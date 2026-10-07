@@ -36,6 +36,7 @@ private record. **CI** is a hosted runner that runs what the stranger runs.
 - Q: When the script finds a cEOS tar but its checksum differs from the recorded one, does it stop, or go on for SR Linux alone and say so? → A: Stop before importing, naming the file, the checksum found and the one recorded; nothing else of the run proceeds.
 - Q: When the script ends on a fresh host, does it leave the Temporal dev server, the worker and the API's server running, or stop them after reading their reports? → A: Leave all three running, detached, logging under `local/`, as development.md's three-process section describes; the last report says they are up and how to stop them.
 - Q: What intent does the README's recorded session run against, given that a step needs a twin built from a waypoint series, which the fixture branch does not have? → A: The throwaway `fylgja-test-readme` branch and series seeded by the fixture tool, as the README's stepping walk-through already does, deleted after the recording. The fixture branch gains no series; a persistent stepping series on it is an idea for the order after the launch, not this feature's scope.
+- Q: On the fresh VM, case 1 deployed `140ae538…`, not `b9d53ebc…`, because a bundle covers its install's schema hash and every install has its own; what does SC-002 ask of case 1? → A: That it deploys the development host's fixture: its CTM equals that host's but for `observed_at` and the install's own `schema_hash`, and with `4d5b37aa…` in that hash's place it compiles to `b9d53ebc…` (research §3.4).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -103,7 +104,8 @@ test-e2e` then ends `E2E-OK` with eight cases.
    worker and the server left running, and its first and last reports name both platforms
    and where the tar was found.
 2. **Given** that host as the script left it, **When** `make test-e2e` runs, **Then** it
-   ends `E2E-OK`, all eight cases, case 1 deploying `b9d53ebc…`.
+   ends `E2E-OK`, all eight cases, case 1's fixture compiling to `b9d53ebc…` under the
+   development host's schema hash.
 3. **Given** a host on any Ubuntu release but 26.04, **When** the script runs, **Then** it
    refuses before changing anything, naming the release it found and the one it supports.
 4. **Given** the cEOS image already present under exactly the reference the EOS package
@@ -553,8 +555,10 @@ development host, the private copy registered, the contract job disabled, no rec
 - **SC-001**: On a fresh Ubuntu 26.04 VM, from a clone and the tar, one run of the script
   ends with tiers 1 and 2 passed and both start-up reports naming both packages, with no
   input asked after its start beyond privilege escalation.
-- **SC-002**: On that VM, `make test-e2e` ends `E2E-OK` with all eight cases, once, case 1
-  deploying `b9d53ebc…`.
+- **SC-002**: On that VM, `make test-e2e` ends `E2E-OK` with all eight cases, once, and
+  case 1 deploys the development host's fixture: its CTM equals that host's but for
+  `observed_at` and the install's own `schema_hash`, and with `4d5b37aa…` in that hash's
+  place it compiles to `b9d53ebc…`.
 - **SC-003**: On a VM without the tar, the script names SR Linux alone in its first and
   last reports and ends with tiers 1 and 2 passed; tier 3 narrowed to `nokia_srlinux`
   ends on the partial-pass line naming cases 6 and 8; a default tier 3 refuses naming

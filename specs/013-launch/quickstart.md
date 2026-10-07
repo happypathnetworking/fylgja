@@ -92,7 +92,9 @@ free -m
 make test-e2e
 ```
 
-Expected: `E2E-OK`, eight cases, case 1 deploying `b9d53ebc…`. Record the script's
+Expected: `E2E-OK`, eight cases, case 1's fixture compiling to `b9d53ebc…` under the
+development host's schema hash (each install has its own, and the bundle covers it, so
+the VM's own id differs; SC-002). Record the script's
 timings and what §3 of research.md asked for (the re-verified facts), then the
 development host's facts move to verified-facts.md with `26.04` and the date.
 

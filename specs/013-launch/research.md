@@ -762,8 +762,9 @@ the server's reports as naming both packages with their logins set, the dev serv
   `b9d53ebc8d8187ccc73623cd9be2740fb865ff101edc58c0e732735d4fd9d668` exactly. So the fixture
   the VM's Infrahub renders from this repository is the development host's, byte for byte,
   and the id `b9d53ebc…` is the development host's install, not the fixture's alone:
-  SC-002, US2's scenario and quickstart §3 name it for the VM, which no fresh install can
-  meet.
+  SC-002, US2's scenario and quickstart §3 named it for the VM, which no fresh install can
+  meet. The operator settled their wording (spec, Clarifications): case 1's fixture
+  compiles to `b9d53ebc…` under the development host's schema hash, which this run meets.
 - **Hygiene**: the greps of quickstart §3, by the operator against the variables from a shell
   that had loaded `local/.env`, over `/tmp/bring-up.out`, `local/*.log`, `bin/`, `.venv/` and
   `local/infrahub/`, found nothing. Repeated after the run for `INFRAHUB_API_TOKEN`,
@@ -816,7 +817,16 @@ the server's reports as naming both packages with their logins set, the dev serv
      FAILED: the workflow service is not answering at localhost:7233: start it with make
      temporal-dev`, while the dev server is `SERVING`; `make temporal-dev` would not find
      the command either. T030 ran with `PATH=$HOME/.temporalio/bin:$PATH` given on its
-     command line.
+     command line. **Fixed after T030**, in the repository's two callers rather than the
+     user's shell files: `scripts/e2e.sh` appends `~/.temporalio/bin` to its `PATH` before
+     its preconditions, so a CLI on the `PATH` still wins, and refuses with `the Temporal
+     CLI is neither on PATH nor in ~/.temporalio/bin, where scripts/bring-up.sh installs
+     it` when there is none; `make temporal-dev` runs `$(TEMPORAL)`, the CLI on the `PATH`
+     or else `~/.temporalio/bin/temporal`. Checked on the VM, whose login shell has no
+     `temporal`: the fallback finds it and the dev server answers `SERVING`, and `make -n
+     temporal-dev` names `~/.temporalio/bin/temporal`; on the development host, with no
+     CLI in either place, `scripts/e2e.sh` stops on the new refusal, exit 1, before
+     anything starts.
 
 ### 3.5 Recorded: CI's first run with the contract job, 2026-10-07
 

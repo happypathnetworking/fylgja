@@ -239,6 +239,10 @@ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -add-link  
 go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -waypoint fylgja-test-readme/2 -description "third link"
 ```
 
+If the seed answers `graphql: None` straight after the delete, run it again before writing
+`/1`: Infrahub 1.11.2 can refuse to create a branch just after one of the same name was
+deleted ([verified facts](docs/verified-facts.md#infrahub-1112)).
+
 **Plan the series.** `waypoint plan` reads and compiles every waypoint and shows what each
 step between them would change. It needs no lab and no worker:
 

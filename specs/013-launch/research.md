@@ -532,6 +532,84 @@ and the date; a fact that no longer holds is a finding (FR-015).
   the log waits until the server serves nothing (`awaitIdle`); 12 runs on four CPUs and 4
   on two then passed.
 
+### 3.2 Recorded: the registration on the development host, 2026-10-07
+
+- **Before the swap** (T015), read by GraphQL on `main`, each found by name once:
+
+  | Object | Name | id | Repository |
+  |---|---|---|---|
+  | `CoreGraphQLQuery` | `device_config` | `18da2a5d-e12f-c2a3-3409-c5118660fec2` | `fylgja-artifacts` |
+  | `CoreTransformJinja2` | `srlinux_device_config` | `18da2a60-2714-cba1-340b-c517bf6ee1ea` | `fylgja-artifacts` |
+  | `CoreArtifactDefinition` | `srlinux_device_config` (artifact `device-config`) | `18da2a61-ecbd-e9f6-3402-c5117971f0c0` | none (the kind has no `repository`; its transform names it) |
+
+  `CoreGenericRepository` held one object, the `CoreRepository` `fylgja-artifacts`
+  (`18da2a54-695c-170f-3407-c510e9cd2815`), whose credential was the one
+  `CorePasswordCredential`, `fylgja-artifacts` (`18da2a40-8dc6-87dd-3405-c51176d27285`).
+- **The delete** (T015), by the operator, by GraphQL on `main`: `CoreRepositoryDelete`
+  of the repository, then `CorePasswordCredentialDelete` of the credential; both answered
+  `ok: true`.
+- **What survives the delete** (R-15's first question): nothing. Read back on `main`
+  afterwards, `CoreGenericRepository`, `CorePasswordCredential`, the query
+  `device_config`, the transform `srlinux_device_config` and the definition
+  `srlinux_device_config` each count 0. Deleting a `CoreRepository` deletes the objects
+  its import made, so from the delete until the next registration's import `main` cannot
+  render an artifact, and the import makes the three objects anew.
+- **`-prepare-main`, the first live run** (T016), by the operator, with `local/.env`
+  loaded: `go run -tags fixture ./cmd/fylgja-fixture -prepare-main` printed
+
+  ```
+  schema loaded on main
+  group fylgja-devices present
+  repository fylgja created (location https://github.com/happypathnetworking/fylgja.git, ref main, no credential)
+  import complete after 24s: query, transform and definition on main
+  ```
+
+  in 35s wall, the build included: the registration reached `active`, `online` and the
+  three objects 24 s after its creation, with no sync stuck. The group was `present`
+  because the delete removed the repository's objects alone.
+- **The second run** printed the same lines but `repository fylgja present (location
+  https://github.com/happypathnetworking/fylgja.git, ref main)` and `import complete after
+  0s`, in 2.7 s wall: it found everything in place and created nothing (contract,
+  Idempotence).
+- **`main` after the registration**, read back by GraphQL: `CoreGenericRepository` holds
+  one object, the `CoreReadOnlyRepository` `fylgja` (`18dc59e8-1961-9499-340f-c517ee2b828d`),
+  location `https://github.com/happypathnetworking/fylgja.git`, `ref main`, `commit
+  4495ec9d7a8d1a53fda35e2ca016353c5f94a0d6` (`origin/main` at the time), `active`,
+  `online`, no credential; `CorePasswordCredential` counts 0. The three objects are new,
+  and the query and the transform name `fylgja` as their repository (R-15's second
+  question):
+
+  | Object | id before | id after |
+  |---|---|---|
+  | query `device_config` | `18da2a5d-e12f-c2a3-3409-c5118660fec2` | `18dc59ea-8cb2-1ef8-3401-c513dff2ecd4` |
+  | transform `srlinux_device_config` | `18da2a60-2714-cba1-340b-c517bf6ee1ea` | `18dc59ec-9653-cb6a-3401-c5149735ae15` |
+  | definition `srlinux_device_config` (`device-config`) | `18da2a61-ecbd-e9f6-3402-c5117971f0c0` | `18dc59ee-08cb-f50a-340d-c513f7d9e7d1` |
+
+  The ids moved because the delete removed the old objects, not because the registration
+  replaced them in place. Nothing Fylgja keeps holds these ids: the definition and the
+  group are looked up by name (`lookupByName`), so no file or test changes.
+- **The fixture re-made and compiled** (T017): the operator re-created `fylgja-fixture`
+  (`make infrahub-clean && make infrahub-seed`) after the registration. `make build`
+  (static), then the worker and the API's server restarted from this tree, each on
+  `bin/fylgja` not `(deleted)`, each environment carrying `INFRAHUB_*`, both logins,
+  `FYLGJA_STATE_ROOT` and `FYLGJA_API_TOKEN`, each report naming `arista_eos` and
+  `nokia_srlinux` with their logins set, the server's `listening on 127.0.0.1:7650 (API
+  version 1, build 0.1.0-dev)`. `fylgja intent read --branch fylgja-fixture` read 3
+  devices, 12 interfaces, 3 links and 3 artifacts at schema `4d5b37aa0a894aec4cdca69fdb9fe455`,
+  and `fylgja twin compile` gave `bundle_id
+  b9d53ebc8d8187ccc73623cd9be2740fb865ff101edc58c0e732735d4fd9d668`: the artifacts
+  Infrahub renders from this repository are byte for byte the ones it rendered from the
+  private copy.
+- **Tier 2** (T017): `make test-contract` passed, exit 0 in 366 s wall, every package
+  `ok` (the longest `internal/stage` 358 s, `internal/waypoint` 208 s, `internal/intent`
+  191 s); afterwards `fylgja waypoint list` printed `no waypoints`.
+- **Tier 3** (T018), on a quiet host (no test or twin running, 20.7 GiB available, load
+  2): `WORKER_LOG=local/worker.log make test-e2e`, detached, ended `E2E-OK`, exit 0, eight
+  cases, case 1 deploying `b9d53ebc8d8187ccc73623cd9be2740fb865ff101edc58c0e732735d4fd9d668`;
+  the script's wall time 1083 s (18 min), creates 42–71 s, verify 2.8–3.5 s, the boot half
+  7.8 s and 7.2 s. Afterwards `clab inspect --all` found no containers, `local/twin` was
+  absent and `fylgja waypoint list` printed `no waypoints`.
+
 ---
 
 ## 4. Owed to the records at the close

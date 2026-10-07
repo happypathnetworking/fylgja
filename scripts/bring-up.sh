@@ -420,7 +420,7 @@ gnmic_is() { grep -qx "version : $1" <<< "$(gnmic version 2> /dev/null)"; }
 pkg_version() { dpkg-query -W -f='${Status} ${Version}' "$1" 2> /dev/null | sed -n 's/^install ok installed //p'; }
 
 part_toolchain() {
-  local p missing=() v want_go have_go mod_cache
+  local p missing=() v want_go local_go have_go mod_cache
 
   for p in make git curl jq xz-utils file golang-go python3-venv shellcheck; do
     [ -n "$(pkg_version "$p")" ] || missing+=("$p")
@@ -435,14 +435,22 @@ part_toolchain() {
     esac
   done
 
-  # Ubuntu's go is the bootstrap: in the clone it fetches and runs the release go.mod names.
+  # Ubuntu's go is the bootstrap: in the clone it fetches and runs the release go.mod names,
+  # unless it is that release itself (26.04's is), when nothing is fetched, then or ever.
   want_go=go$(sed -n 's/^go \([0-9.]*\)$/\1/p' go.mod)
+  local_go=$(cd / && GOTOOLCHAIN=local go version | awk '{print $3}')
   mod_cache=$(cd / && GOTOOLCHAIN=local go env GOMODCACHE)
   have_go=0
   ls -d "$mod_cache/golang.org/toolchain@v0.0.1-$want_go".* > /dev/null 2>&1 && have_go=1
   v=$(go version | awk '{print $3}')
   [ "$v" = "$want_go" ] || fail toolchain go "go version in the clone reports $v, not $want_go (go.mod)"
-  if (( have_go )); then item toolchain go present "$v (go.mod's, run by Ubuntu's go)"; else item toolchain go installed "$v (fetched through go.mod)"; fi
+  if [ "$local_go" = "$want_go" ]; then
+    item toolchain go present "$v (Ubuntu's go, go.mod's release)"
+  elif (( have_go )); then
+    item toolchain go present "$v (go.mod's, run by Ubuntu's go)"
+  else
+    item toolchain go installed "$v (fetched through go.mod)"
+  fi
 
   if [[ $(golangci-lint version 2> /dev/null) == *"version $GOLANGCI_VERSION "* ]]; then
     item toolchain golangci-lint present "$GOLANGCI_VERSION"

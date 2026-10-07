@@ -1,0 +1,23 @@
+# Fylgja's pins on top of Infrahub's published Compose file, which this file leaves
+# untouched. scripts/bring-up.sh fetches that file from https://infrahub.opsmill.io/1.11.2
+# into local/infrahub/docker-compose.yml and copies this one beside it.
+#
+# Infrahub 1.11.2: every Infrahub fact in docs/verified-facts.md was verified against it.
+# The versioned URL already defaults the three Infrahub services to 1.11.2, but the
+# published file reads ${VERSION}, so a stray VERSION in the environment would move the
+# image; the pin keeps it.
+#
+# Neo4j capped: uncapped, its JVM grew into the headroom a twin needs and a tier-3 run
+# died of memory (docs/verified-facts.md, The host).
+services:
+  task-manager:
+    image: registry.opsmill.io/opsmill/infrahub:1.11.2
+  infrahub-server:
+    image: registry.opsmill.io/opsmill/infrahub:1.11.2
+  task-worker:
+    image: registry.opsmill.io/opsmill/infrahub:1.11.2
+  database:
+    environment:
+      NEO4J_server_memory_heap_initial__size: 1g
+      NEO4J_server_memory_heap_max__size: 2g
+      NEO4J_server_memory_pagecache_size: 1g

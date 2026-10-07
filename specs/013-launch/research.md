@@ -609,6 +609,26 @@ and the date; a fact that no longer holds is a finding (FR-015).
   the script's wall time 1083 s (18 min), creates 42–71 s, verify 2.8–3.5 s, the boot half
   7.8 s and 7.2 s. Afterwards `clab inspect --all` found no containers, `local/twin` was
   absent and `fylgja waypoint list` printed `no waypoints`.
+- **The `ref` question** (T019; FR-029, R-15), Infrahub 1.11.2. The operator pushed
+  `main` at `510d32ba2ec1729e9ca536caa21c05c59016619f` (on `origin` by 21:21:40Z), so the
+  registration's `commit`, `4495ec9`, was one push behind.
+  1. *The minute sync on its own*: no. At 21:24:47Z, three minutes on, `commit` was still
+     `4495ec9d7a8d1a53fda35e2ca016353c5f94a0d6`, its `updated_at` 20:40:12Z (the
+     import), and the repository `active`, `online` and `sync_status in-sync`: a
+     read-only repository is not polled for a moved `ref`, and says it is in sync.
+  2. *`CoreReadOnlyRepositoryUpdate` of `ref`, set to `main` again*: no. Sent at
+     21:25:45Z, it answered `ok: true`; at 21:26:46Z `commit` was still `4495ec9…`, its
+     `updated_at` unchanged at 20:40:12Z. An update to the value `ref` already holds
+     writes nothing to act on.
+  3. *`InfrahubReadOnlyRepositoryImportLastCommit(data: {id})`*: **yes**. Sent at
+     21:27:59Z, it answered `ok: true` with a task id; `commit` read
+     `510d32ba2ec1729e9ca536caa21c05c59016619f` with `updated_at` 21:28:07Z, 8 s after the
+     call, the repository still `active`, `online`, `in-sync`.
+
+  So on 1.11.2 a read-only registration imports at its creation and afterwards only when
+  asked: a commit pushed to its `ref` reaches Infrahub by `ImportLastCommit`, and by
+  neither the sync nor a rewrite of `ref`. An artifact rendered before the import keeps
+  its bytes until it is regenerated, which Infrahub does not do on its own.
 
 ---
 

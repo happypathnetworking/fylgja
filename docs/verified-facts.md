@@ -99,6 +99,15 @@ Terms are the [glossary](glossary.md)'s. Dates are 2026.
   optional credential. A public HTTPS repository registers as a `CoreReadOnlyRepository`
   on `main` with no credential: the clone and the connectivity check pass, and the import
   then reads the repository's `.infrahub.yml`. *(10-06)*
+- A `CoreReadOnlyRepository` imports at its creation, its `commit` the head of its `ref`,
+  and afterwards only when asked: a commit pushed to `ref` is not picked up by the minute
+  sync (three minutes on, `commit` unmoved and `sync_status in-sync`), nor by a
+  `CoreReadOnlyRepositoryUpdate` writing `ref`'s own value (`ok: true`, nothing written).
+  `InfrahubReadOnlyRepositoryImportLastCommit(data: {id})` imports the head of `ref`:
+  `commit` moved 8s after the call. *(10-07)*
+- Deleting a `CoreRepository` deletes the query, the transform and the artifact
+  definition its import made; a later registration's import makes them anew, with new
+  ids. *(10-07)*
 
 ---
 

@@ -96,11 +96,20 @@ only binary that does. Infrahub's `main` carries:
   `infrahub/queries/device_config.gql` and `infrahub/templates/device_config.j2`. It
   declares one Jinja2 transform, `srlinux_device_config`, and one artifact definition
   naming the artifact `device-config`, `text/plain`, targeting `fylgja-devices`, with the
-  device's name as its parameter. Register this repository on `main` as a
-  `CoreReadOnlyRepository` over HTTPS with no credential ([D-044](decisions.md#d-044)): it
-  tracks one `ref`, imports at creation, and never pushes. A private copy registers as a
-  `CoreRepository` with a `CorePasswordCredential` holding a personal access token
-  instead.
+  device's name as its parameter. The registration is `fylgja`, a
+  `CoreReadOnlyRepository` on `main` at this repository's HTTPS location, `ref main`, with
+  no credential ([D-044](decisions.md#d-044)), made by `fylgja-fixture -prepare-main`
+  together with the schema and the group: it tracks one `ref`, imports at creation, and
+  never pushes. A private copy registers as a `CoreRepository` with a
+  `CorePasswordCredential` holding a personal access token instead.
+
+**A template change reaches Infrahub by asking for it.** A commit pushed to `main` is not
+imported on its own: neither the minute sync nor rewriting `ref` moves the registration's
+`commit`. `InfrahubReadOnlyRepositoryImportLastCommit(data: {id: <the registration's id>})`
+on `main` imports the head of `ref` within seconds ([verified
+facts](verified-facts.md#infrahub-1112)). The import renders nothing: a branch created
+afterwards sees the new template, an existing one only after `BranchRebase`, and each
+artifact changes only when it is generated again (`-generate`, or the seed).
 
 **One template renders both platforms.** The transform branches on the device's platform
 and emits that vendor's syntax, so a mixed branch renders through the one artifact

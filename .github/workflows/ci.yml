@@ -5,10 +5,15 @@ on:
     branches: [main]
   pull_request:
 
+# Both jobs name the release, never GitHub's moving latest label, which it moves to the
+# next release on its own schedule; the bring-up script supports Ubuntu 26.04 alone. Tier
+# 3 is never run here: it boots twins and stays the operator's (D-017).
+
 jobs:
-  # Unit tier: golden files and pure logic. No infrastructure, by design (D-017).
+  # Unit tier: golden files and pure logic. No infrastructure, by design (D-017). It runs
+  # on every push to main and every pull request; shellcheck reads both scripts.
   unit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -17,22 +22,26 @@ jobs:
       - run: make build
       - run: make test
       - uses: golangci/golangci-lint-action@v9
+      - run: shellcheck scripts/bring-up.sh scripts/e2e.sh
 
-  # Contract tier: a real Infrahub. Disabled until CI has one — Infrahub is
-  # operator-provided and not vendored (CLAUDE.md), so there is nothing for CI to
-  # start. The `go generate` diff check lives here, not in the unit job, because
-  # regeneration fetches the SDL from a live Infrahub.
+  # Contract tier: a real Infrahub, brought up on the runner by the bring-up script's
+  # Infrahub part (Infrahub 1.11.2 by its published Compose file, main prepared with this
+  # repository registered read-only, the fixture branch seeded). It needs no secret: the
+  # script makes Infrahub's admin token on the runner, keeps it in this job's local/.env
+  # and never prints it. It runs on pushes to main alone, after the unit job: no pull
+  # request reaches it, and it never takes the trigger pull-requests.yml uses.
   contract:
-    runs-on: ubuntu-latest
-    if: false # enable once an Infrahub service is available to CI
-    env:
-      INFRAHUB_ADDRESS: http://localhost:8000
-      INFRAHUB_API_TOKEN: ${{ secrets.INFRAHUB_API_TOKEN }}
+    runs-on: ubuntu-26.04
+    needs: unit
+    if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-      - run: make infrahub-schema && make infrahub-seed
+      - run: scripts/bring-up.sh --part infrahub
+      # The committed client against the committed SDL: genqlient reads
+      # schema/infrahub.graphql, so this step needs no Infrahub (make sdl is what fetches
+      # the SDL from a live one). Tier 2 is the client's check against the live schema.
       - run: go generate ./... && git diff --exit-code
-      - run: make test-contract
+      - run: set -a; . local/.env; set +a; make test-contract

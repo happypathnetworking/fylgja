@@ -1,5 +1,7 @@
 # Fylgja
 
+[![ci](https://github.com/happypathnetworking/fylgja/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/happypathnetworking/fylgja/actions/workflows/ci.yml)
+
 Fylgja builds a **walking twin** of a network from its intent. You name a branch in
 [Infrahub](https://github.com/opsmill/infrahub), and optionally a point in time. Fylgja
 reads it, compiles it into a deterministic bundle, and boots it as a running

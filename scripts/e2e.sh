@@ -662,6 +662,10 @@ echo "e2e: T=$T"
 [ -x "$FYLGJA" ] || fail "$FYLGJA is missing: run make build (make test-e2e does)"
 command -v gnmic > /dev/null || fail "gnmic is not on PATH: every create's read-back uses it"
 command -v go > /dev/null || fail "go is not on PATH: case 5 seeds its branch with go run -tags fixture ./cmd/fylgja-fixture; install Go or add it to PATH"
+# The Temporal CLI, from the PATH or else where its installer, run by scripts/bring-up.sh,
+# puts it and leaves it off the PATH.
+PATH="$PATH:$HOME/.temporalio/bin"
+command -v temporal > /dev/null || fail "the Temporal CLI is neither on PATH nor in ~/.temporalio/bin, where scripts/bring-up.sh installs it"
 if ! temporal operator cluster health --address "$TEMPORAL_ADDRESS" > "$OUT/health.out" 2>&1; then
   fail "the workflow service is not answering at $TEMPORAL_ADDRESS: start it with make temporal-dev"
 fi

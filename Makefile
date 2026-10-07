@@ -72,9 +72,11 @@ clean:
 	rm -rf bin/
 
 # The Temporal dev server, file-backed so run history survives a restart
-# (docs/development.md). UI at http://localhost:8233.
+# (docs/development.md). UI at http://localhost:8233. The CLI is the one on the PATH, or
+# else where its installer, run by scripts/bring-up.sh, puts it and leaves it off the PATH.
+TEMPORAL ?= $(or $(shell command -v temporal),$(HOME)/.temporalio/bin/temporal)
 temporal-dev:
-	temporal server start-dev --db-filename local/temporal.db
+	$(TEMPORAL) server start-dev --db-filename local/temporal.db
 
 # The lab-host worker on queue fylgja. The state root is made absolute here so the
 # worker and the API's server, each started from wherever, agree on it.

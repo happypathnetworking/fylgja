@@ -57,13 +57,55 @@
 # fylgja-fixture seeded (local/.env). The API's server is the script's own, so no server the
 # operator runs is needed, and none is used: its port is one the system chooses.
 # Optional: WORKER_LOG names that worker's log, which the credential greps then cover too.
+# Optional: PLATFORMS narrows the run to a list of shipped packages (the stems of psp/*.yaml,
+# separated by commas or spaces): a case runs when every package it needs is in the list and
+# each account-gated image it needs is present, and is skipped, saying why, otherwise. Unset
+# or empty, every case runs and every package's image is required first. A name no package
+# has, or a list that selects no case, is refused before anything starts.
 # It takes minutes; run it on a quiet host (docs/development.md).
 #
-# Exit 0 prints E2E-OK. Any failed check exits 1 after the trap's destroy and its deletion of
-# the throwaway branches of cases 5, 6, 7 and 8 (7's and 8's with their series); a lab, a twin
-# directory or Schedule fylgja-follow
+# Exit 0 prints E2E-OK when every case ran, or, when PLATFORMS skipped one, E2E-PARTIAL naming
+# the list, the cases that ran and each case skipped with its reason. Any failed check exits 1
+# after the trap's destroy and its deletion of the throwaway branches of cases 5, 6, 7 and 8
+# (7's and 8's with their series); a lab, a twin directory or Schedule fylgja-follow
 # left behind after that destroy exits 99.
 set -euo pipefail
+
+fail() {
+  echo "e2e: FAILED: $*" >&2
+  exit 1
+}
+
+# The packages each case needs, read by case_runs and the list's refusals alone: every
+# case boots SR Linux, and 6 and 8 boot EOS beside it.
+declare -A CASE_PACKAGES=([1]=nokia_srlinux [2]=nokia_srlinux [3]=nokia_srlinux [4]=nokia_srlinux
+  [5]=nokia_srlinux [6]="nokia_srlinux arista_eos" [7]=nokia_srlinux [8]="nokia_srlinux arista_eos")
+mapfile -t KNOWN_PACKAGES < <(for f in psp/*.yaml; do basename "$f" .yaml; done | LC_ALL=C sort)
+# PLATFORMS, split; empty for a default run. Checked here, before local/.env is read and
+# before anything starts, so a refused list leaves nothing behind.
+PLATFORMS=${PLATFORMS:-}
+read -ra PLATFORM_LIST <<< "${PLATFORMS//,/ }"
+RAN=() SKIPPED=()
+if [ "${#PLATFORM_LIST[@]}" -gt 0 ]; then
+  for name in "${PLATFORM_LIST[@]}"; do
+    [[ " ${KNOWN_PACKAGES[*]} " == *" $name "* ]] ||
+      fail "PLATFORMS names $name, which no shipped package has; known: ${KNOWN_PACKAGES[*]}"
+  done
+  selected=0 common=" ${KNOWN_PACKAGES[*]} "
+  for n in "${!CASE_PACKAGES[@]}"; do
+    missing=0
+    for pkg in ${CASE_PACKAGES[$n]}; do
+      [[ " ${PLATFORM_LIST[*]} " == *" $pkg "* ]] || missing=1
+    done
+    [ "$missing" -eq 1 ] || selected=1
+    # The packages every case needs: what a list must name to select any.
+    for pkg in $common; do
+      [[ " ${CASE_PACKAGES[$n]} " == *" $pkg "* ]] || common=${common/ $pkg / }
+    done
+  done
+  common=${common% }
+  [ "$selected" -eq 1 ] || fail "PLATFORMS=$PLATFORMS selects no case: every case needs$common"
+fi
 
 FYLGJA_STATE_ROOT="$(pwd)/local"
 export FYLGJA_STATE_ROOT
@@ -108,11 +150,6 @@ export FOLLOW_INTERVAL_S
 # The short-lived worker's host line is on stdout about 0.22s after exec;
 # the bound only stops a worker that never reports from holding the run.
 WORKER_HOST_LINE_WAIT_S=15
-
-fail() {
-  echo "e2e: FAILED: $*" >&2
-  exit 1
-}
 
 # expect FILE FILTER: the document satisfies the jq filter, or the run stops and shows it.
 expect() {
@@ -165,6 +202,41 @@ psp_scalar() {
   sed -n "s/^  $2: *\([^ #]*\).*/\1/p" "$1" | head -1
 }
 
+# case_runs N: whether case N runs, recording it in RAN when it does. A default run runs
+# every case. With PLATFORMS, a case runs when every package it needs is in the list and
+# each such package whose image is account_gated has that image present; otherwise
+# SKIP_REASON names the first package that stops it, and how.
+case_runs() {
+  local pkg why ref
+  SKIP_REASON=""
+  if [ "${#PLATFORM_LIST[@]}" -gt 0 ]; then
+    for pkg in ${CASE_PACKAGES[$1]}; do
+      why=""
+      [[ " ${PLATFORM_LIST[*]} " == *" $pkg "* ]] || why="not in PLATFORMS"
+      if [ "$(psp_scalar "psp/$pkg.yaml" acquisition)" = account_gated ]; then
+        ref=$(psp_scalar "psp/$pkg.yaml" ref)
+        docker image inspect "$ref" > /dev/null 2>&1 || why="${why:+$why; }image $ref absent"
+      fi
+      if [ -n "$why" ]; then
+        SKIP_REASON="needs $pkg: $why"
+        return 1
+      fi
+    done
+  fi
+  RAN+=("$1")
+}
+
+# skip_case N: case N is skipped, said where it would start and recorded for the run's end.
+skip_case() {
+  echo "e2e: case $1: skipped ($SKIP_REASON)"
+  SKIPPED+=("$1 ($SKIP_REASON)")
+}
+
+# ran N: case N ran.
+ran() {
+  [[ " ${RAN[*]} " == *" $1 "* ]]
+}
+
 # fylgja ARGS...: a client's command, through the script's server (contracts/cli.md
 # "Tier 3"): run with PATH, HOME, FYLGJA_API_ADDRESS and FYLGJA_API_TOKEN, and nothing else of
 # the script's environment, so a command that still read Infrahub's variables, a login or the
@@ -176,6 +248,7 @@ fylgja() {
   (
     # shellcheck disable=SC2046
     export -n PATH $(compgen -e)
+    # shellcheck disable=SC2030 # the command's token, for this subshell alone
     export PATH HOME FYLGJA_API_ADDRESS="$API_ADDRESS" FYLGJA_API_TOKEN="$API_TOKEN"
     exec "$FYLGJA" "$@"
   )
@@ -249,7 +322,8 @@ await_checksums_moved() {
 # package declares. The encoding is stated and never defaulted: a default-encoding Get is
 # answered Unimplemented by SR Linux (CLAUDE.md).
 gnmi_get() {
-  local out="$OUT/gnmi-$1-${2//[:.]/_}-$(tr -c 'a-z0-9' _ <<< "$6").json"
+  local out
+  out="$OUT/gnmi-$1-${2//[:.]/_}-$(tr -c 'a-z0-9' _ <<< "$6").json"
   gnmic -a "$2" -u "$4" -p "$5" "$3" -e json_ietf \
     get --path "$6" > "$out" 2> "$out.err" || fail "case $1: gnmic get $6 from $2 failed; see $out.err"
   jq -er '[.. | objects | select(has("values")) | .values[]] | first' "$out" ||
@@ -569,7 +643,7 @@ cleanup() {
 
 # Every artifact carries this in its role comment (testsupport.MarkerPrefix); it may sit
 # in the staged bundle, the store and a read's CTM, and nowhere else.
-MARKER=FYLGJA-MARKER
+MARKER='FYLGJA-MARKER'
 
 RUN_START=$(now_ns)
 # T: whole seconds after fylgja-fixture was seeded with its artifacts Ready, and before any
@@ -631,16 +705,20 @@ done
 
 # Case 6's image is never pulled: its package says account_gated, and a create naming it on
 # a host that does not hold it is refused at the host check. Read from the
-# package, so this names the one reference that check will look for.
-CEOS_REF=$(psp_scalar psp/arista_eos.yaml ref)
-[ -n "$CEOS_REF" ] || fail "psp/arista_eos.yaml states no image ref"
-docker image inspect "$CEOS_REF" > /dev/null 2>&1 ||
-  fail "image $CEOS_REF is absent: import it as docs/development.md says; it is never pulled"
+# package, so this names the one reference that check will look for. A default run alone:
+# with PLATFORMS, an absent image skips the cases that need it (case_runs).
+if [ "${#PLATFORM_LIST[@]}" -eq 0 ]; then
+  CEOS_REF=$(psp_scalar psp/arista_eos.yaml ref)
+  [ -n "$CEOS_REF" ] || fail "psp/arista_eos.yaml states no image ref"
+  docker image inspect "$CEOS_REF" > /dev/null 2>&1 ||
+    fail "image $CEOS_REF is absent: import it as docs/development.md says; it is never pulled"
+fi
 
 # From here on, anything on the host is this run's own.
 trap cleanup EXIT
 
 # --- case 1: a second create is refused naming the twin ------------------------
+if case_runs 1; then
 
 create_twin 1 --no-follow
 BID1=$BID RUN1=$RUN_ID
@@ -688,10 +766,14 @@ jq -e 'all(.findings[] | select(.rule=="host.lab.present" or .rule=="host.twin.p
   fail "case 1: containerlab's state changed across the refused create; compare $OUT/inspect-1a.json and $OUT/inspect-1b.json"
 [ "$twin_before" = "$(sha256sum < "$TWIN/twin.json")" ] || fail "case 1: the refused create changed twin.json"
 
-destroy_twin 1 done done
-destroy_twin 1-again nothing nothing
+destroy_twin 1 "done" "done"
+destroy_twin 1-again "nothing" "nothing"
+else
+  skip_case 1
+fi
 
 # --- case 2: destroy then create from another reference ------------------------
+if case_runs 2; then
 
 create_twin 2 --at "$T"
 BID2=$BID RUN2=$RUN_ID
@@ -705,9 +787,13 @@ expect "$FYLGJA_STATE_ROOT/bundles/$BID2/manifest.json" '.provenance.at==env.T'
 compiled_id 2 --at "$T"
 [ "$BID2" = "$COMPILED_ID" ] || fail "case 2: the run deployed $BID2, but intent read --at $T | twin compile gives $COMPILED_ID"
 
-destroy_twin 2 done done
+destroy_twin 2 "done" "done"
+else
+  skip_case 2
+fi
 
 # --- case 3: an orphan lab is named at worker start and create, and cleared -----
+if case_runs 3; then
 
 # Made only now, on the host case 2's destroy left clean: the orphan and a twin never
 # coexist. One node on the image the tier already needs, outside the state root,
@@ -771,11 +857,15 @@ expect "$OUT/dry-orphan.json" '.status=="rejected" and .dry_run.verdict=="refuse
   and [.findings[] | select(.severity=="rejection") | .rule] == ["host.lab.present"]
   and (.findings[] | select(.rule=="host.lab.present") | .message) == env.ORPHAN_REFUSAL'
 
-destroy_twin 3 done nothing
+destroy_twin 3 "done" "nothing"
 expect "$OUT/destroy-3.json" 'any(.cleanup.removed[]; . == "lab fylgja (1 container)")'
 [ ! -e "$OUT/orphan/clab-fylgja" ] || fail "case 3: destroy left the orphan's $OUT/orphan/clab-fylgja"
+else
+  skip_case 3
+fi
 
 # --- case 4: the pinned reference again, the same bundle -----------------------
+if case_runs 4; then
 
 create_twin 4 --at "$T"
 BID4=$BID RUN4=$RUN_ID
@@ -783,10 +873,14 @@ BID4=$BID RUN4=$RUN_ID
 [ "$RUN4" != "$RUN2" ] || fail "case 4: create --at $T reports case 2's run $RUN2"
 expect "$TWIN/twin.json" '.provenance.at==env.T and .bundle_id==env.BID2'
 
-destroy_twin 4 done done
-destroy_twin 4-again nothing nothing
+destroy_twin 4 "done" "done"
+destroy_twin 4-again "nothing" "nothing"
+else
+  skip_case 4
+fi
 
 # --- case 5: an unpinned twin follows its branch (M4) --------------------------
+if case_runs 5; then
 
 # A throwaway branch: fylgja-fixture is never changed. Set before seeding, so the
 # trap deletes a branch the seed left half made.
@@ -971,8 +1065,12 @@ if fixture -branch "$FB" -delete > "$OUT/delete-branch-5.out" 2>&1; then
 else
   echo "e2e: case 5: branch $FB was not deleted; remove it with: go run -tags fixture ./cmd/fylgja-fixture -branch $FB -delete" >&2
 fi
+else
+  skip_case 5
+fi
 
 # --- case 6: one twin of two platforms (M7) ------------------------------------
+if case_runs 6; then
 
 # A throwaway branch of its own, seeded with the mixed fixture: s1 on SR Linux, e1 and e2
 # on EOS, with one link of each kind between them. Made on the host case 5's
@@ -1010,6 +1108,7 @@ echo "e2e: case 6: boot half passed in ${BOOT_HALF6_TOOK}s"
 # held from both ends.
 verify_twin 6
 VERIFY6_TOOK=$VERIFY_TOOK
+# shellcheck disable=SC2016 # a jq filter, whose $psp is jq's
 expect "$OUT/verify-6.json" '([.verify.nodes[] | {key: .node, value: .psp}] | from_entries) as $psp
   | ([.verify.nodes[] | {node, port: (.addr | split(":") | last)}] | sort_by(.node))
     == [{node: "e1", port: "6030"}, {node: "e2", port: "6030"}, {node: "s1", port: "57400"}]
@@ -1023,15 +1122,19 @@ fylgja twin show --json > "$OUT/show-6.json" 2> "$OUT/show-6.err" ||
 expect "$OUT/show-6.json" '([.show.host.nodes[] | {name, psp}] | sort_by(.name))
   == [{name: "e1", psp: "arista_eos"}, {name: "e2", psp: "arista_eos"}, {name: "s1", psp: "nokia_srlinux"}]'
 
-destroy_twin 6 done done
+destroy_twin 6 "done" "done"
 
 if fixture -branch "$FM" -delete > "$OUT/delete-branch-6.out" 2>&1; then
   unset FM
 else
   echo "e2e: case 6: branch $FM was not deleted; remove it with: go run -tags fixture ./cmd/fylgja-fixture -branch $FM -delete" >&2
 fi
+else
+  skip_case 6
+fi
 
 # --- case 7: a twin from a waypoint is the one the plan printed (M10) -----------
+if case_runs 7; then
 
 # A throwaway branch and a test series of the same name, set before seeding so the trap's
 # -delete removes both: it deletes every test series naming the branch before the branch,
@@ -1130,7 +1233,7 @@ expect "$OUT/list-7a.json" '.status=="ok"
   and [.waypoints.waypoints[] | select(.twin) | "\(.series)/\(.sequence)"] == [env.FW + "/1"]
   and ([.findings[] | select(.rule=="waypoint.twin.moved")] | length) == 0'
 
-destroy_twin 7a done done
+destroy_twin 7a "done" "done"
 
 # The second waypoint's twin: the plan's second id; the branch has not moved since it was
 # written, so Infrahub's artifacts now are the ones it sealed.
@@ -1142,7 +1245,7 @@ expect "$TWIN/twin.json" '.twin_version=="5" and .provenance.branch==env.FW and 
   and .waypoint == {series: env.FW, sequence: 2, description: "third link", at_source: "written"}'
 readback 7b "$FW" enable
 
-destroy_twin 7b done done
+destroy_twin 7b "done" "done"
 unset CREATE_REF
 READBACK=readback
 
@@ -1155,8 +1258,12 @@ if fixture -branch "$FW" -delete > "$OUT/delete-branch-7.out" 2>&1; then
 else
   echo "e2e: case 7: branch $FW and its series were not deleted; remove them with: go run -tags fixture ./cmd/fylgja-fixture -branch $FW -delete" >&2
 fi
+else
+  skip_case 7
+fi
 
 # --- case 8: a waypoint twin steps along its series (M11) -----------------------
+if case_runs 8; then
 
 # containers_of FILE: each node's container, its id and its start time, one line per node
 # sorted by name, from docker rather than containerlab: a restart in place keeps the id and
@@ -1234,7 +1341,8 @@ s1_new_port_description() {
 # with no value. An absent value is no update and no error, so a Get that
 # fails still fails the run, and only an answer that holds no value passes.
 gnmi_absent() {
-  local out="$OUT/gnmi-$1-${2//[:.]/_}-$(tr -c 'a-z0-9' _ <<< "$3").json"
+  local out
+  out="$OUT/gnmi-$1-${2//[:.]/_}-$(tr -c 'a-z0-9' _ <<< "$3").json"
   gnmic -a "$2:57400" -u "$FYLGJA_SRLINUX_USERNAME" -p "$FYLGJA_SRLINUX_PASSWORD" --skip-verify -e json_ietf \
     get --path "$3" > "$out" 2> "$out.err" || fail "case $1: gnmic get $3 from $2 failed; see $out.err"
   jq -e '[.. | objects | select(has("values")) | .values[]] | length == 0' "$out" > /dev/null ||
@@ -1437,7 +1545,7 @@ WAIT8B_AFTER=$WAIT_AFTER
 echo "e2e: case 8: settled after ${WAIT8A_AFTER}s and ${WAIT8B_AFTER}s"
 history_of step-8b fylgja-step "$RUN8B"
 
-destroy_twin 8 done done
+destroy_twin 8 "done" "done"
 unset CREATE_REF
 READBACK=readback
 
@@ -1449,6 +1557,9 @@ if fixture -branch "$FS" -delete > "$OUT/delete-branch-8.out" 2>&1; then
   unset FS
 else
   echo "e2e: case 8: branch $FS and its series were not deleted; remove them with: go run -tags fixture ./cmd/fylgja-fixture -branch $FS -delete" >&2
+fi
+else
+  skip_case 8
 fi
 
 # --- credential hygiene over everything the run produced -----------------------
@@ -1476,6 +1587,7 @@ no_credential "the Infrahub token" "$INFRAHUB_API_TOKEN" "${scan[@]}"
 no_credential "the API's token" "$API_TOKEN" "${scan[@]}"
 # The operator's own token, when local/.env carries one: the run does not use it, but every
 # process the script starts directly, the worker it greps included, has it in its environment.
+# shellcheck disable=SC2031 # local/.env's token, not the one fylgja() sets in its subshell
 if [ -n "${FYLGJA_API_TOKEN:-}" ]; then
   no_credential "local/.env's API token" "$FYLGJA_API_TOKEN" "${scan[@]}"
 fi
@@ -1498,10 +1610,30 @@ fi
 for t in "${CREATE_TIMES[@]}"; do
   echo "e2e: create $t"
 done
-echo "e2e: case 5: seed ${SEED_TOOK}s, artifact-only rebuild ${REBUILD_ARTIFACT_TOOK}s and topology rebuild ${REBUILD_TOOK}s from the change, destroy ${DESTROY5_TOOK}s"
-echo "e2e: case 6: seed ${SEED6_TOOK}s, mixed twin $BID6 under run $RUN6"
-echo "e2e: case 7: plan ${PLAN7_TOOK}s, creates ${CREATE7A_TOOK}s and ${CREATE7B_TOOK}s"
-echo "e2e: case 8: steps ${STEP8A_TOOK}s and ${STEP8B_TOOK}s, create ${CREATE8_TOOK}s; runs $RUN8A and $RUN8B"
-echo "e2e: verify ${VERIFY1_TOOK}s (case 1), ${VERIFY5_TOOK}s (case 5), ${VERIFY6_TOOK}s (case 6); case 8 settled after ${WAIT8A_AFTER}s and ${WAIT8B_AFTER}s"
-echo "e2e: wall time $(since "$RUN_START")s, boot half ${BOOT_HALF_TOOK}s (case 1) and ${BOOT_HALF6_TOOK}s (case 6)"
-echo E2E-OK
+# A case's line only when it ran: a skipped case set none of its variables, which set -u
+# would refuse. Cases 1 and 5 need nokia_srlinux alone, which every list that selects a case
+# names, so they run whenever any case does.
+if ran 5; then
+  echo "e2e: case 5: seed ${SEED_TOOK}s, artifact-only rebuild ${REBUILD_ARTIFACT_TOOK}s and topology rebuild ${REBUILD_TOOK}s from the change, destroy ${DESTROY5_TOOK}s"
+fi
+if ran 6; then
+  echo "e2e: case 6: seed ${SEED6_TOOK}s, mixed twin $BID6 under run $RUN6"
+fi
+if ran 7; then
+  echo "e2e: case 7: plan ${PLAN7_TOOK}s, creates ${CREATE7A_TOOK}s and ${CREATE7B_TOOK}s"
+fi
+if ran 8; then
+  echo "e2e: case 8: steps ${STEP8A_TOOK}s and ${STEP8B_TOOK}s, create ${CREATE8_TOOK}s; runs $RUN8A and $RUN8B"
+fi
+line="e2e: verify ${VERIFY1_TOOK}s (case 1), ${VERIFY5_TOOK}s (case 5)"
+if ran 6; then line+=", ${VERIFY6_TOOK}s (case 6)"; fi
+if ran 8; then line+="; case 8 settled after ${WAIT8A_AFTER}s and ${WAIT8B_AFTER}s"; fi
+echo "$line"
+line="e2e: wall time $(since "$RUN_START")s, boot half ${BOOT_HALF_TOOK}s (case 1)"
+if ran 6; then line+=" and ${BOOT_HALF6_TOOK}s (case 6)"; fi
+echo "$line"
+if [ "${#SKIPPED[@]}" -eq 0 ]; then
+  echo E2E-OK
+else
+  echo "E2E-PARTIAL: platforms ${PLATFORM_LIST[*]}; ran ${RAN[*]}; skipped ${SKIPPED[*]}"
+fi

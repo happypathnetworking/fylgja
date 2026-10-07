@@ -25,9 +25,11 @@ test:
 	go test $(PKGS)
 
 # Contract tier: real Infrahub, never a fake (D-017). Needs INFRAHUB_ADDRESS and
-# INFRAHUB_API_TOKEN in the environment (local/.env; see docs/development.md).
+# INFRAHUB_API_TOKEN in the environment (local/.env; see docs/development.md). Never
+# cached: Go's cache keys a test on its binary, environment and files, never on what
+# Infrahub answers.
 test-contract:
-	go test -tags contract $(PKGS)
+	go test -count=1 -tags contract $(PKGS)
 
 # End-to-end tier: a booted NOS through Temporal. Needs the dev server (make
 # temporal-dev), a worker (make worker), Docker, containerlab, both images (SR Linux and

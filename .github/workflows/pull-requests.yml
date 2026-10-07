@@ -1,0 +1,28 @@
+name: pull-requests
+
+# This repository is read-only (README, Contributing): every pull request is commented
+# and closed. GitHub has no setting that turns pull requests off, so this workflow does
+# it.
+#
+# It runs on pull_request_target, the repository's one use of it. That is safe here
+# because the job checks nothing out and runs no code of the fork: it calls `gh` with
+# the pull request's number, and the only credential it holds is the job's own token,
+# limited to writing pull requests. The ci workflow's contract job never runs on it.
+
+on:
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  close:
+    runs-on: ubuntu-26.04
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr comment "$NUMBER" --repo "$GITHUB_REPOSITORY" --body "This repository is read-only: issues are welcome, pull requests are not taken (README, Contributing). Closing."
+          gh pr close "$NUMBER" --repo "$GITHUB_REPOSITORY"

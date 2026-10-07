@@ -399,9 +399,10 @@ process and one `fylgja serve` process beside it ([D-041](decisions.md#d-041)). 
 **Lab name** — `fylgja`: the fixed containerlab lab name, written into every bundle.
 One twin at a time ([D-013](decisions.md#d-013)).
 
-**Launch** — M14's second half, after the *cut*: the *bring-up script*, CI with a real
-Infrahub, Infrahub rendering from this repository's *artifacts template*, and the
-repository made public at its close ([roadmap](roadmap.md#next)).
+**Launch** — M14's second half, after the *cut*: the repository made public at its
+start, before the *bring-up script* and CI are built ([D-043](decisions.md#d-043)); then
+the script, CI with a real Infrahub, and Infrahub rendering from this repository's
+*artifacts template* ([roadmap](roadmap.md#next)).
 
 **Link-change fidelity** — From M11: what containerlab's reconcile does to a node of a
 platform when a link of its is added or removed, declared by the PSP as

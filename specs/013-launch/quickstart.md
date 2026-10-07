@@ -26,13 +26,21 @@ Credentials: nothing below prints one; `local/.env` is the one file that holds a
 
 ```sh
 grep -rnE 'specs/0(0[1-9]|1[0-2])-|research R[0-9]|/home/[a-z]+/|\bT0[0-9]{2}\b' \
-  --exclude-dir=.git --exclude-dir=.venv --exclude-dir=local --exclude-dir=bin . | grep -v '^./specs/013-launch/'
+  --exclude-dir=.git --exclude-dir=.venv --exclude-dir=local --exclude-dir=bin . | grep -vE '^(\./)?specs/013-launch/'
 test -f SECURITY.md && test -f .github/workflows/pull-requests.yml
 ```
 
-Expected: the grep finds nothing but Spec Kit's own example path in
-`.claude/skills/speckit-specify/SKILL.md` (research §2.11 lists what is scrubbed);
-`SECURITY.md` says how to report a vulnerability. Then, in one sitting
+(The filter takes both path forms: GNU grep prints `./README.md`, ugrep `README.md`.)
+
+Expected: the grep finds nothing but Spec Kit's own text, which is not the record: the
+example path in `.claude/skills/speckit-specify/SKILL.md` and the example task ids
+(`T001`…) in `.specify/templates/tasks-template.md` and in the `speckit-taskstoissues`,
+`speckit-tasks` and `speckit-converge` skills; and four made-up paths in tests
+(`/home/operator/…` in `internal/server/provision_test.go`, `/home/op/…` in
+`internal/lab/stray_test.go` and `internal/provision/workflow_reconcile_test.go`).
+Research §2.11 lists what was scrubbed; the description strings of every contract schema
+and frozen copy carried such citations. `SECURITY.md` says how to report a vulnerability.
+Then, in one sitting
 ([contracts/ci-and-release.md](contracts/ci-and-release.md), "The other settings" and
 "The ruleset"): the flip, the ruleset, private vulnerability reporting, projects and wiki
 off, the topics. Check: `gh repo view --json visibility,repositoryTopics`;

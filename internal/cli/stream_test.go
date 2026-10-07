@@ -52,6 +52,7 @@ func TestInterruptsBeforeTheStartReachNoServer(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			queued := useInterrupts(t)
 			queued <- os.Interrupt
+			awaitIdle(t)
 			before := len(requestOutcomes("interrupt"))
 
 			code, doc := exitOf(t, c.run(t))
@@ -70,6 +71,7 @@ func TestInterruptsBeforeTheStartReachNoServer(t *testing.T) {
 			if len(queued) != 1 {
 				t.Error("the queued interrupt was taken before any start")
 			}
+			awaitIdle(t)
 			if after := len(requestOutcomes("interrupt")); after != before {
 				t.Errorf("the server logged %d interrupts, want none", after-before)
 			}

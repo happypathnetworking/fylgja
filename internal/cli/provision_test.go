@@ -845,6 +845,7 @@ func TestProvisionUnreadableFileInTheBundle(t *testing.T) {
 			if err := os.Chmod(path, 0); err != nil {
 				t.Fatal(err)
 			}
+			awaitIdle(t)
 			before := len(requestOutcomes(findings.OpTwinProvision))
 
 			code, doc := exitOf(t, runTwinProvision(context.Background(), &options{asJSON: true}, &provisionFlags{}, dir))
@@ -856,6 +857,7 @@ func TestProvisionUnreadableFileInTheBundle(t *testing.T) {
 			if doc.Subject == nil || doc.Subject.Bundle != dir {
 				t.Errorf("subject %+v, want the directory as given", doc.Subject)
 			}
+			awaitIdle(t)
 			if got := requestOutcomes(findings.OpTwinProvision); len(got) != before {
 				t.Errorf("the server served %v, want no request", got[before:])
 			}
@@ -968,6 +970,7 @@ func TestProvisionTransferBound(t *testing.T) {
 		paths := useStateRoot(t)
 		useService(t, nil)
 		dir := paddedBundle(t, true)
+		awaitIdle(t)
 		before := len(requestOutcomes(findings.OpTwinProvision))
 
 		code, doc := exitOf(t, runTwinProvision(context.Background(), &options{asJSON: true}, &provisionFlags{}, dir))
@@ -990,6 +993,7 @@ func TestProvisionTransferBound(t *testing.T) {
 		useService(t, svc)
 		useInterrupts(t)
 		dir := paddedBundle(t, false)
+		awaitIdle(t)
 		before := len(requestOutcomes(findings.OpTwinProvision))
 
 		code, doc := exitOf(t, runTwinProvision(context.Background(), &options{asJSON: true}, &provisionFlags{}, dir))

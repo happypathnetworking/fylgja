@@ -530,6 +530,7 @@ func TestTheClientsOwnFailures(t *testing.T) {
 	t.Run("a token the server was not started with", func(t *testing.T) {
 		address := strings.TrimPrefix(harness.http.URL, "http://")
 		useAPIAt(t, address, wrongToken)
+		awaitIdle(t)
 		before := len(requestOutcomes(findings.OpTwinShow))
 		text, asJSON := runBothModes(t, showCmd)
 		wantClientFailure(t, findings.OpTwinShow, text, asJSON, findings.Finding{Severity: findings.Rejection,
@@ -652,6 +653,7 @@ func TestTheClientsOwnFailures(t *testing.T) {
 			t.Fatal(err)
 		}
 		useAPIAt(t, strings.TrimPrefix(harness.http.URL, "http://"), harness.token)
+		awaitIdle(t)
 		before := len(requestOutcomes(findings.OpPSPValidate))
 		text, asJSON := runBothModes(t, func(opts *options) error { return runPSPValidate(opts, []string{big}) })
 		wantClientFailure(t, findings.OpPSPValidate, text, asJSON, findings.Finding{Severity: findings.Rejection,

@@ -685,6 +685,7 @@ func TestDestroyAnswersWithAStartAndNoRun(t *testing.T) {
 	}
 	hreq.Header.Set("Authorization", "Bearer "+harness.token)
 	hreq.Header.Set(api.HeaderStream, stream)
+	awaitIdle(t)
 	before := requestOutcomes("interrupt")
 	type answered struct {
 		lines []api.Frame

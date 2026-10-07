@@ -264,6 +264,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 			}
 			return svc, nil
 		}
+		awaitIdle(t)
 		n, panics := len(requestOutcomes(findings.OpTwinCreate)), strings.Count(harness.log.String(), "outcome=panic")
 
 		kinds := cutAnswer(t, findings.OpTwinCreate, create, svc.reached)
@@ -295,6 +296,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 			svc.hold(ctx)
 			return svc, nil
 		}
+		awaitIdle(t)
 		n, panics := len(requestOutcomes(findings.OpTwinCreate)), strings.Count(harness.log.String(), "outcome=panic")
 
 		kinds := cutAnswer(t, findings.OpTwinCreate, create, svc.reached)
@@ -314,6 +316,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 		useStateRoot(t)
 		svc := newStartService()
 		useStartService(t, svc)
+		awaitIdle(t)
 		n, panics := len(requestOutcomes(findings.OpTwinCreate)), strings.Count(harness.log.String(), "outcome=panic")
 
 		cutAnswer(t, findings.OpTwinCreate, create, svc.reached)
@@ -329,6 +332,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 		svc := newStartService()
 		useStartService(t, svc)
 		ts := stoppingServer(t)
+		awaitIdle(t)
 		n, panics := len(requestOutcomes(findings.OpTwinCreate)), strings.Count(harness.log.String(), "outcome=panic")
 
 		cutAnswerOn(t, ts.URL, findings.OpTwinCreate, create, svc.reached, nil, func() { _ = ts.Config.Close() })
@@ -342,6 +346,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 		svc := &goneService{fakeService: &fakeService{runID: "run-1", result: readyResult()}, holdFollow: true,
 			reached: make(chan struct{})}
 		useService(t, svc)
+		awaitIdle(t)
 		n, panics := len(requestOutcomes(findings.OpTwinCreate)), strings.Count(harness.log.String(), "outcome=panic")
 
 		cutAnswer(t, findings.OpTwinCreate, create, svc.reached)
@@ -374,6 +379,7 @@ func TestAClientGoneAfterItsInterrupt(t *testing.T) {
 		svc.request = ctx
 		return svc, nil
 	}
+	awaitIdle(t)
 	n, panics := len(requestOutcomes(findings.OpTwinCreate)), strings.Count(harness.log.String(), "outcome=panic")
 	delivered := len(requestOutcomes(logInterrupt))
 
@@ -454,6 +460,7 @@ func TestAClientGoneDuringADestroysStart(t *testing.T) {
 	useStateRoot(t)
 	svc := newStartService()
 	useStartService(t, svc)
+	awaitIdle(t)
 	n, panics := len(requestOutcomes(findings.OpTwinDestroy)), strings.Count(harness.log.String(), "outcome=panic")
 
 	cutAnswer(t, findings.OpTwinDestroy, nil, svc.reached)
@@ -483,6 +490,7 @@ func TestAServerStoppedDuringADestroy(t *testing.T) {
 		ts := stoppingServer(t)
 		address := strings.TrimPrefix(ts.URL, "http://")
 		useAPIAt(t, address, harness.token)
+		awaitIdle(t)
 		n, panics := len(requestOutcomes(findings.OpTwinDestroy)), strings.Count(harness.log.String(), "outcome=panic")
 		go func() {
 			select {
@@ -717,6 +725,7 @@ func TestAClientGoneDuringOneAnswer(t *testing.T) {
 			now = now.Add(d)
 			return nil
 		}
+		awaitIdle(t)
 		n, panics := len(requestOutcomes(findings.OpTwinVerify)), strings.Count(harness.log.String(), "outcome=panic")
 
 		cutAnswer(t, findings.OpTwinVerify, map[string]any{"wait": "5s"}, reached)
@@ -758,6 +767,7 @@ func TestAClientGoneDuringOneAnswer(t *testing.T) {
 		t.Cleanup(srv.Close)
 		t.Setenv(intent.EnvAddress, srv.URL)
 		t.Setenv(intent.EnvToken, fakeToken)
+		awaitIdle(t)
 		n, panics := len(requestOutcomes(findings.OpTwinCreate)), strings.Count(harness.log.String(), "outcome=panic")
 
 		cutAnswer(t, findings.OpTwinCreate, map[string]any{"branch": "fylgja-fixture", "dry_run": true}, reached)

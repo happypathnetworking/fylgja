@@ -63,19 +63,6 @@ func servedRequests(op, outcome string) int {
 	return strings.Count(harness.log.String(), "msg=request operation="+op+" outcome="+outcome+" ")
 }
 
-// awaitServed is servedRequests once it reaches want, or after a second: the server logs a
-// request when its handler returns, which is after the client has read the document.
-func awaitServed(op, outcome string, want int) int {
-	deadline := time.Now().Add(time.Second)
-	for {
-		n := servedRequests(op, outcome)
-		if n >= want || time.Now().After(deadline) {
-			return n
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
-}
-
 // The refusals before any connection, each through the command line to the harness's
 // server: one document, M12's finding word for word, exit 2 or 1 as at M12, and neither the
 // workflow service dialled nor Infrahub asked. The server logged the request, so the refusal
@@ -180,6 +167,7 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 			if want == findings.ExitRejected {
 				status = findings.StatusRejected
 			}
+			awaitIdle(t)
 			served := servedRequests(op, string(status))
 
 			code, doc, raw := executeClient(t, c.args...)
@@ -192,7 +180,8 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 			if asked := len(infra.requests()) > before; asked != c.asked {
 				t.Errorf("Infrahub asked before the refusal: %v, want %v (%+v)", asked, c.asked, infra.requests()[before:])
 			}
-			if got := awaitServed(op, string(status), served+1) - served; got != 1 {
+			awaitIdle(t)
+			if got := servedRequests(op, string(status)) - served; got != 1 {
 				t.Errorf("the server logged %d requests of %s ending %s, want 1: the refusal is the server's", got, op, status)
 			}
 			validateM10Document(t, doc)

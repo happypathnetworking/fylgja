@@ -183,6 +183,17 @@ func markServed() servedMark {
 // it.
 func (m servedMark) since(t *testing.T) (wire, log string) {
 	t.Helper()
+	awaitIdle(t)
+	return harness.wire.String()[m.wire:], harness.log.String()[m.log:]
+}
+
+// awaitIdle returns once every request the harness's servers have taken has ended, and so
+// has been logged. A command returns at its answer's document and the server logs the
+// request after it, so a count of the log taken without waiting can miss the line, or the
+// next count takes it and reads one request too many. Every test shares the one log: a count
+// taken before a command waits here too, for any request an earlier test left to end.
+func awaitIdle(t *testing.T) {
+	t.Helper()
 	deadline := time.Now().Add(2 * goneBound)
 	for harness.serving.Load() != 0 {
 		if time.Now().After(deadline) {
@@ -190,7 +201,6 @@ func (m servedMark) since(t *testing.T) (wire, log string) {
 		}
 		time.Sleep(time.Millisecond)
 	}
-	return harness.wire.String()[m.wire:], harness.log.String()[m.log:]
 }
 
 // noSecretServed fails when anything the harness's server wrote to a client or logged after

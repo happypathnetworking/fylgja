@@ -266,6 +266,7 @@ func TestPSPValidateReportsAnUnreadableFileFirst(t *testing.T) {
 	multi := filepath.Join(t.TempDir(), "two-documents.yaml")
 	writeFile(t, multi, string(shipped)+"\n---\n"+string(shipped))
 	missing := filepath.Join(t.TempDir(), "absent.yaml")
+	awaitIdle(t)
 	before := len(requestOutcomes(findings.OpPSPValidate))
 
 	code, doc := runPSPDoc(t, multi, missing)
@@ -274,6 +275,7 @@ func TestPSPValidateReportsAnUnreadableFileFirst(t *testing.T) {
 		doc.Findings[0].Message != want {
 		t.Errorf("exit %d, findings %+v; want 2 with operation.failed saying %q", code, doc.Findings, want)
 	}
+	awaitIdle(t)
 	if got := requestOutcomes(findings.OpPSPValidate); len(got) != before {
 		t.Errorf("the server served %v, want no request", got[before:])
 	}

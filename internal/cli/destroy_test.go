@@ -576,6 +576,7 @@ func TestDestroyThroughTheAPI(t *testing.T) {
 		useService(t, svc)
 		queued := useInterrupts(t)
 		queued <- os.Interrupt
+		awaitIdle(t)
 		before := len(requestOutcomes("interrupt"))
 
 		var err error
@@ -598,6 +599,7 @@ func TestDestroyThroughTheAPI(t *testing.T) {
 		if out != want {
 			t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
 		}
+		awaitIdle(t)
 		if len(queued) != 1 || len(requestOutcomes("interrupt")) != before {
 			t.Errorf("%d left queued, %d interrupts logged; want the queued one left and none sent",
 				len(queued), len(requestOutcomes("interrupt"))-before)

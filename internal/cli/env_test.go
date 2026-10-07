@@ -14,7 +14,6 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -97,10 +96,12 @@ func TestTheClientReadsTheAPIsTwoVariablesAlone(t *testing.T) {
 	asked := askedEnv(t, strings.TrimPrefix(harness.http.URL, "http://"))
 
 	for _, args := range clientCommands(t) {
+		awaitIdle(t)
 		before := requestsLogged()
 		executeClient(t, args...)
-		if awaitLogged(before+1) != before+1 {
-			t.Errorf("fylgja %s: the server logged %d requests, want 1", strings.Join(args, " "), requestsLogged()-before)
+		awaitIdle(t)
+		if got := requestsLogged() - before; got != 1 {
+			t.Errorf("fylgja %s: the server logged %d requests, want 1", strings.Join(args, " "), got)
 		}
 	}
 	for _, name := range asked() {
@@ -110,19 +111,6 @@ func TestTheClientReadsTheAPIsTwoVariablesAlone(t *testing.T) {
 	}
 	if !slices.Contains(asked(), api.EnvAddress) || !slices.Contains(asked(), api.EnvToken) {
 		t.Errorf("the client asked %v, want both of the API's variables", asked())
-	}
-}
-
-// awaitLogged is requestsLogged once it reaches want, or after a second: the server logs a
-// request when its handler returns, after the client has read the document.
-func awaitLogged(want int) int {
-	deadline := time.Now().Add(time.Second)
-	for {
-		n := requestsLogged()
-		if n >= want || time.Now().After(deadline) {
-			return n
-		}
-		time.Sleep(5 * time.Millisecond)
 	}
 }
 
@@ -164,6 +152,7 @@ func TestTheClientReadsTheEnvironmentThroughGetenvAlone(t *testing.T) {
 func TestNoClientsCommandTakesPSPDir(t *testing.T) {
 	askedEnv(t, strings.TrimPrefix(harness.http.URL, "http://"))
 	for _, args := range clientCommands(t) {
+		awaitIdle(t)
 		before := requestsLogged()
 		// --json comes first: cobra stops reading flags at the unknown one.
 		opts := &options{}
@@ -183,6 +172,7 @@ func TestNoClientsCommandTakesPSPDir(t *testing.T) {
 		if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0].Message != "unknown flag: --psp-dir" {
 			t.Errorf("fylgja %s --psp-dir x: exit %d, findings %+v; want 2, cobra's unknown flag", strings.Join(args, " "), code, doc.Findings)
 		}
+		awaitIdle(t)
 		if got := requestsLogged(); got != before {
 			t.Errorf("fylgja %s --psp-dir x: the server logged %d requests, want none", strings.Join(args, " "), got-before)
 		}
@@ -238,6 +228,7 @@ func TestTheAddressIsHostPortOrAURL(t *testing.T) {
 	hostPort := strings.TrimPrefix(harness.http.URL, "http://")
 	for _, address := range []string{hostPort, "http://" + hostPort} {
 		askedEnv(t, address)
+		awaitIdle(t)
 		before := len(requestOutcomes(findings.OpTwinShow))
 		useService(t, &fakeService{readOnly: t})
 		useStateRoot(t)

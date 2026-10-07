@@ -499,6 +499,39 @@ and the date; a fact that no longer holds is a finding (FR-015).
   Infrahub reaches healthy inside a few minutes there.
 - **Arista's checksum** (R-12), at the operator's next download.
 
+### 3.1 Recorded: the flip, 2026-10-07
+
+- **Before the flip**: the tree read (quickstart §1) found nothing private; run 1's
+  commits were fast-forwarded to `main` and pushed at 19:33Z, `origin/main` at `4495ec9`.
+- **The settings**, read back by `gh` after the sitting: visibility `PUBLIC`; the ruleset
+  `main` created 19:36:12Z, `target: branch`, `enforcement: active`, include
+  `~DEFAULT_BRANCH`, exclude none, rules `deletion` and `non_fast_forward`,
+  `bypass_actors: []`, as the contract gives it; private vulnerability reporting
+  `enabled: true`; issues on, projects and wiki off; the eight topics `arista-eos`,
+  `containerlab`, `digital-twin`, `go`, `infrahub`, `network-automation`, `srlinux`,
+  `temporal`; Actions secrets 0.
+- **The public view**: `env -u GH_TOKEN GIT_TERMINAL_PROMPT=0 git -c credential.helper=
+  clone https://github.com/happypathnetworking/fylgja.git` in an empty temporary
+  directory succeeded and held `README.md`, `LICENSE` and `SECURITY.md`. The
+  `-c credential.helper=` is what makes it a stranger's clone: the development host's
+  `~/.gitconfig` names `gh auth git-credential` as the helper for `https://github.com`,
+  and a trace of `git credential fill` shows git running it without the override and
+  stopping at `terminal prompts disabled` with it.
+- **A pull request**: #1, from a throwaway branch `pr-check` made through the API, opened
+  20:13Z. `pull-requests.yml` ran on `pull_request_target` and succeeded in 15s; the
+  pull request carries one comment, by `github-actions`, in the Contributing sentence,
+  and was closed at 20:13:18Z; the branch was deleted. `ci` ran its unit job on the pull
+  request, as it does on every one.
+- **A finding: a race in `internal/cli`'s tests.** The unit job on the push to `main`
+  failed in `TestTheClientReadsTheAPIsTwoVariablesAlone` ("the server logged 2 requests,
+  want 1"), passed on a re-run at 19:56Z, and failed the same way on #1. The harness's
+  server logs a request after its client has read the document, and every test reads one
+  shared log, so a line that lands late is counted by a later command. It predates this
+  feature: on `f601cb8`, the whole suite on four CPUs failed 2 of 8 runs, in this test and
+  in `TestPSPValidateReportsAnUnreadableFileFirst`. Fixed on `013-launch`: every count of
+  the log waits until the server serves nothing (`awaitIdle`); 12 runs on four CPUs and 4
+  on two then passed.
+
 ---
 
 ## 4. Owed to the records at the close

@@ -630,6 +630,40 @@ and the date; a fact that no longer holds is a finding (FR-015).
   neither the sync nor a rewrite of `ref`. An artifact rendered before the import keeps
   its bytes until it is regenerated, which Infrahub does not do on its own.
 
+### 3.3 Recorded: the installers and the script on the development host, 2026-10-07
+
+**The installers' flags** (T024, against §2.10), read from each installer's current text:
+
+- Temporal `https://temporal.download/cli.sh` takes `--version 1.9.1` and installs into
+  `$HOME/.temporalio` (`--dir` overrides it). As §2.10 says.
+- gnmic `https://get-gnmic.openconfig.net` and containerlab `https://get.containerlab.dev`
+  take `--version` or `-v`, with the version with or without its `v` (each prefixes
+  one); both run what needs root through `sudo` themselves, so the script runs them as the
+  user. containerlab's installs its `.deb` by default (`/usr/bin/containerlab`, as the
+  development host's is). As §2.10 says.
+- golangci-lint's `install.sh` takes `-b <dir> v2.14.0`; the script fetches it from the
+  `v2.14.0` tag rather than `HEAD` and runs it under `sudo` for `/usr/local/bin`.
+- **Difference**: containerlab's setup script (`https://containerlab.dev/setup`, whose
+  `install-docker` the lab part runs) does not pin Docker by `CLAB_VERSION`, which names
+  the containerlab release alone. Its Docker pin is in its own text, per distribution
+  release: today's sets `29.8.1` for Ubuntu 26.04 (and fails with no packages removed
+  when that release is not in Docker's repository), while the copy at containerlab's
+  `v0.79.0` tag (`utils/quick-setup.sh`) predates 26.04 and would fall back to `27.5.1`.
+  So the lab part runs today's script, and the Docker it installs is that script's pin
+  for 26.04, recorded at the first 26.04 run (§3).
+
+**The script on the development host** (T028; Ubuntu 24.04.1, ShellCheck 0.9.0, 24.04's
+package): `shellcheck scripts/bring-up.sh` and `bash -n` are clean; `--help` exits 0;
+the script with no flag, `--bogus`, `--part nope` and `--after-groups` without the marker
+each exit 2 with `bring-up: REFUSED: this host is Ubuntu 24.04.1 LTS; the script
+supports Ubuntu 26.04 alone`, the release coming first in the preamble; `git status
+--short` and `local/` were the same before and after. A copy reading a 26.04
+`os-release` from the scratchpad showed each flag refusal's own words, exit 2, before
+`sudo`. The script's read-only helpers, run against the live host, read the worker's and
+the server's reports as naming both packages with their logins set, the dev server
+`SERVING`, `/api/info` `1.11.2`, the fixture `complete`, port 8000 held by
+`fylgja-infrahub`'s `infrahub-server`, and `ceos:4.32.0.2F`'s layer as the recorded tar's.
+
 ---
 
 ## 4. Owed to the records at the close

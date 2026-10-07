@@ -1,0 +1,115 @@
+# The generic queries genqlient generates typed Go from. Every selection names only
+# Fylgja generics (Constitution III) — never a concrete kind. A tier-1 test asserts that
+# every operation is a query and names only Fylgja* roots.
+#
+# Verified 2026-09-08 against Infrahub 1.11.2: envelope (`value`, `node`, `edges`),
+# `limit`/`offset`, and generic resolution to concrete kinds. Ordering comes from the
+# schema's `order_by`, so no `order` argument is passed. `at` is a URL query parameter
+# on POST /graphql/{branch} (URL-encode `+`): sent on every query of a read iff the
+# operator supplied it, never otherwise. Re-verified 2026-09-14: Infrahub honours `at`
+# to the microsecond and truncates beyond; an `at`
+# before the default branch's creation is a 422; an unknown branch is a 404.
+#
+# Conformance (which kinds implement each generic, the schema hash) is not a GraphQL
+# query: it is GET /api/schema?branch=.
+
+# contract version, queried first; any mismatch short-circuits.
+query ContractVersion {
+  FylgjaContract {
+    edges { node { version { value } } }
+  }
+}
+
+fragment PlatformFields on FylgjaPlatform {
+  vendor  { value }
+  nos     { value }
+  version { value }
+  model   { value }
+}
+
+fragment InterfaceFields on FylgjaInterface {
+  id
+  name      { value }
+  iftype    { value }
+  mgmt_only { value }
+  enabled   { value }
+  parent    { node { name { value } } }
+  addresses { edges { node { address { value } } } }
+  link      { node { id } }
+}
+
+# M5 — the rendered configuration Infrahub holds for a device. The fragment names
+# Infrahub's own target interface, never a concrete kind (Constitution III), and it is
+# named rather than inline so genqlient derives a Go interface from it: a device node
+# carries artifacts through this fragment's type, so nothing in Fylgja has to assert on
+# a concrete device kind to read them.
+#
+# Spreading an interface fragment into an interface selection is valid only where the
+# two can overlap, which is exactly the inheritance conformance demands: a
+# device kind that does not inherit CoreArtifactTarget is refused before the query runs.
+fragment ArtifactFields on CoreArtifactTarget {
+  artifacts {
+    edges { node {
+      name        { value }
+      status      { value }
+      content_type { value }
+      checksum    { value }
+      storage_id  { value }
+      definition  { node { artifact_name { value } } }
+    } }
+  }
+}
+
+query Devices($limit: Int!, $offset: Int!) {
+  FylgjaDevice(limit: $limit, offset: $offset) {
+    count
+    edges {
+      node {
+        id
+        name { value }
+        role { value }
+        site { value }
+        platform   { node { ...PlatformFields } }
+        interfaces { edges { node { ...InterfaceFields } } }
+        # Configuration: the artifacts Infrahub rendered for this device, listed in the
+        # same request and at the same `at` as the intent.
+        ...ArtifactFields
+      }
+    }
+  }
+}
+
+query Links($limit: Int!, $offset: Int!) {
+  FylgjaLink(limit: $limit, offset: $offset) {
+    count
+    edges {
+      node {
+        id
+        endpoints {
+          edges {
+            node {
+              name   { value }
+              device { node { name { value } } }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+# M10 — every waypoint, read from the default branch, where the kind lives (D-028).
+# A Fylgja-owned concrete kind, like FylgjaContract; nobody implements it.
+query Waypoints($limit: Int!, $offset: Int!) {
+  FylgjaWaypoint(limit: $limit, offset: $offset) {
+    count
+    edges { node {
+      id
+      series        { value }
+      sequence      { value }
+      branch        { value updated_at }
+      as_of { value }
+      description   { value }
+    } }
+  }
+}

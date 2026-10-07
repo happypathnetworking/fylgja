@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fylgja.dev/contracts/findings/v1",
+  "title": "Fylgja findings document v1 (--json)",
+  "description": "Ported from cd7a389. Added: operation `intent.read`; top-level `bundle_id` (twin.compile); `verified.generics[].kinds` is now the list of implementing kind names (SC-004). Removed: `verified.objects` (schema check reads no intent).",
+  "type": "object",
+  "required": ["findings_version", "operation", "status", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "findings_version": { "const": "1" },
+    "operation": { "enum": ["intent.read", "twin.compile", "schema.check", "psp.validate"] },
+    "status": { "enum": ["ok", "rejected", "error"], "description": "ok→exit 0, rejected→exit 1, error→exit 2" },
+    "subject": {
+      "type": "object",
+      "description": "What was operated on.",
+      "additionalProperties": false,
+      "properties": {
+        "branch": { "type": "string" },
+        "at": { "type": "string", "description": "As supplied on --at; absent otherwise" },
+        "ctm": { "type": "string", "description": "CTM file read (twin.compile) or written (intent.read)" },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "out": { "type": "string", "description": "Bundle directory (twin.compile)" }
+      }
+    },
+    "bundle_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "twin.compile, status ok only: the hash of the bundle directory's canonical bytes (research R23)."
+    },
+    "verified": {
+      "type": "object",
+      "description": "schema.check success detail: what was verified.",
+      "additionalProperties": false,
+      "properties": {
+        "contract_version": { "type": "string" },
+        "generics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["generic", "kinds"],
+            "additionalProperties": false,
+            "properties": {
+              "generic": { "type": "string" },
+              "kinds": { "type": "array", "items": { "type": "string" }, "description": "Concrete kinds implementing the generic (used_by), sorted" }
+            }
+          }
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "rule", "object", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "severity": { "enum": ["rejection", "warning", "info"] },
+          "rule": { "type": "string", "pattern": "^[a-z]+(\\.[a-z_]+)+$" },
+          "object": { "type": "string" },
+          "message": { "type": "string" },
+          "location": {
+            "type": "object",
+            "required": ["file"],
+            "additionalProperties": false,
+            "properties": { "file": { "type": "string" }, "line": { "type": "integer" } }
+          }
+        }
+      }
+    }
+  }
+}

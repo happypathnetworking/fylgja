@@ -1,0 +1,9 @@
+! c1: production configuration (illustrative, never deployed)
+hostname c1
+interface Ethernet1/1
+   description to s1 ethernet-1/1
+   no switchport
+interface Ethernet1/49/1
+   description to c2 Ethernet1/49/1
+   no switchport
+interface Loopback0

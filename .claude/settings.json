@@ -1,0 +1,30 @@
+{
+  "model": "opus",
+  "effortLevel": "high",
+  "promptCacheTtl": "1h",
+  "alwaysThinkingEnabled": true,
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/command-log.py start",
+            "timeout": 30
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$CLAUDE_PROJECT_DIR\"/.claude/hooks/command-log.py stop",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

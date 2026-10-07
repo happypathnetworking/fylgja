@@ -1,0 +1,20 @@
+# genqlient generates the typed client from Infrahub's own SDL, so a schema change that
+# breaks a query fails the build rather than the twin (D-002).
+#
+# The SDL is committed at schema/infrahub.graphql: regenerating it needs a live
+# Infrahub, the build never does.
+#   make sdl && make generate
+schema: ../../schema/infrahub.graphql
+operations:
+  - queries.graphql
+generated: generated.go
+package: intent
+use_extensions: false
+bindings:
+  DateTime:
+    type: string
+  # M10: a Number attribute's value (the waypoint's sequence). Infrahub serialises it as
+  # a JSON number (verified 2026-09-28 on 1.11.2: CoreTransformation.timeout reads 60),
+  # and the kind's min_value 1 keeps it far inside int.
+  BigInt:
+    type: int

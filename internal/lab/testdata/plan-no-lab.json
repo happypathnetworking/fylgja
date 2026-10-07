@@ -1,0 +1,12 @@
+{
+  "dry-run": true,
+  "deployed-lab": true,
+  "lab-name": "m11-run3-probe",
+  "added-nodes": null,
+  "deleted-nodes": null,
+  "recreated-nodes": null,
+  "started-nodes": null,
+  "added-links": null,
+  "deleted-endpoints": null,
+  "restarted-nodes": null
+}

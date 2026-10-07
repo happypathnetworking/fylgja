@@ -1,0 +1,397 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fylgja.dev/contracts/bundle-manifest/v4",
+  "title": "Fylgja bundle manifest v4 — per-platform forwarding, bootstrap delivery, intent’s enabled state per row",
+  "description": "From M6’s v2 (specs/006-psp-lossy-mapping/contracts/manifest.schema.json): bundle_version was 3 at M7 (FR-025; D-025 and its M6 notes) and is 4 at M12 (FR-005, below). `fidelity.production_forwarding` is an object, one entry per platform in the bundle keyed by its package id, so a mixed bundle asserts each platform’s forwarding and M1’s fidelity.forwarding.mixed refusal retires; `mapping[].node_name` is on every row (null on a row without a port) and `fidelity.lossy` is always present ([] when empty), ending M6’s one exception to the empty-list rule; every node gains `bootstrap` {file, via}: the bootstrap file the bundle carries for it and whether containerlab applies it at deploy (startup_config, the topology names it) or the push sends its lines before the artifact’s (push, the topology node has no startup-config; M7 research R4). A v2 or v1 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions. Everything else is v2’s. From M5’s v2 (specs/005-configuration/contracts/manifest.schema.json), bundle_version still 2 (M6 FR-017): a mapping row may carry `node_name`, the node’s own name for its port, present only where it differs from `interface`; `fidelity.lossy` records every lossy mapping and every shared port, present only when it has content; omissions gain the rule omit.interface.shared. Both fields are the one deliberate exception to M1’s rule that every empty list is emitted as []: a bundle with nothing lossy in it is byte-identical to M5’s, so the goldens and both fixture ids stand and no following twin is rebuilt by the upgrade. The exception expires with M7’s bundle_version bump for per-platform forwarding (D-025), which makes both fields unconditional in the same move. From v1 (specs/001-read-compile/contracts/manifest.schema.json): bundle_version is 2, and every node gains `artifact`, the configuration file the bundle carries for it beside its bootstrap (M5 FR-001–FR-005; research R8). A v1 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions (FR-003). Nothing of Infrahub’s — artifact, storage or definition identifiers, a time of generation — appears (FR-005), so bundle_id moves for the artifact’s bytes or name and for nothing else. Everything else is v1’s. M12 (FR-005): bundle_version is 4. Every mapping row carries enabled, the interface's intent admin state (the CTM's enabled, true when unset), so the bundle says what intent says of each port: twin verify asserts nothing of a cabled port whose row says false, and records the skip. The topology, the bootstrap and every configs file are unchanged by the field.",
+  "type": "object",
+  "required": [
+    "bundle_version",
+    "provenance",
+    "nodes",
+    "mapping",
+    "links",
+    "omissions",
+    "fidelity"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "bundle_version": {
+      "const": "4"
+    },
+    "provenance": {
+      "type": "object",
+      "description": "The provenance block: the intent's address, copied from the CTM envelope minus `observed_at`. Nothing about the read, the host, the clock or the build.",
+      "required": [
+        "branch",
+        "schema_hash",
+        "contract_version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "at": {
+          "type": "string",
+          "description": "Present iff the operator supplied --at; verbatim."
+        },
+        "schema_hash": {
+          "type": "string"
+        },
+        "contract_version": {
+          "type": "string"
+        }
+      }
+    },
+    "nodes": {
+      "type": "array",
+      "description": "Sorted by name.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "platform",
+          "psp",
+          "image",
+          "management_port",
+          "artifact",
+          "bootstrap"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "platform": {
+            "type": "string",
+            "description": "platform.nos"
+          },
+          "psp": {
+            "type": "object",
+            "required": [
+              "id",
+              "source"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "source": {
+                "enum": [
+                  "embedded",
+                  "override"
+                ]
+              }
+            }
+          },
+          "image": {
+            "type": "string"
+          },
+          "management_port": {
+            "type": "string",
+            "description": "Always the PSP's interfaces.management name: containerlab gives every node one, whether or not intent flags a mgmt_only interface."
+          },
+          "artifact": {
+            "type": "object",
+            "description": "The node’s configuration artifact, as the bundle carries it: `file` is its path in the bundle, configs/<node>.<artifact_name>, bytes exactly as Infrahub served them; `checksum` is Infrahub’s own (MD5 hex: R6), verbatim; `size` is the byte count.",
+            "required": [
+              "name",
+              "content_type",
+              "checksum",
+              "size",
+              "file"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content_type": {
+                "type": "string",
+                "pattern": "^text/"
+              },
+              "checksum": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{32}$"
+              },
+              "size": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "file": {
+                "type": "string",
+                "pattern": "^configs/[^/]+$"
+              }
+            }
+          },
+          "bootstrap": {
+            "type": "object",
+            "description": "M7: the node’s bootstrap file, rendered from its package’s template (Constitution IV), and how it reaches the node (the package’s config.bootstrap_via).",
+            "required": [
+              "file",
+              "via"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "file": {
+                "type": "string",
+                "pattern": "^configs/[^/]+$"
+              },
+              "via": {
+                "enum": [
+                  "startup_config",
+                  "push"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "mapping": {
+      "type": "array",
+      "description": "One row per interface in intent. Sorted by (device, interface). M7: `node_name` on every row. M12: `enabled` on every row.",
+      "items": {
+        "type": "object",
+        "required": [
+          "device",
+          "interface",
+          "iftype",
+          "mgmt_only",
+          "port",
+          "disposition",
+          "node_name",
+          "enabled"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "device": {
+            "type": "string"
+          },
+          "interface": {
+            "type": "string"
+          },
+          "iftype": {
+            "enum": [
+              "physical",
+              "loopback",
+              "svi",
+              "subinterface"
+            ]
+          },
+          "mgmt_only": {
+            "type": "boolean"
+          },
+          "port": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "Node port; null when omitted or configured-not-cabled without a port"
+          },
+          "node_name": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "M7 (FR-025): on every row. The node’s own name for the port, as the profile’s rule renders it, equal to `interface` where the platform keeps the production name; null on a row without a port."
+          },
+          "disposition": {
+            "enum": [
+              "cabled",
+              "management",
+              "configured-not-cabled",
+              "omitted"
+            ]
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "M12 (FR-005): the interface's intent admin state (ctm.Interface.enabled, true when unset). On every row from bundle 4. A cabled row with false is still cabled and its bootstrap still enables the port; intent's disabling reaches the node through the artifact (M5 research R5), and twin verify asserts nothing of the port or its link."
+          }
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "description": "Cabled links only. Sorted by id.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "a",
+          "b"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "a": {
+            "$ref": "#/$defs/nodePort"
+          },
+          "b": {
+            "$ref": "#/$defs/nodePort"
+          }
+        }
+      }
+    },
+    "omissions": {
+      "type": "array",
+      "description": "Everything left out and why. Sorted by object then rule. Never empty when the mapping has an 'omitted' row. M6: omit.interface.shared is an uncabled interface whose port a cabled interface of the same device holds (FR-015); omit.interface.unmappable’s reason now names the rule, placeholder, value and range when a rule matched out of range (FR-019).",
+      "items": {
+        "type": "object",
+        "required": [
+          "rule",
+          "object",
+          "reason"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "rule": {
+            "enum": [
+              "omit.link.mgmt_only",
+              "omit.interface.unmappable",
+              "omit.mgmt.extra",
+              "omit.interface.shared"
+            ]
+          },
+          "object": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "fidelity": {
+      "type": "object",
+      "description": "Asserted, never measured (D-022); `basis` says so in the bundle itself (Constitution X). M7: `production_forwarding` per platform; `lossy` always present.",
+      "required": [
+        "basis",
+        "production_forwarding",
+        "approximations",
+        "omitted",
+        "lossy"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "const": "asserted",
+          "description": "Fidelity is asserted from PSP data and compiler decisions, never measured against production. The only value at M1; a verification layer would add another."
+        },
+        "production_forwarding": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": {
+            "pattern": "^[a-z0-9_]+$"
+          },
+          "additionalProperties": {
+            "enum": [
+              "hardware",
+              "software"
+            ]
+          },
+          "description": "M7 (FR-025; D-025): one entry per platform in the bundle, keyed by nodes[].psp.id, holding that package’s fidelity.production_forwarding. Keys sorted. Where production forwards in software the twin’s data plane is a fair guide; where in hardware it is not (architecture §1)."
+        },
+        "approximations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "omitted": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Object identifiers, mirrors omissions[].object"
+        },
+        "lossy": {
+          "type": "array",
+          "description": "M6 (FR-016), unconditional from M7 (FR-025): one entry per interface a lossy rule mapped, and per interface whose port another interface of the same device also renders to, whichever rule; [] when there is none. Sorted by (device, interface). `port` is the rendered port even for an interface the mapping table shows omitted for sharing; `shares` lists every other interface of the device rendering to the port, sorted by interface, with its rule and whether it is cabled. Asserted, like the rest of the block.",
+          "items": {
+            "type": "object",
+            "required": [
+              "device",
+              "interface",
+              "port",
+              "node_name",
+              "rule",
+              "lossy",
+              "shares"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "device": {
+                "type": "string"
+              },
+              "interface": {
+                "type": "string"
+              },
+              "port": {
+                "type": "string"
+              },
+              "node_name": {
+                "type": "string",
+                "description": "the node’s own name for the port, whether or not it differs from the production name"
+              },
+              "rule": {
+                "type": "string",
+                "description": "the rule’s name (FR-021), never its position or pattern"
+              },
+              "lossy": {
+                "type": "boolean",
+                "description": "whether that rule is declared lossy; false only for an interface recorded because its port is shared"
+              },
+              "shares": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "interface",
+                    "rule",
+                    "cabled"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "interface": {
+                      "type": "string"
+                    },
+                    "rule": {
+                      "type": "string"
+                    },
+                    "cabled": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "nodePort": {
+      "type": "object",
+      "required": [
+        "node",
+        "port"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "port": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

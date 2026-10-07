@@ -1,0 +1,19 @@
+{
+  "dry-run": true,
+  "deployed-lab": false,
+  "lab-name": "m11-plan",
+  "added-nodes": [],
+  "deleted-nodes": [],
+  "recreated-nodes": [],
+  "started-nodes": [],
+  "added-links": [
+    "e1:eth2 -- s1:e1-2"
+  ],
+  "deleted-endpoints": [],
+  "restarted-nodes": [
+    "e1"
+  ],
+  "node-change-reasons": {
+    "e1": "added link"
+  }
+}

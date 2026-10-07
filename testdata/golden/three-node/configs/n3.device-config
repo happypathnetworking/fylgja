@@ -1,0 +1,16 @@
+# n3: production configuration rendered by Infrahub (fylgja-artifacts)
+# platform nokia srlinux 24.7; role leaf-FYLGJA-MARKER-fixture
+set / system name host-name n3
+set / network-instance default type default
+set / interface ethernet-1/1 description "to n2 ethernet-1/2"
+set / interface ethernet-1/1 admin-state enable
+set / interface ethernet-1/1 subinterface 0 admin-state enable
+set / network-instance default interface ethernet-1/1.0
+set / interface ethernet-1/2 description "to n1 ethernet-1/2"
+set / interface ethernet-1/2 admin-state enable
+set / interface ethernet-1/2 subinterface 0 admin-state enable
+set / network-instance default interface ethernet-1/2.0
+set / interface lo0 admin-state enable
+set / interface lo0 subinterface 0 admin-state enable
+set / network-instance default interface lo0.0
+# mgmt0: out-of-band management, left to the platform

@@ -1,0 +1,24 @@
+{
+  "dry-run": true,
+  "deployed-lab": false,
+  "lab-name": "m11-kind",
+  "added-nodes": [],
+  "deleted-nodes": [],
+  "recreated-nodes": [
+    "s1"
+  ],
+  "started-nodes": [],
+  "added-links": [
+    "e1:eth1 -- s1:eth1"
+  ],
+  "deleted-endpoints": [
+    "s1:e1-1"
+  ],
+  "restarted-nodes": [
+    "e1"
+  ],
+  "node-change-reasons": {
+    "s1": "config drift: Kind, Image",
+    "e1": "added link"
+  }
+}

@@ -1,0 +1,43 @@
+# One device with its platform and interfaces, and each interface's link with both
+# endpoints. Reads the Fylgja generics only (never the concrete kinds), so it renders for
+# any schema that implements the contract.
+query device_config($device: String!) {
+  FylgjaDevice(name__value: $device) {
+    edges {
+      node {
+        name { value }
+        role { value }
+        site { value }
+        platform {
+          node {
+            vendor { value }
+            nos { value }
+            version { value }
+          }
+        }
+        interfaces {
+          edges {
+            node {
+              name { value }
+              iftype { value }
+              mgmt_only { value }
+              enabled { value }
+              link {
+                node {
+                  endpoints {
+                    edges {
+                      node {
+                        name { value }
+                        device { node { name { value } } }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

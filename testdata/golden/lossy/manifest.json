@@ -1,0 +1,476 @@
+{
+  "bundle_version": "4",
+  "provenance": {
+    "branch": "lossy-fixture",
+    "at": "2026-09-19T12:00:00Z",
+    "schema_hash": "fixture",
+    "contract_version": "0.2"
+  },
+  "nodes": [
+    {
+      "name": "c1",
+      "platform": "chassisos",
+      "psp": {
+        "id": "chassisos",
+        "source": "override"
+      },
+      "image": "example.invalid/chassisos:0",
+      "management_port": "eth0",
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "bb706d667cc6de452cfd923424c2a4db",
+        "size": 245,
+        "file": "configs/c1.device-config"
+      },
+      "bootstrap": {
+        "file": "configs/c1.cli",
+        "via": "startup_config"
+      }
+    },
+    {
+      "name": "c2",
+      "platform": "chassisos",
+      "psp": {
+        "id": "chassisos",
+        "source": "override"
+      },
+      "image": "example.invalid/chassisos:0",
+      "management_port": "eth0",
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "3ca0c128e20f6d8a4057c144b812728f",
+        "size": 247,
+        "file": "configs/c2.device-config"
+      },
+      "bootstrap": {
+        "file": "configs/c2.cli",
+        "via": "startup_config"
+      }
+    },
+    {
+      "name": "s1",
+      "platform": "srlinux",
+      "psp": {
+        "id": "nokia_srlinux",
+        "source": "embedded"
+      },
+      "image": "ghcr.io/nokia/srlinux:24.7.1",
+      "management_port": "mgmt0",
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "2419e2e874fe47a2db277ba50102fa39",
+        "size": 343,
+        "file": "configs/s1.device-config"
+      },
+      "bootstrap": {
+        "file": "configs/s1.cli",
+        "via": "startup_config"
+      }
+    }
+  ],
+  "mapping": [
+    {
+      "device": "c1",
+      "interface": "Ethernet1/1",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "eth1",
+      "node_name": "Ethernet1",
+      "disposition": "cabled"
+    },
+    {
+      "device": "c1",
+      "interface": "Ethernet1/49/1",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "eth49",
+      "node_name": "Ethernet49",
+      "disposition": "cabled"
+    },
+    {
+      "device": "c1",
+      "interface": "Ethernet1/49/2",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": null,
+      "node_name": null,
+      "disposition": "omitted"
+    },
+    {
+      "device": "c1",
+      "interface": "Ethernet1/53",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": null,
+      "node_name": null,
+      "disposition": "omitted"
+    },
+    {
+      "device": "c1",
+      "interface": "Ethernet2/1",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": null,
+      "node_name": null,
+      "disposition": "omitted"
+    },
+    {
+      "device": "c1",
+      "interface": "Loopback0",
+      "iftype": "loopback",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": null,
+      "node_name": null,
+      "disposition": "configured-not-cabled"
+    },
+    {
+      "device": "c1",
+      "interface": "Management1",
+      "iftype": "physical",
+      "mgmt_only": true,
+      "enabled": true,
+      "port": "eth0",
+      "node_name": "Management0",
+      "disposition": "management"
+    },
+    {
+      "device": "c2",
+      "interface": "Ethernet1/2",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "eth2",
+      "node_name": "Ethernet2",
+      "disposition": "configured-not-cabled"
+    },
+    {
+      "device": "c2",
+      "interface": "Ethernet1/49/1",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "eth49",
+      "node_name": "Ethernet49",
+      "disposition": "cabled"
+    },
+    {
+      "device": "c2",
+      "interface": "Ethernet1/50",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "eth50",
+      "node_name": "Ethernet50",
+      "disposition": "configured-not-cabled"
+    },
+    {
+      "device": "c2",
+      "interface": "Ethernet1/50/1",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "eth50",
+      "node_name": "Ethernet50",
+      "disposition": "configured-not-cabled"
+    },
+    {
+      "device": "c2",
+      "interface": "Ethernet1/50/2",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "eth50",
+      "node_name": "Ethernet50",
+      "disposition": "configured-not-cabled"
+    },
+    {
+      "device": "c2",
+      "interface": "Ethernet2/1",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "eth1",
+      "node_name": "Ethernet1",
+      "disposition": "cabled"
+    },
+    {
+      "device": "c2",
+      "interface": "Loopback0",
+      "iftype": "loopback",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": null,
+      "node_name": null,
+      "disposition": "configured-not-cabled"
+    },
+    {
+      "device": "c2",
+      "interface": "Management1",
+      "iftype": "physical",
+      "mgmt_only": true,
+      "enabled": true,
+      "port": "eth0",
+      "node_name": "Management0",
+      "disposition": "management"
+    },
+    {
+      "device": "s1",
+      "interface": "ethernet-1/1",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "e1-1",
+      "node_name": "ethernet-1/1",
+      "disposition": "cabled"
+    },
+    {
+      "device": "s1",
+      "interface": "ethernet-1/2/1",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "e1-2-1",
+      "node_name": "ethernet-1/2/1",
+      "disposition": "cabled"
+    },
+    {
+      "device": "s1",
+      "interface": "lo0",
+      "iftype": "loopback",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": null,
+      "node_name": null,
+      "disposition": "configured-not-cabled"
+    },
+    {
+      "device": "s1",
+      "interface": "mgmt0",
+      "iftype": "physical",
+      "mgmt_only": true,
+      "enabled": true,
+      "port": "mgmt0",
+      "node_name": "mgmt0",
+      "disposition": "management"
+    }
+  ],
+  "links": [
+    {
+      "id": "c1:Ethernet1/1|s1:ethernet-1/1",
+      "a": {
+        "node": "c1",
+        "port": "eth1"
+      },
+      "b": {
+        "node": "s1",
+        "port": "e1-1"
+      }
+    },
+    {
+      "id": "c1:Ethernet1/49/1|c2:Ethernet1/49/1",
+      "a": {
+        "node": "c1",
+        "port": "eth49"
+      },
+      "b": {
+        "node": "c2",
+        "port": "eth49"
+      }
+    },
+    {
+      "id": "c2:Ethernet2/1|s1:ethernet-1/2/1",
+      "a": {
+        "node": "c2",
+        "port": "eth1"
+      },
+      "b": {
+        "node": "s1",
+        "port": "e1-2-1"
+      }
+    }
+  ],
+  "omissions": [
+    {
+      "rule": "omit.interface.shared",
+      "object": "c1:Ethernet1/49/2",
+      "reason": "port eth49 is held by cabled Ethernet1/49/1 (rule breakout); this interface maps to it under rule breakout and is not represented"
+    },
+    {
+      "rule": "omit.interface.unmappable",
+      "object": "c1:Ethernet1/53",
+      "reason": "rule front matched, but {port} is 53, outside its range 1..52; no such port on the node"
+    },
+    {
+      "rule": "omit.interface.shared",
+      "object": "c1:Ethernet2/1",
+      "reason": "port eth1 is held by cabled Ethernet1/1 (rule front); this interface maps to it under rule linecard and is not represented"
+    }
+  ],
+  "fidelity": {
+    "basis": "asserted",
+    "production_forwarding": {
+      "chassisos": "hardware",
+      "nokia_srlinux": "hardware"
+    },
+    "approximations": [
+      "chassisos: Synthetic test platform; its port names are illustrative and nothing about it is measured",
+      "nokia_srlinux: No linecard model; port count fixed at container start",
+      "nokia_srlinux: No hardware QoS, TCAM or buffer behaviour",
+      "nokia_srlinux: Convergence timing differs from hardware"
+    ],
+    "omitted": [
+      "c1:Ethernet1/49/2",
+      "c1:Ethernet1/53",
+      "c1:Ethernet2/1"
+    ],
+    "lossy": [
+      {
+        "device": "c1",
+        "interface": "Ethernet1/1",
+        "port": "eth1",
+        "node_name": "Ethernet1",
+        "rule": "front",
+        "lossy": false,
+        "shares": [
+          {
+            "interface": "Ethernet2/1",
+            "rule": "linecard",
+            "cabled": false
+          }
+        ]
+      },
+      {
+        "device": "c1",
+        "interface": "Ethernet1/49/1",
+        "port": "eth49",
+        "node_name": "Ethernet49",
+        "rule": "breakout",
+        "lossy": true,
+        "shares": [
+          {
+            "interface": "Ethernet1/49/2",
+            "rule": "breakout",
+            "cabled": false
+          }
+        ]
+      },
+      {
+        "device": "c1",
+        "interface": "Ethernet1/49/2",
+        "port": "eth49",
+        "node_name": "Ethernet49",
+        "rule": "breakout",
+        "lossy": true,
+        "shares": [
+          {
+            "interface": "Ethernet1/49/1",
+            "rule": "breakout",
+            "cabled": true
+          }
+        ]
+      },
+      {
+        "device": "c1",
+        "interface": "Ethernet2/1",
+        "port": "eth1",
+        "node_name": "Ethernet1",
+        "rule": "linecard",
+        "lossy": true,
+        "shares": [
+          {
+            "interface": "Ethernet1/1",
+            "rule": "front",
+            "cabled": true
+          }
+        ]
+      },
+      {
+        "device": "c2",
+        "interface": "Ethernet1/49/1",
+        "port": "eth49",
+        "node_name": "Ethernet49",
+        "rule": "breakout",
+        "lossy": true,
+        "shares": []
+      },
+      {
+        "device": "c2",
+        "interface": "Ethernet1/50",
+        "port": "eth50",
+        "node_name": "Ethernet50",
+        "rule": "front",
+        "lossy": false,
+        "shares": [
+          {
+            "interface": "Ethernet1/50/1",
+            "rule": "breakout",
+            "cabled": false
+          },
+          {
+            "interface": "Ethernet1/50/2",
+            "rule": "breakout",
+            "cabled": false
+          }
+        ]
+      },
+      {
+        "device": "c2",
+        "interface": "Ethernet1/50/1",
+        "port": "eth50",
+        "node_name": "Ethernet50",
+        "rule": "breakout",
+        "lossy": true,
+        "shares": [
+          {
+            "interface": "Ethernet1/50",
+            "rule": "front",
+            "cabled": false
+          },
+          {
+            "interface": "Ethernet1/50/2",
+            "rule": "breakout",
+            "cabled": false
+          }
+        ]
+      },
+      {
+        "device": "c2",
+        "interface": "Ethernet1/50/2",
+        "port": "eth50",
+        "node_name": "Ethernet50",
+        "rule": "breakout",
+        "lossy": true,
+        "shares": [
+          {
+            "interface": "Ethernet1/50",
+            "rule": "front",
+            "cabled": false
+          },
+          {
+            "interface": "Ethernet1/50/1",
+            "rule": "breakout",
+            "cabled": false
+          }
+        ]
+      },
+      {
+        "device": "c2",
+        "interface": "Ethernet2/1",
+        "port": "eth1",
+        "node_name": "Ethernet1",
+        "rule": "linecard",
+        "lossy": true,
+        "shares": []
+      }
+    ]
+  }
+}

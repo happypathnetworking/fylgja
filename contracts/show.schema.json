@@ -1,0 +1,643 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fylgja.dev/schemas/show.schema.json",
+  "title": "fylgja twin show — the show block — M11 extension",
+  "description": "The `show` block of the findings document `fylgja twin show --json` emits (operation twin.show). One document, from containerlab, the twin directory and the workflow service; every fact the text output reports, and no credential (FR-022). M5 (FR-023): host.nodes[] gains artifact, the name and checksum twin.json records for the node, or null for a node the record does not name (an orphan’s, or a record that cannot be read). in_flight steps may be push. No artifact content (FR-028). M7 (FR-026): host.nodes[] gains psp, the package id from twin.json, or null. M10 (FR-013): record gains waypoint, the waypoint twin.json 3 names, present only when the record names one; a 2 record shows none. The kind line for such a twin reads `pinned at <at>, waypoint <series>/<sequence>; not following`. M11 (FR-031): record gains state and step (the record's step block as twin show reads it: outcome, from, to, run, phase, restarted, pushed, timings, started_at, ended_at), present for a 4 record that has stepped; kind gains diverged, whose line names the target, the phase, the nodes landed and not, and fylgja twin destroy as the remedy; a stepped twin keeps kind pinned with a sentence naming the step; in_flight may list fylgja-step with its step. M12 (FR-023): record.step gains wait, the step's wait as twin show shows it: outcome, budget_s, reads, after_s and the failing assertions by rule and object (no message), or null while it has not run; absent for a 4 record.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "host",
+    "kind",
+    "service",
+    "in_flight",
+    "notes"
+  ],
+  "properties": {
+    "host": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lab_present",
+        "twin_dir_present",
+        "nodes",
+        "phrase"
+      ],
+      "properties": {
+        "lab_present": {
+          "type": "boolean"
+        },
+        "twin_dir_present": {
+          "type": "boolean"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "container",
+              "state",
+              "mgmt_ipv4",
+              "psp"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "container": {
+                "type": "string"
+              },
+              "state": {
+                "type": "string"
+              },
+              "mgmt_ipv4": {
+                "type": "string"
+              },
+              "artifact": {
+                "type": [
+                  "object",
+                  "null"
+                ],
+                "description": "M5: from twin.json, by node name; null when the record does not name the node.",
+                "required": [
+                  "name",
+                  "checksum"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "checksum": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{32}$"
+                  }
+                }
+              },
+              "psp": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "M7 (FR-026): the node’s support package id as twin.json records it (nodes[].psp.id), or null for a node the record does not name (an orphan’s). No new key in twin.json."
+              }
+            }
+          }
+        },
+        "phrase": {
+          "type": "string",
+          "description": "HostState.Describe(): what the host holds, in M3's words; empty when it holds nothing"
+        }
+      }
+    },
+    "record": {
+      "description": "twin.json, when present and readable; absent otherwise",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "branch",
+        "bundle_id",
+        "schema_hash",
+        "contract_version",
+        "observed_at",
+        "source",
+        "run",
+        "worker_version",
+        "recorded_at",
+        "nodes"
+      ],
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "description": "verbatim, when the reference was pinned"
+        },
+        "bundle_id": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "schema_hash": {
+          "type": "string"
+        },
+        "contract_version": {
+          "type": "string"
+        },
+        "observed_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "observed_at_note": {
+          "type": "string"
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "intent",
+            "bundle"
+          ]
+        },
+        "run": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "workflow_id",
+            "run_id"
+          ],
+          "properties": {
+            "workflow_id": {
+              "type": "string"
+            },
+            "run_id": {
+              "type": "string"
+            }
+          }
+        },
+        "worker_version": {
+          "type": "string"
+        },
+        "recorded_at": {
+          "type": "string"
+        },
+        "nodes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "waypoint": {
+          "type": "object",
+          "description": "M10: the waypoint the twin was created from, as twin.json 3 records it (twin.schema.json). Absent when the record names none, and for a 2 record",
+          "required": [
+            "series",
+            "sequence",
+            "description",
+            "at_source"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "series": {
+              "type": "string"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "description": {
+              "type": "string"
+            },
+            "at_source": {
+              "enum": [
+                "given",
+                "written"
+              ]
+            }
+          }
+        },
+        "state": {
+          "enum": [
+            "ready",
+            "diverged"
+          ],
+          "description": "M11: the record’s state; absent for a 3 record"
+        },
+        "step": {
+          "type": "object",
+          "description": "M11: twin.json 4’s step block, as far as twin show shows it (twin.schema.json); absent when the record has no step",
+          "required": [
+            "outcome",
+            "from",
+            "to",
+            "run",
+            "restarted",
+            "pushed",
+            "started_at",
+            "ended_at"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "outcome": {
+              "enum": [
+                "stepped",
+                "unchanged",
+                "diverged"
+              ]
+            },
+            "from": {
+              "type": "object",
+              "required": [
+                "waypoint",
+                "bundle_id",
+                "at"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "waypoint": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "required": [
+                    "series",
+                    "sequence",
+                    "description",
+                    "at_source"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "series": {
+                      "type": "string"
+                    },
+                    "sequence": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "at_source": {
+                      "enum": [
+                        "given",
+                        "written"
+                      ]
+                    }
+                  }
+                },
+                "bundle_id": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string"
+                }
+              }
+            },
+            "to": {
+              "type": "object",
+              "required": [
+                "waypoint",
+                "bundle_id",
+                "at"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "waypoint": {
+                  "type": [
+                    "object",
+                    "null"
+                  ],
+                  "required": [
+                    "series",
+                    "sequence",
+                    "description",
+                    "at_source"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "series": {
+                      "type": "string"
+                    },
+                    "sequence": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "description": {
+                      "type": "string"
+                    },
+                    "at_source": {
+                      "enum": [
+                        "given",
+                        "written"
+                      ]
+                    }
+                  }
+                },
+                "bundle_id": {
+                  "type": "string"
+                },
+                "at": {
+                  "type": "string"
+                }
+              }
+            },
+            "run": {
+              "type": "object",
+              "required": [
+                "workflow_id",
+                "run_id"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "workflow_id": {
+                  "const": "fylgja-step"
+                },
+                "run_id": {
+                  "type": "string"
+                }
+              }
+            },
+            "phase": {
+              "enum": [
+                "reconcile",
+                "readiness",
+                "push",
+                "record"
+              ]
+            },
+            "restarted": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "the reconcile’s restarted, recreated and added nodes"
+            },
+            "pushed": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "node",
+                  "reasons",
+                  "outcome"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "reasons": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "outcome": {
+                    "type": "string"
+                  },
+                  "rule": {
+                    "type": "string"
+                  },
+                  "took_s": {
+                    "type": "number"
+                  }
+                }
+              }
+            },
+            "timings": {
+              "type": "object"
+            },
+            "started_at": {
+              "type": "string"
+            },
+            "ended_at": {
+              "type": "string"
+            },
+            "wait": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "description": "M12: twin.json 5's step.wait as twin show shows it; null while the wait has not run; absent for a 4 record",
+              "required": [
+                "outcome",
+                "budget_s",
+                "reads",
+                "after_s",
+                "failing"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "outcome": {
+                  "enum": [
+                    "settled",
+                    "expired",
+                    "cancelled",
+                    "incomplete"
+                  ]
+                },
+                "budget_s": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "reads": {
+                  "type": "integer",
+                  "minimum": 0
+                },
+                "after_s": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "failing": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "rule",
+                      "object"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "rule": {
+                        "type": "string"
+                      },
+                      "object": {
+                        "type": "string"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "kind": {
+      "type": "string",
+      "enum": [
+        "none",
+        "pinned",
+        "frozen",
+        "from_bundle",
+        "following",
+        "diverged"
+      ]
+    },
+    "following": {
+      "description": "present when Schedule fylgja-follow exists, whatever the twin",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "branch",
+        "interval_s",
+        "schedule_id"
+      ],
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "interval_s": {
+          "type": "integer",
+          "minimum": 10
+        },
+        "schedule_id": {
+          "type": "string",
+          "const": "fylgja-follow"
+        },
+        "next_check_at": {
+          "type": "string"
+        },
+        "last_check": {
+          "$ref": "#/$defs/check"
+        }
+      }
+    },
+    "last_check": {
+      "description": "when following stopped after a failed rebuild and no Schedule exists: the check that stopped it (FR-018)",
+      "$ref": "#/$defs/check"
+    },
+    "in_flight": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "workflow_id",
+          "run_id",
+          "step"
+        ],
+        "properties": {
+          "workflow_id": {
+            "type": "string"
+          },
+          "run_id": {
+            "type": "string"
+          },
+          "step": {
+            "type": "string",
+            "description": "the step the run's history has reached, as findings name steps"
+          },
+          "child": {
+            "description": "for a check: its child run in flight",
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "workflow_id",
+              "run_id",
+              "step"
+            ],
+            "properties": {
+              "workflow_id": {
+                "type": "string"
+              },
+              "run_id": {
+                "type": "string"
+              },
+              "step": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "service": {
+      "type": "string",
+      "enum": [
+        "ok",
+        "unreachable"
+      ]
+    },
+    "notes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "the statements the text prints: best-effort reproducibility for an unpinned twin; a rebuild discards runtime state; why the twin is not following; the remedy for an orphan or a stopped following"
+    }
+  },
+  "$defs": {
+    "check": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflow_id",
+        "run_id",
+        "scheduled_at",
+        "outcome",
+        "findings"
+      ],
+      "properties": {
+        "workflow_id": {
+          "type": "string"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "scheduled_at": {
+          "type": "string"
+        },
+        "closed_at": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "unchanged",
+            "rebuilt",
+            "rejected",
+            "error",
+            "rebuild_failed",
+            "skipped",
+            "cancelled"
+          ]
+        },
+        "step": {
+          "type": "string"
+        },
+        "twin_bundle_id": {
+          "type": "string"
+        },
+        "bundle_id": {
+          "type": "string"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "cleanup": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "teardown",
+            "unstage",
+            "remaining"
+          ],
+          "properties": {
+            "teardown": {
+              "type": "string"
+            },
+            "unstage": {
+              "type": "string"
+            },
+            "removed": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "remaining": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

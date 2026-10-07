@@ -1,0 +1,44 @@
+@startuml
+title <size:24>Component View: Fylgja - fylgja worker run</size>\n<size:24>The packages the worker runs.</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Component>
+
+AddElementTag("Component", $bgColor="#85bbf0", $borderColor="#5d82a8", $fontColor="#000000", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = "")
+
+AddBoundaryTag("Container", $bgColor="#ffffff", $borderColor="#2e6295", $fontColor="#2e6295", $shadowing="", $borderStyle="solid")
+
+System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
+  Container_Boundary("Fylgja.fylgjaworkerrun_boundary", "fylgja worker run", $tags="Container") {
+    Component(Fylgja.fylgjaworkerrun.provision, "provision", $techn="internal/provision", $descr="The four workflows, their control activities, the worker's registration.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaworkerrun.lab, "lab", $techn="internal/lab", $descr="The host-bound activities: deploy, readiness, push, reconcile, record, the wait.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaworkerrun.stage, "stage", $techn="internal/stage", $descr="The read and compile pipelines.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaworkerrun.verify, "verify", $techn="internal/verify", $descr="The readers and the wait.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaworkerrun.labwire, "lab/wire", $techn="internal/lab/wire", $descr="Activity names and the payloads crossing the task queue.", $tags="Component", $link="")
+  }
+
+}
+
+Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.labwire, "Schedules activities by name", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.lab, "Registers the host-bound activities", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.stage, "ReadIntent, Compile", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaworkerrun.lab, Fylgja.fylgjaworkerrun.labwire, "Takes and returns the payloads", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaworkerrun.lab, Fylgja.fylgjaworkerrun.verify, "VerifyTwin waits", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaworkerrun.verify, Fylgja.fylgjaworkerrun.labwire, "Reads the record's types", $techn="", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

@@ -1,0 +1,17 @@
+{
+  "dry-run": true,
+  "deployed-lab": false,
+  "lab-name": "m11-plan",
+  "added-nodes": [],
+  "deleted-nodes": [],
+  "recreated-nodes": [
+    "s2"
+  ],
+  "started-nodes": [],
+  "added-links": [],
+  "deleted-endpoints": [],
+  "restarted-nodes": [],
+  "node-change-reasons": {
+    "s2": "config drift: Image"
+  }
+}

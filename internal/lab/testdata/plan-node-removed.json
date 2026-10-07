@@ -1,0 +1,16 @@
+{
+  "dry-run": true,
+  "deployed-lab": false,
+  "lab-name": "m11-plan",
+  "added-nodes": [],
+  "deleted-nodes": [
+    "e1"
+  ],
+  "recreated-nodes": [],
+  "started-nodes": [],
+  "added-links": [],
+  "deleted-endpoints": [
+    "s1:e1-1"
+  ],
+  "restarted-nodes": []
+}

@@ -1,0 +1,524 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fylgja.dev/contracts/findings/v1",
+  "title": "Fylgja findings document v1 (--json) — M10 extension",
+  "description": "Additive to specs/001-read-compile/contracts/findings.schema.json: every M1 document still validates. Added: operations twin.create, twin.provision, twin.destroy; statuses failed (exit 3) and unclean (exit 4); subject.bundle and subject.run_id; blocks twin (success of create/provision), cleanup (failure of create/provision, and destroy), dry_run. findings_version stays \"1\". M4 (specs/004-walking): operation twin.show; the `show` block (show.schema.json); the `following` block on twin.create and twin.destroy; `dry_run.follow`. findings_version stays \"1\": every M1–M3 document still validates. M5 (FR-021, FR-024): the step enum gains push; dry_run.nodes[] gains artifact (what would be pushed, by name, content type, checksum and size); twin.nodes[] may carry artifact {name, checksum} and pushed_in_s. findings_version stays 1: additive. No artifact content anywhere (FR-028). M6: dry_run gains lossy_mappings and shared_ports (FR-022); nothing else changes. M7: the step enum and every block are unchanged; twin show’s host.nodes[] gains psp (show.schema.json); the summary counts and the dry run’s read line are text. New warning artifact.interface.unrepresented and rejection host.image.absent are ordinary findings. M10 (specs/008-waypoints; FR-009–FR-011, FR-017, FR-018, FR-025, FR-029): operations waypoint.list and waypoint.plan; subject.waypoint (the reference as supplied on --waypoint); the step enum gains resolve, the CLI-side step between the flag guards and the run, as verify is twin.provision's; dry_run.follow.reason gains waypoint; the `waypoint` block (the resolved reference, on twin.create, twin.create --dry-run and intent.read with --waypoint), the `waypoints` block (waypoint.list) and the `plan` block (waypoint.plan), each defined in waypoints.schema.json under its $id; verified.waypoints on schema.check. findings_version stays 1: additive. No artifact or bootstrap content anywhere (FR-021).",
+  "type": "object",
+  "required": [
+    "findings_version",
+    "operation",
+    "status",
+    "findings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "findings_version": {
+      "const": "1"
+    },
+    "operation": {
+      "enum": [
+        "intent.read",
+        "twin.compile",
+        "schema.check",
+        "psp.validate",
+        "twin.create",
+        "twin.provision",
+        "twin.destroy",
+        "twin.show",
+        "waypoint.list",
+        "waypoint.plan"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "rejected",
+        "error",
+        "failed",
+        "unclean"
+      ],
+      "description": "ok→0, rejected→1 (before the host was touched), error→2 (operational), failed→3 (after the host was touched; cleanup complete), unclean→4 (something remains). See cli.md."
+    },
+    "subject": {
+      "type": "object",
+      "description": "What was operated on.",
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "description": "As supplied on --at; absent otherwise"
+        },
+        "ctm": {
+          "type": "string"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "out": {
+          "type": "string"
+        },
+        "bundle": {
+          "type": "string",
+          "description": "The bundle directory given to twin.provision, as given"
+        },
+        "run_id": {
+          "type": "string",
+          "description": "The Temporal run id of the provisioning or destroy run this document reports on, once one was started (or attached to)"
+        },
+        "waypoint": {
+          "type": "string",
+          "pattern": "^[^/\\s]+/[1-9][0-9]*$",
+          "description": "M10: as supplied on --waypoint (twin.create, intent.read), <series>/<sequence>; branch and at then carry the resolved reference. Absent otherwise"
+        }
+      }
+    },
+    "bundle_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "twin.compile (status ok), twin.create and twin.provision (any status once compile completed): the bundle's identity (D-024)."
+    },
+    "verified": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contract_version": {
+          "type": "string"
+        },
+        "generics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "generic",
+              "kinds"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "generic": {
+                "type": "string"
+              },
+              "kinds": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        },
+        "waypoints": {
+          "type": "object",
+          "description": "M10 (FR-029): whether the default branch's schema carries the waypoint kind with every attribute this build reads. Information beside the conformance answer; never a finding",
+          "required": [
+            "kind",
+            "present",
+            "missing",
+            "file"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "FylgjaWaypoint"
+            },
+            "present": {
+              "type": "boolean"
+            },
+            "missing": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "the attributes the kind lacks; empty when present, or when the kind itself is absent"
+            },
+            "file": {
+              "const": "schema/fylgja-waypoint.yaml"
+            }
+          }
+        }
+      }
+    },
+    "twin": {
+      "type": "object",
+      "description": "twin.create / twin.provision, status ok: the twin that was built. Mirrors twin.json's nodes.",
+      "required": [
+        "lab",
+        "dir",
+        "run_id",
+        "observed_at",
+        "nodes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "lab": {
+          "const": "fylgja"
+        },
+        "dir": {
+          "type": "string",
+          "description": "Absolute twin directory path, as the worker reported it (FR-020)"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "observed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "As twin.json: null when no read took place"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "mgmt_ipv4",
+              "ready_after_s"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "mgmt_ipv4": {
+                "type": "string"
+              },
+              "ready_after_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "artifact": {
+                "type": "object",
+                "description": "M5: the artifact pushed, by name and checksum (FR-024).",
+                "required": [
+                  "name",
+                  "checksum"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "checksum": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{32}$"
+                  }
+                }
+              },
+              "pushed_in_s": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "description": "twin.create / twin.provision with status failed or unclean, and twin.destroy: what teardown and unstage did.",
+      "required": [
+        "teardown",
+        "unstage",
+        "remaining"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "teardown": {
+          "enum": [
+            "done",
+            "nothing",
+            "failed",
+            "skipped"
+          ],
+          "description": "done: lab fylgja removed. nothing: no lab was present. failed: see cleanup.incomplete. skipped: not attempted (the CLI stopped waiting)"
+        },
+        "unstage": {
+          "enum": [
+            "done",
+            "nothing",
+            "failed",
+            "skipped"
+          ]
+        },
+        "removed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What was removed, e.g. \"lab fylgja (3 containers)\", \"twin directory /…/twin\""
+        },
+        "remaining": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What is still on the host. Empty for status ok and failed; non-empty for unclean"
+        }
+      }
+    },
+    "dry_run": {
+      "type": "object",
+      "description": "twin.create --dry-run / twin.provision --dry-run: what a real run would do (FR-005, SC-010). M6 (FR-022): `lossy_mappings` and `shared_ports` count what the bundle’s manifest records, so the operator sees a lossy twin before creating it.",
+      "required": [
+        "nodes",
+        "memory_sum_mb",
+        "host_budget_mb",
+        "host",
+        "verdict",
+        "lossy_mappings",
+        "shared_ports"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "image",
+              "psp",
+              "memory_mb",
+              "artifact"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              },
+              "psp": {
+                "type": "string",
+                "description": "psp id"
+              },
+              "memory_mb": {
+                "type": "integer"
+              },
+              "artifact": {
+                "type": "object",
+                "description": "M5: the artifact that would be pushed to this node, as the bundle’s manifest names it.",
+                "required": [
+                  "name",
+                  "content_type",
+                  "checksum",
+                  "size"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "checksum": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{32}$"
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "memory_sum_mb": {
+          "type": "integer"
+        },
+        "host_budget_mb": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "FYLGJA_HOST_MEMORY_MB, or null when unset"
+        },
+        "host": {
+          "type": "object",
+          "required": [
+            "lab_present",
+            "twin_dir_present"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "lab_present": {
+              "type": "boolean"
+            },
+            "twin_dir_present": {
+              "type": "boolean"
+            }
+          }
+        },
+        "verdict": {
+          "enum": [
+            "clear",
+            "refused"
+          ],
+          "description": "refused: the findings carry the identifier the real create would refuse with"
+        },
+        "follow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "interval_s": {
+              "type": "integer",
+              "minimum": 10
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "pinned",
+                "no_follow",
+                "bundle",
+                "waypoint"
+              ]
+            }
+          }
+        },
+        "lossy_mappings": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "the number of entries in the manifest’s fidelity.lossy (0 when absent)"
+        },
+        "shared_ports": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "the number of distinct (node, port) pairs more than one interface renders to"
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "severity",
+          "rule",
+          "object",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "severity": {
+            "enum": [
+              "rejection",
+              "warning",
+              "info"
+            ]
+          },
+          "rule": {
+            "type": "string",
+            "pattern": "^[a-z]+(\\.[a-z_]+)+$"
+          },
+          "object": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "step": {
+            "enum": [
+              "verify",
+              "start",
+              "read",
+              "compile",
+              "host_check",
+              "stage",
+              "deploy",
+              "readiness",
+              "record",
+              "teardown",
+              "unstage",
+              "inspect",
+              "compare",
+              "destroy",
+              "provision",
+              "follow",
+              "push",
+              "resolve"
+            ],
+            "description": "New at M2: the step the finding belongs to (FR-017). Absent on M1 operations; resolve (M10): the CLI's waypoint resolution before a run"
+          },
+          "location": {
+            "type": "object",
+            "required": [
+              "file"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "following": {
+      "description": "twin.create: the following the run began (state started) or could not begin (not_started); twin.destroy: the following stopped. Absent when the twin does not follow and none was stopped.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "branch"
+      ],
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "interval_s": {
+          "type": "integer",
+          "minimum": 10
+        },
+        "schedule_id": {
+          "type": "string",
+          "const": "fylgja-follow"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "started",
+            "not_started"
+          ]
+        },
+        "stopped": {
+          "type": "boolean"
+        }
+      }
+    },
+    "show": {
+      "description": "twin.show: see show.schema.json. Referenced by its $id: a relative reference would resolve against this schema's $id to https://fylgja.dev/contracts/findings/show.schema.json, which nothing defines",
+      "$ref": "https://fylgja.dev/schemas/show.schema.json"
+    },
+    "waypoint": {
+      "description": "M10: the resolved waypoint reference, present on twin.create (with or without --dry-run) and intent.read when --waypoint was given and the resolution succeeded. Defined in waypoints.schema.json by its $id",
+      "$ref": "https://fylgja.dev/schemas/waypoints.schema.json#/$defs/resolved"
+    },
+    "waypoints": {
+      "description": "M10: waypoint.list's block",
+      "$ref": "https://fylgja.dev/schemas/waypoints.schema.json#/$defs/list"
+    },
+    "plan": {
+      "description": "M10: waypoint.plan's block",
+      "$ref": "https://fylgja.dev/schemas/waypoints.schema.json#/$defs/plan"
+    }
+  }
+}

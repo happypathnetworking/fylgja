@@ -1,0 +1,67 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+#
+# Fylgja waypoint kind (M10). Beside the generics
+# contract, not in it: the contract stays 0.2, and only --waypoint, waypoint list and
+# waypoint plan need this kind. Loaded on the default branch (D-028), where Fylgja reads it.
+#
+# Verified 2026-09-28 against Infrahub 1.11.2: checks
+# on main (202, the diff adds FylgjaWaypoint, no warnings), loads branch-agnostic with its
+# uniqueness constraint, and refuses at write what the reference syntax refuses.
+#
+#   - The attribute is `as_of`, not `at`: Infrahub caps attribute names at 3-64
+#     characters, so `at` is refused. "As of" is the temporal-query term for reading data
+#     as it stood at an instant. Every command, report and record still calls it `at`.
+#   - `branch: agnostic`, so a waypoint lands in no branch's diff (D-010's reason: intent
+#     is the operator's, and a mark about it is not part of it) and one written from any
+#     branch is read from any other.
+#   - The series regex and the sequence floor mirror the reference syntax
+#     <series>/<sequence> (internal/waypoint; a test holds the regex equal to
+#     waypoint.SeriesPattern).
+#   - `generate_profile: false`: a mark has no profile to share.
+version: "1.0"
+
+nodes:
+  - name: Waypoint
+    namespace: Fylgja
+    description: "A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it."
+    label: Waypoint
+    icon: mdi:map-marker-path
+    include_in_menu: true
+    human_friendly_id: [series__value, sequence__value]
+    order_by: [series__value, sequence__value]
+    display_label: "{{ series__value }}/{{ sequence__value }}"
+    uniqueness_constraints:
+      - [series__value, sequence__value]
+    generate_profile: false
+    branch: agnostic
+    attributes:
+      - name: series
+        kind: Text
+        parameters:
+          regex: "^[^/\\s]+$"
+        optional: false
+        description: "The series this waypoint belongs to: a name with no '/' and no whitespace."
+        order_weight: 1000
+      - name: sequence
+        kind: Number
+        parameters:
+          min_value: 1
+        optional: false
+        description: "Position in the series: a positive integer, unique within the series."
+        order_weight: 1100
+      - name: branch
+        kind: Text
+        optional: false
+        description: "The Infrahub branch this waypoint seals. Its last write is the waypoint's own time."
+        order_weight: 1200
+      - name: as_of
+        kind: DateTime
+        optional: true
+        description: "The point in time on the branch (the reference's at), passed verbatim. Omitted: when the waypoint was written."
+        order_weight: 1300
+      - name: description
+        kind: Text
+        optional: true
+        description: "What this chapter of the story is."
+        order_weight: 1400

@@ -1,0 +1,18 @@
+{
+  "fylgja": [
+    {
+      "lab_name": "fylgja",
+      "labPath": "twin1/bundle/topology.clab.yml",
+      "absLabPath": "/tmp/scratchpad/twin1/bundle/topology.clab.yml",
+      "name": "clab-fylgja-n1",
+      "container_id": "9f0a212df5e0",
+      "image": "ghcr.io/nokia/srlinux:24.7.1",
+      "kind": "nokia_srlinux",
+      "state": "running",
+      "status": "Up 18 seconds",
+      "ipv4_address": "172.20.20.2/24",
+      "ipv6_address": "3fff:172:20:20::2/64",
+      "owner": "fylgja"
+    }
+  ]
+}

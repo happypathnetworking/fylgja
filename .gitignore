@@ -1,0 +1,31 @@
+# Local, machine-specific state (see docs/development.md)
+local/
+
+# Build output
+bin/
+dist/
+
+# Go test and profiling artifacts
+*.test
+*.out
+*.prof
+coverage.*
+
+# Claude Code per-user overrides
+.claude/settings.local.json
+
+# Spec Kit machine-local feature pointer
+.specify/feature.json
+
+# Editors and OS
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+.DS_Store
+
+# The command log is local in this repository: the hooks write it, make command-log
+# publishes it here, and nothing commits it (docs/development.md).
+commands/
+specs/*/commands/

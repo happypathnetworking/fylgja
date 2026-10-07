@@ -1,0 +1,182 @@
+{
+  "ctm_version": "1",
+  "envelope": {
+    "branch": "fylgja-fixture",
+    "at": "2026-09-08T12:00:00Z",
+    "observed_at": "2026-09-08T12:00:00.000000Z",
+    "schema_hash": "fixture",
+    "contract_version": "0.2"
+  },
+  "devices": [
+    {
+      "name": "n1",
+      "platform": {
+        "vendor": "nokia",
+        "nos": "srlinux",
+        "version": "24.7"
+      },
+      "role": "leaf-FYLGJA-MARKER-fixture",
+      "interfaces": [
+        {
+          "name": "ethernet-1/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "n1:ethernet-1/1|n2:ethernet-1/1"
+        },
+        {
+          "name": "ethernet-1/2",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "n1:ethernet-1/2|n3:ethernet-1/2"
+        },
+        {
+          "name": "lo0",
+          "iftype": "loopback",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "mgmt0",
+          "iftype": "physical",
+          "mgmt_only": true,
+          "enabled": true
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "43e8fd0c2de5f4646f74a51d34742824",
+        "content": "# n1: production configuration rendered by Infrahub (fylgja-artifacts)\n# platform nokia srlinux 24.7; role leaf-FYLGJA-MARKER-fixture\nset / system name host-name n1\nset / network-instance default type default\nset / interface ethernet-1/1 description \"to n2 ethernet-1/1\"\nset / interface ethernet-1/1 admin-state enable\nset / interface ethernet-1/1 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/1.0\nset / interface ethernet-1/2 description \"to n3 ethernet-1/2\"\nset / interface ethernet-1/2 admin-state enable\nset / interface ethernet-1/2 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/2.0\nset / interface lo0 admin-state enable\nset / interface lo0 subinterface 0 admin-state enable\nset / network-instance default interface lo0.0\n# mgmt0: out-of-band management, left to the platform\n"
+      }
+    },
+    {
+      "name": "n2",
+      "platform": {
+        "vendor": "nokia",
+        "nos": "srlinux",
+        "version": "24.7"
+      },
+      "role": "leaf-FYLGJA-MARKER-fixture",
+      "interfaces": [
+        {
+          "name": "ethernet-1/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "n1:ethernet-1/1|n2:ethernet-1/1"
+        },
+        {
+          "name": "ethernet-1/2",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "n2:ethernet-1/2|n3:ethernet-1/1"
+        },
+        {
+          "name": "lo0",
+          "iftype": "loopback",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "mgmt0",
+          "iftype": "physical",
+          "mgmt_only": true,
+          "enabled": true
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "ecb03029ea805a09c54d2cd6a0e59ac9",
+        "content": "# n2: production configuration rendered by Infrahub (fylgja-artifacts)\n# platform nokia srlinux 24.7; role leaf-FYLGJA-MARKER-fixture\nset / system name host-name n2\nset / network-instance default type default\nset / interface ethernet-1/1 description \"to n1 ethernet-1/1\"\nset / interface ethernet-1/1 admin-state enable\nset / interface ethernet-1/1 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/1.0\nset / interface ethernet-1/2 description \"to n3 ethernet-1/1\"\nset / interface ethernet-1/2 admin-state enable\nset / interface ethernet-1/2 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/2.0\nset / interface lo0 admin-state enable\nset / interface lo0 subinterface 0 admin-state enable\nset / network-instance default interface lo0.0\n# mgmt0: out-of-band management, left to the platform\n"
+      }
+    },
+    {
+      "name": "n3",
+      "platform": {
+        "vendor": "nokia",
+        "nos": "srlinux",
+        "version": "24.7"
+      },
+      "role": "leaf-FYLGJA-MARKER-fixture",
+      "interfaces": [
+        {
+          "name": "ethernet-1/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "n2:ethernet-1/2|n3:ethernet-1/1"
+        },
+        {
+          "name": "ethernet-1/2",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "n1:ethernet-1/2|n3:ethernet-1/2"
+        },
+        {
+          "name": "lo0",
+          "iftype": "loopback",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "mgmt0",
+          "iftype": "physical",
+          "mgmt_only": true,
+          "enabled": true
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "ae0c3a87085839354cbb2ca10f71e487",
+        "content": "# n3: production configuration rendered by Infrahub (fylgja-artifacts)\n# platform nokia srlinux 24.7; role leaf-FYLGJA-MARKER-fixture\nset / system name host-name n3\nset / network-instance default type default\nset / interface ethernet-1/1 description \"to n2 ethernet-1/2\"\nset / interface ethernet-1/1 admin-state enable\nset / interface ethernet-1/1 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/1.0\nset / interface ethernet-1/2 description \"to n1 ethernet-1/2\"\nset / interface ethernet-1/2 admin-state enable\nset / interface ethernet-1/2 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/2.0\nset / interface lo0 admin-state enable\nset / interface lo0 subinterface 0 admin-state enable\nset / network-instance default interface lo0.0\n# mgmt0: out-of-band management, left to the platform\n"
+      }
+    }
+  ],
+  "links": [
+    {
+      "id": "n1:ethernet-1/1|n2:ethernet-1/1",
+      "endpoints": [
+        {
+          "device": "n1",
+          "interface": "ethernet-1/1"
+        },
+        {
+          "device": "n2",
+          "interface": "ethernet-1/1"
+        }
+      ]
+    },
+    {
+      "id": "n1:ethernet-1/2|n3:ethernet-1/2",
+      "endpoints": [
+        {
+          "device": "n1",
+          "interface": "ethernet-1/2"
+        },
+        {
+          "device": "n3",
+          "interface": "ethernet-1/2"
+        }
+      ]
+    },
+    {
+      "id": "n2:ethernet-1/2|n3:ethernet-1/1",
+      "endpoints": [
+        {
+          "device": "n2",
+          "interface": "ethernet-1/2"
+        },
+        {
+          "device": "n3",
+          "interface": "ethernet-1/1"
+        }
+      ]
+    }
+  ]
+}

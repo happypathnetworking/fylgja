@@ -1,0 +1,9 @@
+# Spec Kit extension hooks. Each speckit-* skill reads this file before and after
+# it runs and invokes the listed commands (dots become hyphens). optional: false
+# makes a hook automatic.
+#
+# None are registered. Commands are logged by Claude Code hooks instead
+# (.claude/settings.json -> .claude/hooks/command-log.py), which read the session
+# transcript and need nothing from the model.
+
+hooks: {}

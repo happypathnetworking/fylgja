@@ -1,0 +1,37 @@
+@startuml
+title <size:24>System Context View: Fylgja</size>\n<size:24>The operator, Fylgja, Infrahub, the artifacts repository and the walking twin.</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+
+AddElementTag("Software System", $bgColor="#1168bd", $borderColor="#0b4884", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Person", $bgColor="#08427b", $borderColor="#052e56", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Software System,External", $bgColor="#999999", $borderColor="#6b6b6b", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = "")
+
+Person(Operator, "Operator", $descr="Owns the lab host and Infrahub; drives the twin through the CLI.", $tags="Person", $link="")
+System(Infrahub, "Infrahub", $descr="The network source of truth. Holds intent on branches, versioned in time, and renders each device's configuration artifact.", $tags="Software System,External", $link="")
+System(Artifactsrepository, "Artifacts repository", $descr="This repository, registered in Infrahub read-only: the artifacts template (.infrahub.yml, infrahub/) that renders each device's configuration from the Fylgja generics.", $tags="Software System,External", $link="")
+System(Walkingtwin, "Walking twin", $descr="Lab fylgja: a running containerlab topology of real network operating system images, built from one branch at one time.", $tags="Software System", $link="")
+System(Fylgja, "Fylgja", $descr="Reads intent from Infrahub, compiles it into a deterministic bundle, boots it as a twin and pushes each device's production configuration.", $tags="Software System", $link="")
+
+Rel(Operator, Fylgja, "Runs commands", $techn="", $tags="Relationship", $link="")
+Rel(Operator, Infrahub, "Edits intent; writes waypoints", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja, Infrahub, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
+Rel(Fylgja, Walkingtwin, "Boots, probes, pushes, reads", $techn="", $tags="Relationship", $link="")
+Rel(Infrahub, Artifactsrepository, "Clones; renders the template", $techn="", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

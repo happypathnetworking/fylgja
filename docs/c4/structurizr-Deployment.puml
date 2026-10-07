@@ -1,0 +1,79 @@
+@startuml
+title <size:24>Deployment View: Lab</size>\n<size:24>Where each role runs, its ports and the credentials it holds.</size>
+
+set separator none
+left to right direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Container>
+!include <C4/C4_Deployment>
+
+AddElementTag("Container,Files", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Element", $bgColor="#ffffff", $borderColor="#444444", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Software System,External", $bgColor="#999999", $borderColor="#6b6b6b", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = "")
+
+Deployment_Node(Lab.Infrahubhost, "Infrahub host", $type="", $descr="Docker Compose, :8000; may be the lab host", $tags="Element", $link="") {
+  System(Lab.Infrahubhost.Infrahub_1, "Infrahub", $descr="The network source of truth. Holds intent on branches, versioned in time, and renders each device's configuration artifact.", $tags="Software System,External", $link="")
+}
+
+Deployment_Node(Lab.Operatorsmachine, "Operator's machine", $type="", $descr="FYLGJA_API_TOKEN; FYLGJA_API_ADDRESS, or an SSH tunnel to the lab host", $tags="Element", $link="") {
+  Container(Lab.Operatorsmachine.fylgjaclient_1, "fylgja (client)", $techn="Go, one static binary", $descr="Every command but the two roles. Sends one request to the API and prints what comes back.", $tags="Container", $link="")
+}
+
+Deployment_Node(Lab.Labhost, "Lab host", $type="", $descr="Ubuntu, Docker, containerlab, the NOS images", $tags="Element", $link="") {
+  Container(Lab.Labhost.containerlab_1, "containerlab", $techn="CLI", $descr="Deploys, reconciles, inspects and destroys lab fylgja.", $tags="Container", $link="")
+  Deployment_Node(Lab.Labhost.Docker, "Docker", $type="", $descr="privileged containers", $tags="Element", $link="") {
+    Deployment_Node(Lab.Labhost.Docker.Labfylgja, "Lab fylgja", $type="", $descr="clab-fylgja-<node>; gNMI :57400 (TLS) or :6030; JSON-RPC or eAPI :443", $tags="Element", $link="") {
+      Container(Lab.Labhost.Docker.Labfylgja.NOSnode_1, "NOS node", $techn="Container", $descr="One device of the twin, clab-fylgja-<node>: SR Linux or EOS, probed and read over gNMI and pushed its artifact.", $tags="Container", $link="")
+    }
+
+  }
+
+  Deployment_Node(Lab.Labhost.fylgjaserve, "fylgja serve", $type="process", $descr="127.0.0.1:7650; FYLGJA_API_TOKEN, INFRAHUB_API_TOKEN, both node logins", $tags="Element", $link="") {
+    Container(Lab.Labhost.fylgjaserve.fylgjaserve_1, "fylgja serve", $techn="Go, the same binary; HTTP on 127.0.0.1:7650", $descr="The API's server, on the lab host. Reads Infrahub, compiles, checks the host, starts and follows runs, reads the twin.", $tags="Container", $link="")
+  }
+
+  Deployment_Node(Lab.Labhost.fylgjaworkerrun, "fylgja worker run", $type="process", $descr="INFRAHUB_API_TOKEN, both node logins; no API token", $tags="Element", $link="") {
+    Container(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, "fylgja worker run", $techn="Go, the same binary", $descr="The lab-host worker: runs the workflows and the host-bound activities.", $tags="Container", $link="")
+  }
+
+  Deployment_Node(Lab.Labhost.temporalserverstartdev, "temporal server start-dev", $type="process", $descr=":7233; UI :8233", $tags="Element", $link="") {
+    Container(Lab.Labhost.temporalserverstartdev.Workflowservice_1, "Workflow service", $techn="Temporal", $descr="Durable execution: run history, Schedule fylgja-follow.", $tags="Container", $link="")
+  }
+
+  Deployment_Node(Lab.Labhost.Stateroot, "State root", $type="directory", $descr="FYLGJA_STATE_ROOT: bundles/, twin/", $tags="Element", $link="") {
+    ContainerDb(Lab.Labhost.Stateroot.Bundlestore_1, "Bundle store", $techn="Files", $descr="<state root>/bundles/<bundle_id>/: every bundle compiled or provisioned.", $tags="Container,Files", $link="")
+    ContainerDb(Lab.Labhost.Stateroot.Twindirectory_1, "Twin directory", $techn="Files", $descr="<state root>/twin/: the staged bundle, containerlab's directory, twin.json.", $tags="Container,Files", $link="")
+  }
+
+}
+
+Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.Stateroot.Bundlestore_1, "Files and reads bundles", $techn="", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.Stateroot.Bundlestore_1, "Files and reads bundles", $techn="", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.Stateroot.Twindirectory_1, "Reads the record and the staged bundle", $techn="", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.Stateroot.Twindirectory_1, "Stages, records", $techn="", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.containerlab_1, "Inspects; dry runs", $techn="", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.containerlab_1, "Deploys, reconciles, destroys", $techn="", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.Docker.Labfylgja.NOSnode_1, "Reads for verify", $techn="gNMI", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.Docker.Labfylgja.NOSnode_1, "Probes; pushes the artifact; waits", $techn="gNMI; JSON-RPC or eAPI", $tags="Relationship", $link="")
+Rel(Lab.Labhost.containerlab_1, Lab.Labhost.Docker.Labfylgja.NOSnode_1, "Creates and cables", $techn="", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Infrahubhost.Infrahub_1, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Infrahubhost.Infrahub_1, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
+Rel(Lab.Operatorsmachine.fylgjaclient_1, Lab.Labhost.fylgjaserve.fylgjaserve_1, "POST /v1/<noun>/<verb>; bearer token", $techn="HTTP, NDJSON", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.temporalserverstartdev.Workflowservice_1, "Starts, follows, cancels runs", $techn="gRPC", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.temporalserverstartdev.Workflowservice_1, "Polls task queue fylgja", $techn="gRPC", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

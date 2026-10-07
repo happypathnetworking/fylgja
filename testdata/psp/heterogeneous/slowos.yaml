@@ -1,0 +1,77 @@
+# Synthetic platform for tier-1 tests of a heterogeneous bundle. It
+# describes no real NOS and never boots: its only job is to wait under budgets that
+# differ from fastos.yaml's, so a test can see each node waiting under its own.
+psp_version: "0.6"
+
+platform:
+  id: slowos
+  vendor: example
+  nos: slowos
+  device_class: router
+
+image:
+  clab_kind: slowos
+  ref: example.invalid/slowos:0
+  acquisition: public_registry
+  resources:
+    cpu: 1
+    memory_mb: 4096
+  deploy_timeout_s: 600
+  destroy_timeout_s: 120
+
+interfaces:
+  rules:
+    - name: ethernet
+      match: "ethernet-{slot}/{port}"
+      ranges: { slot: [1, 1], port: [1, 32] }
+      port: "e{slot}-{port}"
+      node_name: "ethernet-{slot}/{port}"
+      lossy: false
+    - name: management
+      management: true
+      port: mgmt0
+      node_name: mgmt0
+  mappings:
+    - { production: ethernet-1/1, rule: ethernet, port: e1-1, node_name: ethernet-1/1 }
+    - { production: ethernet-1/33, rule: ethernet, unmappable: out_of_range }
+    - { production: mgmt0, rule: management, port: mgmt0, node_name: mgmt0 }
+
+config:
+  startup_format: cli
+  delivery: json_rpc
+  commit: explicit
+  artifact_name: device-config
+  artifact_content_types: ["text/plain"]
+  mode: merge
+  push_timeout_s: 90                  # slower than fastos, so the push step takes each node's own budget
+  push:
+    scheme: https
+    port: 443
+    login:
+      username_env: FYLGJA_SLOWOS_USERNAME
+      password_env: FYLGJA_SLOWOS_PASSWORD
+  bootstrap:
+    - "set / system name host-name {node}"
+    - "set / interface {interface} admin-state enable"
+
+state:
+  transport: gnmi
+  openconfig_coverage: full
+
+readiness:
+  probe: gnmi_get
+  path: /system/information
+  encoding: json_ietf
+  port: 57400
+  timeout_s: 300
+  login:
+    username_env: FYLGJA_SLOWOS_USERNAME
+    password_env: FYLGJA_SLOWOS_PASSWORD
+
+capabilities: [bgp]
+
+fidelity:
+  production_forwarding: hardware
+  approximations:
+    - Synthetic test platform; nothing about it is measured
+  link_change: live

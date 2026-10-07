@@ -1,0 +1,235 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fylgja.dev/schemas/api.schema.json",
+  "title": "Fylgja API, version 1",
+  "description": "M13 (specs/011-api): what crosses the API beside the documents Fylgja already versions. A request is $defs/request with the args of its operation ($defs/args). An answer is application/x-ndjson, each line one $defs/frame, the last a document frame whose document is findings.schema.json's, unchanged at findings_version 1. A transport fault's body is $defs/problem. The CTM, the bundle and a support package cross inside $defs/file, as bytes, and are validated by their own schemas (ctm.schema.json, manifest.schema.json, psp.schema.json), never here. No token, login, configuration line or device diff appears in any of these (FR-009, FR-032).",
+  "$defs": {
+    "request": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "render": {
+          "enum": ["text", "json"],
+          "description": "The rendering the client asks for beside the document: text is what the command printed without --json at M12; json is what it wrote to stderr under --json. Absent: no out or err frame and no document text."
+        },
+        "args": {
+          "type": "object",
+          "description": "The command's arguments as given, one of $defs/args by the operation the path names. An absent key is a flag that was not given."
+        },
+        "files": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/file" },
+          "description": "twin.compile: the CTM, under the path given. twin.provision: every regular file of the bundle directory, each under its slash-separated path inside it. psp.validate: each package, under the path given, in order."
+        }
+      }
+    },
+    "file": {
+      "type": "object",
+      "required": ["path", "data"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "minLength": 1 },
+        "data": { "type": "string", "contentEncoding": "base64", "description": "The file's bytes, unchanged." }
+      }
+    },
+    "args": {
+      "description": "The arguments of each operation. Every key is optional on the wire but two: a required flag that is missing is refused by the server under M12's identifier and wording. twin.provision's bundle, which M12's command took as its one argument, is required, and twin.verify's args are given only beside wait; the server refuses a request without either as 400, the request is not one (tasks.md T087).",
+      "$defs": {
+        "twin.create": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "branch": { "type": "string" },
+            "at": { "type": "string" },
+            "waypoint": { "type": "string", "description": "--waypoint as given; present and empty is --waypoint=" },
+            "interval": { "type": "string", "description": "--interval as given; present and empty is --interval=" },
+            "no_follow": { "type": "boolean" },
+            "dry_run": { "type": "boolean" }
+          }
+        },
+        "twin.provision": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["bundle"],
+          "properties": {
+            "bundle": { "type": "string", "description": "The bundle directory as the operator gave it, for the subject and every sentence that names it. The server opens no path a client names." },
+            "dry_run": { "type": "boolean" }
+          }
+        },
+        "twin.step": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "waypoint": { "type": "string" },
+            "allow_restart": { "type": "boolean" },
+            "dry_run": { "type": "boolean" },
+            "wait": { "type": "string", "description": "--wait as given; present and empty is --wait=" }
+          }
+        },
+        "twin.destroy": { "type": "object", "additionalProperties": false },
+        "twin.show": { "type": "object", "additionalProperties": false },
+        "twin.verify": {
+          "type": "object",
+          "additionalProperties": false,
+          "dependentRequired": { "args": ["wait"] },
+          "properties": {
+            "wait": { "type": "string", "description": "--wait's value: the default budget when the flag was given bare" },
+            "args": { "type": "array", "items": { "type": "string" }, "description": "The words a bare --wait leaves as arguments, which the server refuses as verify.wait.invalid" }
+          }
+        },
+        "twin.compile": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "ctm": { "type": "string" },
+            "out": { "type": "string" }
+          }
+        },
+        "waypoint.list": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "series": { "type": "string", "description": "--series as given; present and empty is --series=" } }
+        },
+        "waypoint.plan": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "series": { "type": "string" } }
+        },
+        "intent.read": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "branch": { "type": "string" },
+            "at": { "type": "string" },
+            "waypoint": { "type": "string" },
+            "out": { "type": "string" }
+          }
+        },
+        "schema.check": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "branch": { "type": "string" } }
+        },
+        "psp.validate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": { "files": { "type": "array", "items": { "type": "string" } } }
+        }
+      }
+    },
+    "frame": {
+      "description": "One line of an answer. A frame's kind is its key. A client ignores a kind it does not know.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["out"],
+          "additionalProperties": false,
+          "properties": { "out": { "type": "string", "description": "Text for stdout, whole lines, as M12 printed them. Under render text alone." } }
+        },
+        {
+          "type": "object",
+          "required": ["err"],
+          "additionalProperties": false,
+          "properties": { "err": { "type": "string", "description": "Text for stderr, whole lines. Under either rendering." } }
+        },
+        {
+          "type": "object",
+          "required": ["start"],
+          "additionalProperties": false,
+          "properties": {
+            "start": {
+              "type": "object",
+              "required": ["workflow_id"],
+              "additionalProperties": false,
+              "properties": { "workflow_id": { "enum": ["fylgja-provision", "fylgja-step", "fylgja-destroy"] } },
+              "description": "The server begins to start this run. From here an interrupt call reaches it, on an operation that takes one: twin.destroy's start opens no stream, and its answer has no run frame (tasks.md T097)."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["run"],
+          "additionalProperties": false,
+          "properties": { "run": { "$ref": "#/$defs/run" } }
+        },
+        {
+          "type": "object",
+          "required": ["event"],
+          "additionalProperties": false,
+          "properties": { "event": { "$ref": "#/$defs/event" } }
+        },
+        {
+          "type": "object",
+          "required": ["files"],
+          "additionalProperties": false,
+          "properties": {
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/file" },
+              "description": "intent.read: one file, ctm.json, the CTM. twin.compile: every file of the bundle, each under its path inside it."
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["document"],
+          "additionalProperties": false,
+          "properties": {
+            "document": { "$ref": "https://fylgja.dev/contracts/findings/v1" },
+            "text": { "type": "string", "description": "Under render text, when the document has findings: they as text, for stderr, as M12's report printed them." }
+          }
+        }
+      ]
+    },
+    "run": {
+      "type": "object",
+      "required": ["workflow_id", "run_id"],
+      "additionalProperties": false,
+      "properties": {
+        "workflow_id": { "type": "string" },
+        "run_id": { "type": "string" }
+      }
+    },
+    "event": {
+      "description": "One step boundary of a run, or one notice about a run, read from the run's history (M2's progress event).",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["notice"],
+          "additionalProperties": false,
+          "properties": {
+            "workflow_id": { "type": "string" },
+            "notice": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "required": ["step", "end"],
+          "additionalProperties": false,
+          "properties": {
+            "workflow_id": { "type": "string" },
+            "step": { "type": "string", "description": "As the progress line names it: read, readiness n1, cleanup teardown" },
+            "finding_step": { "type": "string", "description": "The step as findings name it, when it has one" },
+            "end": { "type": "boolean", "description": "false: the step began" },
+            "outcome": { "enum": ["done", "failed", "timed out", "cancelled"] },
+            "duration_s": { "type": "number", "minimum": 0 },
+            "detail": { "type": "string" },
+            "rule": { "type": "string" },
+            "message": { "type": "string" }
+          }
+        }
+      ]
+    },
+    "problem": {
+      "type": "object",
+      "required": ["message"],
+      "additionalProperties": false,
+      "properties": {
+        "message": { "type": "string", "description": "One sentence. Names no token." },
+        "limit_bytes": { "type": "integer", "description": "On 413: the transfer bound" }
+      },
+      "description": "The body of a transport fault: 401, 404, 413, 400, 409. The status says which."
+    }
+  }
+}

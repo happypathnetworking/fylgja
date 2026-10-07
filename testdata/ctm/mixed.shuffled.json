@@ -1,0 +1,182 @@
+{
+  "ctm_version": "1",
+  "envelope": {
+    "branch": "mixed-fixture",
+    "at": "2026-09-20T12:00:00Z",
+    "observed_at": "2026-09-20T12:00:00.000000Z",
+    "schema_hash": "fixture",
+    "contract_version": "0.2"
+  },
+  "devices": [
+    {
+      "name": "s1",
+      "platform": {
+        "vendor": "nokia",
+        "nos": "srlinux",
+        "version": "24.7"
+      },
+      "role": "leaf",
+      "interfaces": [
+        {
+          "name": "mgmt0",
+          "iftype": "physical",
+          "mgmt_only": true,
+          "enabled": true
+        },
+        {
+          "name": "lo0",
+          "iftype": "loopback",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "ethernet-1/2",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "e2:Ethernet3/1/1|s1:ethernet-1/2"
+        },
+        {
+          "name": "ethernet-1/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "e1:Ethernet1|s1:ethernet-1/1"
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "34df00ec1671208400fe63e325403f6e",
+        "content": "# s1: production configuration rendered by Infrahub (fylgja-artifacts)\n# platform nokia srlinux 24.7; role leaf\nset / system name host-name s1\nset / network-instance default type default\nset / interface ethernet-1/1 description \"to e1 Ethernet1\"\nset / interface ethernet-1/1 admin-state enable\nset / interface ethernet-1/1 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/1.0\nset / interface ethernet-1/2 description \"to e2 Ethernet3/1/1\"\nset / interface ethernet-1/2 admin-state enable\nset / interface ethernet-1/2 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/2.0\nset / interface lo0 admin-state enable\nset / interface lo0 subinterface 0 admin-state enable\nset / network-instance default interface lo0.0\n# mgmt0: out-of-band management, left to the platform\n"
+      }
+    },
+    {
+      "name": "e2",
+      "platform": {
+        "vendor": "arista",
+        "nos": "eos",
+        "version": "4.32"
+      },
+      "role": "spine",
+      "interfaces": [
+        {
+          "name": "Management1",
+          "iftype": "physical",
+          "mgmt_only": true,
+          "enabled": true
+        },
+        {
+          "name": "Ethernet3/1/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "e2:Ethernet3/1/1|s1:ethernet-1/2"
+        },
+        {
+          "name": "Loopback0",
+          "iftype": "loopback",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "Ethernet1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "e1:Ethernet2/1|e2:Ethernet1"
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "8b74d853e73787868f582b3f127a6cf6",
+        "content": "! e2: production configuration rendered by Infrahub (fylgja-artifacts)\n! platform arista eos 4.32; role spine\nhostname e2\ninterface Ethernet1\ndescription to e1 Ethernet2/1\nno shutdown\ninterface Ethernet3/1/1\ndescription to s1 ethernet-1/2\nno shutdown\ninterface Loopback0\n   no shutdown\n! Management1: out-of-band management, left to the platform\n"
+      }
+    },
+    {
+      "name": "e1",
+      "platform": {
+        "vendor": "arista",
+        "nos": "eos",
+        "version": "4.32"
+      },
+      "role": "spine",
+      "interfaces": [
+        {
+          "name": "Loopback0",
+          "iftype": "loopback",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "Management1",
+          "iftype": "physical",
+          "mgmt_only": true,
+          "enabled": true
+        },
+        {
+          "name": "Ethernet2/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "e1:Ethernet2/1|e2:Ethernet1"
+        },
+        {
+          "name": "Ethernet1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "e1:Ethernet1|s1:ethernet-1/1"
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "644a78b35c8c3793641e779053796b38",
+        "content": "! e1: production configuration rendered by Infrahub (fylgja-artifacts)\n! platform arista eos 4.32; role spine\nhostname e1\ninterface Ethernet1\ndescription to s1 ethernet-1/1\nno shutdown\ninterface Ethernet2/1\ndescription to e2 Ethernet1\nno shutdown\ninterface Loopback0\n   no shutdown\n! Management1: out-of-band management, left to the platform\n"
+      }
+    }
+  ],
+  "links": [
+    {
+      "id": "e2:Ethernet3/1/1|s1:ethernet-1/2",
+      "endpoints": [
+        {
+          "device": "s1",
+          "interface": "ethernet-1/2"
+        },
+        {
+          "device": "e2",
+          "interface": "Ethernet3/1/1"
+        }
+      ]
+    },
+    {
+      "id": "e1:Ethernet1|s1:ethernet-1/1",
+      "endpoints": [
+        {
+          "device": "s1",
+          "interface": "ethernet-1/1"
+        },
+        {
+          "device": "e1",
+          "interface": "Ethernet1"
+        }
+      ]
+    },
+    {
+      "id": "e1:Ethernet2/1|e2:Ethernet1",
+      "endpoints": [
+        {
+          "device": "e2",
+          "interface": "Ethernet1"
+        },
+        {
+          "device": "e1",
+          "interface": "Ethernet2/1"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+# testdata/psp/lossy/chassisos.yaml with the management rule's node_name alone changed,
+# to Ethernet1, which front and linecard both render (Ethernet{port}, port 1 inside both
+# ranges): psp.management.collides for a management node name a data rule can render.
+# Not derived from the shipped package, as every other fixture here is: on SR Linux a
+# node name is its production name, so a management node name a data rule renders also
+# matches that rule's match, and M1's count would fire beside this one.
+# Synthetic platform for tier-1 tests of a lossy mapping profile. It
+# describes no real NOS and never boots: its only job is to name its ports as a modular
+# chassis does, so the format and the compiler can be proven on a lossy platform before
+# one is bootable.
+#
+# The naming is illustrative, EOS-style, taken from public documentation and never
+# verified against a running image. It is never shipped or deployed. cEOS itself does not
+# name its ports this way: it carries production's names one to one (psp/arista_eos.yaml).
+psp_version: "0.6"
+
+platform:
+  id: chassisos
+  vendor: example
+  nos: chassisos
+  device_class: router
+
+image:
+  clab_kind: chassisos
+  ref: example.invalid/chassisos:0
+  acquisition: public_registry
+  resources:
+    cpu: 1
+    memory_mb: 2048
+  deploy_timeout_s: 180
+  destroy_timeout_s: 60
+
+interfaces:
+  # Rules are tried in order and the first whose match fits decides. Ethernet1/1 fits
+  # front (the literal 1) and never reaches linecard; Ethernet2/1 does not fit front and
+  # falls to linecard. Both render eth1: a sharing across rules.
+  rules:
+    - name: front                          # one-to-one, the node name differs
+      match: "Ethernet1/{port}"
+      ranges: { port: [1, 52] }
+      port: "eth{port}"
+      node_name: "Ethernet{port}"
+      lossy: false
+    - name: linecard                       # many-to-one: the slot is dropped
+      match: "Ethernet{slot}/{port}"
+      ranges: { slot: [2, 4], port: [1, 48] }
+      port: "eth{port}"
+      node_name: "Ethernet{port}"
+      lossy: true
+    - name: breakout                       # a collapsing breakout: the lanes share the parent's port
+      match: "Ethernet{slot}/{port}/{sub}"
+      ranges: { slot: [1, 1], port: [49, 52], sub: [1, 4] }
+      port: "eth{port}"
+      node_name: "Ethernet{port}"
+      lossy: true
+      breakout: { parent: "Ethernet{slot}/{port}" }
+    - name: management
+      management: true
+      port: eth0
+      node_name: Ethernet1
+  # One of each kind: a mapping per rule, a name out of range under each rule with a
+  # range to fall outside, a name no rule matches, and management by another name.
+  mappings:
+    - { production: Ethernet1/1, rule: front, port: eth1, node_name: Ethernet1 }
+    - { production: Ethernet2/1, rule: linecard, port: eth1, node_name: Ethernet1, lossy: true }
+    - { production: Ethernet1/49/1, rule: breakout, port: eth49, node_name: Ethernet49, lossy: true }
+    - { production: Ethernet1/53, rule: front, unmappable: out_of_range }
+    - { production: Ethernet3/49, rule: linecard, unmappable: out_of_range }
+    - { production: Port-Channel1, unmappable: no_rule }
+    - { production: Management1, rule: management, port: eth0, node_name: Management0 }
+
+config:
+  startup_format: cli
+  delivery: json_rpc
+  commit: explicit
+  artifact_name: device-config
+  artifact_content_types: ["text/plain"]
+  mode: merge
+  push_timeout_s: 30
+  push:                                    # never made: the platform never boots
+    scheme: https
+    port: 443
+    login:
+      username_env: FYLGJA_CHASSISOS_USERNAME
+      password_env: FYLGJA_CHASSISOS_PASSWORD
+  # Illustrative. {interface} renders the node's own name for each cabled port.
+  bootstrap:
+    - "hostname {node}"
+    - "interface {interface}"
+    - "no shutdown"
+    - "lldp run"
+
+state:
+  transport: gnmi
+  openconfig_coverage: full
+
+readiness:
+  probe: gnmi_get
+  path: /system/information
+  encoding: json_ietf
+  port: 57400
+  timeout_s: 60
+  login:
+    username_env: FYLGJA_CHASSISOS_USERNAME
+    password_env: FYLGJA_CHASSISOS_PASSWORD
+
+capabilities: [bgp]
+
+fidelity:
+  production_forwarding: hardware          # the same as SR Linux's, so the two can share a bundle
+  approximations:
+    - Synthetic test platform; its port names are illustrative and nothing about it is measured
+  link_change: live

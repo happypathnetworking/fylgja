@@ -1,0 +1,11 @@
+{
+  "ctm_version": "1",
+  "envelope": {
+    "branch": "fylgja-fixture",
+    "observed_at": "2026-09-08T12:00:00.000000Z",
+    "schema_hash": "fixture",
+    "contract_version": "0.2"
+  },
+  "devices": [],
+  "links": []
+}

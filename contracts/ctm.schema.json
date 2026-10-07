@@ -1,0 +1,247 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fylgja.dev/contracts/ctm/v1",
+  "title": "Fylgja CTM (Canonical Topology Model) file v1 — M5 extension",
+  "description": "Written by `fylgja intent read`, read by `fylgja twin compile`, and used as a fixture. Envelope per FR-003 (D-012, D-023); per-object provenance tag per D-010. Ported from cd7a389 with the envelope reshaped (research R24). M5 (FR-001, FR-025; research R8): a device gains `artifact`, the configuration Infrahub rendered for it, fetched by the read in the same pass and at the same `at` as the intent, verified against Infrahub’s checksum, content as UTF-8 text. ctm_version stays 1: a CTM whose device lacks the field is refused by validation and by `twin compile` as artifact.missing naming each device, not as an unknown version. A CTM file therefore holds configuration and lives only in the bundle store (FR-028). M7: unchanged; CTM 1.",
+  "type": "object",
+  "required": [
+    "ctm_version",
+    "envelope",
+    "devices",
+    "links"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "ctm_version": {
+      "const": "1"
+    },
+    "envelope": {
+      "type": "object",
+      "description": "The intent reference and what was read against it. `at` is present iff the operator supplied it, verbatim. `observed_at` is recorded on every read and never reaches the bundle.",
+      "required": [
+        "branch",
+        "observed_at",
+        "schema_hash",
+        "contract_version"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "at": {
+          "type": "string",
+          "description": "Exactly as supplied on --at. At most six fractional digits: Infrahub honours microseconds and truncates beyond (research R20), so a finer value is rejected before it is queried."
+        },
+        "observed_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+          "description": "UTC, local clock, the instant the read began; six fractional digits so it can be passed back as --at (research R27). Informational when `at` is present."
+        },
+        "schema_hash": {
+          "type": "string",
+          "description": "`main` of GET /api/schema?branch= at read time (research R22, R28)."
+        },
+        "contract_version": {
+          "type": "string"
+        }
+      }
+    },
+    "devices": {
+      "type": "array",
+      "description": "Sorted by name; names unique.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "platform",
+          "interfaces"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "platform": {
+            "type": "object",
+            "required": [
+              "vendor",
+              "nos"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "vendor": {
+                "type": "string"
+              },
+              "nos": {
+                "type": "string"
+              },
+              "version": {
+                "type": "string"
+              },
+              "model": {
+                "type": "string"
+              }
+            }
+          },
+          "role": {
+            "type": "string"
+          },
+          "site": {
+            "type": "string"
+          },
+          "interfaces": {
+            "type": "array",
+            "description": "Sorted by name; names unique within the device.",
+            "items": {
+              "type": "object",
+              "required": [
+                "name",
+                "iftype"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "iftype": {
+                  "enum": [
+                    "physical",
+                    "loopback",
+                    "svi",
+                    "subinterface"
+                  ]
+                },
+                "mgmt_only": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "enabled": {
+                  "type": "boolean",
+                  "default": true
+                },
+                "parent": {
+                  "type": "string"
+                },
+                "addresses": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "cidr"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "cidr": {
+                        "type": "string"
+                      },
+                      "family": {
+                        "enum": [
+                          "ipv4",
+                          "ipv6"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "link": {
+                  "type": "string",
+                  "description": "Link id this interface terminates"
+                },
+                "provenance": {
+                  "$ref": "#/$defs/provenance"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "$ref": "#/$defs/provenance"
+          },
+          "artifact": {
+            "type": "object",
+            "description": "The device’s configuration artifact as Infrahub served it (D-028). Name is the definition’s artifact_name the device’s support package names; checksum is Infrahub’s own, verbatim (MD5 hex of the content: R6); content is the bytes, unchanged, as text. No Infrahub identifier and no time of generation: a regeneration to identical bytes leaves the CTM and the bundle unchanged (FR-005).",
+            "required": [
+              "name",
+              "content_type",
+              "checksum",
+              "content"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content_type": {
+                "type": "string",
+                "pattern": "^text/"
+              },
+              "checksum": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{32}$"
+              },
+              "content": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "description": "Sorted by id.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "endpoints"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "endpoints": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "object",
+              "required": [
+                "device",
+                "interface"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "device": {
+                  "type": "string"
+                },
+                "interface": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "$ref": "#/$defs/provenance"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "provenance": {
+      "enum": [
+        "intent",
+        "observed",
+        "synthesized"
+      ],
+      "default": "intent",
+      "description": "Where this object came from (D-010). Omitted when `intent`, which is every object at M1."
+    }
+  }
+}

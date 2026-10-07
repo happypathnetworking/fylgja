@@ -1,0 +1,75 @@
+@startuml
+title <size:24>Component View: Fylgja - fylgja serve</size>\n<size:24>The packages the API's server runs. The client's side of the boundary is internal/cli, which links api, findings and tree alone.</size>
+
+set separator none
+top to bottom direction
+
+<style>
+  root {
+    BackgroundColor: #ffffff
+    FontColor: #444444
+  }
+</style>
+
+!include <C4/C4>
+!include <C4/C4_Context>
+!include <C4/C4_Component>
+
+AddElementTag("Component", $bgColor="#85bbf0", $borderColor="#5d82a8", $fontColor="#000000", $sprite="", $shadowing="", $borderStyle="solid")
+
+AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = "")
+
+AddBoundaryTag("Container", $bgColor="#ffffff", $borderColor="#2e6295", $fontColor="#2e6295", $shadowing="", $borderStyle="solid")
+
+System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
+  Container_Boundary("Fylgja.fylgjaserve_boundary", "fylgja serve", $tags="Container") {
+    Component(Fylgja.fylgjaserve.api, "api", $techn="internal/api", $descr="The wire: paths, frames, requests, problems, bounds. The client's side links it too.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.stage, "stage", $techn="internal/stage", $descr="The read and compile pipelines, shared with the worker.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.waypoint, "waypoint", $techn="internal/waypoint", $descr="Waypoint references, their resolution, list and plan.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.provision, "provision", $techn="internal/provision", $descr="Starts, follows and cancels runs on the workflow service.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.lab, "lab", $techn="internal/lab", $descr="Host-bound code: containerlab, the host check, the dry run, twin.json.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.verify, "verify", $techn="internal/verify", $descr="Assertions derived from the manifest; one read of the twin.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.intent, "intent", $techn="internal/intent", $descr="The Infrahub client: intent, conformance, artifacts, waypoints.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.validate, "validate", $techn="internal/validate", $descr="Completeness and intent rules on the CTM.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.step, "step", $techn="internal/step", $descr="The pure step between two bundles; the push plan.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.compiler, "compiler", $techn="internal/compiler", $descr="CTM + PSPs -> bundle. Pure. Its manifest is what the others read.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.bundle, "bundle", $techn="internal/bundle", $descr="The bundle format, canonical hashing, the store.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.psp, "psp", $techn="internal/psp", $descr="Platform support packages: loading and validation.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.findings, "findings", $techn="internal/findings", $descr="Findings, rules, the findings document, exit codes. The client's side links it too.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.server, "server", $techn="internal/server", $descr="The handlers: each command's logic behind POST /v1/<noun>/<verb>.", $tags="Component", $link="")
+  }
+
+}
+
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.api, "Decodes requests; writes frames", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.findings, "Words every refusal; writes the document", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.psp, "Loads the packages", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.stage, "Reads and compiles", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.waypoint, "Resolves, lists, plans", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.intent, "Reads waypoints; checks the schema", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.step, "Diffs; plans the push", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.bundle, "Verifies and files bundles", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.compiler, "Reads manifests", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.lab, "Host check, inspect, dry run", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.verify, "Reads the twin", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.provision, "Starts and follows runs", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.api, Fylgja.fylgjaserve.findings, "Carries the document", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.waypoint, Fylgja.fylgjaserve.stage, "Reads and compiles each waypoint", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.waypoint, Fylgja.fylgjaserve.intent, "Reads the series", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.waypoint, Fylgja.fylgjaserve.step, "Diffs each pair", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.waypoint, Fylgja.fylgjaserve.compiler, "Reads manifests", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.stage, Fylgja.fylgjaserve.intent, "Reads", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.stage, Fylgja.fylgjaserve.validate, "Validates", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.stage, Fylgja.fylgjaserve.compiler, "Compiles", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.stage, Fylgja.fylgjaserve.bundle, "Files", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.lab, Fylgja.fylgjaserve.verify, "Reads through its readers", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.lab, Fylgja.fylgjaserve.bundle, "Verifies the staged bundle", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.lab, Fylgja.fylgjaserve.compiler, "Reads the manifest", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.verify, Fylgja.fylgjaserve.compiler, "Derives from the manifest", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.validate, Fylgja.fylgjaserve.compiler, "Surveys each device", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.step, Fylgja.fylgjaserve.compiler, "Compares two manifests", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.compiler, Fylgja.fylgjaserve.psp, "Applies the mapping profile", $techn="", $tags="Relationship", $link="")
+
+SHOW_LEGEND(true)
+hide stereotypes
+@enduml

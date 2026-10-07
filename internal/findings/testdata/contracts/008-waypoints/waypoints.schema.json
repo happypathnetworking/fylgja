@@ -1,0 +1,507 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fylgja.dev/schemas/waypoints.schema.json",
+  "title": "Fylgja waypoint blocks — M10 (FR-014, FR-017–FR-021, FR-025)",
+  "description": "The three waypoint blocks of the findings document, referenced from findings.schema.json by this $id: `resolved`, the reference one waypoint resolves to (the `waypoint` block on twin.create, twin.create --dry-run and intent.read with --waypoint); `list`, waypoint.list's `waypoints` block; `plan`, waypoint.plan's `plan` block, whose steps are step.Diff's result. Every fact the text prints and no more: artifacts by name and checksum, bootstraps as changed or not, never a line of either (FR-021, Constitution X). Every list is sorted, so the same input gives the same document (SC-004).",
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[^/\\s]+/[1-9][0-9]*$",
+      "description": "<series>/<sequence>: the reference syntax (FR-004)"
+    },
+    "at_source": {
+      "enum": [
+        "given",
+        "written"
+      ],
+      "description": "given: as_of was written on the waypoint and is used verbatim. written: the waypoint carries none, and the at is its branch attribute's updated_at, the moment the waypoint last said which branch it seals (FR-005; research R3)"
+    },
+    "resolved": {
+      "type": "object",
+      "description": "One waypoint resolved to a pinned intent reference. The at is verbatim: what was written, or what Infrahub returned",
+      "required": [
+        "series",
+        "sequence",
+        "branch",
+        "at",
+        "at_source",
+        "description"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "series": {
+          "type": "string",
+          "pattern": "^[^/\\s]+$"
+        },
+        "sequence": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "at": {
+          "type": "string",
+          "minLength": 1
+        },
+        "at_source": {
+          "$ref": "#/$defs/at_source"
+        },
+        "description": {
+          "type": "string",
+          "description": "as the operator wrote it; empty when none was written"
+        }
+      }
+    },
+    "list": {
+      "type": "object",
+      "description": "waypoint.list: every waypoint Infrahub holds (or the one series asked for), sorted by series then sequence, each with the reference it resolves to; and the waypoint the host's readable record names, when it names one",
+      "required": [
+        "series",
+        "waypoints",
+        "record"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "series": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "the --series filter, or null when every series was listed"
+        },
+        "waypoints": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "description": "a resolved reference (the six fields of `resolved`, restated because that schema admits nothing else) plus twin",
+            "required": [
+              "series",
+              "sequence",
+              "branch",
+              "at",
+              "at_source",
+              "description",
+              "twin"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "series": {
+                "type": "string",
+                "pattern": "^[^/\\s]+$"
+              },
+              "sequence": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "branch": {
+                "type": "string",
+                "minLength": 1
+              },
+              "at": {
+                "type": "string",
+                "minLength": 1
+              },
+              "at_source": {
+                "$ref": "#/$defs/at_source"
+              },
+              "description": {
+                "type": "string"
+              },
+              "twin": {
+                "type": "boolean",
+                "description": "true on the one row the host's record names (twin.json 3's waypoint); waypoint.twin.moved beside it says when that row no longer resolves to what the record holds"
+              }
+            }
+          }
+        },
+        "record": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "what twin.json under the state root names, as recorded, when it is readable and names a waypoint; null otherwise. The at and branch are the record's provenance, which the row's may differ from (waypoint.twin.moved)",
+          "required": [
+            "series",
+            "sequence",
+            "branch",
+            "at",
+            "at_source"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "series": {
+              "type": "string"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "branch": {
+              "type": "string"
+            },
+            "at": {
+              "type": "string"
+            },
+            "at_source": {
+              "$ref": "#/$defs/at_source"
+            }
+          }
+        }
+      }
+    },
+    "read_counts": {
+      "type": "object",
+      "description": "intent read's summary line, as numbers: what the read holds and what the packages' profiles make of it",
+      "required": [
+        "devices",
+        "interfaces",
+        "links",
+        "artifacts",
+        "lossy_mappings",
+        "shared_ports"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "devices": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "interfaces": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "links": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "artifacts": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "lossy_mappings": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "shared_ports": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "node_port": {
+      "type": "object",
+      "required": [
+        "node",
+        "port"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "port": {
+          "type": "string",
+          "description": "containerlab's port name, as the manifest's links carry it"
+        }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": [
+        "id",
+        "a",
+        "b"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "the manifest's canonical link id (D-011)"
+        },
+        "a": {
+          "$ref": "#/$defs/node_port"
+        },
+        "b": {
+          "$ref": "#/$defs/node_port"
+        }
+      }
+    },
+    "step": {
+      "type": "object",
+      "description": "step.Diff between two consecutive waypoints' bundles: a pure function of the two, with provenance excluded (research R6). unchanged is every list empty; the two ids are never equal between two waypoints, because at is hashed",
+      "required": [
+        "from",
+        "to",
+        "from_bundle_id",
+        "to_bundle_id",
+        "computed"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "from": {
+          "$ref": "#/$defs/ref"
+        },
+        "to": {
+          "$ref": "#/$defs/ref"
+        },
+        "from_bundle_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "to_bundle_id": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "computed": {
+          "type": "boolean",
+          "description": "false when either waypoint did not compile; not_computed then names it, and nothing else is present"
+        },
+        "not_computed": {
+          "type": "string",
+          "description": "e.g. `demo/5 was refused`"
+        },
+        "unchanged": {
+          "type": "boolean",
+          "description": "nodes, links, bootstraps and artifacts identical; the bundles differ in provenance alone"
+        },
+        "nodes": {
+          "type": "object",
+          "required": [
+            "added",
+            "removed",
+            "changed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "added": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "removed": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "changed": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": [
+                  "node",
+                  "reasons"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "reasons": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "enum": [
+                        "platform",
+                        "image",
+                        "psp",
+                        "mapping",
+                        "bootstrap"
+                      ]
+                    },
+                    "description": "sorted; bootstrap means the node's bootstrap file's bytes differ, and no line of it is quoted"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "links": {
+          "type": "object",
+          "required": [
+            "added",
+            "removed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "added": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/link"
+              }
+            },
+            "removed": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/link"
+              }
+            }
+          }
+        },
+        "artifacts": {
+          "type": "object",
+          "required": [
+            "changed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "changed": {
+              "type": "array",
+              "description": "nodes present on both sides whose artifact checksum differs; an added or removed node's artifact goes with the node",
+              "items": {
+                "type": "object",
+                "required": [
+                  "node",
+                  "name",
+                  "from",
+                  "to"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "node": {
+                    "type": "string"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "from": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{32}$"
+                  },
+                  "to": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{32}$"
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "computed": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "unchanged",
+              "nodes",
+              "links",
+              "artifacts"
+            ],
+            "not": {
+              "required": [
+                "not_computed"
+              ]
+            }
+          },
+          "else": {
+            "required": [
+              "not_computed"
+            ]
+          }
+        }
+      ]
+    },
+    "plan": {
+      "type": "object",
+      "description": "waypoint.plan: each waypoint of the series in sequence order with what it resolved to, compiled to and read, or its findings; and the step between each consecutive pair",
+      "required": [
+        "series",
+        "waypoints",
+        "steps"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "series": {
+          "type": "string",
+          "pattern": "^[^/\\s]+$"
+        },
+        "waypoints": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "description": "the resolved reference when resolution succeeded (branch, at, at_source then present), the bundle when the compile did, the read counts when the read did, and this waypoint's findings in every case; a waypoint refused at resolution carries series, sequence, description and findings alone",
+            "required": [
+              "series",
+              "sequence",
+              "description",
+              "bundle_id",
+              "read",
+              "findings"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "series": {
+                "type": "string"
+              },
+              "sequence": {
+                "type": "integer",
+                "minimum": 1
+              },
+              "branch": {
+                "type": "string"
+              },
+              "at": {
+                "type": "string"
+              },
+              "at_source": {
+                "$ref": "#/$defs/at_source"
+              },
+              "description": {
+                "type": "string"
+              },
+              "bundle_id": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^[0-9a-f]{64}$",
+                "description": "null when the waypoint was refused at resolution, read or compile"
+              },
+              "read": {
+                "oneOf": [
+                  {
+                    "$ref": "#/$defs/read_counts"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "findings": {
+                "type": "array",
+                "items": {
+                  "type": "object"
+                },
+                "description": "this waypoint's findings, each also in the document's own list with the same rule, object, step and message"
+              }
+            }
+          }
+        },
+        "steps": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/step"
+          },
+          "description": "one fewer than the waypoints, in order"
+        }
+      }
+    }
+  }
+}

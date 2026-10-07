@@ -1,0 +1,101 @@
+{
+  "ctm_version": "1",
+  "envelope": {
+    "branch": "fylgja-fixture",
+    "observed_at": "2026-09-08T12:00:00.000000Z",
+    "schema_hash": "fixture",
+    "contract_version": "0.2"
+  },
+  "devices": [
+    {
+      "name": "c1",
+      "platform": {
+        "vendor": "example",
+        "nos": "chassisos",
+        "version": "0"
+      },
+      "role": "spine",
+      "interfaces": [
+        {
+          "name": "Ethernet1/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c1:Ethernet1/1|c2:Ethernet1/1"
+        },
+        {
+          "name": "Ethernet2/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c1:Ethernet2/1|c2:Ethernet1/2"
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "a16f653a076e2559a056c5d8e18c1212",
+        "content": "! c1: production configuration (illustrative, never deployed)\nhostname c1\n"
+      }
+    },
+    {
+      "name": "c2",
+      "platform": {
+        "vendor": "example",
+        "nos": "chassisos",
+        "version": "0"
+      },
+      "role": "spine",
+      "interfaces": [
+        {
+          "name": "Ethernet1/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c1:Ethernet1/1|c2:Ethernet1/1"
+        },
+        {
+          "name": "Ethernet1/2",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c1:Ethernet2/1|c2:Ethernet1/2"
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "f63e12228620357f0246ed8bac1e19a6",
+        "content": "! c2: production configuration (illustrative, never deployed)\nhostname c2\n"
+      }
+    }
+  ],
+  "links": [
+    {
+      "id": "c1:Ethernet1/1|c2:Ethernet1/1",
+      "endpoints": [
+        {
+          "device": "c1",
+          "interface": "Ethernet1/1"
+        },
+        {
+          "device": "c2",
+          "interface": "Ethernet1/1"
+        }
+      ]
+    },
+    {
+      "id": "c1:Ethernet2/1|c2:Ethernet1/2",
+      "endpoints": [
+        {
+          "device": "c1",
+          "interface": "Ethernet2/1"
+        },
+        {
+          "device": "c2",
+          "interface": "Ethernet1/2"
+        }
+      ]
+    }
+  ]
+}

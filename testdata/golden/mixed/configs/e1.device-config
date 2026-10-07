@@ -1,0 +1,12 @@
+! e1: production configuration rendered by Infrahub (fylgja-artifacts)
+! platform arista eos 4.32; role spine
+hostname e1
+interface Ethernet1
+description to s1 ethernet-1/1
+no shutdown
+interface Ethernet2/1
+description to e2 Ethernet1
+no shutdown
+interface Loopback0
+   no shutdown
+! Management1: out-of-band management, left to the platform

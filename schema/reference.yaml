@@ -1,0 +1,27 @@
+# Fylgja reference schema — concrete kinds implementing the v0.1 generics.
+#
+# UNVERIFIED against current Infrahub schema syntax. For greenfield installs: load
+# this alongside fylgja-generics.yaml and populate it. Organisations with an existing
+# model do not use this file; they add `inherit_from` to their own kinds instead.
+---
+version: "1.0"
+
+nodes:
+  - name: Platform
+    namespace: Network
+    inherit_from: [FylgjaPlatform]
+
+  - name: Device
+    namespace: Network
+    # CoreArtifactTarget is what lets an artifact definition render for this kind, and
+    # so what lets a read find a device's configuration (M5, D-028). Contract 0.2
+    # demands it of every kind implementing FylgjaDevice.
+    inherit_from: [FylgjaDevice, CoreArtifactTarget]
+
+  - name: Interface
+    namespace: Network
+    inherit_from: [FylgjaInterface]
+
+  - name: Link
+    namespace: Network
+    inherit_from: [FylgjaLink]

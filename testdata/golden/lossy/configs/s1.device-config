@@ -1,0 +1,7 @@
+# s1: production configuration (illustrative)
+set / system name host-name s1
+set / network-instance default type default
+set / interface ethernet-1/1 description "to c1 Ethernet1/1"
+set / interface ethernet-1/1 admin-state enable
+set / interface ethernet-1/2/1 description "to c2 Ethernet2/1"
+set / interface ethernet-1/2/1 admin-state enable

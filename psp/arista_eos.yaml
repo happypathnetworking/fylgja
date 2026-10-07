@@ -1,0 +1,157 @@
+# Arista EOS — the second platform, as containerlab's `ceos` kind runs the imported
+# cEOS image. Every value below was measured or read from a booted node, and what was
+# measured is named beside it.
+psp_version: "0.6"
+
+platform:
+  id: arista_eos
+  vendor: arista
+  nos: eos
+  versions: ["4.32"]                  # gNMI and `show version` both read 4.32.0.2F-41889544.43202F (engineering build), which matches a listed 4.32
+  device_class: switch                # modelName cEOSLab
+
+image:
+  clab_kind: ceos
+  ref: ceos:4.32.0.2F                 # obtained from Arista with an account and imported by hand under this tag; the kind needs nothing else stated of it
+  acquisition: account_gated          # not a registry: the host check verifies this reference is present and refuses the run when it is not, never pulling. docs/development.md says how to import it
+  resources:
+    cpu: 1
+    memory_mb: 1536                   # 889-1541 MiB measured over four labs, steady across readings minutes apart; the highest reading
+  deploy_timeout_s: 300               # 95.5s measured, three mixed nodes, the host swapping and the kind's post-deploy holding the deploy open; x3
+  destroy_timeout_s: 60               # 1.47s for one node, 2.08s for the three-node mixed lab; x28
+
+interfaces:
+  # The mapping profile (format 0.4). The kind names each Linux interface by replacing
+  # `eth` with `Ethernet` and `_` with `/` (INTFTYPE=eth, MAPETH0=1), so a production
+  # name of any of the three shapes is carried unchanged by the node and becomes a port
+  # of its own: nothing is dropped, nothing is renamed, no port is shared, and no rule
+  # here is lossy.
+  rules:
+    - name: ethernet
+      match: "Ethernet{port}"
+      ranges: { port: [1, 511] }              # eth511 booted and eth512 did not, with no error anywhere: 511 is the node's ceiling for the plain form. 0 is below the range because eth0 is the management interface
+      port: "eth{port}"
+      node_name: "Ethernet{port}"
+      lossy: false
+    - name: modular
+      match: "Ethernet{slot}/{port}"
+      ranges: { slot: [1, 100], port: [1, 256] }   # slot 100 and port 256 under a slot both booted; the node reported no ceiling for either, so each bound is the highest verified
+      port: "eth{slot}_{port}"
+      node_name: "Ethernet{slot}/{port}"
+      lossy: false
+    - name: breakout
+      match: "Ethernet{slot}/{port}/{sub}"
+      ranges: { slot: [1, 100], port: [1, 256], sub: [1, 64] }   # sub 64 booted
+      port: "eth{slot}_{port}_{sub}"          # spreading: each lane is a port of its own, so nothing is dropped
+      node_name: "Ethernet{slot}/{port}/{sub}"
+      lossy: false
+      breakout: { parent: "Ethernet{slot}/{port}" }
+    - name: management
+      management: true
+      port: eth0                              # containerlab's management interface
+      node_name: Management0                  # `Ma0` in the CLI
+  # What the conformance suite holds this profile to: each bound's far end, a name each
+  # rule decides, both kinds of out-of-range name, two names no rule matches, and
+  # management. Every mapped name here is one a booted node carried.
+  mappings:
+    - { production: Ethernet1, rule: ethernet, port: eth1, node_name: Ethernet1 }
+    - { production: Ethernet511, rule: ethernet, port: eth511, node_name: Ethernet511 }
+    - { production: Ethernet2/1, rule: modular, port: eth2_1, node_name: Ethernet2/1 }
+    - { production: Ethernet100/1, rule: modular, port: eth100_1, node_name: Ethernet100/1 }
+    - { production: Ethernet1/256, rule: modular, port: eth1_256, node_name: Ethernet1/256 }
+    - { production: Ethernet3/1/1, rule: breakout, port: eth3_1_1, node_name: Ethernet3/1/1 }
+    - { production: Ethernet1/1/64, rule: breakout, port: eth1_1_64, node_name: Ethernet1/1/64 }
+    - { production: Ethernet0, rule: ethernet, unmappable: out_of_range }
+    - { production: Ethernet512, rule: ethernet, unmappable: out_of_range }
+    - { production: Ethernet0/1, rule: modular, unmappable: out_of_range }
+    - { production: Port-Channel1, unmappable: no_rule }
+    - { production: Vlan100, unmappable: no_rule }
+    - { production: Management1, rule: management, port: eth0, node_name: Management0 }
+
+config:
+  startup_format: cli
+  comment_prefix: "!"                 # `!` lines are accepted in a configuration session; `#` is refused at token 0, and with an atomic commit that refusal lands nothing. The bundle's bootstrap file opens with Fylgja's generated header, which this node is sent as a command under bootstrap_via: push
+  delivery: eapi                      # POST /command-api, method runCmds, one request
+  commit: explicit                    # `configure session <name>` then `commit`, which is atomic: a refused line leaves the session pending and the running configuration untouched, where `configure` alone leaves every line before the refused one applied
+  # The rendered configuration this platform takes, and how it is pushed to a booted
+  # node. Not the bootstrap below: that is platform data, this is intent.
+  artifact_name: device-config        # one artifact definition renders EOS text for a device whose nos is eos, under the same name SR Linux's artifact has
+  artifact_content_types: ["text/plain"]  # the definition's content type; EOS CLI text
+  mode: replace                       # rollback clean-config and copy startup-config session-config (the baseline containerlab left), bootstrap, artifact, show session-config diffs, commit: one session, one atomic commit, sent with format text (M11 D-033)
+  push_timeout_s: 30                  # 0.63s measured for a fourteen-command request; x47, for a node stalled under memory pressure
+  push:
+    scheme: https                     # `management api http-commands` serves 443 with a certificate generated at boot, accepted unverified as the gNMI probe accepts one; HTTP on 80 is shut
+    port: 443
+    login:                            # variable names, never values. Its own pair, not SR Linux's, so one worker environment carries both logins
+      username_env: FYLGJA_EOS_USERNAME
+      password_env: FYLGJA_EOS_PASSWORD
+  # The kind takes a startup-config as the WHOLE configuration, not as an overlay: a
+  # file named in the topology replaces containerlab's template, and a node given a
+  # three-line one lost its login, its eAPI and its gNMI and never answered a probe.
+  # A file that carried them back would put a login in the bundle. So the
+  # bootstrap reaches the node through the push instead, ahead of the artifact's lines
+  # in the same request.
+  bootstrap_via: push
+  # Platform bootstrap only: enough to come up and form adjacencies, nothing from
+  # intent (Constitution IV). Everything else bootstrap exists for is already true of
+  # this node before Fylgja touches it, so each omitted line is named here rather
+  # than written:
+  #   - no per-port enable: every Ethernet interface is up by default, admin and oper,
+  #     in every lab and on every port.
+  #   - no `lldp run`: LLDP runs on every port by default, and every adjacency of the
+  #     mixed lab had formed before the deploy returned.
+  # The hostname is set by containerlab's post-deploy too, and is kept because it is
+  # the one line that names the node and the one an artifact overrides.
+  bootstrap:
+    - "hostname {node}"
+
+state:
+  transport: gnmi
+  openconfig_coverage: partial        # the `config/` containers omit a leaf holding its default, so a read of one comes back empty
+
+# Ready means the management plane answers an authenticated gNMI Get, not that routing
+# has converged, and not that the bootstrap or the artifact have reached the node: both
+# arrive after this, through the push.
+readiness:
+  probe: gnmi_get
+  path: /system/state/hostname        # a leaf; the version leaf is beside it
+  encoding: json_ietf                 # json and the proto default are answered too, but the encoding is stated rather than left to a default
+  port: 6030                          # `management api gnmi`, transport grpc default
+  tls: false                          # plaintext: that transport has no SSL profile, and a TLS dial is refused at the handshake
+  timeout_s: 90                       # 9.3s after the deploy returned, three nodes, the host swapping; x10
+  # This node answers gNMI before `management api http-commands` is listening: measured on
+  # the mixed lab, gNMI opened at deploy+11.1s and eAPI at +12.1s and +13.6s, and a push
+  # beginning a second after the probe succeeded was refused three times over nine seconds.
+  # The bootstrap arrives through that push, so a node that cannot take it is not
+  # ready. SR Linux declares nothing here: its transport is up when its probe answers (D-029)
+  await_push_transport: true
+  login:                              # variable names, never values
+    username_env: FYLGJA_EOS_USERNAME
+    password_env: FYLGJA_EOS_PASSWORD
+
+# How the conformance suite's boot half reads a booted node, over the readiness probe's
+# gNMI Get, port, encoding and login. {node_name} is the port's node name.
+conformance:
+  host_name: /system/state/hostname
+  version: /system/state/software-version
+  port:
+    enabled: { path: "/interfaces/interface[name={node_name}]/state/admin-status", value: UP }
+    discovering:
+      path: "/lldp/interfaces/interface[name={node_name}]/state/enabled"
+      value: "true"
+      absent: "true"                  # the leaf is not reported while LLDP runs, since it holds its default; `false` appears once LLDP is turned off on the port
+    neighbor:
+      path: "/lldp/interfaces/interface[name={node_name}]/neighbors/neighbor"
+      system_name: state/system-name  # the far node's host name, one container below the entry
+      port_id: state/port-id          # the far port as the far node names it (port-id-type INTERFACE_NAME)
+
+capabilities: [bgp, bgp_evpn, isis, lag, ospf, vxlan]   # each accepted in one configuration session on a booted node, never claimed
+
+fidelity:
+  production_forwarding: hardware     # production EOS switches forward in silicon; the twin's data plane is not a guide
+  approximations:
+    - Ethernet{slot}/{port} is carried as a port of its own, where a fixed-configuration switch has it as a breakout lane of Ethernet{slot}; intent carries no breakout structure to tell the two apart
+    - No linecard model; the port set is fixed at container start and read once, so a port added later does not appear
+    - No hardware QoS, TCAM or buffer behaviour
+    - Convergence timing differs from hardware
+  link_change: restart                # a link added or removed restarts the node in place; it returns on its startup configuration about 50-55s later (eAPI), its push lost

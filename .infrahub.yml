@@ -1,0 +1,26 @@
+---
+# Infrahub repository configuration for fylgja-artifacts.
+# One Jinja2 transformation renders a device's production configuration from the
+# Fylgja generics (FylgjaDevice, FylgjaInterface, FylgjaLink); one artifact definition
+# generates it for every device in the group `fylgja-devices`.
+
+queries:
+  - name: device_config
+    file_path: infrahub/queries/device_config.gql
+
+jinja2_transforms:
+  - name: srlinux_device_config
+    description: SR Linux configuration for one device, from the Fylgja generics.
+    query: device_config
+    template_path: infrahub/templates/device_config.j2
+    watch:
+      files: []
+
+artifact_definitions:
+  - name: srlinux_device_config
+    artifact_name: device-config
+    parameters:
+      device: name__value
+    content_type: text/plain
+    targets: fylgja-devices
+    transformation: srlinux_device_config

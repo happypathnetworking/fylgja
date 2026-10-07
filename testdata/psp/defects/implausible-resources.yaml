@@ -1,0 +1,118 @@
+# Nokia SR Linux — the M0 platform.
+psp_version: "0.6"
+
+platform:
+  id: nokia_srlinux
+  vendor: nokia
+  nos: srlinux
+  versions: ["24.7"]                  # v24.7.1-330-g38f237abfe read from the booted image; 24.3 removed, no image here boots it
+  device_class: router
+
+image:
+  clab_kind: nokia_srlinux
+  ref: ghcr.io/nokia/srlinux:24.7.1   # the image every value here was measured on
+  acquisition: public_registry
+  resources:
+    cpu: 0
+    memory_mb: 0                   # 1641 MiB measured, three nodes, steady over a minute; ×1.25
+  deploy_timeout_s: 180               # 39.4s measured, three nodes, host swapping; ×4.5. An image pull counts against it
+  destroy_timeout_s: 60               # 0.8–2.0s measured, one to three nodes, ready or half-deployed; ×30
+
+interfaces:
+  # The mapping profile (format 0.4). Rules are tried in order and the first whose
+  # match fits decides; SR Linux maps one-to-one, so every node name is the production
+  # name and nothing is lossy.
+  rules:
+    - name: ethernet
+      match: "ethernet-{slot}/{port}"
+      ranges: { slot: [1, 1], port: [1, 58] }   # /interface/name lists ethernet-1/1..ethernet-1/58 on the 7220 IXR-D2L; the node refuses port 99 ("max is 58") and slot 2
+      port: "e{slot}-{port}"                   # containerlab's endpoint name
+      node_name: "ethernet-{slot}/{port}"
+      lossy: false
+    - name: breakout
+      match: "ethernet-{slot}/{port}/{sub}"
+      ranges: { slot: [1, 1], port: [1, 58], sub: [1, 4] }   # sub: the D2L's 4x breakout; checked by the declared mappings only, no fixture breaks a port out
+      port: "e{slot}-{port}-{sub}"             # clab: ethernet-1/1/1 -> e1-1-1
+      node_name: "ethernet-{slot}/{port}/{sub}"
+      lossy: false
+      breakout: { parent: "ethernet-{slot}/{port}" }
+    - name: management
+      management: true
+      port: mgmt0
+      node_name: mgmt0
+  # What the conformance suite holds this profile to: the bound's ends, a breakout
+  # child, both kinds of out-of-range name, a name no rule matches, and management.
+  mappings:
+    - { production: ethernet-1/1, rule: ethernet, port: e1-1, node_name: ethernet-1/1 }
+    - { production: ethernet-1/58, rule: ethernet, port: e1-58, node_name: ethernet-1/58 }
+    - { production: ethernet-1/49/1, rule: breakout, port: e1-49-1, node_name: ethernet-1/49/1 }
+    - { production: ethernet-1/59, rule: ethernet, unmappable: out_of_range }
+    - { production: ethernet-2/1, rule: ethernet, unmappable: out_of_range }
+    - { production: Ethernet99, unmappable: no_rule }
+    - { production: mgmt0, rule: management, port: mgmt0, node_name: mgmt0 }
+
+config:
+  startup_format: cli                 # a snippet merged over clab's default config
+  delivery: json_rpc                  # POST /jsonrpc, method cli; the mechanism M5 implements
+  commit: explicit                    # candidate datastore, then commit
+  # The rendered configuration this platform takes, and how it is pushed to a booted
+  # node (D-028). Not the bootstrap below: that is platform data, this is intent.
+  artifact_name: device-config        # the artifact definition srlinux_device_config renders under this name
+  artifact_content_types: ["text/plain"]  # the definition's content type; SR Linux CLI text
+  mode: merge                         # the artifact's lines over bootstrap's; `replace` is `delete /` first, which took the probe node dark
+  push_timeout_s: 30                  # 0.70s measured for an 839-byte artifact, three pushes 0.62-0.66s; x40 for a node stalled under memory pressure
+  push:
+    scheme: https                     # port 443, TLS profile clab-profile; the boot-time certificate is accepted unverified, as the gNMI probe accepts it
+    port: 443
+    login:                            # variable names, never values. The probe's variables reused, named again so a platform whose push login differs can say so
+      username_env: FYLGJA_SRLINUX_USERNAME
+      password_env: FYLGJA_SRLINUX_PASSWORD
+  # Platform bootstrap only: enough to come up and form adjacencies, nothing from
+  # intent (Constitution IV). clab's default config already enables LLDP and gNMI;
+  # the LLDP line is redundant but harmless, and makes the requirement explicit.
+  # No commit line: containerlab enters the candidate config and commits a CLI
+  # snippet itself, so an explicit commit here would be redundant at best.
+  bootstrap:
+    - "set / system name host-name {node}"
+    - "set / interface {interface} admin-state enable"
+    - "set / system lldp admin-state enable"
+
+state:
+  transport: gnmi
+  openconfig_coverage: full
+  native_fallback: "srl_nokia-*"
+
+# Ready means the management plane answers an authenticated gNMI Get, not that routing
+# has converged.
+readiness:
+  probe: gnmi_get
+  path: /system/information
+  encoding: json_ietf                 # the proto default is refused as Unimplemented
+  port: 57400
+  timeout_s: 1                       # 0.9s after deploy returned, three nodes; 2.4s worst seen; ×25
+  login:                              # variable names, never values
+    username_env: FYLGJA_SRLINUX_USERNAME
+    password_env: FYLGJA_SRLINUX_PASSWORD
+
+# How the conformance suite's boot half reads a booted node, over the readiness probe's
+# gNMI Get, port, encoding and login. {node_name} is the port's node name.
+conformance:
+  host_name: /system/name/host-name
+  version: /system/information/version
+  port:
+    enabled: { path: "/interface[name={node_name}]/admin-state", value: enable }
+    discovering: { path: "/system/lldp/interface[name={node_name}]/admin-state", value: enable }
+    neighbor:
+      path: "/system/lldp/interface[name={node_name}]/neighbor"
+      system_name: system-name        # the far node's host name
+      port_id: port-id                # the far port as the far node names it (port-id-type INTERFACE_NAME)
+
+capabilities: [bgp, bgp_evpn, isis, ospf, lag, vxlan]
+
+fidelity:
+  production_forwarding: hardware     # 7220/7250 forward in silicon; twin data plane is not a guide
+  approximations:
+    - No linecard model; port count fixed at container start
+    - No hardware QoS, TCAM or buffer behaviour
+    - Convergence timing differs from hardware
+  link_change: live

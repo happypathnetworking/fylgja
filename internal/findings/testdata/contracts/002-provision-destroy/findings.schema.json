@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fylgja.dev/contracts/findings/v1",
+  "title": "Fylgja findings document v1 (--json) — M2 extension",
+  "description": "Additive to specs/001-read-compile/contracts/findings.schema.json: every M1 document still validates. Added: operations twin.create, twin.provision, twin.destroy; statuses failed (exit 3) and unclean (exit 4); subject.bundle and subject.run_id; blocks twin (success of create/provision), cleanup (failure of create/provision, and destroy), dry_run. findings_version stays \"1\".",
+  "type": "object",
+  "required": ["findings_version", "operation", "status", "findings"],
+  "additionalProperties": false,
+  "properties": {
+    "findings_version": { "const": "1" },
+    "operation": { "enum": ["intent.read", "twin.compile", "schema.check", "psp.validate", "twin.create", "twin.provision", "twin.destroy"] },
+    "status": {
+      "enum": ["ok", "rejected", "error", "failed", "unclean"],
+      "description": "ok→0, rejected→1 (before the host was touched), error→2 (operational), failed→3 (after the host was touched; cleanup complete), unclean→4 (something remains). See cli.md."
+    },
+    "subject": {
+      "type": "object",
+      "description": "What was operated on.",
+      "additionalProperties": false,
+      "properties": {
+        "branch": { "type": "string" },
+        "at": { "type": "string", "description": "As supplied on --at; absent otherwise" },
+        "ctm": { "type": "string" },
+        "files": { "type": "array", "items": { "type": "string" } },
+        "out": { "type": "string" },
+        "bundle": { "type": "string", "description": "The bundle directory given to twin.provision, as given" },
+        "run_id": { "type": "string", "description": "The Temporal run id of the provisioning or destroy run this document reports on, once one was started (or attached to)" }
+      }
+    },
+    "bundle_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "twin.compile (status ok), twin.create and twin.provision (any status once compile completed): the bundle's identity (D-024)."
+    },
+    "verified": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contract_version": { "type": "string" },
+        "generics": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["generic", "kinds"],
+            "additionalProperties": false,
+            "properties": { "generic": { "type": "string" }, "kinds": { "type": "array", "items": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "twin": {
+      "type": "object",
+      "description": "twin.create / twin.provision, status ok: the twin that was built. Mirrors twin.json's nodes.",
+      "required": ["lab", "dir", "run_id", "observed_at", "nodes"],
+      "additionalProperties": false,
+      "properties": {
+        "lab": { "const": "fylgja" },
+        "dir": { "type": "string", "description": "Absolute twin directory path, as the worker reported it (FR-020)" },
+        "run_id": { "type": "string" },
+        "observed_at": { "type": ["string", "null"], "description": "As twin.json: null when no read took place" },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "mgmt_ipv4", "ready_after_s"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "mgmt_ipv4": { "type": "string" },
+              "ready_after_s": { "type": "number", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "description": "twin.create / twin.provision with status failed or unclean, and twin.destroy: what teardown and unstage did.",
+      "required": ["teardown", "unstage", "remaining"],
+      "additionalProperties": false,
+      "properties": {
+        "teardown": { "enum": ["done", "nothing", "failed", "skipped"], "description": "done: lab fylgja removed. nothing: no lab was present. failed: see cleanup.incomplete. skipped: not attempted (the CLI stopped waiting)" },
+        "unstage": { "enum": ["done", "nothing", "failed", "skipped"] },
+        "removed": { "type": "array", "items": { "type": "string" }, "description": "What was removed, e.g. \"lab fylgja (3 containers)\", \"twin directory /…/twin\"" },
+        "remaining": { "type": "array", "items": { "type": "string" }, "description": "What is still on the host. Empty for status ok and failed; non-empty for unclean" }
+      }
+    },
+    "dry_run": {
+      "type": "object",
+      "description": "twin.create --dry-run / twin.provision --dry-run: what a real run would do (FR-005, SC-010).",
+      "required": ["nodes", "memory_sum_mb", "host_budget_mb", "host", "verdict"],
+      "additionalProperties": false,
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "image", "psp", "memory_mb"],
+            "additionalProperties": false,
+            "properties": {
+              "name": { "type": "string" },
+              "image": { "type": "string" },
+              "psp": { "type": "string", "description": "psp id" },
+              "memory_mb": { "type": "integer" }
+            }
+          }
+        },
+        "memory_sum_mb": { "type": "integer" },
+        "host_budget_mb": { "type": ["integer", "null"], "description": "FYLGJA_HOST_MEMORY_MB, or null when unset" },
+        "host": {
+          "type": "object",
+          "required": ["lab_present", "twin_dir_present"],
+          "additionalProperties": false,
+          "properties": {
+            "lab_present": { "type": "boolean" },
+            "twin_dir_present": { "type": "boolean" }
+          }
+        },
+        "verdict": { "enum": ["clear", "refused"], "description": "refused: the findings carry the identifier the real create would refuse with" }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "rule", "object", "message"],
+        "additionalProperties": false,
+        "properties": {
+          "severity": { "enum": ["rejection", "warning", "info"] },
+          "rule": { "type": "string", "pattern": "^[a-z]+(\\.[a-z_]+)+$" },
+          "object": { "type": "string" },
+          "message": { "type": "string" },
+          "step": { "enum": ["verify", "start", "read", "compile", "host_check", "stage", "deploy", "readiness", "record", "teardown", "unstage"], "description": "New at M2: the step the finding belongs to (FR-017). Absent on M1 operations" },
+          "location": {
+            "type": "object",
+            "required": ["file"],
+            "additionalProperties": false,
+            "properties": { "file": { "type": "string" }, "line": { "type": "integer" } }
+          }
+        }
+      }
+    }
+  }
+}

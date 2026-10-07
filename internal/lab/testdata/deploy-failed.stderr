@@ -1,0 +1,12 @@
+10:18:45 INFO Creating container name=n2
+10:18:45 INFO Creating container name=n1
+10:18:45 INFO Creating container name=n3
+10:18:45 INFO Created link: n1:e1-1 ▪┄┄▪ n2:e1-1
+10:18:45 INFO Running postdeploy actions kind=nokia_srlinux node=n3
+10:18:45 INFO Running postdeploy actions kind=nokia_srlinux node=n1
+10:18:45 INFO Running postdeploy actions kind=nokia_srlinux node=n2
+10:19:12 ERRO node "n2" post-deploy: command execution error:At line 3: Error: Failed to parse value 'e1-1' for key 'name' (node 'interface') - Invalid value "e1-1": Must match the pattern '(mgmt0|mgmt0-standby|system0|sync0|lo(…)|ethernet-([1-9](\d){0,1}(/[abcd])?(/[1-9](\d){0,1})?/(…))|irb(…)|lag(…))'
+10:19:12 ERRO clab-fylgja-n3: failed to execute cmd: "bash -c su -s /bin/bash admin -c '/opt/srlinux/bin/sr_cli -ed < /tmp/clab-overlay-config'" with error context canceled
+10:19:12 ERRO node "n3" post-deploy: context canceled
+10:19:12 ERRO node "n1" post-deploy: context canceled
+   ERROR  Deployment failed for one or more nodes: node "n2" post-deploy: command execution error: node "n3" post-deploy: context canceled  node "n1" post-deploy: context canceled.

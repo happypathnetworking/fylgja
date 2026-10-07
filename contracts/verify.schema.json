@@ -1,0 +1,225 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fylgja.dev/schemas/verify.schema.json",
+  "title": "fylgja twin verify — the verify block (M12 FR-007)",
+  "description": "The `verify` block of the findings document fylgja twin verify emits (operation twin.verify): the intent conformance report. The twin as its record names it; every assertion derived from the staged bundle's manifest with its outcome, grouped by node and by link; each node's configuration as the record claims it (nodes[].holds against the staged bundle), labelled recorded, never read; every cabled port intent disables, skipped with its reason; the counts by kind; the runs in flight as twin show reads them; and, with --wait, the wait. Advisory: no Fylgja operation reads it. No configuration line, artifact or bootstrap content, device diff, token or login anywhere (FR-006, FR-024): the values read are host names, admin states and neighbour names.",
+  "$defs": {
+    "waypoint": {
+      "type": ["object", "null"],
+      "required": ["series", "sequence", "description", "at_source"],
+      "additionalProperties": false,
+      "properties": {
+        "series": { "type": "string", "pattern": "^[^/\\s]+$" },
+        "sequence": { "type": "integer", "minimum": 1 },
+        "description": { "type": "string" },
+        "at_source": { "enum": ["given", "written"] }
+      }
+    },
+    "outcome": {
+      "enum": ["held", "failed", "absent", "unread", "skipped"],
+      "description": "held: the value read is the value expected. failed: a value was read and differs. absent: nothing was read, and the package's facet declares no meaning for absence (SR Linux: no update and no error, M6 R3; a facet with `absent` reads that value instead, M7 R6). unread: the read failed at the transport. skipped: not asserted, a port intent disables or a link end on one, with reason."
+    },
+    "assertion": {
+      "type": "object",
+      "description": "One assertion about one observable fact of one node, read once over the node's package's readiness transport by the path its conformance facet declares",
+      "required": ["path", "expected", "outcome"],
+      "additionalProperties": false,
+      "properties": {
+        "path": { "type": "string", "description": "the facet's path with {node_name} rendered, filled whenever the node's package is known (a skipped assertion and a node unread for want of an address included); \"\" only when the package is not" },
+        "expected": { "type": "string" },
+        "outcome": { "$ref": "#/$defs/outcome" },
+        "read": { "type": ["string", "null"], "description": "what was read, as a message quotes it (a string as itself, anything else as its JSON); null when nothing was, or the read failed" },
+        "error": { "type": "string", "description": "unread: the transport error, the password redacted" },
+        "reason": { "type": "string", "description": "skipped: why" }
+      }
+    },
+    "port_assertion": {
+      "type": "object",
+      "description": "port_enabled: one cabled port, by its production name and the node's own name for it",
+      "required": ["port", "node_name", "path", "expected", "outcome"],
+      "additionalProperties": false,
+      "properties": {
+        "port": { "type": "string" },
+        "node_name": { "type": "string" },
+        "path": { "type": "string" },
+        "expected": { "type": "string" },
+        "outcome": { "$ref": "#/$defs/outcome" },
+        "read": { "type": ["string", "null"] },
+        "error": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "end": {
+      "type": "object",
+      "description": "neighbor: one end of a link, which must see the far node and the far port under the far node's own name as the one entry of its neighbour list",
+      "required": ["node", "port", "node_name", "path", "expected", "outcome", "read"],
+      "additionalProperties": false,
+      "properties": {
+        "node": { "type": "string" },
+        "port": { "type": "string", "description": "the production name" },
+        "node_name": { "type": "string" },
+        "path": { "type": "string" },
+        "expected": {
+          "type": "object",
+          "required": ["node", "port"],
+          "additionalProperties": false,
+          "properties": { "node": { "type": "string" }, "port": { "type": "string", "description": "the far node's own name for its port" } }
+        },
+        "outcome": { "$ref": "#/$defs/outcome" },
+        "read": {
+          "type": "array",
+          "description": "every neighbour entry read, as {node, port} from the facet's system_name and port_id leaves; [] when nothing was read, the read failed or the end was skipped; an entry missing a leaf shows \"(no <leaf>)\"",
+          "items": {
+            "type": "object",
+            "required": ["node", "port"],
+            "additionalProperties": false,
+            "properties": { "node": { "type": "string" }, "port": { "type": "string" } }
+          }
+        },
+        "error": { "type": "string" },
+        "reason": { "type": "string" }
+      }
+    },
+    "node": {
+      "type": "object",
+      "required": ["node", "psp", "addr", "read", "host_name", "ports"],
+      "additionalProperties": false,
+      "properties": {
+        "node": { "type": "string" },
+        "psp": { "type": "string", "description": "the manifest's nodes[].psp.id" },
+        "addr": { "type": ["string", "null"], "description": "<mgmt ipv4>:<readiness port> as dialled: the record's address, else containerlab's; null when the node was not dialled, because it had no address or containerlab did not report it (the record's address is then not used either)" },
+        "read": { "type": "boolean", "description": "false when any assertion of the node is unread" },
+        "error": { "type": "string", "description": "the first transport error, redacted, when read is false" },
+        "host_name": { "$ref": "#/$defs/assertion" },
+        "ports": { "type": "array", "items": { "$ref": "#/$defs/port_assertion" }, "description": "the node's cabled ports, in port order" }
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": ["id", "a", "b"],
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string" },
+        "a": { "$ref": "#/$defs/end" },
+        "b": { "$ref": "#/$defs/end" }
+      }
+    },
+    "claim": {
+      "type": "object",
+      "description": "the record's claim of what a node holds (twin.json nodes[].holds) against the staged bundle: recorded, never read (answer (c)); never waited on",
+      "required": ["node", "holds", "staged", "outcome"],
+      "additionalProperties": false,
+      "properties": {
+        "node": { "type": "string" },
+        "holds": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "null: containerlab restarted, recreated or created the node and no push landed (M11); a record before 4 reads as its bundle_id" },
+        "staged": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
+        "outcome": { "enum": ["held", "failed"] }
+      }
+    },
+    "skip": {
+      "type": "object",
+      "required": ["node", "port", "reason", "link"],
+      "additionalProperties": false,
+      "properties": {
+        "node": { "type": "string" },
+        "port": { "type": "string", "description": "the production name" },
+        "reason": { "type": "string" },
+        "link": { "type": ["string", "null"], "description": "the link id for a skipped link end; null for the port's own state" }
+      }
+    },
+    "count": {
+      "type": "object",
+      "required": ["held", "failed"],
+      "additionalProperties": false,
+      "properties": {
+        "held": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0, "description": "failed and absent together" },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "unread": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "run": {
+      "type": "object",
+      "required": ["workflow_id", "run_id", "step"],
+      "additionalProperties": false,
+      "properties": {
+        "workflow_id": { "type": "string" },
+        "run_id": { "type": "string" },
+        "step": { "type": "string" },
+        "child": { "$ref": "#/$defs/run" }
+      }
+    },
+    "verify": {
+      "type": "object",
+      "required": ["twin", "read_at", "nodes", "links", "record", "skipped", "extra_nodes", "counts", "in_flight", "service"],
+      "additionalProperties": false,
+      "properties": {
+        "twin": {
+          "type": "object",
+          "description": "the twin as its record names it, and the staged bundle the assertions were derived from",
+          "required": ["bundle_id", "waypoint", "state", "source", "nodes"],
+          "additionalProperties": false,
+          "properties": {
+            "bundle_id": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "the staged bundle's identity (twin/bundle), which is the record's bundle_id for a ready twin and the target's for a diverged one whose stage landed" },
+            "waypoint": { "$ref": "#/$defs/waypoint" },
+            "state": { "enum": ["ready", "diverged"], "description": "a record before 4 reads ready" },
+            "source": { "enum": ["intent", "bundle"] },
+            "nodes": { "type": "integer", "minimum": 0, "description": "the record's node count" },
+            "diverged": {
+              "type": "object",
+              "description": "present when the record is diverged: where the step was going and where it stopped (answer (d))",
+              "required": ["towards", "run", "phase"],
+              "additionalProperties": false,
+              "properties": {
+                "towards": {
+                  "type": "object",
+                  "required": ["waypoint", "bundle_id"],
+                  "additionalProperties": false,
+                  "properties": { "waypoint": { "$ref": "#/$defs/waypoint" }, "bundle_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" } }
+                },
+                "run": {
+                  "type": "object",
+                  "required": ["workflow_id", "run_id"],
+                  "additionalProperties": false,
+                  "properties": { "workflow_id": { "const": "fylgja-step" }, "run_id": { "type": "string" } }
+                },
+                "phase": { "enum": ["reconcile", "readiness", "push", "record"] }
+              }
+            }
+          }
+        },
+        "read_at": { "type": "string", "description": "RFC 3339 UTC: the start of the read the block reports (the last read, with --wait)" },
+        "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" }, "description": "every node the staged manifest names, in name order" },
+        "links": { "type": "array", "items": { "$ref": "#/$defs/link" }, "description": "every link the staged manifest names, in id order" },
+        "record": { "type": "array", "items": { "$ref": "#/$defs/claim" }, "description": "one claim per record node, and one per node of the staged bundle the record does not name (holds null, failed), in name order" },
+        "skipped": { "type": "array", "items": { "$ref": "#/$defs/skip" }, "description": "every skipped assertion: a port intent disables, then each end of its link" },
+        "extra_nodes": { "type": "array", "items": { "type": "string" }, "description": "nodes containerlab reports that the staged bundle does not name; nothing is asserted of them" },
+        "counts": {
+          "type": "object",
+          "required": ["host_name", "port_enabled", "neighbor", "record"],
+          "additionalProperties": false,
+          "properties": {
+            "host_name": { "$ref": "#/$defs/count" },
+            "port_enabled": { "$ref": "#/$defs/count" },
+            "neighbor": { "$ref": "#/$defs/count" },
+            "record": { "$ref": "#/$defs/count" }
+          }
+        },
+        "in_flight": { "type": "array", "items": { "$ref": "#/$defs/run" }, "description": "as twin show's, read best-effort under its five-second budget" },
+        "service": { "enum": ["ok", "unreachable"] },
+        "wait": {
+          "type": "object",
+          "description": "present with --wait alone: the budget, the reads, how the wait ended and after how many seconds from the command's first read. An unread node at expiry ends the command operation.failed, and the block then says so through nodes[].read",
+          "required": ["budget_s", "reads", "outcome", "after_s"],
+          "additionalProperties": false,
+          "properties": {
+            "budget_s": { "type": "integer", "minimum": 0 },
+            "reads": { "type": "integer", "minimum": 1 },
+            "outcome": { "enum": ["settled", "expired"] },
+            "after_s": { "type": "number", "minimum": 0 }
+          }
+        }
+      }
+    }
+  }
+}

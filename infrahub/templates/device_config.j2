@@ -1,0 +1,68 @@
+{#- Production configuration for one device, rendered by Infrahub from the Fylgja generics,
+    in the dialect of the device's platform: SR Linux CLI, or EOS CLI (Fylgja M7).
+    Deterministic: interfaces are emitted in name order. Nothing here is invented: every
+    line follows from the device, its platform, its interfaces and their links. -#}
+{% set dev = data.FylgjaDevice.edges[0].node -%}
+{% set p = dev.platform.node -%}
+{% if p.nos.value == 'eos' -%}
+! {{ dev.name.value }}: production configuration rendered by Infrahub (fylgja-artifacts)
+! platform {{ p.vendor.value }} {{ p.nos.value }} {{ p.version.value }}; role {{ dev.role.value }}
+hostname {{ dev.name.value }}
+{% for edge in dev.interfaces.edges | sort(attribute='node.name.value') -%}
+{% set i = edge.node -%}
+{% if i.mgmt_only.value -%}
+! {{ i.name.value }}: out-of-band management, left to the platform
+{% elif i.iftype.value == 'physical' -%}
+{% set ns = namespace(peer=none) -%}
+{% if i.link.node -%}
+{% for ep in i.link.node.endpoints.edges -%}
+{% if ep.node.device.node.name.value != dev.name.value or ep.node.name.value != i.name.value -%}
+{% set ns.peer = ep.node -%}
+{% endif -%}
+{% endfor -%}
+{% endif -%}
+interface {{ i.name.value }}
+{% if ns.peer -%}
+   description to {{ ns.peer.device.node.name.value }} {{ ns.peer.name.value }}
+{% endif -%}
+   {{ 'no shutdown' if i.enabled.value else 'shutdown' }}
+{% elif i.iftype.value == 'loopback' -%}
+interface {{ i.name.value }}
+   {{ 'no shutdown' if i.enabled.value else 'shutdown' }}
+{% else -%}
+! {{ i.name.value }}: iftype {{ i.iftype.value }} is not rendered
+{% endif -%}
+{% endfor -%}
+{% else -%}
+# {{ dev.name.value }}: production configuration rendered by Infrahub (fylgja-artifacts)
+# platform {{ p.vendor.value }} {{ p.nos.value }} {{ p.version.value }}; role {{ dev.role.value }}
+set / system name host-name {{ dev.name.value }}
+set / network-instance default type default
+{% for edge in dev.interfaces.edges | sort(attribute='node.name.value') -%}
+{% set i = edge.node -%}
+{% if i.mgmt_only.value -%}
+# {{ i.name.value }}: out-of-band management, left to the platform
+{% elif i.iftype.value == 'physical' -%}
+{% set ns = namespace(peer=none) -%}
+{% if i.link.node -%}
+{% for ep in i.link.node.endpoints.edges -%}
+{% if ep.node.device.node.name.value != dev.name.value or ep.node.name.value != i.name.value -%}
+{% set ns.peer = ep.node -%}
+{% endif -%}
+{% endfor -%}
+{% endif -%}
+{% if ns.peer -%}
+set / interface {{ i.name.value }} description "to {{ ns.peer.device.node.name.value }} {{ ns.peer.name.value }}"
+{% endif -%}
+set / interface {{ i.name.value }} admin-state {{ 'enable' if i.enabled.value else 'disable' }}
+set / interface {{ i.name.value }} subinterface 0 admin-state enable
+set / network-instance default interface {{ i.name.value }}.0
+{% elif i.iftype.value == 'loopback' -%}
+set / interface {{ i.name.value }} admin-state {{ 'enable' if i.enabled.value else 'disable' }}
+set / interface {{ i.name.value }} subinterface 0 admin-state enable
+set / network-instance default interface {{ i.name.value }}.0
+{% else -%}
+# {{ i.name.value }}: iftype {{ i.iftype.value }} is not rendered
+{% endif -%}
+{% endfor -%}
+{% endif -%}

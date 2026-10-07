@@ -1,0 +1,245 @@
+{
+  "bundle_version": "4",
+  "provenance": {
+    "branch": "fylgja-fixture",
+    "at": "2026-09-08T12:00:00Z",
+    "schema_hash": "fixture",
+    "contract_version": "0.2"
+  },
+  "nodes": [
+    {
+      "name": "n1",
+      "platform": "srlinux",
+      "psp": {
+        "id": "nokia_srlinux",
+        "source": "embedded"
+      },
+      "image": "ghcr.io/nokia/srlinux:24.7.1",
+      "management_port": "mgmt0",
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "43e8fd0c2de5f4646f74a51d34742824",
+        "size": 861,
+        "file": "configs/n1.device-config"
+      },
+      "bootstrap": {
+        "file": "configs/n1.cli",
+        "via": "startup_config"
+      }
+    },
+    {
+      "name": "n2",
+      "platform": "srlinux",
+      "psp": {
+        "id": "nokia_srlinux",
+        "source": "embedded"
+      },
+      "image": "ghcr.io/nokia/srlinux:24.7.1",
+      "management_port": "mgmt0",
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "ecb03029ea805a09c54d2cd6a0e59ac9",
+        "size": 861,
+        "file": "configs/n2.device-config"
+      },
+      "bootstrap": {
+        "file": "configs/n2.cli",
+        "via": "startup_config"
+      }
+    },
+    {
+      "name": "n3",
+      "platform": "srlinux",
+      "psp": {
+        "id": "nokia_srlinux",
+        "source": "embedded"
+      },
+      "image": "ghcr.io/nokia/srlinux:24.7.1",
+      "management_port": "mgmt0",
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "ae0c3a87085839354cbb2ca10f71e487",
+        "size": 861,
+        "file": "configs/n3.device-config"
+      },
+      "bootstrap": {
+        "file": "configs/n3.cli",
+        "via": "startup_config"
+      }
+    }
+  ],
+  "mapping": [
+    {
+      "device": "n1",
+      "interface": "ethernet-1/1",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "e1-1",
+      "node_name": "ethernet-1/1",
+      "disposition": "cabled"
+    },
+    {
+      "device": "n1",
+      "interface": "ethernet-1/2",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "e1-2",
+      "node_name": "ethernet-1/2",
+      "disposition": "cabled"
+    },
+    {
+      "device": "n1",
+      "interface": "lo0",
+      "iftype": "loopback",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": null,
+      "node_name": null,
+      "disposition": "configured-not-cabled"
+    },
+    {
+      "device": "n1",
+      "interface": "mgmt0",
+      "iftype": "physical",
+      "mgmt_only": true,
+      "enabled": true,
+      "port": "mgmt0",
+      "node_name": "mgmt0",
+      "disposition": "management"
+    },
+    {
+      "device": "n2",
+      "interface": "ethernet-1/1",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "e1-1",
+      "node_name": "ethernet-1/1",
+      "disposition": "cabled"
+    },
+    {
+      "device": "n2",
+      "interface": "ethernet-1/2",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "e1-2",
+      "node_name": "ethernet-1/2",
+      "disposition": "cabled"
+    },
+    {
+      "device": "n2",
+      "interface": "lo0",
+      "iftype": "loopback",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": null,
+      "node_name": null,
+      "disposition": "configured-not-cabled"
+    },
+    {
+      "device": "n2",
+      "interface": "mgmt0",
+      "iftype": "physical",
+      "mgmt_only": true,
+      "enabled": true,
+      "port": "mgmt0",
+      "node_name": "mgmt0",
+      "disposition": "management"
+    },
+    {
+      "device": "n3",
+      "interface": "ethernet-1/1",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "e1-1",
+      "node_name": "ethernet-1/1",
+      "disposition": "cabled"
+    },
+    {
+      "device": "n3",
+      "interface": "ethernet-1/2",
+      "iftype": "physical",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": "e1-2",
+      "node_name": "ethernet-1/2",
+      "disposition": "cabled"
+    },
+    {
+      "device": "n3",
+      "interface": "lo0",
+      "iftype": "loopback",
+      "mgmt_only": false,
+      "enabled": true,
+      "port": null,
+      "node_name": null,
+      "disposition": "configured-not-cabled"
+    },
+    {
+      "device": "n3",
+      "interface": "mgmt0",
+      "iftype": "physical",
+      "mgmt_only": true,
+      "enabled": true,
+      "port": "mgmt0",
+      "node_name": "mgmt0",
+      "disposition": "management"
+    }
+  ],
+  "links": [
+    {
+      "id": "n1:ethernet-1/1|n2:ethernet-1/1",
+      "a": {
+        "node": "n1",
+        "port": "e1-1"
+      },
+      "b": {
+        "node": "n2",
+        "port": "e1-1"
+      }
+    },
+    {
+      "id": "n1:ethernet-1/2|n3:ethernet-1/2",
+      "a": {
+        "node": "n1",
+        "port": "e1-2"
+      },
+      "b": {
+        "node": "n3",
+        "port": "e1-2"
+      }
+    },
+    {
+      "id": "n2:ethernet-1/2|n3:ethernet-1/1",
+      "a": {
+        "node": "n2",
+        "port": "e1-2"
+      },
+      "b": {
+        "node": "n3",
+        "port": "e1-1"
+      }
+    }
+  ],
+  "omissions": [],
+  "fidelity": {
+    "basis": "asserted",
+    "production_forwarding": {
+      "nokia_srlinux": "hardware"
+    },
+    "approximations": [
+      "nokia_srlinux: No linecard model; port count fixed at container start",
+      "nokia_srlinux: No hardware QoS, TCAM or buffer behaviour",
+      "nokia_srlinux: Convergence timing differs from hardware"
+    ],
+    "omitted": [],
+    "lossy": []
+  }
+}

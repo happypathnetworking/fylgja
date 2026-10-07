@@ -1,0 +1,46 @@
+{
+  "fylgja": [
+    {
+      "lab_name": "fylgja",
+      "labPath": "twin3/bundle/topology.clab.yml",
+      "absLabPath": "/tmp/scratchpad/twin3/bundle/topology.clab.yml",
+      "name": "clab-fylgja-n1",
+      "container_id": "3c1e0a7b9d21",
+      "image": "ghcr.io/nokia/srlinux:24.7.1",
+      "kind": "nokia_srlinux",
+      "state": "running",
+      "status": "Up 38 seconds",
+      "ipv4_address": "172.20.20.2/24",
+      "ipv6_address": "3fff:172:20:20::2/64",
+      "owner": "fylgja"
+    },
+    {
+      "lab_name": "fylgja",
+      "labPath": "twin3/bundle/topology.clab.yml",
+      "absLabPath": "/tmp/scratchpad/twin3/bundle/topology.clab.yml",
+      "name": "clab-fylgja-n2",
+      "container_id": "8a4f2c6e1b90",
+      "image": "ghcr.io/nokia/srlinux:24.7.1",
+      "kind": "nokia_srlinux",
+      "state": "running",
+      "status": "Up 38 seconds",
+      "ipv4_address": "172.20.20.3/24",
+      "ipv6_address": "3fff:172:20:20::3/64",
+      "owner": "fylgja"
+    },
+    {
+      "lab_name": "fylgja",
+      "labPath": "twin3/bundle/topology.clab.yml",
+      "absLabPath": "/tmp/scratchpad/twin3/bundle/topology.clab.yml",
+      "name": "clab-fylgja-n3",
+      "container_id": "d27b5e3f0c48",
+      "image": "ghcr.io/nokia/srlinux:24.7.1",
+      "kind": "nokia_srlinux",
+      "state": "running",
+      "status": "Up 38 seconds",
+      "ipv4_address": "172.20.20.4/24",
+      "ipv6_address": "3fff:172:20:20::4/64",
+      "owner": "fylgja"
+    }
+  ]
+}

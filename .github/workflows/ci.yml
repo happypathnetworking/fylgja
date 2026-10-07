@@ -1,0 +1,38 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  # Unit tier: golden files and pure logic. No infrastructure, by design (D-017).
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: make build
+      - run: make test
+      - uses: golangci/golangci-lint-action@v9
+
+  # Contract tier: a real Infrahub. Disabled until CI has one — Infrahub is
+  # operator-provided and not vendored (CLAUDE.md), so there is nothing for CI to
+  # start. The `go generate` diff check lives here, not in the unit job, because
+  # regeneration fetches the SDL from a live Infrahub.
+  contract:
+    runs-on: ubuntu-latest
+    if: false # enable once an Infrahub service is available to CI
+    env:
+      INFRAHUB_ADDRESS: http://localhost:8000
+      INFRAHUB_API_TOKEN: ${{ secrets.INFRAHUB_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - run: make infrahub-schema && make infrahub-seed
+      - run: go generate ./... && git diff --exit-code
+      - run: make test-contract

@@ -1,0 +1,167 @@
+# Fylgja generics contract — v0.1
+#
+# Verified 2026-09-08 against Infrahub 1.11.2 (schema/check + load on a branch). See
+# schema/README.md for the one open caveat (display_labels deprecation). Names: D-003.
+#
+# Rules this file lives by (D-003, D-004):
+#   - demand the least possible: every required attribute constrains someone's model
+#   - never claim a name with established operational meaning unless we mean the same
+#     thing ("role" on Interface is deliberately unclaimed)
+#   - `iftype` is kind only; `mgmt_only` is the one use-flag (D-003)
+#   - wiring behaviour is derived from `iftype` + `mgmt_only` by the compiler, never
+#     declared here
+#   - reserve structure you are confident about (parent), not structure you are
+#     guessing at (no VLAN generic yet)
+---
+version: "1.0"
+
+generics:
+  - name: Platform
+    namespace: Fylgja
+    label: Platform
+    description: >
+      Vendor / NOS / version identity. Exists to be the join key to a Platform
+      Support Package (psp/).
+    display_labels: [vendor__value, nos__value, version__value]
+    order_by: [vendor__value, nos__value, version__value]
+    attributes:
+      - name: vendor
+        kind: Text
+        optional: false
+      - name: nos
+        kind: Text
+        optional: false
+        description: "srlinux | eos | iol | panos | ..."
+      - name: version
+        kind: Text
+        optional: true
+      - name: model
+        kind: Text
+        optional: true
+
+  - name: Device
+    namespace: Fylgja
+    label: Device
+    description: A network node. `name` becomes the containerlab node name.
+    display_labels: [name__value]
+    order_by: [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        unique: true
+        optional: false
+      - name: role
+        kind: Text
+        optional: true
+        description: leaf / spine / border … Input to scope selection later.
+      - name: site
+        kind: Text
+        optional: true
+    relationships:
+      - name: platform
+        peer: FylgjaPlatform
+        cardinality: one
+        optional: false
+        kind: Attribute
+      - name: interfaces
+        peer: FylgjaInterface
+        identifier: device__interface
+        cardinality: many
+        kind: Component
+
+  - name: Interface
+    namespace: Fylgja
+    label: Interface
+    # `iftype` says what an interface is; `mgmt_only` marks the OOB port; the compiler
+    # decides how to wire it. Unimplemented classes are rejected at compile time,
+    # never silently treated as physical.
+    description: "Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port."
+    display_labels: [name__value]
+    order_by: [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+      - name: iftype   # Infrahub rejects `class` (Python keyword) and `type` (reserved)
+        kind: Dropdown
+        optional: false
+        choices:
+          - name: physical
+            label: Physical
+            description: Becomes a veth link in the twin.
+          - name: loopback
+            label: Loopback
+            description: Configured, never cabled.
+          - name: svi
+            label: SVI
+            description: RESERVED — not implemented until VLANs are modelled.
+          - name: subinterface
+            label: Subinterface
+            description: RESERVED — arrives with PAN-OS support. Requires `parent`.
+      - name: mgmt_only
+        kind: Boolean
+        default_value: false
+        # Maps onto the node's containerlab management interface; never cabled as a
+        # topology link. Not set on an in-band loopback.
+        description: "Out-of-band management port; never cabled. Not set on in-band loopbacks."
+
+      - name: enabled
+        kind: Boolean
+        default_value: true
+    relationships:
+      - name: device
+        peer: FylgjaDevice
+        identifier: device__interface
+        cardinality: one
+        optional: false
+        kind: Parent
+      - name: parent
+        peer: FylgjaInterface
+        identifier: interface__parent
+        cardinality: one
+        optional: true
+        kind: Attribute
+        description: Subinterfaces now; LAG members and breakout children later.
+      - name: addresses
+        # Verified 2026-09-08: Infrahub's core IPAM generic is BuiltinIPAddress; there is
+        # no IpamIPAddress kind on a fresh instance (that name is from the demo schema).
+        # Pointing at the generic keeps "never reach past the generic" symmetric.
+        peer: BuiltinIPAddress
+        cardinality: many
+        optional: true
+        kind: Attribute
+      - name: link
+        peer: FylgjaLink
+        identifier: link__endpoint
+        cardinality: one
+        optional: true
+        kind: Attribute
+
+  - name: Link
+    namespace: Fylgja
+    label: Link
+    description: A point-to-point connection between exactly two interfaces.
+    relationships:
+      - name: endpoints
+        peer: FylgjaInterface
+        identifier: link__endpoint
+        cardinality: many
+        # VERIFY: Infrahub min/max cardinality support. Fylgja validates exactly-2
+        # at ingest regardless.
+        min_count: 2
+        max_count: 2
+        kind: Attribute
+
+# The contract version, queryable so a mismatch can name both versions.
+nodes:
+  - name: Contract
+    namespace: Fylgja
+    label: Fylgja contract
+    # Ingest queries this first; any mismatch with the compiled-in version rejects.
+    description: "Singleton: the Fylgja generics contract version this schema implements."
+
+    display_labels: [version__value]
+    attributes:
+      - name: version
+        kind: Text
+        optional: false

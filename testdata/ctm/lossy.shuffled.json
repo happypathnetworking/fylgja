@@ -1,0 +1,224 @@
+{
+  "ctm_version": "1",
+  "envelope": {
+    "branch": "lossy-fixture",
+    "at": "2026-09-19T12:00:00Z",
+    "observed_at": "2026-09-19T12:00:00.000000Z",
+    "schema_hash": "fixture",
+    "contract_version": "0.2"
+  },
+  "devices": [
+    {
+      "name": "s1",
+      "platform": {
+        "vendor": "nokia",
+        "nos": "srlinux",
+        "version": "24.7"
+      },
+      "role": "leaf",
+      "interfaces": [
+        {
+          "name": "mgmt0",
+          "iftype": "physical",
+          "mgmt_only": true,
+          "enabled": true
+        },
+        {
+          "name": "ethernet-1/2/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c2:Ethernet2/1|s1:ethernet-1/2/1"
+        },
+        {
+          "name": "lo0",
+          "iftype": "loopback",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "ethernet-1/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c1:Ethernet1/1|s1:ethernet-1/1"
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "2419e2e874fe47a2db277ba50102fa39",
+        "content": "# s1: production configuration (illustrative)\nset / system name host-name s1\nset / network-instance default type default\nset / interface ethernet-1/1 description \"to c1 Ethernet1/1\"\nset / interface ethernet-1/1 admin-state enable\nset / interface ethernet-1/2/1 description \"to c2 Ethernet2/1\"\nset / interface ethernet-1/2/1 admin-state enable\n"
+      }
+    },
+    {
+      "name": "c1",
+      "platform": {
+        "vendor": "example",
+        "nos": "chassisos",
+        "version": "0"
+      },
+      "role": "spine",
+      "interfaces": [
+        {
+          "name": "Ethernet2/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "Management1",
+          "iftype": "physical",
+          "mgmt_only": true,
+          "enabled": true
+        },
+        {
+          "name": "Ethernet1/49/2",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "Ethernet1/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c1:Ethernet1/1|s1:ethernet-1/1"
+        },
+        {
+          "name": "Loopback0",
+          "iftype": "loopback",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "Ethernet1/53",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "Ethernet1/49/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c1:Ethernet1/49/1|c2:Ethernet1/49/1"
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "bb706d667cc6de452cfd923424c2a4db",
+        "content": "! c1: production configuration (illustrative, never deployed)\nhostname c1\ninterface Ethernet1/1\n   description to s1 ethernet-1/1\n   no switchport\ninterface Ethernet1/49/1\n   description to c2 Ethernet1/49/1\n   no switchport\ninterface Loopback0\n"
+      }
+    },
+    {
+      "name": "c2",
+      "platform": {
+        "vendor": "example",
+        "nos": "chassisos",
+        "version": "0"
+      },
+      "role": "spine",
+      "interfaces": [
+        {
+          "name": "Management1",
+          "iftype": "physical",
+          "mgmt_only": true,
+          "enabled": true
+        },
+        {
+          "name": "Ethernet2/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c2:Ethernet2/1|s1:ethernet-1/2/1"
+        },
+        {
+          "name": "Ethernet1/50/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "Ethernet1/2",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "Loopback0",
+          "iftype": "loopback",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "Ethernet1/50",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "Ethernet1/50/2",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true
+        },
+        {
+          "name": "Ethernet1/49/1",
+          "iftype": "physical",
+          "mgmt_only": false,
+          "enabled": true,
+          "link": "c1:Ethernet1/49/1|c2:Ethernet1/49/1"
+        }
+      ],
+      "artifact": {
+        "name": "device-config",
+        "content_type": "text/plain",
+        "checksum": "3ca0c128e20f6d8a4057c144b812728f",
+        "content": "! c2: production configuration (illustrative, never deployed)\nhostname c2\ninterface Ethernet1/49/1\n   description to c1 Ethernet1/49/1\n   no switchport\ninterface Ethernet2/1\n   description to s1 ethernet-1/2/1\n   no switchport\ninterface Loopback0\n"
+      }
+    }
+  ],
+  "links": [
+    {
+      "id": "c2:Ethernet2/1|s1:ethernet-1/2/1",
+      "endpoints": [
+        {
+          "device": "s1",
+          "interface": "ethernet-1/2/1"
+        },
+        {
+          "device": "c2",
+          "interface": "Ethernet2/1"
+        }
+      ]
+    },
+    {
+      "id": "c1:Ethernet1/1|s1:ethernet-1/1",
+      "endpoints": [
+        {
+          "device": "s1",
+          "interface": "ethernet-1/1"
+        },
+        {
+          "device": "c1",
+          "interface": "Ethernet1/1"
+        }
+      ]
+    },
+    {
+      "id": "c1:Ethernet1/49/1|c2:Ethernet1/49/1",
+      "endpoints": [
+        {
+          "device": "c2",
+          "interface": "Ethernet1/49/1"
+        },
+        {
+          "device": "c1",
+          "interface": "Ethernet1/49/1"
+        }
+      ]
+    }
+  ]
+}

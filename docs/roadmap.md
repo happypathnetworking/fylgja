@@ -31,9 +31,9 @@ keep the numbers they were planned with.
 ## Next
 
 **The launch**, M14's second half, is the first feature specified here (`013-launch`). It
-ends with this repository public and a stranger able to stand Fylgja up: one bring-up
-script takes a clean host to every tier passing, and both of its consumers run it, the
-setup of a fresh Ubuntu 26.04 VM and CI on a hosted runner. **Size**: 10–14 hours.
+makes this repository public at its start and ends with a stranger able to stand Fylgja
+up: one bring-up script takes a clean host to every tier passing, and both of its
+consumers run it, the setup of a fresh Ubuntu 26.04 VM and CI on a hosted runner. **Size**: 10–14 hours.
 
 **The bring-up script.** One script takes a clean Ubuntu 26.04 install to every tier
 passing, and the hand walk-through in [development.md](development.md) becomes its record.
@@ -44,7 +44,8 @@ It covers:
   `infrahub-sdk[ctl]` and the `.gitignore` inside it.
 - **Lab host.** Docker Engine with the user in `docker`, containerlab 0.79 with the user
   in `clab_admins`, the SR Linux image pulled, the cEOS image imported from an
-  operator-provided tar, and the AppArmor widening for SR Linux's `rsyslogd`.
+  operator-provided tar when one is found, and the AppArmor widening for SR Linux's
+  `rsyslogd`.
 - **Infrahub.** The 1.11.2 Compose with the override that pins the version and caps
   Neo4j, the schema loaded on `main`, the group `fylgja-devices`, this repository
   registered read-only on `main` ([D-044](decisions.md#d-044)), which needs no
@@ -56,12 +57,21 @@ It covers:
 Its test infrastructure is a fresh VM. The facts in [verified-facts.md](verified-facts.md)
 were verified on Ubuntu 24.04, and a new release changes the kernel, the AppArmor profiles
 and the packaged Docker, so the script's first run is the re-verification those facts ask
-for on any upgrade. The cEOS tar stays the operator's to provide: the script asks for it
-and refuses to continue without it, rather than silently skipping the steps that need it,
-unless the launch gives it an SR Linux-only path (tiers 1 and 2, and tier 3 without the
-EOS cases), which it then names as such.
+for on any upgrade. Ubuntu 26.04 is the one release it supports, and the development host
+moves to it as the script is verified. The cEOS tar stays the operator's to provide, and the script offers an
+SR Linux-only path without it: it looks for the pinned version's tar at a path the operator
+gives, then in `local/` and the repository's parent directory (never the repository root,
+where it could be committed), checks it against a recorded checksum and imports it under
+exactly the reference the EOS package names; without it, the script goes on for SR Linux
+alone and names the platforms the host can run in its first and last reports, so nothing
+is skipped silently. Tier 3 keeps requiring every package's image by default, so `E2E-OK`
+still means every case; an explicit platform list narrows a run, which skips the cases
+that need another platform and ends on a distinct partial-pass line naming them. The
+launch's exit, a milestone's close and the attended loop run it in full
+([013-launch's brief](../specs/013-launch/brief.md#decided)).
 
-**CI with a real Infrahub.** A GitHub Actions workflow runs tier 1, then the script's
+**CI with a real Infrahub.** A GitHub Actions workflow on `ubuntu-26.04`, named and never
+`ubuntu-latest`, the one release the script supports, runs tier 1, then the script's
 Infrahub half (OpsMill's published Compose for 1.11.2, this repository registered, the
 import awaited, the fixture seeded), then tier 2, with a badge in the README. The contract
 job in `.github/workflows/ci.yml` is disabled until then. Tier 3 stays out of CI by
@@ -76,15 +86,19 @@ would run a fork's code with the job's secrets.
 **Infrahub renders from this repository.** Until the launch, the development host's
 Infrahub renders the configuration from a private copy of the template, registered with a
 credential. The launch registers this repository in its place, read-only on `main` with
-no credential, as [D-044](decisions.md#d-044) decides, once it is public. The template's
+no credential, as [D-044](decisions.md#d-044) decides, as soon as it is public. The template's
 bytes are the same, so no artifact or fixture id moves. Whether Infrahub 1.11.2 takes a new
 commit on a `ref` update or only on re-creation is verified then, and the fixture tool's
 message that names the private repository is reworded.
 
-**Visible.** The repository goes public at the launch's close, so the first view has the
-script, CI and the README. Two things make it worth reading, neither a feature: a README
+**Visible.** The repository goes public at the launch's start, before the script and CI
+are built and proved, so that every registration they make is the credential-less one a
+stranger makes and no token for it is ever stored; the script, CI and the recording
+arrive in the open. Before the flip, the settings refuse pull requests and protect
+`main`, and `SECURITY.md` says how to report a vulnerability. Two things make it worth reading, neither a feature: a README
 that says what is built and how to stand it up, and one recorded session of a create, a
-step and a verify. With them:
+step and a verify, an asciinema cast rendered to an animated image the README embeds. With
+them:
 
 - **`SECURITY.md`, the threat model.** The API is one bearer token sent in the clear, on
   loopback unless `--listen` says otherwise ([D-042](decisions.md#d-042)), and the server
@@ -312,8 +326,9 @@ M10's.
 
 ## Decisions the order needs
 
-- At the launch: whether the bring-up script offers an SR Linux-only path. Where the
-  template lives and how Infrahub registers it are settled ([D-044](decisions.md#d-044)).
+- At the launch: nothing left. The bring-up script offers an SR Linux-only path, and tier 3
+  narrows by platform only when asked ([Next](#next)); where the template lives and how
+  Infrahub registers it are settled ([D-044](decisions.md#d-044)).
 - At item 9: whether the webhook needs an entry beside [D-026](decisions.md#d-026), which
   already names it and keeps the compare.
 - At item 14: a second Fylgja-owned kind on [D-032](decisions.md#d-032)'s pattern, and what

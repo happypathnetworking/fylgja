@@ -300,6 +300,7 @@ Rewritten whole at each milestone's close, never appended to.
 - **Next: the launch**, the first feature here (`013-launch`), whose `brief.md` is the
   specify brief: the bring-up script, CI with a real Infrahub, Infrahub rendering from
   this repository (D-044), the README's recorded session, `SECURITY.md`, `v0.1.0`, and the
-  repository made public at its close ([roadmap](docs/roadmap.md#next)).
-- **Open**: nothing. `origin` is private until the launch's close, and the operator
-  pushes. Infrahub renders from the private copy of the template until the launch.
+  repository made public at its start, before the script and CI are built
+  ([roadmap](docs/roadmap.md#next)).
+- **Open**: nothing. `origin` is private until the launch makes it public, and the
+  operator pushes. Infrahub renders from the private copy of the template until then.

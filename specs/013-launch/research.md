@@ -664,6 +664,186 @@ the server's reports as naming both packages with their logins set, the dev serv
 `SERVING`, `/api/info` `1.11.2`, the fixture `complete`, port 8000 held by
 `fylgja-infrahub`'s `infrahub-server`, and `ceos:4.32.0.2F`'s layer as the recorded tar's.
 
+### 3.4 Recorded: the full run on a fresh Ubuntu 26.04 VM, 2026-10-07
+
+- **The VM** (R-05): Ubuntu 26.04.1 LTS, kernel `7.0.0-38-generic`, 10 vCPUs, 31,065 MiB,
+  8 GiB swap, a 59 GB root; no `/dev/kvm`. A clone of `013-launch` at `5207aae`, the tar
+  `cEOS-lab-4.32.0.2F.tar` in the clone's parent directory. The operator's user was in
+  `sudo` and had passwordless sudo by a file under `/etc/sudoers.d/`, which the operator
+  removes before the second run (T031) so that its prompt is exercised.
+- **The run** (T029), by the operator: `scripts/bring-up.sh 2>&1 | tee /tmp/bring-up.out`,
+  begun 22:25:46Z, ended `bring-up: DONE in 1685s`, exit 0. The first report:
+
+  ```
+  bring-up: host: Ubuntu 26.04.1 LTS, kernel 7.0.0-38-generic, 10 CPUs, 31065 MiB, swap 8191 MiB
+  bring-up: parts: toolchain lab infrahub fylgja
+  bring-up: cEOS tar: found <the clone's parent>/cEOS-lab-4.32.0.2F.tar (sha256 matches 89a567d5…)
+  bring-up: platforms: nokia_srlinux arista_eos
+  bring-up: memory: 31065 MiB; tier 3 was proved with 32768 MiB
+  bring-up: local/.env: scaffolded from .env.example (mode 0600)
+  ```
+
+  One prompt, `sudo -v`'s (finding 2), and none after it. One re-exec through a fresh login
+  session, after the lab part's groups. Tier 1 passed in 35 s and tier 2 in 398 s; the last
+  report named the dev server, the worker and the API's server running, the worker and the
+  server each with `packages nokia_srlinux arista_eos`, and how to stop them.
+- **The parts' times**, from the modification times of what the run wrote (UTC): the
+  preamble to `local/.env` at 22:27:37, the prompt's wait included; the toolchain about
+  1 min (the venv at 22:28:26); the lab about 10 min, to the Compose file at 22:38:35
+  (Docker's install, containerlab, the re-exec, the 5.19 GB SR Linux pull and the 2.91 GB
+  cEOS import, tagged 22:37:25); the infrahub part 7 min 12 s (Compose's pulls and start,
+  `infrahub-server` started 22:40:25, `-prepare-main` done 22:44:42, the seed done
+  22:45:47); the fylgja part 8 min (the build at 22:46:33, tier 1, tier 2, the three
+  processes up by 22:53:50).
+- **The items.** Toolchain: `make`, `golang-go`, `python3-venv` and `shellcheck` installed
+  by one `apt-get install`, `git`, `curl`, `jq`, `xz-utils` and `file` present; `go`
+  `installed go1.26.0` (finding 4); golangci-lint `2.14.0`, Temporal `1.9.1`, gnmic
+  `0.49.0` and `infrahub-sdk` `1.23.2` (`.venv`, Python 3.14.4) installed: 5 present, 9
+  installed, read from the item lines because the report omits the part's line (finding
+  1). `did: lab: 0 present, 6 installed, 0 skipped` (Docker, containerlab, the groups with
+  `docker added`, AppArmor's three lines and the reload, SR Linux pulled, cEOS imported from
+  the tar). `did: infrahub: 1 present, 5 installed, 0 skipped` (the server's item reads
+  `present` once it answers). `did: fylgja: 0 present, 4 installed, 0 skipped`.
+- **What §3 owed, as this run found it:**
+  - *The host*: `/etc/apparmor.d/usr.sbin.rsyslogd` ships on 26.04; the lab part appended
+    the three lines to `local/usr.sbin.rsyslogd` and reloaded the profile. Whether it still
+    attaches to SR Linux's `rsyslogd`, and whether the lines suffice, needs a twin, which
+    tiers 1 and 2 do not boot: tier 3 answered it (below). `/dev/kvm` absent and unneeded.
+    Infrahub after the run: about 5.2 GiB across its eight containers (Neo4j 2.10 GiB under its cap,
+    the server 1.60 GiB, the task manager and the two task workers about 0.44 GiB each), and
+    `free -m` 24,732 MiB available with the three processes running.
+  - *Docker*: containerlab's setup script installed Docker's repository packages,
+    `docker-ce` `29.8.1` (the pin §3.3 read for 26.04), `containerd.io` `2.3.6` and the
+    Compose plugin `5.6.0`. Compose 5.6 ran the published file with the override, warning
+    once per start that the task worker's `deploy.mode is only honored in Swarm mode`; it
+    pulled `neo4j:2026.05.0-community`, `postgres:18-alpine`, `redis:8.4.0`,
+    `rabbitmq:4.2.1-management` and `infrahub:1.11.2`.
+  - *containerlab 0.79.0*, from its `.deb`: `/usr/bin/containerlab` setuid root, as on the
+    development host; its package created `clab_admins` and put the user in it, so the lab
+    part added `docker` alone (finding 5). Its twin-side facts (`absLabPath`, the dry run,
+    the reconcile) need twins: tier 3, below.
+  - *The images*: `ghcr.io/nokia/srlinux:24.7.1` pulled; `ceos:4.32.0.2F` imported from the
+    tar, its layer the recorded `sha256:09ab9635…`. Their boots are tier 3's, below.
+  - *Python*: 26.04's `python3` is 3.14.4 (`python3.14-venv` 3.14.4), inside
+    `infrahub-sdk` 1.23.2's `>=3.10,<3.15`; the SDK installed into `.venv`.
+  - *Go*: **26.04's packaged Go is go1.26.0** (`golang-go` `2:1.26~1`, `golang-1.26-go`
+    `1.26.0-1`), the release `go.mod` names, so nothing is fetched: the module cache holds no
+    `golang.org/toolchain`, and `go version` in the clone is the packaged binary's.
+  - *Temporal CLI 1.9.1* (Server 1.32.0, UI 2.54.1) by its installer into
+    `~/.temporalio/bin`, its dev server `SERVING` inside the 60 s wait; *golangci-lint
+    2.14.0* (the v2 line) into `/usr/local/bin`; gnmic `0.49.0`; ShellCheck `0.11.0`, 26.04's
+    package.
+  - *The registration*, on a fresh Infrahub: `schema loaded on main`, `group fylgja-devices
+    created`, `repository fylgja created (location https://github.com/happypathnetworking/fylgja.git,
+    ref main, no credential)`, `import complete after 48s`. Credential-less, as on the
+    development host (24 s, §3.2) and in CI (22 s, §3.5).
+  - *sudo*: 26.04's `sudo` is **sudo-rs 0.2.13** (`/usr/bin/sudo` → `/usr/lib/cargo/bin/sudo`
+    through alternatives).
+- **Tier 3** (T030), on the host the run left (the dev server, the worker and the API's
+  server running; `free -m` 24,634 MiB available, load 0.9, no twin): `make build` left the
+  worker's binary in place (not `(deleted)`); `WORKER_LOG=local/worker.log make test-e2e`,
+  detached with its exit status in a file, first stopped at once on finding 7, then, with
+  `PATH=$HOME/.temporalio/bin:$PATH`, began 23:06:08Z and ended `E2E-OK`, exit 0, all eight
+  cases, wall time 1107.1 s (18.5 min; 1083 s on the development host, §3.2). Creates
+  42.7–73.6 s (case 6's mixed twin the longest), `twin verify` 3.7 s, 3.8 s and 2.4 s, the
+  boot half 9.9 s and 7.0 s, case 8's steps 82.4 s and 63.3 s, their waits settled after
+  4.6 s and 3.4 s. Afterwards `clab inspect --all` found no containers, `local/twin` was
+  absent, `fylgja waypoint list` printed `no waypoints`, 23,710 MiB available. So on 26.04
+  with kernel 7.0: SR Linux deploys through containerlab's post-deploy commit with the
+  three AppArmor lines (whether two suffice was not tried); cEOS 4.32.0.2F, imported from
+  the tar, boots and runs its artifact (cases 6 and 8); every containerlab path tier 3
+  drives (the deploy, the dry run, the orphan of case 3, the destroy) works.
+- **Case 1's bundle is `140ae538…`, not `b9d53ebc…`**, and no run on another Infrahub can
+  give `b9d53ebc…`. The VM's fixture CTM equals the development host's but for
+  `observed_at` and `schema_hash` (`3b686463ab78483d647a5f04187ad22b` here, `4d5b37aa…`
+  there): the schema hash is the install's (CLAUDE.md, "a branch's hash covers its whole
+  schema, so each install has its own"), and the bundle covers it. The VM's CTM, compiled
+  on the development host with `4d5b37aa…` in its place, gives
+  `b9d53ebc8d8187ccc73623cd9be2740fb865ff101edc58c0e732735d4fd9d668` exactly. So the fixture
+  the VM's Infrahub renders from this repository is the development host's, byte for byte,
+  and the id `b9d53ebc…` is the development host's install, not the fixture's alone:
+  SC-002, US2's scenario and quickstart §3 name it for the VM, which no fresh install can
+  meet.
+- **Hygiene**: the greps of quickstart §3, by the operator against the variables from a shell
+  that had loaded `local/.env`, over `/tmp/bring-up.out`, `local/*.log`, `bin/`, `.venv/` and
+  `local/infrahub/`, found nothing. Repeated after the run for `INFRAHUB_API_TOKEN`,
+  `FYLGJA_API_TOKEN`, the SR Linux password, `INFRAHUB_INITIAL_ADMIN_PASSWORD`,
+  `INFRAHUB_INITIAL_AGENT_TOKEN` and `INFRAHUB_SECURITY_SECRET_KEY`: 0 files each. The EOS
+  image's published default password is a common word, which no grep tells from other
+  text; the worker's and the server's reports say each login is `set`, never its value.
+- **Findings**, recorded and not fixed in this run:
+  1. *The last report omits the toolchain part's `did:` line.* The lab part's re-exec passes
+     `--part lab --part infrahub --part fylgja` (`scripts/bring-up.sh`, line ~552), and the
+     report loop prints a part's line only when the re-executed run's list names it (line
+     ~866), so a run that re-executes prints three `did:` lines, against the contract's "one
+     line per part run". The toolchain's counts travel in the re-exec's state; only the line
+     is skipped.
+  2. *The privilege check prompts despite `NOPASSWD`.* On the VM `sudo -n -v` exits 1
+     (`interactive authentication is required`) while `sudo -n true` exits 0: the user
+     matches the `NOPASSWD: ALL` rule and also `%sudo ALL=(ALL:ALL) ALL`, and `-v` asks for a
+     password unless every rule matching the user is `NOPASSWD` (sudo's `verifypw=all`). So
+     the preamble's `sudo -v` prompted once, and the re-executed run, which starts its
+     keep-alive loop only when `sudo -n -v` succeeds, ran without one; nothing after the
+     groups needed sudo.
+  3. *`go: downloading` lines in the report.* `-prepare-main` runs by `go run`, which says
+     its module downloads on stderr, and the part relays its output, so six `go: downloading
+     …` lines appear under `bring-up: infrahub: main:` on a host with an empty module cache.
+     CI's contract job showed none there.
+  4. *The `go` item reads `installed` on 26.04, and always will.* It reads `present` only
+     when the module cache holds the toolchain `go.mod` names (line ~442); 26.04's packaged
+     Go is that release, so nothing is ever fetched. The item said `installed go1.26.0
+     (fetched through go.mod)`, untrue here, and a second run would have said `installed`
+     again, against T031's `installed 0`. **Fixed after the run**: the item reads `present
+     <v> (Ubuntu's go, go.mod's release)` when Ubuntu's `go`, run outside the clone with
+     `GOTOOLCHAIN=local`, is the release `go.mod` names. Its decision, run read-only on both
+     hosts, picks that line on the VM and `present go1.26.0 (go.mod's, run by Ubuntu's go)`
+     on the development host (Ubuntu's 1.22.2, the toolchain fetched), as before. Still
+     open: a packaged Go newer than `go.mod`'s, which Ubuntu's updates may bring, is used
+     as it is, and the item's check that `go version` in the clone is `go.mod`'s release
+     would then fail the part.
+  5. *The re-exec's line names both groups.* `lab: groups: docker clab_admins added;
+     continuing in a fresh login session` is fixed text, while the groups item before it
+     said `(docker added)`.
+  6. *sudo-rs ignores `-E`.* The lab part's `curl … containerlab.dev/setup | sudo -E bash -s
+     install-docker` printed `sudo: preserving the entire environment is not supported, '-E'
+     is ignored`, twice; the setup script installed Docker at its pin regardless.
+  7. *The Temporal CLI is not on the user's `PATH` after the run* (found at T030). The
+     toolchain part installs it into `~/.temporalio/bin`, which its installer only
+     suggests adding to `PATH`, and the contract puts it on the `PATH` of the processes the
+     script starts alone; neither `~/.bashrc` nor `~/.profile` adds it, so a login shell
+     has no `temporal`. The last report says `make test-e2e runs it`, but `scripts/e2e.sh`
+     calls `temporal operator cluster health` from the `PATH` and stops at once with `e2e:
+     FAILED: the workflow service is not answering at localhost:7233: start it with make
+     temporal-dev`, while the dev server is `SERVING`; `make temporal-dev` would not find
+     the command either. T030 ran with `PATH=$HOME/.temporalio/bin:$PATH` given on its
+     command line.
+
+### 3.5 Recorded: CI's first run with the contract job, 2026-10-07
+
+- **Run `37694132184`**: `ci` on the push of `5207aae` to `main` at 22:07:40Z, both jobs
+  `success`, 8 min 41 s in all: the unit job 1 min 39 s (22:07:43–22:09:22Z), the contract
+  job 6 min 55 s (22:09:25–22:16:20Z).
+- **The runner**, as the script's first report gave it: Ubuntu 26.04.1 LTS, kernel
+  `7.0.0-1012-azure`, 4 CPUs, 15,983 MiB, swap 3,071 MiB; `cEOS tar: not found; looked at
+  --ceos-tar (none given), local/, <the clone's parent>; the repository root is never
+  searched`; platforms `nokia_srlinux` alone; the memory `WARNING` (under 24,576 MiB) and the
+  script going on.
+- **`scripts/bring-up.sh --part infrahub`**: `DONE in 229s`, `did: infrahub: 1 present, 5
+  installed, 0 skipped`, its lines in order: the Compose file and the override installed;
+  Compose's pulls and start, 56 s (`7 services started`); `infrahub-server` healthy and
+  `/api/info` answering `1.11.2` 86 s later; `schema loaded on main`, `group fylgja-devices
+  created`, `repository fylgja created (… ref main, no credential)`, `import complete after
+  22s`, `-prepare-main` 62 s in all; the seed 24 s (`fylgja-fixture, 3 artifacts Ready`).
+  So the hosted runner holds Infrahub and reaches healthy inside a few minutes (R-06).
+- **Then** `go generate ./... && git diff --exit-code` clean, and tier 2 in about 2 min 46 s
+  (22:13:33–22:16:18Z), every package `ok`, the longest `internal/stage` 151 s,
+  `internal/waypoint` 98 s and `internal/intent` 85 s.
+- **Hygiene** (SC-007), by the operator over the job's log: the expected lines in order; no
+  `INFRAHUB_` beside a UUID; no `FYLGJA_API_TOKEN=`; neither image's published default
+  password, SR Linux's by value and EOS's by its shapes (no twin runs there, so no login is
+  used). Actions secrets: `0`.
+- **Peak memory**: the log does not show it (SC-004 asks for it only where it does).
+
 ---
 
 ## 4. Owed to the records at the close

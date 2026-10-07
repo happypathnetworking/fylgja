@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/schemas/api.schema.json",
   "title": "Fylgja API, version 1",
-  "description": "M13 (specs/011-api): what crosses the API beside the documents Fylgja already versions. A request is $defs/request with the args of its operation ($defs/args). An answer is application/x-ndjson, each line one $defs/frame, the last a document frame whose document is findings.schema.json's, unchanged at findings_version 1. A transport fault's body is $defs/problem. The CTM, the bundle and a support package cross inside $defs/file, as bytes, and are validated by their own schemas (ctm.schema.json, manifest.schema.json, psp.schema.json), never here. No token, login, configuration line or device diff appears in any of these (FR-009, FR-032).",
+  "description": "M13: what crosses the API beside the documents Fylgja already versions. A request is $defs/request with the args of its operation ($defs/args). An answer is application/x-ndjson, each line one $defs/frame, the last a document frame whose document is findings.schema.json's, unchanged at findings_version 1. A transport fault's body is $defs/problem. The CTM, the bundle and a support package cross inside $defs/file, as bytes, and are validated by their own schemas (ctm.schema.json, manifest.schema.json, psp.schema.json), never here. No token, login, configuration line or device diff appears in any of these.",
   "$defs": {
     "request": {
       "type": "object",
@@ -33,7 +33,7 @@
       }
     },
     "args": {
-      "description": "The arguments of each operation. Every key is optional on the wire but two: a required flag that is missing is refused by the server under M12's identifier and wording. twin.provision's bundle, which M12's command took as its one argument, is required, and twin.verify's args are given only beside wait; the server refuses a request without either as 400, the request is not one (tasks.md T087).",
+      "description": "The arguments of each operation. Every key is optional on the wire but two: a required flag that is missing is refused by the server under M12's identifier and wording. twin.provision's bundle, which M12's command took as its one argument, is required, and twin.verify's args are given only beside wait; the server refuses a request without either as 400, the request is not one.",
       "$defs": {
         "twin.create": {
           "type": "object",
@@ -142,7 +142,7 @@
               "required": ["workflow_id"],
               "additionalProperties": false,
               "properties": { "workflow_id": { "enum": ["fylgja-provision", "fylgja-step", "fylgja-destroy"] } },
-              "description": "The server begins to start this run. From here an interrupt call reaches it, on an operation that takes one: twin.destroy's start opens no stream, and its answer has no run frame (tasks.md T097)."
+              "description": "The server begins to start this run. From here an interrupt call reaches it, on an operation that takes one: twin.destroy's start opens no stream, and its answer has no run frame."
             }
           }
         },

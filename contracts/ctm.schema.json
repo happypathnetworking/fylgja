@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/contracts/ctm/v1",
   "title": "Fylgja CTM (Canonical Topology Model) file v1 — M5 extension",
-  "description": "Written by `fylgja intent read`, read by `fylgja twin compile`, and used as a fixture. Envelope per FR-003 (D-012, D-023); per-object provenance tag per D-010. Ported from cd7a389 with the envelope reshaped (research R24). M5 (FR-001, FR-025; research R8): a device gains `artifact`, the configuration Infrahub rendered for it, fetched by the read in the same pass and at the same `at` as the intent, verified against Infrahub’s checksum, content as UTF-8 text. ctm_version stays 1: a CTM whose device lacks the field is refused by validation and by `twin compile` as artifact.missing naming each device, not as an unknown version. A CTM file therefore holds configuration and lives only in the bundle store (FR-028). M7: unchanged; CTM 1.",
+  "description": "Written by `fylgja intent read`, read by `fylgja twin compile`, and used as a fixture. Envelope per D-012 and D-023; per-object provenance tag per D-010. Ported from an earlier format, with the envelope reshaped. M5: a device gains `artifact`, the configuration Infrahub rendered for it, fetched by the read in the same pass and at the same `at` as the intent, verified against Infrahub’s checksum, content as UTF-8 text. ctm_version stays 1: a CTM whose device lacks the field is refused by validation and by `twin compile` as artifact.missing naming each device, not as an unknown version. A CTM file therefore holds configuration and lives only in the bundle store. M7: unchanged; CTM 1.",
   "type": "object",
   "required": [
     "ctm_version",
@@ -32,16 +32,16 @@
         },
         "at": {
           "type": "string",
-          "description": "Exactly as supplied on --at. At most six fractional digits: Infrahub honours microseconds and truncates beyond (research R20), so a finer value is rejected before it is queried."
+          "description": "Exactly as supplied on --at. At most six fractional digits: Infrahub honours microseconds and truncates beyond, so a finer value is rejected before it is queried."
         },
         "observed_at": {
           "type": "string",
           "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
-          "description": "UTC, local clock, the instant the read began; six fractional digits so it can be passed back as --at (research R27). Informational when `at` is present."
+          "description": "UTC, local clock, the instant the read began; six fractional digits so it can be passed back as --at. Informational when `at` is present."
         },
         "schema_hash": {
           "type": "string",
-          "description": "`main` of GET /api/schema?branch= at read time (research R22, R28)."
+          "description": "`main` of GET /api/schema?branch= at read time."
         },
         "contract_version": {
           "type": "string"
@@ -162,7 +162,7 @@
           },
           "artifact": {
             "type": "object",
-            "description": "The device’s configuration artifact as Infrahub served it (D-028). Name is the definition’s artifact_name the device’s support package names; checksum is Infrahub’s own, verbatim (MD5 hex of the content: R6); content is the bytes, unchanged, as text. No Infrahub identifier and no time of generation: a regeneration to identical bytes leaves the CTM and the bundle unchanged (FR-005).",
+            "description": "The device’s configuration artifact as Infrahub served it (D-028). Name is the definition’s artifact_name the device’s support package names; checksum is Infrahub’s own, verbatim (MD5 hex of the content); content is the bytes, unchanged, as text. No Infrahub identifier and no time of generation: a regeneration to identical bytes leaves the CTM and the bundle unchanged.",
             "required": [
               "name",
               "content_type",

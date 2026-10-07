@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/contracts/findings/v1",
   "title": "Fylgja findings document v1 (--json)",
-  "description": "Ported from cd7a389. Added: operation `intent.read`; top-level `bundle_id` (twin.compile); `verified.generics[].kinds` is now the list of implementing kind names (SC-004). Removed: `verified.objects` (schema check reads no intent).",
+  "description": "M1's findings document. Added to the format it was ported from: operation `intent.read`; top-level `bundle_id` (twin.compile); `verified.generics[].kinds` is now the list of implementing kind names. Removed: `verified.objects` (schema check reads no intent).",
   "type": "object",
   "required": ["findings_version", "operation", "status", "findings"],
   "additionalProperties": false,
@@ -25,7 +25,7 @@
     "bundle_id": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
-      "description": "twin.compile, status ok only: the hash of the bundle directory's canonical bytes (research R23)."
+      "description": "twin.compile, status ok only: the hash of the bundle directory's canonical bytes."
     },
     "verified": {
       "type": "object",

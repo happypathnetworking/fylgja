@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/contracts/twin/v5",
-  "title": "Fylgja twin.json v5 — the twin’s record (M2 FR-012; M5 FR-022; M10 FR-013; M11 FR-026–FR-028; M12 FR-022)",
-  "description": "Written by the record step into the twin directory after every node is ready; removed with the directory by unstage. Carries the manifest's provenance block (never observed_at from the bundle: D-023), observed_at when the run performed a read and an explicit statement that it is unknown when it did not (Constitution VI), the bundle_id, the provisioning run's identity, and the version of the binary that provisioned it. Nothing here is a credential. M5: twin_version is 2, and each node records the artifact it was pushed — name, content type, checksum and size, copied from the staged manifest — and how long its push took. Never the artifact’s bytes (FR-028). Everything else is v1’s, with M4’s meaning. M7: unchanged (FR-026: no new key); twin_version stays 2. M10: twin_version is 3, and the record names the waypoint the twin was created from — series, sequence, description and the at’s source — or null when it was created with --branch or from a bundle; provenance.at carries the at itself. Nothing else is new. A waypoint is only ever recorded on a pinned, intent-sourced record. M11: twin_version is 4. The record gains state (ready or diverged), a step block (the last step: outcome, the side it came from and the side it went to or towards, the step run, the phase that failed, containerlab's plan with each touched node's declared and reported link-change behaviour, every push with its outcome, the readiness and push timings, when it started and ended, and the failure's findings) or null for a twin that has not stepped, and nodes[].holds, the bundle_id whose bootstrap and artifact the node is last known to run, or null for a node containerlab restarted, recreated or created that no push landed on, which runs its baseline alone (R7.6). After a stepped or unchanged step bundle_id, provenance, observed_at and waypoint are the target's; after a diverged step they stay the previous record's and step.to names the target. run stays the create's. A create writes a 4 record with state ready, step null and holds equal to bundle_id on every node. The record is written whole on every path after the step's stage. No device diff, no artifact or bootstrap line, no credential. M12: twin_version is 5. The step block gains wait: how verify's waiting form ended after the record (settled, expired, cancelled or incomplete), the budget, the reads, the seconds from the record until the twin settled or the wait ended, and the assertions still failing at the last read, or null while it has not run. A create writes a 5 record with step null. Nothing else is new. No device diff, no artifact or bootstrap line, no credential.",
+  "title": "Fylgja twin.json v5 — the twin’s record (M2, M5, M10, M11, M12)",
+  "description": "Written by the record step into the twin directory after every node is ready; removed with the directory by unstage. Carries the manifest's provenance block (never observed_at from the bundle: D-023), observed_at when the run performed a read and an explicit statement that it is unknown when it did not (Constitution VI), the bundle_id, the provisioning run's identity, and the version of the binary that provisioned it. Nothing here is a credential. M5: twin_version is 2, and each node records the artifact it was pushed — name, content type, checksum and size, copied from the staged manifest — and how long its push took. Never the artifact’s bytes. Everything else is v1’s, with M4’s meaning. M7: unchanged (no new key); twin_version stays 2. M10: twin_version is 3, and the record names the waypoint the twin was created from — series, sequence, description and the at’s source — or null when it was created with --branch or from a bundle; provenance.at carries the at itself. Nothing else is new. A waypoint is only ever recorded on a pinned, intent-sourced record. M11: twin_version is 4. The record gains state (ready or diverged), a step block (the last step: outcome, the side it came from and the side it went to or towards, the step run, the phase that failed, containerlab's plan with each touched node's declared and reported link-change behaviour, every push with its outcome, the readiness and push timings, when it started and ended, and the failure's findings) or null for a twin that has not stepped, and nodes[].holds, the bundle_id whose bootstrap and artifact the node is last known to run, or null for a node containerlab restarted, recreated or created that no push landed on, which runs its baseline alone. After a stepped or unchanged step bundle_id, provenance, observed_at and waypoint are the target's; after a diverged step they stay the previous record's and step.to names the target. run stays the create's. A create writes a 4 record with state ready, step null and holds equal to bundle_id on every node. The record is written whole on every path after the step's stage. No device diff, no artifact or bootstrap line, no credential. M12: twin_version is 5. The step block gains wait: how verify's waiting form ended after the record (settled, expired, cancelled or incomplete), the budget, the reads, the seconds from the record until the twin settled or the wait ended, and the assertions still failing at the last read, or null while it has not run. A create writes a 5 record with step null. Nothing else is new. No device diff, no artifact or bootstrap line, no credential.",
   "type": "object",
   "required": [
     "twin_version",
@@ -115,7 +115,7 @@
     },
     "nodes": {
       "type": "array",
-      "description": "One entry per node, sorted by name, as containerlab reported them at deploy and as readiness observed them. M11 (FR-027, FR-028): after a step, the nodes are containerlab's report after the reconcile; after a reconcile that failed or was cut short, the lab as clab inspect reports it when the record is written (a created node present, a deleted one gone), or the inspection taken before the stage when that read fails; when no reconcile ran, the inspection taken before the stage. Each node's ready_after_s and pushed_in_s are the step's where the step awaited or pushed it, and the previous record's otherwise.",
+      "description": "One entry per node, sorted by name, as containerlab reported them at deploy and as readiness observed them. M11: after a step, the nodes are containerlab's report after the reconcile; after a reconcile that failed or was cut short, the lab as clab inspect reports it when the record is written (a created node present, a deleted one gone), or the inspection taken before the stage when that read fails; when no reconcile ran, the inspection taken before the stage. Each node's ready_after_s and pushed_in_s are the step's where the step awaited or pushed it, and the previous record's otherwise.",
       "items": {
         "type": "object",
         "required": [
@@ -136,7 +136,7 @@
           },
           "container": {
             "type": "string",
-            "description": "containerlab's container name, clab-fylgja-<name> (R1)."
+            "description": "containerlab's container name, clab-fylgja-<name>."
           },
           "image": {
             "type": "string"
@@ -162,7 +162,7 @@
           },
           "mgmt_ipv4": {
             "type": "string",
-            "description": "The management address containerlab assigned, without prefix length (R1: ipv4_address is reported as 172.20.20.2/24)."
+            "description": "The management address containerlab assigned, without prefix length (containerlab reports ipv4_address as 172.20.20.2/24)."
           },
           "ready_after_s": {
             "type": "number",
@@ -171,7 +171,7 @@
           },
           "artifact": {
             "type": "object",
-            "description": "The artifact pushed to this node: the manifest entry minus its file path. Name and checksum are what twin show, the dry run and every finding name an artifact by (FR-027). M11: the artifact of the bundle holds names.",
+            "description": "The artifact pushed to this node: the manifest entry minus its file path. Name and checksum are what twin show, the dry run and every finding name an artifact by. M11: the artifact of the bundle holds names.",
             "required": [
               "name",
               "content_type",
@@ -208,7 +208,7 @@
               "null"
             ],
             "pattern": "^[0-9a-f]{64}$",
-            "description": "M11 (FR-028): the bundle_id whose bootstrap and artifact this node is last known to run: the record's bundle_id on a create and on every node a stepped step pushed or left as it was. After a diverged step: the target's on a node whose push landed; null for a node containerlab restarted, recreated or created whose push did not land, which runs containerlab's baseline alone; the previous bundle's on every other node. null and the previous are what the node last ran that the step knows of, not a claim that a push which did not land left it untouched: a push whose step.pushed[].outcome is failed may have committed (a replace that darkens a node, FR-019), and only refused is the node's own atomic answer. A later rollback reads step.pushed[].outcome beside holds (FR-014). artifact is the artifact of the bundle holds names (the previous record's entry beside a null)."
+            "description": "M11: the bundle_id whose bootstrap and artifact this node is last known to run: the record's bundle_id on a create and on every node a stepped step pushed or left as it was. After a diverged step: the target's on a node whose push landed; null for a node containerlab restarted, recreated or created whose push did not land, which runs containerlab's baseline alone; the previous bundle's on every other node. null and the previous are what the node last ran that the step knows of, not a claim that a push which did not land left it untouched: a push whose step.pushed[].outcome is failed may have committed (a replace that darkens a node), and only refused is the node's own atomic answer. A later rollback reads step.pushed[].outcome beside holds. artifact is the artifact of the bundle holds names (the previous record's entry beside a null)."
           }
         }
       }
@@ -218,7 +218,7 @@
         "object",
         "null"
       ],
-      "description": "M10 (FR-013): the waypoint the CLI resolved and passed to the record step as data (wire.RecordInput.Waypoint), or null. The at is provenance.at; at_source says whether it was written on the waypoint (given) or is the waypoint's own write time (written).",
+      "description": "M10: the waypoint the CLI resolved and passed to the record step as data (wire.RecordInput.Waypoint), or null. The at is provenance.at; at_source says whether it was written on the waypoint (given) or is the waypoint's own write time (written).",
       "required": [
         "series",
         "sequence",
@@ -251,14 +251,14 @@
         "ready",
         "diverged"
       ],
-      "description": "ready: the twin is at the record's waypoint and bundle. diverged: the last step failed or was cancelled after the host was touched; the twin is up, step says where it stopped, and it accepts only fylgja twin destroy (M11 FR-014)."
+      "description": "ready: the twin is at the record's waypoint and bundle. diverged: the last step failed or was cancelled after the host was touched; the twin is up, step says where it stopped, and it accepts only fylgja twin destroy (M11)."
     },
     "step": {
       "type": [
         "object",
         "null"
       ],
-      "description": "M11 (FR-027): the last step, or null for a twin that has not stepped. A step is one twin step: from the bundle the record named to one waypoint of the same series.",
+      "description": "M11: the last step, or null for a twin that has not stepped. A step is one twin step: from the bundle the record named to one waypoint of the same series.",
       "required": [
         "outcome",
         "from",
@@ -299,7 +299,7 @@
                 "object",
                 "null"
               ],
-              "description": "M10 (FR-013): the waypoint the CLI resolved and passed to the record step as data (wire.RecordInput.Waypoint), or null. The at is provenance.at; at_source says whether it was written on the waypoint (given) or is the waypoint's own write time (written).",
+              "description": "M10: the waypoint the CLI resolved and passed to the record step as data (wire.RecordInput.Waypoint), or null. The at is provenance.at; at_source says whether it was written on the waypoint (given) or is the waypoint's own write time (written).",
               "required": [
                 "series",
                 "sequence",
@@ -351,7 +351,7 @@
                 "object",
                 "null"
               ],
-              "description": "M10 (FR-013): the waypoint the CLI resolved and passed to the record step as data (wire.RecordInput.Waypoint), or null. The at is provenance.at; at_source says whether it was written on the waypoint (given) or is the waypoint's own write time (written).",
+              "description": "M10: the waypoint the CLI resolved and passed to the record step as data (wire.RecordInput.Waypoint), or null. The at is provenance.at; at_source says whether it was written on the waypoint (given) or is the waypoint's own write time (written).",
               "required": [
                 "series",
                 "sequence",
@@ -428,7 +428,7 @@
         },
         "reconcile": {
           "type": "object",
-          "description": "containerlab's plan (clab deploy --dry-run --format json, R9.1) with each touched node's package declaration beside what containerlab reported, and the apply's time; skipped true with no took_s when the plan was empty (its lists empty) or the step was unchanged, whose run applies nothing (its lists still containerlab's plan as read)",
+          "description": "containerlab's plan (clab deploy --dry-run --format json) with each touched node's package declaration beside what containerlab reported, and the apply's time; skipped true with no took_s when the plan was empty (its lists empty) or the step was unchanged, whose run applies nothing (its lists still containerlab's plan as read)",
           "required": [
             "skipped",
             "added",
@@ -563,7 +563,7 @@
                   "failed",
                   "not_attempted"
                 ],
-                "description": "landed: the node committed the replace. refused: the node's own answer; a refused replace is atomic, so the node runs what it ran before (R7.2, R7.3). failed: no answer settled the push (the node did not answer within push_timeout_s, the heartbeat was lost, or the cancellation reached it, rule run.cancelled), and it may have committed: a replace that darkens a node commits and then times out on every attempt (FR-019). not_attempted: an earlier phase failed. A later rollback reads this beside nodes[].holds, the bundle last known to run on the node (FR-014)."
+                "description": "landed: the node committed the replace. refused: the node's own answer; a refused replace is atomic, so the node runs what it ran before. failed: no answer settled the push (the node did not answer within push_timeout_s, the heartbeat was lost, or the cancellation reached it, rule run.cancelled), and it may have committed: a replace that darkens a node commits and then times out on every attempt. not_attempted: an earlier phase failed. A later rollback reads this beside nodes[].holds, the bundle last known to run on the node."
               },
               "rule": {
                 "type": "string",
@@ -630,7 +630,7 @@
         },
         "ended_at": {
           "type": "string",
-          "description": "RFC 3339 UTC, workflow.Now() at the record; the pause at a waypoint is this to the next step’s started_at (FR-030)"
+          "description": "RFC 3339 UTC, workflow.Now() at the record; the pause at a waypoint is this to the next step’s started_at"
         },
         "findings": {
           "type": "array",
@@ -644,7 +644,7 @@
             "object",
             "null"
           ],
-          "description": "M12 (FR-022): the step's wait, verify's waiting form run after the record by the VerifyTwin activity (data-model §5.2, §6), or null when it has not run: the record was just written and the wait is in flight, the run was cancelled before the wait began, or the activity could not write its outcome (the run's result and twin step's document say which). settled: every assertion read from a node held at a read. expired: the budget passed with every node read and an assertion still failing. cancelled: twin destroy (or an interrupt) cancelled the run during the wait. incomplete: the budget passed with a node unread, or the activity itself failed. Record claims (nodes[].holds) are never waited on.",
+          "description": "M12: the step's wait, verify's waiting form run after the record by the VerifyTwin activity, or null when it has not run: the record was just written and the wait is in flight, the run was cancelled before the wait began, or the activity could not write its outcome (the run's result and twin step's document say which). settled: every assertion read from a node held at a read. expired: the budget passed with every node read and an assertion still failing. cancelled: twin destroy (or an interrupt) cancelled the run during the wait. incomplete: the budget passed with a node unread, or the activity itself failed. Record claims (nodes[].holds) are never waited on.",
           "required": [
             "outcome",
             "budget_s",

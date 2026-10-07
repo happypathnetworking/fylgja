@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/schemas/show.schema.json",
   "title": "fylgja twin show — the show block — M5 extension",
-  "description": "The `show` block of the findings document `fylgja twin show --json` emits (operation twin.show). One document, from containerlab, the twin directory and the workflow service; every fact the text output reports, and no credential (FR-022). M5 (FR-023): host.nodes[] gains artifact, the name and checksum twin.json records for the node, or null for a node the record does not name (an orphan’s, or a record that cannot be read). in_flight steps may be push. No artifact content (FR-028). M7 (FR-026): host.nodes[] gains psp, the package id from twin.json, or null.",
+  "description": "The `show` block of the findings document `fylgja twin show --json` emits (operation twin.show). One document, from containerlab, the twin directory and the workflow service; every fact the text output reports, and no credential. M5: host.nodes[] gains artifact, the name and checksum twin.json records for the node, or null for a node the record does not name (an orphan’s, or a record that cannot be read). in_flight steps may be push. No artifact content. M7: host.nodes[] gains psp, the package id from twin.json, or null.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -80,7 +80,7 @@
                   "string",
                   "null"
                 ],
-                "description": "M7 (FR-026): the node’s support package id as twin.json records it (nodes[].psp.id), or null for a node the record does not name (an orphan’s). No new key in twin.json."
+                "description": "M7: the node’s support package id as twin.json records it (nodes[].psp.id), or null for a node the record does not name (an orphan’s). No new key in twin.json."
               }
             }
           }
@@ -209,7 +209,7 @@
       }
     },
     "last_check": {
-      "description": "when following stopped after a failed rebuild and no Schedule exists: the check that stopped it (FR-018)",
+      "description": "when following stopped after a failed rebuild and no Schedule exists: the check that stopped it",
       "$ref": "#/$defs/check"
     },
     "in_flight": {

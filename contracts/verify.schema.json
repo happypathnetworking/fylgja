@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/schemas/verify.schema.json",
-  "title": "fylgja twin verify — the verify block (M12 FR-007)",
-  "description": "The `verify` block of the findings document fylgja twin verify emits (operation twin.verify): the intent conformance report. The twin as its record names it; every assertion derived from the staged bundle's manifest with its outcome, grouped by node and by link; each node's configuration as the record claims it (nodes[].holds against the staged bundle), labelled recorded, never read; every cabled port intent disables, skipped with its reason; the counts by kind; the runs in flight as twin show reads them; and, with --wait, the wait. Advisory: no Fylgja operation reads it. No configuration line, artifact or bootstrap content, device diff, token or login anywhere (FR-006, FR-024): the values read are host names, admin states and neighbour names.",
+  "title": "fylgja twin verify — the verify block (M12)",
+  "description": "The `verify` block of the findings document fylgja twin verify emits (operation twin.verify): the intent conformance report. The twin as its record names it; every assertion derived from the staged bundle's manifest with its outcome, grouped by node and by link; each node's configuration as the record claims it (nodes[].holds against the staged bundle), labelled recorded, never read; every cabled port intent disables, skipped with its reason; the counts by kind; the runs in flight as twin show reads them; and, with --wait, the wait. Advisory: no Fylgja operation reads it. No configuration line, artifact or bootstrap content, device diff, token or login anywhere: the values read are host names, admin states and neighbour names.",
   "$defs": {
     "waypoint": {
       "type": ["object", "null"],
@@ -17,7 +17,7 @@
     },
     "outcome": {
       "enum": ["held", "failed", "absent", "unread", "skipped"],
-      "description": "held: the value read is the value expected. failed: a value was read and differs. absent: nothing was read, and the package's facet declares no meaning for absence (SR Linux: no update and no error, M6 R3; a facet with `absent` reads that value instead, M7 R6). unread: the read failed at the transport. skipped: not asserted, a port intent disables or a link end on one, with reason."
+      "description": "held: the value read is the value expected. failed: a value was read and differs. absent: nothing was read, and the package's facet declares no meaning for absence (SR Linux: no update and no error, M6; a facet with `absent` reads that value instead, M7). unread: the read failed at the transport. skipped: not asserted, a port intent disables or a link end on one, with reason."
     },
     "assertion": {
       "type": "object",

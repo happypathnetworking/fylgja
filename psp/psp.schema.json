@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/psp/v0.6",
   "title": "Fylgja Platform Support Package v0.6",
-  "description": "Changes from v0.4 (specs/006-psp-lossy-mapping/contracts/psp.schema.json), all additive (M7 FR-005; research R3–R6, R9): `readiness.tls` (default true; false dials plaintext gRPC, which cEOS serves by containerlab's default); `config.comment_prefix` (default `#`; the platform's comment marker, which the bootstrap file's generated header is written with, because bootstrap_via: push sends that header to the node as a command and cEOS refuses `#`); `config.bootstrap_via` (default startup_config; `push` sends the bootstrap's lines before the artifact's through the delivery mechanism, and the topology node carries no startup-config, because containerlab's ceos kind takes a startup-config as the whole configuration); `conformance.port.*.absent`, the value the node means by reporting nothing at a path (OpenConfig does not report defaults); `conformance.port.neighbor.system_name` and `.port_id` are paths relative to one neighbour entry (`state/system-name`), of which a single element is the one-element case; `config.delivery: eapi` is the second mechanism this build pushes by and requires `config.push`; `image.acquisition` other than public_registry means the host check verifies the image is present under exactly `image.ref` and never pulls. psp_version is 0.5 so the packages directory documents these under the version they arrived in: a 0.4 package decodes and means the same, and `psp validate` names it psp.version.unknown. Changes from v0.3 (specs/005-configuration/contracts/psp.schema.json), in the Interfaces facet and one new facet (M6 FR-001–FR-012, FR-029; research R2–R5, R7): `interfaces` becomes a declarative mapping profile, an ordered list of named `rules`, each saying which production names it matches, the range each captured placeholder accepts, which containerlab port and which node name each becomes, whether it loses information, and whether its matches are breakout children of a parent; one rule is the management rule; `mappings` declares what the conformance suite checks the package against. `hardware_pattern`, `container_pattern`, `breakout_pattern`, `container_breakout_pattern`, `management`, `max_ports` and `lossy` are gone. The new `conformance` facet declares how the suite’s boot half reads a booted node over the readiness probe’s transport. psp_version is 0.4 because the facet’s required structure changes, so a 0.3 package is not valid 0.4: `psp validate` says psp.version.unknown. The compiler consumes the rules; the read consumes nothing new; the conformance block is consumed by the suite alone and never reaches a bundle. M11 (format 0.6, specs/009-stepping; D-033): one required field, fidelity.link_change, what containerlab's reconcile does to a node of this kind on a link change (restart or live); config.mode: replace now means the reset to the baseline containerlab left on the node, the bundle's bootstrap, the artifact, the device's diff and one atomic commit, per delivery; bootstrap_via says only how a deploy delivers the bootstrap. Nothing here reaches a bundle, so no bundle_id moves.",
+  "description": "Changes from v0.4, all additive (M7): `readiness.tls` (default true; false dials plaintext gRPC, which cEOS serves by containerlab's default); `config.comment_prefix` (default `#`; the platform's comment marker, which the bootstrap file's generated header is written with, because bootstrap_via: push sends that header to the node as a command and cEOS refuses `#`); `config.bootstrap_via` (default startup_config; `push` sends the bootstrap's lines before the artifact's through the delivery mechanism, and the topology node carries no startup-config, because containerlab's ceos kind takes a startup-config as the whole configuration); `conformance.port.*.absent`, the value the node means by reporting nothing at a path (OpenConfig does not report defaults); `conformance.port.neighbor.system_name` and `.port_id` are paths relative to one neighbour entry (`state/system-name`), of which a single element is the one-element case; `config.delivery: eapi` is the second mechanism this build pushes by and requires `config.push`; `image.acquisition` other than public_registry means the host check verifies the image is present under exactly `image.ref` and never pulls. psp_version is 0.5 so the packages directory documents these under the version they arrived in: a 0.4 package decodes and means the same, and `psp validate` names it psp.version.unknown. Changes from v0.3, in the Interfaces facet and one new facet (M6): `interfaces` becomes a declarative mapping profile, an ordered list of named `rules`, each saying which production names it matches, the range each captured placeholder accepts, which containerlab port and which node name each becomes, whether it loses information, and whether its matches are breakout children of a parent; one rule is the management rule; `mappings` declares what the conformance suite checks the package against. `hardware_pattern`, `container_pattern`, `breakout_pattern`, `container_breakout_pattern`, `management`, `max_ports` and `lossy` are gone. The new `conformance` facet declares how the suite’s boot half reads a booted node over the readiness probe’s transport. psp_version is 0.4 because the facet’s required structure changes, so a 0.3 package is not valid 0.4: `psp validate` says psp.version.unknown. The compiler consumes the rules; the read consumes nothing new; the conformance block is consumed by the suite alone and never reaches a bundle. M11 (format 0.6; D-033): one required field, fidelity.link_change, what containerlab's reconcile does to a node of this kind on a link change (restart or live); config.mode: replace now means the reset to the baseline containerlab left on the node, the bundle's bootstrap, the artifact, the device's diff and one atomic commit, per delivery; bootstrap_via says only how a deploy delivers the bootstrap. Nothing here reaches a bundle, so no bundle_id moves.",
   "type": "object",
   "required": [
     "psp_version",
@@ -51,7 +51,7 @@
         "type": "integer",
         "minimum": 0
       },
-      "description": "[min, max], inclusive. A captured value under a range must be a decimal integer within it; anything else is out of range under the rule (FR-005)."
+      "description": "[min, max], inclusive. A captured value under a range must be a decimal integer within it; anything else is out of range under the rule."
     },
     "rule": {
       "type": "object",
@@ -65,18 +65,18 @@
         "name": {
           "type": "string",
           "pattern": "^[a-z0-9][a-z0-9_-]*$",
-          "description": "Unique within the profile (psp.rule.name). Findings, the pure half and the fidelity record name a rule by it, never by position or pattern (FR-001, FR-021)."
+          "description": "Unique within the profile (psp.rule.name). Findings, the pure half and the fidelity record name a rule by it, never by position or pattern."
         },
         "match": {
           "$ref": "#/$defs/pattern",
-          "description": "Which production interface names this rule decides. Required on a data rule; absent on the management rule. The first rule in `rules` whose match fits a name decides it (FR-004)."
+          "description": "Which production interface names this rule decides. Required on a data rule; absent on the management rule. The first rule in `rules` whose match fits a name decides it."
         },
         "ranges": {
           "type": "object",
           "additionalProperties": {
             "$ref": "#/$defs/range"
           },
-          "description": "Per captured placeholder (FR-005). A placeholder with no range accepts any value, which the pure half reports as information. A placeholder `match` does not capture is psp.patterns.placeholders."
+          "description": "Per captured placeholder. A placeholder with no range accepts any value, which the pure half reports as information. A placeholder `match` does not capture is psp.patterns.placeholders."
         },
         "port": {
           "$ref": "#/$defs/pattern",
@@ -84,11 +84,11 @@
         },
         "node_name": {
           "$ref": "#/$defs/pattern",
-          "description": "What the node’s operating system calls the port, rendered from the captured values; may use only placeholders `port` uses, because one port has one node name. Bootstrap’s {interface} renders it (FR-007); the mapping row records it where it differs from the production name (FR-006)."
+          "description": "What the node’s operating system calls the port, rendered from the captured values; may use only placeholders `port` uses, because one port has one node name. Bootstrap’s {interface} renders it; the mapping row records it where it differs from the production name."
         },
         "lossy": {
           "type": "boolean",
-          "description": "Required on a data rule. Must equal ‘the port drops a placeholder match captures’: a rule that drops and says false, or drops nothing and says true, is psp.patterns.placeholders (FR-004). A rule that only renames inverts and is not lossy."
+          "description": "Required on a data rule. Must equal ‘the port drops a placeholder match captures’: a rule that drops and says false, or drops nothing and says true, is psp.patterns.placeholders. A rule that only renames inverts and is not lossy."
         },
         "breakout": {
           "type": "object",
@@ -99,13 +99,13 @@
           "properties": {
             "parent": {
               "$ref": "#/$defs/pattern",
-              "description": "Marks the rule’s matches as breakout children and renders the parent’s production name from the child’s captured values (FR-008); may use only placeholders `match` captures and must differ from `match` (psp.patterns.breakout). Whether children spread or collapse onto the parent’s port is `port`’s: a collapsing rule drops {sub} and is lossy."
+              "description": "Marks the rule’s matches as breakout children and renders the parent’s production name from the child’s captured values; may use only placeholders `match` captures and must differ from `match` (psp.patterns.breakout). Whether children spread or collapse onto the parent’s port is `port`’s: a collapsing rule drops {sub} and is lossy."
             }
           }
         },
         "management": {
           "const": true,
-          "description": "Marks the one management rule (psp.management.rule): applied to a device’s mgmt_only interface whatever its name (D-003; FR-009), with no match, ranges, lossy or breakout. Its port is the manifest node’s management_port."
+          "description": "Marks the one management rule (psp.management.rule): applied to a device’s mgmt_only interface whatever its name (D-003), with no match, ranges, lossy or breakout. Its port is the manifest node’s management_port."
         }
       },
       "allOf": [
@@ -245,7 +245,7 @@
         },
         "absent": {
           "type": "string",
-          "description": "New in 0.5. The value the node means by reporting nothing at the path: read nothing is read this value. Without it, nothing read fails the check (M6). cEOS's /lldp/interfaces/interface[name=X]/state/enabled is absent while LLDP runs and false when it does not (M7 research R6)."
+          "description": "New in 0.5. The value the node means by reporting nothing at the path: read nothing is read this value. Without it, nothing read fails the check (M6). cEOS's /lldp/interfaces/interface[name=X]/state/enabled is absent while LLDP runs and false when it does not (M7)."
         }
       }
     }
@@ -280,7 +280,7 @@
           "items": {
             "type": "string"
           },
-          "description": "The software versions this package claims. From 0.4 the boot half reads the node’s version (conformance.version) and fails when no listed value matches it: a listed value L matches a read R when, with one leading `v` stripped from R, R == L or R begins with L followed by `.` or `-` (M6 research R5). A shipped package lists only versions a boot has verified (FR-035)."
+          "description": "The software versions this package claims. From 0.4 the boot half reads the node’s version (conformance.version) and fails when no listed value matches it: a listed value L matches a read R when, with one leading `v` stripped from R, R == L or R begins with L followed by `.` or `-` (M6). A shipped package lists only versions a boot has verified."
         },
         "device_class": {
           "enum": [
@@ -316,7 +316,7 @@
             "licensed",
             "vrnetlab_vm"
           ],
-          "description": "How the image is obtained. From 0.5 the value has a run-time meaning (M7 research R9): public_registry is the only value under which a deploy may pull (M2, under the deploy budget); every other value means the host check verifies that the host holds an image under exactly `ref` (docker image inspect) and refuses the run as host.image.absent when it does not, never pulling or tagging. account_gated: obtained from the vendor with an account and imported by hand (cEOS)."
+          "description": "How the image is obtained. From 0.5 the value has a run-time meaning (M7): public_registry is the only value under which a deploy may pull (M2, under the deploy budget); every other value means the host check verifies that the host holds an image under exactly `ref` (docker image inspect) and refuses the run as host.image.absent when it does not, never pulling or tagging. account_gated: obtained from the vendor with an account and imported by hand (cEOS)."
         },
         "resources": {
           "type": "object",
@@ -332,7 +332,7 @@
             "memory_mb": {
               "type": "integer",
               "minimum": 64,
-              "description": "Per-node steady-state memory budget in MiB, measured on a booted node with stated headroom (FR-010, FR-025); summed by the host check against FYLGJA_HOST_MEMORY_MB. Never a guess."
+              "description": "Per-node steady-state memory budget in MiB, measured on a booted node with stated headroom; summed by the host check against FYLGJA_HOST_MEMORY_MB. Never a guess."
             }
           }
         },
@@ -350,7 +350,7 @@
     },
     "interfaces": {
       "type": "object",
-      "description": "New shape in 0.4: the mapping profile (M6 data-model §1). Every case FR-002 names is data here: one-to-one with the node’s own name, many-to-one (a rule that drops a placeholder, declared lossy), breakout children spreading onto distinct ports or collapsing onto the parent’s, and the management mapping. The compiler applies the rules and branches on nothing a package is (FR-012).",
+      "description": "New shape in 0.4: the mapping profile (M6). Every case of mapping is data here: one-to-one with the node’s own name, many-to-one (a rule that drops a placeholder, declared lossy), breakout children spreading onto distinct ports or collapsing onto the parent’s, and the management mapping. The compiler applies the rules and branches on nothing a package is.",
       "required": [
         "rules",
         "mappings"
@@ -363,7 +363,7 @@
           "items": {
             "$ref": "#/$defs/rule"
           },
-          "description": "Ordered: the first rule whose match fits a name decides it, in range or out of it (FR-004, FR-005). Exactly one rule has management: true (psp.management.rule)."
+          "description": "Ordered: the first rule whose match fits a name decides it, in range or out of it. Exactly one rule has management: true (psp.management.rule)."
         },
         "mappings": {
           "type": "array",
@@ -371,7 +371,7 @@
           "items": {
             "$ref": "#/$defs/declaredMapping"
           },
-          "description": "What the conformance suite’s pure half holds this package to (FR-003): each declaration must be produced by the rules as declared, and each mapped one must round-trip. Required and non-empty (psp.mappings.invalid): a package the suite cannot check cannot be supported. Consumed by the suite alone; never by the compiler, so a change here moves no bundle_id."
+          "description": "What the conformance suite’s pure half holds this package to: each declaration must be produced by the rules as declared, and each mapped one must round-trip. Required and non-empty (psp.mappings.invalid): a package the suite cannot check cannot be supported. Consumed by the suite alone; never by the compiler, so a change here moves no bundle_id."
         }
       }
     },
@@ -405,14 +405,14 @@
             "xml_api",
             "cli"
           ],
-          "description": "Consumed from 0.3 by the push step. json_rpc (SR Linux: POST /jsonrpc, method cli, M5 R7) and, from 0.5, eapi (EOS: POST /command-api, runCmds, M7 R5) are the mechanisms this build implements; every other value is refused at load as psp.config.delivery.unimplemented, naming both, until a build implements it (Constitution II)."
+          "description": "Consumed from 0.3 by the push step. json_rpc (SR Linux: POST /jsonrpc, method cli, M5) and, from 0.5, eapi (EOS: POST /command-api, runCmds, M7) are the mechanisms this build implements; every other value is refused at load as psp.config.delivery.unimplemented, naming both, until a build implements it (Constitution II)."
         },
         "commit": {
           "enum": [
             "explicit",
             "implicit"
           ],
-          "description": "Consumed from 0.3 by the mechanism. json_rpc: explicit wraps the artifact’s lines in `enter candidate private` … `commit now`; implicit sends the lines alone. eapi (0.5): explicit opens `configure session <name>` (a name per attempt) and ends with `commit`, atomic: a refused line leaves the session pending and the running configuration untouched; implicit is `configure` … `end`, where the lines before a refused one stay applied (M7 R5). The shipped EOS package says explicit."
+          "description": "Consumed from 0.3 by the mechanism. json_rpc: explicit wraps the artifact’s lines in `enter candidate private` … `commit now`; implicit sends the lines alone. eapi (0.5): explicit opens `configure session <name>` (a name per attempt) and ends with `commit`, atomic: a refused line leaves the session pending and the running configuration untouched; implicit is `configure` … `end`, where the lines before a refused one stay applied (M7). The shipped EOS package says explicit."
         },
         "bootstrap": {
           "type": "array",
@@ -420,7 +420,7 @@
           "items": {
             "type": "string"
           },
-          "description": "Ordered startup-config line templates. Platform bootstrap ONLY (Constitution IV). Placeholders: {node} the node name; a line containing {port} or {interface} is emitted once per cabled port, {port} rendering the node port (containerlab's endpoint name, e.g. e1-1) and, from 0.4, {interface} rendering the node’s own name for the port as the deciding rule’s node_name gives it (ethernet-1/1 on SR Linux, where it is the production name; Ethernet49 on a collapsing platform), because bootstrap is what the node runs (FR-007; M2 R2a)."
+          "description": "Ordered startup-config line templates. Platform bootstrap ONLY (Constitution IV). Placeholders: {node} the node name; a line containing {port} or {interface} is emitted once per cabled port, {port} rendering the node port (containerlab's endpoint name, e.g. e1-1) and, from 0.4, {interface} rendering the node’s own name for the port as the deciding rule’s node_name gives it (ethernet-1/1 on SR Linux, where it is the production name; Ethernet49 on a collapsing platform), because bootstrap is what the node runs."
         },
         "artifact_name": {
           "type": "string",
@@ -442,12 +442,12 @@
             "merge",
             "replace"
           ],
-          "description": "New in 0.3, required, no default (M5 FR-017). merge: the node runs bootstrap with the artifact applied over it (M5). replace, from 0.6 (M11; D-033): the push resets the node's candidate to the baseline containerlab left on it at deploy — json_rpc loads `startup`, eapi runs `rollback clean-config` then `copy startup-config session-config` in its named session — then sends the bundle's bootstrap, then the artifact, obtains the device's own diff (`diff flat`, `show session-config diffs`) and commits, in one request with one atomic commit. The device computes the difference; Fylgja never saves a running configuration and never reads a baseline line. Both shipped packages declare replace, so a create and a step share one push; a package on merge can create but cannot step (step.package.merge). Before 0.6 replace meant `delete /` before the artifact on json_rpc, which took a node dark (M5 R7) and no package ever shipped."
+          "description": "New in 0.3 (M5), required, no default. merge: the node runs bootstrap with the artifact applied over it (M5). replace, from 0.6 (M11; D-033): the push resets the node's candidate to the baseline containerlab left on it at deploy — json_rpc loads `startup`, eapi runs `rollback clean-config` then `copy startup-config session-config` in its named session — then sends the bundle's bootstrap, then the artifact, obtains the device's own diff (`diff flat`, `show session-config diffs`) and commits, in one request with one atomic commit. The device computes the difference; Fylgja never saves a running configuration and never reads a baseline line. Both shipped packages declare replace, so a create and a step share one push; a package on merge can create but cannot step (step.package.merge). Before 0.6 replace meant `delete /` before the artifact on json_rpc, which took a node dark (M5) and no package ever shipped."
         },
         "push_timeout_s": {
           "type": "integer",
           "minimum": 5,
-          "description": "New in 0.3. Seconds one node may take to accept its artifact, from the push activity’s start to the node’s commit; the push step’s budget is the largest value among the bundle’s platforms plus the mechanism margin. Set from a measured push with stated headroom (0.7s measured, ×40: M5 R7). Never a global constant (Constitution II)."
+          "description": "New in 0.3. Seconds one node may take to accept its artifact, from the push activity’s start to the node’s commit; the push step’s budget is the largest value among the bundle’s platforms plus the mechanism margin. Set from a measured push with stated headroom (0.7s measured at M5, ×40). Never a global constant (Constitution II)."
         },
         "push": {
           "type": "object",
@@ -481,7 +481,7 @@
           "minLength": 1,
           "pattern": "^\\S+$",
           "default": "#",
-          "description": "New in 0.5 (M7; research R5). The marker that begins a comment line in this platform's startup-config syntax. The compiler writes the bundle's bootstrap file with one generated header line, `<comment_prefix> Generated by Fylgja: …`, and under bootstrap_via: push that line is sent to the node as a command like every other line of the file, so a marker the node does not read as a comment is refused and nothing commits: cEOS answers `#` with `Invalid input (at token 0: '#')` and reads `!`. A package omitting it means `#`, which is what every package written before this field meant, so no package, bundle or bundle_id moves for it."
+          "description": "New in 0.5 (M7). The marker that begins a comment line in this platform's startup-config syntax. The compiler writes the bundle's bootstrap file with one generated header line, `<comment_prefix> Generated by Fylgja: …`, and under bootstrap_via: push that line is sent to the node as a command like every other line of the file, so a marker the node does not read as a comment is refused and nothing commits: cEOS answers `#` with `Invalid input (at token 0: '#')` and reads `!`. A package omitting it means `#`, which is what every package written before this field meant, so no package, bundle or bundle_id moves for it."
         },
         "bootstrap_via": {
           "enum": [
@@ -489,7 +489,7 @@
             "push"
           ],
           "default": "startup_config",
-          "description": "New in 0.5 (M7 FR-018; research R4). How a DEPLOY delivers the bootstrap file. startup_config (the default, M2): the topology names it and containerlab applies it at deploy. push: the file is still written to configs/<node>.<ext> and named in the manifest (nodes[].bootstrap), the topology node carries no startup-config, and the push sends the bootstrap's lines before the artifact's in one request. Needed where containerlab's kind takes a startup-config as the whole configuration (ceos) and its default already brings the management plane up. From 0.6 (M11; D-033's second note): under mode replace the push ALWAYS sends the bootstrap after the reset, whatever this says, because a topology step changes the bootstrap and containerlab's reconcile does not apply a changed startup snippet to a running node (R7.6); the pairing push + replace is the shipped EOS case and is no longer refused. push with a delivery that carries no configuration lines is still psp.config.bootstrap_via."
+          "description": "New in 0.5 (M7). How a DEPLOY delivers the bootstrap file. startup_config (the default, M2): the topology names it and containerlab applies it at deploy. push: the file is still written to configs/<node>.<ext> and named in the manifest (nodes[].bootstrap), the topology node carries no startup-config, and the push sends the bootstrap's lines before the artifact's in one request. Needed where containerlab's kind takes a startup-config as the whole configuration (ceos) and its default already brings the management plane up. From 0.6 (M11; D-033's second note): under mode replace the push ALWAYS sends the bootstrap after the reset, whatever this says, because a topology step changes the bootstrap and containerlab's reconcile does not apply a changed startup snippet to a running node; the pairing push + replace is the shipped EOS case and is no longer refused. push with a delivery that carries no configuration lines is still psp.config.bootstrap_via."
         }
       },
       "allOf": [
@@ -575,7 +575,7 @@
             "ascii",
             "bytes"
           ],
-          "description": "New in 0.2. The gNMI encoding the probe requests. Required for gnmi_get and gnmi_subscribe: SR Linux refuses the proto default (json, 0) as Unimplemented, so a probe without one never succeeds (M2 R3, FR-013)."
+          "description": "New in 0.2. The gNMI encoding the probe requests. Required for gnmi_get and gnmi_subscribe: SR Linux refuses the proto default (json, 0) as Unimplemented, so a probe without one never succeeds (M2)."
         },
         "port": {
           "type": "integer",
@@ -586,7 +586,7 @@
         "timeout_s": {
           "type": "integer",
           "minimum": 10,
-          "description": "Per node, from the moment the deploy step returns, never global (M2 FR-027): seconds within which the probe must first succeed. Set from a measured concurrent boot with stated headroom. From 0.4 the boot half checks each recorded ready_after_s against it (FR-028)."
+          "description": "Per node, from the moment the deploy step returns, never global (M2): seconds within which the probe must first succeed. Set from a measured concurrent boot with stated headroom. From 0.4 the boot half checks each recorded ready_after_s against it."
         },
         "login": {
           "$ref": "#/$defs/login"
@@ -594,12 +594,12 @@
         "tls": {
           "type": "boolean",
           "default": true,
-          "description": "New in 0.5 (M7 research R3). Whether the gNMI probe, and the conformance suite’s reader, dial with TLS (the node’s boot-time certificate accepted unverified, M2). false dials plaintext gRPC: cEOS’s `management api gnmi` with `transport grpc default` has no SSL profile and refuses a TLS handshake. Absent means true, so a 0.4 package means the same."
+          "description": "New in 0.5 (M7). Whether the gNMI probe, and the conformance suite’s reader, dial with TLS (the node’s boot-time certificate accepted unverified, M2). false dials plaintext gRPC: cEOS’s `management api gnmi` with `transport grpc default` has no SSL profile and refuses a TLS handshake. Absent means true, so a 0.4 package means the same."
         },
         "await_push_transport": {
           "type": "boolean",
           "default": false,
-          "description": "New in 0.5 (M7 research R13, D-029). Whether the node is ready only once the endpoint `config.push` names also accepts a connection, not merely once the probe has answered. A platform can answer its probe before the transport its configuration must arrive on is listening: on cEOS gNMI opened at deploy+11.1s and eAPI at +12.1s and +13.6s, and a push beginning a second after the probe succeeded was refused three times over nine seconds. Absent means false, which is what every package written before it meant, and a platform whose push transport is up when its probe answers leaves it absent. A package that sets it and declares no `config.push` is refused psp.readiness.await_push_transport."
+          "description": "New in 0.5 (M7; D-029). Whether the node is ready only once the endpoint `config.push` names also accepts a connection, not merely once the probe has answered. A platform can answer its probe before the transport its configuration must arrive on is listening: on cEOS gNMI opened at deploy+11.1s and eAPI at +12.1s and +13.6s, and a push beginning a second after the probe succeeded was refused three times over nine seconds. Absent means false, which is what every package written before it meant, and a platform whose push transport is up when its probe answers leaves it absent. A package that sets it and declares no `config.push` is refused psp.readiness.await_push_transport."
         }
       },
       "allOf": [
@@ -625,7 +625,7 @@
     },
     "conformance": {
       "type": "object",
-      "description": "New in 0.4 (FR-029; M6 research R3, R4). How the conformance suite’s boot half reads a booted node, over the readiness probe’s transport, port, encoding and login: the paths that carry the node’s host name and software version, and for a cabled port (with {node_name} the node’s own name for it) whether it is enabled and discovering and which neighbour it sees. Optional: a package without it never boots as far as the suite is concerned, and the boot half fails naming the package and this field rather than skipping (FR-031). Consumed by the suite alone; never reaches a bundle. At 0.4 the reader is gNMI Get, so the readiness probe must be gnmi_get or gnmi_subscribe. From 0.5 (M7 R6): `absent` on a value says what nothing read means; `neighbor.system_name` and `neighbor.port_id` are paths relative to one entry (`state/system-name` on cEOS, `system-name` on SR Linux); and a list the reader requests whole may come back one update per keyed entry (cEOS) or as one update at the parent with the list inside (SR Linux), which the reader treats alike.",
+      "description": "New in 0.4 (M6). How the conformance suite’s boot half reads a booted node, over the readiness probe’s transport, port, encoding and login: the paths that carry the node’s host name and software version, and for a cabled port (with {node_name} the node’s own name for it) whether it is enabled and discovering and which neighbour it sees. Optional: a package without it never boots as far as the suite is concerned, and the boot half fails naming the package and this field rather than skipping. Consumed by the suite alone; never reaches a bundle. At 0.4 the reader is gNMI Get, so the readiness probe must be gnmi_get or gnmi_subscribe. From 0.5 (M7): `absent` on a value says what nothing read means; `neighbor.system_name` and `neighbor.port_id` are paths relative to one entry (`state/system-name` on cEOS, `system-name` on SR Linux); and a list the reader requests whole may come back one update per keyed entry (cEOS) or as one update at the parent with the list inside (SR Linux), which the reader treats alike.",
       "required": [
         "host_name",
         "version",
@@ -641,7 +641,7 @@
         "version": {
           "type": "string",
           "pattern": "^/",
-          "description": "The leaf carrying the software version, matched against platform.versions. SR Linux: /system/information/version, which read v24.7.1-330-g38f237abfe (R5)."
+          "description": "The leaf carrying the software version, matched against platform.versions. SR Linux: /system/information/version, which read v24.7.1-330-g38f237abfe."
         },
         "port": {
           "type": "object",
@@ -676,11 +676,11 @@
                 },
                 "system_name": {
                   "type": "string",
-                  "description": "A path, relative to one entry of the list, to the leaf carrying the far node’s name: `/`-separated elements, module prefixes ignored. SR Linux: system-name. cEOS: state/system-name (M7 R6)."
+                  "description": "A path, relative to one entry of the list, to the leaf carrying the far node’s name: `/`-separated elements, module prefixes ignored. SR Linux: system-name. cEOS: state/system-name (M7)."
                 },
                 "port_id": {
                   "type": "string",
-                  "description": "A path, relative to one entry, to the leaf carrying the far port as the far node names it (its rule’s node_name). SR Linux: port-id, with port-id-type INTERFACE_NAME (M6 R4). cEOS: state/port-id, INTERFACE_NAME too (M7 R6)."
+                  "description": "A path, relative to one entry, to the leaf carrying the far port as the far node names it (its rule’s node_name). SR Linux: port-id, with port-id-type INTERFACE_NAME (M6). cEOS: state/port-id, INTERFACE_NAME too (M7)."
                 }
               }
             }
@@ -721,7 +721,7 @@
             "restart",
             "live"
           ],
-          "description": "New in 0.6 (M11 FR-024; research R7.6, R9). What containerlab's reconcile (a `clab deploy` over a running lab, 0.78+) does to a node of this kind when a link of its is added or removed: restart — the node is restarted in place and returns on its startup configuration about a minute later with its push lost (cEOS: 50–55s to eAPI); live — it is re-cabled with no lifecycle action and keeps its push (SR Linux), though a changed bootstrap never reaches it, which is why a replace sends the bootstrap. Fidelity, asserted by the package and measured by containerlab's dry-run plan at every step; the step acts on the plan, records both, and warns step.restart.undeclared when they differ. Re-verified on a containerlab or image upgrade (psp/README.md). The pure half of the conformance suite checks it is present and one of the two."
+          "description": "New in 0.6 (M11). What containerlab's reconcile (a `clab deploy` over a running lab, 0.78+) does to a node of this kind when a link of its is added or removed: restart — the node is restarted in place and returns on its startup configuration about a minute later with its push lost (cEOS: 50–55s to eAPI); live — it is re-cabled with no lifecycle action and keeps its push (SR Linux), though a changed bootstrap never reaches it, which is why a replace sends the bootstrap. Fidelity, asserted by the package and measured by containerlab's dry-run plan at every step; the step acts on the plan, records both, and warns step.restart.undeclared when they differ. Re-verified on a containerlab or image upgrade (psp/README.md). The pure half of the conformance suite checks it is present and one of the two."
         }
       }
     }

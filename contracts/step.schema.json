@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/schemas/step.schema.json",
-  "title": "fylgja twin step — the step block (M11 FR-002, FR-015; M12 FR-021)",
-  "description": "The `step` block of the findings document fylgja twin step emits (operation twin.step), on the dry run and on the run. The two sides, M10's step between their bundles (waypoints.schema.json $defs/step), containerlab's dry-run plan with each touched node's package declaration beside what containerlab reported, the push plan with each node's reasons, and, once a run closed, the step run, its outcome, the phase that failed, each push's outcome, the timings and when it started and ended. No device diff, artifact or bootstrap content, token or login (FR-029). M12 (FR-021): wait, the step's waiting form after the record: budget_s on the dry run and before the run closed; outcome, reads, after_s and failing once the run closed and the wait ran; absent when the run was cancelled before the wait began (data-model §7.3).",
+  "title": "fylgja twin step — the step block (M11, M12)",
+  "description": "The `step` block of the findings document fylgja twin step emits (operation twin.step), on the dry run and on the run. The two sides, M10's step between their bundles (waypoints.schema.json $defs/step), containerlab's dry-run plan with each touched node's package declaration beside what containerlab reported, the push plan with each node's reasons, and, once a run closed, the step run, its outcome, the phase that failed, each push's outcome, the timings and when it started and ended. No device diff, artifact or bootstrap content, token or login. M12: wait, the step's waiting form after the record: budget_s on the dry run and before the run closed; outcome, reads, after_s and failing once the run closed and the wait ran; absent when the run was cancelled before the wait began.",
   "$defs": {
     "waypoint": {
       "type": ["object", "null"],
@@ -28,7 +28,7 @@
     },
     "reconcile": {
       "type": "object",
-      "description": "clab deploy --dry-run --format json over the target topology, read with the twin directory's lab state (research R9.1, R9.4), with the packages' fidelity.link_change beside it",
+      "description": "clab deploy --dry-run --format json over the target topology, read with the twin directory's lab state, with the packages' fidelity.link_change beside it",
       "required": ["added", "deleted", "recreated", "restarted", "links_added", "endpoints_deleted", "nodes"],
       "additionalProperties": false,
       "properties": {
@@ -115,7 +115,7 @@
         "ended_at": { "type": "string" },
         "wait": {
           "type": "object",
-          "description": "M12 (FR-021): the step's wait, verify's waiting form after the record. On the dry run and before the run closed, budget_s alone; once the run closed and the wait ran, how it ended. Absent when the run was cancelled before the wait began (the record's step.wait is then null). settled: every assertion read from a node held; expired: the budget passed with every node read and an assertion failing; cancelled: the run was cancelled during the wait; incomplete: a node unread at expiry, or the activity failed",
+          "description": "M12: the step's wait, verify's waiting form after the record. On the dry run and before the run closed, budget_s alone; once the run closed and the wait ran, how it ended. Absent when the run was cancelled before the wait began (the record's step.wait is then null). settled: every assertion read from a node held; expired: the budget passed with every node read and an assertion failing; cancelled: the run was cancelled during the wait; incomplete: a node unread at expiry, or the activity failed",
           "required": ["budget_s"],
           "additionalProperties": false,
           "properties": {

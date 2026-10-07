@@ -1,20 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/schemas/waypoints.schema.json",
-  "title": "Fylgja waypoint blocks — M10 (FR-014, FR-017–FR-021, FR-025)",
-  "description": "The three waypoint blocks of the findings document, referenced from findings.schema.json by this $id: `resolved`, the reference one waypoint resolves to (the `waypoint` block on twin.create, twin.create --dry-run and intent.read with --waypoint); `list`, waypoint.list's `waypoints` block; `plan`, waypoint.plan's `plan` block, whose steps are step.Diff's result. Every fact the text prints and no more: artifacts by name and checksum, bootstraps as changed or not, never a line of either (FR-021, Constitution X). Every list is sorted, so the same input gives the same document (SC-004).",
+  "title": "Fylgja waypoint blocks — M10",
+  "description": "The three waypoint blocks of the findings document, referenced from findings.schema.json by this $id: `resolved`, the reference one waypoint resolves to (the `waypoint` block on twin.create, twin.create --dry-run and intent.read with --waypoint); `list`, waypoint.list's `waypoints` block; `plan`, waypoint.plan's `plan` block, whose steps are step.Diff's result. Every fact the text prints and no more: artifacts by name and checksum, bootstraps as changed or not, never a line of either (Constitution X). Every list is sorted, so the same input gives the same document.",
   "$defs": {
     "ref": {
       "type": "string",
       "pattern": "^[^/\\s]+/[1-9][0-9]*$",
-      "description": "<series>/<sequence>: the reference syntax (FR-004)"
+      "description": "<series>/<sequence>: the reference syntax"
     },
     "at_source": {
       "enum": [
         "given",
         "written"
       ],
-      "description": "given: as_of was written on the waypoint and is used verbatim. written: the waypoint carries none, and the at is its branch attribute's updated_at, the moment the waypoint last said which branch it seals (FR-005; research R3)"
+      "description": "given: as_of was written on the waypoint and is used verbatim. written: the waypoint carries none, and the at is its branch attribute's updated_at, the moment the waypoint last said which branch it seals"
     },
     "resolved": {
       "type": "object",
@@ -230,7 +230,7 @@
     },
     "step": {
       "type": "object",
-      "description": "step.Diff between two consecutive waypoints' bundles: a pure function of the two, with provenance excluded (research R6). unchanged is every list empty; the two ids are never equal between two waypoints, because at is hashed",
+      "description": "step.Diff between two consecutive waypoints' bundles: a pure function of the two, with provenance excluded. unchanged is every list empty; the two ids are never equal between two waypoints, because at is hashed",
       "required": [
         "from",
         "to",

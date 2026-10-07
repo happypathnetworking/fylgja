@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/contracts/findings/v1",
   "title": "Fylgja findings document v1 (--json) — M5 extension",
-  "description": "Additive to specs/001-read-compile/contracts/findings.schema.json: every M1 document still validates. Added: operations twin.create, twin.provision, twin.destroy; statuses failed (exit 3) and unclean (exit 4); subject.bundle and subject.run_id; blocks twin (success of create/provision), cleanup (failure of create/provision, and destroy), dry_run. findings_version stays \"1\". M4 (specs/004-walking): operation twin.show; the `show` block (show.schema.json); the `following` block on twin.create and twin.destroy; `dry_run.follow`. findings_version stays \"1\": every M1–M3 document still validates. M5 (FR-021, FR-024): the step enum gains push; dry_run.nodes[] gains artifact (what would be pushed, by name, content type, checksum and size); twin.nodes[] may carry artifact {name, checksum} and pushed_in_s. findings_version stays 1: additive. No artifact content anywhere (FR-028). M6: dry_run gains lossy_mappings and shared_ports (FR-022); nothing else changes.",
+  "description": "Additive to M1's findings format: every M1 document still validates. Added: operations twin.create, twin.provision, twin.destroy; statuses failed (exit 3) and unclean (exit 4); subject.bundle and subject.run_id; blocks twin (success of create/provision), cleanup (failure of create/provision, and destroy), dry_run. findings_version stays \"1\". M4: operation twin.show; the `show` block (show.schema.json); the `following` block on twin.create and twin.destroy; `dry_run.follow`. findings_version stays \"1\": every M1–M3 document still validates. M5: the step enum gains push; dry_run.nodes[] gains artifact (what would be pushed, by name, content type, checksum and size); twin.nodes[] may carry artifact {name, checksum} and pushed_in_s. findings_version stays 1: additive. No artifact content anywhere. M6: dry_run gains lossy_mappings and shared_ports; nothing else changes.",
   "type": "object",
   "required": [
     "findings_version",
@@ -124,7 +124,7 @@
         },
         "dir": {
           "type": "string",
-          "description": "Absolute twin directory path, as the worker reported it (FR-020)"
+          "description": "Absolute twin directory path, as the worker reported it"
         },
         "run_id": {
           "type": "string"
@@ -159,7 +159,7 @@
               },
               "artifact": {
                 "type": "object",
-                "description": "M5: the artifact pushed, by name and checksum (FR-024).",
+                "description": "M5: the artifact pushed, by name and checksum.",
                 "required": [
                   "name",
                   "checksum"
@@ -229,7 +229,7 @@
     },
     "dry_run": {
       "type": "object",
-      "description": "twin.create --dry-run / twin.provision --dry-run: what a real run would do (FR-005, SC-010). M6 (FR-022): `lossy_mappings` and `shared_ports` count what the bundle’s manifest records, so the operator sees a lossy twin before creating it.",
+      "description": "twin.create --dry-run / twin.provision --dry-run: what a real run would do. M6: `lossy_mappings` and `shared_ports` count what the bundle’s manifest records, so the operator sees a lossy twin before creating it.",
       "required": [
         "nodes",
         "memory_sum_mb",
@@ -415,7 +415,7 @@
               "follow",
               "push"
             ],
-            "description": "New at M2: the step the finding belongs to (FR-017). Absent on M1 operations"
+            "description": "New at M2: the step the finding belongs to. Absent on M1 operations"
           },
           "location": {
             "type": "object",

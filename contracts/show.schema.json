@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/schemas/show.schema.json",
   "title": "fylgja twin show — the show block — M11 extension",
-  "description": "The `show` block of the findings document `fylgja twin show --json` emits (operation twin.show). One document, from containerlab, the twin directory and the workflow service; every fact the text output reports, and no credential (FR-022). M5 (FR-023): host.nodes[] gains artifact, the name and checksum twin.json records for the node, or null for a node the record does not name (an orphan’s, or a record that cannot be read). in_flight steps may be push. No artifact content (FR-028). M7 (FR-026): host.nodes[] gains psp, the package id from twin.json, or null. M10 (FR-013): record gains waypoint, the waypoint twin.json 3 names, present only when the record names one; a 2 record shows none. The kind line for such a twin reads `pinned at <at>, waypoint <series>/<sequence>; not following`. M11 (FR-031): record gains state and step (the record's step block as twin show reads it: outcome, from, to, run, phase, restarted, pushed, timings, started_at, ended_at), present for a 4 record that has stepped; kind gains diverged, whose line names the target, the phase, the nodes landed and not, and fylgja twin destroy as the remedy; a stepped twin keeps kind pinned with a sentence naming the step; in_flight may list fylgja-step with its step. M12 (FR-023): record.step gains wait, the step's wait as twin show shows it: outcome, budget_s, reads, after_s and the failing assertions by rule and object (no message), or null while it has not run; absent for a 4 record.",
+  "description": "The `show` block of the findings document `fylgja twin show --json` emits (operation twin.show). One document, from containerlab, the twin directory and the workflow service; every fact the text output reports, and no credential. M5: host.nodes[] gains artifact, the name and checksum twin.json records for the node, or null for a node the record does not name (an orphan’s, or a record that cannot be read). in_flight steps may be push. No artifact content. M7: host.nodes[] gains psp, the package id from twin.json, or null. M10: record gains waypoint, the waypoint twin.json 3 names, present only when the record names one; a 2 record shows none. The kind line for such a twin reads `pinned at <at>, waypoint <series>/<sequence>; not following`. M11: record gains state and step (the record's step block as twin show reads it: outcome, from, to, run, phase, restarted, pushed, timings, started_at, ended_at), present for a 4 record that has stepped; kind gains diverged, whose line names the target, the phase, the nodes landed and not, and fylgja twin destroy as the remedy; a stepped twin keeps kind pinned with a sentence naming the step; in_flight may list fylgja-step with its step. M12: record.step gains wait, the step's wait as twin show shows it: outcome, budget_s, reads, after_s and the failing assertions by rule and object (no message), or null while it has not run; absent for a 4 record.",
   "type": "object",
   "additionalProperties": false,
   "required": [
@@ -80,7 +80,7 @@
                   "string",
                   "null"
                 ],
-                "description": "M7 (FR-026): the node’s support package id as twin.json records it (nodes[].psp.id), or null for a node the record does not name (an orphan’s). No new key in twin.json."
+                "description": "M7: the node’s support package id as twin.json records it (nodes[].psp.id), or null for a node the record does not name (an orphan’s). No new key in twin.json."
               }
             }
           }
@@ -494,7 +494,7 @@
       }
     },
     "last_check": {
-      "description": "when following stopped after a failed rebuild and no Schedule exists: the check that stopped it (FR-018)",
+      "description": "when following stopped after a failed rebuild and no Schedule exists: the check that stopped it",
       "$ref": "#/$defs/check"
     },
     "in_flight": {

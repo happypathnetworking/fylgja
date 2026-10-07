@@ -854,6 +854,54 @@ the server's reports as naming both packages with their logins set, the dev serv
   used). Actions secrets: `0`.
 - **Peak memory**: the log does not show it (SC-004 asks for it only where it does).
 
+### 3.6 Recorded: the second run on the VM, 2026-10-07
+
+- **Before** (T031): the operator removed the passwordless-sudo file and moved the VM's
+  clone to `013-launch` at `80020e8`, which carries the fixes of findings 4 and 7. The
+  dev server, the worker and the API's server ran from the first run; Infrahub's eight
+  containers had started between 22:39:37 and 22:41:47Z.
+- **The run**, by the operator in a terminal multiplexer session: `cp local/.env
+  /tmp/env.before; scripts/bring-up.sh 2>&1 | tee /tmp/bring-up2.out; cmp local/.env
+  /tmp/env.before`, begun 23:43:30Z, ended `DONE in 68s`, exit 0. sudo prompted once, and
+  nothing after it did (the prompt took a second try: `Authentication failed, try again`
+  is sudo's own). `local/.env: kept`, and `cmp` found it byte-identical. `cEOS tar: not
+  needed; ceos:4.32.0.2F is present`. No re-exec, so all four `did:` lines printed:
+
+  ```
+  bring-up: did: toolchain: 14 present, 0 installed, 0 skipped
+  bring-up: did: lab: 5 present, 0 installed, 1 skipped
+  bring-up: did: infrahub: 6 present, 0 installed, 0 skipped
+  bring-up: did: fylgja: 1 present, 3 installed, 0 skipped
+  ```
+
+  The `go` item read `present go1.26.0 (Ubuntu's go, go.mod's release)` (finding 4's
+  fix). The lab's skip is the cEOS item, `skipped (ceos:4.32.0.2F present; its layer is
+  the recorded tar's)`, as the contract's lab item gives it. `-prepare-main` printed
+  `present` twice and `import complete after 0s`. Infrahub's containers kept their first
+  start times, each the same to the nanosecond.
+- **The fylgja part's `3 installed` is the pull's.** `go build` stamps the commit into the
+  binary (`go version -m bin/fylgja`: `vcs.revision=80020e8…`, `vcs.modified=false`), and
+  the first run's was built at `5207aae`, so `make build` wrote a new binary (`build:
+  installed`), and the worker and the server, on the replaced one, were restarted
+  (`pid … runs a replaced binary; restarting it`, then `installed`), as the script should.
+  At one commit a rebuild leaves the binary in place: T030's `make build` at `5207aae` did.
+  A run on a tree no commit has moved since the last would read `fylgja: 4 present`; this
+  one could not.
+- **Finding 8: the second run's tiers are Go's cached results.** `make test` and `make
+  test-contract` run `go test` without `-count=1`, so tier 1 took 17 s and tier 2 16 s:
+  17 of tier 2's 21 packages printed `(cached)`, and only `internal/bundle`, `internal/lab`,
+  `internal/psp` and `internal/tree` ran. Go's cache keys a test on its binary, the
+  environment variables and the files it reads, never on what a service answers, so a
+  cached tier 2 says nothing about the Infrahub in front of it, against the contract's
+  "the tiers run again" and FR-013's "end with the tiers passing as a first run does".
+  Tier 1 is pure, and its cache is sound. **Fixed after the run**, on the operator's word,
+  where every caller meets it: `make test-contract` runs `go test -count=1 -tags contract`,
+  so tier 2 runs against the Infrahub in front of it from the script, by hand, in the
+  converge loop and in CI alike; `make test` keeps its cache.
+- **To close T031**: the fix is a commit, so the next run on the VM rebuilds and restarts
+  again; the run after it, at the same commit, is the one that must read `installed 0` on
+  every part with tier 2 run in full.
+
 ---
 
 ## 4. Owed to the records at the close

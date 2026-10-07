@@ -226,9 +226,10 @@ func (c *Client) SDL(branch string) ([]byte, error) {
 	return body, nil
 }
 
-// ArtifactDefinitionName is the definition in the fylgja-artifacts repository that
-// renders a device's configuration. It is the name, not an id: the id differs per
-// install, and a branch inherits main's definition (D-028).
+// ArtifactDefinitionName is the definition this repository's .infrahub.yml declares, which
+// renders a device's configuration once the repository is registered on main (D-044). It
+// is the name, not an id: the id differs per install, and a branch inherits main's
+// definition (D-028).
 const ArtifactDefinitionName = "srlinux_device_config"
 
 // ArtifactGroupName is the standard group whose members the definition renders for. A
@@ -239,6 +240,13 @@ const ArtifactGroupName = "fylgja-devices"
 // three devices, the same bound the schema wait uses.
 const artifactWait = 90 * time.Second
 
+// unregistered is what a lookup by name says when main lacks what the registration brings,
+// or a branch predates it: the definition comes with the repository's import, and the
+// group with fylgja-fixture -prepare-main, which makes the registration too.
+const unregistered = "register this repository (github.com/happypathnetworking/fylgja) on main as a " +
+	"read-only repository with no credential and wait for its import " +
+	`(docs/development.md, "What Infrahub needs"); a branch created before the import cannot see it`
+
 // lookupByName returns the one object of a kind with the given name, or an error naming
 // how many were found. Used for the definition and the group, which are looked up by
 // name because their ids differ per install.
@@ -248,8 +256,7 @@ func (c *Client) lookupByName(branch, kind, name string) (string, error) {
 		return "", err
 	}
 	if len(found) != 1 {
-		return "", fmt.Errorf("branch %s holds %d %s named %q, want one; "+
-			"the fylgja-artifacts repository must be connected and in-sync on main", branch, len(found), kind, name)
+		return "", fmt.Errorf("branch %s holds %d %s named %q, want one; "+unregistered, branch, len(found), kind, name)
 	}
 	return found[0], nil
 }
@@ -449,8 +456,8 @@ func (c *Client) groupMemberCount(branch string) (int, error) {
 		return 0, err
 	}
 	if len(r.G.Edges) != 1 {
-		return 0, fmt.Errorf("branch %s holds %d CoreStandardGroup named %q, want one; "+
-			"the fylgja-artifacts repository must be connected and in-sync on main", branch, len(r.G.Edges), ArtifactGroupName)
+		return 0, fmt.Errorf("branch %s holds %d CoreStandardGroup named %q, want one; "+unregistered,
+			branch, len(r.G.Edges), ArtifactGroupName)
 	}
 	return r.G.Edges[0].Node.Members.Count, nil
 }

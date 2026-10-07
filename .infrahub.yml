@@ -1,5 +1,6 @@
 ---
-# Infrahub repository configuration for fylgja-artifacts.
+# Infrahub repository configuration for this repository, registered on main as the
+# read-only repository `fylgja` (D-044).
 # One Jinja2 transformation renders a device's production configuration from the
 # Fylgja generics (FylgjaDevice, FylgjaInterface, FylgjaLink); one artifact definition
 # generates it for every device in the group `fylgja-devices`.

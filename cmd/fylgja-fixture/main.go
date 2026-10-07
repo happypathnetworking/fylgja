@@ -3,9 +3,10 @@
 // Command fylgja-fixture prepares a local Infrahub for development: it loads the
 // generics contract and reference schema onto a branch and seeds the three-node fixture
 // or the mixed one, or makes following's branch change on a throwaway branch, or writes
-// and removes a test series of waypoints (M10). Development tooling, not the product — it
-// writes to Infrahub, which the product never does. Build-tagged so it cannot
-// be built by accident.
+// and removes a test series of waypoints (M10), or prepares main: the schema, the group and
+// this repository's read-only registration (D-044). Development tooling, not the product —
+// it writes to Infrahub, which the product never does. Build-tagged so it cannot be built
+// by accident.
 package main
 
 import (
@@ -13,7 +14,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/testsupport"
 	"github.com/happypathnetworking/fylgja/internal/waypoint"
@@ -47,7 +50,29 @@ func main() {
 	description := flag.String("description", "", "with -waypoint: the waypoint's description")
 	deleteSeries := flag.String("delete-series", "",
 		"delete every waypoint of a "+testsupport.TestSeriesPrefix+"* series and exit")
+	prepare := flag.Bool("prepare-main", false,
+		"load the schema on main, create the group "+testsupport.ArtifactGroupName+
+			", register this repository read-only with no credential, wait for its import, and exit; takes no -branch")
+	repoName := flag.String("repository-name", testsupport.RepositoryName, "with -prepare-main: the registration's name")
+	repoLocation := flag.String("repository-location", testsupport.RepositoryLocation,
+		"with -prepare-main: the repository's HTTPS location")
+	repoRef := flag.String("repository-ref", testsupport.RepositoryRef, "with -prepare-main: the ref the registration tracks")
+	wait := flag.Duration("wait", 300*time.Second, "with -prepare-main: how long to wait for the import")
 	flag.Parse()
+
+	// -prepare-main is refused or allowed before any request: it writes main, so a flag
+	// meant for a branch beside it is a mistake, never a narrowing.
+	if err := checkPrepareFlags(*prepare, *wait); err != nil {
+		fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
+		os.Exit(1)
+	}
+	if *prepare {
+		if err := prepareMain(*schemaDir, *repoName, *repoLocation, *repoRef, *wait); err != nil {
+			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	if (*at != "" || *description != "") && *wp == "" {
 		fmt.Fprintln(os.Stderr, "fylgja-fixture: -at and -description describe the waypoint -waypoint writes; give -waypoint")
@@ -103,6 +128,84 @@ func main() {
 		fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
 		os.Exit(1)
 	}
+}
+
+// prepareFlags are the flags -prepare-main takes; any other beside it is refused.
+var prepareFlags = map[string]bool{
+	"prepare-main": true, "schema-dir": true,
+	"repository-name": true, "repository-location": true, "repository-ref": true, "wait": true,
+}
+
+// checkPrepareFlags refuses -prepare-main beside -branch or any action flag, and its own
+// flags without it. It reads only the command line, so it refuses before any request.
+func checkPrepareFlags(prepare bool, wait time.Duration) error {
+	var given []string
+	flag.Visit(func(f *flag.Flag) { given = append(given, f.Name) })
+	sort.Strings(given)
+	if !prepare {
+		for _, name := range given {
+			if prepareFlags[name] && name != "schema-dir" {
+				return fmt.Errorf("-%s goes with -prepare-main; give it, or leave -%s out", name, name)
+			}
+		}
+		return nil
+	}
+	for _, name := range given {
+		if name == "branch" {
+			return fmt.Errorf("-prepare-main takes no -branch: it prepares main")
+		}
+	}
+	for _, name := range given {
+		if !prepareFlags[name] {
+			return fmt.Errorf("-prepare-main combines with no other flag: -%s was given", name)
+		}
+	}
+	if wait <= 0 {
+		return fmt.Errorf("-wait must be positive, got %s", wait)
+	}
+	return nil
+}
+
+// prepareMain makes main what every branch needs before it can render (D-028, D-044):
+// the schema, the group the definition targets, and this repository registered read-only
+// with no credential, imported. Each step looks up by name and skips what exists, so a
+// second run writes nothing; nothing is updated or deleted.
+func prepareMain(schemaDir, name, location, ref string, wait time.Duration) error {
+	c, err := testsupport.NewClient()
+	if err != nil {
+		return err
+	}
+	if err := c.LoadSchema("main", schemaDir); err != nil {
+		return err
+	}
+	fmt.Println("schema loaded on main")
+
+	created, err := c.EnsureGroup(testsupport.ArtifactGroupName)
+	if err != nil {
+		return err
+	}
+	if created {
+		fmt.Printf("group %s created\n", testsupport.ArtifactGroupName)
+	} else {
+		fmt.Printf("group %s present\n", testsupport.ArtifactGroupName)
+	}
+
+	created, err = c.EnsureReadOnlyRepository(name, location, ref)
+	if err != nil {
+		return err
+	}
+	if created {
+		fmt.Printf("repository %s created (location %s, ref %s, no credential)\n", name, location, ref)
+	} else {
+		fmt.Printf("repository %s present (location %s, ref %s)\n", name, location, ref)
+	}
+
+	took, err := c.AwaitImport(name, wait)
+	if err != nil {
+		return err
+	}
+	fmt.Printf("import complete after %.0fs: query, transform and definition on main\n", took.Seconds())
+	return nil
 }
 
 // writeSDL fetches the branch's GraphQL schema. genqlient generates the typed client

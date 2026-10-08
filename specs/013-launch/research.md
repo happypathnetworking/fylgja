@@ -1115,6 +1115,146 @@ runs by the branch's name tag and starts about a second after a delete, so it ta
 same-named branch's create run as well. Afterwards Infrahub held `main` and
 `fylgja-fixture` alone.
 
+### 3.12 Recorded: the development host on Ubuntu 26.04, 2026-10-08
+
+- **The install** (T052), by the operator, after T047 had read the figures: a fresh Ubuntu
+  26.04.1 LTS on the same QEMU/KVM guest, hostname `fylgja-26`, kernel `7.0.0-38-generic`,
+  10 vCPUs, 31,065 MiB, 8 GiB swap (`/swap.img`), a 157 GB root; no `/dev/kvm`. A clone of
+  `013-launch` at `b7276f9` (05:30:12Z), the tar `cEOS-lab-4.32.0.2F.tar` in the clone's
+  parent directory (sha256 `89a567d5…`, the recorded one), then `scripts/bring-up.sh`. Its
+  report stayed in the operator's terminal. What it wrote, by modification time (UTC):
+  `local/.env` scaffolded at 05:30 (mode 0600); the venv 05:31; Infrahub's Compose file
+  and the committed override under `local/infrahub/` 05:41; `-prepare-main` 05:47 (`schema
+  loaded on main`, `group fylgja-devices created`, `repository fylgja created (location
+  https://github.com/happypathnetworking/fylgja.git, ref main, no credential)`, `import
+  complete after 47s`); the seed and the build 05:48; tier 1 05:50 and tier 2 05:57, every
+  package `ok` in both; the dev server, the worker and the API's server started at 05:57.
+  Compose's one project is `fylgja-infrahub`, running from `local/infrahub/` with the
+  override. `~/projects/infrahub-dev` and its stopped `infrahub-dev` project went with the
+  old disk.
+- **Versions**, each the VM's (§3.4): Docker `29.8.1` from Docker's repository
+  (`containerd.io` `2.3.6`, Compose plugin `5.6.0`, cgroup v2 with the `systemd` driver);
+  containerlab `0.79.0` from its `.deb`, `/usr/bin/containerlab` setuid root; Go `go1.26.0`,
+  Ubuntu's `golang-go` `2:1.26~1`, with no `golang.org/toolchain` in the module cache;
+  Python `3.14.4` (`python3.14-venv` `3.14.4-1ubuntu0.2`), `.venv` holding `infrahub-sdk`
+  `1.23.2` and its `.gitignore` of `*`; Temporal CLI `1.9.1` (Server 1.32.0, UI 2.54.1) in
+  `~/.temporalio/bin`; golangci-lint `2.14.0`; gnmic `0.49.0`; ShellCheck `0.11.0`; sudo
+  is sudo-rs `0.2.13`. The images: `ghcr.io/nokia/srlinux:24.7.1` (`sha256:171ec8d41d6e…`,
+  5.19 GB) and `ceos:4.32.0.2F` (2.91 GB, its one layer the recorded `sha256:09ab9635…`, no
+  `Cmd`).
+- **The session's groups.** This Claude Code session's shell, and the user's systemd
+  manager (`systemd --user`), began before the lab part added the groups, so neither has
+  `docker` or `clab_admins`. `getent` lists the user in both, and the processes the script
+  started in its fresh login session carry both (983 and 982). Docker commands ran through
+  `sg docker`. Nesting `sg docker` and `sg clab_admins` keeps only the inner group, so a
+  first tier-3 attempt, run that way, stopped at case 1's host check: `clab inspect`
+  could not reach the Docker socket. Nothing was deployed. `sg docker` alone was enough
+  for every containerlab command: the worker, restarted under it with `docker` as its gid
+  and no `clab_admins` among its groups, deployed every twin of tier 3. So containerlab
+  does not need `clab_admins` in the calling process's groups. A login session that
+  begins after the run has both groups.
+- **The worker and the API's server**, as the script left them: from this tree
+  (`/proc/<pid>/cwd` and `exe` under `~/projects/fylgja`, not `(deleted)`), each
+  environment carrying `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT` and
+  `FYLGJA_API_TOKEN`, each report naming both packages with their logins set, the server
+  `listening on 127.0.0.1:7650 (API version 1, build 0.1.0-dev)`. Clients answered through
+  it (`twin show`: none; `waypoint list`: no waypoints). Tier 3's `make build` replaced the
+  script's binary, so both were restarted from this tree under `sg docker` and verified
+  the same way, from inside the group, since `/proc/<pid>/environ` of a process with
+  another gid is closed to this shell. A second `make build` left them in place.
+- **Tiers 1 and 2**, once more from this session after tier 3 (begun 06:38:59Z, no twin):
+  tier 1 in 26 s and tier 2 in 431 s, every package `ok`, the longest `internal/stage`
+  426.8 s, `internal/waypoint` 236.0 s and `internal/intent` 223.9 s. Afterwards Infrahub
+  held `main` and `fylgja-fixture` alone, `/api/info` answered `1.11.2`, and `waypoint
+  list` printed `no waypoints`.
+- **Tier 3**: `WORKER_LOG=local/worker.log make test-e2e` under `sg docker`, begun
+  06:11:39Z on a quiet host (24,499 MiB available, load 2.1, no twin):
+  `E2E-OK`, exit 0, eight cases, wall time 1141.4 s (19.0 min; 1107 s on the VM, §3.4).
+  Creates took 42.6–70.4 s; `twin verify` 4.3, 3.5 and 3.3 s; the boot half 9.9 s and 8.1 s;
+  case 8's steps 72.1 s and 72.4 s, their waits settled after 3.95 s and 3.68 s. Afterwards
+  `clab inspect --all` found no lab, no container ran but Infrahub's eight, `local/twin` was
+  absent, `no waypoints`, and 23,396 MiB was available.
+- **The fixture compiles to `47b2c449…` on this host**, not `b9d53ebc…`. Case 1's bundle is
+  `47b2c449cc6be1454786b570bf1339af56044adeb67b24e4864b18c0e2752856`. The fresh
+  Infrahub's schema hash is `0aba31a532a305bb321d51ef64a01042`, and `4d5b37aa…` was the
+  24.04 install's (§3.4: each install has its own). The CTM equals
+  `testdata/ctm/three-node.json` in everything but the envelope. With `4d5b37aa…` in its
+  place, `twin compile` gives `b9d53ebc8d8187ccc73623cd9be2740fb865ff101edc58c0e732735d4fd9d668`
+  exactly. So the fixture is unchanged, but the development host's live id is now
+  `47b2c449…`, which the records owe (T053, T057).
+- **The host** (verified-facts, *The host*), re-verified:
+  - *AppArmor*: `/etc/apparmor.d/usr.sbin.rsyslogd` ships on 26.04 and still attaches.
+    With a twin up, the `rsyslogd` processes inside SR Linux run as `rsyslogd (enforce)`,
+    as the host's own does. With the three lines the script wrote, every SR Linux deploy
+    passed containerlab's post-deploy commit: tier 3's twins and the hand lab's below. In
+    the kernel log, the profile's only denials were `capable` `net_admin` from SR Linux's
+    `rsyslogd`: 10 during tier 3 and 2 during the hand lab, with no file denied and every
+    deploy passing. They were not recorded on 24.04, where nobody looked. Whether the
+    two lines suffice without `/run/syslogd.pid* rw,` was not tried: it needs sudo, and
+    this session has none (`sudo -n` asks for a password).
+  - *`/dev/kvm`* is absent and unneeded: every twin ran.
+  - *Infrahub's memory*: about 5.2 GiB idle across its eight containers, Neo4j 2.12 GiB
+    under the override's cap (heap 1g/2g, page cache 1g, read from the container's
+    environment), the server 1.56 GiB, the task manager and the two task workers about
+    0.44 GiB each. `free -m` gave 24,470 MiB available with the three processes running.
+  - *A twin beside tier 2* was not tried, on purpose: the rule (CLAUDE.md, "No twin while
+    tier 2 runs") stands, and proving it would starve the host again. *`sr_cli` under
+    memory pressure* was not tried either.
+- **containerlab 0.79.0** (verified-facts, *containerlab 0.79.0*) on kernel 7.0, from tier
+  3's own calls (the worker's log) and a hand lab `hand` in the scratchpad: two SR Linux
+  nodes, one link and a startup `.cli` each, under a scratch `CLAB_LABDIR_BASE`.
+  - `clab deploy` made `clab-hand/` under `CLAB_LABDIR_BASE`, root-owned but for
+    `authorized_keys`. `destroy --cleanup` removed it without sudo in 1.06 s (tier 3's took
+    1.0–1.6 s). Holds.
+  - The startup snippet, which has no `commit` line, was applied: `location hand-a-v1`.
+    LLDP and the gNMI server are `enable` by default; LLDP saw the far end. Holds.
+  - `inspect --all` from the scratchpad gave `labPath` `hand/topo.clab.yml`, relative to
+    the caller, and `absLabPath` absolute. Holds.
+  - A stopped node's `ipv4_address` is `N/A`. Holds.
+  - *Setuid and `Pdeathsig`*: under a parent bash killed with `-9`, a control `setpriv
+    --pdeathsig KILL sleep` died with its parent, while `setpriv --pdeathsig KILL
+    containerlab deploy` ran on through post-deploy and ended 39.3 s after its start.
+    Holds.
+  - *A partial lab*: `clab deploy` was killed with `-9` 3 s into post-deploy, leaving both
+    containers running with no bootstrap. A plain re-deploy took 0.45 s, ran no post-deploy
+    and left it unapplied. `--reconfigure` took 37.9 s and applied it. Holds.
+  - *The dry run writes nothing*: no file under the lab's base, the topology's directory or
+    another base was newer after it. Holds.
+  - *The dry run's base*: from the lab's base, a kind change (`b` to `ceos`) was
+    `recreated-nodes: ["b"]` with `config drift: Kind, Image`. From another base it was
+    invisible: `b` appeared only in `restarted-nodes`, for `deleted endpoint`. A topology
+    whose lab has no containers gave `deployed-lab: true`, `lab-name`, and every list
+    `null`. Holds, with one refinement: from another base while the lab runs, the answer
+    is a plan (`deployed-lab: false`) that misses image and kind changes. The fresh-deploy
+    answer comes only when no container of the lab exists. Unchanged, the plan was every
+    list empty from either base.
+  - *A difference in the plan's shape*: no `deployed-lab: false` plan here carried
+    `lab-name`, which every such plan in `internal/lab/testdata/`, recorded on 24.04 at the
+    same release, does. `parsePlan` reads `lab-name` only in its refusal of a
+    `deployed-lab: true` plan, which still carries it, so nothing reads the difference.
+    `started-nodes` is in every plan, as in those fixtures.
+  - *Reconciles* (`clab deploy` without `--reconfigure`), with the plan beside each:
+    - An SR Linux link added: 0.66 s. Removed: 0.59 s. Both live, neither node's
+      `StartedAt` moved.
+    - A link between cEOS and SR Linux: tier 3 case 8's steps, 3.27 s and 3.24 s.
+    - A node added: 37.0 s, with containerlab's post-deploy (`location hand-c-v1`).
+    - A node removed: 1.04 s.
+    - A kind change: a recreate, 53.6 s.
+    - Nothing to do: 0.53 s, and the changed `.cli` (`hand-a-v2`) was not applied to the
+      running node.
+
+    Each holds, with timings on this host's order.
+  - *A link disabled at one end*: `a`'s `ethernet-1/1` disabled. Both ends went oper
+    `down` with no neighbour, and `b`'s admin-state stayed `enable`. Holds.
+- **So**: every fact of *The host* and *containerlab 0.79.0* that was tried holds on the
+  26.04 development host. Owed to the records (T053, T057):
+  - The live fixture's id on this host is `47b2c449…`.
+  - The dry-run refinement and the absent `lab-name`.
+  - The `net_admin` denials.
+  - A session begun before the lab part's groups lacks them.
+  - Not re-verified: whether two AppArmor lines suffice, a twin beside tier 2, and
+    `sr_cli` under pressure.
+
 ---
 
 ## 4. Owed to the records at the close

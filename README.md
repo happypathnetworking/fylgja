@@ -16,6 +16,11 @@ can drive the twin, from the lab host or through an SSH tunnel from another mach
 Milestones M1–M7 and M10–M13 are built, and the [roadmap](docs/roadmap.md) says what
 each delivered and what comes next.
 
+![A twin created from a waypoint, stepped to the next and verified](docs/recording/session.gif)
+
+The asciinema cast beside it, [docs/recording/session.cast](docs/recording/session.cast),
+plays the same session as text.
+
 Today it runs Nokia SR Linux and Arista EOS, alone or mixed in one twin. A vendor is a
 YAML file, not code ([psp/README.md](psp/README.md)). A twin built from a waypoint can
 step to the next one without a rebuild, and `twin verify` reports whether the running twin

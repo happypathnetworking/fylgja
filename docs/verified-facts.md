@@ -22,6 +22,11 @@ Terms are the [glossary](glossary.md)'s. Dates are 2026.
   one. *(09-14)*
 - GraphQL takes the branch in the path, `POST /graphql/<branch>`; a `?branch=` parameter
   there is ignored and answers for `main` with no error. *(09-30)*
+  Reported upstream: **needs further investigation**, on the operator's word. It is
+  [opsmill/infrahub#10686](https://github.com/opsmill/infrahub/issues/10686), closed as
+  completed on 2026-09-28 with no linked change, no mention in the 1.11.3 or 1.11.4
+  release notes, and the GraphQL app on `stable` and `develop` still reading the branch
+  from the path alone. Nothing posted yet. *(10-08)*
 - `POST /graphql` and `GET /api/schema` with no branch answer for the default branch.
   *(09-28)*
 - A pinned `at` carries at most six fractional digits: Infrahub takes nine, and Fylgja
@@ -42,6 +47,10 @@ Terms are the [glossary](glossary.md)'s. Dates are 2026.
   *(09-14)*
 - An attribute name is 3–64 characters of `[a-z0-9_]`, so `at` is refused by the JSON
   schema before it reaches the server; the waypoint's attribute is `as_of`. *(09-28)*
+  Reported upstream: **dropped**, on the operator's word. Infrahub's schema reference
+  documents the rule (`Length: min 3, max 64` in
+  [attribute.mdx](https://github.com/opsmill/infrahub/blob/infrahub-v1.11.2/docs/docs/reference/schema/attribute.mdx)
+  at 1.11.2). *(10-08)*
 - On a branch without the Fylgja schema the generics are not GraphQL types at all: read
   `GET /api/schema` first, whose `used_by` is the conformance check. *(09-14)*
 - The IPAM core generic is `BuiltinIPAddress`; `IpamIPAddress` is a demo-schema name.
@@ -84,6 +93,10 @@ Terms are the [glossary](glossary.md)'s. Dates are 2026.
 - Nothing marks an artifact stale. A regeneration to identical bytes writes nothing, not
   even a storage id; one that changes bytes returns before the rewrite, and the artifact
   stays `Ready` throughout, so wait for its checksum to move. *(09-18)*
+  Reported upstream: **dropped**, on the operator's word. Infrahub documents both
+  behaviours as the design ([opsmill/infrahub#10437](https://github.com/opsmill/infrahub/pull/10437):
+  no data or membership change starts a run, and there is no staleness indicator).
+  *(10-08)*
 - `CoreArtifact.checksum` is the MD5 hex of the bytes `GET /api/storage/object/<storage_id>`
   serves. A listing pinned to `at` gives the storage id as of `at`, and the older object
   is still served. *(09-18)*

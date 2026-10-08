@@ -1060,6 +1060,36 @@ the server's reports as naming both packages with their logins set, the dev serv
   for the list alone and ends on the partial pass in two-thirds of a full run's time;
   whole, it is a default run.
 
+### 3.10 Recorded: the recording, 2026-10-08
+
+- **The tools**: asciinema `3.2.1` and agg `1.9.0`, the `x86_64-unknown-linux-gnu`
+  binaries of their GitHub releases, installed by hand into `~/.local/bin` (sha256
+  `1b405bbd…` and `f111e315…`). asciinema 3.2.1 has no `--cols` or `--rows`: its size is
+  `--window-size 100x30`, and it was run `--headless` with the session as its
+  `--command`, a short bash script that types each command after a prompt and then runs
+  it. The cast's header carries that script verbatim, so it says how it was driven.
+- **Off camera**: `fylgja-test-readme` seeded and its waypoints written as the stepping
+  walk-through does (the delete, the seed, `/1` "seeded", `-add-link`, a wait until n1's
+  and n3's checksums moved with every artifact Ready, `/2` "third link").
+- **The take that was kept** is the second. The first ran on the state root `local/`, so
+  its create printed the twin directory under the operator's home: a local path in a
+  frame (SC-008). The twin was destroyed, the worker and the server restarted on the
+  README's state root `/var/tmp/fylgja` (each on `bin/fylgja`, not `(deleted)`, with every
+  credential's name set), and the session recorded again. The shell held
+  `FYLGJA_API_TOKEN` alone: `local/.env` loaded, then every variable but `HOME`, `PATH`,
+  `TERM`, `LANG` and the token unset, so no credential was in any process's arguments.
+- **The session**: `twin create --waypoint fylgja-test-readme/1` deploying `2e2dd93b…` in
+  38.8 s, `twin step` to `/2` (`02b79569…`; n1 and n3 pushed, n2 untouched, settled after
+  4.7 s) in 4.6 s, `twin verify` holding 19 assertions over 3 nodes, nothing failed or
+  unread; 77 s recorded. `agg --idle-time-limit 2 --fps-cap 15 --font-size 14` rendered
+  it to 87 frames, 860×608, 37 s of play, 1.19 MB (the cast 7.3 KB).
+- **Off camera after**: `twin destroy`, `fylgja-fixture -branch fylgja-test-readme
+  -delete` (2 test waypoints and the branch), the worker and the server restarted on
+  `local/` and verified, `fylgja waypoint list` printing `no waypoints`, no lab.
+- **Hygiene**: a fixed-string grep of the cast, the GIF and the cast's text for the API's
+  token, Infrahub's token, both node passwords and Infrahub's admin password found
+  nothing; the cast names no path under a home directory or the scratchpad.
+
 ---
 
 ## 4. Owed to the records at the close
@@ -1078,5 +1108,96 @@ waypoint series on the fixture branch, the idea the spec parks).
 
 ## 5. The write-up's figures
 
-Empty until the one session that reads the private record (R-09); each figure stated
-as derived from it and read by the operator before this section is committed.
+Every figure below is **derived from the private record** of M1–M13 and the cut, read in
+one session on the development host on 2026-10-08 (R-09), at a location the operator gave
+in that session. The record was read by a script that printed numbers alone. Nothing of the
+record is quoted here, and the figures were read by the operator before this section was
+committed. The launch, built here, is not in them.
+
+**How each was counted.**
+
+- **A feature** is one Spec Kit feature. There is one per milestone: M1–M7, M10–M13 and
+  M14's first half, the cut. That makes 12.
+- **Hours** are the command log's active time: each logged command's time working, the
+  command and its follow-ups together, with every wait on the operator left out. Wall
+  clock and the operator's own hours are not in the record and are not claimed. A
+  milestone's hours sum its feature's commands. Each figure is rounded on its own, to a
+  tenth of an hour.
+- **A pass** is one logged Spec Kit command, and a **convergence pass** is one
+  `/speckit-converge` run. All 309 logged commands are Spec Kit passes. The constitution
+  was ratified once before M1 and amended once in M1, and both runs count as passes. The
+  record holds two `specify` passes each for M2 and M11 and none for M13; they are counted
+  as the record holds them.
+- **Tasks appended** are the tasks each convergence pass recorded adding to its feature's
+  task list. The log of M1 and M2 predates that field, so their count is not recorded. M14
+  ran no convergence pass.
+- **`[behaviour]` and `[pin]`** count the tasks that carry the tag in their feature's task
+  list. A `[behaviour]` task changes what the code does. A `[pin]` task changes no
+  behaviour: it adds a test, a doc line or a named constant, with the code under test
+  unchanged. Two passes in a row that append only `[pin]` tasks end convergence
+  (development.md, "Stopping rule for converge"). The tags begin at M10, and before it the
+  column is empty (—).
+- **Model time** is active time by model. 7 of the 309 commands ran on two models, and
+  each of those is split by the share of its responses from each model. The harness's own
+  responses, which carry no model, account for under 0.02 h; it stays in the hours alone.
+  Subagents run inside a command's time and add none of their own. So Sonnet 5.5 and
+  Haiku 4.5, which ran only as subagents, appear in tokens alone.
+- **Tokens** are by model, the main session's and its subagents' together. They are given
+  in millions as *input / output*. Input counts uncached input, cache writes and cache
+  reads together, and cache reads are most of it.
+- **Totals.** Tasks are every task in the 12 features' task lists. Commits are the private
+  history's commit count, through the cut. Decisions are the entries in the decision log
+  at the cut, D-001–D-044. Verified facts are the top-level entries in the verified-facts
+  record at the cut (this repository's holds 82 now, the launch's two added since).
+
+**Per milestone: hours, passes and model time.**
+
+| Milestone | Hours | Passes | Convergence passes | Tasks appended | `[behaviour]` | `[pin]` | Fable 5.1 h | Opus 5 h | Opus 5.5 h |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| M1 | 2.9 | 17 | 3 | not recorded | — | — | 0.8 | 2.1 | — |
+| M2 | 7.7 | 34 | 11 | not recorded | — | — | 2.2 | 5.5 | — |
+| M3 | 2.4 | 11 | 1 | 0 | — | — | 0.5 | 1.9 | — |
+| M4 | 7.0 | 34 | 12 | 18 | — | — | 0.5 | 6.5 | — |
+| M5 | 5.3 | 25 | 8 | 14 | — | — | 2.3 | 3.0 | — |
+| M6 | 3.8 | 17 | 3 | 6 | — | — | 1.1 | 2.7 | — |
+| M7 | 11.2 | 20 | 3 | 10 | — | — | 2.4 | 8.7 | — |
+| M10 | 6.3 | 21 | 5 | 12 | 3 | 7 | 1.7 | — | 4.6 |
+| M11 | 13.4 | 46 | 13 | 63 | 6 | 54 | 1.3 | — | 12.1 |
+| M12 | 7.8 | 25 | 5 | 25 | 8 | 15 | 0.9 | — | 6.9 |
+| M13 | 12.4 | 39 | 8 | 51 | 21 | 19 | 0.8 | — | 11.6 |
+| M14 (the cut) | 4.8 | 19 | 0 | 0 | — | — | 1.1 | — | 3.7 |
+| before M1 | 0.4 | 1 | — | — | — | — | 0.4 | — | — |
+| **all** | **85.4** | **309** | **72** | **199** | **38** | **95** | **16.1** | **30.6** | **38.8** |
+
+Opus 5 ran through M7, and Opus 5.5 ran from M10 on.
+
+**Passes by command, all milestones.**
+
+| Pass | specify | clarify | plan | tasks | analyze | implement | converge | constitution | all |
+|---|--:|--:|--:|--:|--:|--:|--:|--:|--:|
+| Count | 13 | 13 | 12 | 12 | 16 | 169 | 72 | 2 | 309 |
+
+**Tokens by model, in millions, input / output.**
+
+| Milestone | Fable 5.1 | Opus 5 | Opus 5.5 | Sonnet 5.5 | Haiku 4.5 |
+|---|--:|--:|--:|--:|--:|
+| M1 | 16.2 / 0.22 | 115.8 / 0.46 | — | — | — |
+| M2 | 53.4 / 0.64 | 139.6 / 1.52 | — | — | — |
+| M3 | 5.7 / 0.14 | 46.1 / 0.34 | — | — | — |
+| M4 | 4.5 / 0.11 | 204.8 / 1.26 | — | — | — |
+| M5 | 58.3 / 0.52 | 182.7 / 0.71 | — | — | — |
+| M6 | 20.0 / 0.30 | 174.6 / 0.82 | — | — | — |
+| M7 | 31.6 / 0.33 | 350.2 / 1.13 | — | — | — |
+| M10 | 23.9 / 0.26 | — | 256.0 / 1.09 | — | — |
+| M11 | 25.6 / 0.34 | — | 671.4 / 2.47 | 38.6 / 0.00 | — |
+| M12 | 17.8 / 0.24 | — | 371.1 / 1.39 | — | — |
+| M13 | 37.3 / 0.25 | — | 694.1 / 2.30 | — | — |
+| M14 (the cut) | 20.5 / 0.26 | — | 240.3 / 1.05 | 4.5 / 0.01 | 27.1 / 0.07 |
+| before M1 | 36.9 / 0.10 | — | — | — | — |
+| **all** | 351.6 / 3.70 | 1,213.9 / 6.23 | 2,233.0 / 8.30 | 43.1 / 0.01 | 27.1 / 0.07 |
+
+**Totals.**
+
+| Features | Tasks | Commits | Decisions | Verified facts |
+|--:|--:|--:|--:|--:|
+| 12 | 947 | 809 | 44 | 80 |

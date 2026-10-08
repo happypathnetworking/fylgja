@@ -22,11 +22,11 @@ Terms are the [glossary](glossary.md)'s. Dates are 2026.
   one. *(09-14)*
 - GraphQL takes the branch in the path, `POST /graphql/<branch>`; a `?branch=` parameter
   there is ignored and answers for `main` with no error. *(09-30)*
-  Reported upstream: **needs further investigation**, on the operator's word. It is
+  Reported upstream: **dropped**, on the operator's word. It is
   [opsmill/infrahub#10686](https://github.com/opsmill/infrahub/issues/10686), closed as
   completed on 2026-09-28 with no linked change, no mention in the 1.11.3 or 1.11.4
   release notes, and the GraphQL app on `stable` and `develop` still reading the branch
-  from the path alone. Nothing posted yet. *(10-08)*
+  from the path alone. *(10-08)*
 - `POST /graphql` and `GET /api/schema` with no branch answer for the default branch.
   *(09-28)*
 - A pinned `at` carries at most six fractional digits: Infrahub takes nine, and Fylgja
@@ -57,6 +57,7 @@ Terms are the [glossary](glossary.md)'s. Dates are 2026.
   *(09-14)*
 - The SDL is at `GET /schema.graphql?branch=`, and its field order is not stable between
   two fetches of one branch: compare two SDLs structurally, never with `diff`. *(09-28)*
+  Reported upstream: **dropped**, on the operator's word, before any search. *(10-08)*
 - `GET /api/schema/summary?branch=` returns the branch's schema hash as `main`; the hash
   covers the branch's whole schema, so two branches whose schemas differ, and two installs,
   have different hashes. *(09-14)*
@@ -104,7 +105,12 @@ Terms are the [glossary](glossary.md)'s. Dates are 2026.
   repository commit it forked with: a template commit reaches it only by `BranchRebase`,
   then a generate. *(09-18)*
 - A `BranchCreate` straight after a `BranchDelete` of the same name can fail with
-  `graphql: None`; run it again. *(09-18)*
+  `graphql: None`; run it again. *(09-18)* The branch is created all the same: the
+  delete's task purge, which picks runs by the branch's name, deletes the new create's
+  flow run while the API polls it (2 of 12 re-creates, 1.11.2). Reported upstream:
+  **dropped**, on the operator's word; the same cause is
+  [opsmill/infrahub#10694](https://github.com/opsmill/infrahub/pull/10694)'s, from the
+  delete's side. *(10-08)*
 - The repository sync (Prefect's `git_repositories_sync`) runs every minute with one
   concurrency slot, so one run stuck `PENDING` blocks every import until it is cancelled.
   *(09-18)*

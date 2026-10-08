@@ -1090,6 +1090,31 @@ the server's reports as naming both packages with their logins set, the dev serv
   token, Infrahub's token, both node passwords and Infrahub's admin password found
   nothing; the cast names no path under a home directory or the scratchpad.
 
+### 3.11 Recorded: the five Infrahub behaviours, 2026-10-08
+
+Each was taken through the `infrahub-reporting-issues` skill until the operator's word, and
+all five were **dropped**. Nothing was posted. `opsmill/infrahub` has Discussions turned
+off, so R-11's "discussion" was not available there.
+
+| # | Behaviour | What the search found | Outcome |
+|---|---|---|---|
+| 1 | No artifact regenerates on its own; nothing marks one stale | Open docs PR #10437 documents both as the design. No issue asks for a staleness or in-flight signal; a feature request was drafted | dropped |
+| 2 | `?branch=` on `POST /graphql` is ignored | Exact duplicate #10686, closed as completed on 09-28 with no linked change. The GraphQL app on `stable` and `develop` still reads the branch from the path alone, and the 1.11.3 and 1.11.4 notes don't mention it; a comment asking for the fix's release was drafted | dropped |
+| 3 | An attribute name is 3–64 characters | The schema reference at 1.11.2 documents `Length: min 3, max 64` | dropped |
+| 4 | `BranchCreate` straight after `BranchDelete` can fail `graphql: None` | No issue. Same cause as open PR #10694 (the delete's side); a comment on it was drafted | dropped |
+| 5 | The SDL's field order is not stable | Not searched | dropped |
+
+**Behaviour 4, reproduced on the running 1.11.2.** `fylgja-test-recreate` was created,
+deleted and re-created at once, six rounds of two re-creates. 2 of 12 re-creates answered
+`"message": "None"`, `UNDEFINED_ERROR`, `http_status: 500`, and each time the branch had
+been created. The server log shows the create mutation (`graphql/mutations/branch.py:118`
+→ `execute_workflow`) getting `404 Flow run not found` on its own flow run, then
+`ObjectNotFound: None`. The task worker meanwhile logged `Purge tasks for deleted branch
+'fylgja-test-recreate'`, purging 4–15 runs each time. The purge (#10479, in 1.11.2) picks
+runs by the branch's name tag and starts about a second after a delete, so it takes a
+same-named branch's create run as well. Afterwards Infrahub held `main` and
+`fylgja-fixture` alone.
+
 ---
 
 ## 4. Owed to the records at the close

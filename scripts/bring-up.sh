@@ -245,14 +245,17 @@ fi
 [ -z "$FLAG_ERROR" ] || refuse "$FLAG_ERROR"
 [ "$(id -u)" -ne 0 ] || refuse "run as the user who will run Fylgja, not root; the script asks for sudo itself"
 
-# The re-executed run carries the counts, the start and the lab part's progress.
+# The re-executed run carries the counts, the start, the lab part's progress and the parts
+# the whole run runs, which the last report names although the re-execution runs fewer.
 RUN_START=$SECONDS
 LAB_HOST_DONE=0
+REPORT_PARTS=("${PARTS[@]}")
 if (( AFTER_GROUPS )); then
   for kv in ${BRING_UP_STATE:-}; do
     case $kv in
       elapsed=*) RUN_START=$(( SECONDS - ${kv#elapsed=} )) ;;
       lab_host=1) LAB_HOST_DONE=1 ;;
+      parts=*) IFS=, read -ra REPORT_PARTS <<< "${kv#parts=}" ;;
       *=*,*,*)
         p=${kv%%=*} c=${kv#*=}
         IFS=, read -r "N_PRESENT[$p]" "N_INSTALLED[$p]" "N_SKIPPED[$p]" <<< "$c"
@@ -261,19 +264,24 @@ if (( AFTER_GROUPS )); then
   done
 fi
 
-# (3) Privilege escalation: the one prompt. sudo's cached credential expires sooner than
-# the toolchain and lab parts take, so a loop keeps it alive for the run and the trap ends
-# it. The re-executed run, in a session of its own, keeps one alive when it can and prompts
-# for nothing: nothing after the lab part's groups needs sudo.
-if (( AFTER_GROUPS )); then
-  if sudo -n -v 2> /dev/null; then
-    ( while sudo -n -v 2> /dev/null; do sleep 60; done ) > /dev/null 2>&1 < /dev/null &
-    SUDO_LOOP_PID=$!
-  fi
-else
-  sudo -v || refuse "sudo did not grant privilege escalation; the toolchain and lab parts install with it"
+# (3) Privilege escalation: at most one prompt. sudo's cached credential expires sooner
+# than the toolchain and lab parts take, so a loop keeps it alive for the run and the trap
+# ends it. No prompt when none is needed: a credential already cached is kept alive, and a
+# user whose commands need no password has nothing to keep alive, although sudo -v may
+# still ask (sudo's verifypw=all asks unless every rule naming the user says NOPASSWD). The
+# re-executed run, in a session of its own, keeps one alive when it can and prompts for
+# nothing: nothing after the lab part's groups needs sudo.
+keep_sudo_alive() {
   ( while sudo -n -v 2> /dev/null; do sleep 60; done ) > /dev/null 2>&1 < /dev/null &
   SUDO_LOOP_PID=$!
+}
+if sudo -n -v 2> /dev/null; then
+  keep_sudo_alive
+elif (( AFTER_GROUPS )) || sudo -n true 2> /dev/null; then
+  :
+else
+  sudo -v || refuse "sudo did not grant privilege escalation; the toolchain and lab parts install with it"
+  keep_sudo_alive
 fi
 
 # (4) The cEOS tar (research R-12). The package's image reference names the version, and
@@ -417,6 +425,9 @@ apt_install() {
 
 gnmic_is() { grep -qx "version : $1" <<< "$(gnmic version 2> /dev/null)"; }
 
+# version_at_least A B: A is B or a later release (go1.26.10 is later than go1.26.9).
+version_at_least() { [ "$(printf '%s\n' "$1" "$2" | sort -V | head -n 1)" = "$2" ]; }
+
 pkg_version() { dpkg-query -W -f='${Status} ${Version}' "$1" 2> /dev/null | sed -n 's/^install ok installed //p'; }
 
 part_toolchain() {
@@ -436,20 +447,28 @@ part_toolchain() {
   done
 
   # Ubuntu's go is the bootstrap: in the clone it fetches and runs the release go.mod names,
-  # unless it is that release itself (26.04's is), when nothing is fetched, then or ever.
+  # unless it is that release (26.04's is) or a later one, which Go runs as it is, so
+  # nothing is fetched, then or ever.
   want_go=go$(sed -n 's/^go \([0-9.]*\)$/\1/p' go.mod)
   local_go=$(cd / && GOTOOLCHAIN=local go version | awk '{print $3}')
   mod_cache=$(cd / && GOTOOLCHAIN=local go env GOMODCACHE)
   have_go=0
   ls -d "$mod_cache/golang.org/toolchain@v0.0.1-$want_go".* > /dev/null 2>&1 && have_go=1
   v=$(go version | awk '{print $3}')
-  [ "$v" = "$want_go" ] || fail toolchain go "go version in the clone reports $v, not $want_go (go.mod)"
-  if [ "$local_go" = "$want_go" ]; then
-    item toolchain go present "$v (Ubuntu's go, go.mod's release)"
-  elif (( have_go )); then
-    item toolchain go present "$v (go.mod's, run by Ubuntu's go)"
+  if [ "$v" = "$local_go" ] && version_at_least "$local_go" "$want_go"; then
+    if [ "$local_go" = "$want_go" ]; then
+      item toolchain go present "$v (Ubuntu's go, go.mod's release)"
+    else
+      item toolchain go present "$v (Ubuntu's go, newer than go.mod's $want_go)"
+    fi
+  elif [ "$v" = "$want_go" ]; then
+    if (( have_go )); then
+      item toolchain go present "$v (go.mod's, run by Ubuntu's go)"
+    else
+      item toolchain go installed "$v (fetched through go.mod)"
+    fi
   else
-    item toolchain go installed "$v (fetched through go.mod)"
+    fail toolchain go "go version in the clone reports $v, neither go.mod's $want_go nor Ubuntu's $local_go"
   fi
 
   if [[ $(golangci-lint version 2> /dev/null) == *"version $GOLANGCI_VERSION "* ]]; then
@@ -503,7 +522,7 @@ part_lab_host() {
   else
     # containerlab's setup script pins the Docker release it supports on each Ubuntu
     # release; the copy at containerlab's v0.79.0 tag predates 26.04, so the current one.
-    curl -sSfL https://containerlab.dev/setup | sudo -E bash -s install-docker
+    curl -sSfL https://containerlab.dev/setup | sudo bash -s install-docker
     v=$(sudo docker version --format '{{.Server.Version}}') || fail lab docker "the engine does not answer after the install"
     item lab docker installed "$v (compose $(docker compose version --short))"
   fi
@@ -548,13 +567,15 @@ part_lab_host() {
   fi
 }
 
-# reexec_after_groups: the groups this part added are not in this session, and Docker
-# needs them. One re-exec through a fresh login session, which carries them, with the
-# remaining parts and this run's counts; the marker stops it looping.
+# reexec_after_groups: the user's groups are not all in this session, whether this run or
+# an earlier one added them, and Docker needs them. One re-exec through a fresh login
+# session, which carries them, with the remaining parts and this run's counts; the marker
+# stops it looping.
 reexec_after_groups() {
-  local state p rest=()
-  say "lab: groups: docker clab_admins added; continuing in a fresh login session"
-  state="elapsed=$(( SECONDS - RUN_START )) lab_host=1"
+  local state p g rest=() lacking=()
+  for g in docker clab_admins; do session_has_group "$g" || lacking+=("$g"); done
+  say "lab: groups: ${lacking[*]} not in this session; continuing in a fresh login session"
+  state="elapsed=$(( SECONDS - RUN_START )) lab_host=1 parts=$(IFS=,; echo "${REPORT_PARTS[*]}")"
   for p in "${PARTS_ALL[@]}"; do state+=" $p=${N_PRESENT[$p]},${N_INSTALLED[$p]},${N_SKIPPED[$p]}"; done
   for p in "${PARTS[@]}"; do
     [ "$p" = toolchain ] || rest+=(--part "$p")
@@ -691,7 +712,8 @@ part_infrahub() {
   local out="$ROOT/local/bring-up-main.log"
   with_env go run -tags fixture ./cmd/fylgja-fixture -prepare-main > "$out" 2>&1 ||
     { sed 's/^/bring-up: infrahub: main: /' "$out" >&2; fail infrahub main "the fixture tool's -prepare-main failed (local/bring-up-main.log)"; }
-  sed 's/^/bring-up: infrahub: main: /' "$out"
+  # go run's module downloads stay in the log; the report relays the tool's own lines.
+  sed -e '/^go: downloading /d' -e 's/^/bring-up: infrahub: main: /' "$out"
   if grep -q ' created' "$out"; then
     item infrahub main installed "(schema, group, repository registered and imported)"
   else
@@ -871,7 +893,7 @@ CURRENT_PART=report
 
 # The last report.
 for part in "${PARTS_ALL[@]}"; do
-  runs "$part" || continue
+  [[ " ${REPORT_PARTS[*]} " == *" $part "* ]] || continue
   say "did: $part: ${N_PRESENT[$part]} present, ${N_INSTALLED[$part]} installed, ${N_SKIPPED[$part]} skipped"
 done
 say "$CEOS_LINE"

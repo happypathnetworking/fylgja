@@ -23,12 +23,15 @@ In order; the first refusal ends the run with exit `2`:
    Otherwise `bring-up: REFUSED: this host is <PRETTY_NAME>; the script supports Ubuntu
    26.04 alone`.
 2. **The flags**: an unknown flag, a `--part` name not in the four, or `--after-groups`.
-3. **Privilege escalation**: `sudo -v`, the one prompt a run may make. The script then
-   keeps the cached credential alive for the whole run, by a background loop that runs
-   `sudo -n -v` each minute and is ended by the trap, because sudo's timestamp expires
-   (15 minutes by default) sooner than the toolchain and lab parts take, and a second
-   prompt would break SC-001. The re-executed run (`--after-groups`) starts its own loop
-   and prompts for nothing.
+3. **Privilege escalation**: at most one prompt, `sudo -v`'s. A credential already cached
+   (`sudo -n -v` answers) is not asked for again, and a user whose commands need no
+   password (`sudo -n true` answers) is not prompted, although `sudo -v` would ask when
+   another rule naming the user wants one (sudo's `verifypw=all`). The script keeps a
+   cached credential alive for the whole run, by a background loop that runs `sudo -n -v`
+   each minute and is ended by the trap, because sudo's timestamp expires (15 minutes by
+   default) sooner than the toolchain and lab parts take, and a second prompt would break
+   SC-001. The re-executed run (`--after-groups`) starts its own loop when it can and
+   prompts for nothing.
 4. **The cEOS tar**: looked for at `--ceos-tar PATH`, then `local/`, then the clone's
    parent directory, never the clone's root; the file is `cEOS-lab-4.32.0.2F.tar` or
    `cEOS-lab-4.32.0.2F.tar.xz`, the version taken from `psp/arista_eos.yaml`'s
@@ -65,8 +68,9 @@ clone); golangci-lint `v2.14.0` into `/usr/local/bin`; the Temporal CLI `1.9.1` 
 (ceos:4.32.0.2F present; its layer is the recorded tar's)` or `(… present; its layer is
 not the recorded tar's)` when the reference exists, `installed ceos:4.32.0.2F (from
 <path>)` when the tar was found, `skipped (no cEOS tar: SR Linux alone)` otherwise. When
-this part added a group, the run re-executes once through `sudo -u "$USER" -i` and says
-`bring-up: lab: groups: docker clab_admins added; continuing in a fresh login session`.
+the login session lacks either group, the run re-executes once through `sudo -u "$USER" -i`
+and says `bring-up: lab: groups: <the groups it lacks> not in this session; continuing in a
+fresh login session`.
 
 **infrahub**: `local/infrahub/docker-compose.yml` fetched from
 `https://infrahub.opsmill.io/1.11.2` when absent; `docker-compose.override.yml` copied

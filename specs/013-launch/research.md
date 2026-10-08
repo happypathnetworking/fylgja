@@ -1029,6 +1029,37 @@ the server's reports as naming both packages with their logins set, the dev serv
   passes tiers 1 and 2, tier 3 narrowed to `nokia_srlinux` ends on the partial pass, and
   a tar in the repository root is not found.
 
+### 3.9 Recorded: the platform list on the development host, 2026-10-08
+
+- **The host**: the development host (Ubuntu 24.04.1), both images present
+  (`ceos:4.32.0.2F` and `ghcr.io/nokia/srlinux:24.7.1`). `make build` replaced the
+  binary, so the worker and the API's server were restarted from this tree and verified:
+  each on `bin/fylgja` not `(deleted)`, each environment carrying `INFRAHUB_*`, both
+  logins, `FYLGJA_STATE_ROOT` and `FYLGJA_API_TOKEN`, each report naming `arista_eos` and
+  `nokia_srlinux` with their logins set, the server `listening on 127.0.0.1:7650 (API
+  version 1, build 0.1.0-dev)`. Before the first run: no twin, no lab, `no waypoints`.
+- **`PLATFORMS=nokia_srlinux make test-e2e`** (T041; US3 scenario 5), detached, begun
+  02:12:47Z on a quiet host (no test or twin running, 20,888 MiB available, load 1.3):
+  `E2E-PARTIAL: platforms nokia_srlinux; ran 1 2 3 4 5 7; skipped 6 (needs arista_eos: not
+  in PLATFORMS) 8 (needs arista_eos: not in PLATFORMS)`, exit 0, the contract's line to the
+  character; the script's wall time 730.5 s (12.2 min; 732 s with make's build), case 1
+  deploying `b9d53ebc8d8187ccc73623cd9be2740fb865ff101edc58c0e732735d4fd9d668`, creates
+  43.4–53.9 s, `twin verify` 3.9 s and 4.1 s, the boot half 9.2 s. With both images
+  present each skip names the list alone: the list selects by package, never by image.
+  Afterwards `clab inspect --all` found no containers, `local/twin` was absent and
+  `fylgja waypoint list` printed `no waypoints`.
+- **`PLATFORMS=nokia_srlinux,arista_eos make test-e2e`** (T042; US3 scenario 7), after the
+  host rested (the five-minute load back under 2), begun 02:33:47Z with 20,882 MiB
+  available, load 1.1: `E2E-OK`, exit 0, eight cases, none skipped, case 1 deploying
+  `b9d53ebc…`; the script's wall time 1075.4 s (17.9 min; 1081 s with make's build),
+  creates 42.4–72.0 s (the mixed twins of cases 6 and 8 the longest), `twin verify`
+  3.0–4.7 s, case 8's steps 83.9 s and 71.0 s and their waits settled after 4.2 s and
+  3.8 s, the boot half 10.2 s and 7.2 s. A list naming every shipped package on a host
+  with every image ran as a default run. Afterwards the host was clean as after T041.
+- So the platform list holds on a host with both images: narrowed, it skips cases 6 and 8
+  for the list alone and ends on the partial pass in two-thirds of a full run's time;
+  whole, it is a default run.
+
 ---
 
 ## 4. Owed to the records at the close

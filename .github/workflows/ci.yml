@@ -5,13 +5,25 @@ on:
     branches: [main]
   pull_request:
 
-# Both jobs name the release, never GitHub's moving latest label, which it moves to the
+# All jobs name the release, never GitHub's moving latest label, which it moves to the
 # next release on its own schedule; the bring-up script supports Ubuntu 26.04 alone. Tier
 # 3 is never run here: it boots twins and stays the operator's (D-017).
 
 jobs:
+  # Lint: golangci-lint over every build tag .golangci.yml names, and shellcheck over
+  # both scripts. It runs on every push to main and every pull request.
+  lint:
+    runs-on: ubuntu-26.04
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: golangci/golangci-lint-action@v9
+      - run: shellcheck scripts/bring-up.sh scripts/e2e.sh
+ 
   # Unit tier: golden files and pure logic. No infrastructure, by design (D-017). It runs
-  # on every push to main and every pull request; shellcheck reads both scripts.
+  # on every push to main and every pull request.
   unit:
     runs-on: ubuntu-26.04
     steps:
@@ -21,18 +33,16 @@ jobs:
           go-version-file: go.mod
       - run: make build
       - run: make test
-      - uses: golangci/golangci-lint-action@v9
-      - run: shellcheck scripts/bring-up.sh scripts/e2e.sh
 
   # Contract tier: a real Infrahub, brought up on the runner by the bring-up script's
   # Infrahub part (Infrahub 1.11.2 by its published Compose file, main prepared with this
   # repository registered read-only, the fixture branch seeded). It needs no secret: the
   # script makes Infrahub's admin token on the runner, keeps it in this job's local/.env
-  # and never prints it. It runs on pushes to main alone, after the unit job: no pull
-  # request reaches it, and it never takes the trigger pull-requests.yml uses.
+  # and never prints it. It runs on pushes to main alone, after the lint and unit jobs:
+  # no pull request reaches it, and it never takes the trigger pull-requests.yml uses.
   contract:
     runs-on: ubuntu-26.04
-    needs: unit
+    needs: [lint, unit]
     if: github.event_name == 'push'
     steps:
       - uses: actions/checkout@v5

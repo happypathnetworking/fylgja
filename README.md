@@ -484,13 +484,13 @@ make test-e2e        # tier 3: eight cases and eight live twins, SR Linux and EO
 make lint
 ```
 
-CI ([ci.yml](.github/workflows/ci.yml), the badge above) runs two jobs on GitHub's hosted
-Ubuntu 26.04 runner. The **unit** job runs on every push to `main` and every pull request:
-the build, tier 1, the linter, and shellcheck over both scripts. The **contract** job runs
-on pushes to `main` alone, after the unit job: it brings up a real Infrahub on the runner
-with the script's Infrahub part, checks the committed GraphQL client against the committed
-SDL, and runs tier 2. It needs no secret: the script makes Infrahub's token on the runner
-and never prints it.
+CI ([ci.yml](.github/workflows/ci.yml), the badge above) runs three jobs on GitHub's hosted
+Ubuntu 26.04 runner. The **lint** job and the **unit** job run on every push to `main` and
+every pull request: the first runs the linter and shellcheck over both scripts, the second
+the build and tier 1. The **contract** job runs on pushes to `main` alone, after both: it
+brings up a real Infrahub on the runner with the script's Infrahub part, checks the
+committed GraphQL client against the committed SDL, and runs tier 2. It needs no secret:
+the script makes Infrahub's token on the runner and never prints it.
 
 Tier 3 boots twins, so it is the operator's, on a lab host, and never runs in CI. It needs
 the dev server and a worker running from the repository root (the script leaves both),

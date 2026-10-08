@@ -9,30 +9,124 @@ document says what to do.
 
 ## Local environment
 
-One lab host, the development host: Ubuntu 24.04.1, kernel 6.8, as a QEMU/KVM guest with
-10 vCPUs and 32 GiB. Every component below was verified there; re-verify after any
-upgrade, since every wrong assumption so far has been about how a dependency actually
-behaved ([verified facts](verified-facts.md)).
+One lab host, the development host: Ubuntu 26.04.1 LTS, kernel 7.0, as a QEMU/KVM guest
+with 10 vCPUs, 32 GiB and 8 GiB of swap, set up by the bring-up script below. Ubuntu 26.04
+is the one release the script supports. Every component below was verified there;
+re-verify after any upgrade, since every wrong assumption so far has been about how a
+dependency actually behaved ([verified facts](verified-facts.md)).
+
+**The bring-up script** stands a host up: `scripts/bring-up.sh [--ceos-tar PATH] [--part
+NAME]... [--help]`, run from the clone by the user who will run Fylgja, never root. A
+preamble, then four parts in order, `toolchain`, `lab`, `infrahub` and `fylgja`; `--part`
+(repeatable) runs the named ones alone. Each item is verified, installed when it is
+missing and verified again, and prints one line, `bring-up: <part>: <item>: present`,
+`installed` or `skipped (<why>)`; every wait names what it waits for and its bound, and
+fails naming both on expiry. Exit 0: every part run completed and the last report printed.
+Exit 1: an item or a tier failed, named in the output. Exit 2: refused in the preamble,
+before any change. It never prints, logs or passes as an argument a value of `local/.env`
+and never uses `set -x`, so its output can go into a CI log. A second run on a host it set
+up installs nothing, keeps `local/.env` and the running Infrahub, runs both tiers again
+and ends the same way. On a fresh VM of the development host's shape a first run took 28
+minutes with the cEOS tar and 20 without, most of it the images' pulls and import; a second
+run takes about 7, most of it tier 2. Its contract is
+[specs/013-launch/contracts/bring-up-script.md](../specs/013-launch/contracts/bring-up-script.md).
+
+- **The preamble** changes nothing until `local/.env`. It refuses a release other than
+  Ubuntu 26.04, an unknown flag, a cEOS tar whose sha256 is not the recorded one, and port
+  8000 held by anything but the Compose project `fylgja-infrahub` (point
+  `INFRAHUB_ADDRESS` at that Infrahub and run `--part fylgja` instead). It asks for `sudo`
+  at most once, and not at all when a credential is cached or the user's commands need no
+  password, and keeps the credential alive for the run, so no second prompt comes. It
+  looks for the cEOS tar (below). When `local/.env` is absent it writes it, mode `0600`,
+  every name `.env.example` documents filled: the tokens and Infrahub's Compose secrets
+  made then, `FYLGJA_STATE_ROOT` the absolute `local/`, `FYLGJA_HOST_MEMORY_MB` the host's
+  memory less 8 GiB, each login its image's published default, and `FYLGJA_PSP_DIR` empty
+  on purpose. A present file is kept byte for byte. Then the first report: the host, the
+  parts, where the tar was found or looked for, the platforms the host can run, and the
+  memory, with a warning under 24 GiB, since tier 3 was proved with 32.
+- **`toolchain`**: Ubuntu's `make`, `git`, `curl`, `jq`, `xz-utils`, `file`, `golang-go`,
+  `python3-venv` and `shellcheck`, in one `apt-get install` of those missing; Go (its row
+  below); golangci-lint 2.14.0 into `/usr/local/bin`; the Temporal CLI 1.9.1 into
+  `~/.temporalio/bin`; gnmic 0.49.0; and `.venv/` at the root with `infrahub-sdk[ctl]`
+  1.23.2 and a `.gitignore` of `*` inside it.
+- **`lab`**: Docker, by containerlab's setup script; containerlab 0.79.0 from its package;
+  the user in `docker` and `clab_admins`; the AppArmor lines SR Linux's `rsyslogd` needs,
+  each appended when missing and the profile reloaded; the SR Linux image pulled; the cEOS
+  image imported from the tar when one was found. A running session does not see a group
+  added to its user, so when the session lacks either group the script says so and
+  re-executes itself once through `sudo -u "$USER" -i`, a fresh login session, with the
+  remaining parts. Every process it leaves running carries both groups. A shell that began
+  before the run (an editor's terminal, an agent's session, the user's `systemd --user`)
+  lacks them until the next login: run Docker and containerlab from it through `sg docker`,
+  which is all containerlab needs.
+- **`infrahub`**: Infrahub 1.11.2's published Compose file, fetched by version from
+  `https://infrahub.opsmill.io/1.11.2` into `local/infrahub/docker-compose.yml`
+  (git-ignored), with this repository's `scripts/infrahub/docker-compose.override.yml`
+  copied beside it; the project `fylgja-infrahub` started with `local/.env` as its
+  environment file and awaited, up to 600 s, until `infrahub-server` is healthy and
+  `/api/info` answers 1.11.2; `fylgja-fixture -prepare-main`, which prepares `main` (What
+  Infrahub needs, below); then the fixture branch, `present` when it holds three `Ready`
+  artifacts, seeded when absent, cleaned and seeded when incomplete, the seed run once
+  more on `graphql: None`. It runs alone on any host with `docker`, `go`, `curl` and `jq`
+  on the `PATH`, and is what CI's contract job runs.
+- **`fylgja`**: `make build`, checked static with `file`; tier 1 and tier 2, each timed;
+  then the dev server, the worker and the API's server, started detached as the
+  three-process paragraph below starts them, logging under `local/`. A process already
+  running from this tree's `bin/fylgja` is `present`; one on a replaced or `(deleted)`
+  binary is restarted. Each report is read: the dev server `SERVING`, and the worker's and
+  the server's naming every package the host can run with its login set. The last report
+  gives each part's counts, the tar and the platforms again, both tiers' times, how to run
+  tier 3, the three processes with their pids and logs, how to stop them (`pkill -x
+  fylgja; pkill -f 'temporal server start-dev'`), and `DONE` with the run's time.
+
+**The cEOS tar.** The operator downloads `cEOS-lab-4.32.0.2F.tar` from Arista's software
+downloads, which need an account; the portal may name it `.tar.xz`, and the file is
+xz-compressed under either name, which `docker import` reads as it is. The script looks
+for either name at `--ceos-tar`, then in `local/`, then in the clone's parent directory,
+and **never in the clone's root**, which `.gitignore` does not cover and from which the
+converge loop commits. It imports a file only when its sha256 is the recorded
+`89a567d52f85e5f0e4650fe8e097e0226f78346d5a13d26bcab2a5623e888778`, the file the proven
+image came from, and refuses any other before any part, naming both checksums. When
+`ceos:4.32.0.2F` is already present the tar is not needed, and the lab part says whether
+the image's one layer is the recorded tar's.
+
+**A host without the tar runs SR Linux alone.** The cEOS item reads `skipped (no cEOS tar:
+SR Linux alone)`, both reports name `nokia_srlinux` alone and where the script looked, and
+the worker and the server serve that package. Everything but EOS and mixed twins works,
+and every walk-through in the README is SR Linux. Tier 3 there is `PLATFORMS=nokia_srlinux
+make test-e2e`, which skips cases 6 and 8 and ends `E2E-PARTIAL` ([Test
+architecture](#test-architecture)); a default run refuses before any case, naming
+`ceos:4.32.0.2F`.
 
 | Component | State | Notes |
 |---|---|---|
-| Go | 1.26.0 | `CGO_ENABLED=0`; the binary must stay static. Ubuntu's own `go` (1.22.2) fetches go1.26.0 on first use, because `go.mod` says `go 1.26.0` (`GOTOOLCHAIN=auto`) |
-| containerlab | 0.79.0 | runs without sudo for members of `clab_admins`. A guest that does not nest has no `/dev/kvm`, which only a `vrnetlab_vm` package would need. **SR Linux needs the host's rsyslog AppArmor profile widened**: add `/opt/srlinux/** mr,` and `/run/srlinux/** rw,` to `/etc/apparmor.d/local/usr.sbin.rsyslogd` and reload it with `apparmor_parser -r`, or every `nokia_srlinux` deploy fails on `log_mgr` |
-| Docker | 27.5.1 | privileged containers work |
-| Infrahub | 1.11.2, running | Infrahub's published Compose file, in a directory of the operator's choosing, with a `docker-compose.override.yml` beside it that pins the three Infrahub services to 1.11.2 (the published file reads `${VERSION}` and defaults to a later release) and caps Neo4j (heap 1g/2g, page cache 1g). Start it from that directory with `local/.env` loaded, which names the Compose project (`COMPOSE_PROJECT_NAME`) and the initial admin token and password; it serves http://localhost:8000. Operator-provided; not vendored |
-| Temporal CLI | 1.9.1 (Server 1.32.0) | `temporal server start-dev` on `:7233`, UI `:8233`; see below |
+| Go | 1.26.0 | `CGO_ENABLED=0`; the binary must stay static. Ubuntu 26.04's `golang-go` is go1.26.0, the release `go.mod` names, so nothing is fetched. An older `go`, such as 24.04's 1.22.2, fetches go1.26.0 on first use, because `go.mod` says `go 1.26.0` (`GOTOOLCHAIN=auto`); a newer one runs as it is |
+| containerlab | 0.79.0 | from its `.deb`; `/usr/bin/containerlab` is setuid root. Its package creates `clab_admins` and puts the installing user in it, and members run it without sudo. A guest that does not nest has no `/dev/kvm`, which only a `vrnetlab_vm` package would need. **SR Linux needs the host's rsyslog AppArmor profile widened**: `/opt/srlinux/** mr,`, `/run/srlinux/** rw,` and `/run/syslogd.pid* rw,` in `/etc/apparmor.d/local/usr.sbin.rsyslogd`, reloaded with `apparmor_parser -r`, or every `nokia_srlinux` deploy fails on `log_mgr`. The lab part writes them |
+| Docker | 29.8.1, Compose 5.6.0 | from Docker's repository: the release containerlab's setup script pins for Ubuntu 26.04. Privileged containers work; cgroup v2. `docker` must be on the `PATH` of both the worker and the API's server, which makes every dry run |
+| Infrahub | 1.11.2, running | the Compose project `fylgja-infrahub`, from `local/infrahub/`: the published file and the committed override, which pins the three Infrahub services to 1.11.2 (the published file reads `${VERSION}`, so a stray variable would move the image) and caps Neo4j (heap 1g/2g, page cache 1g). `local/.env` is its environment file. It serves http://localhost:8000, published on every interface, as the published file has it. By hand, from the repository root: `docker compose -p fylgja-infrahub --env-file local/.env -f local/infrahub/docker-compose.yml -f local/infrahub/docker-compose.override.yml <command>`. Its volumes persist across `down` |
+| Temporal CLI | 1.9.1 (Server 1.32.0) | in `~/.temporalio/bin`, where its installer puts it and which no login shell's `PATH` names: `make temporal-dev` and `scripts/e2e.sh` look there when the `PATH` has none. `temporal server start-dev` on `:7233`, UI `:8233`; see below |
 | Temporal Go SDK | v1.49.0 (`go.temporal.io/api` v1.63.5) | in `go.mod` with `openconfig/gnmi` v0.14.1 and `grpc` v1.83.2, all pure Go. Its `testsuite` is the tier-1 workflow harness |
 | gnmic | 0.49.0 | a hand tool for asking a node something, or for disabling a port outside Fylgja; **not** a dependency. The readiness probe and `twin verify` are in-process gNMI clients, so nothing Fylgja runs shells out to gnmic |
 | golangci-lint | 2.14.0 | must be the v2 line: `.golangci.yml` declares `version: "2"`, which v1 rejects |
-| SR Linux image | `ghcr.io/nokia/srlinux:24.7.1` | public, about 3.9 GB. Its package says `acquisition: public_registry`, so a deploy may pull it. Boots once AppArmor allows its `rsyslogd` (containerlab row) |
-| cEOS image | `ceos:4.32.0.2F`, imported | **account-gated: never vendored, never pulled.** The operator downloads the cEOS-lab tar from Arista's software downloads (an account is needed) and imports it: `docker import cEOS64-lab-4.32.0.2F.tar ceos:4.32.0.2F`. It is about 2 GB, one layer and no `Cmd`, as `docker import` leaves it, and containerlab's `ceos` kind supplies the command. Its package says `acquisition: account_gated`, so the host check verifies presence under exactly that reference and **refuses the run rather than pulling**; the same image under another tag is absent. `docker` must be on the `PATH` of both the worker and the API's server, which makes every dry run |
+| Python | 3.14.4 | `.venv/` at the root holds `infrahub-sdk[ctl]` 1.23.2, whose `infrahubctl` is the operator's hand tool for waypoints and connects as Admin. The repository does not ignore `.venv`: the `.gitignore` of `*` inside it keeps the tree clean, and a venv made by hand needs one too |
+| ShellCheck | 0.11.0 | Ubuntu 26.04's package. The lint job runs the runner's over both scripts |
+| SR Linux image | `ghcr.io/nokia/srlinux:24.7.1` | public, 5.19 GB as Docker counts it. Its package says `acquisition: public_registry`, so a deploy may pull it; the lab part pulls it. Boots once AppArmor allows its `rsyslogd` (containerlab row) |
+| cEOS image | `ceos:4.32.0.2F`, imported | **account-gated: never vendored, never pulled.** Imported from the tar above, `docker import cEOS-lab-4.32.0.2F.tar ceos:4.32.0.2F`: one layer, whose digest is the sha256 of the decompressed tar (`sha256:09ab9635…` for the recorded one), and no `Cmd`, as `docker import` leaves it; containerlab's `ceos` kind supplies the command. 2.91 GB as Docker counts it. Its package says `acquisition: account_gated`, so the host check verifies presence under exactly that reference and **refuses the run rather than pulling**; the same image under another tag is absent |
 
-**Credentials.** `local/.env` (git-ignored) holds the Infrahub address and token, both
-node logins — `FYLGJA_SRLINUX_USERNAME`/`_PASSWORD` and `FYLGJA_EOS_USERNAME`/`_PASSWORD`,
-each its image's default — and the API's token `FYLGJA_API_TOKEN`. It is the only file
-that holds a value; `.env.example` documents the names and no value. Load it with
-`set -a; . local/.env; set +a`. Fylgja reads the process environment only — never a file —
-and never echoes, persists, or embeds a credential in a bundle, a finding, or a log line.
+**Credentials.** `local/.env` (git-ignored, mode `0600`) is the only file that holds a
+value: the preamble writes it, and `.env.example` documents every name and no value. It
+holds the Infrahub address and token, both node logins — `FYLGJA_SRLINUX_USERNAME`/`_PASSWORD`
+and `FYLGJA_EOS_USERNAME`/`_PASSWORD`, each its image's published default — and the API's
+token `FYLGJA_API_TOKEN`. It also holds Infrahub's Compose values, which Compose reads
+through `--env-file` and Fylgja never reads: `COMPOSE_PROJECT_NAME` (`fylgja-infrahub`),
+`INFRAHUB_INITIAL_ADMIN_TOKEN` (`INFRAHUB_API_TOKEN` carries the same value),
+`INFRAHUB_INITIAL_ADMIN_PASSWORD`, `INFRAHUB_INITIAL_AGENT_TOKEN` and
+`INFRAHUB_SECURITY_SECRET_KEY`. The published Compose file carries defaults for the last
+four that anyone can read, so a host never keeps them. Infrahub's volumes keep the admin
+token they were created with, which is why a present `local/.env` is never re-made. Load
+it with `set -a; . local/.env; set +a`. Fylgja reads the process environment only — never
+a file — and never echoes, persists, or embeds a credential in a bundle, a finding, or a
+log line.
 
 **Environment variables.** One binary runs in three roles, and each reads its own
 ([D-040](decisions.md#d-040)). **A client's command** (every command but the two roles)
@@ -60,9 +154,9 @@ never a client:
 
 The server needs `containerlab` and `docker` on its `PATH`. A client needs neither.
 
-**Temporal.** Install the CLI (`curl -sSf https://temporal.download/cli.sh | sh`, or
-the release binary), then run the dev server file-backed so history survives a
-restart:
+**Temporal.** The toolchain part installs the CLI (`curl -sSf
+https://temporal.download/cli.sh | sh -s -- --version 1.9.1`), and the `fylgja` part runs
+the dev server file-backed, so history survives a restart:
 
 ```
 temporal server start-dev --db-filename local/temporal.db
@@ -71,8 +165,9 @@ temporal server start-dev --db-filename local/temporal.db
 Web UI at http://localhost:8233. `make temporal-dev` wraps the command.
 
 **Three processes on the lab host.** The dev server (`make temporal-dev`), the worker
-(`make worker`) and the API's server (`make serve`, [D-041](decisions.md#d-041)). Start
-the worker and the server from shells that loaded `local/.env`, from the repository root,
+(`make worker`) and the API's server (`make serve`, [D-041](decisions.md#d-041)). The
+script's `fylgja` part leaves all three running. Start the worker and the server from
+shells that loaded `local/.env`, from the repository root,
 so they share one state root and one environment, the server adding `FYLGJA_API_TOKEN`.
 Every other command is a client of the server: from a shell that holds `FYLGJA_API_TOKEN`
 alone (and `FYLGJA_API_ADDRESS` off `127.0.0.1:7650`), on the lab host or, through
@@ -99,9 +194,9 @@ only binary that does. Infrahub's `main` carries:
   device's name as its parameter. The registration is `fylgja`, a
   `CoreReadOnlyRepository` on `main` at this repository's HTTPS location, `ref main`, with
   no credential ([D-044](decisions.md#d-044)), made by `fylgja-fixture -prepare-main`
-  together with the schema and the group: it tracks one `ref`, imports at creation, and
-  never pushes. A private copy registers as a `CoreRepository` with a
-  `CorePasswordCredential` holding a personal access token instead.
+  together with the schema and the group, which the script's `infrahub` part and CI's
+  contract job run: it tracks one `ref`, imports at creation, and never pushes. The import
+  took 22–48 s on the hosts it was proved on.
 
 **A template change reaches Infrahub by asking for it.** A commit pushed to `main` is not
 imported on its own: neither the minute sync nor rewriting `ref` moves the registration's
@@ -175,19 +270,24 @@ contracts/             the current formats' contracts: the CLI and the API (cli.
 schema/                Fylgja generics, the reference schema and the waypoint kind (YAML); infrahub.graphql, the default branch's SDL, committed, and genqlient's input (`make sdl`); README, with the guide to writing a waypoint
 psp/                   platform support packages (YAML) + JSON schema; README's Supported packages table
 .infrahub.yml          the artifacts template's manifest, which Infrahub reads at the repository root
+SECURITY.md            the threat model (one bearer token over loopback HTTP, the credentials the server and the worker hold) and how to report a vulnerability
 infrahub/              the template's query and Jinja2 body (queries/, templates/)
 testdata/              golden bundles, fixture CTMs, test-only packages (psp/heterogeneous, psp/lossy, psp/defects; never embedded), the boundary test's leaky fixture
+scripts/bring-up.sh    the bring-up script: a fresh Ubuntu 26.04 host to tiers 1 and 2 and the three processes; its `infrahub` part alone is CI's contract job (Local environment, above)
+scripts/infrahub/      docker-compose.override.yml, copied beside Infrahub's published Compose file under local/infrahub/: the 1.11.2 pin and the Neo4j cap
 scripts/e2e.sh         the body of `make test-e2e`
 scripts/diagrams.sh    writes the import graph below and docs/diagrams/topologies.md; run by `make diagrams`
 scripts/converge-loop.sh  the converge loop (Spec Kit workflow, below)
-docs/                  brief, architecture, decisions, roadmap, glossary, development, verified-facts, ideas
+docs/                  brief, architecture, decisions, roadmap, glossary, development, verified-facts, ideas, and how-it-was-built, the one-page write-up of how Fylgja was built
+docs/recording/        session.cast, the README's recorded session (a create from a waypoint, a step and a verify), and session.gif, rendered from it
 docs/c4/               workspace.dsl, the C4 model, and its five views exported as .puml and .svg
 docs/diagrams/         the fixture topologies (generated) and the schema's entity diagram
 specs/                 Spec Kit features (NNN-slug), created by the first feature here
 commands/              git-ignored: the command log the hooks publish (see below)
-local/                 git-ignored, the default state root: .env, temporal.db, bundles/ (with bundles/.reads/, a read's CTM before compile names its bundle), twin/, command-log/
+local/                 git-ignored, the default state root: .env, temporal.db, bundles/ (with bundles/.reads/, a read's CTM before compile names its bundle), twin/, command-log/; infrahub/, the Compose project's two files; the three processes' and the bring-up script's logs
 .specify/              Spec Kit: the constitution (memory/constitution.md, amended only by citing a decision-log entry), templates and scripts
 .claude/               Claude Code: the project settings, the command-log hook and the Spec Kit skills
+.github/workflows/     ci.yml (the lint and unit jobs; the contract job on pushes to main), pull-requests.yml (comments the Contributing sentence on a pull request and closes it) and release.yml (a tag's draft release); Test architecture, below
 ```
 
 `internal/lab` is the host-bound boundary: everything that must run where the
@@ -330,16 +430,17 @@ graph LR
 | Target | Does |
 |---|---|
 | `make build` | `bin/fylgja`, `CGO_ENABLED=0`. `VERSION=…` stamps `fylgja --version`; it identifies the binary and reaches no bundle ([D-024](decisions.md#d-024)) |
+| `scripts/bring-up.sh` | not a target: stands a fresh Ubuntu 26.04 host up, from the toolchain to tiers 1 and 2 and the three processes; `--part infrahub` alone brings Infrahub up and prepares it, as CI does (Local environment, above) |
 | `make test` | tier 1: unit, golden, workflow tests. Seconds. No infrastructure |
-| `make test-contract` | tier 2: real Infrahub. Needs `local/.env`. Minutes |
-| `make test-e2e` | tier 3: builds, then runs `scripts/e2e.sh`, eight cases and eight twins in one run (the [Test architecture](#test-architecture) describes them). Needs `make temporal-dev` and `make worker` running from the repository root, Docker, containerlab, **both** images and Infrahub; it starts its own server, so `make serve` need not run. `WORKER_LOG=<file>` adds the worker's log to its credential and marker greps. Never in CI |
+| `make test-contract` | tier 2: real Infrahub. Needs `local/.env`. Minutes. Runs `go test -count=1`, so it always asks the Infrahub in front of it: a cached result keys on the test binary, the environment and the files read, never on what a service answers |
+| `make test-e2e` | tier 3: builds, then runs `scripts/e2e.sh`, eight cases and eight twins in one run (the [Test architecture](#test-architecture) describes them). Needs `make temporal-dev` and `make worker` running from the repository root, Docker, containerlab, **both** images and Infrahub; it starts its own server, so `make serve` need not run. `WORKER_LOG=<file>` adds the worker's log to its credential and marker greps. `PLATFORMS=<list>` narrows it to the cases a list of shipped packages can run, ending `E2E-PARTIAL` when it skipped one. Never in CI |
 | `make worker` | builds, then `fylgja worker run` on queue `fylgja` with the state root made absolute. Load `local/.env` in its shell first: it carries Infrahub's address and token and **both** node logins, and a worker started without them fails a create at the host check or the push. `docker` must be on its `PATH`, for the image-presence check. **Restart it after every rebuild** |
 | `make serve` | builds, then `fylgja serve` on `127.0.0.1:7650` with the state root made absolute, as `make worker` does. Load `local/.env` in its shell first: the server reads Infrahub's address and token, **both** node logins and `FYLGJA_API_TOKEN`, without which it refuses to start. `containerlab` and `docker` must be on its `PATH`. It prints where it listens (API version and build), its state root, that the workflow service and Infrahub are dialled on need, the memory budget and each package as the worker prints them, and one line a request on stderr. Detached: `setsid nohup env FYLGJA_STATE_ROOT="$PWD/local" bin/fylgja serve >> local/server.log 2>&1 < /dev/null &`. **Restart it after every rebuild** |
 | `make lint` | `gofmt`, `go vet`, `golangci-lint`. Runs with build tags `contract,fixture,e2e` (`.golangci.yml`), so the tagged files — `cmd/fylgja-fixture`, the contract tests and the boot half's tier-3 entry (`internal/conformance/boot_e2e_test.go`) — are linted too rather than only when Infrahub or a twin is up. `go vet -tags contract,fixture,e2e ./...` checks the same set |
 | `make diagrams` | validates the C4 model `docs/c4/workspace.dsl` and regenerates every committed diagram: the five views as C4-PlantUML and SVG under `docs/c4/`, the import graph above and `docs/diagrams/topologies.md`. Two images, pinned by digest in the Makefile (`STRUCTURIZR_IMAGE`, `PLANTUML_IMAGE`) and pulled on first use, do the model's part; `scripts/diagrams.sh` needs `go`. Needs Docker; no tier needs it, and a second run changes nothing |
 | `make sdl` | refetch Infrahub's SDL for the default branch, `main`, which carries the waypoint kind, into `schema/`. Infrahub's field order is not stable between fetches, so a refetch diffs by thousands of lines with nothing changed: compare two SDLs structurally, not by `diff`. The header is kept by hand |
 | `make generate` | regenerate the `genqlient` client |
-| `make temporal-dev` | start the file-backed dev server |
+| `make temporal-dev` | start the file-backed dev server, with the Temporal CLI on the `PATH` or else `~/.temporalio/bin/temporal`, where the bring-up script installs it |
 | `make command-log` | publish the command log the hooks kept (Spec Kit workflow, below) |
 | `make infrahub-seed` / `infrahub-clean` | fixture branch lifecycle. The seed loads the schema, writes the three-node topology, joins the devices to `fylgja-devices`, generates their artifacts and waits for `Ready`. `go run -tags fixture ./cmd/fylgja-fixture -branch <b>` seeds a throwaway branch the same way, and changes one with `-add-link`, `-generate` (generate and wait), `-set-role <v>` (moves the artifact only), `-set-site <v>` (regenerates identical bytes) or `-disable-port <dev>:<if>`. Every change flag refuses `fylgja-fixture`. The seed and `-add-link` render and wait for `Ready` themselves; `-set-role`, `-set-site` and `-disable-port` change intent only, so `-generate` must follow them, since Infrahub 1.11.2 regenerates nothing on its own. `-mixed` seeds one SR Linux node and two EOS. `-waypoint <series>/<sequence>` writes one waypoint naming `-branch` as it stands now, with `-at <t>` for a written `as_of` and `-description <s>`; it refuses `fylgja-fixture` and any series outside `fylgja-test-`, and `-at` or `-description` without it. Compose a series by writing each waypoint after the writes it seals and after their generate has moved the artifacts: seed, `-waypoint S/1`, `-add-link`, `-waypoint S/2`. `-delete` removes every `fylgja-test-*` waypoint naming the branch, printing the count, then the branch; `-delete-series <s>` removes a test series by name. `-add-mixed-link` adds `s1:ethernet-1/3`, `e1:Ethernet3` and the link between them to a branch seeded with `-mixed`, and generates; it refuses `fylgja-fixture` and a second add on one branch. A mixed series is composed the same way: `-mixed`, `-waypoint S/1`, `-add-mixed-link`, `-waypoint S/2`. `-prepare-main` acts on `main` alone and takes no `-branch`: it loads the schema, creates the group `fylgja-devices` and registers this repository read-only with no credential when each is absent, then waits up to `-wait` (300s) for the import, so a second run writes nothing |
 | `go test ./internal/compiler -update` | regenerate golden bundles after an intended compiler change. **Review the diff**: goldens enshrine bugs as readily as fixes. Three goldens, each with its `bundle_id` asserted in `golden_test.go`: `testdata/golden/three-node/` (SR Linux, `23f86a26…`), `testdata/golden/lossy/` (the design-case package beside SR Linux, `5773b6bb…`) and `testdata/golden/mixed/` (SR Linux beside two EOS nodes, `391bcb96…`). Prefer `-run TestGoldenLossy -update` so nothing else moves. A diff in the three-node or lossy golden from a change to the mapping profile or how it is applied is a defect in that change, never a re-baseline; a change meant to move them, such as a new bundle format, says so in its spec, and its re-baseline is a commit of its own |
@@ -358,13 +459,43 @@ frozen copy under its package's `testdata/contracts/<feature>/`, and
 
 | Tier | Covers | Runs | Needs |
 |---|---|---|---|
-| 1 — Unit + golden + workflow | **The compiler and its formats**: the three goldens, each fact asserted by name, and the lossy golden's shuffled fixture; every mapping kind, shared port, omission and refusal, worded alike by validation and the compiler; every `psp.*` rule from its fixture under `testdata/psp/defects/`; bundle hashing and verification, a bundle of another format refused naming both; `step.Diff`, `PushPlan` and `Unapplied`, pure. **The read**: the CTM projection, every artifact refusal and conformance's `schema.artifact_target.missing` from an `httptest` Infrahub; the waypoint reference's every shape and every resolution refusal, none reading the branch. **The node**: each push mechanism, merge and replace, against an `httptest` node (the request in order and in one call, a refusal's reason cut with no configuration line kept, `commit validate` after a cut refusal, the device's diff in the result and in no log line); the gNMI readers and the readiness probe against in-process gNMI servers, TLS and plaintext; `twin verify`'s every assertion and claim outcome against a faked reader; the conformance suite's pure half over every package meant to load, and the boot half's every check and wording against a faked reader. **The workflows**, on the Temporal Go SDK test suite with mocked activities: every outcome of provision, destroy, the reconcile check and step, the step's wait among them; and nine histories recorded from the dev server replayed with `worker.WorkflowReplayer` where the test suite departs from the service. **The API and the commands**: every client's command run through a server in the test's own process (`internal/cli`'s harness: one `httptest` server over a `server.Server`, a token made for the run, every byte the server writes recorded); every refusal made before any connection, with nothing dialled; each operation's answer under each rendering, every frame valid against `contracts/api.schema.json`; a run started, followed, interrupted and left by its client; the client's own failures and environment; `fylgja serve`'s refusals and report; the boundary test. **Secrets**: the marker proof (an artifact's bytes reach the bundle and no finding, log line, payload, record or answer) and the token in nothing the server writes | every PR, seconds | nothing |
-| 2 — Contract | the read against a real Infrahub with the reference schema loaded: conformance and completeness findings; a pinned read reproduces its bundle after the branch changes (`TestPinnedReadReproducesItsBundle`); two reads of an unchanged branch compile to one `bundle_id` and a change moves it (`TestFollowingDetection`); a seeded branch reads with every artifact, a role change moves the id and a site change regenerates identical bytes and moves nothing, and a device outside the target group, or in it before its first generate, is `artifact.missing` (`TestArtifactOnASeededBranch`); a kind that does not inherit `CoreArtifactTarget` is named; a mixed branch reads three devices of two platforms and compiles with both bootstrap routes and both forwarding entries (`TestMixedSeedReads`, which skips naming the template when an EOS device's artifact is SR Linux text); a waypoint resolves to the `at` and the id `--at` gives, and a series plans to each waypoint's own id (`TestWaypointResolvesLikeAt`); the waypoint kind loads, reads across branches and refuses a duplicate (`TestWaypointKindLoads`); `schema check` through the harness's server (`internal/cli/schema_contract_test.go`). Every branch and series it writes is `fylgja-test-*` and is deleted by the test. The token case has no live oracle, because this Infrahub reads anonymously | locally before merge; in CI once CI has an Infrahub | Infrahub in Docker |
-| 3 — End-to-end | eight cases and eight twins in one run, every command through a server the script starts (below) | on demand (`make test-e2e`) | dev server, worker, privileged Docker, **both** NOS images (the cEOS one imported by hand), Infrahub |
+| 1 — Unit + golden + workflow | **The compiler and its formats**: the three goldens, each fact asserted by name, and the lossy golden's shuffled fixture; every mapping kind, shared port, omission and refusal, worded alike by validation and the compiler; every `psp.*` rule from its fixture under `testdata/psp/defects/`; bundle hashing and verification, a bundle of another format refused naming both; `step.Diff`, `PushPlan` and `Unapplied`, pure. **The read**: the CTM projection, every artifact refusal and conformance's `schema.artifact_target.missing` from an `httptest` Infrahub; the waypoint reference's every shape and every resolution refusal, none reading the branch. **The node**: each push mechanism, merge and replace, against an `httptest` node (the request in order and in one call, a refusal's reason cut with no configuration line kept, `commit validate` after a cut refusal, the device's diff in the result and in no log line); the gNMI readers and the readiness probe against in-process gNMI servers, TLS and plaintext; `twin verify`'s every assertion and claim outcome against a faked reader; the conformance suite's pure half over every package meant to load, and the boot half's every check and wording against a faked reader. **The workflows**, on the Temporal Go SDK test suite with mocked activities: every outcome of provision, destroy, the reconcile check and step, the step's wait among them; and nine histories recorded from the dev server replayed with `worker.WorkflowReplayer` where the test suite departs from the service. **The API and the commands**: every client's command run through a server in the test's own process (`internal/cli`'s harness: one `httptest` server over a `server.Server`, a token made for the run, every byte the server writes recorded); every refusal made before any connection, with nothing dialled; each operation's answer under each rendering, every frame valid against `contracts/api.schema.json`; a run started, followed, interrupted and left by its client; the client's own failures and environment; `fylgja serve`'s refusals and report; the boundary test. **Secrets**: the marker proof (an artifact's bytes reach the bundle and no finding, log line, payload, record or answer) and the token in nothing the server writes | CI's unit job, on every push to `main` and every pull request; seconds | nothing |
+| 2 — Contract | the read against a real Infrahub with the reference schema loaded: conformance and completeness findings; a pinned read reproduces its bundle after the branch changes (`TestPinnedReadReproducesItsBundle`); two reads of an unchanged branch compile to one `bundle_id` and a change moves it (`TestFollowingDetection`); a seeded branch reads with every artifact, a role change moves the id and a site change regenerates identical bytes and moves nothing, and a device outside the target group, or in it before its first generate, is `artifact.missing` (`TestArtifactOnASeededBranch`); a kind that does not inherit `CoreArtifactTarget` is named; a mixed branch reads three devices of two platforms and compiles with both bootstrap routes and both forwarding entries (`TestMixedSeedReads`, which skips naming the template when an EOS device's artifact is SR Linux text); a waypoint resolves to the `at` and the id `--at` gives, and a series plans to each waypoint's own id (`TestWaypointResolvesLikeAt`); the waypoint kind loads, reads across branches and refuses a duplicate (`TestWaypointKindLoads`); `schema check` through the harness's server (`internal/cli/schema_contract_test.go`). Every branch and series it writes is `fylgja-test-*` and is deleted by the test. The token case has no live oracle, because this Infrahub reads anonymously | CI's contract job, on every push to `main`; locally before merge | Infrahub in Docker |
+| 3 — End-to-end | eight cases and eight twins in one run, every command through a server the script starts (below) | on demand (`make test-e2e`), never in CI | dev server, worker, privileged Docker, **both** NOS images (the cEOS one imported from the operator's tar), or a `PLATFORMS` list for fewer; Infrahub |
+
+**CI** (`.github/workflows/ci.yml`) runs three jobs on GitHub's hosted `ubuntu-26.04`
+runner, named rather than `ubuntu-latest` because the bring-up script supports that release
+alone. The **lint job** and the **unit job** run on every push to `main` and every pull
+request: the lint job golangci-lint and `shellcheck` over `scripts/bring-up.sh` and
+`scripts/e2e.sh`, the unit job `make build` and `make test`. The **contract job** runs
+after both on pushes to `main` alone, never on a pull request:
+`scripts/bring-up.sh --part infrahub` brings Infrahub 1.11.2 up on the runner, prepares
+`main` with this repository registered read-only and seeds the fixture branch;
+then `go generate ./... && git diff --exit-code`, which checks the committed client against
+the committed SDL and needs no Infrahub; then `make test-contract` with the job's
+`local/.env` loaded. It needs no secret: the script makes Infrahub's admin token on the
+runner, keeps it in that file and never prints it, and the repository holds none. Its first
+run took 6 min 55 s, the script's part 229 s of it. The README's badge shows the last run
+on `main`; a pull request's run does not move it. `pull-requests.yml`, on
+`pull_request_target` with no checkout and the job's own token alone, comments the
+README's Contributing sentence on each pull request and closes it, and is the repository's
+one use of that trigger. `release.yml` builds a pushed `v*` tag's draft release: the static
+binary and its checksum, from the tagged commit, once that commit's `ci` run succeeded; the
+operator pushes the tag and publishes the draft.
 
 **Tier 3, as `scripts/e2e.sh` runs it.** Before anything runs the script checks the cEOS
 image is present under the reference `psp/arista_eos.yaml` names, and stops saying to
-import it, since it is never pulled. After the workflow service's health check it makes a
+import it, since it is never pulled. That is a default run, and its `E2E-OK` means all
+eight cases. **`PLATFORMS=<list> make test-e2e`** narrows a run to a list of shipped
+package names (the stems of `psp/*.yaml`, comma- or space-separated). A case runs when the
+list names every package it needs (cases 1–5 and 7 `nokia_srlinux`; 6 and 8 also
+`arista_eos`, in one table at the top of the script) and each account-gated image among
+them is present; otherwise it prints `e2e: case N: skipped (<why>)`. The list selects by
+package, never by image. A name no package has, or a list that selects no case, is refused
+before anything starts. A list that skipped nothing ends `E2E-OK`; one that skipped a case
+and passed every case it ran ends `E2E-PARTIAL: platforms <list>; ran <cases>; skipped
+<case> (<why>) …`, exit 0, and never prints `E2E-OK`. Narrowed to `nokia_srlinux` it takes
+about 12 minutes. After the workflow service's health check it makes a
 token for the run (never exported), starts `bin/fylgja serve --listen 127.0.0.1:0` from
 the tree in its full environment, logging to `$OUT/server.log`, and reads the port the
 system chose. Every `fylgja` command, the trap's destroy included, runs with `PATH`,
@@ -420,7 +551,8 @@ decoded run history or server log (or the worker's, with `WORKER_LOG`): the mark
 a read's CTM and a compiled bundle. The server is stopped before the greps, and one that
 does not exit 0 on SIGTERM fails the run. The script leaves the host clean: a leaked lab,
 twin directory or Schedule `fylgja-follow` exits 99, and the trap deletes the branches and
-their series. Its closing lines give the wall time and each case's timings.
+their series, after a narrowed run too. Its closing lines give the wall time and the
+timings of each case that ran.
 
 **The conformance suite** (`internal/conformance`) is `go test` in two halves, and
 decides whether a package is supported. Its wordings are held by its own tests, and

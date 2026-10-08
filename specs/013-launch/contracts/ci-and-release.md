@@ -7,12 +7,16 @@ on:
   push: { branches: [main] }
   pull_request:
 jobs:
+  lint:                      # every push to main and every pull request
+    runs-on: ubuntu-26.04
+    steps: checkout@v5; setup-go@v6 (go-version-file: go.mod);
+           golangci-lint-action@v9; shellcheck scripts/bring-up.sh scripts/e2e.sh
   unit:                      # every push to main and every pull request
     runs-on: ubuntu-26.04
-    steps: checkout@v5; setup-go@v6 (go-version-file: go.mod); make build; make test;
-           golangci-lint-action@v9; shellcheck scripts/bring-up.sh
+    steps: checkout@v5; setup-go@v6 (go-version-file: go.mod); make build; make test
   contract:                  # pushes to main alone; never pull_request_target
     runs-on: ubuntu-26.04
+    needs: [lint, unit]
     if: github.event_name == 'push'
     steps: checkout@v5; setup-go@v6;
            scripts/bring-up.sh --part infrahub;
@@ -20,7 +24,8 @@ jobs:
            set -a; . local/.env; set +a; make test-contract
 ```
 
-- Both jobs name `ubuntu-26.04`, never `ubuntu-latest`.
+- Every job names `ubuntu-26.04`, never `ubuntu-latest`. Lint has its own job, beside
+  the unit job (it was a step of the unit job when CI's first runs were verified).
 - No `secrets.*` anywhere: the script makes Infrahub's admin token on the runner and
   writes it to the job's `local/.env`; nothing prints it. The `env:` block that read
   `secrets.INFRAHUB_API_TOKEN` is removed.

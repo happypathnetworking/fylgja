@@ -772,24 +772,33 @@ the server's reports as naming both packages with their logins set, the dev serv
   `INFRAHUB_INITIAL_AGENT_TOKEN` and `INFRAHUB_SECURITY_SECRET_KEY`: 0 files each. The EOS
   image's published default password is a common word, which no grep tells from other
   text; the worker's and the server's reports say each login is `set`, never its value.
-- **Findings**, recorded and not fixed in this run:
+- **Findings**, recorded and not fixed in this run (each fix after it is said beside it;
+  the fixes after T031 were checked against stand-ins for `sudo`, `go` and the login
+  session's groups, run on the blocks taken from the script, then on a fresh host by
+  T043, §3.8):
   1. *The last report omits the toolchain part's `did:` line.* The lab part's re-exec passes
      `--part lab --part infrahub --part fylgja` (`scripts/bring-up.sh`, line ~552), and the
      report loop prints a part's line only when the re-executed run's list names it (line
      ~866), so a run that re-executes prints three `did:` lines, against the contract's "one
      line per part run". The toolchain's counts travel in the re-exec's state; only the line
-     is skipped.
+     is skipped. **Fixed after T031**: the re-exec's state also carries the parts the whole
+     run runs (`parts=toolchain,lab,infrahub,fylgja`), and the report prints a line for
+     each.
   2. *The privilege check prompts despite `NOPASSWD`.* On the VM `sudo -n -v` exits 1
      (`interactive authentication is required`) while `sudo -n true` exits 0: the user
      matches the `NOPASSWD: ALL` rule and also `%sudo ALL=(ALL:ALL) ALL`, and `-v` asks for a
      password unless every rule matching the user is `NOPASSWD` (sudo's `verifypw=all`). So
      the preamble's `sudo -v` prompted once, and the re-executed run, which starts its
      keep-alive loop only when `sudo -n -v` succeeds, ran without one; nothing after the
-     groups needed sudo.
+     groups needed sudo. **Fixed after T031**: the preamble prompts only when it must. A
+     credential `sudo -n -v` accepts is kept alive with no prompt; else a user `sudo -n
+     true` serves has nothing to keep alive and no prompt; else `sudo -v` prompts, once,
+     and the loop keeps it. The contract's preamble item 3 says so.
   3. *`go: downloading` lines in the report.* `-prepare-main` runs by `go run`, which says
      its module downloads on stderr, and the part relays its output, so six `go: downloading
      …` lines appear under `bring-up: infrahub: main:` on a host with an empty module cache.
-     CI's contract job showed none there.
+     CI's contract job showed none there. **Fixed after T031**: the relay drops them, and
+     `local/bring-up-main.log` keeps them; a failure still relays the whole log.
   4. *The `go` item reads `installed` on 26.04, and always will.* It reads `present` only
      when the module cache holds the toolchain `go.mod` names (line ~442); 26.04's packaged
      Go is that release, so nothing is ever fetched. The item said `installed go1.26.0
@@ -798,16 +807,24 @@ the server's reports as naming both packages with their logins set, the dev serv
      <v> (Ubuntu's go, go.mod's release)` when Ubuntu's `go`, run outside the clone with
      `GOTOOLCHAIN=local`, is the release `go.mod` names. Its decision, run read-only on both
      hosts, picks that line on the VM and `present go1.26.0 (go.mod's, run by Ubuntu's go)`
-     on the development host (Ubuntu's 1.22.2, the toolchain fetched), as before. Still
-     open: a packaged Go newer than `go.mod`'s, which Ubuntu's updates may bring, is used
-     as it is, and the item's check that `go version` in the clone is `go.mod`'s release
-     would then fail the part.
+     on the development host (Ubuntu's 1.22.2, the toolchain fetched), as before. A
+     packaged Go newer than `go.mod`'s, which Ubuntu's updates may bring, is one Go runs as
+     it is, and the item's check that `go version` in the clone was `go.mod`'s release
+     would have failed the part on it. **Fixed after T031**: the item takes Ubuntu's `go`
+     at `go.mod`'s release or a later one (`present <v> (Ubuntu's go, newer than go.mod's
+     go1.26.0)`), and fails only on a `go version` in the clone that is neither.
   5. *The re-exec's line names both groups.* `lab: groups: docker clab_admins added;
      continuing in a fresh login session` is fixed text, while the groups item before it
-     said `(docker added)`.
+     said `(docker added)`. **Fixed after T031**: the line names the groups the login
+     session lacks, whichever run added them (`lab: groups: docker not in this session;
+     continuing in a fresh login session`), and the contract's lab item says so.
   6. *sudo-rs ignores `-E`.* The lab part's `curl … containerlab.dev/setup | sudo -E bash -s
      install-docker` printed `sudo: preserving the entire environment is not supported, '-E'
-     is ignored`, twice; the setup script installed Docker at its pin regardless.
+     is ignored`, twice; the setup script installed Docker at its pin regardless. One
+     warning is the lab part's `sudo -E`, the other the setup script's own `sudo -E curl`.
+     **Fixed after T031**, the first: the lab part runs `sudo bash -s install-docker`, since
+     the setup script reads none of the user's environment, and the classic sudo's `-E`
+     would have handed it over; the setup script's own warning stays, and is harmless.
   7. *The Temporal CLI is not on the user's `PATH` after the run* (found at T030). The
      toolchain part installs it into `~/.temporalio/bin`, which its installer only
      suggests adding to `PATH`, and the contract puts it on the `PATH` of the processes the
@@ -898,9 +915,119 @@ the server's reports as naming both packages with their logins set, the dev serv
   where every caller meets it: `make test-contract` runs `go test -count=1 -tags contract`,
   so tier 2 runs against the Infrahub in front of it from the script, by hand, in the
   converge loop and in CI alike; `make test` keeps its cache.
-- **To close T031**: the fix is a commit, so the next run on the VM rebuilds and restarts
-  again; the run after it, at the same commit, is the one that must read `installed 0` on
-  every part with tier 2 run in full.
+- **Two more runs close T031**, on the VM's clone pulled to `6cabd94` (the Makefile's fix),
+  each by the operator as before, `local/.env` byte-identical after each, exit 0, neither
+  output carrying any prompt or sudo message:
+  - *Run 3*, begun 23:51:24Z, `DONE in 439s`: toolchain 14 present, lab 5 present and 1
+    skipped, infrahub 6 present, and `fylgja: 1 present, 3 installed`, the new commit's
+    rebuild and the two restarts, as the pull made them. Tier 1 3 s (cached, as it may
+    be), tier 2 417 s, run in full.
+  - *Run 4*, begun 00:00:41Z on 2026-10-08, at the same commit, `DONE in 432s`:
+
+    ```
+    bring-up: did: toolchain: 14 present, 0 installed, 0 skipped
+    bring-up: did: lab: 5 present, 0 installed, 1 skipped
+    bring-up: did: infrahub: 6 present, 0 installed, 0 skipped
+    bring-up: did: fylgja: 4 present, 0 installed, 0 skipped
+    ```
+
+    `build: present`, the dev server `present`, and the worker and the server `present`,
+    each the same process as after run 3 and on this tree's `bin/fylgja`
+    (`vcs.revision=6cabd94…`). Tier 1 2 s, every package cached; tier 2 420 s, none of its
+    21 packages `(cached)`, every one `ok`, the longest `internal/stage` 415 s,
+    `internal/intent` 239 s and `internal/waypoint` 216 s; `fylgja waypoint list` printed
+    `no waypoints` afterwards. Infrahub's eight containers still carried their first start
+    times, 22:39:37–22:41:47Z on 2026-10-07, through all three later runs.
+
+  So a run on a host the script set up, at the commit it was set up from, changes nothing
+  and installs nothing, keeps `local/.env` and the running Infrahub, and passes both tiers
+  against that Infrahub (FR-013); the only item that is not `present` is the cEOS image's
+  `skipped`, which the contract gives a present image.
+
+### 3.7 Recorded: a pull request after the contract job, 2026-10-08
+
+- **The pull request** (T036), by the operator: a throwaway branch `pr-check-2` made
+  through the API at `013-launch`'s head (`6cabd94`, ahead of `main`), and pull request #2
+  from it to `main`, opened 01:16:16Z.
+- **`pull-requests.yml`** ran on `pull_request_target` (run `37712085675`), its one job
+  `close` `success` in 10 s: one comment, by `github-actions`, at 01:16:26Z, `This
+  repository is read-only: issues are welcome, pull requests are not taken (README,
+  Contributing). Closing.`, and the pull request `CLOSED` at 01:16:27Z, 11 s after it
+  opened.
+- **`ci`** ran on `pull_request` (run `37712085629`, head `6cabd94`), `success`: the unit
+  job `success` in 47 s (01:16:22–01:17:09Z), the contract job `skipped`, as its `if:
+  github.event_name == 'push'` gives it. No pull request reaches the job that starts
+  Infrahub.
+- **The branch** was deleted afterwards by the operator; the API answers `Branch not
+  found` (404) for it.
+- **The badge**: the README's `ci` badge for `main` reads `ci - passing`, the last `ci` run
+  on `main` being `37694132184` (the push of `5207aae`, both jobs `success`, §3.5); a
+  pull request's run does not move it.
+
+### 3.8 Recorded: SR Linux alone, on a fresh VM with no tar, 2026-10-08
+
+- **The VM** (T043): the first VM, reinstalled by the operator: Ubuntu 26.04.1 LTS, kernel
+  `7.0.0-38-generic`, 10 vCPUs, 31,065 MiB, 8 GiB swap, sudo-rs 0.2.13; no Docker,
+  containerlab, Go, Temporal or `make`; no file named `cEOS*` anywhere on its disk. The
+  user in `sudo` with passwordless sudo by a file under `/etc/sudoers.d/`, finding 2's
+  configuration (`sudo -n true` exits 0, `sudo -n -v` exits 1).
+- **The clone**: `git clone -b 013-launch https://github.com/happypathnetworking/fylgja.git`
+  with no credential, at `6cabd94`, and this tree's `scripts/bring-up.sh` copied over it
+  (sha256 `0b62c997…`), the fixes of findings 1, 2, 3, 4's newer Go, 5 and 6 not yet
+  committed; `git status` showed that file alone modified.
+- **Run 1**, begun 01:12:22Z in a terminal multiplexer session, `DONE in 1229s`, exit 0.
+  Both reports said `cEOS tar: not found; looked at --ceos-tar (none given), local/, <the
+  clone's parent>; the repository root is never searched` and `platforms: nokia_srlinux
+  (arista_eos needs the cEOS tar: docs/development.md says where to get it)`; the last
+  report's tier 3 line was `PLATFORMS=nokia_srlinux make test-e2e runs it on SR Linux
+  alone`, and the worker and the server ran with `packages nokia_srlinux`. The cEOS item
+  read `skipped (no cEOS tar: SR Linux alone)`. Tier 1 35 s, tier 2 420 s; the
+  registration's import after 43 s. The `did:` lines: toolchain 6 present and 8
+  installed, lab 5 installed and 1 skipped, infrahub 1 present and 5 installed, fylgja 4
+  installed.
+- **The fixes after T031, on a host for the first time**, all as designed: no prompt
+  (nothing in the output, and the journal records no sudo authentication) on the host of
+  finding 2; four `did:` lines after the re-exec (finding 1); `lab: groups: docker
+  clab_admins not in this session; continuing in a fresh login session`, the session
+  holding neither while the groups item said `(docker added)`, containerlab's package
+  having put the user in `clab_admins` again (finding 5); no `go: downloading` line in
+  the report (finding 3); `go: present go1.26.0 (Ubuntu's go, go.mod's release)`
+  (finding 4); one `'-E' is ignored`, the setup script's own, where the first VM had two
+  (finding 6).
+- **Hygiene**: the greps of quickstart §3 for the six values of `local/.env` (both
+  tokens, the SR Linux password, the Compose block's password, agent token and secret
+  key) over `/tmp/bring-up1.out`, `local/*.log`, `bin/`, `.venv/` and `local/infrahub/`: 0
+  files each.
+- **`make test-e2e`**, default: `e2e: FAILED: image ceos:4.32.0.2F is absent: import it as
+  docs/development.md says; it is never pulled`, `scripts/e2e.sh` exit 1 (make's own 2),
+  before any case; no twin, no image.
+- **`PLATFORMS=acme_os make test-e2e`**: `e2e: FAILED: PLATFORMS names acme_os, which no
+  shipped package has; known: arista_eos nokia_srlinux`, exit 1 (make's 2).
+- **`PLATFORMS=nokia_srlinux make test-e2e`**, detached, begun 01:33:52Z with 24,622 MiB
+  available: `E2E-PARTIAL: platforms nokia_srlinux; ran 1 2 3 4 5 7; skipped 6 (needs
+  arista_eos: not in PLATFORMS; image ceos:4.32.0.2F absent) 8 (needs arista_eos: not in
+  PLATFORMS; image ceos:4.32.0.2F absent)`, exit 0, wall time 736.0 s (12.3 min): creates
+  38.9–54.0 s, `twin verify` 3.2 s and 3.1 s, the boot half 8.7 s. Afterwards `clab
+  inspect --all` found no containers, `local/twin` was absent and `fylgja waypoint list`
+  printed `no waypoints`. Each skip says both reasons, as US3's scenario 4 asks of an SR
+  Linux-only host.
+- **The tar in the clone's root alone**: the recorded tar (sha256 `89a567d5…`) copied to
+  `<the clone>/cEOS-lab-4.32.0.2F.tar`, then run 2 from a fresh login, begun 01:46:45Z,
+  `DONE in 449s`, exit 0: both reports again `cEOS tar: not found; looked at …; the
+  repository root is never searched`, the platforms `nokia_srlinux` alone. It was a
+  second run too, and changed nothing: `local/.env: kept`, toolchain 14 present, lab 5
+  present and 1 skipped, infrahub 6 present, fylgja 4 present, `installed 0` on every
+  part; tier 1 16 s, tier 2 422 s, run in full. The tar was removed afterwards.
+- **A file of random bytes** (1,000 bytes) as `local/cEOS-lab-4.32.0.2F.tar`: the script's
+  one line was `bring-up: REFUSED: <the clone>/local/cEOS-lab-4.32.0.2F.tar: sha256
+  e8aff2a3c1edbbe2c18966e9d9c25d9a8590a8ccead6758d4483d55acea303f9 does not match the
+  recorded 89a567d52f85e5f0e4650fe8e097e0226f78346d5a13d26bcab2a5623e888778; nothing was
+  imported`, exit 2, before any part and before the first report; `docker images` and
+  `local/.env` were the same before and after. The file was removed, and no `cEOS*` file
+  remains on the VM.
+- So SC-003 holds: without the tar the script names SR Linux alone in both reports and
+  passes tiers 1 and 2, tier 3 narrowed to `nokia_srlinux` ends on the partial pass, and
+  a tar in the repository root is not found.
 
 ---
 

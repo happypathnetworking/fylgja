@@ -30,16 +30,50 @@ research and command logs) is private; this repository holds the result.
 
 ## What it needs
 
-| | |
-|---|---|
-| Go 1.26, `make` | to build. `make build` → `bin/fylgja`, one static binary: the commands, the worker and the API's server |
-| Docker and containerlab 0.79 | on the lab host. The SR Linux image is pulled. The cEOS image is **account-gated**: you download it from Arista and `docker import` it; Fylgja never pulls it |
-| Temporal | `make temporal-dev` starts a file-backed dev server on `:7233` |
-| Infrahub 1.11.2 | operator-provided. Fylgja reads intent and each device's configuration from it, and never writes to it. Its `main` needs Fylgja's schema (`schema/`), the empty group `fylgja-devices`, and this repository registered as a read-only repository, so that Infrahub renders each device's `device-config` artifact from the template here (`.infrahub.yml`, `infrahub/`) |
-| `local/.env` | the Infrahub address and token, each platform's node login, and the API's token (`FYLGJA_API_TOKEN`), which the server and every command share. Fylgja reads the process environment only, and never prints, logs or stores a credential ([.env.example](.env.example)) |
+One Ubuntu 26.04 host on amd64, and a clone of this repository. `scripts/bring-up.sh`
+stands the host up: run it from the clone, as the user who will run Fylgja (not root). It
+asks for `sudo` once.
 
-[docs/development.md](docs/development.md#local-environment) walks through each of these,
-including the cEOS import, registering the template and seeding the Infrahub fixture.
+```sh
+git clone https://github.com/happypathnetworking/fylgja.git && cd fylgja
+scripts/bring-up.sh --ceos-tar ~/Downloads/cEOS-lab-4.32.0.2F.tar   # or no flag: SR Linux alone
+```
+
+It runs four parts in order. Each item is checked, installed when it is missing and
+checked again, and each prints one line, `present`, `installed` or `skipped` with why:
+
+| Part | What it installs, or finds already there |
+|---|---|
+| `toolchain` | `make`, `git`, `curl`, `jq`, `xz-utils`, `file`; Go (Ubuntu's, which fetches the 1.26 toolchain `go.mod` names); golangci-lint 2.14.0; the Temporal CLI 1.9.1; gnmic 0.49.0; `.venv/` with `infrahub-sdk[ctl]` 1.23.2 |
+| `lab` | Docker and containerlab 0.79.0, with you in the groups `docker` and `clab_admins`; the AppArmor lines SR Linux's `rsyslogd` needs; the SR Linux image, pulled; the cEOS image, imported from the tar |
+| `infrahub` | Infrahub 1.11.2 on `:8000`, from its published Compose file, under `local/infrahub/`. Fylgja reads intent and each device's configuration from it, and never writes to it. The part prepares its `main`: Fylgja's schema (`schema/`), the empty group `fylgja-devices`, and this repository registered read-only, so that Infrahub renders each device's `device-config` artifact from the template here (`.infrahub.yml`, `infrahub/`). Then it seeds the fixture branch `fylgja-fixture` |
+| `fylgja` | `make build` → `bin/fylgja`, one static binary: the commands, the worker and the API's server; tiers 1 and 2 (see [Tests](#tests)); then three processes, left running and logging under `local/`: Temporal's file-backed dev server on `:7233`, the worker, and the API's server on `127.0.0.1:7650`, the last two with `local/` as their state root |
+
+Before any part, when there is no `local/.env`, it writes one, readable by you alone:
+Infrahub's address and an admin token it makes, each platform's node login (the image's
+default), the API's token (`FYLGJA_API_TOKEN`), which the server and every command share,
+and Infrahub's Compose values. A `local/.env` already there is kept as it is. Fylgja reads
+the process environment only, and neither it nor the script prints, logs or stores a
+credential anywhere else ([.env.example](.env.example) names every value).
+
+The script ends `bring-up: DONE`, naming the three processes and how to stop them; on a
+host it set up, skip the first walk-through's step that starts them. A second run installs
+nothing and runs the tiers again, and `--part` runs one part alone. A fresh host took
+about 28 minutes with the tar and 20 without, most of it the images' pulls and import. The
+host it was proved on had 10 vCPUs and 32 GiB; Infrahub idles at about 5 GiB, and the
+script warns under 24 GiB.
+
+**The cEOS image is account-gated.** You download `cEOS-lab-4.32.0.2F.tar` (or `.tar.xz`)
+from Arista yourself, and Fylgja never pulls it. The script looks for it at `--ceos-tar`,
+then in `local/`, then in the clone's parent directory, never in the clone's root, and
+imports it only when its sha256 is the one recorded. Without it the host runs **SR Linux
+alone**, and the script says so in its first and last reports. The cEOS image is needed
+only for EOS and mixed twins and for tier 3's two EOS cases. Every twin the walk-throughs
+on this page boot is SR Linux, and the mixed compile under [Two vendors, one
+twin](#two-vendors-one-twin) boots nothing, so each runs on such a host unchanged.
+
+[docs/development.md](docs/development.md#local-environment) describes each component, and
+where the cEOS image comes from.
 
 ## A walking twin, start to finish
 
@@ -444,6 +478,30 @@ make test-contract   # tier 2: against a real Infrahub; needs local/.env
 make test-e2e        # tier 3: eight cases and eight live twins, SR Linux and EOS, every command through a server of its own; never in CI
 make lint
 ```
+
+CI ([ci.yml](.github/workflows/ci.yml), the badge above) runs two jobs on GitHub's hosted
+Ubuntu 26.04 runner. The **unit** job runs on every push to `main` and every pull request:
+the build, tier 1, the linter, and shellcheck over both scripts. The **contract** job runs
+on pushes to `main` alone, after the unit job: it brings up a real Infrahub on the runner
+with the script's Infrahub part, checks the committed GraphQL client against the committed
+SDL, and runs tier 2. It needs no secret: the script makes Infrahub's token on the runner
+and never prints it.
+
+Tier 3 boots twins, so it is the operator's, on a lab host, and never runs in CI. It needs
+the dev server and a worker running from the repository root (the script leaves both),
+Docker, containerlab, Infrahub and both images, and takes about 17–19 minutes. Without the
+cEOS image it refuses before any case; `PLATFORMS` narrows it to the packages you name,
+and on an SR Linux-only host it ends on a partial pass, exit 0:
+
+```console
+$ PLATFORMS=nokia_srlinux make test-e2e
+…
+E2E-PARTIAL: platforms nokia_srlinux; ran 1 2 3 4 5 7; skipped 6 (needs arista_eos: not in PLATFORMS; image ceos:4.32.0.2F absent) 8 (needs arista_eos: not in PLATFORMS; image ceos:4.32.0.2F absent)
+```
+
+Cases 6 and 8 build mixed twins, and each skip says why. A narrowed run takes about 12
+minutes, leaves the host as clean as a full one, and never prints `E2E-OK` when it skipped
+a case.
 
 ## Where to read next
 

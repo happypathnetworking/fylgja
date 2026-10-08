@@ -1,0 +1,66 @@
+name: release
+
+# The release of a tag: a draft with one static binary and its checksum, built on the
+# runner from the tagged commit with go.mod's toolchain, so that any reader can rebuild
+# it. The operator pushes the tag and publishes the draft; this workflow publishes
+# nothing (FR-037). It refuses a tag whose commit's ci run did not succeed, so the tagged
+# commit reaches main, and its ci run ends, before the tag is pushed.
+#
+# The notes below are the launch's (v0.1.0); a later release rewrites them.
+
+on:
+  push:
+    tags: ['v*']
+
+# contents to create the draft and attach to it; actions to read the tagged commit's ci
+# run, since naming one permission sets every other to none.
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-26.04
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      # The binary names the tag without its v, the line `fylgja --version` prints.
+      - run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          make build VERSION="$VERSION"
+          test "$(bin/fylgja --version)" = "fylgja version $VERSION"
+          file bin/fylgja | grep -q 'statically linked'
+      - run: make test
+      - run: |
+          gh run list --repo "$GITHUB_REPOSITORY" --commit "$GITHUB_SHA" --workflow ci \
+            --json conclusion --jq '.[0].conclusion' | grep -qx success
+      - run: |
+          cp bin/fylgja fylgja-linux-amd64 && sha256sum fylgja-linux-amd64 > SHA256SUMS
+          {
+            echo "Fylgja $GITHUB_REF_NAME: the launch."
+            cat <<'EOF'
+
+          Fylgja builds a walking twin of a network from its intent: an Infrahub branch, and
+          optionally a point in time, compiled into a deterministic bundle and booted as a
+          containerlab topology on Nokia SR Linux and Arista EOS, each device pushed the
+          configuration Infrahub rendered for it. Milestones M1–M7 and M10–M14 are built;
+          M8 (object storage and a Temporal cluster) and M9 (remote hosts) are not
+          (docs/roadmap.md).
+
+          Attached: `fylgja-linux-amd64`, one statically linked binary for Linux on amd64
+          (the commands, the worker and the API's server), built on this release's runner
+          from the tagged commit, and `SHA256SUMS` (`sha256sum -c SHA256SUMS`).
+
+          A lab host is stood up from a clone of the tagged tree by `scripts/bring-up.sh`, on
+          Ubuntu 26.04 (README, What it needs). A client on another machine builds its own
+          binary from the tree (`make build`, Go 1.26) and reaches the lab host's server
+          through `ssh -N -L 7650:127.0.0.1:7650 <lab host>`, holding the API's token alone.
+          EOF
+          } > "$RUNNER_TEMP/notes.md"
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag \
+            --title "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md" \
+            fylgja-linux-amd64 SHA256SUMS

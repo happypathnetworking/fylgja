@@ -52,7 +52,7 @@ comment: *This repository is read-only: issues are welcome, pull requests are no
 ```yaml
 on:
   push: { tags: ['v*'] }
-permissions: { contents: write }
+permissions: { contents: write, actions: read }   # actions: the gate reads the ci run; naming one permission sets the rest to none
 jobs:
   release:
     runs-on: ubuntu-26.04

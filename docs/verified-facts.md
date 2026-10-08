@@ -2,14 +2,17 @@
 
 A **verified fact** is something about a dependency that was checked against the running
 system, not taken from its documentation or from memory: how Infrahub, containerlab, a
-network operating system, Temporal or the host actually behaves. Each fact below names the
+network operating system, Temporal, GitHub's runner or the host actually behaves. Each fact below names the
 version it was verified against and the date. Re-verify a fact on any upgrade of the
 system it names, and before a change depends on one that is not here, verify it and add
 it, as the [development guide](development.md#verification-is-just-in-time) says. A fact a
 session needs in every task is also in `CLAUDE.md`; this document holds the rest, read on
 demand.
 
-Terms are the [glossary](glossary.md)'s. Dates are 2026.
+Terms are the [glossary](glossary.md)'s. Dates are 2026. A date alone is a verification on
+the development host's first release, Ubuntu 24.04.1; *(26.04, 10-08)* beside it is a
+re-verification on Ubuntu 26.04 on that date, made when the bring-up script set the
+development host up again there, or on a fresh 26.04 VM before it.
 
 ---
 
@@ -60,7 +63,10 @@ Terms are the [glossary](glossary.md)'s. Dates are 2026.
   Reported upstream: **dropped**, on the operator's word, before any search. *(10-08)*
 - `GET /api/schema/summary?branch=` returns the branch's schema hash as `main`; the hash
   covers the branch's whole schema, so two branches whose schemas differ, and two installs,
-  have different hashes. *(09-14)*
+  have different hashes. *(09-14)* Three installs that loaded the same `schema/` gave
+  three: `4d5b37aa…` on 24.04, `3b686463…` on a fresh 26.04 VM and `0aba31a5…` on the
+  26.04 development host, so a bundle compiled from the same fixture differs by install.
+  *(26.04, 10-07, 10-08)*
 - A branch sees `main` as it was when the branch was created, so a branch made before the
   schema, the group or the template existed on `main` cannot render. *(09-18)*
 
@@ -117,7 +123,11 @@ Terms are the [glossary](glossary.md)'s. Dates are 2026.
 - `CoreRepository` and `CoreReadOnlyRepository` are both branch-agnostic and take an
   optional credential. A public HTTPS repository registers as a `CoreReadOnlyRepository`
   on `main` with no credential: the clone and the connectivity check pass, and the import
-  then reads the repository's `.infrahub.yml`. *(10-06)*
+  then reads the repository's `.infrahub.yml`. *(10-06)* This repository's registration
+  reached `active`, `online` and its query, transform and definition on `main` 22–48 s
+  after its creation, with no sync stuck: 24 s on the 24.04 development host, 22 s on
+  GitHub's runner, 48 s and 43 s on fresh 26.04 VMs and 47 s on the 26.04 development
+  host. *(10-07; 26.04, 10-07, 10-08)*
 - A `CoreReadOnlyRepository` imports at its creation, its `commit` the head of its `ref`,
   and afterwards only when asked: a commit pushed to `ref` is not picked up by the minute
   sync (three minutes on, `commit` unmoved and `sync_status in-sync`), nor by a
@@ -128,41 +138,80 @@ Terms are the [glossary](glossary.md)'s. Dates are 2026.
   definition its import made; a later registration's import makes them anew, with new
   ids. *(10-07)*
 
+**Its published Compose**
+
+- `https://infrahub.opsmill.io/1.11.2` serves the Compose file whose three Infrahub
+  services read `${VERSION:-1.11.2}`; the root URL serves the latest release's, and
+  `/1.11` is 404. *(10-07)*
+- The published file carries defaults, readable by anyone, for
+  `INFRAHUB_INITIAL_ADMIN_TOKEN`, `INFRAHUB_INITIAL_AGENT_TOKEN` and
+  `INFRAHUB_SECURITY_SECRET_KEY`, and `INFRAHUB_INITIAL_ADMIN_PASSWORD` defaults to
+  `infrahub`. It publishes `8000` (the server), `2004` and `6362` (Neo4j) and `15692`
+  (RabbitMQ's metrics) on every interface. Its seven services' images total about
+  2.1 GB. *(10-07)*
+- Compose 5 runs it with an override beside it: 5.5.1 on 24.04, and 5.6.0 on 26.04, which
+  warns once per start that the task worker's `deploy.mode is only honored in Swarm mode`.
+  *(10-07; 26.04, 10-07)*
+
 ---
 
 ## containerlab 0.79.0
 
 - `clab deploy` creates `clab-<lab>/` beside the topology file, or under
   `CLAB_LABDIR_BASE` when it is set, mostly root-owned; `clab destroy --cleanup` removes
-  it without sudo in about 1s. *(09-15)*
+  it without sudo in about 1s. *(09-15; 26.04, 10-08)*
 - containerlab applies an SR Linux `.cli` startup snippet over the default configuration
   and commits it itself, so the snippet carries no `commit` line; LLDP and gNMI are on by
-  default. *(0.77, 09-15)*
+  default. *(0.77, 09-15; 26.04, 10-08)*
 - `inspect --all --format json` gives each container's `absLabPath`, always absolute;
   `labPath` is relative to the caller's directory when the topology file is under it, so
-  decode `absLabPath`. *(09-16)*
-- `inspect` reports an exited container's address as `N/A`. *(10-03)*
+  decode `absLabPath`. *(09-16; 26.04, 10-08)*
+- `inspect` reports an exited container's address as `N/A`. *(10-03; 26.04, 10-08)*
 - `/usr/bin/containerlab` is setuid root, so the kernel clears `Pdeathsig` when it starts,
   and a `clab deploy` outlives a worker killed with `kill -9`: stop a stray `clab` before
-  acting. *(09-15)*
+  acting. *(09-15; 26.04, 10-08)*
 - A plain re-deploy of a partial lab skips containerlab's post-deploy and leaves the
-  bootstrap unapplied; deploy over a partial lab with `--reconfigure`. *(09-15)*
+  bootstrap unapplied; deploy over a partial lab with `--reconfigure`. *(09-15; 26.04,
+  10-08)*
 - `clab deploy --dry-run --format json` prints a plan on stdout (`added-nodes`,
   `deleted-nodes`, `recreated-nodes`, `restarted-nodes`, `added-links`,
-  `deleted-endpoints`, `node-change-reasons`) and writes nothing. *(10-01)*
+  `deleted-endpoints`, `node-change-reasons`) and writes nothing. *(10-01; 26.04, 10-08)*
+  On 26.04 every plan also carried `started-nodes`, and no `deployed-lab: false` plan
+  carried `lab-name`, which every such plan recorded on 24.04 at the same release
+  (`internal/lab/testdata/`) does. Fylgja reads `lab-name` only in its refusal of a
+  `deployed-lab: true` answer, which still carries it. *(26.04, 10-08)*
 - That dry run must run with `CLAB_LABDIR_BASE` at the running lab's directory:
   containerlab decides a recreate from `.state.clab.yaml` there, so from any other base an
-  image or kind change is invisible, and with no running lab under the base it answers
-  `deployed-lab: true` with every list `null`. *(10-01)*
+  image or kind change is invisible. *(10-01; 26.04, 10-08)* Refined on 26.04: from
+  another base while the lab runs, the answer is still a plan, `deployed-lab: false`, that
+  misses the change (a kind change showed only as a restart, for `deleted endpoint`);
+  `deployed-lab: true` with `lab-name` and every list `null` comes only when no container
+  of the lab exists. *(26.04, 10-08)*
 - `clab deploy` without `--reconfigure` reconciles a running lab: a link added or removed
   re-cables SR Linux live and restarts a cEOS node in place (3.5–14.6s for the apply); a
   node added is created with containerlab's post-deploy (31.3s); an image or kind change
   is a recreate (20.3s, 58.7s with a far cEOS end's restart); a node removed is deleted
-  (0.85s); nothing to do takes 0.39s. *(10-01)*
-- A changed SR Linux `.cli` is never applied to a running node by a reconcile. *(10-01)*
+  (0.85s); nothing to do takes 0.39s. *(10-01)* On 26.04: an SR Linux link added 0.66s
+  and removed 0.59s, live, with neither node's `StartedAt` moved; a link between cEOS and
+  SR Linux 3.2s; a node added 37.0s; a kind change 53.6s; a node removed 1.04s; nothing to
+  do 0.53s. *(26.04, 10-08)*
+- A changed SR Linux `.cli` is never applied to a running node by a reconcile. *(10-01;
+  26.04, 10-08)*
 - Disabling one end of a containerlab link takes the link down at both ends: both are
   oper `down`, neither has a neighbour, and the far end's admin-state stays `enable`.
-  *(09-19)*
+  *(09-19; 26.04, 10-08)*
+- Its `.deb` installs `/usr/bin/containerlab` setuid root, creates the group
+  `clab_admins` and puts the installing user in it. *(26.04, 10-07)*
+- It does not need `clab_admins` among the calling process's groups: a worker running
+  under `sg docker`, with `docker` as its group and no `clab_admins` among its groups
+  (the user listed in it by `getent`), deployed and destroyed every twin of tier 3.
+  *(26.04, 10-08)*
+- Its setup script (`https://containerlab.dev/setup`, `install-docker`) pins Docker per
+  distribution release in its own text, `29.8.1` for Ubuntu 26.04, and fails, removing
+  nothing, when that release is not in Docker's repository. `CLAB_VERSION` names
+  containerlab's own release, and the copy at its `v0.79.0` tag predates 26.04. On 26.04 it
+  installed `docker-ce` 29.8.1, `containerd.io` 2.3.6 and the Compose plugin 5.6.0.
+  *(10-07; 26.04, 10-07)*
 
 ---
 
@@ -187,7 +236,7 @@ Terms are the [glossary](glossary.md)'s. Dates are 2026.
   (`clab-fylgja/<node>/config/gnoi/healthz/events/events.data` moves on every node), so a
   digest of the whole twin directory moves with nothing read. *(10-03)*
 - It boots on Ubuntu only once AppArmor allows its `rsyslogd` ([the host](#the-host)).
-  *(09-30)*
+  *(09-30; 26.04, 10-07, 10-08)*
 
 **gNMI**
 
@@ -235,7 +284,12 @@ Terms are the [glossary](glossary.md)'s. Dates are 2026.
 - The image is account-gated: downloaded from Arista with an account and imported with
   `docker import`, which leaves one layer and no `Cmd`, and gives each import a new image
   id. containerlab's `ceos` kind boots it with nothing else stated and supplies the
-  command. *(09-20)*
+  command. *(09-20; 26.04, 10-07, 10-08)*
+- The file Arista's portal gives, `cEOS-lab-4.32.0.2F.tar`, is xz-compressed despite its
+  name, and `docker import` reads the xz stream as it is. The imported image's one layer
+  has the decompressed tar's sha256 as its digest, so a present image can be told from the tar it
+  came from without importing again: the tar whose sha256 is `89a567d5…` gives the layer
+  `sha256:09ab9635…`. *(10-07; 26.04, 10-07, 10-08)*
 - It carries production's names one to one: `Ethernet1` … `Ethernet511`
   (`/interfaces/interface/name`, beside `Loopback0` and `Management0`), and modular and
   breakout forms such as `Ethernet2/1` and `Ethernet3/1/1` are the node's own names. A
@@ -293,26 +347,71 @@ Terms are the [glossary](glossary.md)'s. Dates are 2026.
   flight. *(09-15)*
 - A worker that stopped stays listed as polling its queue for about five minutes.
   *(09-15)*
+- The CLI's installer (`https://temporal.download/cli.sh`, `--version 1.9.1`) puts it in
+  `~/.temporalio/bin` and adds that to no shell file's `PATH`, so a login shell has no
+  `temporal` until something else adds it. *(10-07; 26.04, 10-07)*
+
+---
+
+## GitHub Actions, `ubuntu-26.04`
+
+- The hosted runner for a public repository has 4 vCPUs, 15,983 MiB and 3 GiB of swap,
+  Ubuntu 26.04.1 and kernel `7.0.0-1012-azure` (image `20260927.149.1`), and holds Infrahub
+  1.11.2 brought up by the bring-up script's Infrahub part: Compose's pulls and start in
+  56s, `infrahub-server` healthy 86s later, the registration's import 22s, the seed 24s.
+  Tier 2 then took 2 min 46s, and the contract job 6 min 55s in all. Its log shows no peak
+  memory. *(10-07)*
+- On the Free plan, rulesets and branch protection need the repository public: on a
+  private one the API answers `Upgrade to GitHub Pro or make this repository public`. No
+  setting disables pull requests; interaction limits last at most six months and cover
+  issues too. *(10-07)*
+- A `pull_request_target` workflow with no checkout commented on and closed a pull request
+  10–15s after it opened, and a job under `if: github.event_name == 'push'` was skipped on
+  it. *(10-07, 10-08)*
 
 ---
 
 ## The host
 
-Ubuntu 24.04.1, kernel 6.8, Docker 27.5.1, as a QEMU/KVM guest with 32 GiB.
+Ubuntu 26.04.1 LTS, kernel `7.0.0-38-generic`, Docker 29.8.1 (Compose 5.6.0, cgroup v2),
+as a QEMU/KVM guest with 10 vCPUs, 32 GiB (31,065 MiB) and 8 GiB of swap, set up by
+`scripts/bring-up.sh` *(10-08)*. The facts were first verified on the same guest's earlier
+install, Ubuntu 24.04.1, kernel 6.8, Docker 27.5.1, and each says whether it was
+re-verified here.
 
 - Ubuntu's `/etc/apparmor.d/usr.sbin.rsyslogd` attaches to the `rsyslogd` inside every
   privileged SR Linux container; unwidened, it fails `log_mgr`, and every `nokia_srlinux`
   deploy fails at containerlab's post-deploy commit (`Applications have failed:
   log_mgr`). Add `/opt/srlinux/** mr,` and `/run/srlinux/** rw,` to
   `/etc/apparmor.d/local/usr.sbin.rsyslogd` and reload it with `apparmor_parser -r`.
-  *(09-30)*
+  *(09-30)* On 26.04 the profile ships and still attaches: inside a running twin SR
+  Linux's `rsyslogd` runs `(enforce)`, as the host's own does, and with the three lines the
+  bring-up script writes, those two and `/run/syslogd.pid* rw,`, every SR Linux deploy
+  passed. Whether the two alone suffice there was not tried. *(26.04, 10-08)*
+- With those lines the profile still denies SR Linux's `rsyslogd` the `net_admin`
+  capability (`capable`: 10 denials over a tier-3 run), denies no file, and every deploy
+  passes. Nobody looked on 24.04. *(26.04, 10-08)*
 - A guest that does not nest has no `/dev/kvm`, which only a `vrnetlab_vm` package would
-  need. *(09-30)*
+  need. *(09-30; 26.04, 10-08)*
 - Infrahub idles at about 5 GiB, and its Neo4j, uncapped, once took the headroom a twin
   needs and killed an end-to-end run; capped at heap 1g/2g and page cache 1g, it does not.
-  *(09-21)*
+  *(09-21)* On 26.04: 5.2 GiB idle across its eight containers, Neo4j 2.12 GiB under the
+  cap and the server 1.56 GiB, leaving 24.5 GiB available with the three processes
+  running. *(26.04, 10-08)*
 - On a host with little memory to spare, a twin booted beside the contract tier starves
   the worker: it misses heartbeats, its deploys are cut short, and Infrahub times out the
-  tier. Read `free -m` before booting a twin. *(09-15)*
+  tier. Read `free -m` before booting a twin. *(09-15)* Not re-verified on 26.04, on
+  purpose: proving it starves the host again.
 - Under memory pressure SR Linux's own `sr_cli` can segfault, or refuse containerlab's
-  post-deploy checkpoint, failing the deploy. *(09-16, 09-17)*
+  post-deploy checkpoint, failing the deploy. *(09-16, 09-17)* Not re-verified on 26.04.
+- A group added to the user reaches no process that began before it: a shell, an agent's
+  session or the user's `systemd --user` started before the bring-up script's lab part
+  lacks `docker` and `clab_admins` while `getent` lists the user in both, until the next
+  login. Under `sg`, nesting `sg docker` and `sg clab_admins` keeps only the inner group.
+  *(26.04, 10-08)*
+- Ubuntu 26.04's `sudo` is sudo-rs 0.2.13. `sudo -n -v` asks for a password unless every
+  rule naming the user is `NOPASSWD`, while `sudo -n true` passes on one (`verifypw=all`),
+  and `-E` is ignored with a warning. *(26.04, 10-07)*
+- Ubuntu 26.04's `golang-go` (`2:1.26~1`) is go1.26.0, the release `go.mod` names, so no
+  toolchain is fetched; its `python3` is 3.14.4, inside `infrahub-sdk` 1.23.2's `>=3.10,
+  <3.15`. *(26.04, 10-07, 10-08)*

@@ -27,116 +27,24 @@ keep the numbers they were planned with.
 | **M12** | Verify | `twin verify`: the intent conformance report over the running twin, advisory and machine-readable, one finding per failed assertion and per record claim not held, exit 5 when the twin does not conform; its waiting form after every step's record ([D-037](decisions.md#d-037)–[D-039](decisions.md#d-039)) |
 | **M13** | API | `fylgja serve` on the lab host as the boundary of the core ([D-040](decisions.md#d-040)–[D-042](decisions.md#d-042)): every command behind it, the stage commands included, and the CLI as its client holding the API's own token alone; runs started, followed and cancelled through it; the operator's files crossing it |
 | **M14**, the cut | Reproducible and visible | this repository's first commit ([D-043](decisions.md#d-043)): the code with its comments and documents written for a reader of this repository, the contracts in [contracts/](../contracts/), the architecture drawn from one C4 model, the artifacts template ([D-044](decisions.md#d-044)), the module path `github.com/happypathnetworking/fylgja` and the Apache-2.0 license |
+| **M14**, the launch | Reproducible and visible | the repository made public at its start ([D-043](decisions.md#d-043)), with `SECURITY.md` and pull requests refused; `scripts/bring-up.sh`, which takes a fresh Ubuntu 26.04 host to tiers 1 and 2 and the three processes running, for SR Linux alone when the cEOS tar is absent; CI running tier 1 on every push and pull request, and tier 2 on every push to `main` against a real Infrahub the script brings up on the runner, with no secret; Infrahub rendering from this repository, registered read-only on `main` with no credential ([D-044](decisions.md#d-044)); tier 3's platform list and its partial pass; the development host on Ubuntu 26.04; the recorded session, the one-page write-up and the first release, `v0.1.0` |
 
 ## Next
 
-**The launch**, M14's second half, is the first feature specified here (`013-launch`). It
-makes this repository public at its start and ends with a stranger able to stand Fylgja
-up: one bring-up script takes a clean host to every tier passing, and both of its
-consumers run it, the setup of a fresh Ubuntu 26.04 VM and CI on a hosted runner. **Size**: 10–14 hours.
-
-**The bring-up script.** One script takes a clean Ubuntu 26.04 install to every tier
-passing, and the hand walk-through in [development.md](development.md) becomes its record.
-It covers:
-
-- **Toolchain.** `make`, `git`, a bootstrap Go that lets `go.mod` fetch its own
-  toolchain, golangci-lint 2.14, the Temporal CLI, `gnmic`, and a Python venv with
-  `infrahub-sdk[ctl]` and the `.gitignore` inside it.
-- **Lab host.** Docker Engine with the user in `docker`, containerlab 0.79 with the user
-  in `clab_admins`, the SR Linux image pulled, the cEOS image imported from an
-  operator-provided tar when one is found, and the AppArmor widening for SR Linux's
-  `rsyslogd`.
-- **Infrahub.** The 1.11.2 Compose with the override that pins the version and caps
-  Neo4j, the schema loaded on `main`, the group `fylgja-devices`, this repository
-  registered read-only on `main` ([D-044](decisions.md#d-044)), which needs no
-  credential once the repository is public, and the fixture seeded.
-- **Fylgja.** `local/.env` scaffolded from `.env.example`, then `make build`, `make test`
-  and `make test-contract` as the script's own proof, ending with the worker's and the
-  server's start-up reports naming both packages.
-
-Its test infrastructure is a fresh VM. The facts in [verified-facts.md](verified-facts.md)
-were verified on Ubuntu 24.04, and a new release changes the kernel, the AppArmor profiles
-and the packaged Docker, so the script's first run is the re-verification those facts ask
-for on any upgrade. Ubuntu 26.04 is the one release it supports, and the development host
-moves to it as the script is verified. The cEOS tar stays the operator's to provide, and the script offers an
-SR Linux-only path without it: it looks for the pinned version's tar at a path the operator
-gives, then in `local/` and the repository's parent directory (never the repository root,
-where it could be committed), checks it against a recorded checksum and imports it under
-exactly the reference the EOS package names; without it, the script goes on for SR Linux
-alone and names the platforms the host can run in its first and last reports, so nothing
-is skipped silently. Tier 3 keeps requiring every package's image by default, so `E2E-OK`
-still means every case; an explicit platform list narrows a run, which skips the cases
-that need another platform and ends on a distinct partial-pass line naming them. The
-launch's exit, a milestone's close and the attended loop run it in full
-([013-launch's brief](../specs/013-launch/brief.md#decided)).
-
-**CI with a real Infrahub.** A GitHub Actions workflow on `ubuntu-26.04`, named and never
-`ubuntu-latest`, the one release the script supports, runs tier 1, then the script's
-Infrahub half (OpsMill's published Compose for 1.11.2, this repository registered, the
-import awaited, the fixture seeded), then tier 2, with a badge in the README. The contract
-job in `.github/workflows/ci.yml` is disabled until then. Tier 3 stays out of CI by
-design ([development.md](development.md)). The seed refuses unless the artifacts
-repository is connected and in sync on `main`, and the fixture tool does not register it,
-which is why CI runs the script's Infrahub half rather than the Compose alone. Whether a
-hosted runner boots Infrahub, imports and renders inside the job's time is a question only
-a run answers. In a public repository a fork's pull request gets no secrets, so the
-contract job runs on pushes to `main` alone, and never under `pull_request_target`, which
-would run a fork's code with the job's secrets.
-
-**Infrahub renders from this repository.** Until the launch, the development host's
-Infrahub renders the configuration from a private copy of the template, registered with a
-credential. The launch registers this repository in its place, read-only on `main` with
-no credential, as [D-044](decisions.md#d-044) decides, as soon as it is public. The template's
-bytes are the same, so no artifact or fixture id moves. Whether Infrahub 1.11.2 takes a new
-commit on a `ref` update or only on re-creation is verified then, and the fixture tool's
-message that names the private repository is reworded.
-
-**Visible.** The repository goes public at the launch's start, before the script and CI
-are built and proved, so that every registration they make is the credential-less one a
-stranger makes and no token for it is ever stored; the script, CI and the recording
-arrive in the open. Before the flip, the settings refuse pull requests and protect
-`main`, and `SECURITY.md` says how to report a vulnerability. Two things make it worth reading, neither a feature: a README
-that says what is built and how to stand it up, and one recorded session of a create, a
-step and a verify, an asciinema cast rendered to an animated image the README embeds. With
-them:
-
-- **`SECURITY.md`, the threat model.** The API is one bearer token sent in the clear, on
-  loopback unless `--listen` says otherwise ([D-042](decisions.md#d-042)), and the server
-  holds Infrahub's token and both node logins. A reader running it on a shared host is
-  told so, and how to report a vulnerability.
-- **A first release**: tag `v0.1.0` with a static binary attached, stamped by `make build
-  VERSION=…`.
-- **The repository's settings**: `main` protected, issues open and pull requests not taken
-  (the README's Contributing), and topics (Infrahub, containerlab, digital twin, network
-  automation).
-
-Two records go with them:
-
-- **A write-up of how Fylgja was built**, one page, `docs/how-it-was-built.md`: what a
-  Spec Kit pass is, what a convergence pass finds, and what the hours say about
-  AI-assisted engineering with a human deciding. It summarises the private development
-  record ([D-043](decisions.md#d-043)) and does not cite it.
-- **Issues filed against Infrahub.** [verified-facts.md](verified-facts.md) holds
-  behaviours of Infrahub 1.11.2 that its documentation does not state, each verified live:
-  an artifact is never regenerated on its own and nothing marks one stale; a `?branch=`
-  parameter on `POST /graphql` is ignored and answers for `main` with no error; an
-  attribute name is 3–64 characters, so `at` is refused by the JSON schema; a
-  `BranchCreate` straight after a `BranchDelete` of the same name can fail with
-  `graphql: None`; the SDL's field order is not stable between two fetches of one branch.
-  Each is a candidate issue or discussion on `opsmill/infrahub`, through OpsMill's
-  `infrahub-reporting-issues` skill, which classifies it, searches for a duplicate and
-  shows the draft before anything is submitted.
-
-The launch's tests need two kinds of infrastructure, a VM and a runner, one more than a
-milestone is sized for. It is kept whole because both run the one script, and its spec may
-still split CI out if the runner needs more than the script gives.
+**7. The pure proposed-change check**, the first item of the order below, specified as
+one pass with items 8 and 9, which share the API and the artifacts template with it: a
+check beside the template that reports the step between a proposed change's source and
+destination branches (item 7), a pinned twin of the source branch, verified, reported on
+the proposed change (item 8), and a webhook that starts a check early (item 9). None has a
+spec, a decision entry or a researched estimate; the order sizes the three at 8–10 hours,
+and [the items](#the-items) say what each is.
 
 ## The order after the launch
 
 The Infrahub-facing items come first, then observing, then M8 and M9, a third platform,
 Ixia-c and a WebUI. Read-only production data stays [parked](decisions.md#parked). The
 items keep the numbers the order was set with; the first six became M11 to M14, which are
-built or next above.
+built above.
 
 None of these items has a feature spec, a decision entry or a researched estimate. M8, M9
 and items 11, 13, 14, 15, 19, 20 and 21 are each one pass, with one contract boundary and
@@ -163,11 +71,10 @@ the artifacts template. Items 10, 12 and 16 are chores or records, with no spec.
 
 | Phase | Items | Hours |
 |---|---|---|
-| The launch (M14) | — | 10–14 |
 | Infrahub-facing | 7–12 | 17–25 |
 | Observing | 13–16 | 15–23 |
 | Scale and surface | 17–21 | 37–66 |
-| **All** | | **79–128** |
+| **All** | | **69–114** |
 
 ### The items
 
@@ -326,9 +233,6 @@ M10's.
 
 ## Decisions the order needs
 
-- At the launch: nothing left. The bring-up script offers an SR Linux-only path, and tier 3
-  narrows by platform only when asked ([Next](#next)); where the template lives and how
-  Infrahub registers it are settled ([D-044](decisions.md#d-044)).
 - At item 9: whether the webhook needs an entry beside [D-026](decisions.md#d-026), which
   already names it and keeps the compare.
 - At item 14: a second Fylgja-owned kind on [D-032](decisions.md#d-032)'s pattern, and what

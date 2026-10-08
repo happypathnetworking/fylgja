@@ -96,9 +96,12 @@ whatever `bootstrap_via` says, and the node's *artifact* after it.
 **Branch (Infrahub)** — A version of the source of truth; the first half of an intent
 reference.
 
-**Bring-up script** — The launch's one script that takes a clean Ubuntu host to every
-*tier* passing (the toolchain, the lab host, Infrahub and Fylgja), run both by the setup
-of a fresh VM and by CI. Not yet built ([roadmap](roadmap.md#next)).
+**Bring-up script** — `scripts/bring-up.sh`, the launch's: takes a fresh Ubuntu 26.04
+host to tiers 1 and 2 passing and the dev server, the worker and the API's server running.
+A preamble, then four parts (`toolchain`, `lab`, `infrahub`, `fylgja`), each item
+verified, installed when missing and verified again, so a second run installs nothing.
+Without the cEOS tar it sets the host up for SR Linux alone. CI's contract job runs its
+*Infrahub part* alone ([development.md](development.md#local-environment)).
 
 **Bundle** — The compiler's output: `topology.clab.yml`, `configs/` (each node's
 *bootstrap* and its *artifact*), `manifest.json`. Deterministic, self-describing,
@@ -228,8 +231,9 @@ moves no `bundle_id`.
 twin directory. Fixed ID; works on an orphan lab too ([D-007](decisions.md#d-007)).
 
 **Development host** — The one machine Fylgja is developed and tested on, and its only
-*lab host* until M9 ([D-020](decisions.md#d-020)): Ubuntu 24.04 under QEMU/KVM, which
-does not nest, so it has no `/dev/kvm`.
+*lab host* until M9 ([D-020](decisions.md#d-020)): Ubuntu 26.04 under QEMU/KVM, set up by
+the *bring-up script*; the guest does not nest, so it has no `/dev/kvm`. Until the launch
+it ran Ubuntu 24.04, where most *verified facts* were first verified.
 
 **Disconnected context (Temporal)** — A workflow context that keeps running after the
 parent is cancelled. Cleanup in `provision` runs on one, and so does the record of a step
@@ -283,7 +287,9 @@ schema, written once by `make infrahub-seed` and by no test, which tier 2 reads 
 **Fixture tool** — `cmd/fylgja-fixture`: the only binary that writes to Infrahub. It
 seeds and deletes branches (the fixture branch, the mixed one, throwaway ones), changes
 them as the tests need (`-add-link`, `-disable-port`, `-set-role`), generates their
-artifacts and waits for them, and writes and deletes `fylgja-test-*` waypoint series.
+artifacts and waits for them, and writes and deletes `fylgja-test-*` waypoint series. With
+`-prepare-main` it prepares `main`: the schema, the group `fylgja-devices` and this
+repository's read-only registration, each made only when absent.
 
 **Following** — From M4: a twin built from an unpinned reference is checked every
 *interval* and rebuilt when its `bundle_id` moves. `twin create` begins it unless `--at`
@@ -365,6 +371,12 @@ each one's state at start and serves either way. cEOS (`ceos:4.32.0.2F`) is one;
 SR Linux says `public_registry`, so a deploy may pull it and no call is made
 ([§4.5](architecture.md#45-lab-host-containerlab-and-the-twin-directory)).
 
+**Infrahub part** — The *bring-up script*'s `infrahub` part, which CI's contract job runs
+alone (`--part infrahub`): Infrahub 1.11.2 from its published Compose file with this
+repository's override, under `local/infrahub/`; `main` prepared by the *fixture tool*'s
+`-prepare-main`, this repository registered read-only with no credential and its import
+awaited; and the *fixture branch* seeded ([development.md](development.md#local-environment)).
+
 **Intent** — What Infrahub says the network should be, on a branch, at a time.
 
 **Intent conformance report** — From M12: what `fylgja twin verify` prints, and the
@@ -401,8 +413,9 @@ One twin at a time ([D-013](decisions.md#d-013)).
 
 **Launch** — M14's second half, after the *cut*: the repository made public at its
 start, before the *bring-up script* and CI are built ([D-043](decisions.md#d-043)); then
-the script, CI with a real Infrahub, and Infrahub rendering from this repository's
-*artifacts template* ([roadmap](roadmap.md#next)).
+the script, CI with a real Infrahub, Infrahub rendering from this repository's
+*artifacts template*, the *recording*, the *write-up* and the release `v0.1.0`
+([roadmap](roadmap.md#built)).
 
 **Link-change fidelity** — From M11: what containerlab's reconcile does to a node of a
 platform when a link of its is added or removed, declared by the PSP as
@@ -514,6 +527,11 @@ worker alike. An override package `psp validate` rejects is refused at load. How
 operator boots another NOS version without a rebuild. A client's command has no
 `--psp-dir`.
 
+**Partial pass** — The end of a tier-3 run narrowed by a *platform list* that skipped a
+case and passed every case it ran: `E2E-PARTIAL: platforms <list>; ran <cases>; skipped
+<case> (<why>) …`, exit 0. Such a run never prints `E2E-OK`, which means every case ran
+([development.md](development.md#test-architecture)).
+
 **Phase (of a step)** — From M11: where a *step* that failed or was cancelled after it
 touched the host stopped: `reconcile` (the stage swap or containerlab's apply),
 `readiness`, `push` or `record`. A *diverged* record names it, and `step.diverged`
@@ -523,6 +541,13 @@ carries it. A step that ended `stepped` or `unchanged` has none.
 frozen and reproducible. A twin built from a *waypoint* is always pinned: the waypoint
 resolves to the `at` written on it, or to the moment Infrahub recorded its writing, and
 the twin never follows.
+
+**Platform list** — `PLATFORMS=<list> make test-e2e`: shipped package names
+(`nokia_srlinux`, `arista_eos`) that narrow tier 3 to the cases they can run. It selects
+by package, never by image: a case runs when the list names every package it needs and
+each account-gated image among them is present, and is skipped, saying why, otherwise.
+Unset, every case runs and every image is required. A run that skipped a case ends on a
+*partial pass* ([development.md](development.md#test-architecture)).
 
 **Probe login** — The username and password the *readiness* probe authenticates with.
 A PSP names the environment variables that carry them (`readiness.login`) and never
@@ -603,6 +628,11 @@ configuration back, so its report labels each claim as the record's. A claim not
 a finding, `verify.record.holds`, and counts toward `nonconforming`; a *diverged* twin's
 unpushed nodes fail it. The step's wait never waits on a claim
 ([D-038](decisions.md#d-038)).
+
+**Recording** — The README's recorded session: `docs/recording/session.cast`, an
+asciinema cast of `twin create --waypoint`, `twin step` and `twin verify` run through the
+*API* from a shell holding the *API token* alone, and `session.gif`, rendered from it.
+Every frame was read for a credential before it was committed ([README](../README.md)).
 
 **Reference schema** — The concrete Infrahub schema Fylgja ships implementing its
 generics, so a greenfield install has something to populate.
@@ -742,10 +772,11 @@ generates ([D-028](decisions.md#d-028)).
 host move ([D-015](decisions.md#d-015)).
 
 **Tiers** — The three levels of tests ([development.md](development.md#test-architecture)).
-**Tier 1**, `make test`: no infrastructure, every PR, under 35 seconds. **Tier 2**, `make
-test-contract`: the *contract tests*, against a real Infrahub. **Tier 3**, `make
+**Tier 1**, `make test`: no infrastructure, under 35 seconds, in CI on every push and pull
+request. **Tier 2**, `make test-contract`: the *contract tests*, against a real Infrahub,
+in CI on every push to `main` against one the *Infrahub part* brings up. **Tier 3**, `make
 test-e2e`: eight cases on booted NOS images through a server and a worker, on demand and
-never in CI. A **hand check** is a scenario run by hand on the host, read by someone
+never in CI, narrowed by a *platform list* when asked. A **hand check** is a scenario run by hand on the host, read by someone
 present.
 
 **Twin directory** — `twin/` under the *state root*: `bundle/`, a copy of the staged
@@ -812,3 +843,8 @@ ends with `VerifyTwin` ([D-007](decisions.md#d-007)).
 **Workflow service** — The Temporal service the worker polls and the server starts,
 follows and cancels runs through: `temporal server start-dev`, file-backed, on `:7233`,
 until M8 replaces it with a self-hosted cluster. `FYLGJA_TEMPORAL_ADDRESS` names it.
+
+**Write-up** — `docs/how-it-was-built.md`: one page on how Fylgja was built, saying what
+a Spec Kit pass and a convergence pass are and giving the hours and model time per
+milestone. Its figures are derived from the private development record, which it does not
+cite ([how-it-was-built.md](how-it-was-built.md), [D-043](decisions.md#d-043)).

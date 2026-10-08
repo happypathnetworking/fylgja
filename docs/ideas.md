@@ -57,3 +57,44 @@ Four adjustments to the idea as stated:
   table assigns to each command.
 - How the live stages (tier 3, the worker, the hand scenarios) are serialised, and
   which sessions are given the node logins.
+
+## A persistent waypoint series on the fixture branch
+
+**Raised** 2026-10-07, in the launch's clarify session, and parked by its spec (Out of
+scope). **When**: in the order after the launch. **Status**: open.
+
+### The idea
+
+Give `fylgja-fixture` a waypoint series of its own, written by its seed and kept, so that
+a twin can be created from a waypoint and stepped without a throwaway branch and series
+made around each run. The README's stepping walk-through, and the recording made from it,
+seed `fylgja-test-readme` and its series first and delete both after, for want of one.
+
+### What it would reverse
+
+- The fixture tool's refusal: `-waypoint` refuses `fylgja-fixture` ("the fixture never
+  gains a persistent series"), and every series outside `fylgja-test-`.
+- The test-series guard: a test writes only `fylgja-test-*` series, through
+  `testsupport`, and deletes what it wrote.
+- The tiers' "no waypoints" invariant: after the contract tier and after tier 3,
+  `fylgja waypoint list` prints `no waypoints`, so anything it lists is the operator's own.
+
+### What it could add
+
+- A tier-3 step of an SR Linux-only twin. Case 8 is tier 3's only step, and its twin is
+  mixed, so a host without the cEOS tar, narrowed to `PLATFORMS=nokia_srlinux`, steps
+  nothing today.
+- The stepping walk-through with no seeding before it and no delete after.
+
+### To check before building
+
+- The fixture branch's head is what tier 2 and tier 3's first case read and compare with
+  `testdata/ctm/three-node.json`. A series' later waypoint follows a change, so the head
+  would move unless the change is undone after it is sealed, which a generate must follow
+  too.
+- A waypoint outlives the branch it names, so `make infrahub-clean` would have to delete
+  the series with the branch, and the bring-up script's Infrahub part, which reads the
+  fixture as complete from its three `Ready` artifacts alone, would have to read the series
+  too.
+- How the operator's own series and the fixture's share `waypoint list`, whose `no
+  waypoints` after a tier is today how a run is seen to have cleaned up.

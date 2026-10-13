@@ -34,6 +34,18 @@ development host up again there, or on a fresh 26.04 VM before it.
   *(09-28)*
 - A pinned `at` carries at most six fractional digits: Infrahub takes nine, and Fylgja
   refuses more than six (`intent.at.precision`). *(09-16)*
+- History is append-only and stamped by the server's clock: no mutation takes an `at`,
+  and nothing writes at a past instant. `?at=` on a mutation's request is parsed and
+  validated as a query time, then ignored: a create and an update sent with `at` an hour
+  earlier both answered `ok: true`, each attribute's `updated_at` was the moment of the
+  write, and a read pinned between the create and the update saw the value before it. The
+  SDK's `save`, `create` and `update` take no `at`; its `execute_graphql` does, and builds
+  the URL the same way for a query or a mutation. In the source, mutations look the node
+  up and save it with no `at`, then overwrite the context's `at` with now for the
+  resolvers that follow. *(26.04, 10-13)*
+  **Bug, to follow up on**: the silence. The parameter is accepted and validated on a
+  request it has no effect on, and the client is not told. A malformed `at` is refused on
+  a mutation while a well-formed one is discarded. Not yet reported upstream.
 - On a host where Infrahub runs in Docker beside Fylgja, a local clock read after a seed
   returns sees the whole seed, since both share the kernel's clock (verified under WSL2).
   *(09-16)*

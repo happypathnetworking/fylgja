@@ -2915,6 +2915,57 @@ reference would split every command.
   boundary of §2.6 moves on an upgrade (re-verify it on every upgrade), or if a second
   proposed change on one branch becomes expressible.
 
+<a id="d-046"></a>
+## D-046 — A stage's generation stamp is the later of its artifact's checksum stamp and the proposed change's artifact validation; staleness is judged per device
+
+**Status:** Accepted 2026-10-16. Refines [D-045](#d-045). Built by
+`014-proposed-change-stages`.
+
+### Context
+
+[D-045](#d-045) refuses a stale stage: at each stage, pinned at its `at`, intent newer
+than its artifact's `checksum.updated_at`. Verified at the plan on 1.11.2 (2026-10-16,
+`specs/014-proposed-change-stages/research.md` §6.5): a regeneration to identical bytes
+writes no checksum and no storage id, on a hand generate and on the proposed change's
+run-check alike, while the run-check re-runs the proposed change's artifact validator and
+moves its `completed_at`, identical bytes or not. So under D-045's rule as written an
+intent edit the template does not render (a device's `site`) would leave a stage stale with
+no remedy that clears it, and 015's check would fail a merge on a harmless edit.
+
+### Options considered
+
+- **D-045's rule as written.** The hole above.
+- **Branch-wide intent against the artifacts.** A hand generate after a change leaves the
+  unchanged devices' bytes identical and their checksum stamps old, so one added link
+  would make every untouched device stale for ever after.
+- **A warning instead of a refusal.** Contradicts D-045 and its reason: a rehearsal of a
+  stage whose configuration is not the intent's proves nothing.
+- **The artifact's node metadata as the generation stamp.** Whether an identical
+  regeneration touches it is unverified; the validator's completion is.
+
+### Decision
+
+A device is stale at a stage when the latest stamp of its own intent, its attributes and
+relationship edges, read pinned at the stage's `at`, is later than its generation stamp:
+the later of its artifact's `checksum.updated_at` (the artifact of its package's
+`config.artifact_name`, read on the branch pinned at `at`) and the proposed change's
+artifact validator's `completed_at` value (read on the default branch pinned at `at`;
+absent when none has completed). The comparison is per device: exactly the devices whose
+intent moved are named. The one case a per-device reading misses, a neighbour's change
+that alters this device's rendered lines while none of its own stamps moves, is covered by
+the run-check, which re-stamps the validator for every device. `stage.artifact.stale`
+names the device and both remedies: a generate, or the proposed change's checks. Nothing
+else in D-045 moves.
+
+### Consequences
+
+- The stage reader reads `CoreArtifactValidator` pinned, beside `CoreProposedChange` and
+  `Branch` (Constitution III as amended, 1.2.1).
+- Tier 2 proves the hole closed: a non-rendered intent change, a stage refused stale, a
+  generate that moves nothing, a run-check, a fresh stage planned.
+- Revisit if an upgrade makes an identical regeneration move the checksum's stamp, or
+  gives an artifact a generation stamp of its own.
+
 ---
 
 <a id="parked"></a>

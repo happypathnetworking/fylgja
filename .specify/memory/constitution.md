@@ -1,6 +1,11 @@
 <!--
 Sync Impact Report
-- Version change: 1.1.1 → 1.2.0 (2026-10-16, MINOR: Principle VI materially expanded).
+- Version change: 1.2.0 → 1.2.1 (2026-10-16, PATCH: Principle III clarified). III read
+  "only its own generics"; a stage lives on CoreProposedChange (D-045), so the reader
+  reads that kind, its validators and Branch, each a named exception in the read-only
+  test with its reason. No principle is redefined. Source: D-045. Templates:
+  .specify/templates/plan-template.md's Constitution Check names 1.2.1.
+- 1.1.1 → 1.2.0 (2026-10-16, MINOR: Principle VI materially expanded).
   VI forbade an `at` "of its own" when the operator supplies none; it now forbids one
   composed from a clock of Fylgja's own and allows one read from Infrahub — a stamp it
   returned, or the first instant after one — passed as the operator's would be and
@@ -46,6 +51,10 @@ come from the PSP, never from a global constant.
 ### III. The Generics Are the Contract
 Fylgja MUST query only its own Infrahub generics (`schema/`). Specifically:
 - MUST NOT reach past a generic to a concrete kind.
+- MAY read an Infrahub-owned kind that a Fylgja kind relates to or depends on
+  (`CoreProposedChange`, its validators, `Branch`), each named as an exception in the
+  read-only test with the reason it is Infrahub's unit and not the operator's model;
+  never a concrete kind of anyone's model (D-045).
 - MUST demand the least possible; every required attribute is a constraint imposed on
   someone else's model.
 - MUST graduate, not gate: optional generics unlock features; when absent, dependent
@@ -61,7 +70,7 @@ Fylgja MUST query only its own Infrahub generics (`schema/`). Specifically:
   that is a guess.
 - MUST validate schema conformance and data completeness separately, report all
   findings in one pass, and produce no CTM on failure.
-*Rationale: D-002, D-003, D-004.*
+*Rationale: D-002, D-003, D-004, D-045.*
 
 ### IV. Fylgja Never Renders Configuration
 Fylgja MUST consume the artifacts Infrahub renders for the branch under test and push
@@ -205,4 +214,4 @@ Detail lives in `docs/development.md`; these are the gates.
   preceded 1.0.0 at the repository root is retired and MUST NOT be edited in its
   place.
 
-**Version**: 1.2.0 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-16
+**Version**: 1.2.1 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-16

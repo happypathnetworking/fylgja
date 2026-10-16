@@ -12,7 +12,7 @@ Read in this order, then the current feature under `specs/`:
 `docs/archive/`) · `docs/development.md` (conventions).
 Terms are in `docs/glossary.md`. What has been verified about a dependency is in
 `docs/verified-facts.md`, read when a task touches that dependency. The constitution at
-`.specify/memory/constitution.md` (1.2.0) binds every plan's Constitution Check.
+`.specify/memory/constitution.md` (1.2.1) binds every plan's Constitution Check.
 
 This repository began with one commit, M14's cut ([D-043](docs/decisions.md#d-043)). The
 record of how M1–M13 were built (their specs, research logs and command logs) is private

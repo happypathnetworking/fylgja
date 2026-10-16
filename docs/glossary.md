@@ -100,6 +100,15 @@ whatever `bootstrap_via` says, and the node's *artifact* after it.
 **Branch (Infrahub)** — A version of the source of truth; the first half of an intent
 reference.
 
+**Branch point** — From `014-proposed-change-stages` ([D-045](decisions.md#d-045)): the
+first *stage* of every *proposed change*, derived and never marked: `main` read pinned at
+its source branch's `branched_from`, verbatim, `at_source` `branch_point`. It is the base
+the change departs from. A rebase moves `branched_from` and discards the branch's earlier
+history from pinned reads, so every *mark* written before it falls before the branch point
+and is refused (`stage.at.before_branch_point`, naming the rebase). On a `main` that holds
+the schema and no network, as the *development host*'s does, it is refused
+`contract.node.missing` and the plan goes on to the next stage.
+
 **Bring-up script** — `scripts/bring-up.sh`, the launch's: takes a fresh Ubuntu 26.04
 host to tiers 1 and 2 passing and the dev server, the worker and the API's server running.
 A preamble, then four parts (`toolchain`, `lab`, `infrahub`, `fylgja`), each item
@@ -335,6 +344,16 @@ with `--at` is best-effort ([D-027](decisions.md#d-027)).
 **Fylgja** — In Norse tradition, a spirit that accompanies a person: a follower, a
 fetch. Here, the platform, and the reason the twin *walks*.
 
+**Generation stamp** — From `014-proposed-change-stages` ([D-046](decisions.md#d-046)):
+when a device's configuration was last generated, as a *stage* judges it: the later of its
+*artifact*'s `checksum.updated_at` (the artifact its package's `config.artifact_name`
+names) and the *proposed change*'s artifact validator's `completed_at` value, both pinned at
+the stage's `at`. A device whose own intent was written later is stale there, and the stage
+is refused `stage.artifact.stale`, naming the device and both remedies: a generate, or the
+proposed change's checks. The validator counts because a regeneration to identical bytes
+moves no checksum, and a run-check moves the validator either way. The *head* reads it
+unpinned, as it reads its stamps.
+
 **Generics (Infrahub)** — Abstract kinds that concrete node kinds declare they
 implement. Fylgja's schema contract is a small set of generics
 ([D-002](decisions.md#d-002)).
@@ -350,6 +369,15 @@ lossy and mixed, under `testdata/golden/`) are its expected output;
 **Graduate, don't gate** — Optional generics unlock features rather than being
 required; where absent, dependent behaviour skips with a recorded reason. The same
 degradation pattern as PSP capabilities.
+
+**Head** — From `014-proposed-change-stages` ([D-045](decisions.md#d-045)): the last
+*stage* of every *proposed change*, derived and never marked: its source branch pinned one
+microsecond after the latest stamp across the branch's intent (attributes and relationship
+edges) and its artifacts' checksums, in Infrahub's own layout, `at_source` `head`. A read
+pinned at exactly a stamp sees the node and not the value, so the head takes the first
+instant after. It moves whenever the branch is written; a twin built from it keeps the
+`at` it was built at, and `twin step --stage <branch>/head` takes it to the head as it now
+stands.
 
 **Heartbeat (Temporal)** — A progress signal from a long-running activity so Temporal
 does not mistake slow for dead. Mandatory on deploy, readiness and the push
@@ -463,6 +491,14 @@ whether `port` drops a placeholder. An optional `breakout.parent` renders a brea
 child's parent from the child's values. Findings and the fidelity record name the rule
 that decided an interface.
 
+**Mark** — From `014-proposed-change-stages` ([D-045](decisions.md#d-045)): a *stage* the
+operator writes, a `FylgjaStage` object related to its *proposed change*, with a `label`
+unique within it, an optional `as_of` and an optional description. Its `at` is the `as_of`
+as written (`given`), else its own write stamp, the label's `updated_at` (`written`). Marks
+sit between the *branch point* and the *head*, ordered by `at`. The kind is
+branch-agnostic, so a mark lands in no branch's diff; Fylgja only reads it. Mark after the
+artifacts are regenerated, or the mark is stale ([schema/README.md](../schema/README.md)).
+
 **Mechanism** — From M7 ([D-031](decisions.md#d-031)): one of the fixed, named ways
 Fylgja's code reaches a node, selected by a value in a *PSP* and by nothing else about the
 platform. The set is the push mechanisms (`json_rpc`, `eapi`), the probe's transport
@@ -529,6 +565,13 @@ holds the credentials, starts the worker and the server, and gives each command.
 **Orphan lab** — Lab `fylgja` present on the host without a readable `twin.json`: no
 twin directory, no record, or a record that does not open or parse. Detected at `create`
 and at worker start; cleared by `fylgja twin destroy` ([D-013](decisions.md#d-013)).
+
+**Orphaned stage** — From `014-proposed-change-stages` ([D-045](decisions.md#d-045)): a
+*mark* whose *proposed change* was deleted under it, which Infrahub allows though the
+relationship is required. `stage list` lists it after the proposed changes with the
+warning `stage.orphaned`, naming its id; nothing is planned or created from it, and the
+operator deletes it. A test deletes its stages before their proposed change for this
+reason.
 
 **Package override directory** — `--psp-dir` on `fylgja serve` and `fylgja worker run`,
 or `FYLGJA_PSP_DIR`: a directory of support packages loaded after the embedded ones,
@@ -722,13 +765,29 @@ reference* on its source branch. Every proposed change has two derived stages �
 *branch point*, `main` at the branch's `branched_from`, and the *head*, the branch pinned
 one microsecond after its latest stamp — and the operator marks the moments between as
 `FylgjaStage` objects, each related to the proposed change, with a label unique within
-it and an optional `as_of`. Fylgja only reads them. Replaces the *waypoint*.
+it and an optional `as_of`: the *marks*. Fylgja only reads them. In order, the branch
+point, the marks by `at`, the head; named by a *stage reference*. Only an open proposed
+change's stages are visible, draft or not. A stage is refused at `resolve` when its `at`
+is before the branch point or later than now, and when it is stale: a device's intent
+newer than its *generation stamp* ([D-046](decisions.md#d-046)). `stage list` lists them,
+`stage plan` reads and compiles each and prints the step between each pair, and `twin
+step` walks a twin through its own proposed change's stages. Replaces the *waypoint*.
 
 **Stage commands** — `intent read`, `twin compile`, `schema check` and `psp validate`:
 each exposes one stage of the pipeline on its own, on the code path a run uses
 ([D-019](decisions.md#d-019)). Each is a request to the *server* like every command;
 `twin compile` and `psp validate` need neither Infrahub nor the workflow service, and are
 checked against the server's packages.
+
+**Stage reference** — From `014-proposed-change-stages` ([D-045](decisions.md#d-045)):
+`<branch>/<label>`, e.g. `change-1/cabled`, the way to name a *stage* on the command line,
+given as `--stage` to `twin create`, `twin step` and `intent read`. Split at the first `/`:
+the *proposed change* by its source branch, among the open ones, then a *mark*'s label or
+`branch-point` or `head` for the derived ends; neither half has a `/` or whitespace, so a
+reference is one shell word. Those two labels are reserved, and a mark carrying one is
+refused (`stage.label.reserved`). It resolves on the *server*, before any run and before
+any branch's intent is read, to a pinned `(branch, at)` and where the `at` came from; the
+stage's name enters no CTM or bundle.
 
 **State root** — The one directory under which the *bundle store* and the *twin
 directory* live: `FYLGJA_STATE_ROOT`, defaulting to `local/` under the process's

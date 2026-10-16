@@ -12,7 +12,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-	"time"
 )
 
 // fakeWaypoints is an Infrahub holding the waypoint kind (or not) and some waypoints,
@@ -88,13 +87,6 @@ func waypointNode(id, series string, sequence int, branch, writtenAt, at, descri
 		"as_of":       map[string]any{"value": asOf},
 		"description": map[string]any{"value": description},
 	}
-}
-
-func ctx10s(t *testing.T) context.Context {
-	t.Helper()
-	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
-	t.Cleanup(cancel)
-	return ctx
 }
 
 // The kind's presence and shape are read from the schema endpoint before any query, and
@@ -298,13 +290,4 @@ func TestWaypointReaderFromEnv(t *testing.T) {
 	if r.address != "http://infrahub.invalid" {
 		t.Errorf("address = %q, want the trailing slash trimmed", r.address)
 	}
-}
-
-func ptr(s string) *string { return &s }
-
-func deref(s *string) string {
-	if s == nil {
-		return "<nil>"
-	}
-	return *s
 }

@@ -1,6 +1,8 @@
 # The generic queries genqlient generates typed Go from. Every selection names only
 # Fylgja generics (Constitution III) — never a concrete kind. A tier-1 test asserts that
-# every operation is a query and names only Fylgja* roots.
+# every operation is a query and names only Fylgja* roots, but for the three roots that
+# are Infrahub's own units rather than the operator's model (014: CoreProposedChange,
+# CoreArtifactValidator, Branch), each named there.
 #
 # Verified 2026-09-08 against Infrahub 1.11.2: envelope (`value`, `node`, `edges`),
 # `limit`/`offset`, and generic resolution to concrete kinds. Ordering comes from the
@@ -110,6 +112,123 @@ query Waypoints($limit: Int!, $offset: Int!) {
       branch        { value updated_at }
       as_of { value }
       description   { value }
+    } }
+  }
+}
+
+# 014 — the open proposed changes with their stages, read from the default branch, where
+# the stage kind lives (D-045). CoreProposedChange is Infrahub's own unit, not the
+# operator's model: one of the read-only test's three named exceptions. Only `open` is
+# visible to Fylgja, draft or not. An empty $branch is omitted, which Infrahub 1.11.2
+# reads as no filter at all, so every open proposed change is listed; "" would match
+# none (verified 2026-10-16).
+query ProposedChanges(
+  # @genqlient(omitempty: true)
+  $branch: String,
+  $limit: Int!,
+  $offset: Int!
+) {
+  CoreProposedChange(state__value: "open", source_branch__value: $branch, limit: $limit, offset: $offset) {
+    count
+    edges { node {
+      id
+      name               { value }
+      source_branch      { value }
+      destination_branch { value }
+      state              { value }
+      is_draft           { value }
+      fylgja_stages { edges { node {
+        id
+        label       { value updated_at }
+        as_of       { value updated_at }
+        description { value }
+      } } }
+    } }
+  }
+}
+
+# 014 — stages whose proposed change was deleted under them (stage.orphaned).
+query OrphanStages($limit: Int!, $offset: Int!) {
+  FylgjaStage(proposed_change__isnull: true, limit: $limit, offset: $offset) {
+    count
+    edges { node {
+      id
+      label { value updated_at }
+      as_of { value updated_at }
+    } }
+  }
+}
+
+# 014 — a branch's point of origin and its creation: the branch point's `at`, and the
+# rebase rule. Branch is Infrahub's own, a named exception. A name that does not exist
+# answers [] (verified 2026-10-16). Named BranchPoint, not BranchInfo, because genqlient
+# names its function after the operation and intent.BranchInfo is the reader's type.
+query BranchPoint($name: String!) {
+  Branch(name: $name) {
+    name
+    branched_from
+    created_at
+  }
+}
+
+# 014 — a proposed change's artifact validators, read on the default branch pinned at a
+# stage's `at`: the latest completed_at is half of a device's generation stamp (D-046).
+# The value, never its updated_at: pinned, the value is the one in force and the
+# metadata the current one (research §6.5). CoreArtifactValidator is Infrahub's own, a
+# named exception. One validator per artifact definition, so one page.
+query ArtifactValidations($id: ID!) {
+  CoreArtifactValidator(proposed_change__ids: [$id]) {
+    edges { node {
+      completed_at { value }
+      definition   { node { name { value } } }
+    } }
+  }
+}
+
+# 014 — when each part of a branch's intent, and each artifact's checksum, was last
+# written: the head's `at` (the latest plus one microsecond) and the staleness rule's
+# two sides, per device (research R-06, R-07; D-046). Stamps only, never a value of
+# intent but the names that key them and the platform that picks the device's package
+# (Constitution II). An unset relationship's properties.updated_at is null and skipped.
+# The artifacts are spread on CoreArtifactTarget, as the read's are: selected directly
+# on FylgjaDevice they are refused. Named IntentStamps, not Stamps, because
+# intent.Stamps is the aggregate's type.
+fragment ArtifactStamps on CoreArtifactTarget {
+  artifacts { edges { node {
+    name     { value }
+    checksum { value updated_at }
+  } } }
+}
+
+query IntentStamps($limit: Int!, $offset: Int!) {
+  FylgjaDevice(limit: $limit, offset: $offset) {
+    count
+    edges { node {
+      name { value updated_at }
+      role { updated_at }
+      site { updated_at }
+      platform { properties { updated_at } node { ...PlatformFields } }
+      interfaces { edges {
+        properties { updated_at }
+        node {
+          name      { value updated_at }
+          iftype    { updated_at }
+          mgmt_only { updated_at }
+          enabled   { updated_at }
+          link      { properties { updated_at } }
+          parent    { properties { updated_at } }
+        }
+      } }
+      ...ArtifactStamps
+    } }
+  }
+  FylgjaLink(limit: $limit, offset: $offset) {
+    count
+    edges { node {
+      endpoints { edges {
+        properties { updated_at }
+        node { device { node { name { value } } } }
+      } }
     } }
   }
 }

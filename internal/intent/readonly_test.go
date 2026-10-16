@@ -2,6 +2,7 @@ package intent
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -17,7 +18,31 @@ func operations() map[string]string {
 		// M10: a Fylgja-owned concrete kind read from the default branch, as
 		// FylgjaContract is; its root is Fylgja's, so the root check holds it too.
 		"Waypoints": Waypoints_Operation,
+		// 014: the stage reader's four, on the default branch, and the branch's stamps.
+		// FylgjaStage's root is Fylgja's; the other three are infrahubRoots below.
+		"ProposedChanges":     ProposedChanges_Operation,
+		"OrphanStages":        OrphanStages_Operation,
+		"BranchPoint":         BranchPoint_Operation,
+		"ArtifactValidations": ArtifactValidations_Operation,
+		"IntentStamps":        IntentStamps_Operation,
 	}
+}
+
+// infrahubRoots are the roots an operation may select that are not Fylgja's: each is
+// Infrahub's own unit, which nobody implements, and none is the operator's model of the
+// network, so reading it reserves no structure of theirs (Constitution III, amended to
+// 1.2.1 for D-045; research R-03). Each is named; anything else that is not Fylgja's is
+// still refused.
+var infrahubRoots = map[string]bool{
+	// The proposed change is Infrahub's unit of review, and the stage's home (D-045):
+	// a stage is a moment of one, found by its source branch.
+	"CoreProposedChange": true,
+	// The artifact validator is Infrahub's own check of a proposed change's artifacts;
+	// its completion is half of a stage's generation stamp (D-046).
+	"CoreArtifactValidator": true,
+	// The branch is Infrahub's own: its point of origin is the branch point stage's
+	// `at`, and only Infrahub can say where a branch began.
+	"Branch": true,
 }
 
 // Fylgja reads from Infrahub and never writes to it (Constitution III). Proving
@@ -58,9 +83,10 @@ func TestQueriesNameOnlyGenerics(t *testing.T) {
 	}
 }
 
-// Every root an operation selects is a Fylgja generic. The check above catches the
-// reference schema's kinds by name; this one catches any root that is not ours,
-// including a concrete kind from a model Fylgja has never seen.
+// Every root an operation selects is a Fylgja generic, or one of the three roots that
+// are Infrahub's own, named in infrahubRoots. The check above catches the reference
+// schema's kinds by name; this one catches any root that is not ours, including a
+// concrete kind from a model Fylgja has never seen.
 func TestQueryRootsAreFylgjaGenerics(t *testing.T) {
 	for name, doc := range operations() {
 		roots := queryRoots(doc)
@@ -68,9 +94,31 @@ func TestQueryRootsAreFylgjaGenerics(t *testing.T) {
 			t.Errorf("operation %s selects no root", name)
 		}
 		for _, r := range roots {
-			if !strings.HasPrefix(r, "Fylgja") {
+			if !strings.HasPrefix(r, "Fylgja") && !infrahubRoots[r] {
 				t.Errorf("operation %s selects the root %s, which is not a Fylgja generic", name, r)
 			}
+		}
+	}
+}
+
+// The exceptions are exactly the three, each selected by the operation that needs it:
+// widening the list is a change to Constitution III, not to this file.
+func TestQueryRootExceptionsAreNamed(t *testing.T) {
+	want := map[string]string{
+		"CoreProposedChange":    "ProposedChanges",
+		"CoreArtifactValidator": "ArtifactValidations",
+		"Branch":                "BranchPoint",
+	}
+	if len(infrahubRoots) != len(want) {
+		t.Errorf("infrahubRoots names %d roots, want the three %v", len(infrahubRoots), want)
+	}
+	ops := operations()
+	for root, op := range want {
+		if !infrahubRoots[root] {
+			t.Errorf("%s is not among the named exceptions", root)
+		}
+		if !slices.Contains(queryRoots(ops[op]), root) {
+			t.Errorf("operation %s does not select %s", op, root)
 		}
 	}
 }

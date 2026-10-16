@@ -389,12 +389,15 @@ func (c *Client) WaitForArtifacts(branch string, want int) error {
 		branch, want, artifactWait, last)
 }
 
-// ArtifactsReadyAt returns when the branch's last artifact became Ready: the latest
-// status stamp among them, which the generate that renders an artifact writes together
-// with its checksum and storage id. A read pinned after it sees every artifact. It
-// refuses a branch with no artifact, or with one not Ready, since no such instant exists.
+// ArtifactsReadyAt returns when the branch's last artifact was rendered: the latest
+// checksum stamp among them. A first generation stamps the checksum, the storage id and
+// the status alike, but a regeneration moves the checksum's and the storage id's and
+// leaves the status's where it was, Ready to Ready being no change (research §2.5), so
+// only the checksum's stamp sees every generation. A read pinned after it sees every
+// artifact as last rendered. It refuses a branch with no artifact, or with one not Ready,
+// since no such instant exists.
 func (c *Client) ArtifactsReadyAt(branch string) (time.Time, error) {
-	const q = `{ CoreArtifact { edges { node { status { value updated_at } } } } }`
+	const q = `{ CoreArtifact { edges { node { status { value } checksum { updated_at } } } } }`
 	raw, err := c.GraphQL(branch, q)
 	if err != nil {
 		return time.Time{}, err
@@ -404,9 +407,11 @@ func (c *Client) ArtifactsReadyAt(branch string) (time.Time, error) {
 			Edges []struct {
 				Node struct {
 					Status struct {
-						Value     string `json:"value"`
-						UpdatedAt string `json:"updated_at"`
+						Value string `json:"value"`
 					} `json:"status"`
+					Checksum struct {
+						UpdatedAt string `json:"updated_at"`
+					} `json:"checksum"`
 				} `json:"node"`
 			} `json:"edges"`
 		} `json:"CoreArtifact"`
@@ -422,9 +427,9 @@ func (c *Client) ArtifactsReadyAt(branch string) (time.Time, error) {
 		if e.Node.Status.Value != "Ready" {
 			return time.Time{}, fmt.Errorf("branch %s holds an artifact %s, not Ready", branch, e.Node.Status.Value)
 		}
-		at, err := time.Parse(time.RFC3339Nano, e.Node.Status.UpdatedAt)
+		at, err := time.Parse(time.RFC3339Nano, e.Node.Checksum.UpdatedAt)
 		if err != nil {
-			return time.Time{}, fmt.Errorf("branch %s: artifact status stamp %q: %w", branch, e.Node.Status.UpdatedAt, err)
+			return time.Time{}, fmt.Errorf("branch %s: artifact checksum stamp %q: %w", branch, e.Node.Checksum.UpdatedAt, err)
 		}
 		if at.After(latest) {
 			latest = at

@@ -1,0 +1,20 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+#
+# The one-time removal of the waypoint kind from an Infrahub main that carries it
+# (014-proposed-change-stages, D-045: waypoints are removed, not kept beside stages).
+# Loaded by hand on the development host, once, after schema/fylgja-stage.yaml:
+#
+#   .venv/bin/infrahubctl schema load --branch main specs/014-proposed-change-stages/migration/fylgja-waypoint-absent.yaml
+#
+# Verified 2026-10-16 against Infrahub 1.11.2 (research.md §6.2, §6.3): `schema check`
+# prints `removed: FylgjaWaypoint`; the load removes the kind in about 40 s; checked or
+# loaded again where the kind is already absent it is `No diff` / "already up to date", so
+# a fresh install that never had the kind may load it harmlessly. It is kept here, not under
+# schema/, which LoadSchema loads whole and which holds no waypoint file after this pass.
+# FylgjaWaypoint held no object on the development host when it was removed.
+version: "1.0"
+nodes:
+  - name: Waypoint
+    namespace: Fylgja
+    state: absent

@@ -1,0 +1,263 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fylgja.dev/schemas/stages.schema.json",
+  "title": "Fylgja stage blocks — 014",
+  "description": "The three stage blocks of the findings document, referenced from findings.schema.json by this $id: `resolved`, the reference one stage resolves to (the `stage` block on twin.create, twin.create --dry-run, intent.read with --stage and twin.step once its target resolved); `list`, stage.list's `stages` block; `plan`, stage.plan's `plan` block, whose steps are step.Diff's result. Replaces waypoints.schema.json (M10, M11): a stage is a moment of a proposed change (D-045), named <branch>/<label>, with two derived stages, branch-point and head, beside the operator's marks. Every fact the text prints and no more: artifacts by name and checksum, bootstraps as changed or not, never a line of either (Constitution X). Every list is sorted, so the same input gives the same document.",
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[^/\\s]+/[^/\\s]+$",
+      "description": "<branch>/<label>: the reference syntax; branch-point and head name the derived stages"
+    },
+    "label": {
+      "type": "string",
+      "pattern": "^[^/\\s]+$"
+    },
+    "at_source": {
+      "enum": ["given", "written", "branch_point", "head"],
+      "description": "given: as_of was written on the mark and is used verbatim. written: the mark carries none, and the at is its own write stamp (label.updated_at). branch_point: the branch's branched_from, read on main. head: the latest stamp across the branch's intent and artifact checksums plus one microsecond"
+    },
+    "proposed_change": {
+      "type": "object",
+      "description": "the proposed change the stage belongs to, found by its source branch among the open ones",
+      "required": ["id", "name", "branch", "draft"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "name": {"type": "string", "description": "the operator's; not unique"},
+        "branch": {"type": "string", "pattern": "^[^/\\s]+$", "description": "the source branch"},
+        "draft": {"type": "boolean"}
+      }
+    },
+    "resolved": {
+      "type": "object",
+      "description": "One stage resolved to a pinned intent reference. The at is verbatim: what was written, what Infrahub returned, or the first instant after what it returned (the head). branch is the branch the read is on: main for the branch point, the proposed change's source branch otherwise",
+      "required": ["ref", "branch", "label", "proposed_change", "at", "at_source", "description"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {"$ref": "#/$defs/ref"},
+        "branch": {"type": "string", "minLength": 1},
+        "label": {"$ref": "#/$defs/label"},
+        "proposed_change": {"$ref": "#/$defs/proposed_change"},
+        "at": {"type": "string", "minLength": 1},
+        "at_source": {"$ref": "#/$defs/at_source"},
+        "description": {"type": "string", "description": "as the operator wrote it; empty when none was written, and for a derived stage"}
+      }
+    },
+    "row": {
+      "type": "object",
+      "description": "a resolved stage (the fields of `resolved`, restated because that schema admits nothing else) plus twin",
+      "required": ["ref", "branch", "label", "proposed_change", "at", "at_source", "description", "twin"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {"$ref": "#/$defs/ref"},
+        "branch": {"type": "string", "minLength": 1},
+        "label": {"$ref": "#/$defs/label"},
+        "proposed_change": {"$ref": "#/$defs/proposed_change"},
+        "at": {"type": "string", "minLength": 1},
+        "at_source": {"$ref": "#/$defs/at_source"},
+        "description": {"type": "string"},
+        "twin": {
+          "type": "boolean",
+          "description": "true on the one row the host's record names (twin.json 6's stage, by proposed change id and label); stage.twin.moved beside it says when that row no longer resolves to what the record holds"
+        }
+      }
+    },
+    "record": {
+      "type": "object",
+      "description": "what twin.json under the state root names, as recorded, when it is readable and names a stage; the at and branch are the record's provenance, which the row's may since differ from (stage.twin.moved)",
+      "required": ["ref", "proposed_change", "label", "branch", "at", "at_source", "state", "towards"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {"$ref": "#/$defs/ref"},
+        "proposed_change": {
+          "type": "object",
+          "required": ["id", "branch"],
+          "additionalProperties": false,
+          "properties": {"id": {"type": "string"}, "branch": {"type": "string"}}
+        },
+        "label": {"$ref": "#/$defs/label"},
+        "branch": {"type": "string"},
+        "at": {"type": "string"},
+        "at_source": {"$ref": "#/$defs/at_source"},
+        "state": {"enum": ["ready", "diverged"]},
+        "towards": {
+          "type": ["object", "null"],
+          "description": "the target of a diverged step, when state is diverged; null otherwise",
+          "required": ["ref"],
+          "additionalProperties": false,
+          "properties": {"ref": {"$ref": "#/$defs/ref"}}
+        }
+      }
+    },
+    "orphan": {
+      "type": "object",
+      "description": "a stage whose proposed change no longer exists: listed, warned (stage.orphaned), never planned or created from",
+      "required": ["id", "label", "at", "at_source"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "label": {"type": "string"},
+        "at": {"type": "string"},
+        "at_source": {"enum": ["given", "written"]}
+      }
+    },
+    "list": {
+      "type": "object",
+      "description": "stage.list: the stages of every open proposed change (or of the one whose source branch was asked for), sorted by branch then order (branch point, marks by at, head), each with the reference it resolves to; the orphaned stages; and the stage the host's readable record names, when it names one",
+      "required": ["branch", "rows", "orphans", "record"],
+      "additionalProperties": false,
+      "properties": {
+        "branch": {"type": ["string", "null"], "description": "the --branch filter, or null when every open proposed change was listed"},
+        "rows": {"type": "array", "items": {"$ref": "#/$defs/row"}},
+        "orphans": {"type": "array", "items": {"$ref": "#/$defs/orphan"}},
+        "record": {"oneOf": [{"$ref": "#/$defs/record"}, {"type": "null"}]}
+      }
+    },
+    "read_counts": {
+      "type": "object",
+      "description": "intent read's summary line, as numbers: what the read holds and what the packages' profiles make of it",
+      "required": ["devices", "interfaces", "links", "artifacts", "lossy_mappings", "shared_ports"],
+      "additionalProperties": false,
+      "properties": {
+        "devices": {"type": "integer", "minimum": 0},
+        "interfaces": {"type": "integer", "minimum": 0},
+        "links": {"type": "integer", "minimum": 0},
+        "artifacts": {"type": "integer", "minimum": 0},
+        "lossy_mappings": {"type": "integer", "minimum": 0},
+        "shared_ports": {"type": "integer", "minimum": 0}
+      }
+    },
+    "node_port": {
+      "type": "object",
+      "required": ["node", "port"],
+      "additionalProperties": false,
+      "properties": {
+        "node": {"type": "string"},
+        "port": {"type": "string", "description": "containerlab's port name, as the manifest's links carry it"}
+      }
+    },
+    "link": {
+      "type": "object",
+      "required": ["id", "a", "b"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {"type": "string", "description": "the manifest's canonical link id (D-011)"},
+        "a": {"$ref": "#/$defs/node_port"},
+        "b": {"$ref": "#/$defs/node_port"}
+      }
+    },
+    "step": {
+      "type": "object",
+      "description": "step.Diff between two consecutive stages' bundles: a pure function of the two, with provenance excluded. unchanged is every list empty; the two ids are never equal between two stages, because at is hashed, and the step from a mark written after the last regenerate to the head is unchanged",
+      "required": ["from", "to", "from_bundle_id", "to_bundle_id", "computed"],
+      "additionalProperties": false,
+      "properties": {
+        "from": {"$ref": "#/$defs/ref"},
+        "to": {"$ref": "#/$defs/ref"},
+        "from_bundle_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "to_bundle_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
+        "computed": {"type": "boolean", "description": "false when either stage did not compile; not_computed then names it, and nothing else is present"},
+        "not_computed": {"type": "string", "description": "e.g. `change-1/branch-point was refused`"},
+        "unchanged": {"type": "boolean", "description": "nodes, links, bootstraps and artifacts identical; the bundles differ in provenance alone"},
+        "nodes": {
+          "type": "object",
+          "required": ["added", "removed", "changed"],
+          "additionalProperties": false,
+          "properties": {
+            "added": {"type": "array", "items": {"type": "string"}},
+            "removed": {"type": "array", "items": {"type": "string"}},
+            "changed": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["node", "reasons"],
+                "additionalProperties": false,
+                "properties": {
+                  "node": {"type": "string"},
+                  "reasons": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {"enum": ["platform", "image", "psp", "mapping", "bootstrap"]},
+                    "description": "sorted; bootstrap means the node's bootstrap file's bytes differ, and no line of it is quoted"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "links": {
+          "type": "object",
+          "required": ["added", "removed"],
+          "additionalProperties": false,
+          "properties": {
+            "added": {"type": "array", "items": {"$ref": "#/$defs/link"}},
+            "removed": {"type": "array", "items": {"$ref": "#/$defs/link"}}
+          }
+        },
+        "artifacts": {
+          "type": "object",
+          "required": ["changed"],
+          "additionalProperties": false,
+          "properties": {
+            "changed": {
+              "type": "array",
+              "description": "nodes present on both sides whose artifact checksum differs; an added or removed node's artifact goes with the node",
+              "items": {
+                "type": "object",
+                "required": ["node", "name", "from", "to"],
+                "additionalProperties": false,
+                "properties": {
+                  "node": {"type": "string"},
+                  "name": {"type": "string"},
+                  "from": {"type": "string", "pattern": "^[0-9a-f]{32}$"},
+                  "to": {"type": "string", "pattern": "^[0-9a-f]{32}$"}
+                }
+              }
+            }
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"computed": {"const": true}}},
+          "then": {"required": ["unchanged", "nodes", "links", "artifacts"], "not": {"required": ["not_computed"]}},
+          "else": {"required": ["not_computed"]}
+        }
+      ]
+    },
+    "plan_stage": {
+      "type": "object",
+      "description": "one stage of a plan: its reference, label, description and where its at comes from in every case; branch and at once it resolved; the bundle when the compile did; the read counts when the read did; and its findings. A stage refused at resolution carries ref, label, description, at_source and findings alone, with bundle_id and read null",
+      "required": ["ref", "label", "description", "at_source", "bundle_id", "read", "findings"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": {"$ref": "#/$defs/ref"},
+        "label": {"$ref": "#/$defs/label"},
+        "description": {"type": "string"},
+        "at_source": {"$ref": "#/$defs/at_source"},
+        "branch": {"type": "string"},
+        "at": {"type": "string"},
+        "bundle_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "null when the stage was refused at resolution, read or compile"},
+        "read": {"oneOf": [{"$ref": "#/$defs/read_counts"}, {"type": "null"}]},
+        "findings": {
+          "type": "array",
+          "items": {"type": "object"},
+          "description": "this stage's findings, each also in the document's own list with the same rule, object, step and message"
+        }
+      }
+    },
+    "plan": {
+      "type": "object",
+      "description": "stage.plan: the proposed change named by its source branch, each of its stages in order (branch point, marks by at, head) with what it resolved to, compiled to and read, or its findings; and the step between each consecutive pair",
+      "required": ["branch", "proposed_change", "stages", "steps"],
+      "additionalProperties": false,
+      "properties": {
+        "branch": {"type": "string", "pattern": "^[^/\\s]+$"},
+        "proposed_change": {"$ref": "#/$defs/proposed_change"},
+        "stages": {"type": "array", "minItems": 2, "items": {"$ref": "#/$defs/plan_stage"}},
+        "steps": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/step"}, "description": "one fewer than the stages, in order"}
+      }
+    }
+  }
+}

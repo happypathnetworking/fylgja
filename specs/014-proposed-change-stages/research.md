@@ -1,15 +1,18 @@
 # Research: a proposed change's stages
 
 **Feature**: `014-proposed-change-stages` · **Brief**: [brief.md](brief.md) ·
-**Written**: 2026-10-16, on the development host (Ubuntu 26.04.1, Infrahub 1.11.2), before
-`specify`, from one session that ran the live verifications the brief's
-[Left to the plan](brief.md#left-to-the-plan) owed and put three findings to the operator.
+**Written**: 2026-10-16, on the development host (Ubuntu 26.04.1, Infrahub 1.11.2). §1–§4
+before `specify`, from one session that ran the live verifications the brief's
+[Left to the plan](brief.md#left-to-the-plan) owed and put three findings to the operator;
+§5–§7 by `plan` the same day, after `specify`, from a second session that made the design's
+decisions and verified what they rest on.
 Every fact below says how it was verified, with the wall time (UTC) the answer carries;
 the raw exchanges are in that session's scratchpad log and are not committed. Each fact
 that holds is in [verified-facts.md](../../docs/verified-facts.md) with its date.
 
 §1 holds what the operator decided on the findings, §2 what was verified, §3 what the
-brief's design changes as a result, and §4 what stays owed.
+brief's design changes as a result, and §4 what the first session left owed. §5 holds the
+plan's decisions (R-01…R-16), §6 what the plan verified, and §7 what is owed at implement.
 
 ---
 
@@ -277,7 +280,9 @@ changes went the same way during the session.
 - **Fylgja still mutates nothing**: the diff tree would need `DiffUpdate`, so the head
   and `main`'s movement are read from stamps (§2.8).
 
-## 4. Owed
+## 4. Owed, as the first session left it
+
+Superseded by §7 where the two differ.
 
 - **Nothing before `specify`.** Every verification the brief listed is in §2.
 - At implement, the final kind's load on `main` (a migration from the candidate), and
@@ -288,3 +293,431 @@ changes went the same way during the session.
   write.
 - The upstream request for named points in time, once the pass works (the brief's
   [Left to the plan](brief.md#left-to-the-plan)); §2.6 and §2.7 are worth a line in it.
+
+---
+
+<a id="5-the-plans-decisions"></a>
+## 5. The plan's decisions, 2026-10-16
+
+Each names what was chosen, why, and what else was weighed. Where a decision touches the
+text of [D-045](../../docs/decisions.md#d-045) it says so; one (R-05) needs an entry of its
+own, which the operator writes or declines before the code it governs is built.
+
+<a id="r-01"></a>
+### R-01 The kind: the candidate plus `description` and a label rule, loaded as a migration
+
+**Decision**: `schema/fylgja-stage.yaml` is the probe's candidate with two changes: the
+optional `description` (Text, `order_weight` 1200) the brief gives it, and `label`
+constrained by `parameters.regex: "^[^/\\s]+$"`, no `/` and no whitespace, as the
+waypoint's `series` was, so that a stage reference is one shell word and splits at its
+first `/` without ambiguity. The parser's `LabelPattern` is held equal to the kind's regex
+by a test, as `waypoint.SeriesPattern` was. Everything else is the candidate's, so the
+migration on `main` is the diff `schema check` printed (§6.2): `description` added,
+`label`'s description and regex changed. The removal of `FylgjaWaypoint` is a separate
+document, `migration/fylgja-waypoint-absent.yaml`, a node with `state: absent`, loaded once
+by hand (§6.3). **Rationale**: the skill's migration rule (add optional fields; retire with
+`state: absent`), and the two attributes the candidate lacked. **Alternatives**: a
+human-friendly id through the proposed change (refused by Infrahub, §2.2); a `display_label`
+through the proposed change's source branch so the UI's breadcrumb reads `branch/label`
+(rendering unverified; deferred, §7); a label regex excluding the two reserved labels by a
+negative lookahead (Infrahub's acceptance of lookaheads unverified, and the spec settled the
+refusal at list and resolve); `order_by` on node metadata (the kind's `as_of` order is its
+natural one, and Fylgja orders in memory whatever Infrahub does).
+
+<a id="r-02"></a>
+### R-02 The package is `internal/stages`
+
+**Decision**: `internal/waypoint` is renamed `internal/stages`, package `stages`: `Ref`,
+`Resolved`, `ProposedChange`, `Resolve`, `List`, `Plan`, `Build`, `Target`. **Rationale**:
+`internal/stage` is the read-and-compile pipelines, so the singular is taken, and the module
+already has a plural package (`findings`). **Alternatives**: `internal/change`,
+`internal/proposed` (neither says what the package holds).
+
+<a id="r-03"></a>
+### R-03 The reader reads Infrahub's own kinds for the proposed change and the branch
+
+**Decision**: `intent.StageReader` replaces `WaypointReader` on the default branch's
+unnamed endpoints: `Check` reads `GET /api/schema` for `FylgjaStage` with `label`, `as_of`,
+`description` and the relationship `proposed_change`, and for `CoreProposedChange`'s
+`fylgja_stages`; `ProposedChanges(ctx, branch)` lists the open ones (`state__value:
+"open"`, filtered by `source_branch__value` when a branch is named) with their stages
+through `fylgja_stages`; `Orphans(ctx)` lists `FylgjaStage(proposed_change__isnull:
+true)`; `Branch(ctx, name)` reads `Branch(name:)`'s `branched_from` and `created_at`;
+`Validations(ctx, id, at)` reads `CoreArtifactValidator(proposed_change__ids:)`'s
+`completed_at` pinned. `(*intent.Client).Stamps(ctx)` reads, on the client's branch at its
+`at`, every stamp the read's selections carry (R-07). `readonly_test.go`'s root check
+names `CoreProposedChange`, `CoreArtifactValidator` and `Branch` as the three roots that are
+Infrahub's own and not the operator's model; every operation is still a query and the
+concrete-kind check stands. **Rationale**: D-045 chose the proposed change as the stage's
+home, and a branch's point of origin is the branch's to say; neither is a kind anyone
+implements. **Alternative**: reading the branch point and the stages through a Fylgja
+generic (there is none to read them through, and inventing one would reserve structure that
+is a guess, Constitution III).
+
+<a id="r-04"></a>
+### R-04 An empty branch point is refused as any empty read is, and the plan goes on
+
+**Decision**: the branch point is read on `main` at `branched_from` through the stage
+pipeline like any stage, and on an install whose `main` holds no `FylgjaContract` object it
+is refused `contract.node.missing` ("branch defines FylgjaContract but holds no instance
+of it"), before a device is counted (§6.1). The plan prints `b/branch-point: refused
+(contract.node.missing)`, the step to the first mark is `not_computed`, and the other stages
+are planned; `twin create --stage b/branch-point` and a step to it are refused by the same
+finding at `resolve`. Tier 2 and tier 3 assert that outcome on the development host, and a
+twin is created from the first mark. **Rationale**: the development host's `main` carries
+the schema, the group and the registration and no intent by design (the fixture is a
+branch, and every test branch is seeded on itself), while a deployment's `main` carries the
+network; the stage is a true reading of each. **Alternatives**: a contract object and
+devices written on `main` for the tests (rejected: intent writes stay off `main`, and a
+seeded `main` would collide with every throwaway branch's seed); a zero-device bundle for an
+empty branch point (rejected: containerlab deploys no empty lab, and `ctm.devices.empty`
+exists for this); the branch point left out of the list when `main` holds nothing (rejected:
+its position is the design's, and the finding says why). **For the spec**: US1 scenario 1
+and SC-004 say the two derived stages compile; on this install the branch point is refused
+and the head compiles. `analyze` rewords them: "each resolved and planned; compiled where
+`main` carries the contract and intent, which the development host's does not". **For
+015**: a rehearsal's baseline on this install cannot be the branch point.
+
+<a id="r-05"></a>
+### R-05 The generation stamp is the later of the checksum's and the artifact validator's; staleness is per device
+
+**Decision**: a device is stale at a stage when the latest stamp of its own intent, read
+pinned at the stage's `at`, is later than its generation stamp, which is the later of its
+artifact's `checksum.updated_at` (the artifact of its package's `config.artifact_name`,
+read on the branch pinned at `at`) and the proposed change's artifact validator's
+`completed_at` value (read on the default branch pinned at `at`). `stage.artifact.stale`
+names the device and says to regenerate, by a generate or by the proposed change's checks,
+and mark again. **Rationale**: §6.5 verified that a regeneration to identical bytes leaves
+every checksum stamp where it was, on a generate and on a run-check alike, while the
+run-check re-runs the proposed change's artifact validator (the same node) and moves its
+`completed_at`. Under D-045's text, "intent newer than its artifact's checksum stamp", an
+intent edit the template does not render (a device's `site`) would leave a stage stale with
+no remedy that clears it, and 015's check would then fail a merge on a harmless edit; with
+the validator's completion counted, the proposed change's checks always clear it, and a hand
+generate clears it when the bytes change. Per device rather than branch-wide, because a
+hand generate after a change leaves the unchanged devices' bytes identical and their
+checksum stamps old: branch-wide, `-add-link` would make `n2` stale for ever after; per
+device, exactly the devices whose intent moved are named (SC-003). The one case per device
+misses, a neighbour's rename that changes this device's description line while none of its
+own stamps moves, is covered by the run-check, which re-stamps the validator for every
+device. **Alternatives**: D-045's rule as written (the hole above); branch-wide intent
+(false positives after every hand generate); a warning instead of a refusal (contradicts
+D-045 and D-045's reason); reading the artifact's node metadata for a generation stamp
+(unverified whether an identical regeneration touches it; the validator is verified).
+**This refines D-045's text**, which names "each artifact's `checksum.updated_at`" alone
+and compares with "the latest intent stamp on the branch". The draft entry, for the
+operator:
+
+> **D-046 — A stage's generation stamp is the later of its artifact's checksum stamp and
+> the proposed change's artifact validation; staleness is judged per device.** Refines
+> [D-045](#d-045). A regeneration to identical bytes writes no checksum and no storage id,
+> so an intent edit the template does not render would leave a stage stale under D-045's
+> rule with no remedy that clears it; the proposed change's artifact validator is re-run on
+> every run-check, identical bytes or not, and its `completed_at` moves (verified 2026-10-16
+> on 1.11.2). A device is stale at a stage when the latest stamp of its own intent,
+> attributes and relationship edges, pinned at the stage's `at`, is later than the later of
+> its artifact's `checksum.updated_at` and the proposed change's artifact validator's
+> `completed_at`, both pinned at `at`. The remedy names both ways to regenerate. Nothing
+> else in D-045 moves.
+
+`tasks` tagged the entry `[operator]` (T011); the operator accepted it at `analyze` on
+2026-10-16, and it is [D-046](../../docs/decisions.md#d-046) in the decision log.
+
+<a id="r-06"></a>
+### R-06 The head's `at` is the latest stamp plus one microsecond, in the stamp's own layout
+
+**Decision**: the head's `at` is computed from an unpinned `Stamps` read of the source
+branch: the latest `updated_at` across every attribute and relationship edge the read
+selects, on devices, interfaces and links, and every artifact's `checksum.updated_at`;
+parsed (RFC 3339), plus one microsecond, formatted `2006-01-02T15:04:05.000000-07:00`, the
+layout Infrahub's own stamps have (`2026-10-08T05:48:38.544482+00:00`), and passed
+verbatim on every query of the head's read. The validator's completion is not a stamp of
+the branch and does not enter the head's `at`. The same unpinned `Stamps` serves the head's
+staleness check. **Rationale**: R-02 of §1 and Constitution VI 1.2.0; a read pinned at
+exactly a stamp sees the node and not the value (§2.6). **Alternative**: the `Z` layout
+Infrahub also accepts (rejected: the record's `at` should read as the stamps beside it do).
+
+<a id="r-07"></a>
+### R-07 What a device's intent stamp is
+
+**Decision**: a device's latest intent stamp is the latest of: its attributes' `updated_at`
+(`name`, `role`, `site`), its `platform` edge's; each of its interfaces' edge, attributes
+(`name`, `iftype`, `mgmt_only`, `enabled`), `link` edge and `parent` edge; and, for every
+link an interface of its is an endpoint of, the link's `endpoints` edges. `addresses` are
+read but not stamped (they do not reach the artifact or the bundle). An unset relationship's
+`properties.updated_at` is `null` and is skipped (§6.6). One `Stamps` query selects them
+all, spreading the artifact fragment `on CoreArtifactTarget` as the read does (a direct
+`artifacts` on `FylgjaDevice` is refused, §6.6). **Rationale**: a re-cabling that writes no
+attribute still moves an edge stamp (§2.8), and a link's endpoint edges name both devices.
+
+<a id="r-08"></a>
+### R-08 The identifiers
+
+**Decision**: seven `waypoint.*` rules become `stage.*` ones, five are added, one is
+dropped, and one M11 rule whose noun was the waypoint's is renamed: twelve `stage.*` rules. The step named `stage`
+and the M2 rule `stage.failed` are the staging step's and are untouched; no new rule
+collides with them.
+
+| Was | Is | Why |
+|---|---|---|
+| `waypoint.ref.invalid` | `stage.ref.invalid` | `--stage`, or `--branch` on `stage list`/`stage plan`, malformed |
+| `waypoint.flags.conflict` | `stage.flags.conflict` | `--stage` beside `--branch`, `--at` or `--interval` |
+| `waypoint.kind.absent` | `stage.kind.absent` | the kind, an attribute of it, or the extension absent on the default branch |
+| `waypoint.unknown` | `stage.unknown` | no open proposed change on the branch; no such stage of it |
+| `waypoint.duplicate` | `stage.duplicate` | two marks of one proposed change share a label (a defence against the constraint, kept as before) |
+| `waypoint.at.unresolved` | `stage.at.unresolved` | a given `as_of` later than now; a mark with no stamp at all |
+| — | `stage.at.before_branch_point` | a stage's `at` before `branched_from`; says a rebase did it when `created_at` is before the `at` |
+| — | `stage.label.reserved` | a mark labelled `head` or `branch-point` |
+| — | `stage.artifact.stale` | R-05 |
+| — | `stage.orphaned` (warning) | a stage whose proposed change was deleted under it |
+| — | `stage.main.moved` (warning) | `main`'s latest stamp is later than `branched_from` |
+| `waypoint.twin.moved` | `stage.twin.moved` (warning) | the record's stage no longer resolves to the record's reference, or is gone |
+| `waypoint.time.reversed` | dropped | marks are ordered by `at`, so no later one can be earlier |
+| `step.sequence.skipped` | `step.stage.skipped` | the noun was the waypoint's; the warning is M11's |
+| `step.target.foreign`, `step.target.unknown`, `step.target.current` | unchanged | reworded for stages |
+
+**Rationale**: Constitution X and FR-014. The rename of `step.sequence.skipped` is the one
+identifier outside the waypoint rules that moves; a stable identifier whose words name a
+thing that no longer exists would mislead.
+
+<a id="r-09"></a>
+### R-09 The findings contract moves non-additively at version 1; the frozen copies
+
+**Decision**: `contracts/findings.schema.json` loses the `waypoint` blocks and operations
+and gains the `stage` ones, `waypoints.schema.json` is deleted and `stages.schema.json`
+added under `https://fylgja.dev/schemas/stages.schema.json`; `findings_version` stays `1`
+(FR-022). The frozen `008-waypoints` copies under `internal/findings/testdata/contracts/`
+go with their readers (`waypoint_test.go` and the M10 cases of `step_test.go`), since no
+test holds a waypoint document any more. `twin.schema.json` `5` is frozen under
+`internal/lab/testdata/contracts/010-verify/` for the records M12 wrote, beside `009-stepping`'s
+`4`. `frozenContractCopies` becomes 29 (31 − 3 + 1). **Rationale**: a 0.x contract, and
+the spec's decision; a frozen copy exists for a test, and a copy no test reads is dead.
+**Alternative**: `findings_version` `2` (rejected by FR-022; the document's shape for every
+other operation is unchanged).
+
+<a id="r-10"></a>
+### R-10 The recorded step histories' payloads are rewritten to the record's stage block
+
+**Decision**: `step-cancelled`, `step-diverged` and `step-wait-cancelled` carry the
+record's waypoint block inside their payloads, five lines each (§6.7): `InspectTwin`'s
+result (the record the step read) and `RecordStep`'s input. With `TwinRecord.Waypoint`
+gone, the replayed `InspectTwin` result would decode with no stage, the workflow would
+refuse the twin as unsteppable, and the replay would issue different commands than the
+history. So the payloads are decoded (base64 JSON), each `"waypoint": {series, sequence,
+description, at_source}` rewritten as `"stage": {proposed_change: {id, branch}, label,
+description, at_source}` with a label made from the series and sequence, and re-encoded,
+once, by a script kept beside them; the replay tests' comment says so, as it says the
+host's name and the diff were replaced. **Rationale**: the histories are already scrubbed
+fixtures, not pristine recordings; the workflow's decisions depend on the block's
+presence, never its content; re-recording a diverged step needs a fault on a live twin.
+**Alternative**: a JSON key kept as `waypoint` for compatibility (rejected: the record's
+shape is the contract's).
+
+<a id="r-11"></a>
+### R-11 `twin.json` `6`, and how older records read
+
+**Decision**: `twin_version` `6`; `waypoint` becomes `stage`, an object or `null`:
+`proposed_change {id, branch}`, `label`, `description`, `at_source` (`given`, `written`,
+`branch_point`, `head`); the step block's sides carry `stage` where they carried `waypoint`.
+A record of `5` or earlier reads as before, its waypoint block ignored: the twin shows as
+pinned with no stage, and `twin step` refuses it as unsteppable ("created from a waypoint
+of a version this build no longer reads; only a twin built from a stage steps"). `twin
+show`, `twin verify`, `stage list` and the dry runs name the stage where they named the
+waypoint, in the same places (FR-019). **Rationale**: FR-021; a waypoint twin's series is
+gone with the kind, so it has nothing to step along.
+
+<a id="r-12"></a>
+### R-12 The fixture tool and test support
+
+**Decision**: test support gains `TestBranchPrefix = "fylgja-test-"` and refuses any other
+branch before a request, as it refused a series: `OpenProposedChange(branch, draft)`
+returns the id and waits until every validator of the new proposed change is `completed`
+(bounded, 180 s; about 17 s on a bare branch and 41 s on a seeded one, §6.4–§6.5), so an
+intent change that follows is never re-rendered under a mark by the creation's pipeline;
+`MarkStage(id, label, at, description)`, `StagesOf(id)`, `DeleteStagesOf(id)`,
+`CloseProposedChange(id)`, `DeleteProposedChange(id)`, `ProposedChangesOf(branch)` (every
+state), `RunCheck(id)` (asks `ARTIFACT` and waits for the validator's `completed_at` to
+move, bounded 120 s), `Rebase(branch)` (`BranchRebase`, `wait_until_completion`, bounded
+180 s), and `DeleteTestBranch(branch)`: the stages of each of its proposed changes, then
+the proposed changes, then the branch. The fixture tool gains `-propose` (a draft on
+`-branch`, printing the id), `-stage <label>` with `-at` and `-description`, `-run-check`
+and `-close`; `-delete` deletes in order; `-waypoint` and `-delete-series` go. Every flag of
+the group refuses `fylgja-fixture` and a `-branch` outside the prefix. The seed stays one
+call, and the proposed change is opened after it (the wait makes the order safe), so tier
+3 and the README add one command where they wrote a waypoint. `ArtifactsReadyAt` reads the
+checksum's stamp, not the status's (§2.5). **Alternative**: opening the draft on a bare
+branch before the seed, which the operator's own flow resembles (works too, and the
+contract says so; the seed-then-propose order keeps the fixture tool's one-call seed).
+
+<a id="r-13"></a>
+### R-13 Tier 3's cases 7 and 8
+
+**Decision**: case 7 seeds `fylgja-test-e2e-st-<pid>-<n>`, proposes, marks `seeded`, adds
+the link, waits for the checksums, marks `third-link`; `stage plan --branch` lists four
+stages (`branch-point` refused `contract.node.missing`, R-04; `seeded` and `third-link`
+compiled to two ids; `head` compiled, to a third id, since its `at` differs) and three
+steps (not computed; the link added with `n1` and `n3` changed; `unchanged`); `stage list`
+lists them with no record; the twin from `seeded` carries the plan's id and a `6` record
+naming the stage and the proposed change; `twin show` and `stage list` mark it; a step with
+no target goes to `third-link`; a second step with no target goes to `head`, `unchanged`,
+and the record moves (US2 scenario 2); destroy; `-delete` removes stages, proposed change
+and branch, and `stage list --branch` after it is refused `stage.unknown`. Case 8 does the
+same on the mixed fixture with `seeded` and `mixed-link`, the step forward with
+`--allow-restart` and back with `--stage <branch>/seeded`, as today. The trap's `-delete`
+covers both. **Rationale**: FR-029 and the spec's independent tests, at the cost of about
+90 s (two proposed-change waits) and one unchanged step.
+
+<a id="r-14"></a>
+### R-14 The API stays version `1`; the contracts say what moved
+
+**Decision**: `stage.list` and `stage.plan` replace `waypoint.list` and `waypoint.plan` at
+`/v1/stage/list` and `/v1/stage/plan`, `twin.create`, `twin.step` and `intent.read` take
+`stage` where they took `waypoint`, and `api.Version` stays `"1"`; `api.md`'s operations
+table and `api.schema.json` move, and `api.md` and `cli.md` each gain a section "014: the
+stage surface" saying what moved and what each command needs, as they do for M10–M13.
+**Rationale**: FR-023 and SC-008 move the surface and no version; the API is pre-1.0.
+
+<a id="r-15"></a>
+### R-15 The reference, the reserved labels and the derived stages' names
+
+**Decision**: `<branch>/<label>`, split at the first `/`; the branch `^[^/\s]+$` as before,
+the label `^[^/\s]+$` (R-01); `branch-point` and `head` name the derived stages; a mark
+carrying either is `stage.label.reserved` wherever stages are listed or resolved, and the
+derived stage of that name stays the derived one. In every block and record the derived
+stages carry `label` `branch-point` or `head` and `at_source` `branch_point` or `head`, an
+empty description, and the branch point's `branch` is `main`, the branch its read is on,
+with the proposed change's source branch beside it. **Rationale**: the clarifications and
+FR-008; the branch point is read on `main` (§1 R-03) and the record's `provenance.branch`
+says so.
+
+<a id="r-16"></a>
+### R-16 `twin step`'s current stage is a position by label; "current" is the resolved reference
+
+**Decision**: with no target, the next stage after the record's in the proposed change's
+order, the record's position found by its label (`branch-point`, a mark's label, `head`);
+nothing after it, or its label gone, is `step.target.unknown`, saying so and, when the head
+has moved since the record, that `--stage <branch>/head` steps to it. A given target that
+resolves to the record's own `(branch, at)` is `step.target.current`; one of another
+proposed change (by id) or another branch is `step.target.foreign`; the marks strictly
+between the two positions are `step.stage.skipped`. A head that has moved is a valid target
+(FR-018; US2 scenario 6). **Rationale**: a reference names a position in the story and a
+pinned instant; the two differ only when the story has moved under the twin.
+
+---
+
+<a id="6-verified-at-plan"></a>
+## 6. Verified at plan (2026-10-16, development host, Infrahub 1.11.2)
+
+Read-only unless said; every write was on a throwaway `fylgja-test-plan-*` branch, deleted
+after, and the install ended as it began: branches `main` and `fylgja-fixture`,
+`CoreProposedChange 0`, `FylgjaStage 0`, `FylgjaWaypoint 0`, `main`'s hash `e7386419…`.
+
+### 6.1 An empty branch point reads `contract.node.missing`
+
+`fylgja intent read --branch main` through the running server: `rejected`,
+`contract.node.missing` on `main`, "branch defines FylgjaContract but holds no instance
+of it", before any device is counted. The same for `--branch fylgja-fixture --at
+2026-10-08T05:47:52.538186Z`, the fixture's own `branched_from`. GraphQL pinned there on
+the fixture branch: `FylgjaDevice 0, FylgjaLink 0, FylgjaContract 0`. So on this install
+every branch point is refused at conformance (R-04).
+
+### 6.2 The migration's diffs
+
+`infrahubctl schema check --branch main` (read-only) of the final kind: `changed:
+FylgjaStage: attributes: added: description; changed: label: description, parameters.regex`.
+Of a document holding `name: Waypoint, namespace: Fylgja, state: absent` alone: `removed:
+FylgjaWaypoint`. Of a directory holding the generics, the reference schema, the final kind
+and the absent document together: both diffs, plus the four `display_labels` deprecation
+warnings the shipped files already carry. Exit 0 each.
+
+### 6.3 `state: absent` removes the kind and is a no-op after
+
+On `fylgja-test-plan-absent`, created with `BranchCreate`: `schema load` of the absent
+document returned after 38 s and `GET /api/schema?branch=` no longer listed
+`FylgjaWaypoint` (the branch's hash moved to `96c625ec…`; `main`'s did not). `schema
+check` of the same document on that branch then printed `No diff`, `schema load` printed
+"already up to date" in 1.8 s, and the whole directory with the document checked `No
+diff`. So the removal document is idempotent and could ship; it does not, because the tree
+holds no waypoint file by the spec (R-01).
+
+### 6.4 A draft proposed change on a bare branch
+
+On `fylgja-test-plan-pc`, created with the schema alone (22 s): `Branch(name:)` returned
+`branched_from 2026-10-16T19:22:50.878965Z`, `created_at …50.878867Z` (98 µs earlier),
+`origin_branch main`, `status OPEN`; `Branch(name:)` of a name that does not exist returned
+`[]`. `CoreProposedChangeCreate` with `is_draft: true`: `Data Integrity` queued at 12 s and
+`completed`/`success` at 17 s, and no other validator ran, so a bare branch's creation
+pipeline is one validator in about 17 s. `FylgjaStageCreate` with `label: head` was
+accepted (`display_label head`): Infrahub does not know the label is reserved (R-15). The
+stage's `label.updated_at`, `as_of.updated_at` and `proposed_change.properties.updated_at`
+read one stamp, `19:26:07.357145`. `FylgjaStage(proposed_change__source_branch__value:)`
+listed it with its proposed change's `state` and `is_draft`. `_updated_at` is not a field
+of `CoreProposedChange`.
+
+### 6.5 The identical-bytes run-check re-runs the artifact validator
+
+On `fylgja-test-plan-stale2`, seeded (17 s; checksums stamped `19:35:10`): a draft proposed
+change's three validators concluded after 41 s (`Data Integrity`, `Schema Integrity`,
+`Artifact Validator: srlinux_device_config`, `completed_at 19:35:52.068456`), the
+checksums unmoved (identical bytes). `-set-site` moved every device's `site.updated_at`
+(`19:35:50`). A hand `-generate` moved no checksum. `CoreProposedChangeRunCheck(check_type:
+ARTIFACT)` at `19:35:54`: the **same** `CoreArtifactValidator` node (`…86a24e`) read
+`in_progress` at 16 s with `started_at 19:36:05`, and `completed`/`success` at 21 s with
+`completed_at 19:36:12.298111`; the checksums stayed `19:35:10`. Pinned at the run-check's
+moment, the validator read `completed_at.value 19:35:52` (the value in force) but
+`updated_at 19:36:12` (the current metadata), so the staleness rule compares
+`completed_at`'s **value**, never its `updated_at` (R-05). `CoreArtifactValidator(proposed_change__ids:)`
+answers pinned, with `definition { node { name } }` naming the definition.
+
+### 6.6 The stamps through the generics
+
+On `fylgja-fixture`, unpinned: `FylgjaDevice`'s attributes carry `updated_at`
+(`name`, `role`, `site`: `05:47:58.232738`), its `platform` edge `properties.updated_at`
+(the same), each interface's edge and attributes (`ethernet-1/1`: `05:48:00.978841`), the
+interface's `link` edge (`05:48:03.562937`, the cabling), and an unset `parent`'s
+`properties.updated_at` `null`; `FylgjaLink.endpoints.edges.properties.updated_at`
+(`05:48:03.562937`); `FylgjaContract.version.updated_at`. `artifacts` must be spread `...
+on CoreArtifactTarget`, as the read's fragment does: selected directly on `FylgjaDevice` it
+is refused "Cannot query field 'artifacts' on type 'FylgjaDevice'". The fixture's
+`checksum`, `status` and `storage_id` share the first generation's stamp
+(`05:48:38.544482`).
+
+### 6.7 The recorded histories carry the record's waypoint block
+
+Decoding every payload of the nine histories under `internal/provision/testdata/`:
+`step-cancelled`, `step-diverged` and `step-wait-cancelled` each carry five lines naming
+`"waypoint": {"series": "fylgja-test-pause-30395", "sequence": N, "description": "…",
+"at_source": "written"}`; the six provisioning histories carry none. The plain-text grep of
+the tree does not see them (R-10).
+
+### 6.8 The shell
+
+`id -nG` names `docker` and `clab_admins`: `make diagrams` runs from a session's shell.
+
+---
+
+<a id="7-owed"></a>
+## 7. Owed at implement
+
+- **The migration on the development host's `main`**: `fylgja-fixture -prepare-main` with
+  the new `schema/`, then `infrahubctl schema load migration/fylgja-waypoint-absent.yaml`
+  (or `-prepare-main` extended to load it), both verified on `/api/schema`, then `make
+  sdl` and `make generate`; the migration is the first task, since the generated client
+  needs the SDL, and the removal comes after the waypoint code and its `Waypoints` query
+  have left the tree, since genqlient validates every query against the SDL (tasks T003
+  and T042; the SDL fetched again after the removal).
+  `main`'s hash moves again; `fylgja-fixture` keeps `0aba31a5…` and `47b2c449…`.
+- ~~**D-046** (R-05), the operator's~~ Done: accepted at `analyze`, 2026-10-16, and
+  appended to `docs/decisions.md` as [D-046](../../docs/decisions.md#d-046); the
+  validator's completion counts, and T015 builds the rule as the entry states it.
+- **The README's three ways to write a stage**: a peer with no human-friendly id is
+  referenced by `id` in an object file and in `infrahubctl object create --set`; verify each
+  on a throwaway proposed change before the guide is committed (the objects skill's
+  reference says "by `id` or HFID" and shows no example).
+- **`stage.main.moved` exercised by a write on `main`** stays untried, as §4 left it; the
+  mechanism is the head's.
+- **A `display_label` through the proposed change** (`{{ proposed_change__source_branch__value }}/{{ label__value }}`)
+  so the UI's breadcrumb reads as the reference does: unverified, deferred to a later pass.
+- **The upstream request** for named points in time, once the pass works (§4).
+- **Tier 3's wall time** with two proposed-change waits and the unchanged step, recorded
+  in `docs/development.md` once measured.

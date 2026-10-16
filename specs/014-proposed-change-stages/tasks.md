@@ -1,0 +1,333 @@
+# Tasks: A proposed change's stages
+
+**Input**: Design documents from `/specs/014-proposed-change-stages/`: [plan.md](plan.md),
+[spec.md](spec.md), [research.md](research.md) (§5 decisions R-01–R-16, §6 verified at
+plan, §7 owed), [data-model.md](data-model.md), [contracts/](contracts/),
+[quickstart.md](quickstart.md); constitution 1.2.1; [D-045](../../docs/decisions.md#d-045).
+
+**Tests**: requested. FR-027 names tier 1's cases, FR-028 tier 2's and FR-029 tier 3's;
+quickstart §2 names the tests that must exist. Each is a task below. Every format test
+validates against the contract file under `contracts/`, and the goldens and the fixture's
+`47b2c449…` do not move (FR-024, SC-008).
+
+**Organization**: the stage *replaces* the waypoint across shared types, so the stories
+cannot each be built beside the old surface. The findings document has one `plan` block and
+one `subject`, and `twin.json` one record, so `stage plan` cannot coexist with `waypoint
+plan`, nor a stage record with `waypoint list`, which reads the record's waypoint. And the
+loop runs the pure gates after every implement run, so every run must leave the tree green.
+So the work goes bottom-up, in the plan's order ("Order of the work"): the kind and the
+client (Phase 2) and the stages core (Phase 3) are added beside the waypoint code; one run
+then replaces the surface whole and deletes the waypoint code (Phase 4); each story's phase
+then proves its acceptance scenarios through the API's harness and fixes what they find
+(Phases 5–8); US5 removes what is left and runs the live tiers (Phase 9). The records close
+it (Phase 10). Story labels mark which story each later task proves.
+
+**Two orderings this file decides, against the plan's text:**
+
+- **`FylgjaWaypoint` leaves `main` at T042, not in Phase 2.** genqlient validates every
+  query against the SDL, so the `Waypoints` query must leave the tree before the SDL loses
+  the kind. T003 loads the final stage kind alone (`schema/` still holds
+  `fylgja-waypoint.yaml`, which loads with no diff), and the removal document is loaded
+  once the waypoint code is gone (T030), with the SDL fetched again after it.
+- **The `Stamps` query selects the device's platform fields** beside the contract's stamps,
+  so the staleness rule names each device's artifact by its package's
+  `config.artifact_name` from the registry (Constitution II), never by a constant.
+
+**Tags**: `[operator]` marks a task that needs the operator: a write to `main`'s schema, a
+decision, or the operator's review. `[live]` marks a task that needs the development
+host's server, worker or twins (the hand scenarios, tier 3). Unattended, the loop stops at
+both. Commits are by hand, conventional, with a body saying why, and end with the model's
+`Co-Authored-By` trailer; a session never pushes.
+
+## Format: `[ID] [tag?] [P?] [Story] Description`
+
+- **[P]**: can run in parallel (different files, no dependency on an incomplete task)
+- **[Story]**: US1–US5, from spec.md
+
+---
+
+## Phase 1: Setup (the baseline)
+
+**Purpose**: record that the tree's gates pass on this branch before anything changes, so
+any later failure is this feature's.
+
+- [ ] T001 Run the pure gates from the repository root and confirm each passes: `make build`; `file bin/fylgja` reports a statically linked executable; `make test` (note the wall time); `make lint`; `go vet -tags contract,fixture,e2e ./...`. Confirm `git diff --stat main -- testdata/golden` is empty. With `local/.env` loaded, read `main`'s schema hash from `GET $INFRAHUB_ADDRESS/api/schema/summary` (header `X-INFRAHUB-KEY`, never printed) and confirm it begins `e7386419`, and that `FylgjaStage { count }` and `CoreProposedChange { count }` on `main` read 0. Write nothing; report the results.
+
+---
+
+## Phase 2: Foundational — the kind on `main`, the client, test support
+
+**Purpose**: the final kind on `main` and in the tree, the SDL and the typed client that
+read it, the reader and the stamps, and the test tooling that opens proposed changes and
+marks stages. Everything here is added beside the waypoint code, which still builds.
+
+**⚠️ CRITICAL**: every later phase needs this one. T015 needs T011's answer.
+
+- [ ] T002 [P] Create `schema/fylgja-stage.yaml` exactly as [contracts/stage-kind.md](contracts/stage-kind.md) "The file" gives it (its header comment, the node and the extension, keys in that order). Leave `schema/fylgja-waypoint.yaml` in place until T030. In `embed_test.go`, add `TestTheStageKindIsEmbedded` beside `TestTheWaypointKindIsEmbedded`, in its style: `schema/fylgja-stage.yaml` is in `Data`, and it carries `name: Stage`, `namespace: Fylgja`, `branch: agnostic`, `name: as_of`, `name: description`, `regex: "^[^/\\s]+$"`, `kind: CoreProposedChange` and `name: fylgja_stages`. `embed.go`'s `schema/*.yaml` pattern already embeds it. Run `go test . -count=1`.
+- [ ] T003 [operator] Load the final stage kind on the development host's `main`, as a migration of the candidate already there ([contracts/stage-kind.md](contracts/stage-kind.md) steps 1, 2 and 4; quickstart §1). From the repository root with `local/.env` loaded, Infrahub up and no twin: `.venv/bin/infrahubctl schema check --branch main schema/` must print, for `FylgjaStage`, `attributes: added: description; changed: label: description, parameters.regex` and nothing else (the four `display_labels` deprecation warnings aside; `FylgjaWaypoint` shows no diff); stop and report on any other diff. Then `go run -tags fixture ./cmd/fylgja-fixture -prepare-main` prints `schema loaded on main` and finds the group and the repository present. Verify on `GET /api/schema` that `FylgjaStage`'s attributes are `label`, `as_of`, `description` and that `CoreProposedChange` has `fylgja_stages` with peer `FylgjaStage`; read `main`'s new hash from `/api/schema/summary`. **Do not load** `migration/fylgja-waypoint-absent.yaml` here: `FylgjaWaypoint` leaves at T042 (this file's Organization says why). Add `research.md` §8 "Verified at implement" and record the diff, the times and the hash's first eight hex digits there. A session runs this only on the operator's word.
+- [ ] T004 Fetch the SDL and add the five queries. `make sdl` refetches `schema/infrahub.graphql` from `main`; restore the file's leading comment block if `git diff` shows it dropped, and confirm the diff adds `FylgjaStage`'s `description` and the `fylgja_stages` fields, beside the existing `FylgjaWaypoint` (compare structurally: the SDL's field order is not stable between fetches). In `internal/intent/queries.graphql`, keep `Waypoints` and add, in the file's comment style and each naming only the roots T007 allows: `ProposedChanges($branch: String, $limit: Int!, $offset: Int!)` over `CoreProposedChange(state__value: "open", source_branch__value: $branch, …)` selecting `count` and `id`, `name { value }`, `source_branch { value }`, `destination_branch { value }`, `state { value }`, `is_draft { value }` and `fylgja_stages { edges { node { id label { value updated_at } as_of { value updated_at } description { value } } } }`; `OrphanStages` over `FylgjaStage(proposed_change__isnull: true)` selecting `id`, `label { value updated_at }`, `as_of { value updated_at }`; `BranchInfo($name: String!)` over `Branch(name: $name)` selecting `name`, `branched_from`, `created_at`; `ArtifactValidations($id: ID!)` (or the id-list type the SDL gives) over `CoreArtifactValidator(proposed_change__ids: [$id])` selecting `completed_at { value }` and `definition { node { name { value } } }`; and `Stamps($limit: Int!, $offset: Int!)` as [contracts/stage-reference.md](contracts/stage-reference.md) "Stamps" gives it, plus the device's `platform { node { ...PlatformFields } }` so the registry can pick its package. Verify against the running Infrahub (read-only, on `main`) whether a `null` `$branch` makes `source_branch__value` match every open proposed change; if it does not, split `ProposedChanges` into `OpenProposedChanges` and `OpenProposedChangesOn($branch: String!)`, and record the answer in `research.md` §8. Then `make generate` and `go build ./...`.
+- [ ] T005 Create `internal/intent/stages.go` beside `waypoints.go`, in its style and on the same transport, redaction and refusal wording: constants `StageKind = "FylgjaStage"`, `StageSchemaFile = "schema/fylgja-stage.yaml"`, `ProposedChangeKind = "CoreProposedChange"`, `StageExtension = "fylgja_stages"`; `StageFields = []string{"label", "as_of", "description"}` and the relationship `proposed_change`; `StageKindError{Missing []string; Extension bool}` whose `Error()` gives the three first halves of `stage.kind.absent` in [contracts/stage-reference.md](contracts/stage-reference.md) row 1; types `ProposedChange{ID, Name, Branch, Destination, State string; Draft bool; Stages []Stage}`, `Stage{ID, Label, LabelWrittenAt string; At *string; Description string}` (At is `as_of.value` verbatim or nil) and `BranchInfo{Name, BranchedFrom, CreatedAt string}`; and `StageReader` on the default branch's unnamed endpoints (`/api/schema`, `/graphql`), made by `StageReaderFromEnv()`, with `Check(ctx) error` (the kind, its three attributes, its relationship and the extension; a `*StageKindError` when any is absent), `ProposedChanges(ctx, branch string) ([]ProposedChange, error)` (every open one when `branch` is empty; paged as `Devices` is), `Orphans(ctx) ([]Stage, error)`, `Branch(ctx, name string) (*BranchInfo, error)` (nil, nil when absent) and `Validations(ctx, id, at string) (completedAt string, err error)` (the latest `completed_at.value` across the proposed change's artifact validators, read pinned at `at` passed verbatim as the URL's `at` parameter, `""` when none has completed; never `updated_at`, research §6.5). Write `internal/intent/stages_test.go` in `waypoints_test.go`'s `httptest` style: each method's request and decoding, the three `StageKindError` shapes, an empty filter listing every open proposed change, `at` sent verbatim and URL-encoded, and no token in any error.
+- [ ] T006 Create `internal/intent/stamps.go`: `type Stamps struct{ Latest string; Devices map[string]DeviceStamps }`, `type DeviceStamps struct{ Platform Platform; Intent string; Artifacts map[string]string }` (artifact name → `checksum.updated_at`), and `func (c *Client) Stamps(ctx context.Context) (Stamps, error)`, which runs the `Stamps` query on the client's branch at its `at` (sent on every page iff set, as the read does) and aggregates as [contracts/stage-reference.md](contracts/stage-reference.md) and research R-07 say: a device's `Intent` is the latest over its own `name`, `role`, `site`, its `platform` edge, each interface's edge and `name`, `iftype`, `mgmt_only`, `enabled`, its `link` and `parent` edges, and every `endpoints` edge of a link whose endpoint's device is this one; `Latest` is the latest over every stamp the query returns, artifacts' checksums included. A `null` `properties.updated_at` is skipped. Every comparison parses RFC 3339 (six digits, `+00:00` or `Z`); the winning stamp is kept as the string Infrahub returned. Use `Platform` the type the read already decodes platforms into, if one exists. Write `internal/intent/stamps_test.go` (`httptest`): the latest; per device; a null edge skipped; a link's endpoint edges counted for both its devices and for no third; an artifact's checksum stamp in `Latest` and in `Artifacts`; two pages; the pinned `at` on every page.
+- [ ] T007 In `internal/intent/readonly_test.go`, make `TestQueryRootsAreFylgjaGenerics` (and whatever helper names allowed roots) accept `CoreProposedChange`, `CoreArtifactValidator` and `Branch` as the three named exceptions, each with a comment saying it is Infrahub's own unit, not the operator's model (plan, Constitution III; research R-03), while every operation stays a query and the concrete-kind check (`NetworkDevice` and the rest) stands. Then `make build`, `make test`, `make lint`. Depends on T004–T006.
+- [ ] T008 [P] Create `internal/testsupport/proposed.go` (build tag `//go:build contract || fixture`, package `testsupport`), in `infrahub.go`'s and `waypoints.go`'s style, with the helpers of [contracts/fixture-tool.md](contracts/fixture-tool.md) "Test support": `TestBranchPrefix = "fylgja-test-"` and an unexported guard every helper below calls first (refusing any other branch, and `fylgja-fixture` by name, before a request); `OpenProposedChange(branch string, draft bool) (id string, err error)` (`CoreProposedChangeCreate` with `name` the branch's, `source_branch`, `destination_branch main`, `is_draft`; then `AwaitValidators(id, 180*time.Second)`); `AwaitValidators(id string, timeout time.Duration) error` (polls every 2 s until every validator is `completed`); `MarkStage(id, label, at, description string) (stageID, stamp string, err error)` (`FylgjaStageCreate` on the default branch's GraphQL, `as_of` only when `at` is set; `stamp` is `label.updated_at` as returned); `StagesOf(id string) ([]StageRow, error)` with `StageRow{ID, Label string; At *string; WrittenAt, Description string}`; `DeleteStagesOf(id string) (int, error)`; `ProposedChangesOf(branch string) ([]ProposedChangeRow, error)` with `ProposedChangeRow{ID, Name, State string; Draft bool}`, every state; `CloseProposedChange(id string) error`; `DeleteProposedChange(id string) error`; `RunCheck(id string, timeout time.Duration) (completedAt string, err error)` (`CoreProposedChangeRunCheck(data: {id, check_type: ARTIFACT})`, then polls `CoreArtifactValidator(proposed_change__ids:)` every 2 s until a `completed_at.value` is later than before the call); `Rebase(branch string) error` (`BranchRebase(data: {name}, wait_until_completion: true)`, bounded 180 s); `DeleteTestBranch(branch string) error` (each proposed change's stages, then the proposed changes, then the branch). Verify every mutation, argument and field name against `schema/infrahub.graphql` before using it. Change `ArtifactsReadyAt` in `infrahub.go` to read `checksum.updated_at`, not `status.updated_at` (research §2.5), leaving the seed's wait as it is. No error carries the token.
+- [ ] T009 In `cmd/fylgja-fixture/main.go`, add `-propose`, `-stage <label>` (with `-at` and `-description`, which until T041 also serve `-waypoint`), `-run-check` and `-close`, and extend `-delete` to delete, before the branch, every stage of every proposed change whose source is the branch, then those proposed changes, printing `deleted <n> stages, <m> proposed change(s), branch <b>` (it still deletes the branch's `fylgja-test-*` waypoints until T041). Each new flag refuses, before any request, `fylgja-fixture` (`the fixture has no proposed change`) and a `-branch` outside `testsupport.TestBranchPrefix`; `-at` and `-description` with neither `-stage` nor `-waypoint` are refused; `-stage head` and `-stage branch-point` are **not** refused (a test writes what Fylgja must refuse). Output lines exactly as [contracts/fixture-tool.md](contracts/fixture-tool.md) gives them. Failures exit 1 as `fylgja-fixture: <message>` on stderr, as the tool's other flags do.
+- [ ] T010 Gate the phase: `make build`, `make test`, `make lint`, `go vet -tags contract,fixture,e2e ./...`. Then, with `local/.env` loaded and no twin, smoke the tooling on a throwaway branch `B=fylgja-test-tasks-$$`: seed it (`go run -tags fixture ./cmd/fylgja-fixture -branch $B`; the seed loads `schema/`, the stage kind included: if Infrahub refuses the kind or its extension on a branch, stop and report), `-propose` (note the validators' time), `-stage seeded -description seeded`, `-run-check` (note the time), `-stage head`, `-close`, `-delete`. Check `-propose -branch fylgja-fixture` and `-stage x -branch other` are refused with no request. After it, `Branch { name }` lists `main` and `fylgja-fixture` alone and `CoreProposedChange { count }` and `FylgjaStage { count }` read 0. Record the times in `research.md` §8. Depends on T002–T009.
+- [x] T011 [operator] ~~Put [D-046](research.md#r-05) to the operator~~ Done at `analyze`, 2026-10-16: the operator accepted D-046 (a stage's generation stamp is the later of its artifact's checksum stamp and the proposed change's artifact validator's `completed_at`, judged per device); it is appended to `docs/decisions.md` as [D-046](../../docs/decisions.md#d-046) in D-045's format, FR-011 names it, and `docs/architecture.md` carries no D-045 staleness wording to note for T050 (its one `stale` sentence, "nothing marks one stale", is about Infrahub). Research §7's D-046 line is marked done. T015 builds the rule as D-046 states it; nothing remains here.
+
+**Checkpoint**: `main` carries the final stage kind and still the waypoint kind; the client
+reads proposed changes, stages, branches, validations and stamps; the fixture tool opens
+and marks; the tree is green.
+
+---
+
+## Phase 3: Foundational — the stages core (`internal/stages`, beside `internal/waypoint`)
+
+**Purpose**: the package that holds a proposed change's stages (research R-02): the
+reference, the order with the ends derived, the head's microsecond, every resolution rule,
+the staleness rule, the plan, the step's target and the list, each proved in tier 1 over
+faked readers and in tier 2 against the real Infrahub. Nothing outside the package uses it
+yet, so the waypoint surface still builds and passes. The `findings` block types stay the
+waypoint's until Phase 4: the package returns its own result types.
+
+- [ ] T012 In `internal/findings/finding.go`, add the twelve `stage.*` rule constants and `step.stage.skipped` beside the waypoint ones, each with the house comment (`// rejection, exit 1, resolve: <object>; <when>`) taken from [research.md R-08](research.md#r-08) and [contracts/stage-reference.md](contracts/stage-reference.md): `RuleStageRefInvalid` and `RuleStageFlagsConflict` (exit 2, `start`), `RuleStageKindAbsent`, `RuleStageUnknown`, `RuleStageDuplicate`, `RuleStageAtUnresolved`, `RuleStageAtBeforeBranchPoint`, `RuleStageLabelReserved`, `RuleStageArtifactStale` (rejections, exit 1, `resolve`), `RuleStageOrphaned`, `RuleStageMainMoved`, `RuleStageTwinMoved` (warnings, exit 0) and `RuleStepStageSkipped` (warning, exit 0, `resolve`). Register each wherever the file registers a rule's severity, exit and step, and extend `finding_test.go`'s tables. T022 removes the waypoint constants and `step.sequence.skipped`.
+- [ ] T013 Create `internal/stages/ref.go` (package `stages`, its doc comment saying what the package holds and citing D-045) and `ref_test.go`, ported from `internal/waypoint/ref.go` and its test ([contracts/stage-reference.md](contracts/stage-reference.md) "The reference"; research R-15): `Ref{Branch, Label string}`; `ParseRef(s string) (Ref, error)`, split at the first `/`; `CheckBranch(b string) error`; `BranchPattern` and `LabelPattern`, both `^[^/\s]+$`; `LabelBranchPoint = "branch-point"`, `LabelHead = "head"` and `(Ref) Derived() bool`; `Form` and `BranchForm`, the contract's wordings; `(Ref) String()`. Tests: a table of valid and malformed references (no `/`, empty halves, whitespace, a second `/` going to the label and refused by its pattern), `TestLabelPatternEqualsTheKinds` reading the regex from the embedded `schema/fylgja-stage.yaml` as `internal/waypoint`'s test reads the series pattern.
+- [ ] T014 Create `internal/stages/resolve.go` and `resolve_test.go`, ported from `internal/waypoint/resolve.go` (data-model §3–§5; [contracts/stage-reference.md](contracts/stage-reference.md) "The resolution, in order"): a `Reader` interface with `intent.StageReader`'s five methods; a `Stamper` interface the server will satisfy with an intent client per `(branch, at)` (`Stamps(ctx, branch, at string) (intent.Stamps, error)`), so tests fake both; `ProposedChange` and `Resolved` as data-model §3 gives them (`Ref`, `Branch`, `Label`, `ProposedChange{ID, Name, Branch, Draft}`, `At`, `AtSource` one of `given`, `written`, `branch_point`, `head`, `Description`, `ID`); `HeadAt(latest string) (string, error)` (parsed, plus one microsecond, formatted `2006-01-02T15:04:05.000000-07:00`); `Order`, which puts the branch point first, the marks by parsed `at` (equal `at`s by label; an unparsable `at` after those that parse, by its string) and the head last whatever the marks' stamps; and `Resolve(ctx, reader, stamper, ref, now)` and `ResolveFrom` (for a listing already read), applying steps 1–7 and 9 in order, each refusal a rejection at step `resolve` with the contract's identifier, exit, object and wording, and step 8 through T015's function. The clock `now` is compared with a **given** `as_of` alone and never sent. Use `intent.CheckAtPrecision` for six digits (`intent.at.precision`, exit 2). Tests, in `internal/waypoint`'s table style: `TestOrderEndsFixed` (a mark stamped after the head's `at` still sorts before it), `TestHeadIsLatestStampPlusOneMicrosecond` (`…38.544482+00:00` → `…38.544483+00:00`; a `Z` stamp; a rollover at `.999999`), `TestResolveRefusals` (one case per row of the contract's table, each asserting identifier, severity, exit, step, object and the pinned wording, and that the fake stamper saw only stamps reads), `TestRebaseIsNamed` (both wordings of `stage.at.before_branch_point`, every mark at once), `TestMainMovedWarns` (and nothing refused for it), `TestFutureAsOfNeverSent` (the fake records every `at` it is asked for; none is `now`'s).
+- [ ] T015 Create `internal/stages/stale.go` and `stale_test.go`: the staleness rule as [D-046](../../docs/decisions.md#d-046) states it, or as `research.md` §8 records it if T011 was declined (data-model §5; research R-05). For each device in the stage's `Stamps` pinned at its `at` (on `main` for the branch point), the generation stamp is the later of the `checksum.updated_at` of the artifact named by the device's package's `config.artifact_name`, the package found in the registry by the device's platform (Constitution II: no artifact name or platform as a constant), and the proposed change's artifact validator's `completed_at` from `reader.Validations(ctx, id, at)`; the device is stale when its `Intent` is later. One `stage.artifact.stale` per stale device, sorted by device name, object the device, wording as the contract's row 8 gives it, naming both remedies; a device with no artifact of its package's name is left to the read (`artifact.missing`), not stale. Tests, `TestStalePerDevice`: checksum older than intent is stale; the validator completed after the intent clears it; an identical-bytes generate (checksum unmoved) followed by a run-check clears it; a neighbour's change that moves none of `n2`'s own stamps names no `n2`; no artifact, no finding; the head stale after an intent edit; the branch point on an empty `main` fresh.
+- [ ] T016 Create `internal/stages/plan.go` and `plan_test.go`, ported from `internal/waypoint/plan.go` (data-model §6; [contracts/stage-commands.md](contracts/stage-commands.md) "stage plan"): `Plan` over one proposed change named by its source branch, which lists once, orders the stages, and for each resolves (`ResolveFrom`), reads and compiles it on the `internal/stage` pipelines as the waypoint plan does, files each bundle in the store, and calls back per stage and per step as it goes; `PlanResult{Branch, ProposedChange, Stages []PlanStage, Steps []step.Pair}` with `PlanStage{Ref, Label, Description, AtSource, Branch, At, BundleID, Read, Findings, Status}`, status `compiled`, `refused` or `failed` with the first rejection's rule; a step touching a refused stage not computed; a step between bundles that differ in provenance alone `unchanged`. Tests ported from `plan_test.go`, plus: nothing marked gives two stages and one step; two marks give four and three; a refused middle stage and the plan going on; a mark written after the head's `at` stepping to the head `unchanged`; the branch point on a `main` holding no `FylgjaContract` refused `contract.node.missing`, its step not computed, the others planned (research R-04).
+- [ ] T017 [P] Create `internal/stages/target.go` and `target_test.go`, ported from `internal/waypoint/target.go` (research R-16; [contracts/stage-commands.md](contracts/stage-commands.md) "twin step"): `Target` over the proposed change's ordered stages, the record's position found by its label: no target is the next stage; nothing after it, or its label gone, is `step.target.unknown`, adding that `--stage <branch>/head` steps to a head that has moved since the record; a given target of another branch or another proposed change on the same branch (by id) is `step.target.foreign`; one resolving to the record's own `(branch, at)` is `step.target.current`; marks strictly between the two positions, either direction, are `step.stage.skipped`; a moved head is a valid target. `TestTargetByPosition` covers each, with the contract's wordings.
+- [ ] T018 [P] Create `internal/stages/list.go` and `list_test.go`, ported from `internal/waypoint/list.go` (data-model §6; [contracts/stage-commands.md](contracts/stage-commands.md) "stage list"): `List(ctx, reader, stamper, branch string, record *RecordView) (ListResult, findings.List, error)`, steps 1–6 and 9 over every open proposed change or the one named, refusing nothing but the kind absent; `RecordView` (the record's proposed change id and branch, label, branch, `at`, `at_source`, state and the diverged target's label), a package type the server fills from the record in T026, so the core does not read `wire`; `ListResult{Branch, Rows, Orphans, Record}`, rows sorted by branch then order, each `Resolved` plus `Twin`; a mark labelled `head` or `branch-point` a `stage.label.reserved` rejection beside its row with the derived stage still listed; each orphan a `stage.orphaned` warning; `stage.twin.moved` when the record's stage resolves to another `(branch, at)` or is gone (edited `as_of`, deleted, a moved head, a rebase, its proposed change closed). Tests for each, and two runs over one input giving equal results.
+- [ ] T019 Add `filepath.Join("..", "stages")` to `TestCompilerNamesNoPlatform`'s list in `internal/compiler/purity_test.go`, beside `waypoint` (removed at T030). Add the new terms to `docs/glossary.md`, each in the glossary's style and citing D-045: *stage*, *stage reference*, *mark*, *branch point*, *head*, *orphaned stage* and *generation stamp* (the last citing D-046, or the declined rule). Then `make test` (still under its budget), `make lint`. Depends on T012–T018.
+- [ ] T020 Write `internal/stages/stages_contract_test.go` (build tag `//go:build contract`), in `internal/waypoint/waypoint_contract_test.go`'s style, every test on its own `fylgja-test-*` branch deleted in order by `DeleteTestBranch` in a `t.Cleanup`: `TestStageKindLoads` (the kind, its attributes and the extension on `main`; a second stage with one label on one proposed change refused by Infrahub at the write; a label with `/` refused by the regex); `TestStagesListAndPlan` (seed, `OpenProposedChange`, `MarkStage seeded`, `SeedThirdLink` and the checksums' move awaited as tier 3 awaits it, `MarkStage third-link`; the list and the plan give four stages in order, `branch-point` refused `contract.node.missing`, `seeded`, `third-link` and `head` compiled to three ids, three steps, the second adding the link with `n1` and `n3` changed, the third `unchanged`; and the CTM read at `seeded`'s resolved reference equals a read of `--branch $B --at <its at>` but for `observed_at`, SC-002); `TestStageRefusals` (an intent change with no generate then a mark, refused stale naming `n1`, `n2`, `n3`, then `-generate` and a fresh mark planned; the `-set-site` hole: refused stale, a generate moving nothing, `RunCheck`, then a fresh mark planned; `Rebase` after two marks, both refused `stage.at.before_branch_point` naming the rebase, the derived stages still planned; a mark labelled `head` refused `stage.label.reserved`; a mark with `-at` one hour ahead refused `stage.at.unresolved`; the proposed change closed, then the branch `stage.unknown`; an unknown branch `stage.unknown`). Run `go test -count=1 -tags contract ./internal/stages/ -v` and report each test's time. Boot no twin while it runs. Depends on T008, T010 and T019.
+
+**Checkpoint**: the stages core resolves, refuses, plans, targets and lists, proved in tier 1
+and against the real Infrahub; the waypoint surface is untouched.
+
+---
+
+## Phase 4: Foundational — the surface replaced (the switch)
+
+**Purpose**: one run replaces the waypoint surface with the stage surface whole and deletes
+the waypoint code, because the findings document, the API and `twin.json` cannot carry
+both (Organization, above). The tree is green only at its end
+(T032). Existing tests are ported, renamed and reworded rather than dropped; the stories'
+new scenarios are Phases 5–8's. Every text line follows
+[contracts/stage-commands.md](contracts/stage-commands.md); every block validates against
+its contract.
+
+**⚠️ CRITICAL**: Phases 5–9 need this one. One run, one checkpoint.
+
+- [ ] T021 The contracts. Copy `specs/014-proposed-change-stages/contracts/stages.schema.json` to `contracts/stages.schema.json` and delete `contracts/waypoints.schema.json`. In `contracts/findings.schema.json` (still version `1`, R-09): operations `stage.list` and `stage.plan` for `waypoint.list` and `waypoint.plan`; `subject.stage` (`^[^/\s]+/[^/\s]+$`) for `subject.waypoint`; blocks `stage` (`$defs/resolved`), `stages` (`$defs/list`) and `plan` (`$defs/plan`), each by `$id` in `stages.schema.json`; `verified.stages` (`kind`, `present`, `missing`, `extension`, `file`); `dry_run.follow.reason` with `stage` for `waypoint`; the rule-identifier lists, if the schema carries any. In `show.schema.json`, `step.schema.json` and `verify.schema.json`, `stage` where `waypoint` was, in the `6` shape (`proposed_change {id, branch}`, `label`, `description`, `at_source`). `contracts/twin.schema.json` becomes `$id https://fylgja.dev/contracts/twin/v6`, `twin_version` `"6"`, `stage` for `waypoint` (required, object or `null`, the same conditional), and `step.from.stage`/`step.to.stage`. Freeze the current `5` first: copy it unchanged to `internal/lab/testdata/contracts/010-verify/twin.schema.json`. In `internal/compiler/contract_test.go`, `stages.schema.json` for `waypoints.schema.json` among the referenced schemas.
+- [ ] T022 `internal/findings`: remove the waypoint rule constants, `RuleStepSequenceSkipped` and `waypoint.time.reversed`; replace `WaypointBlock`, `WaypointsBlock`, `WaypointRow`, `WaypointRecord`, `WaypointTowards`, the waypoint `PlanBlock`/`PlanWaypoint`, `WaypointsVerified` and `ShowWaypoint` with `StageBlock`, `StagesBlock`, `StageRow`, `StageRecord`, `StageTowards`, `PlanBlock`/`PlanStage`, `StagesVerified` and `ShowStage`, field for field from `contracts/stages.schema.json` and the moved schemas; `Subject.Stage` for `Subject.Waypoint`; `OpStageList` and `OpStagePlan` for the waypoint operations; `Document.Stage`, `Document.Stages`, `Document.Plan`; the text renderers in `render.go` and `verify.go` per the commands contract. Delete `waypoint_test.go` and `testdata/contracts/008-waypoints/`, and port its cases to a new `stages_test.go` validating each block against `contracts/stages.schema.json` through `findings.schema.json`; port `step_test.go`'s M10 cases to stage sides; set `frozenContractCopies` to 29 in `frozen_contracts_test.go` (31 − 3 + T021's 1); fix `decode_test.go` and `finding_test.go`.
+- [ ] T023 `internal/lab`: in `wire/types.go`, `StageRef{ProposedChange struct{ID, Branch string}; Label, Description, AtSource string}` (JSON as the `6` schema) replaces `WaypointRef` on `RecordInput`, `TwinRecord` and `StepSide`; in `twin.go`, `TwinVersion` `"6"`, `RecordFields.Stage`, `NewRecord` refusing a stage on a bundle-sourced or unpinned record as it refused a waypoint, `NewStepRecord` holding the previous record's stage equal to the step's `from` side; a record of `5` or earlier decodes with `Stage` nil, its waypoint block ignored (R-11). Port `twin_test.go`, `stepping_test.go` and `verify_test.go`; add `TestRecord6` (each `at_source`; `provenance.branch` `main` for a branch-point twin) and `TestRecord5ReadsWithNoStage` against the frozen `010-verify` schema.
+- [ ] T024 `internal/provision`: `StageInput` aliasing `wire.StageRef` in `types.go`; `workflow_step.go`, `workflow_provision.go` and `client.go` reworded ("names no stage" for "names no series"; `stepTowards` names a stage); no workflow decision, activity, timeout or version marker changes (FR-024). Rewrite the three recorded step histories (research R-10, §6.7): a Go program `internal/provision/testdata/rewrite-stage.go` (`//go:build ignore`, run once with `go run`) decodes each base64 JSON payload of `step-cancelled`, `step-diverged` and `step-wait-cancelled` `.history.json`, replaces each `"waypoint": {series, sequence, description, at_source}` with `"stage": {"proposed_change": {"id": "fylgja-test-pause-pc", "branch": <series>}, "label": "s<sequence>", "description": …, "at_source": …}`, and re-encodes it, touching nothing else; check with a decode that only those five lines per history moved. Extend the comment above `replayProvision` in `workflow_replay_test.go` to say so, as it says the host's name was replaced. Port `workflow_step_test.go`, `workflow_provision_test.go` and `client_test.go`; the replays must pass unchanged in their commands.
+- [ ] T025 [P] `internal/verify/report.go` (`TwinInfo.Stage`, `Divergence.Towards` naming a stage), `internal/step/render.go` and `internal/step/diff.go` (the pair's refs and comments as `<branch>/<label>`), and their tests.
+- [ ] T026 In `internal/stages`, add the conversions the surface needs: `(Resolved) Block() findings.StageBlock`, `(ListResult) Block() *findings.StagesBlock`, `(PlanResult) Block() *findings.PlanBlock`, `(Resolved) Ref() wire.StageRef` and `RecordViewOf(*wire.TwinRecord) *RecordView`, with a test that each block validates against `contracts/stages.schema.json`.
+- [ ] T027 `internal/server`: rename `waypoint.go` to `stages.go` with `runStageList` and `runStagePlan` (the text per the commands contract; `stage plan`'s `--branch` required); in `resolve.go`, `stageGuards` (at `start`: `stage.ref.invalid`; `stage.flags.conflict` naming the first of `--branch`, `--at`, `--interval`), `resolveStage` (the reference contract's steps 1–9 through `stages.Resolve`, with the server's intent clients as the `Stamper`) returning the `stage` block, and `withStage`; `create.go` (`stage` arg, `RecordInput.Stage`, the resolved line first, never following, `dry_run.follow.reason: stage`), `read.go` (`--stage`, the summary line), `step.go` (`stages.Target` after the host is read, before the from bundle, the host check and containerlab's plan; the first lines and closing lines per the contract), `show.go`, `verify.go`, `schema.go` (`verified.stages` and its four last lines), `dryrun.go`, `handlers.go`, the comment in `filing.go`. Port `server_test.go`, `step_test.go`, `dryrun_test.go` and `helpers_test.go`.
+- [ ] T028 [P] `internal/api`: `wire.go`'s operations `findings.OpStageList` and `findings.OpStagePlan` for the waypoint ones; `contracts/api.schema.json`'s `args` as data-model §9 gives them (`stage` on `twin.create`, `twin.step`, `intent.read`; `branch` on `stage.list` and `stage.plan`; no `waypoint`); `api.Version` stays `"1"`. Port `wire_test.go`, adding that a request carrying `waypoint` is `400` (`twin.create takes no argument "waypoint"`) and `/v1/waypoint/list` is `404`.
+- [ ] T029 `internal/cli`: rename `waypoint.go` to `stages.go` (`stage list [--branch]`, `stage plan --branch`, each one request; `--branch` missing is `--branch is required`, exit 2, no request); `--stage` for `--waypoint` on `create.go`, `step.go` and `read.go`; `root.go` registers the `stage` noun and drops `waypoint` (so `fylgja waypoint list` is cobra's `unknown command`, exit 2); `send.go` carries `doc.Stage`; `schema.go`'s comment. Rename `waypoint_test.go` to `stages_test.go` and `waypoint_create_test.go` to `stage_create_test.go`, porting their cases; rewrite `infrahub_test.go`'s fake Infrahub to serve what the stage commands ask, in Infrahub 1.11.2's shapes: the default branch's schema with `FylgjaStage`, its attributes and the extension (each removable, for the kind-absent cases), `CoreProposedChange` filtered by state and source branch, `FylgjaStage` orphans, `Branch`, `CoreArtifactValidator` pinned, and `Stamps` pinned and unpinned on the branch and on `main`; port every other test file that names the waypoint (`twin_step_test.go`, `show_test.go`, `intent_test.go`, `verify_test.go`, `dryrun_test.go`, `connect_test.go`, `answer_test.go`, `schema_test.go`, `env_test.go`, `create_test.go`, `stage_test.go`, `harness_test.go`, `stream_test.go`, `clients_test.go`). `TestClientReachesTheCoreThroughTheAPIAlone` must pass unchanged.
+- [ ] T030 Delete the waypoint code: `internal/waypoint/` (with its contract test), `internal/intent/waypoints.go` and `waypoints_test.go`, the `Waypoints` query in `queries.graphql` and the `BigInt` binding in `genqlient.yaml` (then `make generate`), `schema/fylgja-waypoint.yaml` and `TestTheWaypointKindIsEmbedded`, `waypoint` from `TestCompilerNamesNoPlatform`'s list; reword `internal/intent/at.go`'s comment. Rewrite `docs/diagrams/schema.md`'s prose and diagram for the stage kind and its relationship to `CoreProposedChange` where it shows the waypoint. `testsupport/waypoints.go` and the fixture tool's `-waypoint` stay until T041.
+- [ ] T031 Redraw the C4 model (development.md, "Keeping the documents true"): in `docs/c4/workspace.dsl`, the component `stages` ("A proposed change's stages: references, resolution, staleness, list, plan and the step's target.", `internal/stages`) for `waypoint`, its relationships (`handlers -> stages "Resolves, lists, plans"`, `stages -> stage "Reads and compiles each stage"`, `stages -> intent "Reads proposed changes, stages and stamps"`, `stages -> step`, `stages -> compiler`), `intent`'s description ("…, proposed changes, stages, stamps"), and the operator's relationship to Infrahub ("Edits intent; opens proposed changes and marks stages"). Run `make diagrams`; check that `git diff --stat docs/c4 docs/diagrams docs/development.md` moves only the stage's component, its edges and the import graph's `internal_stages`.
+- [ ] T032 Gate the switch: `make build`; `file bin/fylgja` statically linked; `make test` under its budget; `make lint`; `go vet -tags contract,fixture,e2e ./...`; `git diff --stat main -- testdata/golden` empty; `bin/fylgja --help` and `bin/fylgja twin create --help` name no waypoint; `/usr/bin/grep -rn -i waypoint --include='*.go' --include='*.graphql' --include='*.yaml' internal cmd schema embed*.go` finds only the old-record path (`internal/lab/twin.go`'s comment and `step.twin.unsteppable`'s wording for a `5` record), the rewrite program and the frozen schemas under `internal/lab/testdata/contracts/` (scripts/e2e.sh still names the waypoint until T044). Depends on T021–T031.
+
+**Checkpoint**: the stage surface is the only one; `twin.json` is `6`; the replays pass; the
+tree is green. `scripts/e2e.sh` and `schema/README.md` still describe waypoints (T044,
+T046).
+
+---
+
+## Phase 5: User Story 1 — The operator marks a proposed change's stages and plans them (Priority: P1) 🎯 MVP
+
+**Goal**: `stage plan --branch <b>` lists a proposed change's stages in order, compiles each
+it can, refuses the rest with a reason, and shows each step.
+
+**Independent Test**: on a faked Infrahub with a proposed change and two marks, `stage
+plan` prints four stages in order with their `at` and its source, an id each it compiled,
+the read counts and three steps; a mark made before its regenerate is refused stale,
+naming the device; exit 1 for a refusal, 0 otherwise (and T020 proves the same against
+the real Infrahub).
+
+- [ ] T033 [US1] In `internal/cli/stage_plan_test.go`, through the harness and T029's fake Infrahub, one test per acceptance scenario of US1: nothing marked gives two stages and one step, both compiled on a fake `main` that carries the contract and the devices, and on an empty `main` the branch point refused `contract.node.missing` with its step not computed and exit 1 (R-04); two marks, the first with no `as_of` (`written`) and the second with one (`given`), give four stages in `at` order and three steps; a stale mark refused naming exactly the devices whose intent moved, the remedy's both ways in the wording, the other stages still planned and the touching steps not computed; an `as_of` before the branch point and one later than now each refused, saying which; a rebase (the fake's `branched_from` moved past both marks, `created_at` not) refusing both marks at once naming the rebase, the ends still planned; `main` written since the branch point warns `stage.main.moved` and refuses nothing. Fix in `internal/stages` or `internal/server` whatever a test finds.
+- [ ] T034 [US1] In the same file: the plan's text pinned line by line against [contracts/stage-commands.md](contracts/stage-commands.md) (the heading `proposed change "<name>" (<id>) on branch <b> → main, draft (<n> stages)`, each compiled stage's line, `bundle_id` and `read:` lines, a refused stage's line and indented findings, a step not computed, `unchanged`); `--json` prints the document alone and it validates against `contracts/findings.schema.json` with `stages.schema.json`; `--branch` missing is exit 2 and `--branch a/b` `stage.ref.invalid`, exit 2, each with no request to the fake; the kind absent (no kind; `description` missing; the extension missing) refused `stage.kind.absent` naming `schema/fylgja-stage.yaml` on `stage plan`, `stage list` and `--stage`, and `schema check --branch <b>` printing each of the contract's four `stages:` lines with `verified.stages` matching (US1 scenario 7).
+
+**Checkpoint**: US1's seven scenarios pass in tier 1 and its plan in tier 2 (T020).
+
+---
+
+## Phase 6: User Story 2 — A twin from a stage, stepped through its proposed change (Priority: P1)
+
+**Goal**: `twin create --stage` boots the bundle the plan printed, pinned and never
+following; `twin step` walks the twin through its own proposed change's stages, forward or
+back, refusing a foreign one before the host is touched.
+
+**Independent Test**: through the harness, a twin created from the first mark carries the
+plan's id and a `6` record naming the stage; a step with no target goes to the second
+mark, `--stage` goes back, a step to the head works, a foreign stage is refused, and
+`twin show` and `twin verify` name the stage.
+
+- [ ] T035 [US2] In `internal/cli/stage_create_test.go`: a twin from each kind of stage records `twin.json` `6` with `stage.proposed_change {id, branch}`, `label`, `description` and `at_source` (`written`, `given`, `head`; a branch point on a fake `main` that carries the contract, with `provenance.branch` `main`) and `provenance.at` the resolved `at`; it deploys the bundle id `stage plan` printed for that stage (SC-002) and starts no follow (`dry_run.follow.reason: stage`); a stale stage, and every other resolution refusal, is refused at `resolve` with no workflow started (the fake workflow client counts zero starts) (US2 scenarios 1, 8). After `twin destroy`, `twin create --branch main --at <t>` still works and records no stage (scenario 7).
+- [ ] T036 [US2] In `internal/cli/twin_step_test.go`: with no target, the next stage, the head when no mark follows; at the head with nothing after, `step.target.unknown`; `--stage` back to an earlier mark (the replace push's plan taking off what it lacks, as M11's tests assert); a stage of another branch, and of another proposed change on the same branch (the fake reopens one with a new id), `step.target.foreign` before any host read; the record's own stage `step.target.current` by resolved reference; a head moved since the record a valid target and `stage list` warning `stage.twin.moved` beforehand; the branch point to the head warning `step.stage.skipped` naming the marks between; a `5` record and a stage-less record `step.twin.unsteppable` with the contract's wordings; the first lines and closing lines (`stepped to stage …`, `unchanged; the record moves to stage …`, `diverged towards stage …`) pinned (US2 scenarios 2–6).
+- [ ] T037 [US2] In `internal/cli/show_test.go` and `verify_test.go`: `twin show`'s kind line (`pinned at …, stage <b>/<label>; not following`, and after a step `… (stepped from <b>/<label> by run fylgja-step …, ended …)`), `in_flight` (`stepping towards stage …`), `twin verify`'s first line, `show.record.stage`, `verify.twin.stage` and `diverged.towards.stage` validating against the moved schemas.
+
+**Checkpoint**: US2's eight scenarios pass in tier 1; tier 3 proves them on twins (T045).
+
+---
+
+## Phase 7: User Story 3 — The operator lists stages and sees where the twin is (Priority: P2)
+
+**Goal**: `stage list` shows every visible stage resolved, marks the twin's, and warns when
+the twin's stage has moved or is gone.
+
+**Independent Test**: through the harness, `stage list` shows four stages with the twin's
+marked and no warning; after its `as_of` is edited, a `stage.twin.moved` warning; after the
+proposed change is closed, no stages and the warning that the twin's stage is gone.
+
+- [ ] T038 [US3] In `internal/cli/stage_list_test.go`: no open proposed change (`no open proposed change`, and `branch <b>: no open proposed change` with `--branch`, exit 0, empty rows); one proposed change's four stages in order with branch, `at`, source and description, no twin marked; two proposed changes sorted by branch; the twin's row marked `← twin` with the record's state, and `← twin (diverged towards <b>/<label>)` beside a diverged record; orphans listed after the proposed changes with `stage.orphaned` and nothing planned from them; a closed proposed change not listed and `stage plan` and `--stage` on its branch `stage.unknown` ("no open proposed change has source branch …"); a mark labelled `head` a `stage.label.reserved` rejection beside its row, the derived head still listed, exit 1; `stage.twin.moved` after the twin's mark's `as_of` is edited, after it is deleted, after the head moves and after the proposed change closes; the padded text per the contract; the JSON validating; two runs over one fake giving byte-equal documents (US3 scenarios 1–5; FR-016).
+
+**Checkpoint**: US3's five scenarios pass in tier 1.
+
+---
+
+## Phase 8: User Story 4 — A stage as an intent reference everywhere (Priority: P2)
+
+**Goal**: `--stage` resolves to a pinned `(branch, at)` before anything is read, wherever a
+reference is taken, and the stage's name enters neither CTM nor bundle.
+
+**Independent Test**: `intent read --stage` writes the CTM `intent read --branch b --at
+<at>` writes, but for `observed_at`; `--stage` beside `--branch` is refused with no
+request; a malformed reference is refused before anything is read.
+
+- [ ] T039 [US4] In `internal/cli/intent_test.go` (and `create_test.go` for create's flags): `intent read --stage` prints the resolved line first, then the read, and its CTM equals `--branch <b> --at <at>`'s but for `observed_at`, with neither the label nor the description anywhere in the CTM's bytes or the compiled bundle's; `--stage` beside `--branch`, `--at` or `--interval` refused `stage.flags.conflict` naming the first conflicting flag in that order, exit 2, with zero requests to the fake Infrahub; `--stage x`, `--stage /x`, `--stage a/` and `--stage "a b/c"` refused `stage.ref.invalid`, exit 2, with zero requests; an unknown proposed change and an unknown stage refused `stage.unknown` naming what exists, with the fake recording no query of a branch's intent (`Devices`, `Links`, `ContractVersion`) (US4 scenarios 1–3; SC-005).
+- [ ] T040 [live] [US4] The hand scenarios before the removal (quickstart §1's tail, §3 and §4), on the development host, no twin: rebuild, restart the API's server from this tree and verify it as `CLAUDE.md` says; `fylgja intent read --branch fylgja-fixture` then `twin compile` gives `47b2c449…`; then quickstart §3 and §4 in full, each output compared with what the quickstart expects. Record each outcome in `research.md` §8; a defect found is fixed under the story it belongs to before this task is ticked. Leave no `fylgja-test-*` branch, proposed change or stage.
+
+**Checkpoint**: US1, US3 and US4 are proved by hand against the real Infrahub.
+
+---
+
+## Phase 9: User Story 5 — Waypoints are gone and the records say so (Priority: P3)
+
+**Goal**: no waypoint is left in the tree, on `main` or in the tooling; the live tiers and
+the walk-through run on stages.
+
+**Independent Test**: after the contract tier, `main` has no `FylgjaWaypoint` and
+`FylgjaStage { count }` reads 0; `fylgja --help` names no waypoint; tier 3 ends `E2E-OK`
+with cases 7 and 8 on stages.
+
+- [ ] T041 [US5] Remove the waypoint from the test tooling: delete `internal/testsupport/waypoints.go`; in `cmd/fylgja-fixture/main.go` remove `-waypoint` and `-delete-series`, make `-at` and `-description` `-stage`'s alone, and stop `-delete` deleting waypoints. Rewrite the fixture tool's sentences in `docs/development.md` (the `make infrahub-seed` / `infrahub-clean` row) for `-propose`, `-stage`, `-run-check`, `-close` and `-delete`'s order, from [contracts/fixture-tool.md](contracts/fixture-tool.md), with "Composing a story for a test" in one sentence. `make lint`, `go vet -tags contract,fixture,e2e ./...`.
+- [ ] T042 [operator] [US5] Remove `FylgjaWaypoint` from the development host's `main` ([contracts/stage-kind.md](contracts/stage-kind.md) step 3; quickstart §1b): `.venv/bin/infrahubctl schema check --branch main specs/014-proposed-change-stages/migration/fylgja-waypoint-absent.yaml` prints `removed: FylgjaWaypoint`; `schema load` of it (about 40 s); `GET /api/schema` lists `FylgjaContract`, `FylgjaDevice`, `FylgjaInterface`, `FylgjaLink`, `FylgjaPlatform`, `FylgjaStage` and no `FylgjaWaypoint`; a second check prints `No diff`. Then `make sdl` (header kept), whose diff removes the waypoint's types alone; `make generate`, which leaves `internal/intent/generated.go` unchanged; `go build ./...`. Reword the `Makefile`'s `sdl` comment (the stage kind lives on `main`). Record `main`'s new hash in `research.md` §8 for T053. A session runs this only on the operator's word. Depends on T030 and T041.
+- [ ] T043 [US5] Tier 2 whole: extend `TestStageKindLoads` to assert no `FylgjaWaypoint` on `main`'s schema; run `make test-contract`; after it, `{ Branch { name } CoreProposedChange { count } FylgjaStage { count } }` reads `main` and `fylgja-fixture`, 0 and 0. Report the tier's wall time against the last run's (about three minutes longer is expected). Boot no twin while it runs. Depends on T042.
+- [ ] T044 [P] [US5] `scripts/e2e.sh`: cases 7 and 8 on stages as [research.md R-13](research.md#r-13) gives them (case 7 on `fylgja-test-e2e-st-<pid>-<n>`: seed, `-propose`, `-stage seeded`, `-add-link`, the checksums awaited, `-stage third-link`; `stage plan --branch` with four stages, `branch-point` refused `contract.node.missing`, three ids, three steps; `stage list` with no record; the twin from `seeded` carrying the plan's id and a `6` record; `twin show` and `stage list` marking it; a step with no target to `third-link`, a second to `head`, `unchanged`, the record moving; destroy; `-delete`, and `stage list --branch` after it refused `stage.unknown`. Case 8 on the mixed fixture with `seeded` and `mixed-link`, forward with `--allow-restart` and back with `--stage <b>/seeded`); `create_twin`'s `CREATE_REF` passed as `--stage`; every `jq` expectation on the `stage`, `stages` and `plan` blocks and `twin.json` `6`; the trap's `-delete` covering both branches; the header's case list and every comment that names a waypoint. `shellcheck scripts/e2e.sh`; `bash -n scripts/e2e.sh`.
+- [ ] T045 [live] [US5] Tier 3 on a quiet host (quickstart §7): read `free -m`; rebuild; restart the worker and the API's server from this tree and verify both as `CLAUDE.md` says; the dev server up. Start `make test-e2e` detached with its exit status in a file and wait in foreground calls of under ten minutes; it must end `E2E-OK`. Then rest the host and run `PLATFORMS=nokia_srlinux make test-e2e`, ending `E2E-PARTIAL`, case 7 run and 8 skipped. After each: no lab, no twin directory, no Schedule, no `fylgja-test-*` branch, proposed change or stage. Record both wall times in `research.md` §8 for T051. A failure is fixed under its story and the run repeated. Depends on T043 and T044.
+- [ ] T046 [live] [US5] `schema/README.md`: verify the three ways to write a stage on a throwaway proposed change first (research §7): an object file (`kind: Object`, `spec.kind: FylgjaStage`, `proposed_change` by id) loaded with `.venv/bin/infrahubctl object load`, and `.venv/bin/infrahubctl object create FylgjaStage --set label=… --set proposed_change=<id> --set description=…`, each then listed by `fylgja stage list --branch`; the UI's path is described as the operator gives it. Delete everything after. Then replace "Waypoints: writing one" with "Stages: marking one", in the content and order [contracts/stage-kind.md](contracts/stage-kind.md) "What schema/README.md says" gives, using the commands as verified, and the file table's row for `fylgja-stage.yaml`. Record the verification in `research.md` §8.
+- [ ] T047 [P] [US5] `README.md`'s "A stepping twin" walk-through rewritten on stages as quickstart §8 gives it (seed `fylgja-test-readme`, `-propose`, `-stage seeded`, `-add-link`, `-stage third-link`, `stage plan`, `twin create --stage fylgja-test-readme/seeded`, `twin step --dry-run`, `twin step`, `twin verify`, `stage list`, `twin step --stage fylgja-test-readme/seeded`, `twin destroy`, `-delete`), the deletion order said, and beside the recording a sentence that it shows waypoints until it is remade at `v0.2.0` (FR-029). Every other README mention of the waypoint becomes the stage's.
+- [ ] T048 [live] [US5] Follow T047's walk-through by hand on the development host, with the worker and the server from this tree (quickstart §8, SC-010), and correct the README to the outputs seen; nothing left in Infrahub after. Depends on T045 and T047.
+- [ ] T049 [P] [US5] `contracts/cli.md` and `contracts/api.md`: a section "014: the stage surface" in each, saying what [contracts/stage-commands.md](contracts/stage-commands.md) says (the commands, `--stage`, the target rule, the operations removed and added, the argument renamed, `twin.json` `6`, the `stage.*` identifiers with their exits, the one M11 identifier renamed, and that the API's version did not move because it is pre-1.0), and every older section's waypoint rows marked as moved at 014 rather than rewritten; `api.md`'s operations table as data-model §9 gives it.
+
+**Checkpoint**: tiers 1, 2 and 3 pass on stages; no waypoint is left in the tree's code, on
+`main` or in the tooling.
+
+---
+
+## Phase 10: Polish & the close
+
+- [ ] T050 [P] `docs/architecture.md`: grep for `waypoint` and rewrite each position for the stage (the kind beside the contract, the reader's three Infrahub roots, the resolution and its refusals at `resolve`, the staleness rule per D-046, `twin.json` `6`, the step within a proposed change), leaving one sentence that says what replaced the waypoint and citing D-045 (and D-046); fix any hit T011 noted.
+- [ ] T051 [P] `docs/glossary.md` (each waypoint term marked superseded by D-045, pointing at its stage term), `docs/development.md` (the package layout line for `internal/stages`, the tiers' wall times from T043 and T045, the walk-through's numbers, `stage list` and `stage plan` wherever the waypoint commands were), `docs/verified-facts.md` (research §6's facts and §8's, each with version and date: the empty branch point, `state: absent`'s idempotence, the draft's pipeline times, the identical-bytes run-check, the validator's pinned value, the stamps through the generics, the artifacts' spread).
+- [ ] T052 [P] `docs/roadmap.md` (F-023 built, 015 next), `docs/ideas.md` (the persistent fixture series closed by the stages), `docs/brief.md` (the stage where the waypoint is).
+- [ ] T053 `CLAUDE.md`: Environment's `main` paragraph (the final `FylgjaStage` and its extension, no `FylgjaWaypoint`, the new hash from T042, the fixture branch's `0aba31a5…` and `47b2c449…` unchanged); the "Waypoints" bullet becomes "Stages" (the operator's to mark by object file, the UI or `infrahubctl`; the guide `schema/README.md`; after the contract tier `FylgjaStage { count }` reads 0); the fixture branch's note that it has no proposed change; Formats (`twin.json` `6`); State rewritten for 014 built and `015-proposed-change-rehearsal` next.
+- [ ] T054 Draft the upstream request for named points in time (FR-032) by loading the `infrahub:infrahub-reporting-issues` skill, citing the issues the brief names, the strict `created_at <= at` boundary and the rebase's discarded history (research §2.6–§2.7), into `specs/014-proposed-change-stages/upstream-request.md`, for the operator's approval. Never file it.
+- [ ] T055 The closing gates and hygiene: `make build`; `file bin/fylgja` statically linked; `make test` with `git diff --stat main -- testdata/golden` empty and every format version but `twin.json`'s unchanged (SC-008); `make lint`; `shellcheck scripts/bring-up.sh scripts/e2e.sh`; quickstart §6's two greps as SC-009 allows them: the first prints nothing, and the second shows in each excluded record only its one sentence (the README's note, `CLAUDE.md`'s Milestones, the contracts' moved rows, the architecture's sentence, the roadmap's F-023, `twin.go`'s `5`-record wording and `step.twin.unsteppable`); `internal/provision/testdata/rewrite-stage.go` is under `testdata` and excluded (report anything else and fix it); `bin/fylgja --help | /usr/bin/grep -c -i waypoint` prints 0; from a shell that has loaded `local/.env`, `/usr/bin/grep -rlF` for `INFRAHUB_API_TOKEN`'s and `FYLGJA_API_TOKEN`'s values and both node passwords over the tree (excluding `.git`, `.venv`, `local`, `bin`), the published defaults in `scripts/e2e.sh` and `scripts/bring-up.sh` aside, never printing a value (FR-033).
+- [ ] T056 [operator] The operator reads the feature's diff and its records, commits by hand (conventional messages, bodies saying why), approves or edits `upstream-request.md`, and runs `make command-log` once the session is closed.
+
+---
+
+## Dependencies & Execution Order
+
+### Phase dependencies
+
+- **Setup (Phase 1)**: none.
+- **Foundational, the kind and the client (Phase 2)**: after Setup. T003 (the operator) before
+  T004 (the SDL); T005–T007 after T004; T008–T009 beside T004–T007; T010 after all of them;
+  T011 any time, but before T015.
+- **Foundational, the core (Phase 3)**: after T005, T006 and T011. T013 → T014 → T015 → T016;
+  T017 and T018 after T014; T019 after T012–T018; T020 after T010 and T019.
+- **Foundational, the switch (Phase 4)**: after Phase 3. T021 → T022 → T023 → T024; T025 and
+  T028 beside T023–T024; T026 after T022–T023; T027 after T026; T029 after T027–T028; T030
+  after T029; T031 after T030; T032 last. **Blocks every story phase.**
+- **US1 (Phase 5), US2 (Phase 6), US3 (Phase 7), US4 (Phase 8)**: each after Phase 4 alone,
+  in separate test files, so in any order or together; T040 after T033–T039.
+- **US5 (Phase 9)**: T041, T044, T046, T047 and T049 after Phase 4; T042 after T030 and T041;
+  T043 after T042; T045 after T043 and T044 (never beside tier 2); T048 after T045 and T047.
+- **Polish (Phase 10)**: after every story; T051 needs T043's and T045's times, T053 T042's
+  hash; T056 last.
+
+### Within a phase
+
+Foundational code is gated in tier 1 before its tier-2 or live proof. In a story phase,
+each test names the scenario it proves; a defect it finds is fixed in that phase, in the
+package that holds the behaviour, before the checkpoint.
+
+### Parallel opportunities
+
+- Phase 2: T002 beside T004–T007; T008 and T009 beside T004–T007.
+- Phase 3: T017 and T018 once T014 is done.
+- Phase 4: T025 and T028 beside T023–T024.
+- Phases 5–8: the four stories' test files (`stage_plan_test.go`, `stage_create_test.go` and
+  `twin_step_test.go`, `stage_list_test.go`, `intent_test.go`) are independent.
+- Phase 9: T044, T046, T047 and T049; Phase 10: T050, T051, T052.
+
+### Parallel example: the story phases after the switch
+
+```text
+T033–T034  internal/cli/stage_plan_test.go       (US1)
+T035–T037  internal/cli/stage_create_test.go, twin_step_test.go, show_test.go, verify_test.go  (US2)
+T038       internal/cli/stage_list_test.go       (US3)
+T039       internal/cli/intent_test.go, create_test.go  (US4)
+→ then T040, the hand scenarios, over all of them
+```
+
+---
+
+## Implementation Strategy
+
+**MVP**: Phases 1–5. US1, the plan, is the surface every later stage use reads, and it
+cannot ship without the switch (Phase 4), which brings the whole stage surface with it.
+After Phase 5 the operator can mark and plan a proposed change's stages; the twin commands
+work too, but are proved only from Phase 6.
+
+**Incremental delivery**: Foundational (the kind, the client, the core proved in tier 2) →
+the switch → US1 → US2 → US3 → US4, each proved in tier 1 at its checkpoint → the hand
+scenarios → US5 (the waypoint kind off `main`, tier 2 whole, tier 3) → the records. Every
+checkpoint leaves the tree green; between the switch and T044, tier 3 still drives
+waypoints and is not run.
+
+### Recommended route
+
+Each line is one implement run's prompt. Every run: only the tasks it names; stop at its
+checkpoint and report; a hand run leaves its work for the operator to commit, a loop run
+commits its own.
+
+1. **Run 1** — the baseline and the stage kind's file, embedded and tested (T001–T002). Only these; stop and report.
+2. **Run 2** — [operator] the final stage kind loaded on main as a migration of the candidate, verified and recorded; the waypoint kind stays (T003). Stop and report.
+3. **Run 3** — the SDL refetched, the five queries, the stage reader, the stamps and the read-only test's three exceptions (T004–T007). Only these; stop and report.
+4. **Run 4** — test support's proposed changes and stages, the fixture tool's four flags and ordered delete, gated and smoked against Infrahub on a throwaway branch (T008–T010). Only these; stop and report.
+5. **Run 5** — ~~[operator] D-046, the generation stamp, written or declined (T011)~~ done at `analyze` (2026-10-16, accepted): nothing to run; go to Run 6.
+6. **Run 6** — the stages core in tier 1: the rule constants, the reference, the resolution, the staleness rule, the plan, the target, the list, the platform grep and the glossary's new terms (T012–T019). Only these; stop and report.
+7. **Run 7** — the stages core's tier-2 tests against the real Infrahub (T020). Only this; stop and report.
+8. **Run 8** — the switch: the contracts, findings, twin.json 6, the workflows' types and the rewritten histories, the server, the API, the client, the waypoint code deleted, the C4 model redrawn, gated (T021–T032). The whole run lands together; stop and report.
+9. **Run 9** — US1's plan scenarios, text and kind-absent cases through the harness (T033–T034). Only these; stop and report.
+10. **Run 10** — US2's create, step, show and verify scenarios through the harness (T035–T037). Only these; stop and report.
+11. **Run 11** — US3's list scenarios and US4's reference scenarios through the harness (T038–T039). Only these; stop and report.
+12. **Run 12** — [live] the hand scenarios of quickstart §1's tail, §3 and §4 on the development host (T040). Stop and report.
+13. **Run 13** — the test tooling's waypoint removed, the fixture tool's documentation, scripts/e2e.sh's cases 7 and 8 on stages, the README's walk-through and the contracts' 014 sections (T041, T044, T047, T049). Only these; stop and report.
+14. **Run 14** — [operator] the waypoint kind removed from main, the SDL refetched, then the contract tier whole (T042–T043). Stop and report.
+15. **Run 15** — [live] tier 3 whole and narrowed on a quiet host, the schema README's three ways verified and written, the walk-through followed by hand (T045, T046, T048). Stop and report.
+16. **Run 16** — the records: architecture, glossary, development.md, verified-facts.md, roadmap, ideas, brief, CLAUDE.md (T050–T053). Only these; stop and report.
+17. **Run 17** — the upstream request drafted, never filed, and the closing gates and greps (T054–T055). Only these; stop and report.
+18. **Run 18** — [operator] the operator's review, commits and the command log (T056). Stop and report.
+
+`converge` follows Run 18.
+
+## Notes
+
+The heading above closes the route: `scripts/converge-loop.sh` reads "Recommended route" only up to the next heading.
+
+Settled at `analyze` (2026-10-16): SC-009 and quickstart §6 now allow the frozen `twin.schema.json` copies, the `5`-record refusal and one sentence per record (T055 matches); the plan's "Order of the work", quickstart §1/§1b and research §7 now remove `FylgjaWaypoint` from `main` last, as this file does; US1 scenario 1, its independent test and SC-004 are reworded per R-04; FR-011 names D-046, accepted (T011 done); FR-025 keeps `-at` and `-description`; FR-028 enumerates tier 2's refusals and T020 gains the future `as_of`; `stages.schema.json`'s list field is `rows`; Constitution III is amended to 1.2.1 for the three Infrahub-owned roots (T007). Still this file's own: the contract's `Stamps` query gains the platform's fields (T004, T006).

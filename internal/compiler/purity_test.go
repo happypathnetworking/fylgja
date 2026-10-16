@@ -94,6 +94,9 @@ func TestCompilerNamesNoPlatform(t *testing.T) {
 		// internal/ whole, and a missing directory fails it.
 		filepath.Join("..", "step"),
 		filepath.Join("..", "waypoint"),
+		// 014: a proposed change's stages, whose staleness rule names each device's
+		// artifact by its package's config.artifact_name, never by a constant.
+		filepath.Join("..", "stages"),
 		// M12: the readers of a booted node, moved out of the suite, and verify's core
 		// (D-031, D-037). Reading is one mechanism
 		// keyed by a package's conformance facet, so nothing in it names whose package it

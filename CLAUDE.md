@@ -111,11 +111,11 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   local/infrahub/docker-compose.override.yml <command>`. Volumes persist across `down`.
 - **Infrahub's `main`** carries the Fylgja schema (`NetworkDevice` inherits
   `CoreArtifactTarget`; the waypoint kind `FylgjaWaypoint`, branch-agnostic, attribute
-  `as_of`; and, since 2026-10-16, 014's candidate stage kind `FylgjaStage` with its
-  `fylgja_stages` extension of `CoreProposedChange`, loaded for
-  [D-045](docs/decisions.md#d-045)'s verification from
-  `specs/014-proposed-change-stages/research-probe/fylgja-stage.yaml`, which the pass's
-  final kind replaces by a migration), hash `e7386419…` on this install (`0aba31a5…`
+  `as_of`, until 014's T042 removes it; and 014's stage kind `FylgjaStage` (`label`,
+  `as_of`, `description`) with its `fylgja_stages` extension of `CoreProposedChange`,
+  loaded 2026-10-16 from `schema/fylgja-stage.yaml` by `-prepare-main` as a migration of
+  the candidate [D-045](docs/decisions.md#d-045)'s verification had loaded), hash
+  `a8045729…` on this install (`e7386419…` with the candidate, `0aba31a5…`
   before the stage kind; a branch's hash is its own, so each install and each branch has
   one, and the fixture branch keeps `0aba31a5…`; the 24.04 install's was `4d5b37aa…`);
   the empty group

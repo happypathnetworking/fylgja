@@ -745,3 +745,53 @@ schema/fylgja-stage.yaml` exits 1 and would put `order_by` before `display_label
 after its `parameters`; nothing else. Of the other shipped files, `fylgja-waypoint.yaml`
 is canonical, and `fylgja-generics.yaml` and `reference.yaml` are not. No gate runs the
 formatter, and T002 ships the contract's order; reordering is open, for the operator.
+
+### 8.3 The final kind on `main`, a migration of the candidate (T003, 2026-10-16)
+
+On the operator's word (the route's Run 2), from the repository root with `local/.env`
+loaded, no twin, and before it `main` at `e7386419…` with `CoreProposedChange`,
+`FylgjaStage` and `FylgjaWaypoint` each 0:
+
+- `infrahubctl schema check --branch main schema/` (21:16:39Z, 10.6 s, exit 0): the four
+  files `Valid`, the four `display_labels` deprecation warnings, and one diff,
+  `FylgjaStage: attributes: added: description; changed: label: description,
+  parameters.regex, regex`; `FylgjaWaypoint` none. The `regex` beside `parameters.regex`
+  is Infrahub's mirror of it, not a second change: the waypoint's `series`, whose file sets
+  `parameters.regex` alone, reads both equal on `main`, and after the load `label` does
+  too. §6.2 and §8.1 name the same diff without the mirror.
+- `go run -tags fixture ./cmd/fylgja-fixture -prepare-main` (21:17:11Z, 37 s with the
+  build, exit 0): `schema loaded on main`, `group fylgja-devices present`, `repository
+  fylgja present (…, ref main)`, `import complete after 2s`. Its wait looks for
+  `FylgjaContractCreate`, which `main` already had, so it does not wait for this
+  migration's rebuild; the reads below came after it.
+- `GET /api/schema?branch=main`: nodes `FylgjaContract`, `FylgjaWaypoint`, `FylgjaStage`
+  and the four generics; `FylgjaStage` `branch: agnostic`, attributes `description`,
+  `as_of`, `label` (Infrahub's order), `label` required with `regex` and
+  `parameters.regex` both `^[^/\s]+$`, `proposed_change` and the uniqueness constraint as
+  the candidate's; `CoreProposedChange.fylgja_stages`, peer `FylgjaStage`, identifier
+  `proposed_change__fylgja_stages`, unchanged. GraphQL's `FylgjaStage` type has
+  `description`.
+- `GET /api/schema/summary`: `main` **`a8045729…`** (was `e7386419…`); `fylgja-fixture`
+  `0aba31a5…`, unmoved.
+- A second `schema check --branch main schema/`: `No diff`. After it: `Branch` `main` and
+  `fylgja-fixture`; `CoreProposedChange 0`, `FylgjaStage 0`, `FylgjaWaypoint 0`.
+- Through a server rebuilt from this tree, `intent read --branch fylgja-fixture` (schema
+  `0aba31a5…`) then `twin compile` gave **`47b2c449…`**, as before (read-only; quickstart
+  §1's tail, which T040 repeats).
+
+`migration/fylgja-waypoint-absent.yaml` was not loaded: `FylgjaWaypoint` leaves at T042.
+Tier 3 after it, on this tree's binary, with every seed loading `schema/` on a branch made
+from the new `main`: `E2E-OK`, 17 m 51 s (21:26:44Z–21:44:35Z), the host clean after.
+
+### 8.4 A dev server restarted after days down purges its expired runs first (Temporal CLI 1.9.1)
+
+The dev server had been down three days, and before that a twin left following since
+2026-10-08 (the README's walk-through, branch `fylgja-test-readme`, since deleted) had run
+a check every 15 s. Restarted at 21:14Z, the server deleted the expired runs under the
+namespace's 24 h retention at about nine a second (5,449 at 21:16Z, 7 at 21:26Z); until
+it ended, a visibility list over many runs timed out (`temporal workflow list` without a
+narrow query, `context deadline exceeded` or `RST_STREAM … CANCEL`), while `workflow
+count` answered. So `twin show` and `twin verify` warned `show.service.unreachable`, and
+tier 3's first run failed at case 1's verify, which requires no finding. After the purge
+every list answered in 0.14 s and the rerun above passed. Before tier 3 on a restarted dev
+server, wait for `temporal workflow count` to stop falling.

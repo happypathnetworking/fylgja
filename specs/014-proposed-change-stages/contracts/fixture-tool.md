@@ -17,15 +17,18 @@ go run -tags fixture ./cmd/fylgja-fixture -branch <b> -delete                   
 ```
 
 - **Guards, before any request**: every flag above refuses `fylgja-fixture` ("the fixture
-  has no proposed change") and a `-branch` that does not begin `fylgja-test-`
+  has no proposed change"; `-delete` alone keeps it, which `make infrahub-clean` deletes and
+  which holds no proposed change) and a `-branch` that does not begin `fylgja-test-`
   (`testsupport.TestBranchPrefix`); `-at` and `-description` without `-stage` are refused as
   before; `-stage` with a reserved label (`head`, `branch-point`) is **not** refused, so a
   test can write what Fylgja must refuse; `-propose` on a branch with an open proposed change
   is Infrahub's refusal, printed.
 - **`-propose`** creates `CoreProposedChange` with `name` the branch's, `source_branch` the
   branch, `destination_branch main`, `is_draft true`, then polls its `validations` every 2 s
-  until every validator is `completed` or 180 s pass (about 17 s on a bare branch, 41 s on
-  a seeded one), and prints `proposed change <id> opened on <b>, draft; <n> validators
+  until it has one, every validator is `completed`, and, when the branch's devices render,
+  its artifact validator is among them, or 180 s pass (about 9–17 s on a bare branch, 38–41 s
+  on a seeded one; the validators appear one after another, so "every one completed" alone
+  ends early, [research.md §8.6](../research.md)), and prints `proposed change <id> opened on <b>, draft; <n> validators
   concluded in <s>s`. The wait is what makes a following intent change safe from the
   creation's regenerate.
 - **`-stage`** finds the open proposed change by `source_branch` and `state open`, writes

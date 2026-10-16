@@ -836,3 +836,55 @@ server, wait for `temporal workflow count` to stop falling.
   own checksum, so the fixture's head is fresh. Pinned at `…05:48:03.562938+00:00`, one
   microsecond after the cabling: no artifact yet, `Latest` the cabling's stamp. On `main`:
   `Latest ""`, no device.
+
+### 8.6 The fixture tool's proposed changes, smoked (T008–T010, 2026-10-16)
+
+From the repository root, Infrahub's address and token in the environment, no twin, on
+`fylgja-test-tasks-1393696` (seeded, 16 s, the stage kind and its extension loaded on the
+branch with `schema/` and accepted) and `fylgja-test-tasks-bare-1414083` (`-schema-only`),
+with `main` holding `Branch` `main` and `fylgja-fixture`, `CoreProposedChange 0` and
+`FylgjaStage 0` before and after:
+
+- **The validators alone end the creation's wait too early.** On the seeded branch, the
+  first `-propose` returned after 20 s with one validator, Data Integrity, completed
+  (22:09:37); Schema Integrity appeared 20 s later and the artifact validator completed at
+  22:10:20, 63 s after the create. Infrahub creates the validators one after another as
+  the pipeline goes, so "every validator completed" holds in the gaps. **Nor do the
+  pipeline's tasks end it**: `InfrahubTask(related_node__ids: [<id>])` lists about eight
+  tasks naming the proposed change (generators, data and schema integrity, user tests,
+  the artifacts' refresh, repository checks, then the artifacts' generation validation and
+  the user checks), and a child task is listed only once it starts, about 2 s after its
+  parent has ended: the second fixed attempt returned with 6 tasks, all ended, and 2
+  validators, while the artifact validation's task appeared after. The first validator
+  has no listed task at all. So `AwaitValidators` waits until there is a validator, every
+  one is completed, and, when the branch's group `fylgja-devices` has members, a
+  `CoreArtifactValidator` of the proposed change is among them: the creation renders inside
+  that validator (§2.4), which is what the wait exists for, and it completed last in all
+  three seeded runs. With that rule: **3 validators concluded in 38 s** on the seeded branch
+  (§6.5 read 41 s), nothing after it in 20 s and no checksum moved (the seed's bytes);
+  **1 validator in 9 s** on the bare branch (members 0), nothing more in 40 s (§6.4 read
+  17 s).
+- **Infrahub dropped one poll's connection** mid-pipeline (`Post …/graphql/main: EOF`, at
+  22:12:33); the polls now read again until their deadline, as `WaitForArtifacts` does.
+- `-stage seeded -description seeded`: written, `at` `label.updated_at`
+  (`2026-10-16T22:16:31.827129+00:00`). `-run-check`: the artifact validator's
+  `completed_at` moved to `2026-10-16T22:16:48.902133Z` **17 s** after the call (§2.4 read
+  26 s, the contract about 21 s). `-stage head`: written, not refused (R-15). `-stage given
+  -at <t>`: `given`, and Infrahub stored a nine-digit `as_of` verbatim (this host's `date`
+  ignores `%6N`; Fylgja refuses it at resolution, `intent.at.precision`). A second
+  `-stage seeded` is Infrahub's `Violates uniqueness constraint 'proposed_change-label'`
+  and `-stage a/b` its `must conform with the regex`, each printed. `-close`: closed, the
+  stages stay; `-stage` after it: `branch … has no open proposed change`.
+- `-delete` on the seeded branch, which held four proposed changes (three closed while
+  the wait was fixed, one closed by `-close`) and three stages: `deleted 3 stages, 4
+  proposed changes, branch …` in 11 s; on the bare one `deleted 0 stages, 1 proposed
+  change, branch …`. `main` read the same 20 s after (no proposed change canceled under a
+  deleted branch).
+- **Refused before any request** (neither variable set, so a request would have failed
+  first on `INFRAHUB_ADDRESS`): `-propose -branch fylgja-fixture` and `-propose` alone ("the
+  fixture has no proposed change"), `-stage x -branch other` and `-run-check -branch other`
+  (the prefix), `-close -branch fylgja-fixture`, `-at` with neither `-stage` nor
+  `-waypoint`, `-propose -close` (one at a time), and `-delete -branch other`. `-delete`
+  keeps `fylgja-fixture`, which `make infrahub-clean` deletes and which holds no proposed
+  change; any other branch outside the prefix is refused, as the contract's guard says.
+- `Rebase` was not exercised here; T020's `TestStageRefusals` runs it.

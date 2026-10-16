@@ -53,15 +53,30 @@ and is not cited here; a bare milestone marker (`M7`) is resolved by the table b
   `research.md` and, once it holds, in `docs/verified-facts.md`.
 - **A changed package, import or component is redrawn** in the same change: edit
   `docs/c4/workspace.dsl` beside the prose it illustrates, then `make diagrams`.
-- **The OpsMill `infrahub-*` skills** (installed in the user's Claude Code skills, not in
-  this repository) are loaded, not left to chance: when a feature designs or changes
-  something in Infrahub — a schema kind, object files, a transform, a check — `plan`
-  loads the matching skill before writing `data-model.md` or `research.md`, and
-  `specify` does when it names a new kind. Most often `infrahub-managing-schemas`, then
-  `-objects`, `-transforms`, `-checks`. Apply their rules; do not obey them where a
-  decision already differs: Fylgja's schema loads on `main` on purpose
-  ([D-028](docs/decisions.md#d-028)), against `workflow-branch-first`. They do not replace
-  verifying against the running 1.11.2.
+- **The OpsMill `infrahub-*` skills** (the user's plugin `infrahub@opsmill`, not in this
+  repository; its skills are named `infrahub:infrahub-managing-schemas` and so on) are
+  loaded, not left to chance: when a feature designs or changes something in Infrahub — a
+  schema kind, object files, a transform, a check — `plan` loads the matching skill before
+  writing `data-model.md` or `research.md`, and `specify` does when it names a new kind.
+  Most often `infrahub-managing-schemas`, then `-objects`, `-transforms`, `-checks`. Its
+  start-up hook's path triggers hold here (`infrahub/templates/`, `infrahub/queries/`,
+  a check's `.py`): read the skill it names before editing. Apply their rules, and do not
+  obey them where this repository already decides otherwise. The hook and its rules say
+  otherwise in three places, and this file wins in each:
+  - **`infrahubctl` is `.venv/bin/infrahubctl`.** Skip the hook's `uv run` / `poetry run`
+    detection; neither tool is used here, and nothing is `uv add`ed or `poetry add`ed.
+    The venv's `infrahub-sdk` is pinned (Environment, Python).
+  - **Fylgja's schema loads on `main`** ([D-028](docs/decisions.md#d-028)), against
+    `workflow-branch-first`. That includes the branch-agnostic kinds beside the contract,
+    `FylgjaWaypoint` and any added after it.
+  - **Some writes go to `main` on purpose**, against `workflow-branch-for-crud`: the group
+    `fylgja-devices` and the repository registration (`fylgja-fixture -prepare-main`);
+    waypoints and other branch-agnostic objects, which land in no branch's diff; and what
+    a check posts on a proposed change. Every other write goes to a branch, as the rule
+    says: the fixture's own branch, a test's `fylgja-test-*` one. This Infrahub is not
+    throwaway, since its volumes hold the admin token.
+
+  They do not replace verifying against the running 1.11.2.
 
 ## Environment
 

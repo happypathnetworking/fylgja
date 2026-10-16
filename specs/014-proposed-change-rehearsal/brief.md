@@ -214,8 +214,8 @@ SPECIFY_FEATURE_DIRECTORY=specs/014-proposed-change-rehearsal. 0.2, the first of
 - **The API's answer for a run of minutes** inside Infrahub's timeout, and the check's
   client for it: Python against the API's frames.
 - **The decision entries** the roadmap names for 014, written after the verification.
-- **Load OpsMill's `infrahub-managing-checks` skill** before writing the checks
-  (`/plugin marketplace add opsmill/claude-marketplace`, `/plugin install infrahub@opsmill`).
+- **Load OpsMill's `infrahub:infrahub-managing-checks` skill** before writing the checks;
+  the plugin `infrahub@opsmill` is installed.
 
 ## Exit
 
@@ -230,7 +230,7 @@ SPECIFY_FEATURE_DIRECTORY=specs/014-proposed-change-rehearsal. 0.2, the first of
   through `fylgja-twin`, which passes, posts its comment and deletes its series. A stage
   that fails, by a means the plan chooses, fails the check at that stage and keeps the
   series. After it, no twin and no `fylgja-test-*` series remain.
-- **Owed before the work starts**: OpsMill's skills installed. Nothing else.
+- **Owed before the work starts**: nothing. OpsMill's skills are installed.
 
 <a id="references"></a>
 ## References

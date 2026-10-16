@@ -37,22 +37,29 @@ in the README, a recording and the write-up. An engineer opens a proposed change
 Infrahub, and two checks from this repository report on it. `fylgja-step` answers in
 seconds with the step from `main` to the source branch, stage by stage. `fylgja-twin`
 answers in minutes. It boots a twin at the branch's branch point, steps it through the
-operator's waypoints for the change to the branch's head, verifies after every step, and
-tears it down. Probes measure loss across each step. A markdown comment on the proposed
-change carries the report, and a stage that fails blocks the merge. Nothing OpsMill
-publishes boots a twin per proposed change; their containerlab demos deploy by hand,
-after the merge. In order:
+stages the operator marked on the proposed change to the branch's head, verifies after
+every step, and tears it down. Probes measure loss across each step. A markdown comment on
+the proposed change carries the report, and a stage that fails blocks the merge. Nothing
+OpsMill publishes boots a twin per proposed change; their containerlab demos deploy by
+hand, after the merge. In order:
 
-1. **`014-proposed-change-rehearsal`**: items 7 and 8, reshaped as one pass. It adds
-   `twin rehearse` (a waypoint series created, stepped and verified stage by stage, then
-   reported and destroyed), the two checks, and the server listening where Infrahub's
-   task workers reach it. Its [brief](../specs/014-proposed-change-rehearsal/brief.md)
-   holds what was decided.
-2. **`015-probes`**: item 14. The report gains its loss column, and the gate gains a
-   flow that has not recovered. Its [brief](../specs/015-probes/brief.md).
-3. **Item 12, the agent skill**, as a chore.
-4. **If time allows**, each its own pass: item 15, then item 13.
-5. **`v0.2.0`**: the recording of a rehearsed proposed change, and the write-up updated.
+1. **`014-proposed-change-stages`**: a stage is a moment of a proposed change, in place of
+   a waypoint (superseding [D-032](decisions.md#d-032)). A `FylgjaStage` relates to the
+   proposed change, and its branch is the proposed change's source. The branch point and
+   the head are derived, so only the moments between them are marked. M10's surface moves
+   to stages. Its [brief](../specs/014-proposed-change-stages/brief.md) holds the probe
+   against the running Infrahub and what was decided.
+2. **`015-proposed-change-rehearsal`**: items 7 and 8, reshaped as one pass. It adds
+   `twin rehearse` (a proposed change's stages created, stepped and verified one by one,
+   then reported and destroyed), the two checks, and the server listening where
+   Infrahub's task workers reach it. Its
+   [brief](../specs/015-proposed-change-rehearsal/brief.md).
+3. **`016-probes`**: item 14. The report gains its loss column, and the gate gains a
+   flow that has not recovered. Its [brief](../specs/016-probes/brief.md).
+4. **Item 12, the agent skill**, as a chore.
+5. **If time allows**, each its own pass: item 15, then item 13.
+6. **`v0.2.0`**: the recording of a rehearsed proposed change, the write-up updated, and
+   the upstream request for named points in time drafted for the operator to file.
 
 Item 9 waits: Infrahub runs a proposed change's checks at its creation and on a retry,
 not on a branch update, so a webhook adds nothing to 0.2. Items 10 and 11, and everything
@@ -109,17 +116,16 @@ artifacts template in this repository, as the OpsMill skills describe it
 worker, so it reaches Fylgja through the API, not by running the binary. The check writes
 the result: Fylgja never writes to Infrahub ([D-026](decisions.md#d-026), citing
 Constitution III). Its report takes verify's advisory form ([D-039](decisions.md#d-039)).
-Size: about M3's. **In 0.2** the check writes its own waypoint series for the stages and
-asks for `waypoint plan` over it. It fails only when Fylgja refuses a stage as intent.
+Size: about M3's. **In 0.2** the check asks for the plan over the proposed change's
+stages. It fails only when Fylgja refuses a stage as intent.
 
-**7–8 in 0.2, the rehearsal.** A proposed change is staged by the operator's own
-waypoints on its source branch, so the check rehearses each stage rather than one step
-from `main`. The live check writes a series: the source branch at its branch point, then
-the operator's stages, then the head. It asks Fylgja to `twin rehearse` that series, posts
-the report, and fails at the first stage that diverges or adds a finding the baseline did
-not have. The series is deleted on a pass and kept on a failure, so the failure can be
-reproduced by hand. [The 0.2 brief](../specs/014-proposed-change-rehearsal/brief.md) has
-the rest.
+**7–8 in 0.2, the rehearsal.** A proposed change is staged by the stages the operator
+marks on it, so the check rehearses each stage rather than one step from `main`. The
+stages are the source branch at its branch point, then the marked ones, then the head. The
+live check asks Fylgja to `twin rehearse` the proposed change, posts the report, and fails
+at the first stage that diverges or adds a finding the baseline did not have. The check
+writes only its comment, and the stages outlive it, so a failure can be reproduced by
+hand. [The 0.2 brief](../specs/015-proposed-change-rehearsal/brief.md) has the rest.
 
 **8. The live proposed-change check.** The second check asks the API for a pinned twin of
 the source branch, runs `twin verify` and reports its result on the proposed change. Open
@@ -264,13 +270,14 @@ M10's.
 
 ## Decisions the order needs
 
-- At 014: the check as a writer of waypoints and of a comment, beside
-  [D-026](decisions.md#d-026) and [D-032](decisions.md#d-032); the server listening on the
-  Docker bridge, superseding [D-042](decisions.md#d-042)'s loopback default for this
-  deployment; `twin rehearse` as a fifth workflow beside the brief's four; how the check
-  maps the report to a conclusion, with Fylgja's verdict staying advisory
+- At 014: stages superseding [D-032](decisions.md#d-032). A stage is a moment of a
+  proposed change, the ends are derived, and waypoints are removed.
+- At 015: the check as the writer of a comment, beside [D-026](decisions.md#d-026); the
+  server listening on the Docker bridge, superseding [D-042](decisions.md#d-042)'s loopback
+  default for this deployment; `twin rehearse` as a fifth workflow beside the brief's four;
+  how the check maps the report to a conclusion, with Fylgja's verdict staying advisory
   ([D-039](decisions.md#d-039)).
-- At 015: probes as an input to a compile beside intent, hashed into the bundle; and
+- At 016: probes as an input to a compile beside intent, hashed into the bundle; and
   item 14's own entries below.
 - At item 9: whether the webhook needs an entry beside [D-026](decisions.md#d-026), which
   already names it and keeps the compare.

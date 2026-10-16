@@ -1,0 +1,49 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+# PROBE ONLY: the candidate stage kind loaded on the throwaway branch fylgja-test-stage-probe
+# on 2026-10-16 against Infrahub 1.11.2 (202 check, 200 load), then deleted with it. Not loaded
+# on main; the pass writes schema/fylgja-stage.yaml from it.
+version: "1.0"
+nodes:
+  - name: Stage
+    namespace: Fylgja
+    description: "A marked moment of a proposed change: its source branch at a point in time."
+    label: Stage
+    icon: mdi:map-marker-path
+    branch: agnostic
+    include_in_menu: true
+    generate_profile: false
+    # human_friendly_id through the proposed change is refused: its name is not unique.
+    display_label: "{{ label__value }}"
+    order_by: [as_of__value]
+    uniqueness_constraints:
+      - [proposed_change, label__value]
+    attributes:
+      - name: label
+        kind: Text
+        optional: false
+        description: "What this stage of the change is, unique within its proposed change."
+        order_weight: 1000
+      - name: as_of
+        kind: DateTime
+        optional: true
+        description: "The point in time on the source branch. Omitted: when the stage was written."
+        order_weight: 1100
+    relationships:
+      - name: proposed_change
+        peer: CoreProposedChange
+        kind: Attribute
+        cardinality: one
+        optional: false
+        identifier: "proposed_change__fylgja_stages"
+        order_weight: 900
+extensions:
+  nodes:
+    - kind: CoreProposedChange
+      relationships:
+        - name: fylgja_stages
+          peer: FylgjaStage
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "proposed_change__fylgja_stages"

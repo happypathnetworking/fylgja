@@ -1,31 +1,37 @@
-# Specify brief: 0.2 feature 1 of 2: the proposed change rehearsed
+# Specify brief: 0.2 feature 2 of 3: the proposed change rehearsed
 
 This is what `/speckit-specify` reads for roadmap items 7 and 8, reshaped as one pass by
 the roadmap's [Next section](../../docs/roadmap.md#next). It was written on 2026-10-16
-from a design session with the operator. The session settled the direction of 0.2 and
-every choice under [Decided](#decided). It read Infrahub 1.11.2's source and schema, and
-the documentation, but verified nothing live: [Infrahub as read](#infrahub-as-read)
-records what the session found, and the plan verifies each point before relying on it.
-Specify what the operator gets, not a new design. [References](#references) names every
-file to read.
+from a design session with the operator, and revised the same day when stages replaced
+waypoints ([014's brief](../014-proposed-change-stages/brief.md)). The session settled the
+direction of 0.2 and every choice under [Decided](#decided). It read Infrahub 1.11.2's
+source and schema, and the documentation, but verified none of the pipeline live:
+[Infrahub as read](#infrahub-as-read) records what it found, and the plan verifies each
+point before relying on it.
+
+Specify after 014 is built. This feature reads the stages 014 builds, so re-read the
+references to them against 014's spec and close first. Specify what the operator gets, not
+a new design. [References](#references) names every file to read.
 
 The prompt:
 
 ```
-SPECIFY_FEATURE_DIRECTORY=specs/014-proposed-change-rehearsal. 0.2, the first of its two features: a proposed change rehearsed on a twin, as docs/roadmap.md's Next section and items 7 and 8 define it. Read specs/014-proposed-change-rehearsal/brief.md first: it holds what changes, the decisions to treat as settled, the questions left for clarify, the exit criteria and every record to read. Specify what the operator gets, not a new design.
+SPECIFY_FEATURE_DIRECTORY=specs/015-proposed-change-rehearsal. 0.2, the second of its three features: a proposed change rehearsed on a twin, as docs/roadmap.md's Next section and items 7 and 8 define it. Read specs/015-proposed-change-rehearsal/brief.md first: it holds what changes, the decisions to treat as settled, the questions left for clarify, the exit criteria and every record to read. Specify what the operator gets, not a new design.
 ```
 
 ## Where the shape is fixed
 
 - **The roadmap's [Next section](../../docs/roadmap.md#next)**, and items 7 and 8 with
   their 0.2 paragraph. This feature is 0.2's frame: the demo the release records happens on
-  a proposed change. Probes, item 14, are the [next feature](../015-probes/brief.md), so
+  a proposed change. Probes, item 14, are the [next feature](../016-probes/brief.md), so
   this feature's gate has no loss in it.
-- **[D-032](../../docs/decisions.md#d-032)**: a waypoint is a name for a pinned
-  reference, written by the operator and only read by Fylgja. An absent `as_of` is the
-  waypoint's own write stamp. **[D-036](../../docs/decisions.md#d-036)**: a step goes to
-  another waypoint of the twin's own series (`step.target.foreign`); a failed step leaves
-  the twin up and diverged.
+- **[014's brief](../014-proposed-change-stages/brief.md)** and its spec once written:
+  - A proposed change's stages are its source branch at its branch point, then each
+    `FylgjaStage` related to it in order of `at`, then the branch's head.
+  - A twin is created from a stage and stepped between stages of one proposed change.
+  - Fylgja only reads them.
+- **[D-036](../../docs/decisions.md#d-036)**: a failed step leaves the twin up and
+  diverged.
 - **[D-038](../../docs/decisions.md#d-038)**: verify's assertions are derived from the
   bundle. **[D-039](../../docs/decisions.md#d-039)**: verify is advisory, and no Fylgja
   operation reads its report. A client may.
@@ -79,10 +85,10 @@ SPECIFY_FEATURE_DIRECTORY=specs/014-proposed-change-rehearsal. 0.2, the first of
 
 ## What changes, and nothing else
 
-1. **`fylgja twin rehearse --series <s>`**, and the API operation `twin.rehearse`. A run:
-   - creates the twin from the series' first waypoint and verifies it (the baseline);
-   - steps through each later waypoint in sequence order, with the step's wait, verifying
-     after each;
+1. **`fylgja twin rehearse`**, and the API operation `twin.rehearse`, over a proposed
+   change's stages (named as 014 names them). A run:
+   - creates the twin from the first stage and verifies it (the baseline);
+   - steps through each later stage with the step's wait, verifying after each;
    - stops at the first stage that fails;
    - always destroys the twin;
    - answers with a **rehearsal report**.
@@ -90,46 +96,38 @@ SPECIFY_FEATURE_DIRECTORY=specs/014-proposed-change-rehearsal. 0.2, the first of
    A stage **fails** when its step leaves the twin diverged, or when verify finds what the
    baseline did not. The baseline's own findings are reported and never fail a stage. The
    report is a document of its own, with a JSON schema in `contracts/`, and renders as
-   text and as markdown. The markdown holds a table with one row per stage, a Mermaid
-   drawing of what each stage changed, the fidelity caveat, and, on a failure, the commands
-   that reproduce it.
-2. **The stage list as a read**: an operation that, given a branch, returns the
-   rehearsal's stages as pinned references, with its warnings.
-   - The first stage is the branch at its branch point (`branched_from`).
-   - Then each waypoint of the one operator series whose waypoints all name the branch,
-     in sequence order.
-   - Then the branch's head, unless the step to it is `unchanged`.
-   - It warns when `main` has moved since the branch point.
-   - It refuses when more than one series names the branch, naming them.
-
-   Fylgja reads, as everywhere; it writes nothing.
-3. **Two checks in this repository**, global, as `InfrahubCheck` classes in `.infrahub.yml`.
-   Each finds its proposed change by the source branch, asks Fylgja for the stage list,
-   and writes the stages as its own series.
-   - **`fylgja-step`** asks for `waypoint plan` over its series, logs it as plain text and
-     deletes its series. It fails only when Fylgja refuses a stage as intent, refuses the
-     stage list, or cannot be reached.
-   - **`fylgja-twin`** asks for `twin rehearse` over its series. It posts the report's
-     markdown as a comment and logs its text. It concludes failure when a stage failed or
-     the rehearsal could not run. It deletes its series on a pass and keeps it on a
-     failure.
+   text and as markdown. The markdown holds:
+   - a table with one row per stage;
+   - a Mermaid drawing of what each stage changed;
+   - the fidelity caveat and 014's warnings (for example, `main` having moved since the
+     branch point);
+   - on a failure, the commands that reproduce it.
+2. **Two checks in this repository**, global, as `InfrahubCheck` classes in `.infrahub.yml`.
+   Each finds its proposed change by the source branch.
+   - **`fylgja-step`** asks Fylgja for the plan over the proposed change's stages and logs
+     it as plain text. It fails only when Fylgja refuses a stage as intent, refuses the
+     stages, or cannot be reached.
+   - **`fylgja-twin`** asks for `twin rehearse` over the proposed change. It posts the
+     report's markdown as a comment and logs its text. It concludes failure when a stage
+     failed or the rehearsal could not run.
    - A comment that cannot be posted is logged and does not fail the check.
-4. **Reclaiming a dead rehearsal**: a rehearsal that finds a twin left by a rehearsal whose
+   - The checks write nothing else. They copy no stage and write no series.
+3. **Reclaiming a dead rehearsal**: a rehearsal that finds a twin left by a rehearsal whose
    run is no longer running destroys it before it starts. Any other twin is refused, under
    VII, as now.
-5. **`fylgja serve --listen` is repeatable.** The start-up report names each address and,
+4. **`fylgja serve --listen` is repeatable.** The start-up report names each address and,
    for each off loopback, that the token crosses it in the clear.
-6. **Infrahub's Compose override** (`scripts/infrahub/docker-compose.override.yml`) gives
+5. **Infrahub's Compose override** (`scripts/infrahub/docker-compose.override.yml`) gives
    the task workers a `host-gateway` entry, `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN`.
    The bring-up script's parts start the server on loopback and on the bridge's address. A
    check whose variables are unset fails, saying so: CI's contract job runs no server.
-7. **The records.**
+6. **The records.**
    - `contracts/` (the API's operations, the report's schema, `cli.md`).
    - The architecture and its C4 model (the checks, `twin rehearse`, the bridge listener).
    - development.md (the three processes, the override, how the checks are tested).
    - verified-facts.md (everything under [Infrahub as read](#infrahub-as-read) that the
      plan verifies).
-   - The glossary (rehearsal, stage, baseline finding).
+   - The glossary (rehearsal, baseline finding).
    - `SECURITY.md` (the bridge listener's exposure).
    - The README (the proposed-change walk-through).
    - `CLAUDE.md`'s State.
@@ -140,24 +138,17 @@ SPECIFY_FEATURE_DIRECTORY=specs/014-proposed-change-rehearsal. 0.2, the first of
 - **The shape**: a twin per proposed change, torn down after, rather than a standing twin
   of `main` that each proposed change steps and steps back. That one waits for a later
   release.
-- **The stages are the operator's waypoints on the source branch**, copied into the
-  check's own series. With no operator series there are two stages, branch point and
-  head.
-- **The rehearsal starts at the branch point**, not at `main`'s head. Reading a stage of a
-  branch that is behind `main` shows `main` as it was at the branch point, so a step from
-  `main`'s head would also revert `main`'s later changes. When `main` has moved, the
-  report warns and the rehearsal goes on.
-- **The check writes the series and the comment; Fylgja only reads** (Constitution III).
-  The series makes every stage a pinned waypoint, so `twin rehearse` is the M10–M12 path
-  (create, step, verify) with no new kind of target, and Constitution VI holds: each `at`
-  is an Infrahub stamp or one the check copies from the operator's waypoint.
-- **Each check has its own series**, since the two run at the same time.
+- **The stages are 014's**: the branch point, the operator's `FylgjaStage`s on the
+  proposed change, and the head. A proposed change with no stage marked has two stages.
+- **The check writes only the comment; Fylgja only reads** (Constitution III). The
+  stages are the operator's, and they outlive the rehearsal, so a failure is reproducible
+  by hand from the commands the report names.
 - **The rehearsal lives in Fylgja, as a workflow**, not in the check. The deadline,
   cleanup, reclaim, classification and report are Go and tested at tier 1. A cancelled
-  check cancels the run. Rehearsing a series is a command outside proposed changes too.
-- **The Python is glue.** It finds the proposed change, writes and deletes the series,
-  calls the API, posts the comment and sets the conclusion. Everything that decides is in
-  Go behind the API.
+  check cancels the run. Rehearsing a proposed change is a command outside Infrahub's
+  pipeline too.
+- **The Python is glue.** It finds the proposed change, calls the API, posts the comment
+  and sets the conclusion. Everything that decides is in Go behind the API.
 - **The gate.**
   - A stage fails on divergence or a finding not in the baseline. The rehearsal stops
     there.
@@ -167,17 +158,16 @@ SPECIFY_FEATURE_DIRECTORY=specs/014-proposed-change-rehearsal. 0.2, the first of
   - Fylgja's report stays advisory: the check maps it to a conclusion
     ([D-039](../../docs/decisions.md#d-039)).
 - **The report's rich form is a comment**, since a check's message renders as plain text.
-  The message carries the same report in text.
-- **The series is deleted on a pass and kept on a failure**, so that a failure is
-  reproducible by hand with `twin create --waypoint` and `twin step`, which the report
-  names.
+  The message carries the same report in text. The comment is also where the stages
+  appear on the proposed change: Infrahub's proposed-change view does not show them
+  ([014's brief](../014-proposed-change-stages/brief.md#verified-live)).
 - **The server listens on the host's Docker-bridge address, in plaintext, beside
   loopback.** The token stays on the host, but any container on the host can reach the
   address, the twin's own nodes included, and the bearer check is what guards it. A relay
   container and server TLS were rejected.
 - **The checks wait.** A check's `timeout` is raised so that the twin finishes inside it.
   The rehearsal's own deadline sits short of that timeout, so cleanup always runs.
-- **Out of this feature**: probes and loss (015), the webhook (item 9), the agent skill,
+- **Out of this feature**: probes and loss (016), the webhook (item 9), the agent skill,
   the state diff and observation.
 
 <a id="open"></a>
@@ -186,12 +176,10 @@ SPECIFY_FEATURE_DIRECTORY=specs/014-proposed-change-rehearsal. 0.2, the first of
 1. **A twin that exists and is not a dead rehearsal.** Does `twin rehearse` refuse at
    once, so the check retries within its deadline, or does the rehearsal wait for the slot
    within its own deadline?
-2. **A retry's series.** When a series kept from an earlier failure exists, a retried
-   check either replaces it, or writes a new series with a run number (`pc-<id>-twin-2`).
-3. **The deadline.** Is it fixed per check (one `timeout` long enough for a bounded number
-   of stages, with longer series refused up front), or derived from the stage count with a
-   ceiling?
-4. **The markdown's form.** A third `render` value beside `text` and `json`, or a field of
+2. **The deadline.** Is it fixed per check (one `timeout` long enough for a bounded number
+   of stages, with longer proposed changes refused up front), or derived from the stage
+   count with a ceiling?
+3. **The markdown's form.** A third `render` value beside `text` and `json`, or a field of
    the report's JSON that the check posts as it is.
 
 ## Left to the plan
@@ -201,10 +189,7 @@ SPECIFY_FEATURE_DIRECTORY=specs/014-proposed-change-rehearsal. 0.2, the first of
   - how a long multi-line message renders;
   - what a timed-out check leaves behind (validator state, conclusion);
   - whether the task worker's client may create a `CoreChangeComment`;
-  - whether a check runs on a proposed change that changes only data;
-  - what a read pinned at exactly `branched_from` returns (the decision log's open question
-    on reads before a branch existed);
-  - how a branch's being behind `main` is read.
+  - whether a check runs on a proposed change that changes only data.
 - **How the checks are tested before they are on `origin`'s `main`**, since the
   registration imports only from there. Perhaps a second, test-only registration. Also:
   the tier-2 run of `fylgja-step` needs a server the task workers reach, and CI's contract
@@ -213,24 +198,22 @@ SPECIFY_FEATURE_DIRECTORY=specs/014-proposed-change-rehearsal. 0.2, the first of
   workflow with their activities; its fixed id under VII; how it is cancelled.
 - **The API's answer for a run of minutes** inside Infrahub's timeout, and the check's
   client for it: Python against the API's frames.
-- **The decision entries** the roadmap names for 014, written after the verification.
+- **The decision entries** the roadmap names for 015, written after the verification.
 - **Load OpsMill's `infrahub:infrahub-managing-checks` skill** before writing the checks;
   the plugin `infrahub@opsmill` is installed.
 
 ## Exit
 
-- **Tier 1**: the stage list, the classification against the baseline, the report and its
-  renderings, the deadline and the reclaim, with the rehearse workflow under Temporal's
-  test suite.
-- **Tier 2**: on a throwaway branch with a two-stage operator series, a throwaway proposed
-  change runs `fylgja-step` to a pass, and to a failure on a stage Fylgja refuses. The
-  stage-list read, with its refusal and its warning, runs against the real Infrahub. No
-  twin, as always in tier 2.
-- **Tier 3**: a new case. A proposed change with a two-stage operator series is rehearsed
-  through `fylgja-twin`, which passes, posts its comment and deletes its series. A stage
-  that fails, by a means the plan chooses, fails the check at that stage and keeps the
-  series. After it, no twin and no `fylgja-test-*` series remain.
-- **Owed before the work starts**: nothing. OpsMill's skills are installed.
+- **Tier 1**: the classification against the baseline, the report and its renderings, the
+  deadline and the reclaim, with the rehearse workflow under Temporal's test suite.
+- **Tier 2**: on a throwaway branch with a throwaway proposed change and two stages,
+  `fylgja-step` runs to a pass, and to a failure on a stage Fylgja refuses. No twin, as
+  always in tier 2.
+- **Tier 3**: a new case. A proposed change with two stages is rehearsed through
+  `fylgja-twin`, which passes and posts its comment. A stage that fails, by a means the
+  plan chooses, fails the check at that stage. After it, no twin and no `fylgja-test-*`
+  branch or proposed change remain.
+- **Owed before the work starts**: 014 built and closed.
 
 <a id="references"></a>
 ## References
@@ -240,11 +223,11 @@ Read in this order, after `CLAUDE.md`'s list.
 | Record | What it gives |
 |---|---|
 | [docs/roadmap.md](../../docs/roadmap.md): [Next](../../docs/roadmap.md#next), items 7, 8 and their 0.2 paragraph, [Decisions the order needs](../../docs/roadmap.md#decisions-the-order-needs) | the scope and the decisions owed |
-| [docs/decisions.md](../../docs/decisions.md): D-026, D-032, D-036, D-038, D-039, D-040–D-042, D-044, the [open questions](../../docs/decisions.md#open-questions) | what this feature builds on and supersedes; numbering continues from D-044 |
+| [014's brief](../014-proposed-change-stages/brief.md), and its spec once written | the stages this feature rehearses |
+| [docs/decisions.md](../../docs/decisions.md): D-026, D-036, D-038, D-039, D-040–D-042, D-044, and 014's entries | what this feature builds on and supersedes |
 | [.specify/memory/constitution.md](../../.specify/memory/constitution.md) 1.1.1: I, III, VI, VII, X | the Constitution Check |
-| [contracts/api.md](../../contracts/api.md), [contracts/step.schema.json](../../contracts/step.schema.json), [contracts/verify.schema.json](../../contracts/verify.schema.json), [contracts/waypoints.schema.json](../../contracts/waypoints.schema.json) | the operations rehearse composes and the documents its report draws on |
-| [schema/fylgja-waypoint.yaml](../../schema/fylgja-waypoint.yaml), [schema/README.md](../../schema/README.md) | the kind the check writes |
+| [contracts/api.md](../../contracts/api.md), [contracts/step.schema.json](../../contracts/step.schema.json), [contracts/verify.schema.json](../../contracts/verify.schema.json) | the operations rehearse composes and the documents its report draws on |
 | [.infrahub.yml](../../.infrahub.yml), [infrahub/](../../infrahub/), [scripts/infrahub/docker-compose.override.yml](../../scripts/infrahub/docker-compose.override.yml) | where the checks and the task workers' variables go |
 | [docs/architecture.md](../../docs/architecture.md) §4.6, §6; [docs/c4/workspace.dsl](../../docs/c4/workspace.dsl) | the API's place, and the drawing to redraw |
-| [internal/step](../../internal/step), [internal/verify](../../internal/verify), [internal/waypoint](../../internal/waypoint), [internal/server](../../internal/server) | what rehearse composes |
+| [internal/step](../../internal/step), [internal/verify](../../internal/verify), [internal/server](../../internal/server) | what rehearse composes |
 | [docs/verified-facts.md](../../docs/verified-facts.md): Infrahub 1.11.2 | what is already verified of the reads |

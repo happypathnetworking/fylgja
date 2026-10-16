@@ -160,6 +160,22 @@ var dataModelRules = []string{
 	"api.token.refused",
 	"api.version.unknown",
 	"api.transfer.too_large",
+
+	// 014's rules (research R-08). Appended; M10's waypoint rules and step.sequence.skipped
+	// leave at the switch, when the stage surface replaces them.
+	"stage.ref.invalid",
+	"stage.flags.conflict",
+	"stage.kind.absent",
+	"stage.unknown",
+	"stage.duplicate",
+	"stage.at.unresolved",
+	"stage.at.before_branch_point",
+	"stage.label.reserved",
+	"stage.artifact.stale",
+	"stage.orphaned",
+	"stage.main.moved",
+	"stage.twin.moved",
+	"step.stage.skipped",
 }
 
 // declaredRules reads the Rule* constants out of finding.go's syntax tree rather than

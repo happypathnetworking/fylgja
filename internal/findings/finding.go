@@ -174,6 +174,25 @@ const (
 	RuleWaypointTimeReversed  = "waypoint.time.reversed"  // warning, exit 0, no step: the later waypoint; a later sequence's at is earlier than the one before it, both parsed
 	RuleWaypointTwinMoved     = "waypoint.twin.moved"     // warning, exit 0, no step: the record's waypoint; it no longer resolves to the record's reference, or is gone
 
+	// 014, a proposed change's stages (D-045, D-046; research R-08), beside M10's until
+	// the switch removes them. Each comment gives the severity, the exit, the step, the
+	// object and when it fires. The syntax and flag guards are at start, before any
+	// connection; the resolution's refusals at resolve, before any run and before any
+	// branch's intent is read (none in intent read, whose operations carry no step); the
+	// listing's two warnings at none. stage.failed above is M2's staging step, not a stage.
+	RuleStageRefInvalid          = "stage.ref.invalid"            // rejection, exit 2, start: the text given; --stage is not <branch>/<label>, or stage list's or stage plan's --branch is not a branch
+	RuleStageFlagsConflict       = "stage.flags.conflict"         // rejection, exit 2, start: the conflicting flag; --stage beside --branch, --at or --interval, the first found in that order
+	RuleStageKindAbsent          = "stage.kind.absent"            // rejection, exit 1, resolve: FylgjaStage; the default branch's schema lacks the kind, an attribute or the relationship this build reads, or CoreProposedChange lacks the extension, naming schema/fylgja-stage.yaml
+	RuleStageUnknown             = "stage.unknown"                // rejection, exit 1, resolve: the branch or <branch>/<label>; no open proposed change has the source branch, naming the branches with one; the branch is gone; or the proposed change has no stage of the label, naming its stages
+	RuleStageDuplicate           = "stage.duplicate"              // rejection, exit 1, resolve: <branch>/<label>; two or more marks of one proposed change share the label, naming every id and choosing none
+	RuleStageAtUnresolved        = "stage.at.unresolved"          // rejection, exit 1, resolve: <branch>/<label>; a given as_of later than the server's clock, or a stage with no stamp at all to name its at
+	RuleStageAtBeforeBranchPoint = "stage.at.before_branch_point" // rejection, exit 1, resolve: <branch>/<label>; the stage's at is before the branch's branched_from, saying a rebase did it when the branch was created before the at
+	RuleStageLabelReserved       = "stage.label.reserved"         // rejection, exit 1, resolve: <branch>/<label>; a mark is labelled head or branch-point, which name the derived stages
+	RuleStageArtifactStale       = "stage.artifact.stale"         // rejection, exit 1, resolve: the device; at the stage's at, the device's intent is newer than its generation stamp (D-046), naming both remedies
+	RuleStageOrphaned            = "stage.orphaned"               // warning, exit 0, no step: the stage's id; a stage whose proposed change was deleted under it
+	RuleStageMainMoved           = "stage.main.moved"             // warning, exit 0, resolve: the branch; main's latest stamp is later than the branch's branched_from, and nothing is refused
+	RuleStageTwinMoved           = "stage.twin.moved"             // warning, exit 0, no step: the record's <branch>/<label>; the record's stage no longer resolves to the record's (branch, at), or is gone
+
 	// M11, stepping (contracts/cli.md). Each
 	// comment gives the severity, the exit, the step, the object and when it fires. The
 	// CLI's refusals before any run are at resolve (the twin, the target, the from
@@ -190,6 +209,7 @@ const (
 	RuleStepRestartRequired   = "step.restart.required"   // rejection, exit 1, compare: the nodes; containerlab's plan restarts or recreates a node and --allow-restart was not given
 	RuleStepDiverged          = "step.diverged"           // rejection, exit 4 (status diverged), the phase's step: the run id; the step failed or was cancelled from the stage on, and the twin is up and diverged
 	RuleStepSequenceSkipped   = "step.sequence.skipped"   // warning, exit 0, resolve: the target; the series has sequences strictly between the record's and the target's, either direction
+	RuleStepStageSkipped      = "step.stage.skipped"      // warning, exit 0, resolve: the target; the proposed change has marks strictly between the record's stage and the target, either direction (014: step.sequence.skipped's successor)
 	RuleStepRestartUndeclared = "step.restart.undeclared" // warning, exit 0, compare: the node; containerlab's plan restarts a node whose package declares link_change live, or re-cables live one that declares restart
 
 	// M12, verify (contracts/cli.md). Each comment

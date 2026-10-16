@@ -795,3 +795,44 @@ count` answered. So `twin show` and `twin verify` warned `show.service.unreachab
 tier 3's first run failed at case 1's verify, which requires no finding. After the purge
 every list answered in 0.14 s and the rerun above passed. Before tier 3 on a restarted dev
 server, wait for `temporal workflow count` to stop falling.
+
+### 8.5 The SDL, the five queries and an unset filter (T004–T006, 2026-10-16, read-only)
+
+- **The SDL.** `make sdl` from `main` (hash `a8045729…`) dropped the file's header, which
+  was restored by hand as the `Makefile` says. Compared structurally with the committed one
+  (each type's fields, arguments and interfaces, parsed, not as text): additions alone. The
+  committed SDL predated even the candidate kind, so the diff adds `FylgjaStage` whole
+  (with `description`), its edge, paginated and mutation types, `Query.FylgjaStage`,
+  `CoreProposedChange.fylgja_stages` and its three input fields, and the `fylgja_stages__*`
+  filters on `Query.CoreProposedChange`; `FylgjaWaypoint` is unchanged and nothing is
+  removed. `completed_at` and `as_of` are `TextAttribute`s in GraphQL (a `String` value);
+  `Branch(name:)` answers `[Branch!]!` with `branched_from` and `created_at` as strings.
+- **An unset filter is no filter.** With `main` holding no proposed change, the question
+  cannot be answered on `CoreProposedChange` read-only, so it was put to Infrahub's same
+  attribute filter on two kinds that hold objects, `CoreAccountRole` (4) and
+  `CoreAccountGroup` (2), by `name__value`: a variable sent as `null`, a variable omitted
+  and a literal `null` each answered every object; `""` answered none; a name answered
+  one. So `ProposedChanges` stays one query: its `$branch` is `omitempty`, so an empty
+  branch is omitted rather than sent as `""`, and every open proposed change is listed.
+  `CoreProposedChange(state__value: "open", source_branch__value:)` answered 0 with the
+  variable null and omitted alike; tier 2 (T020) proves the listing on a real one.
+- **Two names moved.** genqlient names each operation's function after the operation,
+  so a query named `BranchInfo` or `Stamps` would collide with the reader's types
+  `intent.BranchInfo` and `intent.Stamps`, which tasks T014 and T015 name. The queries are
+  `BranchPoint` and `IntentStamps`; the contract's selections are unchanged, `IntentStamps`
+  adding the platform's fields as tasks.md says.
+- **Each operation as generated, live.** `ProposedChanges` (branch omitted, and
+  `fylgja-fixture`) 0; `OrphanStages` 0; `BranchPoint` of `fylgja-fixture`
+  `branched_from 2026-10-08T05:47:52.538186Z`, `created_at …52.538122Z` (`Z`, where the
+  stamps read `+00:00`), of `main` `…05:43:47.307246Z`, of an absent name `[]`;
+  `ArtifactValidations` of an unknown id, pinned, no edge; `IntentStamps` on
+  `fylgja-fixture` unpinned and pinned, and on `main` (0 devices, 0 links).
+- **The reader and the stamps, live** (a throwaway contract test, deleted after):
+  `StageReader.Check` passes on `main`. `Stamps` on `fylgja-fixture`, unpinned and pinned at
+  `…05:48:38.544483+00:00`: `Latest` `2026-10-08T05:48:38.544482+00:00` (n1's checksum,
+  so the head's `at` is the one the contract's example gives); the three checksums are
+  stamped `…38.543597`, `…38.544382` and `…38.544482`, each device's own (the artifacts'
+  spread); intent `05:48:05.022364` (n1, n3) and `05:48:04.922669` (n2), each before its
+  own checksum, so the fixture's head is fresh. Pinned at `…05:48:03.562938+00:00`, one
+  microsecond after the cabling: no artifact yet, `Latest` the cabling's stamp. On `main`:
+  `Latest ""`, no device.

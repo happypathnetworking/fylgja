@@ -1,0 +1,69 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+#
+# Fylgja stage kind (014, D-045): a moment of a proposed change. Beside the generics
+# contract, not in it (the contract stays 0.2); loaded on the default branch (D-028), where
+# Fylgja reads it; needed only by --stage, stage list and stage plan.
+#
+#   - A stage belongs to a proposed change and has no branch of its own: its branch is the
+#     proposed change's source. The relationship is required, so the uniqueness constraint
+#     may name it; a human-friendly id through the proposed change is refused by Infrahub,
+#     since a proposed change's name is not unique.
+#   - The label is the stage's name in a reference, <branch>/<label>: no '/' and no
+#     whitespace (the regex mirrors stages.LabelPattern; a test holds the two equal). The
+#     labels branch-point and head name the two derived stages and are refused by Fylgja
+#     on a mark; Infrahub does not know them.
+#   - The attribute is `as_of`, not `at`: Infrahub refuses a two-character name. Every
+#     command, report and record says `at`.
+#   - `branch: agnostic`, so a mark lands in no branch's diff and is read from the default
+#     branch.
+version: "1.0"
+nodes:
+  - name: Stage
+    namespace: Fylgja
+    description: "A marked moment of a proposed change: its source branch at a point in time."
+    label: Stage
+    icon: mdi:map-marker-path
+    branch: agnostic
+    include_in_menu: true
+    generate_profile: false
+    display_label: "{{ label__value }}"
+    order_by: [as_of__value]
+    uniqueness_constraints:
+      - [proposed_change, label__value]
+    attributes:
+      - name: label
+        kind: Text
+        optional: false
+        parameters:
+          regex: "^[^/\\s]+$"
+        description: "What this stage of the change is: a name with no '/' and no whitespace, unique within its proposed change."
+        order_weight: 1000
+      - name: as_of
+        kind: DateTime
+        optional: true
+        description: "The point in time on the source branch. Omitted: when the stage was written."
+        order_weight: 1100
+      - name: description
+        kind: Text
+        optional: true
+        description: "What this moment of the change is, in a sentence."
+        order_weight: 1200
+    relationships:
+      - name: proposed_change
+        peer: CoreProposedChange
+        kind: Attribute
+        cardinality: one
+        optional: false
+        identifier: "proposed_change__fylgja_stages"
+        order_weight: 900
+extensions:
+  nodes:
+    - kind: CoreProposedChange
+      relationships:
+        - name: fylgja_stages
+          peer: FylgjaStage
+          kind: Generic
+          cardinality: many
+          optional: true
+          identifier: "proposed_change__fylgja_stages"

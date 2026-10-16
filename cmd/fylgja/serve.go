@@ -173,7 +173,12 @@ func runServe(ctx context.Context, opts *serveOptions, version string) error {
 		// Every connection is closed at once, an answer in flight included. A run goes on,
 		// since the worker holds it, and its client reports the API unreachable.
 		_ = srv.Close()
-		<-served
+		// Waited for so the serving goroutine has ended before this returns. After Close,
+		// Serve returns http.ErrServerClosed; anything else is a failure that raced the
+		// cancellation, logged and not returned, since the stop was asked for.
+		if err := <-served; !errors.Is(err, http.ErrServerClosed) {
+			logger.Warn("serving ended with an error while stopping", "addr", addr, "err", err)
+		}
 		return nil
 	case err := <-served:
 		return serveExit(opts, "serving on %s: %v", addr, err)

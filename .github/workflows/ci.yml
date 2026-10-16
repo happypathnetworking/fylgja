@@ -11,7 +11,10 @@ on:
 
 jobs:
   # Lint: golangci-lint over every build tag .golangci.yml names, and shellcheck over
-  # both scripts. It runs on every push to main and every pull request.
+  # both scripts. It runs on every push to main and every pull request. The linter's
+  # version is the one scripts/bring-up.sh installs (GOLANGCI_VERSION), so CI and the
+  # host run the same checks: left to `latest`, a release between two pushes failed a
+  # tree the host passed (2.15.0's errcheck on a discarded channel receive, 2026-10-16).
   lint:
     runs-on: ubuntu-26.04
     steps:
@@ -20,6 +23,8 @@ jobs:
         with:
           go-version-file: go.mod
       - uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.14.0
       - run: shellcheck scripts/bring-up.sh scripts/e2e.sh
  
   # Unit tier: golden files and pure logic. No infrastructure, by design (D-017). It runs

@@ -2749,6 +2749,174 @@ name serves it.
 
 ---
 
+<a id="d-045"></a>
+## D-045 — A stage is a moment of a proposed change: the branch point read on `main`, the operator's marks, and the head pinned one microsecond after the branch's latest stamp
+
+**Status:** Accepted 2026-10-16. Supersedes [D-032](#d-032). Built by
+`014-proposed-change-stages`; until it is, [architecture.md](architecture.md) §3's
+Waypoints paragraph and the glossary describe what runs.
+
+### Context
+
+[D-032](#d-032) gave the operator a name for a pinned reference: a `FylgjaWaypoint`, in a
+series, naming a branch by free text. The operator found it clumsy on two counts. It is
+not Infrahub-native: nothing in Infrahub knows a waypoint, and its own view shows none. And
+it is separate from the change: a branch-agnostic side object that names its branch by
+text, outlives it, and is invisible where the schema lacks the kind.
+
+Infrahub 1.11.2 has no named point in time — no branch tag, checkpoint or saved
+time-travel view; the time selector writes a URL parameter and saves nothing — and
+`Branch` is not a kind anything can relate to. Its one unit of change that a user kind
+may relate to is the **proposed change**, which can be opened as a draft while the change
+is built. So a stage is a moment of a proposed change.
+
+Verified on 2026-10-16 against 1.11.2 ([verified-facts.md](verified-facts.md);
+`specs/014-proposed-change-stages/research.md` §2), on throwaway branches and then on
+`main`:
+
+- A branch-agnostic `FylgjaStage` with a required relationship to `CoreProposedChange`
+  and an extension giving the proposed change its `fylgja_stages` loads on a branch and on
+  `main`; the uniqueness constraint `[proposed_change, label__value]` refuses a duplicate
+  (`Violates uniqueness constraint 'proposed_change-label'`) and accepts the same label on
+  another proposed change. A human-friendly id through the proposed change is refused,
+  since two proposed changes may share a name.
+- One open proposed change per source branch; `main` as source refused. Closing one
+  frees the branch for another; deleting the branch cancels it about 16 s later, and it
+  still names the branch. Deleting a proposed change succeeds under its stages, which
+  are left pointing at nothing.
+- A read pinned at exactly `branched_from` answers with `main` as it then stood, back to
+  the default branch's creation, and is refused before it.
+- **A read pinned at exactly an attribute's `updated_at` sees the node but not the
+  value**; one microsecond later sees it. The boundary is a strict comparison, not a
+  truncated stamp.
+- **A rebase re-stamps the branch's whole content at the new `branched_from`** and
+  discards its earlier history from pinned reads; the branch at `branched_from` then
+  reads the branch's own changes, not the base.
+- The proposed change's pipeline **regenerates the branch's artifacts at its creation,
+  draft or not, and on a run-check**, and not on a branch update or the end of a draft.
+  A regeneration moves `checksum.updated_at` and `storage_id.updated_at` together and
+  leaves `status.updated_at` where it was.
+- The diff tree is a cached calculation, refreshed by the pipeline or the `DiffUpdate`
+  mutation, so neither the head nor `main`'s movement is read from it without a write.
+
+### Options considered
+
+Where the mark lives:
+
+- **A branch tag or checkpoint.** None exists in 1.11.2, and no issue asks for one.
+- **A tag on intent**: each object marked with the stage it goes live in, stage N
+  compiled from the head by filtering. Rejected: it expresses additions only, never a port
+  disabled or a description changed in stage 2, and the artifact for a partial topology
+  does not exist — Infrahub renders the head, and Fylgja never renders ([D-009](#d-009),
+  [D-028](#d-028)).
+- **A stack of proposed changes**, one per step. Rejected: Infrahub branches from `main`
+  alone, so a second step cannot be expressed until the first merges; the two derived
+  ends already rehearse "`main` plus this change".
+- **A side object naming a branch by text**, as D-032. Rejected: the two counts above.
+- **A kind related to the proposed change.** Chosen.
+
+The ends:
+
+- **Marked, by the operator.** Rejected: every proposed change has a branch point and a
+  head whether or not anyone marks them.
+- **Derived.** Chosen: the branch point and the head are stages of every proposed
+  change, and only the moments between are written.
+
+The head's pin:
+
+- **The branch's latest stamp, verbatim**, as the design first said. Rejected: a read
+  pinned at exactly that stamp reads a half-visible write — the node without the value.
+- **Unpinned**: the head read live and recorded by `observed_at`. Rejected: every other
+  stage is pinned, and a twin from the head must be reproducible until the branch moves.
+- **The latest stamp plus one microsecond**, the smallest increment Fylgja can send.
+  Chosen.
+
+The branch point's read:
+
+- **On the branch at `branched_from`.** Rejected: correct for a fresh branch and wrong
+  after a rebase, where it reads the branch's re-stamped content, half-visible.
+- **On `main` at `branched_from`.** Chosen: the branch point by definition, before and
+  after a rebase, and `main` was not written at that instant.
+
+A stale stage, one marked after an intent change and before a regenerate:
+
+- **Left to the operator**, as D-032's "write the waypoint last". Rejected: 015's check
+  would fail a merge on a stage whose configuration is merely stale.
+- **Inferred around**, by regenerating or by reading the artifact at a later time.
+  Rejected: Fylgja writes nothing (Constitution III), and a later artifact is another
+  stage's.
+- **Refused**, naming the device and the remedy. Chosen.
+
+Waypoints kept beside stages: rejected; Fylgja is 0.x, and two ways to name a pinned
+reference would split every command.
+
+### Decision
+
+- **A stage is a moment of a proposed change.** The kind is `FylgjaStage`, loaded on
+  `main` beside the contract ([D-028](#d-028)), branch-agnostic, with a required
+  relationship to its `CoreProposedChange`, a `label` unique within it, an optional `as_of`
+  and an optional description, and no branch of its own: its branch is the proposed
+  change's source. An extension gives `CoreProposedChange` its `fylgja_stages`.
+- **The operator writes stages; Fylgja only reads them** (Constitution III), by
+  Infrahub's means: the UI, an object file, `infrahubctl`. A proposed change is found by
+  its source branch, since Infrahub allows one open proposed change per branch.
+- **A proposed change's stages, in order**: the branch point, read on **`main`** pinned
+  at the branch's `branched_from`; each `FylgjaStage` in order of its `at` — `as_of` as
+  written, or the stamp Infrahub returned for its writing; and the head, read on the
+  branch pinned at **the latest `updated_at` across its intent (attributes and
+  relationship edges) and its artifacts' checksums, plus one microsecond**. Every stage is
+  pinned, and Fylgja composes no `at` from a clock of its own: each is a stamp Infrahub
+  returned, or the first instant after one. Constitution VI says so from 1.2.0.
+- **A stage is refused** when its `at` is before the branch point or later than now; when
+  the branch's `branched_from` has moved past the stage's stamp while its `created_at` has
+  not, the refusal says a rebase did it, since a rebase refuses every mark at once.
+- **A stale stage is refused.** At each stage Fylgja reads, pinned at the stage's `at`, the
+  latest intent stamp on the branch and each artifact's `checksum.updated_at`; intent
+  newer than its artifact is `stage.artifact.stale`, naming the device and saying to
+  regenerate, or run the proposed change's checks, and mark again.
+- **It warns when `main` has moved since the branch point**, read as the head is: `main`'s
+  latest stamp against `branched_from`.
+- **`--stage` replaces `--waypoint`** on `twin create`, `twin step` and `intent read`;
+  `stage list` and `stage plan` replace the waypoint commands, naming the proposed change
+  by its source branch; `twin step` goes to a stage of the twin's own proposed change
+  ([D-036](#d-036)'s target). The findings' `waypoint.*` rules become `stage.*`. The name
+  is still not provenance: it enters neither the CTM nor the bundle, and the twin's
+  record names it ([D-014](#d-014)).
+- **A story along `main`'s own history keeps no named marks**: it is `--branch main --at`,
+  as [D-012](#d-012) has it, since a proposed change cannot have `main` as its source.
+- **`FylgjaWaypoint` is removed**, with its commands, rules, contract and test support.
+
+### Consequences
+
+- Constitution VI is amended (1.2.0): "MUST NOT send an `at` it composed from a clock of
+  its own; one read from Infrahub, or the first instant after one, is passed as the
+  operator's would be". D-032's reading, that a stamp read is not composed, is now the
+  text, and the microsecond is the one addition.
+- The twin record, the API and the CLI move for stages while the contract stays `0.2`;
+  the goldens, the fixture and its id do not move. `main`'s schema hash moved with the
+  kind (`0aba31a5…` → `e7386419…` on this install); a branch's hash is its own, so the
+  fixture branch keeps `0aba31a5…` and compiles to `47b2c449…` as before.
+- A test that makes a proposed change deletes its stages first, then the proposed
+  change, then the branch; a branch deleted under an open proposed change leaves it
+  canceled, naming the branch. A stage whose proposed change is gone is a finding, not a
+  crash.
+- A stage marked before a regenerate is the case the draft workflow invites, since the
+  pipeline runs at creation and on a run-check and not as the branch is edited; the
+  finding's remedy names both.
+- A rebase ends every twin's story on that proposed change until the operator marks
+  again; the record keeps what the twin was built from, as [D-036](#d-036) has it.
+- A stage, like a waypoint, needs no series: one proposed change, one story. Two
+  proposed changes cannot be stepped between, since a twin steps within its own.
+- Infrahub's proposed-change view does not show stages. 015's comment lists them on the
+  proposed change, and the upstream request for named points in time, drafted once the
+  pass works, asks Infrahub for a native mark.
+- Revisit if Infrahub gains a named point in time or a rebase that keeps history (both
+  would retire the microsecond and the branch point's read on `main`), if the strict
+  boundary of §2.6 moves on an upgrade (re-verify it on every upgrade), or if a second
+  proposed change on one branch becomes expressible.
+
+---
+
 <a id="parked"></a>
 ## Parked
 
@@ -2776,10 +2944,14 @@ needs them is planned. Each becomes an entry when that scope is planned.
 <a id="open-questions"></a>
 ## Open questions
 
-- **Infrahub `at` edge cases** (raised 2026-09-14; [D-012](#d-012)). What a read pinned
-  before the branch's creation returns, and whether Infrahub offers a server-side marker
-  for the read time that would make `observed_at` exact. Sub-second precision is settled:
-  a pinned `at` carries at most six fractional digits.
+- ~~**Infrahub `at` edge cases**~~ (raised 2026-09-14; [D-012](#d-012)). Settled by
+  [D-045](#d-045)'s verification on 2026-10-16: a read pinned before the branch's
+  creation answers with `main` as it then stood, back to the default branch's creation,
+  and is refused before that; a read pinned at exactly an attribute's stamp sees the
+  node and not the value, so an `at` that must see a write is strictly after its stamp;
+  Infrahub offers no server-side marker for the read time, so `observed_at` stays
+  best-effort. Sub-second precision was settled earlier: a pinned `at` carries at most six
+  fractional digits.
 - **Opt-in branch coupling** (raised 2026-09-14; [D-001](#d-001)). Whether a twin's lifetime
   may be tied to its branch's, so that merging or deleting the branch destroys the twin.
   Deferred; opt-in if ever.

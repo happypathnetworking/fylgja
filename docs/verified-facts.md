@@ -23,6 +23,27 @@ development host up again there, or on a fresh 26.04 VM before it.
 - Infrahub filters on `created_at <= at`, so a read pinned to a second-granularity local
   "now" hides objects written in that second: send no `at` unless the operator supplied
   one. *(09-14)*
+- **A read pinned at exactly an attribute's `updated_at` sees the node and not the
+  value**: `count 1`, every attribute `null`; one microsecond later, the values; one
+  microsecond earlier, no node; one nanosecond later (nine digits, which Infrahub takes
+  and Fylgja refuses), the values. A strict comparison on the attribute's stamp, not a
+  truncated stamp. The same for an artifact pinned at exactly its `checksum.updated_at`,
+  which reads the previous version. So an `at` that must see a write is strictly after
+  the write's stamp, and the head of a branch is pinned one microsecond after its latest
+  stamp ([D-045](decisions.md#d-045)). *(10-16)*
+- **A read pinned before the branch's creation** reaches back through the branch point
+  into `main`'s history: on a branch at exactly `branched_from`, at its `created_at`
+  (140 µs earlier), a second and an hour before, the answer is `main` as it then stood,
+  down to the default branch's creation; before that it is refused, `Requested time '…'
+  is before branch 'main' was created at '…'`, HTTP 200 with `http_status: 422`, on any
+  branch. For a fresh branch, the branch at `branched_from` and `main` at `branched_from`
+  read the same. *(10-16)*
+- **A relationship edge carries its own `updated_at`**: `interfaces { edges { properties
+  { updated_at } } }`, `device { properties { updated_at } }`, `endpoints { edges {
+  properties { updated_at } } }`. `NetworkLink` has no `name`: `id`, `hfid`,
+  `display_label`, `endpoints` and the groups. Infrahub returns no instant of its own:
+  `InfrahubInfo` is `version` and `deployment_id`, and HTTP's `Date` is whole seconds.
+  *(10-16)*
 - GraphQL takes the branch in the path, `POST /graphql/<branch>`; a `?branch=` parameter
   there is ignored and answers for `main` with no error. *(09-30)*
   Reported upstream: **dropped**, on the operator's word. It is
@@ -78,9 +99,23 @@ development host up again there, or on a fresh 26.04 VM before it.
   have different hashes. *(09-14)* Three installs that loaded the same `schema/` gave
   three: `4d5b37aa…` on 24.04, `3b686463…` on a fresh 26.04 VM and `0aba31a5…` on the
   26.04 development host, so a bundle compiled from the same fixture differs by install.
-  *(26.04, 10-07, 10-08)*
+  *(26.04, 10-07, 10-08)* The hash is the branch's, not the content's: the stage kind
+  loaded on `main` moved it `0aba31a5…` → `e7386419…`, the same candidate on a throwaway
+  branch gave `17934826…`, and the fixture branch kept `0aba31a5…`, reading
+  `schema_differs_from_default_branch: true` and compiling to `47b2c449…` as before.
+  *(10-16)*
 - A branch sees `main` as it was when the branch was created, so a branch made before the
-  schema, the group or the template existed on `main` cannot render. *(09-18)*
+  schema, the group or the template existed on `main` cannot render. *(09-18)* Nor can it
+  query a kind loaded on `main` after it; a branch created after the load carries
+  `main`'s hash and can. *(10-16)*
+- **`BranchRebase` re-stamps the branch's whole content at the new `branched_from`** (its
+  `created_at` stays) and discards the branch's earlier history from pinned reads: after
+  it, every attribute at the head carries the rebase's stamp, a read pinned at any
+  earlier instant on the branch finds none of the branch's nodes (`main`'s and
+  branch-agnostic objects still read), a read at exactly the new `branched_from` finds
+  the nodes with every value `null`, and one microsecond later the branch's own values,
+  not the base's. `wait_until_completion: true` returned after 67 s for a three-node
+  branch. *(10-16)*
 
 **Branch-agnostic kinds (the waypoint)**
 
@@ -103,6 +138,51 @@ development host up again there, or on a fresh 26.04 VM before it.
 - An object file's top-level `kind` is `Object`, with the node's kind under `spec.kind`;
   `infrahubctl object validate` checks one without writing. *(09-28)*
 
+**Proposed changes and stages (014)**
+
+- A branch-agnostic kind with a required `cardinality: one` relationship to
+  `CoreProposedChange`, and an `extensions` entry giving the proposed change the reverse
+  relationship under the same identifier, passes `schema/check` (202, no warning) and
+  loads (200) on a branch and on `main`. A human-friendly id through the proposed change
+  is refused: its `name` is not unique, and two proposed changes did carry one name.
+  *(10-16)*
+- The uniqueness constraint `[proposed_change, label__value]` refuses a duplicate from
+  the branch as `Violates uniqueness constraint 'proposed_change-label'`, HTTP 200 with
+  `http_status: 422`, and accepts the same label on another proposed change. A stage's
+  write stamps every attribute and the relationship edge alike; an unwritten `as_of`
+  reads `null` with its own `updated_at`. The reverse relationship lists the stages, and
+  the kind filters by `proposed_change__ids` and by any attribute of the peer
+  (`proposed_change__source_branch__value`, `proposed_change__state__value`). Where the
+  schema lacks the kind, both the kind and the extension's field are unqueryable (`Cannot
+  query field 'fylgja_stages' on type 'CoreProposedChange'`). *(10-16)*
+- **One open proposed change per source branch**: a second is refused, `An open proposed
+  change already exists for branch '…'` (422); `main` as source, `The source and
+  destination branch can't be the same`; an unknown source, `The specified source branch
+  for this proposed change was not found`. Created `state: open`, draft or not;
+  `CoreProposedChangeUpdate` with `state: closed` closes it and frees the branch for
+  another, and the closed one's stages still read. *(10-16)*
+- **Deleting the source branch cancels its open proposed change asynchronously**: the
+  `BranchDelete` returned after 8 s, the proposed change read `open` 2 s later and
+  `canceled` 16 s after the call, still naming the branch. **`CoreProposedChangeDelete`
+  succeeds under a stage that points at it**, leaving the stage with `proposed_change {
+  node: null }` despite the required cardinality; a second delete is `NODE_NOT_FOUND`.
+  Delete stages first. *(10-16)*
+- **The proposed change's pipeline regenerates the source branch's artifacts** at its
+  creation, draft (`is_draft: true`) or not — the checksums moved 59 s after the create,
+  `Data Integrity`, `Schema Integrity` and `Artifact Validator: <transform>` each
+  `completed`/`success` — and on `CoreProposedChangeRunCheck(data: {id, check_type:
+  ARTIFACT})`, 22–25 s after the call. An intent change on the branch under an open
+  proposed change, and `is_draft` set to `false`, start nothing (100 s each). `CheckType`
+  is `ARTIFACT, DATA, GENERATOR, REPOSITORY, SCHEMA, TEST, USER, ALL`. *(10-16)*
+- **The diff tree is a cached calculation.** `DiffTreeSummary(branch)` and
+  `DiffTree(branch)` carry `from_time` (= `branched_from`), `to_time`,
+  `num_untracked_base_changes`, `num_untracked_diff_changes` and nodes with
+  `last_changed_at`; after the run-check, `to_time` stayed at the run-check's moment
+  through four intent writes and a regenerate (`num_untracked_diff_changes: 6`), and the
+  `DiffUpdate` mutation (`branch, name, from_time, to_time`) is what refreshes it. A
+  rebase resets `from_time`. So neither a branch's head nor `main`'s movement is read
+  from it without a write. *(10-16)*
+
 **Artifacts and repositories**
 
 - Infrahub regenerates no artifact on its own: not on a data change, a group join or a
@@ -111,7 +191,15 @@ development host up again there, or on a fresh 26.04 VM before it.
   at 7.6s. *(09-18)*
 - Nothing marks an artifact stale. A regeneration to identical bytes writes nothing, not
   even a storage id; one that changes bytes returns before the rewrite, and the artifact
-  stays `Ready` throughout, so wait for its checksum to move. *(09-18)*
+  stays `Ready` throughout, so wait for its checksum to move. *(09-18)* The proposed
+  change's pipeline is the one thing that regenerates unasked (above). *(10-16)*
+- **An artifact's stamp is `checksum.updated_at`.** A first generation stamps
+  `checksum`, `storage_id` and `status` alike; a regeneration moves the checksum's and
+  the storage id's together and leaves `status.updated_at` where it was (`Ready` →
+  `Ready` is no change: unmoved through four regenerations). A pinned read returns the
+  stamps of the versions in force at `at`, not the current ones, so intent newer than its
+  artifact at a pinned instant is read from Infrahub's own stamps: the staleness rule of
+  [D-045](decisions.md#d-045). *(10-16)*
   Reported upstream: **dropped**, on the operator's word. Infrahub documents both
   behaviours as the design ([opsmill/infrahub#10437](https://github.com/opsmill/infrahub/pull/10437):
   no data or membership change starts a run, and there is no staleness indicator).

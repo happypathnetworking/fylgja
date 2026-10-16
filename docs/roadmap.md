@@ -50,8 +50,11 @@ hand, after the merge. In order:
 5. **`v0.2.0`**: the recording of a rehearsed proposed change, the write-up updated, and
    the upstream request for named points in time drafted for the operator to file.
 
-Every other feature keeps the order below. None of the features above has a decision entry
-or a researched estimate yet; `plan` writes each entry after the live verification.
+Every other feature keeps the order below. [F-023](#f-023)'s decision entry is
+[D-045](decisions.md#d-045), written on 2026-10-16 after its live verification
+(`specs/014-proposed-change-stages/research.md`) and before its spec; the other
+features have neither a decision entry nor a researched estimate yet, and `plan` writes
+each entry after the live verification.
 
 **At 0.2's close**, [F-023](#f-023), [F-007](#f-007), [F-008](#f-008), [F-012](#f-012) and
 [F-014](#f-014) are built and move to a Release 0.2 table in the archive, beside v0.1's;
@@ -378,12 +381,14 @@ show beyond a status line. It is a second client of the same API.
 
 ## Decisions the order needs
 
-- At [F-023](#f-023) (014): stages superseding [D-032](decisions.md#d-032). A stage is a
-  moment of a proposed change, the ends are derived, and waypoints are removed. With it,
-  Constitution VI amended, citing that entry: "MUST NOT send an `at` of its own" becomes
-  "MUST NOT send an `at` it composed", so a stamp read from Infrahub, a stage's, the branch
-  point's or the head's latest `updated_at`, is passed verbatim as the operator's would
-  be. Waypoints already did this under D-032's reading; the text should say so.
+- ~~At [F-023](#f-023) (014)~~: written on 2026-10-16 as [D-045](decisions.md#d-045),
+  stages superseding [D-032](decisions.md#d-032). A stage is a moment of a proposed
+  change, the ends are derived (the branch point read on `main` at `branched_from`, the
+  head pinned one microsecond after the branch's latest stamp), and waypoints are
+  removed. With it, Constitution VI amended (1.2.0), citing that entry: "MUST NOT send an
+  `at` of its own" became "MUST NOT send an `at` it composed from a clock of its own; an
+  `at` read from Infrahub — a stamp it returned, or the first instant after one — MAY be
+  passed as the operator's would be".
 - At 015: the check as the writer of a comment, beside [D-026](decisions.md#d-026); the
   server listening on the Docker bridge, superseding [D-042](decisions.md#d-042)'s
   loopback default for this deployment; `twin rehearse` as a fifth workflow beside the

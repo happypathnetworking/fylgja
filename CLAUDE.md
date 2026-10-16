@@ -12,7 +12,7 @@ Read in this order, then the current feature under `specs/`:
 `docs/archive/`) · `docs/development.md` (conventions).
 Terms are in `docs/glossary.md`. What has been verified about a dependency is in
 `docs/verified-facts.md`, read when a task touches that dependency. The constitution at
-`.specify/memory/constitution.md` (1.1.1) binds every plan's Constitution Check.
+`.specify/memory/constitution.md` (1.2.0) binds every plan's Constitution Check.
 
 This repository began with one commit, M14's cut ([D-043](docs/decisions.md#d-043)). The
 record of how M1–M13 were built (their specs, research logs and command logs) is private
@@ -111,8 +111,14 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   local/infrahub/docker-compose.override.yml <command>`. Volumes persist across `down`.
 - **Infrahub's `main`** carries the Fylgja schema (`NetworkDevice` inherits
   `CoreArtifactTarget`; the waypoint kind `FylgjaWaypoint`, branch-agnostic, attribute
-  `as_of`), hash `0aba31a5…` on this install (a branch's hash covers its whole schema, so
-  each install has its own; the 24.04 install's was `4d5b37aa…`); the empty group
+  `as_of`; and, since 2026-10-16, 014's candidate stage kind `FylgjaStage` with its
+  `fylgja_stages` extension of `CoreProposedChange`, loaded for
+  [D-045](docs/decisions.md#d-045)'s verification from
+  `specs/014-proposed-change-stages/research-probe/fylgja-stage.yaml`, which the pass's
+  final kind replaces by a migration), hash `e7386419…` on this install (`0aba31a5…`
+  before the stage kind; a branch's hash is its own, so each install and each branch has
+  one, and the fixture branch keeps `0aba31a5…`; the 24.04 install's was `4d5b37aa…`);
+  the empty group
   `fylgja-devices`; and the registration `fylgja`, a `CoreReadOnlyRepository` at
   `https://github.com/happypathnetworking/fylgja.git`, `ref main`, with no credential
   ([D-044](docs/decisions.md#d-044)), whose import made the query `device_config`, the
@@ -130,8 +136,11 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   cancelled.
 - **The fixture branch `fylgja-fixture`**: the four Fylgja generics plus the reference
   schema, 3 devices, 12 interfaces, 3 links, contract `0.2`; the devices are in group
-  `fylgja-devices`, each with one `device-config` artifact, `Ready`. It has the same
-  schema hash as `main`. It compiles to **`47b2c449…`** on this install; its CTM equals
+  `fylgja-devices`, each with one `device-config` artifact, `Ready`. Its schema hash is
+  `0aba31a5…`, `main`'s before the stage kind: a branch sees `main`'s schema as it was at
+  the branch's creation, so it cannot query `FylgjaStage` and reads
+  `schema_differs_from_default_branch: true`, and it is never rebased. It compiles to
+  **`47b2c449…`** on this install, before and after the stage kind; its CTM equals
   `testdata/ctm/three-node.json` in everything but the envelope, and with the 24.04
   install's hash `4d5b37aa…` in place of this one's it compiles to `b9d53ebc…`, the id the
   cut recorded. It is written by its seed (`make infrahub-seed`, which the bring-up
@@ -367,10 +376,11 @@ Rewritten whole at each release's close, never appended to.
   ([roadmap](docs/roadmap.md#release-02)): F-023 as `014-proposed-change-stages`, then
   F-007 and F-008 as `015-proposed-change-rehearsal`, then F-014 as `016-probes`, then
   F-012.
-- **Open**: before 014's plan, the live verifications its brief owes (the uniqueness
-  constraint, the kind on `main`, a read pinned at `branched_from` before and after a
-  rebase, a second open proposed change on one branch, whether a proposed change's
-  pipeline generates artifacts, an artifact's stamp at a pinned read) and the Constitution
-  VI amendment it names. Arista's own checksum for the tar is unread, owed at the
-  operator's next download. On 26.04, whether the two AppArmor lines suffice without
-  `/run/syslogd.pid* rw,` is untried.
+- **014's verifications are done** (2026-10-16, `specs/014-proposed-change-stages/research.md`):
+  every item its brief owed, three findings the operator decided
+  ([D-045](docs/decisions.md#d-045): the head pinned one microsecond after the branch's
+  latest stamp, the branch point read on `main` at `branched_from`, the candidate kind
+  on `main` now), and Constitution VI amended for them (1.2.0). `specify` is next.
+- **Open**: Arista's own checksum for the tar is unread, owed at the operator's next
+  download. On 26.04, whether the two AppArmor lines suffice without `/run/syslogd.pid*
+  rw,` is untried.

@@ -66,10 +66,14 @@ Not a *record claim*.
 
 **`at` / point in time** — The optional half of an intent reference: an RFC 3339 UTC
 timestamp Infrahub applies to every query as a time-travel filter
-(`created_at <= at`). Present → the reference is *pinned*. Absent → *unpinned*, and
-Fylgja sends no `at` of its own; `observed_at`, recorded on every read either way, is
-then the only record of when the intent was seen
-([§4.1](architecture.md#41-intent-reader), [D-012](decisions.md#d-012)).
+(`created_at <= at` for a node; a value is seen strictly after its own stamp). Present →
+the reference is *pinned*. Absent → *unpinned*, and Fylgja sends no `at` it composed
+from a clock of its own: one read from Infrahub — a stamp it returned, or the first
+instant after one, as a *stage (of a proposed change)* resolves — is passed as the
+operator's would be, and a read with neither has `observed_at`, recorded on every read
+either way, as the only record of when the intent was seen
+([§4.1](architecture.md#41-intent-reader), [D-012](decisions.md#d-012),
+[D-045](decisions.md#d-045)).
 
 **Attended loop** — See *converge loop*.
 
@@ -712,6 +716,14 @@ work is a **feature**, a directory `specs/NNN-<slug>/` taken through `specify`,
 `clarify`, `plan`, `tasks`, `analyze`, `implement` and `converge`, each command in a fresh
 context reading its inputs from disk ([development.md](development.md#spec-kit-workflow)).
 
+**Stage (of a proposed change)** — From `014-proposed-change-stages`
+([D-045](decisions.md#d-045)): a moment of a *proposed change*, a pinned *intent
+reference* on its source branch. Every proposed change has two derived stages — the
+*branch point*, `main` at the branch's `branched_from`, and the *head*, the branch pinned
+one microsecond after its latest stamp — and the operator marks the moments between as
+`FylgjaStage` objects, each related to the proposed change, with a label unique within
+it and an optional `as_of`. Fylgja only reads them. Replaces the *waypoint*.
+
 **Stage commands** — `intent read`, `twin compile`, `schema check` and `psp validate`:
 each exposes one stage of the pipeline on its own, on the code path a run uses
 ([D-019](decisions.md#d-019)). Each is a request to the *server* like every command;
@@ -835,7 +847,9 @@ one intent reference. "Twin" and "environment" are synonyms. One at a time. Walk
 because a following twin tracks its intent
 ([§1](architecture.md#1-claims-that-shape-everything), [D-013](decisions.md#d-013)).
 
-**Waypoint** — From M10: a mark the operator writes in Infrahub, a `FylgjaWaypoint`
+**Waypoint** — From M10, superseded by the *stage (of a proposed change)* from
+`014-proposed-change-stages` ([D-045](decisions.md#d-045)): a mark the operator writes
+in Infrahub, a `FylgjaWaypoint`
 object with a series, a sequence, a branch, an optional `as_of` and a description. It is
 a name for a pinned reference. The kind is branch-agnostic, so a waypoint lands in no
 branch's diff, and it is unique on series and sequence. The operator writes waypoints,

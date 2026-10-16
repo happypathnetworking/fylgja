@@ -43,11 +43,13 @@ SPECIFY_FEATURE_DIRECTORY=specs/015-proposed-change-rehearsal. 0.2, the second o
 - **[D-044](../../docs/decisions.md#d-044)**: this repository is registered read-only on
   `main`. A change to its Infrahub files reaches Infrahub only when imported from
   `origin`'s `main`.
-- **[Constitution 1.1.1](../../.specify/memory/constitution.md)**:
+- **[Constitution 1.2.0](../../.specify/memory/constitution.md)**:
   - **I**: Go end to end. The check's Python is Infrahub's runtime, as the Jinja template
     is, and it stays glue ([Decided](#decided)).
   - **III**: every operation Fylgja makes on Infrahub is a query.
-  - **VI**: Fylgja sends no `at` of its own.
+  - **VI**: Fylgja sends no `at` it composed from a clock of its own; a stage's `at` is
+    a stamp read from Infrahub, or the first instant after one
+    ([D-045](../../docs/decisions.md#d-045)).
   - **VII**: one twin at a time.
   - **X**: no credential in anything written, and the honesty of every report.
 
@@ -225,7 +227,7 @@ Read in this order, after `CLAUDE.md`'s list.
 | [docs/roadmap.md](../../docs/roadmap.md): [Release 0.2](../../docs/roadmap.md#release-02), [F-007](../../docs/roadmap.md#f-007) and [F-008](../../docs/roadmap.md#f-008), [Decisions the order needs](../../docs/roadmap.md#decisions-the-order-needs) | the scope and the decisions owed |
 | [014's brief](../014-proposed-change-stages/brief.md), and its spec once written | the stages this feature rehearses |
 | [docs/decisions.md](../../docs/decisions.md): D-026, D-036, D-038, D-039, D-040–D-042, D-044, and 014's entries | what this feature builds on and supersedes |
-| [.specify/memory/constitution.md](../../.specify/memory/constitution.md) 1.1.1: I, III, VI, VII, X | the Constitution Check |
+| [.specify/memory/constitution.md](../../.specify/memory/constitution.md) 1.2.0: I, III, VI, VII, X | the Constitution Check |
 | [contracts/api.md](../../contracts/api.md), [contracts/step.schema.json](../../contracts/step.schema.json), [contracts/verify.schema.json](../../contracts/verify.schema.json) | the operations rehearse composes and the documents its report draws on |
 | [.infrahub.yml](../../.infrahub.yml), [infrahub/](../../infrahub/), [scripts/infrahub/docker-compose.override.yml](../../scripts/infrahub/docker-compose.override.yml) | where the checks and the task workers' variables go |
 | [docs/architecture.md](../../docs/architecture.md) §4.6, §6; [docs/c4/workspace.dsl](../../docs/c4/workspace.dsl) | the API's place, and the drawing to redraw |

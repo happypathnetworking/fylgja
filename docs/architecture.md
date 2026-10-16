@@ -242,7 +242,9 @@ best-effort, which `fylgja twin show` says. The bundle manifest's provenance blo
 `at` if supplied, the schema hash Infrahub reports for the branch
 (`GET /api/schema/summary`, field `main`), and the Fylgja contract version.
 
-**Waypoints** ([D-032](decisions.md#d-032)). `FylgjaWaypoint`
+**Waypoints** ([D-032](decisions.md#d-032); superseded by [D-045](decisions.md#d-045),
+which `014-proposed-change-stages` builds — this paragraph describes what runs until
+then). `FylgjaWaypoint`
 (`schema/fylgja-waypoint.yaml`) is a Fylgja-owned kind beside the contract, not in it. It
 is branch-agnostic, so a waypoint lands in no branch's diff, and it is unique on series
 and sequence. The operator writes waypoints; Fylgja only reads them. The reader uses the
@@ -1210,9 +1212,12 @@ To be stated in the product surface, not buried here.
    Infrahub, from the template this repository carries (`.infrahub.yml`, `infrahub/`;
    [D-044](decisions.md#d-044)); the external pipeline is rejected, and artifacts enter
    the bundle at read time.
-2. **Infrahub `at` edge cases.** Behaviour before the branch's creation, sub-second
-   precision, a server-side marker for the read time
-   ([D-012](decisions.md#d-012)).
+2. ~~**Infrahub `at` edge cases.**~~ Closed by [D-045](decisions.md#d-045)'s
+   verification: a read pinned before the branch's creation answers with `main` as it
+   then stood, back to the default branch's creation, and is refused before that; a read
+   pinned at exactly a stamp sees the node and not the value, so the head is pinned one
+   microsecond after the branch's latest stamp; there is no server-side marker for the
+   read time ([D-012](decisions.md#d-012)).
 3. ~~**Change detection for following.**~~ Closed by [D-026](decisions.md#d-026): a
    scheduled read and compare. Neither the event stream nor the branch diff decides
    when a check runs.

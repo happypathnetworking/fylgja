@@ -1,11 +1,17 @@
 <!--
 Sync Impact Report
-- Version change: 1.1.0 → 1.1.1 (2026-10-06, PATCH, wording only: no principle
-  added, removed or redefined). Development Workflow's Documents gate says that this
-  repository's decision log begins at its first commit, and that earlier decisions are
-  restated there as in force, without the record that produced them, which is private.
-  Source: D-043 and D-044, the decisions this repository began with. Templates:
-  .specify/templates/plan-template.md's Constitution Check names 1.1.1.
+- Version change: 1.1.1 → 1.2.0 (2026-10-16, MINOR: Principle VI materially expanded).
+  VI forbade an `at` "of its own" when the operator supplies none; it now forbids one
+  composed from a clock of Fylgja's own and allows one read from Infrahub — a stamp it
+  returned, or the first instant after one — passed as the operator's would be and
+  recorded as the read's `at`. D-032 already read a returned stamp as not composed; the
+  instant after one is the addition, since a read pinned at exactly a stamp does not see
+  that write (verified on Infrahub 1.11.2, 2026-10-16). Source: D-045. Templates:
+  .specify/templates/plan-template.md's Constitution Check names 1.2.0.
+- 1.1.0 → 1.1.1 (2026-10-06, PATCH, wording only): Development Workflow's Documents
+  gate says that this repository's decision log begins at its first commit, and that
+  earlier decisions are restated there as in force, without the record that produced
+  them, which is private. Source: D-043 and D-044.
 -->
 
 # Fylgja Constitution
@@ -83,11 +89,14 @@ hash Infrahub reports, and the contract version. `observed_at`, the UTC time the
 began, MUST be recorded on every read, pinned or not, in the CTM and in the twin
 directory, and MUST NOT appear in the bundle, so that the same intent hashes the same
 whenever it was read. When the operator supplies `at`, it MUST be passed verbatim on
-every query of the read. When the operator does not, Fylgja MUST NOT send an `at` of
-its own; `observed_at` is then the only record of when the intent was seen. It is
+every query of the read. When the operator does not, Fylgja MUST NOT send an `at` it
+composed from a clock of its own; an `at` read from Infrahub — a stamp it returned, or
+the first instant after one — MAY be passed as the operator's would be, verbatim on
+every query, and is then recorded as the read's `at`. A read with neither has
+`observed_at` as the only record of when the intent was seen. `observed_at` is
 informational in every case, governs nothing when `at` is supplied, and any claim of
 reproducibility from it MUST say best-effort.
-*Rationale: D-001, D-012, D-023.*
+*Rationale: D-001, D-012, D-023, D-045.*
 
 ### VII. One Twin at a Time
 Fylgja MUST refuse to create a twin while lab `fylgja` exists on the host, stating
@@ -196,4 +205,4 @@ Detail lives in `docs/development.md`; these are the gates.
   preceded 1.0.0 at the repository root is retired and MUST NOT be edited in its
   place.
 
-**Version**: 1.1.1 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-06
+**Version**: 1.2.0 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-16

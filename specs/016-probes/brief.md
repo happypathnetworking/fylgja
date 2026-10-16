@@ -30,7 +30,7 @@ SPECIFY_FEATURE_DIRECTORY=specs/016-probes. 0.2, the third of its three specs: p
   bundle, and its consequences name probes as an assertion kind to add.
 - **[D-028](../../docs/decisions.md#d-028)** and Constitution IV: Infrahub renders every
   device's configuration. Fylgja configures only what it synthesizes.
-- **[Constitution 1.1.1](../../.specify/memory/constitution.md)**:
+- **[Constitution 1.2.0](../../.specify/memory/constitution.md)**:
   - **V**: the compiler stays pure.
   - **VI**: what an `at` governs.
   - **IX**: the manifest is the provenance of what runs.

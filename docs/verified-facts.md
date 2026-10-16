@@ -164,6 +164,32 @@ development host up again there, or on a fresh 26.04 VM before it.
 - Compose 5 runs it with an override beside it: 5.5.1 on 24.04, and 5.6.0 on 26.04, which
   warns once per start that the task worker's `deploy.mode is only honored in Swarm mode`.
   *(10-07; 26.04, 10-07)*
+- **Inheriting from two generics.** A node may inherit two generics that declare the same
+  attribute or relationship only when the two declarations match in every normalized
+  property. `POST /api/schema/check` refuses the first mismatch it meets and names it: a
+  `role` that is `Text` in one and `Dropdown` in the other (`must be the same kind`), then a
+  relationship's `peer`, `identifier`, `min_count` and `on_delete` in turn, each as
+  `inherits from 'A' & 'B' with different '<property>' on the '<name>' relationship`. The
+  default identifier of a relationship with none written is the two kinds lowercased and
+  joined (`fylgjadevice__fylgjaplatform`), so two generics peering on different kinds never
+  agree on it unless one writes the other's. Verified by checking OpsMill's schema library
+  (`base/dcim.yml` with its ipam, location and organization bases, read on 10-16) against
+  `main`'s Fylgja generics: the four files load beside them unchanged, and the DCIM kinds
+  inherit the generics only once `DcimGenericDevice`'s `platform` and `interfaces` are
+  exact copies of `FylgjaDevice`'s and `DcimDevice` drops its `role`. *(10-16)*
+- **Two Parent relationships are refused, even when identical.** A node inheriting
+  `device` as `kind: Parent` from two generics fails `schema/check` with `Only one
+  relationship of type parent is allowed, but all the following are of type parent:
+  ['device', 'device']`, before the declarations are compared, so matching them does not
+  help: one generic must not declare it. Dropping it from `DcimInterface` then fails its
+  `uniqueness_constraints`, `human_friendly_id` and `order_by`, which reference `device`,
+  until those are rewritten too. *(10-16)*
+- **A schema check applies a submitted generic as a patch.** Submitting `FylgjaDevice`
+  without its `role`, or `FylgjaInterface` without its `device`, removes nothing: the
+  check reports the live attribute still present (and still conflicting). A removal needs
+  `state: absent` on the member, as a load does. A check with `?branch=main` validates
+  against `main`'s schema and writes nothing; `main`'s hash read `0aba31a5…` before and
+  after seven rounds of checks. *(10-16)*
 
 ---
 

@@ -12,8 +12,8 @@ optionally a point in time, compiled by a pure compiler into a deterministic bun
 booted as one containerlab topology on real network operating system images, with each
 device's configuration as Infrahub rendered it. Provisioning runs through Temporal, there
 is no database, and every command is a request to the API's server on the lab host. The
-[brief](brief.md) says what it is for, and the [roadmap](roadmap.md) what each milestone
-delivered.
+[brief](brief.md) says what it is for, and [the archive](archive/v0.1-built.md) what each
+milestone delivered.
 
 ## What a Spec Kit pass is
 

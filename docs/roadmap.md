@@ -1,35 +1,22 @@
 # Fylgja — Roadmap
 
-What is built, what comes next, and the order of the work after it. Each milestone is one
-pass of the Spec Kit workflow or more, sized so that each pass has one contract boundary
-and one kind of infrastructure in its tests. The architecture is in
-[architecture.md](architecture.md), and every decision the milestones rely on is in the
+What comes next, and the order of the work after it. Each feature is one spec or more, a
+`specs/NNN-slug/` directory taken through the Spec Kit workflow, sized so that each spec
+has one contract boundary and one kind of infrastructure in its tests. What `v0.1.0`
+built, M1 to M14, is recorded in [the archive](archive/v0.1-built.md). The architecture
+is in
+[architecture.md](architecture.md), and every decision the features rely on is in the
 [decision log](decisions.md).
 
-A size here is a comparison with a built milestone, made before any research, and is
-re-based when the item gets a spec, so the totals are a shape, not a commitment. An item
-becomes a milestone, with the next free number, when its feature is specified; M8 and M9
-keep the numbers they were planned with.
+An estimate here is made before any research and is re-based when the feature gets a spec,
+so the totals are a shape, not a commitment. A feature keeps the number the order was set
+with; one added later takes the next free number and sits where the order puts it, and one
+removed or folded into another leaves its number unused. A feature's id is `F-NNN`, written
+as the decision log writes `D-NNN`, and each has an anchor here (`roadmap.md#f-011`). It is
+not the number of the feature's spec directory, which Spec Kit assigns when the feature is
+specified: `F-014`, probes, is specified as `016-probes`.
 
-## Built
-
-| | Theme | Delivers |
-|---|---|---|
-| **M1** | Read and compile | the intent reader and the pure compiler: a branch, at an optional point in time, read into the CTM and compiled into a deterministic, content-addressed bundle with its provenance and fidelity manifest; the schema's conformance and completeness checks; golden bundles |
-| **M2** | Provision and destroy | the `fylgja-provision` and `fylgja-destroy` workflows, the worker, the containerlab driver, readiness, the twin directory and the CLI; one SR Linux twin end to end |
-| **M3** | Operate | refusal while a twin exists; orphan detection at create and at the worker's start; destroy then create across references; a pinned `at` that reproduces its bundle |
-| **M4** | Walking | following: a scheduled `Reconcile` that rebuilds the twin when its branch's `bundle_id` changes; `--no-follow`; `twin show` |
-| **M5** | Configuration | each device's configuration as Infrahub renders it, carried in the bundle and pushed after readiness, so the twin runs what production will ([D-028](decisions.md#d-028)) |
-| **M6** | PSP format and lossy mapping | a mapping profile that expresses many-to-one, breakout and management cases; the conformance suite; proven on SR Linux |
-| **M7** | EOS | the EOS support package, as data; the account-gated `docker import` acquisition path; a mixed SR Linux and EOS twin |
-| **M10** | Waypoints | `FylgjaWaypoint`, an operator-written, branch-agnostic name for a pinned reference ([D-032](decisions.md#d-032)); `twin create --waypoint`; `waypoint list` and `waypoint plan` with no lab; the pure step between two bundles |
-| **M11** | Stepping | a running twin taken from one waypoint's bundle to another without a rebuild: the `fylgja-step` workflow, a replace push per package ([D-033](decisions.md#d-033)), a changed topology applied to a live lab, and a failed step left up and recorded as diverged ([D-036](decisions.md#d-036)) |
-| **M12** | Verify | `twin verify`: the intent conformance report over the running twin, advisory and machine-readable, one finding per failed assertion and per record claim not held, exit 5 when the twin does not conform; its waiting form after every step's record ([D-037](decisions.md#d-037)–[D-039](decisions.md#d-039)) |
-| **M13** | API | `fylgja serve` on the lab host as the boundary of the core ([D-040](decisions.md#d-040)–[D-042](decisions.md#d-042)): every command behind it, the stage commands included, and the CLI as its client holding the API's own token alone; runs started, followed and cancelled through it; the operator's files crossing it |
-| **M14**, the cut | Reproducible and visible | this repository's first commit ([D-043](decisions.md#d-043)): the code with its comments and documents written for a reader of this repository, the contracts in [contracts/](../contracts/), the architecture drawn from one C4 model, the artifacts template ([D-044](decisions.md#d-044)), the module path `github.com/happypathnetworking/fylgja` and the Apache-2.0 license |
-| **M14**, the launch | Reproducible and visible | the repository made public at its start ([D-043](decisions.md#d-043)), with `SECURITY.md` and pull requests refused; `scripts/bring-up.sh`, which takes a fresh Ubuntu 26.04 host to tiers 1 and 2 and the three processes running, for SR Linux alone when the cEOS tar is absent; CI running tier 1 on every push and pull request, and tier 2 on every push to `main` against a real Infrahub the script brings up on the runner, with no secret; Infrahub rendering from this repository, registered read-only on `main` with no credential ([D-044](decisions.md#d-044)); tier 3's platform list and its partial pass; the development host on Ubuntu 26.04; the recorded session, the one-page write-up and the first release, `v0.1.0` |
-
-## Next
+## Release 0.2
 
 **Release 0.2: a proposed change rehearsed on a twin before it merges.** Set with the
 operator on 2026-10-16, for an audience of OpsMill and prospective employers, who see it
@@ -43,135 +30,248 @@ the proposed change carries the report, and a stage that fails blocks the merge.
 OpsMill publishes boots a twin per proposed change; their containerlab demos deploy by
 hand, after the merge. In order:
 
-1. **`014-proposed-change-stages`**: a stage is a moment of a proposed change, in place of
-   a waypoint (superseding [D-032](decisions.md#d-032)). A `FylgjaStage` relates to the
-   proposed change, and its branch is the proposed change's source. The branch point and
-   the head are derived, so only the moments between them are marked. M10's surface moves
-   to stages. Its [brief](../specs/014-proposed-change-stages/brief.md) holds the probe
-   against the running Infrahub and what was decided.
-2. **`015-proposed-change-rehearsal`**: items 7 and 8, reshaped as one pass. It adds
-   `twin rehearse` (a proposed change's stages created, stepped and verified one by one,
-   then reported and destroyed), the two checks, and the server listening where
-   Infrahub's task workers reach it. Its
+1. **`014-proposed-change-stages`**: [F-023](#f-023). A stage is a moment of a proposed
+   change, in place of a waypoint (superseding [D-032](decisions.md#d-032)). A
+   `FylgjaStage` relates to the proposed change, and its branch is the proposed change's
+   source. The branch point and the head are derived, so only the moments between them are
+   marked. M10's surface moves to stages. Its
+   [brief](../specs/014-proposed-change-stages/brief.md) holds the probe against the
+   running Infrahub and what was decided.
+2. **`015-proposed-change-rehearsal`**: [F-007](#f-007) and [F-008](#f-008), reshaped as
+   one spec. It adds `twin rehearse` (a proposed change's stages created, stepped and
+   verified one by one, then reported and destroyed), the two checks, and the server
+   listening where Infrahub's task workers reach it. Its
    [brief](../specs/015-proposed-change-rehearsal/brief.md).
-3. **`016-probes`**: item 14. The report gains its loss column, and the gate gains a
-   flow that has not recovered. Its [brief](../specs/016-probes/brief.md).
-4. **Item 12, the agent skill**, as a chore.
-5. **If time allows**, each its own pass: item 15, then item 13.
-6. **`v0.2.0`**: the recording of a rehearsed proposed change, the write-up updated, and
+3. **`016-probes`**: [F-014](#f-014). The report gains its loss column, and the gate gains
+   a flow that has not recovered. Its [brief](../specs/016-probes/brief.md).
+4. **[F-012](#f-012), the skill `fylgja-rehearsing-changes`**, as a chore: an agent reads
+   a rehearsal's report and explains it, stage by stage, from a catalogue of the findings'
+   rules generated from the code.
+5. **`v0.2.0`**: the recording of a rehearsed proposed change, the write-up updated, and
    the upstream request for named points in time drafted for the operator to file.
 
-Item 9 waits: Infrahub runs a proposed change's checks at its creation and on a retry,
-not on a branch update, so a webhook adds nothing to 0.2. Items 10 and 11, and everything
-after item 15, keep the order below. None of the items above has a decision entry or a
-researched estimate yet; `plan` writes each entry after the live verification.
+Every other feature keeps the order below. None of the features above has a decision entry
+or a researched estimate yet; `plan` writes each entry after the live verification.
 
-## The order after the launch
+**At 0.2's close**, [F-023](#f-023), [F-007](#f-007), [F-008](#f-008), [F-012](#f-012) and
+[F-014](#f-014) are built and move to a Release 0.2 table in the archive, beside v0.1's;
+[F-015](#f-015)'s need, "[F-008](#f-008)", becomes "the rehearsal"; and the phase table is
+re-ranged. The
+webhook-triggered check, once F-009, is removed rather than kept waiting: Infrahub runs a
+proposed change's checks at its creation and on a retry, not on a branch update, so a
+webhook adds nothing while that holds, and [D-026](decisions.md#d-026) keeps the compare
+without it.
 
-The Infrahub-facing items come first, then observing, then M8 and M9, a third platform,
-Ixia-c and a WebUI. 0.2 ([Next](#next)) takes items 7, 8, 14 and 12 out of this order
-first, and items 15 and 13 if time allows; the rest keep it. Read-only production data
-stays [parked](decisions.md#parked). The items keep the numbers the order was set with;
-the first six became M11 to M14, which are built above.
+## Release 0.3
 
-None of these items has a feature spec, a decision entry or a researched estimate. M8, M9
-and items 11, 13, 14, 15, 19, 20 and 21 are each one pass, with one contract boundary and
-one new kind of infrastructure. Items 7 to 9 share one pass, since they share the API and
-the artifacts template. Items 10, 12 and 16 are chores or records, with no spec.
+Not yet set with the operator. It opens with [F-011](#f-011), the schema library's DCIM
+implementing the generics under contract 0.3, then [F-022](#f-022), the sync into it,
+because a contract bump defines a release: 0.2 moves the twin record, the API and the CLI
+for stages while the contract stays 0.2, and 0.3 moves the contract once, with nothing
+added to the generics in between. What contract 0.3 changes is listed under [Decisions the
+order needs](#decisions-the-order-needs). The rest of the order below is untouched until
+0.3 is set.
 
-| # | Item | What it bundles | Needs | Hours | Why here |
+## Backlog
+
+The Infrahub-facing features come first, then observing, then object storage and remote
+hosts, a third platform, Ixia-c and a WebUI. [Release 0.2](#release-02) takes
+[F-023](#f-023), [F-007](#f-007), [F-008](#f-008), [F-014](#f-014) and [F-012](#f-012) out
+of this order first, and [Release 0.3](#release-03) opens with [F-011](#f-011) and
+[F-022](#f-022); the
+rest keep it. Read-only production data stays [parked](decisions.md#parked). The features
+keep the numbers the order was set with; the first six are built ([the
+archive](archive/v0.1-built.md)), F-009 is removed and [F-010](#f-010) is folded into
+[F-011](#f-011).
+
+None of these features has a spec or a decision entry, and only [F-023](#f-023) and
+[F-011](#f-011) have a probe behind their estimate. [F-023](#f-023), [F-011](#f-011),
+[F-013](#f-013), [F-014](#f-014), [F-015](#f-015), [F-017](#f-017) to [F-021](#f-021) and
+[F-022](#f-022) are each one spec, with one contract boundary and one new kind of
+infrastructure. [F-007](#f-007) and
+[F-008](#f-008) share one spec, since they share the API and the artifacts template.
+[F-012](#f-012) and [F-016](#f-016) are chores or records, with no spec.
+
+| # | Feature | What it bundles | Needs | Hours | Why here |
 |---|---|---|---|---|---|
-| 7 | **Pure proposed-change check** | a check beside the artifacts template that reports the step between source and destination | M13 | 3–4 | The first time Fylgja appears inside Infrahub's workflow. |
-| 8 | **Live proposed-change check** | a pinned twin of the source branch, verified, reported on the proposed change | M12, M13 | 3–4 | Small, since verify and the API exist. |
-| 9 | **Webhook-triggered checks** | a webhook starts a check early; the compare is unchanged | M13 | 2 | [D-026](decisions.md#d-026) already names it as the next step. |
-| 10 | **Generic transform** | a template rendering a baseline artifact from the generics alone | nothing new | 2 | Makes item 11 cheap and is an OpsMill artefact in itself. |
-| 11 | **Second schema via `infrahub-sync`** | a NetBox-shaped schema implementing the generics; a sync mapping; a twin of a NetBox-sourced network | item 10, a NetBox instance | 5–8 | The strongest OpsMill signal, and the first test of Constitution III. |
-| 12 | **Agent surface** | a skill in OpsMill's format over the CLI; a small MCP server over the API | M12, M13 | 2–5 | Cheap once there is something to ask. |
-| 13 | **Observation** | markers with bundle id and waypoint; a `gnmic` targets export; a documented collector and Grafana dashboard; a per-capability definition of settled | M11, M13 | 4–6 | Convergence across a step becomes a graph. |
-| 14 | **Probes** | a Fylgja-owned probe kind; synthesized ping and iperf3 hosts; loss across a step; a probe package format | M11, M12 | 5–7 | The headline demo: loss during a change on a running twin. |
-| 15 | **Operational state diff** | adjacencies and routes snapshotted at each waypoint pause and diffed; posted on the proposed change | M11, M12, item 8 | 4–6 | Builds on verify's readers and its observed facts. |
-| 16 | **Upgrade rehearsal** | the same intent on another NOS version through the package override, then verified | M12, a second image version | 2–4 | Cheap and operationally compelling. |
-| 17 | **M8** Object storage and Temporal cluster | as below | nothing new | 6–10 | Needed either way before M9. |
-| 18 | **M9** Remote hosts | as below; parallel twins for A/B of two changes | M8, lab hosts or a cluster | 12–20 | Gated, so it waits. |
-| 19 | **Third platform, Cisco IOL** | the parked platform order's next vendor, as data | the IOL image | 5–14 | Independent of everything. Filler whenever a gated item blocks. |
-| 20 | **Ixia-c** | the OTG probe mechanism; flows, rates, loss and latency | item 14 | 8–12 | After ping probes have proven the kind and the manifest. |
-| 21 | **WebUI** | Go templates and htmx from the same binary, or a decision amending Constitution I | M12, M13, item 13 | 6–10 | Last, so it has verify, steps and observation to show. |
+| F-023 | **Stages of a proposed change** | `FylgjaStage`, a moment of a proposed change marked by the operator, in place of a waypoint; the branch point and the head derived; `--stage`, `stage list` and `stage plan` in place of the waypoint surface; the staleness check; `FylgjaWaypoint` removed | nothing new | 4–6 | Everything 0.2 rehearses is a stage. Probed live on 2026-10-16; first in 0.2 as 014. |
+| F-007 | **`fylgja-step`, the pure check** | a check beside the artifacts template that answers in seconds with the step from `main` to the source branch, stage by stage, as a markdown comment on the proposed change; fails only when Fylgja refuses a stage as intent | [F-023](#f-023), the API | 3–4 | The first time Fylgja appears inside Infrahub's workflow. In 0.2 as 015. |
+| F-008 | **`fylgja-twin`, the live check** | a check that asks for `twin rehearse`: a twin booted at the branch point, stepped through the marked stages to the head, verified after every step and torn down; the report as a markdown comment; a stage that fails blocks the merge | [F-007](#f-007), stepping, verify, the API | 3–4 | Small, since stepping, verify and the API exist. In 0.2 as 015. |
+| F-010 | *Generic transform*, folded into [F-011](#f-011) | the shipped template already queries `FylgjaDevice`, so a DCIM device renders through it; what was left, the template documented as a reference transform, is a paragraph in [F-011](#f-011)'s README | — | — | Overtaken: Infrahub renders from the generics already. |
+| F-011 | **Second schema: the schema library's DCIM** | contract 0.3; OpsMill's DCIM schema implementing the generics; a DCIM-modelled twin; the template documented as a reference transform | nothing new | 4–6 | The strongest OpsMill signal, and the first test of Constitution III. Probed live on 2026-10-16. Opens 0.3. |
+| F-022 | **`infrahub-sync` into the DCIM** | a sync mapping from NetBox onto [F-011](#f-011)'s schema; a twin of a NetBox-sourced network | [F-011](#f-011), a NetBox instance | 3–5 | The source of truth stays where branching lives; the sync writes, not Fylgja. |
+| F-012 | **Agent surface** | `fylgja-rehearsing-changes`, a skill in OpsMill's format over the CLI's JSON, with a findings catalogue generated from the code; an MCP server deferred | verify, the API, [F-008](#f-008)'s rehearsal | 2–5 | Cheap once there is something to ask, and the demo's second act. |
+| F-013 | **Observation** | markers with bundle id and waypoint; a `gnmic` targets export; a documented collector and Grafana dashboard; a per-capability definition of settled | stepping, the API | 4–6 | Convergence across a step becomes a graph. |
+| F-014 | **Probes** | a Fylgja-owned probe kind; synthesized ping and iperf3 hosts; loss across a step; a probe package format | stepping, verify | 5–7 | The headline demo: loss during a change on a running twin. |
+| F-015 | **Operational state diff** | adjacencies and routes snapshotted at each waypoint pause and diffed; posted on the proposed change | stepping, verify, [F-008](#f-008) | 4–6 | Builds on verify's readers and its observed facts. |
+| F-016 | **Upgrade rehearsal** | the same intent on another NOS version through the package override, then verified | verify, a second image version | 2–4 | Cheap and operationally compelling. |
+| F-017 | **Object storage and Temporal cluster** | as below | nothing new | 6–10 | Needed either way before [F-018](#f-018). |
+| F-018 | **Remote hosts** | as below; parallel twins for A/B of two changes | [F-017](#f-017), lab hosts or a cluster | 12–20 | Gated, so it waits. |
+| F-019 | **Third platform, Cisco IOL** | the parked platform order's next vendor, as data | the IOL image | 5–14 | Independent of everything. Filler whenever a gated feature blocks. |
+| F-020 | **Ixia-c** | the OTG probe mechanism; flows, rates, loss and latency | [F-014](#f-014) | 8–12 | After ping probes have proven the kind and the manifest. |
+| F-021 | **WebUI** | Go templates and htmx from the same binary, or a decision amending Constitution I | verify, the API, [F-013](#f-013) | 6–10 | Last, so it has verify, steps and observation to show. |
 
-| Phase | Items | Hours |
+| Phase | Features | Hours |
 |---|---|---|
-| Infrahub-facing | 7–12 | 17–25 |
-| Observing | 13–16 | 15–23 |
-| Scale and surface | 17–21 | 37–66 |
-| **All** | | **69–114** |
+| Infrahub-facing | F-023, F-007, F-008, F-011, F-022, F-012 | 19–30 |
+| Observing | F-013–F-016 | 15–23 |
+| Scale and surface | F-017–F-021 | 37–66 |
+| **All** | | **71–119** |
 
-### The items
+### The features
 
-**7. The pure proposed-change check.** Infrahub's change workflow is the proposed change
+<a id="f-023"></a>
+**F-023. Stages of a proposed change.** Waypoints were Fylgja's own concept bolted on
+beside Infrahub: a branch-agnostic side object naming a branch by free text, outliving it,
+and invisible where the schema lacks the kind. Infrahub 1.11.2 has no named point in time,
+`Branch` is not a kind anything can relate to, and nothing fires when a branch's artifacts
+are all Ready; the proposed change is its one unit of change that a user kind may relate
+to, and it can be opened as a draft while the change is built. So a stage is a moment of a
+proposed change: `FylgjaStage`, loaded on `main` beside the contract, relates to the
+proposed change, carries a label unique within it, an optional `as_of` and a description,
+and has no branch of its own, since its branch is the proposed change's source. The ends
+are derived, the branch point from `branched_from` and the head pinned at a stamp read
+from Infrahub, so a proposed change with nothing marked has two stages and only the
+moments between are written. The operator writes stages by Infrahub's own means and Fylgja
+reads them (Constitution III). `--stage` replaces `--waypoint`, `stage list` and `stage
+plan` replace the waypoint commands, and `twin step` goes to a stage of the twin's own
+proposed change. `stage plan` refuses a stage whose `at` falls outside the branch's life
+and a stale one, where intent moved after its artifact was last generated, which waypoints
+left to the operator. `FylgjaWaypoint` is removed with its commands, rules and contract
+(superseding [D-032](decisions.md#d-032)). Probed live on 2026-10-16; its
+[brief](../specs/014-proposed-change-stages/brief.md) holds the probe and what was
+decided. First in 0.2, as `014-proposed-change-stages`, since everything the release
+rehearses is a stage.
+
+<a id="f-007"></a>
+**F-007. `fylgja-step`, the pure check.** Infrahub's change workflow is the proposed change
 with its checks, and Fylgja is a read-only consumer that never closes the loop. The first
-check compiles the proposed change's source and destination branches and reports the step
-between them on the proposed change, as an advisory. `step.Diff` already does this between
-two waypoints, so it needs no twin and answers in seconds. The check lives beside the
-artifacts template in this repository, as the OpsMill skills describe it
+check answers in seconds with the step from `main` to the source branch, stage by stage:
+the branch point, each stage the operator marked on the proposed change
+(`014-proposed-change-stages`), then the head, and the step between each pair. `step.Diff`
+already does this between two pinned references, so it needs no twin. The check lives
+beside the artifacts template in this repository, as the OpsMill skills describe it
 (`check_definitions` in `.infrahub.yml`, `InfrahubCheck`), and runs inside Infrahub's task
 worker, so it reaches Fylgja through the API, not by running the binary. The check writes
-the result: Fylgja never writes to Infrahub ([D-026](decisions.md#d-026), citing
-Constitution III). Its report takes verify's advisory form ([D-039](decisions.md#d-039)).
-Size: about M3's. **In 0.2** the check asks for the plan over the proposed change's
-stages. It fails only when Fylgja refuses a stage as intent.
+the result, a markdown comment on the proposed change: Fylgja never writes to Infrahub
+([D-026](decisions.md#d-026), citing Constitution III). The report takes verify's advisory
+form ([D-039](decisions.md#d-039)), and the check fails only when Fylgja refuses a stage as
+intent, so a plan that compiles always lets the merge proceed. Built in 0.2 as part of
+`015-proposed-change-rehearsal`.
 
-**7–8 in 0.2, the rehearsal.** A proposed change is staged by the stages the operator
-marks on it, so the check rehearses each stage rather than one step from `main`. The
-stages are the source branch at its branch point, then the marked ones, then the head. The
-live check asks Fylgja to `twin rehearse` the proposed change, posts the report, and fails
-at the first stage that diverges or adds a finding the baseline did not have. The check
-writes only its comment, and the stages outlive it, so a failure can be reproduced by
-hand. [The 0.2 brief](../specs/015-proposed-change-rehearsal/brief.md) has the rest.
+<a id="f-008"></a>
+**F-008. `fylgja-twin`, the live check.** The second check asks Fylgja to `twin rehearse`
+the proposed change and answers in minutes: a twin booted at the branch's branch point,
+stepped through the marked stages to the branch's head, verified after every step, then
+torn down, with the report posted as a markdown comment. It fails at the first stage that
+diverges or adds a finding the baseline did not have, and a stage that fails blocks the
+merge. The check writes only its comment, and the stages outlive it, so a failure can be
+reproduced by hand. Open for 015's spec: a rehearsal takes minutes, so whether the check
+waits for it or a later check reads its result. With `016-probes` the report gains its
+loss column, and with [F-015](#f-015) what changed operationally. Built in 0.2 as part of
+`015-proposed-change-rehearsal`, whose
+[brief](../specs/015-proposed-change-rehearsal/brief.md) has the rest.
 
-**8. The live proposed-change check.** The second check asks the API for a pinned twin of
-the source branch, runs `twin verify` and reports its result on the proposed change. Open
-for the spec: a boot takes one to three minutes, so whether the check waits for the twin or
-a later check reads its result. With item 15 it also carries what changed operationally.
-Size: about M3's.
+<a id="f-010"></a>
+**F-010. The generic transform, folded into [F-011](#f-011).** It was to be a transform
+written against the generics rather than the reference schema's kinds, so that any
+implementing schema renders a baseline artifact. The shipped query `device_config` already
+names `FylgjaDevice`, never a reference kind, so a DCIM-modelled device renders through
+the shipped template today, and a baseline for a platform the template has no branch for
+would serve nobody, since Fylgja refuses a platform without a support package before any
+artifact is read. What was left, the template documented as a reference transform that a
+DCIM user replaces with one reading the library's own fields, is a paragraph in feature
+11's README. [D-009](decisions.md#d-009) holds: Infrahub renders.
 
-**9. Webhook-triggered checks.** [D-026](decisions.md#d-026) closes with the candidate:
-once Fylgja runs a long-lived HTTP listener, a webhook may start a check early, adding to
-the interval and never replacing the compare. `fylgja serve` is that listener. A webhook
-from Infrahub starts a check, the check reads, compiles and compares as it always has, and
-following's latency falls from the interval to seconds. Size: small.
+<a id="f-011"></a>
+**F-011. The second schema: the schema library's DCIM implements the generics, under
+contract 0.3.** Only the reference schema has ever implemented the contract, so
+Constitution III's "demand the least possible" is untested until a second one does. The
+second is OpsMill's own:
+[the schema library's](https://github.com/opsmill/schema-library) `base/dcim.yml`, with
+its IPAM, location and organization bases. Probed on 2026-10-16 against
+Infrahub 1.11.2 with validation-only schema checks ([Verified facts](verified-facts.md)):
+the four base files load beside Fylgja's generics untouched, and the DCIM kinds inherit
+them only after the DCIM side is adapted, because Infrahub's generics are nominal. A
+same-named attribute or relationship inherited from two generics must match in every
+normalized property, and the refusals came one at a time: `role` is Text in Fylgja and a
+Dropdown in DCIM; `platform` differs in peer, identifier and `min_count`; `interfaces` in
+`on_delete`. Two Parent relationships are refused even when identical, and `DcimInterface`
+and `FylgjaInterface` both make `device` one. The adaptation that passed copies Fylgja's
+`platform` and `interfaces` onto `DcimGenericDevice`, drops `DcimDevice`'s `role` and
+`DcimInterface`'s `device`, with the per-device interface id and uniqueness that referenced
+it, and adds a `DcimCable` inheriting `DcimConnector` and `FylgjaLink`. That is a fork of
+the library's generics with double bookkeeping, `vendor` beside `manufacturer`, `enabled`
+beside `status`, `endpoints` beside `connected_endpoints`, so the spec moves Fylgja's side
+instead: contract 0.3 drops `role` and `site`, unused inputs and the operationally loaded
+name Constitution III says not to claim; drops the interface's `device`, since the device
+read nests its interfaces and the link read can take membership from the `link` field it
+already selects; and makes `platform` optional, refused at compile time with a finding.
+The CTM carries neither `role` nor `site`, so no golden moves; the fixture id does, as it
+does per install. First research: whether Fylgja's relationships may ride the library's
+identifiers under Fylgja's own names, since Infrahub matches edges by identifier. If they
+may, the library stays as published; if not, the remaining adaptation is the library's
+peers and the Parent, and the spec says so. The schema README gains the paragraph feature
+10 left: the shipped template as a reference transform, and why a DCIM user writes their
+own against the library's fields. Exit: a DCIM-modelled twin, the conformance suite's pure
+half over the DCIM, a tier 3 case. Needs nothing new.
 
-**10. The generic transform.** A transform beside the artifacts template, written against
-the generics (`FylgjaDevice`, `FylgjaInterface`, `FylgjaLink`) rather than the reference
-schema's kinds, rendering a baseline artifact for any schema that implements them.
-[D-009](decisions.md#d-009) holds: Infrahub renders. The OpsMill transforms skill applies.
-It is what makes item 11 cheap, and it is an OpsMill artefact in itself. Size: small.
-
-**11. The second schema, fed by `infrahub-sync`.** [D-001](decisions.md#d-001) rejected
+<a id="f-022"></a>
+**F-022. `infrahub-sync` from NetBox into the DCIM.** [D-001](decisions.md#d-001) rejected
 NetBox and Nautobot as the source of truth because they lack branching. It did not reject
 them upstream. A one-way sync into Infrahub keeps the source of truth where branching
 lives, and the sync writes, not Fylgja, so no decision changes. OpsMill ships
-`infrahub-sync` for NetBox, Nautobot and others, with a config-driven mapping, so a sync
-inside Fylgja would duplicate their product and add a runtime (Constitution I). What
-Fylgja owes is a NetBox-shaped schema implementing the four generics, a sync mapping onto
-it, and a twin of a NetBox-sourced network rendered through item 10. That schema matters
-more than the sync: only the reference schema has ever implemented the contract, so
-Constitution III's "demand the least possible" is untested until a second one does. The
-mapping looks tractable. NetBox's interface carries `mgmt_only` already, its interface
-types sort into physical and loopback, and a cable with two terminations is a link. A
-multi-termination cable, a LAG and a platform without a vendor and NOS are the refusals to
-expect, and each is a finding the second schema will word. Following works as it does now:
-the sync writes to a branch on a schedule, and the twin follows that branch, so the
-latency is the sync cadence plus the check interval. Needs a NetBox instance with demo
-data. Size: about M3's plus the instance.
+`infrahub-sync` with a config-driven mapping, so a sync inside Fylgja would duplicate
+their product and add a runtime (Constitution I); its NetBox mapping lands in roughly the
+library's shape, which is why [F-011](#f-011) targets it. The mapping looks tractable:
+NetBox's interface carries `mgmt_only`, its interface types sort into physical and
+loopback, and a cable with two terminations is a link. A multi-termination cable, a LAG
+and a platform without a vendor and NOS are the refusals to expect, each a finding the
+schema will word. Following works as it does now: the sync writes to a branch on a
+schedule, and the twin follows that branch, so the latency is the sync cadence plus the
+check interval. Needs a NetBox instance with demo data.
 
-**12. The agent surface.** OpsMill ships Claude skills and an MCP server for Infrahub. A
-`fylgja` skill in their format, or a small MCP server, exposes `twin create`, `show`,
-`verify`, `destroy` and `waypoint plan` to an agent over the JSON every command already
-prints with `--json`, so that an agent can ask whether a branch boots and converges, with
-the credentials staying in the server's and the worker's environment as they do now. The
-skill is the cheaper form, prose over the existing CLI; the MCP server is a client of the
-API. Size: a few hours for the skill.
+<a id="f-012"></a>
+**F-012. The agent surface: `fylgja-rehearsing-changes`.** OpsMill ships Claude skills and
+an MCP server for Infrahub, and their skills are interpretation over a tool's output:
+`infrahub-analyzing-data` reads their MCP server and answers in prose, under TRIGGER and
+DO NOT TRIGGER lines, in a forked context with `allowed-tools` of Bash and Read. Fylgja's
+skill takes the same form over the JSON every command already prints with `--json`, so an
+agent needs `FYLGJA_API_TOKEN` alone and the credentials stay in the server's and the
+worker's environment as they do now. What an agent cannot do today is say what a findings
+report means, so that is the skill's substance:
 
-**13. Observation.** Stepping keeps a pause and recorded timings at each waypoint and
+- **What it does.** Given a branch or a proposed change, it runs `stage plan`, then the
+  rehearsal ([F-008](#f-008)) or `twin create`, `step` and `verify` by hand, and gives a
+  plain account of each stage: what changed, whether the twin converged, which assertion
+  failed on which node, and the likely cause and remedy. It also answers the operating
+  questions along the way: `twin show`, why the host refused, what an orphan is.
+- **The catalogue.** A reference file lists every findings rule with its meaning and its
+  remedy, so `stage.artifact.stale` reads "the stage was marked before its regenerate;
+  regenerate, then re-mark" and a replace push's refusal names the line the NOS rejected.
+  It is generated from `internal/findings`, and a tier 1 test fails when the file omits a
+  rule, so the skill cannot drift from the code, which is the failure OpsMill's own skills
+  warn about.
+- **Advisory, as Fylgja is.** The skill reads and explains; it steps only when asked,
+  destroys nothing unasked, and never composes an `at`, the act stages exist to remove. It
+  repeats Constitution X in its own prose: convergence on a twin compares one change with
+  another and predicts nothing absolute. Its rules forbid echoing the token, as this
+  repository's do.
+- **Where it points instead of acting.** Marking a stage is the operator writing to
+  Infrahub by its own means, which OpsMill's `infrahub-managing-objects` skill covers; the
+  skill gives the regenerate-first rule and the object file's shape, no more.
+
+In the 0.2 recording it is the demo's second act: the check posts its report on the
+proposed change, and an agent explains the report in the thread. **Deferred**: the MCP
+server, a client of the API, until a consumer that cannot run a binary appears, since
+OpsMill's Infrahub MCP server already lets an agent holding both skills correlate
+Infrahub's data with the twin's state; and a second skill,
+`fylgja-authoring-platform-packages`, which belongs with [F-019](#f-019), where a third
+vendor tests the claim that a package is data. Size: a few hours for the skill, plus the
+generator and its test.
+
+<a id="f-013"></a>
+**F-013. Observation.** Stepping keeps a pause and recorded timings at each waypoint and
 leaves telemetry out on purpose. The seeds exist: the package's `state` facet names the
 transport and OpenConfig coverage, the conformance facet names the paths, and
 [D-037](decisions.md#d-037)'s observed facts are the normalized vocabulary. Fylgja never
@@ -182,15 +282,16 @@ file or Prometheus file discovery. A collector such as `gnmic` subscribes and ex
 Prometheus or InfluxDB, and Grafana computes convergence between the step marker and the
 state settling. What "settled" means is defined per capability, for example route-table
 counts unchanged for some seconds, or every BGP session established, and that is the
-item's research. The honesty constraint is already written:
-[architecture §6](architecture.md#6-known-limitations) and each package's fidelity say
-convergence timing differs in containers, so these measurements compare change A with
-change B on the same twin and predict nothing absolute, and every surface that reports one
-says so (Constitution X). Item 8 can then carry a convergence time as an advisory. Size:
-about M3's for the markers and the export, plus a documented collector setup and
-dashboard.
+feature's research. The honesty constraint is already written: [architecture
+§6](architecture.md#6-known-limitations) and each package's fidelity say convergence
+timing differs in containers, so these measurements compare change A with change B on the
+same twin and predict nothing absolute, and every surface that reports one says so
+(Constitution X). [F-008](#f-008) can then carry a convergence time as an advisory. The
+markers and the export are the smaller part; the documented collector setup and dashboard
+the larger.
 
-**14. Probes.** [Architecture §4.2](architecture.md#42-canonical-topology-model-ctm)
+<a id="f-014"></a>
+**F-014. Probes.** [Architecture §4.2](architecture.md#42-canonical-topology-model-ctm)
 justifies the CTM partly by synthesized nodes and names later traffic generators as one,
 provenance `synthesized` is already in the model, and Constitution X demands every
 synthesized node in the fidelity manifest. So the slot is reserved, and the questions are
@@ -205,85 +306,102 @@ generator is not a platform, so a small probe package format is the
 [D-031](decisions.md#d-031) move: one mechanism per generator, keyed by a format value.
 Containers forward in software, so the loss measured is the container's, never the
 ASIC's, and the report says so. With stepping this is the headline demo: a graph of loss
-across a change applied to a running twin. Size: about M6's, the kind and the manifest
-included.
+across a change applied to a running twin. The hours include the kind and the manifest.
 
-**15. Operational state diff.** With verify's readers, snapshot adjacencies and routes at
+<a id="f-015"></a>
+**F-015. Operational state diff.** With verify's readers, snapshot adjacencies and routes at
 each waypoint pause and diff them, so a proposed change carries what changed
-operationally, not only what changed in the topology, through item 8. Builds on
-[D-037](decisions.md#d-037)'s observed facts. Size: about M6's.
+operationally, not only what changed in the topology, through [F-008](#f-008). Builds on
+[D-037](decisions.md#d-037)'s observed facts.
 
-**16. Upgrade rehearsal.** The same intent booted on another NOS version through the
+<a id="f-016"></a>
+**F-016. Upgrade rehearsal.** The same intent booted on another NOS version through the
 package override directory and the package's `versions`, then verified. "Will this
 configuration survive the next release" is a question every operator has. Mostly a
 procedure and a package, gated on a second image version. Size: small.
 
-**17. M8, object storage and a Temporal cluster.** Object storage replaces the bundle
-store's directory behind its interface ([D-014](decisions.md#d-014)), and a self-hosted
-Temporal cluster replaces `temporal server start-dev`. Both stay on the development host
-unless M8's spec moves Infrahub and the cluster to a host of their own; either way the
+<a id="f-017"></a>
+**F-017. Object storage and a Temporal cluster.** Object storage replaces the bundle store's
+directory behind its interface ([D-014](decisions.md#d-014)), and a self-hosted Temporal
+cluster replaces `temporal server start-dev`. Both stay on the development host unless the
+feature's spec moves Infrahub and the cluster to a host of their own; either way the
 storage and orchestration seams are crossed before the host seam. The width is the bundle
 store's seam, not the cluster: `bundle.Store`'s `Path` and the wire's `BundlePath` cross
-the task queue as local paths, so M8 is the first milestone since M2 to change what
-`internal/lab/wire` means. Needed either way before M9.
+the task queue as local paths, so this is the first change to what `internal/lab/wire`
+means since it was written. Needed either way before [F-018](#f-018).
 
-**18. M9, remote hosts.** Remote lab hosts, per-host task queues in place of the one queue
+<a id="f-018"></a>
+**F-018. Remote hosts.** Remote lab hosts, per-host task queues in place of the one queue
 ([D-015](decisions.md#d-015)), and a scheduler that places each twin on a host. Excluding
 the hosts' provisioning. The API already gives an operator access to a twin from another
 machine. It does not reach a host it does not run on: `fylgja serve` runs on the lab host
 and reads the host in its own process ([D-041](decisions.md#d-041)), so how the server
-reaches a remote host, and whether the task queue is the answer, are M9's. Two twins at
-once, one per host or namespace, are what make A/B of two changes possible, which items 13
-and 14 make worth having.
+reaches a remote host, and whether the task queue is the answer, are this feature's. Two
+twins at once, one per host or namespace, are what make A/B of two changes possible, which
+[F-013](#f-013) and [F-014](#f-014) make worth having.
 
-**M9's runtime is open** ([the decision log's open questions](decisions.md#open-questions)).
-If M9 targets clabernetes, as recommended, the cluster schedules the twin and pulls its
-images, so the per-host queues, the scheduler and the image shipping largely give way to a
-second lab driver, and the milestone also waits for clabernetes 0.9's release and a
-cluster. M9 is re-scoped and re-sized when the question closes, before it is specified.
+**The remote hosts' runtime is open** ([the decision log's open
+questions](decisions.md#open-questions)). If [F-018](#f-018) targets clabernetes, as
+recommended, the cluster schedules the twin and pulls its images, so the per-host queues,
+the scheduler and the image shipping largely give way to a second lab driver, and the
+feature also waits for clabernetes 0.9's release and a cluster. It is re-scoped and
+re-sized when the question closes, before it is specified.
 
-**19. A third platform as data: Cisco IOL.** The strongest proof of
+<a id="f-019"></a>
+**F-019. A third platform as data: Cisco IOL.** The strongest proof of
 [D-031](decisions.md#d-031) is a vendor nobody designed for. The parked platform order
 names IOL next, then PAN-OS ([Parked](decisions.md#parked)). IOL needs no KVM, so it boots
-on a host that does not nest, and its image is account-gated, so M7's `docker import` path
-and `host.image.absent` carry over. Research first: readiness is gNMI-only and push is
-JSON-RPC or eAPI, and whether IOL serves either is unverified, so the package may need a
-new readiness or delivery mechanism. That is a format change under D-031, never a platform
-branch, and the write-up must say so: a third vendor is "just YAML" only where the
-existing mechanisms fit. Supported means both halves of the conformance suite pass
-([psp/README.md](../psp/README.md)). It depends on nothing above, so it is the filler
-whenever a gated item blocks. Size: between M6's and M7's; M7's if a mechanism is new.
+on a host that does not nest, and its image is account-gated, so the `docker import`
+acquisition path and `host.image.absent` carry over. Research first: readiness is
+gNMI-only and push is JSON-RPC or eAPI, and whether IOL serves either is unverified, so
+the package may need a new readiness or delivery mechanism. That is a format change under
+D-031, never a platform branch, and the write-up must say so: a third vendor is "just
+YAML" only where the existing mechanisms fit. Supported means both halves of the
+conformance suite pass ([psp/README.md](../psp/README.md)). It depends on nothing above,
+so it is the filler whenever a gated feature blocks. The upper hours are a new
+mechanism's.
 
-**20. Ixia-c.** Keysight's community edition is a container with a containerlab kind, and
+<a id="f-020"></a>
+**F-020. Ixia-c.** Keysight's community edition is a container with a containerlab kind, and
 the Open Traffic Generator client has a Go implementation, so it stays Go end to end and
 gives flows, rates, loss and latency where ping gives loss alone. It is a second mechanism
-under item 14's probe package format. TRex needs hugepages and DPDK and is too heavy for
-the development host. Size: about M7's.
+under [F-014](#f-014)'s probe package format. TRex needs hugepages and DPDK and is too heavy
+for the development host.
 
-**21. The WebUI.** Constitution I is where a UI bites: a JavaScript front end is a second
+<a id="f-021"></a>
+**F-021. The WebUI.** Constitution I is where a UI bites: a JavaScript front end is a second
 runtime. Either serve Go templates with htmx from the same static binary, with the assets
 embedded as the packages are, which keeps the principle, or write a decision entry
 exempting the UI. Its content is what the JSON already carries: `twin show`, following,
 waypoints and plans, verify reports, steps and observation. Last, so it has something to
-show beyond a status line. It is a second client of the same API. Size: between M6's and
-M10's.
+show beyond a status line. It is a second client of the same API.
 
 ## Decisions the order needs
 
-- At 014: stages superseding [D-032](decisions.md#d-032). A stage is a moment of a
-  proposed change, the ends are derived, and waypoints are removed.
+- At [F-023](#f-023) (014): stages superseding [D-032](decisions.md#d-032). A stage is a
+  moment of a proposed change, the ends are derived, and waypoints are removed. With it,
+  Constitution VI amended, citing that entry: "MUST NOT send an `at` of its own" becomes
+  "MUST NOT send an `at` it composed", so a stamp read from Infrahub, a stage's, the branch
+  point's or the head's latest `updated_at`, is passed verbatim as the operator's would
+  be. Waypoints already did this under D-032's reading; the text should say so.
 - At 015: the check as the writer of a comment, beside [D-026](decisions.md#d-026); the
-  server listening on the Docker bridge, superseding [D-042](decisions.md#d-042)'s loopback
-  default for this deployment; `twin rehearse` as a fifth workflow beside the brief's four;
-  how the check maps the report to a conclusion, with Fylgja's verdict staying advisory
-  ([D-039](decisions.md#d-039)).
+  server listening on the Docker bridge, superseding [D-042](decisions.md#d-042)'s
+  loopback default for this deployment; `twin rehearse` as a fifth workflow beside the
+  brief's four; how the check maps the report to a conclusion, with Fylgja's verdict
+  staying advisory ([D-039](decisions.md#d-039)).
 - At 016: probes as an input to a compile beside intent, hashed into the bundle; and
-  item 14's own entries below.
-- At item 9: whether the webhook needs an entry beside [D-026](decisions.md#d-026), which
-  already names it and keeps the compare.
-- At item 14: a second Fylgja-owned kind on [D-032](decisions.md#d-032)'s pattern, and what
-  a probe package is beside a platform package.
-- Before item 18: M9's runtime, the decision log's
-  [open question](decisions.md#open-questions).
-- At item 21: whether the WebUI keeps Constitution I through server-rendered templates or
-  amends it.
+  [F-014](#f-014)'s own entries below.
+- At [F-011](#f-011), contract 0.3 ([Release 0.3](#release-03)): `role` and `site` dropped
+  from `FylgjaDevice`; `device` dropped from `FylgjaInterface`, with the link read taking
+  membership from the interface side; `platform` optional, a compile-time finding when
+  absent; and whether Fylgja's relationships ride the schema library's identifiers under
+  their own names, or the library adapts its peers and its Parent. The entry supersedes
+  the parts of [D-003](decisions.md#d-003) and [D-004](decisions.md#d-004) that named
+  those members, and says in one line why the schema library and not a NetBox-shaped
+  schema of Fylgja's own.
+- At [F-014](#f-014): a second Fylgja-owned kind on [D-032](decisions.md#d-032)'s pattern,
+  and what a probe package is beside a platform package.
+- Before [F-018](#f-018): the remote hosts' runtime, the decision log's [open
+  question](decisions.md#open-questions).
+- At [F-021](#f-021): whether the WebUI keeps Constitution I through server-rendered
+  templates or amends it.

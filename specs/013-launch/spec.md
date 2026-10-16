@@ -15,7 +15,7 @@ takes a clean Ubuntu 26.04 host to every tier passing, CI runs tier 2 against a 
 Infrahub, the development host's Infrahub renders from this repository
 ([D-044](../../docs/decisions.md#d-044)), and the front page carries a recorded session, a
 threat model, a first release and a write-up. Its scope is the roadmap's
-[Next section](../../docs/roadmap.md#next), item by item; its settled decisions are the
+[Next section](../../docs/roadmap.md#release-02), item by item; its settled decisions are the
 brief's [Decided](brief.md#decided) list, which this spec restates only where a
 requirement needs the sentence. **No product behaviour changes**: every format, command,
 workflow, activity, wire type, golden, recorded history and the live fixture id are the

@@ -1,7 +1,7 @@
-# Specify brief: 0.2 feature 2 of 3: the proposed change rehearsed
+# Specify brief: 0.2 spec 2 of 3: the proposed change rehearsed (F-007, F-008)
 
-This is what `/speckit-specify` reads for roadmap items 7 and 8, reshaped as one pass by
-the roadmap's [Next section](../../docs/roadmap.md#next). It was written on 2026-10-16
+This is what `/speckit-specify` reads for roadmap F-007 and F-008, reshaped as one pass by
+the roadmap's [Release 0.2 section](../../docs/roadmap.md#release-02). It was written on 2026-10-16
 from a design session with the operator, and revised the same day when stages replaced
 waypoints ([014's brief](../014-proposed-change-stages/brief.md)). The session settled the
 direction of 0.2 and every choice under [Decided](#decided). It read Infrahub 1.11.2's
@@ -16,14 +16,14 @@ a new design. [References](#references) names every file to read.
 The prompt:
 
 ```
-SPECIFY_FEATURE_DIRECTORY=specs/015-proposed-change-rehearsal. 0.2, the second of its three features: a proposed change rehearsed on a twin, as docs/roadmap.md's Next section and items 7 and 8 define it. Read specs/015-proposed-change-rehearsal/brief.md first: it holds what changes, the decisions to treat as settled, the questions left for clarify, the exit criteria and every record to read. Specify what the operator gets, not a new design.
+SPECIFY_FEATURE_DIRECTORY=specs/015-proposed-change-rehearsal. 0.2, the second of its three specs: a proposed change rehearsed on a twin, as docs/roadmap.md's Release 0.2 section and F-007 and F-008 define it. Read specs/015-proposed-change-rehearsal/brief.md first: it holds what changes, the decisions to treat as settled, the questions left for clarify, the exit criteria and every record to read. Specify what the operator gets, not a new design.
 ```
 
 ## Where the shape is fixed
 
-- **The roadmap's [Next section](../../docs/roadmap.md#next)**, and items 7 and 8 with
+- **The roadmap's [Release 0.2 section](../../docs/roadmap.md#release-02)**, and F-007 and F-008 with
   their 0.2 paragraph. This feature is 0.2's frame: the demo the release records happens on
-  a proposed change. Probes, item 14, are the [next feature](../016-probes/brief.md), so
+  a proposed change. Probes, F-014, are the [next feature](../016-probes/brief.md), so
   this feature's gate has no loss in it.
 - **[014's brief](../014-proposed-change-stages/brief.md)** and its spec once written:
   - A proposed change's stages are its source branch at its branch point, then each
@@ -35,7 +35,7 @@ SPECIFY_FEATURE_DIRECTORY=specs/015-proposed-change-rehearsal. 0.2, the second o
 - **[D-038](../../docs/decisions.md#d-038)**: verify's assertions are derived from the
   bundle. **[D-039](../../docs/decisions.md#d-039)**: verify is advisory, and no Fylgja
   operation reads its report. A client may.
-- **[D-026](../../docs/decisions.md#d-026)** and the roadmap's item 7: Fylgja never writes
+- **[D-026](../../docs/decisions.md#d-026)** and the roadmap's F-007: Fylgja never writes
   to Infrahub; the check writes its own result.
 - **[D-040](../../docs/decisions.md#d-040)–[D-042](../../docs/decisions.md#d-042)**: every
   command goes through `fylgja serve`. One bearer token, in the clear, on loopback unless
@@ -167,7 +167,7 @@ SPECIFY_FEATURE_DIRECTORY=specs/015-proposed-change-rehearsal. 0.2, the second o
   container and server TLS were rejected.
 - **The checks wait.** A check's `timeout` is raised so that the twin finishes inside it.
   The rehearsal's own deadline sits short of that timeout, so cleanup always runs.
-- **Out of this feature**: probes and loss (016), the webhook (item 9), the agent skill,
+- **Out of this feature**: probes and loss (016), the webhook (F-009, since removed), the agent skill,
   the state diff and observation.
 
 <a id="open"></a>
@@ -222,7 +222,7 @@ Read in this order, after `CLAUDE.md`'s list.
 
 | Record | What it gives |
 |---|---|
-| [docs/roadmap.md](../../docs/roadmap.md): [Next](../../docs/roadmap.md#next), items 7, 8 and their 0.2 paragraph, [Decisions the order needs](../../docs/roadmap.md#decisions-the-order-needs) | the scope and the decisions owed |
+| [docs/roadmap.md](../../docs/roadmap.md): [Release 0.2](../../docs/roadmap.md#release-02), [F-007](../../docs/roadmap.md#f-007) and [F-008](../../docs/roadmap.md#f-008), [Decisions the order needs](../../docs/roadmap.md#decisions-the-order-needs) | the scope and the decisions owed |
 | [014's brief](../014-proposed-change-stages/brief.md), and its spec once written | the stages this feature rehearses |
 | [docs/decisions.md](../../docs/decisions.md): D-026, D-036, D-038, D-039, D-040–D-042, D-044, and 014's entries | what this feature builds on and supersedes |
 | [.specify/memory/constitution.md](../../.specify/memory/constitution.md) 1.1.1: I, III, VI, VII, X | the Constitution Check |

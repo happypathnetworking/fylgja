@@ -8,7 +8,8 @@ One twin at a time. No database. Every command is a request to the API's server,
 Read in this order, then the current feature under `specs/`:
 `docs/brief.md` (what we are building) · `docs/architecture.md` · `docs/decisions.md`
 (rejected alternatives live here — check before proposing one) · `docs/roadmap.md`
-(what is built, the launch, the order after it) · `docs/development.md` (conventions).
+(the releases and the backlog of features, `F-NNN`; what v0.1 built is in
+`docs/archive/`) · `docs/development.md` (conventions).
 Terms are in `docs/glossary.md`. What has been verified about a dependency is in
 `docs/verified-facts.md`, read when a task touches that dependency. The constitution at
 `.specify/memory/constitution.md` (1.1.1) binds every plan's Constitution Check.
@@ -341,7 +342,7 @@ under ten minutes.
 
 ## State
 
-Rewritten whole at each milestone's close, never appended to.
+Rewritten whole at each release's close, never appended to.
 
 - **M14 is built**: the cut, this repository's one first commit
   ([D-043](docs/decisions.md#d-043)), and the launch (`013-launch`). M1–M7 and M10–M14
@@ -362,10 +363,14 @@ Rewritten whole at each milestone's close, never appended to.
   under pressure, left untried on purpose. No golden and no format version moved.
 - **The release `v0.1.0`** is the close's last act: the operator pushes the tag,
   `release.yml` builds the draft, the operator publishes it.
-- **Next**: item 7 of the roadmap's order, the pure proposed-change check, specified as
-  one pass with items 8 and 9 ([roadmap](docs/roadmap.md#next)).
-- **Open**: the last runs of `013-launch`'s route: the grep for statements the launch made
-  false and the closing gates, then the release and the operator's read of the front
-  page, then `converge`. Arista's own checksum for the tar is unread, owed at the
+- **Next**: Release 0.2, a proposed change rehearsed on a twin
+  ([roadmap](docs/roadmap.md#release-02)): F-023 as `014-proposed-change-stages`, then
+  F-007 and F-008 as `015-proposed-change-rehearsal`, then F-014 as `016-probes`, then
+  F-012.
+- **Open**: before 014's plan, the live verifications its brief owes (the uniqueness
+  constraint, the kind on `main`, a read pinned at `branched_from` before and after a
+  rebase, a second open proposed change on one branch, whether a proposed change's
+  pipeline generates artifacts, an artifact's stamp at a pinned read) and the Constitution
+  VI amendment it names. Arista's own checksum for the tar is unread, owed at the
   operator's next download. On 26.04, whether the two AppArmor lines suffice without
   `/run/syslogd.pid* rw,` is untried.

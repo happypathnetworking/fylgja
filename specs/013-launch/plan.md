@@ -3,7 +3,7 @@
 **Branch**: `013-launch` | **Date**: 2026-10-07 | **Spec**: [spec.md](spec.md)
 
 **Input**: Feature specification from `/specs/013-launch/spec.md`, the brief
-([brief.md](brief.md)) and the roadmap's [Next](../../docs/roadmap.md#next). Research is in
+([brief.md](brief.md)) and the roadmap's [Next](../../docs/roadmap.md#release-02). Research is in
 [research.md](research.md), the entities in [data-model.md](data-model.md), the tooling's
 wire forms in [contracts/](contracts/), the validation in [quickstart.md](quickstart.md).
 

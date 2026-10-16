@@ -1,7 +1,7 @@
-# Specify brief: 0.2 feature 3 of 3: probes
+# Specify brief: 0.2 spec 3 of 3: probes (F-014)
 
-This is what `/speckit-specify` reads for roadmap item 14, the second feature of the
-roadmap's [Next section](../../docs/roadmap.md#next). It was written on 2026-10-16 in the
+This is what `/speckit-specify` reads for roadmap F-014, the second feature of the
+roadmap's [Release 0.2 section](../../docs/roadmap.md#release-02). It was written on 2026-10-16 in the
 same design session as [015's brief](../015-proposed-change-rehearsal/brief.md), before
 015 is specified. Specify after 015 is built: this feature adds to 015's report and gate,
 and the brief's references to them name what 015 builds, so re-read them against 015's
@@ -10,12 +10,12 @@ spec and close before specifying. Specify what the operator gets, not a new desi
 The prompt:
 
 ```
-SPECIFY_FEATURE_DIRECTORY=specs/016-probes. 0.2, the third of its three features: probes, as docs/roadmap.md's item 14 and Next section define it. Read specs/016-probes/brief.md first: it holds what changes, the decisions to treat as settled, the questions left for clarify, the exit criteria and every record to read. Specify what the operator gets, not a new design.
+SPECIFY_FEATURE_DIRECTORY=specs/016-probes. 0.2, the third of its three specs: probes, as docs/roadmap.md's F-014 and Release 0.2 section define it. Read specs/016-probes/brief.md first: it holds what changes, the decisions to treat as settled, the questions left for clarify, the exit criteria and every record to read. Specify what the operator gets, not a new design.
 ```
 
 ## Where the shape is fixed
 
-- **The roadmap's item 14** and its [Next section](../../docs/roadmap.md#next). This
+- **The roadmap's F-014** and its [Release 0.2 section](../../docs/roadmap.md#release-02). This
   feature is what makes 0.2 a demo: loss measured across each stage of a rehearsed
   proposed change, and a flow that has not recovered failing the stage.
 - **[Architecture §4.2](../../docs/architecture.md#42-canonical-topology-model-ctm)**:
@@ -58,7 +58,7 @@ SPECIFY_FEATURE_DIRECTORY=specs/016-probes. 0.2, the third of its three features
      proposed change that cables a probe's port therefore fails `fylgja-step` with that
      finding.
 4. **A probe package format**, keyed by a format value. `ping` is the first. It names the
-   image, its acquisition and the mechanism, so iperf3 or Ixia-c (item 20) is another
+   image, its acquisition and the mechanism, so iperf3 or Ixia-c (F-020) is another
    format.
 5. **Transient loss, a step measurement.**
    - The step starts each flow before it applies the change and stops it after the wait.
@@ -129,7 +129,7 @@ SPECIFY_FEATURE_DIRECTORY=specs/016-probes. 0.2, the third of its three features
 
 | Record | What it gives |
 |---|---|
-| [docs/roadmap.md](../../docs/roadmap.md): item 14, [Next](../../docs/roadmap.md#next), [Decisions the order needs](../../docs/roadmap.md#decisions-the-order-needs) | the scope and the decisions owed |
+| [docs/roadmap.md](../../docs/roadmap.md): [F-014](../../docs/roadmap.md#f-014), [Release 0.2](../../docs/roadmap.md#release-02), [Decisions the order needs](../../docs/roadmap.md#decisions-the-order-needs) | the scope and the decisions owed |
 | [015's brief](../015-proposed-change-rehearsal/brief.md), and its spec once written | the report and gate this feature extends |
 | [docs/decisions.md](../../docs/decisions.md): D-010, D-022–D-024, D-028, D-031, D-032, D-037, D-038 | synthesized nodes, the bundle's hashing, the mechanism pattern, the assertions |
 | [docs/architecture.md](../../docs/architecture.md) §4.2, §6 | the CTM's synthesized nodes and the known limitations |

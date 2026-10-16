@@ -98,3 +98,22 @@ seed `fylgja-test-readme` and its series first and delete both after, for want o
   too.
 - How the operator's own series and the fixture's share `waypoint list`, whose `no
   waypoints` after a tier is today how a run is seen to have cleaned up.
+
+## A webhook that starts a proposed-change check early
+
+**Raised** 2026-09-14 in [D-026](decisions.md#d-026), as the candidate next step once
+Fylgja ran a long-lived listener; carried as roadmap feature 9 until 2026-10-16.
+**When**: not planned. **Status**: dropped from the roadmap, kept here.
+
+### The idea
+
+Once `fylgja serve` listens, a webhook from Infrahub starts a check early, adding to the
+interval and never replacing the compare, so following's latency falls from the interval
+to seconds. D-026 names it and keeps the compare whether or not it is built.
+
+### Why it was dropped
+
+Infrahub 1.11.2 runs a proposed change's checks at its creation and on a retry, not on a
+branch update (the 014 probe, 2026-10-16), so a webhook adds nothing to a check posted on
+a proposed change, which is what 0.2 builds. It returns to the roadmap if following's
+latency matters to a consumer, or if Infrahub fires on a branch update.

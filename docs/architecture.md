@@ -1026,7 +1026,7 @@ Nothing acts on the report: no command, check or step reads it.
 
 The API exposes what the CLI needs and nothing more: no re-attach to a run, no listing
 of runs, no fetch of a filed bundle. A UI is item 21 of the roadmap's
-[order after the launch](roadmap.md#the-order-after-the-launch), and a second client of the same API. Infrahub
+[backlog](roadmap.md#backlog), and a second client of the same API. Infrahub
 proposed-change integration is a later consumer of the twin, not part of the core: items
 7 to 9 there.
 

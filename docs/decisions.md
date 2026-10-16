@@ -1258,7 +1258,7 @@ starts one sooner than the interval.
   product would build now.
 - No cursor, memo or search attribute is kept anywhere.
 - The API's server ([D-040](#d-040)) is the long-lived listener a webhook needs. A webhook
-  that starts a check early is on the [roadmap](roadmap.md#the-order-after-the-launch); it
+  that starts a check early is on the [roadmap](roadmap.md#backlog); it
   would add to the interval, never replace the compare.
 
 ---
@@ -2180,7 +2180,7 @@ verify`, the step's `VerifyTwin` and the suite share; `internal/conformance` sta
 - A new fact is a new name in the facet and one reader, never a model import.
 - A platform whose transport is not gNMI needs a new reader arm under [D-031](#d-031), and
   is refused by verify until it exists (`verify.package.unreadable`).
-- The operational state diff on the [roadmap](roadmap.md#the-order-after-the-launch)
+- The operational state diff on the [roadmap](roadmap.md#backlog)
   extends the vocabulary (adjacencies, routes) rather than adopting a model.
 - Every assertion carries a stable identifier and names what was read; fidelity is still
   asserted, never measured (Constitution X).
@@ -2232,7 +2232,7 @@ declarative ([D-005](#d-005)).
 - A diverged twin is verified against the staged bundle, the target it was going to, with
   its divergence named.
 - Probes and the operational state diff on the
-  [roadmap](roadmap.md#the-order-after-the-launch) add assertion kinds as data under this
+  [roadmap](roadmap.md#backlog) add assertion kinds as data under this
   entry.
 - Nothing is rendered and the artifact is never read back (Constitution IV); the compiler
   stays pure (V); the manifest beside the lab is the provenance of what runs, and the
@@ -2291,7 +2291,7 @@ it ([D-007](#d-007)); `twin.json` records how the wait ended and when the twin s
 ### Consequences
 
 - Posting the report on a proposed change, which the
-  [roadmap](roadmap.md#the-order-after-the-launch) plans, reports the block and never
+  [roadmap](roadmap.md#backlog) plans, reports the block and never
   blocks on it.
 - The budget is the operator's, by flag: it bounds how long the operator will wait, not how
   a platform behaves, which is why it is not a package field. Constitution II's "budgets
@@ -2325,7 +2325,7 @@ held every credential the system has: Infrahub's token, both node logins and acc
 workflow service.
 
 An API was first planned beside the CLI, with the stage commands left in the CLI's process.
-Six items on the [roadmap](roadmap.md#the-order-after-the-launch) stand on an API: two
+Six items on the [roadmap](roadmap.md#backlog) stand on an API: two
 proposed-change checks, a webhook, an agent surface, observation and a web UI. Each is
 another client, and a rule that lives in the CLI is one each of them must repeat or go
 without.
@@ -2767,7 +2767,7 @@ needs them is planned. Each becomes an entry when that scope is planned.
   are a later decision.
 - **The platform order's tail.** After SR Linux and EOS ([D-021](#d-021)), Cisco IOL is
   next, then PAN-OS. IOL needs no KVM and its image is account-gated, as cEOS's is, so it
-  is the third platform the [roadmap](roadmap.md#the-order-after-the-launch) plans; PAN-OS
+  is the third platform the [roadmap](roadmap.md#backlog) plans; PAN-OS
   is a licensed VM and waits for a lab host with KVM ([D-020](#d-020)). Needed by the
   platform track.
 

@@ -1,7 +1,7 @@
 # Specify brief: M14 feature 2 of 2 — the launch
 
 What `/speckit-specify` reads for the launch, beside the roadmap's
-[Next section](../../docs/roadmap.md#next), [D-043](../../docs/decisions.md#d-043) and
+[Next section](../../docs/roadmap.md#release-02), [D-043](../../docs/decisions.md#d-043) and
 [D-044](../../docs/decisions.md#d-044). Written 2026-10-07, the day this repository's first
 commit (`a5225dd`, M14's cut) was pushed and verified, before any research, so that the
 prompt carries decisions and not restatement
@@ -23,7 +23,7 @@ SPECIFY_FEATURE_DIRECTORY=specs/013-launch. M14 — Reproducible and visible, th
 
 ## Where the shape is fixed
 
-- **The roadmap's [Next section](../../docs/roadmap.md#next)** is this feature's scope,
+- **The roadmap's [Next section](../../docs/roadmap.md#release-02)** is this feature's scope,
   item by item: the bring-up script, CI with a real Infrahub, Infrahub rendering from this
   repository, and the visible half (the README with its recorded session, `SECURITY.md`,
   `v0.1.0`, the repository's settings and topics, the write-up and the Infrahub issues),
@@ -302,7 +302,7 @@ list.
 
 | Record | What it gives |
 |---|---|
-| [docs/roadmap.md](../../docs/roadmap.md): [Next](../../docs/roadmap.md#next), the Built table's M14 row, [Decisions the order needs](../../docs/roadmap.md#decisions-the-order-needs) | the feature's scope, item by item, its size, and the one decision named for it |
+| [docs/roadmap.md](../../docs/roadmap.md): [Next](../../docs/roadmap.md#release-02), the Built table's M14 row, [Decisions the order needs](../../docs/roadmap.md#decisions-the-order-needs) | the feature's scope, item by item, its size, and the one decision named for it |
 | [docs/decisions.md](../../docs/decisions.md): [D-043](../../docs/decisions.md#d-043), [D-044](../../docs/decisions.md#d-044), [D-017](../../docs/decisions.md#d-017), [D-028](../../docs/decisions.md#d-028), [D-042](../../docs/decisions.md#d-042), [D-001](../../docs/decisions.md#d-001) (Infrahub the source of truth, which Fylgja only reads, as [architecture §5](../../docs/architecture.md#5-stack) says; the fixture tool, which writes, is test tooling) | the decisions this feature executes and leans on; the numbering continues from D-044 |
 | [.specify/memory/constitution.md](../../.specify/memory/constitution.md) 1.1.1: I, X; Development Workflow (three tiers, verification); Governance | the Constitution Check |
 | [docs/development.md](../../docs/development.md): [Local environment](../../docs/development.md#local-environment) (the table, the environment variables, Temporal, the three processes, "What Infrahub needs", the fixture); [Build and make targets](../../docs/development.md#build-and-make-targets); [Test architecture](../../docs/development.md#test-architecture); [Spec Kit workflow](../../docs/development.md#spec-kit-workflow) | the hand walk-through the script becomes; what each tier needs; how the work flows here |

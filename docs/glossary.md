@@ -259,6 +259,12 @@ container or twin directory touched. Like a plan, it files the bundle and the CT
 in the *bundle store*. The *server* makes it on the lab host, so it needs `docker` and
 `containerlab` on the server's `PATH`.
 
+**Feature (`F-NNN`)** — One row of the roadmap's backlog, with an anchor
+(`roadmap.md#f-011`): a unit of planned work with an estimate, built as one or more
+*specs*. The id is written as a decision's is and is not the number of the feature's spec
+directory: `F-014`, probes, is specified as `016-probes`. A removed or folded feature
+leaves its number unused.
+
 **Fidelity manifest** — Part of every bundle's manifest: modelled exactly,
 approximated, stubbed, omitted; software- or hardware-forwarding, asserted per platform
 with one `production_forwarding` entry per package in the bundle, so a *mixed twin*
@@ -415,7 +421,7 @@ One twin at a time ([D-013](decisions.md#d-013)).
 start, before the *bring-up script* and CI are built ([D-043](decisions.md#d-043)); then
 the script, CI with a real Infrahub, Infrahub rendering from this repository's
 *artifacts template*, the *recording*, the *write-up* and the release `v0.1.0`
-([roadmap](roadmap.md#built)).
+([the roadmap's archive](archive/v0.1-built.md)).
 
 **Link-change fidelity** — From M11: what containerlab's reconcile does to a node of a
 platform when a link of its is added or removed, declared by the PSP as
@@ -469,8 +475,8 @@ onto the node's containerlab management interface, never cabled. Not set on an i
 loopback ([D-003](decisions.md#d-003)).
 
 **Milestones M1–M14** — Fylgja's units of planned work; `CLAUDE.md`'s table says in one
-line each what each built, and the roadmap's [Built](roadmap.md#built) table what each
-delivers.
+line each what each built, and the roadmap's archived [Built](archive/v0.1-built.md)
+table what each delivers.
 
 **Mixed twin** — From M7: a *walking twin* whose nodes span more than one *PSP*, the
 proof that "a twin is heterogeneous" (the constitution's II) is more than a sentence. It
@@ -541,6 +547,10 @@ carries it. A step that ended `stepped` or `unchanged` has none.
 frozen and reproducible. A twin built from a *waypoint* is always pinned: the waypoint
 resolves to the `at` written on it, or to the moment Infrahub recorded its writing, and
 the twin never follows.
+
+**Pass** — One run of one Spec Kit command (`specify`, `plan`, `implement`, …) over one
+*spec*, as [how-it-was-built.md](how-it-was-built.md) counts them. Not a whole workflow:
+a *spec* is the workflow's unit, a *feature* the roadmap's.
 
 **Platform list** — `PLATFORMS=<list> make test-e2e`: shipped package names
 (`nokia_srlinux`, `arista_eos`) that narrow tier 3 to the cases they can run. It selects
@@ -637,6 +647,11 @@ Every frame was read for a credential before it was committed ([README](../READM
 **Reference schema** — The concrete Infrahub schema Fylgja ships implementing its
 generics, so a greenfield install has something to populate.
 
+**Release** — A tagged version (`v0.1.0`, `v0.2.0`) and the set of *features* it ships,
+set with the operator and recorded as a section of the roadmap (`roadmap.md#release-02`)
+while open, then as a table in `docs/archive/` once closed. A contract bump opens a
+release rather than joining one. The unit of planned work before 0.2 was the *milestone*.
+
 **Replace** — From M11 ([D-033](decisions.md#d-033)): the *push* under `mode: replace`.
 One request with one atomic commit resets the candidate to the node's *baseline*, sends
 the *bootstrap*, then the *artifact*, asks the device for its diff and commits; the device
@@ -685,6 +700,12 @@ render to under the *mapping profile*, from one rule or several. With one of the
 that one holds the port and the others are omitted (`omit.interface.shared`). With none
 cabled, all keep it. Two cabled is `interface.port.collision`, a refusal. Every member is
 recorded in `fidelity.lossy` with the others it shares with.
+
+**Spec** — One `specs/NNN-<slug>/` directory taken through the Spec Kit workflow, from
+its `brief.md` to `converge`; the workflow's unit. A *feature* is built as one spec or
+more, and one spec may build two features, as `015-proposed-change-rehearsal` builds
+`F-007` and `F-008`. The number is Spec Kit's, assigned when the spec is created, and is
+not the feature's id.
 
 **Spec Kit** — The specification-driven workflow Fylgja is built under: each piece of
 work is a **feature**, a directory `specs/NNN-<slug>/` taken through `specify`,

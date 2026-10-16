@@ -13,8 +13,8 @@ itself; state lives in containerlab, a few files and Temporal, and there is no d
 There is one twin at a time, on one lab host. Every command is a request to Fylgja's API,
 which `fylgja serve` answers on the lab host, so a shell that holds the API's token alone
 can drive the twin, from the lab host or through an SSH tunnel from another machine.
-Milestones M1–M7 and M10–M13 are built, and the [roadmap](docs/roadmap.md) says what
-each delivered and what comes next.
+`v0.1.0` is released; [what it built](docs/archive/v0.1-built.md) is recorded milestone by
+milestone, and the [roadmap](docs/roadmap.md) says what comes next.
 
 ![A twin created from a waypoint, stepped to the next and verified](docs/recording/session.gif)
 

@@ -1,7 +1,7 @@
-# Specify brief: 0.2 feature 1 of 3: a proposed change's stages
+# Specify brief: 0.2 spec 1 of 3: a proposed change's stages (F-023)
 
 This is what `/speckit-specify` reads for the pass that replaces waypoints with stages,
-the first of the roadmap's [Next section](../../docs/roadmap.md#next). It was written on
+the first of the roadmap's [Release 0.2 section](../../docs/roadmap.md#release-02). It was written on
 2026-10-16 from a design session with the operator, after a probe against the running
 Infrahub 1.11.2 ([Verified live](#verified-live)). It supersedes
 [D-032](../../docs/decisions.md#d-032) and reshapes what M10 built. The rehearsal
@@ -11,7 +11,7 @@ the operator gets, not a new design. [References](#references) names every file 
 The prompt:
 
 ```
-SPECIFY_FEATURE_DIRECTORY=specs/014-proposed-change-stages. 0.2, the first of its three features: a proposed change's stages in place of waypoints, as docs/roadmap.md's Next section defines it. Read specs/014-proposed-change-stages/brief.md first: it holds what changes, the decisions to treat as settled, the questions left for clarify, the exit criteria and every record to read. Specify what the operator gets, not a new design.
+SPECIFY_FEATURE_DIRECTORY=specs/014-proposed-change-stages. 0.2, the first of its three specs: a proposed change's stages in place of waypoints, as docs/roadmap.md's F-023 and Release 0.2 section define it. Read specs/014-proposed-change-stages/brief.md first: it holds what changes, the decisions to treat as settled, the questions left for clarify, the exit criteria and every record to read. Specify what the operator gets, not a new design.
 ```
 
 ## Why
@@ -104,14 +104,26 @@ deleted after, and `main`'s schema hash read `0aba31a5…` before and after.
 2. **A proposed change's stages**, as Fylgja reads them, in this order:
    - the source branch at `branched_from`;
    - each `FylgjaStage` in order of `at` (an absent `as_of` is the write stamp);
-   - the branch's head, read unpinned.
+   - the branch's head, pinned at a stamp read from Infrahub: the latest `updated_at`
+     across the branch's nodes and artifacts. Fylgja composes no `at` (Constitution VI),
+     and every stage is pinned, so a twin from the head is reproducible until the branch
+     moves.
 
    It warns when `main` has moved since the branch point. It refuses a stage whose `at` is
-   before the branch point or later than now.
+   before the branch point or later than now; when a rebase moved the branch point past
+   the stage, the refusal says so, since a rebase refuses every marked stage at once.
+   **It refuses a stale stage**: at each stage it reads the latest intent `updated_at` on
+   the branch at or before the stage's `at`, and the artifact's own stamp at that time;
+   intent newer than its artifact means the operator marked the stage before regenerating,
+   and the finding (`stage.artifact.stale`) names the device and says to regenerate and
+   re-mark. This is the schema README's "write the waypoint last" rule, which waypoints
+   left to the operator, made a query. 015's check would otherwise fail a merge on a stage
+   whose config is merely stale.
 3. **The commands.** `--stage` replaces `--waypoint` on `twin create`, `twin step` and
    `intent read`. `stage list` and `stage plan` replace `waypoint list` and `waypoint
-   plan`, naming the proposed change by its source branch. `twin step` goes to a stage of
-   the twin's own proposed change. The findings' `waypoint.*` rules become `stage.*`.
+   plan`, naming the proposed change by its source branch; `stage plan` runs the staleness
+   check over every stage. `twin step` goes to a stage of the twin's own proposed change.
+   The findings' `waypoint.*` rules become `stage.*`, plus `stage.artifact.stale`.
 4. **`FylgjaWaypoint` is removed**, with its commands, rules, contract
    (`waypoints.schema.json`), the fixture tool's `-waypoint` and test support's series. The
    twin record names a stage where it named a waypoint.
@@ -141,6 +153,20 @@ deleted after, and `main`'s schema hash read `0aba31a5…` before and after.
   as before waypoints. A proposed change cannot have `main` as its source.
 - **Waypoints are removed, not kept beside stages.** Fylgja is 0.x, and two ways to name a
   pinned reference would split every command.
+- **A stage is a time cut, not a tag on intent.** Tagging each object with the stage it
+  goes live in, and compiling stage N from the head by filtering, would need no time travel
+  and survive a rebase, but it can express only additions, never a port disabled or a
+  description changed in stage 2, and the artifact for a partial topology does not exist:
+  Infrahub renders the head, and Fylgja never renders ([D-009](../../docs/decisions.md#d-009),
+  [D-028](../../docs/decisions.md#d-028)).
+- **Not a stack of proposed changes.** One proposed change per step is how a rollout
+  reaches production, and the two derived ends already rehearse "`main` plus this change".
+  But Infrahub branches from `main` alone, so a second step cannot be expressed until the
+  first merges. The decision entry says this in one line, since OpsMill's audience will
+  ask.
+- **Every stage is pinned, the head included**, at a stamp Infrahub returns, as the branch
+  point is; Fylgja composes none.
+- **A stale stage is refused, not inferred around.** The operator regenerates and re-marks.
 - **No human-friendly id**: Infrahub refuses one through the proposed change's
   non-unique name.
 - **Infrahub's proposed-change view will not show stages.** 015's comment lists them on
@@ -156,9 +182,8 @@ deleted after, and `main`'s schema hash read `0aba31a5…` before and after.
    position, with `0` the branch point and the last the head; or both.
 2. **A proposed change that is merged or closed.** Are its stages still listed and
    creatable (reading its source branch while it exists), or refused?
-3. **A twin created from the head.** The head is read unpinned, so a twin from it is not
-   reproducible: is that allowed, with the record saying so, or must the operator mark a
-   last stage to pin it?
+3. **Where the staleness check reports.** A refusal at `resolve`, so no run starts from a
+   stale stage, or a finding in `stage plan` alone, with `twin create --stage` going ahead?
 
 ## Left to the plan
 
@@ -167,7 +192,15 @@ deleted after, and `main`'s schema hash read `0aba31a5…` before and after.
   - the kind and the extension loaded on `main`;
   - what a read pinned at exactly `branched_from` returns (the decision log's open question
     on reads before a branch existed), and the same after a rebase moves it;
-  - how a branch's being behind `main` is read.
+  - how a branch's being behind `main` is read;
+  - whether Infrahub allows a second open proposed change on one source branch. The
+    brief finds the proposed change by its branch; if two may be open, `stage list` needs
+    an id form;
+  - whether a proposed change's own pipeline generates the branch's artifacts at its
+    creation, and whether a draft's does. This decides how often the staleness check
+    fires in practice;
+  - what stamp a pinned read returns for an artifact (`updated_at` of the checksum or the
+    storage id), which the staleness check compares with intent's.
 - **The kind**, written from [the probe's candidate](research-probe/fylgja-stage.yaml)
   after the plan loads OpsMill's `infrahub:infrahub-managing-schemas` and `-objects`
   skills.
@@ -179,14 +212,22 @@ deleted after, and `main`'s schema hash read `0aba31a5…` before and after.
   (`at` used to pin a query set) and [#1045](https://github.com/opsmill/infrahub/issues/1045)
   (branch metadata).
 - **The decision entry superseding D-032**, written after the verification.
+- **Constitution VI amended, citing that entry**, with a version bump. VI reads "when the
+  operator does not [supply `at`], Fylgja MUST NOT send an `at` of its own", and every
+  stage, the branch point and the pinned head send one the operator did not type.
+  Waypoints already did, under D-032's reading that a stamp read from Infrahub is not
+  composed; the text should say so: "MUST NOT send an `at` it composed; one read from
+  Infrahub is passed verbatim as the operator's would be". Without this the plan's
+  Constitution Check fails or rationalises.
 
 ## Exit
 
-- **Tier 1**: the stage list (ends derived, order, refusals, warning), `--stage` parsing,
-  the step's target rule, the record.
+- **Tier 1**: the stage list (ends derived, the head's read stamp, order, refusals, the
+  rebase message, the staleness rule, warning), `--stage` parsing, the step's target rule,
+  the record.
 - **Tier 2**: the kind on `main`; a throwaway branch and draft proposed change with two
-  stages listed and planned against the real Infrahub; each refusal; no `FylgjaWaypoint`
-  left on `main`.
+  stages listed and planned against the real Infrahub; each refusal, a stage marked before
+  its regenerate refused as stale among them; no `FylgjaWaypoint` left on `main`.
 - **Tier 3**: cases 7 and 8 on stages, `E2E-OK`; after the tier, no `fylgja-test-*`
   branch, proposed change or stage remains.
 - **Owed before the work starts**: nothing.
@@ -196,7 +237,7 @@ deleted after, and `main`'s schema hash read `0aba31a5…` before and after.
 
 | Record | What it gives |
 |---|---|
-| [docs/roadmap.md](../../docs/roadmap.md): [Next](../../docs/roadmap.md#next), [Decisions the order needs](../../docs/roadmap.md#decisions-the-order-needs) | the scope and the decisions owed |
+| [docs/roadmap.md](../../docs/roadmap.md): [Release 0.2](../../docs/roadmap.md#release-02), [Decisions the order needs](../../docs/roadmap.md#decisions-the-order-needs) | the scope and the decisions owed |
 | [docs/decisions.md](../../docs/decisions.md): D-012, D-028, D-032, D-036, the [open questions](../../docs/decisions.md#open-questions) | what this pass supersedes and keeps |
 | [schema/fylgja-waypoint.yaml](../../schema/fylgja-waypoint.yaml), [schema/README.md](../../schema/README.md) | the kind and guide this pass replaces |
 | [contracts/waypoints.schema.json](../../contracts/waypoints.schema.json), [contracts/twin.schema.json](../../contracts/twin.schema.json), [contracts/api.md](../../contracts/api.md), [contracts/cli.md](../../contracts/cli.md) | the documents that move |

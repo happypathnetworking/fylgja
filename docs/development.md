@@ -881,8 +881,9 @@ and the log as every other request does, rather than `net/http`'s own `200`.
 
 ## Spec Kit workflow
 
-Each [roadmap](roadmap.md) item is one or more features, each a directory
-`specs/NNN-<slug>/`. The sequence is `/speckit-specify` → `clarify` → `plan` → `tasks` →
+Each [roadmap](roadmap.md) feature (`F-NNN`) is one or more specs, each a directory
+`specs/NNN-<slug>/` whose number Spec Kit assigns and which is not the feature's. The
+sequence is `/speckit-specify` → `clarify` → `plan` → `tasks` →
 `analyze` → `implement` → `converge`, repeating `converge` until nothing is added.
 Auto-commit hooks stay off; commit with a conventional-commit message whose body says
 *why*.
@@ -894,9 +895,9 @@ repeats them adds nothing, and a longer prompt does not buy a longer or better s
 feature's `brief.md` can hold the full reading list, so the prompt itself is one line.
 Write, in this order:
 
-1. The item and where its shape is fixed: `M8 — Object storage and Temporal cluster, as
-   docs/roadmap.md defines it`, the architecture sections and decisions that decide it,
-   and "specify what the operator gets, not a new design".
+1. The feature and where its shape is fixed: `F-017 — Object storage and Temporal
+   cluster, as docs/roadmap.md defines it`, the architecture sections and decisions that
+   decide it, and "specify what the operator gets, not a new design".
 2. Every behaviour change, named, so that any other difference from what is built is a
    defect.
 3. **Decided:** what you have already chosen, one sentence each, with the reason when it

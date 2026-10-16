@@ -721,3 +721,27 @@ the tree does not see them (R-10).
 - **The upstream request** for named points in time, once the pass works (§4).
 - **Tier 3's wall time** with two proposed-change waits and the unchanged step, recorded
   in `docs/development.md` once measured.
+
+---
+
+<a id="8-verified-at-implement"></a>
+## 8. Verified at implement
+
+### 8.1 The shipped file checks as §6.2's (T002, 2026-10-16, read-only)
+
+`schema/fylgja-stage.yaml`, copied from [contracts/stage-kind.md](contracts/stage-kind.md)
+"The file" by extraction, not by hand. `infrahubctl schema check --branch main schema/`
+against `main` (hash `e7386419…`, the candidate kind on it): each file `Valid`, the four
+`display_labels` deprecation warnings, and one diff, `FylgjaStage: attributes: added:
+description; changed: label: description, parameters.regex`; `FylgjaWaypoint` none.
+Nothing was loaded: T003's step 1 holds before its load.
+
+### 8.2 `infrahubctl schema format` does not keep the contract's key order (1.23.2)
+
+The contract says the file's keys are in canonical order, "so a later `infrahubctl schema
+format` moves nothing". The SDK's formatter disagrees: `schema format --check --diff
+schema/fylgja-stage.yaml` exits 1 and would put `order_by` before `display_label`,
+`generate_profile` and `branch` after `uniqueness_constraints`, and `label`'s `optional`
+after its `parameters`; nothing else. Of the other shipped files, `fylgja-waypoint.yaml`
+is canonical, and `fylgja-generics.yaml` and `reference.yaml` are not. No gate runs the
+formatter, and T002 ships the contract's order; reordering is open, for the operator.

@@ -888,3 +888,71 @@ with `main` holding `Branch` `main` and `fylgja-fixture`, `CoreProposedChange 0`
   keeps `fylgja-fixture`, which `make infrahub-clean` deletes and which holds no proposed
   change; any other branch outside the prefix is refused, as the contract's guard says.
 - `Rebase` was not exercised here; T020's `TestStageRefusals` runs it.
+
+### 8.7 The stages core against the real Infrahub (T020, 2026-10-16)
+
+`internal/stages/stages_contract_test.go`, run twice from the repository root with
+Infrahub's address and token in the environment and no twin: `go test -count=1 -tags
+contract ./internal/stages/ -v`, first with `-run` naming the three tests (22:52Z, package
+278 s) and then exactly as the task gives it (22:58Z, 262 s). Every test green both times:
+
+| Test | First | Second |
+|---|---|---|
+| `TestStageKindLoads` | 22.8 s | 25.0 s |
+| `TestStagesListAndPlan` | 104.1 s | 91.5 s |
+| `TestStageRefusals` | 151.2 s | 144.8 s |
+
+`main` read `Branch` `main` and `fylgja-fixture`, `CoreProposedChange 0`, `FylgjaStage 0`
+before the first run and after each; every test's cleanup deleted its stages, then its
+proposed change, then its branch.
+
+- **The kind on `main`.** `GET /api/schema?branch=main`: `FylgjaStage` `agnostic`,
+  uniqueness `[[proposed_change label__value]]`; `label` `Text`, required, `regex`
+  `^[^/\s]+$` (`stages.LabelPattern`); `as_of` `DateTime` and `description` `Text`, both
+  optional; `proposed_change` to `CoreProposedChange`, cardinality one, required; and
+  `CoreProposedChange.fylgja_stages` to `FylgjaStage`, many. `StageReader.Check` passes.
+  Loading `schema/` on a branch made from `main` left its hash `a8045729…`, `main`'s: an
+  empty diff. The second `seeded` on one proposed change, written through the throwaway
+  branch's GraphQL, was refused naming the uniqueness constraint, and `a/b` the regex.
+- **The reader, live.** It read the open draft proposed change with its one stage (the
+  label's stamp verbatim, no `as_of`), and with the branch filter empty it listed it among
+  every open one: the unset filter §8.5 left for this test lists a real proposed change.
+  `Branch` gave the harness's own `branched_from` and `created_at` strings, and nothing for
+  an absent name. After `DeleteStagesOf`, no stage and no orphan.
+- **The list and the plan.** Two marks with no `as_of`, `seeded` and `third-link` (after
+  `SeedThirdLink` and n1's and n3's checksums awaited): four rows, `branch-point` on `main`
+  at `branched_from`, each mark at its own `label.updated_at` verbatim (`written`), and the
+  head one microsecond after the latest checksum stamp the harness read
+  (`ArtifactsReadyAt`), with no finding. The plan: `branch-point` refused
+  `contract.node.missing` (R-04) and its step not computed; `seeded`, `third-link` and
+  `head` compiled to three ids (`a04ba782…`, `d83e49a0…`, `8f67f497…` the first time);
+  the second step `+n1:e1-3 — n3:e1-3`, n1 and n3 changed for bootstrap and mapping, their
+  artifacts moved; the third `unchanged; the ids differ by provenance alone`. SC-002:
+  `seeded`'s filed CTM equals `stage.Read` of the branch at its `at` but for
+  `observed_at`, and compiles to the plan's id.
+- **The refusals, on one proposed change.** A role written on n1, n2 and n3 with no
+  generate, then a mark: `stage.artifact.stale` on exactly n1, n2, n3, each naming both
+  remedies; after `-generate` moved all three checksums, a fresh mark resolved. The site
+  (rendered nowhere): a mark stale on all three; a generate moved no checksum and the next
+  mark was still stale; `RunCheck`'s artifact validator completed 24 s and 23 s after the
+  call, the checksums still unmoved, and the mark after it resolved, the product's
+  `Validations` pinned at its `at` returning the harness's `completed_at` verbatim (D-046's
+  hole closed live). The plan of the seven stages: the branch point refused
+  `contract.node.missing`, the three stale marks `stage.artifact.stale`, the other two
+  marks and the head compiled, and a step computed only between two compiled stages.
+- **A rebase with nothing on `main` to take still moves the branch point.**
+  `BranchRebase(wait_until_completion: true)` returned after **20 s and 17 s** on a seeded
+  branch with an open draft proposed change and five marks (§2.7 read 67 s), with `main`
+  unwritten since the branch was made: `branched_from` moved to the rebase's moment
+  (`22:56:54.365315Z`, the branch created `22:55:02.356200Z`), `created_at` did not. The
+  plan after it: all five marks `stage.at.before_branch_point`, each message naming `a
+  rebase at <branched_from>` and the creation; the branch point still refused
+  `contract.node.missing`; the head compiled, fresh, since the rebase stamps the intent
+  and the checksums alike (§2.7).
+- **The rest.** A mark labelled `head`, accepted by Infrahub, refused
+  `stage.label.reserved` on `<branch>/head`; a mark with `as_of` one hour ahead refused
+  `stage.at.unresolved`, "later than the current time"; after `CloseProposedChange`, a
+  mark of the branch and the plan refused whole `stage.unknown` on the branch ("no open
+  proposed change has source branch …"); a branch that does not exist `stage.unknown`.
+- **The creation's pipeline** concluded 36–50 s after the create on a seeded branch (§8.6
+  read 38 s) and 7 s on a bare one.

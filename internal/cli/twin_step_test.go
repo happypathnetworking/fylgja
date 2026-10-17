@@ -922,7 +922,10 @@ func TestStepDryRunReconcileLifecycles(t *testing.T) {
 // Every refusal of contracts/cli.md's table before the run ends the command with its rule,
 // step, object, message and exit, and the workflow service is never dialled. So does
 // each part of the command that cannot run: operation.failed, exit 2, at its step
-// (contracts/cli.md).
+// (contracts/cli.md). A target refused at its resolution is refused before any branch's
+// intent is read, and before the from bundle, the host check and containerlab's plan:
+// its host has neither the record's bundle nor the memory a step needs, and is refused
+// for the target alone (FR-018, SC-005).
 func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 	const orphanAt = "/tmp/scratchpad/twin3/bundle/topology.clab.yml"
 	// noStage ends step.twin.unsteppable's message for a twin that names no stage.
@@ -930,6 +933,21 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 		"(fylgja twin create --stage)"
 	refusal := func(rule, step, object, message string) findings.Finding {
 		return findings.Finding{Severity: findings.Rejection, Rule: rule, Step: step, Object: object, Message: message}
+	}
+	// refusedTarget is the stage twin's host with the record's bundle gone from the store
+	// and too little memory for the step, edited: a target refused there is refused
+	// before the from bundle is read and the host checked, either of which would refuse
+	// the step otherwise.
+	refusedTarget := func(edit func(h *stepHostFixture)) func(t *testing.T) *stepHostFixture {
+		return func(t *testing.T) *stepHostFixture {
+			h := stepHost(t, "plan-link-added.json", nil)
+			if err := os.RemoveAll(filepath.Join(h.paths.Bundles, h.fromID)); err != nil {
+				t.Fatal(err)
+			}
+			t.Setenv(lab.EnvHostMemoryMB, "4096")
+			edit(h)
+			return h
+		}
 	}
 	for _, c := range []struct {
 		name string
@@ -940,8 +958,9 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 		// want is the one rejection; its object or message "" is filled from the host by fill.
 		want findings.Finding
 		fill func(h *stepHostFixture, f *findings.Finding)
-		// asked says whether Infrahub was asked anything once the host was built.
-		asked bool
+		// asked says whether Infrahub was asked anything once the host was built; unread,
+		// that it was asked no branch's intent, as no refusal before the read is.
+		asked, unread bool
 	}{
 		{name: "no lab and no twin directory", host: func(t *testing.T) *stepHostFixture {
 			paths := useStateRoot(t)
@@ -1036,50 +1055,70 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		{name: "a diverged twin", host: divergedStepHost, code: findings.ExitRejected, want: divergedRefusal(""),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
-		{name: "another branch", args: []string{"--stage", "other/x"}, code: findings.ExitRejected, asked: true,
+		{name: "another branch", args: []string{"--stage", "other/x"}, code: findings.ExitRejected, asked: true, unread: true,
 			want: refusal(findings.RuleStepTargetForeign, findings.StepResolve, "other/x",
 				"stage other/x is not of proposed change pc-1 on branch change-1, the twin's; a step stays inside the proposed change "+
 					"the twin was built from, whose stages are: "+stepStages)},
 		{name: "the twin's proposed change no longer open", host: func(t *testing.T) *stepHostFixture {
 			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Stage.ProposedChange.ID = "pc-0" })
-		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/sealed",
+		}, code: findings.ExitRejected, asked: true, unread: true, want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/sealed",
 			"proposed change pc-0 on branch change-1, the twin's, is no longer open (the open proposed change on change-1 is pc-1); "+
 				"a step stays inside the proposed change the twin was built from")},
 		{name: "no open proposed change on the twin's branch", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
 			h.infra.changes[0].State = "merged"
 			return h
-		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleStageUnknown, findings.StepResolve, "change-1",
+		}, code: findings.ExitRejected, asked: true, unread: true, want: refusal(findings.RuleStageUnknown, findings.StepResolve, "change-1",
 			"no open proposed change has source branch change-1; there is no open proposed change")},
 		{name: "the twin's label gone", host: func(t *testing.T) *stepHostFixture {
 			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Stage.Label = "gone" })
-		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/gone",
+		}, code: findings.ExitRejected, asked: true, unread: true, want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/gone",
 			"the twin's stage change-1/gone is no longer a stage of proposed change pc-1 on branch change-1; its stages are: "+stepStages)},
 		// A twin at the head has no next, and the head it was built from has since moved.
 		{name: "no next", host: func(t *testing.T) *stepHostFixture {
 			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Stage = stepStage("head", "", "head") })
-		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/head",
+		}, code: findings.ExitRejected, asked: true, unread: true, want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/head",
 			"proposed change pc-1 on change-1 has no stage after change-1/head; its stages are: "+stepStages+
 				"; the head has moved since the twin was built (now at 2026-10-16T11:30:00.000001+00:00): --stage change-1/head steps to it")},
-		{name: "a stage the proposed change lacks", args: []string{"--stage", "change-1/nosuch"}, code: findings.ExitRejected, asked: true,
+		{name: "a stage the proposed change lacks", args: []string{"--stage", "change-1/nosuch"}, code: findings.ExitRejected, asked: true, unread: true,
 			want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/nosuch",
 				`proposed change pc-1 on change-1 has no stage "nosuch"; its stages are: `+stepStages)},
-		{name: "the current one", args: []string{"--stage", "change-1/sealed"}, code: findings.ExitRejected, asked: true,
+		{name: "the current one", args: []string{"--stage", "change-1/sealed"}, code: findings.ExitRejected, asked: true, unread: true,
 			want: refusal(findings.RuleStepTargetCurrent, findings.StepResolve, "change-1/sealed",
 				"the twin is already at stage change-1/sealed (branch change-1, at "+stepMixedAt+"); the proposed change's stages are: "+stepStages)},
 		{name: "the kind absent", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
 			h.infra.kind = nil
 			return h
-		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleStageKindAbsent, findings.StepResolve, intent.StageKind, ""),
+		}, code: findings.ExitRejected, asked: true, unread: true, want: refusal(findings.RuleStageKindAbsent, findings.StepResolve, intent.StageKind, ""),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Message = "" }},
 		{name: "a duplicate target", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
 			h.infra.changes[0].Stages = append(h.infra.changes[0].Stages,
 				mark("st-twice-a", "twice", "2026-10-16T11:45:00Z", ""), mark("st-twice-b", "twice", "2026-10-16T11:50:00Z", ""))
 			return h
-		}, args: []string{"--stage", "change-1/twice"}, code: findings.ExitRejected, asked: true,
+		}, args: []string{"--stage", "change-1/twice"}, code: findings.ExitRejected, asked: true, unread: true,
 			want: refusal(findings.RuleStageDuplicate, findings.StepResolve, "change-1/twice", "")},
+		{name: "a target taking a reserved label", host: refusedTarget(func(h *stepHostFixture) {
+			h.infra.changes[0].Stages = append(h.infra.changes[0].Stages, mark("st-head", "head", "2026-10-16T11:45:00Z", ""))
+		}), args: []string{"--stage", "change-1/head"}, code: findings.ExitRejected, asked: true, unread: true,
+			want: refusal(findings.RuleStageLabelReserved, findings.StepResolve, "change-1/head",
+				`stage change-1/head is a mark labelled "head", which names the derived head of every proposed change and is `+
+					"reserved; relabel it (schema/README.md); the head of change-1 is still its derived stage")},
+		// A rebase moved the branch point past again's at, though not past the branch's
+		// creation.
+		{name: "a target before the branch point, after a rebase", host: refusedTarget(func(h *stepHostFixture) {
+			h.infra.changes[0].BranchedFrom = "2026-10-16T11:15:00.000000+00:00"
+		}), args: []string{"--stage", "change-1/again"}, code: findings.ExitRejected, asked: true, unread: true,
+			want: refusal(findings.RuleStageAtBeforeBranchPoint, findings.StepResolve, "change-1/again",
+				"stage change-1/again has at "+stepLaterAt+", before the branch point 2026-10-16T11:15:00.000000+00:00 of "+
+					"change-1: a rebase at 2026-10-16T11:15:00.000000+00:00 moved the branch point past it (the branch was "+
+					"created at "+fakeBranchedFrom+"); mark the stage again, or delete it")},
+		// Its message names the server's clock, so its words are not compared.
+		{name: "a target given an as_of later than now", host: refusedTarget(func(h *stepHostFixture) {
+			h.infra.changes[0].Stages = append(h.infra.changes[0].Stages, mark("st-future", "future", "2099-01-01T00:00:00Z", ""))
+		}), args: []string{"--stage", "change-1/future"}, code: findings.ExitRejected, asked: true, unread: true,
+			want: refusal(findings.RuleStageAtUnresolved, findings.StepResolve, "change-1/future", "")},
 		// The branch point reads main, whose contract node is absent here.
 		{name: "a refused read", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
@@ -1212,6 +1251,9 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			if asked := len(h.infra.requests()) > h.before; asked != c.asked {
 				t.Errorf("Infrahub asked after the host was built: %v, want %v", asked, c.asked)
 			}
+			if read := intentReadAfter(h.infra, h.before); (!c.asked || c.unread) && len(read) != 0 {
+				t.Errorf("a branch's intent was read for a target refused before its read: %+v", read)
+			}
 			if c.name == "--stage=" && len(h.clab.calls) != 0 {
 				t.Errorf("containerlab was asked %v before the flag was refused", h.clab.calls)
 			}
@@ -1232,6 +1274,8 @@ func TestStepTargetErrorsExitTwo(t *testing.T) {
 		args []string
 		host func(h *stepHostFixture)
 		want findings.Finding // its message "" is not compared
+		// unread is a target refused before its read: no branch's intent is asked.
+		unread bool
 	}{
 		{name: "the target's read cannot run",
 			host: func(h *stepHostFixture) { h.infra.schemaStatus = map[string]int{"change-1": 500} },
@@ -1242,7 +1286,8 @@ func TestStepTargetErrorsExitTwo(t *testing.T) {
 			},
 			want: findings.Finding{Severity: findings.Rejection, Rule: findings.RuleAtPrecision, Step: findings.StepResolve, Object: "change-1/nine",
 				Message: "stage change-1/nine: at 2026-10-16T09:45:00.123456789Z carries 9 fractional digits; Infrahub honours at most 6 " +
-					"(microseconds). Write the stage's as_of with at most six."}},
+					"(microseconds). Write the stage's as_of with at most six."},
+			unread: true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h := stepHost(t, "plan-link-added.json", nil)
@@ -1260,6 +1305,9 @@ func TestStepTargetErrorsExitTwo(t *testing.T) {
 			}
 			if plans := h.clab.asked("clab", "deploy"); len(plans) != 0 {
 				t.Errorf("containerlab's plan was read %v for a target that did not compile", plans)
+			}
+			if read := intentReadAfter(h.infra, h.before); c.unread && len(read) != 0 {
+				t.Errorf("a branch's intent was read for a target refused before its read: %+v", read)
 			}
 			noContent(t, "the error", out.stdout, out.stderr)
 		})

@@ -163,10 +163,16 @@ development host up again there, or on a fresh 26.04 VM before it.
   another, and the closed one's stages still read. *(10-16)*
 - **Deleting the source branch cancels its open proposed change asynchronously**: the
   `BranchDelete` returned after 8 s, the proposed change read `open` 2 s later and
-  `canceled` 16 s after the call, still naming the branch. **`CoreProposedChangeDelete`
-  succeeds under a stage that points at it**, leaving the stage with `proposed_change {
-  node: null }` despite the required cardinality; a second delete is `NODE_NOT_FOUND`.
-  Delete stages first. *(10-16)*
+  `canceled` 16 s after the call, still naming the branch. *(10-16)*
+- **`CoreProposedChangeDelete` is refused while a `FylgjaStage` names the proposed change**,
+  with the kind on `main`: `Cannot delete CoreProposedChange '<id>'. It is linked to
+  mandatory relationship proposed_change on node FylgjaStage '<id>'`
+  (`ATTRIBUTE_CONSTRAINT_VIOLATION`, 422), nothing changed. Delete stages first. The
+  10-16 reading, that the delete succeeds and leaves the stage naming nothing, held only
+  while the kind was loaded on the throwaway branch alone. `RelationshipRemove` of a stage
+  from the proposed change's `fylgja_stages` is accepted, though, and leaves the stage
+  with `proposed_change { node: null }` despite `optional: false`: that is how an orphan
+  arises, and nothing then ties it to its branch. *(10-17)*
 - **The proposed change's pipeline regenerates the source branch's artifacts** at its
   creation, draft (`is_draft: true`) or not — the checksums moved 59 s after the create,
   `Data Integrity`, `Schema Integrity` and `Artifact Validator: <transform>` each

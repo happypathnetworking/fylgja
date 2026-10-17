@@ -152,9 +152,11 @@ three ways on a throwaway proposed change before the text is committed
   stage's `at`; `label` renames the reference. None changes a twin already built from it:
   the record keeps what the twin was built from, and `stage list` warns `stage.twin.moved`
   beside it.
-- **Delete stages before their proposed change**: Infrahub deletes a proposed change under
-  its stages and leaves them pointing at nothing; `stage list` reports each as
-  `stage.orphaned` until they are deleted. A branch deleted under an open proposed change
+- **Delete stages before their proposed change**: Infrahub refuses a proposed change's
+  delete while a stage names it (`It is linked to mandatory relationship proposed_change on
+  node FylgjaStage …`; research §8.8). A stage removed from its proposed change's
+  `fylgja_stages` is left naming none; `stage list` reports each such stage as
+  `stage.orphaned` until it is deleted by id. A branch deleted under an open proposed change
   cancels it, about 16 s later.
 - **The kind on the default branch**: `-prepare-main` or `infrahubctl schema load
   schema/fylgja-stage.yaml` once; `fylgja schema check --branch <b>` reports `stages:

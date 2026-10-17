@@ -134,6 +134,8 @@ extensions, on any branch and on `main`.
   the stage with `proposed_change { node: null }` despite `optional: false` and
   `cardinality: one`. A second delete of the same id is `NODE_NOT_FOUND` (404 in the
   extensions). So a test deletes a proposed change's stages before the proposed change.
+  *Superseded by §8.8: this held with the kind on the branch alone. With the kind on
+  `main`, Infrahub refuses the delete while a stage names it.*
 
 ### 2.4 The proposed change's pipeline, and when it generates artifacts
 
@@ -273,7 +275,9 @@ changes went the same way during the session.
   `created_at` is not.
 - **A proposed change deletes under its stages** (§2.3): tier 2 and tier 3 delete stages
   first, then the proposed change, then the branch; a stage with no proposed change
-  (`proposed_change__isnull`) is a finding, not a crash.
+  (`proposed_change__isnull`) is a finding, not a crash. *(§8.8: with the kind on `main`
+  the delete is refused instead; an orphan arises when a stage is removed from its proposed
+  change's `fylgja_stages`.)*
 - **A deleted branch's proposed change is canceled**, ~16 s later, and still names the
   branch (§2.3): `stage list` for a branch finds at most one open proposed change and
   may find canceled or closed ones, for clarify's question 2.
@@ -956,3 +960,93 @@ proposed change, then its branch.
   proposed change has source branch …"); a branch that does not exist `stage.unknown`.
 - **The creation's pipeline** concluded 36–50 s after the create on a seeded branch (§8.6
   read 38 s) and 7 s on a bare one.
+
+### 8.8 The hand scenarios before the removal (T040, 2026-10-17)
+
+From the repository root with `local/.env` loaded and no twin, after `make build` and the
+worker and the API's server restarted from this tree and verified as `CLAUDE.md` says
+(02:49Z; their binary had read `(deleted)`). Before and after: `main` `a8045729…`, `Branch`
+`main` and `fylgja-fixture`, `CoreProposedChange 0`, `FylgjaStage 0`, `FylgjaWaypoint 0`.
+The fixture tool ran as a binary built from this tree, which is `go run`'s, but for the
+rewritten §4, run from the quickstart verbatim.
+
+- **§1's tail.** `intent read --branch fylgja-fixture` (schema `0aba31a5…`, 8.6 s) then
+  `twin compile`: **`47b2c449…`**.
+- **§3, on `fylgja-test-qs-2027373`** (02:54:48Z–02:57:51Z; seed 17 s, `-propose` 37 s,
+  three validators), every output as the quickstart expects. The first plan: the branch
+  point refused `contract.node.missing`, the head compiled, the step not computed,
+  `rejected`, exit 1. After `seeded`, `-set-role stale-probe` and `stale`: `seeded`
+  compiled; `stale` and the head refused `stage.artifact.stale` naming n1, n2 and n3, each
+  message with both remedies. The three checksums moved 7 s after `-generate` returned, and
+  `fresh`, marked after them, compiled with the head; `stale` was still refused, and the
+  step `fresh → head` read `unchanged; the ids differ by provenance alone`. The head's `at`
+  (n1's checksum stamp plus one microsecond, `02:56:06.117987`) is earlier than `fresh`'s
+  written `02:56:07.077340`, and the head still sorts last, which is `TestOrderEndsFixed`
+  seen live. The list: five rows, no twin marked, the branch point's `at` in Infrahub's
+  `Z` layout (`branched_from` verbatim, as the reference contract says) and the rest
+  `+00:00`. `intent read --stage <b>/fresh` and `--branch <b> --at <its at>`: `same`
+  but for `observed_at`, and neither CTM holds the label or the word `stage`. `twin create
+  --stage <b>/fresh --branch <b> --dry-run`: `stage.flags.conflict` naming `--branch`,
+  exit 2, the server logging the request in 0 s. `stage plan --branch no-such-branch`:
+  `stage.unknown`, `… the branches with one are: <b>`, exit 1. After a mark labelled
+  `head`: `rejected` with `stage.label.reserved` on the mark, the derived head listed
+  after it, exit 1. After `-close`: the list `branch <b>: no open proposed change`, exit 0;
+  the plan `stage.unknown`, exit 1. `-delete`: `deleted 4 stages, 1 proposed change,
+  branch <b>`; the list `no open proposed change`.
+- **The first attempt's `fresh` was stale, and rightly** (`fylgja-test-qs-2016604`, deleted
+  after it). The quickstart marked `fresh` straight after `-generate`, which returned in
+  0.44 s: its wait is for the count and Ready, which a rewrite never leaves
+  (`GenerateArtifacts`' comment). `fresh` was stamped 02:52:26.15 and the checksums
+  landed at 02:52:30.7 (n2), 32.8 (n1) and 33.6 (n3); the plan refused `fresh` stale naming
+  all three, and a plan after them compiled the head and still refused `fresh`, pinned
+  before them. The quickstart now waits for the three checksums to move before the mark,
+  as `scripts/e2e.sh`'s `await_checksums_moved` does. Its CTM comparison read `.at` and
+  `.observed_at`, which the CTM keeps under `.envelope`: `--at null` went to Infrahub
+  verbatim and was refused (`HTTP 400: Invalid time format for null`, `operation.failed`,
+  exit 2). Both are corrected in the quickstart. Neither is a defect in Fylgja.
+- **§4's rebase** (`fylgja-test-qs-rb-2034723`, then on `-2048414` as rewritten):
+  `BranchRebase(wait_until_completion: true)` returned in 19 s, `branched_from` moved to the
+  rebase and `created_at` did not; both marks refused `stage.at.before_branch_point`, each
+  naming the rebase and the creation; the branch point `contract.node.missing`, the head
+  compiled, exit 1.
+- **Infrahub refuses a proposed change's delete while a stage names it.**
+  `CoreProposedChangeDelete` answered `Cannot delete CoreProposedChange '<id>'. It is
+  linked to mandatory relationship proposed_change on node FylgjaStage '<id>' at
+  FylgjaStage.proposed_change` (`ATTRIBUTE_CONSTRAINT_VIOLATION`, `http_status` 422), and
+  the proposed change and its stages were unchanged. The same answer came on both
+  branches. This supersedes §2.3's "`CoreProposedChangeDelete` succeeds under a stage", which was
+  verified while the kind was loaded on the throwaway branch alone (§2's setup, before §2.9
+  loaded it on `main`), so `main`'s delete had no `FylgjaStage` in its schema to find. With
+  the kind on `main`, as it ships, a proposed change is never deleted under its stages.
+- **An orphan is made by removing the edge.** `RelationshipRemove(data: {id: <proposed
+  change>, name: "fylgja_stages", nodes: [{id: …}, {id: …}]})` answered `ok: true`, and
+  each stage then read `proposed_change { node: null }` despite `optional: false`. `stage
+  list`: the proposed change with its two derived stages, then `orphaned: stage "one" (…)
+  names no proposed change` and the same for `two`, two `stage.orphaned` warnings, status
+  `ok`, exit 0; `stage plan` planned neither. The proposed change's delete then succeeded.
+  `-delete` printed `deleted 0 stages, 0 proposed changes, branch <b>`. Nothing ties an
+  orphan to its branch, so the orphans outlived the branch until `FylgjaStageDelete` by id.
+  The quickstart's old expectation, that `-delete` removes them, could not have held under
+  §2.3 either: with the proposed change gone, `-delete` finds none. §4 is rewritten to these
+  steps and ran from the quickstart verbatim (03:04:15Z–03:05:42Z).
+- **Corrected here**: `docs/verified-facts.md`'s fact; [contracts/stage-kind.md](contracts/stage-kind.md)'s
+  guidance, which T046 carries into `schema/README.md`; and the comments in
+  `internal/testsupport/proposed.go`, `cmd/fylgja-fixture/main.go` and
+  `internal/stages/stages_contract_test.go` that gave §2.3's premise as the reason for the
+  deletion order. The order stands: deleting the proposed change first is refused rather
+  than leaving orphans.
+- **Left for the operator.** These records still rest on §2.3's premise:
+  - the `stage.orphaned` message, `… names no proposed change: its proposed change was
+    deleted under it; delete the stage`, which the reference contract quotes and the
+    tier-1 tests pin;
+  - spec.md's edge case "A proposed change is deleted under its stages" and US3
+    scenario 3's Given;
+  - D-045's context ("Deleting a proposed change succeeds under its stages");
+  - the glossary's "Orphaned stage";
+  - the comments in `internal/intent` and `internal/stages` that name an orphan's cause.
+
+  What they require holds for an orphan however it is made: a finding, never a crash, and
+  nothing planned from it. Whether the wording names the edge's removal is a wording
+  decision for the operator.
+- **After**: `Branch` `main` and `fylgja-fixture`; `CoreProposedChange 0`, `FylgjaStage 0`,
+  `FylgjaWaypoint 0`; `clab inspect --all` `{}`; no `local/twin`; no Schedule.

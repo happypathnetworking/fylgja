@@ -85,10 +85,13 @@ go run -tags fixture ./cmd/fylgja-fixture -branch $B -stage seeded -description 
 go run -tags fixture ./cmd/fylgja-fixture -branch $B -set-role stale-probe
 go run -tags fixture ./cmd/fylgja-fixture -branch $B -stage stale
 bin/fylgja stage plan --branch $B --json | jq -c '[.plan.stages[] | {label, rule: (.findings | map(select(.severity=="rejection")) | .[0].rule), devices: [.findings[] | select(.rule=="stage.artifact.stale") | .object]}]'
+ck() { curl -s -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" -H 'Content-Type: application/json' "$INFRAHUB_ADDRESS/graphql/$B" --data-binary '{"query":"{ CoreArtifact { edges { node { checksum { value } } } } }"}' | jq -c '[.data.CoreArtifact.edges[].node.checksum.value]'; }
+BEFORE=$(ck)
 go run -tags fixture ./cmd/fylgja-fixture -branch $B -generate
+until ck | jq -e --argjson b "$BEFORE" 'length == 3 and all(.[]; IN($b[]) | not)' > /dev/null; do sleep 1; done
 go run -tags fixture ./cmd/fylgja-fixture -branch $B -stage fresh
 bin/fylgja stage list --branch $B
-bin/fylgja intent read --stage $B/fresh --out /tmp/fresh.ctm.json && AT=$(jq -r .at /tmp/fresh.ctm.json) && bin/fylgja intent read --branch $B --at "$AT" --out /tmp/at.ctm.json && diff <(jq 'del(.observed_at)' /tmp/fresh.ctm.json) <(jq 'del(.observed_at)' /tmp/at.ctm.json) && echo same
+bin/fylgja intent read --stage $B/fresh --out /tmp/fresh.ctm.json && AT=$(jq -r .envelope.at /tmp/fresh.ctm.json) && bin/fylgja intent read --branch $B --at "$AT" --out /tmp/at.ctm.json && diff <(jq 'del(.envelope.observed_at)' /tmp/fresh.ctm.json) <(jq 'del(.envelope.observed_at)' /tmp/at.ctm.json) && echo same
 bin/fylgja twin create --stage $B/fresh --branch $B --dry-run; echo "exit $?"
 bin/fylgja stage plan --branch no-such-branch; echo "exit $?"
 go run -tags fixture ./cmd/fylgja-fixture -branch $B -stage head
@@ -102,7 +105,10 @@ bin/fylgja stage list
 Expected, in order: the first plan lists `branch-point` refused `contract.node.missing`
 and `head` compiled, one step not computed (`status rejected`, exit 1, on this install);
 after `stale`: `seeded` compiled, `stale` refused `stage.artifact.stale` naming `n1`, `n2`,
-`n3`, `head` refused the same (the role is unrendered until a generate); after the generate
+`n3`, `head` refused the same (the role is unrendered until a generate); the three
+checksums move a few seconds after `-generate` returns (it waits for Ready, which a
+rewrite never leaves, so `fresh` is marked only once they have: a mark made before them is
+refused stale, rightly); after the generate
 and `fresh`: `seeded`, `stale` (still refused: pinned at its own `at`, its artifacts are
 the old ones), `fresh` and `head` compiled, the step `fresh → head` `unchanged`; the list
 shows five stages with no twin mark; the CTM from `--stage` equals the one from `--branch
@@ -120,19 +126,34 @@ B=fylgja-test-qs-rb-$$
 go run -tags fixture ./cmd/fylgja-fixture -branch $B && go run -tags fixture ./cmd/fylgja-fixture -branch $B -propose
 go run -tags fixture ./cmd/fylgja-fixture -branch $B -stage one && go run -tags fixture ./cmd/fylgja-fixture -branch $B -stage two
 curl -s -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" -H 'Content-Type: application/json' "$INFRAHUB_ADDRESS/graphql" --data-binary "{\"query\":\"mutation { BranchRebase(data: {name: \\\"$B\\\"}, wait_until_completion: true) { ok } }\"}"
-bin/fylgja stage plan --branch $B --json | jq -c '[.plan.stages[] | {label, rule: (.findings | map(select(.severity=="rejection")) | .[0].rule), msg: (.findings | map(select(.rule=="stage.at.before_branch_point")) | .[0].message)}]'
+bin/fylgja stage plan --branch $B --json | jq -c '[.plan.stages[] | {label, rule: (.findings | map(select(.severity=="rejection")) | .[0].rule), msg: (.findings | map(select(.rule=="stage.at.before_branch_point")) | .[0].message)}]'; echo "exit ${PIPESTATUS[0]}"
 PC=$(curl -s -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" -H 'Content-Type: application/json' "$INFRAHUB_ADDRESS/graphql" --data-binary "{\"query\":\"{ CoreProposedChange(source_branch__value: \\\"$B\\\") { edges { node { id } } } }\"}" | jq -r '.data.CoreProposedChange.edges[0].node.id')
-curl -s -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" -H 'Content-Type: application/json' "$INFRAHUB_ADDRESS/graphql" --data-binary "{\"query\":\"mutation { CoreProposedChangeDelete(data: {id: \\\"$PC\\\"}) { ok } }\"}"
-bin/fylgja stage list --json | jq -c '{orphans: .stages.orphans, warnings: [.findings[] | select(.rule=="stage.orphaned") | .object]}'
+pcdelete() { curl -s -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" -H 'Content-Type: application/json' "$INFRAHUB_ADDRESS/graphql" --data-binary "{\"query\":\"mutation { CoreProposedChangeDelete(data: {id: \\\"$PC\\\"}) { ok } }\"}" | jq -c '{ok: .data.CoreProposedChangeDelete.ok, code: .errors[0].extensions.code}'; }
+pcdelete
+IDS=$(curl -s -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" -H 'Content-Type: application/json' "$INFRAHUB_ADDRESS/graphql" --data-binary "{\"query\":\"{ CoreProposedChange(ids: [\\\"$PC\\\"]) { edges { node { fylgja_stages { edges { node { id } } } } } } }\"}" | jq -c '[.data.CoreProposedChange.edges[0].node.fylgja_stages.edges[].node.id]')
+jq -nc --arg pc "$PC" --argjson ids "$IDS" '{query: "mutation { RelationshipRemove(data: {id: \"\($pc)\", name: \"fylgja_stages\", nodes: [\($ids | map("{id: \"\(.)\"}") | join(", "))]}) { ok } }"}' | curl -s -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" -H 'Content-Type: application/json' "$INFRAHUB_ADDRESS/graphql" --data-binary @- | jq -c .data
+bin/fylgja stage list --json | jq -c '{orphans: [.stages.orphans[].label], warnings: [.findings[] | select(.rule=="stage.orphaned") | .object]}'; echo "exit ${PIPESTATUS[0]}"
+pcdelete
 go run -tags fixture ./cmd/fylgja-fixture -branch $B -delete
+bin/fylgja stage list; echo "exit $?"
+for id in $(jq -r '.[]' <<< "$IDS"); do curl -s -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" -H 'Content-Type: application/json' "$INFRAHUB_ADDRESS/graphql" --data-binary "{\"query\":\"mutation { FylgjaStageDelete(data: {id: \\\"$id\\\"}) { ok } }\"}" | jq -c .data; done
+bin/fylgja stage list
 ```
 
-Expected: after the rebase (about 67 s) both marks are refused
-`stage.at.before_branch_point` with a message naming the rebase and both stamps, and the
-branch point and the head are planned (the branch point refused `contract.node.missing`
-on this install); after the proposed change is deleted under them, the list carries two
-orphans and two `stage.orphaned` warnings, exit 0; `-delete` removes the two stages and
-the branch.
+Expected: after the rebase (about 20 s on a seeded branch with nothing on `main` to take;
+§2.7 read 67 s) both marks are refused `stage.at.before_branch_point` with a message
+naming the rebase and both stamps, and the branch point and the head are planned (the
+branch point refused `contract.node.missing` on this install). Infrahub then **refuses**
+the proposed change's delete while its stages name it (`ATTRIBUTE_CONSTRAINT_VIOLATION`,
+`Cannot delete CoreProposedChange '<id>'. It is linked to mandatory relationship
+proposed_change on node FylgjaStage '<id>'`; research §8.8): with the kind on `main` a
+proposed change is never deleted under its stages. Removing the stages from its
+`fylgja_stages` is accepted and leaves each naming no proposed change: the list carries
+the proposed change with its two derived stages, then two orphans and two
+`stage.orphaned` warnings, exit 0. The proposed change's delete then succeeds. `-delete`
+removes the branch and no stage (`deleted 0 stages, 0 proposed changes, branch …`), since
+nothing ties an orphan to its branch any more, so the list still carries the two orphans
+until they are deleted by id; after that it prints `no open proposed change`.
 
 ## 5. Tier 2 (FR-028, SC-006)
 
@@ -185,7 +206,8 @@ make test-e2e` ends `E2E-PARTIAL`, case 7 run and 8 skipped.
 ## 8. The README's walk-through by hand (SC-010)
 
 Follow "A stepping twin" as rewritten: seed `fylgja-test-readme`, `-propose`, `-stage
-seeded`, `-add-link`, `-stage third-link`, `stage plan`, `twin create --stage
+seeded`, `-add-link`, n1's and n3's checksums awaited (as §3 awaits them: `-add-link`
+returns before the rewrite lands), `-stage third-link`, `stage plan`, `twin create --stage
 fylgja-test-readme/seeded`, `twin step --dry-run`, `twin step`, `twin verify`, `stage list`,
 `twin step --stage fylgja-test-readme/seeded`, `twin destroy`, `-delete`. Expected: the
 outputs the README shows, with the stage lines; nothing left in Infrahub.

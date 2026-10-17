@@ -3011,6 +3011,78 @@ D-045 moves.
   id (research §8.8); a test that makes one deletes it itself.
 - Revisit on an Infrahub upgrade that lets a proposed change be deleted under its stages.
 
+<a id="d-048"></a>
+## D-048 — The head and the staleness rule also read the branch's intent events, so a removal that no stamp records is seen
+
+**Status:** Accepted 2026-10-17. Refines [D-045](#d-045) and [D-046](#d-046); [D-026](#d-026)
+stands. Built by `014-proposed-change-stages` (T078); until it is,
+[architecture.md](architecture.md) §3's Stages paragraph describes what runs.
+
+### Context
+
+[D-045](#d-045) pins the head one microsecond after the branch's latest stamp, and
+[D-046](#d-046) judges a device stale when the latest stamp of its own intent is later than
+its generation stamp. Both read the stamps of what is present. Verified on Infrahub 1.11.2
+(2026-10-17, `specs/014-proposed-change-stages/research.md` §8.17): deleting a link as the
+branch's latest write moves no stamp the stamps query reads. So the head is pinned before
+the delete and still reads the link, a stage marked after it is not refused though its
+artifacts still configure the link, and `stage plan`'s last step puts the link back. Only a
+regenerate, which moves the endpoint devices' checksums, hides it. Three readers were tried
+read-only (§8.18):
+
+### Options considered
+
+- **The diff tree** (`DiffTreeSummary`, `DiffTree`). It is a cached calculation. After the
+  delete only `num_untracked_diff_changes` moved, with no stamp. Refreshing it needs
+  `DiffUpdate`, a write to Infrahub. Rejected, as D-026 rejected it.
+- **An unpinned read compared with the head's.** It needs no new root, and it differs by
+  exactly the deleted link. But it carries no stamp, so it can warn that a head misses a
+  change and cannot place a head after it. It also costs a second read per head.
+- **Recording the limitation**, with a regenerate before marking after a removal. Rejected
+  on the operator's word: the head is the stage a rehearsal steps to last, and 015's check
+  would pass a change whose removal its twin never saw.
+- **Infrahub's event log**, `InfrahubEvent`. Chosen. It is a read with no write.
+  `branches: [<branch>]` with `since: <branched_from>` bounds it to the branch's own
+  history, so no cursor is kept between reads, which was D-026's objection to it for
+  following. The delete appears as `infrahub.node.deleted`, its `relationships` naming the
+  removed peers, with child `node.updated` events on each endpoint interface. A read pinned
+  one microsecond after the event's `occurred_at` already reads the removal.
+
+### Decision
+
+The stage reader also reads the source branch's events since `branched_from`, through
+`InfrahubEvent`, pinned to nothing, paged at its limit of 50, newest first, and stopping
+once the events are older than what the read needs. An event is **intent's** when its
+primary node's kind is `used_by` a Fylgja generic in the branch's schema, mapped as
+conformance maps a kind, at any level. Infrahub's own churn (query groups, artifacts,
+memberships) is never intent. A concrete kind is read only to be mapped this way and is
+never queried.
+
+- **The head** is pinned one microsecond after the later of the branch's latest stamp
+  (D-045) and the `occurred_at` of its latest intent event.
+- **A device is stale** at a stage (D-046) also when an intent event later than its
+  generation stamp, and no later than the stage's `at`, names it. An event names a device
+  when the device's id, or the id of one of its interfaces as read at the stage, is the
+  event's primary node or a peer in its `relationships`. Its message names the event's
+  action and kind, beside the stamp's.
+- `stage.main.moved`, the branch point and every mark's `at` are as they were. Following
+  is as D-026 decides: no event starts a check, and none decides whether one reads.
+
+### Consequences
+
+- Constitution III is amended (1.3.0): `InfrahubEvent` becomes the fourth Infrahub-owned
+  root the reader may read, named in `internal/intent/readonly_test.go` with its reason.
+  An event is Infrahub's record of a write, not the operator's model.
+- Each head and each staleness judgement costs a page or more of events (0.11–0.29 s a
+  page on the development host). A branch with a long history pages further. The stop
+  condition keeps a head's read to the pages newer than its latest stamp.
+- Tier 2 proves it: a link deleted as the branch's latest write moves the head past the
+  delete, a stage marked after it is refused stale for both endpoint devices and no
+  other, and a regenerate clears it.
+- Revisit if an upgrade stamps a removal in the graph (then the event read can go), if
+  `InfrahubEvent` changes its shape or its retention, or if a removal on `main` must move
+  `stage.main.moved`.
+
 ---
 
 <a id="parked"></a>

@@ -40,7 +40,7 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Constitution 1.2.1 (`.specify/memory/constitution.md`). Mark each gate PASS, N/A (say
+Constitution 1.3.0 (`.specify/memory/constitution.md`). Mark each gate PASS, N/A (say
 why), or VIOLATION (justify in Complexity Tracking). Cite the principle number.
 
 | # | Gate | Status |

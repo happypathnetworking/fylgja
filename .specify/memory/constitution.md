@@ -1,6 +1,12 @@
 <!--
 Sync Impact Report
-- Version change: 1.2.0 → 1.2.1 (2026-10-16, PATCH: Principle III clarified). III read
+- Version change: 1.2.1 → 1.3.0 (2026-10-17, MINOR: Principle III materially expanded).
+  III's exceptions named the Infrahub-owned kinds a stage relates to; it now also allows
+  the branch's event log (`InfrahubEvent`), read for when intent last changed, removals
+  included, since a removal moves no stamp the reader reads (verified on Infrahub 1.11.2,
+  2026-10-17). An event's concrete kind is mapped to a generic and never queried. Source:
+  D-048. Templates: .specify/templates/plan-template.md's Constitution Check names 1.3.0.
+- 1.2.0 → 1.2.1 (2026-10-16, PATCH: Principle III clarified). III read
   "only its own generics"; a stage lives on CoreProposedChange (D-045), so the reader
   reads that kind, its validators and Branch, each a named exception in the read-only
   test with its reason. No principle is redefined. Source: D-045. Templates:
@@ -55,6 +61,10 @@ Fylgja MUST query only its own Infrahub generics (`schema/`). Specifically:
   (`CoreProposedChange`, its validators, `Branch`), each named as an exception in the
   read-only test with the reason it is Infrahub's unit and not the operator's model;
   never a concrete kind of anyone's model (D-045).
+- MAY read the branch's event log (`InfrahubEvent`), named in the read-only test, for
+  when intent last changed, removals included. An event's kind is read only to map it to
+  a generic through the schema's `used_by`, and never queried; Infrahub's own events are
+  never intent (D-048).
 - MUST demand the least possible; every required attribute is a constraint imposed on
   someone else's model.
 - MUST graduate, not gate: optional generics unlock features; when absent, dependent
@@ -70,7 +80,7 @@ Fylgja MUST query only its own Infrahub generics (`schema/`). Specifically:
   that is a guess.
 - MUST validate schema conformance and data completeness separately, report all
   findings in one pass, and produce no CTM on failure.
-*Rationale: D-002, D-003, D-004, D-045.*
+*Rationale: D-002, D-003, D-004, D-045, D-048.*
 
 ### IV. Fylgja Never Renders Configuration
 Fylgja MUST consume the artifacts Infrahub renders for the branch under test and push
@@ -214,4 +224,4 @@ Detail lives in `docs/development.md`; these are the gates.
   preceded 1.0.0 at the repository root is retired and MUST NOT be edited in its
   place.
 
-**Version**: 1.2.1 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-16
+**Version**: 1.3.0 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-17

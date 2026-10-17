@@ -27,9 +27,12 @@ test:
 # Contract tier: real Infrahub, never a fake (D-017). Needs INFRAHUB_ADDRESS and
 # INFRAHUB_API_TOKEN in the environment (local/.env; see docs/development.md). Never
 # cached: Go's cache keys a test on its binary, environment and files, never on what
-# Infrahub answers.
+# Infrahub answers. The packages run beside each other against one Infrahub, which works
+# their branches, proposed changes and rebases in turn, so a package takes up to three
+# times as long as it does alone: internal/stages, about four and a half minutes alone,
+# outlasts go test's default ten-minute timeout here (014's research §8.10).
 test-contract:
-	go test -count=1 -tags contract $(PKGS)
+	go test -count=1 -timeout 30m -tags contract $(PKGS)
 
 # End-to-end tier: a booted NOS through Temporal. Needs the dev server (make
 # temporal-dev), a worker (make worker), Docker, containerlab, both images (SR Linux and

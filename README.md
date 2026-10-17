@@ -276,7 +276,7 @@ Start from a fresh fixture, since the walking twin's branch still has the port d
 The fixture tool works on test branches (their names begin `fylgja-test-`): `-propose`
 opens a draft proposed change from one into `main` and waits for its checks, which render
 the branch's artifacts. Mark `seeded`, add a third link, wait for n1's and n3's artifacts
-to be re-rendered (their checksums move in Infrahub, here after about 10 seconds), then
+to be re-rendered (their checksums move in Infrahub, here 8 to 10 seconds after `-add-link` returns), then
 mark `third-link`:
 
 ```sh
@@ -302,23 +302,23 @@ whatever its `at` and the step to it changes nothing:
 
 ```console
 $ bin/fylgja stage plan --branch fylgja-test-readme
-proposed change "fylgja-test-readme" (18df3345-c838-66db-33b1-c51e73aad544) on branch fylgja-test-readme → main, draft (4 stages)
+proposed change "fylgja-test-readme" (18df36fe-997f-c213-33b8-c510acd939bd) on branch fylgja-test-readme → main, draft (4 stages)
 fylgja-test-readme/branch-point: refused (contract.node.missing)
   rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
-step fylgja-test-readme/branch-point → fylgja-test-readme/seeded (— → f7f9624a…): not computed (fylgja-test-readme/branch-point was refused)
-fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-17T03:26:24.223609+00:00 (written), "seeded"
-  bundle_id f7f9624a20583f1d0b66278955a89a73c8351e4e241aa70b6946fa11345a59fd
+step fylgja-test-readme/branch-point → fylgja-test-readme/seeded (— → b63404c3…): not computed (fylgja-test-readme/branch-point was refused)
+fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-17T04:34:59.424352+00:00 (written), "seeded"
+  bundle_id b63404c330b6144f78dc3dae5daf2d675e3ddd71eec11e899cb4af14dfa00efd
   read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
-step fylgja-test-readme/seeded → fylgja-test-readme/third-link (f7f9624a… → a9f59959…):
+step fylgja-test-readme/seeded → fylgja-test-readme/third-link (b63404c3… → d05dc990…):
   nodes: ~n1 (bootstrap, mapping); ~n3 (bootstrap, mapping)
   links: +n1:e1-3 — n3:e1-3
   artifacts: n1 device-config f0563480… → a5d72b0d…; n3 device-config 7efd0c0d… → 01125980…
-fylgja-test-readme/third-link: branch fylgja-test-readme at 2026-10-17T03:26:34.491995+00:00 (written), "third link"
-  bundle_id a9f59959a06750a4d194cb9348b2a2b80c6e53cff5969afbdda783cf263347a9
+fylgja-test-readme/third-link: branch fylgja-test-readme at 2026-10-17T04:35:09.759424+00:00 (written), "third link"
+  bundle_id d05dc990c7f49e6de0755978bc9f4cb75f138fc79e6c5b43ee95c2e541db6daa
   read: 3 devices (nokia_srlinux 3), 14 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
-step fylgja-test-readme/third-link → fylgja-test-readme/head (a9f59959… → e0c1ada0…): unchanged; the ids differ by provenance alone
-fylgja-test-readme/head: branch fylgja-test-readme at 2026-10-17T03:26:33.857618+00:00 (head)
-  bundle_id e0c1ada0b3bbd1f0a3c3fb511ea684d30747caf1077d4e1e7df55b9e7b6cb2ed
+step fylgja-test-readme/third-link → fylgja-test-readme/head (d05dc990… → 6ecc489c…): unchanged; the ids differ by provenance alone
+fylgja-test-readme/head: branch fylgja-test-readme at 2026-10-17T04:35:08.687492+00:00 (head)
+  bundle_id 6ecc489c6a38c219abf5b3d84ecbabb57db6b74d1982e409937a060a05d188d2
   read: 3 devices (nokia_srlinux 3), 14 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
 rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
 1 finding(s): 1 rejection, 0 warning, 0 info
@@ -329,14 +329,14 @@ stage's instant, and it never follows:
 
 ```console
 $ bin/fylgja twin create --stage fylgja-test-readme/seeded
-stage fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-17T03:26:24.223609+00:00 (written), "seeded"
-run fylgja-provision 01a11635-d5b5-7c3c-8df0-9dd946eb34bb
+stage fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-17T04:34:59.424352+00:00 (written), "seeded"
+run fylgja-provision 01a14824-b77c-7ed6-958f-d5b3ad006e5f
 …
-step deploy: done in 36.2s (3 nodes)
+step deploy: done in 43.2s (3 nodes)
 …
-twin ready: bundle_id f7f9624a20583f1d0b66278955a89a73c8351e4e241aa70b6946fa11345a59fd
+twin ready: bundle_id b63404c330b6144f78dc3dae5daf2d675e3ddd71eec11e899cb4af14dfa00efd
 …
-pinned at 2026-10-17T03:26:24.223609+00:00, not following
+pinned at 2026-10-17T04:34:59.424352+00:00, not following
 ```
 
 **Step it.** With no `--stage`, `twin step` goes to the next stage of the proposed change.
@@ -346,36 +346,34 @@ running lab, and touches nothing:
 ```console
 $ bin/fylgja twin step --dry-run
 dry run: no lab, container, twin directory or run is changed
-twin: stage fylgja-test-readme/seeded (bundle f7f9624a…), pinned at 2026-10-17T03:26:24.223609+00:00; 3 nodes
-stage fylgja-test-readme/third-link: branch fylgja-test-readme at 2026-10-17T03:26:34.491995+00:00 (written), "third link"
-step fylgja-test-readme/seeded → fylgja-test-readme/third-link (f7f9624a… → a9f59959…):
+twin: stage fylgja-test-readme/seeded (bundle b63404c3…), pinned at 2026-10-17T04:34:59.424352+00:00; 3 nodes
+stage fylgja-test-readme/third-link: branch fylgja-test-readme at 2026-10-17T04:35:09.759424+00:00 (written), "third link"
+step fylgja-test-readme/seeded → fylgja-test-readme/third-link (b63404c3… → d05dc990…):
   nodes: ~n1 (bootstrap, mapping); ~n3 (bootstrap, mapping)
   links: +n1:e1-3 — n3:e1-3
   artifacts: n1 device-config f0563480… → a5d72b0d…; n3 device-config 7efd0c0d… → 01125980…
 reconcile: live n1 (nokia_srlinux declares live); live n3 (nokia_srlinux declares live)
 push: n1 (artifact, bootstrap); n3 (artifact, bootstrap); n2 untouched
 wait: after the record, until the twin conforms, at most 2m0s
-memory: sum 6144 MiB; host budget unset
+memory: sum 6144 MiB; host budget 22873 MiB
 host: lab fylgja present; twin directory present
 verdict: clear
-…
 $ bin/fylgja twin step
 …
-run fylgja-step 01a11636-a6ad-767f-8fb9-8918c890ca50
+run fylgja-step 01a14825-cf27-77d6-bfeb-00dcaf01d2f4
 step inspect: done in 0.2s
 step host check: done in 0.2s
 step plan reconcile: done in 0.3s (live n1, n3)
 step stage: done in 0.0s
-step reconcile: done in 0.6s (3 nodes)
-step push n1: done in 2.5s
-step push n3: done in 2.5s
-step record: done in 0.0s
-step observe: settled after 5.7s (1 read)
-stepped to stage fylgja-test-readme/third-link (bundle a9f59959…) in 4.1s: reconcile 0.5s; push n1 2.4s, n3 2.5s; settled after 5.7s
-…
+step reconcile: done in 0.8s (3 nodes)
+step push n1: done in 2.6s
+step push n3: done in 2.6s
+step record: done in 0.1s
+step observe: settled after 6.1s (1 read)
+stepped to stage fylgja-test-readme/third-link (bundle d05dc990…) in 4.5s: reconcile 0.8s; push n1 2.5s, n3 2.6s; settled after 6.1s
 ```
 
-The step took 4.1 seconds where a rebuild takes about a minute. SR Linux takes the new link
+The step took 4.5 seconds where a rebuild takes about a minute. SR Linux takes the new link
 live, so no container restarted (each still had the create's start time), n2 was neither
 touched nor pushed, and n1 and n3 were pushed their new artifacts by replace. After its
 record the run waits, as `twin verify --wait` would, until the twin conforms to its new
@@ -384,20 +382,20 @@ and `stage list` marks the twin's stage:
 
 ```console
 $ bin/fylgja twin verify
-twin: stage fylgja-test-readme/third-link (bundle a9f59959…), ready, pinned at 2026-10-17T03:26:34.491995+00:00; 3 nodes
-staged: bundle a9f59959…; 19 assertions over 3 nodes, 0 skipped
-n1 (172.20.20.3:57400, nokia_srlinux): host name n1; ethernet-1/1, ethernet-1/2, ethernet-1/3 enabled; neighbours n2 ethernet-1/1, n3 ethernet-1/2, n3 ethernet-1/3; record: holds a9f59959…
-n2 (172.20.20.4:57400, nokia_srlinux): host name n2; ethernet-1/1, ethernet-1/2 enabled; neighbours n1 ethernet-1/1, n3 ethernet-1/1; record: holds a9f59959…
-n3 (172.20.20.2:57400, nokia_srlinux): host name n3; ethernet-1/1, ethernet-1/2, ethernet-1/3 enabled; neighbours n2 ethernet-1/2, n1 ethernet-1/2, n1 ethernet-1/3; record: holds a9f59959…
+twin: stage fylgja-test-readme/third-link (bundle d05dc990…), ready, pinned at 2026-10-17T04:35:09.759424+00:00; 3 nodes
+staged: bundle d05dc990…; 19 assertions over 3 nodes, 0 skipped
+n1 (172.20.20.3:57400, nokia_srlinux): host name n1; ethernet-1/1, ethernet-1/2, ethernet-1/3 enabled; neighbours n2 ethernet-1/1, n3 ethernet-1/2, n3 ethernet-1/3; record: holds d05dc990…
+n2 (172.20.20.2:57400, nokia_srlinux): host name n2; ethernet-1/1, ethernet-1/2 enabled; neighbours n1 ethernet-1/1, n3 ethernet-1/1; record: holds d05dc990…
+n3 (172.20.20.4:57400, nokia_srlinux): host name n3; ethernet-1/1, ethernet-1/2, ethernet-1/3 enabled; neighbours n2 ethernet-1/2, n1 ethernet-1/2, n1 ethernet-1/3; record: holds d05dc990…
 skipped: none
 in flight: none
 held: 3 host names, 8 ports, 8 link ends, 3 record claims (the record's, not read); failed: none; unread: none
 $ bin/fylgja stage list
-proposed change "fylgja-test-readme" (18df3345-c838-66db-33b1-c51e73aad544) on branch fylgja-test-readme, draft (4 stages)
-  fylgja-test-readme/branch-point  main                at 2026-10-17T03:25:37.163062Z (branch point)  ""
-  fylgja-test-readme/seeded        fylgja-test-readme  at 2026-10-17T03:26:24.223609+00:00 (written)       "seeded"
-  fylgja-test-readme/third-link    fylgja-test-readme  at 2026-10-17T03:26:34.491995+00:00 (written)       "third link"  ← twin
-  fylgja-test-readme/head          fylgja-test-readme  at 2026-10-17T03:26:33.857618+00:00 (head)          ""
+proposed change "fylgja-test-readme" (18df36fe-997f-c213-33b8-c510acd939bd) on branch fylgja-test-readme, draft (4 stages)
+  fylgja-test-readme/branch-point  main                at 2026-10-17T04:33:44.802096Z (branch point)  ""
+  fylgja-test-readme/seeded        fylgja-test-readme  at 2026-10-17T04:34:59.424352+00:00 (written)       "seeded"
+  fylgja-test-readme/third-link    fylgja-test-readme  at 2026-10-17T04:35:09.759424+00:00 (written)       "third link"  ← twin
+  fylgja-test-readme/head          fylgja-test-readme  at 2026-10-17T04:35:08.687492+00:00 (head)          ""
 ```
 
 A step with no `--stage` from here goes to the head, and is `unchanged`: the two bundles
@@ -412,8 +410,7 @@ $ bin/fylgja twin step --stage fylgja-test-readme/seeded
 …
   links: -n1:e1-3 — n3:e1-3
 …
-stepped to stage fylgja-test-readme/seeded (bundle f7f9624a…) in 4.7s: reconcile 0.5s; push n1 3.0s, n3 2.9s; settled after 5.0s
-…
+stepped to stage fylgja-test-readme/seeded (bundle b63404c3…) in 4.8s: reconcile 0.6s; push n1 2.8s, n3 2.8s; settled after 4.9s
 ```
 
 `twin destroy` removes the twin as before, and the fixture tool's `-delete` removes the

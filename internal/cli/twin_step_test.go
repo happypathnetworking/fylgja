@@ -277,16 +277,29 @@ func (stepStamper) Stamps(ctx context.Context, branch, at string) (intent.Stamps
 // after the first.
 func buildStage(t *testing.T, paths lab.Paths, label string) string {
 	t.Helper()
-	ctx := context.Background()
 	builtStages.Lock()
 	built, ok := builtStages.byLabel[label]
 	builtStages.Unlock()
 	if ok {
-		if _, _, err := fileCompiled(ctx, paths.Bundles, built.files, built.id, built.snapshot); err != nil {
+		if _, _, err := fileCompiled(context.Background(), paths.Bundles, built.files, built.id, built.snapshot); err != nil {
 			t.Fatal(err)
 		}
 		return built.id
 	}
+	built = compileStage(t, paths, label)
+	builtStages.Lock()
+	builtStages.byLabel[label] = built
+	builtStages.Unlock()
+	return built.id
+}
+
+// compileStage is buildStage's read, compile and filing, against the fake Infrahub as it
+// stands: a test that has changed stepInfrahub's proposed change builds its stages here,
+// never through builtStages.
+func compileStage(t *testing.T, paths lab.Paths, label string) compiledStage {
+	t.Helper()
+	ctx := context.Background()
+	var built compiledStage
 	reg, err := psp.Load("")
 	if err != nil {
 		t.Fatal(err)
@@ -312,10 +325,7 @@ func buildStage(t *testing.T, paths lab.Paths, label string) string {
 	if built.id != s.Bundle.ID {
 		t.Fatalf("%s filed %s and compiled to %s", ref, built.id, s.Bundle.ID)
 	}
-	builtStages.Lock()
-	builtStages.byLabel[label] = built
-	builtStages.Unlock()
-	return s.Bundle.ID
+	return built
 }
 
 // stepStage is the record's reference to change-1's stage label.
@@ -1944,5 +1954,421 @@ func TestStepRunReportsTheWait(t *testing.T) {
 				t.Errorf("step.wait %+v, want the run's %+v", w, c.wait)
 			}
 		})
+	}
+}
+
+// US2's step scenarios through the harness (014, T036), on stepInfrahub's proposed change:
+// the target with none given, a step back, a stage foreign to the twin's proposed change, a
+// step from the branch point to the head, a target that is the twin's own stage under
+// another reference, a head that has moved since the twin was built, and a stale target.
+// TestStepRefusedBeforeAnyConnection holds the refusals of the table in contracts/cli.md; these
+// are the scenarios of spec.md's US2.
+
+// stepHeadAt is the head of change-1 as stepInfrahub serves it: one microsecond after its
+// last version's stamp.
+const stepHeadAt = "2026-10-16T11:30:00.000001+00:00"
+
+// stepTwin is a twin of change-1's stage label as its create records it, at at on branch,
+// from bundle id; retired drops e2, as less and the head retired it.
+type stepTwin struct {
+	id, label, description, atSource, branch, at string
+	retired                                      bool
+}
+
+// twinAt rewrites stepHost's record as the twin of w, which then steps from w's bundle.
+func twinAt(t *testing.T, h *stepHostFixture, w stepTwin) {
+	t.Helper()
+	writeTwin(t, h.paths, stepRecordOf(t, w.id, func(f *lab.RecordFields) {
+		f.Provenance.Branch, f.Provenance.At = w.branch, w.at
+		f.Stage = stepStage(w.label, w.description, w.atSource)
+		if w.retired {
+			f.Nodes = slices.DeleteFunc(f.Nodes, func(n wire.TwinNode) bool { return n.Name == "e2" })
+		}
+	}))
+	h.fromID = w.id
+}
+
+// lineOf is stdout's nth line, from 1, or "" past its end.
+func lineOf(stdout string, n int) string {
+	l := lines2(stdout)
+	if n > len(l) {
+		return ""
+	}
+	return l[n-1]
+}
+
+// onlyInspected fails unless containerlab was asked nothing but the host's state, once per
+// run of the command: nothing of the step's own (the target's host check, containerlab's
+// plan) was reached.
+func onlyInspected(t *testing.T, label string, c *stepClab) {
+	t.Helper()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	for _, call := range c.calls {
+		if !slices.Equal(call, inspectAll) {
+			t.Errorf("%s: containerlab was asked %v; a refusal at resolve asks only for the host's state", label, call)
+		}
+	}
+}
+
+// intentReadAfter is every request for a branch's intent the fake answered after the
+// first n: its devices, links, contract node or an artifact's content.
+func intentReadAfter(f *fakeInfrahub, n int) []fakeRequest {
+	var out []fakeRequest
+	for _, r := range f.requests()[n:] {
+		if strings.HasPrefix(r.Path, "/api/storage/") || r.Operation == "Devices" || r.Operation == "Links" ||
+			r.Operation == "ContractVersion" {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// Scenario 2: with no target, a step goes to the next stage of the twin's proposed change,
+// the head when no mark follows (the next mark is TestStepDryRun's, sealed to linked); at
+// the head, with the head where the twin was built, nothing follows, and the step is
+// refused saying so.
+func TestStepWithNoTargetGoesToTheNextStage(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		// from is the twin's stage.
+		from stepTwin
+		plan string
+		// target is the target's resolved line; "" when the step is refused.
+		target string
+		want   findings.Finding
+	}{
+		{name: "the head when no mark follows", from: stepTwin{label: "less", description: "e2 retired", atSource: "given",
+			branch: "change-1", at: stepLessAt, retired: true}, plan: "plan-nothing.json",
+			target: "stage change-1/head: branch change-1 at " + stepHeadAt + " (head)"},
+		{name: "nothing after the head", from: stepTwin{label: "head", atSource: "head", branch: "change-1", at: stepHeadAt,
+			retired: true}, plan: "plan-nothing.json",
+			want: findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTargetUnknown, Object: "change-1/head",
+				Step: findings.StepResolve, Message: "proposed change pc-1 on change-1 has no stage after change-1/head; " +
+					"its stages are: " + stepStages}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := stepHost(t, c.plan, nil)
+			w := c.from
+			w.id = buildStage(t, h.paths, w.label)
+			twinAt(t, h, w)
+			h.clab.calls = nil
+			out := runStepCmd(t, "--dry-run")
+			if c.target == "" {
+				if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != c.want {
+					t.Errorf("exit %d, refusal %+v\nwant 1, %+v", out.code, got, c.want)
+				}
+				onlyInspected(t, c.name, h.clab)
+				return
+			}
+			to := strings.TrimPrefix(strings.SplitN(c.target, ":", 2)[0], "stage ")
+			if out.code != findings.ExitOK || lineOf(out.stdout, 3) != c.target || out.doc.Subject.Stage != to ||
+				!strings.HasPrefix(lineOf(out.stdout, 4), "step change-1/"+w.label+" → "+to+" (") {
+				t.Errorf("exit %d, subject %+v, stdout:\n%s\nwant 0, the step from change-1/%s to %s, resolved as %q",
+					out.code, out.doc.Subject, out.stdout, w.label, to, c.target)
+			}
+			if carriesRule(out.doc.Findings, findings.RuleStepStageSkipped) {
+				t.Errorf("findings %+v; the next stage skips none", out.doc.Findings)
+			}
+		})
+	}
+}
+
+// Scenario 3: a step back to an earlier mark goes there, forward or back alike: from
+// linked to sealed, the step takes the link off, containerlab deletes its two ends, and the
+// push sends e1 and s1 sealed's artifacts by their packages' replace, which takes off each
+// node what sealed lacks (M11's step back). The dry run's lines and the run's first and
+// closing lines are pinned.
+func TestStepBackToAnEarlierMark(t *testing.T) {
+	h := stepHost(t, "plan-nothing.json", nil)
+	sealedID := h.fromID
+	linkedID := buildStage(t, h.paths, "linked")
+	twinAt(t, h, stepTwin{id: linkedID, label: "linked", description: "a link between e1 and s1", atSource: "written",
+		branch: "change-1", at: stepWrittenAt})
+	h.clab.plan = []byte(`{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": [], "deleted-nodes": [],
+		"recreated-nodes": [], "started-nodes": [], "added-links": [], "deleted-endpoints": ["e1:eth3", "s1:e1-3"],
+		"restarted-nodes": ["e1"], "node-change-reasons": {"e1": "deleted endpoint"}}`)
+	first := []string{
+		"twin: stage change-1/linked (bundle " + short(linkedID) + "), pinned at " + stepWrittenAt + "; 3 nodes",
+		`stage change-1/sealed: branch change-1 at ` + stepMixedAt + ` (given), "the mixed fixture as sealed"`,
+		"step change-1/linked → change-1/sealed (" + short(linkedID) + " → " + short(sealedID) + "):",
+		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
+		"  links: -e1:eth3 — s1:e1-3",
+		"  artifacts: e1 device-config 9f22a736… → 644a78b3…; s1 device-config 5612b2a0… → 34df00ec…",
+		"reconcile: restart e1 (deleted endpoint; arista_eos declares restart); live s1 (nokia_srlinux declares live)",
+		"push: e1 (artifact, restarted); s1 (artifact, bootstrap); e2 untouched",
+	}
+
+	out := runStepCmd(t, "--stage", "change-1/sealed", "--dry-run", "--allow-restart")
+	want := lines(append(append([]string{"dry run: no lab, container, twin directory or run is changed"}, first...),
+		"wait: after the record, until the twin conforms, at most 2m0s",
+		"memory: sum 5120 MiB; host budget unset",
+		"host: lab fylgja present; twin directory present",
+		"verdict: clear")...)
+	if out.code != findings.ExitOK || out.stdout != want || out.doc.BundleID != sealedID {
+		t.Errorf("exit %d, bundle_id %s, stdout:\n%s\nwant 0, sealed's %s, and:\n%s", out.code, out.doc.BundleID, out.stdout, sealedID, want)
+	}
+	if carriesRule(out.doc.Findings, findings.RuleStepStageSkipped) {
+		t.Errorf("findings %+v; a step to the stage before skips none", out.doc.Findings)
+	}
+	reg, err := psp.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st := out.doc.Step; st == nil || len(st.PushPlan) != 2 {
+		t.Fatalf("step block %+v; want e1 and s1 pushed", st)
+	}
+	for _, p := range out.doc.Step.PushPlan {
+		id := map[string]string{"e1": "arista_eos", "s1": "nokia_srlinux"}[p.Node]
+		if pkg, ok := reg.LookupID(id); !ok || pkg.Config.Mode != psp.ModeReplace {
+			t.Errorf("node %s pushes by package %s, mode %v; a step back takes off what the earlier stage lacks only by replace",
+				p.Node, id, pkg)
+		}
+	}
+
+	// The run: its first lines are the dry run's, its closing line names the stage it
+	// stepped back to.
+	svc := &fakeService{runID: stepRunID, events: stepEvents()}
+	reconcile, e1Took, s1Took := 3.9, 1.6, 2.4
+	svc.stepResult = provision.StepResult{Outcome: provision.StepStepped, Findings: findings.List{},
+		PushPlan: []wire.StepPush{
+			{Node: "e1", Reasons: []string{"artifact", "restarted"}, Outcome: wire.PushLanded, TookS: &e1Took},
+			{Node: "s1", Reasons: []string{"artifact", "bootstrap"}, Outcome: wire.PushLanded, TookS: &s1Took}},
+		Timings: wire.StepTimings{ReconcileS: &reconcile, Readiness: map[string]float64{"e1": 54.8},
+			Push: map[string]float64{"e1": 1.6, "s1": 2.4}, WholeS: 71.2},
+		Record:    &wire.TwinRecord{State: wire.StateReady},
+		StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:15:41Z"}
+	useService(t, svc)
+	useInterrupts(t)
+	out = runStepCmd(t, "--stage", "change-1/sealed", "--allow-restart")
+	want = lines(append(first,
+		"run fylgja-step "+stepRunID,
+		"step inspect: done in 0.1s",
+		"step host check: done in 0.3s",
+		"step plan reconcile: done in 0.5s (restart e1)",
+		"step stage: done in 0.2s",
+		"step reconcile: done in 3.9s (3 nodes)",
+		"step readiness e1: ready in 54.8s",
+		"step push e1: done in 1.6s",
+		"step push s1: done in 2.4s",
+		"step record: done in 0.1s",
+		"stepped to stage change-1/sealed (bundle "+short(sealedID)+") in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s")...)
+	if out.code != findings.ExitOK || out.stdout != want {
+		t.Errorf("exit %d, stdout:\n%s\nwant 0 and:\n%s", out.code, out.stdout, want)
+	}
+	in := svc.stepped[0]
+	wantFrom := wire.StepSide{Stage: stepStage("linked", "a link between e1 and s1", "written"), BundleID: linkedID, At: stepWrittenAt}
+	wantTo := wire.StepSide{Stage: stepStage("sealed", "the mixed fixture as sealed", "given"), BundleID: sealedID, At: stepMixedAt,
+		Branch: "change-1"}
+	if !reflect.DeepEqual(in.From, wantFrom) || !reflect.DeepEqual(in.To, wantTo) || len(in.PushPlan) != 2 ||
+		!slices.Equal(in.PushPlan[0].Reasons, []string{"artifact", "restarted"}) || !slices.Equal(in.PushPlan[1].Reasons, []string{"artifact", "bootstrap"}) {
+		t.Errorf("the run's input from %+v to %+v, push plan %+v; want linked → sealed, e1 (artifact, restarted) and s1 "+
+			"(artifact, bootstrap)", in.From, in.To, in.PushPlan)
+	}
+	noContent(t, "the step back", out.stdout, out.stderr)
+}
+
+// Scenario 4: a stage of another proposed change is refused as foreign, whether it is of
+// another branch or of another proposed change opened on the twin's own branch since; the
+// host's state is read, since the record says which proposed change the twin is of, and
+// nothing else: no target is read or compiled, the host check and containerlab's plan are
+// never reached, and the record and the store are as they were.
+func TestStepToAnotherProposedChangeIsForeign(t *testing.T) {
+	for _, c := range []struct {
+		name, ref string
+		setup     func(f *fakeInfrahub)
+		message   string
+	}{
+		{name: "of another branch", ref: "other/x",
+			message: "stage other/x is not of proposed change pc-1 on branch change-1, the twin's; a step stays inside the " +
+				"proposed change the twin was built from, whose stages are: " + stepStages},
+		{name: "of another proposed change on the twin's branch", ref: "change-1/sealed",
+			setup: func(f *fakeInfrahub) {
+				f.changes[0].State = "closed"
+				f.change("pc-2", "change-1", mark("st-2-sealed", "sealed", stepMixedAt, "the mixed fixture as sealed"))
+			},
+			message: "stage change-1/sealed is not of proposed change pc-1 on branch change-1, the twin's; a step stays inside the " +
+				"proposed change the twin was built from, which is no longer open (the open proposed change on change-1 is pc-2)"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := stepHost(t, "plan-link-added.json", nil)
+			if c.setup != nil {
+				c.setup(h.infra)
+			}
+			record := sha256Of(t, h.paths.TwinJSON)
+			filed := storedBundles(t, h.paths.Bundles)
+			h.clab.calls = nil
+			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTargetForeign, Object: c.ref,
+				Step: findings.StepResolve, Message: c.message}
+			for _, args := range [][]string{{"--stage", c.ref}, {"--stage", c.ref, "--dry-run"}} {
+				out := runStepCmd(t, args...)
+				if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want || out.doc.Step != nil {
+					t.Errorf("%v: exit %d, refusal %+v, step %+v\nwant 1, %+v and no step", args, out.code, got, out.doc.Step, want)
+				}
+			}
+			onlyInspected(t, c.name, h.clab)
+			if got := intentReadAfter(h.infra, h.before); len(got) != 0 {
+				t.Errorf("a target was read: %+v", got)
+			}
+			if sha256Of(t, h.paths.TwinJSON) != record || !slices.Equal(storedBundles(t, h.paths.Bundles), filed) {
+				t.Errorf("the record or the store changed under a refused step")
+			}
+		})
+	}
+}
+
+// Scenario 5: from the branch point, a step to the head goes straight there, warning that it
+// skips the marks between, and with no target goes to the first mark, skipping none. main
+// here reads as the mixed fixture, as change-1 began.
+func TestStepFromTheBranchPointToTheHead(t *testing.T) {
+	h := stepHost(t, "plan-nothing.json", nil)
+	mixed, err := ctm.Load(repoPath("testdata", "ctm", "mixed.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mixed.Envelope.Branch = "main"
+	h.infra.branches["main"] = mixed
+	bp := compileStage(t, h.paths, "branch-point")
+	twinAt(t, h, stepTwin{id: bp.id, label: "branch-point", atSource: "branch_point", branch: "main", at: fakeBranchedFrom})
+	const twinLine = "twin: stage change-1/branch-point (bundle %s), pinned at " + fakeBranchedFrom + "; 3 nodes"
+
+	t.Run("to the head", func(t *testing.T) {
+		h.clab.plan = []byte(`{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": [],
+			"deleted-nodes": ["e2"], "recreated-nodes": [], "started-nodes": [], "added-links": [],
+			"deleted-endpoints": ["e1:eth2_1", "s1:e1-2"], "restarted-nodes": ["e1"], "node-change-reasons": {"e1": "deleted endpoint"}}`)
+		out := runStepCmd(t, "--stage", "change-1/head", "--dry-run", "--allow-restart")
+		skipped := findings.Finding{Severity: findings.Warning, Rule: findings.RuleStepStageSkipped, Object: "change-1/head",
+			Step: findings.StepResolve, Message: "the step from change-1/branch-point to change-1/head skips stages sealed, linked, " +
+				"again, less; the step is between the two bundles either way"}
+		if out.code != findings.ExitOK || !slices.Contains(out.doc.Findings, skipped) || out.doc.Findings.Rejected() {
+			t.Errorf("exit %d, findings %+v; want 0 beside %+v", out.code, out.doc.Findings, skipped)
+		}
+		for i, line := range []string{fmt.Sprintf(twinLine, short(bp.id)), "stage change-1/head: branch change-1 at " + stepHeadAt + " (head)"} {
+			if got := lineOf(out.stdout, i+2); got != line {
+				t.Errorf("stdout line %d %q, want %q:\n%s", i+2, got, line, out.stdout)
+			}
+		}
+		if !strings.HasPrefix(lineOf(out.stdout, 4), "step change-1/branch-point → change-1/head (") ||
+			!strings.Contains(out.stdout, "\nverdict: clear\n") {
+			t.Errorf("stdout:\n%s\nwant the step from the branch point to the head, clear", out.stdout)
+		}
+	})
+	t.Run("with no target", func(t *testing.T) {
+		h.clab.plan = []byte(`{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": [], "deleted-nodes": [],
+			"recreated-nodes": [], "started-nodes": [], "added-links": [], "deleted-endpoints": [], "restarted-nodes": []}`)
+		out := runStepCmd(t, "--dry-run")
+		if out.code != findings.ExitOK || out.doc.Subject.Stage != "change-1/sealed" || carriesRule(out.doc.Findings, findings.RuleStepStageSkipped) ||
+			!strings.HasPrefix(lineOf(out.stdout, 4), "step change-1/branch-point → change-1/sealed (") {
+			t.Errorf("exit %d, subject %+v, findings %+v, stdout:\n%s\nwant 0, the step to sealed skipping none",
+				out.code, out.doc.Subject, out.doc.Findings, out.stdout)
+		}
+	})
+}
+
+// A target is the twin's own stage when it resolves to the record's branch and at, whatever
+// its label: another mark whose as_of is the record's at, and the head while it is where the
+// twin was built, are each refused as current.
+func TestStepTargetCurrentByResolvedReference(t *testing.T) {
+	for _, c := range []struct {
+		name, ref string
+		setup     func(t *testing.T, h *stepHostFixture)
+		message   string
+	}{
+		{name: "another mark at the twin's at", ref: "change-1/twin",
+			setup: func(_ *testing.T, h *stepHostFixture) {
+				h.infra.changes[0].Stages = append(h.infra.changes[0].Stages, mark("st-twin", "twin", stepMixedAt, ""))
+			},
+			message: "the twin is already at stage change-1/twin (branch change-1, at " + stepMixedAt + "); the proposed change's " +
+				"stages are: branch-point, sealed, twin, linked, again, less, head"},
+		{name: "the head where the twin was built", ref: "change-1/head",
+			setup: func(t *testing.T, h *stepHostFixture) {
+				twinAt(t, h, stepTwin{id: buildStage(t, h.paths, "head"), label: "head", atSource: "head", branch: "change-1",
+					at: stepHeadAt, retired: true})
+			},
+			message: "the twin is already at stage change-1/head (branch change-1, at " + stepHeadAt + "); the proposed change's " +
+				"stages are: " + stepStages},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := stepHost(t, "plan-nothing.json", nil)
+			c.setup(t, h)
+			h.clab.calls = nil
+			out := runStepCmd(t, "--stage", c.ref, "--dry-run")
+			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTargetCurrent, Object: c.ref,
+				Step: findings.StepResolve, Message: c.message}
+			if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want {
+				t.Errorf("exit %d, refusal %+v\nwant 1, %+v", out.code, got, want)
+			}
+			onlyInspected(t, c.name, h.clab)
+		})
+	}
+}
+
+// Scenario 6: a twin built at the head, the branch written since: stage list warns that the
+// record's stage has moved, a step with no target is refused naming the moved head and the
+// reference that steps to it, and --stage <branch>/head is a target, not the current stage,
+// since it now resolves to another at.
+func TestStepToAMovedHead(t *testing.T) {
+	const oldHead = "2026-10-16T10:30:00.000001+00:00"
+	h := stepHost(t, "plan-nothing.json", nil)
+	versions := h.infra.versions["change-1"]
+	h.infra.versions["change-1"] = versions[:3]
+	old := compileStage(t, h.paths, "head")
+	twinAt(t, h, stepTwin{id: old.id, label: "head", atSource: "head", branch: "change-1", at: oldHead})
+	h.infra.versions["change-1"] = versions
+
+	code, doc, raw := stageDoc(t, "list", "--branch", "change-1")
+	moved := findings.Finding{Severity: findings.Warning, Rule: findings.RuleStageTwinMoved, Object: "change-1/head",
+		Message: "the twin was built from stage change-1/head at branch change-1, at " + oldHead + " (head); change-1/head now " +
+			"resolves to branch change-1, at " + stepHeadAt + " (head); the twin is pinned to what it was built from"}
+	if code != findings.ExitOK || !slices.Contains(doc.Findings, moved) {
+		t.Errorf("stage list: exit %d, findings %+v; want 0 beside %+v\n%s", code, doc.Findings, moved, raw)
+	}
+
+	out := runStepCmd(t, "--dry-run")
+	if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got.Rule != findings.RuleStepTargetUnknown ||
+		!strings.HasSuffix(got.Message, "; the head has moved since the twin was built (now at "+stepHeadAt+"): --stage change-1/head steps to it") {
+		t.Errorf("with no target: exit %d, refusal %+v; want step.target.unknown naming the moved head", out.code, got)
+	}
+
+	h.clab.plan = []byte(`{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": [],
+		"deleted-nodes": ["e2"], "recreated-nodes": [], "started-nodes": [], "added-links": [],
+		"deleted-endpoints": ["e1:eth2_1", "s1:e1-2"], "restarted-nodes": ["e1"], "node-change-reasons": {"e1": "deleted endpoint"}}`)
+	out = runStepCmd(t, "--stage", "change-1/head", "--dry-run", "--allow-restart")
+	if out.code != findings.ExitOK || out.doc.Findings.Rejected() || out.doc.BundleID == old.id ||
+		lineOf(out.stdout, 3) != "stage change-1/head: branch change-1 at "+stepHeadAt+" (head)" ||
+		!strings.HasPrefix(lineOf(out.stdout, 4), "step change-1/head → change-1/head ("+short(old.id)+" → ") {
+		t.Errorf("--stage change-1/head: exit %d, findings %+v, stdout:\n%s\nwant 0, the step from the head as built to the "+
+			"head as it is", out.code, out.doc.Findings, out.stdout)
+	}
+}
+
+// Scenario 8, for a step: a target marked before its artifacts were regenerated is refused
+// as stale at resolution, given or chosen as the next stage, with the findings stage plan
+// gives it, before it is read and before anything of the step: no service is dialled and
+// containerlab is asked for nothing but the host's state.
+func TestStepToAStaleStageIsRefused(t *testing.T) {
+	h := stepHost(t, "plan-link-added.json", nil)
+	h.infra.stamps = map[string]fakeDeviceStamps{
+		"change-1/e1": {Intent: "2026-10-16T09:45:00.000000+00:00", Artifact: "2026-10-16T09:30:00.000000+00:00"},
+	}
+	_, doc, raw := stageDoc(t, "plan", "--branch", "change-1")
+	stages, _ := planned(t, doc)
+	i := slices.IndexFunc(stages, func(st findings.PlanStage) bool { return st.Label == "linked" })
+	if i < 0 || stages[i].BundleID != nil || !slices.Equal(rulesOf(stages[i].Findings), []string{findings.RuleStageArtifactStale + " e1"}) {
+		t.Fatalf("stage plan did not refuse change-1/linked stale for e1\n%s", raw)
+	}
+	want := stages[i].Findings
+	before := len(h.infra.requests())
+	h.clab.calls = nil
+	for _, args := range [][]string{{"--stage", "change-1/linked"}, {}} {
+		out := runStepCmd(t, append(args, "--allow-restart")...)
+		if out.code != findings.ExitRejected || !reflect.DeepEqual(out.doc.Findings, want) || out.doc.Step != nil {
+			t.Errorf("%v: exit %d, findings %+v, step %+v\nwant 1, stage plan's %+v, and no step", args, out.code,
+				out.doc.Findings, out.doc.Step, want)
+		}
+	}
+	onlyInspected(t, "a stale target", h.clab)
+	if got := intentReadAfter(h.infra, before); len(got) != 0 {
+		t.Errorf("the stale target was read: %+v", got)
 	}
 }

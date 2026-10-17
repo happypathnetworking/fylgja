@@ -3,16 +3,31 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"io"
+	"log/slog"
+	"maps"
+	"net"
+	"net/http/httptest"
+	"os"
 	"reflect"
+	"slices"
+	"strconv"
 	"strings"
 	"testing"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/spf13/cobra"
+	"go.temporal.io/sdk/activity"
+	tlog "go.temporal.io/sdk/log"
+	"go.temporal.io/sdk/testsuite"
 
+	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
+	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
 // The stages the create tests resolve, all of one proposed change on the fixture branch,
@@ -436,5 +451,435 @@ func TestCreateFromAStageReportsTheReference(t *testing.T) {
 	})
 	if code, _ := exitOf(t, err); code != findings.ExitRejected || out != "" {
 		t.Errorf("exit %d, stdout %q; want 1 and nothing printed", code, out)
+	}
+}
+
+// US2's create scenarios through the harness (014, T035): a twin from each kind of stage,
+// the stage refusals that start nothing, and a create along main's own history after a
+// stage twin. The proposed change is stage plan's, pc-1 on change-1 (stage_plan_test.go):
+// its branch point reads main, the fixture, at the branch's branched_from; cabled, written
+// and unwritten, reads change-1 less its last link; live, given, and the head read the whole
+// fixture. Each create is the command the operator runs; where it starts a run, the run is
+// the Provision workflow on Temporal's test suite, given the input the server started, so
+// the record and the bundle it deploys are the run's own.
+
+// provisionOnSuite runs the Provision workflow with in on Temporal's test suite, with the
+// worker's own activities wherever they need no host, as
+// TestConfigurationBytesGoToTheNodeAndNowhereElse drives a create: the read and the compile
+// against the fake Infrahub the test started, the host check over a recorded empty host,
+// the stage, the readiness, the push to a node that commits whatever it is sent, and the
+// record. Only the deploy answers as containerlab would, and the stop of a following finds
+// none. It returns the run's result and twin.json as the run wrote it.
+func provisionOnSuite(t *testing.T, paths lab.Paths, in provision.ProvisionInput) (provision.ProvisionResult, []byte) {
+	t.Helper()
+	reg, err := psp.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	inspect, err := os.ReadFile(repoPath("internal", "lab", "testdata", "inspect-empty.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	node := httptest.NewTLSServer(&markerNode{})
+	t.Cleanup(node.Close)
+	nodeHost, nodePort, err := net.SplitHostPort(strings.TrimPrefix(node.URL, "https://"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	port, _ := strconv.Atoi(nodePort)
+
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	store := bundle.NewDirStore(paths.Bundles)
+	acts := &lab.Activities{
+		Clab: &lab.Clab{Runner: &fakeClab{stdout: inspect}, Log: logger}, Store: store, Paths: paths, Registry: reg,
+		Prober: readyProber{},
+		Getenv: func(k string) (string, bool) {
+			v, ok := map[string]string{"FYLGJA_SRLINUX_USERNAME": "admin", "FYLGJA_SRLINUX_PASSWORD": "not-the-real-one"}[k]
+			return v, ok
+		},
+		Version: version, Log: logger,
+	}
+	activities := (&provision.ControlActivities{Store: store, Paths: paths}).Names()
+	maps.Copy(activities, acts.Names())
+	activities[provision.ActStopFollowing] = func(context.Context) (provision.StopFollowingResult, error) {
+		return provision.StopFollowingResult{}, nil
+	}
+	activities[wire.ActDeployLab] = func(_ context.Context, in wire.DeployInput) (wire.DeployResult, error) {
+		var res wire.DeployResult
+		for _, n := range in.Nodes {
+			res.Nodes = append(res.Nodes, wire.LabNode{Name: n.Name, Container: "clab-fylgja-" + n.Name, Kind: "nokia_srlinux",
+				Image: n.Image, State: "running", MgmtIPv4: nodeHost})
+		}
+		return res, nil
+	}
+	activities[wire.ActPushConfig] = func(ctx context.Context, in wire.PushInput) (wire.PushResult, error) {
+		// Only the port differs from the package's: the node is this test's.
+		in.Push.Port = port
+		return acts.PushConfig(ctx, in)
+	}
+
+	var suite testsuite.WorkflowTestSuite
+	suite.SetLogger(tlog.NewStructuredLogger(logger))
+	env := suite.NewTestWorkflowEnvironment()
+	env.RegisterWorkflow(provision.Provision)
+	for name, fn := range activities {
+		env.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name})
+	}
+	env.ExecuteWorkflow(provision.Provision, in)
+	if !env.IsWorkflowCompleted() || env.GetWorkflowError() != nil {
+		t.Fatalf("the run did not complete: %v", env.GetWorkflowError())
+	}
+	var res provision.ProvisionResult
+	if err := env.GetWorkflowResult(&res); err != nil {
+		t.Fatal(err)
+	}
+	if res.Outcome != provision.OutcomeReady {
+		t.Fatalf("the run ended %s at %s: %+v", res.Outcome, res.Step, res.Findings)
+	}
+	record, err := os.ReadFile(paths.TwinJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return res, record
+}
+
+// validateTwinJSON validates twin.json as written against the current
+// contracts/twin.schema.json, version 6 since 014.
+func validateTwinJSON(t *testing.T, record []byte) {
+	t.Helper()
+	f, err := os.Open(repoPath("contracts", "twin.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	doc, err := jsonschema.UnmarshalJSON(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource("twin.schema.json", doc); err != nil {
+		t.Fatal(err)
+	}
+	schema, err := c.Compile("twin.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := validateAgainst(schema, record); err != nil {
+		t.Errorf("twin.json does not satisfy contracts/twin.schema.json:\n%v\n%s", err, record)
+	}
+}
+
+// writtenRecord is what twin.json says of the stage and the reference it was read at, as
+// written.
+type writtenRecord struct {
+	TwinVersion string           `json:"twin_version"`
+	BundleID    string           `json:"bundle_id"`
+	Provenance  wire.Provenance  `json:"provenance"`
+	Source      string           `json:"source"`
+	Stage       *wire.StageRef   `json:"stage"`
+	Step        *wire.StepRecord `json:"step"`
+}
+
+func decodeRecord(t *testing.T, record []byte) writtenRecord {
+	t.Helper()
+	var w writtenRecord
+	if err := json.Unmarshal(record, &w); err != nil {
+		t.Fatalf("twin.json does not decode: %v\n%s", err, record)
+	}
+	return w
+}
+
+// Scenario 1 and SC-002: a twin from each kind of stage — a mark written and one given, the
+// branch point on a main that carries the contract, and the head — deploys the bundle id
+// stage plan printed for that stage, is pinned at the stage's at and never follows, and
+// twin.json 6 names its proposed change by id and branch, its label, its description and
+// where its at came from, with provenance.at the resolved at and provenance.branch the
+// branch read: main for the branch point. The branch point's dry run, read on another
+// branch than its proposed change's, says the same id and that the twin would not follow,
+// because of the stage; which kind of stage it is changes neither.
+func TestCreateFromEachKindOfStage(t *testing.T) {
+	useStateRoot(t)
+	useService(t, nil)
+	f := planInfrahub(t, twoMarks()...)
+	versioned(t, f)
+	f.start()
+
+	code, doc, raw := stageDoc(t, "plan", "--branch", lessLink)
+	stages, _ := planned(t, doc)
+	if code != findings.ExitOK || len(compiledRefs(stages)) != 4 {
+		t.Fatalf("exit %d, compiled %v; want 0 and four stages compiled\n%s", code, compiledRefs(stages), raw)
+	}
+	printed := map[string]findings.PlanStage{}
+	for _, st := range stages {
+		printed[st.Label] = st
+	}
+	var ids []string
+	for _, c := range []struct {
+		label, branch, at, source, description string
+	}{
+		{"branch-point", "main", fakeBranchedFrom, findings.AtSourceBranchPoint, ""},
+		{"cabled", lessLink, cabledAt, findings.AtSourceWritten, "the leaf cabled"},
+		{"live", lessLink, planLiveAt, findings.AtSourceGiven, "the leaf live"},
+		{"head", lessLink, planHeadAt, findings.AtSourceHead, ""},
+	} {
+		t.Run(c.label, func(t *testing.T) {
+			paths := useStateRoot(t)
+			dryRunEnv(t)
+			useClab(t, "inspect-empty.json")
+			plan := printed[c.label]
+			if plan.Branch != c.branch || plan.At != c.at || plan.AtSource != c.source || plan.BundleID == nil {
+				t.Fatalf("stage plan printed %+v; want %s at %s (%s), compiled", plan, c.branch, c.at, c.source)
+			}
+			id := *plan.BundleID
+			ids = append(ids, id)
+			ref := lessLink + "/" + c.label
+			stage := wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: lessLink}, Label: c.label,
+				Description: c.description, AtSource: c.source}
+			block := findings.StageBlock{Ref: ref, Branch: c.branch, Label: c.label,
+				ProposedChange: findings.StageChange{ID: "pc-1", Name: "change pc-1", Branch: lessLink, Draft: true},
+				At:             c.at, AtSource: c.source, Description: c.description}
+
+			if c.source == findings.AtSourceBranchPoint {
+				code, dry := executeTwin(t, "twin", "create", "--stage", ref, "--dry-run")
+				if code != findings.ExitOK || dry.BundleID != id || dry.DryRun == nil || dry.DryRun.Follow == nil ||
+					dry.DryRun.Follow.Enabled || dry.DryRun.Follow.Reason != findings.FollowReasonStage ||
+					dry.Stage == nil || *dry.Stage != block {
+					t.Errorf("dry run exit %d, bundle_id %s, dry_run %+v, stage %+v; want 0, the plan's %s, not following "+
+						"(reason stage), and %+v", code, dry.BundleID, dry.DryRun, dry.Stage, id, block)
+				}
+				mustCarryNoToken(t, "the dry run", dry)
+			}
+
+			svc := &fakeService{runID: "run-1", result: readyResult()}
+			useService(t, svc)
+			useInterrupts(t)
+			code, created := executeTwin(t, "twin", "create", "--stage", ref)
+			want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: c.branch, At: c.at, Version: version,
+				StopFollowing: true, Stage: &stage}
+			if code != findings.ExitOK || len(svc.started) != 1 || !reflect.DeepEqual(svc.started[0], want) {
+				t.Fatalf("exit %d, started %+v; want 0 and one run of %+v", code, svc.started, want)
+			}
+			if created.Stage == nil || *created.Stage != block || created.Following != nil {
+				t.Errorf("stage block %+v, following %+v; want %+v and none", created.Stage, created.Following, block)
+			}
+
+			res, record := provisionOnSuite(t, paths, svc.started[0])
+			validateTwinJSON(t, record)
+			w := decodeRecord(t, record)
+			if res.BundleID != id || w.BundleID != id || w.TwinVersion != "6" || w.Source != wire.SourceIntent ||
+				w.Provenance.Branch != c.branch || w.Provenance.At != c.at || !reflect.DeepEqual(w.Stage, &stage) || w.Step != nil {
+				t.Errorf("the run deployed %s and recorded\n%s\nwant %s, twin_version 6, provenance %s at %s, stage %+v, step null",
+					res.BundleID, record, id, c.branch, c.at, stage)
+			}
+			if res.FollowingStopped != nil || res.Following != nil {
+				t.Errorf("the run's following %+v, stopped %+v; a stage twin never follows", res.Following, res.FollowingStopped)
+			}
+			mustCarryNoToken(t, c.label, created, svc.started)
+		})
+	}
+	if distinct := slices.Compact(slices.Sorted(slices.Values(ids))); len(distinct) != 4 {
+		t.Errorf("the four stages deployed %v; want four bundles", ids)
+	}
+}
+
+// untimed is a finding with the clock cut from its message: a given at later than now
+// names the time the server read its clock, which no two commands share.
+func untimed(f findings.Finding) findings.Finding {
+	if i := strings.Index(f.Message, "later than the current time "); i >= 0 {
+		f.Message = f.Message[:i]
+	}
+	return f
+}
+
+// Scenario 8, and every other refusal at resolution: a stage marked after an intent change
+// and before its regenerate, one before the branch point, one in the future, one a rebase
+// moved the branch point past and a mark taking the head's label are each refused at step
+// resolve with the finding stage plan gives that stage, word for word, by the create and by
+// its dry run. No run is started: the workflow service is asked nothing, containerlab is
+// asked nothing, no branch's intent is read at the stage's at, and nothing is filed.
+func TestCreateFromARefusedStageStartsNothing(t *testing.T) {
+	const (
+		editedAt = "2026-10-16T09:30:00.000000+00:00"
+		markedAt = "2026-10-16T09:40:00.000000+00:00"
+		earlyAt  = "2026-10-16T07:30:00.000000+00:00"
+		futureAt = "2099-01-01T00:00:00.000000+00:00"
+		rebaseAt = "2026-10-16T08:55:00.000000+00:00"
+	)
+	// refused is one stage a create is refused, with its refusals' rule and object as
+	// rulesOf gives them, and its at, which no read may name ("" for one refused before it
+	// has an at of its own).
+	type refused struct {
+		label string
+		rules []string
+		at    string
+	}
+	for _, c := range []struct {
+		name  string
+		marks []fakeStage
+		setup func(*fakeInfrahub)
+		// planned is whether the expected findings are stage plan's; the reserved label's
+		// are the reference contract's step 4, written out.
+		planned bool
+		stages  []refused
+	}{
+		{name: "marks refused", planned: true,
+			marks: []fakeStage{mark("st-edited", "edited", markedAt, "before the regenerate"), mark("st-early", "early", earlyAt, ""),
+				mark("st-future", "future", futureAt, "")},
+			// n1 and n2 are edited after their artifacts were generated, and nothing is
+			// regenerated or checked after; a stage at or before the edit is not stale.
+			setup: func(f *fakeInfrahub) {
+				f.stamps = map[string]fakeDeviceStamps{
+					lessLink + "/n1": {Intent: editedAt, Artifact: fakeWritten},
+					lessLink + "/n2": {Intent: editedAt, Artifact: fakeWritten},
+				}
+			},
+			stages: []refused{
+				{"edited", []string{findings.RuleStageArtifactStale + " n1", findings.RuleStageArtifactStale + " n2"}, markedAt},
+				{"early", []string{findings.RuleStageAtBeforeBranchPoint + " change-1/early"}, earlyAt},
+				{"future", []string{findings.RuleStageAtUnresolved + " change-1/future"}, futureAt},
+			}},
+		{name: "after a rebase", planned: true, marks: []fakeStage{mark("st-cabled", "cabled", cabledAt, "")},
+			setup:  func(f *fakeInfrahub) { f.changes[0].BranchedFrom = rebaseAt },
+			stages: []refused{{"cabled", []string{findings.RuleStageAtBeforeBranchPoint + " change-1/cabled"}, cabledAt}}},
+		{name: "a mark labelled head", marks: []fakeStage{mark("st-head", "head", cabledAt, "")},
+			stages: []refused{{"head", []string{findings.RuleStageLabelReserved + " change-1/head"}, ""}}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			paths := useStateRoot(t)
+			dryRunEnv(t)
+			clab := useClab(t, "inspect-empty.json")
+			useService(t, nil)
+			f := planInfrahub(t, c.marks...)
+			if c.setup != nil {
+				c.setup(f)
+			}
+			f.start()
+
+			want := map[string]findings.List{"head": {{Severity: findings.Rejection, Rule: findings.RuleStageLabelReserved,
+				Object: "change-1/head", Step: findings.StepResolve, Message: `stage change-1/head is a mark labelled "head", ` +
+					"which names the derived head of every proposed change and is reserved; relabel it (schema/README.md); " +
+					"the head of change-1 is still its derived stage"}}}
+			if c.planned {
+				_, doc, raw := stageDoc(t, "plan", "--branch", lessLink)
+				stages, _ := planned(t, doc)
+				for _, st := range stages {
+					if st.BundleID == nil {
+						want[st.Label] = st.Findings
+					}
+				}
+				if len(want) != len(c.stages)+1 {
+					t.Fatalf("stage plan refused %d stages; want %d\n%s", len(want)-1, len(c.stages), raw)
+				}
+			}
+			filed := storedBundles(t, paths.Bundles)
+
+			for _, st := range c.stages {
+				ref := lessLink + "/" + st.label
+				if got := rulesOf(want[st.label]); !slices.Equal(got, st.rules) {
+					t.Fatalf("%s's refusals are %v; want %v", ref, got, st.rules)
+				}
+				for _, args := range [][]string{{"--stage", ref}, {"--stage", ref, "--dry-run"}} {
+					svc := &fakeService{runID: "run-1", result: readyResult()}
+					useService(t, svc)
+					useInterrupts(t)
+					clab.calls = nil
+					code, doc := executeTwin(t, append([]string{"twin", "create"}, args...)...)
+					got, w := doc.Findings, want[st.label]
+					if code != findings.ExitRejected || doc.Status != findings.StatusRejected || len(got) != len(w) {
+						t.Fatalf("%v: exit %d, findings %+v; want 1 with %+v", args, code, got, w)
+					}
+					for i := range got {
+						if untimed(got[i]) != untimed(w[i]) || got[i].Step != findings.StepResolve {
+							t.Errorf("%v: finding %+v\nwant stage plan's %+v", args, got[i], w[i])
+						}
+					}
+					if len(svc.calls) != 0 || len(svc.started) != 0 || doc.Subject.RunID != "" || doc.DryRun != nil || doc.Stage != nil {
+						t.Errorf("%v: the service was asked %v and started %d runs; run %q, dry_run %+v, stage %+v; want nothing",
+							args, svc.calls, len(svc.started), doc.Subject.RunID, doc.DryRun, doc.Stage)
+					}
+					if len(clab.calls) != 0 {
+						t.Errorf("%v: containerlab was asked %v", args, clab.calls)
+					}
+					validateM10Document(t, doc)
+				}
+				if st.at != "" && readAt(f, st.at) {
+					t.Errorf("a branch's intent was read at %s, refused %s's at", st.at, ref)
+				}
+			}
+			if got := storedBundles(t, paths.Bundles); !slices.Equal(got, filed) {
+				t.Errorf("the store holds %v, and held %v before the creates; a refused create files nothing", got, filed)
+			}
+		})
+	}
+}
+
+// Scenario 7: after a twin built from a stage is destroyed, a story along main's own
+// history still works as before and names no stage. A proposed change cannot have main as
+// its source, so main has no stage to name; the create of main at a time is M3's pinned
+// create, its run's input carrying no stage, its dry run not following because of the at,
+// and twin.json 6 recording stage null.
+func TestCreateAlongMainAfterAStageTwin(t *testing.T) {
+	const mainAt = "2026-10-16T07:30:00.000000+00:00"
+	paths := useStateRoot(t)
+	dryRunEnv(t)
+	useClab(t, "inspect-empty.json")
+	f := planInfrahub(t, twoMarks()...)
+	versioned(t, f)
+	f.start()
+
+	svc := &fakeService{runID: "run-1", result: readyResult()}
+	useService(t, svc)
+	useInterrupts(t)
+	if code, doc := executeTwin(t, "twin", "create", "--stage", lessLink+"/cabled"); code != findings.ExitOK || len(svc.started) != 1 {
+		t.Fatalf("exit %d, findings %+v, started %d; want 0 and one run", code, doc.Findings, len(svc.started))
+	}
+	_, record := provisionOnSuite(t, paths, svc.started[0])
+	if w := decodeRecord(t, record); w.Stage == nil || w.Stage.Label != "cabled" {
+		t.Fatalf("the stage twin recorded stage %+v; want cabled", w.Stage)
+	}
+
+	// twin destroy, whose run removes the lab and the twin directory; the directory is
+	// removed here as the run's unstage removes it.
+	useService(t, &fakeService{destroyRun: destroyedRun(provision.CleanupResult{Teardown: provision.CleanupDone,
+		Unstage: provision.CleanupDone, Removed: []string{"lab fylgja (3 containers)", "twin directory " + paths.Twin}}, nil)})
+	if code, doc := executeTwin(t, "twin", "destroy"); code != findings.ExitOK {
+		t.Fatalf("twin destroy exit %d, findings %+v; want 0", code, doc.Findings)
+	}
+	if err := os.RemoveAll(paths.Twin); err != nil {
+		t.Fatal(err)
+	}
+
+	// main has no stage: no proposed change has it as its source.
+	useService(t, nil)
+	code, doc := executeTwin(t, "twin", "create", "--stage", "main/cabled")
+	if want := (findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStageUnknown, Object: "main", Step: findings.StepResolve,
+		Message: "no open proposed change has source branch main; the branches with one are: change-1"}); code != findings.ExitRejected ||
+		len(doc.Findings) != 1 || doc.Findings[0] != want {
+		t.Errorf("--stage main/cabled: exit %d, findings %+v; want 1 with %+v", code, doc.Findings, want)
+	}
+
+	code, dry := executeTwin(t, "twin", "create", "--branch", "main", "--at", mainAt, "--dry-run")
+	if code != findings.ExitOK || dry.Stage != nil || dry.DryRun == nil || dry.DryRun.Follow == nil ||
+		dry.DryRun.Follow.Reason != findings.FollowReasonPinned || dry.Subject.Stage != "" {
+		t.Errorf("the dry run along main: exit %d, stage %+v, dry_run %+v, subject %+v; want 0, no stage, not following "+
+			"(reason pinned)", code, dry.Stage, dry.DryRun, dry.Subject)
+	}
+
+	svc = &fakeService{runID: "run-2", result: readyResult()}
+	useService(t, svc)
+	code, created := executeTwin(t, "twin", "create", "--branch", "main", "--at", mainAt)
+	want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: "main", At: mainAt, Version: version, StopFollowing: true}
+	if code != findings.ExitOK || len(svc.started) != 1 || !reflect.DeepEqual(svc.started[0], want) ||
+		created.Stage != nil || created.Subject.Stage != "" {
+		t.Fatalf("exit %d, started %+v, stage %+v, subject %+v; want 0, one run of %+v and no stage",
+			code, svc.started, created.Stage, created.Subject, want)
+	}
+	res, record := provisionOnSuite(t, paths, svc.started[0])
+	validateTwinJSON(t, record)
+	w := decodeRecord(t, record)
+	if res.BundleID != dry.BundleID || w.TwinVersion != "6" || w.Provenance.Branch != "main" || w.Provenance.At != mainAt ||
+		w.Stage != nil || !strings.Contains(string(record), `"stage": null`) {
+		t.Errorf("the run deployed %s (the dry run %s) and recorded\n%s\nwant main at %s, stage null", res.BundleID, dry.BundleID,
+			record, mainAt)
 	}
 }

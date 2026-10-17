@@ -1513,3 +1513,80 @@ func TestVerifyWaitEdges(t *testing.T) {
 		}
 	})
 }
+
+// A twin of a derived stage, the branch point read on main or the head, is verified naming
+// it: the first line says the stage and that the twin is pinned at its at, and the verify
+// block's twin.stage is what twin.json 6 records, key for key. A diverged one names the
+// stage its step was going to in diverged.towards.stage, as the record's step names it. The
+// contract refuses a twin.stage in M10's waypoint shape and a towards.stage with no label
+// (014, T037).
+func TestVerifyNamesTheStageAsRecorded(t *testing.T) {
+	stage := func(label, source string) *wire.StageRef {
+		return &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: label, AtSource: source}
+	}
+	for _, c := range []struct {
+		label, source, branch, at string
+	}{
+		{"branch-point", findings.AtSourceBranchPoint, "main", "2026-10-16T08:00:00.000000+00:00"},
+		{"head", findings.AtSourceHead, "change-1", "2026-10-16T08:40:00.000001+00:00"},
+	} {
+		t.Run(c.label, func(t *testing.T) {
+			h := verifyHost(t, "three-node", nil, func(rec *wire.TwinRecord) {
+				rec.Provenance.Branch, rec.Provenance.At = c.branch, c.at
+				rec.Stage = stage(c.label, c.source)
+			})
+			out := runVerify(t, h.paths.Root, func() *fakeNodes { return h.healthy(t) })
+			if want := "twin: stage change-1/" + c.label + " (bundle " + short(h.staged) + "), ready, pinned at " + c.at + "; 3 nodes"; out.code != findings.ExitOK ||
+				lines2(out.stdout)[0] != want {
+				t.Errorf("exit %d, first line %q; want 0, %q", out.code, lines2(out.stdout)[0], want)
+			}
+			if got, want := compactJSON(t, out.doc.Verify.Twin.Stage), recordedJSON(t, h.paths.TwinJSON, "stage"); got != want {
+				t.Errorf("verify.twin.stage %s\nwant twin.json's %s", got, want)
+			}
+			refusedOnceEdited(t, "a waypoint for the twin's stage", out.doc, func(m map[string]any) {
+				dig(m, "verify", "twin")["stage"] = m10Waypoint
+			})
+		})
+	}
+
+	t.Run("diverged towards the head", func(t *testing.T) {
+		const (
+			prev  = "348fd9340000000000000000000000000000000000000000000000000000abcd"
+			runID = "01a3c0de-0000-7000-8000-000000000004"
+		)
+		h := verifyHost(t, "three-node", nil, nil)
+		rec, err := lab.ReadRecord(h.paths.TwinJSON)
+		if err != nil {
+			t.Fatal(err)
+		}
+		phase := findings.StepPush
+		rec.BundleID, rec.State = prev, wire.StateDiverged
+		rec.Provenance.Branch, rec.Provenance.At = "main", "2026-10-16T08:00:00.000000+00:00"
+		rec.Stage = stage("branch-point", findings.AtSourceBranchPoint)
+		rec.Step = &wire.StepRecord{Outcome: wire.StepDiverged, Phase: &phase,
+			From: wire.StepSide{Stage: rec.Stage, BundleID: prev, At: rec.Provenance.At},
+			To:   wire.StepSide{Stage: stage("head", findings.AtSourceHead), BundleID: h.staged, At: "2026-10-16T08:40:00.000001+00:00"},
+			Run:  wire.RunRef{WorkflowID: wire.StepWorkflowID, RunID: runID}}
+		writeTwin(t, h.paths, rec)
+
+		out := runVerify(t, h.paths.Root, func() *fakeNodes { return h.healthy(t) })
+		want := "twin: stage change-1/branch-point (bundle 348fd934…), diverged towards change-1/head (bundle " + short(h.staged) +
+			") at phase push by run fylgja-step " + runID + "; 3 nodes"
+		if got := lines2(out.stdout)[0]; got != want {
+			t.Errorf("first line %q\nwant %q", got, want)
+		}
+		tw := out.doc.Verify.Twin
+		if tw.Diverged == nil {
+			t.Fatalf("twin %+v; want the divergence named", tw)
+		}
+		if got, want := compactJSON(t, tw.Diverged.Towards.Stage), recordedJSON(t, h.paths.TwinJSON, "step", "to", "stage"); got != want {
+			t.Errorf("verify.twin.diverged.towards.stage %s\nwant twin.json's step.to.stage %s", got, want)
+		}
+		if got, want := compactJSON(t, tw.Stage), recordedJSON(t, h.paths.TwinJSON, "stage"); got != want {
+			t.Errorf("verify.twin.stage %s\nwant twin.json's %s", got, want)
+		}
+		refusedOnceEdited(t, "a towards.stage with no label", out.doc, func(m map[string]any) {
+			delete(dig(m, "verify", "twin", "diverged", "towards", "stage"), "label")
+		})
+	})
+}

@@ -1731,3 +1731,150 @@ func TestShowCreatedVersion6RecordAsM11(t *testing.T) {
 		t.Errorf("version 5 show block %s\nversion 4 %s\nwant them equal, with no step key", b5, b4)
 	}
 }
+
+// US2's show scenarios through the harness (014, T037): the stage blocks of twin show and
+// twin verify, beside what twin.json records, and the moved schemas holding them to the
+// 6 shape.
+
+// recordedJSON is the value under keys in twin.json at path, compacted: what the record
+// says, to set beside what a document says of it.
+func recordedJSON(t *testing.T, path string, keys ...string) string {
+	t.Helper()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var v any
+	if err := json.Unmarshal(b, &v); err != nil {
+		t.Fatal(err)
+	}
+	for _, k := range keys {
+		m, ok := v.(map[string]any)
+		if !ok {
+			t.Fatalf("twin.json has no %v", keys)
+		}
+		v = m[k]
+	}
+	return compactJSON(t, v)
+}
+
+// compactJSON is v as JSON with every object's keys in order, so a struct and the record's
+// decoded map of it compare equal when their keys and values are.
+func compactJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var generic any
+	if err := json.Unmarshal(b, &generic); err != nil {
+		t.Fatal(err)
+	}
+	if b, err = json.Marshal(generic); err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// m10Waypoint is M10's waypoint block, the shape a stage replaced.
+var m10Waypoint = map[string]any{"series": "steps", "sequence": 1, "description": "the seeded stage", "at_source": "given"}
+
+// refusedOnceEdited fails unless the current findings contract refuses doc once edit has
+// changed its JSON: the moved schemas hold the stage blocks to twin.json 6's shape.
+func refusedOnceEdited(t *testing.T, label string, doc *findings.Document, edit func(m map[string]any)) {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal([]byte(compactJSON(t, doc)), &m); err != nil {
+		t.Fatal(err)
+	}
+	edit(m)
+	if err := validateAgainst(findingsContract(t, currentContract), []byte(compactJSON(t, m))); err == nil {
+		t.Errorf("%s: the findings contract accepts %s", label, compactJSON(t, m))
+	}
+}
+
+// dig is the object under keys in a decoded document.
+func dig(m map[string]any, keys ...string) map[string]any {
+	for _, k := range keys {
+		m, _ = m[k].(map[string]any)
+	}
+	return m
+}
+
+// A twin of each kind of stage — a mark written, a mark given, the branch point, read on
+// main, and the head — is shown pinned at its at and naming its stage, on the record line
+// and the kind line, and the show block's record.stage is what twin.json 6 records, key for
+// key. The contract refuses a record.stage in M10's waypoint shape, one lacking its
+// proposed change, and one whose at came from nowhere it names.
+func TestShowNamesTheStageAsRecorded(t *testing.T) {
+	for _, c := range []struct {
+		label, description, source, branch, at string
+	}{
+		{"cabled", "the leaf cabled", findings.AtSourceWritten, "change-1", "2026-10-16T08:30:00.000000+00:00"},
+		{"live", "the leaf live", findings.AtSourceGiven, "change-1", "2026-10-16T08:50:00.000000+00:00"},
+		{"branch-point", "", findings.AtSourceBranchPoint, "main", "2026-10-16T08:00:00.000000+00:00"},
+		{"head", "", findings.AtSourceHead, "change-1", "2026-10-16T08:40:00.000001+00:00"},
+	} {
+		t.Run(c.label, func(t *testing.T) {
+			paths := useStateRoot(t)
+			writeTwin(t, paths, twinOf(t, func(f *lab.RecordFields) {
+				f.Provenance.Branch, f.Provenance.At = c.branch, c.at
+				f.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: c.label,
+					Description: c.description, AtSource: c.source}
+			}))
+			out := showWith(t, paths, "inspect-three.json", &fakeService{})
+			kind := "pinned at " + c.at + ", stage change-1/" + c.label + "; not following"
+			wantShow(t, out, threeNodes+
+				"record: branch "+c.branch+" at "+c.at+" (stage change-1/"+c.label+", at "+c.source+"), bundle_id "+showBundleID+
+				", schema 41349c3a9c582e5dd44e55d6771f79c2, contract 1\n"+
+				"  intent read at "+showObserved+"\n"+provisionedLine+lines("kind: "+kind, "in flight: none"),
+				findings.ShowKindPinned, kind)
+			if got, want := compactJSON(t, out.doc.Show.Record.Stage), recordedJSON(t, paths.TwinJSON, "stage"); got != want {
+				t.Errorf("show.record.stage %s\nwant twin.json's %s", got, want)
+			}
+			refusedOnceEdited(t, "a waypoint for the stage", out.doc, func(m map[string]any) {
+				dig(m, "show", "record")["stage"] = m10Waypoint
+			})
+			refusedOnceEdited(t, "a stage naming no proposed change", out.doc, func(m map[string]any) {
+				delete(dig(m, "show", "record", "stage"), "proposed_change")
+			})
+			refusedOnceEdited(t, "an at_source the stage has not", out.doc, func(m map[string]any) {
+				dig(m, "show", "record", "stage")["at_source"] = "sequence"
+			})
+		})
+	}
+}
+
+// A stepped twin's step sides name the stages it stepped between as twin.json 6's step
+// block records them, and the contract refuses a side naming M10's waypoint; a step in
+// flight names the stage it steps towards.
+func TestShowNamesTheStepsStagesAsRecorded(t *testing.T) {
+	paths := useStateRoot(t)
+	writeM11Twin(t, paths, steppedTwin(t, nil))
+	out := showWith(t, paths, "inspect-three.json", &fakeService{})
+	r := out.doc.Show.Record
+	if r == nil || r.Step == nil {
+		t.Fatalf("record %+v; want a step", r)
+	}
+	for side, got := range map[string]any{"from": r.Step.From.Stage, "to": r.Step.To.Stage} {
+		if want := recordedJSON(t, paths.TwinJSON, "step", side, "stage"); compactJSON(t, got) != want {
+			t.Errorf("show.record.step.%s.stage %s\nwant twin.json's %s", side, compactJSON(t, got), want)
+		}
+	}
+	if got, want := compactJSON(t, r.Stage), recordedJSON(t, paths.TwinJSON, "stage"); got != want || r.Stage.Label != "cabled" {
+		t.Errorf("show.record.stage %s, want the step's target as twin.json records it, %s", got, want)
+	}
+	refusedOnceEdited(t, "a step side naming a waypoint", out.doc, func(m map[string]any) {
+		dig(m, "show", "record", "step", "to")["stage"] = m10Waypoint
+	})
+
+	paths = useStateRoot(t)
+	writeTwin(t, paths, seededTwin(t))
+	out = showWith(t, paths, "inspect-three.json", &fakeService{inFlight: []provision.RunInFlight{
+		{WorkflowID: "fylgja-step", RunID: stepShowRunID, Step: findings.StepPush, Towards: "fylgja-fixture/cabled"}}})
+	running := "run fylgja-step " + stepShowRunID + " is at step push, stepping towards stage fylgja-fixture/cabled"
+	if s := out.doc.Show; !slices.Contains(s.Notes, running) ||
+		!strings.Contains(out.stdout, "kind: pinned at "+stepFromAt+", stage fylgja-fixture/seeded; not following; "+running+"\n") {
+		t.Errorf("notes %q, stdout:\n%s\nwant the kind line naming the stage it steps towards", s.Notes, out.stdout)
+	}
+}

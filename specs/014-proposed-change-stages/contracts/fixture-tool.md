@@ -77,11 +77,14 @@ completion counts as the generation). A non-rendered change for the hole R-05 cl
 
 | Helper | Does |
 |---|---|
-| `TestBranchPrefix = "fylgja-test-"`; `testBranch(name) error` | refuses any other branch before a request; every helper below calls it |
+| `TestBranchPrefix = "fylgja-test-"`; `testBranch(name) error` | refuses any other branch before a request; every helper below calls it, but `StagesPresent`, `BranchExists` and `ArtifactsReadyAt`, which write nothing and need no guard |
 | `OpenProposedChange(branch string, draft bool) (id string, err error)` | the create and the validators' wait (180 s) |
 | `AwaitValidators(id string, timeout time.Duration) error` | every validator `completed` |
+| `ValidatorsOf(id string) ([]ValidatorRow, error)` | `{ID, Label, State, Conclusion, CompletedAt}`, a proposed change's validators: one on a bare branch, three on a seeded one (research §6.4, §6.5) |
 | `MarkStage(id, label, at, description string) (stageID, stamp string, err error)` | the write; returns `label.updated_at` |
+| `UpdateStage(id string, fields map[string]any) error` | the stage's attributes on the default branch, each field (`label`, `as_of`, `description`) written as its value, a nil value clearing it; its proposed change is read first and must be a test branch's, as `MarkStage` checks it, and an orphan, which names none, is refused (T075) |
 | `StagesOf(id string) ([]StageRow, error)` | `{ID, Label, At *string, WrittenAt, Description}` through `fylgja_stages` |
+| `StagesPresent(ids []string) ([]string, error)` | which of the ids still read as stages on the default branch, whatever proposed change they name or none; writes nothing (T058) |
 | `DeleteStagesOf(id string) (int, error)` | each stage |
 | `ProposedChangesOf(branch string) ([]ProposedChangeRow, error)` | `{ID, Name, State, Draft}`, every state |
 | `CloseProposedChange(id string) error` | `state closed` |
@@ -89,6 +92,8 @@ completion counts as the generation). A non-rendered change for the hole R-05 cl
 | `RunCheck(id string, timeout time.Duration) (completedAt string, err error)` | `ARTIFACT`; waits for `completed_at` to move (120 s) |
 | `Rebase(branch string) error` | `BranchRebase(data: {name}, wait_until_completion: true)`, bounded 180 s (about 67 s) |
 | `DeleteTestBranch(branch string) error` | stages, proposed changes, branch, in order |
+| `DeleteTestBranchCounting(branch string) (stages, proposed int, err error)` | `DeleteTestBranch`'s order, returning how many stages and proposed changes went (T058) |
+| `BranchExists(name string) (bool, error)` (`infrahub.go`) | whether Infrahub lists the branch by name; writes nothing (T058) |
 | `ArtifactsReadyAt(branch)` (existing) | reads `checksum.updated_at`, not `status.updated_at` (research §2.5); the seed's wait is unchanged |
 
 The contract tier's invariant after `make test-contract`: `Branch` is `main` and

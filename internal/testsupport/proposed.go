@@ -343,8 +343,8 @@ func (c *Client) StagesOf(id string) ([]StageRow, error) {
 }
 
 // DeleteStagesOf deletes a proposed change's stages and returns how many. It comes before
-// the proposed change's own delete, which Infrahub allows under a stage and which leaves
-// the stage pointing at nothing (research §2.3).
+// the proposed change's own delete, which Infrahub refuses while a stage names it, the
+// relationship being required (research §8.8).
 func (c *Client) DeleteStagesOf(id string) (int, error) {
 	rows, err := c.StagesOf(id)
 	if err != nil {
@@ -420,7 +420,7 @@ func (c *Client) CloseProposedChange(id string) error {
 }
 
 // DeleteProposedChange deletes a proposed change. Delete its stages first: Infrahub
-// would leave them behind, pointing at nothing.
+// refuses the delete while a stage names it.
 func (c *Client) DeleteProposedChange(id string) error {
 	if _, err := c.testProposedChange(id); err != nil {
 		return err
@@ -542,9 +542,9 @@ func (c *Client) DeleteTestBranch(branch string) error {
 
 // DeleteTestBranchCounting deletes each stage of each proposed change whose source is a
 // test branch, then those proposed changes, then the branch, and returns how many stages
-// and proposed changes went. The order is fixed: a proposed change deleted first leaves
-// its stages pointing at nothing, and a branch deleted first cancels its open proposed
-// change, which then names a branch that no longer exists (research §2.3).
+// and proposed changes went. The order is fixed: Infrahub refuses a proposed change's
+// delete while a stage names it (research §8.8), and a branch deleted first cancels its
+// open proposed change, which then names a branch that no longer exists (research §2.3).
 func (c *Client) DeleteTestBranchCounting(branch string) (stages, proposed int, err error) {
 	rows, err := c.ProposedChangesOf(branch)
 	if err != nil {

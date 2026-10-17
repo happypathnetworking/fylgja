@@ -519,9 +519,9 @@ func change(branch string, generate bool, role, site, port string) error {
 // deleteBranch deletes a branch and what hangs on it. A test branch goes in the fixed
 // order: the test series naming it (a waypoint outlives its branch, so one left behind
 // would be listed by every waypoint list after), then every stage of every proposed
-// change whose source it is, then those proposed changes, then the branch, since a
-// proposed change deleted first leaves its stages pointing at nothing and a branch deleted
-// first cancels its open proposed change (research §2.3). The fixture has no proposed
+// change whose source it is, then those proposed changes, then the branch, since Infrahub
+// refuses a proposed change's delete while a stage names it (research §8.8) and a branch
+// deleted first cancels its open proposed change (research §2.3). The fixture has no proposed
 // change and is deleted as before, which make infrahub-clean needs; any other branch is
 // refused by deletable before any request, being an operator's.
 func deleteBranch(c *testsupport.Client, branch string) error {

@@ -45,7 +45,7 @@ func harness(t *testing.T) *testsupport.Client {
 
 // testBranch makes a branch fylgja-test-st-<ts>-<n>. When the test ends, each stage of
 // each proposed change whose source it is goes, then those proposed changes, then the
-// branch: a proposed change deleted first leaves its stages pointing at nothing, and a
+// branch: Infrahub refuses a proposed change's delete while a stage names it, and a
 // branch deleted first cancels its open proposed change. The durable fylgja-fixture branch
 // is never written.
 func testBranch(t *testing.T, c *testsupport.Client) string {

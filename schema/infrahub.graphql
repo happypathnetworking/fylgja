@@ -3270,14 +3270,14 @@ type CoreGroupAction implements CoreNode & CoreAction {
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """A detailed description of the action"""
   description: TextAttribute
 
   """Short descriptive name"""
   name: TextAttribute
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   triggers(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, active__value: Boolean, active__values: [Boolean], active__source__id: ID, active__owner__id: ID, active__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, branch_scope__value: String, branch_scope__values: [String], branch_scope__source__id: ID, branch_scope__owner__id: ID, branch_scope__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean): NestedPaginatedCoreTriggerRule!
 
   """
@@ -3591,14 +3591,14 @@ type BuiltinTag implements CoreNode {
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """None (required)"""
   name: TextAttribute
 
   """None"""
   description: TextAttribute
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   profiles(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, profile_priority__value: BigInt, profile_priority__values: [BigInt], profile_priority__source__id: ID, profile_priority__owner__id: ID, profile_priority__is_protected: Boolean, profile_name__value: String, profile_name__values: [String], profile_name__source__id: ID, profile_name__owner__id: ID, profile_name__is_protected: Boolean): NestedPaginatedCoreProfile!
 }
 
@@ -3639,7 +3639,7 @@ type NestedPaginatedBuiltinTag {
 }
 
 """User Account for Infrahub"""
-type CoreAccount implements CoreGenericAccount & LineageOwner & CoreNode & LineageSource {
+type CoreAccount implements LineageSource & CoreGenericAccount & CoreNode & LineageOwner {
   """Unique identifier"""
   id: String!
 
@@ -3699,8 +3699,6 @@ type InternalAccountToken implements CoreNode {
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """The authentication token value (required)"""
   token: TextAttribute
@@ -3710,7 +3708,9 @@ type InternalAccountToken implements CoreNode {
 
   """Date and time when the token expires"""
   expiration: TextAttribute
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   account: NestedEdgedCoreGenericAccount!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 }
 
 """Token for User Account"""
@@ -3749,14 +3749,14 @@ type CoreGeneratorAction implements CoreNode & CoreAction {
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """A detailed description of the action"""
   description: TextAttribute
 
   """Short descriptive name"""
   name: TextAttribute
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   triggers(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, active__value: Boolean, active__values: [Boolean], active__source__id: ID, active__owner__id: ID, active__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, branch_scope__value: String, branch_scope__values: [String], branch_scope__source__id: ID, branch_scope__owner__id: ID, branch_scope__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean): NestedPaginatedCoreTriggerRule!
   generator: NestedEdgedCoreGeneratorDefinition!
 }
@@ -3792,15 +3792,13 @@ type NestedPaginatedCoreGeneratorAction {
 """
 A trigger rule that matches against updates to memberships within groups
 """
-type CoreGroupTriggerRule implements CoreNode & CoreTriggerRule {
+type CoreGroupTriggerRule implements CoreTriggerRule & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """
   Indicates if this trigger is enabled or if it's just prepared, could be useful as you are setting up a trigger
@@ -3817,6 +3815,8 @@ type CoreGroupTriggerRule implements CoreNode & CoreTriggerRule {
 
   """The name of the trigger rule"""
   name: TextAttribute
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   action: NestedEdgedCoreAction!
 
   """Indicate if the match should be for when members are added or removed"""
@@ -3863,15 +3863,13 @@ type NestedPaginatedCoreGroupTriggerRule {
 """
 A trigger rule that evaluates modifications to nodes within the Infrahub database
 """
-type CoreNodeTriggerRule implements CoreNode & CoreTriggerRule {
+type CoreNodeTriggerRule implements CoreTriggerRule & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """
   Indicates if this trigger is enabled or if it's just prepared, could be useful as you are setting up a trigger
@@ -3888,6 +3886,8 @@ type CoreNodeTriggerRule implements CoreNode & CoreTriggerRule {
 
   """The name of the trigger rule"""
   name: TextAttribute
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   action: NestedEdgedCoreAction!
 
   """The kind of node to match against (required)"""
@@ -3935,15 +3935,15 @@ type NestedPaginatedCoreNodeTriggerRule {
 }
 
 """A trigger match that matches against attribute changes on a node"""
-type CoreNodeTriggerAttributeMatch implements CoreNode & CoreNodeTriggerMatch {
+type CoreNodeTriggerAttributeMatch implements CoreNodeTriggerMatch & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   trigger: NestedEdgedCoreNodeTriggerRule!
 
   """
@@ -3990,15 +3990,15 @@ type NestedPaginatedCoreNodeTriggerAttributeMatch {
 }
 
 """A trigger match that matches against relationship changes on a node"""
-type CoreNodeTriggerRelationshipMatch implements CoreNode & CoreNodeTriggerMatch {
+type CoreNodeTriggerRelationshipMatch implements CoreNodeTriggerMatch & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   trigger: NestedEdgedCoreNodeTriggerRule!
 
   """The node_id of the relationship peer to match against"""
@@ -4049,11 +4049,11 @@ type CorePasswordCredential implements CoreNode & CoreCredential {
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   name: TextAttribute
   label: TextAttribute
   description: TextAttribute
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """None"""
   password: TextAttribute
@@ -4098,11 +4098,11 @@ type InternalRefreshToken implements CoreNode {
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Date and time when the refresh token expires (required)"""
   expiration: TextAttribute
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   account: NestedEdgedCoreGenericAccount!
 }
 
@@ -4135,15 +4135,15 @@ type NestedPaginatedInternalRefreshToken {
 }
 
 """Metadata related to a proposed change"""
-type CoreProposedChange implements CoreNode & CoreTaskTarget {
+type CoreProposedChange implements CoreTaskTarget & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Whether the proposed change is still a draft"""
   is_draft: CheckboxAttribute
@@ -4203,21 +4203,21 @@ type NestedPaginatedCoreProposedChange {
 }
 
 """A thread on proposed change"""
-type CoreChangeThread implements CoreNode & CoreThread {
+type CoreChangeThread implements CoreThread & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   label: TextAttribute
 
   """Whether the thread has been marked as resolved"""
   resolved: CheckboxAttribute
   comments(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, text__value: String, text__values: [String], text__source__id: ID, text__owner__id: ID, text__is_protected: Boolean): NestedPaginatedCoreThreadComment!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   change: NestedEdgedCoreProposedChange!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 }
 
 """A thread on proposed change"""
@@ -4249,21 +4249,21 @@ type NestedPaginatedCoreChangeThread {
 }
 
 """A thread related to a file on a proposed change"""
-type CoreFileThread implements CoreNode & CoreThread {
+type CoreFileThread implements CoreThread & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   label: TextAttribute
 
   """Whether the thread has been marked as resolved"""
   resolved: CheckboxAttribute
   comments(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, text__value: String, text__values: [String], text__source__id: ID, text__owner__id: ID, text__is_protected: Boolean): NestedPaginatedCoreThreadComment!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   change: NestedEdgedCoreProposedChange!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Path to the file being discussed"""
   file: TextAttribute
@@ -4305,21 +4305,21 @@ type NestedPaginatedCoreFileThread {
 }
 
 """A thread related to an artifact on a proposed change"""
-type CoreArtifactThread implements CoreNode & CoreThread {
+type CoreArtifactThread implements CoreThread & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   label: TextAttribute
 
   """Whether the thread has been marked as resolved"""
   resolved: CheckboxAttribute
   comments(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, text__value: String, text__values: [String], text__source__id: ID, text__owner__id: ID, text__is_protected: Boolean): NestedPaginatedCoreThreadComment!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   change: NestedEdgedCoreProposedChange!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """ID of the artifact in the object store"""
   storage_id: TextAttribute
@@ -4360,21 +4360,21 @@ type NestedPaginatedCoreArtifactThread {
 }
 
 """A thread related to an object on a proposed change"""
-type CoreObjectThread implements CoreNode & CoreThread {
+type CoreObjectThread implements CoreThread & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   label: TextAttribute
 
   """Whether the thread has been marked as resolved"""
   resolved: CheckboxAttribute
   comments(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, text__value: String, text__values: [String], text__source__id: ID, text__owner__id: ID, text__is_protected: Boolean): NestedPaginatedCoreThreadComment!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   change: NestedEdgedCoreProposedChange!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Path to the object being discussed (required)"""
   object_path: TextAttribute
@@ -4497,15 +4497,15 @@ type NestedPaginatedCoreThreadComment {
 }
 
 """A Git Repository integrated with Infrahub"""
-type CoreRepository implements LineageOwner & CoreNode & CoreTaskTarget & CoreGenericRepository & LineageSource {
+type CoreRepository implements CoreNode & LineageOwner & LineageSource & CoreTaskTarget & CoreGenericRepository {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Connectivity status of the repository"""
   operational_status: Dropdown
@@ -4570,15 +4570,15 @@ type NestedPaginatedCoreRepository {
 """
 A Git Repository integrated with Infrahub, Git-side will not be updated
 """
-type CoreReadOnlyRepository implements LineageOwner & CoreNode & CoreTaskTarget & CoreGenericRepository & LineageSource {
+type CoreReadOnlyRepository implements CoreNode & LineageOwner & LineageSource & CoreTaskTarget & CoreGenericRepository {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Connectivity status of the repository"""
   operational_status: Dropdown
@@ -4649,15 +4649,13 @@ type NestedPaginatedCoreReadOnlyRepository {
 }
 
 """A file rendered from a Jinja2 template"""
-type CoreTransformJinja2 implements CoreNode & CoreTransformation {
+type CoreTransformJinja2 implements CoreTransformation & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Maximum execution time in seconds"""
   timeout: NumberAttribute
@@ -4681,6 +4679,8 @@ type CoreTransformJinja2 implements CoreNode & CoreTransformation {
   tags(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean): NestedPaginatedBuiltinTag!
   repository: NestedEdgedCoreGenericRepository!
   query: NestedEdgedCoreGraphQLQuery!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Path to the Jinja2 template file in the repository (required)"""
   template_path: TextAttribute
@@ -5120,7 +5120,7 @@ type NestedPaginatedCoreGeneratorCheck {
 }
 
 """A check to validate the data integrity between two branches"""
-type CoreDataValidator implements CoreValidator & CoreNode {
+type CoreDataValidator implements CoreNode & CoreValidator {
   """Unique identifier"""
   id: String!
 
@@ -5175,7 +5175,7 @@ type NestedPaginatedCoreDataValidator {
 }
 
 """A Validator related to a specific repository"""
-type CoreRepositoryValidator implements CoreValidator & CoreNode {
+type CoreRepositoryValidator implements CoreNode & CoreValidator {
   """Unique identifier"""
   id: String!
 
@@ -5231,7 +5231,7 @@ type NestedPaginatedCoreRepositoryValidator {
 }
 
 """A Validator related to a user defined checks in a repository"""
-type CoreUserValidator implements CoreValidator & CoreNode {
+type CoreUserValidator implements CoreNode & CoreValidator {
   """Unique identifier"""
   id: String!
 
@@ -5288,7 +5288,7 @@ type NestedPaginatedCoreUserValidator {
 }
 
 """A validator related to the schema"""
-type CoreSchemaValidator implements CoreValidator & CoreNode {
+type CoreSchemaValidator implements CoreNode & CoreValidator {
   """Unique identifier"""
   id: String!
 
@@ -5343,7 +5343,7 @@ type NestedPaginatedCoreSchemaValidator {
 }
 
 """A validator related to the artifacts"""
-type CoreArtifactValidator implements CoreValidator & CoreNode {
+type CoreArtifactValidator implements CoreNode & CoreValidator {
   """Unique identifier"""
   id: String!
 
@@ -5399,7 +5399,7 @@ type NestedPaginatedCoreArtifactValidator {
 }
 
 """A validator related to generators"""
-type CoreGeneratorValidator implements CoreValidator & CoreNode {
+type CoreGeneratorValidator implements CoreNode & CoreValidator {
   """Unique identifier"""
   id: String!
 
@@ -5455,15 +5455,15 @@ type NestedPaginatedCoreGeneratorValidator {
 }
 
 """Defines a user-defined check that validates data in a proposed change"""
-type CoreCheckDefinition implements CoreNode & CoreTaskTarget {
+type CoreCheckDefinition implements CoreTaskTarget & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Path to the Python file containing the check class (required)"""
   file_path: TextAttribute
@@ -5518,15 +5518,13 @@ type NestedPaginatedCoreCheckDefinition {
 }
 
 """A transform function written in Python"""
-type CoreTransformPython implements CoreNode & CoreTransformation {
+type CoreTransformPython implements CoreTransformation & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Maximum execution time in seconds"""
   timeout: NumberAttribute
@@ -5550,6 +5548,8 @@ type CoreTransformPython implements CoreNode & CoreTransformation {
   tags(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean): NestedPaginatedBuiltinTag!
   repository: NestedEdgedCoreGenericRepository!
   query: NestedEdgedCoreGraphQLQuery!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Name of the Python class implementing the transformation (required)"""
   class_name: TextAttribute
@@ -5597,8 +5597,6 @@ type CoreGraphQLQuery implements CoreNode {
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """number of nested levels in the query"""
   depth: NumberAttribute
@@ -5630,7 +5628,9 @@ type CoreGraphQLQuery implements CoreNode {
   name: TextAttribute
   repository: NestedEdgedCoreGenericRepository!
   tags(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean): NestedPaginatedBuiltinTag!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   query_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, parameters__value: GenericScalar, parameters__values: [GenericScalar], parameters__source__id: ID, parameters__owner__id: ID, parameters__is_protected: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGraphQLQueryGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 }
 
 """A pre-defined GraphQL Query"""
@@ -5664,15 +5664,15 @@ type NestedPaginatedCoreGraphQLQuery {
 """
 A file generated by a transformation, associated with a specific object
 """
-type CoreArtifact implements CoreNode & CoreTaskTarget {
+type CoreArtifact implements CoreTaskTarget & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """ID of the file in the object store"""
   storage_id: TextAttribute
@@ -5734,15 +5734,15 @@ type NestedPaginatedCoreArtifact {
 """
 Defines how artifacts are generated from a transformation for a group of targets
 """
-type CoreArtifactDefinition implements CoreNode & CoreTaskTarget {
+type CoreArtifactDefinition implements CoreTaskTarget & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """GraphQL query parameters for the transformation (required)"""
   parameters: JSONAttribute
@@ -5806,15 +5806,15 @@ type NestedPaginatedCoreArtifactDefinition {
 """
 Defines a generator that creates or updates objects based on a GraphQL query
 """
-type CoreGeneratorDefinition implements CoreNode & CoreTaskTarget {
+type CoreGeneratorDefinition implements CoreTaskTarget & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Whether to run this generator in proposed changes"""
   execute_in_proposed_change: CheckboxAttribute
@@ -5896,15 +5896,15 @@ type NestedPaginatedCoreGeneratorDefinition {
 }
 
 """An instance of a generator execution for a specific object"""
-type CoreGeneratorInstance implements CoreNode & CoreTaskTarget {
+type CoreGeneratorInstance implements CoreTaskTarget & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """None (required)"""
   status: TextAttribute
@@ -5944,15 +5944,13 @@ type NestedPaginatedCoreGeneratorInstance {
 }
 
 """A key-value pair with a plain-text value"""
-type CoreStaticKeyValue implements CoreNode & CoreKeyValue {
+type CoreStaticKeyValue implements CoreKeyValue & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Optional description of this key-value pair"""
   description: TextAttribute
@@ -5965,6 +5963,8 @@ type CoreStaticKeyValue implements CoreNode & CoreKeyValue {
 
   """The key portion of the key-value pair"""
   key: TextAttribute
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 }
 
 """A key-value pair with a plain-text value"""
@@ -5998,15 +5998,13 @@ type NestedPaginatedCoreStaticKeyValue {
 """
 A key-value pair whose value is resolved from an environment variable at send time
 """
-type CoreEnvKeyValue implements CoreNode & CoreKeyValue {
+type CoreEnvKeyValue implements CoreKeyValue & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """Optional description of this key-value pair"""
   description: TextAttribute
@@ -6019,6 +6017,8 @@ type CoreEnvKeyValue implements CoreNode & CoreKeyValue {
 
   """The key portion of the key-value pair"""
   key: TextAttribute
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 }
 
 """
@@ -6058,7 +6058,7 @@ type NestedPaginatedCoreEnvKeyValue {
 }
 
 """A webhook that connects to an external integration"""
-type CoreStandardWebhook implements CoreWebhook & CoreNode & CoreTaskTarget {
+type CoreStandardWebhook implements CoreWebhook & CoreTaskTarget & CoreNode {
   """Unique identifier"""
   id: String!
 
@@ -6122,7 +6122,7 @@ type NestedPaginatedCoreStandardWebhook {
 }
 
 """A webhook that connects to an external integration"""
-type CoreCustomWebhook implements CoreWebhook & CoreNode & CoreTaskTarget {
+type CoreCustomWebhook implements CoreWebhook & CoreTaskTarget & CoreNode {
   """Unique identifier"""
   id: String!
 
@@ -6187,18 +6187,18 @@ type NestedPaginatedCoreCustomWebhook {
 }
 
 """A namespace that segments IPAM"""
-type IpamNamespace implements CoreNode & BuiltinIPNamespace {
+type IpamNamespace implements BuiltinIPNamespace & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   name: TextAttribute
   description: TextAttribute
   ip_prefixes(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, is_pool__value: Boolean, is_pool__values: [Boolean], is_pool__source__id: ID, is_pool__owner__id: ID, is_pool__is_protected: Boolean, utilization__value: BigInt, utilization__values: [BigInt], utilization__source__id: ID, utilization__owner__id: ID, utilization__is_protected: Boolean, hostmask__value: String, hostmask__values: [String], hostmask__source__id: ID, hostmask__owner__id: ID, hostmask__is_protected: Boolean, network_address__value: String, network_address__values: [String], network_address__source__id: ID, network_address__owner__id: ID, network_address__is_protected: Boolean, is_top_level__value: Boolean, is_top_level__values: [Boolean], is_top_level__source__id: ID, is_top_level__owner__id: ID, is_top_level__is_protected: Boolean, prefix__value: String, prefix__values: [String], prefix__source__id: ID, prefix__owner__id: ID, prefix__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, netmask__value: String, netmask__values: [String], netmask__source__id: ID, netmask__owner__id: ID, netmask__is_protected: Boolean, broadcast_address__value: String, broadcast_address__values: [String], broadcast_address__source__id: ID, broadcast_address__owner__id: ID, broadcast_address__is_protected: Boolean, member_type__value: String, member_type__values: [String], member_type__source__id: ID, member_type__owner__id: ID, member_type__is_protected: Boolean): NestedPaginatedBuiltinIPPrefix!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   ip_addresses(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, address__value: String, address__values: [String], address__source__id: ID, address__owner__id: ID, address__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean): NestedPaginatedBuiltinIPAddress!
   profiles(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, profile_priority__value: BigInt, profile_priority__values: [BigInt], profile_priority__source__id: ID, profile_priority__owner__id: ID, profile_priority__is_protected: Boolean, profile_name__value: String, profile_name__values: [String], profile_name__source__id: ID, profile_name__owner__id: ID, profile_name__is_protected: Boolean): NestedPaginatedCoreProfile!
 
@@ -6235,7 +6235,7 @@ type NestedPaginatedIpamNamespace {
 }
 
 """A pool of IP prefix resources"""
-type CoreIPPrefixPool implements CoreResourcePool & CoreNode & LineageSource & CoreIPPool {
+type CoreIPPrefixPool implements CoreResourcePool & LineageSource & CoreIPPool & CoreNode {
   """Unique identifier"""
   id: String!
 
@@ -6290,7 +6290,7 @@ type NestedPaginatedCoreIPPrefixPool {
 }
 
 """A pool of IP address resources"""
-type CoreIPAddressPool implements CoreResourcePool & CoreNode & LineageSource & CoreIPPool {
+type CoreIPAddressPool implements CoreResourcePool & LineageSource & CoreIPPool & CoreNode {
   """Unique identifier"""
   id: String!
 
@@ -6344,17 +6344,17 @@ type NestedPaginatedCoreIPAddressPool {
 }
 
 """A pool of number resources"""
-type CoreNumberPool implements CoreNode & LineageSource & CoreResourcePool {
+type CoreNumberPool implements LineageSource & CoreResourcePool & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   name: TextAttribute
   description: TextAttribute
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """The attribute of the selected model (required)"""
   node_attribute: TextAttribute
@@ -6520,13 +6520,13 @@ type CoreAccountRole implements CoreNode {
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """None (required)"""
   name: TextAttribute
   permissions(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, identifier__value: String, identifier__values: [String], identifier__source__id: ID, identifier__owner__id: ID, identifier__is_protected: Boolean): NestedPaginatedCoreBasePermission!
   groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, origin__value: String, origin__values: [String], origin__source__id: ID, origin__owner__id: ID, origin__is_protected: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreAccountGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 }
 
 """A role defines a set of permissions to grant to a group of accounts"""
@@ -6558,7 +6558,7 @@ type NestedPaginatedCoreAccountRole {
 }
 
 """A group of users to manage common permissions"""
-type CoreAccountGroup implements LineageOwner & CoreGroup & LineageSource {
+type CoreAccountGroup implements CoreGroup & LineageSource & LineageOwner {
   """Unique identifier"""
   id: String!
 
@@ -6616,15 +6616,13 @@ type NestedPaginatedCoreAccountGroup {
 """
 IPv4 or IPv6 prefix also referred as network which has not been allocated yet
 """
-type InternalIPPrefixAvailable implements CoreNode & BuiltinIPPrefix {
+type InternalIPPrefixAvailable implements BuiltinIPPrefix & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean, include_descendants: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean, include_descendants: Boolean): NestedPaginatedCoreGroup!
 
   """All IP addresses within this prefix are considered usable"""
   is_pool: CheckboxAttribute
@@ -6656,6 +6654,8 @@ type InternalIPPrefixAvailable implements CoreNode & BuiltinIPPrefix {
   ip_namespace: NestedEdgedBuiltinIPNamespace!
   ip_addresses(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, address__value: String, address__values: [String], address__source__id: ID, address__owner__id: ID, address__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, include_descendants: Boolean): NestedPaginatedBuiltinIPAddress!
   resource_pool(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, include_descendants: Boolean): NestedPaginatedCoreIPPool!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean, include_descendants: Boolean): NestedPaginatedCoreGroup!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean, include_descendants: Boolean): NestedPaginatedCoreGroup!
   profiles(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, profile_priority__value: BigInt, profile_priority__values: [BigInt], profile_priority__source__id: ID, profile_priority__owner__id: ID, profile_priority__is_protected: Boolean, profile_name__value: String, profile_name__values: [String], profile_name__source__id: ID, profile_name__owner__id: ID, profile_name__is_protected: Boolean, include_descendants: Boolean): NestedPaginatedCoreProfile!
   parent: NestedEdgedBuiltinIPPrefix!
   children(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, is_pool__value: Boolean, is_pool__values: [Boolean], is_pool__source__id: ID, is_pool__owner__id: ID, is_pool__is_protected: Boolean, utilization__value: BigInt, utilization__values: [BigInt], utilization__source__id: ID, utilization__owner__id: ID, utilization__is_protected: Boolean, hostmask__value: String, hostmask__values: [String], hostmask__source__id: ID, hostmask__owner__id: ID, hostmask__is_protected: Boolean, network_address__value: String, network_address__values: [String], network_address__source__id: ID, network_address__owner__id: ID, network_address__is_protected: Boolean, is_top_level__value: Boolean, is_top_level__values: [Boolean], is_top_level__source__id: ID, is_top_level__owner__id: ID, is_top_level__is_protected: Boolean, prefix__value: String, prefix__values: [String], prefix__source__id: ID, prefix__owner__id: ID, prefix__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, netmask__value: String, netmask__values: [String], netmask__source__id: ID, netmask__owner__id: ID, netmask__is_protected: Boolean, broadcast_address__value: String, broadcast_address__values: [String], broadcast_address__source__id: ID, broadcast_address__owner__id: ID, broadcast_address__is_protected: Boolean, member_type__value: String, member_type__values: [String], member_type__source__id: ID, member_type__owner__id: ID, member_type__is_protected: Boolean): NestedPaginatedBuiltinIPPrefix!
@@ -6700,19 +6700,19 @@ type NestedPaginatedInternalIPPrefixAvailable {
 }
 
 """Range of IPv4 or IPv6 addresses which has not been allocated yet"""
-type InternalIPRangeAvailable implements CoreNode & BuiltinIPAddress {
+type InternalIPRangeAvailable implements BuiltinIPAddress & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """The IP address with prefix length"""
   address: IPHost
   description: TextAttribute
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   ip_prefix: NestedEdgedBuiltinIPPrefix!
   ip_namespace: NestedEdgedBuiltinIPNamespace!
   profiles(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, profile_priority__value: BigInt, profile_priority__values: [BigInt], profile_priority__source__id: ID, profile_priority__owner__id: ID, profile_priority__is_protected: Boolean, profile_name__value: String, profile_name__values: [String], profile_name__source__id: ID, profile_name__owner__id: ID, profile_name__is_protected: Boolean): NestedPaginatedCoreProfile!
@@ -6757,8 +6757,6 @@ type InternalExternalIdentity implements CoreNode {
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """
   The provider name as configured in Infrahub, e.g. 'google', 'provider1' (required)
@@ -6772,7 +6770,9 @@ type InternalExternalIdentity implements CoreNode {
   The authentication protocol used, e.g. 'oidc', 'oauth2', 'ldap' (required)
   """
   protocol: TextAttribute
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   account: NestedEdgedCoreGenericAccount!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 }
 
 """External authentication provider identity linked to an account"""
@@ -6813,11 +6813,11 @@ type FylgjaContract implements CoreNode {
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """None (required)"""
   version: TextAttribute
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   profiles(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, profile_priority__value: BigInt, profile_priority__values: [BigInt], profile_priority__source__id: ID, profile_priority__owner__id: ID, profile_priority__is_protected: Boolean, profile_name__value: String, profile_name__values: [String], profile_name__source__id: ID, profile_name__owner__id: ID, profile_name__is_protected: Boolean): NestedPaginatedCoreProfile!
 }
 
@@ -6857,81 +6857,7 @@ type NestedPaginatedFylgjaContract {
   permissions: PaginatedObjectPermission!
 }
 
-"""
-A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it.
-"""
-type FylgjaWaypoint implements CoreNode {
-  """Unique identifier"""
-  id: String!
-
-  """Human friendly identifier"""
-  hfid: [String!]
-  display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-
-  """What this chapter of the story is."""
-  description: TextAttribute
-
-  """
-  The Infrahub branch this waypoint seals. Its last write is the waypoint's own time. (required)
-  """
-  branch: TextAttribute
-
-  """
-  Position in the series: a positive integer, unique within the series. (required)
-  """
-  sequence: NumberAttribute
-
-  """
-  The point in time on the branch (the reference's at), passed verbatim. Omitted: when the waypoint was written.
-  """
-  as_of: TextAttribute
-
-  """
-  The series this waypoint belongs to: a name with no '/' and no whitespace. (required)
-  """
-  series: TextAttribute
-  profiles(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, profile_priority__value: BigInt, profile_priority__values: [BigInt], profile_priority__source__id: ID, profile_priority__owner__id: ID, profile_priority__is_protected: Boolean, profile_name__value: String, profile_name__values: [String], profile_name__source__id: ID, profile_name__owner__id: ID, profile_name__is_protected: Boolean): NestedPaginatedCoreProfile!
-}
-
-"""
-A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it.
-"""
-type EdgedFylgjaWaypoint {
-  node: FylgjaWaypoint
-  node_metadata: InfrahubNodeMetadata
-}
-
-"""
-A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it.
-"""
-type NestedEdgedFylgjaWaypoint {
-  node: FylgjaWaypoint
-  node_metadata: InfrahubNodeMetadata
-  properties: RelationshipProperty
-  relationship_metadata: InfrahubRelationshipMetadata
-}
-
-"""
-A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it.
-"""
-type PaginatedFylgjaWaypoint {
-  count: Int!
-  edges: [EdgedFylgjaWaypoint!]!
-  permissions: PaginatedObjectPermission!
-}
-
-"""
-A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it.
-"""
-type NestedPaginatedFylgjaWaypoint {
-  count: Int!
-  edges: [NestedEdgedFylgjaWaypoint!]!
-  permissions: PaginatedObjectPermission!
-}
-
-type NetworkDevice implements FylgjaDevice & CoreNode & CoreArtifactTarget {
+type NetworkDevice implements FylgjaDevice & CoreArtifactTarget & CoreNode {
   """Unique identifier"""
   id: String!
 
@@ -6975,15 +6901,13 @@ type NestedPaginatedNetworkDevice {
   permissions: PaginatedObjectPermission!
 }
 
-type NetworkInterface implements CoreNode & FylgjaInterface {
+type NetworkInterface implements FylgjaInterface & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   name: TextAttribute
   iftype: Dropdown
 
@@ -6994,8 +6918,10 @@ type NetworkInterface implements CoreNode & FylgjaInterface {
   enabled: CheckboxAttribute
   parent: NestedEdgedFylgjaInterface!
   link: NestedEdgedFylgjaLink!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   device: NestedEdgedFylgjaDevice!
   addresses(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, address__value: String, address__values: [String], address__source__id: ID, address__owner__id: ID, address__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean): NestedPaginatedBuiltinIPAddress!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   profiles(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, profile_priority__value: BigInt, profile_priority__values: [BigInt], profile_priority__source__id: ID, profile_priority__owner__id: ID, profile_priority__is_protected: Boolean, profile_name__value: String, profile_name__values: [String], profile_name__source__id: ID, profile_name__owner__id: ID, profile_name__is_protected: Boolean): NestedPaginatedCoreProfile!
 }
 
@@ -7023,16 +6949,16 @@ type NestedPaginatedNetworkInterface {
   permissions: PaginatedObjectPermission!
 }
 
-type NetworkLink implements CoreNode & FylgjaLink {
+type NetworkLink implements FylgjaLink & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   endpoints(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, iftype__value: String, iftype__values: [String], iftype__source__id: ID, iftype__owner__id: ID, iftype__is_protected: Boolean, mgmt_only__value: Boolean, mgmt_only__values: [Boolean], mgmt_only__source__id: ID, mgmt_only__owner__id: ID, mgmt_only__is_protected: Boolean, enabled__value: Boolean, enabled__values: [Boolean], enabled__source__id: ID, enabled__owner__id: ID, enabled__is_protected: Boolean): NestedPaginatedFylgjaInterface!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   profiles(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, profile_priority__value: BigInt, profile_priority__values: [BigInt], profile_priority__source__id: ID, profile_priority__owner__id: ID, profile_priority__is_protected: Boolean, profile_name__value: String, profile_name__values: [String], profile_name__source__id: ID, profile_name__owner__id: ID, profile_name__is_protected: Boolean): NestedPaginatedCoreProfile!
 }
 
@@ -7060,21 +6986,21 @@ type NestedPaginatedNetworkLink {
   permissions: PaginatedObjectPermission!
 }
 
-type NetworkPlatform implements CoreNode & FylgjaPlatform {
+type NetworkPlatform implements FylgjaPlatform & CoreNode {
   """Unique identifier"""
   id: String!
 
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   vendor: TextAttribute
 
   """srlinux | eos | iol | panos | ..."""
   nos: TextAttribute
   model: TextAttribute
   version: TextAttribute
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   profiles(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, profile_priority__value: BigInt, profile_priority__values: [BigInt], profile_priority__source__id: ID, profile_priority__owner__id: ID, profile_priority__is_protected: Boolean, profile_name__value: String, profile_name__values: [String], profile_name__source__id: ID, profile_name__owner__id: ID, profile_name__is_protected: Boolean): NestedPaginatedCoreProfile!
 }
 
@@ -7112,8 +7038,6 @@ type FylgjaStage implements CoreNode {
   """Human friendly identifier"""
   hfid: [String!]
   display_label: String
-  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
-  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
 
   """What this moment of the change is, in a sentence."""
   description: TextAttribute
@@ -7127,6 +7051,8 @@ type FylgjaStage implements CoreNode {
   What this stage of the change is: a name with no '/' and no whitespace, unique within its proposed change. (required)
   """
   label: TextAttribute
+  subscriber_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
+  member_of_groups(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, group_type__value: String, group_type__values: [String], group_type__source__id: ID, group_type__owner__id: ID, group_type__is_protected: Boolean, description__value: String, description__values: [String], description__source__id: ID, description__owner__id: ID, description__is_protected: Boolean, name__value: String, name__values: [String], name__source__id: ID, name__owner__id: ID, name__is_protected: Boolean, label__value: String, label__values: [String], label__source__id: ID, label__owner__id: ID, label__is_protected: Boolean): NestedPaginatedCoreGroup!
   proposed_change: NestedEdgedCoreProposedChange!
   profiles(offset: Int, limit: Int, order: OrderInput, ids: [ID], isnull: Boolean, display_label__value: String, display_label__values: [String], display_label__isnull: Boolean, profile_priority__value: BigInt, profile_priority__values: [BigInt], profile_priority__source__id: ID, profile_priority__owner__id: ID, profile_priority__is_protected: Boolean, profile_name__value: String, profile_name__values: [String], profile_name__source__id: ID, profile_name__owner__id: ID, profile_name__is_protected: Boolean): NestedPaginatedCoreProfile!
 }
@@ -7168,7 +7094,7 @@ type NestedPaginatedFylgjaStage {
 }
 
 """Profile for BuiltinTag"""
-type ProfileBuiltinTag implements CoreProfile & CoreNode & LineageSource {
+type ProfileBuiltinTag implements LineageSource & CoreNode & CoreProfile {
   """Unique identifier"""
   id: String!
 
@@ -7220,7 +7146,7 @@ type NestedPaginatedProfileBuiltinTag {
 }
 
 """Profile for IpamNamespace"""
-type ProfileIpamNamespace implements CoreProfile & CoreNode & LineageSource {
+type ProfileIpamNamespace implements LineageSource & CoreNode & CoreProfile {
   """Unique identifier"""
   id: String!
 
@@ -7274,7 +7200,7 @@ type NestedPaginatedProfileIpamNamespace {
 }
 
 """Profile for FylgjaContract"""
-type ProfileFylgjaContract implements CoreProfile & CoreNode & LineageSource {
+type ProfileFylgjaContract implements LineageSource & CoreNode & CoreProfile {
   """Unique identifier"""
   id: String!
 
@@ -7326,7 +7252,7 @@ type NestedPaginatedProfileFylgjaContract {
 }
 
 """Profile for NetworkDevice"""
-type ProfileNetworkDevice implements CoreProfile & CoreNode & LineageSource {
+type ProfileNetworkDevice implements LineageSource & CoreNode & CoreProfile {
   """Unique identifier"""
   id: String!
 
@@ -7383,7 +7309,7 @@ type NestedPaginatedProfileNetworkDevice {
 }
 
 """Profile for NetworkInterface"""
-type ProfileNetworkInterface implements CoreProfile & CoreNode & LineageSource {
+type ProfileNetworkInterface implements LineageSource & CoreNode & CoreProfile {
   """Unique identifier"""
   id: String!
 
@@ -7449,7 +7375,7 @@ type NestedPaginatedProfileNetworkInterface {
 }
 
 """Profile for NetworkLink"""
-type ProfileNetworkLink implements CoreProfile & CoreNode & LineageSource {
+type ProfileNetworkLink implements LineageSource & CoreNode & CoreProfile {
   """Unique identifier"""
   id: String!
 
@@ -7499,7 +7425,7 @@ type NestedPaginatedProfileNetworkLink {
 }
 
 """Profile for NetworkPlatform"""
-type ProfileNetworkPlatform implements CoreProfile & CoreNode & LineageSource {
+type ProfileNetworkPlatform implements LineageSource & CoreNode & CoreProfile {
   """Unique identifier"""
   id: String!
 
@@ -7560,7 +7486,7 @@ type NestedPaginatedProfileNetworkPlatform {
 }
 
 """Profile for BuiltinIPPrefix"""
-type ProfileBuiltinIPPrefix implements CoreProfile & CoreNode & LineageSource {
+type ProfileBuiltinIPPrefix implements LineageSource & CoreNode & CoreProfile {
   """Unique identifier"""
   id: String!
 
@@ -7622,7 +7548,7 @@ type NestedPaginatedProfileBuiltinIPPrefix {
 }
 
 """Profile for BuiltinIPAddress"""
-type ProfileBuiltinIPAddress implements CoreProfile & CoreNode & LineageSource {
+type ProfileBuiltinIPAddress implements LineageSource & CoreNode & CoreProfile {
   """Unique identifier"""
   id: String!
 
@@ -7678,7 +7604,7 @@ type NestedPaginatedProfileBuiltinIPAddress {
 }
 
 """Profile for FylgjaDevice"""
-type ProfileFylgjaDevice implements CoreProfile & CoreNode & LineageSource {
+type ProfileFylgjaDevice implements LineageSource & CoreNode & CoreProfile {
   """Unique identifier"""
   id: String!
 
@@ -7734,7 +7660,7 @@ type NestedPaginatedProfileFylgjaDevice {
 }
 
 """Profile for FylgjaInterface"""
-type ProfileFylgjaInterface implements CoreProfile & CoreNode & LineageSource {
+type ProfileFylgjaInterface implements LineageSource & CoreNode & CoreProfile {
   """Unique identifier"""
   id: String!
 
@@ -7800,7 +7726,7 @@ type NestedPaginatedProfileFylgjaInterface {
 }
 
 """Profile for FylgjaLink"""
-type ProfileFylgjaLink implements CoreProfile & CoreNode & LineageSource {
+type ProfileFylgjaLink implements LineageSource & CoreNode & CoreProfile {
   """Unique identifier"""
   id: String!
 
@@ -7850,7 +7776,7 @@ type NestedPaginatedProfileFylgjaLink {
 }
 
 """Profile for FylgjaPlatform"""
-type ProfileFylgjaPlatform implements CoreProfile & CoreNode & LineageSource {
+type ProfileFylgjaPlatform implements LineageSource & CoreNode & CoreProfile {
   """Unique identifier"""
   id: String!
 
@@ -17721,123 +17647,6 @@ type Query {
     profiles__profile_name__owner__id: ID
     profiles__profile_name__is_protected: Boolean
   ): PaginatedFylgjaContract!
-  FylgjaWaypoint(
-    offset: Int
-    limit: Int
-    order: OrderInput
-    ids: [ID]
-    display_label__value: String
-    display_label__values: [String]
-    display_label__isnull: Boolean
-    hfid: [String]
-    description__value: String
-    description__values: [String]
-    description__isnull: Boolean
-    description__source__id: ID
-    description__owner__id: ID
-    description__is_protected: Boolean
-    branch__value: String
-    branch__values: [String]
-    branch__isnull: Boolean
-    branch__source__id: ID
-    branch__owner__id: ID
-    branch__is_protected: Boolean
-    sequence__value: BigInt
-    sequence__values: [BigInt]
-    sequence__isnull: Boolean
-    sequence__source__id: ID
-    sequence__owner__id: ID
-    sequence__is_protected: Boolean
-    as_of__value: DateTime
-    as_of__values: [DateTime]
-    as_of__isnull: Boolean
-    as_of__source__id: ID
-    as_of__owner__id: ID
-    as_of__is_protected: Boolean
-    series__value: String
-    series__values: [String]
-    series__isnull: Boolean
-    series__source__id: ID
-    series__owner__id: ID
-    series__is_protected: Boolean
-    any__value: String
-    any__values: [String]
-    any__source__id: ID
-    any__owner__id: ID
-    any__is_protected: Boolean
-    partial_match: Boolean
-
-    """Filter by exact creator account UUID"""
-    node_metadata__created_by__id: ID
-
-    """Filter by list of creator account UUIDs"""
-    node_metadata__created_by__ids: [ID]
-
-    """Filter by exact updater account UUID"""
-    node_metadata__updated_by__id: ID
-
-    """Filter by list of updater account UUIDs"""
-    node_metadata__updated_by__ids: [ID]
-
-    """Filter by exact creation timestamp"""
-    node_metadata__created_at: DateTime
-
-    """Filter for objects created before this timestamp"""
-    node_metadata__created_at__before: DateTime
-
-    """Filter for objects created after this timestamp"""
-    node_metadata__created_at__after: DateTime
-
-    """Filter by exact update timestamp"""
-    node_metadata__updated_at: DateTime
-
-    """Filter for objects updated before this timestamp"""
-    node_metadata__updated_at__before: DateTime
-
-    """Filter for objects updated after this timestamp"""
-    node_metadata__updated_at__after: DateTime
-    member_of_groups__ids: [ID]
-    member_of_groups__isnull: Boolean
-    member_of_groups__display_label__value: String
-    member_of_groups__display_label__values: [String]
-    member_of_groups__display_label__isnull: Boolean
-    member_of_groups__group_type__value: String
-    member_of_groups__group_type__values: [String]
-    member_of_groups__description__value: String
-    member_of_groups__description__values: [String]
-    member_of_groups__name__value: String
-    member_of_groups__name__values: [String]
-    member_of_groups__label__value: String
-    member_of_groups__label__values: [String]
-    subscriber_of_groups__ids: [ID]
-    subscriber_of_groups__isnull: Boolean
-    subscriber_of_groups__display_label__value: String
-    subscriber_of_groups__display_label__values: [String]
-    subscriber_of_groups__display_label__isnull: Boolean
-    subscriber_of_groups__group_type__value: String
-    subscriber_of_groups__group_type__values: [String]
-    subscriber_of_groups__description__value: String
-    subscriber_of_groups__description__values: [String]
-    subscriber_of_groups__name__value: String
-    subscriber_of_groups__name__values: [String]
-    subscriber_of_groups__label__value: String
-    subscriber_of_groups__label__values: [String]
-    profiles__ids: [ID]
-    profiles__isnull: Boolean
-    profiles__display_label__value: String
-    profiles__display_label__values: [String]
-    profiles__display_label__isnull: Boolean
-    profiles__profile_priority__value: BigInt
-    profiles__profile_priority__values: [BigInt]
-    profiles__profile_priority__source__id: ID
-    profiles__profile_priority__owner__id: ID
-    profiles__profile_priority__is_protected: Boolean
-    profiles__profile_name__value: String
-    profiles__profile_name__values: [String]
-    profiles__profile_name__source__id: ID
-    profiles__profile_name__owner__id: ID
-    profiles__profile_name__is_protected: Boolean
-  ): PaginatedFylgjaWaypoint!
   NetworkDevice(
     offset: Int
     limit: Int
@@ -26503,26 +26312,6 @@ type Mutation {
   Singleton: the Fylgja generics contract version this schema implements.
   """
   FylgjaContractDelete(context: ContextInput, data: DeleteInput!): FylgjaContractDelete
-
-  """
-  A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it.
-  """
-  FylgjaWaypointCreate(context: ContextInput, data: FylgjaWaypointCreateInput!): FylgjaWaypointCreate
-
-  """
-  A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it.
-  """
-  FylgjaWaypointUpdate(context: ContextInput, data: FylgjaWaypointUpdateInput!): FylgjaWaypointUpdate
-
-  """
-  A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it.
-  """
-  FylgjaWaypointUpsert(context: ContextInput, data: FylgjaWaypointUpsertInput!): FylgjaWaypointUpsert
-
-  """
-  A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it.
-  """
-  FylgjaWaypointDelete(context: ContextInput, data: DeleteInput!): FylgjaWaypointDelete
   NetworkDeviceCreate(context: ContextInput, data: NetworkDeviceCreateInput!): NetworkDeviceCreate
   NetworkDeviceUpdate(context: ContextInput, data: NetworkDeviceUpdateInput!): NetworkDeviceUpdate
   NetworkDeviceUpsert(context: ContextInput, data: NetworkDeviceUpsertInput!): NetworkDeviceUpsert
@@ -32340,123 +32129,6 @@ input FylgjaContractUpsertInput {
 Singleton: the Fylgja generics contract version this schema implements.
 """
 type FylgjaContractDelete {
-  ok: Boolean
-}
-
-"""
-A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it.
-"""
-type FylgjaWaypointCreate {
-  ok: Boolean
-  object: FylgjaWaypoint
-}
-
-input FylgjaWaypointCreateInput {
-  id: String
-
-  """What this chapter of the story is."""
-  description: TextAttributeCreate
-
-  """
-  The Infrahub branch this waypoint seals. Its last write is the waypoint's own time.
-  """
-  branch: TextAttributeCreate
-
-  """Position in the series: a positive integer, unique within the series."""
-  sequence: NumberAttributeCreate
-
-  """
-  The point in time on the branch (the reference's at), passed verbatim. Omitted: when the waypoint was written.
-  """
-  as_of: TextAttributeCreate
-
-  """
-  The series this waypoint belongs to: a name with no '/' and no whitespace.
-  """
-  series: TextAttributeCreate
-  member_of_groups: [RelatedNodeInput]
-  subscriber_of_groups: [RelatedNodeInput]
-  profiles: [RelatedNodeInput]
-}
-
-"""
-A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it.
-"""
-type FylgjaWaypointUpdate {
-  ok: Boolean
-  object: FylgjaWaypoint
-}
-
-input FylgjaWaypointUpdateInput {
-  id: String
-  hfid: [String]
-
-  """What this chapter of the story is."""
-  description: TextAttributeUpdate
-
-  """
-  The Infrahub branch this waypoint seals. Its last write is the waypoint's own time.
-  """
-  branch: TextAttributeUpdate
-
-  """Position in the series: a positive integer, unique within the series."""
-  sequence: NumberAttributeUpdate
-
-  """
-  The point in time on the branch (the reference's at), passed verbatim. Omitted: when the waypoint was written.
-  """
-  as_of: TextAttributeUpdate
-
-  """
-  The series this waypoint belongs to: a name with no '/' and no whitespace.
-  """
-  series: TextAttributeUpdate
-  member_of_groups: [RelatedNodeInput]
-  subscriber_of_groups: [RelatedNodeInput]
-  profiles: [RelatedNodeInput]
-}
-
-"""
-A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it.
-"""
-type FylgjaWaypointUpsert {
-  ok: Boolean
-  object: FylgjaWaypoint
-}
-
-input FylgjaWaypointUpsertInput {
-  id: String
-  hfid: [String]
-
-  """What this chapter of the story is."""
-  description: TextAttributeUpdate
-
-  """
-  The Infrahub branch this waypoint seals. Its last write is the waypoint's own time.
-  """
-  branch: TextAttributeUpdate
-
-  """Position in the series: a positive integer, unique within the series."""
-  sequence: NumberAttributeUpdate
-
-  """
-  The point in time on the branch (the reference's at), passed verbatim. Omitted: when the waypoint was written.
-  """
-  as_of: TextAttributeUpdate
-
-  """
-  The series this waypoint belongs to: a name with no '/' and no whitespace.
-  """
-  series: TextAttributeUpdate
-  member_of_groups: [RelatedNodeInput]
-  subscriber_of_groups: [RelatedNodeInput]
-  profiles: [RelatedNodeInput]
-}
-
-"""
-A named, ordered mark naming a pinned intent reference (branch, at). The operator writes it; Fylgja only reads it.
-"""
-type FylgjaWaypointDelete {
   ok: Boolean
 }
 

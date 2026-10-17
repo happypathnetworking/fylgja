@@ -47,9 +47,9 @@ command-log:
 	python3 .claude/hooks/command-log.py flush --commit
 
 # Fetches the GraphQL SDL from a live Infrahub. The SDL is committed
-# so the build never needs Infrahub; only regeneration does. From the default branch
-# since M10: the waypoint kind lives there, and a branch created before the kind was
-# loaded does not carry it. The file's header is kept by hand.
+# so the build never needs Infrahub; only regeneration does. From the default branch:
+# the stage kind and its extension of CoreProposedChange live there (014), and a branch
+# created before the kind was loaded does not carry them. The file's header is kept by hand.
 sdl:
 	go run -tags fixture ./cmd/fylgja-fixture -branch main -sdl schema/infrahub.graphql
 

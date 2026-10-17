@@ -69,10 +69,10 @@ and is not cited here; a bare milestone marker (`M7`) is resolved by the table b
     The venv's `infrahub-sdk` is pinned (Environment, Python).
   - **Fylgja's schema loads on `main`** ([D-028](docs/decisions.md#d-028)), against
     `workflow-branch-first`. That includes the branch-agnostic kinds beside the contract,
-    `FylgjaWaypoint` and any added after it.
+    `FylgjaStage` and any added after it.
   - **Some writes go to `main` on purpose**, against `workflow-branch-for-crud`: the group
     `fylgja-devices` and the repository registration (`fylgja-fixture -prepare-main`);
-    waypoints and other branch-agnostic objects, which land in no branch's diff; and what
+    stages and other branch-agnostic objects, which land in no branch's diff; and what
     a check posts on a proposed change. Every other write goes to a branch, as the rule
     says: the fixture's own branch, a test's `fylgja-test-*` one. This Infrahub is not
     throwaway, since its volumes hold the admin token.
@@ -110,14 +110,15 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   --env-file local/.env -f local/infrahub/docker-compose.yml -f
   local/infrahub/docker-compose.override.yml <command>`. Volumes persist across `down`.
 - **Infrahub's `main`** carries the Fylgja schema (`NetworkDevice` inherits
-  `CoreArtifactTarget`; the waypoint kind `FylgjaWaypoint`, branch-agnostic, attribute
-  `as_of`, until 014's T042 removes it; and 014's stage kind `FylgjaStage` (`label`,
-  `as_of`, `description`) with its `fylgja_stages` extension of `CoreProposedChange`,
-  loaded 2026-10-16 from `schema/fylgja-stage.yaml` by `-prepare-main` as a migration of
-  the candidate [D-045](docs/decisions.md#d-045)'s verification had loaded), hash
-  `a8045729…` on this install (`e7386419…` with the candidate, `0aba31a5…`
-  before the stage kind; a branch's hash is its own, so each install and each branch has
-  one, and the fixture branch keeps `0aba31a5…`; the 24.04 install's was `4d5b37aa…`);
+  `CoreArtifactTarget`; and the stage kind `FylgjaStage`, branch-agnostic (`label`,
+  `as_of`, `description`, a required `proposed_change`), with its `fylgja_stages`
+  extension of `CoreProposedChange`, loaded from `schema/fylgja-stage.yaml` by
+  `-prepare-main` on 2026-10-16; M10's kind was removed from it on 2026-10-17 by
+  `specs/014-proposed-change-stages/migration/`'s `state: absent` document), hash
+  **`e43a1cde…`** on this install (`a8045729…` before that removal, `e7386419…` with
+  [D-045](docs/decisions.md#d-045)'s candidate kind, `0aba31a5…` before any stage kind; a
+  branch's hash is its own, so each install and each branch has one, and the fixture
+  branch keeps `0aba31a5…`; the 24.04 install's was `4d5b37aa…`);
   the empty group
   `fylgja-devices`; and the registration `fylgja`, a `CoreReadOnlyRepository` at
   `https://github.com/happypathnetworking/fylgja.git`, `ref main`, with no credential
@@ -138,19 +139,24 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   schema, 3 devices, 12 interfaces, 3 links, contract `0.2`; the devices are in group
   `fylgja-devices`, each with one `device-config` artifact, `Ready`. Its schema hash is
   `0aba31a5…`, `main`'s before the stage kind: a branch sees `main`'s schema as it was at
-  the branch's creation, so it cannot query `FylgjaStage` and reads
-  `schema_differs_from_default_branch: true`, and it is never rebased. It compiles to
+  the branch's creation, so it cannot query `FylgjaStage`, still carries M10's removed
+  kind, which nothing reads, and reads `schema_differs_from_default_branch: true`; it is
+  never rebased. It has no proposed change. It compiles to
   **`47b2c449…`** on this install, before and after the stage kind; its CTM equals
   `testdata/ctm/three-node.json` in everything but the envelope, and with the 24.04
   install's hash `4d5b37aa…` in place of this one's it compiles to `b9d53ebc…`, the id the
   cut recorded. It is written by its seed (`make infrahub-seed`, which the bring-up
   script runs when the branch is absent) and by no test. Contract tests make their own
-  throwaway `fylgja-test-*` branches and `fylgja-test-*` waypoint series, deleted by the
-  test that wrote them. `fylgja-fixture` has no series, and the fixture tool refuses to
-  write one naming it.
-- **Waypoints** are the operator's to write, by object file (`kind: Object`, the node kind
-  under `spec.kind`), the UI or `.venv/bin/infrahubctl object create`; the guide is
-  `schema/README.md`. After the contract tier, `FylgjaWaypoint { count }` reads 0.
+  throwaway `fylgja-test-*` branches, with their draft proposed changes and stages, and
+  the test that wrote them deletes the stages, then the proposed changes, then the
+  branch. The fixture tool refuses to open a proposed change on `fylgja-fixture` or mark a
+  stage of it.
+- **Stages** are the operator's to mark on a proposed change, on the default branch: by
+  object file (`kind: Object`, `spec.kind: FylgjaStage`, `proposed_change` the proposed
+  change's id), the UI (`Stage`, an object entry of its own) or `.venv/bin/infrahubctl
+  object create FylgjaStage --set label=… --set proposed_change=<id>`; the guide is
+  `schema/README.md`. After the contract tier, `CoreProposedChange { count }` and
+  `FylgjaStage { count }` read 0, and `Branch` lists `main` and `fylgja-fixture` alone.
 - **containerlab 0.79.0** (its `.deb`; `/usr/bin/containerlab` setuid root) and **Docker
   29.8.1** with Compose 5.6.0, from Docker's repository. The user is in `clab_admins` and
   `docker`: `clab` runs without sudo. A shell begun before the bring-up script added the
@@ -248,7 +254,7 @@ another machine comes through `ssh -N -L 7650:127.0.0.1:7650 <lab host>`, with a
 built from this tree.
 
 **Formats**: bundle `4` (a bundle of another format is refused), CTM `1`, PSP `0.6`
-(both shipped packages on `mode: replace`), `twin.json` `5`, contract `0.2`, findings `1`,
+(both shipped packages on `mode: replace`), `twin.json` `6`, contract `0.2`, findings `1`,
 the API `1` (`contracts/api.md`, the version in every path). The three goldens are
 three-node **`23f86a26…`**, lossy **`5773b6bb…`** and mixed **`391bcb96…`**, and the live
 fixture compiles to `47b2c449…` on this install (`b9d53ebc…` under the 24.04 install's
@@ -259,7 +265,8 @@ older format reads a frozen copy under its package's `testdata/contracts/`.
 
 Each is in `docs/verified-facts.md` with the version and date it was verified; the rest
 of what has been verified — the SR Linux and cEOS nodes' paths and answers, the push and
-the replace, containerlab's reconcile, the waypoint kind, verify's reads — is there too.
+the replace, containerlab's reconcile, the branch-agnostic kinds, proposed changes and
+stages, verify's reads — is there too.
 Re-verify on any upgrade.
 
 - **Infrahub filters `created_at <= at`**: send no `at` unless the operator supplied one.
@@ -277,6 +284,15 @@ Re-verify on any upgrade.
   a commit import. Generate with `POST /api/artifact/generate/<definition id>?branch=`,
   then wait for the checksum to move; a regeneration to identical bytes writes nothing.
   `CoreArtifact.checksum` is the MD5 of the stored bytes.
+- **A proposed change's pipeline** regenerates its source branch's artifacts at its
+  creation, draft or not, and on a run-check (`CoreProposedChangeRunCheck`, `check_type:
+  ARTIFACT`), never as the branch is edited; a run-check completes the artifact validator
+  anew even when the bytes are identical. Infrahub refuses a proposed change's delete
+  while a stage names it, and cancels an open one about 16 s after its branch is deleted:
+  delete the stages, then the proposed change, then the branch (`fylgja-fixture -delete`).
+- **A read pinned at exactly an attribute's `updated_at` sees the node and not the
+  value**, and one microsecond later sees it. A rebase re-stamps a branch's whole content
+  at the new `branched_from` and discards its earlier history from pinned reads.
 - **A `BranchCreate` straight after a `BranchDelete`** of the same name can fail with
   `graphql: None`; run it again.
 - **containerlab**: decode `absLabPath` from `inspect --all --format json`, never
@@ -328,7 +344,8 @@ runs golangci-lint and `shellcheck scripts/bring-up.sh scripts/e2e.sh`) · `make
 test-contract` (tier 2, real
 Infrahub, never cached; needs `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN`; CI's contract
 job on every push to `main`, against an Infrahub the script brings up on the runner, with
-no secret) · `make lint` (runs with build tags `contract,fixture,e2e`) ·
+no secret; about nine minutes, `internal/stages` the longest package, under the
+`-timeout 30m` it sets) · `make lint` (runs with build tags `contract,fixture,e2e`) ·
 `go test ./internal/compiler -update` regenerates the three goldens — review the diff,
 and commit a re-baseline on its own · the conformance suite's pure half is part of
 `make test`; its boot half is `FYLGJA_STATE_ROOT=$PWD/local go test -count=1 -tags e2e
@@ -337,14 +354,14 @@ temporal-dev` (the file-backed dev server) · `make worker` and `make serve` (ea
 state root made absolute; load `local/.env` first) · `make infrahub-seed` and `make
 infrahub-clean` (the fixture branch) · `make sdl` · `make diagrams` (needs Docker; no tier
 needs it) · **every command but `worker run` and `serve` needs a running server**, the
-stage commands included (`psp validate` and `twin compile` need neither Infrahub nor the
-workflow service, but they need the server) · `make test-e2e` (tier 3, `scripts/e2e.sh`:
-eight cases, eight twins, `twin verify` on three of them and on the steps' waits, every
+pipeline's stage commands and `stage list` and `stage plan` included (`psp validate` and
+`twin compile` need neither Infrahub nor the workflow service, but they need the server) ·
+`make test-e2e` (tier 3, `scripts/e2e.sh`: eight cases, seven twins, `twin verify` on three of them and on the steps' waits, every
 command through a server the script starts itself with a token it makes; needs the dev
 server and a worker running from the repository root, Docker, containerlab, **both**
-images and Infrahub; about 17–19 minutes; `WORKER_LOG=<file>` adds the worker's log to its
+images and Infrahub; about 19 minutes; `WORKER_LOG=<file>` adds the worker's log to its
 credential greps; `PLATFORMS=nokia_srlinux` narrows it to the six cases SR Linux alone
-runs, about 12 minutes, ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
+runs, about 11 minutes, ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
 never `E2E-OK`; never in CI). A command that runs longer than one tool call (tier 3)
 starts detached with its exit status in a file, and is waited on in foreground calls of
 under ten minutes.
@@ -370,17 +387,37 @@ Rewritten whole at each release's close, never appended to.
   development host reinstalled on 26.04 by the script, tiers 1, 2 and 3 passing there and
   its host and containerlab facts re-verified, but for a twin beside tier 2 and `sr_cli`
   under pressure, left untried on purpose. No golden and no format version moved.
-- **The release `v0.1.0`** is the close's last act: the operator pushes the tag,
-  `release.yml` builds the draft, the operator publishes it.
-- **Next**: Release 0.2, a proposed change rehearsed on a twin
-  ([roadmap](docs/roadmap.md#release-02)): F-023 as `014-proposed-change-stages`, then
-  F-007 and F-008 as `015-proposed-change-rehearsal`, then F-014 as `016-probes`, then
-  F-012.
-- **014's verifications are done** (2026-10-16, `specs/014-proposed-change-stages/research.md`):
-  every item its brief owed, three findings the operator decided
-  ([D-045](docs/decisions.md#d-045): the head pinned one microsecond after the branch's
-  latest stamp, the branch point read on `main` at `branched_from`, the candidate kind
-  on `main` now), and Constitution VI amended for them (1.2.0). `specify` is next.
+- **The release `v0.1.0`** was published on 2026-10-08, from the tag the operator pushed
+  and the draft `release.yml` built.
+- **Release 0.2 is under way**: a proposed change rehearsed on a twin
+  ([roadmap](docs/roadmap.md#release-02)).
+- **014 is built** (`014-proposed-change-stages`, F-023, 2026-10-17): a proposed change's
+  stages in place of M10's surface ([D-045](docs/decisions.md#d-045),
+  [D-046](docs/decisions.md#d-046); Constitution 1.2.1). `FylgjaStage` and its extension
+  on `main`, and M10's kind removed from it (`e43a1cde…`); `--stage`, `stage list` and
+  `stage plan`; the branch point read on `main` at `branched_from`, the head one
+  microsecond after the branch's latest stamp, a stale stage refused per device;
+  `twin.json` `6`, the findings' stage blocks and the API's two operations, with neither
+  the API's version nor the findings' moved. Tier 2 passed in 531.5 s, tier 3 `E2E-OK` in
+  1125.5 s and `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in 665.7 s, and the hand scenarios
+  and the README's stepping walk-through were followed by hand
+  (`specs/014-proposed-change-stages/research.md` §8). No golden, no fixture id and no
+  format but the twin record's moved. Its close drafts the upstream request for named
+  points in time for the operator to file, never filed by a session (T054), runs the
+  closing gates (T055), and is the operator's to review and commit (T056).
+- **Next**: `015-proposed-change-rehearsal`, F-007 and F-008 as one spec (its
+  [brief](specs/015-proposed-change-rehearsal/brief.md)), then F-014 as `016-probes`, then
+  F-012, then `v0.2.0`. On this install the branch point is refused
+  `contract.node.missing`, since `main` holds no network, so a rehearsal's baseline here
+  cannot be the branch point (research R-04).
 - **Open**: Arista's own checksum for the tar is unread, owed at the operator's next
   download. On 26.04, whether the two AppArmor lines suffice without `/run/syslogd.pid*
-  rw,` is untried.
+  rw,` is untried. From 014, the operator's: the `stage.orphaned` message, the spec's edge
+  case and D-045's context still give a proposed change deleted under its stages as an
+  orphan's cause, which Infrahub refuses with the kind on `main` (research §8.8);
+  `twin create --stage`'s closing line does not name the stage, as
+  `specs/014-proposed-change-stages/contracts/stage-commands.md` says it should (T049's
+  note); `stage list`'s descriptions line up only when every `at` has one width (§8.13);
+  `infrahubctl schema format` would reorder `schema/fylgja-stage.yaml` (§8.2);
+  `stage.main.moved` is untried by a write on `main`; and the recording shows M10's
+  surface until it is remade at `v0.2.0`.

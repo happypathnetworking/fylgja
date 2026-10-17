@@ -44,6 +44,19 @@ development host up again there, or on a fresh 26.04 VM before it.
   `display_label`, `endpoints` and the groups. Infrahub returns no instant of its own:
   `InfrahubInfo` is `version` and `deployment_id`, and HTTP's `Date` is whole seconds.
   *(10-16)*
+- **A branch read pinned at its own `branched_from` is `main` as it then stood**, so on an
+  install whose `main` holds the schema and no intent it finds no contract object, no
+  device and no link: `fylgja-fixture` pinned at its `branched_from` reads `FylgjaDevice 0,
+  FylgjaLink 0, FylgjaContract 0`, and Fylgja's read refuses it `contract.node.missing`, as
+  it refuses `main` itself. *(10-16)*
+- `Branch(name:)` answers `[Branch!]!`, `[]` for a name that does not exist. Its
+  `branched_from` and `created_at` are strings in the `Z` layout
+  (`2026-10-08T05:47:52.538186Z`), where an attribute's stamp reads `+00:00`; a fresh
+  branch's `branched_from` is 98–140 µs after its `created_at`. *(10-16)*
+- **An unset filter is no filter**: an attribute filter (`name__value`) sent as a `null`
+  variable, omitted, or written as a literal `null` answers every object; `""` answers
+  none. So a query whose filter is optional omits the variable rather than sending `""`.
+  *(10-16)*
 - GraphQL takes the branch in the path, `POST /graphql/<branch>`; a `?branch=` parameter
   there is ignored and answers for `main` with no error. *(09-30)*
   Reported upstream: **dropped**, on the operator's word. It is
@@ -82,7 +95,7 @@ development host up again there, or on a fresh 26.04 VM before it.
   characters, and strict mode is on; check a candidate with `POST /api/schema/check`.
   *(09-14)*
 - An attribute name is 3–64 characters of `[a-z0-9_]`, so `at` is refused by the JSON
-  schema before it reaches the server; the waypoint's attribute is `as_of`. *(09-28)*
+  schema before it reaches the server; the stage's attribute is `as_of`. *(09-28)*
   Reported upstream: **dropped**, on the operator's word. Infrahub's schema reference
   documents the rule (`Length: min 3, max 64` in
   [attribute.mdx](https://github.com/opsmill/infrahub/blob/infrahub-v1.11.2/docs/docs/reference/schema/attribute.mdx)
@@ -103,7 +116,10 @@ development host up again there, or on a fresh 26.04 VM before it.
   loaded on `main` moved it `0aba31a5…` → `e7386419…`, the same candidate on a throwaway
   branch gave `17934826…`, and the fixture branch kept `0aba31a5…`, reading
   `schema_differs_from_default_branch: true` and compiling to `47b2c449…` as before.
-  *(10-16)*
+  *(10-16)* The final stage kind, a migration of the candidate, moved `main` to
+  `a8045729…`, and the removal of M10's kind to `e43a1cde…`; the fixture branch kept
+  `0aba31a5…` through both, and still carries the removed kind, which nothing reads.
+  *(10-16, 10-17)*
 - A branch sees `main` as it was when the branch was created, so a branch made before the
   schema, the group or the template existed on `main` cannot render. *(09-18)* Nor can it
   query a kind loaded on `main` after it; a branch created after the load carries
@@ -115,23 +131,39 @@ development host up again there, or on a fresh 26.04 VM before it.
   branch-agnostic objects still read), a read at exactly the new `branched_from` finds
   the nodes with every value `null`, and one microsecond later the branch's own values,
   not the base's. `wait_until_completion: true` returned after 67 s for a three-node
-  branch. *(10-16)*
+  branch. *(10-16)* With nothing on `main` to take, a rebase still moves `branched_from`
+  to its own moment, and returned after 17–22 s on a seeded branch with an open draft
+  proposed change and five stages. *(10-16, 10-17)*
+- **A kind is removed by a document naming it with `state: absent`.** `schema check`
+  prints `removed: <kind>`; the load takes about 40 s (38 s on a branch, 40.8 s on
+  `main`); the kind then leaves `GET /api/schema` and GraphQL (`Cannot query field '<kind>'
+  on type 'Query'`); and a second check prints `No diff` and a second load is already up to
+  date in 1.8 s, so the document is idempotent. *(10-16, 10-17)*
+- A change of an attribute's `parameters.regex` shows in `schema check`'s diff as
+  `parameters.regex, regex`: `regex` is Infrahub's mirror of it, read equal on `main`
+  after the load, not a second change. *(10-16)*
+- `infrahubctl schema format` (SDK 1.23.2) does not keep the order the stage kind's
+  contract calls canonical: `--check` exits 1 on `schema/fylgja-stage.yaml` and would put
+  `order_by` before `display_label`, `generate_profile` and `branch` after
+  `uniqueness_constraints`, and an attribute's `optional` after its `parameters`. No gate
+  runs it. *(10-16)*
 
-**Branch-agnostic kinds (the waypoint)**
+**Branch-agnostic kinds**
 
-- A branch-agnostic kind loads with a uniqueness constraint over two attributes, and a
-  duplicate is refused from any branch as `Violates uniqueness constraint
-  'series-sequence'`: HTTP 200 on the wire, with `http_status: 422` in the extensions.
-  *(09-28)*
+Verified with M10's kind, since removed, and held by the stage kind (below).
+
+- A branch-agnostic kind loads with a uniqueness constraint over two members, and a
+  duplicate is refused from any branch as `Violates uniqueness constraint '<a>-<b>'`:
+  HTTP 200 on the wire, with `http_status: 422` in the extensions. *(09-28)*
 - A branch-agnostic object is read from every branch whose schema has its kind, and
   outlives the branch it names. *(09-28)*
 - A branch whose schema lacks the kind cannot query it at all: `Cannot query field
-  'FylgjaWaypoint' on type 'Query'`, HTTP 200 with a 500 in the extensions that names
-  nothing, so read the kind's presence from `GET /api/schema` first. *(09-28)*
+  '<kind>' on type 'Query'`, HTTP 200 with a 500 in the extensions that names nothing, so
+  read the kind's presence from `GET /api/schema` first. *(09-28)*
 - At creation every attribute carries one `updated_at` (six fractional digits, `+00:00`),
-  and only a real change of its value moves it: a description edit leaves `branch`'s
-  stamp, and re-pointing `branch` moves it. No node-level `_updated_at` is queryable on a
-  Fylgja kind. *(09-28)*
+  and only a real change of its value moves it: a description edit leaves another
+  attribute's stamp where it was, and a change of that attribute's value moves it. No
+  node-level `_updated_at` is queryable on a Fylgja kind. *(09-28)*
 - A DateTime attribute keeps a written value character for character and refuses only
   nonsense; GraphQL types it as text, so an unwritten one reads `""`. A Number attribute's
   value is a `BigInt`, which genqlient binds to `int`. *(09-28)*
@@ -154,7 +186,16 @@ development host up again there, or on a fresh 26.04 VM before it.
   the kind filters by `proposed_change__ids` and by any attribute of the peer
   (`proposed_change__source_branch__value`, `proposed_change__state__value`). Where the
   schema lacks the kind, both the kind and the extension's field are unqueryable (`Cannot
-  query field 'fylgja_stages' on type 'CoreProposedChange'`). *(10-16)*
+  query field 'fylgja_stages' on type 'CoreProposedChange'`). Infrahub knows nothing of
+  the labels Fylgja reserves: a stage labelled `head` is accepted. *(10-16)*
+- **A stage is written three ways, each on the default branch** (`infrahubctl` 1.23.2,
+  connecting as Admin, with no `--branch`): an object file (`kind: Object`, `spec.kind:
+  FylgjaStage`) whose `proposed_change` is the proposed change's id as a bare string,
+  since the peer has no human-friendly id, checked by `object validate` and written by
+  `object load`; `object create FylgjaStage --set label=… --set proposed_change=<id>`; and
+  the UI, whose menu lists `Stage` as an entry of its own in the object section
+  (`/objects/FylgjaStage`), under no Fylgja group. `object delete FylgjaStage <id> --yes`
+  deletes one. *(10-17)*
 - **One open proposed change per source branch**: a second is refused, `An open proposed
   change already exists for branch '…'` (422); `main` as source, `The source and
   destination branch can't be the same`; an unknown source, `The specified source branch
@@ -180,6 +221,25 @@ development host up again there, or on a fresh 26.04 VM before it.
   ARTIFACT})`, 22–25 s after the call. An intent change on the branch under an open
   proposed change, and `is_draft` set to `false`, start nothing (100 s each). `CheckType`
   is `ARTIFACT, DATA, GENERATOR, REPOSITORY, SCHEMA, TEST, USER, ALL`. *(10-16)*
+- **A draft's creation pipeline** is one validator, `Data Integrity`, on a branch with
+  the schema alone, concluded 7–17 s after the create; on a seeded branch three, the
+  artifact validator last, concluded 36–63 s after it. Infrahub creates the validators one
+  after another as the pipeline goes, so "every validator completed" holds in the gaps
+  between them; nor do the pipeline's tasks (`InfrahubTask(related_node__ids:)`) end it,
+  since a child task is listed only once it starts, about 2 s after its parent ends, and
+  the first validator has no task. So a wait for the creation's rendering waits for a
+  completed `CoreArtifactValidator` too, when the branch's devices are in the target
+  group. Infrahub once dropped a poll's connection mid-pipeline (`EOF`), so a poll reads
+  again until its deadline. *(10-16)*
+- **A run-check re-runs the same artifact validator, identical bytes or not.** After an
+  edit the template renders nowhere (`site`), a hand generate moves no checksum, and
+  `CoreProposedChangeRunCheck(check_type: ARTIFACT)` leaves the checksums where they were
+  while the proposed change's one `CoreArtifactValidator` node reads `in_progress`, then
+  `completed`/`success` with a new `completed_at`, 17–24 s after the call. *(10-16)*
+- **Pinned, the validator's `completed_at` value is the one in force at `at`, and its
+  `updated_at` the current one**: compare the value, never the metadata.
+  `CoreArtifactValidator(proposed_change__ids:)` answers pinned, with `definition { node {
+  name } }` naming the definition. *(10-16)*
 - **The diff tree is a cached calculation.** `DiffTreeSummary(branch)` and
   `DiffTree(branch)` carry `from_time` (= `branched_from`), `to_time`,
   `num_untracked_base_changes`, `num_untracked_diff_changes` and nodes with
@@ -210,6 +270,19 @@ development host up again there, or on a fresh 26.04 VM before it.
   behaviours as the design ([opsmill/infrahub#10437](https://github.com/opsmill/infrahub/pull/10437):
   no data or membership change starts a run, and there is no staleness indicator).
   *(10-08)*
+- **The stamps read through the generics**, unpinned and pinned: `FylgjaDevice`'s
+  attributes' `updated_at`, its `platform` edge's `properties.updated_at`, each interface's
+  edge and attributes, its `link` edge (the cabling's stamp) and its `parent` edge, whose
+  `properties.updated_at` is `null` when unset; `FylgjaLink.endpoints.edges.properties
+  .updated_at`; `FylgjaContract.version.updated_at`. `artifacts` must be spread `... on
+  CoreArtifactTarget`: selected on `FylgjaDevice` it is refused `Cannot query field
+  'artifacts' on type 'FylgjaDevice'`. *(10-16)*
+- **A generation stamps each device's artifact apart.** The fixture's three checksums read
+  `…38.543597`, `…38.544382` and `…38.544482`, each after its own device's intent, so the
+  latest stamp of a branch is one device's checksum. A regeneration that changes bytes
+  lands device by device, seconds apart: a generate returned in 0.44 s, and the three
+  checksums moved 4.6–7.5 s after a mark made as it returned; after `-add-link`, n1's and
+  n3's moved 7.6–10 s after it returned. *(10-16, 10-17)*
 - `CoreArtifact.checksum` is the MD5 hex of the bytes `GET /api/storage/object/<storage_id>`
   serves. A listing pinned to `at` gives the storage id as of `at`, and the older object
   is still served. *(09-18)*
@@ -482,6 +555,12 @@ development host up again there, or on a fresh 26.04 VM before it.
 - The CLI's installer (`https://temporal.download/cli.sh`, `--version 1.9.1`) puts it in
   `~/.temporalio/bin` and adds that to no shell file's `PATH`, so a login shell has no
   `temporal` until something else adds it. *(10-07; 26.04, 10-07)*
+- **A dev server restarted after days down purges its expired runs first**, those past
+  the namespace's 24 h retention, at about nine a second. Until it ends, a visibility list
+  over many runs times out (`context deadline exceeded`, `RST_STREAM … CANCEL`) while
+  `temporal workflow count` answers, so `twin show` and `twin verify` warn
+  `show.service.unreachable`. Before tier 3 on a restarted dev server, wait for `workflow
+  count` to stop falling. *(CLI 1.9.1, 10-16)*
 
 ---
 

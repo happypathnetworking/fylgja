@@ -252,19 +252,20 @@ it ran Ubuntu 24.04, where most *verified facts* were first verified.
 parent is cancelled. Cleanup in `provision` runs on one, and so does the record of a step
 that failed or was cancelled after its stage.
 
-**Diverged** — From M11: the state of a twin whose *step* failed or was cancelled after
-it touched the host (from the stage on). The twin stays up, part on the waypoint it came
-from and part on the one it was going to; `twin.json` keeps the first at its top level,
-names the second, the run and the *phase* in its `step` block, records `state:
-diverged`, and gives each node the bundle it is last known to hold, or `null` for a node
-containerlab restarted whose push did not land. Each push's outcome sits beside it, and
-only `refused` is the node's own answer. A `failed` push may have committed (a node the
-replace darkened), so a later rollback reads the outcome beside the bundle. `twin step`
-exits `4` with status `diverged`, and `twin show` names the kind `diverged` in one line.
-A diverged twin accepts only `twin destroy` ([D-036](decisions.md#d-036)). `twin verify`
-reads it too, and changes nothing: it is verified against the staged bundle, the target
-it was going to, with its divergence on the first line, and each node whose record does
-not say it holds that bundle is a failed *record claim* ([D-038](decisions.md#d-038)).
+**Diverged** — From M11: the state of a twin whose *step* failed or was cancelled after it
+touched the host (from the stage on). The twin stays up, part on the *stage (of a proposed
+change)* it came from and part on the one it was going to; `twin.json` keeps the first at
+its top level, names the second, the run and the *phase* in its `step` block, records
+`state: diverged`, and gives each node the bundle it is last known to hold, or `null` for
+a node containerlab restarted whose push did not land. Each push's outcome sits beside it,
+and only `refused` is the node's own answer. A `failed` push may have committed (a node
+the replace darkened), so a later rollback reads the outcome beside the bundle. `twin
+step` exits `4` with status `diverged`, and `twin show` names the kind `diverged` in one
+line. A diverged twin accepts only `twin destroy` ([D-036](decisions.md#d-036)). `twin
+verify` reads it too, and changes nothing: it is verified against the staged bundle, the
+target it was going to, with its divergence on the first line, and each node whose record
+does not say it holds that bundle is a failed *record claim*
+([D-038](decisions.md#d-038)).
 
 **Dry run** — `--dry-run` on `twin create`, `twin provision` and `twin step`: every
 refusal the run would make, and what it would do, with no run started and no lab,
@@ -301,14 +302,18 @@ rendering.
 
 **Fixture branch** — `fylgja-fixture`: the three-node SR Linux topology on the reference
 schema, written once by `make infrahub-seed` and by no test, which tier 2 reads and tier
-3's first case deploys. Tests make their own throwaway `fylgja-test-*` branches.
+3's first case deploys. It has no *proposed change*, and the fixture tool refuses to open
+one on it. Tests make their own throwaway `fylgja-test-*` branches.
 
 **Fixture tool** — `cmd/fylgja-fixture`: the only binary that writes to Infrahub. It
 seeds and deletes branches (the fixture branch, the mixed one, throwaway ones), changes
 them as the tests need (`-add-link`, `-disable-port`, `-set-role`), generates their
-artifacts and waits for them, and writes and deletes `fylgja-test-*` waypoint series. With
-`-prepare-main` it prepares `main`: the schema, the group `fylgja-devices` and this
-repository's read-only registration, each made only when absent.
+artifacts and waits for them, and gives a throwaway branch its *proposed change* and
+*marks*: `-propose` opens a draft and waits for its validators, `-stage` marks one,
+`-run-check` asks the proposed change's artifact checks, `-close` closes it, and `-delete`
+removes the stages, then the proposed changes, then the branch. With `-prepare-main` it
+prepares `main`: the schema, the group `fylgja-devices` and this repository's read-only
+registration, each made only when absent.
 
 **Following** — From M4: a twin built from an unpinned reference is checked every
 *interval* and rebuilt when its `bundle_id` moves. `twin create` begins it unless `--at`
@@ -430,16 +435,17 @@ which the *fidelity manifest* still asserts. Also called **verify**.
 
 **Intent reference** — `(branch, at?)`: the address of intent as the operator gives
 it; the provenance of every CTM, bundle and twin ([§3](architecture.md#3-core-objects),
-[D-012](decisions.md#d-012)). The operator may also name one by a *waypoint*, which the
-*server* resolves to a pinned `(branch, at)` before any run starts; the waypoint's name
-is not part of the reference and enters no CTM or bundle ([D-032](decisions.md#d-032)).
+[D-012](decisions.md#d-012)). The operator may also name one by a *stage reference*,
+which the *server* resolves to a pinned `(branch, at)` before any run starts; the stage's
+name is not part of the reference and enters no CTM or bundle
+([D-045](decisions.md#d-045)).
 
 **Interval** — How often a *following* twin is *checked*: `twin create --interval`,
 in Go duration syntax. Default 5 minutes, floor 10 seconds. Held only by the Schedule,
 and refused with `--at` or `--no-follow`.
 
 **Kind (of a twin)** — What `twin show` calls the twin on the host: `following`,
-`pinned` (built from an `at` or a waypoint, stepped or not), `frozen`, from a bundle
+`pinned` (built from an `at` or a *stage*, stepped or not), `frozen`, from a bundle
 (`twin provision`), `diverged`, or `none`.
 
 **Lab host** — A machine with Docker, containerlab, NOS images, one `fylgja worker run`
@@ -559,19 +565,20 @@ say when it was read is worth less than one that can. Informational provenance, 
 transaction marker. Recorded in the CTM envelope and `twin.json`, never in the bundle,
 so it cannot disturb `bundle_id` ([D-023](decisions.md#d-023), constitution VI).
 
-**Operator** — The person who runs Fylgja: who writes intent and waypoints in Infrahub,
-holds the credentials, starts the worker and the server, and gives each command.
+**Operator** — The person who runs Fylgja: who writes intent in Infrahub, opens its
+*proposed changes* and marks their *stages*, holds the credentials, starts the worker and
+the server, and gives each command.
 
 **Orphan lab** — Lab `fylgja` present on the host without a readable `twin.json`: no
 twin directory, no record, or a record that does not open or parse. Detected at `create`
 and at worker start; cleared by `fylgja twin destroy` ([D-013](decisions.md#d-013)).
 
 **Orphaned stage** — From `014-proposed-change-stages` ([D-045](decisions.md#d-045)): a
-*mark* whose *proposed change* was deleted under it, which Infrahub allows though the
-relationship is required. `stage list` lists it after the proposed changes with the
-warning `stage.orphaned`, naming its id; nothing is planned or created from it, and the
-operator deletes it. A test deletes its stages before their proposed change for this
-reason.
+*mark* that names no *proposed change*, though the relationship is required. Nothing
+ties it to a branch. `stage list` lists it after the proposed changes with the warning
+`stage.orphaned`, naming its id; nothing is planned or created from it, and the operator
+deletes it by id. Infrahub refuses a proposed change's delete while a stage names it, so
+a test deletes its stages before their proposed change.
 
 **Package override directory** — `--psp-dir` on `fylgja serve` and `fylgja worker run`,
 or `FYLGJA_PSP_DIR`: a directory of support packages loaded after the embedded ones,
@@ -591,9 +598,10 @@ touched the host stopped: `reconcile` (the stage swap or containerlab's apply),
 carries it. A step that ended `stepped` or `unchanged` has none.
 
 **Pinned** — Of a reference: has an `at`. Of a twin: built from one, and therefore
-frozen and reproducible. A twin built from a *waypoint* is always pinned: the waypoint
-resolves to the `at` written on it, or to the moment Infrahub recorded its writing, and
-the twin never follows.
+frozen and reproducible. A twin built from a *stage* is always pinned: a *mark* resolves
+to the `at` written on it or to the moment Infrahub recorded its writing, the *branch
+point* to `branched_from` and the *head* to the first instant after the branch's latest
+stamp, and the twin never follows.
 
 **Pass** — One run of one Spec Kit command (`specify`, `plan`, `implement`, …) over one
 *spec*, as [how-it-was-built.md](how-it-was-built.md) counts them. Not a whole workflow:
@@ -612,6 +620,15 @@ the values; the worker reads them from its process environment; no bundle, findi
 `twin.json` or log carries them (constitution X). The *push* has a login of its own under
 the same rules (`config.push.login`); each shipped package names the same two variables
 for both.
+
+**Proposed change (Infrahub)** — Infrahub's unit of change: a `CoreProposedChange` from
+a source branch into `main`, which may be opened as a draft while the change is built.
+Infrahub allows one open proposed change per source branch and none from `main`; closing
+one frees the branch, and deleting the branch cancels it about sixteen seconds later. Its
+pipeline regenerates the branch's artifacts at its creation and on a run-check, never as
+the branch is edited. From `014-proposed-change-stages` ([D-045](decisions.md#d-045)) it
+is the home of the *stages*, found by its source branch; Fylgja reads it, with its
+artifact validators, as one of Infrahub's own kinds and never writes it.
 
 **Provenance** — Per-object tag in the CTM (`intent`, `observed`, `synthesized`), and
 the block in every manifest recording branch, `at`, schema hash and contract
@@ -690,6 +707,8 @@ unpushed nodes fail it. The step's wait never waits on a claim
 asciinema cast of `twin create --waypoint`, `twin step` and `twin verify` run through the
 *API* from a shell holding the *API token* alone, and `session.gif`, rendered from it.
 Every frame was read for a credential before it was committed ([README](../README.md)).
+It was made at `v0.1.0` and shows the *waypoint*, which the *stage* has since replaced,
+until it is remade at `v0.2.0`.
 
 **Reference schema** — The concrete Infrahub schema Fylgja ships implementing its
 generics, so a greenfield install has something to populate.
@@ -717,10 +736,12 @@ lab host; each reads its own environment ([D-018](decisions.md#d-018),
 **Schedule (Temporal)** — A server-side cron that starts a workflow on an interval.
 How following runs without a long-lived workflow.
 
-**Series** — From M10: the *waypoints* that share one series name, ordered by sequence.
-It tells a story about one branch, or about several in turn, since each waypoint names
-its own branch. `waypoint plan --series` reads and compiles the waypoints in order and
-prints the *step (of a series)* between each consecutive pair. A series named
+**Series** — From M10, superseded by a *proposed change*'s *stages* from
+`014-proposed-change-stages` ([D-045](decisions.md#d-045)), which need no series: one
+proposed change, one story. The *waypoints* that share one series name, ordered by
+sequence. It tells a story about one branch, or about several in turn, since each waypoint
+names its own branch. `waypoint plan --series` reads and compiles the waypoints in order
+and prints the *step (of a series)* between each consecutive pair. A series named
 `fylgja-test-*` belongs to a test, and the test that wrote it deletes it
 ([D-032](decisions.md#d-032)).
 
@@ -777,7 +798,8 @@ step` walks a twin through its own proposed change's stages. Replaces the *waypo
 each exposes one stage of the pipeline on its own, on the code path a run uses
 ([D-019](decisions.md#d-019)). Each is a request to the *server* like every command;
 `twin compile` and `psp validate` need neither Infrahub nor the workflow service, and are
-checked against the server's packages.
+checked against the server's packages. Not the `stage` noun's commands, `stage list` and
+`stage plan`, which act on *stages (of a proposed change)*.
 
 **Stage reference** — From `014-proposed-change-stages` ([D-045](decisions.md#d-045)):
 `<branch>/<label>`, e.g. `change-1/cabled`, the way to name a *stage* on the command line,
@@ -795,6 +817,15 @@ working directory, resolved once at start. The worker and the *server* each repo
 root, so two roles started from different directories are visibly, not silently, apart.
 A *client* has none.
 
+**Step (between stages)** — From M10: the difference between two *stages*' bundles,
+computed by a pure function of the two (`step.Diff`, `internal/step`). It names the
+nodes, links, bootstraps and artifacts that differ, by presence and checksum, and never
+quotes content. `provenance` is left out of the comparison. `at` is hashed, so two stages
+never share a `bundle_id`, and `unchanged` therefore means identical content; both ids
+are printed beside every step. `stage plan` prints it between each consecutive pair, not
+computed beside a refused stage, and `twin step` prints it and acts on it
+([D-045](decisions.md#d-045)).
+
 **Step (of a run)** — One idempotent unit of a provisioning or destroy run, implemented
 as a Temporal *activity*: read, compile, host check, stage, deploy, readiness (one per
 node), push (one per node), record; teardown and unstage. Takes paths and identities,
@@ -806,18 +837,16 @@ starts. A *step (of a twin)* runs its own: inspect, host check, plan reconcile (
 step `compare`), stage, reconcile, readiness, push, record, and *observe*, which is also
 `twin verify`'s.
 
-**Step (of a series)** — From M10: the difference between two consecutive *waypoints*'
-bundles, computed by a pure function of the two (`step.Diff`, `internal/step`). It names
-the nodes, links, bootstraps and artifacts that differ, by presence and checksum, and
-never quotes content. `provenance` is left out of the comparison. `at` is hashed, so two
-waypoints never share a `bundle_id`, and `unchanged` therefore means identical content;
-both ids are printed beside every step. `waypoint plan` prints it, and `twin step` prints
-it and acts on it ([D-032](decisions.md#d-032)).
+**Step (of a series)** — From M10, superseded by the *step (between stages)* from
+`014-proposed-change-stages` ([D-045](decisions.md#d-045)): the step between two
+consecutive *waypoints* of a *series* ([D-032](decisions.md#d-032)).
 
 **Step (of a twin)** — From M11: `twin step`, which takes a running twin built from a
-*waypoint* to another waypoint of its *series*, the next by default, forward or back,
-without a rebuild. The *server* reads and compiles the target, computes the *step (of a
-series)* between the two bundles and the *push plan*, and reads containerlab's plan,
+*stage* to another stage of its own *proposed change*, the next by default, forward or
+back, the *head* included once it has moved, without a rebuild; a stage of another
+proposed change is refused (`step.target.foreign`). The *server* reads and compiles the
+target, computes the *step (between stages)* between the two bundles and the *push plan*,
+and reads containerlab's plan,
 making every refusal before any connection to the workflow service; the `fylgja-step`
 workflow then stages the target, *reconciles* the lab, waits for every node containerlab
 restarted, recreated or created, *replaces* every changed or restarted node's
@@ -828,10 +857,10 @@ under `--wait <duration>` or 2m0s, and records how the wait ended; the wait neve
 its outcome.
 
 **Stepped** — From M11: a twin a *step (of a twin)* took to its target. Its `twin.json`
-names the target's waypoint and bundle at the top level, `state: ready`, and the step in
+names the target's stage and bundle at the top level, `state: ready`, and the step in
 its `step` block (outcome `stepped`, or `unchanged` when the two bundles differ by
 provenance alone), and every node holds the target's bundle. `twin show` still calls it
-`pinned`, and adds `stepped from demo/1 by run fylgja-step …` to the kind line.
+`pinned`, and adds `stepped from change-1/cabled by run fylgja-step …` to the kind line.
 
 **Stream** — From M13: an *API* answer that is a run's progress. A client names it
 (`Fylgja-Stream`, 16 random bytes in hex) on the request of a create, a provision or a
@@ -877,19 +906,21 @@ own working directory; and `twin.json`. Present exactly while a twin is provisio
 being provisioned; removed whole by unstage. With containerlab, the whole state of the
 twin ([D-014](decisions.md#d-014)).
 
-**`twin.json`** — The twin's record, version `5`, written last by the record step and
+**`twin.json`** — The twin's record, version `6`, written last by the record step and
 removed with the *twin directory*
 ([contracts/twin.schema.json](../contracts/twin.schema.json)): the manifest's provenance
 block, `observed_at` (or an explicit statement that it is unknown, when no read took
 place), `bundle_id`, the provisioning run's identity, the version of the worker binary
 that provisioned it, and each node's management address, *artifact* (name, content type,
-checksum, size, never the bytes) and how long its *push* took; the *waypoint* the twin was
-built from (series, sequence, description and where its `at` came from), or an explicit
-`null`; `state` (`ready` or *diverged*); the last *step* (its sides, run, outcome,
-*phase*, containerlab's plan with each package's declaration, each node's push outcome,
-the timings, and the step's `wait`, `null` until `VerifyTwin` writes it), or `null`; and
-on each node `holds`, the bundle whose content it runs. A step rewrites it whole, on every
-path after its stage. Older versions are read where a twin may still carry one.
+checksum, size, never the bytes) and how long its *push* took; the *stage* the twin was
+built from (its proposed change's id and branch, its label, description and where its `at`
+came from: `given`, `written`, `branch_point` or `head`), or an explicit `null`; `state`
+(`ready` or *diverged*); the last *step* (its sides, run, outcome, *phase*, containerlab's
+plan with each package's declaration, each node's push outcome, the timings, and the
+step's `wait`, `null` until `VerifyTwin` writes it), or `null`; and on each node `holds`,
+the bundle whose content it runs. A step rewrites it whole, on every path after its stage.
+Older versions are read where a twin may still carry one; a record of `5` or earlier names
+M10's *waypoint*, which reads as no stage, so its twin shows as pinned and cannot step.
 
 **Verified fact** — Something about a dependency checked against the running system,
 not taken from its documentation: how Infrahub, containerlab, a NOS, Temporal or the
@@ -916,9 +947,12 @@ and Fylgja only reads them, from the default branch. The attribute is `as_of` be
 Infrahub refuses a two-character name; everything Fylgja prints or records says `at`.
 Write a waypoint last, after the branch's writes and after generating: one written
 before the generate seals the old artifact. Editing a waypoint changes no twin already
-built from it ([D-032](decisions.md#d-032); [schema/README.md](../schema/README.md)).
+built from it ([D-032](decisions.md#d-032)). The kind left `main` and the tree with its
+commands, rules and contract at 014.
 
-**Waypoint reference** — `<series>/<sequence>`, e.g. `demo/2`: the third way to name an
+**Waypoint reference** — From M10, superseded by the *stage reference* from
+`014-proposed-change-stages` ([D-045](decisions.md#d-045)), and `--waypoint` by
+`--stage`. `<series>/<sequence>`, e.g. `demo/2`: the third way to name an
 *intent reference* on the command line, beside `--branch` and `--branch --at`, given as
 `--waypoint` to `twin create`, `twin step` and `intent read`. The series has no `/` and
 no whitespace; the sequence is a positive integer with no leading zero. It resolves to a

@@ -900,7 +900,7 @@ generates ([D-028](decisions.md#d-028)).
 host move ([D-015](decisions.md#d-015)).
 
 **Tiers** — The three levels of tests ([development.md](development.md#test-architecture)).
-**Tier 1**, `make test`: no infrastructure, under 35 seconds, in CI on every push and pull
+**Tier 1**, `make test`: no infrastructure, under 45 seconds, in CI on every push and pull
 request. **Tier 2**, `make test-contract`: the *contract tests*, against a real Infrahub,
 in CI on every push to `main` against one the *Infrahub part* brings up. **Tier 3**, `make
 test-e2e`: eight cases on booted NOS images through a server and a worker, on demand and

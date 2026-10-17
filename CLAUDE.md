@@ -361,9 +361,9 @@ pipeline's stage commands and `stage list` and `stage plan` included (`psp valid
 `make test-e2e` (tier 3, `scripts/e2e.sh`: eight cases, seven twins, `twin verify` on three of them and on the steps' waits, every
 command through a server the script starts itself with a token it makes; needs the dev
 server and a worker running from the repository root, Docker, containerlab, **both**
-images and Infrahub; about 19 minutes; `WORKER_LOG=<file>` adds the worker's log to its
-credential greps; `PLATFORMS=nokia_srlinux` narrows it to the six cases SR Linux alone
-runs, about 11 minutes, ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
+images and Infrahub; about 19–20 minutes (1198.9 s on 2026-10-17); `WORKER_LOG=<file>`
+adds the worker's log to its credential greps; `PLATFORMS=nokia_srlinux` narrows it to
+the six cases SR Linux alone runs, about 11 minutes, ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
 never `E2E-OK`; never in CI). A command that runs longer than one tool call (tier 3)
 starts detached with its exit status in a file, and is waited on in foreground calls of
 under ten minutes.
@@ -404,9 +404,9 @@ Rewritten whole at each release's close, never appended to.
   refused per device, by its stamps or an event naming it;
   `twin.json` `6`, the findings' stage blocks and the API's two operations, with neither
   the API's version nor the findings' moved. Tier 2 passed in 531.5 s, and in 716.7 s with
-  D-048 built (2026-10-17, `internal/stages` 712.1 s), tier 3 `E2E-OK` in
-  1125.5 s and `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in 665.7 s, and the hand scenarios
-  and the README's stepping walk-through were followed by hand
+  D-048 built (2026-10-17, `internal/stages` 712.1 s); tier 3 `E2E-OK` in 1125.5 s, and
+  in 1198.9 s with D-048 built; `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in 665.7 s; and
+  the hand scenarios and the README's stepping walk-through were followed by hand
   (`specs/014-proposed-change-stages/research.md` §8). No golden, no fixture id and no
   format but the twin record's moved. Its close drafts the upstream request for named
   points in time for the operator to file, never filed by a session (T054), runs the

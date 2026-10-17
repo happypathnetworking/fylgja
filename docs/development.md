@@ -609,9 +609,10 @@ Rules:
 - **Tier 3 and the hand checks run on a quiet host.** A twin boot must not overlap
   `make test-contract` or other heavy work: a starved worker misses heartbeats, so its
   deploys are cut short and retried until the step fails, and Infrahub times out the
-  contract tier. Tier 3 takes about 19 minutes on the development host (1125.5 s on
-  2026-10-17): seven twins, two rebuilds, four steps, two of which restart a cEOS node,
-  two draft proposed changes' pipelines and an orphan boot. Read `free -m`
+  contract tier. Tier 3 takes about 19–20 minutes on the development host (1125.5 s on
+  2026-10-17, and 1198.9 s the same day with D-048 built): seven twins, two rebuilds,
+  four steps, two of which restart a cEOS node, two draft proposed changes' pipelines
+  and an orphan boot. Read `free -m`
   before it, give the host room and rest it between runs. It starts and stops a worker of
   its own to see orphan detection at start; the stopped worker stays listed as a poller
   for about five minutes, which is harmless. Restart the worker after every rebuild,

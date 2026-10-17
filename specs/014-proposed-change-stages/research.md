@@ -1551,3 +1551,47 @@ whole**, `make test-contract`, passed in 716.7 s (`internal/stages` 712.1 s, `in
 wait (706.1 s) had failed this test alone, for the lag. Infrahub was left with `main` and
 `fylgja-fixture` alone, no proposed change and no stage, and `clab inspect --all` found no
 container. No golden, no fixture id and no format version moved.
+
+### 8.20 Tier 3 on the tree that carries D-048 (T080, 2026-10-17)
+
+From the repository root with `local/.env`'s names in the environment, after `make build`
+and the worker and the API's server restarted from this tree (16:10Z; both had read
+`(deleted)` since T078) and verified as `CLAUDE.md` says: each binary current,
+`INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT` and `FYLGJA_API_TOKEN` in the environment,
+both reports naming both packages with their logins set, the server `listening on
+127.0.0.1:7650 (API version 1, build 0.1.0-dev)`. The dev server answered `SERVING`.
+Before: no lab, no twin directory, no Schedule, `Branch` `main` and `fylgja-fixture`,
+`CoreProposedChange 0`, `FylgjaStage 0`; `free -m` 18.6 GiB available, a load average of
+1.5, no tier 2 beside it.
+
+- **`make test-e2e`** (16:10:27Z–16:30:27Z): **`E2E-OK`**, exit 0, wall **1198.9 s**
+  (19 m 59 s), against §8.11's 1125.5 s and T076's 1159.1 s. Case 1 deployed `47b2c449…`.
+  Case 7: seed 19.7 s, the draft proposed change and its three validators 51.1 s, n1's and
+  n3's artifacts moved and Ready 7.7 s after the generate returned, the plan 10.3 s (exit 1:
+  four stages, the branch point on `main` refused `contract.node.missing` with no id,
+  `seeded`, `third-link` and the head compiled to three ids, `977689e5…`, `d5cfeecc…` and
+  `4bd5717e…`; one link added, n1 and n3 changed; the step from `third-link` to the head
+  computed `unchanged`), the create from `seeded` 55.8 s deploying the id the plan printed
+  for it, the step to `third-link` 16.0 s and the `unchanged` step to the head 12.1 s
+  (command wall), destroy 2.3 s. The head's `at` (`16:22:21.282346`) is earlier than
+  `third-link`'s written `16:22:22.158789`, as in §8.11, and the head still planned last.
+  Case 8: proposed change 40.5 s, create 87.2 s, the step to `mixed-link` refused
+  `step.restart.required` naming e1 (dry run and run), then taken with `--allow-restart` in
+  83.3 s (e1 restarted in place, s1 and e2 untouched, the link seen from both ends 0.7 s
+  and 0.6 s after), the step back with `--stage <b>/seeded` 72.2 s, the waits settled after
+  4.575 s and 3.587 s. Creates 42.7–91.5 s; verify 4.3 s, 3.8 s and 2.5 s; the boot half
+  8.3 s and 6.9 s.
+- **Why the head did not move**, read-only after the run, since the log outlives a deleted
+  branch (§8.19, item 2): `InfrahubEvent(branches: [<case 7's branch>], since:
+  16:22:12Z, until: 16:22:24Z)` holds 11 events. The add-link's seven, intent's by D-048
+  (two `NetworkInterface` created, their two devices' `interfaces`, the `NetworkLink`
+  created, its two endpoints' `link`), occurred at `16:22:13.320990`–`.502911`, after
+  `seeded` was marked (`16:22:12.808310`) and before the generate; the other four are the
+  two artifacts' (`CoreArtifact` `storage_id` and `checksum`, `16:22:21.116143` and
+  `16:22:21.322734`, with their `artifact.updated`), which are not intent. So the latest
+  intent event precedes the branch's latest stamp, a checksum at `16:22:21.282345`, and
+  the head is that stamp plus one microsecond, as before D-048.
+- After: `clab inspect --all` `{}`, no `local/twin`, no Schedule and no running workflow,
+  `Branch` `main` and `fylgja-fixture`, `CoreProposedChange 0`, `FylgjaStage 0`. The worker
+  and the server were left running on this tree's binary. No case failed, so nothing was
+  fixed. No golden, no fixture id and no format version moved.

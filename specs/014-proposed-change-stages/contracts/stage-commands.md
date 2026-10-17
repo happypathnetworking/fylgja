@@ -43,7 +43,8 @@ change` with `--branch`), exit 0, `stages.rows == []`. Beside a diverged record 
 reads `← twin (diverged towards change-1/live)`. Orphans print after the proposed changes:
 `orphaned: stage "cabled" (18df…) names no proposed change`. Every stage has its row: one
 nothing names an `at` for prints `at unresolved` and has no `at` in its row, with the
-warning `stage.at.unresolved` (the head of a branch holding nothing stamped); a source
+warning `stage.at.unresolved` (the head of a branch holding neither a stamp nor an intent
+event); a source
 branch deleted under its open proposed change lists its marks at their own `at`s and its
 branch point and head unresolved, with one warning `stage.unknown` naming the branch, until
 Infrahub cancels it, every other proposed change listed as usual. The heading's count is

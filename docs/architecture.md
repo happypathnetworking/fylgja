@@ -255,12 +255,15 @@ change's stages are read, draft or not. The operator marks stages; Fylgja only r
 Stages replaced M10's waypoints, a branch-agnostic kind that named its branch by free text,
 in a series of its own ([D-032](decisions.md#d-032), superseded by D-045).
 
-The stage reader uses the default branch's unnamed endpoints and names no branch:
-`GET /api/schema` first, to check the kind, its attributes and the extension, then
+The stage reader uses the default branch's unnamed endpoints, and every method of it
+names no branch but `IntentEvents`, which reads the source branch's event log
+(`InfrahubEvent(branches:)`) and that branch's schema (`GET /api/schema?branch=`), to map
+each event's kind: `GET /api/schema` first, to check the kind, its attributes and the extension, then
 `POST /graphql`. Beside Fylgja's own kinds it reads four roots that are Infrahub's and
 nobody's model, each by a query: `CoreProposedChange` (the open ones, with their stages),
 `Branch` (`branched_from` and `created_at`), `CoreArtifactValidator` (the proposed
-change's artifact validation, pinned), as Constitution III allows from 1.2.1, and
+change's artifact validation, pinned at a mark's or the branch point's `at` and unpinned
+for the head), as Constitution III allows from 1.2.1, and
 `InfrahubEvent` (the source branch's event log since `branched_from`, pinned to nothing),
 as it allows from 1.3.0 ([D-048](decisions.md#d-048)); every operation is still a query.
 An event is intent's when it is a node's own write of a kind that implements a Fylgja
@@ -292,7 +295,7 @@ resolution reads stamps and never a value of intent: the kind or its extension a
 (`stage.kind.absent`); no open proposed change on the branch, or no such stage of it
 (`stage.unknown`); a mark carrying a reserved label (`stage.label.reserved`); a stage with
 no `at` at all (a mark with neither `as_of` nor its label's stamp, a head of a branch with
-nothing stamped, a branch point with no `branched_from`), or a given one later than now
+neither a stamp nor an intent event, a branch point with no `branched_from`), or a given one later than now
 (`stage.at.unresolved`); more than six fractional digits (`intent.at.precision`); an `at`
 before the branch point (`stage.at.before_branch_point`), which names the rebase when
 `branched_from` has moved past the mark while `created_at` has not, since a rebase

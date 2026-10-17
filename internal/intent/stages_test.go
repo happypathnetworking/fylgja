@@ -437,9 +437,10 @@ func TestStageReaderReadsValidationsPinned(t *testing.T) {
 	}
 }
 
-// The reader names no branch: the schema endpoint and GraphQL are asked on their unnamed
-// paths, with no query string but the validators' `at`, so the default branch answers
-// whatever it is called. The credential goes in the header, as a branch read's does.
+// Every method of the reader but IntentEvents names no branch: the schema endpoint and
+// GraphQL are asked on their unnamed paths, with no query string but the validators'
+// `at`, so the default branch answers whatever it is called. The credential goes in the
+// header, as a branch read's does.
 func TestStageReaderNamesNoBranch(t *testing.T) {
 	f := &fakeStages{attributes: StageFields}
 	r := f.reader(t)

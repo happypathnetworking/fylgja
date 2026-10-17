@@ -6,8 +6,9 @@
 # named there.
 #
 # Verified 2026-09-08 against Infrahub 1.11.2: envelope (`value`, `node`, `edges`),
-# `limit`/`offset`, and generic resolution to concrete kinds. Ordering comes from the
-# schema's `order_by`, so no `order` argument is passed. `at` is a URL query parameter
+# `limit`/`offset`, and generic resolution to concrete kinds. The generic queries take
+# their order from the schema's `order_by` and pass no `order` argument; the event log
+# is read newest first (`order: DESC`, IntentEvents below). `at` is a URL query parameter
 # on POST /graphql/{branch} (URL-encode `+`): sent on every query of a read iff the
 # operator supplied it, never otherwise. Re-verified 2026-09-14: Infrahub honours `at`
 # to the microsecond and truncates beyond; an `at`

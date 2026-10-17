@@ -119,10 +119,12 @@ func (e *StageKindError) Error() string {
 
 // StageReader reads proposed changes, their stages and their branches from the default
 // branch. It is a second client beside Client, for objects that live on no branch of
-// the operator's: it names no branch at all, using Infrahub's unnamed endpoints
-// (/api/schema and /graphql), so an installation whose default branch is not called
-// main needs nothing of it. Client's Config.Branch stays required; a stage read never
-// has one.
+// the operator's: every method but IntentEvents names no branch, using Infrahub's
+// unnamed endpoints (/api/schema and /graphql), so an installation whose default branch
+// is not called main needs nothing of it. IntentEvents names the source branch, in
+// InfrahubEvent(branches:) and in the branch schema it maps each event's kind by
+// (/api/schema?branch=), since the log and the kinds are that branch's (D-048).
+// Client's Config.Branch stays required; StageReader has no branch of its own.
 //
 // It shares Client's transport, redaction and explanation of Infrahub's refusals, so an
 // unreachable Infrahub, a refused credential or a non-200 read the same as a branch

@@ -78,9 +78,12 @@ extensions:
           identifier: "proposed_change__fylgja_stages"
 ```
 
-Keys are in the canonical order the schema skill's formatting rule gives, so a later
-`infrahubctl schema format` moves nothing. The identifier is shared by both sides and is
-immutable once loaded; it is the candidate's, so the migration keeps it.
+Keys are in the order the schema skill's formatting rule gives. `infrahubctl schema format`
+(SDK 1.23.2) orders them otherwise: it would put `order_by` before `display_label`,
+`generate_profile` and `branch` after `uniqueness_constraints`, and `label`'s `optional`
+after its `parameters` (research §8.2). No gate runs it, and whether to reformat the file
+is the operator's. The identifier is shared by both sides and is immutable once loaded; it
+is the candidate's, so the migration keeps it.
 
 ## The migration on a `main` that carries the candidate (the development host)
 
@@ -141,8 +144,9 @@ three ways on a throwaway proposed change before the text is committed
   labelled is refused), `as_of` (optional; verbatim; at most six fractional digits; later
   than now refused until it has passed), `description` (optional), `proposed_change`
   (required).
-- **Three ways to write one**, all Infrahub's: the UI (Stage, under the Fylgja menu, with the
-  proposed change chosen from the list); an object file (`kind: Object`, `spec.kind:
+- **Three ways to write one**, all Infrahub's: the UI (Stage, an entry of its own in the
+  sidebar's object menu, `/objects/FylgjaStage`, with the proposed change chosen from the
+  list; research §8.12); an object file (`kind: Object`, `spec.kind:
   FylgjaStage`, each row's `proposed_change` by the proposed change's id, since the kind
   has no human-friendly id), loaded with `infrahubctl object load stages.yml` (any
   branch; the default has the kind); `infrahubctl object create FylgjaStage --set

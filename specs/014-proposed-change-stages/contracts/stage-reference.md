@@ -40,7 +40,7 @@ writes.
 | 4 | the stage by label among the branch point, the marks and the head | `stage.unknown` | the reference | `proposed change <name> (<id>) on branch b has no stage "x"; its stages are: branch-point, seeded, third-link, head` |
 | 4 | two marks of the proposed change share the label | `stage.duplicate` | the reference | `stage b/x is held by 2 objects (ids …), which the kind's uniqueness constraint should have refused; none is chosen` |
 | 4 | the mark's label is `head` or `branch-point` | `stage.label.reserved` | the reference | `stage b/head is a mark labelled "head", which names the derived head of every proposed change and is reserved; relabel it (schema/README.md); the head of b is still its derived stage` |
-| 5 | the mark's `at`: `as_of` verbatim, else `label.updated_at` | `stage.at.unresolved` | the reference | `stage b/x has no at: no as_of is written on it and Infrahub returned no updated_at for its label, so it names no point in time` |
+| 5 | the stage's `at`: a mark's `as_of` verbatim, else `label.updated_at`; the branch point's `branched_from` (step 3); the head's (step 6) | `stage.at.unresolved` | the reference | `stage b/x has no at: no as_of is written on it and Infrahub returned no updated_at for its label, so it names no point in time` / `stage b/branch-point has no at: Infrahub returned no branched_from for branch b, so it names no point in time` / `stage b/head has no at: branch b holds no stamped device, interface, link or artifact, so it names no point in time` (the branch has neither a stamp nor an intent event) |
 | 5 | more than six fractional digits | `intent.at.precision` (exit 2) | the reference | M1's sentence, then `Write the stage's as_of with at most six.` |
 | 5 | a given `as_of` later than the server's clock, read once and never sent | `stage.at.unresolved` | the reference | `stage b/x has at … (given), later than the current time …: it seals nothing yet, and a twin from it could differ between two creates` |
 | 6 | the head: the branch's unpinned stamps (`Stamps`) and its intent events after the latest of them (`IntentEvents`, below); `at` = the later of the latest stamp and the latest event's `occurred_at`, + 1 µs | `operation.failed` (exit 2) only when Infrahub cannot be read | — | the read's own wording |
@@ -49,9 +49,12 @@ writes.
 | 9 | `main`'s unpinned stamps against `branched_from` | `stage.main.moved` (warning) | the branch | `main has moved since b's branch point: its latest write is …, the branch point …; the branch point stage still reads main as it was then, and nothing is refused` |
 
 The branch point's `at` is `branched_from` verbatim (step 3) and its read is on `main`;
-steps 5 and 7 cannot refuse it. The head's `at` (step 6) is after every stamp and every
-intent event by construction, so step 7 cannot refuse it either; step 8 can (the head is
-stale after an intent edit, a removal included, until a regenerate or a run-check).
+step 7 cannot refuse it. The head's `at` (step 6) is after every stamp and every intent
+event by construction, so step 7 cannot refuse it either; step 8 can (the head is stale
+after an intent edit, a removal included, until a regenerate or a run-check). Step 5
+refuses either end only when it has no `at`: a branch point Infrahub returned no
+`branched_from` for, or the head of a branch with neither a stamp nor an intent event; a
+given `as_of`'s precision and future are a mark's alone.
 
 **At `start`**, before any connection, exit 2: `stage.ref.invalid` (`--stage "x" is not a
 stage reference: expected <branch>/<label>, …`; `--branch "a/b" is not a branch: expected

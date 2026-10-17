@@ -125,10 +125,13 @@ stamps query reads stamps, not intent):
 4. the stage named: `branch-point`, `head`, or a mark by label → `stage.unknown` naming the
    proposed change's labels; two marks with one label → `stage.duplicate`; a mark labelled
    `head` or `branch-point` → `stage.label.reserved`;
-5. the `at`: a mark with no `as_of` and no write stamp → `stage.at.unresolved`; more than
-   six fractional digits → `intent.at.precision` (exit 2); a given `as_of` later than the
-   server's clock → `stage.at.unresolved` (the clock is read once and never sent);
-6. the head's `at` computed from the branch's unpinned stamps (§5);
+5. the `at`: a mark with no `as_of` and no write stamp, a branch point Infrahub returned no
+   `branched_from` for, or the head of a branch with neither a stamp nor an intent event →
+   `stage.at.unresolved`; more than six fractional digits → `intent.at.precision` (exit
+   2); a given `as_of` later than the server's clock → `stage.at.unresolved` (the clock is
+   read once and never sent);
+6. the head's `at` computed from the branch's unpinned stamps and its intent events after
+   the latest of them ([D-048](../../docs/decisions.md#d-048), §5);
 7. an `at` before `branched_from` → `stage.at.before_branch_point`, saying a rebase did it
    when `created_at` is before the `at` (every mark at once after a rebase);
 8. the staleness rule at the stage's `at` → `stage.artifact.stale`, one finding per device;

@@ -3,9 +3,8 @@
 // Command fylgja-fixture prepares a local Infrahub for development: it loads the
 // generics contract and reference schema onto a branch and seeds the three-node fixture
 // or the mixed one, or makes following's branch change on a throwaway branch, or opens,
-// marks, checks and closes a throwaway branch's proposed change (D-045), or writes and
-// removes a test series of waypoints (M10), or prepares main: the schema, the group and
-// this repository's read-only registration (D-044). Development tooling, not the product —
+// marks, checks and closes a throwaway branch's proposed change (D-045), or prepares main:
+// the schema, the group and this repository's read-only registration (D-044). Development tooling, not the product —
 // it writes to Infrahub, which the product never does. Build-tagged so it cannot be built
 // by accident.
 package main
@@ -16,7 +15,6 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -29,8 +27,7 @@ func main() {
 	schemaOnly := flag.Bool("schema-only", false, "load the schema but do not seed data")
 	remove := flag.Bool("delete", false,
 		"delete the branch instead, a "+testsupport.TestBranchPrefix+"* one or "+testsupport.FixtureBranch+
-			": every "+testsupport.TestSeriesPrefix+"* waypoint naming it, every stage of every proposed change whose source it is, "+
-			"those proposed changes, then the branch")
+			": every stage of every proposed change whose source it is, those proposed changes, then the branch")
 	sdl := flag.String("sdl", "", "write the branch's GraphQL SDL to this path and exit")
 	addLink := flag.Bool("add-link", false,
 		"add link n1:ethernet-1/3 <-> n3:ethernet-1/3 to a seeded throwaway branch and exit")
@@ -46,9 +43,6 @@ func main() {
 		"disable one interface on a throwaway branch and exit, as <device>:<interface>")
 	mixed := flag.Bool("mixed", false,
 		"seed the mixed fixture (two platforms, three devices) on a throwaway branch instead of the three-node one")
-	wp := flag.String("waypoint", "",
-		"write one waypoint <series>/<sequence> naming a throwaway -branch as it stands now, and exit; "+
-			"the series begins "+testsupport.TestSeriesPrefix+" (write it after the writes it seals)")
 	propose := flag.Bool("propose", false,
 		"open a draft proposed change from a throwaway -branch into main, wait for its validators, print its id, and exit")
 	stage := flag.String("stage", "",
@@ -58,10 +52,8 @@ func main() {
 		"run a throwaway -branch's open proposed change's artifact checks, wait for its artifact validator, and exit")
 	closePC := flag.Bool("close", false, "close a throwaway -branch's open proposed change (its stages stay), and exit")
 	at := flag.String("at", "",
-		"with -stage or -waypoint: its as_of, verbatim; omitted, its at is when it was written")
-	description := flag.String("description", "", "with -stage or -waypoint: its description")
-	deleteSeries := flag.String("delete-series", "",
-		"delete every waypoint of a "+testsupport.TestSeriesPrefix+"* series and exit")
+		"with -stage: its as_of, verbatim; omitted, its at is when it was written")
+	description := flag.String("description", "", "with -stage: its description")
 	prepare := flag.Bool("prepare-main", false,
 		"load the schema on main, create the group "+testsupport.ArtifactGroupName+
 			", register this repository read-only with no credential, wait for its import, and exit; takes no -branch")
@@ -86,26 +78,12 @@ func main() {
 		return
 	}
 
-	if (*at != "" || *description != "") && *stage == "" && *wp == "" {
-		fmt.Fprintln(os.Stderr, "fylgja-fixture: -at and -description describe the stage -stage marks or the waypoint -waypoint writes; give one")
+	if (*at != "" || *description != "") && *stage == "" {
+		fmt.Fprintln(os.Stderr, "fylgja-fixture: -at and -description describe the stage -stage marks; give it")
 		os.Exit(1)
 	}
 	if *propose || *stage != "" || *runCheck || *closePC {
 		if err := proposal(*branch, *propose, *stage, *runCheck, *closePC, *at, *description); err != nil {
-			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
-			os.Exit(1)
-		}
-		return
-	}
-	if *wp != "" {
-		if err := writeWaypoint(*branch, *wp, *at, *description); err != nil {
-			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
-			os.Exit(1)
-		}
-		return
-	}
-	if *deleteSeries != "" {
-		if err := removeSeries(*deleteSeries); err != nil {
 			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
 			os.Exit(1)
 		}
@@ -412,52 +390,6 @@ func plural(n int, one, many string) string {
 	return fmt.Sprintf("%d %s", n, many)
 }
 
-// writeWaypoint writes one waypoint of a test series naming a throwaway branch. The durable
-// fixture branch never gains a persistent series, and
-// a series that is not a test's is refused before any request, so no call here can write
-// where an operator's series live. Each call comes after the writes it seals and after the
-// generate the previous flag ran: the one rule of schema/README.md.
-func writeWaypoint(branch, ref, at, description string) error {
-	series, number, ok := strings.Cut(ref, "/")
-	sequence, err := strconv.Atoi(number)
-	if !ok || series == "" || strings.ContainsAny(series, " \t\n") || strings.HasPrefix(number, "0") || err != nil || sequence < 1 {
-		return fmt.Errorf("-waypoint %q is not <series>/<sequence>, a series with no \"/\" and no whitespace and a positive sequence", ref)
-	}
-	if branch == testsupport.FixtureBranch {
-		return fmt.Errorf("-waypoint refuses branch %s: the fixture never gains a persistent series; "+
-			"seed a throwaway branch and name it with -branch", branch)
-	}
-	if !strings.HasPrefix(series, testsupport.TestSeriesPrefix) {
-		return fmt.Errorf("-waypoint refuses series %s: every series this tool writes begins %s, and is a test's",
-			series, testsupport.TestSeriesPrefix)
-	}
-	c, err := testsupport.NewClient()
-	if err != nil {
-		return err
-	}
-	id, err := c.WriteWaypoint(series, sequence, branch, at, description)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("waypoint %s/%d written naming branch %s (id %s)\n", series, sequence, branch, id)
-	return nil
-}
-
-// removeSeries deletes a test series by name: tier 2's cleanup by hand, when a test was
-// killed before its own.
-func removeSeries(series string) error {
-	c, err := testsupport.NewClient()
-	if err != nil {
-		return err
-	}
-	n, err := c.DeleteWaypointSeries(series)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("deleted %d waypoint(s) of series %s\n", n, series)
-	return nil
-}
-
 // change applies one of the branch-change flags. Each refuses the durable fixture branch
 // for the same reason -add-link does: every test, and every twin built from it, relies
 // on its artifacts and its bundle_id staying put. The fixture branch is written
@@ -517,19 +449,13 @@ func change(branch string, generate bool, role, site, port string) error {
 }
 
 // deleteBranch deletes a branch and what hangs on it. A test branch goes in the fixed
-// order: the test series naming it (a waypoint outlives its branch, so one left behind
-// would be listed by every waypoint list after), then every stage of every proposed
-// change whose source it is, then those proposed changes, then the branch, since Infrahub
-// refuses a proposed change's delete while a stage names it (research §8.8) and a branch
-// deleted first cancels its open proposed change (research §2.3). The fixture has no proposed
-// change and is deleted as before, which make infrahub-clean needs; any other branch is
-// refused by deletable before any request, being an operator's.
+// order: every stage of every proposed change whose source it is, then those proposed
+// changes, then the branch, since Infrahub refuses a proposed change's delete while a
+// stage names it (research §8.8) and a branch deleted first cancels its open proposed
+// change (research §2.3). The fixture has no proposed change and is deleted as before,
+// which make infrahub-clean needs; any other branch is refused by deletable before any
+// request, being an operator's.
 func deleteBranch(c *testsupport.Client, branch string) error {
-	n, err := c.DeleteWaypointsNaming(branch)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("deleted %d test waypoint(s) naming branch %s\n", n, branch)
 	if branch == testsupport.FixtureBranch {
 		if err := c.DeleteBranch(branch); err != nil {
 			return err

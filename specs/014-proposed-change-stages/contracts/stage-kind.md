@@ -152,10 +152,13 @@ three ways on a throwaway proposed change before the text is committed
   branch; the default has the kind); `infrahubctl object create FylgjaStage --set
   label=cabled --set proposed_change=<id> --set description="…"`. Deleting: the UI or
   `FylgjaStageDelete`.
-- **Editing a stage**: `description` changes nothing Fylgja reads; `as_of` moves the
-  stage's `at`; `label` renames the reference. None changes a twin already built from it:
-  the record keeps what the twin was built from, and `stage list` warns `stage.twin.moved`
-  beside it, as `twin step` does beside its target.
+- **Editing a stage**: `description` changes nothing Fylgja reads, the `at` included;
+  `as_of` moves the stage's `at`; `label` renames the reference and, on a mark with no
+  `as_of`, moves its `at` to the relabel's write, since that `at` is `label.updated_at`
+  (stage-reference.md row 5): a relabelled mark names the moment of the relabel, and to
+  keep its moment its `at` is written as its `as_of` first (research §8.15). None changes
+  a twin already built from it: the record keeps what the twin was built from, and `stage
+  list` warns `stage.twin.moved` beside it, as `twin step` does beside its target.
 - **Delete stages before their proposed change**: Infrahub refuses a proposed change's
   delete while a stage names it (`It is linked to mandatory relationship proposed_change on
   node FylgjaStage …`; research §8.8). A stage removed from its proposed change's

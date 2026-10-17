@@ -164,9 +164,10 @@ curl -s -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" -H 'Content-Type: application/j
 
 Expected: green, with `TestStageKindLoads` (the kind and the extension on `main`; a
 duplicate label refused from the branch), `TestStagesListAndPlan` (four stages, three
-steps, the ids), `TestStageRefusals` (stale, rebase, reserved, closed, unknown), the
-deletion in order inside each test; after it, `main` and `fylgja-fixture` alone, zero
-proposed changes, zero stages. About three minutes longer than before.
+steps, the ids, a mark edited three ways), `TestStageRefusals` (stale, rebase, reserved,
+closed, unknown), the deletion in order inside each test; after it, `main` and
+`fylgja-fixture` alone, zero proposed changes, zero stages. About three minutes longer
+than before.
 
 ## 6. The records and the tree (US5, SC-009)
 

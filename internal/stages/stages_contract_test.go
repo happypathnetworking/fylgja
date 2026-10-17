@@ -389,7 +389,10 @@ func TestStageKindLoads(t *testing.T) {
 // is refused contract.node.missing and its step is not computed (research R-04); the marks
 // and the head compile to three ids, the step between the marks is the link added with n1
 // and n3 changed, and the step to the head is unchanged. The mark's CTM is the read of
-// --branch at its at, but for observed_at, and compiles to the same id (SC-002).
+// --branch at its at, but for observed_at, and compiles to the same id (SC-002). Then the
+// first mark is edited three times: a description edit leaves its at, and a twin built from
+// it unmoved; a relabel leaves the old reference unknown and the new one at the relabel's
+// write; an as_of of its first at gives that at back, given.
 func TestStagesListAndPlan(t *testing.T) {
 	c := harness(t)
 	name := throwaway(t, c, true)
@@ -538,6 +541,71 @@ func TestStagesListAndPlan(t *testing.T) {
 		t.Errorf("--branch %s --at %s compiles to %s (%v); %s planned to %s", name, seededAt, byAtID, list, seeded.Ref, seeded.BundleID())
 	}
 	t.Logf("%s: at %s (written), bundle_id %s", seeded.Ref, seededAt, seeded.BundleID())
+
+	// Editing the mark, the proposed change found again after each edit: a description edit
+	// alone moves nothing a twin built from it holds, a relabel names its own write, and an
+	// as_of written to the first at gives that at back.
+	reader := stageReader(t)
+	first := *seeded.Resolved
+	record := RecordView{ProposedChange: RecordChange{ID: id, Branch: name}, Label: first.Label,
+		Branch: first.Branch, At: first.At, AtSource: first.AtSource}
+	edit := func(what string, fields map[string]any) *Change {
+		t.Helper()
+		if err := c.UpdateStage(first.ID, fields); err != nil {
+			t.Fatalf("%s: %v", what, err)
+		}
+		ch, list, err := Find(t.Context(), reader, liveStamper{}, name)
+		if err != nil || list != nil {
+			t.Fatalf("finding %s's proposed change after %s: %v %v", name, what, err, list)
+		}
+		return ch
+	}
+	markOf := func(what string, ch *Change, label string) Stage {
+		t.Helper()
+		for _, st := range ch.Stages {
+			if st.Mark != nil && st.ID == first.ID {
+				if st.Label != label {
+					t.Fatalf("after %s the mark %s is labelled %q; want %q", what, first.ID, st.Label, label)
+				}
+				t.Logf("after %s: %s at %s (%s), its label written at %s", what, st.Ref, st.At, st.AtSource, st.Mark.LabelWrittenAt)
+				return st
+			}
+		}
+		t.Fatalf("after %s the mark %s is not among %s's stages", what, first.ID, name)
+		return Stage{}
+	}
+
+	ch := edit("a description edit", map[string]any{"description": "seeded, described again"})
+	if st := markOf("a description edit", ch, "seeded"); st.At != first.At || st.AtSource != AtWritten ||
+		st.Description != "seeded, described again" {
+		t.Errorf("after a description edit %s is at %s (%s), described %q; want at %s (written) as before, described anew",
+			st.Ref, st.At, st.AtSource, st.Description, first.At)
+	}
+	if moved := Moved(ch, record); len(moved) != 0 {
+		t.Errorf("after a description edit the record's stage reads as moved: %v", moved)
+	}
+
+	ch = edit("a relabel", map[string]any{"label": "relabelled"})
+	relabelled := markOf("a relabel", ch, "relabelled")
+	if later, err := laterThan(relabelled.At, first.At); err != nil || !later || relabelled.AtSource != AtWritten {
+		t.Errorf("after a relabel %s is at %s (%s); want written, later than %s (%v)", relabelled.Ref, relabelled.At,
+			relabelled.AtSource, first.At, err)
+	}
+	if _, list, err := Resolve(t.Context(), reader, liveStamper{}, registry(t), first.Ref, time.Now().UTC()); err != nil {
+		t.Fatalf("resolving %s after a relabel: %v", first.Ref, err)
+	} else {
+		refused(t, "the old reference after a relabel", list, findings.RuleStageUnknown, first.Ref.String())
+	}
+	moved := Moved(ch, record)
+	if len(moved) != 1 || moved[0].Rule != findings.RuleStageTwinMoved || moved[0].Severity != findings.Warning ||
+		!strings.Contains(moved[0].Message, first.Ref.String()+" no longer exists") {
+		t.Errorf("after a relabel Moved files %v; want one stage.twin.moved warning saying %s no longer exists", moved, first.Ref)
+	}
+
+	ch = edit("an as_of edit", map[string]any{"as_of": first.At})
+	if st := markOf("an as_of edit", ch, "relabelled"); st.At != first.At || st.AtSource != AtGiven {
+		t.Errorf("after as_of was written %s, %s is at %s (%s); want %s (given)", first.At, st.Ref, st.At, st.AtSource, first.At)
+	}
 }
 
 // The refusals tier 2 can make, on one proposed change in the order its story makes them.

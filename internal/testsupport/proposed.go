@@ -3,8 +3,11 @@
 package testsupport
 
 import (
+	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
+	"slices"
 	"strings"
 	"time"
 )
@@ -283,6 +286,62 @@ func (c *Client) MarkStage(id, label, at, description string) (stageID, stamp st
 			label, id, r.Create.OK, r.Create.Object.ID)
 	}
 	return r.Create.Object.ID, r.Create.Object.Label.UpdatedAt, nil
+}
+
+// UpdateStage edits a stage's attributes on the default branch's GraphQL, each field
+// written as its value: label, as_of or description, a nil value clearing it. The stage's
+// proposed change is read first and must be a test branch's, as MarkStage checks it, so no
+// test edits an operator's stage; an orphan, which names none, is refused too.
+func (c *Client) UpdateStage(id string, fields map[string]any) error {
+	if len(fields) == 0 {
+		return fmt.Errorf("updating stage %s: no field given", id)
+	}
+	raw, err := c.GraphQL("main", fmt.Sprintf(
+		`{ FylgjaStage(ids: [%q]) { edges { node { proposed_change { node { id } } } } } }`, id))
+	if err != nil {
+		return fmt.Errorf("reading stage %s: %w", id, err)
+	}
+	var r struct {
+		S struct {
+			Edges []struct {
+				Node struct {
+					ProposedChange struct {
+						Node *struct {
+							ID string `json:"id"`
+						} `json:"node"`
+					} `json:"proposed_change"`
+				} `json:"node"`
+			} `json:"edges"`
+		} `json:"FylgjaStage"`
+	}
+	if err := json_Unmarshal(raw, &r); err != nil {
+		return err
+	}
+	if len(r.S.Edges) != 1 {
+		return fmt.Errorf("stage %s: %d found, want one", id, len(r.S.Edges))
+	}
+	pc := r.S.Edges[0].Node.ProposedChange.Node
+	if pc == nil {
+		return fmt.Errorf("stage %s names no proposed change", id)
+	}
+	if _, err := c.testProposedChange(pc.ID); err != nil {
+		return err
+	}
+	names := slices.Sorted(maps.Keys(fields))
+	data := []string{fmt.Sprintf("id: %q", id)}
+	for _, name := range names {
+		v, err := json.Marshal(fields[name])
+		if err != nil {
+			return fmt.Errorf("updating stage %s's %s: %w", id, name, err)
+		}
+		data = append(data, fmt.Sprintf("%s: {value: %s}", name, v))
+	}
+	what := fmt.Sprintf("updating stage %s's %s", id, strings.Join(names, ", "))
+	raw, err = c.GraphQL("main", fmt.Sprintf(`mutation { FylgjaStageUpdate(data: {%s}) { ok } }`, strings.Join(data, ", ")))
+	if err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	return okOf(raw, "FylgjaStageUpdate", what)
 }
 
 // StagesOf lists a proposed change's stages through its fylgja_stages extension, in

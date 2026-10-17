@@ -89,12 +89,14 @@ list. Or `infrahubctl object create FylgjaStage --set label=verified --set
 proposed_change=<id> --set description="checked by hand"`. To delete one: the UI,
 `infrahubctl object delete FylgjaStage <stage id> --yes`, or `FylgjaStageDelete`.
 
-**Editing a stage.** Changing `description` changes nothing Fylgja reads. Changing `as_of`
-moves the stage's `at`, and changing `label` renames its reference. None of this changes a
-twin already built from the stage: the twin's record keeps what it was built from, and
-`stage list` warns beside it (`stage.twin.moved`) when the stage now resolves elsewhere or
-is gone, as `twin step` does beside its target; the step still goes from the bundle the
-twin was built from.
+**Editing a stage.** Changing `description` changes nothing Fylgja reads: the stage keeps
+its `at`. Changing `as_of` moves the stage's `at`. Changing `label` renames its reference,
+and on a stage with no `as_of` it moves the `at` too: that `at` is the label's own write,
+so a relabelled stage names the moment of the relabel. To keep its moment, write that `at`
+(as `stage list` shows it) as its `as_of` first. None of this changes a twin already built
+from the stage: the twin's record keeps what it was built from, and `stage list` warns
+beside it (`stage.twin.moved`) when the stage now resolves elsewhere or is gone, as `twin
+step` does beside its target; the step still goes from the bundle the twin was built from.
 
 **Delete stages before their proposed change.** Infrahub refuses a proposed change's
 delete while a stage names it (`It is linked to mandatory relationship proposed_change on

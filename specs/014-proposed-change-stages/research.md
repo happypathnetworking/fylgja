@@ -1276,3 +1276,32 @@ Tier 2's `internal/stages`, with no twin and no other tier running, Infrahub hol
   take about 0.15 s of that. The 35 s budget sits inside the run-to-run spread, as T038's
   note found, and is still the operator's. `make lint` 0 issues; `go vet -tags
   contract,fixture,e2e ./...` clean; no golden moved; `fylgja --help` names no waypoint.
+
+### 8.15 Editing a mark (T075, 2026-10-17)
+
+`TestStagesListAndPlan` alone, with no twin booted and no other tier running, passed in
+96.5 s (99.8 s wall). After its plan, on its own open proposed change, it edited its first
+mark, `seeded`, written with no `as_of` and so at its label's stamp
+`2026-10-17T07:11:33.236706+00:00`, three times through `FylgjaStageUpdate` on the default
+branch (`testsupport.UpdateStage`), finding the proposed change again after each:
+
+- **A `description` edit alone** left `label.updated_at` at `…07:11:33.236706+00:00`: the
+  mark read its new description at the same `at`, `written`, and `stages.Moved` against a
+  record view of its first resolution filed nothing. The 09-28 reading of M10's kind, that
+  a description edit leaves another attribute's stamp where it was, holds for the stage
+  kind.
+- **A relabel** to `relabelled` moved `label.updated_at` to the relabel's write,
+  `…07:11:57.578379+00:00`, 24 s later: the new reference is at that stamp, `written`; the
+  old `<branch>/seeded` resolves to one `stage.unknown`; and `Moved` files one
+  `stage.twin.moved` warning saying `<branch>/seeded no longer exists`. A mark with no
+  `as_of` names the moment of its last relabel, not of its first write.
+- **An `as_of`** of the first `at`, `2026-10-17T07:11:33.236706+00:00`, gave the mark that
+  `at` back verbatim, `given`, and left `label.updated_at` at the relabel's write.
+- The cleanup deleted 2 stages, 1 proposed change and the branch; afterwards `Branch` lists
+  `main` and `fylgja-fixture` alone, and `CoreProposedChange { count }` and `FylgjaStage {
+  count }` read 0.
+
+So `schema/README.md`'s "Editing a stage" and `contracts/stage-kind.md`'s bullet, which
+said a `label` edit only renames the reference, now say that a relabelled mark with no
+`as_of` names the moment of the relabel, and that writing its `at` as its `as_of` first
+keeps its moment.

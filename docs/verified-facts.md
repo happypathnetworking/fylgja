@@ -196,6 +196,12 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   the UI, whose menu lists `Stage` as an entry of its own in the object section
   (`/objects/FylgjaStage`), under no Fylgja group. `object delete FylgjaStage <id> --yes`
   deletes one. *(10-17)*
+- **Editing a stage moves only the stamp of the attribute whose value changed**
+  (`FylgjaStageUpdate` on the default branch): a `description` edit leaves
+  `label.updated_at` where the create put it; a relabel moves it to the relabel's write, so
+  a stage with no `as_of`, whose `at` is that stamp, then names the moment of the relabel;
+  an `as_of` written after it reads back verbatim and leaves `label.updated_at` where the
+  relabel put it. *(10-17)*
 - **One open proposed change per source branch**: a second is refused, `An open proposed
   change already exists for branch '…'` (422); `main` as source, `The source and
   destination branch can't be the same`; an unknown source, `The specified source branch

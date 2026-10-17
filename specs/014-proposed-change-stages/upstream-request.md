@@ -90,9 +90,10 @@ We built the mark as a user kind: a branch-agnostic `FylgjaStage` with a require
 relationship to `CoreProposedChange`, a label unique within it and an optional `as_of`.
 Its instant is the stamp Infrahub returns for the mark's own writing. The branch point is
 read on the default branch, pinned at the source branch's `branched_from`, and the head is
-pinned one microsecond after the latest `updated_at` across the branch's intent and its
-artifacts' checksums. It works, but three parts of it are workarounds a native mark would
-retire:
+pinned one microsecond after the later of the latest `updated_at` across the branch's
+intent and its artifacts' checksums and the `occurred_at` of the branch's latest intent
+event in `InfrahubEvent`, since a removal moves no stamp. It works, but three parts of it
+are workarounds a native mark would retire:
 
 1. **The boundary is strict, so a client must offset every stamp it pins.** A read pinned
    at exactly an attribute's `updated_at` returns the node with every attribute `null`;

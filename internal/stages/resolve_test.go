@@ -17,14 +17,15 @@ import (
 
 // fakeReader is Infrahub's default branch as the stages see it. It records every call:
 // the Reader interface has no way to read a branch's intent, and the record proves which
-// of its five reads a rule made.
+// of its six reads a rule made.
 type fakeReader struct {
-	checkErr, pcErr, orphanErr, branchErr, validationsErr error
+	checkErr, pcErr, orphanErr, branchErr, validationsErr, eventsErr error
 
 	pcs         []intent.ProposedChange
 	orphans     []intent.Stage
 	branches    map[string]*intent.BranchInfo
-	validations map[string]string // id@at → the latest completed_at value in force
+	validations map[string]string         // id@at → the latest completed_at value in force
+	events      map[string][]intent.Event // branch → its intent events since its branch point, newest first
 	calls       []string
 }
 
@@ -58,6 +59,20 @@ func (f *fakeReader) Branch(_ context.Context, name string) (*intent.BranchInfo,
 func (f *fakeReader) Validations(_ context.Context, id, at string) (string, error) {
 	f.calls = append(f.calls, "Validations "+id+"@"+at)
 	return f.validations[id+"@"+at], f.validationsErr
+}
+
+// IntentEvents answers the branch's events after after, as the reader pages them, every
+// one when it is empty; since is recorded, not applied: a case's events are all after
+// the branch point.
+func (f *fakeReader) IntentEvents(_ context.Context, branch, since, after string) ([]intent.Event, error) {
+	f.calls = append(f.calls, "IntentEvents "+branch+" since "+since+" after "+after)
+	var out []intent.Event
+	for _, ev := range f.events[branch] {
+		if after == "" || later(ev.OccurredAt, after) {
+			out = append(out, ev)
+		}
+	}
+	return out, f.eventsErr
 }
 
 // fakeStamper is the branches' stamps: exactly at a (branch, at) when a case gives one,

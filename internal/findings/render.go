@@ -100,7 +100,7 @@ const (
 	AtSourceGiven       = "given"        // as_of written on the mark, verbatim
 	AtSourceWritten     = "written"      // the mark's own write stamp, its label's updated_at
 	AtSourceBranchPoint = "branch_point" // the source branch's branched_from, read on the default branch
-	AtSourceHead        = "head"         // the source branch's latest stamp plus one microsecond
+	AtSourceHead        = "head"         // the source branch's latest stamp or intent event plus one microsecond
 )
 
 // AtSourceText is how the text names where an at came from: the identifier, but for the

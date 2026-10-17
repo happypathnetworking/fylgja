@@ -65,6 +65,10 @@ type fakeInfrahub struct {
 	// stamps overrides a device's stamps on a branch, keyed "<branch>/<device>": an intent
 	// written after its artifact is a stale artifact (D-046).
 	stamps map[string]fakeDeviceStamps
+	// events are each branch's event log, newest first, served on the unnamed endpoint:
+	// a removal moves no stamp, and its event is how a stage sees it (D-048). A branch
+	// with none has an empty log.
+	events map[string][]fakeEvent
 
 	mu      sync.Mutex
 	served  []fakeRequest
@@ -95,6 +99,15 @@ type fakeChange struct {
 // Infrahub was seen to answer and the resolution refuses), At its as_of ("" unwritten).
 type fakeStage struct {
 	ID, Label, WrittenAt, At, Description string
+}
+
+// fakeEvent is one node's write in a branch's log: Name and At as Infrahub names and
+// stamps it, its primary node's Kind and ID, the Attrs it changed, and the Peers of the
+// one relationship Rel it changed. A stamped device's id is "dev-<device>", and its
+// interface's "if-<device>-<interface>".
+type fakeEvent struct {
+	Name, At, Kind, ID, Rel string
+	Attrs, Peers            []string
 }
 
 // fakeVersion is one intent of a versioned branch, in force from Since.
@@ -355,6 +368,27 @@ func (f *fakeInfrahub) serveDefault(w http.ResponseWriter, seen fakeRequest, at 
 			}
 		}
 		writeFakeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"CoreArtifactValidator": fakeEdges(nodes)}})
+	case "IntentEvents":
+		branch, _ := seen.Variables["branch"].(string)
+		limit, _ := seen.Variables["limit"].(float64)
+		offset, _ := seen.Variables["offset"].(float64)
+		log := f.events[branch]
+		nodes := []any{}
+		for i := int(offset); i < len(log) && i < int(offset+limit); i++ {
+			ev := log[i]
+			attrs, rels := []any{}, []any{}
+			for _, a := range ev.Attrs {
+				attrs = append(attrs, map[string]any{"name": a})
+			}
+			for _, p := range ev.Peers {
+				rels = append(rels, map[string]any{"name": ev.Rel, "peer": map[string]any{"id": p}})
+			}
+			nodes = append(nodes, map[string]any{"__typename": "NodeMutatedEvent", "event": ev.Name, "occurred_at": ev.At,
+				"primary_node": map[string]any{"id": ev.ID, "kind": ev.Kind}, "attributes": attrs, "relationships": rels})
+		}
+		page := fakeEdges(nodes)
+		page["count"] = len(log)
+		writeFakeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"InfrahubEvent": page}})
 	default:
 		f.t.Errorf("a command sent GraphQL operation %q on the default branch, which the fake does not know", seen.Operation)
 		http.Error(w, "unknown operation", http.StatusTeapot)
@@ -457,6 +491,7 @@ func (f *fakeInfrahub) stampPages(branch, at string, c *ctm.CTM) map[string]any 
 					"properties": written,
 					"node": map[string]any{
 						"__typename": "NetworkInterface",
+						"id":         "if-" + d.Name + "-" + in.Name,
 						"name":       map[string]any{"value": in.Name, "updated_at": intentAt},
 						"iftype":     written, "mgmt_only": written, "enabled": written,
 						"link":   map[string]any{"properties": map[string]any{"updated_at": nil}},
@@ -466,6 +501,7 @@ func (f *fakeInfrahub) stampPages(branch, at string, c *ctm.CTM) map[string]any 
 			}
 			devices = append(devices, map[string]any{
 				"__typename": "NetworkDevice",
+				"id":         "dev-" + d.Name,
 				"name":       map[string]any{"value": d.Name, "updated_at": intentAt},
 				"role":       written,
 				"site":       written,

@@ -13,16 +13,17 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
-// Reader is what the stages ask of Infrahub's default branch: intent.StageReader's five
+// Reader is what the stages ask of Infrahub's default branch: intent.StageReader's six
 // methods, faked in tier 1. Nothing here names a branch's intent: it reads the kind, the
-// open proposed changes with their marks, the orphaned marks, a branch's origin and a
-// proposed change's artifact validations.
+// open proposed changes with their marks, the orphaned marks, a branch's origin, a
+// proposed change's artifact validations and a branch's intent events (D-048).
 type Reader interface {
 	Check(ctx context.Context) error
 	ProposedChanges(ctx context.Context, branch string) ([]intent.ProposedChange, error)
 	Orphans(ctx context.Context) ([]intent.Stage, error)
 	Branch(ctx context.Context, name string) (*intent.BranchInfo, error)
 	Validations(ctx context.Context, id, at string) (string, error)
+	IntentEvents(ctx context.Context, branch, since, after string) ([]intent.Event, error)
 }
 
 // Stamper reads a branch's stamps at an `at`, unpinned when it is empty: the server
@@ -42,8 +43,8 @@ const (
 	// AtBranchPoint: the source branch's branched_from, verbatim, read on the default
 	// branch.
 	AtBranchPoint = "branch_point"
-	// AtHead: the latest stamp across the source branch's intent and artifact checksums,
-	// plus one microsecond.
+	// AtHead: the later of the latest stamp across the source branch's intent and artifact
+	// checksums and its latest intent event (D-048), plus one microsecond.
 	AtHead = "head"
 )
 
@@ -86,7 +87,8 @@ type Stage struct {
 
 // Change is one open proposed change as a resolution reads it (steps 1–3 and 6): the
 // proposed change, its source branch's origin, and its stages in order, the head's at
-// computed from the branch's unpinned stamps, which the head's staleness reads too.
+// computed from the branch's unpinned stamps, which the head's staleness reads too, and
+// from its intent events.
 type Change struct {
 	ProposedChange ProposedChange
 	// BranchedFrom is the branch point's at, which a rebase moves; CreatedAt is the
@@ -97,6 +99,11 @@ type Change struct {
 
 	head intent.Stamps  // the source branch's unpinned stamps
 	main *intent.Stamps // the destination's unpinned stamps, read once, for stage.main.moved
+
+	// events are the source branch's intent events read so far, newest first: every one
+	// after eventsAfter, or since the branch point when it is "". nil before any read.
+	events      []intent.Event
+	eventsAfter *string
 }
 
 // kindRemedy follows intent.StageKindError's sentence in every stage.kind.absent finding
@@ -148,7 +155,7 @@ func Find(ctx context.Context, r Reader, s Stamper, branch string) (*Change, fin
 	if info == nil {
 		return nil, findings.List{refusal(findings.RuleStageUnknown, branch, gone(branch, pc.ID))}, nil
 	}
-	ch, err := newChange(ctx, s, pc, *info)
+	ch, err := newChange(ctx, r, s, pc, *info)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -165,8 +172,10 @@ func gone(branch, id string) string {
 
 // newChange builds a proposed change's stages in order: the branch point at the branch's
 // branched_from, each mark at its as_of or its own write stamp, and the head one
-// microsecond after the branch's latest stamp, read unpinned.
-func newChange(ctx context.Context, s Stamper, pc intent.ProposedChange, info intent.BranchInfo) (*Change, error) {
+// microsecond after the later of the branch's latest stamp, read unpinned, and its latest
+// intent event, which is how a removal that moves no stamp moves the head (D-048). Only
+// the events after the latest stamp can move it, so only their pages are read.
+func newChange(ctx context.Context, r Reader, s Stamper, pc intent.ProposedChange, info intent.BranchInfo) (*Change, error) {
 	head, err := s.Stamps(ctx, pc.Branch, "")
 	if err != nil {
 		return nil, err
@@ -176,14 +185,31 @@ func newChange(ctx context.Context, s Stamper, pc intent.ProposedChange, info in
 			return nil, fmt.Errorf("the head of %s: %w", pc.Branch, err)
 		}
 	}
-	return changeOf(pc, info, head), nil
+	events, err := readEvents(ctx, r, pc.Branch, info.BranchedFrom, head.Latest)
+	if err != nil {
+		return nil, err
+	}
+	ch := changeOf(pc, info, head, events)
+	ch.events, ch.eventsAfter = events, &head.Latest
+	return ch, nil
 }
 
-// changeOf is newChange's proposed change from what was read: the branch's origin and its
-// unpinned stamps, either empty when the branch is gone, which leaves the derived stages
-// with no at. A head stamp HeadAt cannot read leaves the head with none too; newChange
-// refuses one first.
-func changeOf(pc intent.ProposedChange, info intent.BranchInfo, head intent.Stamps) *Change {
+// readEvents is the reader's IntentEvents for a branch, none when Infrahub returned no
+// branched_from for it: nothing then bounds the log to the branch's own history, and its
+// branch point is refused for having no at.
+func readEvents(ctx context.Context, r Reader, branch, since, after string) ([]intent.Event, error) {
+	if since == "" {
+		return nil, nil
+	}
+	return r.IntentEvents(ctx, branch, since, after)
+}
+
+// changeOf is newChange's proposed change from what was read: the branch's origin, its
+// unpinned stamps and the intent events after the latest of them, all empty when the
+// branch is gone, which leaves the derived stages with no at. A head stamp HeadAt cannot
+// read leaves the head with none too; newChange refuses one first, and the reader one
+// of an event.
+func changeOf(pc intent.ProposedChange, info intent.BranchInfo, head intent.Stamps, events []intent.Event) *Change {
 	ch := &Change{
 		ProposedChange: ProposedChange{ID: pc.ID, Name: pc.Name, Branch: pc.Branch, Destination: pc.Destination, Draft: pc.Draft},
 		BranchedFrom:   info.BranchedFrom,
@@ -198,9 +224,59 @@ func changeOf(pc intent.ProposedChange, info intent.BranchInfo, head intent.Stam
 	for i := range pc.Stages {
 		stages = append(stages, ch.mark(&pc.Stages[i]))
 	}
-	headAt, _ := HeadAt(head.Latest)
+	latest := head.Latest
+	if ev := latestEvent(events); ev != nil && (latest == "" || later(ev.OccurredAt, latest)) {
+		latest = ev.OccurredAt
+	}
+	headAt, _ := HeadAt(latest)
 	ch.Stages = Order(append(stages, derived(LabelHead, pc.Branch, headAt, AtHead)))
 	return ch
+}
+
+// intentEvents is the source branch's intent events that occurred after after, newest
+// first, every one since the branch point when after is "". The events are pinned to
+// nothing, so one read serves every stage of the proposed change: a read down to an
+// earlier bound serves a later one, and only a bound earlier than the last read's reads
+// again.
+func (c *Change) intentEvents(ctx context.Context, r Reader, after string) ([]intent.Event, error) {
+	if c.eventsAfter == nil || (*c.eventsAfter != "" && (after == "" || later(*c.eventsAfter, after))) {
+		events, err := readEvents(ctx, r, c.ProposedChange.Branch, c.BranchedFrom, after)
+		if err != nil {
+			return nil, err
+		}
+		c.events, c.eventsAfter = events, &after
+		return events, nil
+	}
+	if after == "" || *c.eventsAfter == after {
+		return c.events, nil
+	}
+	var out []intent.Event
+	for _, ev := range c.events {
+		if later(ev.OccurredAt, after) {
+			out = append(out, ev)
+		}
+	}
+	return out, nil
+}
+
+// latestEvent is the latest of events by when each occurred, nil when there is none; two
+// at one instant keep the first. The reader has parsed every one.
+func latestEvent(events []intent.Event) *intent.Event {
+	var latest *intent.Event
+	for i := range events {
+		if latest == nil || later(events[i].OccurredAt, latest.OccurredAt) {
+			latest = &events[i]
+		}
+	}
+	return latest
+}
+
+// later reports whether stamp a is later than b, both as Infrahub returned them; a stamp
+// Go cannot read is later than nothing and nothing is later than it.
+func later(a, b string) bool {
+	ta, okA := ParseAt(a)
+	tb, okB := ParseAt(b)
+	return okA && okB && ta.After(tb)
 }
 
 // mark is one mark resolved by step 5 without its rules: the written as_of verbatim, or

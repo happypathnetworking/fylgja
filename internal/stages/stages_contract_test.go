@@ -799,6 +799,133 @@ func TestStageRefusals(t *testing.T) {
 	refused(t, "an unknown branch", list, findings.RuleStageUnknown, absent)
 }
 
+// D-048 against the real Infrahub: the link n1:ethernet-1/1 — n2:ethernet-1/1 deleted as
+// the branch's latest write moves no stamp the stamps read selects (research §8.17), and
+// the head moves past the delete all the same, by the branch's intent events. A stage
+// marked after the delete, and the head, are refused stale for n1 and n2, whose interfaces
+// the events name, and for no other; a mark before it, after the query groups' churn that
+// follows every generation, is fresh. A regenerate then clears the head, which reads two
+// links, and leaves the mark after the delete stale: its artifacts are the ones it read.
+func TestStagesSeeARemoval(t *testing.T) {
+	c := harness(t)
+	name := throwaway(t, c, true)
+	id := propose(t, c, name)
+	r := stageReader(t)
+	headOf := func(what string) string {
+		t.Helper()
+		ch, list, err := Find(t.Context(), r, liveStamper{}, name)
+		if err != nil || list != nil {
+			t.Fatalf("%s: finding %s: %v %v", what, name, err, list)
+		}
+		head, _ := ch.first(LabelHead)
+		return head.At
+	}
+	stamps := func() intent.Stamps {
+		t.Helper()
+		s, err := liveStamper{}.Stamps(t.Context(), name, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+
+	seededAt := markStage(t, c, id, "seeded", "", "before the delete")
+	before, headBefore := stamps(), headOf("before the delete")
+	sent := time.Now().UTC()
+	returned, err := c.DeleteLink(name, "n1", "ethernet-1/1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("seeded marked at %s; the delete sent at %s and returned at %s", seededAt,
+		sent.Format(time.RFC3339Nano), returned.Format(time.RFC3339Nano))
+	after := stamps()
+	if after.Latest != before.Latest {
+		// The premise of D-048: were a removal stamped, the event read could go (its Revisit).
+		t.Errorf("the delete moved the branch's latest stamp from %s to %s; D-048's premise no longer holds", before.Latest, after.Latest)
+	}
+	for _, d := range []string{"n1", "n2", "n3"} {
+		if after.Devices[d].Intent != before.Devices[d].Intent {
+			t.Errorf("the delete moved %s's intent stamp from %s to %s", d, before.Devices[d].Intent, after.Devices[d].Intent)
+		}
+	}
+	// The delete's events are stamped about when it returns, and land in the log after it,
+	// in under half a second on an idle host and over a second under the tier's load
+	// (research §8.19): until they land the head is the stamps', before the delete. Wait for
+	// the head to pass the delete and settle, two reads a second apart agreeing.
+	stampsHead, _ := HeadAt(after.Latest)
+	headAfter, deadline := headOf("after the delete"), time.Now().Add(30*time.Second)
+	var passed time.Time
+	for {
+		if at, ok := ParseAt(headAfter); ok && at.After(sent) {
+			if passed.IsZero() {
+				passed = time.Now()
+				t.Logf("the head passed the delete at %s, %.1fs after it returned", headAfter, passed.Sub(returned).Seconds())
+			}
+			time.Sleep(time.Second)
+			if again := headOf("again"); again == headAfter {
+				break
+			} else {
+				headAfter = again
+			}
+		} else if time.Now().After(deadline) {
+			t.Fatalf("the head is %s 30 s after the delete; want it past the stamps' head %s and the delete's send %s, "+
+				"by the delete's events", headAfter, stampsHead, sent.Format(time.RFC3339Nano))
+		} else {
+			time.Sleep(250 * time.Millisecond)
+			headAfter = headOf("after the delete")
+		}
+	}
+	t.Logf("the head moved from %s past the delete to %s, %.1fs after it returned", headBefore, headAfter,
+		time.Since(returned).Seconds())
+	removedAt := markStage(t, c, id, "removed", "", "after the delete")
+	t.Logf("removed marked at %s", removedAt)
+
+	p, _ := filing(t)
+	res := planOf(t, name, p)
+	if got, want := outcomes(res), []outcome{
+		{LabelBranchPoint, PlanRefused, findings.RuleContractNodeMissing},
+		{"seeded", PlanCompiled, ""},
+		{"removed", PlanRefused, findings.RuleStageArtifactStale},
+		{LabelHead, PlanRefused, findings.RuleStageArtifactStale},
+	}; !slices.Equal(got, want) {
+		t.Fatalf("stage plan %s: %v, want %v (findings %v)", name, got, want, res.Findings)
+	}
+	if links := res.Stages[1].Read.Counts.Links; links != 3 {
+		t.Errorf("seeded read %d links, want 3", links)
+	}
+	for _, st := range res.Stages[2:] {
+		for _, m := range refused(t, st.Label, st.Findings, findings.RuleStageArtifactStale, "n1", "n2") {
+			if !strings.Contains(m, "(Infrahub's event log: infrahub.node.") {
+				t.Errorf("%s: %s; want the event named", st.Label, m)
+			}
+			t.Log(m)
+		}
+	}
+
+	checksumsBefore := checksums(t, c, name)
+	if err := c.GenerateArtifacts(name); err != nil {
+		t.Fatal(err)
+	}
+	awaitMoved(t, c, name, checksumsBefore, "n1", "n2")
+	regenerated := stamps()
+	if want, _ := HeadAt(regenerated.Latest); headOf("after the regenerate") != want {
+		t.Errorf("after the regenerate the head is not the stamps' %s", want)
+	}
+	res = planOf(t, name, p)
+	if got, want := outcomes(res), []outcome{
+		{LabelBranchPoint, PlanRefused, findings.RuleContractNodeMissing},
+		{"seeded", PlanCompiled, ""},
+		{"removed", PlanRefused, findings.RuleStageArtifactStale},
+		{LabelHead, PlanCompiled, ""},
+	}; !slices.Equal(got, want) {
+		t.Fatalf("stage plan %s after the regenerate: %v, want %v (findings %v)", name, got, want, res.Findings)
+	}
+	refused(t, "removed after the regenerate", res.Stages[2].Findings, findings.RuleStageArtifactStale, "n1", "n2")
+	if links := res.Stages[3].Read.Counts.Links; links != 2 {
+		t.Errorf("the head read %d links after the regenerate, want 2", links)
+	}
+}
+
 // branchOrigin is the harness's own read of a branch's branched_from and created_at, on the
 // default branch's GraphQL, verbatim.
 func branchOrigin(t *testing.T, c *testsupport.Client, branch string) (branchedFrom, createdAt string) {

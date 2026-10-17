@@ -257,20 +257,31 @@ in a series of its own ([D-032](decisions.md#d-032), superseded by D-045).
 
 The stage reader uses the default branch's unnamed endpoints and names no branch:
 `GET /api/schema` first, to check the kind, its attributes and the extension, then
-`POST /graphql`. Beside Fylgja's own kinds it reads three roots that are Infrahub's and
+`POST /graphql`. Beside Fylgja's own kinds it reads four roots that are Infrahub's and
 nobody's model, each by a query: `CoreProposedChange` (the open ones, with their stages),
-`Branch` (`branched_from` and `created_at`) and `CoreArtifactValidator` (the proposed
-change's artifact validation, pinned), as Constitution III allows from 1.2.1; every
-operation is still a query. A branch whose schema lacks the kind cannot query
+`Branch` (`branched_from` and `created_at`), `CoreArtifactValidator` (the proposed
+change's artifact validation, pinned), as Constitution III allows from 1.2.1, and
+`InfrahubEvent` (the source branch's event log since `branched_from`, pinned to nothing),
+as it allows from 1.3.0 ([D-048](decisions.md#d-048)); every operation is still a query.
+An event is intent's when it is a node's own write of a kind that implements a Fylgja
+generic, mapped through the branch schema's `used_by` and never queried, and it creates or
+deletes the node or changes a field the stamps fold into a device's intent; an update of a
+node's memberships or artifacts alone, which Infrahub writes after every generation, is
+its own churn and never intent. A branch whose schema lacks the kind cannot query
 it at all, so the stages are read from `main` and every other read stays on its branch.
 
 A proposed change's stages, in order: the **branch point**, `main` read pinned at the
 source branch's `branched_from`, verbatim; the **marks**, each at its `as_of` as written
 (`given`) or, when none is written, its label's `updated_at` as Infrahub returned it
 (`written`), ordered by `at`; and the **head**, the branch pinned one microsecond after
-the latest `updated_at` across its intent (attributes and relationship edges) and its
-artifacts' checksums, in Infrahub's own layout, since a read pinned at exactly a stamp
-sees the node and not the value. `branch-point` and `head` are reserved labels. Every
+the later of the latest `updated_at` across its intent (attributes and relationship edges)
+and its artifacts' checksums, and the `occurred_at` of its latest intent event, in
+Infrahub's own layout, since a read pinned at exactly a stamp sees the node and not the
+value. A removal (a link or an interface deleted, a relationship unset) moves no stamp, and
+its event is how the head moves past it ([D-048](decisions.md#d-048)). An event lands in
+the log a few seconds after its write, a varying time (half a second to over six were
+seen), so a head read in that window is the stamps' and does not see the removal yet; a
+mark is judged by each event's `occurred_at` against its `at`, whenever the event lands. `branch-point` and `head` are reserved labels. Every
 stage is pinned, and no `at` is composed from a clock of Fylgja's own: each is a stamp
 Infrahub returned, or the first instant after one (Constitution VI).
 
@@ -290,11 +301,14 @@ mark at once. The server's
 clock is read once per resolution and compared with a given `as_of` alone, never with a
 stamp Infrahub returned, and never sent.
 
-**A stale stage is refused** ([D-046](decisions.md#d-046)), per device: a device is stale
-at a stage when the latest stamp of its own intent, pinned at the stage's `at`, is later
-than its generation stamp, the later of its artifact's `checksum.updated_at` (the artifact
-its package's `config.artifact_name` names) and the proposed change's artifact validator's
-`completed_at` value. `stage.artifact.stale` names each such device and both remedies, a
+**A stale stage is refused** ([D-046](decisions.md#d-046), [D-048](decisions.md#d-048)),
+per device: a device is stale at a stage when its intent was written later than its
+generation stamp. Its intent was written at the later of the latest stamp of its own
+intent, pinned at the stage's `at`, and the latest intent event no later than the `at` that
+names it (by its id or one of its interfaces' ids as read at the stage, as the event's node
+or a peer of its relationships). Its generation stamp is the later of its artifact's
+`checksum.updated_at` (the artifact its package's `config.artifact_name` names) and the
+proposed change's artifact validator's `completed_at` value. `stage.artifact.stale` names each such device and both remedies, a
 generate or the proposed change's checks, and says to mark again. The validator counts
 because a regeneration to identical bytes moves no checksum, while a run-check completes
 the validator either way. Two warnings refuse nothing: `stage.main.moved`, when `main`'s

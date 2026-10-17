@@ -36,12 +36,12 @@ func newStageListCmd(opts *options) *cobra.Command {
 		Long: "List the stages of Infrahub's open proposed changes, or of the one whose source\n" +
 			"branch --branch names, in order: the branch point (the default branch at the\n" +
 			"branch's branched_from), the marks by their at, and the head (the branch one\n" +
-			"microsecond after its latest stamp), each with the branch and at it resolves to and\n" +
-			"where the at came from. The stage the host's twin was built from is marked. Nothing\n" +
-			"is refused but a mark labelled like a derived stage; a twin whose stage has since\n" +
-			"moved, a stage whose proposed change is gone and a default branch written since the\n" +
-			"branch point are warnings. The API's server reads them, and needs Infrahub and\n" +
-			"nothing else for it.",
+			"microsecond after its latest stamp or its latest intent event, whichever is later),\n" +
+			"each with the branch and at it resolves to and where the at came from. The stage\n" +
+			"the host's twin was built from is marked. Nothing is refused but a mark labelled\n" +
+			"like a derived stage; a twin whose stage has since moved, a stage whose proposed\n" +
+			"change is gone and a default branch written since the branch point are warnings.\n" +
+			"The API's server reads them, and needs Infrahub and nothing else for it.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			f.branchGiven = cmd.Flags().Changed("branch")

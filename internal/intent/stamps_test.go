@@ -96,6 +96,7 @@ func stampedDevice(name, s string, interfaces []map[string]any, artifacts ...map
 	}
 	return map[string]any{
 		"__typename": "NetworkDevice",
+		"id":         "dev-" + name,
 		"name":       map[string]any{"value": name, "updated_at": stamp(s)},
 		"role":       stampAttr(s),
 		"site":       stampAttr(s),
@@ -204,6 +205,32 @@ func TestStampsPerDevice(t *testing.T) {
 	}
 	if got.Latest != roleEdit {
 		t.Errorf("Latest = %q, want %q", got.Latest, roleEdit)
+	}
+}
+
+// Each device keeps its own id and its interfaces' ids, in the order read, by which an
+// intent event names it (D-048): a link's endpoints name no third device's.
+func TestStampsIDs(t *testing.T) {
+	withID := func(e map[string]any, id string) map[string]any {
+		e["node"].(map[string]any)["id"] = id
+		return e
+	}
+	f := &fakeStamps{branch: "change-1", devices: []map[string]any{
+		stampedDevice("n1", stampDevices, []map[string]any{
+			withID(stampedInterface(stampInterfaces, stampInterfaces, "", ""), "if-n1-e1"),
+			withID(stampedInterface(stampInterfaces, stampInterfaces, "", ""), "if-n1-e2"),
+		}),
+		stampedDevice("n2", stampDevices, nil),
+	}, links: []map[string]any{stampedLink("n1", stampCabling, "n2", stampCabling)}}
+	got, err := f.read(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ids := got.Devices["n1"].IDs; !slices.Equal(ids, []string{"dev-n1", "if-n1-e1", "if-n1-e2"}) {
+		t.Errorf("n1's ids = %v", ids)
+	}
+	if ids := got.Devices["n2"].IDs; !slices.Equal(ids, []string{"dev-n2"}) {
+		t.Errorf("n2's ids = %v", ids)
 	}
 }
 

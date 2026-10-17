@@ -86,7 +86,7 @@ A pinned intent reference on the proposed change's source branch, one of three k
 |---|---|---|---|---|---|
 | branch point | `<branch>/branch-point` | `main` | the branch's `branched_from`, verbatim | `branch_point` | derived |
 | mark | `<branch>/<label>` | the source branch | `as_of` as written, else the mark's own write stamp (`label.updated_at`), verbatim | `given` / `written` | the operator |
-| head | `<branch>/head` | the source branch | the latest stamp across the branch's intent and artifact checksums, plus one microsecond, in the stamp's layout (`…T15:04:05.000000+00:00`) | `head` | derived |
+| head | `<branch>/head` | the source branch | the later of the latest stamp across the branch's intent and artifact checksums and its latest intent event's `occurred_at` (D-048), plus one microsecond, in the stamp's layout (`…T15:04:05.000000+00:00`) | `head` | derived |
 
 **Order** (FR-005): the branch point first, the marks by `at` (parsed; two equal `at`s by
 label), the head last, whatever the marks' stamps; a mark whose `at` Go cannot parse sorts
@@ -141,8 +141,8 @@ goes on.
 
 ## 5. Stamps, the head and the staleness rule
 
-Contract: [contracts/stage-reference.md](contracts/stage-reference.md) §"Stamps".
-Research R-05, R-06, R-07.
+Contract: [contracts/stage-reference.md](contracts/stage-reference.md) §"Stamps" and
+§"Events". Research R-05, R-06, R-07, §8.19; [D-048](../../docs/decisions.md#d-048).
 
 **`Stamps`** (`(*intent.Client).Stamps`, one query on the client's branch at its `at`):
 
@@ -150,16 +150,28 @@ Research R-05, R-06, R-07.
 |---|---|
 | `Latest` | the latest `updated_at` over every device's attributes and edges and its platform's stamped attributes (§R-07) and every artifact's `checksum.updated_at` |
 | `Devices[name].Intent` | the latest over that device's own attributes, its edges, its platform's `vendor`, `nos` and `version`, its interfaces' edges and attributes, their `link` and `parent` edges, and the `endpoints` edges of every link an interface of its ends |
+| `Devices[name].IDs` | the device's `id`, then each of its interfaces' `id`s, as read: how an intent event names it |
 | `Devices[name].Artifacts[artifact name].Checksum` | that artifact's `checksum.updated_at` |
 
-**The head's `at`** = `Latest` of the unpinned read, parsed, plus one microsecond,
-formatted `2006-01-02T15:04:05.000000-07:00`.
+**`intent.Event`** (`(*intent.StageReader).IntentEvents`, the source branch's log since
+`branched_from`, newest first, pinned to nothing): `Name` (`infrahub.node.deleted`),
+`OccurredAt` verbatim, `Kind` (the primary node's concrete kind, mapped and never queried)
+and `Nodes` (the primary node's id, then each relationship peer's). Only intent's events
+are returned: a node's creation or deletion, or an update of a field the stamps fold into
+a device's intent, of a kind implementing a Fylgja generic; never Infrahub's churn.
+
+**The head's `at`** = the later of `Latest` of the unpinned read and the latest intent
+event's `OccurredAt` (only the events after `Latest` are read for it), parsed, plus one
+microsecond, formatted `2006-01-02T15:04:05.000000-07:00`.
 
 **The generation stamp** of a device at a stage = the later of its artifact's
 `Checksum` (the artifact of its package's `config.artifact_name`, pinned at `at`) and the
 proposed change's artifact validator's `completed_at` value (pinned at `at`; absent when
-no validator has run). **Stale** when `Devices[name].Intent` is later than the generation
-stamp. A device with no artifact at `at` is the read's `artifact.missing`, not stale. The
+no validator has run). **Stale** when the device's intent was written later than the
+generation stamp: written at the later of `Devices[name].Intent` and the latest intent
+event no later than `at` whose `Nodes` hold one of `Devices[name].IDs`; the events are read
+after the earliest `Checksum` judged (every one since the branch point when one is
+unstamped), once per proposed change and bound. A device with no artifact at `at` is the read's `artifact.missing`, not stale. The
 branch point is checked too (on `main`, trivially fresh where `main` holds no device).
 
 **`stage.main.moved`**: `main`'s unpinned `Latest` later than `branched_from`.

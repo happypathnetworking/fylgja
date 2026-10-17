@@ -53,7 +53,7 @@ func listedRows(doc *findings.Document) []string {
 
 // listsNoIntent fails when a listing asked Infrahub anything of a branch's intent or its
 // artifacts' content: the listing reads the schema, the proposed changes, the orphans, the
-// branches' points of origin and stamps, and nothing else.
+// branches' points of origin, stamps and events, and nothing else.
 func listsNoIntent(t *testing.T, label string, f *fakeInfrahub) {
 	t.Helper()
 	readsNoIntent(t, label, f)

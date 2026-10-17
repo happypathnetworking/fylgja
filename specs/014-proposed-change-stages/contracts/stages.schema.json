@@ -15,7 +15,7 @@
     },
     "at_source": {
       "enum": ["given", "written", "branch_point", "head"],
-      "description": "given: as_of was written on the mark and is used verbatim. written: the mark carries none, and the at is its own write stamp (label.updated_at). branch_point: the branch's branched_from, read on main. head: the latest stamp across the branch's intent and artifact checksums plus one microsecond"
+      "description": "given: as_of was written on the mark and is used verbatim. written: the mark carries none, and the at is its own write stamp (label.updated_at). branch_point: the branch's branched_from, read on main. head: the later of the latest stamp across the branch's intent and artifact checksums and its latest intent event (D-048), plus one microsecond"
     },
     "proposed_change": {
       "type": "object",

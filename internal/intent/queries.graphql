@@ -173,8 +173,9 @@ query ArtifactValidations($id: ID!) {
 # 014 — when each part of a branch's intent, and each artifact's checksum, was last
 # written: the head's `at` (the latest plus one microsecond) and the staleness rule's
 # two sides, per device (research R-06, R-07; D-046). Stamps only, never a value of
-# intent but the names that key them and the platform that picks the device's package
-# (Constitution II). An unset relationship's properties.updated_at is null and skipped.
+# intent but the names that key them, the platform that picks the device's package
+# (Constitution II), and the device's and its interfaces' ids, by which an intent event
+# names the device (D-048). An unset relationship's properties.updated_at is null and skipped.
 # The artifacts are spread on CoreArtifactTarget, as the read's are: selected directly
 # on FylgjaDevice they are refused. Named IntentStamps, not Stamps, because
 # intent.Stamps is the aggregate's type.
@@ -201,6 +202,7 @@ query IntentStamps($limit: Int!, $offset: Int!) {
   FylgjaDevice(limit: $limit, offset: $offset) {
     count
     edges { node {
+      id
       name { value updated_at }
       role { updated_at }
       site { updated_at }
@@ -208,6 +210,7 @@ query IntentStamps($limit: Int!, $offset: Int!) {
       interfaces { edges {
         properties { updated_at }
         node {
+          id
           name      { value updated_at }
           iftype    { updated_at }
           mgmt_only { updated_at }
@@ -226,6 +229,30 @@ query IntentStamps($limit: Int!, $offset: Int!) {
         properties { updated_at }
         node { device { node { name { value } } } }
       } }
+    } }
+  }
+}
+
+# 014 — the source branch's events since its branched_from, newest first: when intent last
+# changed, removals included, which no stamp records (D-048). InfrahubEvent is Infrahub's
+# own record of a write, a named exception, read on the default branch's endpoint (it
+# answers alike on a branch's) and pinned to nothing. A primary node's kind is the
+# concrete one, read only to be mapped to a Fylgja generic through the branch schema's
+# used_by, and never queried. The names of the attributes and relationships an update
+# changed tell intent from Infrahub's own churn on the same node (a query group's
+# membership, an artifact): only the fields the stamps fold into a device's intent count
+# (R-07). A limit above 50 is refused (research §8.18).
+query IntentEvents($branch: String!, $since: DateTime!, $limit: Int!, $offset: Int!) {
+  InfrahubEvent(branches: [$branch], since: $since, order: DESC, limit: $limit, offset: $offset) {
+    count
+    edges { node {
+      event
+      occurred_at
+      primary_node { id kind }
+      ... on NodeMutatedEvent {
+        attributes    { name }
+        relationships { name peer { id } }
+      }
     } }
   }
 }

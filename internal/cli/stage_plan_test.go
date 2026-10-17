@@ -283,6 +283,71 @@ func TestStagePlanTwoMarks(t *testing.T) {
 	mustQuoteNoContent(t, f, stdout, stderr, raw)
 }
 
+// D-048: the link n1:ethernet-1/1 — n2:ethernet-1/1 deleted at 09:30, after the artifacts
+// were generated at 09:00, moves no stamp; the event log records it, then each endpoint
+// interface's link removed. The head is listed one microsecond after the last of those
+// events; a stage marked after the delete, and the head, are refused stale for n1 and n2,
+// whose interfaces the events name, and never for n3; a mark before it is fresh.
+func TestStagePlanRemoval(t *testing.T) {
+	const (
+		beforeAt  = "2026-10-16T09:20:00.000000+00:00"
+		deletedAt = "2026-10-16T09:30:00.031152+00:00"
+		n1At      = "2026-10-16T09:30:00.040000+00:00"
+		n2At      = "2026-10-16T09:30:00.041000+00:00"
+		markedAt  = "2026-10-16T09:40:00.000000+00:00"
+	)
+	useStateRoot(t)
+	useService(t, nil)
+	f := planInfrahub(t,
+		mark("st-removed", "removed", markedAt, "after the delete"),
+		mark("st-before", "before", beforeAt, "before the delete"))
+	f.events = map[string][]fakeEvent{lessLink: {
+		// The query groups' churn names n3, and is never intent.
+		{Name: "infrahub.node.updated", At: "2026-10-16T09:30:03.000000+00:00", Kind: "NetworkDevice", ID: "dev-n3",
+			Rel: "member_of_groups", Peers: []string{"group-1"}},
+		{Name: "infrahub.node.updated", At: n2At, Kind: "NetworkInterface", ID: "if-n2-ethernet-1/1", Rel: "link",
+			Peers: []string{"link-1"}},
+		{Name: "infrahub.node.updated", At: n1At, Kind: "NetworkInterface", ID: "if-n1-ethernet-1/1", Rel: "link",
+			Peers: []string{"link-1"}},
+		{Name: "infrahub.node.updated", At: n1At, Kind: "CoreGraphQLQueryGroup", ID: "group-1", Rel: "members",
+			Peers: []string{"dev-n3"}},
+		{Name: "infrahub.node.deleted", At: deletedAt, Kind: "NetworkLink", ID: "link-1", Rel: "endpoints",
+			Peers: []string{"if-n1-ethernet-1/1", "if-n2-ethernet-1/1"}},
+	}}
+	f.start()
+
+	code, doc, raw := stageDoc(t, "list", "--branch", lessLink)
+	if want := "change-1/head change-1 2026-10-16T09:30:00.041001+00:00 head "; code != findings.ExitOK ||
+		!slices.Contains(listedRows(doc), want) {
+		t.Fatalf("exit %d, rows %q; want 0 with %q\n%s", code, listedRows(doc), want, raw)
+	}
+
+	code, doc, raw = stageDoc(t, "plan", "--branch", lessLink)
+	stages, _ := planned(t, doc)
+	want := []string{"change-1/branch-point", "change-1/before", "change-1/removed", "change-1/head"}
+	if code != findings.ExitRejected || !slices.Equal(stageRefs(stages), want) {
+		t.Fatalf("exit %d, stages %v; want 1 with %v\n%s", code, stageRefs(stages), want, raw)
+	}
+	if got := compiledRefs(stages); !slices.Equal(got, []string{"change-1/branch-point", "change-1/before"}) {
+		t.Errorf("compiled %v; want the branch point and before", got)
+	}
+	stale := []string{findings.RuleStageArtifactStale + " n1", findings.RuleStageArtifactStale + " n2"}
+	for _, st := range stages[2:] {
+		if got := rulesOf(st.Findings); !slices.Equal(got, stale) {
+			t.Errorf("%s's findings %v; want stale for n1 and n2 alone", st.Ref, got)
+		}
+	}
+	for i, at := range []string{n1At, n2At} {
+		fd := stages[2].Findings[i]
+		if has := "its intent on change-1 was written at " + at + " (Infrahub's event log: infrahub.node.updated of a " +
+			"NetworkInterface; its latest stamp " + fakeWritten + "), later than its artifact device-config was generated " +
+			"(checksum stamped " + fakeWritten; !strings.Contains(fd.Message, has) {
+			t.Errorf("%s's finding lacks %q: %s", fd.Object, has, fd.Message)
+		}
+	}
+	mustQuoteNoContent(t, f, "", "", raw)
+}
+
 // Scenario 3: a stage marked after an intent change and before the artifacts were
 // regenerated is refused stale, one stage.artifact.stale per device whose intent is newer
 // than its artifact, naming exactly those devices and both ways to regenerate before

@@ -276,8 +276,9 @@ func (v *ArtifactFieldsNetworkDevice) GetArtifacts() ArtifactFieldsArtifactsNest
 // 014 — when each part of a branch's intent, and each artifact's checksum, was last
 // written: the head's `at` (the latest plus one microsecond) and the staleness rule's
 // two sides, per device (research R-06, R-07; D-046). Stamps only, never a value of
-// intent but the names that key them and the platform that picks the device's package
-// (Constitution II). An unset relationship's properties.updated_at is null and skipped.
+// intent but the names that key them, the platform that picks the device's package
+// (Constitution II), and the device's and its interfaces' ids, by which an intent event
+// names the device (D-048). An unset relationship's properties.updated_at is null and skipped.
 // The artifacts are spread on CoreArtifactTarget, as the read's are: selected directly
 // on FylgjaDevice they are refused. Named IntentStamps, not Stamps, because
 // intent.Stamps is the aggregate's type.
@@ -421,8 +422,9 @@ func (v *ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreA
 // 014 — when each part of a branch's intent, and each artifact's checksum, was last
 // written: the head's `at` (the latest plus one microsecond) and the staleness rule's
 // two sides, per device (research R-06, R-07; D-046). Stamps only, never a value of
-// intent but the names that key them and the platform that picks the device's package
-// (Constitution II). An unset relationship's properties.updated_at is null and skipped.
+// intent but the names that key them, the platform that picks the device's package
+// (Constitution II), and the device's and its interfaces' ids, by which an intent event
+// names the device (D-048). An unset relationship's properties.updated_at is null and skipped.
 // The artifacts are spread on CoreArtifactTarget, as the read's are: selected directly
 // on FylgjaDevice they are refused. Named IntentStamps, not Stamps, because
 // intent.Stamps is the aggregate's type.
@@ -1485,6 +1487,1085 @@ func (v *DevicesResponse) GetFylgjaDevice() DevicesFylgjaDevicePaginatedFylgjaDe
 	return v.FylgjaDevice
 }
 
+// IntentEventsInfrahubEventEvents includes the requested fields of the GraphQL type Events.
+type IntentEventsInfrahubEventEvents struct {
+	Count int                                              `json:"count"`
+	Edges []IntentEventsInfrahubEventEventsEdgesEventNodes `json:"edges"`
+}
+
+// GetCount returns IntentEventsInfrahubEventEvents.Count, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEvents) GetCount() int { return v.Count }
+
+// GetEdges returns IntentEventsInfrahubEventEvents.Edges, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEvents) GetEdges() []IntentEventsInfrahubEventEventsEdgesEventNodes {
+	return v.Edges
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodes includes the requested fields of the GraphQL type EventNodes.
+type IntentEventsInfrahubEventEventsEdgesEventNodes struct {
+	Node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface `json:"-"`
+}
+
+// GetNode returns IntentEventsInfrahubEventEventsEdgesEventNodes.Node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodes) GetNode() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface {
+	return v.Node
+}
+
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodes) UnmarshalJSON(b []byte) error {
+
+	if string(b) == "null" {
+		return nil
+	}
+
+	var firstPass struct {
+		*IntentEventsInfrahubEventEventsEdgesEventNodes
+		Node json.RawMessage `json:"node"`
+		graphql.NoUnmarshalJSON
+	}
+	firstPass.IntentEventsInfrahubEventEventsEdgesEventNodes = v
+
+	err := json.Unmarshal(b, &firstPass)
+	if err != nil {
+		return err
+	}
+
+	{
+		dst := &v.Node
+		src := firstPass.Node
+		if len(src) != 0 && string(src) != "null" {
+			err = __unmarshalIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface(
+				src, dst)
+			if err != nil {
+				return fmt.Errorf(
+					"unable to unmarshal IntentEventsInfrahubEventEventsEdgesEventNodes.Node: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+type __premarshalIntentEventsInfrahubEventEventsEdgesEventNodes struct {
+	Node json.RawMessage `json:"node"`
+}
+
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodes) MarshalJSON() ([]byte, error) {
+	premarshaled, err := v.__premarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(premarshaled)
+}
+
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodes) __premarshalJSON() (*__premarshalIntentEventsInfrahubEventEventsEdgesEventNodes, error) {
+	var retval __premarshalIntentEventsInfrahubEventEventsEdgesEventNodes
+
+	{
+
+		dst := &retval.Node
+		src := v.Node
+		var err error
+		*dst, err = __marshalIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface(
+			&src)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"unable to marshal IntentEventsInfrahubEventEventsEdgesEventNodes.Node: %w", err)
+		}
+	}
+	return &retval, nil
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType includes the requested fields of the GraphQL type AccountLoggedInEventType.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType includes the requested fields of the GraphQL type AccountLoggedOutEventType.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent includes the requested fields of the GraphQL type ArtifactEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent includes the requested fields of the GraphQL type BranchCreatedEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent includes the requested fields of the GraphQL type BranchDeletedEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent includes the requested fields of the GraphQL type BranchMergedEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent includes the requested fields of the GraphQL type BranchRebasedEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface includes the requested fields of the GraphQL interface EventNodeInterface.
+//
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface is implemented by the following types:
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface interface {
+	implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface()
+	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
+	GetTypename() string
+	// GetEvent returns the interface-field "event" from its implementation.
+	// The GraphQL interface field's documentation follows.
+	//
+	// The name of the event.
+	GetEvent() string
+	// GetOccurred_at returns the interface-field "occurred_at" from its implementation.
+	// The GraphQL interface field's documentation follows.
+	//
+	// The timestamp when the event occurred.
+	GetOccurred_at() string
+	// GetPrimary_node returns the interface-field "primary_node" from its implementation.
+	// The GraphQL interface field's documentation follows.
+	//
+	// The primary Infrahub node this event is associated with.
+	GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode
+}
+
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent) implementsGraphQLInterfaceIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface() {
+}
+
+func __unmarshalIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface(b []byte, v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface) error {
+	if string(b) == "null" {
+		return nil
+	}
+
+	var tn struct {
+		TypeName string `json:"__typename"`
+	}
+	err := json.Unmarshal(b, &tn)
+	if err != nil {
+		return err
+	}
+
+	switch tn.TypeName {
+	case "AccountLoggedInEventType":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType)
+		return json.Unmarshal(b, *v)
+	case "AccountLoggedOutEventType":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType)
+		return json.Unmarshal(b, *v)
+	case "ArtifactEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent)
+		return json.Unmarshal(b, *v)
+	case "BranchCreatedEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent)
+		return json.Unmarshal(b, *v)
+	case "BranchDeletedEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent)
+		return json.Unmarshal(b, *v)
+	case "BranchMergedEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent)
+		return json.Unmarshal(b, *v)
+	case "BranchRebasedEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent)
+		return json.Unmarshal(b, *v)
+	case "GroupAutoCreateCappedEventType":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType)
+		return json.Unmarshal(b, *v)
+	case "GroupAutoCreateRejectedEventType":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType)
+		return json.Unmarshal(b, *v)
+	case "GroupAutoCreatedEventType":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType)
+		return json.Unmarshal(b, *v)
+	case "GroupEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent)
+		return json.Unmarshal(b, *v)
+	case "NodeMutatedEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent)
+		return json.Unmarshal(b, *v)
+	case "ProposedChangeApprovalsRevokedEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent)
+		return json.Unmarshal(b, *v)
+	case "ProposedChangeMergedEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent)
+		return json.Unmarshal(b, *v)
+	case "ProposedChangeReviewEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent)
+		return json.Unmarshal(b, *v)
+	case "ProposedChangeReviewRequestedEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent)
+		return json.Unmarshal(b, *v)
+	case "ProposedChangeReviewRevokedEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent)
+		return json.Unmarshal(b, *v)
+	case "ProposedChangeThreadEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent)
+		return json.Unmarshal(b, *v)
+	case "StandardEvent":
+		*v = new(IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent)
+		return json.Unmarshal(b, *v)
+	case "":
+		return fmt.Errorf(
+			"response was missing EventNodeInterface.__typename")
+	default:
+		return fmt.Errorf(
+			`unexpected concrete type for IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface: "%v"`, tn.TypeName)
+	}
+}
+
+func __marshalIntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface(v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface) ([]byte, error) {
+
+	var typename string
+	switch v := (*v).(type) {
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType:
+		typename = "AccountLoggedInEventType"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedInEventType
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType:
+		typename = "AccountLoggedOutEventType"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeAccountLoggedOutEventType
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent:
+		typename = "ArtifactEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeArtifactEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent:
+		typename = "BranchCreatedEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchCreatedEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent:
+		typename = "BranchDeletedEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchDeletedEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent:
+		typename = "BranchMergedEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchMergedEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent:
+		typename = "BranchRebasedEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeBranchRebasedEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType:
+		typename = "GroupAutoCreateCappedEventType"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType:
+		typename = "GroupAutoCreateRejectedEventType"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType:
+		typename = "GroupAutoCreatedEventType"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent:
+		typename = "GroupEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent:
+		typename = "NodeMutatedEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent:
+		typename = "ProposedChangeApprovalsRevokedEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent:
+		typename = "ProposedChangeMergedEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent:
+		typename = "ProposedChangeReviewEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent:
+		typename = "ProposedChangeReviewRequestedEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent:
+		typename = "ProposedChangeReviewRevokedEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent:
+		typename = "ProposedChangeThreadEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case *IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent:
+		typename = "StandardEvent"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent
+		}{typename, v}
+		return json.Marshal(result)
+	case nil:
+		return []byte("null"), nil
+	default:
+		return nil, fmt.Errorf(
+			`unexpected concrete type for IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterface: "%T"`, v)
+	}
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode includes the requested fields of the GraphQL type RelatedNode.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode struct {
+	// The ID of the requested object
+	Id string `json:"id"`
+	// The ID of the requested object
+	Kind string `json:"kind"`
+}
+
+// GetId returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode.Id, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode) GetId() string {
+	return v.Id
+}
+
+// GetKind returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode.Kind, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode) GetKind() string {
+	return v.Kind
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType includes the requested fields of the GraphQL type GroupAutoCreateCappedEventType.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateCappedEventType) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType includes the requested fields of the GraphQL type GroupAutoCreateRejectedEventType.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreateRejectedEventType) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType includes the requested fields of the GraphQL type GroupAutoCreatedEventType.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupAutoCreatedEventType) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent includes the requested fields of the GraphQL type GroupEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeGroupEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent includes the requested fields of the GraphQL type NodeMutatedEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node  IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode                  `json:"primary_node"`
+	Attributes    []IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventAttributesInfrahubMutatedAttribute       `json:"attributes"`
+	Relationships []IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationship `json:"relationships"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// GetAttributes returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent.Attributes, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent) GetAttributes() []IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventAttributesInfrahubMutatedAttribute {
+	return v.Attributes
+}
+
+// GetRelationships returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent.Relationships, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEvent) GetRelationships() []IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationship {
+	return v.Relationships
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventAttributesInfrahubMutatedAttribute includes the requested fields of the GraphQL type InfrahubMutatedAttribute.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventAttributesInfrahubMutatedAttribute struct {
+	Name string `json:"name"`
+}
+
+// GetName returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventAttributesInfrahubMutatedAttribute.Name, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventAttributesInfrahubMutatedAttribute) GetName() string {
+	return v.Name
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationship includes the requested fields of the GraphQL type InfrahubMutatedRelationship.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationship struct {
+	Name string                                                                                                                    `json:"name"`
+	Peer IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationshipPeerRelatedNode `json:"peer"`
+}
+
+// GetName returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationship.Name, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationship) GetName() string {
+	return v.Name
+}
+
+// GetPeer returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationship.Peer, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationship) GetPeer() IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationshipPeerRelatedNode {
+	return v.Peer
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationshipPeerRelatedNode includes the requested fields of the GraphQL type RelatedNode.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationshipPeerRelatedNode struct {
+	// The ID of the requested object
+	Id string `json:"id"`
+}
+
+// GetId returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationshipPeerRelatedNode.Id, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeNodeMutatedEventRelationshipsInfrahubMutatedRelationshipPeerRelatedNode) GetId() string {
+	return v.Id
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent includes the requested fields of the GraphQL type ProposedChangeApprovalsRevokedEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeApprovalsRevokedEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent includes the requested fields of the GraphQL type ProposedChangeMergedEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeMergedEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent includes the requested fields of the GraphQL type ProposedChangeReviewEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent includes the requested fields of the GraphQL type ProposedChangeReviewRequestedEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRequestedEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent includes the requested fields of the GraphQL type ProposedChangeReviewRevokedEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeReviewRevokedEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent includes the requested fields of the GraphQL type ProposedChangeThreadEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeProposedChangeThreadEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent includes the requested fields of the GraphQL type StandardEvent.
+type IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent struct {
+	Typename string `json:"__typename"`
+	// The name of the event.
+	Event string `json:"event"`
+	// The timestamp when the event occurred.
+	Occurred_at string `json:"occurred_at"`
+	// The primary Infrahub node this event is associated with.
+	Primary_node IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode `json:"primary_node"`
+}
+
+// GetTypename returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent.Typename, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent) GetTypename() string {
+	return v.Typename
+}
+
+// GetEvent returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent.Event, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent) GetEvent() string {
+	return v.Event
+}
+
+// GetOccurred_at returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent.Occurred_at, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent) GetOccurred_at() string {
+	return v.Occurred_at
+}
+
+// GetPrimary_node returns IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent.Primary_node, and is useful for accessing the field via an interface.
+func (v *IntentEventsInfrahubEventEventsEdgesEventNodesNodeStandardEvent) GetPrimary_node() IntentEventsInfrahubEventEventsEdgesEventNodesNodeEventNodeInterfacePrimary_nodeRelatedNode {
+	return v.Primary_node
+}
+
+// IntentEventsResponse is returned by IntentEvents on success.
+type IntentEventsResponse struct {
+	InfrahubEvent IntentEventsInfrahubEventEvents `json:"InfrahubEvent"`
+}
+
+// GetInfrahubEvent returns IntentEventsResponse.InfrahubEvent, and is useful for accessing the field via an interface.
+func (v *IntentEventsResponse) GetInfrahubEvent() IntentEventsInfrahubEventEvents {
+	return v.InfrahubEvent
+}
+
 // IntentStampsFylgjaDevicePaginatedFylgjaDevice includes the requested fields of the GraphQL type PaginatedFylgjaDevice.
 // The GraphQL type's documentation follows.
 //
@@ -1589,6 +2670,11 @@ type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylg
 	implementsGraphQLInterfaceIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice()
 	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
 	GetTypename() string
+	// GetId returns the interface-field "id" from its implementation.
+	// The GraphQL interface field's documentation follows.
+	//
+	// Unique identifier
+	GetId() string
 	// GetName returns the interface-field "name" from its implementation.
 	GetName() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute
 	// GetRole returns the interface-field "role" from its implementation.
@@ -1766,6 +2852,11 @@ type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylg
 	implementsGraphQLInterfaceIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface()
 	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
 	GetTypename() string
+	// GetId returns the interface-field "id" from its implementation.
+	// The GraphQL interface field's documentation follows.
+	//
+	// Unique identifier
+	GetId() string
 	// GetName returns the interface-field "name" from its implementation.
 	GetName() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute
 	// GetIftype returns the interface-field "iftype" from its implementation.
@@ -1948,9 +3039,11 @@ func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNode
 
 // IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface includes the requested fields of the GraphQL type NetworkInterface.
 type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface struct {
-	Typename string                                                                                                                                                                                         `json:"__typename"`
-	Name     IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute `json:"name"`
-	Iftype   IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceIftypeDropdown    `json:"iftype"`
+	Typename string `json:"__typename"`
+	// Unique identifier
+	Id     string                                                                                                                                                                                         `json:"id"`
+	Name   IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute `json:"name"`
+	Iftype IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceIftypeDropdown    `json:"iftype"`
 	// Out-of-band management port; never cabled. Not set on in-band loopbacks.
 	Mgmt_only IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceMgmt_onlyCheckboxAttribute       `json:"mgmt_only"`
 	Enabled   IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceEnabledCheckboxAttribute         `json:"enabled"`
@@ -1961,6 +3054,11 @@ type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylg
 // GetTypename returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Typename, and is useful for accessing the field via an interface.
 func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetTypename() string {
 	return v.Typename
+}
+
+// GetId returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Id, and is useful for accessing the field via an interface.
+func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetId() string {
+	return v.Id
 }
 
 // GetName returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Name, and is useful for accessing the field via an interface.
@@ -2308,8 +3406,10 @@ func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNode
 
 // IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice includes the requested fields of the GraphQL type NetworkDevice.
 type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice struct {
-	Typename string                                                                                               `json:"__typename"`
-	Name     IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute `json:"name"`
+	Typename string `json:"__typename"`
+	// Unique identifier
+	Id   string                                                                                               `json:"id"`
+	Name IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute `json:"name"`
 	// leaf / spine / border … Input to scope selection later.
 	Role                        IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute                        `json:"role"`
 	Site                        IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute                        `json:"site"`
@@ -2321,6 +3421,11 @@ type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetw
 // GetTypename returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Typename, and is useful for accessing the field via an interface.
 func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetTypename() string {
 	return v.Typename
+}
+
+// GetId returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Id, and is useful for accessing the field via an interface.
+func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetId() string {
+	return v.Id
 }
 
 // GetName returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Name, and is useful for accessing the field via an interface.
@@ -2381,6 +3486,8 @@ func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNode
 type __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice struct {
 	Typename string `json:"__typename"`
 
+	Id string `json:"id"`
+
 	Name IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute `json:"name"`
 
 	Role IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute `json:"role"`
@@ -2406,6 +3513,7 @@ func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNode
 	var retval __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice
 
 	retval.Typename = v.Typename
+	retval.Id = v.Id
 	retval.Name = v.Name
 	retval.Role = v.Role
 	retval.Site = v.Site
@@ -4919,6 +6027,26 @@ func (v *__DevicesInput) GetLimit() int { return v.Limit }
 // GetOffset returns __DevicesInput.Offset, and is useful for accessing the field via an interface.
 func (v *__DevicesInput) GetOffset() int { return v.Offset }
 
+// __IntentEventsInput is used internally by genqlient
+type __IntentEventsInput struct {
+	Branch string `json:"branch"`
+	Since  string `json:"since"`
+	Limit  int    `json:"limit"`
+	Offset int    `json:"offset"`
+}
+
+// GetBranch returns __IntentEventsInput.Branch, and is useful for accessing the field via an interface.
+func (v *__IntentEventsInput) GetBranch() string { return v.Branch }
+
+// GetSince returns __IntentEventsInput.Since, and is useful for accessing the field via an interface.
+func (v *__IntentEventsInput) GetSince() string { return v.Since }
+
+// GetLimit returns __IntentEventsInput.Limit, and is useful for accessing the field via an interface.
+func (v *__IntentEventsInput) GetLimit() int { return v.Limit }
+
+// GetOffset returns __IntentEventsInput.Offset, and is useful for accessing the field via an interface.
+func (v *__IntentEventsInput) GetOffset() int { return v.Offset }
+
 // __IntentStampsInput is used internally by genqlient
 type __IntentStampsInput struct {
 	Limit  int `json:"limit"`
@@ -5249,6 +6377,77 @@ func Devices(
 	return data_, err_
 }
 
+// The query executed by IntentEvents.
+const IntentEvents_Operation = `
+query IntentEvents ($branch: String!, $since: DateTime!, $limit: Int!, $offset: Int!) {
+	InfrahubEvent(branches: [$branch], since: $since, order: DESC, limit: $limit, offset: $offset) {
+		count
+		edges {
+			node {
+				__typename
+				event
+				occurred_at
+				primary_node {
+					id
+					kind
+				}
+				... on NodeMutatedEvent {
+					attributes {
+						name
+					}
+					relationships {
+						name
+						peer {
+							id
+						}
+					}
+				}
+			}
+		}
+	}
+}
+`
+
+// 014 — the source branch's events since its branched_from, newest first: when intent last
+// changed, removals included, which no stamp records (D-048). InfrahubEvent is Infrahub's
+// own record of a write, a named exception, read on the default branch's endpoint (it
+// answers alike on a branch's) and pinned to nothing. A primary node's kind is the
+// concrete one, read only to be mapped to a Fylgja generic through the branch schema's
+// used_by, and never queried. The names of the attributes and relationships an update
+// changed tell intent from Infrahub's own churn on the same node (a query group's
+// membership, an artifact): only the fields the stamps fold into a device's intent count
+// (R-07). A limit above 50 is refused (research §8.18).
+func IntentEvents(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	branch string,
+	since string,
+	limit int,
+	offset int,
+) (data_ *IntentEventsResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "IntentEvents",
+		Query:  IntentEvents_Operation,
+		Variables: &__IntentEventsInput{
+			Branch: branch,
+			Since:  since,
+			Limit:  limit,
+			Offset: offset,
+		},
+	}
+
+	data_ = &IntentEventsResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
 // The query executed by IntentStamps.
 const IntentStamps_Operation = `
 query IntentStamps ($limit: Int!, $offset: Int!) {
@@ -5257,6 +6456,7 @@ query IntentStamps ($limit: Int!, $offset: Int!) {
 		edges {
 			node {
 				__typename
+				id
 				name {
 					value
 					updated_at
@@ -5283,6 +6483,7 @@ query IntentStamps ($limit: Int!, $offset: Int!) {
 						}
 						node {
 							__typename
+							id
 							name {
 								value
 								updated_at

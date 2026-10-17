@@ -393,10 +393,13 @@ Rewritten whole at each release's close, never appended to.
   ([roadmap](docs/roadmap.md#release-02)).
 - **014 is built** (`014-proposed-change-stages`, F-023, 2026-10-17): a proposed change's
   stages in place of M10's surface ([D-045](docs/decisions.md#d-045),
-  [D-046](docs/decisions.md#d-046); Constitution 1.2.1). `FylgjaStage` and its extension
+  [D-046](docs/decisions.md#d-046), [D-048](docs/decisions.md#d-048); Constitution 1.3.0,
+  amended for D-048). `FylgjaStage` and its extension
   on `main`, and M10's kind removed from it (`e43a1cde…`); `--stage`, `stage list` and
   `stage plan`; the branch point read on `main` at `branched_from`, the head one
-  microsecond after the branch's latest stamp, a stale stage refused per device;
+  microsecond after the later of the branch's latest stamp and its latest intent event
+  (`InfrahubEvent`, the fourth named root; a removal moves no stamp), a stale stage
+  refused per device, by its stamps or an event naming it;
   `twin.json` `6`, the findings' stage blocks and the API's two operations, with neither
   the API's version nor the findings' moved. Tier 2 passed in 531.5 s, tier 3 `E2E-OK` in
   1125.5 s and `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in 665.7 s, and the hand scenarios

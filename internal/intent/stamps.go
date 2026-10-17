@@ -10,9 +10,9 @@ import (
 
 // Stamps is when a branch's intent and its artifacts were last written, as one read at
 // the client's (branch, at) returned them (014; research R-06, R-07; D-046). It reads
-// stamps and never a value of intent but the names that key them and the platform that
-// picks each device's package. Every stamp is kept as the string Infrahub returned;
-// each comparison parses it.
+// stamps and never a value of intent but the names that key them, the platform that
+// picks each device's package and the ids an intent event names a device by (D-048).
+// Every stamp is kept as the string Infrahub returned; each comparison parses it.
 type Stamps struct {
 	// Latest is the latest stamp the read returned: every device's and its platform's,
 	// every interface's and link's, and every artifact's checksum's. The head's `at` is it
@@ -27,6 +27,10 @@ type DeviceStamps struct {
 	// Platform picks the device's package from the registry, whose config.artifact_name
 	// names which of Artifacts is its configuration (Constitution II).
 	Platform ctm.Platform
+	// IDs are the device's own id, then each of its interfaces' as read: an intent event
+	// names the device when one is its primary node or a peer of its relationships
+	// (D-048).
+	IDs []string
 	// Intent is the latest stamp of the device's own intent: its name, role and site,
 	// its platform edge and its platform's vendor, nos and version, each interface's edge
 	// and its name, iftype, mgmt_only, enabled, link edge and parent edge, and every
@@ -97,7 +101,7 @@ func (c *Client) Stamps(ctx context.Context) (Stamps, error) {
 		for a, fold := range d.artifacts {
 			artifacts[a] = fold.stamp
 		}
-		out.Devices[name] = DeviceStamps{Platform: d.platform, Intent: d.intent.stamp, Artifacts: artifacts}
+		out.Devices[name] = DeviceStamps{Platform: d.platform, IDs: d.ids, Intent: d.intent.stamp, Artifacts: artifacts}
 	}
 	return out, nil
 }
@@ -118,6 +122,7 @@ func (f *stampFold) take(stamp string, at time.Time) {
 // deviceFold is one device's stamps while the pages are read.
 type deviceFold struct {
 	platform  ctm.Platform
+	ids       []string
 	intent    stampFold
 	artifacts map[string]*stampFold
 }
@@ -159,6 +164,7 @@ func (r *stampReader) device(n stampDeviceNode) {
 		d = &deviceFold{artifacts: map[string]*stampFold{}}
 		r.devices[name] = d
 	}
+	d.ids = append(d.ids, n.GetId())
 	role, site, platform := n.GetRole(), n.GetSite(), n.GetPlatform()
 	platformEdge := platform.GetProperties()
 	r.see(nameAttr.GetUpdated_at(), &d.intent)
@@ -184,6 +190,7 @@ func (r *stampReader) device(n stampDeviceNode) {
 		if in == nil {
 			continue
 		}
+		d.ids = append(d.ids, in.GetId())
 		ifName, iftype, mgmtOnly, enabled := in.GetName(), in.GetIftype(), in.GetMgmt_only(), in.GetEnabled()
 		link, parent := in.GetLink(), in.GetParent()
 		linkEdge, parentEdge := link.GetProperties(), parent.GetProperties()

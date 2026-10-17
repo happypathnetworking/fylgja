@@ -311,7 +311,8 @@ each `^[^/\s]+$`, so a reference is one shell word. The server finds the one ope
 change whose source branch is the branch, then the stage by its label: the branch point is
 `main` at the branch's `branched_from`; a mark is its source branch at its `as_of`,
 verbatim, or at its own write stamp when it has none; the head is the source branch at the
-latest stamp of its intent and artifact checksums, plus one microsecond. The stages are
+later of the latest stamp of its intent and artifact checksums and its latest intent event
+in Infrahub's event log (a removal moves no stamp; D-048), plus one microsecond. The stages are
 ordered branch point, marks by `at`, head. A reference resolves before anything of intent
 is read, and its label and description enter neither the CTM nor the bundle.
 

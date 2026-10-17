@@ -30,7 +30,8 @@ development host up again there, or on a fresh 26.04 VM before it.
   truncated stamp. The same for an artifact pinned at exactly its `checksum.updated_at`,
   which reads the previous version. So an `at` that must see a write is strictly after
   the write's stamp, and the head of a branch is pinned one microsecond after its latest
-  stamp ([D-045](decisions.md#d-045)). *(10-16)*
+  stamp ([D-045](decisions.md#d-045)), or after its latest intent event when that is later
+  ([D-048](decisions.md#d-048)). *(10-16)*
 - **A read pinned before the branch's creation** reaches back through the branch point
   into `main`'s history: on a branch at exactly `branched_from`, at its `created_at`
   (140 µs earlier), a second and an hour before, the answer is `main` as it then stood,
@@ -273,6 +274,26 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   and Infrahub's own query-group events. A read pinned at that `occurred_at` −1 µs already
   reads the removal. It answers alike through `/graphql/main` and `/graphql/<branch>`, in
   0.11–0.29 s a page. *(10-17)*
+- **The event log keeps a deleted branch's events, and not what is older than it keeps.**
+  A deleted test branch's events still read by its name, so `since: <branched_from>` is
+  what keeps an earlier branch of the same name out. On this install the oldest event is
+  `2026-10-13T16:48:04`, so `fylgja-fixture`, seeded on 10-08, reads none (`count: 0`);
+  `since` defaults to 180 days back. *(10-17)*
+- **Infrahub writes its own churn on intent's kinds.** After each generation, about three
+  to four seconds after the checksums, `node.updated` events on every `NetworkDevice`,
+  `NetworkInterface`, `NetworkLink` and `NetworkPlatform` change `member_of_groups` alone
+  (the query groups' membership); an artifact's creation adds one on its device changing
+  `artifacts` alone. The schema endpoint lists `member_of_groups`, `subscriber_of_groups`
+  (kind `Group`) and `profiles` (kind `Profile`) on each Fylgja generic. So an event's kind
+  does not tell intent from churn; the names of the fields an update changed
+  (`attributes { name }`, `relationships { name }` on `NodeMutatedEvent`) do. *(10-17)*
+- **The log lags its writes, by a varying few seconds.** It is ordered strictly by
+  `occurred_at`. A deleted link's own `node.deleted` is stamped just before the mutation
+  returns, and its child events (each endpoint interface's `link` REMOVED, the query
+  groups') up to about 25 ms after; each lands in the log later. A read half a second after
+  the return held one child event and not the other; under the contract tier's load reads
+  1.5 s after held none; on an idle host the first read to hold one was 6.6 s after the
+  return. So a head read in that window does not see a removal yet. *(10-17)*
 
 **Artifacts and repositories**
 

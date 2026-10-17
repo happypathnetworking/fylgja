@@ -2,10 +2,10 @@
 // change that a twin is built from, planned through and stepped along. Every proposed
 // change has two derived stages, the branch point (the default branch pinned at the
 // source branch's branched_from) and the head (the source branch pinned one microsecond
-// after its latest stamp), and between them the operator's marks, FylgjaStage objects
-// ordered by their `at`. The package holds the reference syntax, the order with its ends
-// derived, every resolution rule and its refusal, the staleness rule (D-046), the list,
-// the plan and the step's target.
+// after its latest stamp or intent event), and between them the operator's marks,
+// FylgjaStage objects ordered by their `at`. The package holds the reference syntax, the
+// order with its ends derived, every resolution rule and its refusal, the staleness rule
+// (D-046, D-048), the list, the plan and the step's target.
 //
 // A stage is read, never written: the product's every request to Infrahub is a query
 // (Constitution III). It resolves on the server, before any run starts and before any
@@ -43,8 +43,8 @@ const (
 	// LabelBranchPoint names the branch point: the default branch pinned at the source
 	// branch's branched_from.
 	LabelBranchPoint = "branch-point"
-	// LabelHead names the head: the source branch pinned one microsecond after its
-	// latest stamp.
+	// LabelHead names the head: the source branch pinned one microsecond after the later
+	// of its latest stamp and its latest intent event (D-048).
 	LabelHead = "head"
 )
 

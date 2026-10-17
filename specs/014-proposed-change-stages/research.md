@@ -426,6 +426,12 @@ operator:
 
 `tasks` tagged the entry `[operator]` (T011); the operator accepted it at `analyze` on
 2026-10-16, and it is [D-046](../../docs/decisions.md#d-046) in the decision log.
+*Widened at T078 (2026-10-17, §8.19; [D-048](../../docs/decisions.md#d-048)):* a device's
+intent was written at the later of the latest stamp of its own intent and the latest intent
+event of the source branch's log that names it, by its id or one of its interfaces' ids as
+read at the stage, no later than the stage's `at`; the generation stamp and the remedy are as
+they were. As first written, the rule read the stamps alone, so a removal, which moves no
+stamp (§8.17), left a stage marked after it fresh.
 
 <a id="r-06"></a>
 ### R-06 The head's `at` is the latest stamp plus one microsecond, in the stamp's own layout
@@ -440,6 +446,11 @@ the branch and does not enter the head's `at`. The same unpinned `Stamps` serves
 staleness check. **Rationale**: R-02 of §1 and Constitution VI 1.2.0; a read pinned at
 exactly a stamp sees the node and not the value (§2.6). **Alternative**: the `Z` layout
 Infrahub also accepts (rejected: the record's `at` should read as the stamps beside it do).
+*Refined at T078 (2026-10-17, §8.19; [D-048](../../docs/decisions.md#d-048)):* the head is
+one microsecond after the later of that latest stamp and the `occurred_at` of the source
+branch's latest intent event, the events after the latest stamp alone read for it, in the
+same layout. As first written, the head was the stamps' alone, and pinned before a removal
+that no stamp records (§8.17).
 
 <a id="r-07"></a>
 ### R-07 What a device's intent stamp is
@@ -459,7 +470,10 @@ on the platform, since the template renders all three into each device's artifac
 branches on `nos`, and `nos` picks the package and enters the manifest; `model`, like
 `addresses`, reaches neither and is read but not stamped. As first written, the decision
 stamped the device's `platform` edge alone, so a platform edited on the branch after the
-last regenerate moved no device's intent and no `Latest`.
+last regenerate moved no device's intent and no `Latest`. *At T078 (2026-10-17, §8.19):*
+the same fields decide which of the branch's events are intent's (D-048): a node's creation
+or deletion, or an update changing one of them; an update of a node's memberships or
+artifacts alone, which Infrahub writes after every generation, is not.
 
 <a id="r-08"></a>
 ### R-08 The identifiers
@@ -1451,3 +1465,89 @@ well; without the write it gives `num_untracked_diff_changes` alone, which has n
 second read per head and no stamp, so it could refuse or warn of a head that misses a
 change and could not place one after it; a design the plan never weighed.
 
+
+### 8.19 The head and the staleness rule read the branch's events (T078, 2026-10-17)
+
+Built as [D-048](../../docs/decisions.md#d-048) decides: `(*intent.StageReader).IntentEvents`
+reads `InfrahubEvent(branches: [<branch>], since: <branched_from>, order: DESC, limit: 50)`
+on the default branch's endpoint, pinned to nothing, newest first, and stops at the first
+page that reaches an event no later than what the read needs; the head is pinned one
+microsecond after the later of the latest stamp and the latest intent event, and a device
+is stale when an intent event naming it, no later than the stage's `at`, is later than its
+generation stamp. Three readings decided how, no twin booted:
+
+1. **The log holds nothing of the fixture.** Read-only, `InfrahubEvent(branches:
+   ["fylgja-fixture"], since: "2026-10-08T05:47:52.538186Z")` counts 0. Unfiltered it
+   counted 8456 events, the oldest a `branch.created` at `2026-10-13T16:48:04.939107`; the
+   fixture was seeded on 10-08, so its history predates what this install's log keeps (the
+   SDL's `since` "defaults to 180 days back"). A branch whose history the log lacks reads no
+   event, and its head and staleness are the stamps' alone, as before D-048.
+2. **Infrahub's own churn is written on intent's own kinds.** The log outlives a deleted
+   branch: §8.17's (`fylgja-test-st-1792245248-1945`) holds 124 events. Beside the seed's
+   creations and the delete, each `NetworkDevice` has `node.updated` (level 1) changing
+   `artifacts` alone as its artifact was created (`13:54:22.418`–`.522`, before its
+   checksum), and `member_of_groups` alone, ADDED at `13:54:27.731`–`.947`, about four
+   seconds after every checksum (`13:54:23.623`–`24.023`), and REMOVED at
+   `13:55:32.538`–`.691`, three seconds after the regenerate's (`13:55:29.618`–`.632`): the
+   query groups' membership, which Infrahub rewrites after each generation. Each
+   `NetworkInterface` (18 ADDED, 2 REMOVED), `NetworkLink` (6) and `NetworkPlatform` (3)
+   has the same. The schema endpoint lists `member_of_groups` and `subscriber_of_groups`
+   (kind `Group`) and `profiles` (kind `Profile`) on each Fylgja generic itself, and a
+   device kind's `artifacts` comes from `CoreArtifactTarget`. So the kind alone would count
+   the churn as intent, every device stale after every generation and the head after it,
+   and D-048's "a regenerate clears it" would never hold. The reader therefore counts a
+   node's own write (`NodeMutatedEvent`) of a kind implementing a Fylgja generic when it
+   creates or deletes the node, or changes a field the stamps fold into a device's intent
+   (R-07): `FylgjaDevice`'s `name`, `role`, `site`, `platform` and `interfaces`;
+   `FylgjaInterface`'s `name`, `iftype`, `mgmt_only`, `enabled`, `link`, `parent` and
+   `device`; `FylgjaLink`'s `endpoints`; `FylgjaPlatform`'s `vendor`, `nos` and `version`.
+   `addresses` and `model` stay out of the events as R-07 and T076 keep them out of the
+   stamps. The query selects the names of the attributes and relationships each update
+   changed (`attributes { name }`, `relationships { name peer { id } }`).
+3. **The log lags its writes.** In the tier-2 proof's first run
+   (`fylgja-test-st-1792250101-4999`), the delete was sent at `15:15:58.183305` and returned
+   at `15:15:59.184945`; its own event's `occurred_at` is `15:15:59.182758`, before the
+   return, and its six child events' `15:15:59.189406`–`.207823`, after it. A head read
+   that began about half a second after the return (after a mark's write, stamped
+   `15:15:59.718423`) was pinned at `15:15:59.198034`, one microsecond after n2's interface
+   event, n1's (`.199256`) not yet in the log; the next read, moments later, at
+   `15:15:59.199257`. The log is ordered strictly by `occurred_at`, but an event lands in it
+   some time after that stamp, and the time varies: in the whole tier's run
+   (`fylgja-test-st-1792250971-6537`, the other packages' tests beside it) a head read about
+   half a second after the return, and the plan's own a moment later, held none of the
+   delete's events, so the head stayed the stamps' and compiled, while the staleness read of
+   the mark after the delete, a few seconds later, held them all and refused it; on an idle
+   host (`fylgja-test-st-1792251216-8309`) the head first passed the delete 6.6 s after the
+   return. So a head read before the delete's events land is the stamps', before the
+   delete, and one read after it is past it; the staleness rule compares each event's
+   `occurred_at` with the stage's `at`, so a mark is judged by the events whenever they
+   land, and the delete names both endpoints by its peers, so neither endpoint waits for a
+   child event. The tier-2 proof waits, up to 30 s, for the head to pass the delete and
+   settle before it marks and plans.
+
+**The tier-2 proof**, `internal/stages`' `TestStagesSeeARemoval`, second run
+(`fylgja-test-st-1792250248-8874`, 93.2 s, before the wait above): its own seeded branch and draft proposed change,
+the validators awaited (36 s); `seeded` marked at `15:18:19.837832`; the link n1:ethernet-1/1
+— n2:ethernet-1/1 deleted by `DeleteLink` (`NetworkLinkDelete`), sent `15:18:21.691782`,
+returned `15:18:21.936150`, moving neither `Latest` nor any device's intent stamp; `removed`
+marked at `15:18:22.413029`. The head moved from `15:17:42.940186` (the stamps') to
+`15:18:21.952665`, one microsecond after n1's interface event, and stayed there. `stage
+plan` (7.5 s): the branch point refused `contract.node.missing` (R-04), `seeded` compiled
+with 3 links, and `removed` and the head each refused `stage.artifact.stale` for n1 and n2
+alone, each message naming `infrahub.node.updated of a NetworkInterface` beside the
+device's own latest stamp (`its intent on … was written at 15:18:21.952664+00:00 (Infrahub's
+event log: infrahub.node.updated of a NetworkInterface; its latest stamp
+2026-10-17T15:17:36.296836+00:00), later than its artifact device-config was generated (…)`).
+A generate then moved n1's and n2's checksums, the head went back to the stamps' (the
+checksums later than every intent event, the churn after them not intent), and the plan
+(6.2 s) compiled the head with 2 links and still refused `removed` for n1 and n2, its
+artifacts at its `at` those it read. The cleanup deleted 2 stages, 1 proposed change and the
+branch.
+
+With the wait for the log (item 3) the proof passed twice alone (93.4 s and 100.4 s, the
+head first past the delete 6.6 s after its return in the second), and then inside **tier 2
+whole**, `make test-contract`, passed in 716.7 s (`internal/stages` 712.1 s, `internal/stage`
+482.8 s, `internal/intent` 212.9 s), every package passing; the whole tier's run before the
+wait (706.1 s) had failed this test alone, for the lag. Infrahub was left with `main` and
+`fylgja-fixture` alone, no proposed change and no stage, and `clab inspect --all` found no
+container. No golden, no fixture id and no format version moved.

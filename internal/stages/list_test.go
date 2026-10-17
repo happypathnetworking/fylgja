@@ -78,8 +78,11 @@ func TestListRefusesNoAt(t *testing.T) {
 		"change-1/future given", "change-1/head head"}; !reflect.DeepEqual(got, want) {
 		t.Errorf("rows %v, want %v", got, want)
 	}
+	// The head's at reads the events after the branch's latest stamp, the only ones that
+	// can move it (D-048), and nothing judges a stage stale.
+	headEvents := "IntentEvents change-1 since " + branchedFrom + " after " + headLatest
 	for _, c := range r.calls {
-		if c != "Check" && c != "ProposedChanges " && c != "Branch change-1" && c != "Orphans" {
+		if c != "Check" && c != "ProposedChanges " && c != "Branch change-1" && c != "Orphans" && c != headEvents {
 			t.Errorf("a listing asked %s", c)
 		}
 	}

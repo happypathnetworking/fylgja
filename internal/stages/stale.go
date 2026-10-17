@@ -14,17 +14,24 @@ import (
 const remedy = "regenerate (fylgja-fixture -generate, POST /api/artifact/generate, or the proposed change's checks: " +
 	"a retry in Infrahub, or CoreProposedChangeRunCheck)"
 
-// Stale is step 8, the staleness rule as D-046 states it: at the stage's at, each device
-// is stale when the latest stamp of its own intent is later than its generation stamp, the
-// later of its artifact's checksum.updated_at and the proposed change's artifact
-// validator's completed_at. The artifact is the one named by the device's package's
-// config.artifact_name, the package found in the registry by the device's platform
-// (Constitution II). One stage.artifact.stale per stale device, sorted by name, each a
-// rejection at step resolve naming the device.
+// Stale is step 8, the staleness rule as D-046 states it and D-048 widens it: at the
+// stage's at, each device is stale when its intent was written later than its generation
+// stamp, the later of its artifact's checksum.updated_at and the proposed change's
+// artifact validator's completed_at. Its intent was written at the later of the latest
+// stamp of its own intent and the latest intent event that names it, no later than the
+// stage's at: a removal moves no stamp, and its event is how it is seen. The artifact is
+// the one named by the device's package's config.artifact_name, the package found in the
+// registry by the device's platform (Constitution II). One stage.artifact.stale per stale
+// device, sorted by name, each a rejection at step resolve naming the device.
 //
 // The stamps are read on the stage's branch pinned at its at (the default branch for the
 // branch point); the head's are the branch's unpinned stamps its at was computed from
-// (research R-06). The validator is read pinned at the stage's at, and only when some
+// (research R-06). An event names a device when the device's id, or one of its
+// interfaces' ids as those stamps read them, is its primary node or a peer. The events
+// are the source branch's, read after the earliest checksum among the devices judged
+// (every one since the branch point when one is unstamped), since only an event after a
+// device's generation can make it stale; the branch point reads main before any of them
+// and reads none. The validator is read pinned at the stage's at, and only when some
 // device's checksum alone leaves it stale. For the head it is read unpinned: its
 // completion is no stamp of the branch and never enters the head's at (R-06), so pinned at
 // the head a run-check that regenerated identical bytes would never count, and the head
@@ -44,21 +51,67 @@ func Stale(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 		}
 	}
 
-	type candidate struct {
-		device, artifact, intent, checksum string
+	type judged struct {
+		device, artifact, checksum string
+		stamps                     intent.DeviceStamps
 	}
-	var candidates []candidate
+	var devices []judged
+	floor, unstamped := "", false
 	for name, d := range stamps.Devices {
 		pkg, ok := reg.Lookup(d.Platform.NOS)
 		if !ok {
 			continue
 		}
 		checksum, ok := d.Artifacts[pkg.Config.ArtifactName]
-		if !ok || d.Intent == "" {
+		if !ok {
 			continue
 		}
-		if checksum != "" {
-			later, err := laterThan(d.Intent, checksum)
+		if checksum == "" {
+			unstamped = true
+		} else if _, ok := ParseAt(checksum); !ok {
+			return nil, fmt.Errorf("the stamp %q Infrahub returned is not an RFC 3339 time", checksum)
+		} else if floor == "" || later(floor, checksum) {
+			floor = checksum
+		}
+		devices = append(devices, judged{device: name, artifact: pkg.Config.ArtifactName, checksum: checksum, stamps: d})
+	}
+	if len(devices) == 0 {
+		return nil, nil
+	}
+	if unstamped {
+		floor = ""
+	}
+	var events []intent.Event
+	stageAt, timed := ParseAt(st.At)
+	if st.Branch == ch.ProposedChange.Branch && timed {
+		var err error
+		if events, err = ch.intentEvents(ctx, r, floor); err != nil {
+			return nil, err
+		}
+	}
+
+	type candidate struct {
+		device, artifact, intent, stamp, checksum string
+		event                                     *intent.Event // the latest naming the device, when later than its stamps
+	}
+	var candidates []candidate
+	for _, d := range devices {
+		c := candidate{device: d.device, artifact: d.artifact, intent: d.stamps.Intent, stamp: d.stamps.Intent, checksum: d.checksum}
+		for i := range events {
+			ev := &events[i]
+			at, _ := ParseAt(ev.OccurredAt)
+			if at.After(stageAt) || !ev.Names(d.stamps.IDs) {
+				continue
+			}
+			if c.intent == "" || later(ev.OccurredAt, c.intent) {
+				c.intent, c.event = ev.OccurredAt, ev
+			}
+		}
+		if c.intent == "" {
+			continue
+		}
+		if c.checksum != "" {
+			later, err := laterThan(c.intent, c.checksum)
 			if err != nil {
 				return nil, err
 			}
@@ -66,7 +119,7 @@ func Stale(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 				continue
 			}
 		}
-		candidates = append(candidates, candidate{device: name, artifact: pkg.Config.ArtifactName, intent: d.Intent, checksum: checksum})
+		candidates = append(candidates, c)
 	}
 	if len(candidates) == 0 {
 		return nil, nil
@@ -107,9 +160,17 @@ func Stale(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 		if validated != "" {
 			validator = "the proposed change's artifact validator last completed " + validated
 		}
+		written := c.intent
+		if c.event != nil {
+			stamp := "no stamp of its own"
+			if c.stamp != "" {
+				stamp = "its latest stamp " + c.stamp
+			}
+			written = fmt.Sprintf("%s (Infrahub's event log: %s of a %s; %s)", c.intent, c.event.Name, c.event.Kind, stamp)
+		}
 		list = append(list, refusal(findings.RuleStageArtifactStale, c.device, fmt.Sprintf(
 			"device %s: its intent on %s was written at %s, later than its artifact %s was generated (%s; %s): %s",
-			c.device, st.Branch, c.intent, c.artifact, checksum, validator, staleTail(st))))
+			c.device, st.Branch, written, c.artifact, checksum, validator, staleTail(st))))
 	}
 	return list, nil
 }

@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 )
@@ -690,6 +691,35 @@ func (c *Client) DisablePort(branch, device, iface string) error {
 		return fmt.Errorf("disabling %s/%s:%s: %w", branch, device, iface, err)
 	}
 	return okOf(raw, "NetworkInterfaceUpdate", fmt.Sprintf("disabling %s/%s:%s", branch, device, iface))
+}
+
+// DeleteLink deletes the one link that ends at device's iface on a branch, by the
+// link kind's own delete mutation, as the seed creates it. It writes intent and nothing
+// else, and moves no stamp the stamps read selects: the link's endpoint edges go with it
+// and each endpoint interface's link edge reads null (research §8.17). It returns when
+// the delete returned, which a test compares with what the event log records (D-048).
+func (c *Client) DeleteLink(branch, device, iface string) (time.Time, error) {
+	found, err := c.ids(branch, "NetworkInterface",
+		fmt.Sprintf(`(device__name__value: %q, name__value: %q)`, device, iface))
+	if err != nil {
+		return time.Time{}, err
+	}
+	if len(found) != 1 {
+		return time.Time{}, fmt.Errorf("branch %s holds %d interfaces named %s on %s, want one", branch, len(found), iface, device)
+	}
+	links, err := c.ids(branch, "NetworkLink", fmt.Sprintf(`(endpoints__ids: [%q])`, found[0]))
+	if err != nil {
+		return time.Time{}, err
+	}
+	if len(links) != 1 {
+		return time.Time{}, fmt.Errorf("branch %s holds %d links ending at %s:%s, want one", branch, len(links), device, iface)
+	}
+	raw, err := c.GraphQL(branch, fmt.Sprintf(`mutation { NetworkLinkDelete(data: {id: %q}) { ok } }`, links[0]))
+	returned := time.Now().UTC()
+	if err != nil {
+		return time.Time{}, fmt.Errorf("deleting the link at %s/%s:%s: %w", branch, device, iface, err)
+	}
+	return returned, okOf(raw, "NetworkLinkDelete", fmt.Sprintf("deleting the link at %s/%s:%s", branch, device, iface))
 }
 
 // deviceID returns the one device of a name on a branch.

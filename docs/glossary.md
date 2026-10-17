@@ -377,8 +377,10 @@ degradation pattern as PSP capabilities.
 
 **Head** — From `014-proposed-change-stages` ([D-045](decisions.md#d-045)): the last
 *stage* of every *proposed change*, derived and never marked: its source branch pinned one
-microsecond after the latest stamp across the branch's intent (attributes and relationship
-edges) and its artifacts' checksums, in Infrahub's own layout, `at_source` `head`. A read
+microsecond after the later of the latest stamp across the branch's intent (attributes and
+relationship edges) and its artifacts' checksums, and its latest intent event in Infrahub's
+event log, which is how it moves past a removal no stamp records
+([D-048](decisions.md#d-048)), in Infrahub's own layout, `at_source` `head`. A read
 pinned at exactly a stamp sees the node and not the value, so the head takes the first
 instant after. It moves whenever the branch is written; a twin built from it keeps the
 `at` it was built at, and `twin step --stage <branch>/head` takes it to the head as it now
@@ -785,7 +787,7 @@ context reading its inputs from disk ([development.md](development.md#spec-kit-w
 ([D-045](decisions.md#d-045)): a moment of a *proposed change*, a pinned *intent
 reference* on its source branch. Every proposed change has two derived stages — the
 *branch point*, `main` at the branch's `branched_from`, and the *head*, the branch pinned
-one microsecond after its latest stamp — and the operator marks the moments between as
+one microsecond after its latest stamp or intent event — and the operator marks the moments between as
 `FylgjaStage` objects, each related to the proposed change, with a label unique within
 it and an optional `as_of`: the *marks*. Fylgja only reads them. In order, the branch
 point, the marks by `at`, the head; named by a *stage reference*. Only an open proposed

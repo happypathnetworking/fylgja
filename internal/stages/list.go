@@ -123,10 +123,10 @@ func List(ctx context.Context, r Reader, s Stamper, branch string, record *Recor
 		if info == nil {
 			// Its stages still list until Infrahub cancels it, the branch's warning saying
 			// why its two derived stages have no at.
-			ch = changeOf(pc, intent.BranchInfo{Name: pc.Branch}, intent.Stamps{})
+			ch = changeOf(pc, intent.BranchInfo{Name: pc.Branch}, intent.Stamps{}, nil)
 			list = append(list, warning(refusal(findings.RuleStageUnknown, pc.Branch, gone(pc.Branch, pc.ID)+
 				"; until then its branch point and head have no at")))
-		} else if ch, err = newChange(ctx, s, pc, *info); err != nil {
+		} else if ch, err = newChange(ctx, r, s, pc, *info); err != nil {
 			return ListResult{}, nil, err
 		}
 		changes = append(changes, ch)

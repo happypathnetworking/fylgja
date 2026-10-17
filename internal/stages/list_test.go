@@ -357,6 +357,62 @@ func TestListMarksTheRecord(t *testing.T) {
 	}
 }
 
+// Moved over the proposed change as Find reads it, as twin step files it beside its target's
+// findings: nothing for a record whose stage still resolves to the record's (branch, at),
+// and stage.twin.moved, in the listing's words and object, for a head written since, a
+// mark's as_of edited, a mark deleted and a proposed change no longer open.
+func TestMovedOfTheFoundChange(t *testing.T) {
+	const suffix = "; the twin is pinned to what it was built from"
+	built := func(rec RecordView) string {
+		return "the twin was built from stage " + rec.Ref().String() + " at branch " + rec.Branch + ", at " + rec.At +
+			" (" + rec.AtSource + "); "
+	}
+	live := change1().Stages[0]
+	reopened := change1(change1().Stages...)
+	reopened.ID = "pc-9"
+	cabled := record("cabled", cabledAt, AtWritten)
+	movedHead := record("head", "2026-10-16T17:29:00.000001+00:00", AtHead)
+	for _, c := range []struct {
+		name    string
+		pcs     []intent.ProposedChange
+		none    bool // no open proposed change was read: the caller passes nil
+		record  RecordView
+		message string // the one stage.twin.moved expected, or none
+	}{
+		{name: "a mark unmoved", record: cabled},
+		{name: "a given mark unmoved", record: record("live", liveAt, AtGiven)},
+		{name: "the branch point unmoved", record: record("branch-point", branchedFrom, AtBranchPoint)},
+		{name: "the head unmoved", record: record("head", headAt, AtHead)},
+		{name: "the head moved", record: movedHead,
+			message: built(movedHead) + "change-1/head now resolves to branch change-1, at " + headAt + " (head)" + suffix},
+		{name: "a mark's as_of edited", record: cabled,
+			pcs: []intent.ProposedChange{change1(live, mark("st-cabled", "cabled", cabledAt,
+				str("2026-10-16T17:26:00.000000+00:00"), ""))},
+			message: built(cabled) + "change-1/cabled now resolves to branch change-1, at 2026-10-16T17:26:00.000000+00:00 (given)" + suffix},
+		{name: "the mark deleted", record: cabled, pcs: []intent.ProposedChange{change1(live)},
+			message: built(cabled) + "change-1/cabled no longer exists" + suffix},
+		{name: "another proposed change opened on the branch", record: cabled, pcs: []intent.ProposedChange{reopened},
+			message: built(cabled) + "proposed change pc-1 is no longer open, so change-1/cabled is gone" + suffix},
+		{name: "no open proposed change", record: cabled, none: true,
+			message: built(cabled) + "proposed change pc-1 is no longer open, so change-1/cabled is gone" + suffix},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var ch *Change
+			if !c.none {
+				ch = targetChange(t, c.pcs...)
+			}
+			var want findings.List
+			if c.message != "" {
+				want = findings.List{{Severity: findings.Warning, Rule: findings.RuleStageTwinMoved, Object: c.record.Ref().String(),
+					Message: c.message}}
+			}
+			if got := Moved(ch, c.record); !reflect.DeepEqual(got, want) {
+				t.Errorf("Moved = %+v\nwant %+v", got, want)
+			}
+		})
+	}
+}
+
 // Two runs over one input give equal results: the listing is sorted whatever order the
 // server returned, and maps never reach it unsorted (FR-016).
 func TestListIsStable(t *testing.T) {

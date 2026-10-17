@@ -665,7 +665,8 @@ included once it has moved since the record. A stage of another branch, or of an
 proposed change on the same branch, is `step.target.foreign`; nothing after the record's
 stage, or its label gone, is `step.target.unknown`; a target that resolves to the record's
 own `(branch, at)` is `step.target.current`; and the marks the step passes over are the
-warning `step.stage.skipped`. The command's request does
+warning `step.stage.skipped`, and a record whose stage has moved under it is `stage list`'s
+warning `stage.twin.moved`, neither refusing the step. The command's request does
 everything that touches nothing first, in the API's server: it reads the host, chooses and resolves the target, reads and compiles it on
 `stage plan`'s code path, files it, computes the step (`step.Diff`) and the push plan,
 runs the host check on the target with the presence refusals dropped, and reads

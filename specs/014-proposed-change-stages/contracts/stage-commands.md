@@ -117,6 +117,7 @@ the host check and containerlab's plan, each exit 1:
 | `step.target.unknown` | no stage after the record's; the record's label gone; `--stage` names no stage of the proposed change | `proposed change <id> on change-1 has no stage after change-1/head; its stages are: …` / `…; the head has moved since the twin was built (now at …): --stage change-1/head steps to it` |
 | `step.target.current` | the target resolves to the record's `(branch, at)` | `the twin is already at stage change-1/live (branch change-1, at …); the proposed change's stages are: …` |
 | `step.stage.skipped` (warning) | marks strictly between the record's position and the target's | `the step from change-1/branch-point to change-1/head skips stages cabled, live; the step is between the two bundles either way` |
+| `stage.twin.moved` (warning, no step) | the record's stage no longer resolves to the record's `(branch, at)`: the head written since, a mark's `as_of` edited, a rebase; filed once a target is chosen, as `stage list` files it, on the dry run and the run alike | `the twin was built from stage change-1/head at branch change-1, at … (head); change-1/head now resolves to branch change-1, at … (head); the twin is pinned to what it was built from` |
 
 The target's own resolution refusals (the reference contract's steps 4–9) follow, with the
 same identifiers and wordings as `twin create --stage` gives. Everything after the target

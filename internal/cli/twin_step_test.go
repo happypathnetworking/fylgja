@@ -2111,6 +2111,9 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 	if carriesRule(out.doc.Findings, findings.RuleStepStageSkipped) {
 		t.Errorf("findings %+v; a step to the stage before skips none", out.doc.Findings)
 	}
+	if carriesRule(out.doc.Findings, findings.RuleStageTwinMoved) {
+		t.Errorf("findings %+v; the twin's mark still resolves to the record's reference, so it has not moved", out.doc.Findings)
+	}
 	reg, err := psp.Load("")
 	if err != nil {
 		t.Fatal(err)
@@ -2153,8 +2156,9 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 		"step push s1: done in 2.4s",
 		"step record: done in 0.1s",
 		"stepped to stage change-1/sealed (bundle "+short(sealedID)+") in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s")...)
-	if out.code != findings.ExitOK || out.stdout != want {
-		t.Errorf("exit %d, stdout:\n%s\nwant 0 and:\n%s", out.code, out.stdout, want)
+	if out.code != findings.ExitOK || out.stdout != want || carriesRule(out.doc.Findings, findings.RuleStageTwinMoved) {
+		t.Errorf("exit %d, findings %+v, stdout:\n%s\nwant 0, no stage.twin.moved, and:\n%s", out.code, out.doc.Findings,
+			out.stdout, want)
 	}
 	in := svc.stepped[0]
 	wantFrom := wire.StepSide{Stage: stepStage("linked", "a link between e1 and s1", "written"), BundleID: linkedID, At: stepWrittenAt}
@@ -2317,7 +2321,8 @@ func TestStepTargetCurrentByResolvedReference(t *testing.T) {
 // Scenario 6: a twin built at the head, the branch written since: stage list warns that the
 // record's stage has moved, a step with no target is refused naming the moved head and the
 // reference that steps to it, and --stage <branch>/head is a target, not the current stage,
-// since it now resolves to another at.
+// since it now resolves to another at; the step, dry run and run alike, carries stage
+// list's stage.twin.moved once, in its words, and steps.
 func TestStepToAMovedHead(t *testing.T) {
 	const oldHead = "2026-10-16T10:30:00.000001+00:00"
 	h := stepHost(t, "plan-nothing.json", nil)
@@ -2351,6 +2356,38 @@ func TestStepToAMovedHead(t *testing.T) {
 		t.Errorf("--stage change-1/head: exit %d, findings %+v, stdout:\n%s\nwant 0, the step from the head as built to the "+
 			"head as it is", out.code, out.doc.Findings, out.stdout)
 	}
+	movedOnce := func(label string, out stepOutput) {
+		t.Helper()
+		var got findings.List
+		for _, f := range out.doc.Findings {
+			if f.Rule == findings.RuleStageTwinMoved {
+				got = append(got, f)
+			}
+		}
+		if !slices.Equal(got, findings.List{moved}) ||
+			!strings.Contains(out.stdout+out.stderr, "warning stage.twin.moved change-1/head: "+moved.Message+"\n") {
+			t.Errorf("%s: stage.twin.moved %+v, stdout:\n%s\nstderr:\n%s\nwant stage list's %+v once, in both renderings",
+				label, got, out.stdout, out.stderr, moved)
+		}
+	}
+	movedOnce("the dry run", out)
+
+	svc := &fakeService{runID: stepRunID, events: stepEvents()}
+	reconcile, e1Took := 3.9, 1.6
+	svc.stepResult = provision.StepResult{Outcome: provision.StepStepped, Findings: findings.List{},
+		PushPlan: []wire.StepPush{{Node: "e1", Reasons: []string{"artifact", "restarted"}, Outcome: wire.PushLanded, TookS: &e1Took}},
+		Timings: wire.StepTimings{ReconcileS: &reconcile, Readiness: map[string]float64{"e1": 54.8},
+			Push: map[string]float64{"e1": 1.6}, WholeS: 62.5},
+		Record:    &wire.TwinRecord{State: wire.StateReady},
+		StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:15:33Z"}
+	useService(t, svc)
+	useInterrupts(t)
+	out = runStepCmd(t, "--stage", "change-1/head", "--allow-restart")
+	if l := lines2(out.stdout); out.code != findings.ExitOK || len(svc.stepped) == 0 || len(l) == 0 ||
+		!strings.HasPrefix(l[len(l)-1], "stepped to stage change-1/head (bundle ") {
+		t.Errorf("the run: exit %d, stdout:\n%s\nwant 0 and the step to the head as it is", out.code, out.stdout)
+	}
+	movedOnce("the run", out)
 }
 
 // Scenario 8, for a step: a target marked before its artifacts were regenerated is refused

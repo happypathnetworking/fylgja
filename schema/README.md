@@ -93,7 +93,8 @@ proposed_change=<id> --set description="checked by hand"`. To delete one: the UI
 moves the stage's `at`, and changing `label` renames its reference. None of this changes a
 twin already built from the stage: the twin's record keeps what it was built from, and
 `stage list` warns beside it (`stage.twin.moved`) when the stage now resolves elsewhere or
-is gone.
+is gone, as `twin step` does beside its target; the step still goes from the bundle the
+twin was built from.
 
 **Delete stages before their proposed change.** Infrahub refuses a proposed change's
 delete while a stage names it (`It is linked to mandatory relationship proposed_change on

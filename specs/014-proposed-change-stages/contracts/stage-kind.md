@@ -155,7 +155,7 @@ three ways on a throwaway proposed change before the text is committed
 - **Editing a stage**: `description` changes nothing Fylgja reads; `as_of` moves the
   stage's `at`; `label` renames the reference. None changes a twin already built from it:
   the record keeps what the twin was built from, and `stage list` warns `stage.twin.moved`
-  beside it.
+  beside it, as `twin step` does beside its target.
 - **Delete stages before their proposed change**: Infrahub refuses a proposed change's
   delete while a stage names it (`It is linked to mandatory relationship proposed_change on
   node FylgjaStage …`; research §8.8). A stage removed from its proposed change's

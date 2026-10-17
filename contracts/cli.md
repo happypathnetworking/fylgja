@@ -408,6 +408,7 @@ the host check and containerlab's plan, exit 1:
 | `step.target.unknown` | no stage after the record's; the record's label gone; `--stage` names no stage of the proposed change | `proposed change <id> on change-1 has no stage after change-1/head; its stages are: …`, or `…; the head has moved since the twin was built (now at …): --stage change-1/head steps to it` |
 | `step.target.current` | the target resolves to the record's own `(branch, at)` | `the twin is already at stage change-1/live (branch change-1, at …); the proposed change's stages are: …` |
 | `step.stage.skipped` (warning, exit 0) | marks strictly between the record's stage and the target's, either direction | `the step from change-1/branch-point to change-1/head skips stages cabled, live; the step is between the two bundles either way` |
+| `stage.twin.moved` (warning, exit 0, no step) | once a target is chosen, the record's stage no longer resolves to the record's `(branch, at)`: the head written since, a mark's `as_of` edited, a rebase; `stage list`'s warning in its words and object, on the dry run and the run alike | `the twin was built from stage change-1/head at branch change-1, at … (head); change-1/head now resolves to branch change-1, at … (head); the twin is pinned to what it was built from` |
 
 The target's own resolution refusals follow, as `twin create --stage` makes them.
 Everything after the target is M11's and M12's with "stage" for "waypoint": `stepped to
@@ -454,7 +455,7 @@ step `stage` and the rule `stage.failed` are the staging step's, as before. A re
 | `stage.artifact.stale` | rejection, 1, `resolve`, one per device | at the stage's `at`, the device's intent is later than its generation stamp, the later of its artifact's checksum stamp and the proposed change's artifact validator's completion ([D-046](../docs/decisions.md#d-046)); names both remedies | new |
 | `stage.orphaned` | warning, 0, none | a stage that names no proposed change | new |
 | `stage.main.moved` | warning, 0, `resolve` | `main` was written after the branch's `branched_from`; nothing is refused | new |
-| `stage.twin.moved` | warning, 0, none | the record's stage no longer resolves to the record's `(branch, at)`, or is gone | `waypoint.twin.moved` |
+| `stage.twin.moved` | warning, 0, none | the record's stage no longer resolves to the record's `(branch, at)`, or is gone; in `stage list` beside the record's row, and on `twin step` beside the target's findings | `waypoint.twin.moved` |
 | `step.stage.skipped` | warning, 0, `resolve` | marks between the record's stage and the target | `step.sequence.skipped` (M11) |
 
 `step.target.foreign`, `step.target.unknown`, `step.target.current` and

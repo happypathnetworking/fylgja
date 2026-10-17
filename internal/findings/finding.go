@@ -166,7 +166,8 @@ const (
 	// object and when it fires. The syntax and flag guards are at start, before any
 	// connection; the resolution's refusals at resolve, before any run and before any
 	// branch's intent is read (none in intent read, whose operations carry no step); the
-	// listing's two warnings at none. stage.failed above is M2's staging step, not a stage.
+	// listing's two warnings at none, stage.twin.moved on twin step too. stage.failed above
+	// is M2's staging step, not a stage.
 	RuleStageRefInvalid          = "stage.ref.invalid"            // rejection, exit 2, start: the text given; --stage is not <branch>/<label>, or stage list's or stage plan's --branch is not a branch
 	RuleStageFlagsConflict       = "stage.flags.conflict"         // rejection, exit 2, start: the conflicting flag; --stage beside --branch, --at or --interval, the first found in that order
 	RuleStageKindAbsent          = "stage.kind.absent"            // rejection, exit 1, resolve: FylgjaStage; the default branch's schema lacks the kind, an attribute or the relationship this build reads, or CoreProposedChange lacks the extension, naming schema/fylgja-stage.yaml
@@ -178,7 +179,7 @@ const (
 	RuleStageArtifactStale       = "stage.artifact.stale"         // rejection, exit 1, resolve: the device; at the stage's at, the device's intent is newer than its generation stamp (D-046), naming both remedies
 	RuleStageOrphaned            = "stage.orphaned"               // warning, exit 0, no step: the stage's id; a stage its proposed change no longer names, removed from its fylgja_stages (D-047)
 	RuleStageMainMoved           = "stage.main.moved"             // warning, exit 0, resolve: the branch; main's latest stamp is later than the branch's branched_from, and nothing is refused
-	RuleStageTwinMoved           = "stage.twin.moved"             // warning, exit 0, no step: the record's <branch>/<label>; the record's stage no longer resolves to the record's (branch, at), or is gone
+	RuleStageTwinMoved           = "stage.twin.moved"             // warning, exit 0, no step: the record's <branch>/<label>; the record's stage no longer resolves to the record's (branch, at), or is gone; stage list files it beside the record's row, twin step beside its target's findings
 
 	// M11, stepping (contracts/cli.md). Each
 	// comment gives the severity, the exit, the step, the object and when it fires. The

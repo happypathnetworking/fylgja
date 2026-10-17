@@ -44,7 +44,8 @@ type stepFlags struct {
 // runTwinStep steps the stage twin. Everything up to the run is decided here, before any
 // connection to the workflow service, each refusal ending the command with its document:
 // --stage as given; the packages; the host, whose twin must be a stage twin that is not
-// diverged; the record's proposed change and the target (014: research R-16); the target's
+// diverged; the record's proposed change and the target (014: research R-16), with stage
+// list's stage.twin.moved beside it when the record's stage has moved; the target's
 // resolution, read, compile and filing on stage plan's path; the from bundle out of the
 // store; the step between the two; the host check on the target and containerlab's plan
 // for the lab, both in this process as a dry run reads them; and the rules on that plan.
@@ -112,10 +113,15 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	if list.Rejected() {
 		return finish(op, subject, list)
 	}
-	target, _, list := stages.Target(ch, *stages.RecordViewOf(rec), given)
+	view := *stages.RecordViewOf(rec)
+	target, _, list := stages.Target(ch, view, given)
 	if list.Rejected() {
 		return finish(op, subject, list)
 	}
+	// The record's stage moved under the twin is stage list's warning, beside the target's
+	// findings: the step goes from the bundle the record holds whatever its stage now
+	// resolves to, so it refuses nothing.
+	list = append(list, stages.Moved(ch, view)...)
 	subject.Stage = target.String()
 
 	file := func(ctx context.Context, files map[string][]byte, id string, snapshot *ctm.CTM) (findings.List, error) {

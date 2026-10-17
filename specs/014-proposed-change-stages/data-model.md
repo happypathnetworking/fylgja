@@ -148,8 +148,8 @@ Research R-05, R-06, R-07.
 
 | Field | From |
 |---|---|
-| `Latest` | the latest `updated_at` over every device's attributes and edges (§R-07) and every artifact's `checksum.updated_at` |
-| `Devices[name].Intent` | the latest over that device's own attributes, its edges, its interfaces' edges and attributes, their `link` and `parent` edges, and the `endpoints` edges of every link an interface of its ends |
+| `Latest` | the latest `updated_at` over every device's attributes and edges and its platform's stamped attributes (§R-07) and every artifact's `checksum.updated_at` |
+| `Devices[name].Intent` | the latest over that device's own attributes, its edges, its platform's `vendor`, `nos` and `version`, its interfaces' edges and attributes, their `link` and `parent` edges, and the `endpoints` edges of every link an interface of its ends |
 | `Devices[name].Artifacts[artifact name].Checksum` | that artifact's `checksum.updated_at` |
 
 **The head's `at`** = `Latest` of the unpinned read, parsed, plus one microsecond,

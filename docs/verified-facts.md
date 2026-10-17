@@ -282,7 +282,11 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   `properties.updated_at` is `null` when unset; `FylgjaLink.endpoints.edges.properties
   .updated_at`; `FylgjaContract.version.updated_at`. `artifacts` must be spread `... on
   CoreArtifactTarget`: selected on `FylgjaDevice` it is refused `Cannot query field
-  'artifacts' on type 'FylgjaDevice'`. *(10-16)*
+  'artifacts' on type 'FylgjaDevice'`. *(10-16)* The platform node's own attributes, through
+  `FylgjaPlatform`, carry `updated_at` too: the fixture's `vendor`, `nos`, `version` and
+  unset `model` all read `05:47:56.812998`, the platform's creation, unpinned and pinned at
+  the head, before every device's stamp, and pinned at exactly a device's stamp the edge
+  and the node are `null`. *(10-17)*
 - **A generation stamps each device's artifact apart.** The fixture's three checksums read
   `…38.543597`, `…38.544382` and `…38.544482`, each after its own device's intent, so the
   latest stamp of a branch is one device's checksum. A regeneration that changes bytes

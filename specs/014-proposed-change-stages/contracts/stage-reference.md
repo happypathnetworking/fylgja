@@ -80,10 +80,13 @@ and `main`'s unpinned reads):
 fragment ArtifactStamps on CoreArtifactTarget {
   artifacts { edges { node { name { value } checksum { value updated_at } } } }
 }
+fragment PlatformStamps on FylgjaPlatform {
+  vendor { value updated_at } nos { value updated_at } version { value updated_at } model { value }
+}
 query Stamps($limit: Int!, $offset: Int!) {
   FylgjaDevice(limit: $limit, offset: $offset) { count edges { node {
     name { value updated_at } role { updated_at } site { updated_at }
-    platform { properties { updated_at } }
+    platform { properties { updated_at } node { ...PlatformStamps } }
     interfaces { edges { properties { updated_at } node {
       name { value updated_at } iftype { updated_at } mgmt_only { updated_at } enabled { updated_at }
       link { properties { updated_at } } parent { properties { updated_at } } } } }
@@ -94,7 +97,11 @@ query Stamps($limit: Int!, $offset: Int!) {
 ```
 
 Paged as `Devices` is. A `null` `properties.updated_at` (an unset relationship) is
-skipped. Every stamp is compared parsed (RFC 3339); none is ever sent but the head's `at`.
+skipped, as is any other `null` stamp. The platform's values pick the device's package; its
+`vendor`, `nos` and `version` are stamped because they reach the artifact (the template
+renders them into every device's configuration and branches on `nos`) and `nos` the
+bundle, and `model`, which reaches neither, is read but not stamped. Every stamp is
+compared parsed (RFC 3339); none is ever sent but the head's `at`.
 
 **The head's `at`**: the latest over every stamp above, plus one microsecond, formatted
 `2006-01-02T15:04:05.000000-07:00` (Infrahub's own layout: `2026-10-08T05:48:38.544483+00:00`).
@@ -109,9 +116,10 @@ Its value is read, never its `updated_at`: pinned, the value is the one in force
 metadata the current one (research §6.5).
 
 **A device's intent stamp** at the stage: the latest over its own `name`, `role`, `site`,
-its `platform` edge, each interface's edge and `name`, `iftype`, `mgmt_only`, `enabled`,
-its `link` and `parent` edges, and every `endpoints` edge of a link whose endpoint's
-device is this one.
+its `platform` edge and its platform's `vendor`, `nos` and `version`, each interface's edge
+and `name`, `iftype`, `mgmt_only`, `enabled`, its `link` and `parent` edges, and every
+`endpoints` edge of a link whose endpoint's device is this one. A platform edited on the
+branch so moves the intent of every device on it, and of no other (T076).
 
 **Stale**: intent later than the generation stamp. Fresh otherwise. A device with no
 artifact of its package's name at `at` is left to the read (`artifact.missing`).

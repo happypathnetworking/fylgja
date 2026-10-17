@@ -57,6 +57,16 @@ func TestStalePerDevice(t *testing.T) {
 		// -add-link's hand generate: n2's own stamps did not move, so n2 is fresh whatever
 		// its neighbours did.
 		{name: "a neighbour's change names no n2", stamps: edited("n1", "n3"), stale: []string{"n1", "n3"}, validator: true},
+		// A platform's version edited after the checksums: intent folds the platform's
+		// stamps into each device on it (TestStampsPlatform), so n1 and n3 on SR Linux are
+		// stale and n2, on EOS, whose package names the same artifact, is not.
+		{name: "a platform edited after the checksum names each device on it", stamps: func() intent.Stamps {
+			s := edited("n1", "n3")
+			d := s.Devices["n2"]
+			d.Platform = ctm.Platform{Vendor: "arista", NOS: "eos", Version: "4.32.0.2F"}
+			s.Devices["n2"] = d
+			return s
+		}(), stale: []string{"n1", "n3"}, validator: true},
 		{name: "fresh reads no validator", stamps: edited()},
 		{name: "a checksum after the intent clears it", stamps: func() intent.Stamps {
 			s := edited("n1")

@@ -453,6 +453,13 @@ read but not stamped (they do not reach the artifact or the bundle). An unset re
 all, spreading the artifact fragment `on CoreArtifactTarget` as the read does (a direct
 `artifacts` on `FylgjaDevice` is refused, §6.6). **Rationale**: a re-cabling that writes no
 attribute still moves an edge stamp (§2.8), and a link's endpoint edges name both devices.
+*Corrected at T076 (2026-10-17, §8.16), by this decision's own criterion:* the platform's
+`vendor`, `nos` and `version` are stamped too, each folded into the intent of every device
+on the platform, since the template renders all three into each device's artifact and
+branches on `nos`, and `nos` picks the package and enters the manifest; `model`, like
+`addresses`, reaches neither and is read but not stamped. As first written, the decision
+stamped the device's `platform` edge alone, so a platform edited on the branch after the
+last regenerate moved no device's intent and no `Latest`.
 
 <a id="r-08"></a>
 ### R-08 The identifiers
@@ -1305,3 +1312,28 @@ So `schema/README.md`'s "Editing a stage" and `contracts/stage-kind.md`'s bullet
 said a `label` edit only renames the reference, now say that a relabelled mark with no
 `as_of` names the moment of the relabel, and that writing its `at` as its `as_of` first
 keeps its moment.
+
+### 8.16 The platform's stamps (T076, 2026-10-17, read-only)
+
+On `fylgja-fixture`, through the raw query and then through `(*intent.Client).Stamps` with
+the regenerated `IntentStamps`, which selects the platform's `vendor`, `nos` and `version`
+with their `updated_at` (fragment `PlatformStamps`), no twin booted:
+
+- **Unpinned**, the fixture's one platform (all three devices name the same node) reads
+  `vendor` `nokia`, `nos` `srlinux` and `version` `24.7`, each `updated_at`
+  `2026-10-08T05:47:56.812998+00:00`, as is its unset `model`'s: the seed wrote the platform
+  first, 1.4 s before n1's own stamps (`05:47:58.232738`).
+- **Pinned at the head** (`2026-10-08T05:48:38.544483+00:00`), the same three stamps; pinned
+  one microsecond after n1's stamp, one device and the same three; pinned at exactly n1's
+  stamp, the node and no value, its platform edge and node `null`, as §2.6 found for any
+  attribute.
+- **Through the client**, unpinned and pinned at the head: `Latest`
+  `2026-10-08T05:48:38.544482+00:00`, n1's and n3's intent `…05:48:05.022364`, n2's
+  `…05:48:04.922669` (the cabling), each artifact's checksum as before, each platform
+  `{nokia srlinux 24.7}`. The platform's stamps are older than every device's, so no
+  device's intent, no `Latest`, no head and no fixture id moves.
+
+Genqlient cannot merge two fragment spreads that select one field (`...PlatformFields
+...PlatformStamps` generates `GetVendor`, `GetNos` and `GetVersion` twice and does not
+compile), so `PlatformStamps` carries the values beside the stamps and the stamps read
+projects the platform from it.

@@ -14,9 +14,9 @@ import (
 // picks each device's package. Every stamp is kept as the string Infrahub returned;
 // each comparison parses it.
 type Stamps struct {
-	// Latest is the latest stamp the read returned: every device's, interface's and
-	// link's, and every artifact's checksum's. The head's `at` is it plus one
-	// microsecond. "" when the branch holds nothing stamped.
+	// Latest is the latest stamp the read returned: every device's and its platform's,
+	// every interface's and link's, and every artifact's checksum's. The head's `at` is it
+	// plus one microsecond. "" when the branch holds nothing stamped.
 	Latest string
 	// Devices holds each device's own stamps by its name.
 	Devices map[string]DeviceStamps
@@ -28,9 +28,9 @@ type DeviceStamps struct {
 	// names which of Artifacts is its configuration (Constitution II).
 	Platform ctm.Platform
 	// Intent is the latest stamp of the device's own intent: its name, role and site,
-	// its platform edge, each interface's edge and its name, iftype, mgmt_only, enabled,
-	// link edge and parent edge, and every endpoints edge of each link one of its
-	// interfaces terminates.
+	// its platform edge and its platform's vendor, nos and version, each interface's edge
+	// and its name, iftype, mgmt_only, enabled, link edge and parent edge, and every
+	// endpoints edge of each link one of its interfaces terminates.
 	Intent string
 	// Artifacts maps each of the device's artifacts by name to its checksum.updated_at,
 	// which moves only when Infrahub stores bytes that differ; "" when Infrahub returned
@@ -166,7 +166,14 @@ func (r *stampReader) device(n stampDeviceNode) {
 	r.see(site.GetUpdated_at(), &d.intent)
 	r.see(platformEdge.GetUpdated_at(), &d.intent)
 	if p := platform.GetNode(); p != nil {
-		d.platform = projectPlatform(p)
+		// The platform's vendor, nos and version reach every device on it: the template
+		// renders them into its artifact, and nos picks its package (R-07). model reaches
+		// neither and is projected but not stamped.
+		vendor, nos, version, model := p.GetVendor(), p.GetNos(), p.GetVersion(), p.GetModel()
+		d.platform = ctm.Platform{Vendor: vendor.GetValue(), NOS: nos.GetValue(), Version: version.GetValue(), Model: model.GetValue()}
+		for _, stamp := range []string{vendor.GetUpdated_at(), nos.GetUpdated_at(), version.GetUpdated_at()} {
+			r.see(stamp, &d.intent)
+		}
 	}
 
 	interfaces := n.GetInterfaces()

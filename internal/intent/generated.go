@@ -2122,7 +2122,7 @@ type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylg
 	implementsGraphQLInterfaceIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform()
 	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
 	GetTypename() string
-	PlatformFields
+	PlatformStamps
 }
 
 func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) implementsGraphQLInterfaceIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform() {
@@ -2181,7 +2181,7 @@ func __marshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevic
 // IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform includes the requested fields of the GraphQL type NetworkPlatform.
 type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform struct {
 	Typename                      string `json:"__typename"`
-	PlatformFieldsNetworkPlatform `json:"-"`
+	PlatformStampsNetworkPlatform `json:"-"`
 }
 
 // GetTypename returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Typename, and is useful for accessing the field via an interface.
@@ -2190,23 +2190,23 @@ func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNode
 }
 
 // GetVendor returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Vendor, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetVendor() PlatformFieldsVendorTextAttribute {
-	return v.PlatformFieldsNetworkPlatform.Vendor
+func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetVendor() PlatformStampsVendorTextAttribute {
+	return v.PlatformStampsNetworkPlatform.Vendor
 }
 
 // GetNos returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Nos, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetNos() PlatformFieldsNosTextAttribute {
-	return v.PlatformFieldsNetworkPlatform.Nos
+func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetNos() PlatformStampsNosTextAttribute {
+	return v.PlatformStampsNetworkPlatform.Nos
 }
 
 // GetVersion returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Version, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetVersion() PlatformFieldsVersionTextAttribute {
-	return v.PlatformFieldsNetworkPlatform.Version
+func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetVersion() PlatformStampsVersionTextAttribute {
+	return v.PlatformStampsNetworkPlatform.Version
 }
 
 // GetModel returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Model, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetModel() PlatformFieldsModelTextAttribute {
-	return v.PlatformFieldsNetworkPlatform.Model
+func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetModel() PlatformStampsModelTextAttribute {
+	return v.PlatformStampsNetworkPlatform.Model
 }
 
 func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) UnmarshalJSON(b []byte) error {
@@ -2227,7 +2227,7 @@ func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNode
 	}
 
 	err = json.Unmarshal(
-		b, &v.PlatformFieldsNetworkPlatform)
+		b, &v.PlatformStampsNetworkPlatform)
 	if err != nil {
 		return err
 	}
@@ -2237,13 +2237,13 @@ func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNode
 type __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform struct {
 	Typename string `json:"__typename"`
 
-	Vendor PlatformFieldsVendorTextAttribute `json:"vendor"`
+	Vendor PlatformStampsVendorTextAttribute `json:"vendor"`
 
-	Nos PlatformFieldsNosTextAttribute `json:"nos"`
+	Nos PlatformStampsNosTextAttribute `json:"nos"`
 
-	Version PlatformFieldsVersionTextAttribute `json:"version"`
+	Version PlatformStampsVersionTextAttribute `json:"version"`
 
-	Model PlatformFieldsModelTextAttribute `json:"model"`
+	Model PlatformStampsModelTextAttribute `json:"model"`
 }
 
 func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) MarshalJSON() ([]byte, error) {
@@ -2258,10 +2258,10 @@ func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNode
 	var retval __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform
 
 	retval.Typename = v.Typename
-	retval.Vendor = v.PlatformFieldsNetworkPlatform.Vendor
-	retval.Nos = v.PlatformFieldsNetworkPlatform.Nos
-	retval.Version = v.PlatformFieldsNetworkPlatform.Version
-	retval.Model = v.PlatformFieldsNetworkPlatform.Model
+	retval.Vendor = v.PlatformStampsNetworkPlatform.Vendor
+	retval.Nos = v.PlatformStampsNetworkPlatform.Nos
+	retval.Version = v.PlatformStampsNetworkPlatform.Version
+	retval.Model = v.PlatformStampsNetworkPlatform.Model
 	return &retval, nil
 }
 
@@ -4458,6 +4458,165 @@ type PlatformFieldsVersionTextAttribute struct {
 // GetValue returns PlatformFieldsVersionTextAttribute.Value, and is useful for accessing the field via an interface.
 func (v *PlatformFieldsVersionTextAttribute) GetValue() string { return v.Value }
 
+// The platform's values, which pick the device's package, and the stamps of those that reach
+// the artifact or the bundle: the template renders vendor, nos and version into every
+// device's artifact and branches on nos, and nos picks the package (R-07). model reaches
+// neither and is not stamped. A fragment of its own, not PlatformFields beside a second
+// spread: genqlient cannot merge two fragments' selections of one field.
+//
+// PlatformStamps is implemented by the following types:
+// PlatformStampsNetworkPlatform
+type PlatformStamps interface {
+	implementsGraphQLInterfacePlatformStamps()
+	// GetVendor returns the interface-field "vendor" from its implementation.
+	GetVendor() PlatformStampsVendorTextAttribute
+	// GetNos returns the interface-field "nos" from its implementation.
+	// The GraphQL interface field's documentation follows.
+	//
+	// srlinux | eos | iol | panos | ...
+	GetNos() PlatformStampsNosTextAttribute
+	// GetVersion returns the interface-field "version" from its implementation.
+	GetVersion() PlatformStampsVersionTextAttribute
+	// GetModel returns the interface-field "model" from its implementation.
+	GetModel() PlatformStampsModelTextAttribute
+}
+
+func (v *PlatformStampsNetworkPlatform) implementsGraphQLInterfacePlatformStamps() {}
+
+func __unmarshalPlatformStamps(b []byte, v *PlatformStamps) error {
+	if string(b) == "null" {
+		return nil
+	}
+
+	var tn struct {
+		TypeName string `json:"__typename"`
+	}
+	err := json.Unmarshal(b, &tn)
+	if err != nil {
+		return err
+	}
+
+	switch tn.TypeName {
+	case "NetworkPlatform":
+		*v = new(PlatformStampsNetworkPlatform)
+		return json.Unmarshal(b, *v)
+	case "":
+		return fmt.Errorf(
+			"response was missing FylgjaPlatform.__typename")
+	default:
+		return fmt.Errorf(
+			`unexpected concrete type for PlatformStamps: "%v"`, tn.TypeName)
+	}
+}
+
+func __marshalPlatformStamps(v *PlatformStamps) ([]byte, error) {
+
+	var typename string
+	switch v := (*v).(type) {
+	case *PlatformStampsNetworkPlatform:
+		typename = "NetworkPlatform"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*PlatformStampsNetworkPlatform
+		}{typename, v}
+		return json.Marshal(result)
+	case nil:
+		return []byte("null"), nil
+	default:
+		return nil, fmt.Errorf(
+			`unexpected concrete type for PlatformStamps: "%T"`, v)
+	}
+}
+
+// PlatformStampsModelTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type PlatformStampsModelTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns PlatformStampsModelTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *PlatformStampsModelTextAttribute) GetValue() string { return v.Value }
+
+// The platform's values, which pick the device's package, and the stamps of those that reach
+// the artifact or the bundle: the template renders vendor, nos and version into every
+// device's artifact and branches on nos, and nos picks the package (R-07). model reaches
+// neither and is not stamped. A fragment of its own, not PlatformFields beside a second
+// spread: genqlient cannot merge two fragments' selections of one field.
+type PlatformStampsNetworkPlatform struct {
+	Vendor PlatformStampsVendorTextAttribute `json:"vendor"`
+	// srlinux | eos | iol | panos | ...
+	Nos     PlatformStampsNosTextAttribute     `json:"nos"`
+	Version PlatformStampsVersionTextAttribute `json:"version"`
+	Model   PlatformStampsModelTextAttribute   `json:"model"`
+}
+
+// GetVendor returns PlatformStampsNetworkPlatform.Vendor, and is useful for accessing the field via an interface.
+func (v *PlatformStampsNetworkPlatform) GetVendor() PlatformStampsVendorTextAttribute {
+	return v.Vendor
+}
+
+// GetNos returns PlatformStampsNetworkPlatform.Nos, and is useful for accessing the field via an interface.
+func (v *PlatformStampsNetworkPlatform) GetNos() PlatformStampsNosTextAttribute { return v.Nos }
+
+// GetVersion returns PlatformStampsNetworkPlatform.Version, and is useful for accessing the field via an interface.
+func (v *PlatformStampsNetworkPlatform) GetVersion() PlatformStampsVersionTextAttribute {
+	return v.Version
+}
+
+// GetModel returns PlatformStampsNetworkPlatform.Model, and is useful for accessing the field via an interface.
+func (v *PlatformStampsNetworkPlatform) GetModel() PlatformStampsModelTextAttribute { return v.Model }
+
+// PlatformStampsNosTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type PlatformStampsNosTextAttribute struct {
+	Value string `json:"value"`
+	// Date/Time when the attribute was last modified by a user or a system task
+	Updated_at string `json:"updated_at"`
+}
+
+// GetValue returns PlatformStampsNosTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *PlatformStampsNosTextAttribute) GetValue() string { return v.Value }
+
+// GetUpdated_at returns PlatformStampsNosTextAttribute.Updated_at, and is useful for accessing the field via an interface.
+func (v *PlatformStampsNosTextAttribute) GetUpdated_at() string { return v.Updated_at }
+
+// PlatformStampsVendorTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type PlatformStampsVendorTextAttribute struct {
+	Value string `json:"value"`
+	// Date/Time when the attribute was last modified by a user or a system task
+	Updated_at string `json:"updated_at"`
+}
+
+// GetValue returns PlatformStampsVendorTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *PlatformStampsVendorTextAttribute) GetValue() string { return v.Value }
+
+// GetUpdated_at returns PlatformStampsVendorTextAttribute.Updated_at, and is useful for accessing the field via an interface.
+func (v *PlatformStampsVendorTextAttribute) GetUpdated_at() string { return v.Updated_at }
+
+// PlatformStampsVersionTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type PlatformStampsVersionTextAttribute struct {
+	Value string `json:"value"`
+	// Date/Time when the attribute was last modified by a user or a system task
+	Updated_at string `json:"updated_at"`
+}
+
+// GetValue returns PlatformStampsVersionTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *PlatformStampsVersionTextAttribute) GetValue() string { return v.Value }
+
+// GetUpdated_at returns PlatformStampsVersionTextAttribute.Updated_at, and is useful for accessing the field via an interface.
+func (v *PlatformStampsVersionTextAttribute) GetUpdated_at() string { return v.Updated_at }
+
 // ProposedChangesCoreProposedChangePaginatedCoreProposedChange includes the requested fields of the GraphQL type PaginatedCoreProposedChange.
 // The GraphQL type's documentation follows.
 //
@@ -5114,7 +5273,7 @@ query IntentStamps ($limit: Int!, $offset: Int!) {
 					}
 					node {
 						__typename
-						... PlatformFields
+						... PlatformStamps
 					}
 				}
 				interfaces {
@@ -5181,15 +5340,18 @@ query IntentStamps ($limit: Int!, $offset: Int!) {
 		}
 	}
 }
-fragment PlatformFields on FylgjaPlatform {
+fragment PlatformStamps on FylgjaPlatform {
 	vendor {
 		value
+		updated_at
 	}
 	nos {
 		value
+		updated_at
 	}
 	version {
 		value
+		updated_at
 	}
 	model {
 		value

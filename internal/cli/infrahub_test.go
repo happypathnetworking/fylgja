@@ -104,11 +104,11 @@ type fakeVersion struct {
 }
 
 // fakeDeviceStamps is one device's stamps in place of its branch's: Intent every stamp of
-// its own intent (its attributes, its platform edge, its interfaces), Artifact its
-// artifacts' checksum.updated_at ("" a null one), and Link the stamp of each endpoints edge
-// joining one of its interfaces to a link ("" the branch's): an edit of the device alone
-// leaves its links as they were, and a re-cabling moves the intent of every device on the
-// link (R-07).
+// its own intent (its attributes, its platform edge and its platform's vendor, nos and
+// version, its interfaces), Artifact its artifacts' checksum.updated_at ("" a null one),
+// and Link the stamp of each endpoints edge joining one of its interfaces to a link (""
+// the branch's): an edit of the device alone leaves its links as they were, and a
+// re-cabling moves the intent of every device on the link (R-07).
 type fakeDeviceStamps struct {
 	Intent, Artifact, Link string
 }
@@ -471,9 +471,9 @@ func (f *fakeInfrahub) stampPages(branch, at string, c *ctm.CTM) map[string]any 
 				"site":       written,
 				"platform": map[string]any{"properties": written, "node": map[string]any{
 					"__typename": "NetworkPlatform",
-					"vendor":     fakeValue(d.Platform.Vendor),
-					"nos":        fakeValue(d.Platform.NOS),
-					"version":    fakeValue(d.Platform.Version),
+					"vendor":     map[string]any{"value": d.Platform.Vendor, "updated_at": intentAt},
+					"nos":        map[string]any{"value": d.Platform.NOS, "updated_at": intentAt},
+					"version":    map[string]any{"value": d.Platform.Version, "updated_at": intentAt},
 					"model":      fakeValue(d.Platform.Model),
 				}},
 				"interfaces": map[string]any{"edges": ifaces},

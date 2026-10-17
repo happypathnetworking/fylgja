@@ -77,12 +77,19 @@ func stampEdge(s string) map[string]any {
 	return map[string]any{"properties": map[string]any{"updated_at": stamp(s)}}
 }
 
-// stampedDevice is a device whose name, role, site and platform edge carry one stamp,
-// with the interfaces and artifacts given.
+// platformNode is a platform whose vendor, nos and version carry one stamp, its model
+// none.
+func platformNode(vendor, nos, version, s string) map[string]any {
+	attr := func(v string) map[string]any { return map[string]any{"value": v, "updated_at": stamp(s)} }
+	return map[string]any{"__typename": "NetworkPlatform",
+		"vendor": attr(vendor), "nos": attr(nos), "version": attr(version), "model": valueOf(nil)}
+}
+
+// stampedDevice is a device whose name, role, site and platform edge carry one stamp, on
+// the fixture's platform, with the interfaces and artifacts given.
 func stampedDevice(name, s string, interfaces []map[string]any, artifacts ...map[string]any) map[string]any {
 	platform := stampEdge(s)
-	platform["node"] = map[string]any{"__typename": "NetworkPlatform",
-		"vendor": valueOf("nokia"), "nos": valueOf("srlinux"), "version": valueOf("24.7"), "model": valueOf(nil)}
+	platform["node"] = platformNode("nokia", "srlinux", "24.7", stampPlatform)
 	var artifactEdges []map[string]any
 	for _, a := range artifacts {
 		artifactEdges = append(artifactEdges, map[string]any{"node": a})
@@ -133,9 +140,11 @@ func stampedLink(a, aStamp, b, bStamp string) map[string]any {
 		"endpoints": map[string]any{"edges": []map[string]any{endpoint(a, aStamp), endpoint(b, bStamp)}}}
 }
 
-// The fixture's own stamps (research §6.6): devices written first, interfaces after,
-// the cabling after that, the artifacts' checksums last.
+// The fixture's own stamps (research §6.6, §8.16): its one platform written first, the
+// devices after, interfaces after them, the cabling after that, the artifacts' checksums
+// last.
 const (
+	stampPlatform   = "2026-10-08T05:47:56.812998+00:00"
 	stampDevices    = "2026-10-08T05:47:58.232738+00:00"
 	stampInterfaces = "2026-10-08T05:48:00.978841+00:00"
 	stampCabling    = "2026-10-08T05:48:03.562937+00:00"
@@ -226,6 +235,45 @@ func TestStampsCountEveryEdgeAndSkipANull(t *testing.T) {
 				t.Errorf("intent = %q, want %q", got.Devices["n1"].Intent, tc.want)
 			}
 		})
+	}
+}
+
+// A platform's vendor, nos and version reach every device on it, through its artifact and
+// its package (R-07): a version edited after every other stamp moves the intent of each
+// device on that platform and Latest, and of no device on another platform. model reaches
+// neither and is not stamped, and a null stamp is skipped.
+func TestStampsPlatform(t *testing.T) {
+	const edited = "2026-10-17T08:00:00.000001+00:00"
+	srlinux := platformNode("nokia", "srlinux", "24.7", stampPlatform)
+	srlinux["version"] = map[string]any{"value": "24.10", "updated_at": edited}
+	eos := platformNode("arista", "eos", "4.32", "")
+	eos["model"] = map[string]any{"value": "ceos", "updated_at": "2026-10-17T09:00:00.000000+00:00"}
+	on := func(device, platform map[string]any) map[string]any {
+		device["platform"].(map[string]any)["node"] = platform
+		return device
+	}
+	f := &fakeStamps{branch: "change-1", devices: []map[string]any{
+		on(stampedDevice("n1", stampDevices, nil, stampedArtifact("device-config", stampArtifacts)), srlinux),
+		on(stampedDevice("n2", stampDevices, nil, stampedArtifact("device-config", stampArtifacts)), eos),
+		on(stampedDevice("n3", stampDevices, nil, stampedArtifact("device-config", stampArtifacts)), srlinux),
+	}}
+	got, err := f.read(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{"n1": edited, "n2": stampDevices, "n3": edited} {
+		if got.Devices[name].Intent != want {
+			t.Errorf("%s's intent = %q, want %q", name, got.Devices[name].Intent, want)
+		}
+	}
+	if got.Latest != edited {
+		t.Errorf("Latest = %q, want the platform's version %q", got.Latest, edited)
+	}
+	if p := got.Devices["n1"].Platform; p != (ctm.Platform{Vendor: "nokia", NOS: "srlinux", Version: "24.10"}) {
+		t.Errorf("n1's platform = %+v", p)
+	}
+	if p := got.Devices["n2"].Platform; p != (ctm.Platform{Vendor: "arista", NOS: "eos", Version: "4.32", Model: "ceos"}) {
+		t.Errorf("n2's platform = %+v", p)
 	}
 }
 

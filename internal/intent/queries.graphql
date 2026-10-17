@@ -185,6 +185,18 @@ fragment ArtifactStamps on CoreArtifactTarget {
   } } }
 }
 
+# The platform's values, which pick the device's package, and the stamps of those that reach
+# the artifact or the bundle: the template renders vendor, nos and version into every
+# device's artifact and branches on nos, and nos picks the package (R-07). model reaches
+# neither and is not stamped. A fragment of its own, not PlatformFields beside a second
+# spread: genqlient cannot merge two fragments' selections of one field.
+fragment PlatformStamps on FylgjaPlatform {
+  vendor  { value updated_at }
+  nos     { value updated_at }
+  version { value updated_at }
+  model   { value }
+}
+
 query IntentStamps($limit: Int!, $offset: Int!) {
   FylgjaDevice(limit: $limit, offset: $offset) {
     count
@@ -192,7 +204,7 @@ query IntentStamps($limit: Int!, $offset: Int!) {
       name { value updated_at }
       role { updated_at }
       site { updated_at }
-      platform { properties { updated_at } node { ...PlatformFields } }
+      platform { properties { updated_at } node { ...PlatformStamps } }
       interfaces { edges {
         properties { updated_at }
         node {

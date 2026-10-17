@@ -282,14 +282,19 @@ func TestPlanMainMovedBesideARefusedBranchPoint(t *testing.T) {
 }
 
 // A label two marks share is planned once and refused stage.duplicate; a mark labelled
-// head makes the head refused stage.label.reserved, at the head's place.
+// head makes the head refused stage.label.reserved, at the head's place. Neither refused
+// stage is read.
 func TestPlanDuplicateAndReserved(t *testing.T) {
 	r, s := story(change1(append(change1().Stages,
 		mark("st-cabled-0", "cabled", "2026-10-16T17:26:00.000000+00:00", nil, "second"),
 		mark("st-head", "head", "2026-10-16T17:27:00.000000+00:00", nil, ""))...))
-	res, _ := planned(t, r, s, "change-1", &fakePipeline{t: t})
+	f := &fakePipeline{t: t}
+	res, _ := planned(t, r, s, "change-1", f)
 	if got := labelsOf(res); !reflect.DeepEqual(got, []string{"branch-point compiled", "cabled refused", "live compiled", "head refused"}) {
 		t.Fatalf("stages %v", got)
+	}
+	if want := []string{"main@" + branchedFrom, "change-1@" + liveAt}; !reflect.DeepEqual(f.reads, want) {
+		t.Errorf("reads %v; want %v: a stage refused at resolution is never read", f.reads, want)
 	}
 	if st := res.Stages[1]; st.Rule != findings.RuleStageDuplicate || st.Description != "after the link is cabled" ||
 		!strings.Contains(st.Findings[0].Message, "ids st-cabled, st-cabled-0") {
@@ -297,6 +302,42 @@ func TestPlanDuplicateAndReserved(t *testing.T) {
 	}
 	if st := res.Stages[3]; st.Rule != findings.RuleStageLabelReserved || st.AtSource != AtHead {
 		t.Errorf("head: %+v", st)
+	}
+}
+
+// A mark with no at, no as_of written and no stamp returned for its label, is refused
+// stage.at.unresolved and never read; it goes after the marks that have one, both steps
+// touching it are not computed, and the other stages are planned.
+func TestPlanMarkWithNoAt(t *testing.T) {
+	r, s := story(change1(
+		mark("st-live", "live", "2026-10-16T17:31:00.000000+00:00", str(liveAt), "after its configuration is live"),
+		mark("st-cabled", "cabled", "", nil, "after the link is cabled")))
+	f := &fakePipeline{t: t}
+	res, _ := planned(t, r, s, "change-1", f)
+	if got := labelsOf(res); !reflect.DeepEqual(got, []string{"branch-point compiled", "live compiled", "cabled refused", "head compiled"}) {
+		t.Fatalf("stages %v", got)
+	}
+	if want := []string{"main@" + branchedFrom, "change-1@" + liveAt, "change-1@" + headAt}; !reflect.DeepEqual(f.reads, want) {
+		t.Errorf("reads %v; want %v: a stage with no at is never read", f.reads, want)
+	}
+	cabled := res.Stages[2]
+	if cabled.Rule != findings.RuleStageAtUnresolved || cabled.Resolved != nil || cabled.Bundle != nil || len(cabled.Findings) != 1 ||
+		cabled.Findings[0].Object != "change-1/cabled" || cabled.Findings[0].Step != findings.StepResolve {
+		t.Errorf("cabled: %+v", cabled)
+	}
+	for i, want := range []string{
+		"step change-1/live → change-1/cabled (" + res.Stages[1].BundleID()[:8] + "… → —): not computed (change-1/cabled was refused)",
+		"step change-1/cabled → change-1/head (— → " + res.Stages[3].BundleID()[:8] + "…): not computed (change-1/cabled was refused)",
+	} {
+		if got := res.Steps[i+1].Text(); got != want {
+			t.Errorf("step %d: %s\nwant %s", i+1, got, want)
+		}
+	}
+	if got := res.Steps[0].Text(); strings.Contains(got, "not computed") {
+		t.Errorf("step 0: %s; want the branch point to live computed", got)
+	}
+	if !reflect.DeepEqual(res.Findings, cabled.Findings) {
+		t.Errorf("document findings %v; want cabled's refusal alone", res.Findings)
 	}
 }
 

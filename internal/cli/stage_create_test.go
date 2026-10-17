@@ -717,7 +717,7 @@ func untimed(f findings.Finding) findings.Finding {
 // moved the branch point past and a mark taking the head's label are each refused at step
 // resolve with the finding stage plan gives that stage, word for word, by the create and by
 // its dry run. No run is started: the workflow service is asked nothing, containerlab is
-// asked nothing, no branch's intent is read at the stage's at, and nothing is filed.
+// asked nothing, no branch's intent is read at all, pinned or not, and nothing is filed.
 func TestCreateFromARefusedStageStartsNothing(t *testing.T) {
 	const (
 		editedAt = "2026-10-16T09:30:00.000000+00:00"
@@ -727,12 +727,10 @@ func TestCreateFromARefusedStageStartsNothing(t *testing.T) {
 		rebaseAt = "2026-10-16T08:55:00.000000+00:00"
 	)
 	// refused is one stage a create is refused, with its refusals' rule and object as
-	// rulesOf gives them, and its at, which no read may name ("" for one refused before it
-	// has an at of its own).
+	// rulesOf gives them.
 	type refused struct {
 		label string
 		rules []string
-		at    string
 	}
 	for _, c := range []struct {
 		name  string
@@ -755,15 +753,15 @@ func TestCreateFromARefusedStageStartsNothing(t *testing.T) {
 				}
 			},
 			stages: []refused{
-				{"edited", []string{findings.RuleStageArtifactStale + " n1", findings.RuleStageArtifactStale + " n2"}, markedAt},
-				{"early", []string{findings.RuleStageAtBeforeBranchPoint + " change-1/early"}, earlyAt},
-				{"future", []string{findings.RuleStageAtUnresolved + " change-1/future"}, futureAt},
+				{"edited", []string{findings.RuleStageArtifactStale + " n1", findings.RuleStageArtifactStale + " n2"}},
+				{"early", []string{findings.RuleStageAtBeforeBranchPoint + " change-1/early"}},
+				{"future", []string{findings.RuleStageAtUnresolved + " change-1/future"}},
 			}},
 		{name: "after a rebase", planned: true, marks: []fakeStage{mark("st-cabled", "cabled", cabledAt, "")},
 			setup:  func(f *fakeInfrahub) { f.changes[0].BranchedFrom = rebaseAt },
-			stages: []refused{{"cabled", []string{findings.RuleStageAtBeforeBranchPoint + " change-1/cabled"}, cabledAt}}},
+			stages: []refused{{"cabled", []string{findings.RuleStageAtBeforeBranchPoint + " change-1/cabled"}}}},
 		{name: "a mark labelled head", marks: []fakeStage{mark("st-head", "head", cabledAt, "")},
-			stages: []refused{{"head", []string{findings.RuleStageLabelReserved + " change-1/head"}, ""}}},
+			stages: []refused{{"head", []string{findings.RuleStageLabelReserved + " change-1/head"}}}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			paths := useStateRoot(t)
@@ -804,6 +802,7 @@ func TestCreateFromARefusedStageStartsNothing(t *testing.T) {
 					useService(t, svc)
 					useInterrupts(t)
 					clab.calls = nil
+					before := len(f.requests())
 					code, doc := executeTwin(t, append([]string{"twin", "create"}, args...)...)
 					got, w := doc.Findings, want[st.label]
 					if code != findings.ExitRejected || doc.Status != findings.StatusRejected || len(got) != len(w) {
@@ -821,10 +820,10 @@ func TestCreateFromARefusedStageStartsNothing(t *testing.T) {
 					if len(clab.calls) != 0 {
 						t.Errorf("%v: containerlab was asked %v", args, clab.calls)
 					}
+					if read := intentReadAfter(f, before); len(read) != 0 {
+						t.Errorf("%v: a branch's intent was read for a refused stage: %+v", args, read)
+					}
 					validateM10Document(t, doc)
-				}
-				if st.at != "" && readAt(f, st.at) {
-					t.Errorf("a branch's intent was read at %s, refused %s's at", st.at, ref)
 				}
 			}
 			if got := storedBundles(t, paths.Bundles); !slices.Equal(got, filed) {

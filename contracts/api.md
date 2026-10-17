@@ -1,8 +1,9 @@
-# API contract: M13, version 1
+# API contract: M13, version 1; 014's stage surface
 
 What crosses between a client and `fylgja serve`. The shapes are
-[api.schema.json](api.schema.json); the documents are M12's, unchanged
-([findings.schema.json](findings.schema.json) and the blocks beside it). The addresses,
+[api.schema.json](api.schema.json); the documents are M12's
+([findings.schema.json](findings.schema.json) and the blocks beside it), as 014 moved them
+("014: the stage surface", at the end). The addresses,
 the statuses, the frame kinds and the document are the contract; a sentence is contract
 only where it is quoted.
 
@@ -45,21 +46,24 @@ frames. A dry run is its operation with `dry_run` set.
 
 | Operation | Path | `args` | Files in | Files out | Takes an interrupt |
 |---|---|---|---|---|---|
-| `twin.create` | `/v1/twin/create` | `branch`, `at`, `waypoint`, `interval`, `no_follow`, `dry_run` | | | from `start` |
+| `twin.create` | `/v1/twin/create` | `branch`, `at`, `stage`, `interval`, `no_follow`, `dry_run` | | | from `start` |
 | `twin.provision` | `/v1/twin/provision` | `bundle`, `dry_run` | the bundle's regular files | | from `start` |
-| `twin.step` | `/v1/twin/step` | `waypoint`, `allow_restart`, `dry_run`, `wait` | | | from `start` |
+| `twin.step` | `/v1/twin/step` | `stage`, `allow_restart`, `dry_run`, `wait` | | | from `start` |
 | `twin.destroy` | `/v1/twin/destroy` | | | | no |
 | `twin.show` | `/v1/twin/show` | | | | no |
 | `twin.verify` | `/v1/twin/verify` | `wait`, `args` | | | no |
 | `twin.compile` | `/v1/twin/compile` | `ctm`, `out` | the CTM | the bundle | no |
-| `waypoint.list` | `/v1/waypoint/list` | `series` | | | no |
-| `waypoint.plan` | `/v1/waypoint/plan` | `series` | | | no |
-| `intent.read` | `/v1/intent/read` | `branch`, `at`, `waypoint`, `out` | | the CTM | no |
+| `stage.list` | `/v1/stage/list` | `branch` | | | no |
+| `stage.plan` | `/v1/stage/plan` | `branch` | | | no |
+| `intent.read` | `/v1/intent/read` | `branch`, `at`, `stage`, `out` | | the CTM | no |
 | `schema.check` | `/v1/schema/check` | `branch` | | | no |
 | `psp.validate` | `/v1/psp/validate` | `files` | each package | | no |
 
 There is no other operation. In particular there is none to re-attach to a run, to list
-runs or to fetch a filed bundle.
+runs or to fetch a filed bundle. Moved at 014: `waypoint.list` and `waypoint.plan`
+(`/v1/waypoint/list`, `/v1/waypoint/plan`, argument `series`) became `stage.list` and
+`stage.plan`, and `twin.create`, `twin.step` and `intent.read` take `stage` where they took
+`waypoint`.
 
 **Arguments are as given.** An absent key is a flag that was not given; a present key is
 one that was, whatever its value (`"interval": ""` is `--interval=`). Every guard is the
@@ -243,3 +247,35 @@ curl -sS -X POST -H "Authorization: Bearer $FYLGJA_API_TOKEN" \
 
 One line comes back: the `document` frame, which is `fylgja twin show --json`'s
 document.
+
+## 014: the stage surface
+
+A proposed change's stages replace the waypoint ([D-045](../docs/decisions.md#d-045);
+[cli.md](cli.md), "014: the stage surface", says what each command does). The API's
+version stays `1`: it is pre-1.0, and every other operation, the transport, the token, the
+frames, the statuses and the files are as M13 left them.
+
+| | Operation | Path | `args` |
+|---|---|---|---|
+| removed | `waypoint.list` | `/v1/waypoint/list` | `series` |
+| removed | `waypoint.plan` | `/v1/waypoint/plan` | `series` |
+| added | `stage.list` | `/v1/stage/list` | `branch` |
+| added | `stage.plan` | `/v1/stage/plan` | `branch` |
+| renamed argument | `twin.create`, `twin.step`, `intent.read` | | `stage` for `waypoint` |
+
+- `/v1/waypoint/list` and `/v1/waypoint/plan` are `404`, as any path under `/v1/` that names
+  no operation. A request carrying `waypoint` is `400`: `the request is not one: twin.create
+  takes no argument "waypoint"`.
+- `stage` is the reference as given, `<branch>/<label>`. Present and empty is `--stage=`,
+  and `branch` present and empty on `stage.list` or `stage.plan` is `--branch=`: each is
+  refused `stage.ref.invalid` at `start`, exit 2, before the server connects to Infrahub.
+  `stage.list` without `branch` lists every open proposed change's stages; `stage.plan`
+  without it is `operation.failed`, `--branch is required`, exit 2.
+- `stage.list` and `stage.plan` are one answer each, their `document` frame alone when no
+  rendering is asked for, and take no interrupt. The plan files each bundle and its CTM in
+  the store on the lab host; there is still no fetch by identifier.
+- [api.schema.json](api.schema.json)'s `args` definitions move with the table. The
+  documents' blocks are [findings.schema.json](findings.schema.json)'s at version `1`: the
+  `stage`, `stages` and `plan` blocks of [stages.schema.json](stages.schema.json), which
+  replaces `waypoints.schema.json`, and `twin.json` `6`'s stage in `show`, `step` and
+  `verify`.

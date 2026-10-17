@@ -1,11 +1,13 @@
-# CLI contract: M13 — API
+# CLI contract: M13 — API; 014 — the stage surface
 
-Extends the CLI as M2–M12 built it. **Everything not named here is as M12 left it**:
+Extends the CLI as M2–M12 built it, and 014 moves it once more: the section "014: the
+stage surface" at the end says what moved. **Everything not named here is as M12 left it**:
 every command's text on stdout and stderr, its `--json` document, each identifier, step,
 object and message, and each exit status. Identifiers, exit statuses and the JSON
 documents are the contract; text is illustrative except where a sentence is quoted. The
-wire is [api.md](api.md). In this directory the nine schemas beside `api.schema.json` are
-M12's byte for byte: bundle `4`, CTM `1`, PSP `0.6`, `twin.json` `5`, findings `1`.
+wire is [api.md](api.md). At M13 the nine schemas beside `api.schema.json` were M12's byte
+for byte: bundle `4`, CTM `1`, PSP `0.6`, `twin.json` `5`, findings `1`; 014 moved the
+findings blocks, `twin.json` to `6` and the schemas that carry the record's stage.
 
 ## `fylgja serve [--listen <host:port>] [--psp-dir <dir>]`
 
@@ -74,15 +76,16 @@ The listen line names the address as `--listen` gave it, with the port it got: `
 ## Every other command is a client's command
 
 `twin create`, `twin show`, `twin destroy`, `twin provision`, `twin step`, `twin verify`,
-`twin compile`, `waypoint list`, `waypoint plan`, `intent read`, `schema check` and
-`psp validate`, each with its dry run where it has one. Each does its work by one
+`twin compile`, `waypoint list` and `waypoint plan` (moved at 014: `stage list` and `stage
+plan`), `intent read`, `schema check` and `psp validate`, each with its dry run where it
+has one. Each does its work by one
 request to the API and prints what comes back.
 
 - **What it prints and how it exits are M12's**, for the same arguments and the same
   state of the host, Infrahub and the workflow service.
 - **Every refusal with a rule identifier is the server's**, those M2–M12 made "before
   any connection" included: a missing `--branch`, a flag conflict, an empty
-  `--interval=`, `--wait=` or `--waypoint=`. "Before any connection" now means before the
+  `--interval=`, `--wait=` or `--waypoint=` (moved at 014: `--stage=`). "Before any connection" now means before the
   server connects to Infrahub or the workflow service.
 - **The client's own errors are its argument parser's**: an unknown flag, a wrong
   argument count. Exit 2, as cobra words them at M12, with no request sent.
@@ -98,7 +101,8 @@ request to the API and prints what comes back.
 What each command needed at M12 it still needs, with the server in the CLI's place: `twin
 show` answers for the host and the record with the workflow service unreachable, inside
 five seconds; `twin verify` needs no run and no worker; `waypoint list` and `waypoint
-plan` need no lab, worker or workflow service; `psp validate` and `twin compile` need
+plan` (moved at 014: `stage list` and `stage plan`, which need the same) need no lab,
+worker or workflow service; `psp validate` and `twin compile` need
 neither Infrahub nor the workflow service. **Each needs a server.**
 
 ## The client's environment
@@ -214,8 +218,9 @@ the move of the commands' work into the server made false:
   when the link's name was an id.
 - (e) The help texts of `psp validate` and `twin compile` say the API's server checks or
   compiles what it is sent and that neither needs Infrahub nor the workflow service, where
-  M12's said "no network" and "entirely local". Those of `waypoint list`, `waypoint plan`,
-  `twin step` and `twin show` say the API's server does the command's work, where M12's
+  M12's said "no network" and "entirely local". Those of `waypoint list` and `waypoint
+  plan` (moved at 014: `stage list` and `stage plan`, whose help says the same), `twin
+  step` and `twin show` say the API's server does the command's work, where M12's
   said the command needs Infrahub and nothing else, needs Infrahub and the bundle store,
   resolves, reads, compiles and files its target "here", or "Runs on the lab host".
 - (f) A dependency's warning that M12 wrote to stderr is an `err` frame when a rendering
@@ -234,7 +239,7 @@ exit status changes. `serve`'s refusals to start and the build line have no iden
 |---|---|---|
 | the API | `1` | new: [api.md](api.md), [api.schema.json](api.schema.json) |
 | findings | `1` | none; the four identifiers match its `rule` pattern |
-| bundle manifest, `twin.json`, PSP, CTM, contract | `4`, `5`, `0.6`, `1`, `0.2` | none |
+| bundle manifest, `twin.json`, PSP, CTM, contract | `4`, `5`, `0.6`, `1`, `0.2` | none (`twin.json` `6` since 014) |
 
 ## Workflows and activities
 
@@ -263,10 +268,221 @@ The server needs `containerlab` and `docker` on its `PATH`. A client needs neith
 
 ## Tier 3 (`scripts/e2e.sh`)
 
-Eight cases, M12's, unchanged in what they assert. The script starts a server of its own
+Eight cases, M12's, unchanged in what they assert (cases 7 and 8 moved to stages at 014,
+below). The script starts a server of its own
 from the tree, with a token it makes for the run, and stops it in its trap. Every
 `fylgja` command runs with `PATH`, `HOME`, `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN`
 and nothing else. The script's own reads (`gnmic`, Docker, containerlab, `twin.json`,
 the store), the boot half and the fixture tool stay direct, with the full environment.
 The credential and marker greps gain the API's token and `$OUT/server.log`. The closing
 lines are M12's.
+
+## 014: the stage surface
+
+A proposed change's stages replace the waypoint ([D-045](../docs/decisions.md#d-045)). A
+stage is a moment of an open proposed change, named `<branch>/<label>` by the proposed
+change's source branch: its two derived stages, `branch-point` and `head`, and the marks the
+operator writes between them as `FylgjaStage` objects ([schema/README.md](../schema/README.md)).
+**Everything not named here is as M13 left it.** Identifiers, exit statuses and the JSON
+documents are the contract; text is illustrative except where a sentence is quoted.
+
+### The commands
+
+```
+fylgja stage list  [--branch <b>]             # every open proposed change's stages, or one's; marks the twin's
+fylgja stage plan  --branch <b>               # reads and compiles each stage; the step between each pair
+fylgja twin create --stage <branch>/<label>   # the pinned run of the reference the stage resolves to; never follows
+fylgja twin step   [--stage <branch>/<label>] [--allow-restart] [--wait <duration>] [--dry-run]
+fylgja intent read --stage <branch>/<label> --out ctm.json
+fylgja schema check --branch <b>              # also says whether the default branch has the stage kind and its extension
+```
+
+Moved at 014: `waypoint list`, `waypoint plan` and `--waypoint` are gone. `fylgja --help`
+names none, and `fylgja waypoint list` is cobra's `unknown command`, exit 2, with no
+request.
+
+Each is a client's command, as above: one request, the frames printed, the exit by the
+document, and every refusal with an identifier the server's. `stage list` and `stage plan`
+need Infrahub and (the plan) the bundle store, and no lab, worker or workflow service.
+**Each needs a server.**
+
+**The reference.** `<branch>/<label>`, split at the first `/`; the branch and the label are
+each `^[^/\s]+$`, so a reference is one shell word. The server finds the one open proposed
+change whose source branch is the branch, then the stage by its label: the branch point is
+`main` at the branch's `branched_from`; a mark is its source branch at its `as_of`,
+verbatim, or at its own write stamp when it has none; the head is the source branch at the
+latest stamp of its intent and artifact checksums, plus one microsecond. The stages are
+ordered branch point, marks by `at`, head. A reference resolves before anything of intent
+is read, and its label and description enter neither the CTM nor the bundle.
+
+### `stage list [--branch <b>]`
+
+A heading per proposed change, then one line per stage, the reference and the branch padded
+so the `at`s line up, the source in parentheses, the description quoted and the twin's row
+marked:
+
+```
+proposed change "third link" (18df…) on branch change-1, draft (4 stages)
+  change-1/branch-point  main      at 2026-10-16T17:20:19.944651+00:00 (branch point)  ""
+  change-1/cabled        change-1  at 2026-10-16T17:25:30.118244+00:00 (written)       "after the link is cabled"  ← twin
+  change-1/live          change-1  at 2026-10-16T17:30:00.000000+00:00 (given)         "after its configuration is live"
+  change-1/head          change-1  at 2026-10-16T17:30:11.884302+00:00 (head)          ""
+```
+
+With no open proposed change: `no open proposed change`, or `branch b: no open proposed
+change` with `--branch`, exit 0, `stages.rows` empty. Beside a diverged record the mark
+reads `← twin (diverged towards change-1/live)`. Orphans print after the proposed changes:
+`orphaned: stage "cabled" (18df…) names no proposed change`. Exit 0, warnings included; 1
+when a mark labelled `head` or `branch-point` is among the rows, which are all still listed,
+or the kind is absent; 2 when Infrahub cannot be read (`operation.failed` at `resolve`).
+`--json`: the `stages` block and the findings.
+
+### `stage plan --branch <b>`
+
+The heading, then each stage as it finishes and each step as it is known:
+
+```
+proposed change "third link" (18df…) on branch change-1 → main, draft (4 stages)
+change-1/branch-point: refused (contract.node.missing)
+  rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
+step change-1/branch-point → change-1/cabled (— → 5c6c1d96…): not computed (change-1/branch-point was refused)
+change-1/cabled: branch change-1 at 2026-10-16T17:25:30.118244+00:00 (written), "after the link is cabled"
+  bundle_id 5c6c1d96…
+  read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
+step change-1/cabled → change-1/head (5c6c1d96… → cc1ca493…): unchanged; the ids differ by provenance alone
+…
+```
+
+Each step is the pure step between the two bundles, as M10's plan printed it, and is
+`unchanged` when they differ in provenance alone, as the step from a mark written after the
+last regenerate to the head always does. A refused stage prints its findings beneath it,
+and a step touching it is not computed; the branch point of a `main` that holds no contract
+is refused `contract.node.missing` at its read. Exit 0 when every stage compiled, whatever
+the warnings; 1 when any was refused; 2 when the listing failed. `--branch` is required:
+`--branch is required`, exit 2, with no request. `--json`: the `plan` block and the
+findings, every stage's, in order. Each bundle and its CTM are filed in the store, as a dry
+run files them.
+
+### `--stage` on `twin create` and `intent read`
+
+The resolved line first, before the run or the read:
+
+```
+stage change-1/cabled: branch change-1 at 2026-10-16T17:25:30.118244+00:00 (written), "after the link is cabled"
+stage change-1/branch-point: main at 2026-10-16T17:20:19.944651+00:00 (branch point)
+stage change-1/head: branch change-1 at 2026-10-16T17:30:11.884302+00:00 (head)
+```
+
+Then the pinned run (create) or the read, as M13 has them, with the `at` verbatim on every
+query. `twin create --stage` never follows (`dry_run.follow.reason: stage`). `--branch`,
+`--at` or `--interval` beside `--stage` is `stage.flags.conflict` at `start`, naming the
+first in that order. The document carries `subject.stage`, as given, and the `stage` block
+once resolved; `intent read`'s summary line begins `stage change-1/cabled: …`. The twin's
+closing line is a pinned twin's, `pinned at …, not following`; `twin show`'s kind line
+names the stage (below).
+
+### `twin step [--stage <branch>/<label>]`
+
+The first lines:
+
+```
+twin: stage change-1/cabled (bundle f857d513…), pinned at …; 3 nodes
+stage change-1/live: branch change-1 at … (given), "after its configuration is live"
+step change-1/cabled → change-1/live (f857d513… → 7eafd93c…):
+  …
+```
+
+The target is the next stage of the twin's own proposed change when none is given, the head
+when no mark follows; the one given otherwise, forward or back, the head included when it
+has moved since the record. Each refusal below is made at `resolve`, before the from bundle,
+the host check and containerlab's plan, exit 1:
+
+| Rule | When | Wording (shape) |
+|---|---|---|
+| `step.twin.unsteppable` | no twin; an orphan; an unreadable record; a record of `5` or earlier, or one naming no stage | `…; only a twin built from a stage steps (fylgja twin create --stage)`; for a `5` record, `the twin was created from a waypoint of a record version this build no longer reads (twin.json 5); only a twin built from a stage steps; fylgja twin destroy clears it` |
+| `step.target.foreign` | `--stage` names another branch, or another proposed change on the same branch | `stage other/x is not of proposed change <id> on branch change-1, the twin's; a step stays inside the proposed change the twin was built from, whose stages are: …` |
+| `step.target.unknown` | no stage after the record's; the record's label gone; `--stage` names no stage of the proposed change | `proposed change <id> on change-1 has no stage after change-1/head; its stages are: …`, or `…; the head has moved since the twin was built (now at …): --stage change-1/head steps to it` |
+| `step.target.current` | the target resolves to the record's own `(branch, at)` | `the twin is already at stage change-1/live (branch change-1, at …); the proposed change's stages are: …` |
+| `step.stage.skipped` (warning, exit 0) | marks strictly between the record's stage and the target's, either direction | `the step from change-1/branch-point to change-1/head skips stages cabled, live; the step is between the two bundles either way` |
+
+The target's own resolution refusals follow, as `twin create --stage` makes them.
+Everything after the target is M11's and M12's with "stage" for "waypoint": `stepped to
+stage change-1/live (bundle …) in 4.1s: …`; `unchanged; the record moves to stage
+change-1/head (bundle …) in 0.9s`; `diverged towards stage change-1/live (bundle …) at
+phase push: …; the twin is up at stage change-1/cabled (bundle …); fylgja twin destroy
+clears it`.
+
+### `twin show`, `twin verify`, `schema check`
+
+`twin show`'s kind line is `pinned at …, stage change-1/cabled; not following`, and after a
+step `pinned at …, stage change-1/live (stepped from change-1/cabled by run fylgja-step …,
+ended …); not following`; `in_flight` names `stepping towards stage change-1/live`. `twin
+verify`'s first line is `twin: stage change-1/live (bundle …), ready, pinned at …; 3
+nodes`. `schema check`'s last line is one of:
+
+```
+stages: FylgjaStage present on the default branch, with its extension
+stages: FylgjaStage absent from the default branch (load schema/fylgja-stage.yaml; needed only by the stage commands)
+stages: FylgjaStage on the default branch lacks description (load schema/fylgja-stage.yaml; needed only by the stage commands)
+stages: FylgjaStage present on the default branch, but CoreProposedChange lacks fylgja_stages (load schema/fylgja-stage.yaml; needed only by the stage commands)
+```
+
+and the document's `verified.stages` carries `kind`, `present`, `missing`, `extension` and
+`file`.
+
+### Identifiers
+
+Twelve `stage.*` rules, seven of them moved at 014 from the waypoint's and five new; one M11
+rule renamed; `waypoint.time.reversed` dropped, since marks are ordered by their `at`. The
+step `stage` and the rule `stage.failed` are the staging step's, as before. A rejection at
+`resolve` is made before any run starts and before any branch's intent is read.
+
+| Rule | Severity, exit, step | When | Moved at 014 from |
+|---|---|---|---|
+| `stage.ref.invalid` | rejection, 2, `start` | `--stage` is not `<branch>/<label>`, or `--branch` on `stage list` or `stage plan` is not a branch | `waypoint.ref.invalid` |
+| `stage.flags.conflict` | rejection, 2, `start` | `--stage` beside `--branch`, `--at` or `--interval` | `waypoint.flags.conflict` |
+| `stage.kind.absent` | rejection, 1, `resolve` | the default branch lacks `FylgjaStage`, an attribute of it, or `CoreProposedChange`'s `fylgja_stages`, naming `schema/fylgja-stage.yaml` | `waypoint.kind.absent` |
+| `stage.unknown` | rejection, 1, `resolve` | no open proposed change has the branch as its source; the branch is gone; or the proposed change has no stage of the label | `waypoint.unknown` |
+| `stage.duplicate` | rejection, 1, `resolve` | two marks of one proposed change share a label | `waypoint.duplicate` |
+| `stage.at.unresolved` | rejection, 1, `resolve` | a given `as_of` later than the server's clock, or a mark with no stamp at all | `waypoint.at.unresolved` |
+| `stage.at.before_branch_point` | rejection, 1, `resolve` | the stage's `at` is before the branch's `branched_from`, naming a rebase when the branch was created before the `at` | new |
+| `stage.label.reserved` | rejection, 1, `resolve` | a mark labelled `head` or `branch-point` | new |
+| `stage.artifact.stale` | rejection, 1, `resolve`, one per device | at the stage's `at`, the device's intent is later than its generation stamp, the later of its artifact's checksum stamp and the proposed change's artifact validator's completion ([D-046](../docs/decisions.md#d-046)); names both remedies | new |
+| `stage.orphaned` | warning, 0, none | a stage that names no proposed change | new |
+| `stage.main.moved` | warning, 0, `resolve` | `main` was written after the branch's `branched_from`; nothing is refused | new |
+| `stage.twin.moved` | warning, 0, none | the record's stage no longer resolves to the record's `(branch, at)`, or is gone | `waypoint.twin.moved` |
+| `step.stage.skipped` | warning, 0, `resolve` | marks between the record's stage and the target | `step.sequence.skipped` (M11) |
+
+`step.target.foreign`, `step.target.unknown`, `step.target.current` and
+`step.twin.unsteppable` keep their identifiers, exits and step, reworded for stages. No
+status, step or operation is new beyond `stage.list` and `stage.plan`.
+
+### Formats and versions
+
+| Format | Version | Change |
+|---|---|---|
+| the API | `1` | `stage.list` and `stage.plan` for `waypoint.list` and `waypoint.plan`; `stage` for `waypoint` in three operations' arguments ([api.md](api.md)) |
+| findings | `1` | operations `stage.list` and `stage.plan` for the waypoint's; `subject.stage` for `subject.waypoint`; the blocks `stage`, `stages` and `plan` in [stages.schema.json](stages.schema.json), which replaces `waypoints.schema.json`; `verified.stages`; `dry_run.follow.reason` `stage`; `show`, `step` and `verify` carry `stage` where they carried `waypoint` |
+| `twin.json` | `6` | `stage` (`proposed_change {id, branch}`, `label`, `description`, `at_source`) for `waypoint`, and in the step's two sides; `provenance.branch` is `main` for a twin from a branch point. A `5` record reads with no stage, and does not step |
+| bundle manifest, PSP, CTM, contract | `4`, `0.6`, `1`, `0.2` | none |
+
+The version of the findings document and of the API did not move: both are pre-1.0, and
+every other operation and block is unchanged.
+
+### Workflows and activities
+
+None is added, removed or changed: no workflow decision, activity, timeout or version
+marker. The wire types carry `stage` where they carried `waypoint`, and the three recorded
+step histories carry the stage block in their payloads; every recorded history replays.
+
+### Tier 3 (`scripts/e2e.sh`)
+
+Cases 7 and 8 move to stages; the other six are unchanged, and the run makes seven twins.
+Case 7 seeds a throwaway branch, opens a draft proposed change on it, marks `seeded`, adds
+the third link and marks `third-link` once the checksums move; `stage plan` gives four
+stages, the branch point refused, three ids and three steps, the last unchanged; a twin
+from `seeded` carries the plan's id and a `6` record; a step with no target goes to
+`third-link` and a second to the head, unchanged, the record moving; after its `-delete`,
+`stage list --branch` lists nothing and `stage plan --branch` is `stage.unknown`. Case 8
+does the same on the mixed fixture with `seeded` and `mixed-link`, stepping forward with
+`--allow-restart` and back with `--stage <branch>/seeded`.

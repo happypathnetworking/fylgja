@@ -62,7 +62,7 @@ func AddCommands(root *cobra.Command, b string) {
 		"emit one findings document on stdout and nothing else there")
 	root.AddCommand(newIntentCmd(rootOptions))
 	root.AddCommand(newTwinCmd(rootOptions))
-	root.AddCommand(newWaypointCmd(rootOptions))
+	root.AddCommand(newStageCmd(rootOptions))
 	root.AddCommand(newSchemaCmd(rootOptions))
 	root.AddCommand(newPSPCmd(rootOptions))
 }

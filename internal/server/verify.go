@@ -314,17 +314,17 @@ func verifyStatus(r verify.Report) findings.Status {
 // and the node count.
 func verifyTwinLine(rec *wire.TwinRecord) string {
 	ref := "branch " + rec.Provenance.Branch
-	if rec.Waypoint != nil {
-		ref = "waypoint " + waypointOf(rec.Waypoint)
+	if rec.Stage != nil {
+		ref = "stage " + rec.Stage.Name()
 	} else if rec.Provenance.At != "" {
 		ref += " at " + rec.Provenance.At
 	}
 	state := "ready"
 	switch st := rec.Step; {
 	case rec.State == wire.StateDiverged && st != nil:
-		state = fmt.Sprintf("diverged towards %s (bundle %s) at phase %s by run %s %s", waypointOf(st.To.Waypoint),
+		state = fmt.Sprintf("diverged towards %s (bundle %s) at phase %s by run %s %s", st.To.Stage.Name(),
 			shortID(st.To.BundleID), phaseOf(st), st.Run.WorkflowID, st.Run.RunID)
-	case rec.Waypoint != nil && rec.Provenance.At != "":
+	case rec.Stage != nil && rec.Provenance.At != "":
 		state += ", pinned at " + rec.Provenance.At
 	}
 	return fmt.Sprintf("twin: %s (bundle %s), %s; %s", ref, shortID(rec.BundleID), state, plural(len(rec.Nodes), "node"))

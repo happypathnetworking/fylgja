@@ -187,7 +187,7 @@ func followLine(branch string, follow findings.DryRunFollow) string {
 		findings.FollowReasonPinned:   "--at given",
 		findings.FollowReasonNoFollow: "--no-follow given",
 		findings.FollowReasonBundle:   "a bundle never follows",
-		findings.FollowReasonWaypoint: "--waypoint given: a waypoint is pinned",
+		findings.FollowReasonStage:    "--stage given: a stage is pinned",
 	}[follow.Reason]
 	return "would not follow (" + why + ")"
 }

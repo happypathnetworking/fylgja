@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/contracts/findings/v1",
   "title": "Fylgja findings document v1 (--json) — M12 extension",
-  "description": "Additive to M1's findings format: every M1 document still validates. Added: operations twin.create, twin.provision, twin.destroy; statuses failed (exit 3) and unclean (exit 4); subject.bundle and subject.run_id; blocks twin (success of create/provision), cleanup (failure of create/provision, and destroy), dry_run. findings_version stays \"1\". M4: operation twin.show; the `show` block (show.schema.json); the `following` block on twin.create and twin.destroy; `dry_run.follow`. findings_version stays \"1\": every M1–M3 document still validates. M5: the step enum gains push; dry_run.nodes[] gains artifact (what would be pushed, by name, content type, checksum and size); twin.nodes[] may carry artifact {name, checksum} and pushed_in_s. findings_version stays 1: additive. No artifact content anywhere. M6: dry_run gains lossy_mappings and shared_ports; nothing else changes. M7: the step enum and every block are unchanged; twin show’s host.nodes[] gains psp (show.schema.json); the summary counts and the dry run’s read line are text. New warning artifact.interface.unrepresented and rejection host.image.absent are ordinary findings. M10: operations waypoint.list and waypoint.plan; subject.waypoint (the reference as supplied on --waypoint); the step enum gains resolve, the CLI-side step between the flag guards and the run, as verify is twin.provision's; dry_run.follow.reason gains waypoint; the `waypoint` block (the resolved reference, on twin.create, twin.create --dry-run and intent.read with --waypoint), the `waypoints` block (waypoint.list) and the `plan` block (waypoint.plan), each defined in waypoints.schema.json under its $id; verified.waypoints on schema.check. findings_version stays 1: additive. No artifact or bootstrap content anywhere. M11: operation twin.step; status diverged (exit 4: a step that failed or was cancelled after the host was touched; the twin is up and twin destroy clears it); the step enum gains reconcile; the `step` block (step.schema.json under its $id) on twin.step and its dry run: the two sides, M10's step, containerlab's plan with the packages' declarations, the push plan, and once a run closed its outcome, phase, pushes and timings; dry_run on twin.step --dry-run carries no follow. findings_version stays 1: additive. No device diff, artifact or bootstrap content anywhere. M12: operation twin.verify; status nonconforming (exit 5: every node was read and an assertion or a record claim failed; nothing acts on it); the step enum gains observe, the step at which verify reads the twin and at which the step run's wait reports; the `verify` block (verify.schema.json under its $id) on twin.verify; the `step` block gains wait on twin.step. findings_version stays 1: additive. No configuration line, device diff, artifact or bootstrap content, token or login anywhere.",
+  "description": "Additive to M1's findings format: every M1 document still validates. Added: operations twin.create, twin.provision, twin.destroy; statuses failed (exit 3) and unclean (exit 4); subject.bundle and subject.run_id; blocks twin (success of create/provision), cleanup (failure of create/provision, and destroy), dry_run. findings_version stays \"1\". M4: operation twin.show; the `show` block (show.schema.json); the `following` block on twin.create and twin.destroy; `dry_run.follow`. findings_version stays \"1\": every M1–M3 document still validates. M5: the step enum gains push; dry_run.nodes[] gains artifact (what would be pushed, by name, content type, checksum and size); twin.nodes[] may carry artifact {name, checksum} and pushed_in_s. findings_version stays 1: additive. No artifact content anywhere. M6: dry_run gains lossy_mappings and shared_ports; nothing else changes. M7: the step enum and every block are unchanged; twin show’s host.nodes[] gains psp (show.schema.json); the summary counts and the dry run’s read line are text. New warning artifact.interface.unrepresented and rejection host.image.absent are ordinary findings. M10: operations waypoint.list and waypoint.plan; subject.waypoint (the reference as supplied on --waypoint); the step enum gains resolve, the CLI-side step between the flag guards and the run, as verify is twin.provision's; dry_run.follow.reason gains waypoint; the `waypoint` block (the resolved reference, on twin.create, twin.create --dry-run and intent.read with --waypoint), the `waypoints` block (waypoint.list) and the `plan` block (waypoint.plan), each defined in waypoints.schema.json under its $id; verified.waypoints on schema.check. findings_version stays 1: additive. No artifact or bootstrap content anywhere. M11: operation twin.step; status diverged (exit 4: a step that failed or was cancelled after the host was touched; the twin is up and twin destroy clears it); the step enum gains reconcile; the `step` block (step.schema.json under its $id) on twin.step and its dry run: the two sides, M10's step, containerlab's plan with the packages' declarations, the push plan, and once a run closed its outcome, phase, pushes and timings; dry_run on twin.step --dry-run carries no follow. findings_version stays 1: additive. No device diff, artifact or bootstrap content anywhere. M12: operation twin.verify; status nonconforming (exit 5: every node was read and an assertion or a record claim failed; nothing acts on it); the step enum gains observe, the step at which verify reads the twin and at which the step run's wait reports; the `verify` block (verify.schema.json under its $id) on twin.verify; the `step` block gains wait on twin.step. findings_version stays 1: additive. No configuration line, device diff, artifact or bootstrap content, token or login anywhere. 014: operations stage.list and stage.plan replace waypoint.list and waypoint.plan; subject.stage (the reference as supplied on --stage, <branch>/<label>) replaces subject.waypoint; the `stage` block (the resolved stage, on twin.create, its dry run, intent.read with --stage and twin.step once its target resolved), the `stages` block (stage.list) and the `plan` block (stage.plan), each defined in stages.schema.json under its $id, replace the waypoint blocks; verified.stages replaces verified.waypoints; dry_run.follow.reason has stage for waypoint. findings_version stays 1 (FR-022): the shape of every other operation's document is unchanged.",
   "type": "object",
   "required": [
     "findings_version",
@@ -25,8 +25,8 @@
         "twin.provision",
         "twin.destroy",
         "twin.show",
-        "waypoint.list",
-        "waypoint.plan",
+        "stage.list",
+        "stage.plan",
         "twin.step",
         "twin.verify"
       ]
@@ -75,10 +75,10 @@
           "type": "string",
           "description": "The Temporal run id of the provisioning, destroy or (M11) step run this document reports on, once one was started (or attached to)"
         },
-        "waypoint": {
+        "stage": {
           "type": "string",
-          "pattern": "^[^/\\s]+/[1-9][0-9]*$",
-          "description": "M10: as supplied on --waypoint (twin.create, intent.read), <series>/<sequence>; branch and at then carry the resolved reference. M11: on twin.step, the target, given or chosen, once known. Absent otherwise"
+          "pattern": "^[^/\\s]+/[^/\\s]+$",
+          "description": "014: as supplied on --stage (twin.create, intent.read), <branch>/<label>; branch and at then carry the resolved reference. On twin.step, the target, given or chosen, once known. Absent otherwise"
         }
       }
     },
@@ -116,19 +116,20 @@
             }
           }
         },
-        "waypoints": {
+        "stages": {
           "type": "object",
-          "description": "M10: whether the default branch's schema carries the waypoint kind with every attribute this build reads. Information beside the conformance answer; never a finding",
+          "description": "014: whether the default branch's schema carries the stage kind with every attribute this build reads, and CoreProposedChange the extension fylgja_stages. Information beside the conformance answer; never a finding",
           "required": [
             "kind",
             "present",
             "missing",
+            "extension",
             "file"
           ],
           "additionalProperties": false,
           "properties": {
             "kind": {
-              "const": "FylgjaWaypoint"
+              "const": "FylgjaStage"
             },
             "present": {
               "type": "boolean"
@@ -138,10 +139,14 @@
               "items": {
                 "type": "string"
               },
-              "description": "the attributes the kind lacks; empty when present, or when the kind itself is absent"
+              "description": "the attributes and the relationship the kind lacks; empty when present, or when the kind itself is absent"
+            },
+            "extension": {
+              "type": "boolean",
+              "description": "whether CoreProposedChange carries fylgja_stages, the extension the file adds"
             },
             "file": {
-              "const": "schema/fylgja-waypoint.yaml"
+              "const": "schema/fylgja-stage.yaml"
             }
           }
         }
@@ -390,7 +395,7 @@
                 "pinned",
                 "no_follow",
                 "bundle",
-                "waypoint"
+                "stage"
               ]
             }
           }
@@ -459,7 +464,7 @@
               "reconcile",
               "observe"
             ],
-            "description": "New at M2: the step the finding belongs to. Absent on M1 operations; resolve (M10): the CLI's waypoint resolution before a run; reconcile (M11): the step's stage and reconcile phase"
+            "description": "New at M2: the step the finding belongs to. Absent on M1 operations; resolve (M10): the server's resolution of a reference before a run, a stage's since 014; reconcile (M11): the step's stage and reconcile phase"
           },
           "location": {
             "type": "object",
@@ -514,17 +519,17 @@
       "description": "twin.show: see show.schema.json. Referenced by its $id: a relative reference would resolve against this schema's $id to https://fylgja.dev/contracts/findings/show.schema.json, which nothing defines",
       "$ref": "https://fylgja.dev/schemas/show.schema.json"
     },
-    "waypoint": {
-      "description": "M10: the resolved waypoint reference, present on twin.create (with or without --dry-run) and intent.read when --waypoint was given and the resolution succeeded; M11: on twin.step (with or without --dry-run), the target, once resolved. Defined in waypoints.schema.json by its $id",
-      "$ref": "https://fylgja.dev/schemas/waypoints.schema.json#/$defs/resolved"
+    "stage": {
+      "description": "014: the resolved stage, present on twin.create (with or without --dry-run) and intent.read when --stage was given and the resolution succeeded, and on twin.step (with or without --dry-run) once its target resolved. Defined in stages.schema.json by its $id",
+      "$ref": "https://fylgja.dev/schemas/stages.schema.json#/$defs/resolved"
     },
-    "waypoints": {
-      "description": "M10: waypoint.list's block",
-      "$ref": "https://fylgja.dev/schemas/waypoints.schema.json#/$defs/list"
+    "stages": {
+      "description": "014: stage.list's block",
+      "$ref": "https://fylgja.dev/schemas/stages.schema.json#/$defs/list"
     },
     "plan": {
-      "description": "M10: waypoint.plan's block",
-      "$ref": "https://fylgja.dev/schemas/waypoints.schema.json#/$defs/plan"
+      "description": "014: stage.plan's block",
+      "$ref": "https://fylgja.dev/schemas/stages.schema.json#/$defs/plan"
     },
     "step": {
       "description": "M11: twin.step's block, on the dry run and the run. Defined in step.schema.json by its $id",

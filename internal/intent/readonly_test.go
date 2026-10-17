@@ -15,9 +15,6 @@ func operations() map[string]string {
 		"ContractVersion": ContractVersion_Operation,
 		"Devices":         Devices_Operation,
 		"Links":           Links_Operation,
-		// M10: a Fylgja-owned concrete kind read from the default branch, as
-		// FylgjaContract is; its root is Fylgja's, so the root check holds it too.
-		"Waypoints": Waypoints_Operation,
 		// 014: the stage reader's four, on the default branch, and the branch's stamps.
 		// FylgjaStage's root is Fylgja's; the other three are infrahubRoots below.
 		"ProposedChanges":     ProposedChanges_Operation,

@@ -119,16 +119,6 @@ var dataModelRules = []string{
 	"artifact.interface.unrepresented",
 	"psp.config.bootstrap_via",
 
-	// M10's rules. Appended, as every milestone's were.
-	"waypoint.ref.invalid",
-	"waypoint.flags.conflict",
-	"waypoint.kind.absent",
-	"waypoint.unknown",
-	"waypoint.duplicate",
-	"waypoint.at.unresolved",
-	"waypoint.time.reversed",
-	"waypoint.twin.moved",
-
 	// M11's rules. Appended, as every milestone's were; a run in flight is M2's
 	// run.in_flight, so it is not here.
 	"step.twin.unsteppable",
@@ -141,7 +131,6 @@ var dataModelRules = []string{
 	"step.node.unapplied",
 	"step.restart.required",
 	"step.diverged",
-	"step.sequence.skipped",
 	"step.restart.undeclared",
 
 	// M12's rules. Appended; an unread node is operation.failed, and a missing package or an unset
@@ -161,8 +150,10 @@ var dataModelRules = []string{
 	"api.version.unknown",
 	"api.transfer.too_large",
 
-	// 014's rules (research R-08). Appended; M10's waypoint rules and step.sequence.skipped
-	// leave at the switch, when the stage surface replaces them.
+	// 014's rules (research R-08). Appended; they replace M10's eight, which left with
+	// M11's skipped-target warning at the switch: seven renamed, five new, and the
+	// reversed-time warning dropped, since marks are ordered by their at. The skipped
+	// target is step.stage.skipped, last.
 	"stage.ref.invalid",
 	"stage.flags.conflict",
 	"stage.kind.absent",
@@ -397,11 +388,11 @@ func TestOperationConstantsMatchTheContract(t *testing.T) {
 		t.Errorf("operations = %v, contract enum = %v", got, want)
 	}
 
-	// The newest schema enumerates every operation there is: M4's eight, M10's two,
-	// M11's one and M12's one.
+	// The newest schema enumerates every operation there is: M4's eight, 014's two (M10's
+	// two, renamed), M11's one and M12's one.
 	all := []string{OpIntentRead, OpCompile, OpSchemaCheck, OpPSPValidate,
 		OpTwinCreate, OpTwinProvision, OpTwinDestroy, OpTwinShow,
-		OpWaypointList, OpWaypointPlan, OpTwinStep, OpTwinVerify}
+		OpStageList, OpStagePlan, OpTwinStep, OpTwinVerify}
 	sort.Strings(all)
 	raw, err := os.ReadFile(newestSchemaPath("findings.schema.json"))
 	if err != nil {

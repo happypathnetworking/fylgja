@@ -399,21 +399,21 @@ func short(id string) string {
 }
 
 // TwinInfo is the twin as its record names it, for the block: the staged
-// bundle the assertions were derived from, the record's waypoint, state, source and node
+// bundle the assertions were derived from, the record's stage, state, source and node
 // count, and where a diverged twin's step was going.
 type TwinInfo struct {
 	BundleID string // the staged bundle's
-	Waypoint *wire.WaypointRef
+	Stage    *wire.StageRef
 	State    string // wire.StateReady or wire.StateDiverged; a record before 4 reads ready
 	Source   string
 	Nodes    int
 	Diverged *Divergence
 }
 
-// Divergence is a diverged record's step: the waypoint and bundle it was going to, its run
+// Divergence is a diverged record's step: the stage and bundle it was going to, its run
 // and the phase it stopped at.
 type Divergence struct {
-	Towards       *wire.WaypointRef
+	Towards       *wire.StageRef
 	TowardsBundle string
 	RunID         string
 	Phase         string
@@ -421,12 +421,12 @@ type Divergence struct {
 
 // TwinOf names the twin from its record and the staged bundle's id.
 func TwinOf(rec wire.TwinRecord, staged string) TwinInfo {
-	t := TwinInfo{BundleID: staged, Waypoint: rec.Waypoint, State: rec.State, Source: rec.Source, Nodes: len(rec.Nodes)}
+	t := TwinInfo{BundleID: staged, Stage: rec.Stage, State: rec.State, Source: rec.Source, Nodes: len(rec.Nodes)}
 	if t.State == "" {
 		t.State = wire.StateReady
 	}
 	if s := rec.Step; rec.State == wire.StateDiverged && s != nil {
-		d := &Divergence{Towards: s.To.Waypoint, TowardsBundle: s.To.BundleID, RunID: s.Run.RunID}
+		d := &Divergence{Towards: s.To.Stage, TowardsBundle: s.To.BundleID, RunID: s.Run.RunID}
 		if s.Phase != nil {
 			d.Phase = *s.Phase
 		}
@@ -580,10 +580,10 @@ func (c counter) block(skips bool) findings.VerifyCount {
 }
 
 func twinBlock(t TwinInfo) findings.VerifyTwin {
-	out := findings.VerifyTwin{BundleID: t.BundleID, Waypoint: waypointBlock(t.Waypoint), State: t.State, Source: t.Source, Nodes: t.Nodes}
+	out := findings.VerifyTwin{BundleID: t.BundleID, Stage: StageBlock(t.Stage), State: t.State, Source: t.Source, Nodes: t.Nodes}
 	if d := t.Diverged; d != nil {
 		out.Diverged = &findings.VerifyDiverged{
-			Towards: findings.VerifyTowards{Waypoint: waypointBlock(d.Towards), BundleID: d.TowardsBundle},
+			Towards: findings.VerifyTowards{Stage: StageBlock(d.Towards), BundleID: d.TowardsBundle},
 			Run:     findings.ShowRef{WorkflowID: wire.StepWorkflowID, RunID: d.RunID},
 			Phase:   d.Phase,
 		}
@@ -591,9 +591,12 @@ func twinBlock(t TwinInfo) findings.VerifyTwin {
 	return out
 }
 
-func waypointBlock(w *wire.WaypointRef) *findings.ShowWaypoint {
-	if w == nil {
+// StageBlock is a record's stage as the documents name it, or nil when it names none:
+// twin verify's twin and towards, and twin show's record and step sides.
+func StageBlock(st *wire.StageRef) *findings.ShowStage {
+	if st == nil {
 		return nil
 	}
-	return &findings.ShowWaypoint{Series: w.Series, Sequence: w.Sequence, Description: w.Description, AtSource: w.AtSource}
+	return &findings.ShowStage{ProposedChange: findings.StageChangeRef{ID: st.ProposedChange.ID, Branch: st.ProposedChange.Branch},
+		Label: st.Label, Description: st.Description, AtSource: st.AtSource}
 }

@@ -163,11 +163,11 @@ func send(ctx context.Context, opts *options, op string, args map[string]any, fi
 }
 
 // writeFailure is a file of the answer that could not be written on this machine: the
-// operation failing in M12's words, under the subject and the waypoint the server's document
+// operation failing in M12's words, under the subject and the stage the server's document
 // named, which are what M12's command had decided when its write failed.
 func writeFailure(op string, served *findings.Document, err error) error {
 	res := &result{doc: findings.ErrorDocument(op, served.Subject, err.Error())}
-	res.doc.Waypoint = served.Waypoint
+	res.doc.Stage = served.Stage
 	return res
 }
 

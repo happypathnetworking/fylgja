@@ -11,46 +11,45 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/stage"
-	"github.com/happypathnetworking/fylgja/internal/waypoint"
+	"github.com/happypathnetworking/fylgja/internal/stages"
 )
 
 type createFlags struct {
 	branch string
 	at     string
-	// waypoint is --waypoint as given, <series>/<sequence>: a pinned reference named in
-	// Infrahub, in place of --branch and --at (M10).
-	waypoint string
-	// waypointGiven is whether --waypoint was given at all, apart from its value: an explicit
+	// stage is --stage as given, <branch>/<label>: a moment of a proposed change, resolved
+	// to a pinned reference in place of --branch and --at (014).
+	stage string
+	// stageGiven is whether --stage was given at all, apart from its value: an explicit
 	// empty one is a reference refused, not one left out (M4's --interval= precedent).
-	waypointGiven bool
-	dryRun        bool
+	stageGiven bool
+	dryRun     bool
 	// interval is --interval's value, read only when intervalGiven; not given, the default stands.
 	interval      string
 	intervalGiven bool
 	noFollow      bool
 }
 
-// fromWaypoint is whether the create names a waypoint: --waypoint given, whatever its value,
-// or a value set without the flag, as a caller building the flags sets it.
-func (f *createFlags) fromWaypoint() bool {
-	return f.waypointGiven || f.waypoint != ""
+// fromStage is whether the create names a stage: --stage given, whatever its value, or a
+// value set without the flag, as a caller building the flags sets it.
+func (f *createFlags) fromStage() bool {
+	return f.stageGiven || f.stage != ""
 }
 
 func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	const op = findings.OpTwinCreate
 	subject := &findings.Subject{Branch: f.branch, At: f.at}
 
-	if f.branch == "" && !f.fromWaypoint() {
-		return fail(op, subject, "--branch or --waypoint is required")
+	if f.branch == "" && !f.fromStage() {
+		return fail(op, subject, "--branch or --stage is required")
 	}
-	var ref waypoint.Ref
+	var ref stages.Ref
 	var follow findings.DryRunFollow
-	if f.fromWaypoint() {
-		// A waypoint is a whole pinned reference: its guards stand in for --at's and
-		// --interval's, before any connection (M10 contracts/cli.md). --no-follow beside
-		// it changes nothing.
+	if f.fromStage() {
+		// A stage is a whole pinned reference: its guards stand in for --at's and
+		// --interval's, before any connection. --no-follow beside it changes nothing.
 		var refused error
-		ref, refused = waypointGuards(op, subject, findings.StepStart, f.waypoint, []flagConflict{
+		ref, refused = stageGuards(op, subject, findings.StepStart, f.stage, []flagConflict{
 			{f.branch != "", "--branch", wholeReference},
 			{f.at != "", "--at", wholeReference},
 			{f.intervalGiven, "--interval", neverFollows},
@@ -58,7 +57,7 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 		if refused != nil {
 			return refused
 		}
-		// A waypoint twin never follows, so no interval is read.
+		// A stage twin never follows, so no interval is read.
 		follow = createFollow(f, 0)
 	} else {
 		// M1's precision guard, before any connection.
@@ -85,19 +84,19 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 		return loadFailureAt(op, subject, findings.StepRead, err)
 	}
 
-	// A waypoint resolves here, in the CLI, before any run starts; what follows is the
-	// pinned create of the reference it names.
+	// A stage resolves here, on the server, before any run starts and before any branch's
+	// intent is read; what follows is the pinned create of the reference it names.
 	branch, at := f.branch, f.at
-	var resolved *findings.WaypointBlock
-	if f.fromWaypoint() {
-		if resolved, err = resolveWaypoint(ctx, op, subject, findings.StepResolve, ref); err != nil {
+	var resolved *resolvedStage
+	if f.fromStage() {
+		if resolved, err = resolveStage(ctx, op, subject, findings.StepResolve, ref, reg); err != nil {
 			return err
 		}
-		branch, at = resolved.Branch, resolved.At
-		opts.note("%s", resolved.Line())
+		branch, at = resolved.block.Branch, resolved.block.At
+		opts.note("%s", resolved.block.Line())
 	}
 	if f.dryRun {
-		return withWaypoint(runCreateDryRun(ctx, opts, op, subject, branch, at, reg, follow), resolved)
+		return withStage(runCreateDryRun(ctx, opts, op, subject, branch, at, reg, follow), resolved)
 	}
 
 	in := provision.ProvisionInput{
@@ -110,12 +109,11 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	if follow.Enabled {
 		in.Follow = &provision.FollowInput{IntervalS: follow.IntervalS}
 	}
-	// The run records the waypoint as data, and branches on nothing of it.
+	// The run records the stage as data, and branches on nothing of it.
 	if resolved != nil {
-		in.Waypoint = &provision.WaypointInput{Series: resolved.Series, Sequence: resolved.Sequence,
-			Description: resolved.Description, AtSource: resolved.AtSource}
+		in.Stage = resolved.record
 	}
-	return withWaypoint(runProvision(ctx, opts, op, subject, in), resolved)
+	return withStage(runProvision(ctx, opts, op, subject, in), resolved)
 }
 
 // followFlagsConflict refuses --interval given with --at or with --no-follow as
@@ -143,8 +141,8 @@ func followFlagsConflict(op string, subject *findings.Subject, f *createFlags) e
 // checked, or why it does not: what the run is started with and what a dry run reports.
 func createFollow(f *createFlags, interval time.Duration) findings.DryRunFollow {
 	switch {
-	case f.fromWaypoint():
-		return findings.DryRunFollow{Reason: findings.FollowReasonWaypoint}
+	case f.fromStage():
+		return findings.DryRunFollow{Reason: findings.FollowReasonStage}
 	case f.at != "":
 		return findings.DryRunFollow{Reason: findings.FollowReasonPinned}
 	case f.noFollow:

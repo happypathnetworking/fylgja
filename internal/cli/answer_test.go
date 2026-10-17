@@ -170,7 +170,7 @@ func apiContract(t *testing.T, def string) *jsonschema.Schema {
 	}
 	c := jsonschema.NewCompiler()
 	for _, name := range []string{"api.schema.json", "findings.schema.json", "show.schema.json",
-		"waypoints.schema.json", "step.schema.json", "verify.schema.json"} {
+		"stages.schema.json", "step.schema.json", "verify.schema.json"} {
 		f, err := os.Open(repoPath("contracts", name))
 		if err != nil {
 			t.Fatal(err)
@@ -456,35 +456,30 @@ func answerCases() []answerCase {
 					})
 				}}
 		}},
-		{"waypoint list (TestWaypointList)", findings.OpWaypointList, func(t *testing.T) answerWant {
+		{"stage list (TestStageList)", findings.OpStageList, func(t *testing.T) answerWant {
 			useStateRoot(t)
 			useService(t, nil)
-			f := seriesInfrahub(t)
-			f.waypoint("wp-mid-12", "mid", 12, "fylgja-fixture", demoWrittenAt, fixtureAt, "twelfth")
+			f := newFakeInfrahub(t)
+			f.change("pc-1", "change-1", mark("st-1", "cabled", "", "the leaf cabled"))
 			f.start()
 			return answerWant{kinds: []string{api.KindDocument}, status: findings.StatusOK,
-				stdout: lines("series back (2 waypoints)",
-					`  back/1  branch fylgja-fixture  at 2026-09-20T00:00:00Z (given)  ""`,
-					`  back/2  branch fylgja-fixture  at 2026-09-08T12:00:00Z (given)  ""`,
-					"series demo (3 waypoints)",
-					`  demo/1  branch fylgja-fixture  at 2026-09-01T09:00:00.000000+00:00 (written)  "before the change"`,
-					`  demo/2  branch fylgja-fixture  at 2026-09-08T12:00:00Z (given)  "after the first cut-over"`,
-					`  demo/3  branch change-1        at 2026-09-21T15:20:44.000000+00:00 (written)  "after the second"`,
-					"series mid (5 waypoints)",
-					`  mid/1   branch fylgja-fixture  at 2026-09-02T00:00:00.000000+00:00 (written)  ""`,
-					`  mid/2   branch fylgja-fixture  at 2026-09-02T12:00:00.123456789Z (given)  ""`,
-					`  mid/3   branch gone            at 2026-09-03T00:00:00.000000+00:00 (written)  ""`,
-					`  mid/4   branch fylgja-fixture  at 2026-09-08T12:00:00Z (given)  ""`,
-					`  mid/12  branch fylgja-fixture  at 2026-09-08T12:00:00Z (given)  "twelfth"`)}
+				cli: func(t *testing.T) string {
+					return cliStdout(t, func() error {
+						return runStageList(context.Background(), &options{}, &stageFlags{})
+					})
+				}}
 		}},
-		{"waypoint plan (TestWaypointPlan)", findings.OpWaypointPlan, func(t *testing.T) answerWant {
+		{"stage plan (TestStagePlan)", findings.OpStagePlan, func(t *testing.T) answerWant {
 			useStateRoot(t)
 			useService(t, nil)
-			seriesInfrahub(t).start()
-			return answerWant{args: map[string]any{"series": "demo"}, kinds: []string{api.KindDocument}, status: findings.StatusOK,
+			f := newFakeInfrahub(t)
+			f.change("pc-1", "change-1", mark("st-1", "cabled", "", "the leaf cabled"))
+			f.start()
+			return answerWant{args: map[string]any{"branch": "change-1"}, kinds: []string{api.KindDocument}, status: findings.StatusOK,
 				cli: func(t *testing.T) string {
-					_, stdout, _ := runWaypoint(t, "plan", "--series", "demo")
-					return stdout
+					return cliStdout(t, func() error {
+						return runStagePlan(context.Background(), &options{}, &stageFlags{branch: "change-1", branchGiven: true})
+					})
 				}}
 		}},
 		{"intent read", findings.OpIntentRead, func(t *testing.T) answerWant {
@@ -498,7 +493,7 @@ func answerCases() []answerCase {
 					})
 				}}
 		}},
-		{"schema check (TestCheckNamesTheWaypointKind)", findings.OpSchemaCheck, func(t *testing.T) answerWant {
+		{"schema check (TestCheckNamesTheStageKind)", findings.OpSchemaCheck, func(t *testing.T) answerWant {
 			newFakeInfrahub(t).start()
 			return answerWant{args: map[string]any{"branch": "fylgja-fixture"}, kinds: []string{api.KindDocument}, status: findings.StatusOK,
 				cli: func(t *testing.T) string {

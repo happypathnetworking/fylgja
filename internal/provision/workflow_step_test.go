@@ -41,8 +41,12 @@ import (
 var (
 	stepFrom = strings.Repeat("34", 32)
 	stepTo   = strings.Repeat("ee", 32)
-	demo1    = wire.WaypointRef{Series: "demo", Sequence: 1, Description: "before the change", AtSource: "written"}
-	demo2    = wire.WaypointRef{Series: "demo", Sequence: 2, Description: "after the first cut-over", AtSource: "written"}
+	// stageCabled and stageLive are two stages of proposed change pc-1 on branch change-1
+	// (014): the step goes from change-1/cabled to change-1/live.
+	stageCabled = wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled",
+		Description: "before the change", AtSource: "written"}
+	stageLive = wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "live",
+		Description: "after the first cut-over", AtSource: "written"}
 	// stepStart is when a run starts on the test suite's clock, for a test that sets it, so
 	// that its record's times are known exactly. The clock moves only when a mocked activity
 	// waits on it (MockCallWrapper.After).
@@ -66,13 +70,13 @@ func stepPlan() wire.ReconcilePlan {
 
 // stepInput is the CLI's input for case 8's step, given --allow-restart.
 func stepInput() StepInput {
-	from, to := demo1, demo2
+	from, to := stageCabled, stageLive
 	return StepInput{
-		From:         wire.StepSide{Waypoint: &from, BundleID: stepFrom, At: stepFromAt},
-		To:           wire.StepSide{Waypoint: &to, BundleID: stepTo, At: stepToAt, Branch: "change-1"},
+		From:         wire.StepSide{Stage: &from, BundleID: stepFrom, At: stepFromAt},
+		To:           wire.StepSide{Stage: &to, BundleID: stepTo, At: stepToAt, Branch: "change-1"},
 		ObservedAt:   "2026-10-02T09:14:01.000000Z",
 		ToBundlePath: "/state/bundles/" + stepTo,
-		Diff: json.RawMessage(`{"from":"demo/1","to":"demo/2","from_bundle_id":"` + stepFrom + `","to_bundle_id":"` + stepTo +
+		Diff: json.RawMessage(`{"from":"change-1/cabled","to":"change-1/live","from_bundle_id":"` + stepFrom + `","to_bundle_id":"` + stepTo +
 			`","computed":true,"unchanged":false,"nodes":{"added":[],"removed":[],"changed":[{"node":"s1","reasons":["bootstrap","mapping"]}]},` +
 			`"links":{"added":[{"id":"e1:Ethernet3|s1:ethernet-1/3","a":{"node":"e1","port":"eth3"},"b":{"node":"s1","port":"e1-3"}}],"removed":[]},` +
 			`"artifacts":{"changed":[{"node":"e1","name":"device-config","from":"43e8fd0c2de5f4646f74a51d34742824","to":"9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3"},` +
@@ -115,14 +119,15 @@ func stepLab() []wire.LabNode {
 	}
 }
 
-// stepTwinHost is the host holding the twin the step was planned from: ready at demo/1.
+// stepTwinHost is the host holding the twin the step was planned from: ready at
+// change-1/cabled.
 func stepTwinHost() wire.HostReport {
-	w := demo1
+	st := stageCabled
 	return wire.HostReport{LabPresent: true, TwinDirPresent: true, Nodes: stepLab(),
-		Twin: &wire.TwinRecord{TwinVersion: "4", Lab: wire.LabName, BundleID: stepFrom, Waypoint: &w, State: wire.StateReady,
+		Twin: &wire.TwinRecord{TwinVersion: "6", Lab: wire.LabName, BundleID: stepFrom, Stage: &st, State: wire.StateReady,
 			Provenance: wire.Provenance{Branch: "change-1", At: stepFromAt}, Source: wire.SourceIntent,
 			Run: wire.RunRef{WorkflowID: WorkflowProvision, RunID: "run-0"}},
-		Phrase: "the twin of branch change-1 at " + stepFromAt + ", waypoint demo/1"}
+		Phrase: "the twin of branch change-1 at " + stepFromAt + ", stage change-1/cabled"}
 }
 
 // stepHarness is a workflow test environment for Step: every activity it schedules
@@ -295,7 +300,7 @@ func (h *stepHarness) recordAs(_ context.Context, in wire.RecordStepInput) (wire
 	rec := *h.host.Twin
 	rec.State = wire.StateDiverged
 	if in.Outcome != wire.StepDiverged {
-		rec.BundleID, rec.Waypoint, rec.State = in.To.BundleID, in.To.Waypoint, wire.StateReady
+		rec.BundleID, rec.Stage, rec.State = in.To.BundleID, in.To.Stage, wire.StateReady
 	}
 	var phase *string
 	if in.Phase != "" {
@@ -329,7 +334,7 @@ func (h *stepHarness) run(in StepInput) StepResult {
 // feature's contracts, with the device's diff in no part of it.
 func stepDocument(t *testing.T, in StepInput, res StepResult) *findings.Document {
 	t.Helper()
-	doc := StepDocument(&findings.Subject{Waypoint: "demo/2", Branch: "change-1", At: stepToAt, RunID: "default-test-run-id"}, in, res)
+	doc := StepDocument(&findings.Subject{Stage: "change-1/live", Branch: "change-1", At: stepToAt, RunID: "default-test-run-id"}, in, res)
 	b := mustValidateM11(t, doc)
 	if bytes.Contains(b, []byte("insert /")) {
 		t.Errorf("the document carries the device's diff:\n%s", b)
@@ -338,7 +343,7 @@ func stepDocument(t *testing.T, in StepInput, res StepResult) *findings.Document
 }
 
 // mustValidateM11 validates a findings document against the current contract, under the
-// module root's contracts/, with the step, show, waypoints and verify schemas under their
+// module root's contracts/, with the step, show, stages and verify schemas under their
 // $ids, and returns its bytes. The current contract extends M11's additively, so an M11
 // document still satisfies it.
 func mustValidateM11(t *testing.T, doc *findings.Document) []byte {
@@ -356,7 +361,7 @@ func mustValidateM11(t *testing.T, doc *findings.Document) []byte {
 		return v
 	}
 	c := jsonschema.NewCompiler()
-	for _, name := range []string{"show.schema.json", "waypoints.schema.json", "step.schema.json", "verify.schema.json"} {
+	for _, name := range []string{"show.schema.json", "stages.schema.json", "step.schema.json", "verify.schema.json"} {
 		if err := c.AddResource("https://fylgja.dev/schemas/"+name, load(name)); err != nil {
 			t.Fatal(err)
 		}
@@ -660,26 +665,26 @@ func TestStepRejectedAtEachLock(t *testing.T) {
 		{"the record names another bundle", func(h *stepHarness, _ *StepInput) {
 			h.host.Twin.BundleID = stepTo
 		}, findings.StepInspect, findings.RuleStepTwinUnsteppable,
-			"the twin is at waypoint demo/1 (bundle eeeeeeee…), not at waypoint demo/1 (bundle 34343434…) the step was planned from: " +
+			"the twin is at stage change-1/cabled (bundle eeeeeeee…), not at stage change-1/cabled (bundle 34343434…) the step was planned from: " +
 				"the host changed after the command looked; nothing was touched; run fylgja twin step again"},
-		{"the record names another waypoint", func(h *stepHarness, _ *StepInput) {
-			w := demo2
-			h.host.Twin.Waypoint = &w
+		{"the record names another stage", func(h *stepHarness, _ *StepInput) {
+			st := stageLive
+			h.host.Twin.Stage = &st
 		}, findings.StepInspect, findings.RuleStepTwinUnsteppable,
-			"the twin is at waypoint demo/2 (bundle 34343434…), not at waypoint demo/1 (bundle 34343434…) the step was planned from: " +
+			"the twin is at stage change-1/live (bundle 34343434…), not at stage change-1/cabled (bundle 34343434…) the step was planned from: " +
 				"the host changed after the command looked; nothing was touched; run fylgja twin step again"},
 		{"the record is diverged", func(h *stepHarness, _ *StepInput) {
 			h.host.Twin.State = wire.StateDiverged
 			h.host.Twin.Step = &wire.StepRecord{Outcome: wire.StepDiverged, Phase: &phase,
-				Run: wire.RunRef{WorkflowID: WorkflowStep, RunID: "01a1"}, To: wire.StepSide{Waypoint: &demo2},
+				Run: wire.RunRef{WorkflowID: WorkflowStep, RunID: "01a1"}, To: wire.StepSide{Stage: &stageLive},
 				Pushed: []wire.StepPush{{Node: "s1", Outcome: wire.PushLanded}, {Node: "e1", Outcome: wire.PushRefused, Rule: findings.RulePushRefused}}}
 		}, findings.StepInspect, findings.RuleStepTwinDiverged,
-			"the twin is diverged: step run fylgja-step 01a1 towards waypoint demo/2 stopped at phase push " +
+			"the twin is diverged: step run fylgja-step 01a1 towards stage change-1/live stopped at phase push " +
 				"(landed: s1; not landed: e1 (push.refused)); it accepts only fylgja twin destroy"},
 		{"no twin", func(h *stepHarness, _ *StepInput) {
 			h.host = wire.HostReport{}
 		}, findings.StepInspect, findings.RuleStepTwinUnsteppable,
-			"no twin: no lab fylgja and no twin directory; only a twin built from a waypoint steps (fylgja twin create --waypoint)"},
+			"no twin: no lab fylgja and no twin directory; only a twin built from a stage steps (fylgja twin create --stage)"},
 		{"the target does not fit the host", func(h *stepHarness, _ *StepInput) {
 			h.plan.Findings = findings.List{
 				{Severity: findings.Rejection, Rule: findings.RuleHostLabPresent, Object: "lab fylgja", Step: findings.StepHostCheck, Message: "lab"},
@@ -882,8 +887,8 @@ func TestStepDivergedAtEachPhase(t *testing.T) {
 				failure(findings.RuleStageFailed, findings.StepStage, "/state/twin/bundle", "twin/bundle holds bundle 5151…"))
 		}, findings.StepReconcile, findings.StepStage, findings.RuleStageFailed, false,
 			map[string]string{"e1": wire.PushNotAttempted, "s1": wire.PushNotAttempted},
-			"step run default-test-run-id towards waypoint demo/2 (bundle eeeeeeee…) stopped at phase reconcile: landed none; " +
-				"not landed e1, s1; the twin is up and diverged at waypoint demo/1 (bundle 34343434…), its record says so, " +
+			"step run default-test-run-id towards stage change-1/live (bundle eeeeeeee…) stopped at phase reconcile: landed none; " +
+				"not landed e1, s1; the twin is up and diverged at stage change-1/cabled (bundle 34343434…), its record says so, " +
 				"and it accepts only fylgja twin destroy"},
 		{"the reconcile", func(h *stepHarness) {
 			h.env.OnActivity(wire.ActReconcileLab, mock.Anything, mock.Anything).Return(wire.ReconcileResult{},
@@ -901,8 +906,8 @@ func TestStepDivergedAtEachPhase(t *testing.T) {
 					"node e1 refused artifact device-config (checksum aaaa…) at line 7: Invalid input (at token 0: 'bogus')"))
 		}, findings.StepPush, findings.StepPush, findings.RulePushRefused, true,
 			map[string]string{"e1": wire.PushRefused, "s1": wire.PushLanded},
-			"step run default-test-run-id towards waypoint demo/2 (bundle eeeeeeee…) stopped at phase push: landed s1; " +
-				"not landed e1 (push.refused); the twin is up and diverged at waypoint demo/1 (bundle 34343434…), its record says so, " +
+			"step run default-test-run-id towards stage change-1/live (bundle eeeeeeee…) stopped at phase push: landed s1; " +
+				"not landed e1 (push.refused); the twin is up and diverged at stage change-1/cabled (bundle 34343434…), its record says so, " +
 				"and it accepts only fylgja twin destroy"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -1174,8 +1179,8 @@ func TestStepDivergedAtTheRecord(t *testing.T) {
 			res.Step, res.Record)
 	}
 	onlyFinding(t, res.Findings, findings.RuleRecordFailed)
-	want := "step run default-test-run-id towards waypoint demo/2 (bundle eeeeeeee…) stopped at phase record: landed e1, s1; " +
-		"not landed none; the twin is up and diverged at waypoint demo/1 (bundle 34343434…), but its record could not be written " +
+	want := "step run default-test-run-id towards stage change-1/live (bundle eeeeeeee…) stopped at phase record: landed e1, s1; " +
+		"not landed none; the twin is up and diverged at stage change-1/cabled (bundle 34343434…), but its record could not be written " +
 		"and still says it is ready there; fylgja twin destroy clears it"
 	if d := onlyFinding(t, res.Findings, findings.RuleStepDiverged); d.Message != want || d.Step != findings.StepRecord {
 		t.Errorf("step.diverged %+v\nwant %q", d, want)
@@ -1377,8 +1382,8 @@ func TestStepCancelled(t *testing.T) {
 						t.Errorf("record input push %+v, want landed with its time", p)
 					}
 				}
-				want := "step run default-test-run-id towards waypoint demo/2 (bundle eeeeeeee…) stopped at phase push: landed e1, s1; " +
-					"not landed none; the twin is up and diverged at waypoint demo/1 (bundle 34343434…), its record says so, and it " +
+				want := "step run default-test-run-id towards stage change-1/live (bundle eeeeeeee…) stopped at phase push: landed e1, s1; " +
+					"not landed none; the twin is up and diverged at stage change-1/cabled (bundle 34343434…), its record says so, and it " +
 					"accepts only fylgja twin destroy"
 				if d := onlyFinding(t, res.Findings, findings.RuleStepDiverged); d.Message != want {
 					t.Errorf("step.diverged %q\nwant %q", d.Message, want)
@@ -1643,8 +1648,8 @@ func TestStepCancelledWhenTheRecordCannotBeWritten(t *testing.T) {
 		t.Errorf("record.failed %+v, want at record", f)
 	}
 	d := onlyFinding(t, res.Findings, findings.RuleStepDiverged)
-	prefix := "step run default-test-run-id towards waypoint demo/2 (bundle eeeeeeee…) stopped at phase push: "
-	suffix := "; the twin is up and diverged at waypoint demo/1 (bundle 34343434…), but its record could not be written and " +
+	prefix := "step run default-test-run-id towards stage change-1/live (bundle eeeeeeee…) stopped at phase push: "
+	suffix := "; the twin is up and diverged at stage change-1/cabled (bundle 34343434…), but its record could not be written and " +
 		"still says it is ready there; fylgja twin destroy clears it"
 	if d.Step != findings.StepPush || !strings.HasPrefix(d.Message, prefix) || !strings.HasSuffix(d.Message, suffix) {
 		t.Errorf("step.diverged %+v\nwant at push, beginning %q and ending %q", d, prefix, suffix)
@@ -1768,7 +1773,7 @@ func TestPlanRulesUnappliedIsStepUnapplied(t *testing.T) {
 func TestIneligibleWording(t *testing.T) {
 	branch := func(at, source string) wire.HostReport {
 		h := stepTwinHost()
-		h.Twin.Waypoint, h.Twin.Provenance.At, h.Twin.Source = nil, at, source
+		h.Twin.Stage, h.Twin.Provenance.At, h.Twin.Source = nil, at, source
 		return h
 	}
 	orphan := wire.HostReport{LabPresent: true, Phrase: "an orphan: lab fylgja with no twin directory"}
@@ -1776,20 +1781,27 @@ func TestIneligibleWording(t *testing.T) {
 	gone.LabPresent = false
 	gone.Phrase = "a twin record whose lab is gone"
 	leftover := wire.HostReport{TwinDirPresent: true, Phrase: "a leftover twin directory: no twin.json and no lab fylgja"}
+	// A record of twin.json 5 that named M10's pinned reference reads with no stage and
+	// Superseded set (lab.ReadRecord, 014), and is refused as such.
+	superseded := branch(stepFromAt, wire.SourceIntent)
+	superseded.Twin.TwinVersion, superseded.Twin.Superseded = "5", true
 	for _, c := range []struct {
 		name         string
 		host         wire.HostReport
 		object, want string
 	}{
-		{"an orphan", orphan, "lab fylgja", orphan.Phrase + "; only a twin built from a waypoint steps; fylgja twin destroy clears it"},
-		{"a record whose lab is gone", gone, "/state/twin", gone.Phrase + "; only a twin built from a waypoint steps; fylgja twin destroy clears it"},
-		{"a leftover twin directory", leftover, "/state/twin", leftover.Phrase + "; only a twin built from a waypoint steps; fylgja twin destroy clears it"},
-		{"a branch twin", branch("", wire.SourceIntent), stepFrom, "the twin was created from branch change-1, not from a waypoint, " +
-			"so it names no series to step along; only a twin built from a waypoint steps"},
+		{"an orphan", orphan, "lab fylgja", orphan.Phrase + "; only a twin built from a stage steps; fylgja twin destroy clears it"},
+		{"a record whose lab is gone", gone, "/state/twin", gone.Phrase + "; only a twin built from a stage steps; fylgja twin destroy clears it"},
+		{"a leftover twin directory", leftover, "/state/twin", leftover.Phrase + "; only a twin built from a stage steps; fylgja twin destroy clears it"},
+		{"a branch twin", branch("", wire.SourceIntent), stepFrom, "the twin was created from branch change-1, not from a stage, " +
+			"so it names no proposed change to step along; only a twin built from a stage steps (fylgja twin create --stage)"},
 		{"a pinned twin", branch(stepFromAt, wire.SourceIntent), stepFrom, "the twin was created from branch change-1 at " + stepFromAt +
-			", not from a waypoint, so it names no series to step along; only a twin built from a waypoint steps"},
-		{"a bundle twin", branch("", wire.SourceBundle), stepFrom, "the twin was created from a bundle, not from a waypoint, " +
-			"so it names no series to step along; only a twin built from a waypoint steps"},
+			", not from a stage, so it names no proposed change to step along; only a twin built from a stage steps " +
+			"(fylgja twin create --stage)"},
+		{"a bundle twin", branch("", wire.SourceBundle), stepFrom, "the twin was created from a bundle, not from a stage, " +
+			"so it names no proposed change to step along; only a twin built from a stage steps (fylgja twin create --stage)"},
+		{"a superseded twin", superseded, stepFrom, "the twin was created from a waypoint of a record version this build no " +
+			"longer reads (twin.json 5); only a twin built from a stage steps; fylgja twin destroy clears it"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := Ineligible(c.host, findings.StepResolve, "/state/twin")
@@ -1802,7 +1814,7 @@ func TestIneligibleWording(t *testing.T) {
 		})
 	}
 	if f := Ineligible(stepTwinHost(), findings.StepResolve, ""); f != nil {
-		t.Errorf("a ready waypoint twin refused: %+v", *f)
+		t.Errorf("a ready stage twin refused: %+v", *f)
 	}
 	// The run's second lock at inspect knows no state root, so a host with no lab names the
 	// twin directory by what it is rather than by its path (contracts/cli.md, the run's
@@ -1810,7 +1822,7 @@ func TestIneligibleWording(t *testing.T) {
 	for _, host := range []wire.HostReport{gone, leftover} {
 		f := Ineligible(host, findings.StepInspect, "")
 		if f == nil || f.Rule != findings.RuleStepTwinUnsteppable || f.Step != findings.StepInspect || f.Object != "twin directory" ||
-			f.Message != host.Phrase+"; only a twin built from a waypoint steps; fylgja twin destroy clears it" {
+			f.Message != host.Phrase+"; only a twin built from a stage steps; fylgja twin destroy clears it" {
 			t.Errorf("the run's refusal of %q: %+v; want %s at inspect on the twin directory", host.Phrase, f, findings.RuleStepTwinUnsteppable)
 		}
 	}

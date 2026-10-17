@@ -93,30 +93,39 @@ func TestCheckDocumentsNameTheOperation(t *testing.T) {
 	}
 }
 
-// A conforming branch's answer is followed by the waypoint kind as the default branch holds
-// it, whatever branch was checked: present, absent, or lacking what this build reads, one
-// line and verified.waypoints, never a finding, the status and exit the conformance
-// answer's (contracts/cli.md). A refused check asks nothing of the default
-// branch.
-func TestCheckNamesTheWaypointKind(t *testing.T) {
-	const remedy = " (load schema/fylgja-waypoint.yaml; needed only by the waypoint commands)"
+// A conforming branch's answer is followed by the stage kind and its extension as the
+// default branch holds them, whatever branch was checked: present, absent, lacking an
+// attribute or the relationship this build reads, or CoreProposedChange lacking the
+// extension, one line and verified.stages, never a finding, the status and exit the
+// conformance answer's (specs/014-proposed-change-stages/contracts/stage-commands.md). A
+// refused check asks nothing of the default branch.
+func TestCheckNamesTheStageKind(t *testing.T) {
+	const remedy = " (load schema/fylgja-stage.yaml; needed only by the stage commands)"
+	const lacksExtension = "CoreProposedChange lacks fylgja_stages"
 	for _, c := range []struct {
-		name    string
-		kind    []string
-		line    string
-		present bool
-		missing []string
+		name                        string
+		kind                        []string
+		noRelationship, noExtension bool
+		line                        string
+		present, extension          bool
+		missing                     []string
 	}{
-		{"present", intent.WaypointFields, "waypoints: FylgjaWaypoint present on the default branch", true, []string{}},
-		{"absent", nil, "waypoints: FylgjaWaypoint absent from the default branch" + remedy, false, []string{}},
-		{"lacks one", []string{"series", "sequence", "branch", "description"},
-			"waypoints: FylgjaWaypoint on the default branch lacks as_of" + remedy, false, []string{"as_of"}},
-		{"lacks two", []string{"series", "sequence", "branch"},
-			"waypoints: FylgjaWaypoint on the default branch lacks as_of, description" + remedy, false, []string{"as_of", "description"}},
+		{"present", intent.StageFields, false, false,
+			"stages: FylgjaStage present on the default branch, with its extension", true, true, []string{}},
+		{"absent", nil, false, false,
+			"stages: FylgjaStage absent from the default branch" + remedy, false, false, []string{}},
+		{"lacks an attribute", []string{"label", "description"}, false, false,
+			"stages: FylgjaStage on the default branch lacks as_of" + remedy, false, true, []string{"as_of"}},
+		{"lacks the relationship", intent.StageFields, true, false,
+			"stages: FylgjaStage on the default branch lacks proposed_change" + remedy, false, true, []string{"proposed_change"}},
+		{"lacks the extension", intent.StageFields, false, true,
+			"stages: FylgjaStage present on the default branch, but " + lacksExtension + remedy, true, false, []string{}},
+		{"lacks an attribute and the extension", []string{"label", "description"}, false, true,
+			"stages: FylgjaStage on the default branch lacks as_of, and " + lacksExtension + remedy, false, false, []string{"as_of"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := newFakeInfrahub(t)
-			f.kind = c.kind
+			f.kind, f.noRelationship, f.noExtension = c.kind, c.noRelationship, c.noExtension
 			f.start()
 
 			var err error
@@ -130,18 +139,18 @@ func TestCheckNamesTheWaypointKind(t *testing.T) {
 				t.Errorf("stdout\n%s\nwant the contract line, then\n%s", out, c.line)
 			}
 			doc := res.doc
-			if doc.Status != findings.StatusOK || len(doc.Findings) != 0 || doc.Verified == nil || doc.Verified.Waypoints == nil {
-				t.Fatalf("status %s, findings %+v, verified %+v; want ok, none and the waypoints", doc.Status, doc.Findings, doc.Verified)
+			if doc.Status != findings.StatusOK || len(doc.Findings) != 0 || doc.Verified == nil || doc.Verified.Stages == nil {
+				t.Fatalf("status %s, findings %+v, verified %+v; want ok, none and the stages", doc.Status, doc.Findings, doc.Verified)
 			}
 			// As the document writes it: missing is a list, empty when nothing is missing.
-			got, _ := json.Marshal(doc.Verified.Waypoints)
-			want, _ := json.Marshal(map[string]any{"kind": "FylgjaWaypoint", "present": c.present, "missing": c.missing,
-				"file": "schema/fylgja-waypoint.yaml"})
+			got, _ := json.Marshal(doc.Verified.Stages)
+			want, _ := json.Marshal(map[string]any{"kind": "FylgjaStage", "present": c.present, "missing": c.missing,
+				"extension": c.extension, "file": "schema/fylgja-stage.yaml"})
 			var g, w any
 			_ = json.Unmarshal(got, &g)
 			_ = json.Unmarshal(want, &w)
 			if !reflect.DeepEqual(g, w) {
-				t.Errorf("verified.waypoints %s, want %s", got, want)
+				t.Errorf("verified.stages %s, want %s", got, want)
 			}
 			validateM10Document(t, doc)
 			mustCarryNoToken(t, "schema check", out, doc)

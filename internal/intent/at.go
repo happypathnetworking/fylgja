@@ -36,8 +36,8 @@ func CheckAtPrecision(at string) string {
 }
 
 // AtFractionDigits counts the fractional-seconds digits of an instant, 0 when it carries
-// none. CheckAtPrecision's measure, shared with the waypoint resolution, which refuses a
-// written at under the same rule in its own words (M10).
+// none. CheckAtPrecision's measure, shared with a stage's resolution, which refuses an
+// as_of under the same rule in its own words (014).
 func AtFractionDigits(at string) int {
 	m := atFraction.FindStringSubmatch(at)
 	if m == nil {

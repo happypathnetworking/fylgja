@@ -18,11 +18,13 @@ const (
 	OpTwinDestroy   = "twin.destroy"
 	OpTwinShow      = "twin.show"
 
-	// M10: a series listed and planned, with no lab.
-	OpWaypointList = "waypoint.list"
-	OpWaypointPlan = "waypoint.plan"
+	// 014: a proposed change's stages listed and planned, with no lab (M10's two
+	// operations, renamed).
+	OpStageList = "stage.list"
+	OpStagePlan = "stage.plan"
 
-	// M11: a waypoint twin stepped to another waypoint of its series, and its dry run.
+	// M11: a twin stepped to another stage of its proposed change (014), and its dry
+	// run.
 	OpTwinStep = "twin.step"
 
 	// M12: the twin read and verified against intent, with no run.
@@ -87,124 +89,171 @@ type Subject struct {
 	// RunID is the Temporal run the document reports on, once one was started or
 	// attached to.
 	RunID string `json:"run_id,omitempty"`
-	// Waypoint is --waypoint as given, <series>/<sequence> (M10). Branch and At then
+	// Stage is --stage as given, <branch>/<label> (014): on twin create and intent read
+	// the reference supplied, on twin step the target once known. Branch and At then
 	// carry the reference it resolved to, once it resolved.
-	Waypoint string `json:"waypoint,omitempty"`
+	Stage string `json:"stage,omitempty"`
 }
 
-// WaypointBlock is the reference one waypoint resolved to (M10): the waypoint block of
-// twin create, its dry run and intent read given --waypoint
-// ($defs/resolved). At is verbatim:
-// what was written on the waypoint, or what Infrahub returned as its branch's write time.
-type WaypointBlock struct {
-	Series      string `json:"series"`
-	Sequence    int    `json:"sequence"`
-	Branch      string `json:"branch"`
-	At          string `json:"at"`
-	AtSource    string `json:"at_source"`
-	Description string `json:"description"`
+// Where a stage's at came from (stages.schema.json, $defs/at_source).
+const (
+	AtSourceGiven       = "given"        // as_of written on the mark, verbatim
+	AtSourceWritten     = "written"      // the mark's own write stamp, its label's updated_at
+	AtSourceBranchPoint = "branch_point" // the source branch's branched_from, read on the default branch
+	AtSourceHead        = "head"         // the source branch's latest stamp plus one microsecond
+)
+
+// AtSourceText is how the text names where an at came from: the identifier, but for the
+// branch point, which reads as two words.
+func AtSourceText(source string) string {
+	if source == AtSourceBranchPoint {
+		return "branch point"
+	}
+	return source
 }
 
-// Line is the one line printed wherever a reference is resolved (contracts/cli.md):
+// StageChange is the proposed change a stage belongs to (014; stages.schema.json,
+// $defs/proposed_change): found by its source branch among the open ones. Its name is the
+// operator's and not unique; its id is the identity.
+type StageChange struct {
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Branch string `json:"branch"`
+	Draft  bool   `json:"draft"`
+}
+
+// StageBlock is the reference one stage resolved to (014): the stage block of twin create,
+// its dry run, intent read given --stage, and twin step once its target resolved
+// (stages.schema.json, $defs/resolved). Branch is the branch the read is on: the default
+// branch for the branch point, the proposed change's source branch otherwise. At is
+// verbatim: what was written on the mark, what Infrahub returned, or the first instant
+// after what it returned (the head).
+type StageBlock struct {
+	Ref            string      `json:"ref"`
+	Branch         string      `json:"branch"`
+	Label          string      `json:"label"`
+	ProposedChange StageChange `json:"proposed_change"`
+	At             string      `json:"at"`
+	AtSource       string      `json:"at_source"`
+	Description    string      `json:"description"`
+}
+
+// Line is the one line printed wherever a reference resolved
+// (specs/014-proposed-change-stages/contracts/stage-commands.md):
 //
-//	waypoint demo/2: branch change-1 at 2026-09-28T15:20:44.000000+00:00 (written), "after the first cut-over"
-//
-// The description is the operator's, quoted, and "" when none was written.
-func (w WaypointBlock) Line() string {
-	return fmt.Sprintf("waypoint %s/%d: %s", w.Series, w.Sequence, w.Resolution())
+//	stage change-1/cabled: branch change-1 at 2026-10-16T17:25:30.118244+00:00 (written), "after the link is cabled"
+//	stage change-1/branch-point: main at 2026-10-16T17:20:19.944651+00:00 (branch point)
+//	stage change-1/head: branch change-1 at 2026-10-16T17:30:11.884302+00:00 (head)
+func (s StageBlock) Line() string {
+	return fmt.Sprintf("stage %s: %s", s.Ref, s.Resolution())
 }
 
-// Resolution is the line's part after the reference, which waypoint plan prints under its
-// series heading: branch change-1 at 2026-09-28T15:20:44.000000+00:00 (written), "…".
-func (w WaypointBlock) Resolution() string {
-	return fmt.Sprintf("branch %s at %s (%s), %q", w.Branch, w.At, w.AtSource, w.Description)
+// Resolution is the line's part after the reference, which stage plan prints after each
+// compiled stage's reference. A mark's description is the operator's, quoted, and "" when
+// none was written; a derived stage has none and prints none.
+func (s StageBlock) Resolution() string {
+	where := "branch " + s.Branch
+	if s.AtSource == AtSourceBranchPoint {
+		where = s.Branch
+	}
+	line := fmt.Sprintf("%s at %s (%s)", where, s.At, AtSourceText(s.AtSource))
+	if s.AtSource == AtSourceGiven || s.AtSource == AtSourceWritten {
+		line += fmt.Sprintf(", %q", s.Description)
+	}
+	return line
 }
 
-// WaypointsBlock is waypoint list's block (M10; waypoints.schema.json, $defs/list): every
-// waypoint Infrahub holds, or the one series asked for, sorted by series then sequence,
-// each with the reference it resolves to; and the waypoint the host's record names.
-type WaypointsBlock struct {
-	// Series is the --series filter, or nil when every series was listed.
-	Series    *string       `json:"series"`
-	Waypoints []WaypointRow `json:"waypoints"`
+// StagesBlock is stage list's block (014; stages.schema.json, $defs/list): the stages of
+// every open proposed change, or of the one whose source branch was asked for, sorted by
+// branch then order, each with the reference it resolves to; the orphaned stages; and the
+// stage the host's record names.
+type StagesBlock struct {
+	// Branch is the --branch filter, or nil when every open proposed change was listed.
+	Branch  *string       `json:"branch"`
+	Rows    []StageRow    `json:"rows"`
+	Orphans []StageOrphan `json:"orphans"`
 	// Record is what twin.json names, as recorded, when it is readable and names a
-	// waypoint; nil otherwise. Written as an explicit null, as the contract requires.
-	Record *WaypointRecord `json:"record"`
+	// stage; nil otherwise. Written as an explicit null, as the contract requires.
+	Record *StageRecord `json:"record"`
 }
 
-// MarshalJSON writes no rows as [] rather than null: the contract requires the list.
-func (b WaypointsBlock) MarshalJSON() ([]byte, error) {
-	type plain WaypointsBlock
-	if b.Waypoints == nil {
-		b.Waypoints = []WaypointRow{}
+// MarshalJSON writes no rows and no orphans as [] rather than null: the contract requires
+// the lists.
+func (b StagesBlock) MarshalJSON() ([]byte, error) {
+	type plain StagesBlock
+	if b.Rows == nil {
+		b.Rows = []StageRow{}
+	}
+	if b.Orphans == nil {
+		b.Orphans = []StageOrphan{}
 	}
 	return json.Marshal(plain(b))
 }
 
-// WaypointRow is one listed waypoint: the reference it resolves to now, with no refusal
-// (a listing resolves nothing for a run), and whether it is the one the host's twin was
-// built from.
-type WaypointRow struct {
-	WaypointBlock
+// StageRow is one listed stage: the reference it resolves to now, with no refusal (a
+// listing resolves nothing for a run), and whether it is the one the host's twin was built
+// from.
+type StageRow struct {
+	StageBlock
 	Twin bool `json:"twin"`
 }
 
-// WaypointRecord is the waypoint a version 3 twin.json names, with the reference the record
-// holds: its provenance's branch and at, which the row's may since differ from.
-type WaypointRecord struct {
-	Series   string `json:"series"`
-	Sequence int    `json:"sequence"`
-	Branch   string `json:"branch"`
+// StageOrphan is a stage whose proposed change no longer exists: listed, warned
+// (stage.orphaned), never planned or created from.
+type StageOrphan struct {
+	ID       string `json:"id"`
+	Label    string `json:"label"`
 	At       string `json:"at"`
 	AtSource string `json:"at_source"`
-	// State is a version 4 record's state, ready or diverged, and "" for a version 3 one,
-	// which has none (waypoints.schema.json).
-	State string `json:"state,omitempty"`
-	// Towards is the target of the diverged step, when State is diverged; nil otherwise.
-	Towards *WaypointTowards `json:"towards"`
 }
 
-// MarshalJSON writes state and towards for a version 4 record alone, towards as an explicit
-// null when the record is not diverged; a version 3 record's block is M10's, key for key.
-func (r WaypointRecord) MarshalJSON() ([]byte, error) {
-	type plain WaypointRecord
-	if r.State != "" {
-		return json.Marshal(plain(r))
-	}
-	type m10 struct {
-		Series   string `json:"series"`
-		Sequence int    `json:"sequence"`
-		Branch   string `json:"branch"`
-		At       string `json:"at"`
-		AtSource string `json:"at_source"`
-	}
-	return json.Marshal(m10{Series: r.Series, Sequence: r.Sequence, Branch: r.Branch, At: r.At, AtSource: r.AtSource})
+// StageChangeRef names a proposed change as twin.json 6 records it: its id and its source
+// branch.
+type StageChangeRef struct {
+	ID     string `json:"id"`
+	Branch string `json:"branch"`
 }
 
-// WaypointTowards names the waypoint a diverged step was going to.
-type WaypointTowards struct {
-	Series   string `json:"series"`
-	Sequence int    `json:"sequence"`
+// StageRecord is the stage a twin.json 6 names, with the reference the record holds: its
+// provenance's branch and at, which the row's may since differ from (stage.twin.moved).
+type StageRecord struct {
+	Ref            string         `json:"ref"`
+	ProposedChange StageChangeRef `json:"proposed_change"`
+	Label          string         `json:"label"`
+	Branch         string         `json:"branch"`
+	At             string         `json:"at"`
+	AtSource       string         `json:"at_source"`
+	// State is the record's: ready or diverged.
+	State string `json:"state"`
+	// Towards is the target of the diverged step, when State is diverged; nil otherwise,
+	// written as an explicit null.
+	Towards *StageTowards `json:"towards"`
 }
 
-// PlanBlock is waypoint plan's block (M10; waypoints.schema.json, $defs/plan): each waypoint
-// of the series in sequence order, as far as it got, and the step between each consecutive
-// pair.
+// StageTowards names the stage a diverged step was going to.
+type StageTowards struct {
+	Ref string `json:"ref"`
+}
+
+// PlanBlock is stage plan's block (014; stages.schema.json, $defs/plan): the proposed change
+// named by its source branch, each of its stages in order as far as it got, and the step
+// between each consecutive pair.
 type PlanBlock struct {
-	Series    string         `json:"series"`
-	Waypoints []PlanWaypoint `json:"waypoints"`
+	Branch         string      `json:"branch"`
+	ProposedChange StageChange `json:"proposed_change"`
+	Stages         []PlanStage `json:"stages"`
 	// Steps are internal/step's pairs as they marshal themselves, one fewer than the
-	// waypoints, in order. Raw, because the step's shape is the step package's to render,
+	// stages, in order. Raw, because the step's shape is the step package's to render,
 	// and this package imports none of Fylgja's.
 	Steps []json.RawMessage `json:"steps"`
 }
 
-// MarshalJSON writes no steps as [] rather than null: a series of one waypoint has none,
-// and the contract requires the list.
+// MarshalJSON writes no stages and no steps as [] rather than null: the contract requires
+// the lists.
 func (b PlanBlock) MarshalJSON() ([]byte, error) {
 	type plain PlanBlock
-	if b.Waypoints == nil {
-		b.Waypoints = []PlanWaypoint{}
+	if b.Stages == nil {
+		b.Stages = []PlanStage{}
 	}
 	if b.Steps == nil {
 		b.Steps = []json.RawMessage{}
@@ -212,29 +261,30 @@ func (b PlanBlock) MarshalJSON() ([]byte, error) {
 	return json.Marshal(plain(b))
 }
 
-// PlanWaypoint is one waypoint of a plan. Branch, At and AtSource are set once it resolved;
-// BundleID once it compiled; Read once its read did. A waypoint refused at resolution
-// carries its reference, description and findings alone.
-type PlanWaypoint struct {
-	Series      string      `json:"series"`
-	Sequence    int         `json:"sequence"`
+// PlanStage is one stage of a plan. Its reference, label, description and the source of
+// its at are known whether or not it resolves; Branch and At are set once it resolved,
+// BundleID once it compiled, Read once its read did. A stage refused at resolution
+// carries those four and its findings alone.
+type PlanStage struct {
+	Ref         string      `json:"ref"`
+	Label       string      `json:"label"`
+	Description string      `json:"description"`
+	AtSource    string      `json:"at_source"`
 	Branch      string      `json:"branch,omitempty"`
 	At          string      `json:"at,omitempty"`
-	AtSource    string      `json:"at_source,omitempty"`
-	Description string      `json:"description"`
 	BundleID    *string     `json:"bundle_id"`
 	Read        *ReadCounts `json:"read"`
-	// Findings are this waypoint's, each also in the document's own list.
+	// Findings are this stage's, each also in the document's own list.
 	Findings List `json:"findings"`
 }
 
 // MarshalJSON writes no findings as [] rather than null: the contract requires the list.
-func (w PlanWaypoint) MarshalJSON() ([]byte, error) {
-	type plain PlanWaypoint
-	if w.Findings == nil {
-		w.Findings = List{}
+func (s PlanStage) MarshalJSON() ([]byte, error) {
+	type plain PlanStage
+	if s.Findings == nil {
+		s.Findings = List{}
 	}
-	return json.Marshal(plain(w))
+	return json.Marshal(plain(s))
 }
 
 // ReadCounts is intent read's summary line as numbers: what a read holds, and what the
@@ -260,31 +310,33 @@ type GenericKinds struct {
 type Verified struct {
 	ContractVersion string         `json:"contract_version,omitempty"`
 	Generics        []GenericKinds `json:"generics,omitempty"`
-	// Waypoints is whether the default branch carries the waypoint kind,
-	// whatever branch was checked: information beside the conformance answer, never a
-	// finding.
-	Waypoints *WaypointsVerified `json:"waypoints,omitempty"`
+	// Stages is whether the default branch carries the stage kind and its extension,
+	// whatever branch was checked (014): information beside the conformance answer, never
+	// a finding.
+	Stages *StagesVerified `json:"stages,omitempty"`
 }
 
-// WaypointsVerified is the waypoint kind as the default branch's schema holds it: present
-// with every attribute this build reads, or absent, or lacking the attributes Missing names
-// (verified.waypoints).
-type WaypointsVerified struct {
-	Kind    string   `json:"kind"`
-	Present bool     `json:"present"`
-	Missing []string `json:"missing"`
-	// File is the schema file that loads the kind.
+// StagesVerified is the stage kind as the default branch's schema holds it (014;
+// verified.stages): present with every attribute and the relationship this build reads,
+// or absent, or lacking what Missing names; and whether CoreProposedChange carries the
+// extension the file adds.
+type StagesVerified struct {
+	Kind      string   `json:"kind"`
+	Present   bool     `json:"present"`
+	Missing   []string `json:"missing"`
+	Extension bool     `json:"extension"`
+	// File is the schema file that loads the kind and the extension.
 	File string `json:"file"`
 }
 
-// MarshalJSON writes no missing attribute as [] rather than null: the contract requires
-// the list.
-func (w WaypointsVerified) MarshalJSON() ([]byte, error) {
-	type plain WaypointsVerified
-	if w.Missing == nil {
-		w.Missing = []string{}
+// MarshalJSON writes nothing missing as [] rather than null: the contract requires the
+// list.
+func (s StagesVerified) MarshalJSON() ([]byte, error) {
+	type plain StagesVerified
+	if s.Missing == nil {
+		s.Missing = []string{}
 	}
-	return json.Marshal(plain(w))
+	return json.Marshal(plain(s))
 }
 
 // TwinBlock is the success detail of twin create and twin provision: the twin that was
@@ -404,7 +456,7 @@ const (
 	FollowReasonPinned   = "pinned"    // --at given
 	FollowReasonNoFollow = "no_follow" // --no-follow given
 	FollowReasonBundle   = "bundle"    // twin provision: a bundle never follows
-	FollowReasonWaypoint = "waypoint"  // --waypoint given: a waypoint is pinned (M10)
+	FollowReasonStage    = "stage"     // --stage given: a stage is pinned (014)
 )
 
 // DryRunFollow is whether the twin a real run would build follows its branch, and how
@@ -540,9 +592,9 @@ type ShowRecord struct {
 	WorkerVersion  string  `json:"worker_version"`
 	RecordedAt     string  `json:"recorded_at"`
 	Nodes          int     `json:"nodes"`
-	// Waypoint is the waypoint a version 3 record names (M10), absent when it names none
-	// and for an earlier record.
-	Waypoint *ShowWaypoint `json:"waypoint,omitempty"`
+	// Stage is the stage a version 6 record names (014), absent when it names none and
+	// for an earlier record.
+	Stage *ShowStage `json:"stage,omitempty"`
 	// State is a version 4 record's state, ready or diverged; absent for an earlier record,
 	// which has none.
 	State string `json:"state,omitempty"`
@@ -643,14 +695,18 @@ type ShowWaitFailing struct {
 	Object string `json:"object"`
 }
 
-// ShowWaypoint is the waypoint a twin was created from, as twin.json records it. The at
-// is the record's own.
-type ShowWaypoint struct {
-	Series      string `json:"series"`
-	Sequence    int    `json:"sequence"`
-	Description string `json:"description"`
-	AtSource    string `json:"at_source"`
+// ShowStage is the stage a twin was created from or stepped to, as twin.json 6 records it
+// (014): its proposed change by id and source branch, its label, description and where its
+// at came from. The at is the record's own.
+type ShowStage struct {
+	ProposedChange StageChangeRef `json:"proposed_change"`
+	Label          string         `json:"label"`
+	Description    string         `json:"description"`
+	AtSource       string         `json:"at_source"`
 }
+
+// Ref is the stage as a reference names it: <branch>/<label>.
+func (s ShowStage) Ref() string { return s.ProposedChange.Branch + "/" + s.Label }
 
 // ShowRef is a run's identity.
 type ShowRef struct {
@@ -705,9 +761,9 @@ type ShowRun struct {
 // and destroy, dry_run.follow, and twin show — conform to M4's, additive again. M5's
 // operations — the artifact on a dry run's, a twin's and a shown host's nodes,
 // `pushed_in_s`, and the step `push` — conform to M5's, with show.schema.json added as a
-// resource under its $id. M10's — subject.waypoint, the waypoint block, record.waypoint in
-// the show block, and the waypoints and plan blocks of waypoint list and waypoint plan —
-// conform to M10's, with waypoints.schema.json added under its $id as well. Each
+// resource under its $id. 014's — subject.stage, the stage block, record.stage in the show
+// block, and the stages and plan blocks of stage list and stage plan — conform to the
+// current contract, with stages.schema.json added under its $id as well. Each
 // milestone's copy is kept under testdata/contracts/, and the current contract is
 // contracts/findings.schema.json. No field of any block carries a byte of artifact content.
 type Document struct {
@@ -722,11 +778,11 @@ type Document struct {
 	DryRun          *DryRunBlock    `json:"dry_run,omitempty"`
 	Following       *FollowingBlock `json:"following,omitempty"`
 	Show            *ShowBlock      `json:"show,omitempty"`
-	// Waypoint is the reference --waypoint resolved to (M10), present once it resolved.
-	Waypoint *WaypointBlock `json:"waypoint,omitempty"`
-	// Waypoints is waypoint list's block, Plan waypoint plan's (M10).
-	Waypoints *WaypointsBlock `json:"waypoints,omitempty"`
-	Plan      *PlanBlock      `json:"plan,omitempty"`
+	// Stage is the reference --stage resolved to (014), present once it resolved.
+	Stage *StageBlock `json:"stage,omitempty"`
+	// Stages is stage list's block, Plan stage plan's (014).
+	Stages *StagesBlock `json:"stages,omitempty"`
+	Plan   *PlanBlock   `json:"plan,omitempty"`
 	// Step is twin step's block, on the dry run and the run (M11).
 	Step *StepBlock `json:"step,omitempty"`
 	// Verify is twin verify's block (M12),
@@ -827,7 +883,7 @@ func (d *Document) WriteText(w io.Writer) error {
 }
 
 // TextLines is each finding as WriteText prints it, in WriteText's order, with no summary:
-// the shape waypoint plan also prints under each waypoint's line.
+// the shape stage plan also prints under each stage's line.
 func (l List) TextLines() []string {
 	list := make(List, len(l))
 	copy(list, l)
@@ -871,7 +927,7 @@ type StepBlock struct {
 	From StepSideBlock `json:"from"`
 	To   StepSideBlock `json:"to"`
 	// Diff is M10's step between the two bundles as internal/step marshals it
-	// (waypoints.schema.json, $defs/step).
+	// (stages.schema.json, $defs/step).
 	Diff         json.RawMessage     `json:"diff"`
 	Reconcile    StepReconcileBlock  `json:"reconcile"`
 	PushPlan     []StepPushPlanEntry `json:"push_plan"`
@@ -956,13 +1012,13 @@ type StepWaitFailing struct {
 	Message string `json:"message"`
 }
 
-// StepSideBlock is one side of a step: the waypoint, the bundle and the pinned at,
-// verbatim, and for the target the branch it resolved to.
+// StepSideBlock is one side of a step: the stage, the bundle and the pinned at, verbatim,
+// and for the target the branch it resolved to.
 type StepSideBlock struct {
-	Waypoint *ShowWaypoint `json:"waypoint"`
-	BundleID string        `json:"bundle_id"`
-	At       string        `json:"at"`
-	Branch   string        `json:"branch,omitempty"`
+	Stage    *ShowStage `json:"stage"`
+	BundleID string     `json:"bundle_id"`
+	At       string     `json:"at"`
+	Branch   string     `json:"branch,omitempty"`
 }
 
 // StepReconcileBlock is containerlab's plan (clab deploy --dry-run): the

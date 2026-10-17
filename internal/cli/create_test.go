@@ -577,8 +577,8 @@ func validateM7Document(t *testing.T, doc *findings.Document) {
 }
 
 // validateM10Document validates a document against the newest findings contract, with
-// the show block's, the waypoint blocks', the step block's and the verify block's schemas
-// added under their $ids. A document naming a waypoint was M10's; the
+// the show block's, the stage blocks', the step block's and the verify block's schemas
+// added under their $ids. A document naming a stage is 014's; the
 // newest contract, under the module root's contracts/,
 // extends M11's additively and accepts it, so the documents this build writes are read
 // against that.
@@ -588,7 +588,7 @@ func validateM10Document(t *testing.T, doc *findings.Document) {
 }
 
 // validateWithShow validates doc against feature's findings contract, with the show
-// block's schema added under its $id, from M10 the waypoint blocks', from M11 the step
+// block's schema added under its $id, from 014 the stage blocks', from M11 the step
 // block's and from M12 the verify block's under theirs.
 func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Document) {
 	t.Helper()
@@ -648,7 +648,7 @@ func findingsContract(t *testing.T, feature string) *jsonschema.Schema {
 	if err := c.AddResource("https://fylgja.dev/schemas/show.schema.json", load("show.schema.json")); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"waypoints.schema.json", "step.schema.json", "verify.schema.json"} {
+	for _, name := range []string{"stages.schema.json", "step.schema.json", "verify.schema.json"} {
 		if _, err := os.Stat(contractPath(feature, name)); err == nil {
 			if err := c.AddResource("https://fylgja.dev/schemas/"+name, load(name)); err != nil {
 				t.Fatal(err)

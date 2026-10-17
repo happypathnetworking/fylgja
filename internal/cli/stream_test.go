@@ -219,7 +219,7 @@ func TestEveryRunRequestNamesAFreshStream(t *testing.T) {
 			return runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
 		}},
 		{findings.OpTwinCreate, func() error {
-			return runCreate(context.Background(), &options{}, &createFlags{waypoint: "demo/1", waypointGiven: true})
+			return runCreate(context.Background(), &options{}, &createFlags{stage: "change-1/cabled", stageGiven: true})
 		}},
 		{findings.OpTwinProvision, func() error {
 			return runTwinProvision(context.Background(), &options{}, &provisionFlags{}, bundleDir)

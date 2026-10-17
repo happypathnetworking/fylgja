@@ -966,11 +966,11 @@ func TestVerifyDivergedRecord(t *testing.T) {
 	}
 	phase := findings.StepPush
 	rec.BundleID = prev
-	rec.Waypoint = &wire.WaypointRef{Series: "demo", Sequence: 1, AtSource: "given"}
+	rec.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "seeded", AtSource: "given"}
 	rec.State = wire.StateDiverged
 	rec.Step = &wire.StepRecord{Outcome: wire.StepDiverged, Phase: &phase,
-		From: wire.StepSide{Waypoint: rec.Waypoint, BundleID: prev},
-		To:   wire.StepSide{Waypoint: &wire.WaypointRef{Series: "demo", Sequence: 2, AtSource: "given"}, BundleID: h.staged},
+		From: wire.StepSide{Stage: rec.Stage, BundleID: prev},
+		To:   wire.StepSide{Stage: &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled", AtSource: "given"}, BundleID: h.staged},
 		Run:  wire.RunRef{WorkflowID: wire.StepWorkflowID, RunID: runID}}
 	p := prev
 	rec.Nodes[0].Holds = &p
@@ -990,7 +990,7 @@ func TestVerifyDivergedRecord(t *testing.T) {
 		t.Fatalf("exit %d, findings\n%+v\nwant 5 and\n%+v", out.code, out.doc.Findings, want)
 	}
 	for _, line := range []string{
-		"twin: waypoint demo/1 (bundle 348fd934…), diverged towards demo/2 (bundle " + short(h.staged) +
+		"twin: stage change-1/seeded (bundle 348fd934…), diverged towards change-1/cabled (bundle " + short(h.staged) +
 			") at phase push by run fylgja-step " + runID + "; 3 nodes",
 		"n1 (172.20.20.2:57400, nokia_srlinux): host name n1; ethernet-1/1, ethernet-1/2 enabled; neighbours n2 ethernet-1/1, n3 ethernet-1/2; " +
 			"record: holds 348fd934…, not the staged bundle (verify.record.holds)",
@@ -1004,7 +1004,7 @@ func TestVerifyDivergedRecord(t *testing.T) {
 	}
 	tw := out.doc.Verify.Twin
 	if tw.State != wire.StateDiverged || tw.BundleID != h.staged || tw.Diverged == nil || tw.Diverged.Phase != findings.StepPush ||
-		tw.Diverged.Run.RunID != runID || tw.Diverged.Towards.BundleID != h.staged || tw.Diverged.Towards.Waypoint.Sequence != 2 {
+		tw.Diverged.Run.RunID != runID || tw.Diverged.Towards.BundleID != h.staged || tw.Diverged.Towards.Stage == nil || tw.Diverged.Towards.Stage.Label != "cabled" {
 		t.Errorf("twin %+v, diverged %+v; want the divergence named", tw, tw.Diverged)
 	}
 }
@@ -1362,7 +1362,7 @@ func TestVerifyNamesNodesNotInTheBundle(t *testing.T) {
 func lines2(s string) []string { return strings.Split(strings.TrimSuffix(s, "\n"), "\n") }
 
 // The twin: line names the record's reference in each form contracts/cli.md gives it: a
-// branch twin pinned at T keeps its at in the reference; a ready waypoint twin, stepped or
+// branch twin pinned at T keeps its at in the reference; a ready stage twin, stepped or
 // not, says pinned at T after its state, never diverged; a bundle twin names its manifest's
 // branch and at, as a branch twin's.
 func TestVerifyTwinLine(t *testing.T) {
@@ -1374,19 +1374,19 @@ func TestVerifyTwinLine(t *testing.T) {
 	}{
 		{"a branch twin pinned at T", func(rec *wire.TwinRecord) { rec.Provenance.At = at },
 			"twin: branch fylgja-fixture at " + at + " (bundle %s), ready; 3 nodes"},
-		{"a ready waypoint twin", func(rec *wire.TwinRecord) {
+		{"a ready stage twin", func(rec *wire.TwinRecord) {
 			rec.Provenance.At = at
-			rec.Waypoint = &wire.WaypointRef{Series: "demo", Sequence: 2, AtSource: "given"}
-		}, "twin: waypoint demo/2 (bundle %s), ready, pinned at " + at + "; 3 nodes"},
-		{"a waypoint twin that has stepped and is ready", func(rec *wire.TwinRecord) {
+			rec.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled", AtSource: "given"}
+		}, "twin: stage change-1/cabled (bundle %s), ready, pinned at " + at + "; 3 nodes"},
+		{"a stage twin that has stepped and is ready", func(rec *wire.TwinRecord) {
 			rec.Provenance.At = at
-			rec.Waypoint = &wire.WaypointRef{Series: "demo", Sequence: 2, AtSource: "given"}
+			rec.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled", AtSource: "given"}
 			rec.Step = &wire.StepRecord{Outcome: wire.StepStepped,
-				From: wire.StepSide{Waypoint: &wire.WaypointRef{Series: "demo", Sequence: 1, AtSource: "given"},
+				From: wire.StepSide{Stage: &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "seeded", AtSource: "given"},
 					BundleID: "348fd9340000000000000000000000000000000000000000000000000000abcd"},
-				To:  wire.StepSide{Waypoint: rec.Waypoint, BundleID: rec.BundleID, At: at},
+				To:  wire.StepSide{Stage: rec.Stage, BundleID: rec.BundleID, At: at},
 				Run: wire.RunRef{WorkflowID: wire.StepWorkflowID, RunID: stepRunID}}
-		}, "twin: waypoint demo/2 (bundle %s), ready, pinned at " + at + "; 3 nodes"},
+		}, "twin: stage change-1/cabled (bundle %s), ready, pinned at " + at + "; 3 nodes"},
 		{"a bundle twin", func(rec *wire.TwinRecord) {
 			rec.Source, rec.ObservedAt, rec.Provenance.At = wire.SourceBundle, nil, "2026-09-08T12:00:00Z"
 		}, "twin: branch fylgja-fixture at 2026-09-08T12:00:00Z (bundle %s), ready; 3 nodes"},

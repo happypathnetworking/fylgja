@@ -14,7 +14,7 @@ import (
 )
 
 // fileCompiled files a compiled bundle in the store under dir, and the CTM it was compiled
-// from beside it, as a run's compile step files them: what the dry run and waypoint plan
+// from beside it, as a run's compile step files them: what the dry run and stage plan
 // leave behind to inspect. Moved here from the dry run so the two file alike.
 //
 // A store already holding other bytes under the id is refused as bundle.id.mismatch at

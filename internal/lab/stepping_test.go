@@ -339,22 +339,22 @@ func TestReconcileLab(t *testing.T) {
 
 // RecordStep writes the record a step leaves from the record it started from, the staged
 // target and what crossed as data, on a stepped and on a diverged outcome, against
-// twin.schema.json 4; and refuses as record.failed a record that names another bundle,
+// twin.schema.json 6; and refuses as record.failed a record that names another bundle,
 // leaving it whole.
 func TestRecordStep(t *testing.T) {
 	ctx := context.Background()
 	target, targetID := targetBundle(t)
 	golden := manifestNodes(t, goldenBundle())
-	demo1 := &wire.WaypointRef{Series: "demo", Sequence: 1, Description: "before", AtSource: "given"}
-	demo2 := &wire.WaypointRef{Series: "demo", Sequence: 2, Description: "after", AtSource: "given"}
+	seededStage := &wire.StageRef{ProposedChange: change1, Label: "seeded", Description: "before", AtSource: findings.AtSourceGiven}
+	cabledStage := &wire.StageRef{ProposedChange: change1, Label: "cabled", Description: "after", AtSource: findings.AtSourceGiven}
 	const goldenAt = "2026-09-08T12:00:00Z"
 
-	// prepared is the twin as a create of demo/1 left it, the target staged when stage says so.
+	// prepared is the twin as a create of change-1/seeded left it, the target staged when stage says so.
 	prepared := func(t *testing.T, stage bool) *Activities {
 		t.Helper()
 		a, _ := steppingTwin(t, &fakeRunner{})
 		observed := "2026-09-08T12:01:00.000000Z"
-		f := RecordFields{BundleID: goldenID, ObservedAt: &observed, Source: wire.SourceIntent, Waypoint: demo1,
+		f := RecordFields{BundleID: goldenID, ObservedAt: &observed, Source: wire.SourceIntent, Stage: seededStage,
 			Provenance: wire.Provenance{Branch: "fylgja-fixture", At: goldenAt, SchemaHash: "fixture", ContractVersion: "0.2"},
 			RunID:      "01a0e9e3-0000-7000-8000-000000000001", Version: "0.1.0-dev", RecordedAt: time.Now()}
 		for _, n := range golden {
@@ -384,8 +384,8 @@ func TestRecordStep(t *testing.T) {
 				MgmtIPv4: "172.20.20.2"})
 		}
 		return wire.RecordStepInput{TwinDir: a.Paths.Twin, RunID: stepRunID, Outcome: wire.StepStepped,
-			From:       wire.StepSide{Waypoint: demo1, BundleID: goldenID, At: goldenAt},
-			To:         wire.StepSide{Waypoint: demo2, BundleID: targetID, At: stepTargetAt, Branch: "fylgja-fixture"},
+			From:       wire.StepSide{Stage: seededStage, BundleID: goldenID, At: goldenAt},
+			To:         wire.StepSide{Stage: cabledStage, BundleID: targetID, At: stepTargetAt, Branch: "fylgja-fixture"},
 			ObservedAt: "2026-09-09T12:01:00.000000Z", ReconcileStarted: true,
 			Plan:      wire.ReconcilePlan{Restarted: []string{"n1"}, LinksAdded: []string{"n1:e1-3 -- n2:e1-3"}},
 			Declared:  map[string]string{"n1": "live", "n2": "live", "n3": "live"},
@@ -685,7 +685,7 @@ func TestRecordStep(t *testing.T) {
 		})
 	}
 
-	// A second step over a stepped record, demo/2 → demo/3 by another run, writes its own
+	// A second step over a stepped record, change-1/cabled → change-1/third-link by another run, writes its own
 	// record: the top level is the new target's, the step block the second run's alone, run
 	// stays the create's, and a node the second step left alone keeps the times the first
 	// gave it. This is the success beside the refusal above.
@@ -694,7 +694,7 @@ func TestRecordStep(t *testing.T) {
 			thirdAt = "2026-09-10T12:00:00Z"
 			runB    = "01a1b2c3-0000-7000-8000-00000000000c"
 		)
-		demo3 := &wire.WaypointRef{Series: "demo", Sequence: 3, Description: "later", AtSource: "given"}
+		thirdStage := &wire.StageRef{ProposedChange: change1, Label: "third-link", Description: "later", AtSource: findings.AtSourceGiven}
 		a := prepared(t, true)
 		first, err := record(t, a, input(a))
 		if err != nil {
@@ -706,8 +706,8 @@ func TestRecordStep(t *testing.T) {
 		}
 		in := input(a)
 		in.RunID = runB
-		in.From = wire.StepSide{Waypoint: demo2, BundleID: targetID, At: stepTargetAt}
-		in.To = wire.StepSide{Waypoint: demo3, BundleID: thirdID, At: thirdAt, Branch: "fylgja-fixture"}
+		in.From = wire.StepSide{Stage: cabledStage, BundleID: targetID, At: stepTargetAt}
+		in.To = wire.StepSide{Stage: thirdStage, BundleID: thirdID, At: thirdAt, Branch: "fylgja-fixture"}
 		in.ObservedAt = "2026-09-10T12:01:00.000000Z"
 		in.Plan = wire.ReconcilePlan{Restarted: []string{"n2"}, LinksAdded: []string{"n2:e1-4 -- n3:e1-4"}}
 		in.Reconcile = &wire.ReconcileResult{Nodes: in.Nodes, TookS: 4.2}
@@ -729,19 +729,19 @@ func TestRecordStep(t *testing.T) {
 			t.Errorf("the record returned differs from the one written")
 		}
 		validateRecord(t, schema, written)
-		if written.BundleID != thirdID || written.Provenance.At != thirdAt || !reflect.DeepEqual(written.Waypoint, demo3) ||
+		if written.BundleID != thirdID || written.Provenance.At != thirdAt || !reflect.DeepEqual(written.Stage, thirdStage) ||
 			written.State != wire.StateReady || written.Run != first.Record.Run {
-			t.Errorf("record %+v; want demo/3's top level, ready, and the create's run %+v", written, first.Record.Run)
+			t.Errorf("record %+v; want change-1/third-link's top level, ready, and the create's run %+v", written, first.Record.Run)
 		}
 		if st := written.Step; st == nil || st.Run.RunID != runB || st.From.BundleID != targetID ||
-			!reflect.DeepEqual(st.From.Waypoint, demo2) || st.To.BundleID != thirdID || st.StartedAt != in.StartedAt ||
+			!reflect.DeepEqual(st.From.Stage, cabledStage) || st.To.BundleID != thirdID || st.StartedAt != in.StartedAt ||
 			st.EndedAt != in.EndedAt || !slices.Equal(st.Reconcile.Restarted, []string{"n2"}) {
-			t.Errorf("step block %+v; want the second run's, from demo/2", st)
+			t.Errorf("step block %+v; want the second run's, from change-1/cabled", st)
 		}
 		times := map[string][2]float64{"n1": {11.2, 1.2}, "n2": {12.5, 0.8}, "n3": {1, 0.6}}
 		for _, n := range written.Nodes {
 			if n.Holds == nil || *n.Holds != thirdID {
-				t.Errorf("node %s holds %v, want demo/3's bundle", n.Name, n.Holds)
+				t.Errorf("node %s holds %v, want change-1/third-link's bundle", n.Name, n.Holds)
 			}
 			if got := [2]float64{n.ReadyAfterS, n.PushedInS}; got != times[n.Name] {
 				t.Errorf("node %s: ready after %v, pushed in %v; want %v", n.Name, got[0], got[1], times[n.Name])

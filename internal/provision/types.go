@@ -96,16 +96,17 @@ type ProvisionInput struct {
 	// StopFollowing stops any following once the host check has passed: true on every run
 	// the CLI starts, false on a rebuild's child and on M2's inputs (M4).
 	StopFollowing bool `json:"stop_following,omitempty"`
-	// Waypoint is the waypoint the CLI resolved Branch and At from, which the record step
-	// writes into twin.json. The run branches on nothing of it. Nil in every
-	// M2–M7 input and recorded history, and omitted when nil.
-	Waypoint *WaypointInput `json:"waypoint,omitempty"`
+	// Stage is the stage the server resolved Branch and At from (014), which the record
+	// step writes into twin.json. The run branches on nothing of it. Nil in every input
+	// and recorded history of a run not created from a stage, and omitted when nil.
+	Stage *StageInput `json:"stage,omitempty"`
 }
 
-// WaypointInput names a waypoint as the record does: series, sequence, description and
-// where the at came from. It is the record input's own type, so the run copies it in one
-// assignment and a nil stays nil with no branch in the workflow.
-type WaypointInput = wire.WaypointRef
+// StageInput names a stage as the record does: its proposed change by id and source
+// branch, its label, description and where the at came from. It is the record input's own
+// type, so the run copies it in one assignment and a nil stays nil with no branch in the
+// workflow.
+type StageInput = wire.StageRef
 
 // FollowInput is how often a following twin is checked.
 type FollowInput struct {
@@ -237,7 +238,7 @@ type CompileResult struct {
 // host. Paths are absolute and no bytes cross the queue beyond M10's step between the two
 // bundles, which the record keeps.
 type StepInput struct {
-	// From is the record's side: its waypoint, bundle_id and at. The run's first lock holds
+	// From is the record's side: its stage, bundle_id and at. The run's first lock holds
 	// the host's record to it.
 	From wire.StepSide `json:"from"`
 	// To is the target's side, with its branch.
@@ -250,7 +251,7 @@ type StepInput struct {
 	// BundlePath is read.
 	ToBundlePath string `json:"to_bundle_path"`
 	// Diff is M10's step between the two bundles as its pair JSON
-	// (waypoints.schema.json, $defs/step), for the record and the document.
+	// (stages.schema.json, $defs/step), for the record and the document.
 	Diff json.RawMessage `json:"diff"`
 	// Unchanged is step.Unchanged: the two bundles' content is equal and they differ by
 	// provenance alone. The run then stages the target and records it, and reconciles,

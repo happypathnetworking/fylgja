@@ -335,10 +335,10 @@ graph LR
     internal_psp["internal/psp"]
     internal_server["internal/server"]
     internal_stage["internal/stage"]
+    internal_stages["internal/stages"]
     internal_step["internal/step"]
     internal_validate["internal/validate"]
     internal_verify["internal/verify"]
-    internal_waypoint["internal/waypoint"]
     cmd_fylgja --> internal_api
     cmd_fylgja --> internal_bundle
     cmd_fylgja --> internal_cli
@@ -392,10 +392,10 @@ graph LR
     internal_server --> internal_provision
     internal_server --> internal_psp
     internal_server --> internal_stage
+    internal_server --> internal_stages
     internal_server --> internal_step
     internal_server --> internal_tree
     internal_server --> internal_verify
-    internal_server --> internal_waypoint
     internal_stage --> internal_bundle
     internal_stage --> internal_compiler
     internal_stage --> internal_ctm
@@ -403,6 +403,14 @@ graph LR
     internal_stage --> internal_intent
     internal_stage --> internal_psp
     internal_stage --> internal_validate
+    internal_stages --> internal_compiler
+    internal_stages --> internal_ctm
+    internal_stages --> internal_findings
+    internal_stages --> internal_intent
+    internal_stages --> internal_lab_wire
+    internal_stages --> internal_psp
+    internal_stages --> internal_stage
+    internal_stages --> internal_step
     internal_step --> internal_compiler
     internal_validate --> internal_compiler
     internal_validate --> internal_ctm
@@ -412,14 +420,6 @@ graph LR
     internal_verify --> internal_findings
     internal_verify --> internal_lab_wire
     internal_verify --> internal_psp
-    internal_waypoint --> internal_compiler
-    internal_waypoint --> internal_ctm
-    internal_waypoint --> internal_findings
-    internal_waypoint --> internal_intent
-    internal_waypoint --> internal_lab_wire
-    internal_waypoint --> internal_psp
-    internal_waypoint --> internal_stage
-    internal_waypoint --> internal_step
 ```
 <!-- /import-graph -->
 

@@ -21,13 +21,13 @@ const (
 type createFlags struct {
 	branch string
 	at     string
-	// waypoint is --waypoint as given, <series>/<sequence>: a pinned reference named in
-	// Infrahub, in place of --branch and --at (M10).
-	waypoint string
-	// waypointGiven is whether --waypoint was given at all, apart from its value: an explicit
+	// stage is --stage as given, <branch>/<label>: a moment of a proposed change, resolved
+	// by the server to a pinned reference in place of --branch and --at (014).
+	stage string
+	// stageGiven is whether --stage was given at all, apart from its value: an explicit
 	// empty one is a reference refused, not one left out (M4's --interval= precedent).
-	waypointGiven bool
-	dryRun        bool
+	stageGiven bool
+	dryRun     bool
 	// interval is --interval's value, read only when intervalGiven; not given, the default stands.
 	interval      string
 	intervalGiven bool
@@ -50,15 +50,15 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 			// parsed whatever it is, even empty, and the conflict guard sees only a flag the
 			// operator gave; the flag's default is shown in the help alone.
 			f.intervalGiven = cmd.Flags().Changed("interval")
-			f.waypointGiven = cmd.Flags().Changed("waypoint")
+			f.stageGiven = cmd.Flags().Changed("stage")
 			return runCreate(cmd.Context(), opts, f)
 		},
 	}
-	cmd.Flags().StringVar(&f.branch, "branch", "", "Infrahub branch to read (this or --waypoint is required)")
+	cmd.Flags().StringVar(&f.branch, "branch", "", "Infrahub branch to read (this or --stage is required)")
 	cmd.Flags().StringVar(&f.at, "at", "",
 		"point in time to read at, passed verbatim; omitted entirely when not given")
-	cmd.Flags().StringVar(&f.waypoint, "waypoint", "",
-		"waypoint to build the twin from, <series>/<sequence>: the pinned branch and at it names in Infrahub, never followed")
+	cmd.Flags().StringVar(&f.stage, "stage", "",
+		"stage to build the twin from, <branch>/<label>: the pinned branch and at a proposed change's stage resolves to, never followed")
 	cmd.Flags().StringVar(&f.interval, "interval", defaultInterval,
 		"how often a following twin is checked, as a Go duration (5m, 90s); floor "+minInterval)
 	cmd.Flags().BoolVar(&f.noFollow, "no-follow", false,
@@ -68,21 +68,21 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 	return cmd
 }
 
-// fromWaypoint is whether the create names a waypoint: --waypoint given, whatever its value,
-// or a value set without the flag, as a caller building the flags sets it.
-func (f *createFlags) fromWaypoint() bool {
-	return f.waypointGiven || f.waypoint != ""
+// fromStage is whether the create names a stage: --stage given, whatever its value, or a
+// value set without the flag, as a caller building the flags sets it.
+func (f *createFlags) fromStage() bool {
+	return f.stageGiven || f.stage != ""
 }
 
 // runCreate is twin create as one request: the flags given, and the server's answer printed
-// as it comes. Every guard, the waypoint's and the following's among them,
+// as it comes. Every guard, the stage's and the following's among them,
 // is the server's.
 func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	a := given{}
 	a.string("branch", f.branch)
 	a.string("at", f.at)
-	if f.fromWaypoint() {
-		a["waypoint"] = f.waypoint
+	if f.fromStage() {
+		a["stage"] = f.stage
 	}
 	if f.intervalGiven {
 		a["interval"] = f.interval

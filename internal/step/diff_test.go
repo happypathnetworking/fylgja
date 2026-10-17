@@ -258,9 +258,9 @@ func TestDiffNodeAdded(t *testing.T) {
 		t.Fatalf("Diff:\n got %+v\nwant %+v", got, want)
 	}
 
-	text := Between("demo/1", "demo/2", got).Text()
+	text := Between("change-1/seeded", "change-1/third-link", got).Text()
 	wantText := strings.Join([]string{
-		"step demo/1 → demo/2 (35aea06f… → 9c2d01e7…):",
+		"step change-1/seeded → change-1/third-link (35aea06f… → 9c2d01e7…):",
 		"  nodes: +n4; ~n1 (bootstrap, mapping)",
 		"  links: +n1:e1-3 — n4:e1-1",
 		"  artifacts: n1 device-config 43e8fd0c… → 9a0177b2…; n4 device-config added",
@@ -274,8 +274,8 @@ func TestDiffNodeAdded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if text := Between("demo/2", "demo/1", back).Text(); text != strings.Join([]string{
-		"step demo/2 → demo/1 (9c2d01e7… → 35aea06f…):",
+	if text := Between("change-1/third-link", "change-1/seeded", back).Text(); text != strings.Join([]string{
+		"step change-1/third-link → change-1/seeded (9c2d01e7… → 35aea06f…):",
 		"  nodes: -n4; ~n1 (bootstrap, mapping)",
 		"  links: -n1:e1-3 — n4:e1-1",
 		"  artifacts: n1 device-config 9a0177b2… → 43e8fd0c…; n4 device-config removed",
@@ -298,12 +298,12 @@ func TestPairTextOrder(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := strings.Join([]string{
-		"step demo/1 → demo/2 (35aea06f… → 9c2d01e7…):",
+		"step change-1/seeded → change-1/third-link (35aea06f… → 9c2d01e7…):",
 		"  nodes: -n1; ~n2 (bootstrap)",
 		"  links: unchanged",
 		"  artifacts: n1 device-config removed; n3 device-config ae0c3a87… → 9a0177b2…",
 	}, "\n")
-	if got := Between("demo/1", "demo/2", s).Text(); got != want {
+	if got := Between("change-1/seeded", "change-1/third-link", s).Text(); got != want {
 		t.Errorf("text:\n%s\nwant:\n%s", got, want)
 	}
 }
@@ -317,10 +317,10 @@ func TestPairTextOneLine(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, c := range []struct{ got, want string }{
-		{Between("demo/2", "demo/3", s).Text(),
-			"step demo/2 → demo/3 (35aea06f… → 9c2d01e7…): unchanged; the ids differ by provenance alone"},
-		{NotComputed("demo/3", "demo/5", idA, "", "demo/5 was refused").Text(),
-			"step demo/3 → demo/5 (35aea06f… → —): not computed (demo/5 was refused)"},
+		{Between("change-1/third-link", "change-1/live", s).Text(),
+			"step change-1/third-link → change-1/live (35aea06f… → 9c2d01e7…): unchanged; the ids differ by provenance alone"},
+		{NotComputed("change-1/live", "change-1/head", idA, "", "change-1/head was refused").Text(),
+			"step change-1/live → change-1/head (35aea06f… → —): not computed (change-1/head was refused)"},
 	} {
 		if c.got != c.want {
 			t.Errorf("text:\n got %s\nwant %s", c.got, c.want)
@@ -330,7 +330,7 @@ func TestPairTextOneLine(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := Between("demo/1", "demo/2", same).Text(); got != "step demo/1 → demo/2 (35aea06f… → 35aea06f…): unchanged; the two are one bundle" {
+	if got := Between("change-1/seeded", "change-1/third-link", same).Text(); got != "step change-1/seeded → change-1/third-link (35aea06f… → 35aea06f…): unchanged; the two are one bundle" {
 		t.Errorf("one bundle: %s", got)
 	}
 }
@@ -380,13 +380,13 @@ func TestDiffIsStable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	text, js := renderings(t, Between("demo/1", "demo/2", first))
+	text, js := renderings(t, Between("change-1/seeded", "change-1/third-link", first))
 	for i := 0; i < 2; i++ {
 		again, err := Diff(shuffled(t, a), shuffled(t, b))
 		if err != nil {
 			t.Fatal(err)
 		}
-		t2, j2 := renderings(t, Between("demo/1", "demo/2", again))
+		t2, j2 := renderings(t, Between("change-1/seeded", "change-1/third-link", again))
 		if t2 != text || string(j2) != string(js) {
 			t.Fatalf("run %d differs from the first:\n%s\n%s\nwant\n%s\n%s", i+2, t2, j2, text, js)
 		}
@@ -415,7 +415,7 @@ func TestDiffCarriesNoContent(t *testing.T) {
 			if len(s.ArtifactsChanged) != len(m.Nodes) || len(s.NodesChanged) != len(m.Nodes) {
 				t.Fatalf("every node's artifact and bootstrap changed, but the step names %+v", s)
 			}
-			text, js := renderings(t, Between("demo/1", "demo/2", s))
+			text, js := renderings(t, Between("change-1/seeded", "change-1/third-link", s))
 			for _, side := range []Bundle{a, b} {
 				for name, body := range side.Files {
 					if name == manifestFile || name == "topology.clab.yml" {
@@ -442,10 +442,10 @@ func TestDiffCarriesNoContent(t *testing.T) {
 	}
 }
 
-// stepSchema is waypoints.schema.json's step, from the module root's contracts/.
+// stepSchema is stages.schema.json's step, from the module root's contracts/.
 func stepSchema(t *testing.T) *jsonschema.Schema {
 	t.Helper()
-	f, err := os.Open(filepath.Join("..", "..", "contracts", "waypoints.schema.json"))
+	f, err := os.Open(filepath.Join("..", "..", "contracts", "stages.schema.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -454,7 +454,7 @@ func stepSchema(t *testing.T) *jsonschema.Schema {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const id = "https://fylgja.dev/schemas/waypoints.schema.json"
+	const id = "https://fylgja.dev/schemas/stages.schema.json"
 	c := jsonschema.NewCompiler()
 	if err := c.AddResource(id, doc); err != nil {
 		t.Fatal(err)
@@ -466,7 +466,7 @@ func stepSchema(t *testing.T) *jsonschema.Schema {
 	return s
 }
 
-// Every shape of a pair's JSON is waypoints.schema.json's step, and carries the checksums
+// Every shape of a pair's JSON is stages.schema.json's step, and carries the checksums
 // whole.
 func TestPairJSONSatisfiesTheContract(t *testing.T) {
 	schema := stepSchema(t)
@@ -484,10 +484,10 @@ func TestPairJSONSatisfiesTheContract(t *testing.T) {
 		name string
 		p    Pair
 	}{
-		{"changed", Between("demo/1", "demo/2", changed)},
-		{"unchanged", Between("demo/2", "demo/3", unchanged)},
-		{"not computed, one side", NotComputed("demo/3", "demo/5", idA, "", "demo/5 was refused")},
-		{"not computed, both sides", NotComputed("demo/4", "demo/5", "", "", "demo/4 and demo/5 were refused")},
+		{"changed", Between("change-1/seeded", "change-1/third-link", changed)},
+		{"unchanged", Between("change-1/third-link", "change-1/live", unchanged)},
+		{"not computed, one side", NotComputed("change-1/live", "change-1/head", idA, "", "change-1/head was refused")},
+		{"not computed, both sides", NotComputed("change-1/later", "change-1/head", "", "", "change-1/later and change-1/head were refused")},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			raw, err := json.Marshal(c.p)
@@ -503,7 +503,7 @@ func TestPairJSONSatisfiesTheContract(t *testing.T) {
 			}
 		})
 	}
-	raw, _ := json.Marshal(Between("demo/1", "demo/2", changed))
+	raw, _ := json.Marshal(Between("change-1/seeded", "change-1/third-link", changed))
 	for _, whole := range []string{idA, idB, "43e8fd0c2de5f4646f74a51d34742824", "9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3"} {
 		if !strings.Contains(string(raw), `"`+whole+`"`) {
 			t.Errorf("the JSON does not carry %s whole: %s", whole, raw)

@@ -1,7 +1,6 @@
 // Package step is the difference between two compiled bundles: what a twin built from one
-// would have to become to be a twin built from the other (M10). `waypoint plan` prints it
-// between consecutive
-// waypoints of a series; M11 applies it.
+// would have to become to be a twin built from the other (M10). `stage plan` prints it
+// between consecutive stages of a proposed change (014); M11 applies it.
 //
 // Diff is a pure function, as the compiler is: two bundles in memory in, a Step out, no
 // file, network or clock. A test in the compiler's shape holds the import
@@ -10,7 +9,7 @@
 // by its bytes, and no byte of an artifact or a bootstrap reaches the result.
 //
 // Provenance is excluded entirely. The at is hashed into bundle_id with everything else,
-// so two waypoints never share an id even when nothing they seal differs.
+// so two stages never share an id even when nothing they seal differs.
 // The step compares content, and the ids are printed beside it.
 package step
 
@@ -32,7 +31,7 @@ type Bundle struct {
 	Files map[string][]byte
 }
 
-// Why a node present on both sides changed (waypoints.schema.json, $defs/step). Listed in
+// Why a node present on both sides changed (stages.schema.json, $defs/step). Listed in
 // this order, which is also their sort order.
 const (
 	ReasonBootstrap = "bootstrap" // the node's bootstrap file's bytes differ

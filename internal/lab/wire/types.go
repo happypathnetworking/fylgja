@@ -50,7 +50,7 @@ const StepWorkflowID = "fylgja-step"
 // A record's state. twin.json 4 writes one of the two; a
 // record of 3 or earlier reads as "" and is shown as ready.
 const (
-	StateReady    = "ready"    // the twin is at the record's waypoint and bundle
+	StateReady    = "ready"    // the twin is at the record's stage and bundle
 	StateDiverged = "diverged" // the last step failed or was cancelled after the host was touched
 )
 
@@ -303,10 +303,10 @@ type RecordInput struct {
 	// Pushed is each node's push result (M5). RecordTwin refuses record.failed for a
 	// node the results do not name, as it refuses one the manifest does not name.
 	Pushed []PushResult `json:"pushed"`
-	// Waypoint is the waypoint the CLI resolved the run's reference from,
-	// copied into the record as data. Nil in every M2–M7 input and recorded history, and
-	// omitted when nil, so their activity payloads are byte-identical.
-	Waypoint *WaypointRef `json:"waypoint,omitempty"`
+	// Stage is the stage the server resolved the run's reference from (014), copied into
+	// the record as data. Nil in every input and recorded history of a run not created
+	// from a stage, and omitted when nil, so their activity payloads are byte-identical.
+	Stage *StageRef `json:"stage,omitempty"`
 }
 
 // RecordResult is where the record was written and the record exactly as written, so
@@ -331,28 +331,50 @@ type TwinRecord struct {
 	ProvisionedBy  ProvisionedBy `json:"provisioned_by"`
 	RecordedAt     string        `json:"recorded_at"`
 	Nodes          []TwinNode    `json:"nodes"`
-	// Waypoint names the waypoint the twin was created from, or is nil. No
-	// omitempty: version 3 writes an explicit null for none, as observed_at does, and a
-	// version 1 or 2 record, which has no key, reads as nil.
-	Waypoint *WaypointRef `json:"waypoint"`
+	// Stage names the stage the twin was created from or last stepped to, or is nil
+	// (014). No omitempty: version 6 writes an explicit null for none, as observed_at
+	// does, and a record of 5 or earlier, which has no key, reads as nil.
+	Stage *StageRef `json:"stage"`
 	// State is ready or diverged. A record of version 3 or
 	// earlier has no key and reads as "", which is shown as ready.
 	State string `json:"state,omitempty"`
 	// Step is the twin's last step, or nil for a twin that has not stepped.
 	// An earlier record, which has no key, reads as nil. Version 4 writes an explicit
-	// null, as waypoint does.
+	// null, as stage does.
 	Step *StepRecord `json:"step"`
+	// Superseded is set by lab.ReadRecord on a record of twin.json 5 or earlier that names
+	// the pinned reference it was created from in M10's shape, which this build no longer
+	// reads, so twin step's refusal can say so. Never written, and not carried across an
+	// activity's boundary, where the refusal is the one for a record naming no stage.
+	Superseded bool `json:"-"`
 }
 
-// WaypointRef is the waypoint a twin was created from, as the record names it: the
-// reference, the operator's description and where the at came from (given on the
-// waypoint, or written: the waypoint's own write time). The at itself is the record's
-// provenance.at.
-type WaypointRef struct {
-	Series      string `json:"series"`
-	Sequence    int    `json:"sequence"`
-	Description string `json:"description"`
-	AtSource    string `json:"at_source"`
+// StageRef is the stage a twin was created from or stepped to, as the record names it
+// (014): its proposed change by id and source branch, its label (a mark's, or
+// branch-point or head), the operator's description and where the at came from (given on
+// the mark, written: the mark's own write stamp, branch_point or head). The at itself is
+// the record's provenance.at, and provenance.branch the branch read: the default branch
+// for a branch-point twin.
+type StageRef struct {
+	ProposedChange StageChange `json:"proposed_change"`
+	Label          string      `json:"label"`
+	Description    string      `json:"description"`
+	AtSource       string      `json:"at_source"`
+}
+
+// StageChange names the proposed change a stage belongs to: its id, which is its
+// identity, and its source branch, which is how a reference finds it.
+type StageChange struct {
+	ID     string `json:"id"`
+	Branch string `json:"branch"`
+}
+
+// Name is the stage as a reference names it, <branch>/<label>, or "none".
+func (s *StageRef) Name() string {
+	if s == nil {
+		return "none"
+	}
+	return s.ProposedChange.Branch + "/" + s.Label
 }
 
 // RunRef is the provisioning run's identity in Temporal.
@@ -562,15 +584,15 @@ type ReconcileResult struct {
 	TookS float64   `json:"took_s"`
 }
 
-// StepSide is one side of a step: the waypoint, the bundle and the pinned at, verbatim.
+// StepSide is one side of a step: the stage, the bundle and the pinned at, verbatim.
 // Branch is the target's, for the document's to side
 // (contracts/step.schema.json); the record's sides carry none (contracts/twin.schema.json),
 // so a side written into a record leaves it empty.
 type StepSide struct {
-	Waypoint *WaypointRef `json:"waypoint"`
-	BundleID string       `json:"bundle_id"`
-	At       string       `json:"at"`
-	Branch   string       `json:"branch,omitempty"`
+	Stage    *StageRef `json:"stage"`
+	BundleID string    `json:"bundle_id"`
+	At       string    `json:"at"`
+	Branch   string    `json:"branch,omitempty"`
 }
 
 // RecordStepInput is everything a step's record holds that the lab host cannot read for

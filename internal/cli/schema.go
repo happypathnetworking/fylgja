@@ -43,7 +43,7 @@ func newSchemaCheckCmd(opts *options) *cobra.Command {
 }
 
 // runCheck is schema check as one request: the server asks the branch's schema, and the
-// default branch's for the waypoint kind.
+// default branch's for the stage kind and its extension.
 func runCheck(ctx context.Context, opts *options, f *checkFlags) error {
 	a := given{}
 	a.string("branch", f.branch)

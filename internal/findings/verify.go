@@ -47,7 +47,7 @@ func orEmpty[T any](l []T) []T {
 // derived from.
 type VerifyTwin struct {
 	BundleID string          `json:"bundle_id"` // the staged bundle's
-	Waypoint *ShowWaypoint   `json:"waypoint"`
+	Stage    *ShowStage      `json:"stage"`
 	State    string          `json:"state"` // ready or diverged; a record before 4 reads ready
 	Source   string          `json:"source"`
 	Nodes    int             `json:"nodes"` // the record's node count
@@ -61,10 +61,10 @@ type VerifyDiverged struct {
 	Phase   string        `json:"phase"`
 }
 
-// VerifyTowards is the waypoint and bundle a diverged twin's step was going to.
+// VerifyTowards is the stage and bundle a diverged twin's step was going to.
 type VerifyTowards struct {
-	Waypoint *ShowWaypoint `json:"waypoint"`
-	BundleID string        `json:"bundle_id"`
+	Stage    *ShowStage `json:"stage"`
+	BundleID string     `json:"bundle_id"`
 }
 
 // VerifyNode is one node the staged manifest names, read or not.

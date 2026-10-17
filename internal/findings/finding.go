@@ -160,22 +160,9 @@ const (
 	RuleArtifactInterfaceUnrepresented = "artifact.interface.unrepresented" // read; compile: <device>:<interface>; the artifact names an interface the mapping omitted, or one the node calls by another name; a warning, exit 0, which never refuses a bundle
 	RulePSPConfigBootstrapVia          = "psp.config.bootstrap_via"         // verify: the package path; bootstrap_via is push with mode replace, or with a delivery that carries no configuration lines
 
-	// M10, waypoints (contracts/cli.md). Each
-	// comment gives the severity, the step, the object and when it fires. The syntax and
-	// flag guards are at start, before any connection, as M4's are; the resolution
-	// refusals at the CLI-side step resolve (none in intent read, whose operations carry
-	// no step); the two warnings at none.
-	RuleWaypointRefInvalid    = "waypoint.ref.invalid"    // rejection, exit 2, start: the text given; --waypoint, or the plan's --series, is not <series>/<sequence>
-	RuleWaypointFlagsConflict = "waypoint.flags.conflict" // rejection, exit 2, start: the conflicting flag; --waypoint beside --branch, --at or --interval, the first found
-	RuleWaypointKindAbsent    = "waypoint.kind.absent"    // rejection, exit 1, resolve: FylgjaWaypoint; the default branch's schema lacks the kind or an attribute this build reads, naming schema/fylgja-waypoint.yaml
-	RuleWaypointUnknown       = "waypoint.unknown"        // rejection, exit 1, resolve: <series> or <series>/<sequence>; no such series, naming those that exist, or no such sequence, naming the series' sequences
-	RuleWaypointDuplicate     = "waypoint.duplicate"      // rejection, exit 1, resolve: <series>/<sequence>; two or more objects share the pair, naming every id and choosing none
-	RuleWaypointAtUnresolved  = "waypoint.at.unresolved"  // rejection, exit 1, resolve: <series>/<sequence>; the given at parses and is later than the CLI's clock
-	RuleWaypointTimeReversed  = "waypoint.time.reversed"  // warning, exit 0, no step: the later waypoint; a later sequence's at is earlier than the one before it, both parsed
-	RuleWaypointTwinMoved     = "waypoint.twin.moved"     // warning, exit 0, no step: the record's waypoint; it no longer resolves to the record's reference, or is gone
-
-	// 014, a proposed change's stages (D-045, D-046; research R-08), beside M10's until
-	// the switch removes them. Each comment gives the severity, the exit, the step, the
+	// 014, a proposed change's stages (D-045, D-046), in place of M10's rules: seven of
+	// them renamed, five new, and M10's reversed-time warning dropped, since marks are
+	// ordered by their at. Each comment gives the severity, the exit, the step, the
 	// object and when it fires. The syntax and flag guards are at start, before any
 	// connection; the resolution's refusals at resolve, before any run and before any
 	// branch's intent is read (none in intent read, whose operations carry no step); the
@@ -198,18 +185,17 @@ const (
 	// CLI's refusals before any run are at resolve (the twin, the target, the from
 	// bundle) and compare (the plan's rules); the run's second locks reword them at
 	// inspect and compare. A run in flight is M2's run.in_flight, not a new rule.
-	RuleStepTwinUnsteppable   = "step.twin.unsteppable"   // rejection, exit 1, resolve (inspect from the run's second lock): lab fylgja, M3's object, or the record's bundle_id; no twin, an orphan, an unreadable record, a record without its lab, or a record naming no waypoint
+	RuleStepTwinUnsteppable   = "step.twin.unsteppable"   // rejection, exit 1, resolve (inspect from the run's second lock): lab fylgja, M3's object, or the record's bundle_id; no twin, an orphan, an unreadable record, a record without its lab, a record of twin.json 5 or earlier, or a record naming no stage
 	RuleStepTwinDiverged      = "step.twin.diverged"      // rejection, exit 1, resolve (inspect): the record's bundle_id; the record's state is diverged, which only twin destroy clears
-	RuleStepTargetForeign     = "step.target.foreign"     // rejection, exit 1, resolve: the given reference; --waypoint names another series than the record's
-	RuleStepTargetUnknown     = "step.target.unknown"     // rejection, exit 1, resolve: the series or the reference; the series has no waypoints, no sequence after the record's, or not the one given
-	RuleStepTargetCurrent     = "step.target.current"     // rejection, exit 1, resolve: the reference; the target is the record's own waypoint
+	RuleStepTargetForeign     = "step.target.foreign"     // rejection, exit 1, resolve: the given reference; --stage names another branch than the record's, or another proposed change on it
+	RuleStepTargetUnknown     = "step.target.unknown"     // rejection, exit 1, resolve: the record's stage or the reference; the record's label is gone, no stage follows it, or the proposed change has not the one given
+	RuleStepTargetCurrent     = "step.target.current"     // rejection, exit 1, resolve: the reference; the target resolves to the record's own (branch, at)
 	RuleStepBundleMissing     = "step.bundle.missing"     // rejection, exit 1, resolve: the record's bundle_id; the store does not hold the bundle the twin was built from
 	RuleStepPackageMerge      = "step.package.merge"      // rejection, exit 1, compare: the package id; a node of either bundle runs a package whose mode is merge, which has no reset
 	RuleStepNodeUnapplied     = "step.node.unapplied"     // rejection, exit 1, compare: the node; the step changes its image, platform or psp and containerlab's plan does not recreate it, or adds it and the plan does not create it
 	RuleStepRestartRequired   = "step.restart.required"   // rejection, exit 1, compare: the nodes; containerlab's plan restarts or recreates a node and --allow-restart was not given
 	RuleStepDiverged          = "step.diverged"           // rejection, exit 4 (status diverged), the phase's step: the run id; the step failed or was cancelled from the stage on, and the twin is up and diverged
-	RuleStepSequenceSkipped   = "step.sequence.skipped"   // warning, exit 0, resolve: the target; the series has sequences strictly between the record's and the target's, either direction
-	RuleStepStageSkipped      = "step.stage.skipped"      // warning, exit 0, resolve: the target; the proposed change has marks strictly between the record's stage and the target, either direction (014: step.sequence.skipped's successor)
+	RuleStepStageSkipped      = "step.stage.skipped"      // warning, exit 0, resolve: the target; the proposed change has marks strictly between the record's stage and the target, either direction (014: M11's step.sequence.skipped, renamed)
 	RuleStepRestartUndeclared = "step.restart.undeclared" // warning, exit 0, compare: the node; containerlab's plan restarts a node whose package declares link_change live, or re-cables live one that declares restart
 
 	// M12, verify (contracts/cli.md). Each comment
@@ -260,8 +246,8 @@ const (
 	// M5: the push, between readiness and the record.
 	StepPush = "push"
 
-	// M10: the CLI's step between the flag guards and the run, where a waypoint resolves
-	// to its reference, as verify is twin provision's. No workflow step.
+	// M10: the server's step between the flag guards and the run, where a reference
+	// resolves (a stage's since 014), as verify is twin provision's. No workflow step.
 	StepResolve = "resolve"
 
 	// M11: the step's stage and reconcile, the first phase that touches the host.

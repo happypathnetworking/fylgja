@@ -193,7 +193,7 @@ func apiSchema(t *testing.T, def string) *jsonschema.Schema {
 	t.Helper()
 	c := jsonschema.NewCompiler()
 	for _, name := range []string{"api.schema.json", "findings.schema.json", "show.schema.json",
-		"waypoints.schema.json", "step.schema.json", "verify.schema.json"} {
+		"stages.schema.json", "step.schema.json", "verify.schema.json"} {
 		f, err := os.Open(filepath.Join("..", "..", "contracts", name))
 		if err != nil {
 			t.Fatal(err)
@@ -431,6 +431,9 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 	_, srv, log, calls := testServer(t, answered)
 	for _, c := range []struct{ op, body, says string }{
 		{findings.OpTwinShow, `{"args":{"branch":"b"}}`, `twin.show takes no argument "branch"`},
+		// 014: the argument M10 named is gone with the waypoint; stage is its successor.
+		{findings.OpTwinCreate, `{"args":{"waypoint":"demo/2"}}`, `twin.create takes no argument "waypoint"`},
+		{findings.OpStageList, `{"args":{"series":"demo"}}`, `stage.list takes no argument "series"`},
 		{findings.OpTwinCreate, `{"args":{"branch":true}}`, `twin.create's argument "branch" is not a string`},
 		{findings.OpTwinCreate, `{"args":{"dry_run":"yes"}}`, `twin.create's argument "dry_run" is not a boolean`},
 		{findings.OpTwinVerify, `{"args":{"args":"x"}}`, `twin.verify's argument "args" is not an array of strings`},
@@ -502,7 +505,8 @@ func TestAnUnknownVersionIsNamedAndNothingIsDone(t *testing.T) {
 		}
 		satisfies(t, problem, body, path)
 	}
-	for _, path := range []string{"/v1/twin/nope", "/v1/streams/x/nope"} {
+	// 014: M10's two operations are gone, so their paths name no operation.
+	for _, path := range []string{"/v1/twin/nope", "/v1/streams/x/nope", "/v1/waypoint/list", "/v1/waypoint/plan"} {
 		resp, body := post(t, nil, srv.URL+path, testToken, `{}`, nil)
 		if resp.StatusCode != http.StatusNotFound || resp.Header.Get(api.HeaderVersions) != "" {
 			t.Errorf("%s: status %d with %s %q, want 404 without it", path, resp.StatusCode,
@@ -919,7 +923,7 @@ func TestAPanicEndsTheAnswerWithoutADocument(t *testing.T) {
 		panic("a value that names " + testToken)
 	}
 	_, srv, log, _ := testServer(t, run)
-	req, _ := http.NewRequest(http.MethodPost, srv.URL+api.Path(findings.OpWaypointPlan), strings.NewReader(`{"render":"text"}`))
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+api.Path(findings.OpStagePlan), strings.NewReader(`{"render":"text"}`))
 	req.Header.Set("Authorization", "Bearer "+testToken)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
@@ -935,7 +939,7 @@ func TestAPanicEndsTheAnswerWithoutADocument(t *testing.T) {
 			t.Errorf("a document after a panic: %s", l)
 		}
 	}
-	l := waitForLog(t, log, "operation=waypoint.plan", "outcome=panic", "level=ERROR")
+	l := waitForLog(t, log, "operation=stage.plan", "outcome=panic", "level=ERROR")
 	if strings.Contains(log.String(), "a value that names") {
 		t.Errorf("the log carries the panic's value: %s", l)
 	}

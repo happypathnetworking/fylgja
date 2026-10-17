@@ -14,7 +14,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/stage"
-	"github.com/happypathnetworking/fylgja/internal/waypoint"
+	"github.com/happypathnetworking/fylgja/internal/stages"
 )
 
 // observedAtFormat is the envelope's observed_at, shared with the read a provisioning
@@ -24,38 +24,37 @@ const observedAtFormat = stage.ObservedAtFormat
 type readFlags struct {
 	branch string
 	at     string
-	// waypoint is --waypoint as given, <series>/<sequence>: a pinned reference named in
-	// Infrahub, in place of --branch and --at (M10).
-	waypoint string
-	// waypointGiven is whether --waypoint was given at all, apart from its value: an explicit
+	// stage is --stage as given, <branch>/<label>: a moment of a proposed change, resolved
+	// to a pinned reference in place of --branch and --at (014).
+	stage string
+	// stageGiven is whether --stage was given at all, apart from its value: an explicit
 	// empty one is a reference refused, not one left out (M4's --interval= precedent).
-	waypointGiven bool
-	out           string
+	stageGiven bool
+	out        string
 }
 
-// fromWaypoint is whether the read names a waypoint: --waypoint given, whatever its value,
-// or a value set without the flag, as a caller building the flags sets it.
-func (f *readFlags) fromWaypoint() bool {
-	return f.waypointGiven || f.waypoint != ""
+// fromStage is whether the read names a stage: --stage given, whatever its value, or a
+// value set without the flag, as a caller building the flags sets it.
+func (f *readFlags) fromStage() bool {
+	return f.stageGiven || f.stage != ""
 }
 
 func runRead(ctx context.Context, opts *options, f *readFlags) error {
 	subject := &findings.Subject{Branch: f.branch, At: f.at, Out: f.out}
 
-	if f.branch == "" && !f.fromWaypoint() {
-		return fail(findings.OpIntentRead, subject, "--branch or --waypoint is required")
+	if f.branch == "" && !f.fromStage() {
+		return fail(findings.OpIntentRead, subject, "--branch or --stage is required")
 	}
 	if f.out == "" {
 		return fail(findings.OpIntentRead, subject, "--out is required")
 	}
 
-	var ref waypoint.Ref
-	if f.fromWaypoint() {
-		// A waypoint is a whole pinned reference, refused beside the flags it stands for
-		// before any connection; with no step, as M1's operations carry none (M10
-		// contracts/cli.md).
+	var ref stages.Ref
+	if f.fromStage() {
+		// A stage is a whole pinned reference, refused beside the flags it stands for
+		// before any connection; with no step, as M1's operations carry none.
 		var refused error
-		ref, refused = waypointGuards(findings.OpIntentRead, subject, "", f.waypoint, []flagConflict{
+		ref, refused = stageGuards(findings.OpIntentRead, subject, "", f.stage, []flagConflict{
 			{f.branch != "", "--branch", wholeReference},
 			{f.at != "", "--at", wholeReference},
 		})
@@ -84,23 +83,28 @@ func runRead(ctx context.Context, opts *options, f *readFlags) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	// A waypoint resolves to the pinned reference it names, and the read is that
-	// reference's: the CTM is the one --branch and --at would write, naming nothing of the
-	// waypoint. Every document after it names the waypoint.
+	// A stage resolves to the pinned reference it names, and the read is that reference's:
+	// the CTM is the one --branch and --at would write, naming nothing of the stage. The
+	// resolved line comes first, and every document after it names the stage.
 	branch, at := f.branch, f.at
-	var resolved *findings.WaypointBlock
-	if f.fromWaypoint() {
-		if resolved, err = resolveWaypoint(ctx, findings.OpIntentRead, subject, "", ref); err != nil {
+	var resolved *resolvedStage
+	if f.fromStage() {
+		if resolved, err = resolveStage(ctx, findings.OpIntentRead, subject, "", ref, reg); err != nil {
 			return err
 		}
-		branch, at = resolved.Branch, resolved.At
+		branch, at = resolved.block.Branch, resolved.block.At
+		opts.note("%s", resolved.block.Line())
 	}
-	return withWaypoint(read(ctx, opts, subject, branch, at, f.out, reg, observedAt, resolved), resolved)
+	var block *findings.StageBlock
+	if resolved != nil {
+		block = &resolved.block
+	}
+	return withStage(read(ctx, opts, subject, branch, at, f.out, reg, observedAt, block), resolved)
 }
 
 // read is intent read's read and write of one reference, pinned or not.
 func read(ctx context.Context, opts *options, subject *findings.Subject, branch, at, out string, reg *psp.Registry,
-	observedAt string, resolved *findings.WaypointBlock) error {
+	observedAt string, resolved *findings.StageBlock) error {
 	// Conformance, fetch and validation, reported together in one pass: the
 	// same pipeline a create runs inside its run (internal/stage).
 	snapshot, list, err := stage.Read(ctx, branch, at, reg, observedAt)
@@ -124,7 +128,7 @@ func read(ctx context.Context, opts *options, subject *findings.Subject, branch,
 
 	named := readSubject(snapshot.Envelope)
 	if resolved != nil {
-		named = fmt.Sprintf("waypoint %s/%d: %s", resolved.Series, resolved.Sequence, named)
+		named = fmt.Sprintf("stage %s: %s", resolved.Ref, named)
 	}
 	opts.note("%s", summaryLine(out, snapshot, reg, named))
 	return finish(findings.OpIntentRead, subject, list)
@@ -138,7 +142,7 @@ func readSummaryLine(out string, c *ctm.CTM, reg *psp.Registry) string {
 }
 
 // summaryLine is readSummaryLine naming what was read as named says: the reference, or
-// from M10 the waypoint it was resolved from and then the reference (contracts/cli.md).
+// from 014 the stage it was resolved from and then the reference.
 func summaryLine(out string, c *ctm.CTM, reg *psp.Registry, named string) string {
 	return fmt.Sprintf("wrote %s: %s (%s)", out,
 		readCounts(intent.Summarize(c), intent.DevicesByPackage(c, reg), compiler.Survey(c, reg)), named)

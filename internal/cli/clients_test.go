@@ -152,7 +152,7 @@ func TestADestroyFromASecondClientDuringAStep(t *testing.T) {
 			{Severity: findings.Rejection, Rule: findings.RuleRunCancelled, Object: stepRunID, Step: findings.StepReadiness,
 				Message: "run " + stepRunID + " was cancelled at step readiness; the record was written diverged and nothing was torn down"},
 			{Severity: findings.Rejection, Rule: findings.RuleStepDiverged, Object: stepRunID, Step: findings.StepReadiness,
-				Message: "step run " + stepRunID + " towards waypoint steps/2 stopped at phase readiness; …"}}}
+				Message: "step run " + stepRunID + " towards stage change-1/live stopped at phase readiness; …"}}}
 	following := make(chan struct{})
 	svc := &destroyDuringAStep{fakeService: &fakeService{runID: stepRunID, release: make(chan struct{}), stepResult: cancelled,
 		events: []provision.Event{{WorkflowID: provision.WorkflowStep, Step: "readiness e1", FindingStep: findings.StepReadiness}},

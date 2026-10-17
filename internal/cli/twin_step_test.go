@@ -28,26 +28,33 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
-	"github.com/happypathnetworking/fylgja/internal/stage"
-	"github.com/happypathnetworking/fylgja/internal/waypoint"
+	intentstage "github.com/happypathnetworking/fylgja/internal/stage"
+	"github.com/happypathnetworking/fylgja/internal/stages"
 )
 
-// The series twin step walks in tier 1: steps/1 is the mixed fixture
-// read at its own at, steps/2 a branch that adds the link e1:Ethernet3 — s1:ethernet-1/3 and
-// re-renders e1's and s1's artifacts (the fixture tool's -add-mixed-link, in the fake), and
-// steps/3 the
-// mixed fixture again at a later at, so the step from steps/1 is unchanged but for
-// provenance. steps/4 reads a branch with no contract node, steps/6 is held twice, and
-// other/3 is of another series.
+// The proposed change twin step walks in tier 1 (014): pc-1 on branch change-1, whose
+// source branch reads four intents by version (the fake's versions), so each stage reads
+// its own at. Its stages in order: the branch point (main, the fixture); sealed, the mixed
+// fixture at a given at; linked, unwritten, at its mark's writing, which adds the link
+// e1:Ethernet3 — s1:ethernet-1/3 and re-renders e1's and s1's artifacts (the fixture tool's
+// -add-mixed-link, in the fake); again, the mixed fixture at a later at, so the step from
+// sealed is unchanged but for provenance; less, e2 retired; and the head, at the branch's
+// latest stamp.
 const (
-	stepMixedAt   = "2026-09-20T12:00:00Z"
-	stepWrittenAt = "2026-09-21T08:00:00.000000+00:00"
-	stepLaterAt   = "2026-09-22T00:00:00Z"
+	stepMixedAt   = "2026-10-16T08:30:00Z"
+	stepWrittenAt = fakeMarkedAt
+	stepLaterAt   = "2026-10-16T11:00:00Z"
+	stepLessAt    = "2026-10-16T12:00:00Z"
 	stepRunID     = "01a1b2c3-0000-7000-8000-000000000001"
 	createRunID   = "01a1b2c3-0000-7000-8000-000000000000"
+	// stepStages is the proposed change's stages, as its refusals name them.
+	stepStages = "branch-point, sealed, linked, again, less, head"
 )
 
-// stepInfrahub serves the series.
+// stepChange is the twin's proposed change as its record names it.
+var stepChange = wire.StageChange{ID: "pc-1", Branch: "change-1"}
+
+// stepInfrahub serves the proposed change.
 func stepInfrahub(t *testing.T) *fakeInfrahub {
 	t.Helper()
 	f := newFakeInfrahub(t)
@@ -55,21 +62,22 @@ func stepInfrahub(t *testing.T) *fakeInfrahub {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.branches = map[string]*ctm.CTM{"mixed-fixture": mixed, "mixed-step": withMixedLink(t), "contractless": mixed,
-		"mixed-less": withoutE2(t)}
-	f.contractless = map[string]bool{"contractless": true}
-	f.waypoint("wp-steps-2", "steps", 2, "mixed-step", stepWrittenAt, "", "a link between e1 and s1")
-	f.waypoint("wp-steps-1", "steps", 1, "mixed-fixture", stepWrittenAt, stepMixedAt, "the mixed fixture as sealed")
-	f.waypoint("wp-steps-3", "steps", 3, "mixed-fixture", stepWrittenAt, stepLaterAt, "the fixture again")
-	f.waypoint("wp-steps-4", "steps", 4, "contractless", stepWrittenAt, stepLaterAt, "")
-	f.waypoint("wp-steps-5", "steps", 5, "mixed-less", stepWrittenAt, stepLaterAt, "e2 retired")
-	f.waypoint("wp-steps-6a", "steps", 6, "mixed-fixture", stepWrittenAt, stepLaterAt, "")
-	f.waypoint("wp-steps-6b", "steps", 6, "mixed-fixture", stepWrittenAt, stepLaterAt, "")
-	f.waypoint("wp-other-3", "other", 3, "mixed-fixture", stepWrittenAt, stepMixedAt, "")
+	mixed.Envelope.Branch = "change-1"
+	f.versions = map[string][]fakeVersion{"change-1": {
+		{Since: "2026-10-16T08:10:00.000000+00:00", CTM: mixed},
+		{Since: "2026-10-16T09:30:00.000000+00:00", CTM: withMixedLink(t)},
+		{Since: "2026-10-16T10:30:00.000000+00:00", CTM: mixed},
+		{Since: "2026-10-16T11:30:00.000000+00:00", CTM: withoutE2(t)},
+	}}
+	f.change("pc-1", "change-1",
+		mark("st-linked", "linked", "", "a link between e1 and s1"),
+		mark("st-sealed", "sealed", stepMixedAt, "the mixed fixture as sealed"),
+		mark("st-again", "again", stepLaterAt, "the fixture again"),
+		mark("st-less", "less", stepLessAt, "e2 retired"))
 	return f
 }
 
-// withMixedLink is the mixed fixture read from branch mixed-step with the link
+// withMixedLink is the mixed fixture read from branch change-1 with the link
 // e1:Ethernet3 — s1:ethernet-1/3 added and e1's and s1's artifacts re-rendered for it, each
 // carrying the marker in a comment line, as the seed's role line does.
 func withMixedLink(t *testing.T) *ctm.CTM {
@@ -78,7 +86,7 @@ func withMixedLink(t *testing.T) *ctm.CTM {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Envelope.Branch = "mixed-step"
+	c.Envelope.Branch = "change-1"
 	const link = "e1:Ethernet3|s1:ethernet-1/3"
 	c.Links = append(c.Links, ctm.Link{ID: link, Endpoints: []ctm.Endpoint{
 		{Device: "e1", Interface: "Ethernet3"}, {Device: "s1", Interface: "ethernet-1/3"}}})
@@ -105,7 +113,7 @@ func withMixedLink(t *testing.T) *ctm.CTM {
 	return c
 }
 
-// withoutE2 is the mixed fixture read from branch mixed-less with e2 and its two links
+// withoutE2 is the mixed fixture read from branch change-1 with e2 and its two links
 // removed, s1's and e1's ends of them left uncabled.
 func withoutE2(t *testing.T) *ctm.CTM {
 	t.Helper()
@@ -113,7 +121,7 @@ func withoutE2(t *testing.T) *ctm.CTM {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.Envelope.Branch = "mixed-less"
+	c.Envelope.Branch = "change-1"
 	gone := map[string]bool{}
 	var links []ctm.Link
 	for _, l := range c.Links {
@@ -219,11 +227,11 @@ type stepHostFixture struct {
 	before int
 }
 
-// stepHost is a host running the mixed twin, built from steps/1 by run createRunID: the
-// state root, the fake Infrahub, containerlab answering inspect-three.json and plan, both
-// logins set and no host budget, and no workflow service. The from bundle is built and filed
-// through waypoint plan's own path, as a create's compile files it, and twin.json 4 records
-// it; change adjusts the record before it is written.
+// stepHost is a host running the mixed twin, built from stage change-1/sealed by run
+// createRunID: the state root, the fake Infrahub, containerlab answering inspect-three.json
+// and plan, both logins set and no host budget, and no workflow service. The from bundle is
+// built and filed through stage plan's own path, as a create's compile files it, and
+// twin.json 6 records it; change adjusts the record before it is written.
 func stepHost(t *testing.T, plan string, change func(*lab.RecordFields)) *stepHostFixture {
 	t.Helper()
 	paths := useStateRoot(t)
@@ -231,36 +239,48 @@ func stepHost(t *testing.T, plan string, change func(*lab.RecordFields)) *stepHo
 	mixedDryRunEnv(t)
 	infra := stepInfrahub(t)
 	infra.start()
-	fromID := buildWaypoint(t, paths, waypoint.Ref{Series: "steps", Sequence: 1})
+	fromID := buildStage(t, paths, "sealed")
 	writeTwin(t, paths, stepRecordOf(t, fromID, change))
 	return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-three.json", plan), fromID: fromID,
 		before: len(infra.requests())}
 }
 
-// compiledWaypoint is what waypoint plan's path hands its filing for one reference.
-type compiledWaypoint struct {
+// compiledStage is what stage plan's path hands its filing for one label.
+type compiledStage struct {
 	files    map[string][]byte
 	id       string
 	snapshot *ctm.CTM
 }
 
-// builtWaypoints holds buildWaypoint's read and compile by reference, once for the package.
-// Every caller reads stepInfrahub's fixture as stepHost builds it, unchanged, so a reference
+// builtStages holds buildStage's read and compile by label, once for the package. Every
+// caller reads stepInfrahub's proposed change as stepHost builds it, unchanged, so a label
 // compiles to the same files each time; only the filing, into each test's own store, is
 // done again.
-var builtWaypoints = struct {
+var builtStages = struct {
 	sync.Mutex
-	byRef map[waypoint.Ref]compiledWaypoint
-}{byRef: map[waypoint.Ref]compiledWaypoint{}}
+	byLabel map[string]compiledStage
+}{byLabel: map[string]compiledStage{}}
 
-// buildWaypoint reads, compiles and files ref through waypoint plan's path and returns its id.
-// The read and the compile are builtWaypoints' after the first.
-func buildWaypoint(t *testing.T, paths lab.Paths, ref waypoint.Ref) string {
+// stepStamper reads a branch's stamps as the server's does.
+type stepStamper struct{}
+
+func (stepStamper) Stamps(ctx context.Context, branch, at string) (intent.Stamps, error) {
+	cfg, err := intent.FromEnv(branch, at)
+	if err != nil {
+		return intent.Stamps{}, err
+	}
+	return intent.New(cfg).Stamps(ctx)
+}
+
+// buildStage finds change-1's proposed change and reads, compiles and files its stage label
+// through stage plan's path, and returns its id. The read and the compile are builtStages'
+// after the first.
+func buildStage(t *testing.T, paths lab.Paths, label string) string {
 	t.Helper()
 	ctx := context.Background()
-	builtWaypoints.Lock()
-	built, ok := builtWaypoints.byRef[ref]
-	builtWaypoints.Unlock()
+	builtStages.Lock()
+	built, ok := builtStages.byLabel[label]
+	builtStages.Unlock()
 	if ok {
 		if _, _, err := fileCompiled(ctx, paths.Bundles, built.files, built.id, built.snapshot); err != nil {
 			t.Fatal(err)
@@ -271,45 +291,86 @@ func buildWaypoint(t *testing.T, paths lab.Paths, ref waypoint.Ref) string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader, err := intent.WaypointReaderFromEnv()
+	reader, err := intent.StageReaderFromEnv()
 	if err != nil {
 		t.Fatal(err)
 	}
-	all, _, err := waypoint.ListAll(ctx, reader)
-	if err != nil {
-		t.Fatal(err)
+	ch, list, err := stages.Find(ctx, reader, stepStamper{}, "change-1")
+	if err != nil || ch == nil {
+		t.Fatalf("change-1's proposed change was not found: %v %+v", err, list)
 	}
 	file := func(ctx context.Context, files map[string][]byte, id string, snapshot *ctm.CTM) (findings.List, error) {
-		built = compiledWaypoint{files: files, id: id, snapshot: snapshot}
+		built = compiledStage{files: files, id: id, snapshot: snapshot}
 		_, list, err := fileCompiled(ctx, paths.Bundles, files, id, snapshot)
 		return list, err
 	}
-	w := waypoint.Build(ctx, all, ref, reg, waypoint.NewStages(file), time.Now().UTC())
-	if w.Status != waypoint.PlanCompiled {
-		t.Fatalf("%s did not compile: %+v", ref, w.Findings)
+	ref := stages.Ref{Branch: "change-1", Label: label}
+	s := stages.Build(ctx, reader, stepStamper{}, reg, ch, ref, stages.NewPipeline(file), time.Now().UTC())
+	if s.Status != stages.PlanCompiled {
+		t.Fatalf("%s did not compile: %+v", ref, s.Findings)
 	}
-	if built.id != w.Bundle.ID {
-		t.Fatalf("%s filed %s and compiled to %s", ref, built.id, w.Bundle.ID)
+	if built.id != s.Bundle.ID {
+		t.Fatalf("%s filed %s and compiled to %s", ref, built.id, s.Bundle.ID)
 	}
-	builtWaypoints.Lock()
-	builtWaypoints.byRef[ref] = built
-	builtWaypoints.Unlock()
-	return w.Bundle.ID
+	builtStages.Lock()
+	builtStages.byLabel[label] = built
+	builtStages.Unlock()
+	return s.Bundle.ID
 }
 
-// stepRecordOf is twin.json 4 of the mixed twin created from steps/1.
+// stepStage is the record's reference to change-1's stage label.
+func stepStage(label, description, atSource string) *wire.StageRef {
+	return &wire.StageRef{ProposedChange: stepChange, Label: label, Description: description, AtSource: atSource}
+}
+
+// supersededHost is stepHost's twin with its record rewritten as twin.json 5, carrying
+// waypoint as M10's record did, or no waypoint key when it is nil.
+func supersededHost(t *testing.T, waypoint map[string]any) *stepHostFixture {
+	t.Helper()
+	h := stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) {
+		if waypoint == nil {
+			f.Stage = nil
+		}
+	})
+	b, err := os.ReadFile(h.paths.TwinJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	for k, v := range m {
+		if v == lab.TwinVersion && strings.Contains(k, "version") {
+			m[k] = "5"
+		}
+	}
+	delete(m, "stage")
+	if waypoint != nil {
+		m["waypoint"] = waypoint
+	}
+	if b, err = json.Marshal(m); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(h.paths.TwinJSON, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+// stepRecordOf is twin.json 6 of the mixed twin created from stage change-1/sealed.
 func stepRecordOf(t *testing.T, bundleID string, change func(*lab.RecordFields)) wire.TwinRecord {
 	t.Helper()
 	observed := "2026-09-21T09:00:00.000000Z"
 	f := lab.RecordFields{
 		BundleID:   bundleID,
-		Provenance: wire.Provenance{Branch: "mixed-fixture", At: stepMixedAt, SchemaHash: "fixture", ContractVersion: "0.2"},
+		Provenance: wire.Provenance{Branch: "change-1", At: stepMixedAt, SchemaHash: "fixture", ContractVersion: "0.2"},
 		ObservedAt: &observed,
 		Source:     wire.SourceIntent,
 		RunID:      createRunID,
 		Version:    "0.1.0-dev",
 		RecordedAt: time.Date(2026, 9, 21, 9, 1, 2, 0, time.UTC),
-		Waypoint:   &wire.WaypointRef{Series: "steps", Sequence: 1, Description: "the mixed fixture as sealed", AtSource: "given"},
+		Stage:      stepStage("sealed", "the mixed fixture as sealed", "given"),
 	}
 	for i, n := range []string{"e1", "e2", "s1"} {
 		image, id := "ceos:4.32.0.2F", "arista_eos"
@@ -436,14 +497,14 @@ func samePlan(a, b wire.ReconcilePlan) bool {
 		slices.Equal(a.EndpointsDeleted, b.EndpointsDeleted) && maps.Equal(a.Reasons, b.Reasons)
 }
 
-// stepDryRunLines is the dry run's text for the step steps/1 → steps/2 under
-// plan-link-added.json, through the push: line (contracts/cli.md).
+// stepDryRunLines is the dry run's text for the step change-1/sealed → change-1/linked
+// under plan-link-added.json, through the push: line (contracts/cli.md).
 func stepDryRunLines(fromID, toID string) []string {
 	return []string{
 		"dry run: no lab, container, twin directory or run is changed",
-		"twin: waypoint steps/1 (bundle " + short(fromID) + "), pinned at " + stepMixedAt + "; 3 nodes",
-		`waypoint steps/2: branch mixed-step at ` + stepWrittenAt + ` (written), "a link between e1 and s1"`,
-		"step steps/1 → steps/2 (" + short(fromID) + " → " + short(toID) + "):",
+		"twin: stage change-1/sealed (bundle " + short(fromID) + "), pinned at " + stepMixedAt + "; 3 nodes",
+		`stage change-1/linked: branch change-1 at ` + stepWrittenAt + ` (written), "a link between e1 and s1"`,
+		"step change-1/sealed → change-1/linked (" + short(fromID) + " → " + short(toID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
 		"  links: +e1:eth3 — s1:e1-3",
 		"  artifacts: e1 device-config 644a78b3… → 9f22a736…; s1 device-config 34df00ec… → 5612b2a0…",
@@ -460,7 +521,7 @@ var restartRequired = findings.Finding{Severity: findings.Rejection, Rule: findi
 		"it loses its running state and its push until the step pushes it again; give --allow-restart to proceed, " +
 		"or --dry-run to see the step"}
 
-// The dry run of the step steps/1 → steps/2 says, line for line, what a step would do and
+// The dry run of the step change-1/sealed → change-1/linked says, line for line, what a step would do and
 // that containerlab would restart e1; it refuses the step without --allow-restart and
 // clears it with the flag. Nothing on the host or in the twin directory changes: the plan is
 // read from the store's copy of the target against the twin directory's lab state, and the
@@ -521,7 +582,7 @@ func TestStepDryRun(t *testing.T) {
 			}
 			st := doc.Step
 			if st == nil || st.StepRunBlock != nil || st.AllowRestart != !refused || st.From.BundleID != h.fromID ||
-				st.To.BundleID != toID || st.To.Branch != "mixed-step" || !slices.Equal(st.Reconcile.Restarted, []string{"e1"}) ||
+				st.To.BundleID != toID || st.To.Branch != "change-1" || !slices.Equal(st.Reconcile.Restarted, []string{"e1"}) ||
 				len(st.PushPlan) != 2 || st.PushPlan[0].Node != "e1" || st.PushPlan[1].Node != "s1" {
 				t.Errorf("step block %+v; want the two sides, e1 restarted, e1 and s1 pushed, and no run", st)
 			}
@@ -548,11 +609,12 @@ func TestStepDryRun(t *testing.T) {
 					t.Errorf("step.push_plan %+v, want %+v", st.PushPlan, pushPlan)
 				}
 			}
-			if doc.Waypoint == nil || doc.Waypoint.Series != "steps" || doc.Waypoint.Sequence != 2 || doc.Waypoint.Branch != "mixed-step" {
-				t.Errorf("waypoint block %+v; want steps/2 on mixed-step", doc.Waypoint)
+			if doc.Stage == nil || doc.Stage.Ref != "change-1/linked" || doc.Stage.Branch != "change-1" ||
+				doc.Stage.AtSource != findings.AtSourceWritten || doc.Stage.ProposedChange.ID != stepChange.ID {
+				t.Errorf("stage block %+v; want change-1/linked, written, of pc-1", doc.Stage)
 			}
-			if sub := doc.Subject; sub == nil || sub.Waypoint != "steps/2" || sub.Branch != "mixed-step" || sub.At != stepWrittenAt || sub.RunID != "" {
-				t.Errorf("subject %+v; want steps/2 resolved and no run", sub)
+			if sub := doc.Subject; sub == nil || sub.Stage != "change-1/linked" || sub.Branch != "change-1" || sub.At != stepWrittenAt || sub.RunID != "" {
+				t.Errorf("subject %+v; want change-1/linked resolved and no run", sub)
 			}
 
 			// containerlab's plan is the store's copy of the target, against the twin
@@ -598,8 +660,8 @@ func TestStepDryRun(t *testing.T) {
 	}
 }
 
-// divergedStepHost is stepHost's twin left diverged by a step towards steps/2 that stopped
-// at push, e1 refused and s1 landed.
+// divergedStepHost is stepHost's twin left diverged by a step towards change-1/linked that
+// stopped at push, e1 refused and s1 landed.
 func divergedStepHost(t *testing.T) *stepHostFixture {
 	t.Helper()
 	h := stepHost(t, "plan-link-added.json", nil)
@@ -611,8 +673,8 @@ func divergedStepHost(t *testing.T) *stepHostFixture {
 	rec.State = wire.StateDiverged
 	rec.Step = &wire.StepRecord{Outcome: wire.StepDiverged, Phase: &phase,
 		Run:  wire.RunRef{WorkflowID: provision.WorkflowStep, RunID: stepRunID},
-		From: wire.StepSide{Waypoint: rec.Waypoint, BundleID: rec.BundleID, At: stepMixedAt},
-		To: wire.StepSide{Waypoint: &wire.WaypointRef{Series: "steps", Sequence: 2, AtSource: "written"},
+		From: wire.StepSide{Stage: rec.Stage, BundleID: rec.BundleID, At: stepMixedAt},
+		To: wire.StepSide{Stage: stepStage("linked", "a link between e1 and s1", "written"),
 			BundleID: strings.Repeat("f44ca840", 8), At: stepWrittenAt},
 		Pushed: []wire.StepPush{{Node: "e1", Reasons: []string{"artifact"}, Outcome: wire.PushRefused, Rule: findings.RulePushRefused},
 			{Node: "s1", Reasons: []string{"artifact"}, Outcome: wire.PushLanded}}}
@@ -624,7 +686,7 @@ func divergedStepHost(t *testing.T) *stepHostFixture {
 // record's bundle_id.
 func divergedRefusal(bundleID string) findings.Finding {
 	return findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinDiverged, Step: findings.StepResolve, Object: bundleID,
-		Message: "the twin is diverged: step run fylgja-step " + stepRunID + " towards waypoint steps/2 stopped at phase push " +
+		Message: "the twin is diverged: step run fylgja-step " + stepRunID + " towards stage change-1/linked stopped at phase push " +
 			"(landed: s1; not landed: e1 (push.refused)); it accepts only fylgja twin destroy"}
 }
 
@@ -732,14 +794,14 @@ func TestStepDryRunRefusals(t *testing.T) {
 	}
 }
 
-// Two warnings leave the exit as it is: a step that skips waypoints of the series, and a
-// package whose declared link change containerlab's plan contradicts.
+// Two warnings leave the exit as it is: a step that skips stages of its proposed change, and
+// a package whose declared link change containerlab's plan contradicts.
 func TestStepWarnings(t *testing.T) {
 	t.Run("skipped", func(t *testing.T) {
 		stepHost(t, "plan-nothing.json", nil)
-		out := runStepCmd(t, "--waypoint", "steps/3", "--dry-run")
-		want := findings.Finding{Severity: findings.Warning, Rule: findings.RuleStepSequenceSkipped, Object: "steps/3",
-			Step: findings.StepResolve, Message: "the step from steps/1 to steps/3 skips waypoint 2; the step is between the two bundles either way"}
+		out := runStepCmd(t, "--stage", "change-1/again", "--dry-run")
+		want := findings.Finding{Severity: findings.Warning, Rule: findings.RuleStepStageSkipped, Object: "change-1/again",
+			Step: findings.StepResolve, Message: "the step from change-1/sealed to change-1/again skips stage linked; the step is between the two bundles either way"}
 		if out.code != findings.ExitOK || !slices.Contains(out.doc.Findings, want) {
 			t.Errorf("exit %d, findings %+v; want 0 beside %+v", out.code, out.doc.Findings, want)
 		}
@@ -754,7 +816,7 @@ func TestStepWarnings(t *testing.T) {
 	// does: the plan is printed as containerlab gave it.
 	t.Run("unchanged beside a drifted lab", func(t *testing.T) {
 		stepHost(t, "plan-link-added.json", nil)
-		out := runStepCmd(t, "--waypoint", "steps/3", "--dry-run", "--allow-restart")
+		out := runStepCmd(t, "--stage", "change-1/again", "--dry-run", "--allow-restart")
 		if out.code != findings.ExitOK || !strings.Contains(out.stdout,
 			"reconcile: restart e1 (added link; arista_eos declares restart); live s1 (nokia_srlinux declares live)\npush: nobody\n") ||
 			out.doc.Step == nil || len(out.doc.Step.PushPlan) != 0 {
@@ -795,18 +857,19 @@ func TestStepWarnings(t *testing.T) {
 func TestStepDryRunReconcileLifecycles(t *testing.T) {
 	for _, c := range []struct {
 		name string
-		// fromLess builds the twin from steps/5, e2 retired, so that a step to steps/2 adds e2.
+		// fromLess builds the twin from change-1/less, e2 retired, so that a step to
+		// change-1/linked adds e2.
 		fromLess bool
 		args     []string
 		plan     string
 		line     string
 	}{
-		{name: "a recreate and a delete", args: []string{"--waypoint", "steps/5"},
+		{name: "a recreate and a delete", args: []string{"--stage", "change-1/less"},
 			plan: `{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": [], "deleted-nodes": ["e2"],
 				"recreated-nodes": ["s1"], "started-nodes": [], "added-links": [], "deleted-endpoints": [], "restarted-nodes": [],
 				"node-change-reasons": {"s1": "config drift: Image"}}`,
 			line: "reconcile: recreate s1 (config drift: Image; nokia_srlinux declares live); delete e2"},
-		{name: "a create", fromLess: true, args: []string{"--waypoint", "steps/2"},
+		{name: "a create", fromLess: true, args: []string{"--stage", "change-1/linked"},
 			plan: `{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": ["e2"], "deleted-nodes": [],
 				"recreated-nodes": [], "started-nodes": [],
 				"added-links": ["e1:eth2_1 -- e2:eth1", "e2:eth3_1_1 -- s1:e1-2", "e1:eth3 -- s1:e1-3"], "deleted-endpoints": [],
@@ -816,10 +879,10 @@ func TestStepDryRunReconcileLifecycles(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			h := stepHost(t, "plan-nothing.json", nil)
 			if c.fromLess {
-				fromID := buildWaypoint(t, h.paths, waypoint.Ref{Series: "steps", Sequence: 5})
+				fromID := buildStage(t, h.paths, "less")
 				writeTwin(t, h.paths, stepRecordOf(t, fromID, func(f *lab.RecordFields) {
-					f.Provenance.Branch, f.Provenance.At = "mixed-less", stepLaterAt
-					f.Waypoint = &wire.WaypointRef{Series: "steps", Sequence: 5, Description: "e2 retired", AtSource: "given"}
+					f.Provenance.At = stepLessAt
+					f.Stage = stepStage("less", "e2 retired", "given")
 					f.Nodes = slices.DeleteFunc(f.Nodes, func(n wire.TwinNode) bool { return n.Name == "e2" })
 				}))
 			}
@@ -839,12 +902,15 @@ func TestStepDryRunReconcileLifecycles(t *testing.T) {
 // (contracts/cli.md).
 func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 	const orphanAt = "/tmp/scratchpad/twin3/bundle/topology.clab.yml"
+	// noStage ends step.twin.unsteppable's message for a twin that names no stage.
+	const noStage = ", not from a stage, so it names no proposed change to step along; only a twin built from a stage steps " +
+		"(fylgja twin create --stage)"
 	refusal := func(rule, step, object, message string) findings.Finding {
 		return findings.Finding{Severity: findings.Rejection, Rule: rule, Step: step, Object: object, Message: message}
 	}
 	for _, c := range []struct {
 		name string
-		// host builds the host; nil is the waypoint twin of steps/1 under plan-link-added.
+		// host builds the host; nil is the stage twin of change-1/sealed under plan-link-added.
 		host func(t *testing.T) *stepHostFixture
 		args []string
 		code int
@@ -861,7 +927,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			infra.start()
 			return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-empty.json", "")}
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "lab fylgja",
-			"no twin: no lab fylgja and no twin directory; only a twin built from a waypoint steps (fylgja twin create --waypoint)")},
+			"no twin: no lab fylgja and no twin directory; only a twin built from a stage steps (fylgja twin create --stage)")},
 		{name: "an orphan", host: func(t *testing.T) *stepHostFixture {
 			paths := useStateRoot(t)
 			useService(t, nil)
@@ -869,7 +935,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			infra.start()
 			return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-three.json", "")}
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "lab fylgja",
-			"an orphan: no twin.json records it; deployed from "+orphanAt+"; only a twin built from a waypoint steps; fylgja twin destroy clears it")},
+			"an orphan: no twin.json records it; deployed from "+orphanAt+"; only a twin built from a stage steps; fylgja twin destroy clears it")},
 		{name: "a record that cannot be read", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
 			if err := os.WriteFile(h.paths.TwinJSON, []byte("{"), 0o644); err != nil {
@@ -880,7 +946,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			fill: func(h *stepHostFixture, f *findings.Finding) {
 				_, err := lab.ReadRecord(h.paths.TwinJSON)
 				f.Message = "treated as an orphan: twin.json could not be read (" + err.Error() + "); deployed from " + orphanAt +
-					"; only a twin built from a waypoint steps; fylgja twin destroy clears it"
+					"; only a twin built from a stage steps; fylgja twin destroy clears it"
 			}},
 		{name: "a record whose lab is absent", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
@@ -889,9 +955,9 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "", ""),
 			fill: func(h *stepHostFixture, f *findings.Finding) {
 				f.Object = h.paths.Twin
-				f.Message = "the twin of branch mixed-fixture at " + stepMixedAt + ", bundle_id " + h.fromID +
+				f.Message = "the twin of branch change-1 at " + stepMixedAt + ", bundle_id " + h.fromID +
 					", provisioned by run fylgja-provision " + createRunID + ", 3 nodes recorded, but lab fylgja is absent; " +
-					"only a twin built from a waypoint steps; fylgja twin destroy clears it"
+					"only a twin built from a stage steps; fylgja twin destroy clears it"
 			}},
 		{name: "a leftover twin directory", host: func(t *testing.T) *stepHostFixture {
 			paths := useStateRoot(t)
@@ -903,56 +969,95 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			}
 			return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-empty.json", "")}
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
-			"a leftover twin directory: no twin.json and no lab fylgja; only a twin built from a waypoint steps; fylgja twin destroy clears it"),
+			"a leftover twin directory: no twin.json and no lab fylgja; only a twin built from a stage steps; fylgja twin destroy clears it"),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.paths.Twin }},
 		{name: "a twin of a branch", host: func(t *testing.T) *stepHostFixture {
-			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Waypoint, f.Provenance.At = nil, "" })
+			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Stage, f.Provenance.At = nil, "" })
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
-			"the twin was created from branch mixed-fixture, not from a waypoint, so it names no series to step along; only a twin built from a waypoint steps"),
+			"the twin was created from branch change-1"+noStage),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		{name: "a twin of a branch at a time", host: func(t *testing.T) *stepHostFixture {
-			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Waypoint = nil })
+			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Stage = nil })
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
-			"the twin was created from branch mixed-fixture at "+stepMixedAt+", not from a waypoint, so it names no series to step along; only a twin built from a waypoint steps"),
+			"the twin was created from branch change-1 at "+stepMixedAt+noStage),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		{name: "a twin of a bundle", host: func(t *testing.T) *stepHostFixture {
 			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) {
-				f.Waypoint, f.Source, f.ObservedAt, f.Provenance.At = nil, wire.SourceBundle, nil, ""
+				f.Stage, f.Source, f.ObservedAt, f.Provenance.At = nil, wire.SourceBundle, nil, ""
 			})
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
-			"the twin was created from a bundle, not from a waypoint, so it names no series to step along; only a twin built from a waypoint steps"),
+			"the twin was created from a bundle"+noStage),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		// A record of twin.json 5 or earlier reads with no stage (R-11): one naming M10's
+		// waypoint is the superseded reference, one naming none the branch it was read from.
+		{name: "a record of twin.json 5 naming a waypoint", host: func(t *testing.T) *stepHostFixture {
+			return supersededHost(t, map[string]any{"series": "steps", "sequence": 1,
+				"description": "the mixed fixture as sealed", "at_source": "given"})
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
+			"the twin was created from a waypoint of a record version this build no longer reads (twin.json 5); "+
+				"only a twin built from a stage steps; fylgja twin destroy clears it"),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		{name: "a record of twin.json 5 naming no waypoint", host: func(t *testing.T) *stepHostFixture {
+			return supersededHost(t, nil)
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
+			"the twin was created from branch change-1 at "+stepMixedAt+noStage),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		{name: "a diverged twin", host: divergedStepHost, code: findings.ExitRejected, want: divergedRefusal(""),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
-		{name: "another series", args: []string{"--waypoint", "other/3"}, code: findings.ExitRejected, asked: true,
-			want: refusal(findings.RuleStepTargetForeign, findings.StepResolve, "other/3",
-				"waypoint other/3 is not of series steps, the twin's series, whose sequences are 1, 2, 3, 4, 5, 6; a step stays inside the series the twin was built from")},
-		{name: "a series with no waypoints", host: func(t *testing.T) *stepHostFixture {
-			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Waypoint.Series = "gone" })
-		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "gone",
-			"series gone has no waypoints; the series are: other, steps")},
+		{name: "another branch", args: []string{"--stage", "other/x"}, code: findings.ExitRejected, asked: true,
+			want: refusal(findings.RuleStepTargetForeign, findings.StepResolve, "other/x",
+				"stage other/x is not of proposed change pc-1 on branch change-1, the twin's; a step stays inside the proposed change "+
+					"the twin was built from, whose stages are: "+stepStages)},
+		{name: "the twin's proposed change no longer open", host: func(t *testing.T) *stepHostFixture {
+			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Stage.ProposedChange.ID = "pc-0" })
+		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/sealed",
+			"proposed change pc-0 on branch change-1, the twin's, is no longer open (the open proposed change on change-1 is pc-1); "+
+				"a step stays inside the proposed change the twin was built from")},
+		{name: "no open proposed change on the twin's branch", host: func(t *testing.T) *stepHostFixture {
+			h := stepHost(t, "plan-link-added.json", nil)
+			h.infra.changes[0].State = "merged"
+			return h
+		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleStageUnknown, findings.StepResolve, "change-1",
+			"no open proposed change has source branch change-1; there is no open proposed change")},
+		{name: "the twin's label gone", host: func(t *testing.T) *stepHostFixture {
+			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Stage.Label = "gone" })
+		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/gone",
+			"the twin's stage change-1/gone is no longer a stage of proposed change pc-1 on branch change-1; its stages are: "+stepStages)},
+		// A twin at the head has no next, and the head it was built from has since moved.
 		{name: "no next", host: func(t *testing.T) *stepHostFixture {
-			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Waypoint.Sequence = 6 })
-		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "steps",
-			"series steps has no waypoint after 6; its sequences are 1, 2, 3, 4, 5, 6")},
-		{name: "a sequence the series lacks", args: []string{"--waypoint", "steps/7"}, code: findings.ExitRejected, asked: true,
-			want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "steps/7",
-				"series steps has no waypoint 7; its sequences are 1, 2, 3, 4, 5, 6")},
-		{name: "the current one", args: []string{"--waypoint", "steps/1"}, code: findings.ExitRejected, asked: true,
-			want: refusal(findings.RuleStepTargetCurrent, findings.StepResolve, "steps/1", "the twin is already at waypoint steps/1; series steps's sequences are 1, 2, 3, 4, 5, 6")},
+			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Stage = stepStage("head", "", "head") })
+		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/head",
+			"proposed change pc-1 on change-1 has no stage after change-1/head; its stages are: "+stepStages+
+				"; the head has moved since the twin was built (now at 2026-10-16T11:30:00.000001+00:00): --stage change-1/head steps to it")},
+		{name: "a stage the proposed change lacks", args: []string{"--stage", "change-1/nosuch"}, code: findings.ExitRejected, asked: true,
+			want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/nosuch",
+				`proposed change pc-1 on change-1 has no stage "nosuch"; its stages are: `+stepStages)},
+		{name: "the current one", args: []string{"--stage", "change-1/sealed"}, code: findings.ExitRejected, asked: true,
+			want: refusal(findings.RuleStepTargetCurrent, findings.StepResolve, "change-1/sealed",
+				"the twin is already at stage change-1/sealed (branch change-1, at "+stepMixedAt+"); the proposed change's stages are: "+stepStages)},
 		{name: "the kind absent", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
 			h.infra.kind = nil
 			return h
-		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleWaypointKindAbsent, findings.StepResolve, intent.WaypointKind, ""),
+		}, code: findings.ExitRejected, asked: true, want: refusal(findings.RuleStageKindAbsent, findings.StepResolve, intent.StageKind, ""),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Message = "" }},
-		{name: "a duplicate target", args: []string{"--waypoint", "steps/6"}, code: findings.ExitRejected, asked: true,
-			want: refusal(findings.RuleWaypointDuplicate, findings.StepResolve, "steps/6", "")},
-		{name: "a refused read", args: []string{"--waypoint", "steps/4"}, code: findings.ExitRejected, asked: true,
+		{name: "a duplicate target", host: func(t *testing.T) *stepHostFixture {
+			h := stepHost(t, "plan-link-added.json", nil)
+			h.infra.changes[0].Stages = append(h.infra.changes[0].Stages,
+				mark("st-twice-a", "twice", "2026-10-16T11:45:00Z", ""), mark("st-twice-b", "twice", "2026-10-16T11:50:00Z", ""))
+			return h
+		}, args: []string{"--stage", "change-1/twice"}, code: findings.ExitRejected, asked: true,
+			want: refusal(findings.RuleStageDuplicate, findings.StepResolve, "change-1/twice", "")},
+		// The branch point reads main, whose contract node is absent here.
+		{name: "a refused read", host: func(t *testing.T) *stepHostFixture {
+			h := stepHost(t, "plan-link-added.json", nil)
+			h.infra.contractless = map[string]bool{"main": true}
+			return h
+		}, args: []string{"--stage", "change-1/branch-point"}, code: findings.ExitRejected, asked: true,
 			want: refusal(findings.RuleContractNodeMissing, findings.StepRead, "", "")},
 		{name: "a refused compile", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
-			toID := buildWaypoint(t, h.paths, waypoint.Ref{Series: "steps", Sequence: 2})
+			toID := buildStage(t, h.paths, "linked")
 			manifest := filepath.Join(h.paths.Bundles, toID, "manifest.json")
 			if err := os.Chmod(manifest, 0o644); err != nil {
 				t.Fatal(err)
@@ -1031,7 +1136,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			h := stepHost(t, "plan-link-added.json", nil)
 			t.Setenv("FYLGJA_PSP_DIR", overridePackage(t, "arista_eos", "mode: replace", "mode: merge"))
 			return h
-		}, args: []string{"--waypoint", "steps/5", "--allow-restart"}, code: findings.ExitRejected, asked: true,
+		}, args: []string{"--stage", "change-1/less", "--allow-restart"}, code: findings.ExitRejected, asked: true,
 			want: refusal(findings.RuleStepPackageMerge, findings.StepCompare, "arista_eos",
 				"support package arista_eos pushes by merge, which a step cannot use: a step removes what the previous "+
 					"artifact added, and only a replace does that; nodes e1, e2; a create from it is unaffected")},
@@ -1044,9 +1149,8 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 				"node s1 changes in image between the two bundles, but containerlab's reconcile would not recreate it "+
 					"(its plan: live); the running node would keep its image; a step cannot apply it")},
 		{name: "a restart without the flag", code: findings.ExitRejected, asked: true, want: restartRequired},
-		{name: "--waypoint=", args: []string{"--waypoint="}, code: findings.ExitError,
-			want: refusal(findings.RuleWaypointRefInvalid, findings.StepStart, "",
-				`--waypoint "" is not a waypoint reference: expected <series>/<sequence>, a series with no "/" and no whitespace and a positive integer`)},
+		{name: "--stage=", args: []string{"--stage="}, code: findings.ExitError,
+			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "", stageRefInvalid(""))},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			host := c.host
@@ -1054,7 +1158,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 				host = func(t *testing.T) *stepHostFixture { return stepHost(t, "plan-link-added.json", nil) }
 			}
 			h := host(t)
-			if c.name == "--waypoint=" {
+			if c.name == "--stage=" {
 				h.clab.calls = nil
 			}
 			want := c.want
@@ -1076,7 +1180,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			if asked := len(h.infra.requests()) > h.before; asked != c.asked {
 				t.Errorf("Infrahub asked after the host was built: %v, want %v", asked, c.asked)
 			}
-			if c.name == "--waypoint=" && len(h.clab.calls) != 0 {
+			if c.name == "--stage=" && len(h.clab.calls) != 0 {
 				t.Errorf("containerlab was asked %v before the flag was refused", h.clab.calls)
 			}
 			if plans := h.clab.asked("clab", "deploy"); got.Step != findings.StepCompare && len(plans) != 0 {
@@ -1087,7 +1191,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 }
 
 // A target whose read cannot run, and a target whose at carries more fractional digits than
-// Infrahub honours, end the command as M10 ends them for a waypoint: exit 2, status error,
+// Infrahub honours, end the command as a create ends them for a stage: exit 2, status error,
 // not a refusal's 1 (contracts/cli.md's resolution row). Nothing of the
 // step is computed: containerlab's plan is never read and no service is dialled.
 func TestStepTargetErrorsExitTwo(t *testing.T) {
@@ -1098,15 +1202,15 @@ func TestStepTargetErrorsExitTwo(t *testing.T) {
 		want findings.Finding // its message "" is not compared
 	}{
 		{name: "the target's read cannot run",
-			host: func(h *stepHostFixture) { delete(h.infra.branches, "mixed-step") },
-			want: findings.Finding{Severity: findings.Rejection, Rule: findings.RuleOperationFailed, Step: findings.StepRead, Object: "steps/2"}},
-		{name: "the target's at carries nine fractional digits", args: []string{"--waypoint", "steps/7"},
+			host: func(h *stepHostFixture) { h.infra.schemaStatus = map[string]int{"change-1": 500} },
+			want: findings.Finding{Severity: findings.Rejection, Rule: findings.RuleOperationFailed, Step: findings.StepRead, Object: "change-1/linked"}},
+		{name: "the target's at carries nine fractional digits", args: []string{"--stage", "change-1/nine"},
 			host: func(h *stepHostFixture) {
-				h.infra.waypoint("wp-steps-7", "steps", 7, "mixed-fixture", stepWrittenAt, "2026-09-22T00:00:00.123456789Z", "")
+				h.infra.changes[0].Stages = append(h.infra.changes[0].Stages, mark("st-nine", "nine", "2026-10-16T09:45:00.123456789Z", ""))
 			},
-			want: findings.Finding{Severity: findings.Rejection, Rule: findings.RuleAtPrecision, Step: findings.StepResolve, Object: "steps/7",
-				Message: "waypoint steps/7: at 2026-09-22T00:00:00.123456789Z carries 9 fractional digits; Infrahub honours at most 6 " +
-					"(microseconds). Write the waypoint's as_of with at most six."}},
+			want: findings.Finding{Severity: findings.Rejection, Rule: findings.RuleAtPrecision, Step: findings.StepResolve, Object: "change-1/nine",
+				Message: "stage change-1/nine: at 2026-10-16T09:45:00.123456789Z carries 9 fractional digits; Infrahub honours at most 6 " +
+					"(microseconds). Write the stage's as_of with at most six."}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h := stepHost(t, "plan-link-added.json", nil)
@@ -1258,7 +1362,7 @@ func TestStepRuns(t *testing.T) {
 		Push: map[string]float64{"e1": 1.6, "s1": 2.4}, WholeS: 71.2}
 	diverged := func(phase string) findings.Finding {
 		return findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepDiverged, Object: stepRunID, Step: phase,
-			Message: "step run " + stepRunID + " towards waypoint steps/2 stopped at phase " + phase + "; …"}
+			Message: "step run " + stepRunID + " towards stage change-1/linked stopped at phase " + phase + "; …"}
 	}
 	for _, c := range []struct {
 		name    string
@@ -1276,14 +1380,14 @@ func TestStepRuns(t *testing.T) {
 				Record: &wire.TwinRecord{State: wire.StateReady}},
 			code: findings.ExitOK, status: findings.StatusOK,
 			closing: func(_, toID string) string {
-				return "stepped to waypoint steps/2 (bundle " + short(toID) + ") in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s"
+				return "stepped to stage change-1/linked (bundle " + short(toID) + ") in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s"
 			}},
-		{name: "unchanged", args: []string{"--waypoint", "steps/3"}, plan: "plan-nothing.json",
+		{name: "unchanged", args: []string{"--stage", "change-1/again"}, plan: "plan-nothing.json",
 			res: provision.StepResult{Outcome: provision.StepUnchanged, PushPlan: []wire.StepPush{},
 				Timings: wire.StepTimings{WholeS: 1.8}, Record: &wire.TwinRecord{State: wire.StateReady}},
 			code: findings.ExitOK, status: findings.StatusOK,
 			closing: func(_, toID string) string {
-				return "unchanged; the record moves to waypoint steps/3 (bundle " + short(toID) + ") in 1.8s"
+				return "unchanged; the record moves to stage change-1/again (bundle " + short(toID) + ") in 1.8s"
 			}, events: unchangedStepEvents()},
 		{name: "diverged at push", args: []string{"--allow-restart"}, plan: "plan-link-added.json",
 			res: provision.StepResult{Outcome: provision.StepDiverged, Phase: findings.StepPush, Step: findings.StepPush,
@@ -1295,18 +1399,18 @@ func TestStepRuns(t *testing.T) {
 					diverged(findings.StepPush)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
 			closing: func(fromID, toID string) string {
-				return "diverged towards waypoint steps/2 (bundle " + short(toID) + ") at phase push: landed s1; not landed e1 (push.refused); " +
-					"the twin is up at waypoint steps/1 (bundle " + short(fromID) + "); fylgja twin destroy clears it"
+				return "diverged towards stage change-1/linked (bundle " + short(toID) + ") at phase push: landed s1; not landed e1 (push.refused); " +
+					"the twin is up at stage change-1/sealed (bundle " + short(fromID) + "); fylgja twin destroy clears it"
 			}},
 		// The wait's clause follows M11's line on an unchanged and a diverged result too, as
 		// contracts/cli.md quotes them.
-		{name: "unchanged, the wait settled", args: []string{"--waypoint", "steps/3"}, plan: "plan-nothing.json",
+		{name: "unchanged, the wait settled", args: []string{"--stage", "change-1/again"}, plan: "plan-nothing.json",
 			res: provision.StepResult{Outcome: provision.StepUnchanged, PushPlan: []wire.StepPush{},
 				Timings: wire.StepTimings{WholeS: 1.8}, Record: &wire.TwinRecord{State: wire.StateReady},
 				Wait: &wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 1, AfterS: 1.1, Failing: []wire.StepFinding{}}},
 			code: findings.ExitOK, status: findings.StatusOK,
 			closing: func(_, toID string) string {
-				return "unchanged; the record moves to waypoint steps/3 (bundle " + short(toID) + ") in 1.8s; settled after 1.1s"
+				return "unchanged; the record moves to stage change-1/again (bundle " + short(toID) + ") in 1.8s; settled after 1.1s"
 			}, events: unchangedStepEvents()},
 		{name: "diverged at push, the wait settled", args: []string{"--allow-restart"}, plan: "plan-link-added.json",
 			res: provision.StepResult{Outcome: provision.StepDiverged, Phase: findings.StepPush, Step: findings.StepPush,
@@ -1319,8 +1423,8 @@ func TestStepRuns(t *testing.T) {
 					diverged(findings.StepPush)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
 			closing: func(fromID, toID string) string {
-				return "diverged towards waypoint steps/2 (bundle " + short(toID) + ") at phase push: landed s1; not landed e1 (push.refused); " +
-					"the twin is up at waypoint steps/1 (bundle " + short(fromID) + "); fylgja twin destroy clears it; settled after 1.9s"
+				return "diverged towards stage change-1/linked (bundle " + short(toID) + ") at phase push: landed s1; not landed e1 (push.refused); " +
+					"the twin is up at stage change-1/sealed (bundle " + short(fromID) + "); fylgja twin destroy clears it; settled after 1.9s"
 			}},
 		{name: "cancelled before the stage", args: []string{"--allow-restart"}, plan: "plan-link-added.json",
 			res: provision.StepResult{Outcome: provision.OutcomeCancelled, Step: findings.StepCompare,
@@ -1340,8 +1444,8 @@ func TestStepRuns(t *testing.T) {
 					diverged(findings.StepReadiness)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
 			closing: func(fromID, toID string) string {
-				return "diverged towards waypoint steps/2 (bundle " + short(toID) + ") at phase readiness: landed none; not landed e1, s1; " +
-					"the twin is up at waypoint steps/1 (bundle " + short(fromID) + "); fylgja twin destroy clears it"
+				return "diverged towards stage change-1/linked (bundle " + short(toID) + ") at phase readiness: landed none; not landed e1, s1; " +
+					"the twin is up at stage change-1/sealed (bundle " + short(fromID) + "); fylgja twin destroy clears it"
 			}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -1436,7 +1540,7 @@ func TestStepRuns(t *testing.T) {
 			in := svc.stepped[0]
 			if in.From.BundleID != h.fromID || in.To.BundleID != toID || in.ToBundlePath != filepath.Join(h.paths.Bundles, toID) ||
 				in.ObservedAt == "" || in.Unchanged != unchanged || in.AllowRestart != slices.Contains(c.args, "--allow-restart") ||
-				in.From.Waypoint == nil || in.From.Waypoint.Sequence != 1 || in.To.Waypoint == nil || len(in.Diff) == 0 ||
+				in.From.Stage == nil || in.From.Stage.Label != "sealed" || in.To.Stage == nil || len(in.Diff) == 0 ||
 				in.Declared["e1"] != "restart" || in.Declared["s1"] != "live" || in.Version != version {
 				t.Errorf("the run's input %+v does not carry what the command decided", in)
 			}
@@ -1453,15 +1557,14 @@ func TestStepRuns(t *testing.T) {
 			// its recording reads; and the target read's own observed_at, which the record takes
 			// once the step moves the twin. The command's second run filed the
 			// target's CTM last, so its read's time is the one beside the bundle in the store.
-			wantFrom := wire.StepSide{Waypoint: &wire.WaypointRef{Series: "steps", Sequence: 1,
-				Description: "the mixed fixture as sealed", AtSource: "given"}, BundleID: h.fromID, At: stepMixedAt}
-			wantTo := wire.StepSide{Waypoint: &wire.WaypointRef{Series: "steps", Sequence: 2,
-				Description: "a link between e1 and s1", AtSource: "written"}, BundleID: toID, At: stepWrittenAt, Branch: "mixed-step"}
+			wantFrom := wire.StepSide{Stage: stepStage("sealed", "the mixed fixture as sealed", "given"), BundleID: h.fromID, At: stepMixedAt}
+			wantTo := wire.StepSide{Stage: stepStage("linked", "a link between e1 and s1", "written"), BundleID: toID,
+				At: stepWrittenAt, Branch: "change-1"}
 			wantPlan := wire.ReconcilePlan{Restarted: []string{"e1"}, LinksAdded: []string{"e1:eth2 -- s1:e1-2"},
 				Reasons: map[string]string{"e1": "added link"}}
 			if unchanged {
-				wantTo = wire.StepSide{Waypoint: &wire.WaypointRef{Series: "steps", Sequence: 3, Description: "the fixture again",
-					AtSource: "given"}, BundleID: toID, At: stepLaterAt, Branch: "mixed-fixture"}
+				wantTo = wire.StepSide{Stage: stepStage("again", "the fixture again", "given"), BundleID: toID, At: stepLaterAt,
+					Branch: "change-1"}
 				wantPlan = wire.ReconcilePlan{}
 			}
 			asJSON := func(v any) string {
@@ -1484,8 +1587,8 @@ func TestStepRuns(t *testing.T) {
 			if lastAt != read.Envelope.ObservedAt {
 				t.Errorf("the second run's observed_at %q; want its target read's, %q", lastAt, read.Envelope.ObservedAt)
 			}
-			if at, err := time.Parse(stage.ObservedAtFormat, firstAt); err != nil || at.Before(began) || firstAt > lastAt {
-				t.Errorf("the first run's observed_at %q; want a read's time from %s to %s", firstAt, began.Format(stage.ObservedAtFormat), lastAt)
+			if at, err := time.Parse(intentstage.ObservedAtFormat, firstAt); err != nil || at.Before(began) || firstAt > lastAt {
+				t.Errorf("the first run's observed_at %q; want a read's time from %s to %s", firstAt, began.Format(intentstage.ObservedAtFormat), lastAt)
 			}
 
 			raw, err := json.Marshal(in)
@@ -1555,7 +1658,7 @@ func TestStepInterrupt(t *testing.T) {
 		Findings: findings.List{
 			cancelled(findings.StepReadiness, "run "+stepRunID+" was cancelled at step readiness; the record was written diverged and nothing was torn down"),
 			{Severity: findings.Rejection, Rule: findings.RuleStepDiverged, Object: stepRunID, Step: findings.StepReadiness,
-				Message: "step run " + stepRunID + " towards waypoint steps/2 stopped at phase readiness; …"}}}
+				Message: "step run " + stepRunID + " towards stage change-1/linked stopped at phase readiness; …"}}}
 	beforeStage := provision.StepResult{Outcome: provision.OutcomeCancelled, Step: findings.StepInspect,
 		StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:14:31Z",
 		Findings: findings.List{cancelled(findings.StepInspect, "run "+stepRunID+" was cancelled at step inspect, before the host "+
@@ -1597,8 +1700,8 @@ func TestStepInterrupt(t *testing.T) {
 				t.Errorf("findings %+v lack the run's %+v", doc.Findings, f)
 			}
 		}
-		tail := "\nstep readiness e1: begins\n" + waiting + "\ndiverged towards waypoint steps/2 (bundle " + short(doc.BundleID) +
-			") at phase readiness: landed none; not landed e1, s1; the twin is up at waypoint steps/1 (bundle " + short(h.fromID) +
+		tail := "\nstep readiness e1: begins\n" + waiting + "\ndiverged towards stage change-1/linked (bundle " + short(doc.BundleID) +
+			") at phase readiness: landed none; not landed e1, s1; the twin is up at stage change-1/sealed (bundle " + short(h.fromID) +
 			"); fylgja twin destroy clears it\n"
 		if !strings.HasSuffix(stdout, tail) {
 			t.Errorf("stdout:\n%s\nwant it to end:%s", stdout, tail)
@@ -1761,7 +1864,7 @@ func TestStepDryRunWait(t *testing.T) {
 // what it was, and the exit is M11's (contracts/cli.md, twin step --wait).
 // An activity that failed outright prints that the wait could not complete.
 func TestStepRunReportsTheWait(t *testing.T) {
-	const m11 = "stepped to waypoint steps/2 (bundle %s) in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s"
+	const m11 = "stepped to stage change-1/linked (bundle %s) in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s"
 	reconcile := 3.9
 	e1Took, s1Took := 1.6, 2.4
 	neighbor := func(object string) wire.StepFinding {

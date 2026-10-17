@@ -18,7 +18,7 @@ import (
 func decodeDocuments() []labelledDocument {
 	var docs []labelledDocument
 	for _, set := range [][]labelledDocument{
-		m1Documents(), m2Documents(), m4Documents(), m5Documents(), m10Documents(),
+		m1Documents(), m2Documents(), m4Documents(), m5Documents(), stageDocuments(), schemaCheckStageDocuments(),
 		listAndPlanDocuments(), stepDocuments(), showStepDocuments(), listStepDocuments(),
 	} {
 		docs = append(docs, set...)
@@ -71,7 +71,7 @@ func decodeDocuments() []labelledDocument {
 }
 
 // m1Documents are M1's operations as TestEveryOperationRendersAValidDocument builds them,
-// with a finding located in a file and a schema check that names the waypoint kind.
+// with a finding located in a file and a schema check that names the stage kind.
 func m1Documents() []labelledDocument {
 	located := List{{Severity: Warning, Rule: RulePSPResourcesImplausible, Object: "nokia_srlinux",
 		Message: "resources look implausible", Location: &Location{File: "psp/x.yaml", Line: 12}}}
@@ -79,8 +79,8 @@ func m1Documents() []labelledDocument {
 	compiled.BundleID = stepToID
 	checked := NewDocument(OpSchemaCheck, &Subject{Branch: "fylgja-fixture"}, nil)
 	checked.Verified = &Verified{ContractVersion: "0.2",
-		Generics:  []GenericKinds{{Generic: "FylgjaDevice", Kinds: []string{"NetworkDevice"}}},
-		Waypoints: &WaypointsVerified{Kind: "FylgjaWaypoint", Present: true, File: "schema/fylgja-waypoint.yaml"}}
+		Generics: []GenericKinds{{Generic: "FylgjaDevice", Kinds: []string{"NetworkDevice"}}},
+		Stages:   &StagesVerified{Kind: "FylgjaStage", Present: true, Extension: true, File: "schema/fylgja-stage.yaml"}}
 	return []labelledDocument{
 		{"intent read ok", NewDocument(OpIntentRead, &Subject{Branch: "fylgja-fixture", CTM: "ctm.json"}, nil)},
 		{"twin compile ok", compiled},
@@ -99,7 +99,8 @@ func verifyDocuments() []labelledDocument {
 	enabled := "enable"
 	held := NewDocument(OpTwinVerify, nil, nil)
 	held.Verify = &VerifyBlock{
-		Twin:   VerifyTwin{BundleID: stepToID, Waypoint: demoWaypoint(2, "after the first cut-over"), State: "ready", Source: "intent", Nodes: 2},
+		Twin: VerifyTwin{BundleID: stepToID, Stage: showStage("live", "after its configuration is live", AtSourceGiven), State: "ready",
+			Source: "intent", Nodes: 2},
 		ReadAt: "2026-10-03T12:00:00Z",
 		Nodes: []VerifyNode{{Node: "n1", PSP: "nokia_srlinux", Addr: str("172.20.20.2:57400"), Read: true,
 			HostName: VerifyAssertion{Path: "/system/name/host-name", Expected: "n1", Outcome: "held", Read: &read},
@@ -126,7 +127,7 @@ func verifyDocuments() []labelledDocument {
 	diverged.Status = StatusError
 	diverged.Verify = &VerifyBlock{
 		Twin: VerifyTwin{BundleID: stepFromID, State: "diverged", Source: "intent", Nodes: 1,
-			Diverged: &VerifyDiverged{Towards: VerifyTowards{Waypoint: demoWaypoint(3, ""), BundleID: stepToID},
+			Diverged: &VerifyDiverged{Towards: VerifyTowards{Stage: showStage("head", "", AtSourceHead), BundleID: stepToID},
 				Run: ShowRef{WorkflowID: "fylgja-step", RunID: stepRunID}, Phase: "readiness"}},
 		ReadAt: "2026-10-03T12:00:00Z",
 		Nodes: []VerifyNode{{Node: "e1", PSP: "arista_eos", Read: false, Error: "connection refused",

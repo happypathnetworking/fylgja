@@ -26,7 +26,7 @@ func apiSchema(t *testing.T, def string) *jsonschema.Schema {
 	t.Helper()
 	c := jsonschema.NewCompiler()
 	for _, name := range []string{"api.schema.json", "findings.schema.json", "show.schema.json",
-		"waypoints.schema.json", "step.schema.json", "verify.schema.json"} {
+		"stages.schema.json", "step.schema.json", "verify.schema.json"} {
 		f, err := os.Open(contracts(name))
 		if err != nil {
 			t.Fatal(err)
@@ -116,7 +116,7 @@ func TestOperationsAreTheContractsAndTheirPaths(t *testing.T) {
 	for op, path := range map[string]string{
 		"twin.create": "/v1/twin/create", "twin.provision": "/v1/twin/provision", "twin.step": "/v1/twin/step",
 		"twin.destroy": "/v1/twin/destroy", "twin.show": "/v1/twin/show", "twin.verify": "/v1/twin/verify",
-		"twin.compile": "/v1/twin/compile", "waypoint.list": "/v1/waypoint/list", "waypoint.plan": "/v1/waypoint/plan",
+		"twin.compile": "/v1/twin/compile", "stage.list": "/v1/stage/list", "stage.plan": "/v1/stage/plan",
 		"intent.read": "/v1/intent/read", "schema.check": "/v1/schema/check", "psp.validate": "/v1/psp/validate",
 	} {
 		if got := Path(op); got != path {
@@ -140,18 +140,18 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 		files []File
 	}{
 		{"twin.create", map[string]json.RawMessage{"branch": str("fylgja-fixture"), "at": str("2026-09-14T12:00:00Z"),
-			"waypoint": str("demo/2"), "interval": str(""), "no_follow": yes, "dry_run": yes}, nil},
+			"stage": str("change-1/cabled"), "interval": str(""), "no_follow": yes, "dry_run": yes}, nil},
 		{"twin.provision", map[string]json.RawMessage{"bundle": str("./b9d53ebc"), "dry_run": yes},
 			[]File{{Path: "manifest.json", Data: []byte("{}\n")}, {Path: "configs/n1.cli", Data: []byte("set / system name host-name n1\n")}}},
-		{"twin.step", map[string]json.RawMessage{"waypoint": str("demo/3"), "allow_restart": yes, "dry_run": yes, "wait": str("20s")}, nil},
+		{"twin.step", map[string]json.RawMessage{"stage": str("change-1/head"), "allow_restart": yes, "dry_run": yes, "wait": str("20s")}, nil},
 		{"twin.destroy", nil, nil},
 		{"twin.show", nil, nil},
 		{"twin.verify", map[string]json.RawMessage{"wait": str("2m0s"), "args": mustJSON(t, []string{"30s"})}, nil},
 		{"twin.compile", map[string]json.RawMessage{"ctm": str("ctm.json"), "out": str("out")},
 			[]File{{Path: "ctm.json", Data: []byte(`{"ctm_version":"1"}`)}}},
-		{"waypoint.list", map[string]json.RawMessage{"series": str("")}, nil},
-		{"waypoint.plan", map[string]json.RawMessage{"series": str("demo")}, nil},
-		{"intent.read", map[string]json.RawMessage{"branch": str("b"), "at": str("2026-09-14T12:00:00Z"), "waypoint": str("demo/1"), "out": str("ctm.json")}, nil},
+		{"stage.list", map[string]json.RawMessage{"branch": str("")}, nil},
+		{"stage.plan", map[string]json.RawMessage{"branch": str("change-1")}, nil},
+		{"intent.read", map[string]json.RawMessage{"branch": str("b"), "at": str("2026-09-14T12:00:00Z"), "stage": str("change-1/cabled"), "out": str("ctm.json")}, nil},
 		{"schema.check", map[string]json.RawMessage{"branch": str("fylgja-fixture")}, nil},
 		{"psp.validate", map[string]json.RawMessage{"files": mustJSON(t, []string{"a.yaml", "b.yaml"})},
 			[]File{{Path: "a.yaml", Data: []byte("psp_version: \"0.6\"\n")}, {Path: "b.yaml", Data: nil}}},
@@ -189,6 +189,12 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 	// An argument an operation does not take is not its args, and neither is twin.provision
 	// without its bundle directory or twin.verify's args without wait.
 	invalid(t, apiSchema(t, "args/$defs/twin.show"), `{"branch":"b"}`, "twin.show with a branch")
+	// 014: the argument M10 named is gone from the three operations that took it, and M10's
+	// two operations have no args of their own.
+	for _, op := range []string{"twin.create", "twin.step", "intent.read"} {
+		invalid(t, apiSchema(t, "args/$defs/"+op), `{"waypoint":"demo/2"}`, op+" with a waypoint")
+	}
+	invalid(t, apiSchema(t, "args/$defs/stage.list"), `{"series":"demo"}`, "stage.list with a series")
 	invalid(t, apiSchema(t, "args/$defs/twin.provision"), `{"dry_run":true}`, "twin.provision without a bundle")
 	invalid(t, apiSchema(t, "args/$defs/twin.verify"), `{"args":["30s"]}`, "twin.verify's args without wait")
 	valid(t, apiSchema(t, "args/$defs/twin.verify"), []byte(`{}`), "twin.verify with no argument")

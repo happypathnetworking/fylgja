@@ -89,12 +89,13 @@ func TestProvisionHappyPath(t *testing.T) {
 	}
 }
 
-// A create from a waypoint is M2–M7's pinned create: the same activities in the same
-// order, with the waypoint the CLI resolved copied to the record step as data, and nil
+// A create from a stage is M2–M7's pinned create (014): the same activities in the same
+// order, with the stage the server resolved copied to the record step as data, and nil
 // there when none was given.
-func TestProvisionCarriesTheWaypointToTheRecord(t *testing.T) {
-	waypoint := &WaypointInput{Series: "demo", Sequence: 2, Description: "after the first cut-over", AtSource: "written"}
-	for label, given := range map[string]*WaypointInput{"with a waypoint": waypoint, "without": nil} {
+func TestProvisionCarriesTheStageToTheRecord(t *testing.T) {
+	live := &StageInput{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "live",
+		Description: "after the first cut-over", AtSource: "written"}
+	for label, given := range map[string]*StageInput{"with a stage": live, "without": nil} {
 		t.Run(label, func(t *testing.T) {
 			h := newHarness(t)
 			var recorded wire.RecordInput
@@ -102,20 +103,20 @@ func TestProvisionCarriesTheWaypointToTheRecord(t *testing.T) {
 				func(_ context.Context, in wire.RecordInput) (wire.RecordResult, error) {
 					recorded = in
 					rec := recordFor(in)
-					rec.Waypoint = in.Waypoint
+					rec.Stage = in.Stage
 					return wire.RecordResult{Path: in.TwinDir + "/twin.json", Record: rec}, nil
 				})
 			h.mockHappyPath()
 
-			res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "change-1", At: "2026-09-28T15:20:44.000000+00:00", Waypoint: given})
+			res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "change-1", At: "2026-09-28T15:20:44.000000+00:00", Stage: given})
 
 			if res.Outcome != OutcomeReady {
 				t.Fatalf("outcome %q, findings %+v; want ready", res.Outcome, res.Findings)
 			}
-			if !reflect.DeepEqual(recorded.Waypoint, given) {
-				t.Errorf("record input's waypoint = %+v, want %+v", recorded.Waypoint, given)
+			if !reflect.DeepEqual(recorded.Stage, given) {
+				t.Errorf("record input's stage = %+v, want %+v", recorded.Stage, given)
 			}
-			if res.Twin == nil || !reflect.DeepEqual(res.Twin.Waypoint, given) {
+			if res.Twin == nil || !reflect.DeepEqual(res.Twin.Stage, given) {
 				t.Errorf("twin = %+v, want the record naming %+v", res.Twin, given)
 			}
 			if calls := h.calls(); len(calls) != 12 || calls[11] != wire.ActRecordTwin {
@@ -127,7 +128,7 @@ func TestProvisionCarriesTheWaypointToTheRecord(t *testing.T) {
 
 // The field is omitted when nil, so an M2–M7 input and the record step's input for it
 // serialise as they did: the recorded histories' payloads are byte-identical.
-func TestAnInputWithNoWaypointSerialisesAsBefore(t *testing.T) {
+func TestAnInputWithNoStageSerialisesAsBefore(t *testing.T) {
 	for label, v := range map[string]any{
 		"ProvisionInput":   ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"},
 		"wire.RecordInput": wire.RecordInput{Source: wire.SourceIntent},
@@ -136,8 +137,8 @@ func TestAnInputWithNoWaypointSerialisesAsBefore(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(b), "waypoint") {
-			t.Errorf("%s with no waypoint serialises a waypoint key: %s", label, b)
+		if strings.Contains(string(b), `"stage"`) {
+			t.Errorf("%s with no stage serialises a stage key: %s", label, b)
 		}
 	}
 }

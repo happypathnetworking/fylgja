@@ -22,17 +22,17 @@ const (
 // and the kind of its value. An argument that is absent is a flag that was
 // not given; one that is present was given, whatever its value.
 var operationArgs = map[string]map[string]string{
-	findings.OpTwinCreate: {"branch": argString, "at": argString, "waypoint": argString, "interval": argString,
+	findings.OpTwinCreate: {"branch": argString, "at": argString, "stage": argString, "interval": argString,
 		"no_follow": argBool, "dry_run": argBool},
 	findings.OpTwinProvision: {"bundle": argString, "dry_run": argBool},
-	findings.OpTwinStep:      {"waypoint": argString, "allow_restart": argBool, "dry_run": argBool, "wait": argString},
+	findings.OpTwinStep:      {"stage": argString, "allow_restart": argBool, "dry_run": argBool, "wait": argString},
 	findings.OpTwinDestroy:   {},
 	findings.OpTwinShow:      {},
 	findings.OpTwinVerify:    {"wait": argString, "args": argStrings},
 	findings.OpCompile:       {"ctm": argString, "out": argString},
-	findings.OpWaypointList:  {"series": argString},
-	findings.OpWaypointPlan:  {"series": argString},
-	findings.OpIntentRead:    {"branch": argString, "at": argString, "waypoint": argString, "out": argString},
+	findings.OpStageList:     {"branch": argString},
+	findings.OpStagePlan:     {"branch": argString},
+	findings.OpIntentRead:    {"branch": argString, "at": argString, "stage": argString, "out": argString},
 	findings.OpSchemaCheck:   {"branch": argString},
 	findings.OpPSPValidate:   {"files": argStrings},
 }
@@ -120,7 +120,7 @@ var handlers = map[string]func(*call) error{
 		a := args(c.req.Args)
 		return runCreate(c.ctx, c.options(), &createFlags{
 			branch: a.string("branch"), at: a.string("at"),
-			waypoint: a.string("waypoint"), waypointGiven: a.given("waypoint"),
+			stage: a.string("stage"), stageGiven: a.given("stage"),
 			interval: a.string("interval"), intervalGiven: a.given("interval"),
 			noFollow: a.bool("no_follow"), dryRun: a.bool("dry_run"),
 		})
@@ -132,7 +132,7 @@ var handlers = map[string]func(*call) error{
 	findings.OpTwinStep: func(c *call) error {
 		a := args(c.req.Args)
 		return runTwinStep(c.ctx, c.options(), &stepFlags{
-			waypoint: a.string("waypoint"), waypointGiven: a.given("waypoint"),
+			stage: a.string("stage"), stageGiven: a.given("stage"),
 			allowRestart: a.bool("allow_restart"), dryRun: a.bool("dry_run"),
 			wait: a.string("wait"), waitGiven: a.given("wait"),
 		})
@@ -153,19 +153,19 @@ var handlers = map[string]func(*call) error{
 		a := args(c.req.Args)
 		return runCompile(c.options(), &compileFlags{ctmPath: a.string("ctm"), out: a.string("out")}, c.req.Files)
 	},
-	findings.OpWaypointList: func(c *call) error {
+	findings.OpStageList: func(c *call) error {
 		a := args(c.req.Args)
-		return runWaypointList(c.ctx, c.options(), &waypointFlags{series: a.string("series"), seriesGiven: a.given("series")})
+		return runStageList(c.ctx, c.options(), &stageFlags{branch: a.string("branch"), branchGiven: a.given("branch")})
 	},
-	findings.OpWaypointPlan: func(c *call) error {
+	findings.OpStagePlan: func(c *call) error {
 		a := args(c.req.Args)
-		return runWaypointPlan(c.ctx, c.options(), &waypointFlags{series: a.string("series"), seriesGiven: a.given("series")})
+		return runStagePlan(c.ctx, c.options(), &stageFlags{branch: a.string("branch"), branchGiven: a.given("branch")})
 	},
 	findings.OpIntentRead: func(c *call) error {
 		a := args(c.req.Args)
 		return runRead(c.ctx, c.options(), &readFlags{
 			branch: a.string("branch"), at: a.string("at"),
-			waypoint: a.string("waypoint"), waypointGiven: a.given("waypoint"),
+			stage: a.string("stage"), stageGiven: a.given("stage"),
 			out: a.string("out"),
 		})
 	},

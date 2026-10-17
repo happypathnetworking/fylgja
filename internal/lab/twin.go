@@ -17,11 +17,12 @@ import (
 
 // TwinVersion is the twin.json format version (contracts/twin.schema.json). Version 2 named
 // what each node was pushed and how long it took;
-// version 3 names the waypoint the twin was created from, or null; version 4
+// version 3 names the pinned reference the twin was created from (M10's), or null; version 4
 // says whether the twin is ready or diverged, carries its last step or null, and names
 // the bundle each node holds; version 5 carries the step's wait,
-// step.wait, or null while it has not run.
-const TwinVersion = "5"
+// step.wait, or null while it has not run; version 6 names the stage the twin was created
+// from or stepped to, with its proposed change, in place of version 3's reference (014).
+const TwinVersion = "6"
 
 // ObservedAtUnknown is what twin.json says when no read took place, so a null
 // observed_at is an explicit statement rather than a missing value (Constitution VI).
@@ -38,14 +39,14 @@ type RecordFields struct {
 	Version    string // the worker binary's --version
 	RecordedAt time.Time
 	Nodes      []wire.TwinNode
-	Waypoint   *wire.WaypointRef // nil unless the CLI resolved the reference from a waypoint
+	Stage      *wire.StageRef // nil unless the server resolved the reference from a stage
 }
 
 // NewRecord builds twin.json's content and refuses a record the contract would not
 // accept: a twin created from intent always had a read, so its observed_at is known,
 // and a twin provisioned from a bundle never did, so its observed_at is null and the
-// note says why. A waypoint is recorded only on a pinned twin created from intent (M10):
-// a bundle carries no waypoint, and a waypoint always resolves to an at.
+// note says why. A stage is recorded only on a pinned twin created from intent (014): a
+// bundle carries no stage, and a stage always resolves to an at.
 func NewRecord(f RecordFields) (wire.TwinRecord, error) {
 	switch f.Source {
 	case wire.SourceIntent:
@@ -56,14 +57,14 @@ func NewRecord(f RecordFields) (wire.TwinRecord, error) {
 		if f.ObservedAt != nil {
 			return wire.TwinRecord{}, fmt.Errorf("a twin provisioned from a bundle had no read, so it cannot record observed_at %q", *f.ObservedAt)
 		}
-		if w := f.Waypoint; w != nil {
-			return wire.TwinRecord{}, fmt.Errorf("a twin provisioned from a bundle cannot record waypoint %s/%d: a bundle carries no waypoint", w.Series, w.Sequence)
+		if st := f.Stage; st != nil {
+			return wire.TwinRecord{}, fmt.Errorf("a twin provisioned from a bundle cannot record stage %s: a bundle carries no stage", st.Name())
 		}
 	default:
 		return wire.TwinRecord{}, fmt.Errorf("unknown twin source %q", f.Source)
 	}
-	if w := f.Waypoint; w != nil && f.Provenance.At == "" {
-		return wire.TwinRecord{}, fmt.Errorf("a twin created from waypoint %s/%d must record its at: a waypoint twin is pinned", w.Series, w.Sequence)
+	if st := f.Stage; st != nil && f.Provenance.At == "" {
+		return wire.TwinRecord{}, fmt.Errorf("a twin created from stage %s must record its at: a stage twin is pinned", st.Name())
 	}
 	if !bundle.IsID(f.BundleID) {
 		return wire.TwinRecord{}, fmt.Errorf("%q is not a bundle identity", f.BundleID)
@@ -94,7 +95,7 @@ func NewRecord(f RecordFields) (wire.TwinRecord, error) {
 		ProvisionedBy: wire.ProvisionedBy{Version: f.Version},
 		RecordedAt:    f.RecordedAt.UTC().Format(time.RFC3339Nano),
 		Nodes:         nodes,
-		Waypoint:      f.Waypoint,
+		Stage:         f.Stage,
 		State:         wire.StateReady,
 	}
 	if rec.ObservedAt == nil {
@@ -202,7 +203,7 @@ func (a *Activities) RecordTwin(_ context.Context, in wire.RecordInput) (wire.Re
 		Version:    a.Version,
 		RecordedAt: time.Now(),
 		Nodes:      nodes,
-		Waypoint:   in.Waypoint,
+		Stage:      in.Stage,
 	})
 	if err != nil {
 		return failed("%v", err)
@@ -213,11 +214,13 @@ func (a *Activities) RecordTwin(_ context.Context, in wire.RecordInput) (wire.Re
 	return wire.RecordResult{Path: path, Record: rec}, nil
 }
 
-// ReadRecord reads twin.json. A version 1 or 2 record has no waypoint key and reads with
-// Waypoint nil; a version 3 or earlier one has no state, step or holds, and reads with
-// State "" (shown as ready), Step nil and every Holds nil (shown as the record's
-// bundle_id); a version 4 one's step has no wait and reads with Step.Wait nil, as a
-// version 5 one's does while its wait has not run.
+// ReadRecord reads twin.json. A record of version 5 or earlier has no stage key and reads
+// with Stage nil; the waypoint block versions 3 to 5 carry, M10's pinned reference, is not
+// read, and a record that names one reads with Superseded set, so twin step can say why it
+// refuses it (014, research R-11). A version 3 or earlier one has no state, step or holds,
+// and reads with State "" (shown as ready), Step nil and every Holds nil (shown as the
+// record's bundle_id); a version 4 one's step has no wait and reads with Step.Wait nil, as
+// a version 5 or 6 one's does while its wait has not run.
 func ReadRecord(path string) (wire.TwinRecord, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -226,6 +229,12 @@ func ReadRecord(path string) (wire.TwinRecord, error) {
 	var rec wire.TwinRecord
 	if err := json.Unmarshal(b, &rec); err != nil {
 		return wire.TwinRecord{}, fmt.Errorf("reading %s: %w", path, err)
+	}
+	if rec.Stage == nil {
+		var old struct {
+			Waypoint *struct{} `json:"waypoint"`
+		}
+		rec.Superseded = json.Unmarshal(b, &old) == nil && old.Waypoint != nil
 	}
 	return rec, nil
 }
@@ -279,7 +288,7 @@ type StagedTarget struct {
 // version 5) from the record the step started from, and refuses what the contract would
 // not accept, or what would claim more than the step did:
 //
-//   - a previous record that is not the step's from side (another bundle or waypoint), or
+//   - a previous record that is not the step's from side (another bundle or stage), or
 //     is diverged, which no step starts from;
 //   - a phase given to a stepped or unchanged step, or none, or another, to a diverged one;
 //   - a stepped or unchanged step whose staged target is absent, hashes to another
@@ -303,9 +312,9 @@ func NewStepRecord(prev wire.TwinRecord, f StepFields) (wire.TwinRecord, error) 
 	if prev.BundleID != f.From.BundleID {
 		return wire.TwinRecord{}, fmt.Errorf("the record names bundle %s, not bundle %s the step started from", prev.BundleID, f.From.BundleID)
 	}
-	if !sameWaypoint(prev.Waypoint, f.From.Waypoint) {
-		return wire.TwinRecord{}, fmt.Errorf("the record names waypoint %s, not waypoint %s the step started from",
-			waypointName(prev.Waypoint), waypointName(f.From.Waypoint))
+	if !SameStage(prev.Stage, f.From.Stage) {
+		return wire.TwinRecord{}, fmt.Errorf("the record names stage %s, not stage %s the step started from",
+			prev.Stage.Name(), f.From.Stage.Name())
 	}
 	if prev.State == wire.StateDiverged {
 		return wire.TwinRecord{}, fmt.Errorf("the record is diverged; no step starts from a diverged twin")
@@ -373,7 +382,7 @@ func NewStepRecord(prev wire.TwinRecord, f StepFields) (wire.TwinRecord, error) 
 		rec.Provenance = f.Staged.Provenance
 		rec.ObservedAt = &observed
 		rec.ObservedAtNote = ""
-		rec.Waypoint = f.To.Waypoint
+		rec.Stage = f.To.Stage
 		rec.State = wire.StateReady
 	}
 	rec.Nodes = stepNodes(prev, f, moved, outcome)
@@ -558,18 +567,10 @@ func stepBlock(f StepFields, whole time.Duration) *wire.StepRecord {
 	return block
 }
 
-// sameWaypoint says whether two records name the same waypoint, nil included.
-func sameWaypoint(a, b *wire.WaypointRef) bool {
+// SameStage says whether two records name the same stage, nil included.
+func SameStage(a, b *wire.StageRef) bool {
 	if a == nil || b == nil {
 		return a == b
 	}
 	return *a == *b
-}
-
-// waypointName is a waypoint as a refusal names it.
-func waypointName(w *wire.WaypointRef) string {
-	if w == nil {
-		return "none"
-	}
-	return fmt.Sprintf("%s/%d", w.Series, w.Sequence)
 }

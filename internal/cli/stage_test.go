@@ -333,7 +333,7 @@ func TestStageHelpTextsNameTheServer(t *testing.T) {
 	}
 }
 
-// waypoint list, waypoint plan, twin step and twin show do their work in the API's server,
+// stage list, stage plan, twin step and twin show do their work in the API's server,
 // and their help no longer says the command needs Infrahub alone, or Infrahub and the bundle
 // store, or does its work here, or runs on the lab host.
 func TestWorkHelpTextsNameTheServer(t *testing.T) {
@@ -342,9 +342,9 @@ func TestWorkHelpTextsNameTheServer(t *testing.T) {
 		cmd        *cobra.Command
 		gone, said []string
 	}{
-		{newWaypointListCmd(opts), []string{"Needs Infrahub and nothing else"},
+		{newStageListCmd(opts), []string{"Needs Infrahub and nothing else"},
 			[]string{"The API's server reads them, and needs Infrahub and nothing else for it."}},
-		{newWaypointPlanCmd(opts), []string{"Needs Infrahub and the bundle store"},
+		{newStagePlanCmd(opts), []string{"Needs Infrahub and the bundle store"},
 			[]string{"The API's server reads, compiles and files them in its bundle store, and needs Infrahub and the store for it"}},
 		{newTwinStepCmd(opts), []string{"compiled and filed here"},
 			[]string{"The API's server resolves, reads, compiles and files the target;"}},

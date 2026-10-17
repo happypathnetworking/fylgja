@@ -13,8 +13,3 @@ use_extensions: false
 bindings:
   DateTime:
     type: string
-  # M10: a Number attribute's value (the waypoint's sequence). Infrahub serialises it as
-  # a JSON number (verified 2026-09-28 on 1.11.2: CoreTransformation.timeout reads 60),
-  # and the kind's min_value 1 keeps it far inside int.
-  BigInt:
-    type: int

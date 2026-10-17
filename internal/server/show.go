@@ -14,6 +14,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
+	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
 // serviceReads is what twin show learned from the workflow service.
@@ -185,10 +186,8 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 			Source: rec.Source, Run: findings.ShowRef{WorkflowID: rec.Run.WorkflowID, RunID: rec.Run.RunID},
 			WorkerVersion: rec.ProvisionedBy.Version, RecordedAt: rec.RecordedAt, Nodes: len(rec.Nodes),
 		}
-		// A version 3 record names the waypoint the twin was created from.
-		if w := rec.Waypoint; w != nil {
-			block.Record.Waypoint = showWaypoint(w)
-		}
+		// A version 6 record names the stage the twin was created from or stepped to.
+		block.Record.Stage = verify.StageBlock(rec.Stage)
 		// A version 4 record says whether the twin is ready or diverged, and its last step.
 		block.Record.State = rec.State
 		block.Record.Step = showStep(rec.Step, waitRecorded(rec))
@@ -306,11 +305,11 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 	case rec.Provenance.At != "":
 		block.Kind = findings.ShowKindPinned
 		text.kind = fmt.Sprintf("pinned at %s; not following", rec.Provenance.At)
-		if w := rec.Waypoint; w != nil {
-			text.kind = fmt.Sprintf("pinned at %s, waypoint %s/%d; not following", rec.Provenance.At, w.Series, w.Sequence)
-			if st := rec.Step; st != nil {
-				text.kind = fmt.Sprintf("pinned at %s, waypoint %s/%d (stepped from %s by run %s %s, ended %s); not following",
-					rec.Provenance.At, w.Series, w.Sequence, waypointOf(st.From.Waypoint), st.Run.WorkflowID, st.Run.RunID, st.EndedAt)
+		if st := rec.Stage; st != nil {
+			text.kind = fmt.Sprintf("pinned at %s, stage %s; not following", rec.Provenance.At, st.Name())
+			if step := rec.Step; step != nil {
+				text.kind = fmt.Sprintf("pinned at %s, stage %s (stepped from %s by run %s %s, ended %s); not following",
+					rec.Provenance.At, st.Name(), step.From.Stage.Name(), step.Run.WorkflowID, step.Run.RunID, step.EndedAt)
 			}
 		}
 		note(text.kind)
@@ -356,7 +355,7 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 		text.hostHeld = true
 		s := fmt.Sprintf("run %s %s is at step %s", r.WorkflowID, r.RunID, r.Step)
 		if towards := stepTowards(reads.inFlight, r.RunID); towards != "" {
-			s += ", stepping towards waypoint " + towards
+			s += ", stepping towards stage " + towards
 		}
 		text.kind += "; " + s
 		note(s)
@@ -367,14 +366,6 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 		note(s)
 	}
 	return block, text
-}
-
-// showWaypoint is a recorded waypoint as the show block carries it.
-func showWaypoint(w *wire.WaypointRef) *findings.ShowWaypoint {
-	if w == nil {
-		return nil
-	}
-	return &findings.ShowWaypoint{Series: w.Series, Sequence: w.Sequence, Description: w.Description, AtSource: w.AtSource}
 }
 
 // waitRecorded says whether the record is version 5 or later, whose step block carries the
@@ -392,7 +383,7 @@ func showStep(st *wire.StepRecord, waitKnown bool) *findings.ShowStep {
 		return nil
 	}
 	side := func(s wire.StepSide) findings.StepSideBlock {
-		return findings.StepSideBlock{Waypoint: showWaypoint(s.Waypoint), BundleID: s.BundleID, At: s.At}
+		return findings.StepSideBlock{Stage: verify.StageBlock(s.Stage), BundleID: s.BundleID, At: s.At}
 	}
 	out := &findings.ShowStep{Outcome: st.Outcome, From: side(st.From), To: side(st.To),
 		Run: findings.ShowRef{WorkflowID: st.Run.WorkflowID, RunID: st.Run.RunID}, Restarted: lifecycleNodes(st.Reconcile),
@@ -429,10 +420,10 @@ func lifecycleNodes(r wire.StepReconcile) []string {
 // divergedKind is the kind line of a diverged twin (contracts/cli.md, twin show).
 func divergedKind(rec *wire.TwinRecord) string {
 	st := rec.Step
-	return fmt.Sprintf("diverged towards waypoint %s (bundle %s): run %s %s stopped at phase %s; landed: %s; not landed: %s; "+
-		"the twin is at waypoint %s (bundle %s); fylgja twin destroy clears it",
-		waypointOf(st.To.Waypoint), shortID(st.To.BundleID), st.Run.WorkflowID, st.Run.RunID, phaseOf(st),
-		orNone(landed(st)), orNone(notLanded(st)), waypointOf(rec.Waypoint), shortID(rec.BundleID))
+	return fmt.Sprintf("diverged towards stage %s (bundle %s): run %s %s stopped at phase %s; landed: %s; not landed: %s; "+
+		"the twin is at stage %s (bundle %s); fylgja twin destroy clears it",
+		st.To.Stage.Name(), shortID(st.To.BundleID), st.Run.WorkflowID, st.Run.RunID, phaseOf(st),
+		orNone(landed(st)), orNone(notLanded(st)), rec.Stage.Name(), shortID(rec.BundleID))
 }
 
 // stepLine is the record block's line for a record that has stepped: how the step went, or
@@ -465,10 +456,10 @@ func showWaitClause(w *wire.StepWait) string {
 func m11StepLine(st *wire.StepRecord) string {
 	if st.Outcome == wire.StepDiverged {
 		return fmt.Sprintf("diverged: step run %s %s towards %s (bundle %s) stopped at phase %s, ended %s; landed %s; not landed %s",
-			st.Run.WorkflowID, st.Run.RunID, waypointOf(st.To.Waypoint), shortID(st.To.BundleID), phaseOf(st), st.EndedAt,
+			st.Run.WorkflowID, st.Run.RunID, st.To.Stage.Name(), shortID(st.To.BundleID), phaseOf(st), st.EndedAt,
 			orNone(landed(st)), orNone(notLanded(st)))
 	}
-	line := fmt.Sprintf("stepped from %s by run %s %s, ended %s", waypointOf(st.From.Waypoint), st.Run.WorkflowID,
+	line := fmt.Sprintf("stepped from %s by run %s %s, ended %s", st.From.Stage.Name(), st.Run.WorkflowID,
 		st.Run.RunID, st.EndedAt)
 	if st.Outcome == wire.StepUnchanged {
 		return line + "; unchanged: nothing reconciled, awaited or pushed"
@@ -549,14 +540,6 @@ func phaseOf(st *wire.StepRecord) string {
 	return *st.Phase
 }
 
-// waypointOf names a recorded waypoint as series/sequence.
-func waypointOf(w *wire.WaypointRef) string {
-	if w == nil {
-		return "none"
-	}
-	return fmt.Sprintf("%s/%d", w.Series, w.Sequence)
-}
-
 // shortID is a bundle id's first eight characters and an ellipsis, as the step's lines
 // print it.
 func shortID(id string) string {
@@ -581,7 +564,7 @@ func stepAtHost(runs []findings.ShowRun) *findings.ShowRun {
 	return nil
 }
 
-// stepTowards is the waypoint the step run runID is stepping towards, as the service read
+// stepTowards is the stage the step run runID is stepping towards, as the service read
 // it, or "".
 func stepTowards(runs []provision.RunInFlight, runID string) string {
 	for _, r := range runs {
@@ -705,8 +688,8 @@ func printShow(opts *options, block findings.ShowBlock, text showText) {
 		if r.At != "" {
 			ref += " at " + r.At
 		}
-		if w := r.Waypoint; w != nil {
-			ref += fmt.Sprintf(" (waypoint %s/%d, at %s)", w.Series, w.Sequence, w.AtSource)
+		if st := r.Stage; st != nil {
+			ref += fmt.Sprintf(" (stage %s, at %s)", st.Ref(), st.AtSource)
 		}
 		opts.note("record: %s, bundle_id %s, schema %s, contract %s", ref, r.BundleID, r.SchemaHash, r.ContractVersion)
 		switch {

@@ -718,7 +718,7 @@ func TestBlock(t *testing.T) {
 			t.Errorf("link %s\nwant %s", link, want)
 		}
 		twin := jsonOf(t, v["twin"])
-		want = `{"bundle_id":"` + in.StagedID + `","waypoint":null,"state":"ready","source":"intent","nodes":3}`
+		want = `{"bundle_id":"` + in.StagedID + `","stage":null,"state":"ready","source":"intent","nodes":3}`
 		if twin != canon(t, want) {
 			t.Errorf("twin %s\nwant %s", twin, want)
 		}
@@ -779,17 +779,17 @@ func TestBlock(t *testing.T) {
 		prev := previousID
 		in.Record.State = wire.StateDiverged
 		in.Record.BundleID = previousID
-		in.Record.Waypoint = &wire.WaypointRef{Series: "demo", Sequence: 1, Description: "first", AtSource: "given"}
+		in.Record.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled", Description: "first", AtSource: "given"}
 		in.Record.Step = &wire.StepRecord{Outcome: wire.StepDiverged, Phase: &phase,
-			To:  wire.StepSide{Waypoint: &wire.WaypointRef{Series: "demo", Sequence: 2, Description: "second", AtSource: "written"}, BundleID: target},
+			To:  wire.StepSide{Stage: &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "live", Description: "second", AtSource: "written"}, BundleID: target},
 			Run: wire.RunRef{WorkflowID: wire.StepWorkflowID, RunID: "01a3"}}
-		in.Record.Nodes[0].Holds = &prev // e1 refused its push and holds demo/1
+		in.Record.Nodes[0].Holds = &prev // e1 refused its push and holds change-1/cabled
 		r := read(t, in)
 		wait := &findings.VerifyWait{BudgetS: 20, Reads: 3, Outcome: "settled", AfterS: 2.1}
 		doc := document(t, schema, r, r.Block(TwinOf(in.Record, in.StagedID), nil, findings.ShowServiceOK, wait), findings.StatusNonconforming)
 		v := doc["verify"].(map[string]any)
-		want := `{"bundle_id":"` + target + `","waypoint":{"series":"demo","sequence":1,"description":"first","at_source":"given"},` +
-			`"state":"diverged","source":"intent","nodes":3,"diverged":{"towards":{"waypoint":{"series":"demo","sequence":2,"description":"second","at_source":"written"},` +
+		want := `{"bundle_id":"` + target + `","stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"cabled","description":"first","at_source":"given"},` +
+			`"state":"diverged","source":"intent","nodes":3,"diverged":{"towards":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"live","description":"second","at_source":"written"},` +
 			`"bundle_id":"` + target + `"},"run":{"workflow_id":"fylgja-step","run_id":"01a3"},"phase":"push"}}`
 		if got := jsonOf(t, v["twin"]); got != canon(t, want) {
 			t.Errorf("twin %s\nwant %s", got, want)
@@ -854,7 +854,7 @@ func compileFindingsSchema(t *testing.T) *jsonschema.Schema {
 		return doc
 	}
 	c := jsonschema.NewCompiler()
-	for _, name := range []string{"show.schema.json", "waypoints.schema.json", "step.schema.json", "verify.schema.json"} {
+	for _, name := range []string{"show.schema.json", "stages.schema.json", "step.schema.json", "verify.schema.json"} {
 		if err := c.AddResource("https://fylgja.dev/schemas/"+name, load(name)); err != nil {
 			t.Fatal(err)
 		}

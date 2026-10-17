@@ -100,22 +100,6 @@ query Links($limit: Int!, $offset: Int!) {
   }
 }
 
-# M10 — every waypoint, read from the default branch, where the kind lives (D-028).
-# A Fylgja-owned concrete kind, like FylgjaContract; nobody implements it.
-query Waypoints($limit: Int!, $offset: Int!) {
-  FylgjaWaypoint(limit: $limit, offset: $offset) {
-    count
-    edges { node {
-      id
-      series        { value }
-      sequence      { value }
-      branch        { value updated_at }
-      as_of { value }
-      description   { value }
-    } }
-  }
-}
-
 # 014 — the open proposed changes with their stages, read from the default branch, where
 # the stage kind lives (D-045). CoreProposedChange is Infrahub's own unit, not the
 # operator's model: one of the read-only test's three named exceptions. Only `open` is

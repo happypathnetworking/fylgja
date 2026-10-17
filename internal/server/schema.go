@@ -55,42 +55,51 @@ func runCheck(ctx context.Context, opts *options, f *checkFlags) error {
 	doc.Verified = conf.Verified()
 	opts.note("contract %s ✓  %s", doc.Verified.ContractVersion, describeGenerics(doc.Verified.Generics))
 
-	// The waypoint kind, from the default branch whatever branch was checked:
-	// one line beside the answer, never a finding, the status and exit the conformance
-	// answer's. An Infrahub that stopped answering here is the operation.failed the
-	// conformance read would have given.
-	waypoints, line, err := waypointsVerified(ctx)
+	// The stage kind and its extension, from the default branch whatever branch was
+	// checked: one line beside the answer, never a finding, the status and exit the
+	// conformance answer's. An Infrahub that stopped answering here is the
+	// operation.failed the conformance read would have given.
+	verified, line, err := stagesVerified(ctx)
 	if err != nil {
 		return fail(findings.OpSchemaCheck, subject, "%v", err)
 	}
-	doc.Verified.Waypoints = waypoints
+	doc.Verified.Stages = verified
 	opts.note("%s", line)
 	return &result{doc: doc}
 }
 
-// waypointsVerified asks the default branch's schema whether it carries the waypoint kind
-// with every attribute this build reads, and says so in schema check's line
-// (contracts/cli.md). Only an Infrahub that cannot be asked is an error.
-func waypointsVerified(ctx context.Context) (*findings.WaypointsVerified, string, error) {
-	reader, err := intent.WaypointReaderFromEnv()
+// stagesVerified asks the default branch's schema whether it carries the stage kind with
+// every attribute and the relationship this build reads, and CoreProposedChange the
+// extension, and says so in schema check's last line
+// (specs/014-proposed-change-stages/contracts/stage-commands.md). Only an Infrahub that
+// cannot be asked is an error.
+func stagesVerified(ctx context.Context) (*findings.StagesVerified, string, error) {
+	reader, err := intent.StageReaderFromEnv()
 	if err != nil {
 		return nil, "", err
 	}
-	v := &findings.WaypointsVerified{Kind: intent.WaypointKind, Present: true, File: intent.WaypointSchemaFile}
-	remedy := " (load " + intent.WaypointSchemaFile + "; needed only by the waypoint commands)"
-	var kindErr *intent.WaypointKindError
+	v := &findings.StagesVerified{Kind: intent.StageKind, Present: true, Extension: true, File: intent.StageSchemaFile}
+	remedy := " (load " + intent.StageSchemaFile + "; needed only by the stage commands)"
+	lacksExtension := intent.ProposedChangeKind + " lacks " + intent.StageExtension
+	var kindErr *intent.StageKindError
 	switch err := reader.Check(ctx); {
 	case err == nil:
-		return v, "waypoints: " + intent.WaypointKind + " present on the default branch", nil
+		return v, "stages: " + intent.StageKind + " present on the default branch, with its extension", nil
 	case !errors.As(err, &kindErr):
 		return nil, "", err
+	case len(kindErr.Missing) == 0 && !kindErr.Extension:
+		v.Present, v.Extension = false, false
+		return v, "stages: " + intent.StageKind + " absent from the default branch" + remedy, nil
 	case len(kindErr.Missing) == 0:
-		v.Present = false
-		return v, "waypoints: " + intent.WaypointKind + " absent from the default branch" + remedy, nil
-	default:
-		v.Present, v.Missing = false, kindErr.Missing
-		return v, "waypoints: " + intent.WaypointKind + " on the default branch lacks " + strings.Join(kindErr.Missing, ", ") + remedy, nil
+		v.Extension = false
+		return v, "stages: " + intent.StageKind + " present on the default branch, but " + lacksExtension + remedy, nil
 	}
+	v.Present, v.Missing, v.Extension = false, kindErr.Missing, !kindErr.Extension
+	line := "stages: " + intent.StageKind + " on the default branch lacks " + strings.Join(kindErr.Missing, ", ")
+	if kindErr.Extension {
+		line += ", and " + lacksExtension
+	}
+	return v, line + remedy, nil
 }
 
 // describeGenerics renders the verified generics for the text success line, in the

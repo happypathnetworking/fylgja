@@ -24,7 +24,7 @@ import (
 )
 
 // The step's wait against a scratch twin directory
-// holding the three-node golden as the staged bundle and a version 5 record whose step
+// holding the three-node golden as the staged bundle and a version 6 record whose step
 // names the run, a fake node table in the suite's shape, and a fake clock, so every wait
 // runs in milliseconds.
 
@@ -154,8 +154,8 @@ func (c *waitClock) Sleep(ctx context.Context, d time.Duration) error {
 	return nil
 }
 
-// waitingTwin is the activities with the three-node golden staged, a version 5 record of a
-// step from demo/1 to the golden as demo/2 written by run, its wait not yet run, the reader
+// waitingTwin is the activities with the three-node golden staged, a version 6 record of a
+// step from change-1/seeded to the golden as change-1/cabled written by run, its wait not yet run, the reader
 // r, a clock standing at the record's time, the probe login in the environment and every
 // log line kept.
 func waitingTwin(t *testing.T, runner Runner, run string, r verify.Reader) (*Activities, *waitClock, *bytes.Buffer) {
@@ -177,7 +177,7 @@ func waitingTwin(t *testing.T, runner Runner, run string, r verify.Reader) (*Act
 	return a, clock, &log
 }
 
-// waitRecord is the record a step from demo/1 to the three-node golden as demo/2 leaves,
+// waitRecord is the record a step from change-1/seeded to the three-node golden as change-1/cabled leaves,
 // written by run, the step's fields changed by change first.
 func waitRecord(t *testing.T, run string, change func(*StepFields)) wire.TwinRecord {
 	t.Helper()
@@ -188,7 +188,7 @@ func waitRecord(t *testing.T, run string, change func(*StepFields)) wire.TwinRec
 	staged := &StagedTarget{BundleID: goldenID, Provenance: wire.Provenance(m.Provenance),
 		PSP: map[string]wire.PSPRef{}, Artifacts: map[string]*wire.TwinArtifact{}}
 	observed := "2026-10-03T11:58:00.000000Z"
-	create := RecordFields{BundleID: stepFromID, ObservedAt: &observed, Source: wire.SourceIntent, Waypoint: demo(1),
+	create := RecordFields{BundleID: stepFromID, ObservedAt: &observed, Source: wire.SourceIntent, Stage: mark("seeded"),
 		Provenance: wire.Provenance{Branch: "fylgja-fixture", At: stepFromAt, SchemaHash: "fixture", ContractVersion: "0.2"},
 		RunID:      "01a0e9e3-0000-7000-8000-000000000001", Version: "0.1.0-dev", RecordedAt: time.Date(2026, 10, 3, 11, 0, 0, 0, time.UTC)}
 	var lab []wire.LabNode
@@ -208,8 +208,8 @@ func waitRecord(t *testing.T, run string, change func(*StepFields)) wire.TwinRec
 		t.Fatal(err)
 	}
 	f := StepFields{Outcome: wire.StepStepped,
-		From:       wire.StepSide{Waypoint: demo(1), BundleID: stepFromID, At: stepFromAt},
-		To:         wire.StepSide{Waypoint: demo(2), BundleID: goldenID, At: m.Provenance.At},
+		From:       wire.StepSide{Stage: mark("seeded"), BundleID: stepFromID, At: stepFromAt},
+		To:         wire.StepSide{Stage: mark("cabled"), BundleID: goldenID, At: m.Provenance.At},
 		ObservedAt: "2026-10-03T11:59:00.000000Z", RunID: run, Version: "0.1.0-dev",
 		Pushed: pushed, StartedAt: "2026-10-03T11:59:30Z", EndedAt: waitFromStamp,
 		RecordedAt: time.Date(2026, 10, 3, 12, 0, 0, 100000000, time.UTC), Nodes: lab, Staged: staged}

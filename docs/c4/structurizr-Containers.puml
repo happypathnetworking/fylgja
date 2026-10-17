@@ -41,7 +41,7 @@ System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
   Container(Fylgja.fylgjaserve, "fylgja serve", $techn="Go, the same binary; HTTP on 127.0.0.1:7650", $descr="The API's server, on the lab host. Reads Infrahub, compiles, checks the host, starts and follows runs, reads the twin.", $tags="Container", $link="")
 }
 
-Rel(Operator, Infrahub, "Edits intent; writes waypoints", $techn="", $tags="Relationship", $link="")
+Rel(Operator, Infrahub, "Edits intent; opens proposed changes and marks stages", $techn="", $tags="Relationship", $link="")
 Rel(Operator, Fylgja.fylgjaclient, "Runs commands", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaclient, Fylgja.fylgjaserve, "POST /v1/<noun>/<verb>; bearer token", $techn="HTTP, NDJSON", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve, Infrahub, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")

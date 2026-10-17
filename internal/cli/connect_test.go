@@ -44,7 +44,7 @@ func executeClient(t *testing.T, args ...string) (int, *findings.Document, strin
 	opts := &options{}
 	root := &cobra.Command{Use: "fylgja", SilenceUsage: true, SilenceErrors: true}
 	root.PersistentFlags().BoolVar(&opts.asJSON, "json", false, "")
-	root.AddCommand(newTwinCmd(opts), newIntentCmd(opts), newWaypointCmd(opts), newSchemaCmd(opts), newPSPCmd(opts))
+	root.AddCommand(newTwinCmd(opts), newIntentCmd(opts), newStageCmd(opts), newSchemaCmd(opts), newPSPCmd(opts))
 	root.SetArgs(append(args, "--json"))
 	var code int
 	out := captureStdout(t, func() {
@@ -68,7 +68,8 @@ func servedRequests(op, outcome string) int {
 // workflow service dialled nor Infrahub asked. The server logged the request, so the refusal
 // is the server's and not the client's.
 func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
-	const notARef = `is not a waypoint reference: expected <series>/<sequence>, a series with no "/" and no whitespace and a positive integer`
+	const notARef = `is not a stage reference: expected <branch>/<label>, a branch with no "/" and no whitespace and a label with neither`
+	const notABranch = `is not a branch: expected a branch with no "/" and no whitespace`
 	const tooPrecise = "2026-09-15T14:22:12.1234567Z"
 	refusal := func(rule, step, object, message string) findings.Finding {
 		return findings.Finding{Severity: findings.Rejection, Rule: rule, Step: step, Object: object, Message: message}
@@ -76,7 +77,7 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 	for _, c := range []struct {
 		name string
 		args []string
-		// step, when set, builds the waypoint twin of steps/1 for twin step's cases.
+		// step, when set, builds the stage twin for twin step's cases.
 		step bool
 		want findings.Finding
 		code int
@@ -84,9 +85,9 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 		// workflow service, by what Infrahub names.
 		asked bool
 	}{
-		// twin create (M1, M4, M10).
-		{name: "create with neither --branch nor --waypoint", args: []string{"twin", "create"},
-			want: refusal(findings.RuleOperationFailed, "", findings.OpTwinCreate, "--branch or --waypoint is required")},
+		// twin create (M1, M4, 014).
+		{name: "create with neither --branch nor --stage", args: []string{"twin", "create"},
+			want: refusal(findings.RuleOperationFailed, "", findings.OpTwinCreate, "--branch or --stage is required")},
 		{name: "create with an at finer than microseconds", args: []string{"twin", "create", "--branch", "fylgja-fixture", "--at", tooPrecise},
 			want: refusal(findings.RuleAtPrecision, "", tooPrecise, "at "+tooPrecise+" carries 7 fractional digits; "+
 				"Infrahub honours at most 6 (microseconds). Re-run with a coarser --at.")},
@@ -98,31 +99,31 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 			want: refusal(findings.RuleFollowFlagsConflict, findings.StepStart, "--interval", "--interval is meaningless with --at: a pinned twin never follows")},
 		{name: "create with --interval and --no-follow", args: []string{"twin", "create", "--branch", "fylgja-fixture", "--no-follow", "--interval", "1m"},
 			want: refusal(findings.RuleFollowFlagsConflict, findings.StepStart, "--interval", "--interval is meaningless with --no-follow: the twin will not follow")},
-		{name: "create with an invalid waypoint reference", args: []string{"twin", "create", "--waypoint", "demo"},
-			want: refusal(findings.RuleWaypointRefInvalid, findings.StepStart, "demo", `--waypoint "demo" `+notARef)},
-		{name: "create with --waypoint=", args: []string{"twin", "create", "--waypoint="},
-			want: refusal(findings.RuleWaypointRefInvalid, findings.StepStart, "", `--waypoint "" `+notARef)},
-		{name: "create --dry-run with --waypoint= beside --branch", args: []string{"twin", "create", "--branch", "fylgja-fixture", "--waypoint=", "--dry-run"},
-			want: refusal(findings.RuleWaypointRefInvalid, findings.StepStart, "", `--waypoint "" `+notARef)},
-		{name: "create with --waypoint and --branch", args: []string{"twin", "create", "--waypoint", "demo/2", "--branch", "change-1"},
-			want: refusal(findings.RuleWaypointFlagsConflict, findings.StepStart, "--branch",
-				"--branch is meaningless with --waypoint: a waypoint is a whole pinned reference (branch and at)")},
+		{name: "create with an invalid stage reference", args: []string{"twin", "create", "--stage", "change-1"},
+			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "change-1", `--stage "change-1" `+notARef)},
+		{name: "create with --stage=", args: []string{"twin", "create", "--stage="},
+			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "", `--stage "" `+notARef)},
+		{name: "create --dry-run with --stage= beside --branch", args: []string{"twin", "create", "--branch", "fylgja-fixture", "--stage=", "--dry-run"},
+			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "", `--stage "" `+notARef)},
+		{name: "create with --stage and --branch", args: []string{"twin", "create", "--stage", "change-1/cabled", "--branch", "change-1"},
+			want: refusal(findings.RuleStageFlagsConflict, findings.StepStart, "--branch",
+				"--branch is meaningless with --stage: a stage is a whole pinned reference (branch and at)")},
 
-		// intent read and schema check (M1, M10).
-		{name: "read with neither --branch nor --waypoint", args: []string{"intent", "read", "--out", "x.json"},
-			want: refusal(findings.RuleOperationFailed, "", findings.OpIntentRead, "--branch or --waypoint is required")},
-		{name: "read with --waypoint=", args: []string{"intent", "read", "--waypoint=", "--out", "x.json"},
-			want: refusal(findings.RuleWaypointRefInvalid, "", "", `--waypoint "" `+notARef)},
+		// intent read and schema check (M1, 014).
+		{name: "read with neither --branch nor --stage", args: []string{"intent", "read", "--out", "x.json"},
+			want: refusal(findings.RuleOperationFailed, "", findings.OpIntentRead, "--branch or --stage is required")},
+		{name: "read with --stage=", args: []string{"intent", "read", "--stage=", "--out", "x.json"},
+			want: refusal(findings.RuleStageRefInvalid, "", "", `--stage "" `+notARef)},
 		{name: "check with no --branch", args: []string{"schema", "check"},
 			want: refusal(findings.RuleOperationFailed, "", findings.OpSchemaCheck, "--branch is required")},
 
-		// waypoint list and plan (M10).
-		{name: "list with a series holding a slash", args: []string{"waypoint", "list", "--series=a/b"},
-			want: refusal(findings.RuleWaypointRefInvalid, findings.StepStart, "a/b", `--series "a/b" is not a waypoint series: expected a series with no "/" and no whitespace`)},
-		{name: "plan with --series=", args: []string{"waypoint", "plan", "--series="},
-			want: refusal(findings.RuleWaypointRefInvalid, findings.StepStart, "", `--series "" is not a waypoint series: expected a series with no "/" and no whitespace`)},
-		{name: "plan with no --series", args: []string{"waypoint", "plan"},
-			want: refusal(findings.RuleOperationFailed, "", findings.OpWaypointPlan, "--series is required")},
+		// stage list and plan (014).
+		{name: "list with a branch holding a slash", args: []string{"stage", "list", "--branch=a/b"},
+			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "a/b", `--branch "a/b" `+notABranch)},
+		{name: "plan with --branch=", args: []string{"stage", "plan", "--branch="},
+			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "", `--branch "" `+notABranch)},
+		{name: "plan with no --branch", args: []string{"stage", "plan"},
+			want: refusal(findings.RuleOperationFailed, "", findings.OpStagePlan, "--branch is required")},
 
 		// twin step (M11, M12).
 		{name: "step with --wait=", args: []string{"twin", "step", "--allow-restart", "--wait="}, step: true,
@@ -130,14 +131,16 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 				"--wait= is empty; give a duration such as --wait=2m, or leave --wait out for the default 2m0s")},
 		{name: "step --dry-run with --wait banana", args: []string{"twin", "step", "--allow-restart", "--wait", "banana", "--dry-run"}, step: true,
 			want: refusal(findings.RuleVerifyWaitInvalid, findings.StepStart, "--wait", `--wait=banana is not a duration: time: invalid duration "banana"`)},
-		{name: "step with --waypoint=", args: []string{"twin", "step", "--waypoint="}, step: true,
-			want: refusal(findings.RuleWaypointRefInvalid, findings.StepStart, "", `--waypoint "" `+notARef)},
-		{name: "step to a sequence the series lacks", args: []string{"twin", "step", "--waypoint", "steps/7"}, step: true,
+		{name: "step with --stage=", args: []string{"twin", "step", "--stage="}, step: true,
+			want: refusal(findings.RuleStageRefInvalid, findings.StepStart, "", `--stage "" `+notARef)},
+		{name: "step to a stage the proposed change lacks", args: []string{"twin", "step", "--stage", "change-1/nosuch"}, step: true,
 			code: findings.ExitRejected, asked: true,
-			want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "steps/7", "series steps has no waypoint 7; its sequences are 1, 2, 3, 4, 5, 6")},
-		{name: "step to the current waypoint", args: []string{"twin", "step", "--waypoint", "steps/1"}, step: true,
+			want: refusal(findings.RuleStepTargetUnknown, findings.StepResolve, "change-1/nosuch",
+				`proposed change pc-1 on change-1 has no stage "nosuch"; its stages are: `+stepStages)},
+		{name: "step to the current stage", args: []string{"twin", "step", "--stage", "change-1/sealed"}, step: true,
 			code: findings.ExitRejected, asked: true,
-			want: refusal(findings.RuleStepTargetCurrent, findings.StepResolve, "steps/1", "the twin is already at waypoint steps/1; series steps's sequences are 1, 2, 3, 4, 5, 6")},
+			want: refusal(findings.RuleStepTargetCurrent, findings.StepResolve, "change-1/sealed",
+				"the twin is already at stage change-1/sealed (branch change-1, at "+stepMixedAt+"); the proposed change's stages are: "+stepStages)},
 
 		// twin verify (M12).
 		{name: "verify with --wait=", args: []string{"twin", "verify", "--wait="},
@@ -154,7 +157,7 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 				infra, before = h.infra, h.before
 			} else {
 				useStateRoot(t)
-				infra = seriesInfrahub(t)
+				infra = newFakeInfrahub(t)
 				infra.start()
 			}
 			dials := countDials(t)
@@ -193,7 +196,7 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 // What each command needed at M12 it still needs, with the server in the CLI's place:
 // twin show answers for the host and the record with the workflow service
 // unreachable, inside its budget, exit 0; twin verify reads the twin with it unreachable,
-// exit 0 with M12's warning; waypoint list and plan answer without dialling it at all; and
+// exit 0 with M12's warning; stage list and plan answer without dialling it at all; and
 // psp validate and twin compile answer with neither it nor Infrahub reachable.
 func TestEachCommandNeedsWhatItNeededAtM12(t *testing.T) {
 	refused := &provision.UnreachableError{Address: "localhost:7233", Err: errors.New("connection refused")}
@@ -241,11 +244,13 @@ func TestEachCommandNeedsWhatItNeededAtM12(t *testing.T) {
 			t.Errorf("exit %d, findings %+v; want 0, the verify block, and %+v alone", out.code, out.doc.Findings, want)
 		}
 	})
-	for _, args := range [][]string{{"waypoint", "list"}, {"waypoint", "plan", "--series", "demo"}} {
+	for _, args := range [][]string{{"stage", "list"}, {"stage", "plan", "--branch", "change-1"}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			useStateRoot(t)
 			useService(t, nil)
-			seriesInfrahub(t).start()
+			f := newFakeInfrahub(t)
+			f.change("pc-1", "change-1", mark("st-1", "cabled", "", "the leaf cabled"))
+			f.start()
 			code, doc, raw := executeClient(t, args...)
 			if code != findings.ExitOK || findings.List(doc.Findings).Rejected() {
 				t.Errorf("exit %d, %s; want 0", code, raw)

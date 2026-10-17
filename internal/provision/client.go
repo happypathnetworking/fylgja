@@ -93,7 +93,7 @@ type Service interface {
 	LastCheck(ctx context.Context, schedule *FollowingState) (*CheckRecord, error)
 	// InFlight names the provisioning run, the destroy run, the step run and the check in
 	// flight, each with the step its history has reached; a check's child run is its Child,
-	// and a step run names the waypoint it steps towards.
+	// and a step run names the stage it steps towards.
 	InFlight(ctx context.Context) ([]RunInFlight, error)
 	// StartStep starts the one step run and returns its run id once a worker has taken it
 	// (M11). A provisioning, destroy or step run in
@@ -137,7 +137,7 @@ type RunInFlight struct {
 	RunID      string
 	Step       string
 	Child      *RunInFlight
-	// Towards is the waypoint a fylgja-step run is stepping towards, series/sequence, from
+	// Towards is the stage a fylgja-step run is stepping towards, <branch>/<label>, from
 	// its input; "" for every other run.
 	Towards string
 }
@@ -859,7 +859,7 @@ func (c *Client) InFlight(ctx context.Context) ([]RunInFlight, error) {
 	return append(runs, checks...), nil
 }
 
-// stepTowards is the waypoint a step run steps towards, series/sequence, read from the
+// stepTowards is the stage a step run steps towards, <branch>/<label>, read from the
 // input its history starts with, or "" when that input names
 // none.
 func (c *Client) stepTowards(ctx context.Context, runID string) (string, error) {
@@ -873,10 +873,10 @@ func (c *Client) stepTowards(ctx context.Context, runID string) (string, error) 
 	}
 	var in StepInput
 	attrs := ev.GetWorkflowExecutionStartedEventAttributes()
-	if attrs == nil || converter.GetDefaultDataConverter().FromPayloads(attrs.GetInput(), &in) != nil || in.To.Waypoint == nil {
+	if attrs == nil || converter.GetDefaultDataConverter().FromPayloads(attrs.GetInput(), &in) != nil || in.To.Stage == nil {
 		return "", nil
 	}
-	return waypointName(in.To.Waypoint), nil
+	return in.To.Stage.Name(), nil
 }
 
 // historyStep reads a run's history once, without waiting for more, and returns the step
@@ -1563,8 +1563,9 @@ func StepDocument(subject *findings.Subject, in StepInput, res StepResult) *find
 func StepBlockOf(in StepInput, plan wire.ReconcilePlan) *findings.StepBlock {
 	side := func(s wire.StepSide) findings.StepSideBlock {
 		b := findings.StepSideBlock{BundleID: s.BundleID, At: s.At, Branch: s.Branch}
-		if w := s.Waypoint; w != nil {
-			b.Waypoint = &findings.ShowWaypoint{Series: w.Series, Sequence: w.Sequence, Description: w.Description, AtSource: w.AtSource}
+		if st := s.Stage; st != nil {
+			b.Stage = &findings.ShowStage{ProposedChange: findings.StageChangeRef{ID: st.ProposedChange.ID,
+				Branch: st.ProposedChange.Branch}, Label: st.Label, Description: st.Description, AtSource: st.AtSource}
 		}
 		return b
 	}

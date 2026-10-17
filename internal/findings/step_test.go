@@ -6,7 +6,8 @@ import (
 	"testing"
 )
 
-// The step's documents and the two M11 extensions of M10's, as the contracts spell them.
+// The step's documents and the two M11 extensions of the stage list's block and the show
+// record, as the contracts spell them, on stage sides since 014.
 
 var (
 	stepFromID = strings.Repeat("34", 32)
@@ -14,15 +15,11 @@ var (
 	stepRunID  = "01a1b2c3-0000-7000-8000-000000000002"
 )
 
-func demoWaypoint(sequence int, description string) *ShowWaypoint {
-	return &ShowWaypoint{Series: "demo", Sequence: sequence, Description: description, AtSource: "written"}
-}
-
 func f64(v float64) *float64 { return &v }
 
-// stepDiff is M10's pair JSON for the example step: e1 and s1 cabled, s1's bootstrap and
-// both artifacts moved.
-var stepDiff = json.RawMessage(`{"from":"demo/1","to":"demo/2","from_bundle_id":"` + stepFromID +
+// stepDiff is M10's pair JSON for the example step from change-1/cabled to change-1/live:
+// e1 and s1 cabled, s1's bootstrap and both artifacts moved.
+var stepDiff = json.RawMessage(`{"from":"change-1/cabled","to":"change-1/live","from_bundle_id":"` + stepFromID +
 	`","to_bundle_id":"` + stepToID + `","computed":true,"unchanged":false,` +
 	`"nodes":{"added":[],"removed":[],"changed":[{"node":"s1","reasons":["bootstrap","mapping"]}]},` +
 	`"links":{"added":[{"id":"e1:Ethernet3|s1:ethernet-1/3","a":{"node":"e1","port":"eth3"},"b":{"node":"s1","port":"e1-3"}}],"removed":[]},` +
@@ -32,9 +29,10 @@ var stepDiff = json.RawMessage(`{"from":"demo/1","to":"demo/2","from_bundle_id":
 func stepBlock() *StepBlock {
 	restart, live := "restart", "live"
 	return &StepBlock{
-		From: StepSideBlock{Waypoint: demoWaypoint(1, "before the change"), BundleID: stepFromID, At: "2026-09-28T15:00:01.123456+00:00"},
-		To: StepSideBlock{Waypoint: demoWaypoint(2, "after the first cut-over"), BundleID: stepToID,
-			At: "2026-09-28T15:20:44.000000+00:00", Branch: "change-1"},
+		From: StepSideBlock{Stage: showStage("cabled", "after the link is cabled", AtSourceWritten), BundleID: stepFromID,
+			At: "2026-10-16T17:25:30.118244+00:00"},
+		To: StepSideBlock{Stage: showStage("live", "after its configuration is live", AtSourceGiven), BundleID: stepToID,
+			At: "2026-10-16T17:30:00.000000+00:00", Branch: "change-1"},
 		Diff: stepDiff,
 		Reconcile: StepReconcileBlock{Restarted: []string{"e1"}, LinksAdded: []string{"e1:eth3 -- s1:e1-3"},
 			Nodes: []StepPlanNode{{Node: "e1", Declared: &restart, Reported: "restart", Reason: "added link"},
@@ -45,20 +43,20 @@ func stepBlock() *StepBlock {
 }
 
 // stepDocuments are twin step's documents: the dry run refused, a stepped run, a diverged
-// one, and an unchanged one whose run pushed and awaited nobody.
+// one, an unchanged one whose run pushed and awaited nobody, and one from the branch point
+// to the head that skips the marks between (014's step.stage.skipped).
 func stepDocuments() []labelledDocument {
 	subject := func() *Subject {
-		return &Subject{Waypoint: "demo/2", Branch: "change-1", At: "2026-09-28T15:20:44.000000+00:00"}
+		return &Subject{Stage: "change-1/live", Branch: "change-1", At: "2026-10-16T17:30:00.000000+00:00"}
 	}
-	resolved := &WaypointBlock{Series: "demo", Sequence: 2, Branch: "change-1", At: "2026-09-28T15:20:44.000000+00:00",
-		AtSource: "written", Description: "after the first cut-over"}
+	resolved := liveBlock()
 
 	var restart List
 	restart.AddStep(Rejection, StepCompare, RuleStepRestartRequired, "e1",
 		"containerlab would restart e1 (added link; package arista_eos declares restart): it loses its running state and its push until the step pushes it again; give --allow-restart to proceed, or --dry-run to see the step")
 	dry := NewDocument(OpTwinStep, subject(), restart)
 	dry.BundleID = stepToID
-	dry.Waypoint = resolved
+	dry.Stage = resolved
 	dry.Step = stepBlock()
 	dry.DryRun = &DryRunBlock{Nodes: []DryRunNode{{Name: "e1", Image: "ceos:4.32.0.2F", PSP: "arista_eos", MemoryMB: 2048,
 		Artifact: &DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: m5Checksum, Size: 900}}},
@@ -68,7 +66,7 @@ func stepDocuments() []labelledDocument {
 	ranSubject.RunID = stepRunID
 	stepped := NewDocument(OpTwinStep, ranSubject, nil)
 	stepped.BundleID = stepToID
-	stepped.Waypoint = resolved
+	stepped.Stage = resolved
 	stepped.Step = stepBlock()
 	stepped.Step.AllowRestart = true
 	stepped.Step.StepRunBlock = &StepRunBlock{Run: ShowRef{WorkflowID: "fylgja-step", RunID: stepRunID},
@@ -84,11 +82,11 @@ func stepDocuments() []labelledDocument {
 	stopped.AddStep(Rejection, StepPush, RulePushRefused, "e1",
 		"node e1 refused artifact device-config (checksum 9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3) at line 7: Invalid input (at token 0: 'bogus')")
 	stopped.AddStep(Rejection, StepPush, RuleStepDiverged, stepRunID,
-		"step run "+stepRunID+" towards waypoint demo/2 (bundle ee…) stopped at phase push: landed s1; not landed e1 (push.refused); the twin is up and diverged at waypoint demo/1 (bundle 34…), its record says so, and it accepts only fylgja twin destroy")
+		"step run "+stepRunID+" towards stage change-1/live (bundle ee…) stopped at phase push: landed s1; not landed e1 (push.refused); the twin is up and diverged at stage change-1/cabled (bundle 34…), its record says so, and it accepts only fylgja twin destroy")
 	diverged := NewDocument(OpTwinStep, ranSubject, stopped)
 	diverged.Status = StatusDiverged
 	diverged.BundleID = stepToID
-	diverged.Waypoint = resolved
+	diverged.Stage = resolved
 	diverged.Step = stepBlock()
 	diverged.Step.AllowRestart = true
 	// A created node, which no package declaration covers.
@@ -104,34 +102,57 @@ func stepDocuments() []labelledDocument {
 
 	unchanged := NewDocument(OpTwinStep, ranSubject, nil)
 	unchanged.BundleID = stepToID
-	unchanged.Waypoint = resolved
-	unchanged.Step = &StepBlock{From: stepBlock().From, To: stepBlock().To, Diff: json.RawMessage(`{"from":"demo/1","to":"demo/2","from_bundle_id":"` +
+	unchanged.Stage = resolved
+	unchanged.Step = &StepBlock{From: stepBlock().From, To: stepBlock().To, Diff: json.RawMessage(`{"from":"change-1/cabled","to":"change-1/live","from_bundle_id":"` +
 		stepFromID + `","to_bundle_id":"` + stepToID + `","computed":true,"unchanged":true,` +
 		`"nodes":{"added":[],"removed":[],"changed":[]},"links":{"added":[],"removed":[]},"artifacts":{"changed":[]}}`),
 		StepRunBlock: &StepRunBlock{Run: ShowRef{WorkflowID: "fylgja-step", RunID: stepRunID}, Outcome: "unchanged", State: "ready",
 			Timings: StepTimingsBlock{WholeS: 1.8}, StartedAt: "2026-10-02T09:20:00Z", EndedAt: "2026-10-02T09:20:01.8Z"}}
 	unchanged.Step.Reconcile.Skipped = true
 
+	// The step across the marks: from the branch point, read on main, to the head, the two
+	// stages derived from the branch, warned that it skips the two marks between.
+	var skips List
+	skips.AddStep(Warning, StepResolve, RuleStepStageSkipped, "change-1/head",
+		"the step from change-1/branch-point to change-1/head skips stages cabled, live; the step is between the two bundles either way")
+	head := headBlock()
+	skipped := NewDocument(OpTwinStep, &Subject{Stage: head.Ref, Branch: head.Branch, At: head.At, RunID: stepRunID}, skips)
+	skipped.BundleID = stepToID
+	skipped.Stage = head
+	skipped.Step = stepBlock()
+	skipped.Step.From = StepSideBlock{Stage: showStage("branch-point", "", AtSourceBranchPoint), BundleID: stepFromID,
+		At: "2026-10-16T17:20:19.944651+00:00"}
+	skipped.Step.To = StepSideBlock{Stage: showStage("head", "", AtSourceHead), BundleID: stepToID,
+		At: head.At, Branch: head.Branch}
+	skipped.Step.Diff = json.RawMessage(strings.Replace(string(stepDiff),
+		`"from":"change-1/cabled","to":"change-1/live"`, `"from":"change-1/branch-point","to":"change-1/head"`, 1))
+	skipped.Step.StepRunBlock = stepped.Step.StepRunBlock
+
 	return []labelledDocument{
 		{"step dry run, refused", dry},
 		{"step run, stepped", stepped},
 		{"step run, diverged", diverged},
 		{"step run, unchanged", unchanged},
+		{"step run, from the branch point to the head, skipping the marks", skipped},
 	}
 }
 
-// showStepDocuments are twin show of a stepped and of a diverged version 4 record.
+// showStepDocuments are twin show of a stepped and of a diverged version 6 record, and of
+// one that has not stepped.
 func showStepDocuments() []labelledDocument {
 	observed := "2026-10-02T09:14:01.000000Z"
 	record := func(state string, step *ShowStep) *ShowRecord {
-		return &ShowRecord{Branch: "change-1", At: "2026-09-28T15:20:44.000000+00:00", BundleID: stepToID, SchemaHash: "4d5b37aa",
+		return &ShowRecord{Branch: "change-1", At: "2026-10-16T17:30:00.000000+00:00", BundleID: stepToID, SchemaHash: "a8045729",
 			ContractVersion: "0.2", ObservedAt: &observed, Source: "intent", Run: ShowRef{WorkflowID: "fylgja-provision", RunID: "run-1"},
 			WorkerVersion: "0.1.0-dev", RecordedAt: "2026-10-02T09:15:41Z", Nodes: 3,
-			Waypoint: demoWaypoint(2, "after the first cut-over"), State: state, Step: step}
+			Stage: showStage("live", "after its configuration is live", AtSourceGiven), State: state, Step: step}
 	}
-	side := func(sequence int, id, at string) StepSideBlock {
-		return StepSideBlock{Waypoint: demoWaypoint(sequence, ""), BundleID: id, At: at}
+	side := func(stage *ShowStage, id, at string) StepSideBlock {
+		return StepSideBlock{Stage: stage, BundleID: id, At: at}
 	}
+	cabled := showStage("cabled", "after the link is cabled", AtSourceWritten)
+	live := showStage("live", "after its configuration is live", AtSourceGiven)
+	head := showStage("head", "", AtSourceHead)
 	show := func(kind string, rec *ShowRecord) *Document {
 		doc := NewDocument(OpTwinShow, nil, nil)
 		doc.Show = &ShowBlock{Kind: kind, Service: ShowServiceOK, Record: rec,
@@ -140,14 +161,14 @@ func showStepDocuments() []labelledDocument {
 		return doc
 	}
 	stepped := show(ShowKindPinned, record("ready", &ShowStep{Outcome: "stepped",
-		From: side(1, stepFromID, "2026-09-28T15:00:01.123456+00:00"), To: side(2, stepToID, "2026-09-28T15:20:44.000000+00:00"),
+		From: side(cabled, stepFromID, "2026-10-16T17:25:30.118244+00:00"), To: side(live, stepToID, "2026-10-16T17:30:00.000000+00:00"),
 		Run: ShowRef{WorkflowID: "fylgja-step", RunID: stepRunID}, Restarted: []string{"e1"},
 		Pushed: []StepPushedEntry{{Node: "e1", Reasons: []string{"artifact", "restarted"}, Outcome: "landed", TookS: f64(1.6)}},
 		Timings: &StepTimingsBlock{ReconcileS: f64(3.9), Readiness: map[string]float64{"e1": 54.8}, Push: map[string]float64{"e1": 1.6},
 			WholeS: 71.2},
 		StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:15:41Z"}))
 	diverged := show(ShowKindDiverged, record("diverged", &ShowStep{Outcome: "diverged",
-		From: side(2, stepToID, "2026-09-28T15:20:44.000000+00:00"), To: side(3, strings.Repeat("51", 32), "2026-09-29T08:00:00Z"),
+		From: side(live, stepToID, "2026-10-16T17:30:00.000000+00:00"), To: side(head, strings.Repeat("51", 32), "2026-10-16T17:30:11.884302+00:00"),
 		Run: ShowRef{WorkflowID: "fylgja-step", RunID: stepRunID}, Phase: "push",
 		Pushed:    []StepPushedEntry{{Node: "e1", Reasons: []string{"artifact"}, Outcome: "refused", Rule: RulePushRefused}},
 		StartedAt: "2026-10-02T10:00:00Z", EndedAt: "2026-10-02T10:00:09Z"}))
@@ -155,34 +176,32 @@ func showStepDocuments() []labelledDocument {
 	return []labelledDocument{
 		{"show of a stepped record", stepped},
 		{"show of a diverged record", diverged},
-		{"show of a version 4 record that has not stepped", unstepped},
+		{"show of a version 6 record that has not stepped", unstepped},
 	}
 }
 
-// listStepDocuments are waypoint list beside a diverged record and beside a ready one.
+// listStepDocuments are stage list beside a diverged record and beside a ready one.
 func listStepDocuments() []labelledDocument {
-	demo := "demo"
-	row := WaypointRow{WaypointBlock: WaypointBlock{Series: "demo", Sequence: 2, Branch: "change-1",
-		At: "2026-09-28T15:20:44.000000+00:00", AtSource: "written", Description: "after the first cut-over"}, Twin: true}
-	list := func(state string, towards *WaypointTowards) *Document {
-		doc := NewDocument(OpWaypointList, nil, nil)
-		doc.Waypoints = &WaypointsBlock{Series: &demo, Waypoints: []WaypointRow{row},
-			Record: &WaypointRecord{Series: "demo", Sequence: 2, Branch: "change-1", At: "2026-09-28T15:20:44.000000+00:00",
-				AtSource: "written", State: state, Towards: towards}}
+	branch := "change-1"
+	cabled := cabledBlock()
+	list := func(state string, towards *StageTowards) *Document {
+		doc := NewDocument(OpStageList, nil, nil)
+		doc.Stages = &StagesBlock{Branch: &branch, Rows: []StageRow{stageRow(cabled, true)},
+			Record: &StageRecord{Ref: cabled.Ref, ProposedChange: StageChangeRef{ID: "pc-1", Branch: "change-1"},
+				Label: cabled.Label, Branch: cabled.Branch, At: cabled.At, AtSource: cabled.AtSource, State: state, Towards: towards}}
 		return doc
 	}
 	return []labelledDocument{
-		{"list beside a diverged record", list("diverged", &WaypointTowards{Series: "demo", Sequence: 3})},
+		{"list beside a diverged record", list("diverged", &StageTowards{Ref: "change-1/live"})},
 		{"list beside a ready record", list("ready", nil)},
 	}
 }
 
-// The step's documents, twin show's of a stepped and a diverged record, and waypoint list's
+// The step's documents, twin show's of a stepped and a diverged record, and stage list's
 // beside one satisfy the newest contracts, every nullable key written. The newest are the
-// module root's contracts/, M11's extended additively.
-// M10's documents stay M10's (TestM10DocumentsSatisfySchema, unchanged).
+// module root's contracts/: M11's, extended additively by M12, with stage sides since 014.
 func TestStepDocumentsSatisfySchema(t *testing.T) {
-	schema := compileFeatureFindingsSchema(t, currentContract, "show.schema.json", "waypoints.schema.json", "step.schema.json", "verify.schema.json")
+	schema := compileCurrentFindingsSchema(t)
 	var all []labelledDocument
 	all = append(all, stepDocuments()...)
 	all = append(all, showStepDocuments()...)
@@ -201,7 +220,9 @@ func TestStepDocumentsSatisfySchema(t *testing.T) {
 		none []string
 	}{
 		// The dry run's block has no run fields; every list is written, declared null for none.
-		{steps[0].doc, []string{`"step":{"from":{"waypoint":{"series":"demo","sequence":1,`, `"to":{"waypoint":{"series":"demo","sequence":2,`,
+		{steps[0].doc, []string{`"step":{"from":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"cabled",`,
+			`"to":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"live",`, `"subject":{"branch":"change-1",`,
+			`"stage":{"ref":"change-1/live","branch":"change-1","label":"live",`,
 			`"branch":"change-1"}`, `"reconcile":{"added":[],"deleted":[],"recreated":[],"restarted":["e1"],`,
 			`"declared":"restart","reported":"restart"`, `"push_plan":[{"node":"e1","reasons":["artifact","restarted"]}`,
 			`"allow_restart":false`, `"status":"rejected"`}, []string{`"run"`, `"outcome"`, `"pushed"`, `"timings"`}},
@@ -210,10 +231,14 @@ func TestStepDocumentsSatisfySchema(t *testing.T) {
 		{steps[2].doc, []string{`"status":"diverged"`, `"phase":"push"`, `"outcome":"refused","rule":"push.refused"`,
 			`{"node":"s2","declared":null,"reported":"create"}`}, nil},
 		{steps[3].doc, []string{`"push_plan":[]`, `"pushed":[]`, `"ready_after":[]`, `"nodes":[]`, `"skipped":true`, `"timings":{"whole_s":1.8}`}, nil},
+		{steps[4].doc, []string{`"from":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"branch-point","description":"","at_source":"branch_point"}`,
+			`"to":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"head","description":"","at_source":"head"}`,
+			`"diff":{"from":"change-1/branch-point","to":"change-1/head",`, `"rule":"step.stage.skipped"`, `"status":"ok"`}, nil},
 		{shows[0].doc, []string{`"state":"ready"`, `"step":{"outcome":"stepped",`, `"restarted":["e1"]`}, []string{`"phase"`}},
-		{shows[1].doc, []string{`"kind":"diverged"`, `"state":"diverged"`, `"phase":"push"`, `"restarted":[]`}, nil},
+		{shows[1].doc, []string{`"kind":"diverged"`, `"state":"diverged"`, `"phase":"push"`, `"restarted":[]`,
+			`"to":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"head","description":"","at_source":"head"}`}, nil},
 		{shows[2].doc, []string{`"state":"ready"`}, []string{`"step"`}},
-		{lists[0].doc, []string{`"state":"diverged","towards":{"series":"demo","sequence":3}`}, nil},
+		{lists[0].doc, []string{`"twin":true`, `"state":"diverged","towards":{"ref":"change-1/live"}`}, nil},
 		{lists[1].doc, []string{`"state":"ready","towards":null`}, nil},
 	} {
 		b := string(mustMarshal(t, c.doc))
@@ -228,8 +253,9 @@ func TestStepDocumentsSatisfySchema(t *testing.T) {
 	}
 
 	// The blocks are the contract's, so a misshapen one is refused: a step block with no
-	// reconcile node's declaration, a show step with no restarted list, and a list record
-	// whose towards names no sequence.
+	// reconcile node's declaration, a show step with no restarted list, a list record whose
+	// towards names no stage, a list record with no state, and a side's stage with an
+	// at_source outside the enum.
 	bad := stepDocuments()[0].doc
 	raw := strings.Replace(string(mustMarshal(t, bad)), `"declared":"restart",`, ``, 1)
 	if err := schema.Validate(mustAny(t, []byte(raw))); err == nil {
@@ -239,23 +265,19 @@ func TestStepDocumentsSatisfySchema(t *testing.T) {
 	if err := schema.Validate(mustAny(t, []byte(shown))); err == nil {
 		t.Error("a show step with no restarted list satisfied the show schema")
 	}
-	listed := strings.Replace(string(mustMarshal(t, listStepDocuments()[0].doc)), `,"sequence":3`, ``, 1)
+	listed := strings.Replace(string(mustMarshal(t, listStepDocuments()[0].doc)), `{"ref":"change-1/live"}`, `{}`, 1)
 	if err := schema.Validate(mustAny(t, []byte(listed))); err == nil {
-		t.Error("a towards with no sequence satisfied the waypoints schema")
+		t.Error("a towards with no ref satisfied the stages schema")
 	}
-}
-
-// A version 3 record's list block is M10's, key for key: no state and no towards, so
-// M10's own contract, which forbids additional properties, still accepts it.
-func TestAVersion3ListRecordIsM10s(t *testing.T) {
-	m10 := compileFeatureFindingsSchema(t, "008-waypoints", "show.schema.json", "waypoints.schema.json")
-	doc := listStepDocuments()[0].doc
-	doc.Waypoints.Record.State, doc.Waypoints.Record.Towards = "", nil
-	b := mustMarshal(t, doc)
-	if strings.Contains(string(b), "state") || strings.Contains(string(b), "towards") {
-		t.Errorf("a version 3 record's list block names state or towards: %s", b)
+	stateless := strings.Replace(string(mustMarshal(t, listStepDocuments()[1].doc)), `"state":"ready",`, ``, 1)
+	if err := schema.Validate(mustAny(t, []byte(stateless))); err == nil {
+		t.Error("a list record with no state satisfied the stages schema")
 	}
-	mustValidateBytes(t, m10, b, "a version 3 list record against M10's contract")
+	guessed := stepDocuments()[0].doc
+	guessed.Step.To.Stage.AtSource = "guessed"
+	if err := schema.Validate(mustAny(t, mustMarshal(t, guessed))); err == nil {
+		t.Error("a step side's stage with at_source guessed satisfied the step schema")
+	}
 }
 
 // The step's wait in twin step's document and in twin show's record block: the budget alone on
@@ -263,7 +285,7 @@ func TestAVersion3ListRecordIsM10s(t *testing.T) {
 // ended once the run closed; in show, the wait of a version 5 record, null while it has not
 // run, and no key for a version 4 record. Each satisfies the newest contracts, under contracts/.
 func TestStepWaitDocumentsSatisfySchema(t *testing.T) {
-	schema := compileFeatureFindingsSchema(t, currentContract, "show.schema.json", "waypoints.schema.json", "step.schema.json", "verify.schema.json")
+	schema := compileCurrentFindingsSchema(t)
 	neighbor := StepWaitFailing{Rule: RuleVerifyNeighbor, Object: "s1:ethernet-1/3",
 		Message: "node s1 (172.20.20.4:57400): port ethernet-1/3 sees no neighbour at /system/lldp/interface[name=ethernet-1/3]/neighbor; link e1:Ethernet3|s1:ethernet-1/3 names e1 Ethernet3 at its far end"}
 	steps := stepDocuments()

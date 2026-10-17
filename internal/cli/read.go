@@ -22,19 +22,19 @@ func newIntentCmd(opts *options) *cobra.Command {
 type readFlags struct {
 	branch string
 	at     string
-	// waypoint is --waypoint as given, <series>/<sequence>: a pinned reference named in
-	// Infrahub, in place of --branch and --at (M10).
-	waypoint string
-	// waypointGiven is whether --waypoint was given at all, apart from its value: an explicit
+	// stage is --stage as given, <branch>/<label>: a moment of a proposed change, resolved
+	// by the server to a pinned reference in place of --branch and --at (014).
+	stage string
+	// stageGiven is whether --stage was given at all, apart from its value: an explicit
 	// empty one is a reference refused, not one left out (M4's --interval= precedent).
-	waypointGiven bool
-	out           string
+	stageGiven bool
+	out        string
 }
 
-// fromWaypoint is whether the read names a waypoint: --waypoint given, whatever its value,
-// or a value set without the flag, as a caller building the flags sets it.
-func (f *readFlags) fromWaypoint() bool {
-	return f.waypointGiven || f.waypoint != ""
+// fromStage is whether the read names a stage: --stage given, whatever its value, or a
+// value set without the flag, as a caller building the flags sets it.
+func (f *readFlags) fromStage() bool {
+	return f.stageGiven || f.stage != ""
 }
 
 func newIntentReadCmd(opts *options) *cobra.Command {
@@ -48,15 +48,15 @@ func newIntentReadCmd(opts *options) *cobra.Command {
 			"Reads only — Fylgja never writes to Infrahub.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			f.waypointGiven = cmd.Flags().Changed("waypoint")
+			f.stageGiven = cmd.Flags().Changed("stage")
 			return runRead(cmd.Context(), opts, f)
 		},
 	}
-	cmd.Flags().StringVar(&f.branch, "branch", "", "Infrahub branch to read (this or --waypoint is required)")
+	cmd.Flags().StringVar(&f.branch, "branch", "", "Infrahub branch to read (this or --stage is required)")
 	cmd.Flags().StringVar(&f.at, "at", "",
 		"point in time to read at, passed verbatim; omitted entirely when not given")
-	cmd.Flags().StringVar(&f.waypoint, "waypoint", "",
-		"waypoint to read, <series>/<sequence>: the pinned branch and at it names in Infrahub")
+	cmd.Flags().StringVar(&f.stage, "stage", "",
+		"stage to read, <branch>/<label>: the pinned branch and at a proposed change's stage resolves to")
 	cmd.Flags().StringVar(&f.out, "out", "", "path of the CTM file to write (required)")
 	return cmd
 }
@@ -69,8 +69,8 @@ func runRead(ctx context.Context, opts *options, f *readFlags) error {
 	a := given{}
 	a.string("branch", f.branch)
 	a.string("at", f.at)
-	if f.fromWaypoint() {
-		a["waypoint"] = f.waypoint
+	if f.fromStage() {
+		a["stage"] = f.stage
 	}
 	a.string("out", f.out)
 	return send(ctx, opts, findings.OpIntentRead, a, nil, handlers{

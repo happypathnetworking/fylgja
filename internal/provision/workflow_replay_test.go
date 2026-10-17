@@ -60,7 +60,13 @@ func replayProvision(t *testing.T, history string) ProvisionResult {
 // the worker's identity and sticky queue named the host, and its activity inputs the state
 // root, so both were replaced (step-worker, /var/lib/fylgja), and each push result's device
 // diff was replaced by a note of its length, since the diff's one home is the run's own
-// history on the workflow service. Replay reads the commands, not those values.
+// history on the workflow service. Replay reads the commands, not those values. The
+// record's waypoint blocks, M10's, in the step's input, InspectTwin's result, RecordStep's
+// input and result and the run's own result, were rewritten to the stage block by
+// testdata/rewrite-stage.go (014, research R-10): proposed change fylgja-test-pause-pc on the
+// series' branch, labelled s<sequence>, each payload otherwise as recorded, the old messages'
+// words included. The run decides on the block's presence, never its content, so without it
+// the replay would refuse the twin as unsteppable and issue other commands.
 func replayStep(t *testing.T, history string) StepResult {
 	t.Helper()
 	capture := &resultCapture{}
@@ -260,7 +266,7 @@ func cancelledAtPushWithCleanup(t *testing.T, res ProvisionResult) {
 	}
 }
 
-// A replace one node refused: the step from waypoint /3 to /4 of a mixed series, where /4
+// A replace one node refused: the step from stage s3 to s4 of a mixed proposed change, where s4
 // names s1:ethernet-1/99, which SR Linux refuses at its commit, and disables e1:Ethernet2/1,
 // which EOS takes (run 01a0fcb8-369b-763b-b760-ad7a970e39b8). Both pushes
 // are scheduled together (events 29, 30); e1's completes with its diff (32) and s1's fails
@@ -308,7 +314,7 @@ func noWaitInAnM11History(t *testing.T, res StepResult) {
 	}
 }
 
-// A destroy during a step: the step from waypoint /1 to /3, which restarts e1, cancelled
+// A destroy during a step: the step from stage s1 to s3, which restarts e1, cancelled
 // by twin destroy while readiness waited for e1 (run
 // 01a0fcbc-67e9-7902-98fb-1ef1f4ed996e). The cancellation is requested at event 36,
 // readiness is cancelled (42), and the record is still written, on a context the
@@ -344,7 +350,7 @@ func TestReplayCancelledStepRecordsDiverged(t *testing.T) {
 }
 
 // A destroy during the step's wait (M12, run
-// 01a1035f-f65c-76cb-9800-94af24068530): the step from waypoint /1 to /2 of a mixed series,
+// 01a1035f-f65c-76cb-9800-94af24068530): the step from stage s1 to s2 of a mixed proposed change,
 // which restarts e1, with e2:Ethernet1 shut by hand so the twin could not conform. Both pushes
 // landed and the record was written (event 55); the verify marker (59) and VerifyTwin (61)
 // followed, and twin destroy's cancellation arrived during the wait (62, 66). The activity,

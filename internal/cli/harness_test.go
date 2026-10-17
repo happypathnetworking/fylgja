@@ -276,7 +276,7 @@ func stagedManifest(dir string) (compiler.Manifest, error) {
 }
 
 // fileCompiled files a compiled bundle in the store under dir, and the CTM beside it, as a
-// run's compile step and the server's waypoint plan file them: a test that builds a host
+// run's compile step and the server's stage plan file them: a test that builds a host
 // files its bundles the same way.
 func fileCompiled(ctx context.Context, dir string, files map[string][]byte, id string, snapshot *ctm.CTM) (bundle.Store, findings.List, error) {
 	store := bundle.NewDirStore(dir)

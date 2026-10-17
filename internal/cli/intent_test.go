@@ -101,8 +101,8 @@ func TestReadRequiresBranchAndOut(t *testing.T) {
 		f    readFlags
 		want string
 	}{
-		{"no branch", readFlags{out: "x.json"}, "--branch or --waypoint is required"},
-		{"no out beside a waypoint", readFlags{waypoint: "demo/2"}, "--out is required"},
+		{"no branch", readFlags{out: "x.json"}, "--branch or --stage is required"},
+		{"no out beside a stage", readFlags{stage: "change-1/cabled"}, "--out is required"},
 		{"no out", readFlags{branch: "fylgja-fixture"}, "--out is required"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -143,32 +143,35 @@ func pinnedCTM(t *testing.T, path string) []byte {
 	return b
 }
 
-// intent read --waypoint writes exactly the CTM intent read --branch B --at T writes for the
-// reference the waypoint names, from the same Infrahub: the pinned read, with the at
-// verbatim, given or written, and nothing of the waypoint in the envelope.
-// The success line and the document name the waypoint.
-func TestReadFromAWaypointIsThePinnedRead(t *testing.T) {
+// intent read --stage writes exactly the CTM intent read --branch B --at T writes for the
+// reference the stage resolves to, from the same Infrahub: the pinned read, with the at
+// verbatim, given or written, and nothing of the stage in the envelope. The resolved line
+// comes first, and the success line and the document name the stage.
+func TestReadFromAStageIsThePinnedRead(t *testing.T) {
 	for _, c := range []struct {
-		ref, at, source string
+		label, at, source, description string
 	}{
-		{"demo/2", fixtureAt, "given"},
-		{"demo/1", demoWrittenAt, "written"},
+		{"sealed", fixtureAt, findings.AtSourceGiven, "after the first cut-over"},
+		{"cabled", demoWrittenAt, findings.AtSourceWritten, "before the change"},
 	} {
 		t.Run(c.source, func(t *testing.T) {
 			f := demoInfrahub(t)
 			f.start()
 			dir := t.TempDir()
-			byWaypoint, byReference := filepath.Join(dir, "waypoint.json"), filepath.Join(dir, "reference.json")
+			byStage, byReference := filepath.Join(dir, "stage.json"), filepath.Join(dir, "reference.json")
+			ref := "fylgja-fixture/" + c.label
+			block := demoBlock(c.label, c.at, c.source, c.description)
 
 			var err error
 			out := captureStdout(t, func() {
-				err = runRead(t.Context(), &options{}, &readFlags{waypoint: c.ref, out: byWaypoint})
+				err = runRead(t.Context(), &options{}, &readFlags{stage: ref, out: byStage})
 			})
 			if code, doc := exitOf(t, err); code != findings.ExitOK {
 				t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
 			}
-			want := "wrote " + byWaypoint + ": 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, " +
-				"0 shared ports (waypoint " + c.ref + ": branch fylgja-fixture, at " + c.at + ", schema fixture)\n"
+			want := block.Line() + "\n" +
+				"wrote " + byStage + ": 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, " +
+				"0 shared ports (stage " + ref + ": branch fylgja-fixture, at " + c.at + ", schema fixture)\n"
 			if out != want {
 				t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
 			}
@@ -177,61 +180,58 @@ func TestReadFromAWaypointIsThePinnedRead(t *testing.T) {
 				t.Fatalf("the --branch --at read: exit %d, findings %+v", code, doc.Findings)
 			}
 
-			got, ref := pinnedCTM(t, byWaypoint), pinnedCTM(t, byReference)
-			if !bytes.Equal(got, ref) {
-				t.Errorf("the waypoint's CTM differs from the pinned read's:\n%s\nwant:\n%s", got, ref)
+			got, pinned := pinnedCTM(t, byStage), pinnedCTM(t, byReference)
+			if !bytes.Equal(got, pinned) {
+				t.Errorf("the stage's CTM differs from the pinned read's:\n%s\nwant:\n%s", got, pinned)
 			}
-			raw, err := os.ReadFile(byWaypoint)
+			raw, err := os.ReadFile(byStage)
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, word := range []string{"waypoint", "demo", c.source} {
+			for _, word := range []string{"stage", demoChange, c.label, c.source} {
 				if strings.Contains(string(raw), word) {
-					t.Errorf("the CTM names %q: a waypoint enters no CTM", word)
+					t.Errorf("the CTM names %q: a stage enters no CTM", word)
 				}
 			}
-			if c.source == "given" && !bytes.Equal(got, pinnedCTM(t, repoPath("testdata", "ctm", "three-node.json"))) {
-				t.Error("the fixture's waypoint does not read as the fixture")
+			if c.source == findings.AtSourceGiven && !bytes.Equal(got, pinnedCTM(t, repoPath("testdata", "ctm", "three-node.json"))) {
+				t.Error("the fixture's stage does not read as the fixture")
 			}
 
-			code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{waypoint: c.ref, out: byWaypoint}))
-			if code != findings.ExitOK || doc.Waypoint == nil || doc.Waypoint.At != c.at || doc.Waypoint.AtSource != c.source ||
-				doc.Subject.Waypoint != c.ref || doc.Subject.Branch != "fylgja-fixture" || doc.Subject.At != c.at {
-				t.Errorf("exit %d, document %+v; want 0 naming %s resolved to fylgja-fixture at %s", code, doc, c.ref, c.at)
+			code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{stage: ref, out: byStage}))
+			if code != findings.ExitOK || doc.Stage == nil || *doc.Stage != block ||
+				doc.Subject.Stage != ref || doc.Subject.Branch != "fylgja-fixture" || doc.Subject.At != c.at {
+				t.Errorf("exit %d, document %+v; want 0 naming %s resolved to fylgja-fixture at %s", code, doc, ref, c.at)
 			}
-			mustCarryNoToken(t, c.ref, doc, out)
+			mustCarryNoToken(t, ref, doc, out)
 			validateM10Document(t, doc)
 		})
 	}
 }
 
-// Beside --waypoint, --branch and --at are refused before any connection, exit 2; a
+// Beside --stage, --branch and --at are refused before any connection, exit 2; a
 // resolution refusal is the create's, with no step, as M1's operations carry none
 // (contracts/cli.md).
-func TestReadFromAWaypointRefusals(t *testing.T) {
-	const whole = "a waypoint is a whole pinned reference (branch and at)"
+func TestReadFromAStageRefusals(t *testing.T) {
+	const whole = "a stage is a whole pinned reference (branch and at)"
 	for _, c := range []struct {
-		name  string
-		flags readFlags
-		code  int
-		want  findings.Finding
-		asked bool
+		name       string
+		flags      readFlags
+		code       int
+		rule, obj  string
+		messageHas string
+		asked      bool
 	}{
-		{"--branch", readFlags{waypoint: "demo/2", branch: "fylgja-fixture"}, findings.ExitError,
-			findings.Finding{Severity: findings.Rejection, Rule: findings.RuleWaypointFlagsConflict, Object: "--branch",
-				Message: "--branch is meaningless with --waypoint: " + whole}, false},
-		{"--at", readFlags{waypoint: "demo/2", at: fixtureAt}, findings.ExitError,
-			findings.Finding{Severity: findings.Rejection, Rule: findings.RuleWaypointFlagsConflict, Object: "--at",
-				Message: "--at is meaningless with --waypoint: " + whole}, false},
-		{"not a reference", readFlags{waypoint: "demo/"}, findings.ExitError,
-			findings.Finding{Severity: findings.Rejection, Rule: findings.RuleWaypointRefInvalid, Object: "demo/",
-				Message: `--waypoint "demo/" is not a waypoint reference: expected <series>/<sequence>, a series with no "/" and no whitespace and a positive integer`}, false},
-		{"unknown", readFlags{waypoint: "demo/3"}, findings.ExitRejected,
-			findings.Finding{Severity: findings.Rejection, Rule: findings.RuleWaypointUnknown, Object: "demo/3",
-				Message: "series demo has no waypoint 3; its sequences are 1, 2, 5, 6, 7"}, true},
-		{"nine digits", readFlags{waypoint: "demo/6"}, findings.ExitError,
-			findings.Finding{Severity: findings.Rejection, Rule: findings.RuleAtPrecision, Object: "demo/6",
-				Message: "waypoint demo/6: at 2026-09-20T10:00:00.123456789Z carries 9 fractional digits; Infrahub honours at most 6 (microseconds). Write the waypoint's as_of with at most six."}, true},
+		{"--branch", readFlags{stage: "fylgja-fixture/sealed", branch: "fylgja-fixture"}, findings.ExitError,
+			findings.RuleStageFlagsConflict, "--branch", "--branch is meaningless with --stage: " + whole, false},
+		{"--at", readFlags{stage: "fylgja-fixture/sealed", at: fixtureAt}, findings.ExitError,
+			findings.RuleStageFlagsConflict, "--at", "--at is meaningless with --stage: " + whole, false},
+		{"not a reference", readFlags{stage: "fylgja-fixture/"}, findings.ExitError,
+			findings.RuleStageRefInvalid, "fylgja-fixture/", stageRefInvalid("fylgja-fixture/"), false},
+		{"unknown", readFlags{stage: "fylgja-fixture/nosuch"}, findings.ExitRejected,
+			findings.RuleStageUnknown, "fylgja-fixture/nosuch", `has no stage "nosuch"; its stages are: branch-point, `, true},
+		{"nine digits", readFlags{stage: "fylgja-fixture/nine"}, findings.ExitError,
+			findings.RuleAtPrecision, "fylgja-fixture/nine",
+			"stage fylgja-fixture/nine: at 2026-09-20T10:00:00.123456789Z carries 9 fractional digits; Infrahub honours at most 6 (microseconds). Write the stage's as_of with at most six.", true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := demoInfrahub(t)
@@ -239,17 +239,17 @@ func TestReadFromAWaypointRefusals(t *testing.T) {
 			c.flags.out = filepath.Join(t.TempDir(), "never.json")
 
 			code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &c.flags))
-			if code != c.code || len(doc.Findings) != 1 || doc.Findings[0] != c.want {
-				t.Errorf("exit %d, findings %+v; want %d with %+v", code, doc.Findings, c.code, c.want)
+			if code != c.code || len(doc.Findings) != 1 {
+				t.Fatalf("exit %d, findings %+v; want %d with one %s", code, doc.Findings, c.code, c.rule)
+			}
+			if got := doc.Findings[0]; got.Severity != findings.Rejection || got.Rule != c.rule || got.Object != c.obj ||
+				got.Step != "" || !strings.Contains(got.Message, c.messageHas) {
+				t.Errorf("finding %+v; want %s naming %s with no step, saying %q", got, c.rule, c.obj, c.messageHas)
 			}
 			if asked := len(f.requests()) > 0; asked != c.asked {
 				t.Errorf("Infrahub asked %v, want %v: %+v", asked, c.asked, f.requests())
 			}
-			for _, r := range f.requests() {
-				if r.Path != "/api/schema" && r.Path != "/graphql" {
-					t.Errorf("a refused resolution read the branch: %+v", r)
-				}
-			}
+			readsNoIntent(t, c.name, f)
 			if _, err := os.Stat(c.flags.out); !os.IsNotExist(err) {
 				t.Errorf("a refused read wrote %s", c.flags.out)
 			}
@@ -258,18 +258,18 @@ func TestReadFromAWaypointRefusals(t *testing.T) {
 	}
 }
 
-// An explicitly empty --waypoint= is a reference that is not the form, through the command
-// line, alone or beside --branch: waypoint.ref.invalid, exit 2, with no step, before any
+// An explicitly empty --stage= is a reference that is not the form, through the command
+// line, alone or beside --branch: stage.ref.invalid, exit 2, with no step, before any
 // connection and with nothing written. Beside --branch it is never the branch's read.
-func TestReadEmptyWaypointIsRefused(t *testing.T) {
-	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleWaypointRefInvalid, Object: "",
-		Message: `--waypoint "" is not a waypoint reference: expected <series>/<sequence>, a series with no "/" and no whitespace and a positive integer`}
+func TestReadEmptyStageIsRefused(t *testing.T) {
+	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStageRefInvalid, Object: "",
+		Message: stageRefInvalid("")}
 	for _, c := range []struct {
 		name string
 		args []string
 	}{
-		{"alone", []string{"--waypoint="}},
-		{"beside --branch", []string{"--branch", "fylgja-fixture", "--waypoint="}},
+		{"alone", []string{"--stage="}},
+		{"beside --branch", []string{"--branch", "fylgja-fixture", "--stage="}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := demoInfrahub(t)
@@ -283,8 +283,8 @@ func TestReadEmptyWaypointIsRefused(t *testing.T) {
 			if got := f.requests(); len(got) != 0 {
 				t.Errorf("Infrahub was asked %+v before the flags were refused", got)
 			}
-			if doc.Waypoint != nil || subjectWaypoint(doc) != "" {
-				t.Errorf("subject %+v, waypoint %+v; an empty reference names no waypoint", doc.Subject, doc.Waypoint)
+			if doc.Stage != nil || subjectStage(doc) != "" {
+				t.Errorf("subject %+v, stage %+v; an empty reference names no stage", doc.Subject, doc.Stage)
 			}
 			if _, err := os.Stat(out); !os.IsNotExist(err) {
 				t.Errorf("a refused read wrote %s", out)
@@ -295,23 +295,27 @@ func TestReadEmptyWaypointIsRefused(t *testing.T) {
 }
 
 // A read the resolved reference refuses keeps M1's wording, word for word what --branch and
-// --at would say, and the document names the waypoint that resolved to it.
-func TestReadFromAWaypointKeepsTheReadsRefusal(t *testing.T) {
+// --at would say, and the document names the stage that resolved to it: a stage of a branch
+// whose contract node was deleted resolves, and its read is refused as the branch's is.
+func TestReadFromAStageKeepsTheReadsRefusal(t *testing.T) {
 	f := demoInfrahub(t)
-	f.waypoint("wp-gone-1", "gone", 1, "deleted-branch", demoWrittenAt, "", "its branch was deleted")
+	f.change("pc-bare", "bare", mark("st-bare", "bare", "", "its contract node deleted"))
+	f.contractless = map[string]bool{"bare": true}
 	f.start()
 	dir := t.TempDir()
 
-	code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{waypoint: "gone/1", out: filepath.Join(dir, "a.json")}))
+	code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{stage: "bare/bare", out: filepath.Join(dir, "a.json")}))
 	_, ref := exitOf(t, runRead(t.Context(), &options{asJSON: true},
-		&readFlags{branch: "deleted-branch", at: demoWrittenAt, out: filepath.Join(dir, "b.json")}))
-	if code != findings.ExitError || len(doc.Findings) != 1 || len(ref.Findings) != 1 || doc.Findings[0] != ref.Findings[0] {
-		t.Errorf("exit %d, findings %+v; want 2 with the --branch --at read's %+v", code, doc.Findings, ref.Findings)
+		&readFlags{branch: "bare", at: fakeMarkedAt, out: filepath.Join(dir, "b.json")}))
+	if code != findings.ExitRejected || len(doc.Findings) != 1 || len(ref.Findings) != 1 || doc.Findings[0] != ref.Findings[0] ||
+		doc.Findings[0].Rule != findings.RuleContractNodeMissing {
+		t.Errorf("exit %d, findings %+v; want 1 with the --branch --at read's %+v", code, doc.Findings, ref.Findings)
 	}
-	want := findings.WaypointBlock{Series: "gone", Sequence: 1, Branch: "deleted-branch", At: demoWrittenAt, AtSource: "written",
-		Description: "its branch was deleted"}
-	if doc.Waypoint == nil || *doc.Waypoint != want {
-		t.Errorf("waypoint block %+v, want %+v", doc.Waypoint, want)
+	want := findings.StageBlock{Ref: "bare/bare", Branch: "bare", Label: "bare",
+		ProposedChange: findings.StageChange{ID: "pc-bare", Name: "change pc-bare", Branch: "bare"},
+		At:             fakeMarkedAt, AtSource: findings.AtSourceWritten, Description: "its contract node deleted"}
+	if doc.Stage == nil || *doc.Stage != want {
+		t.Errorf("stage block %+v, want %+v", doc.Stage, want)
 	}
 	validateM10Document(t, doc)
 }

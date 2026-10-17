@@ -38,9 +38,10 @@ func TestStepClosingCarriesTheWaitOnEveryOutcome(t *testing.T) {
 		fromID = "348fd9340000000000000000000000000000000000000000000000000000abcd"
 		toID   = "ee291b0f0000000000000000000000000000000000000000000000000000abcd"
 	)
+	change := wire.StageChange{ID: "pc-1", Branch: "change-1"}
 	in := provision.StepInput{
-		From: wire.StepSide{Waypoint: &wire.WaypointRef{Series: "demo", Sequence: 1}, BundleID: fromID},
-		To:   wire.StepSide{Waypoint: &wire.WaypointRef{Series: "demo", Sequence: 2}, BundleID: toID},
+		From: wire.StepSide{Stage: &wire.StageRef{ProposedChange: change, Label: "cabled"}, BundleID: fromID},
+		To:   wire.StepSide{Stage: &wire.StageRef{ProposedChange: change, Label: "live"}, BundleID: toID},
 	}
 	took := 2.4
 	results := map[string]provision.StepResult{
@@ -52,10 +53,10 @@ func TestStepClosingCarriesTheWaitOnEveryOutcome(t *testing.T) {
 				{Node: "e1", Outcome: wire.PushRefused, Rule: findings.RulePushRefused}}},
 	}
 	m11 := map[string]string{
-		"stepped":   "stepped to waypoint demo/2 (bundle ee291b0f…) in 71.2s: push s1 2.4s",
-		"unchanged": "unchanged; the record moves to waypoint demo/2 (bundle ee291b0f…) in 1.8s",
-		"diverged": "diverged towards waypoint demo/2 (bundle ee291b0f…) at phase push: landed s1; not landed e1 (push.refused); " +
-			"the twin is up at waypoint demo/1 (bundle 348fd934…); fylgja twin destroy clears it",
+		"stepped":   "stepped to stage change-1/live (bundle ee291b0f…) in 71.2s: push s1 2.4s",
+		"unchanged": "unchanged; the record moves to stage change-1/live (bundle ee291b0f…) in 1.8s",
+		"diverged": "diverged towards stage change-1/live (bundle ee291b0f…) at phase push: landed s1; not landed e1 (push.refused); " +
+			"the twin is up at stage change-1/cabled (bundle 348fd934…); fylgja twin destroy clears it",
 	}
 	failing := []wire.StepFinding{{Rule: findings.RuleVerifyNeighbor, Object: "s1:ethernet-1/3"},
 		{Rule: findings.RuleVerifyNeighbor, Object: "e1:Ethernet3"}}

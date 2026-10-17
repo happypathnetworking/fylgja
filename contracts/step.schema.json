@@ -2,25 +2,34 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/schemas/step.schema.json",
   "title": "fylgja twin step — the step block (M11, M12)",
-  "description": "The `step` block of the findings document fylgja twin step emits (operation twin.step), on the dry run and on the run. The two sides, M10's step between their bundles (waypoints.schema.json $defs/step), containerlab's dry-run plan with each touched node's package declaration beside what containerlab reported, the push plan with each node's reasons, and, once a run closed, the step run, its outcome, the phase that failed, each push's outcome, the timings and when it started and ended. No device diff, artifact or bootstrap content, token or login. M12: wait, the step's waiting form after the record: budget_s on the dry run and before the run closed; outcome, reads, after_s and failing once the run closed and the wait ran; absent when the run was cancelled before the wait began.",
+  "description": "The `step` block of the findings document fylgja twin step emits (operation twin.step), on the dry run and on the run. The two sides, M10's step between their bundles (stages.schema.json $defs/step since 014), containerlab's dry-run plan with each touched node's package declaration beside what containerlab reported, the push plan with each node's reasons, and, once a run closed, the step run, its outcome, the phase that failed, each push's outcome, the timings and when it started and ended. No device diff, artifact or bootstrap content, token or login. M12: wait, the step's waiting form after the record: budget_s on the dry run and before the run closed; outcome, reads, after_s and failing once the run closed and the wait ran; absent when the run was cancelled before the wait began. 014: each side names its stage (twin.json 6's shape) where it named a waypoint.",
   "$defs": {
-    "waypoint": {
+    "stage": {
       "type": ["object", "null"],
-      "required": ["series", "sequence", "description", "at_source"],
+      "description": "014: the stage a side names, as twin.json 6 records it, or null: its proposed change by id and source branch, its label (a mark's, or branch-point or head), its description and where its at came from",
+      "required": ["proposed_change", "label", "description", "at_source"],
       "additionalProperties": false,
       "properties": {
-        "series": { "type": "string", "pattern": "^[^/\\s]+$" },
-        "sequence": { "type": "integer", "minimum": 1 },
+        "proposed_change": {
+          "type": "object",
+          "required": ["id", "branch"],
+          "additionalProperties": false,
+          "properties": {
+            "id": { "type": "string", "minLength": 1 },
+            "branch": { "type": "string", "pattern": "^[^/\\s]+$" }
+          }
+        },
+        "label": { "type": "string", "pattern": "^[^/\\s]+$" },
         "description": { "type": "string" },
-        "at_source": { "enum": ["given", "written"] }
+        "at_source": { "enum": ["given", "written", "branch_point", "head"] }
       }
     },
     "side": {
       "type": "object",
-      "required": ["waypoint", "bundle_id", "at"],
+      "required": ["stage", "bundle_id", "at"],
       "additionalProperties": false,
       "properties": {
-        "waypoint": { "$ref": "#/$defs/waypoint" },
+        "stage": { "$ref": "#/$defs/stage" },
         "bundle_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "at": { "type": "string", "description": "the side's pinned at, verbatim" },
         "branch": { "type": "string", "description": "the target's branch; absent on the from side" }
@@ -95,7 +104,7 @@
       "properties": {
         "from": { "$ref": "#/$defs/side" },
         "to": { "$ref": "#/$defs/side" },
-        "diff": { "$ref": "https://fylgja.dev/schemas/waypoints.schema.json#/$defs/step" },
+        "diff": { "$ref": "https://fylgja.dev/schemas/stages.schema.json#/$defs/step" },
         "reconcile": { "$ref": "#/$defs/reconcile" },
         "push_plan": { "type": "array", "items": { "$ref": "#/$defs/push_plan_entry" } },
         "allow_restart": { "type": "boolean" },

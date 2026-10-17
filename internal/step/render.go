@@ -7,21 +7,22 @@ import (
 	"strings"
 )
 
-// Pair is one step as `waypoint plan` reports it: the two waypoints it joins, and either
+// Pair is one step as `stage plan` reports it: the two stages it joins, and either
 // the step between their bundles or why none was computed. The text and the JSON are both
 // rendered from it, so the two cannot disagree.
 type Pair struct {
-	// From and To are the two waypoint references, demo/1 and demo/2.
+	// From and To are the two stage references, change-1/seeded and change-1/head.
 	From, To string
 	// FromID and ToID are each side's bundle_id, empty for a side that did not compile.
 	FromID, ToID string
 	// Step is the difference, nil when it was not computed.
 	Step *Step
-	// Why says why no step was computed, e.g. "demo/5 was refused"; empty when Step is set.
+	// Why says why no step was computed, e.g. "change-1/branch-point was refused"; empty
+	// when Step is set.
 	Why string
 }
 
-// Between is the step from one waypoint's bundle to the next's.
+// Between is the step from one stage's bundle to the next's.
 func Between(from, to string, s Step) Pair {
 	return Pair{From: from, To: to, FromID: s.From, ToID: s.To, Step: &s}
 }
@@ -32,15 +33,15 @@ func NotComputed(from, to, fromID, toID, why string) Pair {
 	return Pair{From: from, To: to, FromID: fromID, ToID: toID, Why: why}
 }
 
-// Text is the block `waypoint plan` prints for the pair, with no trailing newline
+// Text is the block `stage plan` prints for the pair, with no trailing newline
 // (contracts/cli.md):
 //
-//	step demo/1 → demo/2 (35aea06f… → 9c2d01e7…):
+//	step change-1/branch-point → change-1/seeded (— → 35aea06f…): not computed (change-1/branch-point was refused)
+//	step change-1/seeded → change-1/third-link (35aea06f… → 9c2d01e7…):
 //	  nodes: +n4; ~n1 (bootstrap, mapping)
 //	  links: +n1:e1-3 — n4:e1-1
 //	  artifacts: n1 device-config 43e8fd0c… → 9a0177b2…; n4 device-config added
-//	step demo/2 → demo/3 (9c2d01e7… → 51f0aa93…): unchanged; the ids differ by provenance alone
-//	step demo/3 → demo/5 (51f0aa93… → —): not computed (demo/5 was refused)
+//	step change-1/third-link → change-1/head (9c2d01e7… → 51f0aa93…): unchanged; the ids differ by provenance alone
 //
 // Ids and checksums are shortened to eight characters; the JSON carries them whole. No
 // line quotes an artifact or a bootstrap: the step holds none of their bytes.
@@ -134,7 +135,7 @@ func short(s string) string {
 	return s
 }
 
-// The JSON shape of a pair: waypoints.schema.json's $defs/step. Every list is present,
+// The JSON shape of a pair: stages.schema.json's $defs/step. Every list is present,
 // [] when empty.
 type (
 	pairJSON struct {
@@ -182,7 +183,7 @@ type (
 	}
 )
 
-// MarshalJSON writes the pair as waypoints.schema.json's step: the checksums whole, an
+// MarshalJSON writes the pair as stages.schema.json's step: the checksums whole, an
 // added or removed node's artifact left to the node, as the contract has it.
 func (p Pair) MarshalJSON() ([]byte, error) {
 	out := pairJSON{From: p.From, To: p.To, FromBundleID: idOrNull(p.FromID), ToBundleID: idOrNull(p.ToID)}

@@ -480,29 +480,34 @@ func TestCreateDryRunNeverDials(t *testing.T) {
 	}
 }
 
-// A create dry run from a waypoint resolves it, prints the waypoint line, then M2's report
+// A create dry run from a stage resolves it, prints the stage line, then M2's report
 // on the resolved reference: the read is the pinned read of that branch at that at, so the
-// fixture's waypoint compiles to the golden bundle, and the twin would not follow. A
+// fixture's stage compiles to the golden bundle, and the twin would not follow. A
 // refusal at resolution ends the dry run with its exit, having read,
 // filed and asked containerlab nothing.
-func TestCreateDryRunFromAWaypoint(t *testing.T) {
+func TestCreateDryRunFromAStage(t *testing.T) {
 	paths := useStateRoot(t)
 	useService(t, nil)
 	dryRunEnv(t)
 	clab := useClab(t, "inspect-empty.json")
-	f := demoInfrahub(t)
+	f := newFakeInfrahub(t)
+	// The fixture branch's change, branched before the given at, holds a stage that pins it
+	// there and one with no stamp at all.
+	pc := f.change("pc-1", "fylgja-fixture", mark("st-1", "cabled", fixtureAt, "the leaf cabled"),
+		fakeStage{ID: "st-2", Label: "unstamped"})
+	pc.BranchedFrom, pc.CreatedAt = "2026-09-01T00:00:00.000000+00:00", "2026-09-01T00:00:00.000000+00:00"
 	f.start()
 
 	var err error
 	out := captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{}, &createFlags{waypoint: "demo/2", dryRun: true})
+		err = runCreate(context.Background(), &options{}, &createFlags{stage: "fylgja-fixture/cabled", dryRun: true})
 	})
 	if code, doc := exitOf(t, err); code != findings.ExitOK {
 		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
 	}
 	lines := strings.Split(out, "\n")
 	for i, want := range []string{
-		`waypoint demo/2: branch fylgja-fixture at 2026-09-08T12:00:00Z (given), "after the first cut-over"`,
+		`stage fylgja-fixture/cabled: branch fylgja-fixture at 2026-09-08T12:00:00Z (given), "the leaf cabled"`,
 		"dry run: no lab, container, twin directory or run is created",
 		"read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports " +
 			"(branch fylgja-fixture, at 2026-09-08T12:00:00Z, schema fixture)",
@@ -512,25 +517,31 @@ func TestCreateDryRunFromAWaypoint(t *testing.T) {
 			t.Errorf("stdout line %d is not %q:\n%s", i+1, want, out)
 		}
 	}
-	if !strings.Contains(out, "\nfollow: would not follow (--waypoint given: a waypoint is pinned)\nverdict: clear\n") {
-		t.Errorf("stdout:\n%s\nwant the waypoint's follow line before the verdict", out)
+	if !strings.Contains(out, "\nfollow: would not follow (--stage given: a stage is pinned)\nverdict: clear\n") {
+		t.Errorf("stdout:\n%s\nwant the stage's follow line before the verdict", out)
 	}
-	// Every request of the read names the resolved at, verbatim, as --at would.
+	// Every request of the read names the resolved at, verbatim, as --at would. The
+	// resolution's own reads of a branch's latest stamps, the head's and main's, are unpinned
+	// and are not the read's.
 	for _, r := range f.requests() {
+		if r.Operation == "IntentStamps" && r.Query == "" {
+			continue
+		}
 		if strings.HasPrefix(r.Path, "/graphql/") || strings.HasPrefix(r.Path, "/api/storage/") {
 			if r.Query != "at=2026-09-08T12%3A00%3A00Z" {
-				t.Errorf("the read asked %+v, want the waypoint's at on it", r)
+				t.Errorf("the read asked %+v, want the stage's at on it", r)
 			}
 		}
 	}
 
-	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{waypoint: "demo/2", dryRun: true}))
-	want := findings.WaypointBlock{Series: "demo", Sequence: 2, Branch: "fylgja-fixture", At: fixtureAt, AtSource: "given",
-		Description: "after the first cut-over"}
-	if code != findings.ExitOK || doc.BundleID != fixtureBundleID || doc.Waypoint == nil || *doc.Waypoint != want ||
-		doc.DryRun == nil || doc.DryRun.Follow == nil || doc.DryRun.Follow.Reason != findings.FollowReasonWaypoint ||
-		doc.Subject.Waypoint != "demo/2" || doc.Subject.Branch != "fylgja-fixture" || doc.Subject.At != fixtureAt {
-		t.Errorf("exit %d, document %+v; want 0 naming the golden bundle, the waypoint and the reason waypoint", code, doc)
+	code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{stage: "fylgja-fixture/cabled", dryRun: true}))
+	want := findings.StageBlock{Ref: "fylgja-fixture/cabled", Branch: "fylgja-fixture", Label: "cabled",
+		ProposedChange: findings.StageChange{ID: "pc-1", Name: "change pc-1", Branch: "fylgja-fixture"},
+		At:             fixtureAt, AtSource: findings.AtSourceGiven, Description: "the leaf cabled"}
+	if code != findings.ExitOK || doc.BundleID != fixtureBundleID || doc.Stage == nil || *doc.Stage != want ||
+		doc.DryRun == nil || doc.DryRun.Follow == nil || doc.DryRun.Follow.Reason != findings.FollowReasonStage ||
+		doc.Subject.Stage != "fylgja-fixture/cabled" || doc.Subject.Branch != "fylgja-fixture" || doc.Subject.At != fixtureAt {
+		t.Errorf("exit %d, document %+v; want 0 naming the golden bundle, the stage and the reason stage", code, doc)
 	}
 	mustCarryNoToken(t, "dry run", doc)
 	mustNotCarryContent(t, out)
@@ -539,10 +550,10 @@ func TestCreateDryRunFromAWaypoint(t *testing.T) {
 	t.Run("refused at resolution", func(t *testing.T) {
 		paths := useStateRoot(t)
 		clab.calls = nil
-		code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{waypoint: "demo/5", dryRun: true}))
-		if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleWaypointAtUnresolved ||
+		code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{stage: "fylgja-fixture/unstamped", dryRun: true}))
+		if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleStageAtUnresolved ||
 			doc.Findings[0].Step != findings.StepResolve || doc.DryRun != nil {
-			t.Errorf("exit %d, document %+v; want 1 with %s at step resolve and no dry_run", code, doc, findings.RuleWaypointAtUnresolved)
+			t.Errorf("exit %d, document %+v; want 1 with %s at step resolve and no dry_run", code, doc, findings.RuleStageAtUnresolved)
 		}
 		if len(clab.calls) != 0 {
 			t.Errorf("containerlab was asked %v after a refused resolution", clab.calls)

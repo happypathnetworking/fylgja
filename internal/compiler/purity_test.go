@@ -89,11 +89,10 @@ func TestCompilerNamesNoPlatform(t *testing.T) {
 		filepath.Join("..", "stage"),
 		filepath.Join("..", "bundle"),
 		filepath.Join("..", "validate"),
-		// M10: the step and the waypoint commands' package. Named here
-		// because the walk is of named directories, not of
-		// internal/ whole, and a missing directory fails it.
+		// M10: the step. Named here because the walk is of named
+		// directories, not of internal/ whole, and a missing directory
+		// fails it.
 		filepath.Join("..", "step"),
-		filepath.Join("..", "waypoint"),
 		// 014: a proposed change's stages, whose staleness rule names each device's
 		// artifact by its package's config.artifact_name, never by a constant.
 		filepath.Join("..", "stages"),

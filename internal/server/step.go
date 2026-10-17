@@ -18,20 +18,20 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
+	"github.com/happypathnetworking/fylgja/internal/stages"
 	"github.com/happypathnetworking/fylgja/internal/step"
 	"github.com/happypathnetworking/fylgja/internal/verify"
-	"github.com/happypathnetworking/fylgja/internal/waypoint"
 )
 
 type stepFlags struct {
-	// waypoint is --waypoint as given, <series>/<sequence>: the target, in place of the next
-	// waypoint of the record's series.
-	waypoint string
-	// waypointGiven is whether --waypoint was given at all, apart from its value: an explicit
-	// empty one is a reference refused, not one left out (M10's --waypoint= rule).
-	waypointGiven bool
-	allowRestart  bool
-	dryRun        bool
+	// stage is --stage as given, <branch>/<label>: the target, in place of the next stage
+	// of the twin's proposed change.
+	stage string
+	// stageGiven is whether --stage was given at all, apart from its value: an explicit
+	// empty one is a reference refused, not one left out (M4's --interval= precedent).
+	stageGiven   bool
+	allowRestart bool
+	dryRun       bool
 	// wait is --wait as given: the budget of the step's wait after its record.
 	wait string
 	// waitGiven is whether --wait was given at all, apart from its value: an explicit empty
@@ -41,21 +41,21 @@ type stepFlags struct {
 	waitS int
 }
 
-// runTwinStep steps the waypoint twin. Everything up
-// to the run is decided here, before any connection to the workflow service, each refusal
-// ending the command with its document: --waypoint as given; the packages; the host, whose
-// twin must be a waypoint twin that is not diverged; the listing and the target;
-// the target's read, compile and filing on waypoint plan's path; the from
-// bundle out of the store; the step between the two; the host check on the target
-// and containerlab's plan for the lab, both in this process as a dry run reads them; and the
-// rules on that plan. Then the dry run reports, or the run starts.
+// runTwinStep steps the stage twin. Everything up to the run is decided here, before any
+// connection to the workflow service, each refusal ending the command with its document:
+// --stage as given; the packages; the host, whose twin must be a stage twin that is not
+// diverged; the record's proposed change and the target (014: research R-16); the target's
+// resolution, read, compile and filing on stage plan's path; the from bundle out of the
+// store; the step between the two; the host check on the target and containerlab's plan
+// for the lab, both in this process as a dry run reads them; and the rules on that plan.
+// Then the dry run reports, or the run starts.
 func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	const op = findings.OpTwinStep
 	subject := &findings.Subject{}
 
-	var given *waypoint.Ref
-	if f.waypointGiven || f.waypoint != "" {
-		ref, refused := waypointGuards(op, subject, findings.StepStart, f.waypoint, nil)
+	var given *stages.Ref
+	if f.stageGiven || f.stage != "" {
+		ref, refused := stageGuards(op, subject, findings.StepStart, f.stage, nil)
 		if refused != nil {
 			return refused
 		}
@@ -95,58 +95,60 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 		return finish(op, subject, findings.List{*refused})
 	}
 	rec := host.Twin
-	opts.note("twin: waypoint %s (bundle %s), pinned at %s; %s", waypointOf(rec.Waypoint), shortID(rec.BundleID),
+	opts.note("twin: stage %s (bundle %s), pinned at %s; %s", rec.Stage.Name(), shortID(rec.BundleID),
 		rec.Provenance.At, plural(len(rec.Nodes), "node"))
 
-	// The listing and the target, then the target resolved, read, compiled and filed
-	// as waypoint plan builds a waypoint.
-	reader, err := intent.WaypointReaderFromEnv()
+	// The record's proposed change, found once by its source branch (steps 1–3 and the
+	// head's at), and the target chosen among its stages; then the target resolved
+	// (steps 4–9), read, compiled and filed as stage plan builds a stage.
+	reader, err := intent.StageReaderFromEnv()
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
-	all, list, err := waypoint.ListAll(ctx, reader)
+	ch, list, err := stages.Find(ctx, reader, intentStamper{}, rec.Stage.ProposedChange.Branch)
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
 	if list.Rejected() {
 		return finish(op, subject, list)
 	}
-	target, _, list := waypoint.Target(all, rec.Waypoint.Series, rec.Waypoint.Sequence, given)
+	target, _, list := stages.Target(ch, *stages.RecordViewOf(rec), given)
 	if list.Rejected() {
 		return finish(op, subject, list)
 	}
-	subject.Waypoint = target.String()
+	subject.Stage = target.String()
 
 	file := func(ctx context.Context, files map[string][]byte, id string, snapshot *ctm.CTM) (findings.List, error) {
 		_, filed, err := fileCompiled(ctx, paths.Bundles, files, id, snapshot)
 		return filed, err
 	}
-	built := waypoint.Build(ctx, all, target, reg, waypoint.NewStages(file), time.Now().UTC())
+	built := stages.Build(ctx, reader, intentStamper{}, reg, ch, target, stages.NewPipeline(file), time.Now().UTC())
 	list = append(list, built.Findings...)
-	var resolved *findings.WaypointBlock
+	var resolved *resolvedStage
 	if r := built.Resolved; r != nil {
-		block := r.Block()
-		resolved = &block
+		resolved = &resolvedStage{block: r.Block(), record: r.StageRef()}
 		subject.Branch, subject.At = r.Branch, r.At
-		opts.note("%s", block.Line())
+		opts.note("%s", resolved.block.Line())
 	}
-	if built.Status != waypoint.PlanCompiled {
+	if built.Status != stages.PlanCompiled {
 		doc := findings.NewDocument(op, subject, list)
 		// An Infrahub that cannot be reached and M1's precision rule keep M10's exit 2.
-		if built.Status == waypoint.PlanFailed || carriesRule(built.Findings, findings.RuleAtPrecision) {
+		if built.Status == stages.PlanFailed || carriesRule(built.Findings, findings.RuleAtPrecision) {
 			doc.Status = findings.StatusError
 		}
-		doc.Waypoint = resolved
+		if resolved != nil {
+			doc.Stage = &resolved.block
+		}
 		return &result{doc: doc}
 	}
-	return withWaypoint(stepTo(ctx, opts, f, op, subject, reg, paths, acts, rec, built, list), resolved)
+	return withStage(stepTo(ctx, opts, f, op, subject, reg, paths, acts, rec, built, list), resolved)
 }
 
 // stepTo is the step once the target is compiled and filed: the from bundle, the step, the
 // host check and containerlab's plan, the rules, then the dry run's report or the run. list
 // is what the command has found so far, warnings alone.
 func stepTo(ctx context.Context, opts *options, f *stepFlags, op string, subject *findings.Subject, reg *psp.Registry,
-	paths lab.Paths, acts *lab.Activities, rec *wire.TwinRecord, built waypoint.PlanWaypoint, list findings.List) error {
+	paths lab.Paths, acts *lab.Activities, rec *wire.TwinRecord, built stages.PlanStage, list findings.List) error {
 	// The bundle the twin was built from, out of the store, never re-resolved.
 	store := bundle.NewDirStore(paths.Bundles)
 	held, err := store.Has(ctx, rec.BundleID)
@@ -165,12 +167,12 @@ func stepTo(ctx context.Context, opts *options, f *stepFlags, op string, subject
 	}
 	from := step.Bundle{ID: rec.BundleID, Files: files}
 
-	// The step, as waypoint plan prints it.
+	// The step, as stage plan prints it.
 	s, err := step.Diff(from, *built.Bundle)
 	if err != nil {
 		return failAt(op, subject, findings.StepCompare, rec.BundleID, "%v", err)
 	}
-	pair := step.Between(waypointOf(rec.Waypoint), built.Ref.String(), s)
+	pair := step.Between(rec.Stage.Name(), built.Ref.String(), s)
 	opts.note("%s", pair.Text())
 	diff, err := json.Marshal(pair)
 	if err != nil {
@@ -228,7 +230,7 @@ type stepPackages struct {
 // bundle's from its manifest, each node's package looked up in the registry by its id, since
 // a merge package on either side refuses the step. Declared is each target node's
 // package's fidelity.link_change, which the host check's plan does not carry.
-func stepInput(f *stepFlags, rec *wire.TwinRecord, from step.Bundle, built waypoint.PlanWaypoint, toPath string, s step.Step, diff []byte,
+func stepInput(f *stepFlags, rec *wire.TwinRecord, from step.Bundle, built stages.PlanStage, toPath string, s step.Step, diff []byte,
 	plan wire.CheckHostResult, lifecycle wire.ReconcilePlan, reg *psp.Registry, version string) (provision.StepInput, stepPackages, error) {
 	var packages stepPackages
 	declared := map[string]string{}
@@ -260,9 +262,8 @@ func stepInput(f *stepFlags, rec *wire.TwinRecord, from step.Bundle, built waypo
 	}
 	r := built.Resolved
 	return provision.StepInput{
-		From: wire.StepSide{Waypoint: rec.Waypoint, BundleID: rec.BundleID, At: rec.Provenance.At},
-		To: wire.StepSide{Waypoint: &wire.WaypointRef{Series: built.Ref.Series, Sequence: built.Ref.Sequence,
-			Description: r.Description, AtSource: r.AtSource}, BundleID: built.Bundle.ID, At: r.At, Branch: r.Branch},
+		From:         wire.StepSide{Stage: rec.Stage, BundleID: rec.BundleID, At: rec.Provenance.At},
+		To:           wire.StepSide{Stage: r.StageRef(), BundleID: built.Bundle.ID, At: r.At, Branch: r.Branch},
 		ObservedAt:   built.ObservedAt,
 		ToBundlePath: toPath,
 		Diff:         diff,
@@ -444,7 +445,7 @@ func pushLine(pushes []step.NodePush, nodes []wire.NodePlan) string {
 
 // stepClosing is the run's closing line (contracts/cli.md), or "" for a run that ended
 // before its stage, whose findings say why: stepped, with the times; unchanged; or diverged,
-// naming the phase, each node's push, and the waypoint the twin is still at. After M11's
+// naming the phase, each node's push, and the stage the twin is still at. After M11's
 // line and its timings comes how the wait after the record ended, when it ran.
 func stepClosing(in provision.StepInput, res provision.StepResult) string {
 	line := m11Closing(in, res)
@@ -470,17 +471,17 @@ func waitClause(w wire.StepWait) string {
 
 // m11Closing is M11's closing line, unchanged by the wait.
 func m11Closing(in provision.StepInput, res provision.StepResult) string {
-	to, from := waypointOf(in.To.Waypoint), waypointOf(in.From.Waypoint)
+	to, from := in.To.Stage.Name(), in.From.Stage.Name()
 	switch {
 	case res.Phase != "":
-		return fmt.Sprintf("diverged towards waypoint %s (bundle %s) at phase %s: %s; the twin is up at waypoint %s (bundle %s); "+
+		return fmt.Sprintf("diverged towards stage %s (bundle %s) at phase %s: %s; the twin is up at stage %s (bundle %s); "+
 			"fylgja twin destroy clears it", to, shortID(in.To.BundleID), res.Phase, provision.Landed(res.PushPlan, " "),
 			from, shortID(in.From.BundleID))
 	case res.Outcome == provision.StepUnchanged:
-		return fmt.Sprintf("unchanged; the record moves to waypoint %s (bundle %s) in %s", to, shortID(in.To.BundleID),
+		return fmt.Sprintf("unchanged; the record moves to stage %s (bundle %s) in %s", to, shortID(in.To.BundleID),
 			seconds(res.Timings.WholeS))
 	case res.Outcome == provision.StepStepped:
-		line := fmt.Sprintf("stepped to waypoint %s (bundle %s) in %s", to, shortID(in.To.BundleID), seconds(res.Timings.WholeS))
+		line := fmt.Sprintf("stepped to stage %s (bundle %s) in %s", to, shortID(in.To.BundleID), seconds(res.Timings.WholeS))
 		var parts []string
 		if t := res.Timings.ReconcileS; t != nil {
 			parts = append(parts, "reconcile "+seconds(*t))

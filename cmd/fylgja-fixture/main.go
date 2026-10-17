@@ -16,11 +16,11 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/testsupport"
-	"github.com/happypathnetworking/fylgja/internal/waypoint"
 )
 
 func main() {
@@ -418,27 +418,28 @@ func plural(n int, one, many string) string {
 // where an operator's series live. Each call comes after the writes it seals and after the
 // generate the previous flag ran: the one rule of schema/README.md.
 func writeWaypoint(branch, ref, at, description string) error {
-	r, err := waypoint.ParseRef(ref)
-	if err != nil {
-		return err
+	series, number, ok := strings.Cut(ref, "/")
+	sequence, err := strconv.Atoi(number)
+	if !ok || series == "" || strings.ContainsAny(series, " \t\n") || strings.HasPrefix(number, "0") || err != nil || sequence < 1 {
+		return fmt.Errorf("-waypoint %q is not <series>/<sequence>, a series with no \"/\" and no whitespace and a positive sequence", ref)
 	}
 	if branch == testsupport.FixtureBranch {
 		return fmt.Errorf("-waypoint refuses branch %s: the fixture never gains a persistent series; "+
 			"seed a throwaway branch and name it with -branch", branch)
 	}
-	if !strings.HasPrefix(r.Series, testsupport.TestSeriesPrefix) {
+	if !strings.HasPrefix(series, testsupport.TestSeriesPrefix) {
 		return fmt.Errorf("-waypoint refuses series %s: every series this tool writes begins %s, and is a test's",
-			r.Series, testsupport.TestSeriesPrefix)
+			series, testsupport.TestSeriesPrefix)
 	}
 	c, err := testsupport.NewClient()
 	if err != nil {
 		return err
 	}
-	id, err := c.WriteWaypoint(r.Series, r.Sequence, branch, at, description)
+	id, err := c.WriteWaypoint(series, sequence, branch, at, description)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("waypoint %s written naming branch %s (id %s)\n", r, branch, id)
+	fmt.Printf("waypoint %s/%d written naming branch %s (id %s)\n", series, sequence, branch, id)
 	return nil
 }
 

@@ -27,7 +27,7 @@ System(Walkingtwin, "Walking twin", $descr="Lab fylgja: a running containerlab t
 System(Fylgja, "Fylgja", $descr="Reads intent from Infrahub, compiles it into a deterministic bundle, boots it as a twin and pushes each device's production configuration.", $tags="Software System", $link="")
 
 Rel(Operator, Fylgja, "Runs commands", $techn="", $tags="Relationship", $link="")
-Rel(Operator, Infrahub, "Edits intent; writes waypoints", $techn="", $tags="Relationship", $link="")
+Rel(Operator, Infrahub, "Edits intent; opens proposed changes and marks stages", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja, Infrahub, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
 Rel(Fylgja, Walkingtwin, "Boots, probes, pushes, reads", $techn="", $tags="Relationship", $link="")
 Rel(Infrahub, Artifactsrepository, "Clones; renders the template", $techn="", $tags="Relationship", $link="")

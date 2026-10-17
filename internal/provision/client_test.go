@@ -1199,7 +1199,7 @@ func TestStartStepRefusedBesideARunInFlight(t *testing.T) {
 			if f.Rule != findings.RuleRunInFlight || f.Object != c.workflowID || f.Step != findings.StepStart || f.Message != c.message {
 				t.Errorf("finding %+v\nwant run.in_flight on %s at start: %q", f, c.workflowID, c.message)
 			}
-			doc := refused.Document(findings.OpTwinStep, &findings.Subject{Waypoint: "demo/2"})
+			doc := refused.Document(findings.OpTwinStep, &findings.Subject{Stage: "change-1/live"})
 			if doc.Status.ExitCode() != findings.ExitRejected {
 				t.Errorf("exit %d, want %d", doc.Status.ExitCode(), findings.ExitRejected)
 			}
@@ -1338,8 +1338,8 @@ func startedEvent(t *testing.T, input any) *historypb.HistoryEvent {
 			WorkflowExecutionStartedEventAttributes: &historypb.WorkflowExecutionStartedEventAttributes{Input: payloads}}}
 }
 
-// InFlight names a step run at the step its history has reached, and the waypoint its input
-// steps towards, which twin show's kind line reads.
+// InFlight names a step run at the step its history has reached, and the stage its input
+// steps towards, <branch>/<label> (014), which twin show's kind line reads.
 func TestInFlightNamesAStepAndItsTarget(t *testing.T) {
 	mc := &mocks.Client{}
 	mc.On("ListWorkflow", mock.Anything, mock.Anything).Return(&workflowservice.ListWorkflowExecutionsResponse{}, nil)
@@ -1354,7 +1354,7 @@ func TestInFlightNamesAStepAndItsTarget(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := RunInFlight{WorkflowID: WorkflowStep, RunID: "run-s", Step: findings.StepReconcile, Towards: "demo/2"}
+	want := RunInFlight{WorkflowID: WorkflowStep, RunID: "run-s", Step: findings.StepReconcile, Towards: "change-1/live"}
 	if len(got) != 1 || got[0] != want {
 		t.Errorf("in flight = %+v, want %+v", got, want)
 	}
@@ -1376,6 +1376,12 @@ func TestStepBlockAndClose(t *testing.T) {
 	block := StepBlockOf(in, plan)
 	if block.From.Branch != "" || block.To.Branch != "change-1" || block.StepRunBlock != nil {
 		t.Errorf("from branch %q, to branch %q, run %+v; want none, change-1, none", block.From.Branch, block.To.Branch, block.StepRunBlock)
+	}
+	// Each side names its stage as the record does (014).
+	wantFrom := findings.ShowStage{ProposedChange: findings.StageChangeRef{ID: "pc-1", Branch: "change-1"}, Label: "cabled",
+		Description: "before the change", AtSource: "written"}
+	if block.From.Stage == nil || *block.From.Stage != wantFrom || block.To.Stage == nil || block.To.Stage.Ref() != "change-1/live" {
+		t.Errorf("from stage %+v, to stage %+v; want %+v, change-1/live", block.From.Stage, block.To.Stage, wantFrom)
 	}
 	r := block.Reconcile
 	for _, l := range []struct {
@@ -1406,7 +1412,7 @@ func TestStepBlockAndClose(t *testing.T) {
 	if want := map[string]string{"e1 restart": "restart", "s1 live": "live", "s2 create": "null", "s3 recreate": "live"}; !maps.Equal(declared, want) {
 		t.Errorf("reconcile nodes %v, want %v", declared, want)
 	}
-	doc := findings.NewDocument(findings.OpTwinStep, &findings.Subject{Waypoint: "demo/2"}, nil)
+	doc := findings.NewDocument(findings.OpTwinStep, &findings.Subject{Stage: "change-1/live"}, nil)
 	doc.Step = block
 	mustValidateM11(t, doc)
 
@@ -1470,7 +1476,7 @@ func TestStepDocumentCarriesTheWait(t *testing.T) {
 		if block.Wait == nil || block.Wait.BudgetS != waitS || block.Wait.Outcome != "" {
 			t.Errorf("StepBlockOf's wait with --wait %ds = %+v, want the budget alone", waitS, block.Wait)
 		}
-		doc := findings.NewDocument(findings.OpTwinStep, &findings.Subject{Waypoint: "demo/2"}, nil)
+		doc := findings.NewDocument(findings.OpTwinStep, &findings.Subject{Stage: "change-1/live"}, nil)
 		doc.Step = block
 		if b := string(mustValidateM11(t, doc)); !strings.Contains(b, `"wait":{"budget_s":`+strconv.Itoa(waitS)+`}`) {
 			t.Errorf("dry run's document %s, want its wait to carry budget_s %d alone", b, waitS)
@@ -1480,7 +1486,7 @@ func TestStepDocumentCarriesTheWait(t *testing.T) {
 	in := stepInput()
 	in.WaitS = 120
 	failing := []wire.StepFinding{{Rule: findings.RuleVerifyNeighbor, Object: "e1:Ethernet3", Message: "node e1 (…): port Ethernet3 sees no neighbour"}}
-	subject := &findings.Subject{Waypoint: "demo/2", RunID: "run-s"}
+	subject := &findings.Subject{Stage: "change-1/live", RunID: "run-s"}
 	for _, c := range []struct {
 		name   string
 		res    StepResult

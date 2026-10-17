@@ -1,0 +1,239 @@
+package server
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/happypathnetworking/fylgja/internal/ctm"
+	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/lab"
+	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/psp"
+	"github.com/happypathnetworking/fylgja/internal/stages"
+	"github.com/happypathnetworking/fylgja/internal/step"
+)
+
+type stageFlags struct {
+	branch string
+	// branchGiven is whether --branch was given at all, apart from its value: an explicit
+	// empty one is a branch refused, not one left out (M4's --interval= precedent).
+	branchGiven bool
+}
+
+// branchGuard refuses a --branch that is not a branch as the reference syntax names one,
+// before any connection: stage.ref.invalid, exit 2, at step start, in the shape a
+// --stage's refusal takes (specs/014-proposed-change-stages/contracts/stage-reference.md).
+func branchGuard(op, branch string) error {
+	err := stages.CheckBranch(branch)
+	if err == nil {
+		return nil
+	}
+	doc := findings.RuleErrorDocument(op, nil, findings.RuleStageRefInvalid, branch, err.Error())
+	doc.Findings[0].Step = findings.StepStart
+	return &result{doc: doc}
+}
+
+// intentStamper is the stages' Stamper on the server: an intent client per (branch, at),
+// whose Stamps reads when the intent and the artifacts were written and never a value of
+// intent, with the at verbatim on every page, or none when it is empty.
+type intentStamper struct{}
+
+func (intentStamper) Stamps(ctx context.Context, branch, at string) (intent.Stamps, error) {
+	cfg, err := intent.FromEnv(branch, at)
+	if err != nil {
+		return intent.Stamps{}, err
+	}
+	return intent.New(cfg).Stamps(ctx)
+}
+
+// The noun stage (014, D-045): a proposed change's stages, the operator's marks between
+// its two derived ends, listed and planned. Both verbs dial Infrahub and nothing else: no
+// workflow service, no worker, no containerlab, no host budget.
+
+// runStageList lists the stages of every open proposed change, or of the one whose source
+// branch --branch names. The kind absent from the default branch is stage.kind.absent,
+// exit 1; an Infrahub that cannot be reached or refuses the credential is operation.failed,
+// exit 2, at step resolve, as a create's resolution reports it. A reserved label among the
+// rows is a rejection beside them, exit 1, the rows still listed; the warnings leave the
+// exit 0.
+func runStageList(ctx context.Context, opts *options, f *stageFlags) error {
+	const op = findings.OpStageList
+	if f.branchGiven {
+		if refused := branchGuard(op, f.branch); refused != nil {
+			return refused
+		}
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	reader, err := intent.StageReaderFromEnv()
+	if err != nil {
+		return failAt(op, nil, findings.StepResolve, op, "%v", err)
+	}
+	res, list, err := stages.List(ctx, reader, intentStamper{}, f.branch, stages.RecordViewOf(hostRecord(opts)))
+	if err != nil {
+		return failAt(op, nil, findings.StepResolve, op, "%v", err)
+	}
+	doc := findings.NewDocument(op, nil, list)
+	if carriesRule(list, findings.RuleStageKindAbsent) {
+		return &result{doc: doc}
+	}
+	printList(opts, res)
+	doc.Stages = res.Block()
+	return &result{doc: doc}
+}
+
+// hostRecord is twin.json under the state root, or nil when it is absent or cannot be
+// read: the host is twin show's to report, and the list says nothing of it but the mark.
+// The record carries its state and its last step, so the mark can say a twin is diverged
+// and which stage it was stepping towards.
+func hostRecord(opts *options) *wire.TwinRecord {
+	paths, err := opts.paths()
+	if err != nil {
+		return nil
+	}
+	rec, err := lab.ReadRecord(paths.TwinJSON)
+	if err != nil {
+		return nil
+	}
+	return &rec
+}
+
+// heading names one proposed change as the list and the plan head its stages
+// (specs/014-proposed-change-stages/contracts/stage-commands.md): its name quoted, its
+// id, its source branch, the destination when into is set, whether it is a draft, and how
+// many stages it has.
+func heading(pc stages.ProposedChange, into bool, n int) string {
+	line := fmt.Sprintf("proposed change %q (%s) on branch %s", pc.Name, pc.ID, pc.Branch)
+	if into {
+		line += " → " + pc.Destination
+	}
+	if pc.Draft {
+		line += ", draft"
+	}
+	return line + " (" + plural(n, "stage") + ")"
+}
+
+// printList prints the listing: a heading per proposed change, then one line per stage
+// with its reference, branch and source padded so the ats and the descriptions line up
+// within the proposed change, the description quoted, and the twin's row marked; beside a
+// diverged record the mark says which stage the failed step was going to. The orphans
+// follow, one line each.
+func printList(opts *options, res stages.ListResult) {
+	twinMark := "  ← twin"
+	if r := res.Record; r != nil && r.State == wire.StateDiverged && r.Towards != "" {
+		twinMark = fmt.Sprintf("  ← twin (diverged towards %s)", stages.Ref{Branch: r.ProposedChange.Branch, Label: r.Towards})
+	}
+	if len(res.Rows) == 0 {
+		if res.Branch != "" {
+			opts.note("branch %s: no open proposed change", res.Branch)
+		} else {
+			opts.note("no open proposed change")
+		}
+	}
+	for start := 0; start < len(res.Rows); {
+		end := start
+		for end < len(res.Rows) && res.Rows[end].ProposedChange.ID == res.Rows[start].ProposedChange.ID {
+			end++
+		}
+		rows := res.Rows[start:end]
+		refWidth, branchWidth, sourceWidth := 0, 0, 0
+		for _, r := range rows {
+			refWidth = max(refWidth, len(r.Ref.String()))
+			branchWidth = max(branchWidth, len(r.Branch))
+			sourceWidth = max(sourceWidth, len(source(r.AtSource)))
+		}
+		opts.note("%s", heading(rows[0].ProposedChange, false, len(rows)))
+		for _, r := range rows {
+			mark := ""
+			if r.Twin {
+				mark = twinMark
+			}
+			opts.note("  %-*s  %-*s  at %s %-*s  %q%s", refWidth, r.Ref, branchWidth, r.Branch, r.At, sourceWidth,
+				source(r.AtSource), r.Description, mark)
+		}
+		start = end
+	}
+	for _, o := range res.Orphans {
+		opts.note("orphaned: stage %q (%s) names no proposed change", o.Label, o.ID)
+	}
+}
+
+// source is where an at came from as the text names it, in parentheses: (written),
+// (branch point).
+func source(atSource string) string { return "(" + findings.AtSourceText(atSource) + ")" }
+
+// runStagePlan plans the open proposed change whose source branch --branch names: each of
+// its stages read, compiled and filed in the store on the stage pipeline, and the step
+// between each consecutive pair, printed as each is known. A refused stage is reported and
+// the plan goes on; the exit is 1 when any was refused or failed, and 0 otherwise, whatever
+// the warnings. The kind absent, no open proposed change on the branch, or the
+// branch gone refuses the whole plan with nothing compiled, exit 1; an Infrahub that
+// cannot be reached while finding it is operation.failed, exit 2.
+func runStagePlan(ctx context.Context, opts *options, f *stageFlags) error {
+	const op = findings.OpStagePlan
+	if !f.branchGiven && f.branch == "" {
+		return fail(op, nil, "--branch is required")
+	}
+	if refused := branchGuard(op, f.branch); refused != nil {
+		return refused
+	}
+	// Packages are loaded before anything is dialled, as a create loads them for its read.
+	reg, err := psp.Load(opts.pspDir)
+	if err != nil {
+		return loadFailureAt(op, nil, findings.StepRead, err)
+	}
+	paths, err := opts.paths()
+	if err != nil {
+		return failAt(op, nil, findings.StepCompile, op, "%v", err)
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	reader, err := intent.StageReaderFromEnv()
+	if err != nil {
+		return failAt(op, nil, findings.StepResolve, op, "%v", err)
+	}
+
+	// Each bundle and its CTM are filed as the dry run files them.
+	file := func(ctx context.Context, files map[string][]byte, id string, snapshot *ctm.CTM) (findings.List, error) {
+		_, list, err := fileCompiled(ctx, paths.Bundles, files, id, snapshot)
+		return list, err
+	}
+	res, err := stages.Plan(ctx, reader, intentStamper{}, f.branch, reg, stages.NewPipeline(file), time.Now().UTC(),
+		func(pc stages.ProposedChange, n int) { opts.note("%s", heading(pc, true, n)) },
+		func(st stages.PlanStage) { printPlanned(opts, st) },
+		func(p step.Pair) { opts.note("%s", p.Text()) })
+	if err != nil {
+		return failAt(op, nil, findings.StepResolve, op, "%v", err)
+	}
+	doc := findings.NewDocument(op, nil, res.Findings)
+	if doc.Plan, err = res.Block(); err != nil {
+		return fail(op, nil, "%v", err)
+	}
+	return &result{doc: doc}
+}
+
+// printPlanned prints one planned stage: its resolution, bundle_id and what its read holds
+// when it compiled, and otherwise one line naming the first rejection's rule; then its
+// findings under it, indented, each in the document's text-line shape. The document's
+// stderr rendering is unchanged, so text prints each twice: under its stage, where a
+// finding naming a device or an interface says whose it is, and with the rest.
+func printPlanned(opts *options, st stages.PlanStage) {
+	if st.Status != stages.PlanCompiled {
+		why := st.Status
+		if st.Rule != "" {
+			why = fmt.Sprintf("%s (%s)", st.Status, st.Rule)
+		}
+		opts.note("%s: %s", st.Ref, why)
+	} else {
+		opts.note("%s: %s", st.Ref, st.Resolved.Block().Resolution())
+		opts.note("  bundle_id %s", st.Bundle.ID)
+		opts.note("  read: %s", readCounts(st.Read.Counts, st.Read.Packages, st.Read.Lossy))
+	}
+	for _, line := range st.Findings.TextLines() {
+		opts.note("  %s", line)
+	}
+}

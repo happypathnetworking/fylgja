@@ -32,11 +32,11 @@ func TestDryRunFollowCreate(t *testing.T) {
 			findings.DryRunFollow{Reason: findings.FollowReasonNoFollow}, "follow: would not follow (--no-follow given)"},
 		{"--at --no-follow", createFlags{branch: "fylgja-fixture", at: "2026-09-16T14:00:00Z", noFollow: true},
 			findings.DryRunFollow{Reason: findings.FollowReasonPinned}, "follow: would not follow (--at given)"},
-		// M10: a waypoint is pinned, and says so rather than "--at given".
-		{"--waypoint", createFlags{waypoint: "demo/2"},
-			findings.DryRunFollow{Reason: findings.FollowReasonWaypoint}, "follow: would not follow (--waypoint given: a waypoint is pinned)"},
-		{"--waypoint --no-follow", createFlags{waypoint: "demo/2", noFollow: true},
-			findings.DryRunFollow{Reason: findings.FollowReasonWaypoint}, "follow: would not follow (--waypoint given: a waypoint is pinned)"},
+		// 014: a stage is pinned, and says so rather than "--at given".
+		{"--stage", createFlags{stage: "change-1/cabled"},
+			findings.DryRunFollow{Reason: findings.FollowReasonStage}, "follow: would not follow (--stage given: a stage is pinned)"},
+		{"--stage --no-follow", createFlags{stage: "change-1/cabled", noFollow: true},
+			findings.DryRunFollow{Reason: findings.FollowReasonStage}, "follow: would not follow (--stage given: a stage is pinned)"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			interval, err := followInterval(findings.OpTwinCreate, &findings.Subject{}, &c.flags)
@@ -71,8 +71,8 @@ func TestDryRunFollowCreate(t *testing.T) {
 			if doc.DryRun == nil || doc.DryRun.Follow == nil || *doc.DryRun.Follow != c.want {
 				t.Errorf("dry_run %+v, want follow %+v", doc.DryRun, c.want)
 			}
-			// The reason waypoint is M10's enum's; every other document is M6's.
-			if c.want.Reason == findings.FollowReasonWaypoint {
+			// The reason stage is the current enum's; every other document is M6's.
+			if c.want.Reason == findings.FollowReasonStage {
 				validateM10Document(t, doc)
 			} else {
 				validateM6Document(t, doc)

@@ -9,14 +9,14 @@ import (
 )
 
 type stepFlags struct {
-	// waypoint is --waypoint as given, <series>/<sequence>: the target, in place of the next
-	// waypoint of the record's series.
-	waypoint string
-	// waypointGiven is whether --waypoint was given at all, apart from its value: an explicit
-	// empty one is a reference refused, not one left out (M10's --waypoint= rule).
-	waypointGiven bool
-	allowRestart  bool
-	dryRun        bool
+	// stage is --stage as given, <branch>/<label>: the target, in place of the next stage of
+	// the twin's proposed change.
+	stage string
+	// stageGiven is whether --stage was given at all, apart from its value: an explicit
+	// empty one is a reference refused, not one left out (M4's --interval= precedent).
+	stageGiven   bool
+	allowRestart bool
+	dryRun       bool
 	// wait is --wait as given: the budget of the step's wait after its record.
 	wait string
 	// waitGiven is whether --wait was given at all, apart from its value: an explicit empty
@@ -28,9 +28,9 @@ func newTwinStepCmd(opts *options) *cobra.Command {
 	f := &stepFlags{}
 	cmd := &cobra.Command{
 		Use:   "step",
-		Short: "Take the waypoint twin to another waypoint of its series, without a rebuild",
-		Long: "Take the running twin, built from a waypoint, to another waypoint of its series: the\n" +
-			"next one, or the one --waypoint names. The API's server resolves, reads, compiles and\n" +
+		Short: "Take the stage twin to another stage of its proposed change, without a rebuild",
+		Long: "Take the running twin, built from a stage, to another stage of its proposed change:\n" +
+			"the next one, or the one --stage names. The API's server resolves, reads, compiles and\n" +
 			"files the target; the step between the two bundles is printed, the host is checked for\n" +
 			"the twin after the step, and containerlab's own plan for the lab is read. Then one run\n" +
 			"with the fixed identity fylgja-step stages the target, lets containerlab reconcile the\n" +
@@ -44,13 +44,13 @@ func newTwinStepCmd(opts *options) *cobra.Command {
 			"depend on it.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			f.waypointGiven = cmd.Flags().Changed("waypoint")
+			f.stageGiven = cmd.Flags().Changed("stage")
 			f.waitGiven = cmd.Flags().Changed("wait")
 			return runTwinStep(cmd.Context(), opts, f)
 		},
 	}
-	cmd.Flags().StringVar(&f.waypoint, "waypoint", "",
-		"the waypoint to step to, <series>/<sequence>, of the twin's own series; the next one when left out")
+	cmd.Flags().StringVar(&f.stage, "stage", "",
+		"the stage to step to, <branch>/<label>, of the twin's own proposed change; the next one when left out")
 	cmd.Flags().BoolVar(&f.allowRestart, "allow-restart", false,
 		"proceed when containerlab's plan restarts or recreates a node, which loses its running state until the step pushes it again")
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false,
@@ -64,8 +64,8 @@ func newTwinStepCmd(opts *options) *cobra.Command {
 // the target, checks its host, reads containerlab's plan and starts the run.
 func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	a := given{}
-	if f.waypointGiven || f.waypoint != "" {
-		a["waypoint"] = f.waypoint
+	if f.stageGiven || f.stage != "" {
+		a["stage"] = f.stage
 	}
 	a.bool("allow_restart", f.allowRestart)
 	a.bool("dry_run", f.dryRun)

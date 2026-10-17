@@ -273,13 +273,25 @@ fixture() {
   go run -tags fixture ./cmd/fylgja-fixture "$@"
 }
 
-# gql BRANCH QUERY: Infrahub's GraphQL answer's data on the branch. The token goes to curl
-# as a header file, so it is in no process's arguments.
+# gql BRANCH QUERY: Infrahub's GraphQL answer's data on the branch, or on the default branch
+# through the unnamed endpoint when BRANCH is "", as the stage reader asks it. The token goes
+# to curl as a header file, so it is in no process's arguments.
 gql() {
   local body
   body=$(jq -cn --arg q "$2" '{query: $q}')
   curl -sS --fail-with-body -H @<(printf 'X-INFRAHUB-KEY: %s\n' "$INFRAHUB_API_TOKEN") \
-    -H 'Content-Type: application/json' -d "$body" "$INFRAHUB_ADDRESS/graphql/$1" | jq -e '.data'
+    -H 'Content-Type: application/json' -d "$body" "$INFRAHUB_ADDRESS/graphql${1:+/$1}" | jq -e '.data'
+}
+
+# infrahub_holds_none CASE BRANCH: a deleted throwaway branch left nothing in Infrahub
+# (FR-029): read on the default branch, writing nothing, the branch is absent from Branch,
+# and no proposed change in any state has it as its source. Infrahub refuses a proposed
+# change's delete while a stage names it, so with none left no stage of one is left either.
+infrahub_holds_none() {
+  gql "" "{ Branch(name: \"$2\") { name } CoreProposedChange(source_branch__value: \"$2\") { count } }" \
+    > "$OUT/infrahub-after-$1.json" 2> "$OUT/infrahub-after-$1.err" ||
+    fail "case $1: reading Infrahub after $2's delete failed; see $OUT/infrahub-after-$1.err"
+  expect "$OUT/infrahub-after-$1.json" '(.Branch | length) == 0 and .CoreProposedChange.count == 0'
 }
 
 # artifacts_of BRANCH FILE: each device's device-config artifact on the branch, read through
@@ -1342,11 +1354,13 @@ unset CREATE_REF
 READBACK=readback
 
 # The branch goes with its stages and its proposed change, in that order, and -delete says
-# so. The product then lists no stage of the branch, and plans none: no open proposed change
-# has it as its source.
+# so; Infrahub then holds none of them. The product then lists no stage of the branch, and
+# plans none: no open proposed change has it as its source. A failed delete fails the case,
+# and the trap tries it again.
 if fixture -branch "$FP" -delete > "$OUT/delete-branch-7.out" 2>&1; then
   grep -qxF "deleted 2 stages, 1 proposed change, branch $FP" "$OUT/delete-branch-7.out" ||
     fail "case 7: -delete on $FP did not report its two stages and its proposed change; see $OUT/delete-branch-7.out"
+  infrahub_holds_none 7 "$FP"
   fylgja stage list --branch "$FP" --json > "$OUT/list-7-deleted.json" 2> "$OUT/list-7-deleted.err" ||
     fail "case 7: stage list --branch $FP exited non-zero after the delete; see $OUT/list-7-deleted.err"
   expect "$OUT/list-7-deleted.json" '.status=="ok" and .stages.branch==env.FP and .stages.rows == []'
@@ -1356,7 +1370,7 @@ if fixture -branch "$FP" -delete > "$OUT/delete-branch-7.out" 2>&1; then
   expect "$OUT/plan-7-deleted.json" '.status=="rejected" and [.findings[] | select(.severity=="rejection") | .rule] == ["stage.unknown"]'
   unset FP
 else
-  echo "e2e: case 7: branch $FP and its proposed change were not deleted; remove them with: go run -tags fixture ./cmd/fylgja-fixture -branch $FP -delete" >&2
+  fail "case 7: -delete on $FP failed, leaving its branch, stages or proposed change; see $OUT/delete-branch-7.out"
 fi
 else
   skip_case 7
@@ -1669,17 +1683,22 @@ destroy_twin 8 "done" "done"
 unset CREATE_REF
 READBACK=readback
 
-# The branch goes with its stages and its proposed change, as case 7's; the product then
-# lists no stage of it.
+# The branch goes with its stages and its proposed change, as case 7's, and Infrahub then
+# holds none of them; the product then lists no stage of it, and plans none.
 if fixture -branch "$FS" -delete > "$OUT/delete-branch-8.out" 2>&1; then
   grep -qxF "deleted 2 stages, 1 proposed change, branch $FS" "$OUT/delete-branch-8.out" ||
     fail "case 8: -delete on $FS did not report its two stages and its proposed change; see $OUT/delete-branch-8.out"
+  infrahub_holds_none 8 "$FS"
   fylgja stage list --branch "$FS" --json > "$OUT/list-8-deleted.json" 2> "$OUT/list-8-deleted.err" ||
     fail "case 8: stage list --branch $FS exited non-zero after the delete; see $OUT/list-8-deleted.err"
   expect "$OUT/list-8-deleted.json" '.status=="ok" and .stages.branch==env.FS and .stages.rows == []'
+  plan_status=0
+  fylgja stage plan --branch "$FS" --json > "$OUT/plan-8-deleted.json" 2> "$OUT/plan-8-deleted.err" || plan_status=$?
+  [ "$plan_status" -eq 1 ] || fail "case 8: stage plan --branch $FS exited $plan_status after the delete, not 1; see $OUT/plan-8-deleted.json"
+  expect "$OUT/plan-8-deleted.json" '.status=="rejected" and [.findings[] | select(.severity=="rejection") | .rule] == ["stage.unknown"]'
   unset FS
 else
-  echo "e2e: case 8: branch $FS and its proposed change were not deleted; remove them with: go run -tags fixture ./cmd/fylgja-fixture -branch $FS -delete" >&2
+  fail "case 8: -delete on $FS failed, leaving its branch, stages or proposed change; see $OUT/delete-branch-8.out"
 fi
 else
   skip_case 8

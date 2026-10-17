@@ -270,6 +270,12 @@ func TestPlanMainMovedBesideARefusedBranchPoint(t *testing.T) {
 		bp.Rule != findings.RuleStageArtifactStale || !reflect.DeepEqual(rules, want) {
 		t.Errorf("the branch point: %s (%s), findings %v; want refused stale with %v", bp.Status, bp.Rule, rules, want)
 	}
+	if want := "device n1: its intent on main was written at 2026-10-16T17:19:00.000000+00:00, later than its artifact " +
+		"device-config was generated (checksum stamped 2026-10-16T17:18:00.000000+00:00; no artifact validator of the " +
+		"proposed change had completed): stage change-1/branch-point reads main as it was at the branch point, before " +
+		"its artifacts were regenerated"; len(bp.Findings) == 0 || bp.Findings[0].Message != want {
+		t.Errorf("the branch point's findings %+v; want the first saying\n  %s", bp.Findings, want)
+	}
 	moved := 0
 	for _, f := range res.Findings {
 		if f.Rule == findings.RuleStageMainMoved {

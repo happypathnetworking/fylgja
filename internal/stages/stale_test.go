@@ -45,7 +45,8 @@ func TestStalePerDevice(t *testing.T) {
 		stamps    intent.Stamps
 		validated string // the validator's completed_at in force at the mark
 		stale     []string
-		validator bool // whether the validator was read
+		validator bool   // whether the validator was read
+		message   string // the one finding's whole message, when the case gives it
 	}{
 		{name: "checksum older than intent is stale", stamps: edited("n3", "n1"), stale: []string{"n1", "n3"}, validator: true},
 		{name: "a validator completed before the edit leaves it stale", stamps: edited("n1"), validated: t2,
@@ -92,7 +93,12 @@ func TestStalePerDevice(t *testing.T) {
 			s.Devices["n1"] = device(t1, "")
 			s.Devices["n2"] = device("2026-10-16T19:35:00.000000+00:00", "")
 			return s
-		}(), validated: t2, stale: []string{"n1"}, validator: true},
+		}(), validated: t2, stale: []string{"n1"}, validator: true,
+			message: "device n1: its intent on change-1 was written at " + t1 + ", later than its artifact device-config " +
+				"was generated (its checksum unstamped; the proposed change's artifact validator last completed " + t2 +
+				"): stage change-1/m was marked before the artifacts were regenerated; regenerate (fylgja-fixture " +
+				"-generate, POST /api/artifact/generate, or the proposed change's checks: a retry in Infrahub, or " +
+				"CoreProposedChangeRunCheck) and mark again"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, s := story(change1(mark("st-m", "m", tm, nil, "")))
@@ -120,6 +126,9 @@ func TestStalePerDevice(t *testing.T) {
 			}
 			if !reflect.DeepEqual(stale, tc.stale) {
 				t.Errorf("stale %v, want %v", stale, tc.stale)
+			}
+			if tc.message != "" && (len(list) != 1 || list[0].Message != tc.message) {
+				t.Errorf("findings %+v; want the one saying\n  %s", list, tc.message)
 			}
 			read := slices.Contains(r.calls, "Validations pc-1@"+tm)
 			if read != tc.validator {
@@ -355,16 +364,20 @@ func TestStaleByEvent(t *testing.T) {
 }
 
 // The message names the latest event naming the device, its name and kind, beside the
-// device's own latest stamp; a device whose stamps are later than every event naming it
-// keeps the stamp's wording.
+// device's own latest stamp, or that it has none; a device whose stamps are later than
+// every event naming it keeps the stamp's wording.
 func TestStaleByEventWording(t *testing.T) {
+	const created = "2026-10-16T19:36:40.000000+00:00"
 	r, s := story(change1(mark("st-m", "m", tm, nil, "")))
 	stamps := removed(t0)
 	stamps.Devices["n2"] = ided("n2", device("2026-10-16T19:39:00.000000+00:00", t0)) // edited after the delete
+	stamps.Devices["n3"] = ided("n3", device("", t0))                                 // nothing of its own stamped
 	s.at = map[string]intent.Stamps{"change-1@" + tm: stamps}
-	r.events = map[string][]intent.Event{"change-1": removal()}
+	r.events = map[string][]intent.Event{"change-1": append([]intent.Event{
+		{Name: "infrahub.node.created", OccurredAt: created, Kind: "NetworkInterface", Nodes: []string{"if-n3-e1"}},
+	}, removal()...)}
 	_, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "m"}, now)
-	if err != nil || len(list) != 2 {
+	if err != nil || len(list) != 3 {
 		t.Fatalf("%v %+v", err, list)
 	}
 	tail := ", later than its artifact device-config was generated (checksum stamped " + t0 + "; no artifact validator of " +
@@ -375,6 +388,8 @@ func TestStaleByEventWording(t *testing.T) {
 		"device n1: its intent on change-1 was written at " + te1 + " (Infrahub's event log: infrahub.node.updated of a " +
 			"NetworkInterface; its latest stamp 2026-10-16T19:35:00.000000+00:00)" + tail,
 		"device n2: its intent on change-1 was written at 2026-10-16T19:39:00.000000+00:00" + tail,
+		"device n3: its intent on change-1 was written at " + created + " (Infrahub's event log: infrahub.node.created " +
+			"of a NetworkInterface; no stamp of its own)" + tail,
 	} {
 		if list[i].Message != want {
 			t.Errorf("message %d\n  %s\nwant\n  %s", i, list[i].Message, want)
@@ -523,6 +538,13 @@ func TestNoBranchPointNoEvents(t *testing.T) {
 	}
 	if head, _ := ch.first(LabelHead); head.At != "2026-10-16T19:35:10.000001+00:00" {
 		t.Errorf("the head's at is %s; want the stamps' alone", head.At)
+	}
+	_, list, err = Resolve(t.Context(), r, s, registry(t), Ref{"change-1", LabelBranchPoint}, now)
+	want := "stage change-1/branch-point has no at: Infrahub returned no branched_from for branch change-1, so it " +
+		"names no point in time"
+	if err != nil || len(list) != 1 || list[0].Rule != findings.RuleStageAtUnresolved || list[0].Severity != findings.Rejection ||
+		list[0].Step != findings.StepResolve || list[0].Object != "change-1/branch-point" || list[0].Message != want {
+		t.Errorf("the branch point: %v %+v; want the one rejection %s saying\n  %s", err, list, findings.RuleStageAtUnresolved, want)
 	}
 	for _, c := range r.calls {
 		if strings.HasPrefix(c, "IntentEvents") {

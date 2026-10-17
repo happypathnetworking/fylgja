@@ -276,7 +276,7 @@ func TestResolveRefusals(t *testing.T) {
 				"label, so it names no point in time",
 		},
 		{
-			name: "the head of a branch holding nothing stamped",
+			name: "the head of a branch holding neither a stamp nor an intent event",
 			edit: func(_ *fakeReader, s *fakeStamper) { s.byBranch["change-1"] = intent.Stamps{} },
 			ref:  Ref{"change-1", "head"}, rule: findings.RuleStageAtUnresolved, object: "change-1/head", stamps: true,
 			message: "stage change-1/head has no at: branch change-1 holds no stamped device, interface, link or artifact, " +

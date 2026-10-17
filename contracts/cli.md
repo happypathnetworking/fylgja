@@ -437,9 +437,9 @@ last line is one of:
 
 ```
 stages: FylgjaStage present on the default branch, with its extension
-stages: FylgjaStage absent from the default branch (load schema/fylgja-stage.yaml; needed only by the stage commands)
-stages: FylgjaStage on the default branch lacks description (load schema/fylgja-stage.yaml; needed only by the stage commands)
-stages: FylgjaStage present on the default branch, but CoreProposedChange lacks fylgja_stages (load schema/fylgja-stage.yaml; needed only by the stage commands)
+stages: FylgjaStage absent from the default branch (load schema/fylgja-stage.yaml; needed only by --stage, stage list and stage plan)
+stages: FylgjaStage on the default branch lacks description (load schema/fylgja-stage.yaml; needed only by --stage, stage list and stage plan)
+stages: FylgjaStage present on the default branch, but CoreProposedChange lacks fylgja_stages (load schema/fylgja-stage.yaml; needed only by --stage, stage list and stage plan)
 ```
 
 and the document's `verified.stages` carries `kind`, `present`, `missing`, `extension` and

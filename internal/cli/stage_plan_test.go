@@ -683,7 +683,7 @@ func TestStagePlanRefusedBeforeAnyConnection(t *testing.T) {
 // schema check says, in its last line and verified.stages, how the default branch stands.
 // The kind whole, schema check says so.
 func TestStageKindAbsentEverywhere(t *testing.T) {
-	const remedy = " (load schema/fylgja-stage.yaml; needed only by the stage commands)"
+	const remedy = " (load schema/fylgja-stage.yaml; needed only by --stage, stage list and stage plan)"
 	for _, c := range []struct {
 		name               string
 		edit               func(*fakeInfrahub)

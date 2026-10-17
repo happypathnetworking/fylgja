@@ -149,10 +149,11 @@ diverged names each stage of its step as the waypoint it was, `a waypoint of a r
 version this build no longer reads (twin.json 5)`, never `none`, in those lines and in
 `step.twin.diverged`; its JSON's stages stay `null`. `schema check`'s last line: `stages: FylgjaStage
 present on the default branch, with its extension` / `stages: FylgjaStage absent from the
-default branch (load schema/fylgja-stage.yaml; needed only by the stage commands)` /
-`stages: FylgjaStage on the default branch lacks description (load …)` / `stages:
-FylgjaStage present on the default branch, but CoreProposedChange lacks fylgja_stages (load
-…)`; `verified.stages` carries `kind`, `present`, `missing`, `extension`, `file`.
+default branch (load schema/fylgja-stage.yaml; needed only by --stage, stage list and
+stage plan)` / `stages: FylgjaStage on the default branch lacks description (load …)` /
+`stages: FylgjaStage present on the default branch, but CoreProposedChange lacks
+fylgja_stages (load …)`; `verified.stages` carries `kind`, `present`, `missing`,
+`extension`, `file`.
 
 ## The API
 

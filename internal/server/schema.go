@@ -79,7 +79,7 @@ func stagesVerified(ctx context.Context) (*findings.StagesVerified, string, erro
 		return nil, "", err
 	}
 	v := &findings.StagesVerified{Kind: intent.StageKind, Present: true, Extension: true, File: intent.StageSchemaFile}
-	remedy := " (load " + intent.StageSchemaFile + "; needed only by the stage commands)"
+	remedy := " (load " + intent.StageSchemaFile + "; needed only by --stage, stage list and stage plan)"
 	lacksExtension := intent.ProposedChangeKind + " lacks " + intent.StageExtension
 	var kindErr *intent.StageKindError
 	switch err := reader.Check(ctx); {

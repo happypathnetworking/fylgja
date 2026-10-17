@@ -100,7 +100,7 @@ func TestCheckDocumentsNameTheOperation(t *testing.T) {
 // conformance answer's (specs/014-proposed-change-stages/contracts/stage-commands.md). A
 // refused check asks nothing of the default branch.
 func TestCheckNamesTheStageKind(t *testing.T) {
-	const remedy = " (load schema/fylgja-stage.yaml; needed only by the stage commands)"
+	const remedy = " (load schema/fylgja-stage.yaml; needed only by --stage, stage list and stage plan)"
 	const lacksExtension = "CoreProposedChange lacks fylgja_stages"
 	for _, c := range []struct {
 		name                        string

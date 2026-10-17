@@ -66,10 +66,10 @@ type BranchInfo struct {
 	Name, BranchedFrom, CreatedAt string
 }
 
-// StageKindError says the default branch's schema cannot serve the stage commands: the
-// kind is absent, or it lacks an attribute or the relationship this build reads, or the
-// proposed change lacks the extension. Every caller files it as stage.kind.absent naming
-// StageSchemaFile, and schema check reports it as information.
+// StageKindError says the default branch's schema cannot serve --stage, stage list and
+// stage plan: the kind is absent, or it lacks an attribute or the relationship this build
+// reads, or the proposed change lacks the extension. Every caller files it as
+// stage.kind.absent naming StageSchemaFile, and schema check reports it as information.
 type StageKindError struct {
 	// Missing names what the kind lacks, the attributes in StageFields' order and then
 	// StageRelationship; empty when the kind itself is absent. A list, because schema

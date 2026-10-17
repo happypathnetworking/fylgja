@@ -1121,3 +1121,130 @@ no twin, `main` at `e43a1cde…`:
   tier's time. Its time across the two runs, over 600 s and then 527 s, shows the spread.
 - After it: `{ Branch { name } CoreProposedChange { count } FylgjaStage { count } }` read
   `main` and `fylgja-fixture`, 0 and 0; `main` still `e43a1cde…`.
+
+### 8.11 Tier 3 whole and narrowed, on stages (T045, 2026-10-17)
+
+From the repository root with `local/.env` loaded, after `make build` and the worker and
+the API's server restarted from this tree (03:58Z; both had read `(deleted)`) and verified
+as `CLAUDE.md` says: each binary current, `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT` and
+`FYLGJA_API_TOKEN` in the environment, both reports naming both packages with their logins
+set, the server `listening on 127.0.0.1:7650 (API version 1, build 0.1.0-dev)`. The dev
+server was up. Before: no lab, no twin directory, no Schedule, `Branch` `main` and
+`fylgja-fixture`, `CoreProposedChange 0`, `FylgjaStage 0`; `free -m` 19.3 GiB available,
+Infrahub's eight containers at about 7.8 GiB, four minutes after T043's tier 2.
+
+- **`make test-e2e`** (03:59:03Z–04:17:58Z): **`E2E-OK`**, exit 0, wall **1125.5 s**
+  (18 m 46 s), against 013's 17–19 minutes, which made one twin more and opened no proposed
+  change. Case 1 deployed `47b2c449…`. Case 7: seed 23.8 s, the draft proposed change and
+  its three validators 46.0 s, n1's and n3's artifacts moved and Ready 7.6 s after the
+  generate returned, the plan 5.7 s (exit 1, the branch point refused; one link added, n1
+  and n3 changed; the head unchanged), the create from `seeded` 45.9 s deploying the id the
+  plan printed for it, the step to `third-link` 15.6 s and the `unchanged` step to the head
+  10.0 s (command wall), destroy 2.3 s. The head's `at` (`04:10:20.359571`) is earlier than
+  `third-link`'s written `04:10:21.003498`, and the head still planned last. Case 8:
+  proposed change 41.4 s, create 88.1 s, the step to `mixed-link` refused
+  `step.restart.required` naming e1 (dry run and run), then taken with `--allow-restart` in
+  72.3 s (e1 restarted in place, s1 and e2 untouched, the link seen from both ends 0.8 s and
+  0.5 s after), the step back with `--stage <b>/seeded` 69.7 s, the waits settled after
+  4.586 s and 3.356 s. Creates 43.7–90.6 s; verify 4.9 s, 3.9 s and 3.0 s.
+- **`PLATFORMS=nokia_srlinux make test-e2e`** (04:21:45Z–04:32:55Z, after T046's Infrahub
+  writes and about four minutes' rest from twins): **`E2E-PARTIAL: platforms nokia_srlinux;
+  ran 1 2 3 4 5 7; skipped 6 (needs arista_eos: not in PLATFORMS) 8 (needs arista_eos: not
+  in PLATFORMS)`**, exit 0, wall **665.7 s** (11 m 6 s), against the README's "about 12
+  minutes". Case 7 as in the whole run: proposed change 42.7 s, plan 5.0 s, create 41.8 s,
+  steps 14.2 s and 9.9 s. The skip reasons name the list alone, since the cEOS image is
+  present on this host.
+- After each: `clab inspect --all` `{}`, no `local/twin`, no Schedule, `Branch` `main` and
+  `fylgja-fixture`, `CoreProposedChange 0`, `FylgjaStage 0`. No case failed, so nothing was
+  fixed. Both wall times are for T051.
+
+### 8.12 The three ways to write a stage (T046, 2026-10-17)
+
+On a throwaway proposed change, between T045's two runs, no twin: `fylgja-fixture -branch
+fylgja-test-schema-readme-2389915` (19.0 s), then `-propose` (40.6 s; proposed change
+`18df3629…`, draft, three validators concluded), `infrahubctl` 1.23.2 from `.venv`
+connecting as Admin, with no `--branch` (the default branch, which has the kind).
+
+- **An object file**: `kind: Object`, `spec.kind: FylgjaStage`, two rows, `proposed_change`
+  the proposed change's id as a bare string, one row with `as_of: "2026-10-17T04:19:35Z"`.
+  `infrahubctl object validate` printed `Valid!` (exit 0) and `object load` `Created node:
+  FylgjaStage : <id>` for each (exit 0, 2 s). The loader takes an id for a peer with no
+  human-friendly id, which the objects skill's reference ("by `id` or HFID") showed no
+  example of.
+- **`infrahubctl object create FylgjaStage --set label=verified --set proposed_change=<id>
+  --set description="checked by hand"`**: `Saved FylgjaStage (ID: <id>)`, exit 0.
+- **`fylgja stage list --branch <b>`**: the proposed change with its id, `draft (5
+  stages)`: the branch point, `cut-over` at `2026-10-17T04:19:35Z (given)` verbatim, then
+  `cabled` and `verified` `(written)`, then the head; exit 0. The given row sorts by its
+  `at`, before the two written later.
+- **Deleting by id**: `infrahubctl object delete FylgjaStage <id> --yes` printed `Deleted
+  FylgjaStage 'cut-over' (ID: <id>)`, and the list lost the row.
+- **The UI's entry**: `GET /api/menu?branch=main` has no "Fylgja" group: `Stage` is an
+  entry of its own in the object section (`/objects/FylgjaStage`), beside `Fylgja
+  contract`, Device, Interface, Link and Platform. The contract's "Stage, under the Fylgja
+  menu" is corrected in `schema/README.md` to what the menu holds; the form itself (the
+  proposed change chosen from its list) is described as the contract gives it, untried
+  headless.
+- `fylgja schema check --branch <b>`: `stages: FylgjaStage present on the default branch,
+  with its extension`, exit 0.
+- `-delete` (7 s): `deleted 2 stages, 1 proposed change, branch <b>`. After:
+  `Branch` `main` and `fylgja-fixture`, `CoreProposedChange 0`, `FylgjaStage 0`.
+- `schema/README.md`'s "Waypoints: writing one" is replaced by "Stages: marking one" in the
+  contract's order, with these commands and the file table's row for
+  `fylgja-stage.yaml`.
+
+### 8.13 The README's walk-through by hand (T048, 2026-10-17)
+
+"A stepping twin" as T047 rewrote it, followed command by command on the development host
+after T045's narrowed run, with the worker and the API's server of §8.11 (this tree's
+build), every `fylgja` command through the server on `127.0.0.1:7650`, the fixture tool by
+`go run` as the README gives it. 04:33:43Z–04:37:44Z.
+
+- **`-delete`** first: exit 1, `deleting branch fylgja-test-readme: graphql: Branch:
+  fylgja-test-readme not found`, since this run began at the stepping section; a reader who
+  followed "A walking twin, start to finish" has the branch, which the section's opening
+  sentence says. Left as the README gives it.
+- **Seed** 19.9 s; **`-propose`** 36.8 s (`18df36fe…`, draft, three validators in 36 s);
+  **`-stage seeded`** marked at `04:34:59.424352+00:00 (written)`; **`-add-link`** returned
+  and n1's and n3's checksums moved **7.6 s** after it (T047's run read 10 s), n2's not;
+  **`-stage third-link`** marked after them, at `04:35:09.759424+00:00`.
+- **`stage plan`**: the README's lines exactly but for the ids and stamps: the branch point
+  refused `contract.node.missing`, `seeded` `b63404c3…`, the step adding the link and
+  changing n1 and n3, `third-link` `d05dc990…`, the step to the head `unchanged`, the head
+  `6ecc489c…` at `04:35:08.687492` (n1's checksum stamp plus one microsecond, before
+  `third-link`'s written at, still last); exit 1.
+- **`twin create --stage fylgja-test-readme/seeded`**: deploy 43.2 s, the three nodes ready
+  in 0.1–0.4 s, `twin ready: bundle_id b63404c3…`, `pinned at … not following`; 50.4 s
+  wall, exit 0.
+- **`twin step --dry-run`**: the README's lines but one: `memory: sum 6144 MiB; host budget
+  22873 MiB`, where the README said `host budget unset`. `scripts/bring-up.sh` writes
+  `FYLGJA_HOST_MEMORY_MB` into `local/.env` (MemTotal less 8 GiB), so a host the script set
+  up prints its budget. Nothing follows `verdict: clear`; the README's `…` after it was
+  removed. Exit 0.
+- **`twin step`**: `stepped to stage fylgja-test-readme/third-link (bundle d05dc990…) in
+  4.5s: reconcile 0.8s; push n1 2.5s, n3 2.6s; settled after 6.1s`, 14.0 s wall, exit 0.
+  The three containers kept the create's start time (`04:35:31.44Z`), so none restarted,
+  and n2 was neither reconciled nor pushed. Nothing follows the `stepped` line; the README's
+  trailing `…` was removed.
+- **`twin verify`**: 19 assertions over 3 nodes, the third link held from both ends, `held:
+  3 host names, 8 ports, 8 link ends, 3 record claims`, exit 0. **`stage list`**: four rows,
+  `← twin` beside `third-link`, exit 0.
+- **`twin step --stage fylgja-test-readme/seeded`**: `links: -n1:e1-3 — n3:e1-3`, `in 4.8s:
+  reconcile 0.6s; push n1 2.8s, n3 2.8s; settled after 4.9s`, 14.1 s wall, exit 0, no
+  restart.
+- **`twin destroy`** (3 containers, the twin directory removed), then **`-delete`**:
+  `deleted 2 stages, 1 proposed change, branch fylgja-test-readme`. After: `clab inspect
+  --all` `{}`, no `local/twin`, no Schedule, `Branch` `main` and `fylgja-fixture`,
+  `CoreProposedChange 0`, `FylgjaStage 0`.
+- **The README corrected** to these outputs: the ids, stamps, run ids, timings and the
+  verify's addresses (n2 and n3 swapped this time), the checksums' wait "8 to 10 seconds",
+  the budget line, and the two trailing `…`. The walking-twin section's lines, which this
+  run did not follow, are untouched.
+- **Seen, not changed**: `stage list` pads the reference, the branch and the source but not
+  the `at`, so the descriptions line up only when every `at` has one width. The branch
+  point's comes back in Infrahub's `Z` layout (27 characters) and a mark's in `+00:00` (32),
+  so its description sits five columns left of the others; a given `as_of` written short
+  (§8.12's `2026-10-17T04:19:35Z`) sits further left. The commands contract asks only that
+  "the ats line up", which holds; its example has every `at` in one layout, and
+  `printList`'s comment in `internal/server/stages.go` says the descriptions line up too.
+  Cosmetic, outside T048: left for the operator or a later pass.

@@ -177,7 +177,8 @@ list no longer shows its stages and warns that the twin's stage is gone.
 2. **Given** a twin at the second mark, **When** the operator runs `stage list`, **Then**
    that row is marked as the twin's, with the record's state (ready or diverged, and the
    target it diverged towards).
-3. **Given** a stage whose proposed change has been deleted, **When** the operator runs
+3. **Given** a stage its proposed change no longer names (removed from its
+   `fylgja_stages`; [D-047](../../docs/decisions.md#d-047)), **When** the operator runs
    `stage list`, **Then** the orphan is reported as a finding naming it, nothing crashes,
    and it is planned and created from by nothing.
 4. **Given** a proposed change that was merged, closed or canceled, **When** the operator
@@ -281,9 +282,11 @@ or `waypoint.*` rule; a grep for "waypoint" finds only what SC-009 allows.
   cancel lands its stages still list and every read of them fails on the missing branch;
   once canceled, the proposed change is invisible and its stages are listed, planned and
   created from by nothing.
-- **A proposed change is deleted under its stages.** The stages are left pointing at
-  nothing. Each is a finding in `stage list`, never a crash, and a reference naming one
-  is refused as unknown.
+- **A stage is removed from its proposed change.** Infrahub refuses a proposed change's
+  delete while a stage names it, so a stage is orphaned only when it leaves the proposed
+  change's `fylgja_stages` ([D-047](../../docs/decisions.md#d-047)). The stage is left
+  pointing at nothing. Each is a finding in `stage list`, never a crash, and a reference
+  naming one is refused as unknown.
 - **Two stages with one label on one proposed change.** Infrahub refuses the second at
   the write; Fylgja never sees a duplicate. The same label on another proposed change is
   fine.
@@ -543,7 +546,13 @@ or `waypoint.*` rule; a grep for "waypoint" finds only what SC-009 allows.
   replaced the waypoint (the README's note beside the recording, the architecture, the
   roadmap's F-023, the contracts' rows marked moved at 014), the frozen `twin.schema.json`
   copies and the `5`-record refusal that names it; `fylgja --help` names no waypoint
-  command or flag, and no code, schema, query or test outside the frozen copies does.
+  command or flag, and no code, schema, query or test outside the frozen copies does but
+  what proves the waypoint gone or reads an older record: the tests that `fylgja waypoint
+  list` is unknown, `/v1/waypoint/*` is `404`, a `waypoint` argument is `400` and M10's
+  shape is refused where a stage goes; `twin.json` `5`'s tests and decoder field; the
+  contract schemas' version-history descriptions; `workflow_step.go`'s `5`-record refusal;
+  and `internal/provision/testdata/rewrite-stage.go` (quickstart §6's greps, as amended at
+  T055).
 - **SC-010**: A stranger following the README's stepping walk-through marks, plans,
   creates, steps and lists stages on a throwaway branch and deletes everything after, in
   the order the README gives, with no leftover in Infrahub.

@@ -2966,6 +2966,51 @@ else in D-045 moves.
 - Revisit if an upgrade makes an identical regeneration move the checksum's stamp, or
   gives an artifact a generation stamp of its own.
 
+<a id="d-047"></a>
+## D-047 — A stage is orphaned when its proposed change no longer names it; Infrahub refuses the delete that D-045 gave as the cause
+
+**Status:** Accepted 2026-10-17. Refines [D-045](#d-045). Built by
+`014-proposed-change-stages`.
+
+### Context
+
+[D-045](#d-045)'s context says a proposed change's delete succeeds under its stages and
+leaves them pointing at nothing, and the feature's spec, `stage.orphaned`'s message and the
+data model give that delete as the orphan's cause. That was verified with the stage kind
+loaded on a throwaway branch alone. With the kind on `main`, as it ships, Infrahub 1.11.2
+refuses the delete while a stage names it (2026-10-17,
+`specs/014-proposed-change-stages/research.md` §8.8). An orphan arises only when the stage
+leaves the proposed change's `fylgja_stages` (`RelationshipRemove`), after which the stage
+reads `proposed_change { node: null }` despite `optional: false`, and the proposed change
+can then be deleted.
+
+### Options considered
+
+- **Keep the deletion wording.** It names a cause Infrahub refuses, so an operator reading
+  the finding looks for a delete that never happened.
+- **Name both causes** ("no proposed change names it", covering a delete a later Infrahub
+  might allow). Rejected on the operator's word: it describes a path not reachable on the
+  version Fylgja verifies against.
+- **Name the removal.** Chosen.
+
+### Decision
+
+A stage is orphaned when its proposed change no longer names it: it was removed from the
+proposed change's `fylgja_stages`. `stage.orphaned`'s message, the spec's edge case and US3
+AC3, the data model and the code's comments say so, and none gives a deleted proposed
+change as the cause. What an orphan does is unchanged: a warning in `stage list`, planned
+and created from by nothing, and a reference naming it refused as unknown. Nothing else in
+D-045 moves.
+
+### Consequences
+
+- The message and its pins change together (`internal/stages/list.go`, its tests,
+  `internal/cli/stage_list_test.go`, `internal/findings/stages_test.go`), with
+  `contracts/stage-reference.md`'s quoted wording.
+- An orphan names no branch, so it outlives its branch's cleanup until it is deleted by
+  id (research §8.8); a test that makes one deletes it itself.
+- Revisit on an Infrahub upgrade that lets a proposed change be deleted under its stages.
+
 ---
 
 <a id="parked"></a>

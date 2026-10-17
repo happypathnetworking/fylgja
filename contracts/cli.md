@@ -363,7 +363,10 @@ Each step is the pure step between the two bundles, as M10's plan printed it, an
 last regenerate to the head always does. A refused stage prints its findings beneath it,
 and a step touching it is not computed; the branch point of a `main` that holds no contract
 is refused `contract.node.missing` at its read. Exit 0 when every stage compiled, whatever
-the warnings; 1 when any was refused; 2 when the listing failed. `--branch` is required:
+the warnings; 1 when any was refused; 2 when the listing failed. A stage whose resolution,
+read, compile or filing could not run is `failed` (`operation.failed` at its step) and the
+plan goes on, the steps touching it not computed; that exits 1 as well, since the plan ran
+and reported every stage, where 2 is an operation that did not run. `--branch` is required:
 `--branch is required`, exit 2, with no request. `--json`: the `plan` block and the
 findings, every stage's, in order. Each bundle and its CTM are filed in the store, as a dry
 run files them.

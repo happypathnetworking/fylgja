@@ -78,7 +78,10 @@ printed it, both ids beside it, `—` for a side that has none, `unchanged` when
 bundles differ in provenance alone, which the step from a mark written after the last
 regenerate to the head always is, and `unchanged; the two are one bundle` when two stages
 resolve to one `(branch, at)`). Exit 0 when every stage compiled, whatever the warnings; 1
-when any was refused; 2 when the listing failed.
+when any was refused; 2 when the listing failed. A stage whose resolution, read, compile or
+filing could not run is `failed` (`operation.failed` at its step) and the plan goes on, the
+steps touching it not computed; that exits 1 as well, since the plan ran and reported every
+stage, where 2 is an operation that did not run.
 `--branch` is required (`--branch is required`, exit 2, no request).
 
 JSON: `plan` block (`$defs/plan`), the findings (every stage's, in order).

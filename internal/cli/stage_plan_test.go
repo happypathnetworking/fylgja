@@ -540,6 +540,48 @@ func TestStagePlanMainMoved(t *testing.T) {
 	}
 }
 
+// A stage whose read cannot run is failed rather than refused: operation.failed at its
+// read, the plan going on to the other stages and the steps touching it not computed. The
+// plan ran and reported every stage, so it exits 1, never the 2 of an operation that did
+// not run (contracts/stage-commands.md, "stage plan").
+func TestStagePlanStageFailed(t *testing.T) {
+	useStateRoot(t)
+	useService(t, nil)
+	f := planInfrahub(t, twoMarks()...)
+	versioned(t, f)
+	f.schemaStatus = map[string]int{"main": 500}
+	f.start()
+
+	code, doc, raw := stageDoc(t, "plan", "--branch", lessLink)
+	stages, steps := planned(t, doc)
+	if code != findings.ExitRejected || doc.Status != findings.StatusRejected {
+		t.Errorf("exit %d, status %s; want 1, rejected\n%s", code, doc.Status, raw)
+	}
+	want := []string{"change-1/branch-point", "change-1/cabled", "change-1/live", "change-1/head"}
+	if !slices.Equal(stageRefs(stages), want) || !slices.Equal(compiledRefs(stages), want[1:]) {
+		t.Fatalf("stages %v, compiled %v; want %v, all but the branch point compiled\n%s",
+			stageRefs(stages), compiledRefs(stages), want, raw)
+	}
+	bp := stages[0]
+	if len(bp.Findings) != 1 || bp.Findings[0].Severity != findings.Rejection || bp.Findings[0].Rule != findings.RuleOperationFailed ||
+		bp.Findings[0].Step != findings.StepRead || bp.Findings[0].Object != "change-1/branch-point" || bp.Read != nil {
+		t.Errorf("the branch point %+v; want it failed %s at its read, with no read", bp, findings.RuleOperationFailed)
+	}
+	if len(steps) != 3 || steps[0].Computed || steps[0].NotComputed != "change-1/branch-point was refused" ||
+		steps[0].FromBundleID != nil || !steps[1].Computed || !steps[2].Computed {
+		t.Errorf("steps %+v; want the first not computed, the branch point failed, and the other two computed\n%s", steps, raw)
+	}
+	if !slices.Equal(rulesOf(doc.Findings), []string{findings.RuleOperationFailed + " change-1/branch-point"}) {
+		t.Errorf("findings %v; want the branch point's operation.failed alone", rulesOf(doc.Findings))
+	}
+
+	code, stdout, stderr := runStage(t, "plan", "--branch", lessLink)
+	if code != findings.ExitRejected || !strings.Contains(stdout, "change-1/branch-point: failed ("+findings.RuleOperationFailed+")\n") {
+		t.Errorf("exit %d, stdout\n%s; want 1 and the branch point printed failed", code, stdout)
+	}
+	mustQuoteNoContent(t, f, stdout, stderr, raw)
+}
+
 // The plan's text, line by line (contracts/stage-commands.md, "stage plan"): the heading
 // naming the proposed change, its destination and that it is a draft; each stage as it
 // finishes, a compiled one by its resolution, bundle_id and read, a refused one by its rule

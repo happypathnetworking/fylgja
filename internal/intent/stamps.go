@@ -15,8 +15,9 @@ import (
 // Every stamp is kept as the string Infrahub returned; each comparison parses it.
 type Stamps struct {
 	// Latest is the latest stamp the read returned: every device's and its platform's,
-	// every interface's and link's, and every artifact's checksum's. The head's `at` is it
-	// plus one microsecond. "" when the branch holds nothing stamped.
+	// every interface's and link's, and every artifact's checksum's. The head's `at` is
+	// one microsecond after the later of it and the branch's latest intent event (D-048).
+	// "" when the branch holds nothing stamped.
 	Latest string
 	// Devices holds each device's own stamps by its name.
 	Devices map[string]DeviceStamps

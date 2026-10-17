@@ -274,8 +274,9 @@ func (v *ArtifactFieldsNetworkDevice) GetArtifacts() ArtifactFieldsArtifactsNest
 }
 
 // 014 — when each part of a branch's intent, and each artifact's checksum, was last
-// written: the head's `at` (the latest plus one microsecond) and the staleness rule's
-// two sides, per device (research R-06, R-07; D-046). Stamps only, never a value of
+// written: the head's `at` (one microsecond after the later of the latest stamp and the
+// branch's latest intent event, D-048) and the staleness rule's two sides, per device
+// (research R-06, R-07; D-046). Stamps only, never a value of
 // intent but the names that key them, the platform that picks the device's package
 // (Constitution II), and the device's and its interfaces' ids, by which an intent event
 // names the device (D-048). An unset relationship's properties.updated_at is null and skipped.
@@ -420,8 +421,9 @@ func (v *ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreA
 }
 
 // 014 — when each part of a branch's intent, and each artifact's checksum, was last
-// written: the head's `at` (the latest plus one microsecond) and the staleness rule's
-// two sides, per device (research R-06, R-07; D-046). Stamps only, never a value of
+// written: the head's `at` (one microsecond after the later of the latest stamp and the
+// branch's latest intent event, D-048) and the staleness rule's two sides, per device
+// (research R-06, R-07; D-046). Stamps only, never a value of
 // intent but the names that key them, the platform that picks the device's package
 // (Constitution II), and the device's and its interfaces' ids, by which an intent event
 // names the device (D-048). An unset relationship's properties.updated_at is null and skipped.

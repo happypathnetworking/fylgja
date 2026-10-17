@@ -1,8 +1,9 @@
 # The generic queries genqlient generates typed Go from. Every selection names only
 # Fylgja generics (Constitution III) — never a concrete kind. A tier-1 test asserts that
-# every operation is a query and names only Fylgja* roots, but for the three roots that
+# every operation is a query and names only Fylgja* roots, but for the four roots that
 # are Infrahub's own units rather than the operator's model (014: CoreProposedChange,
-# CoreArtifactValidator, Branch), each named there.
+# CoreArtifactValidator, Branch, and InfrahubEvent, its record of a write, D-048), each
+# named there.
 #
 # Verified 2026-09-08 against Infrahub 1.11.2: envelope (`value`, `node`, `edges`),
 # `limit`/`offset`, and generic resolution to concrete kinds. Ordering comes from the
@@ -171,8 +172,9 @@ query ArtifactValidations($id: ID!) {
 }
 
 # 014 — when each part of a branch's intent, and each artifact's checksum, was last
-# written: the head's `at` (the latest plus one microsecond) and the staleness rule's
-# two sides, per device (research R-06, R-07; D-046). Stamps only, never a value of
+# written: the head's `at` (one microsecond after the later of the latest stamp and the
+# branch's latest intent event, D-048) and the staleness rule's two sides, per device
+# (research R-06, R-07; D-046). Stamps only, never a value of
 # intent but the names that key them, the platform that picks the device's package
 # (Constitution II), and the device's and its interfaces' ids, by which an intent event
 # names the device (D-048). An unset relationship's properties.updated_at is null and skipped.

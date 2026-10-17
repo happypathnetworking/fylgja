@@ -295,7 +295,8 @@ func (c *Change) mark(m *intent.Stage) Stage {
 // 2026-10-08T05:48:38.544483+00:00.
 const headLayout = "2006-01-02T15:04:05.000000-07:00"
 
-// HeadAt is the head's at: the branch's latest stamp, parsed, plus one microsecond, in
+// HeadAt is the head's at: the later of the branch's latest stamp and its latest intent
+// event's occurred_at, which changeOf passes it (D-048), parsed, plus one microsecond, in
 // Infrahub's own layout and the stamp's own offset. A read pinned at exactly a stamp sees
 // the node and not the value (research §2.6), so the head takes the first instant after.
 func HeadAt(latest string) (string, error) {

@@ -249,6 +249,38 @@ func TestPlanMainMoved(t *testing.T) {
 	}
 }
 
+// A branch point refused at resolution keeps the warning: stale on a main that holds the
+// network, written since the branch point, it carries its stage.artifact.stale and the one
+// main.moved, which no other stage repeats.
+func TestPlanMainMovedBesideARefusedBranchPoint(t *testing.T) {
+	r, s := story()
+	s.byBranch["main"] = intent.Stamps{Latest: "2026-10-16T17:50:00.000000+00:00"}
+	s.at = map[string]intent.Stamps{"main@" + branchedFrom: {Latest: "2026-10-16T17:19:00.000000+00:00",
+		Devices: map[string]intent.DeviceStamps{
+			"n1": device("2026-10-16T17:19:00.000000+00:00", "2026-10-16T17:18:00.000000+00:00"),
+			"n2": device("2026-10-16T17:17:00.000000+00:00", "2026-10-16T17:18:00.000000+00:00"),
+		}}}
+	res, _ := planned(t, r, s, "change-1", &fakePipeline{t: t})
+	bp := res.Stages[0]
+	var rules []string
+	for _, f := range bp.Findings {
+		rules = append(rules, string(f.Severity)+" "+f.Rule+" "+f.Object)
+	}
+	if want := []string{"rejection stage.artifact.stale n1", "warning stage.main.moved change-1"}; bp.Status != PlanRefused ||
+		bp.Rule != findings.RuleStageArtifactStale || !reflect.DeepEqual(rules, want) {
+		t.Errorf("the branch point: %s (%s), findings %v; want refused stale with %v", bp.Status, bp.Rule, rules, want)
+	}
+	moved := 0
+	for _, f := range res.Findings {
+		if f.Rule == findings.RuleStageMainMoved {
+			moved++
+		}
+	}
+	if moved != 1 {
+		t.Errorf("main.moved filed %d times in %+v; want once, with the branch point", moved, res.Findings)
+	}
+}
+
 // A label two marks share is planned once and refused stage.duplicate; a mark labelled
 // head makes the head refused stage.label.reserved, at the head's place.
 func TestPlanDuplicateAndReserved(t *testing.T) {

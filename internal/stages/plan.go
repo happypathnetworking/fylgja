@@ -108,8 +108,8 @@ type PlanResult struct {
 // or refuses the credential while finding it returns its error. Otherwise every stage is
 // planned whatever the others did:
 //
-//  1. resolved (steps 4–8, and the main.moved warning with the branch point), findings at
-//     resolve;
+//  1. resolved (steps 4–8, and the main.moved warning with the branch point, refused or
+//     not), findings at resolve;
 //  2. read with an observed_at of its own, findings at read; a read that cannot run is
 //     operation.failed naming the stage;
 //  3. compiled, findings at compile;
@@ -138,8 +138,13 @@ func Plan(ctx context.Context, r Reader, s Stamper, branch string, reg *psp.Regi
 		onChange(pc, len(labels))
 	}
 	for i, label := range labels {
-		// main.moved concerns the branch point, which is always first: filed with it once.
-		st := build(ctx, r, s, reg, ch, Ref{Branch: branch, Label: label}, p, now, i == 0)
+		// main.moved concerns the branch point, which is always first: filed with it once,
+		// whatever its resolution, since a plan applies every step to every stage.
+		moved := movedNever
+		if i == 0 {
+			moved = movedAlways
+		}
+		st := build(ctx, r, s, reg, ch, Ref{Branch: branch, Label: label}, p, now, moved)
 		if n := len(res.Stages); n > 0 {
 			pair, err := pairOf(res.Stages[n-1], st)
 			if err != nil {
@@ -165,12 +170,25 @@ func Plan(ctx context.Context, r Reader, s Stamper, branch string, reg *psp.Regi
 // stage the same way, so the target's bundle_id is the one stage plan prints for that
 // stage, by construction (D-011).
 func Build(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Change, ref Ref, p Pipeline, now time.Time) PlanStage {
-	return build(ctx, r, s, reg, ch, ref, p, now, true)
+	return build(ctx, r, s, reg, ch, ref, p, now, movedResolved)
 }
 
-// build is Build, with step 9's warning when mainMoved is set.
+// movedWhen is when build files step 9's warning, stage.main.moved.
+type movedWhen int
+
+const (
+	// movedNever: a plan's stages after the first, the warning being the branch point's.
+	movedNever movedWhen = iota
+	// movedResolved: twin step's target, as a create resolves its stage, the first
+	// refusal ending the resolution before step 9.
+	movedResolved
+	// movedAlways: a plan's branch point, refused or not.
+	movedAlways
+)
+
+// build is Build, with step 9's warning as moved says.
 func build(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Change, ref Ref, p Pipeline, now time.Time,
-	mainMoved bool) PlanStage {
+	moved movedWhen) PlanStage {
 	ps := PlanStage{Ref: ref, Label: ref.Label}
 	if st, ok := ch.first(ref.Label); ok {
 		ps.Description, ps.AtSource = st.Description, st.AtSource
@@ -199,15 +217,15 @@ func build(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 	if err != nil {
 		return failed(findings.StepResolve, err)
 	}
-	if list.Rejected() {
-		return stop(list)
-	}
-	if mainMoved {
-		moved, err := ch.MainMoved(ctx, s)
+	if moved == movedAlways || moved == movedResolved && !list.Rejected() {
+		warning, err := ch.MainMoved(ctx, s)
 		if err != nil {
 			return failed(findings.StepResolve, err)
 		}
-		list = append(list, moved...)
+		list = append(list, warning...)
+	}
+	if list.Rejected() {
+		return stop(list)
 	}
 	ps.Findings = append(ps.Findings, list...)
 	ps.Resolved = &resolved

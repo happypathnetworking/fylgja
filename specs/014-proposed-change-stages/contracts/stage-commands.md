@@ -117,7 +117,7 @@ the host check and containerlab's plan, each exit 1:
 | `step.target.unknown` | no stage after the record's; the record's label gone; `--stage` names no stage of the proposed change | `proposed change <id> on change-1 has no stage after change-1/head; its stages are: …` / `…; the head has moved since the twin was built (now at …): --stage change-1/head steps to it` |
 | `step.target.current` | the target resolves to the record's `(branch, at)` | `the twin is already at stage change-1/live (branch change-1, at …); the proposed change's stages are: …` |
 | `step.stage.skipped` (warning) | marks strictly between the record's position and the target's | `the step from change-1/branch-point to change-1/head skips stages cabled, live; the step is between the two bundles either way` |
-| `stage.twin.moved` (warning, no step) | the record's stage no longer resolves to the record's `(branch, at)`: the head written since, a mark's `as_of` edited, a rebase; filed once a target is chosen, as `stage list` files it, on the dry run and the run alike | `the twin was built from stage change-1/head at branch change-1, at … (head); change-1/head now resolves to branch change-1, at … (head); the twin is pinned to what it was built from` |
+| `stage.twin.moved` (warning, no step) | the record's stage no longer resolves to the record's `(branch, at)`: the head written since, a mark's `as_of` edited, a rebase; filed once a target is chosen, as `stage list` files it, on the dry run and the run alike, and before the failure of a step that fails after its target | `the twin was built from stage change-1/head at branch change-1, at … (head); change-1/head now resolves to branch change-1, at … (head); the twin is pinned to what it was built from` |
 
 The target's own resolution refusals (the reference contract's steps 4–9) follow, with the
 same identifiers and wordings as `twin create --stage` gives. Everything after the target
@@ -125,7 +125,11 @@ same identifiers and wordings as `twin create --stage` gives. Everything after t
 "stage" for "waypoint": `stepped to stage change-1/live (bundle …) in 4.1s: …`;
 `unchanged; the record moves to stage change-1/head (bundle …) in 0.9s`; `diverged towards
 stage change-1/live (bundle …) at phase push: …; the twin is up at stage change-1/cabled
-(bundle …); fylgja twin destroy clears it`.
+(bundle …); fylgja twin destroy clears it`. Once the target is chosen, every document the
+step ends with carries the warnings found by then (`step.stage.skipped`,
+`stage.twin.moved`, the target's `stage.main.moved`), each once: a refusal's, the dry run's
+and the run's, and, ahead of its `operation.failed`, a failure's (the from bundle
+unreadable, the host check, containerlab's plan, the run's start).
 
 ### `twin show`, `twin verify`, `schema check`
 

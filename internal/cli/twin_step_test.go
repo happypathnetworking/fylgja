@@ -2324,18 +2324,9 @@ func TestStepTargetCurrentByResolvedReference(t *testing.T) {
 // since it now resolves to another at; the step, dry run and run alike, carries stage
 // list's stage.twin.moved once, in its words, and steps.
 func TestStepToAMovedHead(t *testing.T) {
-	const oldHead = "2026-10-16T10:30:00.000001+00:00"
-	h := stepHost(t, "plan-nothing.json", nil)
-	versions := h.infra.versions["change-1"]
-	h.infra.versions["change-1"] = versions[:3]
-	old := compileStage(t, h.paths, "head")
-	twinAt(t, h, stepTwin{id: old.id, label: "head", atSource: "head", branch: "change-1", at: oldHead})
-	h.infra.versions["change-1"] = versions
+	h, old, moved := movedHeadHost(t)
 
 	code, doc, raw := stageDoc(t, "list", "--branch", "change-1")
-	moved := findings.Finding{Severity: findings.Warning, Rule: findings.RuleStageTwinMoved, Object: "change-1/head",
-		Message: "the twin was built from stage change-1/head at branch change-1, at " + oldHead + " (head); change-1/head now " +
-			"resolves to branch change-1, at " + stepHeadAt + " (head); the twin is pinned to what it was built from"}
 	if code != findings.ExitOK || !slices.Contains(doc.Findings, moved) {
 		t.Errorf("stage list: exit %d, findings %+v; want 0 beside %+v\n%s", code, doc.Findings, moved, raw)
 	}
@@ -2346,9 +2337,7 @@ func TestStepToAMovedHead(t *testing.T) {
 		t.Errorf("with no target: exit %d, refusal %+v; want step.target.unknown naming the moved head", out.code, got)
 	}
 
-	h.clab.plan = []byte(`{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": [],
-		"deleted-nodes": ["e2"], "recreated-nodes": [], "started-nodes": [], "added-links": [],
-		"deleted-endpoints": ["e1:eth2_1", "s1:e1-2"], "restarted-nodes": ["e1"], "node-change-reasons": {"e1": "deleted endpoint"}}`)
+	h.clab.plan = []byte(movedHeadPlan)
 	out = runStepCmd(t, "--stage", "change-1/head", "--dry-run", "--allow-restart")
 	if out.code != findings.ExitOK || out.doc.Findings.Rejected() || out.doc.BundleID == old.id ||
 		lineOf(out.stdout, 3) != "stage change-1/head: branch change-1 at "+stepHeadAt+" (head)" ||
@@ -2356,21 +2345,7 @@ func TestStepToAMovedHead(t *testing.T) {
 		t.Errorf("--stage change-1/head: exit %d, findings %+v, stdout:\n%s\nwant 0, the step from the head as built to the "+
 			"head as it is", out.code, out.doc.Findings, out.stdout)
 	}
-	movedOnce := func(label string, out stepOutput) {
-		t.Helper()
-		var got findings.List
-		for _, f := range out.doc.Findings {
-			if f.Rule == findings.RuleStageTwinMoved {
-				got = append(got, f)
-			}
-		}
-		if !slices.Equal(got, findings.List{moved}) ||
-			!strings.Contains(out.stdout+out.stderr, "warning stage.twin.moved change-1/head: "+moved.Message+"\n") {
-			t.Errorf("%s: stage.twin.moved %+v, stdout:\n%s\nstderr:\n%s\nwant stage list's %+v once, in both renderings",
-				label, got, out.stdout, out.stderr, moved)
-		}
-	}
-	movedOnce("the dry run", out)
+	movedOnce(t, "the dry run", out, moved)
 
 	svc := &fakeService{runID: stepRunID, events: stepEvents()}
 	reconcile, e1Took := 3.9, 1.6
@@ -2387,7 +2362,129 @@ func TestStepToAMovedHead(t *testing.T) {
 		!strings.HasPrefix(l[len(l)-1], "stepped to stage change-1/head (bundle ") {
 		t.Errorf("the run: exit %d, stdout:\n%s\nwant 0 and the step to the head as it is", out.code, out.stdout)
 	}
-	movedOnce("the run", out)
+	movedOnce(t, "the run", out, moved)
+}
+
+// movedHeadPlan is containerlab's plan for the step from the head as built, with e2, to the
+// head as it is, with e2 retired.
+const movedHeadPlan = `{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": [],
+	"deleted-nodes": ["e2"], "recreated-nodes": [], "started-nodes": [], "added-links": [],
+	"deleted-endpoints": ["e1:eth2_1", "s1:e1-2"], "restarted-nodes": ["e1"], "node-change-reasons": {"e1": "deleted endpoint"}}`
+
+// movedHeadHost is stepHost's host with its twin built at the head of change-1 before the
+// branch's last write, the head since written: the host, the twin's compiled head, and the
+// stage.twin.moved stage list files for it.
+func movedHeadHost(t *testing.T) (*stepHostFixture, compiledStage, findings.Finding) {
+	t.Helper()
+	const oldHead = "2026-10-16T10:30:00.000001+00:00"
+	h := stepHost(t, "plan-nothing.json", nil)
+	versions := h.infra.versions["change-1"]
+	h.infra.versions["change-1"] = versions[:3]
+	old := compileStage(t, h.paths, "head")
+	twinAt(t, h, stepTwin{id: old.id, label: "head", atSource: "head", branch: "change-1", at: oldHead})
+	h.infra.versions["change-1"] = versions
+	moved := findings.Finding{Severity: findings.Warning, Rule: findings.RuleStageTwinMoved, Object: "change-1/head",
+		Message: "the twin was built from stage change-1/head at branch change-1, at " + oldHead + " (head); change-1/head now " +
+			"resolves to branch change-1, at " + stepHeadAt + " (head); the twin is pinned to what it was built from"}
+	return h, old, moved
+}
+
+// movedOnce fails unless the step's document carries moved exactly once and its text says
+// it exactly once.
+func movedOnce(t *testing.T, label string, out stepOutput, moved findings.Finding) {
+	t.Helper()
+	var got findings.List
+	for _, f := range out.doc.Findings {
+		if f.Rule == findings.RuleStageTwinMoved {
+			got = append(got, f)
+		}
+	}
+	line := "warning stage.twin.moved change-1/head: " + moved.Message + "\n"
+	if !slices.Equal(got, findings.List{moved}) || strings.Count(out.stdout+out.stderr, line) != 1 {
+		t.Errorf("%s: stage.twin.moved %+v, stdout:\n%s\nstderr:\n%s\nwant stage list's %+v once, in both renderings",
+			label, got, out.stdout, out.stderr, moved)
+	}
+}
+
+// Every document twin step ends with once its target is chosen carries the warnings found
+// by then, a failure's as well as a refusal's: a twin at the head after the head moved,
+// stepped to the head as it is, whose step fails reading the from bundle, at the host check
+// or at the run's start, carries the one stage.twin.moved before its operation.failed; one
+// refused on a path whose document is built from the command's findings (the store emptied
+// of the from bundle, the host's memory) carries it once too.
+func TestStepFailureCarriesTheMovedStage(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		// setup breaks the step; the run is a dry run unless run is set.
+		setup func(t *testing.T, h *stepHostFixture, old compiledStage)
+		run   bool
+		code  int
+		rule  string
+		step  string
+	}{
+		{name: "the store cannot inspect the from bundle", code: findings.ExitError, rule: findings.RuleOperationFailed,
+			step: findings.StepResolve, setup: func(t *testing.T, h *stepHostFixture, old compiledStage) {
+				dir := filepath.Join(h.paths.Bundles, old.id)
+				if err := os.RemoveAll(dir); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.Symlink(dir, dir); err != nil {
+					t.Fatal(err)
+				}
+			}},
+		{name: "the from bundle cannot be read", code: findings.ExitError, rule: findings.RuleOperationFailed,
+			step: findings.StepResolve, setup: func(t *testing.T, h *stepHostFixture, old compiledStage) {
+				if err := os.Symlink("manifest.json", filepath.Join(h.paths.Bundles, old.id, "manifest.link")); err != nil {
+					t.Fatal(err)
+				}
+			}},
+		{name: "the host check cannot run", code: findings.ExitError, rule: findings.RuleOperationFailed,
+			step: findings.StepHostCheck, setup: func(t *testing.T, _ *stepHostFixture, _ compiledStage) {
+				t.Setenv(lab.EnvHostMemoryMB, "lots")
+			}},
+		{name: "the run's dial fails", run: true, code: findings.ExitError, rule: findings.RuleOperationFailed,
+			step: findings.StepStart, setup: func(t *testing.T, _ *stepHostFixture, _ compiledStage) {
+				useInterrupts(t)
+				saved := dialService
+				t.Cleanup(func() { dialService = saved })
+				dialService = func(context.Context) (provision.Service, error) {
+					return nil, errors.New("the workflow service's client could not be built")
+				}
+			}},
+		{name: "the store emptied of the from bundle", code: findings.ExitRejected, rule: findings.RuleStepBundleMissing,
+			step: findings.StepResolve, setup: func(t *testing.T, h *stepHostFixture, old compiledStage) {
+				if err := os.RemoveAll(filepath.Join(h.paths.Bundles, old.id)); err != nil {
+					t.Fatal(err)
+				}
+			}},
+		// The head as it is runs two nodes, e2 retired.
+		{name: "the host's memory", run: true, code: findings.ExitRejected, rule: findings.RuleHostMemoryExceeded,
+			step: findings.StepHostCheck, setup: func(t *testing.T, _ *stepHostFixture, _ compiledStage) {
+				t.Setenv(lab.EnvHostMemoryMB, "2048")
+			}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h, old, moved := movedHeadHost(t)
+			h.clab.plan = []byte(movedHeadPlan)
+			c.setup(t, h, old)
+			args := []string{"--stage", "change-1/head", "--allow-restart"}
+			if !c.run {
+				args = append(args, "--dry-run")
+			}
+			out := runStepCmd(t, args...)
+			got := refusalOf(t, out.doc)
+			if out.code != c.code || got.Rule != c.rule || got.Step != c.step {
+				t.Errorf("exit %d, refusal %+v; want %d, %s at %s", out.code, got, c.code, c.rule, c.step)
+			}
+			movedOnce(t, c.name, out, moved)
+			if i, j := slices.Index(out.doc.Findings, moved), slices.Index(out.doc.Findings, got); i > j {
+				t.Errorf("findings %+v; want stage.twin.moved before the %s it was found before", out.doc.Findings, got.Rule)
+			}
+			if out.doc.Stage == nil || out.doc.Stage.Label != "head" {
+				t.Errorf("stage block %+v; want the target's, change-1/head", out.doc.Stage)
+			}
+		})
+	}
 }
 
 // Scenario 8, for a step: a target marked before its artifacts were regenerated is refused

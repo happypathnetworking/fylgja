@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"path/filepath"
@@ -49,7 +50,8 @@ type stepFlags struct {
 // resolution, read, compile and filing on stage plan's path; the from bundle out of the
 // store; the step between the two; the host check on the target and containerlab's plan
 // for the lab, both in this process as a dry run reads them; and the rules on that plan.
-// Then the dry run reports, or the run starts.
+// Then the dry run reports, or the run starts. Once the target is chosen, every document
+// the command ends with carries what it had found by then, a failure's included.
 func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	const op = findings.OpTwinStep
 	subject := &findings.Subject{}
@@ -152,14 +154,20 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 
 // stepTo is the step once the target is compiled and filed: the from bundle, the step, the
 // host check and containerlab's plan, the rules, then the dry run's report or the run. list
-// is what the command has found so far, warnings alone.
+// is what the command has found so far, warnings alone until the host check, whose
+// refusals a dry run goes on beside. Every document stepTo ends with carries it: those
+// built from list (finish's, the dry run's report, the run's) by construction, and a
+// failure's, built fresh, through withFound.
 func stepTo(ctx context.Context, opts *options, f *stepFlags, op string, subject *findings.Subject, reg *psp.Registry,
 	paths lab.Paths, acts *lab.Activities, rec *wire.TwinRecord, built stages.PlanStage, list findings.List) error {
+	// list as it stands when the failure is met, not as it was passed.
+	failed := func(err error) error { return withFound(err, list) }
+
 	// The bundle the twin was built from, out of the store, never re-resolved.
 	store := bundle.NewDirStore(paths.Bundles)
 	held, err := store.Has(ctx, rec.BundleID)
 	if err != nil {
-		return failAt(op, subject, findings.StepResolve, rec.BundleID, "reading bundle %s from the store: %v", rec.BundleID, err)
+		return failed(failAt(op, subject, findings.StepResolve, rec.BundleID, "reading bundle %s from the store: %v", rec.BundleID, err))
 	}
 	if !held {
 		list.AddStep(findings.Rejection, findings.StepResolve, findings.RuleStepBundleMissing, rec.BundleID, fmt.Sprintf(
@@ -169,20 +177,20 @@ func stepTo(ctx context.Context, opts *options, f *stepFlags, op string, subject
 	}
 	files, err := bundle.LoadFiles(store.Path(rec.BundleID))
 	if err != nil {
-		return failAt(op, subject, findings.StepResolve, rec.BundleID, "reading bundle %s from the store: %v", rec.BundleID, err)
+		return failed(failAt(op, subject, findings.StepResolve, rec.BundleID, "reading bundle %s from the store: %v", rec.BundleID, err))
 	}
 	from := step.Bundle{ID: rec.BundleID, Files: files}
 
 	// The step, as stage plan prints it.
 	s, err := step.Diff(from, *built.Bundle)
 	if err != nil {
-		return failAt(op, subject, findings.StepCompare, rec.BundleID, "%v", err)
+		return failed(failAt(op, subject, findings.StepCompare, rec.BundleID, "%v", err))
 	}
 	pair := step.Between(rec.Stage.Name(), built.Ref.String(), s)
 	opts.note("%s", pair.Text())
 	diff, err := json.Marshal(pair)
 	if err != nil {
-		return failAt(op, subject, findings.StepCompare, rec.BundleID, "%v", err)
+		return failed(failAt(op, subject, findings.StepCompare, rec.BundleID, "%v", err))
 	}
 
 	// The host for the twin after the step, without the two refusals that name the twin
@@ -190,7 +198,7 @@ func stepTo(ctx context.Context, opts *options, f *stepFlags, op string, subject
 	toPath := store.Path(built.Bundle.ID)
 	plan, err := lab.CheckHost(ctx, acts, wire.CheckHostInput{BundlePath: toPath, BundleID: built.Bundle.ID})
 	if err != nil {
-		return failAt(op, subject, findings.StepHostCheck, findings.StepHostCheck, "host check: %s", activityMessage(err))
+		return failed(failAt(op, subject, findings.StepHostCheck, findings.StepHostCheck, "host check: %s", activityMessage(err)))
 	}
 	checked := provision.WithoutPresence(plan.Findings)
 	list = append(list, checked...)
@@ -202,12 +210,12 @@ func stepTo(ctx context.Context, opts *options, f *stepFlags, op string, subject
 	// the store's copy: nothing of the twin directory is read but that state.
 	lifecycle, err := acts.Clab.DeployPlan(ctx, filepath.Join(toPath, compiler.TopologyFile), paths.Twin)
 	if err != nil {
-		return failAt(op, subject, findings.StepCompare, "lab "+wire.LabName, "containerlab's plan: %v", err)
+		return failed(failAt(op, subject, findings.StepCompare, "lab "+wire.LabName, "containerlab's plan: %v", err))
 	}
 
 	in, packages, err := stepInput(f, rec, from, built, toPath, s, diff, plan, lifecycle, reg, opts.version())
 	if err != nil {
-		return failAt(op, subject, findings.StepCompare, rec.BundleID, "%v", err)
+		return failed(failAt(op, subject, findings.StepCompare, rec.BundleID, "%v", err))
 	}
 	rules := provision.PlanRules{Plan: lifecycle, Target: packages.target, From: packages.from, Changed: in.Changed,
 		AllowRestart: f.allowRestart}.Findings()
@@ -223,6 +231,20 @@ func stepTo(ctx context.Context, opts *options, f *stepFlags, op string, subject
 		return finish(op, subject, list)
 	}
 	return runStep(ctx, opts, op, subject, in, list)
+}
+
+// withFound carries list, what the command had found before it failed, onto the document
+// err holds, first, as withStage carries a resolution's warnings onto a create's: a
+// failure's document is built fresh (failAt's, startFailure's, followRun's), so without it
+// a step that fails once its target is chosen would drop step.stage.skipped,
+// stage.twin.moved and stage.main.moved. Only a failure passes through it, never a document
+// built from list, so each finding is carried once.
+func withFound(err error, list findings.List) error {
+	var res *result
+	if len(list) > 0 && errors.As(err, &res) {
+		res.doc.Findings = append(append(findings.List{}, list...), res.doc.Findings...)
+	}
+	return err
 }
 
 // stepPackages are the support packages of both bundles' nodes as the step's rules read
@@ -319,7 +341,7 @@ func stepDryRun(opts *options, op string, subject *findings.Subject, in provisio
 	plan wire.CheckHostResult, toPath string, list findings.List) error {
 	artifacts, lossy, err := manifestSummary(toPath)
 	if err != nil {
-		return failAt(op, subject, findings.StepHostCheck, findings.StepHostCheck, "host check: %v", err)
+		return withFound(failAt(op, subject, findings.StepHostCheck, findings.StepHostCheck, "host check: %v", err), list)
 	}
 	block, verdict := dryRunBlock(plan, artifacts, lossy, list)
 	printDryRunHost(opts, plan)
@@ -337,23 +359,24 @@ func stepDryRun(opts *options, op string, subject *findings.Subject, in provisio
 // it, the first after asks the run to cancel and keeps waiting for its record, and a second
 // stops waiting. The command's own warnings lead the document, and the run's
 // repeats of them are dropped: the run checks the host and the plan again as second locks.
+// They lead a start's failure and a failure met while following too.
 func runStep(ctx context.Context, opts *options, op string, subject *findings.Subject, in provision.StepInput,
 	list findings.List) error {
 	svc, err := opts.dial(ctx)
 	if err != nil {
-		return startFailure(op, subject, findings.StepStart, err)
+		return withFound(startFailure(op, subject, findings.StepStart, err), list)
 	}
 	defer svc.Close()
 
 	interrupts, err := opts.c.startFrame(provision.WorkflowStep)
 	if err != nil {
-		return goneBeforeStart(op, subject, provision.WorkflowStep, err)
+		return withFound(goneBeforeStart(op, subject, provision.WorkflowStep, err), list)
 	}
 
 	runID, interrupted, err := startRun(ctx, provision.WorkflowStep,
 		func(ctx context.Context) (string, error) { return svc.StartStep(ctx, in) }, interrupts)
 	if err != nil {
-		return startFailure(op, subject, findings.StepStart, err)
+		return withFound(startFailure(op, subject, findings.StepStart, err), list)
 	}
 	subject.RunID = runID
 	opts.c.runFrame(provision.WorkflowStep, runID)
@@ -362,7 +385,7 @@ func runStep(ctx context.Context, opts *options, op string, subject *findings.Su
 		func(ctx context.Context) (provision.StepResult, error) { return svc.ResultOfStep(ctx, runID) },
 		"run cancelled; waiting for its record")
 	if err != nil {
-		return err
+		return withFound(err, list)
 	}
 	if line := stepClosing(in, res); line != "" {
 		opts.note("%s", line)

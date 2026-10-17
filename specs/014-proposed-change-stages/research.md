@@ -1050,3 +1050,74 @@ rewritten §4, run from the quickstart verbatim.
   decision for the operator.
 - **After**: `Branch` `main` and `fylgja-fixture`; `CoreProposedChange 0`, `FylgjaStage 0`,
   `FylgjaWaypoint 0`; `clab inspect --all` `{}`; no `local/twin`; no Schedule.
+
+### 8.9 The waypoint kind leaves `main` (T042, 2026-10-17)
+
+On the operator's word (the route's Run 14, the attended loop), from the repository root
+with Infrahub's address and token in the environment, no twin, and before it `main` at
+`a8045729…` with `Branch` `main` and `fylgja-fixture`, `CoreProposedChange 0`,
+`FylgjaStage 0` and `FylgjaWaypoint 0`. The waypoint code and its `Waypoints` query had
+left the tree at T030, and the test tooling's at T041.
+
+- `infrahubctl schema check --branch main
+  specs/014-proposed-change-stages/migration/fylgja-waypoint-absent.yaml` (03:31:26Z,
+  9.5 s, exit 0): `Valid`, and the diff `removed: FylgjaWaypoint: null` alone.
+- `schema load` of the same document (03:31:43Z): `loaded successfully`, `1 schema
+  processed in 40.799 seconds` (42.8 s wall), as §6.3 read.
+- `GET /api/schema?branch=main`: nodes `FylgjaContract` and `FylgjaStage`, generics
+  `FylgjaDevice`, `FylgjaInterface`, `FylgjaLink` and `FylgjaPlatform`, no
+  `FylgjaWaypoint`; `FylgjaStage`'s attributes `description`, `as_of`, `label` and its
+  `proposed_change` (`CoreProposedChange`, one, required) unchanged, and
+  `CoreProposedChange.fylgja_stages` (peer `FylgjaStage`, many, identifier
+  `proposed_change__fylgja_stages`) unchanged. `{ FylgjaWaypoint { count } }` is now
+  GraphQL's `Cannot query field 'FylgjaWaypoint' on type 'Query'`.
+- `GET /api/schema/summary`: `main` **`e43a1cde…`** (was `a8045729…`), for T053;
+  `fylgja-fixture` `0aba31a5…`, unmoved (a branch keeps the schema of its creation, so the
+  fixture branch still carries the waypoint kind, which nothing reads).
+- A second check of the absent document (03:32:32Z, 16.4 s): `No diff`. `schema check
+  --branch main schema/` (03:33:43Z, 8.9 s): the three files `Valid`, the four
+  `display_labels` deprecation warnings, `No diff`, so a seed's load of `schema/` on a
+  branch made from the new `main` writes nothing.
+- `make sdl` (2.0 s) dropped the header, restored by hand. Compared structurally with the
+  SDL before it (graphql-core 3.2.13 from the venv: each type's kind, fields with their
+  types and arguments, interfaces, enum values and union members): removed the types
+  `FylgjaWaypoint`, `EdgedFylgjaWaypoint`, `NestedEdgedFylgjaWaypoint`,
+  `PaginatedFylgjaWaypoint`, `NestedPaginatedFylgjaWaypoint`, the `Create`, `Update`,
+  `Upsert` and `Delete` payloads with their three inputs, and the fields
+  `Query.FylgjaWaypoint` and `Mutation.FylgjaWaypoint{Create,Update,Upsert,Delete}`;
+  nothing added or changed. The SDL names no waypoint. `make generate` left
+  `internal/intent/generated.go` unchanged; `go build ./...` passed.
+- The `Makefile`'s `sdl` comment now says the stage kind and its extension live on the
+  default branch.
+- After it: `Branch` `main` and `fylgja-fixture`; `CoreProposedChange 0`, `FylgjaStage 0`.
+
+### 8.10 Tier 2 whole, with no waypoint on `main` (T043, 2026-10-17)
+
+`TestStageKindLoads` now also fails if `main`'s schema lists `FylgjaWaypoint`. `make
+test-contract` from the repository root, Infrahub's address and token in the environment,
+no twin, `main` at `e43a1cde…`:
+
+- **The first run failed at go test's default timeout** (03:34:20Z, 604.8 s wall, exit 2).
+  Every package passed but `internal/stages`, whose binary hit `panic: test timed out
+  after 10m0s` with `TestStageRefusals` 3 m 52 s in, waiting on its `BranchRebase`. The
+  rebase was not stuck: Infrahub's task `Rebase branch fylgja-test-st-…` ran 03:44:05Z to
+  03:44:27Z, 22 s (§8.7 read 17–20 s). The package's three tests take 262–278 s alone
+  (§8.7); beside `internal/stage` (503.0 s this run, 426.8 s in 013's last) and
+  `internal/intent` (254.0 s), one Infrahub works every package's branches, proposed
+  changes and rebases in turn, so `TestStageKindLoads` and `TestStagesListAndPlan` took
+  about 6 m 8 s together where they took 2 m alone. The test's cleanup never ran under the
+  panic: its branch, open proposed change and five stages were left, and `fylgja-fixture
+  -delete -branch fylgja-test-st-1792208433-9527` printed `deleted 5 stages, 1 proposed
+  change, branch …` (8.5 s), after which `main` read as before.
+- **So `make test-contract` sets `-timeout 30m`**, its comment saying why. 10 minutes is
+  go test's default, which no tier set before because no package came near it; 30 minutes
+  leaves headroom and still ends a test that hangs.
+- **The second run passed** (03:45:45Z–03:54:37Z): exit 0, **531.5 s** wall, every package
+  `ok`, the longest `internal/stages` 527.2 s, then `internal/stage` 409.2 s,
+  `internal/intent` 200.3 s, `internal/cli` 22.3 s. Against 013's last run on this host,
+  431 s (`internal/stage` the longest then at 426.8 s), the tier is 100 s longer, less than
+  the plan's "about three minutes", since both of `TestStageRefusals`' rebases took about
+  20 s, not §2.7's 67 s. `internal/stages` is now the longest package and decides the
+  tier's time. Its time across the two runs, over 600 s and then 527 s, shows the spread.
+- After it: `{ Branch { name } CoreProposedChange { count } FylgjaStage { count } }` read
+  `main` and `fylgja-fixture`, 0 and 0; `main` still `e43a1cde…`.

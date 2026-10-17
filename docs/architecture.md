@@ -876,7 +876,9 @@ and branch, the label, the description and `at_source` (`given`, `written`,
 carry the same shape. `provenance.at` is the `at` itself and `provenance.branch` the
 branch read, `main` for a twin built from a branch point. A record of `5` or earlier reads
 as before with no stage: `twin show` calls the twin pinned, and `twin step` refuses it as
-unsteppable, saying `fylgja twin destroy` clears it.
+unsteppable, saying `fylgja twin destroy` clears it. One that stepped or diverged names each
+stage of its step, in `twin show`, `twin verify` and `step.twin.diverged`, as the waypoint
+it was, in the refusal's words, never `none`.
 
 **What `twin verify` reads** ([D-038](decisions.md#d-038)). It reads containerlab, the
 record and the staged manifest, and writes nothing. Its assertions are derived from the

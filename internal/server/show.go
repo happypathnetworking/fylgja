@@ -195,7 +195,7 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 
 	var text showText
 	if rec != nil && rec.Step != nil {
-		text.step = stepLine(rec.Step, waitRecorded(rec))
+		text.step = stepLine(rec, waitRecorded(rec))
 	}
 	following := reads.following
 	if following != nil {
@@ -417,24 +417,26 @@ func lifecycleNodes(r wire.StepReconcile) []string {
 	return slices.Compact(out)
 }
 
-// divergedKind is the kind line of a diverged twin (contracts/cli.md, twin show).
+// divergedKind is the kind line of a diverged twin (contracts/cli.md, twin show). A record of
+// twin.json 5 or earlier names each stage as the waypoint it was (wire.TwinRecord.SideStage).
 func divergedKind(rec *wire.TwinRecord) string {
 	st := rec.Step
-	return fmt.Sprintf("diverged towards stage %s (bundle %s): run %s %s stopped at phase %s; landed: %s; not landed: %s; "+
-		"the twin is at stage %s (bundle %s); fylgja twin destroy clears it",
-		st.To.Stage.Name(), shortID(st.To.BundleID), st.Run.WorkflowID, st.Run.RunID, phaseOf(st),
-		orNone(landed(st)), orNone(notLanded(st)), rec.Stage.Name(), shortID(rec.BundleID))
+	return fmt.Sprintf("diverged towards %s (bundle %s): run %s %s stopped at phase %s; landed: %s; not landed: %s; "+
+		"the twin is at %s (bundle %s); fylgja twin destroy clears it",
+		rec.SideStage(st.To.Stage), shortID(st.To.BundleID), st.Run.WorkflowID, st.Run.RunID, phaseOf(st),
+		orNone(landed(st)), orNone(notLanded(st)), rec.SideStage(rec.Stage), shortID(rec.BundleID))
 }
 
 // stepLine is the record block's line for a record that has stepped: how the step went, or
 // where it stopped (contracts/cli.md, twin show). A version 5 record's line ends with how
-// the step's wait ended.
-func stepLine(st *wire.StepRecord, waitKnown bool) string {
-	line := m11StepLine(st)
+// the step's wait ended. A side of a record of version 5 or earlier is named as the
+// waypoint it was (wire.TwinRecord.SideName).
+func stepLine(rec *wire.TwinRecord, waitKnown bool) string {
+	line := m11StepLine(rec)
 	if !waitKnown {
 		return line
 	}
-	return line + "; " + showWaitClause(st.Wait)
+	return line + "; " + showWaitClause(rec.Step.Wait)
 }
 
 // showWaitClause is how a version 5 record's wait ended, as its step line names it.
@@ -452,14 +454,15 @@ func showWaitClause(w *wire.StepWait) string {
 	return "wait could not complete"
 }
 
-// m11StepLine is M11's step line, unchanged by the wait.
-func m11StepLine(st *wire.StepRecord) string {
+// m11StepLine is M11's step line of rec's step, unchanged by the wait.
+func m11StepLine(rec *wire.TwinRecord) string {
+	st := rec.Step
 	if st.Outcome == wire.StepDiverged {
 		return fmt.Sprintf("diverged: step run %s %s towards %s (bundle %s) stopped at phase %s, ended %s; landed %s; not landed %s",
-			st.Run.WorkflowID, st.Run.RunID, st.To.Stage.Name(), shortID(st.To.BundleID), phaseOf(st), st.EndedAt,
+			st.Run.WorkflowID, st.Run.RunID, rec.SideName(st.To.Stage), shortID(st.To.BundleID), phaseOf(st), st.EndedAt,
 			orNone(landed(st)), orNone(notLanded(st)))
 	}
-	line := fmt.Sprintf("stepped from %s by run %s %s, ended %s", st.From.Stage.Name(), st.Run.WorkflowID,
+	line := fmt.Sprintf("stepped from %s by run %s %s, ended %s", rec.SideName(st.From.Stage), st.Run.WorkflowID,
 		st.Run.RunID, st.EndedAt)
 	if st.Outcome == wire.StepUnchanged {
 		return line + "; unchanged: nothing reconciled, awaited or pushed"

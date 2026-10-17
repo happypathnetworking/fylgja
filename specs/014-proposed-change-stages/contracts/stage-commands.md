@@ -138,7 +138,10 @@ step `pinned at …, stage change-1/live (stepped from change-1/cabled by run fy
 …, ended …); not following`; the `show` block's `record.stage` carries the `6` shape;
 `in_flight` names `stepping towards stage change-1/live`. `twin verify`'s first line: `twin:
 stage change-1/live (bundle …), ready, pinned at …; 3 nodes`; the `verify` block's
-`twin.stage` and `diverged.towards.stage`. `schema check`'s last line: `stages: FylgjaStage
+`twin.stage` and `diverged.towards.stage`. A record of `5` or earlier that stepped or
+diverged names each stage of its step as the waypoint it was, `a waypoint of a record
+version this build no longer reads (twin.json 5)`, never `none`, in those lines and in
+`step.twin.diverged`; its JSON's stages stay `null`. `schema check`'s last line: `stages: FylgjaStage
 present on the default branch, with its extension` / `stages: FylgjaStage absent from the
 default branch (load schema/fylgja-stage.yaml; needed only by the stage commands)` /
 `stages: FylgjaStage on the default branch lacks description (load …)` / `stages:

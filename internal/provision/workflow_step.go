@@ -683,9 +683,8 @@ func Ineligible(host wire.HostReport, at, twinDir string) *findings.Finding {
 	case host.Twin.State == wire.StateDiverged:
 		return refuse(findings.RuleStepTwinDiverged, host.Twin.BundleID, divergedTwin(host.Twin))
 	case host.Twin.Stage == nil && host.Twin.Superseded:
-		return refuse(findings.RuleStepTwinUnsteppable, host.Twin.BundleID, "the twin was created from a waypoint of a "+
-			"record version this build no longer reads (twin.json "+host.Twin.TwinVersion+"); only a twin built from a stage "+
-			"steps; fylgja twin destroy clears it")
+		return refuse(findings.RuleStepTwinUnsteppable, host.Twin.BundleID, "the twin was created from "+
+			host.Twin.SupersededWaypoint()+"; only a twin built from a stage steps; fylgja twin destroy clears it")
 	case host.Twin.Stage == nil:
 		return refuse(findings.RuleStepTwinUnsteppable, host.Twin.BundleID, "the twin was created "+origin(host.Twin)+
 			", not from a stage, so it names no proposed change to step along; only a twin built from a stage steps "+
@@ -711,7 +710,8 @@ func origin(rec *wire.TwinRecord) string {
 	return "from branch " + rec.Provenance.Branch
 }
 
-// divergedTwin is step.twin.diverged's message: the step that left the twin diverged.
+// divergedTwin is step.twin.diverged's message: the step that left the twin diverged,
+// towards the waypoint it was on a record of twin.json 5 or earlier.
 func divergedTwin(rec *wire.TwinRecord) string {
 	st := rec.Step
 	if st == nil {
@@ -721,8 +721,8 @@ func divergedTwin(rec *wire.TwinRecord) string {
 	if st.Phase != nil {
 		phase = *st.Phase
 	}
-	return fmt.Sprintf("the twin is diverged: step run %s %s towards stage %s stopped at phase %s (%s); it accepts only fylgja twin destroy",
-		st.Run.WorkflowID, st.Run.RunID, st.To.Stage.Name(), phase, Landed(st.Pushed, ": "))
+	return fmt.Sprintf("the twin is diverged: step run %s %s towards %s stopped at phase %s (%s); it accepts only fylgja twin destroy",
+		st.Run.WorkflowID, st.Run.RunID, rec.SideStage(st.To.Stage), phase, Landed(st.Pushed, ": "))
 }
 
 // notPlannedFrom is the run's second lock at inspect: the host's record

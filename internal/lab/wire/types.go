@@ -349,6 +349,33 @@ type TwinRecord struct {
 	Superseded bool `json:"-"`
 }
 
+// SideName is s, the record's own stage or a side of its step, as a line names it:
+// s.Name(), or, when s is nil on a record of twin.json 5 or earlier that names M10's
+// waypoint (Superseded), the waypoint as twin step's refusal of the record words it, since
+// a step side of such a record named a waypoint too (014, research R-11).
+func (r *TwinRecord) SideName(s *StageRef) string {
+	if s == nil && r.Superseded {
+		return r.SupersededWaypoint()
+	}
+	return s.Name()
+}
+
+// SideStage is SideName for a line that says "stage" before the name: "stage
+// <branch>/<label>", or a superseded record's waypoint as SideName words it.
+func (r *TwinRecord) SideStage(s *StageRef) string {
+	if s == nil && r.Superseded {
+		return r.SupersededWaypoint()
+	}
+	return "stage " + s.Name()
+}
+
+// SupersededWaypoint is what a record of twin.json 5 or earlier was created from or stepped
+// along, M10's pinned reference, which this build no longer reads: "a waypoint of a record
+// version this build no longer reads (twin.json 5)".
+func (r *TwinRecord) SupersededWaypoint() string {
+	return "a waypoint of a record version this build no longer reads (twin.json " + r.TwinVersion + ")"
+}
+
 // StageRef is the stage a twin was created from or stepped to, as the record names it
 // (014): its proposed change by id and source branch, its label (a mark's, or
 // branch-point or head), the operator's description and where the at came from (given on

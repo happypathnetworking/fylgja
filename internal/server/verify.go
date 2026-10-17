@@ -322,7 +322,7 @@ func verifyTwinLine(rec *wire.TwinRecord) string {
 	state := "ready"
 	switch st := rec.Step; {
 	case rec.State == wire.StateDiverged && st != nil:
-		state = fmt.Sprintf("diverged towards %s (bundle %s) at phase %s by run %s %s", st.To.Stage.Name(),
+		state = fmt.Sprintf("diverged towards %s (bundle %s) at phase %s by run %s %s", rec.SideName(st.To.Stage),
 			shortID(st.To.BundleID), phaseOf(st), st.Run.WorkflowID, st.Run.RunID)
 	case rec.Stage != nil && rec.Provenance.At != "":
 		state += ", pinned at " + rec.Provenance.At

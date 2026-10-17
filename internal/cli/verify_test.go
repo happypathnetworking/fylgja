@@ -953,12 +953,21 @@ func TestVerifyDisabledPortIsNonconforming(t *testing.T) {
 // A diverged twin is verified against its staged bundle, the target: its first line and
 // the block name the divergence, every read holds, and the record's claims that a node
 // holds the previous bundle, or none, are findings labelled the record's: nonconforming,
-// exit 5.
+// exit 5. A version 5 record, whose sides named M10's waypoints, reads with no stage
+// (R-11): its first line names the twin by its branch, and its target as the waypoint it
+// was, never "none", and the block's stages are null.
 func TestVerifyDivergedRecord(t *testing.T) {
 	const (
 		prev  = "348fd9340000000000000000000000000000000000000000000000000000abcd"
 		runID = "01a3c0de-0000-7000-8000-000000000003"
 	)
+	for _, version := range []string{"6", "5"} {
+		t.Run("version "+version, func(t *testing.T) { verifyDiverged(t, version, prev, runID) })
+	}
+}
+
+// verifyDiverged is TestVerifyDivergedRecord for a record of version, 6 or 5.
+func verifyDiverged(t *testing.T, version, prev, runID string) {
 	h := verifyHost(t, "three-node", nil, nil)
 	rec, err := lab.ReadRecord(h.paths.TwinJSON)
 	if err != nil {
@@ -975,7 +984,20 @@ func TestVerifyDivergedRecord(t *testing.T) {
 	p := prev
 	rec.Nodes[0].Holds = &p
 	rec.Nodes[1].Holds = nil
-	writeTwin(t, h.paths, rec)
+	twin := "twin: stage change-1/seeded (bundle 348fd934…), diverged towards change-1/cabled (bundle " + short(h.staged) +
+		") at phase push by run fylgja-step " + runID + "; 3 nodes"
+	if version == "5" {
+		// Drawn by hand as the 6 one is, with what verify reads, so not held to the contract.
+		write5(t, h.paths, record5(t, rec))
+		ref := "branch " + rec.Provenance.Branch
+		if rec.Provenance.At != "" {
+			ref += " at " + rec.Provenance.At
+		}
+		twin = "twin: " + ref + " (bundle 348fd934…), diverged towards " + waypoint5 + " (bundle " + short(h.staged) +
+			") at phase push by run fylgja-step " + runID + "; 3 nodes"
+	} else {
+		writeTwin(t, h.paths, rec)
+	}
 
 	out := runVerify(t, h.paths.Root, func() *fakeNodes { return h.healthy(t) })
 	want := findings.List{
@@ -989,9 +1011,10 @@ func TestVerifyDivergedRecord(t *testing.T) {
 	if out.code != findings.ExitNonconforming || !reflect.DeepEqual(out.doc.Findings, want) {
 		t.Fatalf("exit %d, findings\n%+v\nwant 5 and\n%+v", out.code, out.doc.Findings, want)
 	}
+	if got := lines2(out.stdout)[0]; got != twin {
+		t.Errorf("first line %q\nwant %q", got, twin)
+	}
 	for _, line := range []string{
-		"twin: stage change-1/seeded (bundle 348fd934…), diverged towards change-1/cabled (bundle " + short(h.staged) +
-			") at phase push by run fylgja-step " + runID + "; 3 nodes",
 		"n1 (172.20.20.2:57400, nokia_srlinux): host name n1; ethernet-1/1, ethernet-1/2 enabled; neighbours n2 ethernet-1/1, n3 ethernet-1/2; " +
 			"record: holds 348fd934…, not the staged bundle (verify.record.holds)",
 		"n2 (172.20.20.3:57400, nokia_srlinux): host name n2; ethernet-1/1, ethernet-1/2 enabled; neighbours n1 ethernet-1/1, n3 ethernet-1/1; " +
@@ -1004,8 +1027,15 @@ func TestVerifyDivergedRecord(t *testing.T) {
 	}
 	tw := out.doc.Verify.Twin
 	if tw.State != wire.StateDiverged || tw.BundleID != h.staged || tw.Diverged == nil || tw.Diverged.Phase != findings.StepPush ||
-		tw.Diverged.Run.RunID != runID || tw.Diverged.Towards.BundleID != h.staged || tw.Diverged.Towards.Stage == nil || tw.Diverged.Towards.Stage.Label != "cabled" {
-		t.Errorf("twin %+v, diverged %+v; want the divergence named", tw, tw.Diverged)
+		tw.Diverged.Run.RunID != runID || tw.Diverged.Towards.BundleID != h.staged {
+		t.Fatalf("twin %+v, diverged %+v; want the divergence named", tw, tw.Diverged)
+	}
+	if version == "5" {
+		if tw.Stage != nil || tw.Diverged.Towards.Stage != nil {
+			t.Errorf("stage %+v, towards %+v; want both null for a version 5 record", tw.Stage, tw.Diverged.Towards.Stage)
+		}
+	} else if tw.Diverged.Towards.Stage == nil || tw.Diverged.Towards.Stage.Label != "cabled" {
+		t.Errorf("towards %+v; want stage change-1/cabled", tw.Diverged.Towards)
 	}
 }
 

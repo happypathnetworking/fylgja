@@ -13,6 +13,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/santhosh-tekuri/jsonschema/v6"
+
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
@@ -1574,7 +1576,11 @@ func TestShowStepInFlight(t *testing.T) {
 // A record written before 014 that named M10's waypoint — version 3, written before M11,
 // and versions 4 and 5 that have not stepped — reads with no stage (lab.ReadRecord), so it
 // is shown as a pinned twin naming none, line for line, and its JSON carries no stage; only
-// the 4 and 5 records' JSON carries their state (014, research R-11).
+// the 4 and 5 records' JSON carries their state (014, research R-11). A version 5 record
+// that stepped, or diverged, names each stage of its step as the waypoint it was, as twin
+// step's refusal of such a record says, never "none": the step line's sides and a diverged
+// twin's kind line, its target and where the twin is. One that stepped shows pinned with no
+// stage, and the JSON's stages stay null.
 func TestShowRecordsBeforeStages(t *testing.T) {
 	const kind = "pinned at " + stepFromAt + "; not following"
 	want := threeNodes +
@@ -1626,7 +1632,140 @@ func TestShowRecordsBeforeStages(t *testing.T) {
 			}
 		})
 	}
+
+	record := func(at, id string) string {
+		return "record: branch fylgja-fixture at " + at + ", bundle_id " + id + ", schema 41349c3a9c582e5dd44e55d6771f79c2, contract 1"
+	}
+	provisioned := "  provisioned by run fylgja-provision " + showRunID +
+		" (source intent), worker 0.1.0-dev, recorded 2026-10-02T09:15:41Z, 3 nodes"
+	diverged := "diverged towards " + waypoint5 + " (bundle ee291b0f…): run fylgja-step " + stepShowRunID +
+		" stopped at phase push; landed: n2; not landed: n1 (push.refused); the twin is at " + waypoint5 + " (bundle 893b6392…); " +
+		"fylgja twin destroy clears it"
+	for _, c := range []struct {
+		name   string
+		change func(*lab.StepFields)
+		stdout string
+		kind   string
+		as     string
+	}{
+		{name: "version 5, stepped", stdout: lines(
+			"twin: lab fylgja present (3 nodes); twin directory present",
+			"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux  device-config "+stepAfter["n1"],
+			"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config "+stepAfter["n2"],
+			"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config "+stepAfter["n3"],
+			record(stepToAt, stepToID),
+			"  intent read at 2026-10-02T09:14:01.000000Z",
+			provisioned,
+			"  stepped from "+waypoint5+" by run fylgja-step "+stepShowRunID+", ended "+stepEnded+
+				"; reconcile 3.9s (restart n1); readiness n1 54.8s; push n1 1.6s, n2 2.4s; wait not run",
+			"kind: pinned at "+stepToAt+"; not following",
+			"in flight: none"),
+			kind: "pinned at " + stepToAt + "; not following", as: findings.ShowKindPinned},
+		{name: "version 5, diverged", change: divergeAtPush, stdout: lines(
+			"twin: lab fylgja present (3 nodes); twin directory present",
+			"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux",
+			"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config "+stepAfter["n2"],
+			"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config "+fixtureArtifacts["n3"],
+			record(stepFromAt, showBundleID),
+			"  intent read at "+showObserved,
+			provisioned,
+			"  diverged: step run fylgja-step "+stepShowRunID+" towards "+waypoint5+" (bundle ee291b0f…) stopped at phase push, ended "+
+				stepEnded+"; landed n2; not landed n1 (push.refused); wait not run",
+			"kind: "+diverged,
+			"in flight: none"),
+			kind: diverged, as: findings.ShowKindDiverged},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			paths := useStateRoot(t)
+			raw := record5(t, steppedTwin(t, c.change))
+			satisfiesContract(t, twin5Contract(t), raw, "the version 5 record")
+			write5(t, paths, raw)
+			out := showWith(t, paths, "inspect-three.json", &fakeService{})
+			wantShow(t, out, c.stdout, c.as, c.kind)
+			if strings.Contains(out.stdout, "none by run") || strings.Contains(out.stdout, "stage none") ||
+				strings.Contains(out.stdout, "towards none") {
+				t.Errorf("a side is named none:\n%s", out.stdout)
+			}
+			r := out.doc.Show.Record
+			if r == nil || r.Stage != nil || r.Step == nil || r.Step.From.Stage != nil || r.Step.To.Stage != nil {
+				t.Errorf("record %+v; want no stage, and a step whose sides' stages are null", r)
+			}
+		})
+	}
 }
+
+// record5 is rec as a twin.json 5 worker wrote it: M10's waypoint in place of the stage at
+// the top level, the step's to side's for a twin that stepped and its from side's for one
+// that diverged, and on each side of the step.
+func record5(t *testing.T, rec wire.TwinRecord) []byte {
+	t.Helper()
+	raw, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var generic map[string]any
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		t.Fatal(err)
+	}
+	waypoint := func(sequence int) map[string]any {
+		return map[string]any{"series": "demo", "sequence": sequence, "description": fmt.Sprintf("cut %d", sequence),
+			"at_source": "given"}
+	}
+	generic["twin_version"] = "5"
+	delete(generic, "stage")
+	generic["waypoint"] = waypoint(1)
+	if step, ok := generic["step"].(map[string]any); ok {
+		for side, sequence := range map[string]int{"from": 1, "to": 2} {
+			s := step[side].(map[string]any)
+			delete(s, "stage")
+			s["waypoint"] = waypoint(sequence)
+		}
+		if rec.State != wire.StateDiverged {
+			generic["waypoint"] = waypoint(2)
+		}
+	}
+	if raw, err = json.Marshal(generic); err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+// twin5Contract is twin.json 5's frozen contract.
+func twin5Contract(t *testing.T) *jsonschema.Schema {
+	t.Helper()
+	f, err := os.Open(repoPath("internal", "lab", "testdata", "contracts", "010-verify", "twin.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	doc, err := jsonschema.UnmarshalJSON(f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource("twin.schema.json", doc); err != nil {
+		t.Fatal(err)
+	}
+	schema, err := c.Compile("twin.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return schema
+}
+
+// write5 writes raw, a record of twin.json 5 (record5), into the twin directory.
+func write5(t *testing.T, paths lab.Paths, raw []byte) {
+	t.Helper()
+	if err := os.MkdirAll(paths.Twin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.TwinJSON, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// waypoint5 is how a line names a side of a version 5 record, the waypoint it was.
+const waypoint5 = "a waypoint of a record version this build no longer reads (twin.json 5)"
 
 // A version 5 or 6 record's step line ends with how the step's wait ended, after M11's timings or
 // after a diverged step's pushes, and the JSON record.step carries the wait by identifier and

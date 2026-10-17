@@ -427,7 +427,12 @@ plan, the run's start).
 step `pinned at …, stage change-1/live (stepped from change-1/cabled by run fylgja-step …,
 ended …); not following`; `in_flight` names `stepping towards stage change-1/live`. `twin
 verify`'s first line is `twin: stage change-1/live (bundle …), ready, pinned at …; 3
-nodes`. `schema check`'s last line is one of:
+nodes`. A record of `5` or earlier reads with no stage and shows pinned (research R-11);
+one that stepped or diverged names each stage of its step as the waypoint it was, `a
+waypoint of a record version this build no longer reads (twin.json 5)`, never `none`: in
+`twin show`'s step line and a diverged twin's kind line, `twin verify`'s `diverged towards
+…` and `step.twin.diverged`'s `towards …`. Its JSON's stages stay `null`. `schema check`'s
+last line is one of:
 
 ```
 stages: FylgjaStage present on the default branch, with its extension

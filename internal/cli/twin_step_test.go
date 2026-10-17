@@ -333,15 +333,21 @@ func stepStage(label, description, atSource string) *wire.StageRef {
 	return &wire.StageRef{ProposedChange: stepChange, Label: label, Description: description, AtSource: atSource}
 }
 
-// supersededHost is stepHost's twin with its record rewritten as twin.json 5, carrying
-// waypoint as M10's record did, or no waypoint key when it is nil.
-func supersededHost(t *testing.T, waypoint map[string]any) *stepHostFixture {
+// supersededHost is stepHost's twin, or divergedStepHost's when diverged, with its record
+// rewritten as twin.json 5, carrying waypoint as M10's record did, or no waypoint key when it
+// is nil; a diverged record's step carries it on both sides, as M11's did.
+func supersededHost(t *testing.T, waypoint map[string]any, diverged bool) *stepHostFixture {
 	t.Helper()
-	h := stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) {
-		if waypoint == nil {
-			f.Stage = nil
-		}
-	})
+	var h *stepHostFixture
+	if diverged {
+		h = divergedStepHost(t)
+	} else {
+		h = stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) {
+			if waypoint == nil {
+				f.Stage = nil
+			}
+		})
+	}
 	b, err := os.ReadFile(h.paths.TwinJSON)
 	if err != nil {
 		t.Fatal(err)
@@ -358,6 +364,13 @@ func supersededHost(t *testing.T, waypoint map[string]any) *stepHostFixture {
 	delete(m, "stage")
 	if waypoint != nil {
 		m["waypoint"] = waypoint
+	}
+	if step, ok := m["step"].(map[string]any); ok {
+		for _, side := range []string{"from", "to"} {
+			s := step[side].(map[string]any)
+			delete(s, "stage")
+			s["waypoint"] = waypoint
+		}
 	}
 	if b, err = json.Marshal(m); err != nil {
 		t.Fatal(err)
@@ -1002,15 +1015,24 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 		// waypoint is the superseded reference, one naming none the branch it was read from.
 		{name: "a record of twin.json 5 naming a waypoint", host: func(t *testing.T) *stepHostFixture {
 			return supersededHost(t, map[string]any{"series": "steps", "sequence": 1,
-				"description": "the mixed fixture as sealed", "at_source": "given"})
+				"description": "the mixed fixture as sealed", "at_source": "given"}, false)
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
 			"the twin was created from a waypoint of a record version this build no longer reads (twin.json 5); "+
 				"only a twin built from a stage steps; fylgja twin destroy clears it"),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		{name: "a record of twin.json 5 naming no waypoint", host: func(t *testing.T) *stepHostFixture {
-			return supersededHost(t, nil)
+			return supersededHost(t, nil, false)
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
 			"the twin was created from branch change-1 at "+stepMixedAt+noStage),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		// A diverged one is refused as diverged, towards the waypoint it was.
+		{name: "a diverged record of twin.json 5", host: func(t *testing.T) *stepHostFixture {
+			return supersededHost(t, map[string]any{"series": "steps", "sequence": 1,
+				"description": "the mixed fixture as sealed", "at_source": "given"}, true)
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinDiverged, findings.StepResolve, "",
+			"the twin is diverged: step run fylgja-step "+stepRunID+" towards a waypoint of a record version this build no "+
+				"longer reads (twin.json 5) stopped at phase push (landed: s1; not landed: e1 (push.refused)); it accepts only "+
+				"fylgja twin destroy"),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		{name: "a diverged twin", host: divergedStepHost, code: findings.ExitRejected, want: divergedRefusal(""),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},

@@ -350,8 +350,8 @@ func TestStageReaderKeepsValuesVerbatim(t *testing.T) {
 	}
 }
 
-// An orphaned mark, whose proposed change was deleted under it, is listed from
-// FylgjaStage's own root, by label.
+// An orphaned mark, which its proposed change no longer names (removed from its
+// fylgja_stages, D-047), is listed from FylgjaStage's own root, by label.
 func TestStageReaderListsOrphans(t *testing.T) {
 	f := &fakeStages{orphans: []map[string]any{
 		stageNode("st-9", "zeta", "2026-10-16T19:26:07.357145+00:00", "", ""),

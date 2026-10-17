@@ -285,7 +285,7 @@ type StagedTarget struct {
 }
 
 // NewStepRecord builds the record a step leaves (contracts/twin.schema.json
-// version 5) from the record the step started from, and refuses what the contract would
+// version 6) from the record the step started from, and refuses what the contract would
 // not accept, or what would claim more than the step did:
 //
 //   - a previous record that is not the step's from side (another bundle or stage), or

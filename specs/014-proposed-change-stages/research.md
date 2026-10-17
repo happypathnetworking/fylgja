@@ -565,7 +565,10 @@ lists them with no record; the twin from `seeded` carries the plan's id and a `6
 naming the stage and the proposed change; `twin show` and `stage list` mark it; a step with
 no target goes to `third-link`; a second step with no target goes to `head`, `unchanged`,
 and the record moves (US2 scenario 2); destroy; `-delete` removes stages, proposed change
-and branch, and `stage list --branch` after it is refused `stage.unknown`. Case 8 does the
+and branch, and `stage list --branch` after it is refused `stage.unknown`. (As T044 built
+it and tier 3 asserts it, `stage list --branch` after `-delete` lists no row, exit 0, as a
+listing refuses nothing but the kind's absence and a reserved label, and `stage plan
+--branch` is refused `stage.unknown`, exit 1.) Case 8 does the
 same on the mixed fixture with `seeded` and `mixed-link`, the step forward with
 `--allow-restart` and back with `--stage <branch>/seeded`, as today. The trap's `-delete`
 covers both. **Rationale**: FR-029 and the spec's independent tests, at the cost of about

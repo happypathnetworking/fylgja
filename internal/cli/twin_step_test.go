@@ -2267,17 +2267,24 @@ func TestStepFromTheBranchPointToTheHead(t *testing.T) {
 
 // A target is the twin's own stage when it resolves to the record's branch and at, whatever
 // its label: another mark whose as_of is the record's at, and the head while it is where the
-// twin was built, are each refused as current.
+// twin was built, are each refused as current; and so is the next stage when none is
+// given, which that other mark is, before the from bundle, the host check and
+// containerlab's plan.
 func TestStepTargetCurrentByResolvedReference(t *testing.T) {
+	twinMark := func(_ *testing.T, h *stepHostFixture) {
+		h.infra.changes[0].Stages = append(h.infra.changes[0].Stages, mark("st-twin", "twin", stepMixedAt, ""))
+	}
 	for _, c := range []struct {
 		name, ref string
-		setup     func(t *testing.T, h *stepHostFixture)
-		message   string
+		// next is set when no target is given, ref being the next stage's.
+		next    bool
+		setup   func(t *testing.T, h *stepHostFixture)
+		message string
 	}{
-		{name: "another mark at the twin's at", ref: "change-1/twin",
-			setup: func(_ *testing.T, h *stepHostFixture) {
-				h.infra.changes[0].Stages = append(h.infra.changes[0].Stages, mark("st-twin", "twin", stepMixedAt, ""))
-			},
+		{name: "another mark at the twin's at", ref: "change-1/twin", setup: twinMark,
+			message: "the twin is already at stage change-1/twin (branch change-1, at " + stepMixedAt + "); the proposed change's " +
+				"stages are: branch-point, sealed, twin, linked, again, less, head"},
+		{name: "the next stage at the twin's at", ref: "change-1/twin", next: true, setup: twinMark,
 			message: "the twin is already at stage change-1/twin (branch change-1, at " + stepMixedAt + "); the proposed change's " +
 				"stages are: branch-point, sealed, twin, linked, again, less, head"},
 		{name: "the head where the twin was built", ref: "change-1/head",
@@ -2292,7 +2299,11 @@ func TestStepTargetCurrentByResolvedReference(t *testing.T) {
 			h := stepHost(t, "plan-nothing.json", nil)
 			c.setup(t, h)
 			h.clab.calls = nil
-			out := runStepCmd(t, "--stage", c.ref, "--dry-run")
+			args := []string{"--stage", c.ref, "--dry-run"}
+			if c.next {
+				args = args[2:]
+			}
+			out := runStepCmd(t, args...)
 			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTargetCurrent, Object: c.ref,
 				Step: findings.StepResolve, Message: c.message}
 			if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want {

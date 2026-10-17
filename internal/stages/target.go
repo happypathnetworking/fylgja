@@ -23,7 +23,7 @@ import (
 //     record's label is gone or nothing follows it, saying so and, when the record is at
 //     a head that has moved since, that --stage <branch>/head steps to it;
 //  4. a given label the proposed change lacks is step.target.unknown, naming its stages;
-//  5. a given stage that resolves to the record's own (branch, at) is
+//  5. the target, given or next, that resolves to the record's own (branch, at) is
 //     step.target.current; a moved head, or a mark whose as_of was edited, is a target;
 //  6. every mark strictly between the record's place and the target's, either direction,
 //     is skipped, and when there is any the warning step.stage.skipped says so: the step is
@@ -75,12 +75,14 @@ func Target(ch *Change, rec RecordView, given *Ref) (Ref, []string, findings.Lis
 			return Ref{}, nil, findings.List{refusal(findings.RuleStepTargetUnknown, given.String(), fmt.Sprintf(
 				"proposed change %s on %s has no stage %q; its stages are: %s", pc.ID, branch, given.Label, stages))}
 		}
-		if st, _ := ch.first(given.Label); st.At != "" && st.Branch == rec.Branch && st.At == rec.At {
-			return Ref{}, nil, findings.List{refusal(findings.RuleStepTargetCurrent, given.String(), fmt.Sprintf(
-				"the twin is already at stage %s (branch %s, at %s); the proposed change's stages are: %s",
-				given, st.Branch, st.At, stages))}
-		}
 		target.Label = given.Label
+	}
+	// The next stage is held to it as a given one is: a mark sharing the record's at is
+	// the twin's own reference under another label.
+	if st, _ := ch.first(target.Label); st.At != "" && st.Branch == rec.Branch && st.At == rec.At {
+		return Ref{}, nil, findings.List{refusal(findings.RuleStepTargetCurrent, target.String(), fmt.Sprintf(
+			"the twin is already at stage %s (branch %s, at %s); the proposed change's stages are: %s",
+			target, st.Branch, st.At, stages))}
 	}
 
 	if current < 0 {

@@ -117,6 +117,17 @@ func TestTargetByPosition(t *testing.T) {
 		{name: "another label at the record's reference", rec: record("head", liveAt, AtHead), given: ref("change-1", "live"),
 			list: findings.List{refusal(findings.RuleStepTargetCurrent, "change-1/live",
 				"the twin is already at stage change-1/live (branch change-1, at "+liveAt+"); the proposed change's stages are: "+stages)}},
+		// The next stage is held to the same rule: two marks with one as_of are one
+		// reference, so none given from the first is the twin's own.
+		{name: "the next at the record's reference", pcs: []intent.ProposedChange{change1(append(change1().Stages,
+			mark("st-also", "also", "2026-10-16T17:31:00.000000+00:00", str(liveAt), ""))...)},
+			rec: record("also", liveAt, AtGiven),
+			list: findings.List{refusal(findings.RuleStepTargetCurrent, "change-1/live",
+				"the twin is already at stage change-1/live (branch change-1, at "+liveAt+"); the proposed change's stages are: "+
+					"branch-point, cabled, also, live, head")}},
+		{name: "the next with no at is no current", pcs: []intent.ProposedChange{change1(append(change1().Stages,
+			mark("st-none", "none", "", nil, ""))...)},
+			rec: record("live", liveAt, AtGiven), want: Ref{"change-1", "none"}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			got, skipped, list := Target(targetChange(t, c.pcs...), c.rec, c.given)

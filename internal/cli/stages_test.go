@@ -63,14 +63,14 @@ func runStage(t *testing.T, args ...string) (code int, stdout, stderr string) {
 	return runRoot(t, append([]string{"stage"}, args...)...)
 }
 
-// runRoot runs `fylgja <args>` with the stage and twin nouns beside each other, so a noun
-// that is gone is cobra's own unknown command.
+// runRoot runs `fylgja <args>` with the stage, twin, intent and schema nouns beside each
+// other, so a noun that is gone is cobra's own unknown command.
 func runRoot(t *testing.T, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
 	opts := &options{}
 	root := &cobra.Command{Use: "fylgja", SilenceUsage: true, SilenceErrors: true}
 	root.PersistentFlags().BoolVar(&opts.asJSON, "json", false, "")
-	root.AddCommand(newStageCmd(opts), newTwinCmd(opts))
+	root.AddCommand(newStageCmd(opts), newTwinCmd(opts), newIntentCmd(opts), newSchemaCmd(opts))
 	root.SetArgs(args)
 	stderr = captureStderr(t, func() {
 		stdout = captureStdout(t, func() {
@@ -384,9 +384,9 @@ func TestStagePlanRefusedInTheMiddle(t *testing.T) {
 	}
 }
 
-// Before any connection, a --branch that is not a branch is stage.ref.invalid and stage plan
-// with no --branch is a usage failure, each exit 2 with Infrahub never asked; the waypoint
-// noun is gone, so `fylgja waypoint list` is cobra's unknown command, exit 2.
+// Before any connection, a --branch that is not a branch is stage.ref.invalid, exit 2 with
+// Infrahub never asked (stage plan's are stage_plan_test.go's); the waypoint noun is gone,
+// so `fylgja waypoint list` is cobra's unknown command, exit 2.
 func TestStageRefusedBeforeAnyConnection(t *testing.T) {
 	for _, c := range []struct {
 		name string
@@ -395,9 +395,7 @@ func TestStageRefusedBeforeAnyConnection(t *testing.T) {
 	}{
 		{"list --branch=", []string{"stage", "list", "--branch="}, findings.RuleStageRefInvalid},
 		{"list a spaced branch", []string{"stage", "list", "--branch", "a b"}, findings.RuleStageRefInvalid},
-		{"plan a spaced branch", []string{"stage", "plan", "--branch", "a b"}, findings.RuleStageRefInvalid},
-		{"plan --branch=", []string{"stage", "plan", "--branch="}, findings.RuleStageRefInvalid},
-		{"plan with no --branch", []string{"stage", "plan"}, findings.RuleOperationFailed},
+		{"list a reference for a branch", []string{"stage", "list", "--branch", "a/b"}, findings.RuleStageRefInvalid},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			useStateRoot(t)
@@ -409,11 +407,8 @@ func TestStageRefusedBeforeAnyConnection(t *testing.T) {
 			if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0].Rule != c.rule {
 				t.Errorf("exit %d, findings %+v; want 2 with %s", code, doc.Findings, c.rule)
 			}
-			if c.rule == findings.RuleStageRefInvalid && doc.Findings[0].Step != findings.StepStart {
+			if doc.Findings[0].Step != findings.StepStart {
 				t.Errorf("step %q, want start", doc.Findings[0].Step)
-			}
-			if c.rule == findings.RuleOperationFailed && doc.Findings[0].Message != "--branch is required" {
-				t.Errorf("message %q", doc.Findings[0].Message)
 			}
 			if got := f.requests(); len(got) != 0 {
 				t.Errorf("Infrahub was asked %+v before the flags were refused", got)
@@ -439,42 +434,4 @@ func executeStage(t *testing.T, args ...string) (int, *findings.Document) {
 		t.Fatalf("%v: stdout is not one findings document: %v\n%s", args, err, stdout)
 	}
 	return code, &doc
-}
-
-// A default branch whose schema lacks the stage kind, one of its attributes, its
-// relationship to its proposed change or the proposed change's extension refuses stage
-// list and stage plan as stage.kind.absent, exit 1, and lists nothing.
-func TestStageKindAbsent(t *testing.T) {
-	for _, c := range kindAbsentCases() {
-		t.Run(c.name, func(t *testing.T) {
-			useStateRoot(t)
-			useService(t, nil)
-			f := stagesInfrahub(t)
-			c.edit(f)
-			f.start()
-			for _, args := range [][]string{{"list"}, {"plan", "--branch", lessLink}} {
-				code, doc, raw := stageDoc(t, args...)
-				if code != findings.ExitRejected || !carriesRule(doc.Findings, findings.RuleStageKindAbsent) ||
-					(doc.Stages != nil && len(doc.Stages.Rows) != 0) {
-					t.Errorf("%v: exit %d, %s", args, code, raw)
-				}
-			}
-		})
-	}
-}
-
-// kindAbsentCases are the four ways the default branch's schema lacks the stage kind.
-func kindAbsentCases() []struct {
-	name string
-	edit func(*fakeInfrahub)
-} {
-	return []struct {
-		name string
-		edit func(*fakeInfrahub)
-	}{
-		{"kind absent", func(f *fakeInfrahub) { f.kind = nil }},
-		{"an attribute missing", func(f *fakeInfrahub) { f.kind = f.kind[1:] }},
-		{"the relationship missing", func(f *fakeInfrahub) { f.noRelationship = true }},
-		{"the extension missing", func(f *fakeInfrahub) { f.noExtension = true }},
-	}
 }

@@ -104,9 +104,13 @@ type fakeVersion struct {
 }
 
 // fakeDeviceStamps is one device's stamps in place of its branch's: Intent every stamp of
-// its own intent, Artifact its artifacts' checksum.updated_at ("" a null one).
+// its own intent (its attributes, its platform edge, its interfaces), Artifact its
+// artifacts' checksum.updated_at ("" a null one), and Link the stamp of each endpoints edge
+// joining one of its interfaces to a link ("" the branch's): an edit of the device alone
+// leaves its links as they were, and a re-cabling moves the intent of every device on the
+// link (R-07).
 type fakeDeviceStamps struct {
-	Intent, Artifact string
+	Intent, Artifact, Link string
 }
 
 // The fake's clock: main last written before the branch point, the branch created and
@@ -483,8 +487,8 @@ func (f *fakeInfrahub) stampPages(branch, at string, c *ctm.CTM) map[string]any 
 			eps := make([]any, 0, len(l.Endpoints))
 			for _, e := range l.Endpoints {
 				intentAt := stamp
-				if own, ok := f.stamps[branch+"/"+e.Device]; ok {
-					intentAt = own.Intent
+				if own, ok := f.stamps[branch+"/"+e.Device]; ok && own.Link != "" {
+					intentAt = own.Link
 				}
 				eps = append(eps, map[string]any{
 					"properties": map[string]any{"updated_at": intentAt},

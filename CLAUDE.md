@@ -345,8 +345,9 @@ runs golangci-lint and `shellcheck scripts/bring-up.sh scripts/e2e.sh`) · `make
 test-contract` (tier 2, real
 Infrahub, never cached; needs `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN`; CI's contract
 job on every push to `main`, against an Infrahub the script brings up on the runner, with
-no secret; about nine minutes, `internal/stages` the longest package, under the
-`-timeout 30m` it sets) · `make lint` (runs with build tags `contract,fixture,e2e`) ·
+no secret; about twelve minutes (716.7 s on 2026-10-17), `internal/stages` the longest
+package at 712.1 s, under the `-timeout 30m` it sets) · `make lint` (runs with build
+tags `contract,fixture,e2e`) ·
 `go test ./internal/compiler -update` regenerates the three goldens — review the diff,
 and commit a re-baseline on its own · the conformance suite's pure half is part of
 `make test`; its boot half is `FYLGJA_STATE_ROOT=$PWD/local go test -count=1 -tags e2e
@@ -402,7 +403,8 @@ Rewritten whole at each release's close, never appended to.
   (`InfrahubEvent`, the fourth named root; a removal moves no stamp), a stale stage
   refused per device, by its stamps or an event naming it;
   `twin.json` `6`, the findings' stage blocks and the API's two operations, with neither
-  the API's version nor the findings' moved. Tier 2 passed in 531.5 s, tier 3 `E2E-OK` in
+  the API's version nor the findings' moved. Tier 2 passed in 531.5 s, and in 716.7 s with
+  D-048 built (2026-10-17, `internal/stages` 712.1 s), tier 3 `E2E-OK` in
   1125.5 s and `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in 665.7 s, and the hand scenarios
   and the README's stepping walk-through were followed by hand
   (`specs/014-proposed-change-stages/research.md` §8). No golden, no fixture id and no

@@ -191,7 +191,8 @@ func refused(t *testing.T, what string, list findings.List, rule string, objects
 }
 
 // The kind is on the default branch with its three attributes, its relationship and the
-// extension, and the product's reader accepts it. With the kind there, the seed's schema
+// extension, the waypoint kind it replaced is not (D-045), and the product's reader
+// accepts it. With the kind there, the seed's schema
 // load on a throwaway branch is an empty diff. A stage the harness marks through the
 // default branch's GraphQL is read by the product's reader with its proposed change; a
 // second of its label on the same proposed change, written through the throwaway branch's
@@ -254,6 +255,8 @@ func TestStageKindLoads(t *testing.T) {
 			if !slices.Equal(rels, []string{intent.ProposedChangeKind + " one optional=false"}) {
 				t.Errorf("%s's %s on main is %v, want one required %s", n.Kind, intent.StageRelationship, rels, intent.ProposedChangeKind)
 			}
+		case "FylgjaWaypoint":
+			t.Errorf("main's schema still lists %s; 014 removes it (specs/014-proposed-change-stages/migration/fylgja-waypoint-absent.yaml)", n.Kind)
 		case intent.ProposedChangeKind:
 			for _, r := range n.Relationships {
 				if r.Name == intent.StageExtension {

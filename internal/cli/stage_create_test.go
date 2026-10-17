@@ -132,7 +132,9 @@ func stageRefInvalid(given string) string {
 // and Infrahub never asked; neither flag given is M1's usage failure with the message both
 // commands share (contracts/cli.md). An explicitly empty --stage= is a reference that is
 // not the form, alone or beside --branch, and on the dry run too: never the flag left out,
-// which beside --branch would start a following create.
+// which beside --branch would start a following create. The conflict names the first of
+// --branch, --at and --interval in that order, whatever order they are given in (US4
+// scenario 2).
 func TestCreateStageRefusedBeforeAnyConnection(t *testing.T) {
 	const whole = "a stage is a whole pinned reference (branch and at)"
 	emptyRef := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStageRefInvalid, Object: "", Step: findings.StepStart,
@@ -153,6 +155,10 @@ func TestCreateStageRefusedBeforeAnyConnection(t *testing.T) {
 			Rule: findings.RuleStageRefInvalid, Object: "demo", Step: findings.StepStart, Message: stageRefInvalid("demo")}},
 		{"no label", []string{"--stage", "change-1/", "--branch", "x"}, findings.Finding{Severity: findings.Rejection,
 			Rule: findings.RuleStageRefInvalid, Object: "change-1/", Step: findings.StepStart, Message: stageRefInvalid("change-1/")}},
+		{"no branch", []string{"--stage", "/x"}, findings.Finding{Severity: findings.Rejection,
+			Rule: findings.RuleStageRefInvalid, Object: "/x", Step: findings.StepStart, Message: stageRefInvalid("/x")}},
+		{"a spaced branch", []string{"--stage", "a b/c"}, findings.Finding{Severity: findings.Rejection,
+			Rule: findings.RuleStageRefInvalid, Object: "a b/c", Step: findings.StepStart, Message: stageRefInvalid("a b/c")}},
 		{"--stage= alone", []string{"--stage="}, emptyRef},
 		{"--stage= beside --branch", []string{"--branch", "fylgja-fixture", "--stage="}, emptyRef},
 		{"--stage= alone, dry run", []string{"--stage=", "--dry-run"}, emptyRef},
@@ -163,6 +169,7 @@ func TestCreateStageRefusedBeforeAnyConnection(t *testing.T) {
 		{"--interval empty", []string{"--stage", sealed, "--interval="}, conflict("--interval", "a stage twin is pinned and never follows")},
 		{"the first found", []string{"--stage", sealed, "--interval", "1m", "--at", fixtureAt, "--branch", "change-1"},
 			conflict("--branch", whole)},
+		{"--at before --interval", []string{"--stage", sealed, "--interval", "1m", "--at", fixtureAt}, conflict("--at", whole)},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			useStateRoot(t)
@@ -226,7 +233,8 @@ func TestCreateStageResolutionRefusals(t *testing.T) {
 		{"unknown branch", "beta/sealed", nil, findings.ExitRejected, findings.RuleStageUnknown, "beta",
 			"no open proposed change has source branch beta; the branches with one are: fylgja-fixture", true},
 		{"unknown label", "fylgja-fixture/nosuch", nil, findings.ExitRejected, findings.RuleStageUnknown, "fylgja-fixture/nosuch",
-			`proposed change "change pc-demo" (pc-demo) on branch fylgja-fixture has no stage "nosuch"; its stages are: branch-point, `, true},
+			`proposed change "change pc-demo" (pc-demo) on branch fylgja-fixture has no stage "nosuch"; its stages are: ` +
+				"branch-point, sealed, cabled, twice, nine, future, head", true},
 		{"duplicate", "fylgja-fixture/twice", nil, findings.ExitRejected, findings.RuleStageDuplicate, "fylgja-fixture/twice",
 			"stage fylgja-fixture/twice is held by 2 objects (ids st-twice-a, st-twice-b), which the kind's uniqueness constraint should have refused; none is chosen", true},
 		{"a future at", "fylgja-fixture/future", nil, findings.ExitRejected, findings.RuleStageAtUnresolved, "fylgja-fixture/future",

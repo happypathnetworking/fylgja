@@ -5,11 +5,14 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/psp"
+	"github.com/happypathnetworking/fylgja/internal/stage"
 )
 
 // runRead exercises the command flow exactly as the CLI does, up to wherever it
@@ -143,10 +146,30 @@ func pinnedCTM(t *testing.T, path string) []byte {
 	return b
 }
 
+// compiledCTM compiles the CTM at path on the stage pipeline twin compile and a run share
+// (D-011), and returns the bundle's files and its id.
+func compiledCTM(t *testing.T, path string) (map[string][]byte, string) {
+	t.Helper()
+	c, err := ctm.Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, err := psp.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, id, list := stage.Compile(c, reg)
+	if list.Rejected() || id == "" {
+		t.Fatalf("%s did not compile: %+v", path, list)
+	}
+	return files, id
+}
+
 // intent read --stage writes exactly the CTM intent read --branch B --at T writes for the
 // reference the stage resolves to, from the same Infrahub: the pinned read, with the at
-// verbatim, given or written, and nothing of the stage in the envelope. The resolved line
-// comes first, and the success line and the document name the stage.
+// verbatim, given or written, and nothing of the stage in the envelope, nor in the bundle it
+// compiles to, which is the pinned read's. The resolved line comes first, and the success
+// line and the document name the stage (US4 scenario 1).
 func TestReadFromAStageIsThePinnedRead(t *testing.T) {
 	for _, c := range []struct {
 		label, at, source, description string
@@ -188,9 +211,27 @@ func TestReadFromAStageIsThePinnedRead(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, word := range []string{"stage", demoChange, c.label, c.source} {
+			named := []string{"stage", demoChange, c.label, c.source, c.description}
+			for _, word := range named {
 				if strings.Contains(string(raw), word) {
 					t.Errorf("the CTM names %q: a stage enters no CTM", word)
+				}
+			}
+			// Compiled, the two reads are one bundle, file for file: the same intent hashes the
+			// same however it was named, and the --branch --at read knows no stage, so nothing
+			// of the stage is in it (US4). A label can be a word of the compiler's own
+			// ("cabled" is an interface's disposition in every manifest), so the scan names
+			// what only the stage holds: its reference, its proposed change, its description.
+			files, id := compiledCTM(t, byStage)
+			refFiles, refID := compiledCTM(t, byReference)
+			if id != refID || !reflect.DeepEqual(files, refFiles) {
+				t.Errorf("the stage's CTM compiles to %s, the pinned read's to %s; want one bundle, file for file", id, refID)
+			}
+			for name, b := range files {
+				for _, word := range []string{ref, demoChange, c.description} {
+					if bytes.Contains(b, []byte(word)) {
+						t.Errorf("bundle file %s names %q: a stage enters no bundle", name, word)
+					}
 				}
 			}
 			if c.source == findings.AtSourceGiven && !bytes.Equal(got, pinnedCTM(t, repoPath("testdata", "ctm", "three-node.json"))) {
@@ -210,7 +251,8 @@ func TestReadFromAStageIsThePinnedRead(t *testing.T) {
 
 // Beside --stage, --branch and --at are refused before any connection, exit 2; a
 // resolution refusal is the create's, with no step, as M1's operations carry none
-// (contracts/cli.md).
+// (contracts/cli.md). A reference naming no open proposed change, or no stage of one, is
+// refused naming what exists, before any branch's intent is read (US4 scenario 3).
 func TestReadFromAStageRefusals(t *testing.T) {
 	const whole = "a stage is a whole pinned reference (branch and at)"
 	for _, c := range []struct {
@@ -225,10 +267,15 @@ func TestReadFromAStageRefusals(t *testing.T) {
 			findings.RuleStageFlagsConflict, "--branch", "--branch is meaningless with --stage: " + whole, false},
 		{"--at", readFlags{stage: "fylgja-fixture/sealed", at: fixtureAt}, findings.ExitError,
 			findings.RuleStageFlagsConflict, "--at", "--at is meaningless with --stage: " + whole, false},
+		{"--branch and --at", readFlags{stage: "fylgja-fixture/sealed", branch: "fylgja-fixture", at: fixtureAt}, findings.ExitError,
+			findings.RuleStageFlagsConflict, "--branch", "--branch is meaningless with --stage: " + whole, false},
 		{"not a reference", readFlags{stage: "fylgja-fixture/"}, findings.ExitError,
 			findings.RuleStageRefInvalid, "fylgja-fixture/", stageRefInvalid("fylgja-fixture/"), false},
+		{"unknown proposed change", readFlags{stage: "beta/sealed"}, findings.ExitRejected, findings.RuleStageUnknown, "beta",
+			"no open proposed change has source branch beta; the branches with one are: fylgja-fixture", true},
 		{"unknown", readFlags{stage: "fylgja-fixture/nosuch"}, findings.ExitRejected,
-			findings.RuleStageUnknown, "fylgja-fixture/nosuch", `has no stage "nosuch"; its stages are: branch-point, `, true},
+			findings.RuleStageUnknown, "fylgja-fixture/nosuch", `proposed change "change pc-demo" (pc-demo) on branch fylgja-fixture ` +
+				`has no stage "nosuch"; its stages are: branch-point, sealed, cabled, twice, nine, future, head`, true},
 		{"nine digits", readFlags{stage: "fylgja-fixture/nine"}, findings.ExitError,
 			findings.RuleAtPrecision, "fylgja-fixture/nine",
 			"stage fylgja-fixture/nine: at 2026-09-20T10:00:00.123456789Z carries 9 fractional digits; Infrahub honours at most 6 (microseconds). Write the stage's as_of with at most six.", true},
@@ -252,6 +299,60 @@ func TestReadFromAStageRefusals(t *testing.T) {
 			readsNoIntent(t, c.name, f)
 			if _, err := os.Stat(c.flags.out); !os.IsNotExist(err) {
 				t.Errorf("a refused read wrote %s", c.flags.out)
+			}
+			validateM10Document(t, doc)
+		})
+	}
+}
+
+// Through the command line, a reference that is not the form is stage.ref.invalid, and a
+// flag beside --stage stage.flags.conflict naming the first of --branch and --at whatever
+// order they are given in, each exit 2 with no step, before any connection: Infrahub is
+// asked nothing and nothing is written (US4 scenario 2).
+func TestReadFromAStageRefusedBeforeAnyConnection(t *testing.T) {
+	const whole = "a stage is a whole pinned reference (branch and at)"
+	invalid := func(given string) findings.Finding {
+		return findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStageRefInvalid, Object: given, Message: stageRefInvalid(given)}
+	}
+	conflict := func(flag string) findings.Finding {
+		return findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStageFlagsConflict, Object: flag,
+			Message: flag + " is meaningless with --stage: " + whole}
+	}
+	const sealed = "fylgja-fixture/sealed"
+	for _, c := range []struct {
+		name string
+		args []string
+		want findings.Finding
+	}{
+		{"no slash", []string{"--stage", "x"}, invalid("x")},
+		{"no branch", []string{"--stage", "/x"}, invalid("/x")},
+		{"no label", []string{"--stage", "a/"}, invalid("a/")},
+		{"a spaced branch", []string{"--stage", "a b/c"}, invalid("a b/c")},
+		{"--at", []string{"--at", fixtureAt, "--stage", sealed}, conflict("--at")},
+		{"--at before --branch", []string{"--at", fixtureAt, "--branch", "fylgja-fixture", "--stage", sealed}, conflict("--branch")},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := demoInfrahub(t)
+			f.start()
+			out := filepath.Join(t.TempDir(), "never.json")
+
+			code, doc := executeTwin(t, append(append([]string{"intent", "read"}, c.args...), "--out", out)...)
+			if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != c.want {
+				t.Errorf("exit %d, findings %+v; want 2 with %+v", code, doc.Findings, c.want)
+			}
+			if got := f.requests(); len(got) != 0 {
+				t.Errorf("Infrahub was asked %+v before the flags were refused", got)
+			}
+			// A reference that parses is named in the subject; one that does not is not.
+			wantSubject := ""
+			if c.want.Rule == findings.RuleStageFlagsConflict {
+				wantSubject = sealed
+			}
+			if doc.Stage != nil || subjectStage(doc) != wantSubject {
+				t.Errorf("subject %+v, stage %+v; want subject.stage %q and no block", doc.Subject, doc.Stage, wantSubject)
+			}
+			if _, err := os.Stat(out); !os.IsNotExist(err) {
+				t.Errorf("a refused read wrote %s", out)
 			}
 			validateM10Document(t, doc)
 		})

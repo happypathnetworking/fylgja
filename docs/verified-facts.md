@@ -253,7 +253,26 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   through four intent writes and a regenerate (`num_untracked_diff_changes: 6`), and the
   `DiffUpdate` mutation (`branch, name, from_time, to_time`) is what refreshes it. A
   rebase resets `from_time`. So neither a branch's head nor `main`'s movement is read
-  from it without a write. *(10-16)*
+  from it without a write. *(10-16)* A link deleted after it was computed leaves `to_time`,
+  `num_removed` and every node's `last_changed_at` where they were, the link still
+  `ADDED`; only `num_untracked_diff_changes` moves (0 → 46 for the one delete), a count
+  with no stamp. *(10-17)*
+- **A removal leaves no stamp the intent's read sees.** A link deleted
+  (`NetworkLinkDelete`) as a branch's latest write moves no `updated_at` the stamps read
+  selects: the link's endpoint edges go with it, and each endpoint interface's `link` edge
+  reads `properties.updated_at` `null`. So a head computed from the stamps is pinned before
+  the delete and reads the link, while an unpinned read does not; a mark after the delete
+  reads it gone, with artifacts that still render it. A generate after it moves the
+  checksums of the devices whose rendering named the link, and only then the head.
+  *(10-17)*
+- **The event log records a removal, read-only.** `InfrahubEvent(branches: [<branch>],
+  since: <branched_from>, order:, limit: ≤50)` (above 50 is refused) lists
+  `infrahub.node.deleted` for a deleted link, primary node the concrete kind
+  (`NetworkLink`) with `endpoints` `REMOVED`, at an `occurred_at` between the mutation's
+  send and its return, then `node.updated` on each endpoint interface (`link` `REMOVED`)
+  and Infrahub's own query-group events. A read pinned at that `occurred_at` −1 µs already
+  reads the removal. It answers alike through `/graphql/main` and `/graphql/<branch>`, in
+  0.11–0.29 s a page. *(10-17)*
 
 **Artifacts and repositories**
 

@@ -1337,3 +1337,117 @@ Genqlient cannot merge two fragment spreads that select one field (`...PlatformF
 ...PlatformStamps` generates `GetVendor`, `GetNos` and `GetVersion` twice and does not
 compile), so `PlatformStamps` carries the values beside the stamps and the stamps read
 projects the platform from it.
+
+### 8.17 A link deleted as the branch's latest write (T077, 2026-10-17)
+
+A throwaway contract test in `internal/stages`, deleted after: its own `fylgja-test-st-*`
+branch, the schema loaded and `SeedThreeNode`, a draft proposed change whose validators
+it awaited (`propose`), a mark `seeded` with no `as_of`; then the seeded link
+n1:ethernet-1/1 — n2:ethernet-1/1 deleted by `NetworkLinkDelete(data: {id})` on the branch,
+the kind's delete as the seed writes it (`NetworkLinkCreate`); no twin booted, no other
+tier running. It ran three times; the figures are the third's (`fylgja-test-st-1792245248-1945`,
+98.4 s), and the first two agree in every reading. Each cleanup deleted 2 stages, 1
+proposed change and the branch, and Infrahub held `main` and `fylgja-fixture` alone after,
+no proposed change and no stage.
+
+- **Before the delete**, `Stamps` unpinned: `Latest` `13:54:23.955205` (n1's checksum);
+  n1's and n3's intent `13:54:16.873735` (the n3–n1 cabling), n2's `13:54:16.775152`; the
+  deleted link's endpoint edges and both interfaces' `link` edges `13:54:16.636426`. The
+  head `13:54:23.955206` reads 3 links, as the unpinned read does.
+- **The delete** was sent at `13:55:08.922043` and returned at `13:55:09.034750`.
+- **After it, before any generate**, `Stamps` unpinned reads exactly what it read before:
+  `Latest`, each device's intent and each checksum unmoved, so the head is
+  `13:54:23.955206` still. The link is gone, so no endpoint edge of it is read, and both
+  interfaces' `link` edges read `properties.updated_at` `null` with `node` `null`, which the
+  fold skips (§6.6); their own attributes keep their stamps (`13:54:15.523129`,
+  `…15.960905`). **No stamp the `IntentStamps` query reads moves.**
+- **The head reads the link; an unpinned read does not.** Pinned at the head, 3 links;
+  unpinned, and pinned at the delete's return, 2. `Stamps` pinned at the return reads the
+  same stamps as unpinned.
+- **A mark after the removal is not refused.** `removed`, marked with no `as_of` at
+  `13:55:10.328713`, resolves `written` with no finding: its pinned read holds 2 links,
+  and its artifacts, which still render `description to n2 ethernet-1/1` on n1 and its
+  counterpart on n2, are stamped after every intent stamp the rule reads. `stage plan`
+  compiles `seeded` (3 links), `removed` (2) and the head (3): the step `seeded → removed`
+  is `links: -n1:e1-1 — n2:e1-1` with `artifacts: unchanged`, and `removed → head` puts the
+  link back, `links: +n1:e1-1 — n2:e1-1`. The branch point is refused
+  `contract.node.missing`, as on this install it always is (R-04).
+- **A generate covers it.** `GenerateArtifacts`, then n1's and n2's checksums moved
+  (`13:55:29.597940`, `…29.590055`; n3's, whose rendering names no deleted link, stayed
+  `13:54:23.543788`), so `Latest` and the head moved to `13:55:29.597941`, which reads 2
+  links. The plan then compiles the head with 2 links, `removed → head` `links: unchanged`,
+  `artifacts: n1 device-config f1f4ce3b… → 2c2143b5…; n2 device-config e6065da6… →
+  9c1ea4bc…`; `removed` still resolves `written` with no finding, its artifacts at its `at`
+  the pre-removal bytes.
+
+So the delete moves no stamp the query reads, and T078 needs its decision: a removal that
+changes what a device renders is seen by the head only once a regenerate moves that
+device's checksum, and a mark between the removal and the regenerate is not refused.
+
+### 8.18 What each candidate reader sees of the removal (T079, 2026-10-17, read-only)
+
+In the same test, beside §8.17's readings and on its branch, with nothing written but
+§8.17's own writes and no `DiffUpdate`. The SDL is the committed `schema/infrahub.graphql`
+(`make sdl`'s output, 1.11.2).
+
+1. **Infrahub's event log**: the GraphQL root `InfrahubEvent(limit, offset, level,
+   has_children, event_type, event_type_filter, primary_node__ids, related_node__ids,
+   parent__ids, since, until, branches, account__ids, ids, order)`, answering `Events {
+   count edges { node: EventNodeInterface } }`, each node `id event branch account_id
+   occurred_at level primary_node { id kind } related_nodes has_children parent_id`, and
+   `NodeMutatedEvent` adding `attributes { name action value value_previous }` and
+   `relationships { name action peer { id kind } }`. A read, no write. `limit` above 50 is
+   refused (`The parameter 'limit' can't be above 50`), so a branch's whole history is
+   paged. `branches: [<branch>]` with `since: <branched_from>` bounds it to the branch and
+   to after its creation (`since` took `branched_from`'s `Z` layout and the stamps'
+   `+00:00`), and it answers the same through `/graphql/main` and `/graphql/<branch>`.
+   - Before the delete it counted 105 events since `branched_from` (the seed's
+     `node.created`/`node.updated`, `group.member_added`, `artifact.created`), 112 after.
+   - **The delete appears**: `infrahub.node.deleted`, branch the test's, level 0, primary
+     node `NetworkLink` (the deleted id), relationships `endpoints` `REMOVED` twice and
+     `member_of_groups` `REMOVED` twice (two `CoreGraphQLQueryGroup`), at `occurred_at`
+     `13:55:09.031152`, between the mutation's send and its return (`…08.922043`,
+     `…09.034750`). Six child events follow it within 20 ms: `node.updated` on each endpoint
+     `NetworkInterface` (level 1, `link` `REMOVED`), `node.updated` on the two query groups
+     (level 1) and two `group.member_removed` (level 2).
+   - **Pinned at its stamp the removal is already read**: the branch pinned at the
+     deletion's `occurred_at` −1 µs, at it and +1 µs reads 2 links, so the graph's own stamp
+     of the removal precedes the event's, and a head pinned one microsecond after the latest
+     intent event would read it. The last child event's stamp ±1 µs reads 2 links too.
+   - The generate after it adds 12 more: `node.updated` on two `CoreArtifact`
+     (`storage_id` and `checksum` `UPDATED`), two `artifact.updated`, and query-group and
+     membership events, the latest after the checksums' stamps.
+   - The primary node's `kind` is the concrete kind (`NetworkLink`, `NetworkInterface`),
+     never a Fylgja generic, and the log holds Infrahub's own churn (query groups,
+     artifacts) beside intent, so a reader of intent's latest change would map each kind
+     through the schema's `used_by`, as conformance does. One page took 0.11–0.29 s.
+2. **The diff tree**, `DiffTreeSummary(branch:)` and `DiffTree(branch:)` read before and
+   after, no `DiffUpdate`. The proposed change's creation had computed it: `from_time`
+   `13:54:10.452384` (= `branched_from`), `to_time` `13:54:36.282687`, `num_added` 123,
+   `num_updated` 10, `num_removed` 0, `num_untracked_diff_changes` 0; `DiffTree`'s 21 nodes,
+   the three `NetworkLink` `ADDED` with `last_changed_at` their creation. **After the
+   delete, nothing in it moved but one count**: `to_time`, `num_removed` 0 and every node's
+   `last_changed_at` as before, the deleted link still listed `ADDED`; only
+   `num_untracked_diff_changes` went 0 → 46, and → 54 after the generate. That count says
+   the cached diff is behind the branch, never when or by what. The two reads took
+   1.3–1.8 s. **`DiffUpdate`, not run**: `DiffUpdate(context, data: {branch!, name,
+   from_time, to_time}, wait_until_completion)` answers `{ ok task { … } }`; it starts a
+   task that recomputes the branch's diff against its base and stores it, moving `to_time`
+   to its moment (D-026 measured 3.5 s on a throwaway branch). It is a write to Infrahub.
+3. **An unpinned read against the head's read**, the product's own `FylgjaLink` selection
+   with no `at` and pinned at `stages.HeadAt(Latest)` (`13:54:23.955206`): 2 links against 3,
+   differing by exactly the deleted link (n1:ethernet-1/1 — n2:ethernet-1/1); 0.10 s and
+   0.13 s for the links alone, against 0.33–0.49 s for a whole `Stamps` read. The difference
+   carries no stamp: it says the head misses something and cannot say where a head that
+   reads it would be pinned.
+
+**What each would need.** (1) The event log: a fourth named root in the read-only test,
+`InfrahubEvent`, with Constitution III amended and a decision entry beside D-026, which
+rejected the log as following's trigger; no write, and its `occurred_at` places a head
+after a removal. (2) The diff tree: a named root too (`DiffTreeSummary`), and its counts
+and times move only after `DiffUpdate`, a write, so the read-only principle amended as
+well; without the write it gives `num_untracked_diff_changes` alone, which has no stamp.
+(3) The compare: neither a new root nor a write, the queries being Fylgja's own, but a
+second read per head and no stamp, so it could refuse or warn of a head that misses a
+change and could not place one after it; a design the plan never weighed.
+

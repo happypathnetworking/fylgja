@@ -338,8 +338,9 @@ Infrahub with `main` prepared and the fixture seeded, then the build, tiers 1 an
 the three processes left running; `--part NAME` runs one part, and `--part infrahub` is
 what CI's contract job runs; a second run installs nothing; it asks for sudo, so it is
 the operator's) · `make build` → `bin/fylgja` (CGO disabled; must stay static; `make
-build VERSION=…` stamps `--version`) · `make test` (tier 1, no infrastructure; under 35s
-wall uncached; CI's unit job on every push and pull request, beside its lint job, which
+build VERSION=…` stamps `--version`) · `make test` (tier 1, no infrastructure; under 45s
+wall uncached, raised from 35s on 2026-10-17 when 014's close measured 35.3–38.7s under a
+load average of 2–5, `internal/cli` about 26s of it; CI's unit job on every push and pull request, beside its lint job, which
 runs golangci-lint and `shellcheck scripts/bring-up.sh scripts/e2e.sh`) · `make
 test-contract` (tier 2, real
 Infrahub, never cached; needs `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN`; CI's contract

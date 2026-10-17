@@ -74,7 +74,8 @@ otherwise.
 1. **Given** a proposed change on branch `b` with nothing marked, **When** the operator
    runs `stage plan` for `b`, **Then** the plan lists two stages, the branch point (`main`
    pinned at the branch's `branched_from`) and the head (the branch pinned one
-   microsecond after its latest stamp), each resolved and planned, compiled where `main`
+   microsecond after the later of its latest stamp and its latest intent event), each
+   resolved and planned, compiled where `main`
    carries the contract and intent, and one step between them, not computed when either
    end was refused.
 2. **Given** two stages marked on the proposed change, the first with no `as_of` and the
@@ -334,8 +335,10 @@ or `waypoint.*` rule; a grep for "waypoint" finds only what SC-009 allows.
   draft ones alone, and its stages MUST be, in this order: the branch point, read on `main` pinned at the branch's
   `branched_from`; each `FylgjaStage` related to it, in order of `at`, where `at` is the
   written `as_of` or else the stamp Infrahub returned for the stage's writing; and the
-  head, read on the branch pinned at the latest `updated_at` across its intent (attributes
-  and relationship edges) and its artifacts' checksums, plus one microsecond. The ends'
+  head, read on the branch pinned at the later of the latest `updated_at` across its
+  intent (attributes and relationship edges) and its artifacts' checksums, and the
+  `occurred_at` of the latest intent event in its event log since `branched_from`, plus
+  one microsecond, so a removal no stamp records is seen ([D-048](../../docs/decisions.md#d-048)). The ends'
   positions are fixed whatever the marks' stamps.
 - **FR-006**: Every stage MUST be pinned, and Fylgja MUST compose no `at` from a clock of
   its own: each `at` is a stamp Infrahub returned or the first instant after one, passed
@@ -361,8 +364,10 @@ or `waypoint.*` rule; a grep for "waypoint" finds only what SC-009 allows.
 - **FR-011**: A stale stage MUST be refused: at each stage, pinned at its `at`, Fylgja
   reads, per device, the latest stamp of its own intent and its generation stamp, the
   later of its artifact's checksum stamp (never its status stamp) and the proposed
-  change's artifact validator's completion ([D-046](../../docs/decisions.md#d-046));
-  intent newer than that is `stage.artifact.stale`, naming the device and saying to
+  change's artifact validator's completion ([D-046](../../docs/decisions.md#d-046)), and
+  the intent events later than that generation stamp and no later than the stage's `at`
+  that name the device or one of its interfaces ([D-048](../../docs/decisions.md#d-048)); intent newer than that,
+  by a stamp or an event, is `stage.artifact.stale`, naming the device and saying to
   regenerate, by a generate or by the proposed change's run-check, and mark again. It applies to every stage, the head included, and it is made at
   `resolve` on every command that resolves a stage: `stage plan` runs it over every
   stage, and `twin create --stage`, `twin step` and `intent read --stage` refuse a stale
@@ -453,15 +458,17 @@ or `waypoint.*` rule; a grep for "waypoint" finds only what SC-009 allows.
 
 **Tests and tier 3**
 
-- **FR-027**: Tier 1 MUST cover the stage list with its ends derived, the head's stamp
-  and its microsecond, the order with the ends fixed, each refusal, the rebase message,
+- **FR-027**: Tier 1 MUST cover the stage list with its ends derived, the head's stamp,
+  its latest intent event and its microsecond, the order with the ends fixed, each refusal, the rebase message,
   the staleness rule, the `main`-moved warning, `--stage` parsing, the step's target rule
   and the record, with no infrastructure.
 - **FR-028**: Tier 2 MUST, against the real Infrahub, find the kind on `main`; make a
   throwaway branch and draft proposed change with two stages, list and plan them; exercise
   the refusals tier 2 can make: stale, a rebase, a reserved label, a closed proposed
   change, an unknown branch or stage, a duplicate label and a future `as_of` (the kind
-  absent and a malformed reference are tier 1's); delete
+  absent and a malformed reference are tier 1's); prove a removal seen: a link deleted
+  as the branch's latest write moves the head past it, and a stage marked after it is
+  refused stale on its endpoint devices alone (`TestStagesSeeARemoval`, [D-048](../../docs/decisions.md#d-048)); delete
   the stages, the proposed change and the branch in that order; and find no
   `FylgjaWaypoint` on `main` and no stage after it.
 - **FR-029**: Tier 3's cases 7 and 8 MUST run on a throwaway branch with a draft proposed
@@ -499,7 +506,8 @@ or `waypoint.*` rule; a grep for "waypoint" finds only what SC-009 allows.
   its stages through the extension.
 - **Stage**: a moment of a proposed change, a pinned intent reference on its source
   branch. Two are derived, the **branch point** (`main` at the branch's
-  `branched_from`) and the **head** (the branch one microsecond after its latest stamp);
+  `branched_from`) and the **head** (the branch one microsecond after the later of its
+  latest stamp and its latest intent event);
   the rest are **marks**, `FylgjaStage` objects the operator writes: a label unique
   within the proposed change, an optional `as_of`, an optional description.
 - **Stage reference**: `<branch>/<label>`, how a stage is named on the command line
@@ -573,8 +581,10 @@ or `waypoint.*` rule; a grep for "waypoint" finds only what SC-009 allows.
 - **The head is always last and the branch point always first**, whatever a mark's
   stamp, since a mark written after the last regenerate is the normal case and lies after
   the head's `at`. The step from such a mark to the head is `unchanged`.
-- **The staleness check reads the stamps as research.md §2.5 verified them**: intent is
-  attributes and relationship edges; an artifact's stamp is its checksum's; the branch
+- **The staleness check reads the stamps as research.md §2.5 verified them, and the
+  branch's intent events as §8.18 did** ([D-048](../../docs/decisions.md#d-048)): intent is attributes and
+  relationship edges, and a removal, which moves no stamp, is seen by its event; an
+  artifact's stamp is its checksum's; the branch
   point is checked too, which on an install where `main` holds no devices is trivially
   fresh.
 - **A twin steps from the bundle its record holds**, whatever the record's stage now

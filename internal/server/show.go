@@ -417,8 +417,8 @@ func lifecycleNodes(r wire.StepReconcile) []string {
 	return slices.Compact(out)
 }
 
-// divergedKind is the kind line of a diverged twin (contracts/cli.md, twin show). A record of
-// twin.json 5 or earlier names each stage as the waypoint it was (wire.TwinRecord.SideStage).
+// divergedKind is the kind line of a diverged twin (contracts/cli.md, twin show). Each stage
+// is named as wire.TwinRecord.SideStage names it, a record of twin.json 5 or earlier's too.
 func divergedKind(rec *wire.TwinRecord) string {
 	st := rec.Step
 	return fmt.Sprintf("diverged towards %s (bundle %s): run %s %s stopped at phase %s; landed: %s; not landed: %s; "+
@@ -429,8 +429,8 @@ func divergedKind(rec *wire.TwinRecord) string {
 
 // stepLine is the record block's line for a record that has stepped: how the step went, or
 // where it stopped (contracts/cli.md, twin show). A version 5 record's line ends with how
-// the step's wait ended. A side of a record of version 5 or earlier is named as the
-// waypoint it was (wire.TwinRecord.SideName).
+// the step's wait ended. Each side is named as wire.TwinRecord.SideName names it, a record
+// of version 5 or earlier's too.
 func stepLine(rec *wire.TwinRecord, waitKnown bool) string {
 	line := m11StepLine(rec)
 	if !waitKnown {

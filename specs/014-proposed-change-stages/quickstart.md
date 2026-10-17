@@ -172,8 +172,8 @@ than before.
 ## 6. The records and the tree (US5, SC-009)
 
 ```sh
-/usr/bin/grep -rn -i 'waypoint' --exclude-dir=.git --exclude-dir=.venv --exclude-dir=local --exclude-dir=bin --exclude-dir=specs --exclude-dir=testdata --exclude='*_test.go' . | /usr/bin/grep -v -E '^\./(docs/decisions\.md|docs/archive/|docs/glossary\.md|docs/how-it-was-built\.md|docs/recording/|README\.md|CLAUDE\.md|contracts/(api|cli)\.md|contracts/[a-z]+\.schema\.json|docs/architecture\.md|docs/roadmap\.md|internal/lab/twin\.go|internal/provision/workflow_step\.go)'
-for f in README.md CLAUDE.md contracts/api.md contracts/cli.md docs/architecture.md docs/roadmap.md internal/lab/twin.go internal/provision/workflow_step.go; do echo "== $f"; /usr/bin/grep -n -i waypoint "$f"; done
+/usr/bin/grep -rn -i 'waypoint' --exclude-dir=.git --exclude-dir=.venv --exclude-dir=local --exclude-dir=bin --exclude-dir=specs --exclude-dir=testdata --exclude='*_test.go' . | /usr/bin/grep -v -E '^\./(docs/decisions\.md|docs/archive/|docs/glossary\.md|docs/how-it-was-built\.md|docs/recording/|README\.md|CLAUDE\.md|contracts/(api|cli)\.md|contracts/[a-z]+\.schema\.json|docs/architecture\.md|docs/roadmap\.md|internal/lab/twin\.go|internal/lab/wire/types\.go|internal/provision/workflow_step\.go)'
+for f in README.md CLAUDE.md contracts/api.md contracts/cli.md docs/architecture.md docs/roadmap.md internal/lab/twin.go internal/lab/wire/types.go internal/provision/workflow_step.go; do echo "== $f"; /usr/bin/grep -n -i waypoint "$f"; done
 for f in contracts/*.schema.json; do jq -r '[.. | objects | to_entries[] | select(.key != "description") | .key, (.value | strings)] | .[]' "$f" | /usr/bin/grep -i waypoint; done
 /usr/bin/grep -rl -i waypoint --include='*_test.go' --exclude-dir=.git --exclude-dir=.venv --exclude-dir=local .
 test ! -e schema/fylgja-waypoint.yaml && test ! -e contracts/waypoints.schema.json && bin/fylgja --help | /usr/bin/grep -c -i waypoint
@@ -186,10 +186,12 @@ log, the archive, the write-up's milestone row, the recording's caption and the 
 excluded records, shows in each only what SC-009 allows: the README's note beside the
 recording, `CLAUDE.md`'s Milestones lines, the contracts' rows marked moved at 014, the
 architecture's one sentence saying what replaced the waypoint, the roadmap's F-023,
-`twin.go`'s `5`-record wording and `workflow_step.go`'s `step.twin.unsteppable` refusal
-of a `5` record; the third prints nothing, since a contract's schema names the waypoint in
-its description alone, in the history of its versions and the one sentence saying what
-replaced it at 014; the fourth lists the tests that name it, each only as FR-021's older
+the architecture's and `contracts/cli.md`'s one sentence each on how a `5` record's step
+reads in `twin show` and `twin verify`, `twin.go`'s `5`-record wording,
+`wire/types.go`'s `TwinRecord.SupersededWaypoint` with its `SideName` and `SideStage`, and
+`workflow_step.go`'s `step.twin.unsteppable` refusal of a `5` record; the third prints
+nothing, since a contract's schema names the waypoint in its description alone, in the
+history of its versions and the one sentence saying what replaced it at 014; the fourth lists the tests that name it, each only as FR-021's older
 records (`internal/lab`, `internal/cli`'s show, step and verify tests, the replay's
 rewritten histories), FR-028's absent kind (`internal/stages`'s contract test), or a
 refusal a contract requires: `fylgja waypoint list` unknown (the repository's
@@ -199,7 +201,10 @@ refusal a contract requires: `fylgja waypoint list` unknown (the repository's
 `stages` where `waypoint` was and nothing else moved. *(Run 17, T055: the first grep
 excluded neither `*_test.go`, the contracts' schemas nor `workflow_step.go`, so it could not
 print nothing while FR-021's and FR-028's tests and SC-009's `5`-record refusal stand; the
-third and fourth lines check what it now leaves out.)*
+third and fourth lines check what it now leaves out. T074: T072 moved the `5`-record
+wording into `internal/lab/wire`, where `twin show`, `twin verify` and the step's refusal
+all read it, so the first grep excludes `wire/types.go` and the second lists it, as SC-009
+now allows.)*
 
 ## 7. Tier 3 (FR-029, SC-006)
 

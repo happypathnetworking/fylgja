@@ -544,15 +544,19 @@ or `waypoint.*` rule; a grep for "waypoint" finds only what SC-009 allows.
   archive, `docs/how-it-was-built.md`, the recording and its caption, `CLAUDE.md`'s
   Milestones), the glossary's superseded terms, one sentence per record saying what
   replaced the waypoint (the README's note beside the recording, the architecture, the
-  roadmap's F-023, the contracts' rows marked moved at 014), the frozen `twin.schema.json`
-  copies and the `5`-record refusal that names it; `fylgja --help` names no waypoint
-  command or flag, and no code, schema, query or test outside the frozen copies does but
-  what proves the waypoint gone or reads an older record: the tests that `fylgja waypoint
-  list` is unknown, `/v1/waypoint/*` is `404`, a `waypoint` argument is `400` and M10's
-  shape is refused where a stage goes; `twin.json` `5`'s tests and decoder field; the
-  contract schemas' version-history descriptions; `workflow_step.go`'s `5`-record refusal;
+  roadmap's F-023, the contracts' rows marked moved at 014), one sentence each in the
+  architecture and `contracts/cli.md` on how a `5` record's step reads in `twin show` and
+  `twin verify`, the frozen `twin.schema.json` copies and the `5`-record wording that names
+  it; `fylgja --help` names no waypoint command or flag, and no code, schema, query or test
+  outside the frozen copies does but what proves the waypoint gone or reads an older
+  record: the tests that `fylgja waypoint list` is unknown, `/v1/waypoint/*` is `404`, a
+  `waypoint` argument is `400` and M10's shape is refused where a stage goes; `twin.json`
+  `5`'s tests and decoder field; the contract schemas' version-history descriptions;
+  `internal/lab/wire`'s `TwinRecord.SupersededWaypoint` (the contracts' own words, the one
+  place a `5` record's stage is worded for `twin show`, `twin verify` and the step's
+  refusal) with its `SideName` and `SideStage`; `workflow_step.go`'s `5`-record refusal;
   and `internal/provision/testdata/rewrite-stage.go` (quickstart §6's greps, as amended at
-  T055).
+  T055 and T074).
 - **SC-010**: A stranger following the README's stepping walk-through marks, plans,
   creates, steps and lists stages on a throwaway branch and deletes everything after, in
   the order the README gives, with no leftover in Infrahub.

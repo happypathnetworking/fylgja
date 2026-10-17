@@ -92,7 +92,7 @@
     },
     "orphan": {
       "type": "object",
-      "description": "a stage whose proposed change no longer exists: listed, warned (stage.orphaned), never planned or created from",
+      "description": "a stage its proposed change no longer names, removed from its fylgja_stages (D-047): listed, warned (stage.orphaned), never planned or created from",
       "required": ["id", "label", "at", "at_source"],
       "additionalProperties": false,
       "properties": {

@@ -44,7 +44,7 @@ type fakeInfrahub struct {
 	// changes are the proposed changes served on the unnamed GraphQL endpoint, open or
 	// not, each with its marks, its branch's point of origin and its validators.
 	changes []*fakeChange
-	// orphans are the stages whose proposed change was deleted under them.
+	// orphans are the stages their proposed change no longer names (D-047).
 	orphans []fakeStage
 	// gone names branches the Branch query answers [] for: deleted, though a proposed
 	// change still names them.

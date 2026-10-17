@@ -62,12 +62,17 @@ R-03), never written.
 **States and what Fylgja does**
 
 ```
-                 open (draft or not)        closed / merged / canceled        deleted
-stage list       listed, marked, warned      not listed                        its stages: stage.orphaned
+                 open (draft or not)        closed / merged / canceled        deleted (once no stage names it)
+stage list       listed, marked, warned      not listed                        not listed
 stage plan       planned                     stage.unknown ("no open …")       stage.unknown
 --stage          resolved                    stage.unknown                     stage.unknown
 a twin's record  kept; stage.twin.moved when the stage no longer resolves to the record's reference, or is gone
 ```
+
+Infrahub refuses a proposed change's delete while a stage names it (research §8.8). A
+stage removed from its proposed change's `fylgja_stages` names none: `stage list` lists it
+after the proposed changes with the warning `stage.orphaned`, and nothing plans it or
+creates from it ([D-047](../../docs/decisions.md#d-047)).
 
 A deleted source branch cancels its proposed change about 16 s later (§2.3); until then
 its stages list and every read of them fails on the missing branch (`operation.failed`
@@ -169,10 +174,11 @@ Contracts: [contracts/stage-commands.md](contracts/stage-commands.md),
 
 **`stages.ListResult`** (`$defs/list`): `branch` (the filter or `null`); `rows`, every
 visible proposed change's stages in order, sorted by branch then order, each `Resolved`
-plus `twin` (whether the record names it); `orphans`, stages whose proposed change is gone
-(`id`, `label`, `at`, `at_source`), each also `stage.orphaned`; `record`, the host's
-readable record's stage and reference (`$defs/record`: `ref`, `proposed_change {id,
-branch}`, `label`, `branch`, `at`, `at_source`, `state`, `towards`), or `null`.
+plus `twin` (whether the record names it); `orphans`, stages their proposed change no
+longer names (`id`, `label`, `at`, `at_source`; D-047), each also `stage.orphaned`;
+`record`, the host's readable record's stage and reference (`$defs/record`: `ref`,
+`proposed_change {id, branch}`, `label`, `branch`, `at`, `at_source`, `state`,
+`towards`), or `null`.
 
 **`stages.PlanResult`** (`$defs/plan`): `branch`, `proposed_change`, `stages` in order, each
 `PlanStage` (`ref`, `label`, `description`, `at_source`; `branch`, `at` once resolved;

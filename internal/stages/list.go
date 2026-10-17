@@ -52,8 +52,8 @@ type Row struct {
 	Twin bool
 }
 
-// Orphan is a stage whose proposed change was deleted under it: listed, warned, never
-// planned or created from.
+// Orphan is a stage its proposed change no longer names, removed from its fylgja_stages
+// (D-047): listed, warned, never planned or created from.
 type Orphan struct {
 	ID, Label string
 	At        string // the as_of verbatim, else the label's updated_at
@@ -156,7 +156,8 @@ func List(ctx context.Context, r Reader, s Stamper, branch string, record *Recor
 		}
 		res.Orphans = append(res.Orphans, row)
 		list.Add(findings.Warning, findings.RuleStageOrphaned, o.ID, fmt.Sprintf(
-			"stage %q (id %s) names no proposed change: its proposed change was deleted under it; delete the stage", o.Label, o.ID))
+			"stage %q (id %s) names no proposed change: it was removed from its proposed change's fylgja_stages; delete the stage",
+			o.Label, o.ID))
 	}
 
 	// A listing of another branch says nothing of the record's: its row is not shown.

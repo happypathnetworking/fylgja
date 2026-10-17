@@ -225,7 +225,7 @@ func TestStageListMarksTheTwin(t *testing.T) {
 	}
 }
 
-// Scenario 3: a stage whose proposed change was deleted under it is listed after the
+// Scenario 3: a stage its proposed change no longer names (D-047) is listed after the
 // proposed changes, by label, and warned of, naming it, exit 0; it is no stage of any
 // proposed change, so nothing plans it, reads it or creates from it.
 func TestStageListOrphans(t *testing.T) {
@@ -255,7 +255,7 @@ orphaned: stage "old" (st-old) names no proposed change
 	code, doc, raw := stageDoc(t, "list")
 	warning := func(label, id string) findings.Finding {
 		return findings.Finding{Severity: findings.Warning, Rule: findings.RuleStageOrphaned, Object: id,
-			Message: `stage "` + label + `" (id ` + id + `) names no proposed change: its proposed change was deleted under it; delete the stage`}
+			Message: `stage "` + label + `" (id ` + id + `) names no proposed change: it was removed from its proposed change's fylgja_stages; delete the stage`}
 	}
 	wantOrphans := []findings.StageOrphan{{ID: "st-gone", Label: "gone", At: goneAt, AtSource: findings.AtSourceGiven},
 		{ID: "st-old", Label: "old", At: fakeMarkedAt, AtSource: findings.AtSourceWritten}}

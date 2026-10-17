@@ -62,10 +62,11 @@ the first conflicting flag, in the order `--branch`, `--at`, `--interval`).
 **A listing** (`stage list`) applies steps 1–6 and 9 to every open proposed change's stages
 and refuses nothing but step 1; a reserved label is a rejection beside its row (the
 document's status `rejected`, exit 1, the other rows still listed); an orphaned stage
-(`FylgjaStage(proposed_change__isnull: true)`) is the warning `stage.orphaned` (object
-the stage's id, `stage "<label>" (id …) names no proposed change: its proposed change was
-deleted under it; delete the stage`). **A plan** applies every step to every stage and
-goes on.
+(`FylgjaStage(proposed_change__isnull: true)`, a stage removed from its proposed change's
+`fylgja_stages`; [D-047](../../../docs/decisions.md#d-047)) is the warning
+`stage.orphaned` (object the stage's id, `stage "<label>" (id …) names no proposed change:
+it was removed from its proposed change's fylgja_stages; delete the stage`). **A plan**
+applies every step to every stage and goes on.
 
 ## Stamps
 

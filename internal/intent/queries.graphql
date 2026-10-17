@@ -131,7 +131,8 @@ query ProposedChanges(
   }
 }
 
-# 014 — stages whose proposed change was deleted under them (stage.orphaned).
+# 014 — stages their proposed change no longer names, removed from its fylgja_stages
+# (stage.orphaned; D-047).
 query OrphanStages($limit: Int!, $offset: Int!) {
   FylgjaStage(proposed_change__isnull: true, limit: $limit, offset: $offset) {
     count

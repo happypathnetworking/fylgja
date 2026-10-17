@@ -287,8 +287,9 @@ func (r *StageReader) ProposedChanges(ctx context.Context, branch string) ([]Pro
 	return out, nil
 }
 
-// Orphans reads every stage whose proposed change was deleted under it, sorted by label
-// then id. Nothing is planned from one; stage list warns of each (stage.orphaned).
+// Orphans reads every stage that names no proposed change, removed from its proposed
+// change's fylgja_stages (D-047), sorted by label then id. Nothing is planned from one;
+// stage list warns of each (stage.orphaned).
 func (r *StageReader) Orphans(ctx context.Context) ([]Stage, error) {
 	var out []Stage
 	for offset := 0; ; offset += pageSize {

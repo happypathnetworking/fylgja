@@ -198,8 +198,8 @@ type StageRow struct {
 	Twin bool `json:"twin"`
 }
 
-// StageOrphan is a stage whose proposed change no longer exists: listed, warned
-// (stage.orphaned), never planned or created from.
+// StageOrphan is a stage its proposed change no longer names, removed from its
+// fylgja_stages (D-047): listed, warned (stage.orphaned), never planned or created from.
 type StageOrphan struct {
 	ID       string `json:"id"`
 	Label    string `json:"label"`

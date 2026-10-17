@@ -573,9 +573,10 @@ the server, and gives each command.
 twin directory, no record, or a record that does not open or parse. Detected at `create`
 and at worker start; cleared by `fylgja twin destroy` ([D-013](decisions.md#d-013)).
 
-**Orphaned stage** — From `014-proposed-change-stages` ([D-045](decisions.md#d-045)): a
-*mark* that names no *proposed change*, though the relationship is required. Nothing
-ties it to a branch. `stage list` lists it after the proposed changes with the warning
+**Orphaned stage** — From `014-proposed-change-stages` ([D-045](decisions.md#d-045),
+[D-047](decisions.md#d-047)): a *mark* its *proposed change* no longer names, removed from
+its `fylgja_stages`, so it names none, though the relationship is required. Nothing ties it
+to a branch. `stage list` lists it after the proposed changes with the warning
 `stage.orphaned`, naming its id; nothing is planned or created from it, and the operator
 deletes it by id. Infrahub refuses a proposed change's delete while a stage names it, so
 a test deletes its stages before their proposed change.

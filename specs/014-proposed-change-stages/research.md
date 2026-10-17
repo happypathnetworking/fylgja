@@ -473,7 +473,7 @@ collides with them.
 | — | `stage.at.before_branch_point` | a stage's `at` before `branched_from`; says a rebase did it when `created_at` is before the `at` |
 | — | `stage.label.reserved` | a mark labelled `head` or `branch-point` |
 | — | `stage.artifact.stale` | R-05 |
-| — | `stage.orphaned` (warning) | a stage whose proposed change was deleted under it |
+| — | `stage.orphaned` (warning) | a stage its proposed change no longer names, removed from its `fylgja_stages` (D-047; first written as one whose proposed change was deleted under it, which §8.8 found Infrahub refuses) |
 | — | `stage.main.moved` (warning) | `main`'s latest stamp is later than `branched_from` |
 | `waypoint.twin.moved` | `stage.twin.moved` (warning) | the record's stage no longer resolves to the record's reference, or is gone |
 | `waypoint.time.reversed` | dropped | marks are ordered by `at`, so no later one can be earlier |

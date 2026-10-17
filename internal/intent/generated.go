@@ -5321,7 +5321,8 @@ query OrphanStages ($limit: Int!, $offset: Int!) {
 }
 `
 
-// 014 — stages whose proposed change was deleted under them (stage.orphaned).
+// 014 — stages their proposed change no longer names, removed from its fylgja_stages
+// (stage.orphaned; D-047).
 func OrphanStages(
 	ctx_ context.Context,
 	client_ graphql.Client,

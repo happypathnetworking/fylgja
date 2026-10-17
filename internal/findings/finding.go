@@ -176,7 +176,7 @@ const (
 	RuleStageAtBeforeBranchPoint = "stage.at.before_branch_point" // rejection, exit 1, resolve: <branch>/<label>; the stage's at is before the branch's branched_from, saying a rebase did it when the branch was created before the at
 	RuleStageLabelReserved       = "stage.label.reserved"         // rejection, exit 1, resolve: <branch>/<label>; a mark is labelled head or branch-point, which name the derived stages
 	RuleStageArtifactStale       = "stage.artifact.stale"         // rejection, exit 1, resolve: the device; at the stage's at, the device's intent is newer than its generation stamp (D-046), naming both remedies
-	RuleStageOrphaned            = "stage.orphaned"               // warning, exit 0, no step: the stage's id; a stage whose proposed change was deleted under it
+	RuleStageOrphaned            = "stage.orphaned"               // warning, exit 0, no step: the stage's id; a stage its proposed change no longer names, removed from its fylgja_stages (D-047)
 	RuleStageMainMoved           = "stage.main.moved"             // warning, exit 0, resolve: the branch; main's latest stamp is later than the branch's branched_from, and nothing is refused
 	RuleStageTwinMoved           = "stage.twin.moved"             // warning, exit 0, no step: the record's <branch>/<label>; the record's stage no longer resolves to the record's (branch, at), or is gone
 

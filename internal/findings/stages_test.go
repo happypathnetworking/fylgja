@@ -424,7 +424,7 @@ func listAndPlanDocuments() []labelledDocument {
 
 	var orphaned List
 	orphaned.Add(Warning, RuleStageOrphaned, "st-9",
-		`stage "cabled" (id st-9) names no proposed change: its proposed change was deleted under it; delete the stage`)
+		`stage "cabled" (id st-9) names no proposed change: it was removed from its proposed change's fylgja_stages; delete the stage`)
 	orphans := NewDocument(OpStageList, nil, orphaned)
 	orphans.Stages = &StagesBlock{Orphans: []StageOrphan{{ID: "st-9", Label: "cabled",
 		At: "2026-10-16T17:25:30.118244+00:00", AtSource: AtSourceWritten}}}

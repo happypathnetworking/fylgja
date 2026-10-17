@@ -165,9 +165,9 @@ func TestListOrphans(t *testing.T) {
 	}
 	want := findings.List{
 		{Severity: findings.Warning, Rule: findings.RuleStageOrphaned, Object: "st-o1",
-			Message: `stage "cabled" (id st-o1) names no proposed change: its proposed change was deleted under it; delete the stage`},
+			Message: `stage "cabled" (id st-o1) names no proposed change: it was removed from its proposed change's fylgja_stages; delete the stage`},
 		{Severity: findings.Warning, Rule: findings.RuleStageOrphaned, Object: "st-o2",
-			Message: `stage "live" (id st-o2) names no proposed change: its proposed change was deleted under it; delete the stage`},
+			Message: `stage "live" (id st-o2) names no proposed change: it was removed from its proposed change's fylgja_stages; delete the stage`},
 	}
 	if !reflect.DeepEqual(list, want) {
 		t.Errorf("findings:\n%+v\nwant\n%+v", list, want)

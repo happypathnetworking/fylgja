@@ -456,9 +456,9 @@ step `stage` and the rule `stage.failed` are the staging step's, as before. A re
 | `stage.ref.invalid` | rejection, 2, `start` | `--stage` is not `<branch>/<label>`, or `--branch` on `stage list` or `stage plan` is not a branch | `waypoint.ref.invalid` |
 | `stage.flags.conflict` | rejection, 2, `start` | `--stage` beside `--branch`, `--at` or `--interval` | `waypoint.flags.conflict` |
 | `stage.kind.absent` | rejection, 1, `resolve` | the default branch lacks `FylgjaStage`, an attribute of it, or `CoreProposedChange`'s `fylgja_stages`, naming `schema/fylgja-stage.yaml` | `waypoint.kind.absent` |
-| `stage.unknown` | rejection, 1, `resolve` | no open proposed change has the branch as its source; the branch is gone; or the proposed change has no stage of the label | `waypoint.unknown` |
+| `stage.unknown` | rejection, 1, `resolve` | no open proposed change has the branch as its source; the branch is gone (in `stage list`, a source branch deleted under its open proposed change is a warning, its stages still listed); or the proposed change has no stage of the label | `waypoint.unknown` |
 | `stage.duplicate` | rejection, 1, `resolve` | two marks of one proposed change share a label | `waypoint.duplicate` |
-| `stage.at.unresolved` | rejection, 1, `resolve` | a given `as_of` later than the server's clock, or a mark with no stamp at all | `waypoint.at.unresolved` |
+| `stage.at.unresolved` | rejection, 1, `resolve` | a given `as_of` later than the server's clock, or a stage with no stamp at all to name its `at` (in `stage list` a warning, the row listed with no `at`) | `waypoint.at.unresolved` |
 | `stage.at.before_branch_point` | rejection, 1, `resolve` | the stage's `at` is before the branch's `branched_from`, naming a rebase when the branch was created before the `at` | new |
 | `stage.label.reserved` | rejection, 1, `resolve` | a mark labelled `head` or `branch-point` | new |
 | `stage.artifact.stale` | rejection, 1, `resolve`, one per device | at the stage's `at`, the device's intent is later than its generation stamp, the later of its artifact's checksum stamp and the proposed change's artifact validator's completion ([D-046](../docs/decisions.md#d-046)); names both remedies | new |

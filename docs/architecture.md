@@ -279,12 +279,14 @@ Infrahub returned, or the first instant after one (Constitution VI).
 is the pinned read above, unchanged, with that `at` verbatim on every query. A refused
 resolution reads stamps and never a value of intent: the kind or its extension absent
 (`stage.kind.absent`); no open proposed change on the branch, or no such stage of it
-(`stage.unknown`); a mark carrying a reserved label (`stage.label.reserved`); a mark with
-no `at` at all, or a given one later than now (`stage.at.unresolved`); more than six
-fractional digits (`intent.at.precision`); an `at` before the branch point
-(`stage.at.before_branch_point`), which names the rebase when `branched_from` has moved
-past the mark while `created_at` has not, since a rebase re-stamps the branch, discards
-its history from pinned reads and so refuses every earlier mark at once. The server's
+(`stage.unknown`); a mark carrying a reserved label (`stage.label.reserved`); a stage with
+no `at` at all (a mark with neither `as_of` nor its label's stamp, a head of a branch with
+nothing stamped, a branch point with no `branched_from`), or a given one later than now
+(`stage.at.unresolved`); more than six fractional digits (`intent.at.precision`); an `at`
+before the branch point (`stage.at.before_branch_point`), which names the rebase when
+`branched_from` has moved past the mark while `created_at` has not, since a rebase
+re-stamps the branch, discards its history from pinned reads and so refuses every earlier
+mark at once. The server's
 clock is read once per resolution and compared with a given `as_of` alone, never with a
 stamp Infrahub returned, and never sent.
 
@@ -1059,8 +1061,11 @@ prints each `bundle_id`; a stage that is refused, a stale one among them, is rep
 its reason and the plan goes on. Between each consecutive pair it prints the **step**:
 the nodes, links, bootstraps and artifacts that differ, by presence and checksum, with
 `provenance` left out of the comparison. So two stages of an unchanged branch read
-`unchanged`, although their ids always differ, as the step from a mark made after the last
-regenerate to the head always does ([D-045](decisions.md#d-045)). A step beside a refused
+`unchanged`, although their ids differ by their `at`s, as the step from a mark made after
+the last regenerate to the head always does ([D-045](decisions.md#d-045)); two stages at one
+`(branch, at)`, two marks with one `as_of`, share one id, since the label enters neither the
+CTM nor the bundle, and read `unchanged; the two are one bundle`. Either way `unchanged`
+means identical content. A step beside a refused
 stage is not computed. The step is a pure function of the two bundles (`internal/step`),
 and `twin step` applies it to a running twin.
 

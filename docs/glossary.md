@@ -822,8 +822,10 @@ A *client* has none.
 computed by a pure function of the two (`step.Diff`, `internal/step`). It names the
 nodes, links, bootstraps and artifacts that differ, by presence and checksum, and never
 quotes content. `provenance` is left out of the comparison. `at` is hashed, so two stages
-never share a `bundle_id`, and `unchanged` therefore means identical content; both ids
-are printed beside every step. `stage plan` prints it between each consecutive pair, not
+at different `at`s never share a `bundle_id`; two at one `(branch, at)`, such as two marks
+with one `as_of`, share one, since the label enters neither the CTM nor the bundle, and
+their step reads `unchanged; the two are one bundle`. Either way `unchanged` means
+identical content; both ids are printed beside every step. `stage plan` prints it between each consecutive pair, not
 computed beside a refused stage, and `twin step` prints it and acts on it
 ([D-045](decisions.md#d-045)).
 

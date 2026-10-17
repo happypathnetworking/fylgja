@@ -60,18 +60,24 @@ Text: the heading, then each stage as it finishes and each step as it is known:
 ```
 proposed change "third link" (18df…) on branch change-1 → main, draft (4 stages)
 change-1/branch-point: refused (contract.node.missing)
-  contract.node.missing main: branch defines FylgjaContract but holds no instance of it
-step change-1/branch-point → change-1/cabled: not computed (change-1/branch-point was refused)
-change-1/cabled: main at … (branch point)… 
+  rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
+step change-1/branch-point → change-1/cabled (— → 5c6c1d96…): not computed (change-1/branch-point was refused)
+change-1/cabled: branch change-1 at … (written), "after the link is cabled"
+  bundle_id 5c6c1d96…
+  …
 ```
 
 (each compiled stage: `change-1/cabled: branch change-1 at … (written), "after the link is
 cabled"`, `  bundle_id …`, `  read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3
 artifacts, 0 lossy mappings, 0 shared ports`; a refused stage: `change-1/live: refused
-(stage.artifact.stale)` then its findings indented; a step: `step.Pair.Text()` as M10
-printed it, `unchanged` when the two bundles differ in provenance alone, which the step
-from a mark written after the last regenerate to the head always is). Exit 0 when every
-stage compiled, whatever the warnings; 1 when any was refused; 2 when the listing failed.
+(stage.artifact.stale)` then its findings indented, each in the document's text-line shape,
+`<severity> <rule> [step <step>] <object>: <message>`, the bracket for a finding with a
+step; a step: `step.Pair.Text()` as M10
+printed it, both ids beside it, `—` for a side that has none, `unchanged` when the two
+bundles differ in provenance alone, which the step from a mark written after the last
+regenerate to the head always is, and `unchanged; the two are one bundle` when two stages
+resolve to one `(branch, at)`). Exit 0 when every stage compiled, whatever the warnings; 1
+when any was refused; 2 when the listing failed.
 `--branch` is required (`--branch is required`, exit 2, no request).
 
 JSON: `plan` block (`$defs/plan`), the findings (every stage's, in order).

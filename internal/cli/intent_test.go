@@ -305,6 +305,120 @@ func TestReadFromAStageRefusals(t *testing.T) {
 	}
 }
 
+// Every refusal of the resolution's later steps is the create's for intent read too, made
+// before any branch's intent is read (FR-011, SC-005): a stale stage naming exactly the
+// devices whose intent moved, in the words stage plan gives the same stage; an at before
+// the branch point, by a rebase or not; a mark taking a reserved label; two marks sharing
+// one; a given as_of later than now and a mark with no at. Each is exit 1 with no step,
+// and the fake is asked no device, link or contract node on any branch, pinned or not.
+func TestReadFromAStageRefusedAtResolution(t *testing.T) {
+	const (
+		rebasedAt = "2026-09-10T00:00:00.000000+00:00"
+		earlyAt   = "2026-08-15T00:00:00Z"
+	)
+	add := func(st fakeStage) func(*fakeInfrahub) {
+		return func(f *fakeInfrahub) { f.changes[0].Stages = append(f.changes[0].Stages, st) }
+	}
+	for _, c := range []struct {
+		name  string
+		setup func(*fakeInfrahub)
+		label string
+		rule  string
+		// objects are the findings' objects in order; messages their words, "" for the
+		// stale ones, which are stage plan's for the same stage.
+		objects, messages []string
+	}{
+		{name: "stale", label: "sealed", rule: findings.RuleStageArtifactStale,
+			setup: func(f *fakeInfrahub) {
+				f.stamps = map[string]fakeDeviceStamps{
+					"fylgja-fixture/n1": {Intent: "2026-09-05T00:00:00.000000+00:00", Artifact: "2026-09-02T00:00:00.000000+00:00"},
+					"fylgja-fixture/n3": {Intent: "2026-09-06T00:00:00.000000+00:00", Artifact: "2026-09-02T00:00:00.000000+00:00"},
+				}
+			},
+			objects: []string{"n1", "n3"}, messages: []string{"", ""}},
+		{name: "before the branch point, after a rebase", label: "sealed", rule: findings.RuleStageAtBeforeBranchPoint,
+			setup:   func(f *fakeInfrahub) { f.changes[0].BranchedFrom = rebasedAt },
+			objects: []string{"fylgja-fixture/sealed"},
+			messages: []string{"stage fylgja-fixture/sealed has at " + fixtureAt + ", before the branch point " + rebasedAt +
+				" of fylgja-fixture: a rebase at " + rebasedAt + " moved the branch point past it (the branch was created at " +
+				demoBranchedFrom + "); mark the stage again, or delete it"}},
+		{name: "before the branch was created", label: "early", rule: findings.RuleStageAtBeforeBranchPoint,
+			setup:   add(fakeStage{ID: "st-early", Label: "early", WrittenAt: demoWrittenAt, At: earlyAt}),
+			objects: []string{"fylgja-fixture/early"},
+			messages: []string{"stage fylgja-fixture/early has at " + earlyAt + ", before the branch point " + demoBranchedFrom +
+				" of fylgja-fixture, and before the branch was created at " + demoBranchedFrom +
+				"; a stage names a moment on its source branch"}},
+		{name: "a mark labelled head", label: "head", rule: findings.RuleStageLabelReserved,
+			setup:   add(fakeStage{ID: "st-head", Label: "head", WrittenAt: demoWrittenAt}),
+			objects: []string{"fylgja-fixture/head"},
+			messages: []string{`stage fylgja-fixture/head is a mark labelled "head", which names the derived head of every ` +
+				"proposed change and is reserved; relabel it (schema/README.md); the head of fylgja-fixture is still its " +
+				"derived stage"}},
+		{name: "two marks share the label", label: "twice", rule: findings.RuleStageDuplicate,
+			objects: []string{"fylgja-fixture/twice"},
+			messages: []string{"stage fylgja-fixture/twice is held by 2 objects (ids st-twice-a, st-twice-b), which the kind's " +
+				"uniqueness constraint should have refused; none is chosen"}},
+		{name: "a given as_of later than now", label: "future", rule: findings.RuleStageAtUnresolved,
+			objects:  []string{"fylgja-fixture/future"},
+			messages: []string{"stage fylgja-fixture/future has at 2099-01-01T00:00:00Z (given), "}},
+		{name: "a mark with no at", label: "none", rule: findings.RuleStageAtUnresolved,
+			setup:   add(fakeStage{ID: "st-none", Label: "none"}),
+			objects: []string{"fylgja-fixture/none"},
+			messages: []string{"stage fylgja-fixture/none has no at: no as_of is written on it and Infrahub returned no " +
+				"updated_at for its label, so it names no point in time"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			useStateRoot(t)
+			useService(t, nil)
+			f := demoInfrahub(t)
+			if c.setup != nil {
+				c.setup(f)
+			}
+			f.start()
+			ref := "fylgja-fixture/" + c.label
+			out := filepath.Join(t.TempDir(), "never.json")
+
+			code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{stage: ref, out: out}))
+			if code != findings.ExitRejected || doc.Status != findings.StatusRejected || len(doc.Findings) != len(c.objects) {
+				t.Fatalf("exit %d, status %s, findings %+v; want 1 with %d %s", code, doc.Status, doc.Findings, len(c.objects), c.rule)
+			}
+			// Read before anything else asks the fake: no request so far is the read's.
+			readsNoIntent(t, c.name, f)
+			if _, err := os.Stat(out); !os.IsNotExist(err) {
+				t.Errorf("a refused read wrote %s", out)
+			}
+			validateM10Document(t, doc)
+
+			var byPlan findings.List
+			if c.rule == findings.RuleStageArtifactStale {
+				_, plan, raw := stageDoc(t, "plan", "--branch", "fylgja-fixture")
+				stages, _ := planned(t, plan)
+				for _, st := range stages {
+					if st.Label == c.label {
+						byPlan = st.Findings
+					}
+				}
+				if len(byPlan) != len(c.objects) {
+					t.Fatalf("stage plan refused %s with %v; want %d findings\n%s", ref, rulesOf(byPlan), len(c.objects), raw)
+				}
+			}
+			for i, got := range doc.Findings {
+				want := findings.Finding{Severity: findings.Rejection, Rule: c.rule, Object: c.objects[i], Message: c.messages[i]}
+				switch {
+				case c.rule == findings.RuleStageArtifactStale:
+					want.Message = byPlan[i].Message
+				case c.label == "future" && strings.HasPrefix(got.Message, want.Message) &&
+					strings.HasSuffix(got.Message, ": it seals nothing yet, and a twin from it could differ between two creates"):
+					want.Message = got.Message
+				}
+				if got != want {
+					t.Errorf("finding %d %+v\nwant %+v", i, got, want)
+				}
+			}
+		})
+	}
+}
+
 // Through the command line, a reference that is not the form is stage.ref.invalid, and a
 // flag beside --stage stage.flags.conflict naming the first of --branch and --at whatever
 // order they are given in, each exit 2 with no step, before any connection: Infrahub is

@@ -119,6 +119,28 @@ func (c *Client) DeleteBranch(name string) error {
 	return err
 }
 
+// BranchExists reports whether Infrahub lists a branch by name. It writes nothing.
+func (c *Client) BranchExists(name string) (bool, error) {
+	raw, err := c.GraphQL("main", fmt.Sprintf(`{ Branch(name: %q) { name } }`, name))
+	if err != nil {
+		return false, fmt.Errorf("reading branch %s: %w", name, err)
+	}
+	var r struct {
+		Branch []struct {
+			Name string `json:"name"`
+		} `json:"Branch"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		return false, err
+	}
+	for _, b := range r.Branch {
+		if b.Name == name {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // LoadSchema loads every YAML file in schemaDir onto a branch, then waits for the
 // branch's GraphQL schema to be rebuilt. The rebuild is asynchronous: seeding
 // immediately after a load races it.

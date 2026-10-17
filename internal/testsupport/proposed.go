@@ -342,6 +342,40 @@ func (c *Client) StagesOf(id string) ([]StageRow, error) {
 	return out, nil
 }
 
+// StagesPresent returns which of ids still read as stages on the default branch, where
+// the branch-agnostic kind lives, whatever proposed change they name or none. It writes
+// nothing, so it needs no guard: a test asks it of the ids it made.
+func (c *Client) StagesPresent(ids []string) ([]string, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	quoted := make([]string, len(ids))
+	for i, id := range ids {
+		quoted[i] = fmt.Sprintf("%q", id)
+	}
+	raw, err := c.GraphQL("main", fmt.Sprintf(`{ FylgjaStage(ids: [%s]) { edges { node { id } } } }`, strings.Join(quoted, ", ")))
+	if err != nil {
+		return nil, fmt.Errorf("reading stages by id: %w", err)
+	}
+	var r struct {
+		S struct {
+			Edges []struct {
+				Node struct {
+					ID string `json:"id"`
+				} `json:"node"`
+			} `json:"edges"`
+		} `json:"FylgjaStage"`
+	}
+	if err := json_Unmarshal(raw, &r); err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, e := range r.S.Edges {
+		out = append(out, e.Node.ID)
+	}
+	return out, nil
+}
+
 // DeleteStagesOf deletes a proposed change's stages and returns how many. It comes before
 // the proposed change's own delete, which Infrahub refuses while a stage names it, the
 // relationship being required (research §8.8).

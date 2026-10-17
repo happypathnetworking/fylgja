@@ -46,8 +46,10 @@ func harness(t *testing.T) *testsupport.Client {
 // testBranch makes a branch fylgja-test-st-<ts>-<n>. When the test ends, each stage of
 // each proposed change whose source it is goes, then those proposed changes, then the
 // branch: Infrahub refuses a proposed change's delete while a stage names it, and a
-// branch deleted first cancels its open proposed change. The durable fylgja-fixture branch
-// is never written.
+// branch deleted first cancels its open proposed change. Then nothing the test made may
+// be left: the branch, its proposed changes, and each stage collected before the deletion
+// by id, so the check is of the test's own objects, the package's tests sharing Infrahub
+// (SC-006). The durable fylgja-fixture branch is never written.
 func testBranch(t *testing.T, c *testsupport.Client) string {
 	t.Helper()
 	name := fmt.Sprintf("%sst-%d-%d", testsupport.TestBranchPrefix, time.Now().Unix(), rand.Intn(9999))
@@ -55,6 +57,28 @@ func testBranch(t *testing.T, c *testsupport.Client) string {
 		t.Fatalf("creating branch: %v", err)
 	}
 	t.Cleanup(func() {
+		var made []string
+		if pcs, err := c.ProposedChangesOf(name); err != nil {
+			t.Errorf("listing the proposed changes on %s before deleting them: %v", name, err)
+		} else {
+			for _, p := range pcs {
+				rows, err := c.StagesOf(p.ID)
+				if err != nil {
+					t.Errorf("listing proposed change %s's stages before deleting them: %v", p.ID, err)
+				}
+				for _, r := range rows {
+					made = append(made, r.ID)
+				}
+			}
+		}
+		// The reads that check the deletion see what is there before it, so their
+		// silence after it is the deletion's.
+		if exists, err := c.BranchExists(name); err != nil || !exists {
+			t.Errorf("before the deletion branch %s exists: %t (%v)", name, exists, err)
+		}
+		if present, err := c.StagesPresent(made); err != nil || len(present) != len(made) {
+			t.Errorf("before the deletion %d of the %d stages made on %s read (%v)", len(present), len(made), name, err)
+		}
 		stages, proposed, err := c.DeleteTestBranchCounting(name)
 		if err != nil {
 			t.Errorf("could not delete branch %s and what hangs on it (%d stage(s), %d proposed change(s) deleted): %v",
@@ -62,6 +86,15 @@ func testBranch(t *testing.T, c *testsupport.Client) string {
 			return
 		}
 		t.Logf("deleted %d stage(s), %d proposed change(s), branch %s", stages, proposed, name)
+		if exists, err := c.BranchExists(name); err != nil || exists {
+			t.Errorf("after the deletion branch %s exists: %t (%v)", name, exists, err)
+		}
+		if left, err := c.ProposedChangesOf(name); err != nil || len(left) != 0 {
+			t.Errorf("after the deletion the proposed changes on %s are %+v (%v); want none", name, left, err)
+		}
+		if left, err := c.StagesPresent(made); err != nil || len(left) != 0 {
+			t.Errorf("after the deletion the stages %v of the %d made on %s are still read (%v); want none", left, len(made), name, err)
+		}
 	})
 	return name
 }
@@ -662,6 +695,18 @@ func TestStageRefusals(t *testing.T) {
 	for _, m := range refused(t, name+"/future", list, findings.RuleStageAtUnresolved, name+"/future") {
 		if !strings.Contains(m, "later than the current time") {
 			t.Errorf("%s/future: %q does not say it is in the future", name, m)
+		}
+	}
+
+	// A label the open proposed change lacks names no stage of it; the refusal names its
+	// stages in order: the branch point, the marks by their at (the one labelled head
+	// shares the derived head's place), and the head.
+	_, list = resolve(Ref{Branch: name, Label: "nosuch"})
+	order := append(append([]string{LabelBranchPoint}, marks...), "future", LabelHead)
+	for _, m := range refused(t, name+"/nosuch", list, findings.RuleStageUnknown, name+"/nosuch") {
+		if want := fmt.Sprintf(`proposed change %q (%s) on branch %s has no stage "nosuch"; its stages are: %s`,
+			name, id, name, strings.Join(order, ", ")); m != want {
+			t.Errorf("%s/nosuch: %q\nwant %q", name, m, want)
 		}
 	}
 

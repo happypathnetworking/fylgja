@@ -1282,9 +1282,12 @@ To be stated in the product surface, not buried here.
   stage marked after an intent change and before the regenerate is refused stale**,
   naming the device and both remedies ([D-046](decisions.md#d-046)): mark after the
   branch's writes and after their artifacts have moved. The rule is per device, so a
-  neighbour's change that alters a device's rendered lines while none of the device's own
-  stamps moves is not named on that device; the proposed change's checks cover it, since
-  a run-check re-stamps the validator for every device.
+  neighbour's change that alters a device's rendered lines is not named on that device
+  while none of the device's own stamps moves and no intent event names the device or one
+  of its interfaces, as the event's node or a peer ([D-048](decisions.md#d-048)): a link
+  removed between them names both ends, an edit of the neighbour's own attributes does
+  not. The proposed change's checks cover it, since a run-check re-stamps the validator
+  for every device.
 - **A lossy mapping loses interfaces.** Where a container has fewer ports than the
   production device has interfaces, an interface that shares a port with a cabled one is
   omitted, and the manifest names it (`fidelity.lossy`, `omit.interface.shared`). An
@@ -1322,7 +1325,8 @@ To be stated in the product surface, not buried here.
    verification: a read pinned before the branch's creation answers with `main` as it
    then stood, back to the default branch's creation, and is refused before that; a read
    pinned at exactly a stamp sees the node and not the value, so the head is pinned one
-   microsecond after the branch's latest stamp; there is no server-side marker for the
+   microsecond after the branch's latest stamp, or after its latest intent event, when
+   that is later ([D-048](decisions.md#d-048)); there is no server-side marker for the
    read time ([D-012](decisions.md#d-012)).
 3. ~~**Change detection for following.**~~ Closed by [D-026](decisions.md#d-026): a
    scheduled read and compare. Neither the event stream nor the branch diff decides

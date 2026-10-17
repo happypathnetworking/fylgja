@@ -54,9 +54,12 @@ hand, after the merge. In order:
 Every other feature keeps the order below. [F-023](#f-023)'s decision entries are
 [D-045](decisions.md#d-045), written on 2026-10-16 after its live verification
 (`specs/014-proposed-change-stages/research.md`) and before its spec, and
-[D-046](decisions.md#d-046), which its plan drafted and the operator accepted; the other
-features have neither a decision entry nor a researched estimate yet, and `plan` writes
-each entry after the live verification.
+[D-046](decisions.md#d-046), which its plan drafted and the operator accepted, then
+[D-047](decisions.md#d-047), the orphan's cause, and [D-048](decisions.md#d-048), the head
+and the staleness rule reading the branch's events, which its implementation's live
+verification raised and the operator accepted on 2026-10-17; the other features have
+neither a decision entry nor a researched estimate yet, and `plan` writes each entry
+after the live verification.
 
 **At 0.2's close**, [F-023](#f-023), [F-007](#f-007), [F-008](#f-008), [F-012](#f-012) and
 [F-014](#f-014) are built and move to a Release 0.2 table in the archive, beside v0.1's;
@@ -136,15 +139,19 @@ to, and it can be opened as a draft while the change is built. So a stage is a m
 proposed change: `FylgjaStage`, loaded on `main` beside the contract, relates to the
 proposed change, carries a label unique within it, an optional `as_of` and a description,
 and has no branch of its own, since its branch is the proposed change's source. The ends
-are derived, the branch point from `branched_from` and the head pinned at a stamp read
-from Infrahub, so a proposed change with nothing marked has two stages and only the
-moments between are written. The operator writes stages by Infrahub's own means and Fylgja
+are derived, the branch point from `branched_from` and the head pinned just after the
+latest stamp or intent event read from Infrahub ([D-048](decisions.md#d-048)), so a
+proposed change with nothing marked has two stages and only the moments between are
+written. The operator writes stages by Infrahub's own means and Fylgja
 reads them (Constitution III). `--stage`, `stage list` and `stage plan` took M10's
 surface's place, and `twin step` goes to a stage of the twin's own proposed change. A
 stage whose `at` falls outside the branch's life is refused, and so is a stale one, where
-a device's intent moved after its configuration was last generated
-([D-046](decisions.md#d-046)); M10's kind is removed with its commands, rules and contract
-(superseding [D-032](decisions.md#d-032)). Probed live on 2026-10-16; its
+a device's intent moved, by its own stamps or an intent event naming it, after its
+configuration was last generated ([D-046](decisions.md#d-046),
+[D-048](decisions.md#d-048)); a stage its proposed change no longer names is orphaned,
+warned of and used by nothing ([D-047](decisions.md#d-047)); M10's kind is removed with
+its commands, rules and contract (superseding [D-032](decisions.md#d-032)). Probed live
+on 2026-10-16; its
 [brief](../specs/014-proposed-change-stages/brief.md) holds the probe and what was
 decided. First in 0.2, since everything the release rehearses is a stage.
 
@@ -387,7 +394,9 @@ show beyond a status line. It is a second client of the same API.
   stages superseding [D-032](decisions.md#d-032). A stage is a moment of a proposed
   change, the ends are derived (the branch point read on `main` at `branched_from`, the
   head pinned one microsecond after the branch's latest stamp), and M10's kind is removed;
-  built by 014, with [D-046](decisions.md#d-046) refining its staleness rule. With it,
+  built by 014, with [D-046](decisions.md#d-046) refining its staleness rule,
+  [D-047](decisions.md#d-047) its orphan's cause, and [D-048](decisions.md#d-048) its head
+  and its staleness rule again, both reading the branch's intent events. With it,
   Constitution VI amended (1.2.0), citing that entry: "MUST NOT send an `at` of its own"
   became "MUST NOT send an `at` it composed from a clock of its own; an `at` read from
   Infrahub — a stamp it returned, or the first instant after one — MAY be passed as the

@@ -353,8 +353,10 @@ fetch. Here, the platform, and the reason the twin *walks*.
 when a device's configuration was last generated, as a *stage* judges it: the later of its
 *artifact*'s `checksum.updated_at` (the artifact its package's `config.artifact_name`
 names) and the *proposed change*'s artifact validator's `completed_at` value, both pinned at
-the stage's `at`. A device whose own intent was written later is stale there, and the stage
-is refused `stage.artifact.stale`, naming the device and both remedies: a generate, or the
+the stage's `at`. A device whose own intent was written later is stale there, its intent
+written by its own stamps or by an intent event naming it or one of its interfaces
+([D-048](decisions.md#d-048)), so a removal no stamp records counts, and the stage is
+refused `stage.artifact.stale`, naming the device and both remedies: a generate, or the
 proposed change's checks. The validator counts because a regeneration to identical bytes
 moves no checksum, and a run-check moves the validator either way. The *head* reads it
 unpinned, as it reads its stamps.
@@ -604,7 +606,7 @@ carries it. A step that ended `stepped` or `unchanged` has none.
 frozen and reproducible. A twin built from a *stage* is always pinned: a *mark* resolves
 to the `at` written on it or to the moment Infrahub recorded its writing, the *branch
 point* to `branched_from` and the *head* to the first instant after the branch's latest
-stamp, and the twin never follows.
+stamp or its latest intent event, whichever is later, and the twin never follows.
 
 **Pass** — One run of one Spec Kit command (`specify`, `plan`, `implement`, …) over one
 *spec*, as [how-it-was-built.md](how-it-was-built.md) counts them. Not a whole workflow:

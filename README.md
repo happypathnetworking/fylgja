@@ -392,7 +392,7 @@ in flight: none
 held: 3 host names, 8 ports, 8 link ends, 3 record claims (the record's, not read); failed: none; unread: none
 $ bin/fylgja stage list
 proposed change "fylgja-test-readme" (18df36fe-997f-c213-33b8-c510acd939bd) on branch fylgja-test-readme, draft (4 stages)
-  fylgja-test-readme/branch-point  main                at 2026-10-17T04:33:44.802096Z (branch point)  ""
+  fylgja-test-readme/branch-point  main                at 2026-10-17T04:33:44.802096Z      (branch point)  ""
   fylgja-test-readme/seeded        fylgja-test-readme  at 2026-10-17T04:34:59.424352+00:00 (written)       "seeded"
   fylgja-test-readme/third-link    fylgja-test-readme  at 2026-10-17T04:35:09.759424+00:00 (written)       "third link"  ← twin
   fylgja-test-readme/head          fylgja-test-readme  at 2026-10-17T04:35:08.687492+00:00 (head)          ""

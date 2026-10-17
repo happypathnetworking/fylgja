@@ -117,10 +117,11 @@ func heading(pc stages.ProposedChange, into bool, n int) string {
 }
 
 // printList prints the listing: a heading per proposed change, then one line per stage
-// with its reference, branch and source padded so the ats and the descriptions line up
-// within the proposed change, the description quoted, and the twin's row marked; beside a
-// diverged record the mark says which stage the failed step was going to. The orphans
-// follow, one line each.
+// with its reference, branch, at and source padded so the ats and the descriptions line up
+// within the proposed change, whatever each at's width (Infrahub writes a branch's origin
+// with Z and a stamp with +00:00), the description quoted, and the twin's row marked;
+// beside a diverged record the mark says which stage the failed step was going to. A stage
+// with no at shows it unresolved. The orphans follow, one line each.
 func printList(opts *options, res stages.ListResult) {
 	twinMark := "  ← twin"
 	if r := res.Record; r != nil && r.State == wire.StateDiverged && r.Towards != "" {
@@ -139,10 +140,11 @@ func printList(opts *options, res stages.ListResult) {
 			end++
 		}
 		rows := res.Rows[start:end]
-		refWidth, branchWidth, sourceWidth := 0, 0, 0
+		refWidth, branchWidth, atWidth, sourceWidth := 0, 0, 0, 0
 		for _, r := range rows {
 			refWidth = max(refWidth, len(r.Ref.String()))
 			branchWidth = max(branchWidth, len(r.Branch))
+			atWidth = max(atWidth, len(atText(r.At)))
 			sourceWidth = max(sourceWidth, len(source(r.AtSource)))
 		}
 		opts.note("%s", heading(rows[0].ProposedChange, false, len(rows)))
@@ -151,14 +153,23 @@ func printList(opts *options, res stages.ListResult) {
 			if r.Twin {
 				mark = twinMark
 			}
-			opts.note("  %-*s  %-*s  at %s %-*s  %q%s", refWidth, r.Ref, branchWidth, r.Branch, r.At, sourceWidth,
-				source(r.AtSource), r.Description, mark)
+			opts.note("  %-*s  %-*s  at %-*s %-*s  %q%s", refWidth, r.Ref, branchWidth, r.Branch, atWidth, atText(r.At),
+				sourceWidth, source(r.AtSource), r.Description, mark)
 		}
 		start = end
 	}
 	for _, o := range res.Orphans {
 		opts.note("orphaned: stage %q (%s) names no proposed change", o.Label, o.ID)
 	}
+}
+
+// atText is a listed at as the text prints it: verbatim, or unresolved when the stage has
+// none.
+func atText(at string) string {
+	if at == "" {
+		return "unresolved"
+	}
+	return at
 }
 
 // source is where an at came from as the text names it, in parentheses: (written),

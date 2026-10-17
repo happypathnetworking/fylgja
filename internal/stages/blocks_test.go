@@ -86,6 +86,18 @@ func TestBlocksValidate(t *testing.T) {
 	if got := mustValidate(t, "list", empty.Block()); got != `{"branch":"change-9","rows":[],"orphans":[],"record":null}` {
 		t.Errorf("an empty listing %s", got)
 	}
+	// A row whose stage has no at carries none: a branch deleted under its proposed change.
+	delete(r.branches, "change-1")
+	res, _, err = List(context.Background(), r, s, "change-1", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got = mustValidate(t, "list", res.Block())
+	if want := `{"ref":"change-1/branch-point","branch":"main","label":"branch-point","proposed_change":{"id":"pc-1",` +
+		`"name":"third link","branch":"change-1","draft":true},"at_source":"branch_point","description":"","twin":false}`; !strings.Contains(got, want) {
+		t.Errorf("list block %s\nlacks the branch point with no at, %s", got, want)
+	}
+	r.branches["change-1"] = &intent.BranchInfo{Name: "change-1", BranchedFrom: branchedFrom, CreatedAt: createdAt}
 
 	plan, _ := planned(t, r, s, "change-1", &fakePipeline{t: t, readRefused: emptyMain})
 	b, err := plan.Block()

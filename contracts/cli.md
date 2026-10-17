@@ -317,9 +317,9 @@ is read, and its label and description enter neither the CTM nor the bundle.
 
 ### `stage list [--branch <b>]`
 
-A heading per proposed change, then one line per stage, the reference and the branch padded
-so the `at`s line up, the source in parentheses, the description quoted and the twin's row
-marked:
+A heading per proposed change, then one line per stage, the reference, the branch and the
+`at` padded so the `at`s, the sources and the descriptions line up whatever each `at`'s
+width, the source in parentheses, the description quoted and the twin's row marked:
 
 ```
 proposed change "third link" (18df…) on branch change-1, draft (4 stages)
@@ -332,7 +332,11 @@ proposed change "third link" (18df…) on branch change-1, draft (4 stages)
 With no open proposed change: `no open proposed change`, or `branch b: no open proposed
 change` with `--branch`, exit 0, `stages.rows` empty. Beside a diverged record the mark
 reads `← twin (diverged towards change-1/live)`. Orphans print after the proposed changes:
-`orphaned: stage "cabled" (18df…) names no proposed change`. Exit 0, warnings included; 1
+`orphaned: stage "cabled" (18df…) names no proposed change`. Every stage has its row: one
+with no `at` prints `at unresolved`, its row has no `at`, and the warning
+`stage.at.unresolved` names it; a source branch deleted under its open proposed change lists
+its marks at their own `at`s and its branch point and head unresolved, beside one warning
+`stage.unknown` naming the branch, until Infrahub cancels it. Exit 0, warnings included; 1
 when a mark labelled `head` or `branch-point` is among the rows, which are all still listed,
 or the kind is absent; 2 when Infrahub cannot be read (`operation.failed` at `resolve`).
 `--json`: the `stages` block and the findings.

@@ -141,6 +141,75 @@ func TestStageListOneProposedChange(t *testing.T) {
 	mustQuoteNoContent(t, f, stdout, stderr, raw)
 }
 
+// The ats are padded to the widest within the proposed change, so the sources and the
+// descriptions line up whatever each at's width: Infrahub writes a branch's origin with Z
+// and a stamp with +00:00, and an as_of reads as the operator wrote it (FR-016).
+func TestStageListAlignsAtsOfMixedWidths(t *testing.T) {
+	useStateRoot(t)
+	useService(t, nil)
+	f := planInfrahub(t, twoMarks()[1], mark("st-live", "live", "2026-10-16T17:30:00Z", "the leaf live"))
+	f.changes[0].BranchedFrom = "2026-10-16T08:00:00.000000Z"
+	f.start()
+
+	code, stdout, stderr := runStage(t, "list", "--branch", lessLink)
+	want := `proposed change "change pc-1" (pc-1) on branch change-1, draft (4 stages)
+  change-1/branch-point  main      at 2026-10-16T08:00:00.000000Z      (branch point)  ""
+  change-1/cabled        change-1  at 2026-10-16T08:30:00.000000+00:00 (written)       "the leaf cabled"
+  change-1/live          change-1  at 2026-10-16T17:30:00Z             (given)         "the leaf live"
+  change-1/head          change-1  at 2026-10-16T09:00:00.000001+00:00 (head)          ""
+`
+	if code != findings.ExitOK || stdout != want || stderr != "" {
+		t.Errorf("exit %d, stdout:\n%s\nstderr %q; want 0 with:\n%s", code, stdout, stderr, want)
+	}
+	columns := map[int]bool{}
+	for _, line := range strings.Split(strings.TrimSuffix(stdout, "\n"), "\n")[1:] {
+		columns[strings.Index(line, `"`)] = true
+	}
+	if len(columns) != 1 {
+		t.Errorf("the descriptions start in columns %v; want one", columns)
+	}
+}
+
+// A source branch deleted under its open proposed change still lists its stages until
+// Infrahub cancels it: the marks at their own ats, the branch point and the head with
+// none, shown unresolved and padded as any at, beside one stage.unknown warning naming the
+// branch, exit 0; the document's rows for the two derived stages carry no at.
+func TestStageListBranchGone(t *testing.T) {
+	useStateRoot(t)
+	useService(t, nil)
+	f := planInfrahub(t, twoMarks()...)
+	f.gone = map[string]bool{lessLink: true}
+	f.start()
+
+	code, stdout, stderr := runStage(t, "list")
+	want := `proposed change "change pc-1" (pc-1) on branch change-1, draft (4 stages)
+  change-1/branch-point  main      at unresolved                       (branch point)  ""
+  change-1/cabled        change-1  at 2026-10-16T08:30:00.000000+00:00 (written)       "the leaf cabled"
+  change-1/live          change-1  at 2026-10-16T08:50:00.000000+00:00 (given)         "the leaf live"
+  change-1/head          change-1  at unresolved                       (head)          ""
+`
+	if code != findings.ExitOK || stdout != want || !strings.Contains(stderr, findings.RuleStageUnknown) {
+		t.Errorf("exit %d, stdout:\n%s\nstderr %q; want 0 with:\n%s\nand the warning", code, stdout, stderr, want)
+	}
+
+	code, doc, raw := stageDoc(t, "list")
+	warning := findings.Finding{Severity: findings.Warning, Rule: findings.RuleStageUnknown, Object: lessLink,
+		Step: findings.StepResolve, Message: "branch change-1 does not exist; the open proposed change pc-1 still names it " +
+			"(Infrahub cancels it about sixteen seconds after a branch is deleted); until then its branch point and head have no at"}
+	rows := []string{
+		"change-1/branch-point main  branch_point ",
+		"change-1/cabled change-1 " + cabledAt + " written the leaf cabled",
+		"change-1/live change-1 " + planLiveAt + " given the leaf live",
+		"change-1/head change-1  head ",
+	}
+	if code != findings.ExitOK || doc.Status != findings.StatusOK || !reflect.DeepEqual(doc.Findings, findings.List{warning}) ||
+		!slices.Equal(listedRows(doc), rows) || strings.Count(raw, `"at":`) != 2 {
+		t.Errorf("exit %d, findings %+v, rows %q; want 0, %+v, %q, and two rows with an at\n%s",
+			code, doc.Findings, listedRows(doc), warning, rows, raw)
+	}
+	listsNoIntent(t, "stage list", f)
+}
+
 // Every open proposed change is listed, sorted by source branch whatever order Infrahub
 // serves them in, each under its own heading and padded within itself; an open one that is
 // not a draft says nothing of it.

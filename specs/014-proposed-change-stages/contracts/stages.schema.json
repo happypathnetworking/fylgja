@@ -46,8 +46,8 @@
     },
     "row": {
       "type": "object",
-      "description": "a resolved stage (the fields of `resolved`, restated because that schema admits nothing else) plus twin",
-      "required": ["ref", "branch", "label", "proposed_change", "at", "at_source", "description", "twin"],
+      "description": "a resolved stage (the fields of `resolved`, restated because that schema admits nothing else) plus twin. Every stage has its row: one nothing names an at for (stage.at.unresolved, or stage.unknown for a source branch deleted under its open proposed change) has no at",
+      "required": ["ref", "branch", "label", "proposed_change", "at_source", "description", "twin"],
       "additionalProperties": false,
       "properties": {
         "ref": {"$ref": "#/$defs/ref"},
@@ -104,7 +104,7 @@
     },
     "list": {
       "type": "object",
-      "description": "stage.list: the stages of every open proposed change (or of the one whose source branch was asked for), sorted by branch then order (branch point, marks by at, head), each with the reference it resolves to; the orphaned stages; and the stage the host's readable record names, when it names one",
+      "description": "stage.list: every stage of every open proposed change (or of the one whose source branch was asked for), sorted by branch then order (branch point, marks by at, head), each with the reference it resolves to; the orphaned stages; and the stage the host's readable record names, when it names one",
       "required": ["branch", "rows", "orphans", "record"],
       "additionalProperties": false,
       "properties": {

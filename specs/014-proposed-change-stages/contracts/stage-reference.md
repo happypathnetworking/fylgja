@@ -61,7 +61,10 @@ the first conflicting flag, in the order `--branch`, `--at`, `--interval`).
 
 **A listing** (`stage list`) applies steps 1–6 and 9 to every open proposed change's stages
 and refuses nothing but step 1; a reserved label is a rejection beside its row (the
-document's status `rejected`, exit 1, the other rows still listed); an orphaned stage
+document's status `rejected`, exit 1, the other rows still listed); step 3's branch gone
+and step 5's stage with no `at` are warnings under their own identifiers and wordings, every
+stage still listed (the gone branch's message adds `; until then its branch point and head
+have no at`); an orphaned stage
 (`FylgjaStage(proposed_change__isnull: true)`, a stage removed from its proposed change's
 `fylgja_stages`; [D-047](../../../docs/decisions.md#d-047)) is the warning
 `stage.orphaned` (object the stage's id, `stage "<label>" (id …) names no proposed change:

@@ -192,10 +192,25 @@ func (b StagesBlock) MarshalJSON() ([]byte, error) {
 
 // StageRow is one listed stage: the reference it resolves to now, with no refusal (a
 // listing resolves nothing for a run), and whether it is the one the host's twin was built
-// from.
+// from. A stage nothing names an at for has its row with no at.
 type StageRow struct {
 	StageBlock
 	Twin bool `json:"twin"`
+}
+
+// MarshalJSON leaves at out of a row whose stage has none, which the contract allows a
+// row and not a resolved stage block.
+func (r StageRow) MarshalJSON() ([]byte, error) {
+	return json.Marshal(struct {
+		Ref            string      `json:"ref"`
+		Branch         string      `json:"branch"`
+		Label          string      `json:"label"`
+		ProposedChange StageChange `json:"proposed_change"`
+		At             string      `json:"at,omitempty"`
+		AtSource       string      `json:"at_source"`
+		Description    string      `json:"description"`
+		Twin           bool        `json:"twin"`
+	}{r.Ref, r.Branch, r.Label, r.ProposedChange, r.At, r.AtSource, r.Description, r.Twin})
 }
 
 // StageOrphan is a stage its proposed change no longer names, removed from its

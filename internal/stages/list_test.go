@@ -85,8 +85,8 @@ func TestListRefusesNoAt(t *testing.T) {
 	}
 }
 
-// The kind absent is the one refusal of the whole listing; any other reader error, and a
-// branch deleted under its open proposed change, is returned as it is.
+// The kind absent is the one refusal of the whole listing; any other reader error is
+// returned as it is.
 func TestListKindAbsentAndReaderErrors(t *testing.T) {
 	r, s := story()
 	r.checkErr = &intent.StageKindError{Missing: []string{"description"}}
@@ -112,39 +112,106 @@ func TestListKindAbsentAndReaderErrors(t *testing.T) {
 			t.Errorf("%s: %v, %v; want the error as it is", name, list, err)
 		}
 	}
-	r, s = story()
-	delete(r.branches, "change-1")
-	if _, _, err := List(context.Background(), r, s, "", nil); err == nil ||
-		err.Error() != "branch change-1 does not exist; the open proposed change pc-1 still names it "+
-			"(Infrahub cancels it about sixteen seconds after a branch is deleted)" {
-		t.Errorf("a branch gone: %v", err)
+}
+
+// severities is each finding as its severity, rule and object.
+func severities(list findings.List) []string {
+	var out []string
+	for _, f := range list {
+		out = append(out, string(f.Severity)+" "+f.Rule+" "+f.Object)
 	}
+	return out
 }
 
 // A mark labelled like a derived stage is a rejection beside its row, every row still
-// listed, the derived stage of that name with it; a stage nothing names an at for is left
-// out with stage.at.unresolved beside.
-func TestListReservedAndUnresolved(t *testing.T) {
+// listed, the derived stage of that name with it.
+func TestListReserved(t *testing.T) {
 	r, s := story(change1(append(change1().Stages, mark("st-head", "head", "2026-10-16T17:27:00.000000+00:00", nil, ""))...), change2())
-	s.byBranch["change-2"] = intent.Stamps{}
 	res, list, err := List(context.Background(), r, s, "", nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []string{"change-1/branch-point branch_point", "change-1/cabled written", "change-1/head written", "change-1/live given",
-		"change-1/head head", "change-2/branch-point branch_point"}
+		"change-1/head head", "change-2/branch-point branch_point", "change-2/head head"}
 	if got := rowRefs(res.Rows); !reflect.DeepEqual(got, want) {
 		t.Errorf("rows %v\nwant %v", got, want)
 	}
-	var rules []string
-	for _, f := range list {
-		rules = append(rules, f.Rule+" "+f.Object)
+	if got, want := severities(list), []string{"rejection stage.label.reserved change-1/head"}; !reflect.DeepEqual(got, want) {
+		t.Errorf("findings %v, want %v", got, want)
 	}
-	if want := []string{"stage.label.reserved change-1/head", "stage.at.unresolved change-2/head"}; !reflect.DeepEqual(rules, want) {
-		t.Errorf("findings %v, want %v", rules, want)
-	}
-	if st := findings.NewDocument(findings.OpTwinShow, nil, list).Status; st.ExitCode() != findings.ExitRejected {
+	if st := findings.NewDocument(findings.OpStageList, nil, list).Status; st.ExitCode() != findings.ExitRejected {
 		t.Errorf("status %s; want rejected, exit 1", st)
+	}
+}
+
+// Every stage has its row: one nothing names an at for — the head of a branch that holds
+// nothing stamped, a mark Infrahub returned no stamp for — is listed with no at and warned
+// of, stage.at.unresolved in the resolution's words, and the listing exits 0.
+func TestListUnresolved(t *testing.T) {
+	r, s := story(change1(mark("st-cabled", "cabled", "", nil, "after the link is cabled")), change2())
+	s.byBranch["change-2"] = intent.Stamps{}
+	res, list, err := List(context.Background(), r, s, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"change-1/branch-point branch_point", "change-1/cabled written", "change-1/head head",
+		"change-2/branch-point branch_point", "change-2/head head"}
+	if got := rowRefs(res.Rows); !reflect.DeepEqual(got, want) {
+		t.Errorf("rows %v\nwant %v", got, want)
+	}
+	if cabled, head := res.Rows[1], res.Rows[4]; cabled.At != "" || head.At != "" || res.Rows[3].At == "" {
+		t.Errorf("cabled at %q, change-2's head at %q; want neither, and change-2's branch point at its branched_from", cabled.At, head.At)
+	}
+	wantList := findings.List{
+		{Severity: findings.Warning, Rule: findings.RuleStageAtUnresolved, Object: "change-1/cabled", Step: findings.StepResolve,
+			Message: "stage change-1/cabled has no at: no as_of is written on it and Infrahub returned no updated_at for its label, " +
+				"so it names no point in time"},
+		{Severity: findings.Warning, Rule: findings.RuleStageAtUnresolved, Object: "change-2/head", Step: findings.StepResolve,
+			Message: "stage change-2/head has no at: branch change-2 holds no stamped device, interface, link or artifact, " +
+				"so it names no point in time"},
+	}
+	if !reflect.DeepEqual(list, wantList) {
+		t.Errorf("findings:\n%+v\nwant\n%+v", list, wantList)
+	}
+	if st := findings.NewDocument(findings.OpStageList, nil, list).Status; st.ExitCode() != findings.ExitOK {
+		t.Errorf("status %s; want exit 0", st)
+	}
+}
+
+// A source branch deleted under its open proposed change: until Infrahub cancels it, its
+// marks list at their own ats and its two derived stages with none, one stage.unknown
+// warning saying why; no stamp of the missing branch is read, main is not read for it, and
+// every other proposed change lists as usual. The listing exits 0.
+func TestListBranchGone(t *testing.T) {
+	r, s := story()
+	delete(r.branches, "change-1")
+	res, list, err := List(context.Background(), r, s, "", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{"change-1/branch-point branch_point", "change-1/cabled written", "change-1/live given", "change-1/head head",
+		"change-2/branch-point branch_point", "change-2/head head"}
+	if got := rowRefs(res.Rows); !reflect.DeepEqual(got, want) {
+		t.Errorf("rows %v\nwant %v", got, want)
+	}
+	var ats []string
+	for _, row := range res.Rows {
+		ats = append(ats, row.At)
+	}
+	if want := []string{"", cabledAt, liveAt, "", "2026-10-16T17:40:00.000000Z", "2026-10-16T17:41:00.000001+00:00"}; !reflect.DeepEqual(ats, want) {
+		t.Errorf("ats %q\nwant %q", ats, want)
+	}
+	wantList := findings.List{{Severity: findings.Warning, Rule: findings.RuleStageUnknown, Object: "change-1", Step: findings.StepResolve,
+		Message: "branch change-1 does not exist; the open proposed change pc-1 still names it " +
+			"(Infrahub cancels it about sixteen seconds after a branch is deleted); until then its branch point and head have no at"}}
+	if !reflect.DeepEqual(list, wantList) {
+		t.Errorf("findings:\n%+v\nwant\n%+v", list, wantList)
+	}
+	if want := []string{"change-2@", "main@"}; !reflect.DeepEqual(s.calls, want) {
+		t.Errorf("stamps read %v, want %v", s.calls, want)
+	}
+	if st := findings.NewDocument(findings.OpStageList, nil, list).Status; st.ExitCode() != findings.ExitOK {
+		t.Errorf("status %s; want exit 0", st)
 	}
 }
 

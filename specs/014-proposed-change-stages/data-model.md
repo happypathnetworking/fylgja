@@ -174,7 +174,7 @@ Contracts: [contracts/stage-commands.md](contracts/stage-commands.md),
 
 **`stages.ListResult`** (`$defs/list`): `branch` (the filter or `null`); `rows`, every
 visible proposed change's stages in order, sorted by branch then order, each `Resolved`
-plus `twin` (whether the record names it); `orphans`, stages their proposed change no
+plus `twin` (whether the record names it), with no `at` when nothing names one; `orphans`, stages their proposed change no
 longer names (`id`, `label`, `at`, `at_source`; D-047), each also `stage.orphaned`;
 `record`, the host's readable record's stage and reference (`$defs/record`: `ref`,
 `proposed_change {id, branch}`, `label`, `branch`, `at`, `at_source`, `state`,

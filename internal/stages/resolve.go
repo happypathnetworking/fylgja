@@ -171,6 +171,19 @@ func newChange(ctx context.Context, s Stamper, pc intent.ProposedChange, info in
 	if err != nil {
 		return nil, err
 	}
+	if head.Latest != "" {
+		if _, err := HeadAt(head.Latest); err != nil {
+			return nil, fmt.Errorf("the head of %s: %w", pc.Branch, err)
+		}
+	}
+	return changeOf(pc, info, head), nil
+}
+
+// changeOf is newChange's proposed change from what was read: the branch's origin and its
+// unpinned stamps, either empty when the branch is gone, which leaves the derived stages
+// with no at. A head stamp HeadAt cannot read leaves the head with none too; newChange
+// refuses one first.
+func changeOf(pc intent.ProposedChange, info intent.BranchInfo, head intent.Stamps) *Change {
 	ch := &Change{
 		ProposedChange: ProposedChange{ID: pc.ID, Name: pc.Name, Branch: pc.Branch, Destination: pc.Destination, Draft: pc.Draft},
 		BranchedFrom:   info.BranchedFrom,
@@ -185,14 +198,9 @@ func newChange(ctx context.Context, s Stamper, pc intent.ProposedChange, info in
 	for i := range pc.Stages {
 		stages = append(stages, ch.mark(&pc.Stages[i]))
 	}
-	var headAt string
-	if head.Latest != "" {
-		if headAt, err = HeadAt(head.Latest); err != nil {
-			return nil, fmt.Errorf("the head of %s: %w", pc.Branch, err)
-		}
-	}
+	headAt, _ := HeadAt(head.Latest)
 	ch.Stages = Order(append(stages, derived(LabelHead, pc.Branch, headAt, AtHead)))
-	return ch, nil
+	return ch
 }
 
 // mark is one mark resolved by step 5 without its rules: the written as_of verbatim, or

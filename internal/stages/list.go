@@ -2,7 +2,6 @@ package stages
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -45,7 +44,8 @@ func (v RecordView) names(st Stage) bool {
 
 // Row is one listed stage, resolved by the listing's rules alone: a listing resolves
 // nothing for a run, so a nine-digit, a future or a pre-branch-point at, or a stale stage,
-// is shown with its source and refused nowhere.
+// is shown with its source and refused nowhere. Every stage has its row: one nothing names
+// an at for has its At empty.
 type Row struct {
 	Resolved
 	// Twin is whether the host's twin was built from this stage.
@@ -81,13 +81,15 @@ type ListResult struct {
 //
 // The kind absent from the default branch is stage.kind.absent, the one refusal of the
 // whole listing; an Infrahub that cannot be reached or refuses the credential returns its
-// error as it is, for the caller to report as operation.failed, as does a source branch
-// deleted under its open proposed change. Beside the rows: stage.label.reserved, a
-// rejection, for each mark labelled like a derived stage, and stage.at.unresolved for a
-// stage nothing names an at for, whose row is left out (both make the listing's status
-// rejected, every other row still listed); and three warnings, which refuse nothing:
-// stage.main.moved per proposed change, stage.orphaned per orphan, and stage.twin.moved
-// when the record's stage no longer resolves to what the record holds, or is gone.
+// error as it is, for the caller to report as operation.failed. Every stage of every
+// proposed change listed has its row. Beside the rows: stage.label.reserved, a rejection,
+// for each mark labelled like a derived stage (the listing's status rejected, every row
+// still listed); and warnings, which refuse nothing: stage.at.unresolved for a stage
+// nothing names an at for, whose row has none; stage.unknown for a source branch deleted
+// under its open proposed change, whose marks are listed at their own ats and whose two
+// derived stages have none, until Infrahub cancels it; stage.main.moved per proposed
+// change; stage.orphaned per orphan; and stage.twin.moved when the record's stage no
+// longer resolves to what the record holds, or is gone.
 func List(ctx context.Context, r Reader, s Stamper, branch string, record *RecordView) (ListResult, findings.List, error) {
 	if list, err := checkKind(ctx, r); list != nil || err != nil {
 		return ListResult{}, list, err
@@ -117,24 +119,32 @@ func List(ctx context.Context, r Reader, s Stamper, branch string, record *Recor
 		if err != nil {
 			return ListResult{}, nil, err
 		}
+		var ch *Change
 		if info == nil {
-			return ListResult{}, nil, errors.New(gone(pc.Branch, pc.ID))
-		}
-		ch, err := newChange(ctx, s, pc, *info)
-		if err != nil {
+			// Its stages still list until Infrahub cancels it, the branch's warning saying
+			// why its two derived stages have no at.
+			ch = changeOf(pc, intent.BranchInfo{Name: pc.Branch}, intent.Stamps{})
+			list = append(list, warning(refusal(findings.RuleStageUnknown, pc.Branch, gone(pc.Branch, pc.ID)+
+				"; until then its branch point and head have no at")))
+		} else if ch, err = newChange(ctx, s, pc, *info); err != nil {
 			return ListResult{}, nil, err
 		}
 		changes = append(changes, ch)
 		for _, st := range ch.Stages {
-			if st.At == "" {
-				// The one rule of step 5 a listing applies, which reads no clock.
-				list = append(list, ch.check(st, time.Time{})...)
-				continue
-			}
 			res.Rows = append(res.Rows, Row{Resolved: st.Resolved, Twin: record != nil && record.names(st)})
 			if st.Mark != nil && reserved(st.Label) {
 				list = append(list, ch.reservedRefusal(st.Ref))
 			}
+			if st.At == "" && info != nil {
+				// The one rule of step 5 a listing applies, which reads no clock, and
+				// refuses nothing.
+				for _, f := range ch.check(st, time.Time{}) {
+					list = append(list, warning(f))
+				}
+			}
+		}
+		if info == nil {
+			continue
 		}
 		ch.main = mains[ch.ProposedChange.Destination]
 		mainMoved, err := ch.MainMoved(ctx, s)
@@ -165,6 +175,13 @@ func List(ctx context.Context, r Reader, s Stamper, branch string, record *Recor
 		list = append(list, moved(changes, record)...)
 	}
 	return res, list, nil
+}
+
+// warning is a resolution's refusal as a listing files it: the same rule, object and
+// wording, refusing nothing.
+func warning(f findings.Finding) findings.Finding {
+	f.Severity = findings.Warning
+	return f
 }
 
 // moved is stage.twin.moved when the record's stage is gone, its proposed change no longer

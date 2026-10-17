@@ -25,9 +25,10 @@ worker or workflow service. Every refusal with an identifier is the server's.
 
 ### `stage list [--branch <b>]`
 
-Text: a heading per proposed change, then one line per stage with the reference and branch
-padded so the ats line up within the proposed change, the source quoted, and the twin's row
-marked:
+Text: a heading per proposed change, then one line per stage with the reference, the branch
+and the at padded so the ats, the sources and the descriptions line up within the proposed
+change whatever each at's width (a branch's origin ends `Z`, a stamp `+00:00`), the
+description quoted, and the twin's row marked:
 
 ```
 proposed change "third link" (18df…) on branch change-1, draft (4 stages)
@@ -40,9 +41,15 @@ proposed change "third link" (18df…) on branch change-1, draft (4 stages)
 With no open proposed change: `no open proposed change` (or `branch b: no open proposed
 change` with `--branch`), exit 0, `stages.rows == []`. Beside a diverged record the mark
 reads `← twin (diverged towards change-1/live)`. Orphans print after the proposed changes:
-`orphaned: stage "cabled" (18df…) names no proposed change`. Exit 0 with warnings; exit 1
-when a reserved label is among the rows (`stage.label.reserved`) or the kind is absent;
-exit 2 when Infrahub cannot be read (`operation.failed` at `resolve`).
+`orphaned: stage "cabled" (18df…) names no proposed change`. Every stage has its row: one
+nothing names an `at` for prints `at unresolved` and has no `at` in its row, with the
+warning `stage.at.unresolved` (the head of a branch holding nothing stamped); a source
+branch deleted under its open proposed change lists its marks at their own `at`s and its
+branch point and head unresolved, with one warning `stage.unknown` naming the branch, until
+Infrahub cancels it, every other proposed change listed as usual. The heading's count is
+the rows'. Exit 0 with warnings; exit 1 when a reserved label is among the rows
+(`stage.label.reserved`) or the kind is absent; exit 2 when Infrahub cannot be read
+(`operation.failed` at `resolve`).
 
 JSON: `stages` block (`stages.schema.json` `$defs/list`), the findings.
 

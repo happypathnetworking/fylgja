@@ -1048,8 +1048,9 @@ following and runs in flight are unknown, and exits 0.
 `stage list` and `stage plan` run in the server too, and need no lab, worker or
 workflow service. The list reads every open proposed change's stages, or the one of the
 branch `--branch` names, each with the `(branch, at)` it resolves to and where its `at`
-came from; it marks the twin's row, lists orphaned stages after, and refuses nothing but
-the kind's absence and a reserved label. The plan reads and compiles each stage of one
+came from, or a warning beside it when nothing names its `at`; it marks the twin's row,
+lists orphaned stages after, and refuses nothing but the kind's absence and a reserved
+label. The plan reads and compiles each stage of one
 proposed change on the code path `twin create` uses, files each bundle in the store, and
 prints each `bundle_id`; a stage that is refused, a stale one among them, is reported with
 its reason and the plan goes on. Between each consecutive pair it prints the **step**:

@@ -82,7 +82,7 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.server.stages -> fylgja.server.stage "Reads and compiles each stage"
         fylgja.server.stages -> fylgja.server.intent "Reads proposed changes, stages, stamps and intent events"
         fylgja.server.stages -> fylgja.server.step "Diffs each pair"
-        fylgja.server.stages -> fylgja.server.compiler "Reads manifests"
+        fylgja.server.stages -> fylgja.server.compiler "Surveys each stage's lossy mappings"
         fylgja.server.stage -> fylgja.server.intent "Reads"
         fylgja.server.stage -> fylgja.server.validate "Validates"
         fylgja.server.stage -> fylgja.server.compiler "Compiles"

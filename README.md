@@ -534,7 +534,7 @@ $ PLATFORMS=nokia_srlinux make test-e2e
 E2E-PARTIAL: platforms nokia_srlinux; ran 1 2 3 4 5 7; skipped 6 (needs arista_eos: not in PLATFORMS; image ceos:4.32.0.2F absent) 8 (needs arista_eos: not in PLATFORMS; image ceos:4.32.0.2F absent)
 ```
 
-Cases 6 and 8 build mixed twins, and each skip says why. A narrowed run takes about 12
+Cases 6 and 8 build mixed twins, and each skip says why. A narrowed run takes about 11
 minutes, leaves the host as clean as a full one, and never prints `E2E-OK` when it skipped
 a case.
 

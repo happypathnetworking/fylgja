@@ -57,7 +57,7 @@ Rel(Fylgja.fylgjaserve.api, Fylgja.fylgjaserve.findings, "Carries the document",
 Rel(Fylgja.fylgjaserve.stages, Fylgja.fylgjaserve.stage, "Reads and compiles each stage", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.stages, Fylgja.fylgjaserve.intent, "Reads proposed changes, stages, stamps and intent events", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.stages, Fylgja.fylgjaserve.step, "Diffs each pair", $techn="", $tags="Relationship", $link="")
-Rel(Fylgja.fylgjaserve.stages, Fylgja.fylgjaserve.compiler, "Reads manifests", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.stages, Fylgja.fylgjaserve.compiler, "Surveys each stage's lossy mappings", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.stage, Fylgja.fylgjaserve.intent, "Reads", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.stage, Fylgja.fylgjaserve.validate, "Validates", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.stage, Fylgja.fylgjaserve.compiler, "Compiles", $techn="", $tags="Relationship", $link="")

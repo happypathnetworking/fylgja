@@ -61,7 +61,7 @@ unchanged. `GET /api/schema/summary` gives the hash `CLAUDE.md` records.
 make build && make test && make lint
 ```
 
-Expected: green, under 35 s wall uncached. Among the tests that must exist and pass:
+Expected: green, under 45 s wall uncached. Among the tests that must exist and pass:
 `TestLabelPatternEqualsTheKinds`, `TestOrderEndsFixed` (a mark stamped after the head's
 `at` still sorts before it), `TestHeadIsLatestStampPlusOneMicrosecond` (the formatting),
 `TestResolveRefusals` (each rule of [contracts/stage-reference.md](contracts/stage-reference.md)
@@ -71,8 +71,11 @@ rename not named), `TestMainMovedWarns`, `TestTargetByPosition` (foreign, unknow
 current by resolved reference, a moved head as a target, skipped), `TestRecord6` and the
 `5` record read with no stage, the renderings against `stages.schema.json`, the replays of
 the three step histories, `TestFrozenContractCopiesAgree` at 29, the boundary test, the
-platform grep with `stages` in its list, `TestQueryRootsAreFylgjaGenerics` with its three
-named exceptions.
+platform grep with `stages` in its list, `TestQueryRootsAreFylgjaGenerics` with its four
+named exceptions and `TestQueryRootExceptionsAreNamed` beside it (`InfrahubEvent` the
+fourth), and D-048's: `TestHeadAfterARemoval` and `TestHeadEvents` (the head's latest
+intent event), `TestStaleByEvent` and `TestStaleByEventWording` (the staleness rule by an
+event) and `TestIntentEventsMapsKinds` (the reader's churn).
 
 ## 3. The surface by hand, on a throwaway proposed change (US1, US3, US4)
 

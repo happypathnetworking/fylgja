@@ -102,7 +102,7 @@ query Links($limit: Int!, $offset: Int!) {
 
 # 014 — the open proposed changes with their stages, read from the default branch, where
 # the stage kind lives (D-045). CoreProposedChange is Infrahub's own unit, not the
-# operator's model: one of the read-only test's three named exceptions. Only `open` is
+# operator's model: one of the read-only test's four named exceptions. Only `open` is
 # visible to Fylgja, draft or not. An empty $branch is omitted, which Infrahub 1.11.2
 # reads as no filter at all, so every open proposed change is listed; "" would match
 # none (verified 2026-10-16).

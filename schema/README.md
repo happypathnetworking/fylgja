@@ -8,7 +8,7 @@ and [D-002](../docs/decisions.md#d-002).
 |---|---|
 | `fylgja-generics.yaml` | The generics Fylgja queries, and the `FylgjaContract` kind that carries the contract's version. The generics are contract 0.1's; 0.2 adds that a kind implementing `FylgjaDevice` also inherits Infrahub's `CoreArtifactTarget` ([D-028](../docs/decisions.md#d-028)). The artifact of record. |
 | `reference.yaml` | Concrete kinds implementing the generics. Adopt, extend, or replace. |
-| `fylgja-waypoint.yaml` | The waypoint kind: a named mark for a pinned intent reference, which the operator writes and Fylgja only reads. Beside the contract, not in it (the contract stays 0.2); loaded on the default branch as the contract is (D-028); needed only by `--waypoint`, `waypoint list` and `waypoint plan`. |
+| `fylgja-stage.yaml` | The stage kind: a marked moment of a proposed change, which the operator writes and Fylgja only reads, and its extension of Infrahub's `CoreProposedChange` (`fylgja_stages`). Beside the contract, not in it (the contract stays 0.2); loaded on the default branch as the contract is (D-028); needed only by `--stage`, `stage list` and `stage plan` ([D-045](../docs/decisions.md#d-045)). |
 
 The interface kind attribute is `iftype` ([D-003](../docs/decisions.md#d-003)): Infrahub
 rejects `class` (Python keyword) and `type` (reserved). One caveat remains: Infrahub
@@ -19,77 +19,96 @@ The contract's version is held by a `FylgjaContract` object on the branch, a sin
 whose kind `fylgja-generics.yaml` defines. Every read, and `fylgja schema check`, compares
 it with the version the build understands, `0.2`, before anything else.
 
-## Waypoints: writing one
+## Stages: marking one
 
-A waypoint names a pinned intent reference — a branch and a point in time — so a twin can
-be built from it by name (`fylgja twin create --waypoint demo/2`), and a series of them
-listed and planned with no lab (`fylgja waypoint list`, `fylgja waypoint plan --series
-demo`). The operator writes waypoints; Fylgja only reads them, from the default branch.
+A stage is a moment of a proposed change: its source branch at a point in time, named
+`<branch>/<label>`, so a twin can be built from it (`fylgja twin create --stage
+change-1/cabled`) and stepped to it (`fylgja twin step --stage change-1/cut-over`), and a
+proposed change's stages listed and planned with no lab (`fylgja stage list`, `fylgja stage
+plan --branch change-1`). Every proposed change has two stages of its own, derived and
+never written: its **branch point** (`<branch>/branch-point`, the destination as it was
+when the branch was made) and its **head** (`<branch>/head`, the branch as it is now). The
+operator marks the moments between, each after that moment's writes and after its
+artifacts are regenerated. Fylgja only reads stages, from the default branch.
 
-**Load the kind once**, on the default branch, beside the contract:
-`infrahubctl schema load schema/fylgja-waypoint.yaml` (check it first with `infrahubctl
-schema check`, as for the other files). `fylgja schema check --branch <b>` then says
-`waypoints: FylgjaWaypoint present on the default branch`. An installation that never loads
-it loses only the three waypoint commands, each refused naming this file.
+**Open the proposed change first**, as a draft while the change is built, from the branch
+being built: the UI's "Create proposed change" with the draft toggle on, or
+`CoreProposedChangeCreate` with `is_draft: true`. `main` cannot be a source, and a branch
+has at most one open proposed change. Its creation runs its checks, which render the
+branch's artifacts.
 
-**The fields.** A waypoint is named `<series>/<sequence>`, and the pair is unique.
+**When to mark**: after the moment's writes have landed and its artifacts have been
+regenerated, by the proposed change's checks (its creation, or a retry, runs the artifact
+validator) or by a generate. A regenerated artifact lands a few seconds after the generate
+returns: wait for its checksum to move. A stage marked before that is refused as stale
+(`stage.artifact.stale`), naming each device and both remedies; mark it again after
+regenerating. Leave `as_of` out unless an instant is wanted: the mark's own write is always
+after what it seals, while a read pinned at exactly a stamp sees the node and not the
+value.
+
+**The fields.**
 
 | Field | Required | Meaning |
 |---|---|---|
-| `series` | yes | The series it belongs to: a name with no `/` and no whitespace. `fylgja-test-*` names belong to Fylgja's tests, which remove them. |
-| `sequence` | yes | Its place in the series: a positive integer, written with no leading zero. |
-| `branch` | yes | The branch it seals, by name: any branch, `main` included. The waypoint outlives the branch. |
-| `as_of` | no | The reference's point in time, used verbatim (at most six fractional digits). One later than now is refused at resolution until it has passed. Left out, it is the moment the waypoint's `branch` was written. |
-| `description` | no | What this chapter of the story is. |
+| `label` | yes | What this moment of the change is: a name with no `/` and no whitespace, unique within its proposed change. `branch-point` and `head` name the two derived stages, and a mark so labelled is refused (`stage.label.reserved`). |
+| `proposed_change` | yes | The proposed change it belongs to, by id. The stage's branch is the proposed change's source. |
+| `as_of` | no | The point in time on the branch, used verbatim (at most six fractional digits). One later than now is refused (`stage.at.unresolved`) until it has passed; one before the branch point is refused (`stage.at.before_branch_point`). Left out, it is the moment the stage was written. |
+| `description` | no | What this moment of the change is, in a sentence. |
 
 **The attribute is `as_of`; Fylgja says `at`.** Infrahub refuses attribute names shorter
 than three characters, so the kind cannot call it `at`. Every command, report and record
 calls it `at`, and says where it came from: `(given)` when `as_of` was written, `(written)`
-when it is the waypoint's own write time.
+when it is the stage's own write time, and `(branch point)` and `(head)` for the two
+derived stages.
 
-**Three ways to write one**, all Infrahub's own. An object file, loaded with
-`infrahubctl object load waypoints.yml` (the kind is branch-agnostic, so any branch would
-do; the default branch is the one that always has it):
+**Three ways to write one**, all Infrahub's own. Neither the stage kind nor Infrahub's
+proposed change has a human-friendly id, so a stage names its proposed change by id;
+`fylgja stage list --branch <b>` prints it beside the proposed change's name. An object
+file, loaded with `infrahubctl object load stages.yml` on the default branch, which always
+has the kind (the kind is branch-agnostic, so a stage lands in no branch's diff):
 
 ```yaml
 ---
 apiVersion: infrahub.app/v1
 kind: Object
 spec:
-  kind: FylgjaWaypoint
+  kind: FylgjaStage
   data:
-    - series: demo
-      sequence: 1
-      branch: main
-      description: before the change
-    - series: demo
-      sequence: 2
-      branch: change-1
-      description: after the first cut-over
-    - series: demo
-      sequence: 3
-      branch: change-1
-      as_of: "2026-09-28T16:00:00Z"
-      description: after the second, at a chosen instant
+    - label: cabled
+      proposed_change: 18df3629-86a6-8afb-33bf-c518dfa7f7ce
+      description: the new links cabled
+    - label: cut-over
+      proposed_change: 18df3629-86a6-8afb-33bf-c518dfa7f7ce
+      as_of: "2026-10-17T04:19:35Z"
+      description: traffic moved, at a chosen instant
 ```
 
-Or the UI (Waypoint, under the Fylgja menu, with the fields above); or
-`infrahubctl object create FylgjaWaypoint --set series=demo --set sequence=4 --set
-branch=change-2 --set description="after the rollback"`.
+Or the UI: **Stage**, an entry of its own in the sidebar's object menu
+(`/objects/FylgjaStage`), with the fields above and the proposed change chosen from its
+list. Or `infrahubctl object create FylgjaStage --set label=verified --set
+proposed_change=<id> --set description="checked by hand"`. To delete one: the UI,
+`infrahubctl object delete FylgjaStage <stage id> --yes`, or `FylgjaStageDelete`.
 
-**The one rule: write the waypoint last** — after the branch's writes, and after its
-artifacts are generated and Ready. A waypoint with no `as_of` seals the branch as it was the
-moment the waypoint was written; one written before the generate seals the old artifact. A
-twin built from it then runs the old configuration, and `waypoint plan` shows a topology
-step with no artifact change. Fylgja infers nothing from that; it reports what the waypoint
-sealed.
+**Editing a stage.** Changing `description` changes nothing Fylgja reads. Changing `as_of`
+moves the stage's `at`, and changing `label` renames its reference. None of this changes a
+twin already built from the stage: the twin's record keeps what it was built from, and
+`stage list` warns beside it (`stage.twin.moved`) when the stage now resolves elsewhere or
+is gone.
 
-**Editing a waypoint.** Changing `description` changes nothing Fylgja reads. Changing
-`branch` moves an unwritten `at` to the moment of the change. A written `as_of` is what it
-says. None of this changes a twin already built from the waypoint: the twin is pinned to
-what it was built from, and `waypoint list` warns beside it (`waypoint.twin.moved`) when the
-waypoint now resolves elsewhere or is gone.
+**Delete stages before their proposed change.** Infrahub refuses a proposed change's
+delete while a stage names it (`It is linked to mandatory relationship proposed_change on
+node FylgjaStage …`). A stage removed from its proposed change's `fylgja_stages` is left
+naming none: `stage list` reports each such stage as `stage.orphaned` until it is deleted
+by id, and `stage plan` plans none of them. A branch deleted under an open proposed change
+cancels it, about 16 seconds later.
 
-**Stepping back.** One twin runs at a time. To move the twin to another waypoint of the
-series, earlier or later, destroy it and create from the other:
-`fylgja twin destroy`, then `fylgja twin create --waypoint demo/1`.
+**The kind on the default branch.** Load it once, beside the contract:
+`scripts/bring-up.sh` does with the rest of `schema/`, or `infrahubctl schema load
+schema/fylgja-stage.yaml` (check it first with `infrahubctl schema check`, as for the other
+files). `fylgja schema check --branch <b>` then says `stages: FylgjaStage present on the
+default branch, with its extension`. An installation that never loads it loses only the
+stage surface: `--stage`, `stage list` and `stage plan` are each refused naming this file
+(`stage.kind.absent`).
+
+[A stepping twin](../README.md#a-stepping-twin) walks a twin through a proposed change's
+stages, forward and back.

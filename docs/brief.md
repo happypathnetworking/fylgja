@@ -13,13 +13,14 @@ provides durable execution for provisioning.
 
 ## Scope
 
-- **Input is an intent reference: `(branch, at?)`, or a waypoint that names one.** With
+- **Input is an intent reference: `(branch, at?)`, or a stage that names one.** With
   `at`, the twin is pinned and reproducible. Without it, Fylgja reads the branch head,
-  sends no `at`, and records the read time as informational provenance. A waypoint is a
-  mark the operator writes in Infrahub, and it always resolves to a pinned reference.
+  sends no `at`, and records the read time as informational provenance. A stage is a
+  moment of an Infrahub proposed change: its branch point, its head, or a mark the
+  operator writes between them; it always resolves to a pinned reference.
 - **One twin at a time.** `create` is refused while a twin exists; the operator
   destroys first. Comparisons between references are sequential, and a twin built from a
-  waypoint steps to another waypoint of its series without a rebuild.
+  stage steps to another stage of its proposed change without a rebuild.
 - **One lab host**, the development host, until remote hosts are built.
 - **Temporal runs short workflows with fixed IDs**: `provision`, `destroy`, a `reconcile`
   check and `step`. Provisioning cleans up after itself on failure or cancellation. There
@@ -68,8 +69,8 @@ read ──▶ compile ──▶ provision ──▶ operate
 
 No separate resolve or bind stage. The compiler emits a deployable topology with the
 fixed lab name `fylgja` and containerlab's default management network; image
-overrides use the PSP override directory. `step` takes a waypoint twin to another
-waypoint's bundle in place; `verify` reads the running twin against the intent it was
+overrides use the PSP override directory. `step` takes a twin built from a stage to
+another stage's bundle in place; `verify` reads the running twin against the intent it was
 built from and changes nothing.
 
 ## CLI
@@ -79,19 +80,19 @@ fylgja serve         [--listen <host:port>] [--psp-dir <dir>]
 fylgja worker run    [--psp-dir <dir>]
 
 fylgja twin create   --branch <b> [--at <ts>] [--no-follow] [--interval <d>]
-fylgja twin create   --waypoint <series>/<sequence>
-fylgja twin step     [--waypoint <series>/<sequence>] [--allow-restart] [--wait <duration>] [--dry-run]
+fylgja twin create   --stage <branch>/<label>
+fylgja twin step     [--stage <branch>/<label>] [--allow-restart] [--wait <duration>] [--dry-run]
 fylgja twin verify   [--wait[=<duration>]]
 fylgja twin show
 fylgja twin destroy
 
 fylgja intent read   --branch <b> [--at <ts>] --out ctm.json
-fylgja intent read   --waypoint <series>/<sequence> --out ctm.json
+fylgja intent read   --stage <branch>/<label> --out ctm.json
 fylgja twin compile  --ctm ctm.json --out <bundle-dir>
 fylgja twin provision <bundle-dir>
 
-fylgja waypoint list [--series <s>]
-fylgja waypoint plan --series <s>
+fylgja stage list    [--branch <b>]
+fylgja stage plan    --branch <b>
 
 fylgja schema check  --branch <b>
 fylgja psp validate  <file>...
@@ -111,7 +112,7 @@ Posting a twin's verification on an Infrahub proposed change is not parked; it i
 
 ## Open questions
 
-1. Infrahub `at` edge cases: before the branch's creation, sub-second precision, a
-   server-side marker for the read time.
+1. ~~Infrahub `at` edge cases~~: closed by [D-045](decisions.md#d-045)'s verification
+   (the [architecture](architecture.md#7-open-questions) says how).
 2. Opt-in coupling of twin lifetime to branch lifetime.
 3. The lab runtime remote hosts target: containerlab on remote hosts, clabernetes or KNE.

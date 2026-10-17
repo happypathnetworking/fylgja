@@ -30,17 +30,18 @@ the proposed change carries the report, and a stage that fails blocks the merge.
 OpsMill publishes boots a twin per proposed change; their containerlab demos deploy by
 hand, after the merge. In order:
 
-1. **`014-proposed-change-stages`**: [F-023](#f-023). A stage is a moment of a proposed
-   change, in place of a waypoint (superseding [D-032](decisions.md#d-032)). A
+1. **`014-proposed-change-stages`**: [F-023](#f-023), **built** (2026-10-17). A stage is
+   a moment of a proposed change (superseding [D-032](decisions.md#d-032)). A
    `FylgjaStage` relates to the proposed change, and its branch is the proposed change's
    source. The branch point and the head are derived, so only the moments between them are
-   marked. M10's surface moves to stages. Its
+   marked. M10's surface moved to stages. Its
    [brief](../specs/014-proposed-change-stages/brief.md) holds the probe against the
-   running Infrahub and what was decided.
-2. **`015-proposed-change-rehearsal`**: [F-007](#f-007) and [F-008](#f-008), reshaped as
-   one spec. It adds `twin rehearse` (a proposed change's stages created, stepped and
-   verified one by one, then reported and destroyed), the two checks, and the server
-   listening where Infrahub's task workers reach it. Its
+   running Infrahub and what was decided, and its
+   [research](../specs/014-proposed-change-stages/research.md) what the build verified.
+2. **`015-proposed-change-rehearsal`**, next: [F-007](#f-007) and [F-008](#f-008),
+   reshaped as one spec. It adds `twin rehearse` (a proposed change's stages created,
+   stepped and verified one by one, then reported and destroyed), the two checks, and the
+   server listening where Infrahub's task workers reach it. Its
    [brief](../specs/015-proposed-change-rehearsal/brief.md).
 3. **`016-probes`**: [F-014](#f-014). The report gains its loss column, and the gate gains
    a flow that has not recovered. Its [brief](../specs/016-probes/brief.md).
@@ -50,9 +51,10 @@ hand, after the merge. In order:
 5. **`v0.2.0`**: the recording of a rehearsed proposed change, the write-up updated, and
    the upstream request for named points in time drafted for the operator to file.
 
-Every other feature keeps the order below. [F-023](#f-023)'s decision entry is
+Every other feature keeps the order below. [F-023](#f-023)'s decision entries are
 [D-045](decisions.md#d-045), written on 2026-10-16 after its live verification
-(`specs/014-proposed-change-stages/research.md`) and before its spec; the other
+(`specs/014-proposed-change-stages/research.md`) and before its spec, and
+[D-046](decisions.md#d-046), which its plan drafted and the operator accepted; the other
 features have neither a decision entry nor a researched estimate yet, and `plan` writes
 each entry after the live verification.
 
@@ -87,8 +89,8 @@ keep the numbers the order was set with; the first six are built ([the
 archive](archive/v0.1-built.md)), F-009 is removed and [F-010](#f-010) is folded into
 [F-011](#f-011).
 
-None of these features has a spec or a decision entry, and only [F-023](#f-023) and
-[F-011](#f-011) have a probe behind their estimate. [F-023](#f-023), [F-011](#f-011),
+[F-023](#f-023) is built. None of the others has a spec or a decision entry, and only
+[F-011](#f-011) has a probe behind its estimate. [F-023](#f-023), [F-011](#f-011),
 [F-013](#f-013), [F-014](#f-014), [F-015](#f-015), [F-017](#f-017) to [F-021](#f-021) and
 [F-022](#f-022) are each one spec, with one contract boundary and one new kind of
 infrastructure. [F-007](#f-007) and
@@ -97,16 +99,16 @@ infrastructure. [F-007](#f-007) and
 
 | # | Feature | What it bundles | Needs | Hours | Why here |
 |---|---|---|---|---|---|
-| F-023 | **Stages of a proposed change** | `FylgjaStage`, a moment of a proposed change marked by the operator, in place of a waypoint; the branch point and the head derived; `--stage`, `stage list` and `stage plan` in place of the waypoint surface; the staleness check; `FylgjaWaypoint` removed | nothing new | 4–6 | Everything 0.2 rehearses is a stage. Probed live on 2026-10-16; first in 0.2 as 014. |
+| F-023 | **Stages of a proposed change** (built) | `FylgjaStage`, a moment of a proposed change marked by the operator; the branch point and the head derived; `--stage`, `stage list` and `stage plan` in place of M10's surface; the staleness check; M10's kind removed | nothing new | 4–6 | Everything 0.2 rehearses is a stage. Probed live on 2026-10-16; built first in 0.2, as 014, on 2026-10-17. |
 | F-007 | **`fylgja-step`, the pure check** | a check beside the artifacts template that answers in seconds with the step from `main` to the source branch, stage by stage, as a markdown comment on the proposed change; fails only when Fylgja refuses a stage as intent | [F-023](#f-023), the API | 3–4 | The first time Fylgja appears inside Infrahub's workflow. In 0.2 as 015. |
 | F-008 | **`fylgja-twin`, the live check** | a check that asks for `twin rehearse`: a twin booted at the branch point, stepped through the marked stages to the head, verified after every step and torn down; the report as a markdown comment; a stage that fails blocks the merge | [F-007](#f-007), stepping, verify, the API | 3–4 | Small, since stepping, verify and the API exist. In 0.2 as 015. |
 | F-010 | *Generic transform*, folded into [F-011](#f-011) | the shipped template already queries `FylgjaDevice`, so a DCIM device renders through it; what was left, the template documented as a reference transform, is a paragraph in [F-011](#f-011)'s README | — | — | Overtaken: Infrahub renders from the generics already. |
 | F-011 | **Second schema: the schema library's DCIM** | contract 0.3; OpsMill's DCIM schema implementing the generics; a DCIM-modelled twin; the template documented as a reference transform | nothing new | 4–6 | The strongest OpsMill signal, and the first test of Constitution III. Probed live on 2026-10-16. Opens 0.3. |
 | F-022 | **`infrahub-sync` into the DCIM** | a sync mapping from NetBox onto [F-011](#f-011)'s schema; a twin of a NetBox-sourced network | [F-011](#f-011), a NetBox instance | 3–5 | The source of truth stays where branching lives; the sync writes, not Fylgja. |
 | F-012 | **Agent surface** | `fylgja-rehearsing-changes`, a skill in OpsMill's format over the CLI's JSON, with a findings catalogue generated from the code; an MCP server deferred | verify, the API, [F-008](#f-008)'s rehearsal | 2–5 | Cheap once there is something to ask, and the demo's second act. |
-| F-013 | **Observation** | markers with bundle id and waypoint; a `gnmic` targets export; a documented collector and Grafana dashboard; a per-capability definition of settled | stepping, the API | 4–6 | Convergence across a step becomes a graph. |
+| F-013 | **Observation** | markers with bundle id and stage; a `gnmic` targets export; a documented collector and Grafana dashboard; a per-capability definition of settled | stepping, the API | 4–6 | Convergence across a step becomes a graph. |
 | F-014 | **Probes** | a Fylgja-owned probe kind; synthesized ping and iperf3 hosts; loss across a step; a probe package format | stepping, verify | 5–7 | The headline demo: loss during a change on a running twin. |
-| F-015 | **Operational state diff** | adjacencies and routes snapshotted at each waypoint pause and diffed; posted on the proposed change | stepping, verify, [F-008](#f-008) | 4–6 | Builds on verify's readers and its observed facts. |
+| F-015 | **Operational state diff** | adjacencies and routes snapshotted at each stage's pause and diffed; posted on the proposed change | stepping, verify, [F-008](#f-008) | 4–6 | Builds on verify's readers and its observed facts. |
 | F-016 | **Upgrade rehearsal** | the same intent on another NOS version through the package override, then verified | verify, a second image version | 2–4 | Cheap and operationally compelling. |
 | F-017 | **Object storage and Temporal cluster** | as below | nothing new | 6–10 | Needed either way before [F-018](#f-018). |
 | F-018 | **Remote hosts** | as below; parallel twins for A/B of two changes | [F-017](#f-017), lab hosts or a cluster | 12–20 | Gated, so it waits. |
@@ -124,9 +126,10 @@ infrastructure. [F-007](#f-007) and
 ### The features
 
 <a id="f-023"></a>
-**F-023. Stages of a proposed change.** Waypoints were Fylgja's own concept bolted on
-beside Infrahub: a branch-agnostic side object naming a branch by free text, outliving it,
-and invisible where the schema lacks the kind. Infrahub 1.11.2 has no named point in time,
+**F-023. Stages of a proposed change.** Built by `014-proposed-change-stages` on
+2026-10-17. Waypoints, which it replaced, were Fylgja's own concept bolted on beside
+Infrahub: a branch-agnostic side object naming a branch by free text, outliving it, and
+invisible where the schema lacks the kind. Infrahub 1.11.2 has no named point in time,
 `Branch` is not a kind anything can relate to, and nothing fires when a branch's artifacts
 are all Ready; the proposed change is its one unit of change that a user kind may relate
 to, and it can be opened as a draft while the change is built. So a stage is a moment of a
@@ -136,15 +139,14 @@ and has no branch of its own, since its branch is the proposed change's source. 
 are derived, the branch point from `branched_from` and the head pinned at a stamp read
 from Infrahub, so a proposed change with nothing marked has two stages and only the
 moments between are written. The operator writes stages by Infrahub's own means and Fylgja
-reads them (Constitution III). `--stage` replaces `--waypoint`, `stage list` and `stage
-plan` replace the waypoint commands, and `twin step` goes to a stage of the twin's own
-proposed change. `stage plan` refuses a stage whose `at` falls outside the branch's life
-and a stale one, where intent moved after its artifact was last generated, which waypoints
-left to the operator. `FylgjaWaypoint` is removed with its commands, rules and contract
+reads them (Constitution III). `--stage`, `stage list` and `stage plan` took M10's
+surface's place, and `twin step` goes to a stage of the twin's own proposed change. A
+stage whose `at` falls outside the branch's life is refused, and so is a stale one, where
+a device's intent moved after its configuration was last generated
+([D-046](decisions.md#d-046)); M10's kind is removed with its commands, rules and contract
 (superseding [D-032](decisions.md#d-032)). Probed live on 2026-10-16; its
 [brief](../specs/014-proposed-change-stages/brief.md) holds the probe and what was
-decided. First in 0.2, as `014-proposed-change-stages`, since everything the release
-rehearses is a stage.
+decided. First in 0.2, since everything the release rehearses is a stage.
 
 <a id="f-007"></a>
 **F-007. `fylgja-step`, the pure check.** Infrahub's change workflow is the proposed change
@@ -274,12 +276,12 @@ vendor tests the claim that a package is data. Size: a few hours for the skill, 
 generator and its test.
 
 <a id="f-013"></a>
-**F-013. Observation.** Stepping keeps a pause and recorded timings at each waypoint and
+**F-013. Observation.** Stepping keeps a pause and recorded timings at each stage and
 leaves telemetry out on purpose. The seeds exist: the package's `state` facet names the
 transport and OpenConfig coverage, the conformance facet names the paths, and
 [D-037](decisions.md#d-037)'s observed facts are the normalized vocabulary. Fylgja never
 becomes a telemetry pipeline. It emits markers through the API, twin ready and step
-applied, each with the bundle id, waypoint and timestamp, and it exports the twin's
+applied, each with the bundle id, stage and timestamp, and it exports the twin's
 targets, each node's management address, gNMI port, TLS and encoding, as a `gnmic` targets
 file or Prometheus file discovery. A collector such as `gnmic` subscribes and exports to
 Prometheus or InfluxDB, and Grafana computes convergence between the step marker and the
@@ -313,7 +315,7 @@ across a change applied to a running twin. The hours include the kind and the ma
 
 <a id="f-015"></a>
 **F-015. Operational state diff.** With verify's readers, snapshot adjacencies and routes at
-each waypoint pause and diff them, so a proposed change carries what changed
+each stage's pause and diff them, so a proposed change carries what changed
 operationally, not only what changed in the topology, through [F-008](#f-008). Builds on
 [D-037](decisions.md#d-037)'s observed facts.
 
@@ -376,7 +378,7 @@ for the development host.
 runtime. Either serve Go templates with htmx from the same static binary, with the assets
 embedded as the packages are, which keeps the principle, or write a decision entry
 exempting the UI. Its content is what the JSON already carries: `twin show`, following,
-waypoints and plans, verify reports, steps and observation. Last, so it has something to
+stages and plans, verify reports, steps and observation. Last, so it has something to
 show beyond a status line. It is a second client of the same API.
 
 ## Decisions the order needs
@@ -384,11 +386,12 @@ show beyond a status line. It is a second client of the same API.
 - ~~At [F-023](#f-023) (014)~~: written on 2026-10-16 as [D-045](decisions.md#d-045),
   stages superseding [D-032](decisions.md#d-032). A stage is a moment of a proposed
   change, the ends are derived (the branch point read on `main` at `branched_from`, the
-  head pinned one microsecond after the branch's latest stamp), and waypoints are
-  removed. With it, Constitution VI amended (1.2.0), citing that entry: "MUST NOT send an
-  `at` of its own" became "MUST NOT send an `at` it composed from a clock of its own; an
-  `at` read from Infrahub — a stamp it returned, or the first instant after one — MAY be
-  passed as the operator's would be".
+  head pinned one microsecond after the branch's latest stamp), and M10's kind is removed;
+  built by 014, with [D-046](decisions.md#d-046) refining its staleness rule. With it,
+  Constitution VI amended (1.2.0), citing that entry: "MUST NOT send an `at` of its own"
+  became "MUST NOT send an `at` it composed from a clock of its own; an `at` read from
+  Infrahub — a stamp it returned, or the first instant after one — MAY be passed as the
+  operator's would be".
 - At 015: the check as the writer of a comment, beside [D-026](decisions.md#d-026); the
   server listening on the Docker bridge, superseding [D-042](decisions.md#d-042)'s
   loopback default for this deployment; `twin rehearse` as a fifth workflow beside the

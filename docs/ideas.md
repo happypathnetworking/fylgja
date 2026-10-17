@@ -58,46 +58,36 @@ Four adjustments to the idea as stated:
 - How the live stages (tier 3, the worker, the hand scenarios) are serialised, and
   which sessions are given the node logins.
 
-## A persistent waypoint series on the fixture branch
+## A persistent series on the fixture branch
 
 **Raised** 2026-10-07, in the launch's clarify session, and parked by its spec (Out of
-scope). **When**: in the order after the launch. **Status**: open.
+scope). **When**: in the order after the launch. **Status**: closed by
+`014-proposed-change-stages` on 2026-10-17.
 
 ### The idea
 
-Give `fylgja-fixture` a waypoint series of its own, written by its seed and kept, so that
-a twin can be created from a waypoint and stepped without a throwaway branch and series
+Give `fylgja-fixture` a series of M10's marks of its own, written by its seed and kept, so
+that a twin could be created from a mark and stepped without a throwaway branch and series
 made around each run. The README's stepping walk-through, and the recording made from it,
-seed `fylgja-test-readme` and its series first and delete both after, for want of one.
+seeded `fylgja-test-readme` and its series first and deleted both after, for want of one.
 
-### What it would reverse
+### Why it closed
 
-- The fixture tool's refusal: `-waypoint` refuses `fylgja-fixture` ("the fixture never
-  gains a persistent series"), and every series outside `fylgja-test-`.
-- The test-series guard: a test writes only `fylgja-test-*` series, through
-  `testsupport`, and deletes what it wrote.
-- The tiers' "no waypoints" invariant: after the contract tier and after tier 3,
-  `fylgja waypoint list` prints `no waypoints`, so anything it lists is the operator's own.
+[D-045](decisions.md#d-045) replaced the series with a proposed change's stages: one
+proposed change, one story, with no series to keep. 014's spec gives `fylgja-fixture` no
+proposed change, and the fixture tool refuses `-propose` and `-stage` on it, as it refused
+a series (FR-026). The objection this entry recorded holds for a proposed change too:
+marks follow writes, and the fixture's head is what tier 2 and tier 3's first case read
+and compare with `testdata/ctm/three-node.json`, so it would move unless every change were
+undone, and generated again, after its mark.
 
-### What it could add
-
-- A tier-3 step of an SR Linux-only twin. Case 8 is tier 3's only step, and its twin is
-  mixed, so a host without the cEOS tar, narrowed to `PLATFORMS=nokia_srlinux`, steps
-  nothing today.
-- The stepping walk-through with no seeding before it and no delete after.
-
-### To check before building
-
-- The fixture branch's head is what tier 2 and tier 3's first case read and compare with
-  `testdata/ctm/three-node.json`. A series' later waypoint follows a change, so the head
-  would move unless the change is undone after it is sealed, which a generate must follow
-  too.
-- A waypoint outlives the branch it names, so `make infrahub-clean` would have to delete
-  the series with the branch, and the bring-up script's Infrahub part, which reads the
-  fixture as complete from its three `Ready` artifacts alone, would have to read the series
-  too.
-- How the operator's own series and the fixture's share `waypoint list`, whose `no
-  waypoints` after a tier is today how a run is seen to have cleaned up.
+Of the two gains it named, the first came with the stages: tier 3's case 7 now steps an
+SR Linux-only twin twice, to a mark and to the head, so a host without the cEOS tar,
+narrowed to `PLATFORMS=nokia_srlinux`, steps a twin. The second did not: the stepping
+walk-through still seeds its own throwaway branch and deletes it after, its stages and
+proposed change first, and
+`fylgja stage list` printing `no open proposed change` after a tier is how a run is seen
+to have cleaned up.
 
 ## A webhook that starts a proposed-change check early
 

@@ -412,12 +412,6 @@ Rewritten whole at each release's close, never appended to.
   cannot be the branch point (research R-04).
 - **Open**: Arista's own checksum for the tar is unread, owed at the operator's next
   download. On 26.04, whether the two AppArmor lines suffice without `/run/syslogd.pid*
-  rw,` is untried. From 014, the operator's: the `stage.orphaned` message, the spec's edge
-  case and D-045's context still give a proposed change deleted under its stages as an
-  orphan's cause, which Infrahub refuses with the kind on `main` (research §8.8);
-  `twin create --stage`'s closing line does not name the stage, as
-  `specs/014-proposed-change-stages/contracts/stage-commands.md` says it should (T049's
-  note); `stage list`'s descriptions line up only when every `at` has one width (§8.13);
-  `infrahubctl schema format` would reorder `schema/fylgja-stage.yaml` (§8.2);
-  `stage.main.moved` is untried by a write on `main`; and the recording shows M10's
-  surface until it is remade at `v0.2.0`.
+  rw,` is untried. From 014, the operator's: `infrahubctl schema format` would reorder
+  `schema/fylgja-stage.yaml` (§8.2); `stage.main.moved` is untried by a write on `main`;
+  and the recording shows M10's surface until it is remade at `v0.2.0`.

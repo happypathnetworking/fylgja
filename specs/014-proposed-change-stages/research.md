@@ -1248,3 +1248,28 @@ build), every `fylgja` command through the server on `127.0.0.1:7650`, the fixtu
   "the ats line up", which holds; its example has every `at` in one layout, and
   `printList`'s comment in `internal/server/stages.go` says the descriptions line up too.
   Cosmetic, outside T048: left for the operator or a later pass.
+
+### 8.14 Convergence pass 1 against the real Infrahub (T057, T058, 2026-10-17)
+
+Tier 2's `internal/stages`, with no twin and no other tier running, Infrahub holding
+`main` and `fylgja-fixture` alone before and after:
+
+- **The package whole** passed in 322.7 s (325.9 s wall): `TestStageKindLoads` 40.0 s,
+  `TestStagesListAndPlan` 116.3 s, `TestStageRefusals` 165.8 s. Each cleanup deleted its
+  own: 0, 2 and 7 stages, one proposed change each, and its branch.
+- **An unknown stage of an open proposed change** (T057): `<branch>/nosuch`, resolved after
+  the rebase and the reserved and future marks, is one `stage.unknown` naming the stages
+  in Fylgja's order, the mark labelled `head` not among them, since it shares the derived
+  head's place.
+- **Nothing left** (T058): after `DeleteTestBranchCounting`, `Branch(name:)` lists no
+  branch, `CoreProposedChange(source_branch__value:)` lists nothing in any state, and
+  `FylgjaStage(ids: [...])` on the default branch returns none of the stages collected
+  before the deletion. Both reads see the branch and every stage before the deletion
+  (`TestStagesListAndPlan` alone, 84.5 s: two stages before, none after), so the empty
+  reads after it are the deletion's.
+- **The gates after the pass**: `make build` static; `make test` passed, 35.2 s uncached
+  under a load average of about 5 (`internal/cli` 25.1 s, against 24.1–24.8 s at T038),
+  and 38.3 s on its first run of the pass; the pass's new and extended `internal/cli` cases
+  take about 0.15 s of that. The 35 s budget sits inside the run-to-run spread, as T038's
+  note found, and is still the operator's. `make lint` 0 issues; `go vet -tags
+  contract,fixture,e2e ./...` clean; no golden moved; `fylgja --help` names no waypoint.

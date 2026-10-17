@@ -524,7 +524,7 @@ the script makes Infrahub's token on the runner and never prints it.
 
 Tier 3 boots twins, so it is the operator's, on a lab host, and never runs in CI. It needs
 the dev server and a worker running from the repository root (the script leaves both),
-Docker, containerlab, Infrahub and both images, and takes about 17–19 minutes. Without the
+Docker, containerlab, Infrahub and both images, and takes about 19–20 minutes. Without the
 cEOS image it refuses before any case; `PLATFORMS` narrows it to the packages you name,
 and on an SR Linux-only host it ends on a partial pass, exit 0:
 

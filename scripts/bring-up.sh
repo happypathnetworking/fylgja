@@ -904,7 +904,7 @@ if runs fylgja; then
   if [ "$CEOS_STATE" = absent ]; then
     say "tier 3: not run; PLATFORMS=nokia_srlinux make test-e2e runs it on SR Linux alone (needs the dev server and a worker)"
   else
-    say "tier 3: not run; make test-e2e runs it (about 17–19 minutes; needs both images, or PLATFORMS=nokia_srlinux)"
+    say "tier 3: not run; make test-e2e runs it (about 19–20 minutes; needs both images, or PLATFORMS=nokia_srlinux)"
   fi
   say "running: temporal (pid $TEMPORAL_PID, local/temporal.log)"
   say "running: worker (pid ${ROLE_PID[worker]}, local/worker.log; packages ${PLATFORMS[*]})"

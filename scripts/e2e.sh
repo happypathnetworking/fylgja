@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tier 3: eight cases in one run, making eight twins, through the workflow service and the
+# Tier 3: eight cases in one run, making seven twins, through the workflow service and the
 # operator's worker, leaving the host as it found it. Run by `make test-e2e` from the
 # repository root. Never runs in CI and never gates a PR. M3's four cases create with
 # --no-follow, so nothing checks their twins.
@@ -36,18 +36,22 @@
 #      s1 on SR Linux and e1, e2 on EOS, each node read back over its own package's gNMI;
 #      the boot half reads this twin too, and twin verify reads each node over its own
 #      transport (M12); twin show names each node's package; destroy; the branch deleted
-#   7. a throwaway branch seeded and a test series of the same name (M10): waypoint 1 written,
-#      a third link added, waypoint 2 written; waypoint plan names two ids and the step
-#      between them; waypoint list names both; create --waypoint from each in turn deploys
-#      the id the plan printed, records the waypoint in twin.json 3, and twin show and
-#      waypoint list name it; destroy each; the branch and its series deleted
-#   8. a throwaway branch seeded with the mixed fixture and a test series of the same name
-#      (M11): waypoint 1, a link s1:ethernet-1/3 <-> e1:Ethernet3 added, waypoint 2; create
-#      --waypoint from 1, pushed by replace; the step to 2 refused without --allow-restart,
-#      dry run and run, naming e1; taken with it: e1 restarted in place, s1 re-cabled live
-#      and e2 untouched (their containers say so), both pushed, the new link seen from both
-#      ends over gNMI, twin.json 5 naming the step and its wait settled (M12); the step back
-#      to 1, settled too; destroy; the branch and its series deleted
+#   7. a throwaway branch seeded and a draft proposed change opened on it (014): stage
+#      seeded marked, a third link added, stage third-link marked; stage plan names four
+#      stages, the branch point refused (main holds no contract), three ids and three steps,
+#      the last unchanged; stage list names them; create --stage seeded deploys the id the
+#      plan printed and records the stage in twin.json 6, and twin show and stage list name
+#      it; a step with no target to third-link, the link re-cabled live, and a second to the
+#      head, unchanged, the record moving; destroy; the stages, the proposed change and the
+#      branch deleted, after which stage list lists none and stage plan refuses the branch
+#   8. a throwaway branch seeded with the mixed fixture and a draft proposed change opened on
+#      it (M11, 014): stage seeded, a link s1:ethernet-1/3 <-> e1:Ethernet3 added, stage
+#      mixed-link; create --stage seeded, pushed by replace; the step with no target to
+#      mixed-link refused without --allow-restart, dry run and run, naming e1; taken with it:
+#      e1 restarted in place, s1 re-cabled live and e2 untouched (their containers say so),
+#      both pushed, the new link seen from both ends over gNMI, twin.json 6 naming the step
+#      and its wait settled (M12); the step back with --stage seeded, settled too; destroy;
+#      the stages, the proposed change and the branch deleted
 #
 # Needs, all running from this directory: `make temporal-dev`, `make worker` (restarted
 # after every rebuild, since case 1's refusal is worded by the worker and case 5's checks
@@ -67,7 +71,7 @@
 # Exit 0 prints E2E-OK when every case ran, or, when PLATFORMS skipped one, E2E-PARTIAL naming
 # the list, the cases that ran and each case skipped with its reason. Any failed check exits 1
 # after the trap's destroy and its deletion of the throwaway branches of cases 5, 6, 7 and 8
-# (7's and 8's with their series); a lab, a twin directory or Schedule fylgja-follow
+# (7's and 8's with their stages and proposed changes); a lab, a twin directory or Schedule fylgja-follow
 # left behind after that destroy exits 99.
 set -euo pipefail
 
@@ -357,8 +361,8 @@ eos_first_description() {
 # its line never copied into $OUT, where the marker grep looks.
 #
 # Infrahub's checksums are read now, or taken from HELD, an artifacts_of file read when the
-# twin's pinned reference was written. Case 7's first waypoint needs it: the branch has
-# moved on since, and the twin runs what Infrahub held then.
+# twin's pinned reference was marked. Case 7's first stage needs it: the branch has moved on
+# since, and the twin runs what Infrahub held then.
 readback() {
   local case=$1 branch=$2 want_state=$3 held=${4:-} name addr file want got
   if [ -z "$held" ]; then
@@ -392,7 +396,7 @@ readback() {
 # marker grep looks.
 #
 # Infrahub's checksums are read now, or taken from HELD, as readback takes them: case 8's
-# twin at its first waypoint runs what Infrahub held when that waypoint was written (M11).
+# twin at its first stage runs what Infrahub held when that stage was marked (M11, 014).
 readback_mixed() {
   local case=$1 branch=$2 held=${3:-} name addr pspid file want got port
   if [ -z "$held" ]; then
@@ -510,8 +514,8 @@ ready_to_record() {
 # readback_mixed after the create.
 READBACK=readback
 
-# create_twin CASE ARGS...: twin create --branch $BRANCH ARGS, or --waypoint $CREATE_REF in
-# place of the branch when CREATE_REF is set (case 7), ending with three
+# create_twin CASE ARGS...: twin create --branch $BRANCH ARGS, or --stage $CREATE_REF in
+# place of the branch when CREATE_REF is set (cases 7 and 8), ending with three
 # ready nodes, the twin recorded, the bundle stored and staged as its id, and each node
 # running its artifact; sets and exports BID and RUN_ID,
 # and sets CREATE_TOOK.
@@ -520,7 +524,7 @@ create_twin() {
   local case=$1
   shift
   local start status=0 took ref=(--branch "$BRANCH")
-  [ -z "${CREATE_REF:-}" ] || ref=(--waypoint "$CREATE_REF")
+  [ -z "${CREATE_REF:-}" ] || ref=(--stage "$CREATE_REF")
   start=$(now_ns)
   fylgja twin create "${ref[@]}" "$@" --json > "$OUT/create-$case.json" 2> "$OUT/create-$case.err" || status=$?
   took=$(since "$start")
@@ -603,10 +607,11 @@ cleanup() {
     fylgja twin destroy --json > "$OUT/trap-destroy.json" 2> "$OUT/trap-destroy.err" || true
   fi
   # The throwaway branches of cases 5, 6, 7 and 8, when they were made and not yet deleted;
-  # -delete removes case 7's and case 8's series with their branches. A failure is
-  # reported, not fatal. The destroy above cancels a step in flight and waits for its record.
+  # -delete removes case 7's and case 8's stages and proposed changes before their branches.
+  # A failure is reported, not fatal. The destroy above cancels a step in flight and waits
+  # for its record.
   local branch
-  for branch in "${FB:-}" "${FM:-}" "${FW:-}" "${FS:-}"; do
+  for branch in "${FB:-}" "${FM:-}" "${FP:-}" "${FS:-}"; do
     [ -n "$branch" ] || continue
     if ! fixture -branch "$branch" -delete > "$OUT/trap-delete-$branch.out" 2>&1; then
       echo "e2e: branch $branch was not deleted; remove it with: go run -tags fixture ./cmd/fylgja-fixture -branch $branch -delete" >&2
@@ -1137,136 +1142,227 @@ else
   skip_case 6
 fi
 
-# --- case 7: a twin from a waypoint is the one the plan printed (M10) -----------
+# --- case 7: a twin from a stage, stepped through its proposed change (014) -----
 if case_runs 7; then
 
-# A throwaway branch and a test series of the same name, set before seeding so the trap's
-# -delete removes both: it deletes every test series naming the branch before the branch,
-# since a waypoint outlives its branch. Made on the host case 6's destroy
-# left clean.
-FW="fylgja-test-e2e-wp-$$-$RANDOM"
-export FW
+# A throwaway branch, set before seeding so the trap's -delete removes it and what hangs on
+# it: its stages, then its proposed change, then the branch, since a stage outlives its
+# branch and Infrahub refuses a proposed change's delete while a stage names it. Made on the
+# host case 6's destroy left clean.
+FP="fylgja-test-e2e-st-$$-$RANDOM"
+export FP
 start=$(now_ns)
 seed_status=0
-fixture -branch "$FW" > "$OUT/seed-7.out" 2> "$OUT/seed-7.err" || seed_status=$?
+fixture -branch "$FP" > "$OUT/seed-7.out" 2> "$OUT/seed-7.err" || seed_status=$?
 SEED7_TOOK=$(since "$start")
-echo "e2e: case 7: seeding $FW took ${SEED7_TOOK}s (exit $seed_status)"
-[ "$seed_status" -eq 0 ] || fail "case 7: seeding $FW exited $seed_status; see $OUT/seed-7.err"
+echo "e2e: case 7: seeding $FP took ${SEED7_TOOK}s (exit $seed_status)"
+[ "$seed_status" -eq 0 ] || fail "case 7: seeding $FP exited $seed_status; see $OUT/seed-7.err"
 
-# Each waypoint is written after the writes it seals and after their artifacts are rendered:
-# the one rule (schema/README.md). The seed waits for its artifacts to be Ready. -add-link's
-# generate returns before n1's and n3's are rewritten, so the second waypoint waits
-# for their checksums to move, as tier 2's does. What Infrahub held when the
-# first was written is kept: its twin is read back against it.
-artifacts_of "$FW" "$OUT/artifacts-7-sealed-1.json" 2> "$OUT/artifacts-7-sealed-1.err" ||
-  fail "case 7: reading $FW's artifacts failed; see $OUT/artifacts-7-sealed-1.err"
+# The draft proposed change. Its pipeline renders the branch's artifacts, and -propose waits
+# for its validators, so the creation's rendering cannot land after the first mark.
+start=$(now_ns)
+fixture -branch "$FP" -propose > "$OUT/propose-7.out" 2> "$OUT/propose-7.err" ||
+  fail "case 7: -propose on $FP failed; see $OUT/propose-7.err"
+PROPOSE7_TOOK=$(since "$start")
+echo "e2e: case 7: a draft proposed change opened on $FP, its validators concluded, in ${PROPOSE7_TOOK}s"
+
+# Each stage is marked after the writes it seals and after their artifacts are rendered
+# (schema/README.md); one marked before is refused stale. The seed waits for its artifacts
+# to be Ready. -add-link's generate returns before n1's and n3's are rewritten, so the
+# second mark waits for their checksums to move, as tier 2's does. What Infrahub held when
+# the first was marked is kept: the twin at that stage is read back against it.
+artifacts_of "$FP" "$OUT/artifacts-7-sealed-1.json" 2> "$OUT/artifacts-7-sealed-1.err" ||
+  fail "case 7: reading $FP's artifacts failed; see $OUT/artifacts-7-sealed-1.err"
 expect "$OUT/artifacts-7-sealed-1.json" 'length == 3 and all(.[]; .status == "Ready")'
-fixture -branch "$FW" -waypoint "$FW/1" -description seeded > "$OUT/waypoint-7-1.out" 2> "$OUT/waypoint-7-1.err" ||
-  fail "case 7: writing waypoint $FW/1 failed; see $OUT/waypoint-7-1.err"
-fixture -branch "$FW" -add-link > "$OUT/add-link-7.out" 2> "$OUT/add-link-7.err" ||
-  fail "case 7: -add-link on $FW failed; see $OUT/add-link-7.err"
-await_checksums_moved 7 "$FW" "$OUT/artifacts-7-sealed-1.json" n1 n3
-fixture -branch "$FW" -waypoint "$FW/2" -description "third link" > "$OUT/waypoint-7-2.out" 2> "$OUT/waypoint-7-2.err" ||
-  fail "case 7: writing waypoint $FW/2 failed; see $OUT/waypoint-7-2.err"
+fixture -branch "$FP" -stage seeded -description seeded > "$OUT/stage-7-seeded.out" 2> "$OUT/stage-7-seeded.err" ||
+  fail "case 7: marking stage $FP/seeded failed; see $OUT/stage-7-seeded.err"
+fixture -branch "$FP" -add-link > "$OUT/add-link-7.out" 2> "$OUT/add-link-7.err" ||
+  fail "case 7: -add-link on $FP failed; see $OUT/add-link-7.err"
+await_checksums_moved 7 "$FP" "$OUT/artifacts-7-sealed-1.json" n1 n3
+fixture -branch "$FP" -stage third-link -description "third link" > "$OUT/stage-7-third-link.out" 2> "$OUT/stage-7-third-link.err" ||
+  fail "case 7: marking stage $FP/third-link failed; see $OUT/stage-7-third-link.err"
 
-# The plan: no lab, no worker, no workflow service. Two ids, and between them the
-# third link, with n1 and n3 re-rendered and re-bootstrapped for it. mapping may stand beside
-# bootstrap, since the link gives both ends the interface ethernet-1/3.
+# The plan: no lab, no worker, no workflow service. Four stages in order. The branch point
+# is main at the branch's creation, which holds no contract on this install, so it is
+# refused at its read (research R-04) and the plan exits 1. The two marks and the head
+# compile to three ids, the head's at being its own. Three steps: the first not computed;
+# the second the third link, with n1 and n3 re-rendered and re-bootstrapped for it (mapping
+# may stand beside bootstrap, since the link gives both ends the interface ethernet-1/3);
+# the third unchanged, since nothing was written after the second mark but the mark.
 start=$(now_ns)
 plan_status=0
-fylgja waypoint plan --series "$FW" --json > "$OUT/plan-7.json" 2> "$OUT/plan-7.err" || plan_status=$?
+fylgja stage plan --branch "$FP" --json > "$OUT/plan-7.json" 2> "$OUT/plan-7.err" || plan_status=$?
 PLAN7_TOOK=$(since "$start")
 echo "e2e: case 7: plan took ${PLAN7_TOOK}s (exit $plan_status)"
-[ "$plan_status" -eq 0 ] || fail "case 7: waypoint plan --series $FW exited $plan_status; see $OUT/plan-7.json and $OUT/plan-7.err"
-expect "$OUT/plan-7.json" '.status=="ok" and .operation=="waypoint.plan" and .plan.series==env.FW
-  and [.plan.waypoints[].sequence] == [1, 2]
-  and all(.plan.waypoints[]; .branch==env.FW and .at_source=="written" and (.bundle_id | type)=="string"
-    and (.findings | length)==0)
-  and .plan.waypoints[0].bundle_id != .plan.waypoints[1].bundle_id
-  and (.plan.steps | length) == 1'
-PLAN1=$(jq -r '.plan.waypoints[0].bundle_id' "$OUT/plan-7.json")
-PLAN2=$(jq -r '.plan.waypoints[1].bundle_id' "$OUT/plan-7.json")
-PLAN_AT1=$(jq -r '.plan.waypoints[0].at' "$OUT/plan-7.json")
-PLAN_AT2=$(jq -r '.plan.waypoints[1].at' "$OUT/plan-7.json")
-export PLAN1 PLAN2 PLAN_AT1 PLAN_AT2
-expect "$OUT/plan-7.json" '.plan.steps[0] | .computed and (.unchanged | not)
-  and .from==(env.FW + "/1") and .to==(env.FW + "/2")
-  and .from_bundle_id==env.PLAN1 and .to_bundle_id==env.PLAN2
-  and .nodes.added == [] and .nodes.removed == []
-  and [.nodes.changed[].node] == ["n1", "n3"]
-  and all(.nodes.changed[]; any(.reasons[]; .=="bootstrap") and all(.reasons[]; .=="bootstrap" or .=="mapping"))
-  and .links.removed == [] and (.links.added | length) == 1
-  and ([.links.added[0].a.node, .links.added[0].b.node] | sort) == ["n1", "n3"]
-  and [.artifacts.changed[].node] == ["n1", "n3"]'
-echo "e2e: case 7: plan $FW/1 $PLAN1 at $PLAN_AT1, $FW/2 $PLAN2 at $PLAN_AT2; one link added, n1 and n3 changed"
+[ "$plan_status" -eq 1 ] ||
+  fail "case 7: stage plan --branch $FP exited $plan_status, not 1 for its refused branch point; see $OUT/plan-7.json and $OUT/plan-7.err"
+expect "$OUT/plan-7.json" '.status=="rejected" and .operation=="stage.plan" and .plan.branch==env.FP
+  and .plan.proposed_change.name==env.FP and .plan.proposed_change.branch==env.FP and .plan.proposed_change.draft
+  and [.plan.stages[] | {ref, at_source}]
+    == [{ref: (env.FP + "/branch-point"), at_source: "branch_point"}, {ref: (env.FP + "/seeded"), at_source: "written"},
+        {ref: (env.FP + "/third-link"), at_source: "written"}, {ref: (env.FP + "/head"), at_source: "head"}]
+  and [.findings[] | select(.severity=="rejection") | .rule] == ["contract.node.missing"]
+  and (.plan.stages[0] | .branch=="main" and .bundle_id==null
+    and [.findings[] | select(.severity=="rejection") | .rule] == ["contract.node.missing"])
+  and all(.plan.stages[1:][]; .branch==env.FP and (.bundle_id | type)=="string" and (.findings | length)==0)
+  and [.plan.stages[1:][].description] == ["seeded", "third link", ""]
+  and ([.plan.stages[1:][].bundle_id] | unique | length) == 3
+  and (.plan.steps | length) == 3'
+PC7=$(jq -r '.plan.proposed_change.id' "$OUT/plan-7.json")
+AT7B=$(jq -r '.plan.stages[0].at' "$OUT/plan-7.json")
+PLAN7S=$(jq -r '.plan.stages[1].bundle_id' "$OUT/plan-7.json")
+PLAN7T=$(jq -r '.plan.stages[2].bundle_id' "$OUT/plan-7.json")
+PLAN7H=$(jq -r '.plan.stages[3].bundle_id' "$OUT/plan-7.json")
+AT7S=$(jq -r '.plan.stages[1].at' "$OUT/plan-7.json")
+AT7T=$(jq -r '.plan.stages[2].at' "$OUT/plan-7.json")
+AT7H=$(jq -r '.plan.stages[3].at' "$OUT/plan-7.json")
+export PC7 AT7B PLAN7S PLAN7T PLAN7H AT7S AT7T AT7H
+expect "$OUT/plan-7.json" '(.plan.steps[0] | (.computed | not)
+    and .from==(env.FP + "/branch-point") and .to==(env.FP + "/seeded"))
+  and (.plan.steps[1] | .computed and (.unchanged | not)
+    and .from==(env.FP + "/seeded") and .to==(env.FP + "/third-link")
+    and .from_bundle_id==env.PLAN7S and .to_bundle_id==env.PLAN7T
+    and .nodes.added == [] and .nodes.removed == []
+    and [.nodes.changed[].node] == ["n1", "n3"]
+    and all(.nodes.changed[]; any(.reasons[]; .=="bootstrap") and all(.reasons[]; .=="bootstrap" or .=="mapping"))
+    and .links.removed == [] and (.links.added | length) == 1
+    and ([.links.added[0].a.node, .links.added[0].b.node] | sort) == ["n1", "n3"]
+    and [.artifacts.changed[].node] == ["n1", "n3"])
+  and (.plan.steps[2] | .computed and .unchanged
+    and .from==(env.FP + "/third-link") and .to==(env.FP + "/head")
+    and .from_bundle_id==env.PLAN7T and .to_bundle_id==env.PLAN7H)'
+echo "e2e: case 7: plan $FP/seeded $PLAN7S at $AT7S, $FP/third-link $PLAN7T at $AT7T, $FP/head $PLAN7H at $AT7H; the branch point refused; one link added, n1 and n3 changed; the head unchanged"
 
-# The list, before any twin: both waypoints, each resolving as the plan did, and no record.
-fylgja waypoint list --json > "$OUT/list-7-before.json" 2> "$OUT/list-7-before.err" ||
-  fail "case 7: waypoint list exited non-zero; see $OUT/list-7-before.json and $OUT/list-7-before.err"
-expect "$OUT/list-7-before.json" '.status=="ok" and .waypoints.series==null and .waypoints.record==null
-  and [.waypoints.waypoints[] | select(.series==env.FW) | {sequence, branch, at, at_source, twin}]
-    == [{sequence: 1, branch: env.FW, at: env.PLAN_AT1, at_source: "written", twin: false},
-        {sequence: 2, branch: env.FW, at: env.PLAN_AT2, at_source: "written", twin: false}]'
+# The list, before any twin: the four stages, each resolving as the plan did, and no record.
+fylgja stage list --branch "$FP" --json > "$OUT/list-7-before.json" 2> "$OUT/list-7-before.err" ||
+  fail "case 7: stage list --branch $FP exited non-zero; see $OUT/list-7-before.json and $OUT/list-7-before.err"
+expect "$OUT/list-7-before.json" '.status=="ok" and .stages.branch==env.FP and .stages.record==null
+  and [.stages.rows[] | {ref, branch, at, at_source, twin}]
+    == [{ref: (env.FP + "/branch-point"), branch: "main", at: env.AT7B, at_source: "branch_point", twin: false},
+        {ref: (env.FP + "/seeded"), branch: env.FP, at: env.AT7S, at_source: "written", twin: false},
+        {ref: (env.FP + "/third-link"), branch: env.FP, at: env.AT7T, at_source: "written", twin: false},
+        {ref: (env.FP + "/head"), branch: env.FP, at: env.AT7H, at_source: "head", twin: false}]
+  and all(.stages.rows[]; .proposed_change.id==env.PC7)'
 
-# The first waypoint's twin: the plan's first id, pinned at its at, never following, and the
-# record naming the waypoint (twin.json 3). It is read back against what Infrahub held when
-# the waypoint was written, since -add-link has moved n1's and n3's artifacts since.
-BRANCH=$FW
+# The twin from the first mark: the plan's id, pinned at its at, never following, and the
+# record naming the stage and its proposed change (twin.json 6). It is read back against
+# what Infrahub held when the mark was made, since -add-link has moved n1's and n3's
+# artifacts since.
+BRANCH=$FP
 READBACK=
-CREATE_REF="$FW/1"
-create_twin 7a
-CREATE7A_TOOK=$CREATE_TOOK
-[ "$BID" = "$PLAN1" ] || fail "case 7: create --waypoint $FW/1 deployed $BID, but the plan printed $PLAN1"
-expect "$OUT/create-7a.json" '.subject.waypoint==(env.FW + "/1") and .subject.branch==env.FW and .subject.at==env.PLAN_AT1
-  and .waypoint == {series: env.FW, sequence: 1, branch: env.FW, at: env.PLAN_AT1, at_source: "written", description: "seeded"}
+CREATE_REF="$FP/seeded"
+create_twin 7
+CREATE7_TOOK=$CREATE_TOOK
+[ "$BID" = "$PLAN7S" ] || fail "case 7: create --stage $FP/seeded deployed $BID, but the plan printed $PLAN7S"
+expect "$OUT/create-7.json" '.subject.stage==(env.FP + "/seeded") and .subject.branch==env.FP and .subject.at==env.AT7S
+  and .stage == {ref: (env.FP + "/seeded"), branch: env.FP, label: "seeded",
+    proposed_change: {id: env.PC7, name: env.FP, branch: env.FP, draft: true},
+    at: env.AT7S, at_source: "written", description: "seeded"}
   and (has("following") | not)'
-expect "$TWIN/twin.json" '.twin_version=="5" and .provenance.branch==env.FW and .provenance.at==env.PLAN_AT1
-  and .waypoint == {series: env.FW, sequence: 1, description: "seeded", at_source: "written"}'
-[ "$(schedule_state)" = absent ] || fail "case 7: Schedule $FOLLOW_SCHEDULE is not reported absent beside a waypoint's twin; see $OUT/schedule-describe.err"
-readback 7a "$FW" enable "$OUT/artifacts-7-sealed-1.json"
+expect "$TWIN/twin.json" '.twin_version=="6" and .provenance.branch==env.FP and .provenance.at==env.AT7S and .step==null
+  and .stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "seeded", description: "seeded", at_source: "written"}'
+[ "$(schedule_state)" = absent ] || fail "case 7: Schedule $FOLLOW_SCHEDULE is not reported absent beside a stage's twin; see $OUT/schedule-describe.err"
+readback 7 "$FP" enable "$OUT/artifacts-7-sealed-1.json"
 
-fylgja twin show --json > "$OUT/show-7a.json" 2> "$OUT/show-7a.err" ||
-  fail "case 7: twin show exited non-zero; see $OUT/show-7a.err"
-expect "$OUT/show-7a.json" '.show.kind=="pinned" and .show.record.bundle_id==env.PLAN1 and .show.record.at==env.PLAN_AT1
-  and .show.record.waypoint == {series: env.FW, sequence: 1, description: "seeded", at_source: "written"}'
+fylgja twin show --json > "$OUT/show-7.json" 2> "$OUT/show-7.err" ||
+  fail "case 7: twin show exited non-zero; see $OUT/show-7.err"
+expect "$OUT/show-7.json" '.show.kind=="pinned" and .show.record.bundle_id==env.PLAN7S and .show.record.at==env.AT7S
+  and .show.record.stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "seeded", description: "seeded", at_source: "written"}'
 
-fylgja waypoint list --json > "$OUT/list-7a.json" 2> "$OUT/list-7a.err" ||
-  fail "case 7: waypoint list exited non-zero beside the twin; see $OUT/list-7a.json and $OUT/list-7a.err"
-expect "$OUT/list-7a.json" '.status=="ok"
-  and .waypoints.record == {series: env.FW, sequence: 1, branch: env.FW, at: env.PLAN_AT1, at_source: "written", state: "ready", towards: null}
-  and [.waypoints.waypoints[] | select(.twin) | "\(.series)/\(.sequence)"] == [env.FW + "/1"]
-  and ([.findings[] | select(.rule=="waypoint.twin.moved")] | length) == 0'
+fylgja stage list --branch "$FP" --json > "$OUT/list-7.json" 2> "$OUT/list-7.err" ||
+  fail "case 7: stage list exited non-zero beside the twin; see $OUT/list-7.json and $OUT/list-7.err"
+expect "$OUT/list-7.json" '.status=="ok"
+  and .stages.record == {ref: (env.FP + "/seeded"), proposed_change: {id: env.PC7, branch: env.FP}, label: "seeded",
+    branch: env.FP, at: env.AT7S, at_source: "written", state: "ready", towards: null}
+  and [.stages.rows[] | select(.twin) | .ref] == [env.FP + "/seeded"]
+  and ([.findings[] | select(.rule=="stage.twin.moved")] | length) == 0'
 
-destroy_twin 7a "done" "done"
+# A step with no target goes to the next stage, the second mark: the third link re-cabled
+# live on n1 and n3, which SR Linux's package allows with no restart, and both pushed by
+# replace; n2 untouched. The branch has not moved since the mark, so Infrahub's artifacts
+# now are the ones it sealed.
+start=$(now_ns)
+step7a_status=0
+fylgja twin step --json > "$OUT/step-7a.json" 2> "$OUT/step-7a.err" || step7a_status=$?
+STEP7A_TOOK=$(since "$start")
+echo "e2e: case 7: step to $FP/third-link took ${STEP7A_TOOK}s (exit $step7a_status)"
+[ "$step7a_status" -eq 0 ] || fail "case 7: twin step exited $step7a_status; see $OUT/step-7a.json and $OUT/step-7a.err"
+expect "$OUT/step-7a.json" '.status=="ok" and .operation=="twin.step" and .bundle_id==env.PLAN7T
+  and .subject.stage==(env.FP + "/third-link") and .stage.at==env.AT7T and .stage.at_source=="written"
+  and .step.outcome=="stepped" and .step.state=="ready" and .step.run.workflow_id=="fylgja-step"'
+RUN7A=$(jq -r .subject.run_id "$OUT/step-7a.json")
+export RUN7A
+expect "$TWIN/twin.json" '.twin_version=="6" and .state=="ready" and .bundle_id==env.PLAN7T
+  and .provenance.branch==env.FP and .provenance.at==env.AT7T
+  and .stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "third-link", description: "third link", at_source: "written"}
+  and .step.outcome=="stepped" and .step.run.run_id==env.RUN7A and .step.phase==null
+  and .step.from.stage.label=="seeded" and .step.from.bundle_id==env.PLAN7S
+  and .step.to.stage.label=="third-link" and .step.to.bundle_id==env.PLAN7T
+  and .step.reconcile.restarted == [] and .step.reconcile.recreated == [] and .step.reconcile.added == []
+  and (.step.reconcile.links_added | length) == 1
+  and [.step.pushed[] | {node, outcome}] == [{node: "n1", outcome: "landed"}, {node: "n3", outcome: "landed"}]
+  and all(.nodes[]; .holds==env.PLAN7T)'
+cp "$TWIN/twin.json" "$OUT/twin-7a.json"
+no_credential "the artifact marker" "$MARKER" "$TWIN/twin.json"
+readback 7a "$FP" enable
+history_of step-7a fylgja-step "$RUN7A"
 
-# The second waypoint's twin: the plan's second id; the branch has not moved since it was
-# written, so Infrahub's artifacts now are the ones it sealed.
-CREATE_REF="$FW/2"
-create_twin 7b
-CREATE7B_TOOK=$CREATE_TOOK
-[ "$BID" = "$PLAN2" ] || fail "case 7: create --waypoint $FW/2 deployed $BID, but the plan printed $PLAN2"
-expect "$TWIN/twin.json" '.twin_version=="5" and .provenance.branch==env.FW and .provenance.at==env.PLAN_AT2
-  and .waypoint == {series: env.FW, sequence: 2, description: "third link", at_source: "written"}'
-readback 7b "$FW" enable
+# A second step with no target goes to the head, the stage after the second mark. Nothing
+# was written after the mark but the mark, so the two bundles differ in provenance alone:
+# the step is unchanged, nothing is reconciled or pushed, and the record moves to the head
+# (US2's second scenario). The list then marks the head, which has not moved.
+start=$(now_ns)
+step7b_status=0
+fylgja twin step --json > "$OUT/step-7b.json" 2> "$OUT/step-7b.err" || step7b_status=$?
+STEP7B_TOOK=$(since "$start")
+echo "e2e: case 7: step to $FP/head took ${STEP7B_TOOK}s (exit $step7b_status)"
+[ "$step7b_status" -eq 0 ] || fail "case 7: the second twin step exited $step7b_status; see $OUT/step-7b.json and $OUT/step-7b.err"
+expect "$OUT/step-7b.json" '.status=="ok" and .operation=="twin.step" and .bundle_id==env.PLAN7H
+  and .subject.stage==(env.FP + "/head") and .stage.at==env.AT7H and .stage.at_source=="head"
+  and .step.outcome=="unchanged"'
+RUN7B=$(jq -r .subject.run_id "$OUT/step-7b.json")
+export RUN7B
+expect "$TWIN/twin.json" '.state=="ready" and .bundle_id==env.PLAN7H and .provenance.at==env.AT7H
+  and .stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "head", description: "", at_source: "head"}
+  and .step.outcome=="unchanged" and .step.run.run_id==env.RUN7B
+  and .step.from.stage.label=="third-link" and .step.from.bundle_id==env.PLAN7T and .step.to.bundle_id==env.PLAN7H
+  and .step.reconcile.skipped and (.step.pushed | length) == 0
+  and all(.nodes[]; .holds==env.PLAN7H)'
+cp "$TWIN/twin.json" "$OUT/twin-7b.json"
+no_credential "the artifact marker" "$MARKER" "$TWIN/twin.json"
+history_of step-7b fylgja-step "$RUN7B"
+fylgja stage list --branch "$FP" --json > "$OUT/list-7b.json" 2> "$OUT/list-7b.err" ||
+  fail "case 7: stage list exited non-zero beside the twin at the head; see $OUT/list-7b.json and $OUT/list-7b.err"
+expect "$OUT/list-7b.json" '.status=="ok" and .stages.record.label=="head" and .stages.record.at==env.AT7H
+  and .stages.record.state=="ready" and [.stages.rows[] | select(.twin) | .ref] == [env.FP + "/head"]
+  and ([.findings[] | select(.rule=="stage.twin.moved")] | length) == 0'
 
-destroy_twin 7b "done" "done"
+destroy_twin 7 "done" "done"
 unset CREATE_REF
 READBACK=readback
 
-# The branch and its series go together; the product then lists none of the series.
-if fixture -branch "$FW" -delete > "$OUT/delete-branch-7.out" 2>&1; then
-  fylgja waypoint list --series "$FW" --json > "$OUT/list-7-deleted.json" 2> "$OUT/list-7-deleted.err" ||
-    fail "case 7: waypoint list --series $FW exited non-zero after the delete; see $OUT/list-7-deleted.err"
-  expect "$OUT/list-7-deleted.json" '.waypoints.waypoints == []'
-  unset FW
+# The branch goes with its stages and its proposed change, in that order, and -delete says
+# so. The product then lists no stage of the branch, and plans none: no open proposed change
+# has it as its source.
+if fixture -branch "$FP" -delete > "$OUT/delete-branch-7.out" 2>&1; then
+  grep -qxF "deleted 2 stages, 1 proposed change, branch $FP" "$OUT/delete-branch-7.out" ||
+    fail "case 7: -delete on $FP did not report its two stages and its proposed change; see $OUT/delete-branch-7.out"
+  fylgja stage list --branch "$FP" --json > "$OUT/list-7-deleted.json" 2> "$OUT/list-7-deleted.err" ||
+    fail "case 7: stage list --branch $FP exited non-zero after the delete; see $OUT/list-7-deleted.err"
+  expect "$OUT/list-7-deleted.json" '.status=="ok" and .stages.branch==env.FP and .stages.rows == []'
+  plan_status=0
+  fylgja stage plan --branch "$FP" --json > "$OUT/plan-7-deleted.json" 2> "$OUT/plan-7-deleted.err" || plan_status=$?
+  [ "$plan_status" -eq 1 ] || fail "case 7: stage plan --branch $FP exited $plan_status after the delete, not 1; see $OUT/plan-7-deleted.json"
+  expect "$OUT/plan-7-deleted.json" '.status=="rejected" and [.findings[] | select(.severity=="rejection") | .rule] == ["stage.unknown"]'
+  unset FP
 else
-  echo "e2e: case 7: branch $FW and its series were not deleted; remove them with: go run -tags fixture ./cmd/fylgja-fixture -branch $FW -delete" >&2
+  echo "e2e: case 7: branch $FP and its proposed change were not deleted; remove them with: go run -tags fixture ./cmd/fylgja-fixture -branch $FP -delete" >&2
 fi
 else
   skip_case 7
 fi
 
-# --- case 8: a waypoint twin steps along its series (M11) -----------------------
+# --- case 8: a stage's twin steps through its proposed change (M11, 014) --------
 if case_runs 8; then
 
 # containers_of FILE: each node's container, its id and its start time, one line per node
@@ -1363,9 +1459,9 @@ step_wait_settled() {
   echo "e2e: case 8: step $1's wait settled after ${WAIT_AFTER}s ($(jq -r '.step.wait.reads | if . == 1 then "1 read" else "\(.) reads" end' "$TWIN/twin.json"))"
 }
 
-# A throwaway branch seeded with the mixed fixture and a test series of the same name, set
-# before seeding so the trap's -delete removes both. Made on the host case
-# 7's destroy left clean.
+# A throwaway branch seeded with the mixed fixture, set before seeding so the trap's -delete
+# removes it with its stages and its proposed change, as case 7's. Made on the host case 7's
+# destroy left clean.
 FS="fylgja-test-e2e-step-$$-$RANDOM"
 export FS
 start=$(now_ns)
@@ -1375,38 +1471,54 @@ SEED8_TOOK=$(since "$start")
 echo "e2e: case 8: seeding $FS took ${SEED8_TOOK}s (exit $seed_status)"
 [ "$seed_status" -eq 0 ] || fail "case 8: seeding $FS with -mixed exited $seed_status; see $OUT/seed-8.err"
 
-# The series, as case 7 composes one: each waypoint after the writes it seals and after
-# their artifacts are rendered. -add-mixed-link's generate returns before s1's and e1's are
-# rewritten, so the second waypoint waits for their checksums to move. What
-# Infrahub held when the first was written is kept: the twin at /1 is read back against it.
+# The draft proposed change, opened and waited for as case 7's.
+start=$(now_ns)
+fixture -branch "$FS" -propose > "$OUT/propose-8.out" 2> "$OUT/propose-8.err" ||
+  fail "case 8: -propose on $FS failed; see $OUT/propose-8.err"
+PROPOSE8_TOOK=$(since "$start")
+echo "e2e: case 8: a draft proposed change opened on $FS, its validators concluded, in ${PROPOSE8_TOOK}s"
+
+# The stages, as case 7 marks them: each after the writes it seals and after their artifacts
+# are rendered. -add-mixed-link's generate returns before s1's and e1's are rewritten, so the
+# second mark waits for their checksums to move. What Infrahub held when the first was
+# marked is kept: the twin at seeded is read back against it.
 artifacts_of "$FS" "$OUT/artifacts-8-sealed-1.json" 2> "$OUT/artifacts-8-sealed-1.err" ||
   fail "case 8: reading $FS's artifacts failed; see $OUT/artifacts-8-sealed-1.err"
 expect "$OUT/artifacts-8-sealed-1.json" 'length == 3 and all(.[]; .status == "Ready")'
-fixture -branch "$FS" -waypoint "$FS/1" -description seeded > "$OUT/waypoint-8-1.out" 2> "$OUT/waypoint-8-1.err" ||
-  fail "case 8: writing waypoint $FS/1 failed; see $OUT/waypoint-8-1.err"
+fixture -branch "$FS" -stage seeded -description seeded > "$OUT/stage-8-seeded.out" 2> "$OUT/stage-8-seeded.err" ||
+  fail "case 8: marking stage $FS/seeded failed; see $OUT/stage-8-seeded.err"
 fixture -branch "$FS" -add-mixed-link > "$OUT/add-mixed-link-8.out" 2> "$OUT/add-mixed-link-8.err" ||
   fail "case 8: -add-mixed-link on $FS failed; see $OUT/add-mixed-link-8.err"
 await_checksums_moved 8 "$FS" "$OUT/artifacts-8-sealed-1.json" s1 e1
-fixture -branch "$FS" -waypoint "$FS/2" -description "mixed link" > "$OUT/waypoint-8-2.out" 2> "$OUT/waypoint-8-2.err" ||
-  fail "case 8: writing waypoint $FS/2 failed; see $OUT/waypoint-8-2.err"
+fixture -branch "$FS" -stage mixed-link -description "mixed link" > "$OUT/stage-8-mixed-link.out" 2> "$OUT/stage-8-mixed-link.err" ||
+  fail "case 8: marking stage $FS/mixed-link failed; see $OUT/stage-8-mixed-link.err"
 
-# The plan (M10): two ids, and between them the link, with s1 re-bootstrapped for it and
-# both ends' artifacts re-rendered. e1's bootstrap carries no per-port line, so e1
-# changes in its mapping alone, if at all; e2 not at all. Each waypoint carries warnings and
-# no rejection: the mixed fixture's EOS artifacts name Management1, which the node calls
-# Management0 (artifact.interface.unrepresented, M7), as case 6's create does.
+# The plan (M10, 014): four stages, the branch point refused as case 7's is, so the plan
+# exits 1; the marks and the head compiled to three ids, and between the marks the link,
+# with s1 re-bootstrapped for it and both ends' artifacts re-rendered. e1's bootstrap
+# carries no per-port line, so e1 changes in its mapping alone, if at all; e2 not at all.
+# The step to the head is unchanged. Each compiled stage carries warnings and no rejection:
+# the mixed fixture's EOS artifacts name Management1, which the node calls Management0
+# (artifact.interface.unrepresented, M7), as case 6's create does.
 plan_status=0
-fylgja waypoint plan --series "$FS" --json > "$OUT/plan-8.json" 2> "$OUT/plan-8.err" || plan_status=$?
-[ "$plan_status" -eq 0 ] || fail "case 8: waypoint plan --series $FS exited $plan_status; see $OUT/plan-8.json and $OUT/plan-8.err"
-expect "$OUT/plan-8.json" '.status=="ok" and [.plan.waypoints[].sequence] == [1, 2]
-  and all(.plan.waypoints[]; .branch==env.FS and (.bundle_id | type)=="string"
+fylgja stage plan --branch "$FS" --json > "$OUT/plan-8.json" 2> "$OUT/plan-8.err" || plan_status=$?
+[ "$plan_status" -eq 1 ] ||
+  fail "case 8: stage plan --branch $FS exited $plan_status, not 1 for its refused branch point; see $OUT/plan-8.json and $OUT/plan-8.err"
+expect "$OUT/plan-8.json" '.status=="rejected" and .operation=="stage.plan" and .plan.branch==env.FS
+  and [.plan.stages[].ref]
+    == [env.FS + "/branch-point", env.FS + "/seeded", env.FS + "/mixed-link", env.FS + "/head"]
+  and [.findings[] | select(.severity=="rejection") | .rule] == ["contract.node.missing"]
+  and .plan.stages[0].bundle_id == null
+  and all(.plan.stages[1:][]; .branch==env.FS and (.bundle_id | type)=="string"
     and all(.findings[]; .severity != "rejection"))
-  and .plan.waypoints[0].bundle_id != .plan.waypoints[1].bundle_id
-  and (.plan.steps | length) == 1'
-P1=$(jq -r '.plan.waypoints[0].bundle_id' "$OUT/plan-8.json")
-P2=$(jq -r '.plan.waypoints[1].bundle_id' "$OUT/plan-8.json")
+  and ([.plan.stages[1:][].bundle_id] | unique | length) == 3
+  and (.plan.steps | length) == 3 and (.plan.steps[0].computed | not)
+  and (.plan.steps[2] | .computed and .unchanged)'
+P1=$(jq -r '.plan.stages[1].bundle_id' "$OUT/plan-8.json")
+P2=$(jq -r '.plan.stages[2].bundle_id' "$OUT/plan-8.json")
 export P1 P2
-expect "$OUT/plan-8.json" '.plan.steps[0] | .computed and (.unchanged | not)
+expect "$OUT/plan-8.json" '.plan.steps[1] | .computed and (.unchanged | not)
+  and .from==(env.FS + "/seeded") and .to==(env.FS + "/mixed-link")
   and .from_bundle_id==env.P1 and .to_bundle_id==env.P2
   and .nodes.added == [] and .nodes.removed == []
   and any(.nodes.changed[]; .node=="s1" and any(.reasons[]; .=="bootstrap"))
@@ -1414,32 +1526,35 @@ expect "$OUT/plan-8.json" '.plan.steps[0] | .computed and (.unchanged | not)
   and .links.removed == [] and (.links.added | length) == 1
   and ([.links.added[0].a.node, .links.added[0].b.node] | sort) == ["e1", "s1"]
   and [.artifacts.changed[].node] == ["e1", "s1"]'
-echo "e2e: case 8: plan $FS/1 $P1, $FS/2 $P2; one link added between e1 and s1, both re-rendered"
+echo "e2e: case 8: plan $FS/seeded $P1, $FS/mixed-link $P2; one link added between e1 and s1, both re-rendered"
 
-# The twin at /1, pushed by replace: the plan's first id, a 5 record that has
-# not stepped, every node holding /1's bundle.
+# The twin at seeded, pushed by replace: the plan's id, a 6 record that has not stepped,
+# every node holding seeded's bundle.
 BRANCH=$FS
 READBACK=
-CREATE_REF="$FS/1"
+CREATE_REF="$FS/seeded"
 create_twin 8
 CREATE8_TOOK=$CREATE_TOOK
-[ "$BID" = "$P1" ] || fail "case 8: create --waypoint $FS/1 deployed $BID, but the plan printed $P1"
-expect "$TWIN/twin.json" '.twin_version=="5" and .state=="ready" and .step==null
-  and .waypoint.series==env.FS and .waypoint.sequence==1 and all(.nodes[]; .holds==env.P1)'
+[ "$BID" = "$P1" ] || fail "case 8: create --stage $FS/seeded deployed $BID, but the plan printed $P1"
+expect "$TWIN/twin.json" '.twin_version=="6" and .state=="ready" and .step==null
+  and .stage.proposed_change.branch==env.FS and .stage.label=="seeded" and all(.nodes[]; .holds==env.P1)'
 readback_mixed 8 "$FS" "$OUT/artifacts-8-sealed-1.json"
 containers_of "$OUT/containers-8-created.txt"
 [ "$(wc -l < "$OUT/containers-8-created.txt")" -eq 3 ] || fail "case 8: docker names $(wc -l < "$OUT/containers-8-created.txt") containers of the twin, not 3"
 
-# The step to /2 restarts e1, so it is refused without --allow-restart: the dry run
-# says so and touches nothing; the run is refused before it starts, and touches nothing.
+# The step with no target goes to the next stage, mixed-link. It restarts e1, so it is
+# refused without --allow-restart: the dry run says so and touches nothing; the run is
+# refused before it starts, and touches nothing.
 twin_before=$(sha256sum < "$TWIN/twin.json")
 dry8_status=0
 fylgja twin step --dry-run --json > "$OUT/step-8-dry.json" 2> "$OUT/step-8-dry.err" || dry8_status=$?
 [ "$dry8_status" -eq 1 ] || fail "case 8: twin step --dry-run exited $dry8_status, not 1; see $OUT/step-8-dry.json"
 expect "$OUT/step-8-dry.json" '.status=="rejected" and .operation=="twin.step" and .dry_run.verdict=="refused"
+  and .subject.stage==(env.FS + "/mixed-link")
   and [.findings[] | select(.severity=="rejection") | .rule] == ["step.restart.required"]
   and (.findings[] | select(.rule=="step.restart.required") | .object)=="e1"
-  and .step.from.bundle_id==env.P1 and .step.to.bundle_id==env.P2
+  and .step.from.stage.label=="seeded" and .step.from.bundle_id==env.P1
+  and .step.to.stage.label=="mixed-link" and .step.to.bundle_id==env.P2
   and .step.reconcile.restarted == ["e1"]
   and [.step.push_plan[].node] == ["e1", "s1"]
   and (.step | has("run") | not)'
@@ -1454,24 +1569,24 @@ expect "$OUT/step-8-refused.json" '.status=="rejected"
 containers_of "$OUT/containers-8-refused.txt"
 cmp -s "$OUT/containers-8-created.txt" "$OUT/containers-8-refused.txt" ||
   fail "case 8: a refused step changed the twin's containers; compare $OUT/containers-8-created.txt and $OUT/containers-8-refused.txt"
-echo "e2e: case 8: the step to $FS/2 refused step.restart.required naming e1, dry run and run; nothing touched"
+echo "e2e: case 8: the step to $FS/mixed-link refused step.restart.required naming e1, dry run and run; nothing touched"
 
-# The step to /2: e1 restarted in place, its id kept and its start time moved; s1
+# The step to mixed-link: e1 restarted in place, its id kept and its start time moved; s1
 # re-cabled live and e2 untouched, their containers as they were; both pushed by replace.
 start=$(now_ns)
 step8a_status=0
 fylgja twin step --allow-restart --json > "$OUT/step-8a.json" 2> "$OUT/step-8a.err" || step8a_status=$?
 STEP8A_TOOK=$(since "$start")
-echo "e2e: case 8: step to $FS/2 took ${STEP8A_TOOK}s (exit $step8a_status)"
+echo "e2e: case 8: step to $FS/mixed-link took ${STEP8A_TOOK}s (exit $step8a_status)"
 [ "$step8a_status" -eq 0 ] || fail "case 8: twin step --allow-restart exited $step8a_status; see $OUT/step-8a.json and $OUT/step-8a.err"
 expect "$OUT/step-8a.json" '.status=="ok" and .operation=="twin.step" and .bundle_id==env.P2
   and .step.outcome=="stepped" and .step.state=="ready" and .step.run.workflow_id=="fylgja-step"'
 RUN8A=$(jq -r .subject.run_id "$OUT/step-8a.json")
 export RUN8A
-expect "$TWIN/twin.json" '.twin_version=="5" and .state=="ready" and .bundle_id==env.P2
-  and .waypoint.series==env.FS and .waypoint.sequence==2 and .run.workflow_id=="fylgja-provision"
+expect "$TWIN/twin.json" '.twin_version=="6" and .state=="ready" and .bundle_id==env.P2
+  and .stage.proposed_change.branch==env.FS and .stage.label=="mixed-link" and .run.workflow_id=="fylgja-provision"
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN8A and .step.phase==null
-  and .step.from.waypoint.sequence==1 and .step.from.bundle_id==env.P1 and .step.to.bundle_id==env.P2
+  and .step.from.stage.label=="seeded" and .step.from.bundle_id==env.P1 and .step.to.bundle_id==env.P2
   and .step.reconcile.restarted == ["e1"] and .step.reconcile.recreated == [] and .step.reconcile.added == []
   and ([.step.pushed[] | {node, reasons, outcome}]
     == [{node: "e1", reasons: ["artifact", "restarted"], outcome: "landed"},
@@ -1482,23 +1597,23 @@ no_credential "the artifact marker" "$MARKER" "$TWIN/twin.json"
 containers_of "$OUT/containers-8a.txt"
 for node in s1 e2; do
   [ "$(container_line "$OUT/containers-8-created.txt" $node)" = "$(container_line "$OUT/containers-8a.txt" $node)" ] ||
-    fail "case 8: the step to $FS/2 changed $node's container; compare $OUT/containers-8-created.txt and $OUT/containers-8a.txt"
+    fail "case 8: the step to $FS/mixed-link changed $node's container; compare $OUT/containers-8-created.txt and $OUT/containers-8a.txt"
 done
 read -r _ e1_id_before e1_started_before < <(container_line "$OUT/containers-8-created.txt" e1)
 read -r _ e1_id_after e1_started_after < <(container_line "$OUT/containers-8a.txt" e1)
-[ "$e1_id_before" = "$e1_id_after" ] || fail "case 8: the step to $FS/2 replaced e1's container, where containerlab restarts it in place"
+[ "$e1_id_before" = "$e1_id_after" ] || fail "case 8: the step to $FS/mixed-link replaced e1's container, where containerlab restarts it in place"
 [ "$(date -d "$e1_started_after" +%s%N)" -gt "$(date -d "$e1_started_before" +%s%N)" ] ||
   fail "case 8: e1's container started at $e1_started_after, not after the create's $e1_started_before: it was not restarted"
 echo "e2e: case 8: e1 restarted in place; s1 and e2 untouched"
 readback_mixed 8a "$FS"
 # The replace's removal, first half: s1 is re-cabled live and never restarted, so
-# only the push changes its configuration, and /2's artifact describes the new port.
+# only the push changes its configuration, and mixed-link's artifact describes the new port.
 S1_ADDR=$(jq -r '.nodes[] | select(.name=="s1") | .mgmt_ipv4' "$TWIN/twin.json")
 want=$(s1_new_port_description)
-[ -n "$want" ] || fail "case 8: s1's artifact at $FS/2 sets no description on ethernet-1/3, the port the step cabled"
+[ -n "$want" ] || fail "case 8: s1's artifact at $FS/mixed-link sets no description on ethernet-1/3, the port the step cabled"
 got=$(gnmi_value 8a "$S1_ADDR" '/interface[name=ethernet-1/3]/description')
-[ "$got" = "$want" ] || fail "case 8: s1's ethernet-1/3 description reads \"$got\", its artifact at $FS/2 sets \"$want\""
-echo "e2e: case 8: s1 ethernet-1/3 carries the description its artifact at $FS/2 sets"
+[ "$got" = "$want" ] || fail "case 8: s1's ethernet-1/3 description reads \"$got\", its artifact at $FS/mixed-link sets \"$want\""
+echo "e2e: case 8: s1 ethernet-1/3 carries the description its artifact at $FS/mixed-link sets"
 await_neighbour s1 ethernet-1/3 e1 Ethernet3
 await_neighbour e1 Ethernet3 s1 ethernet-1/3
 # The step's own wait after its record: the record and the step's
@@ -1512,26 +1627,27 @@ fylgja twin show --json > "$OUT/show-8a.json" 2> "$OUT/show-8a.err" ||
   fail "case 8: twin show exited non-zero after the step; see $OUT/show-8a.err"
 expect "$OUT/show-8a.json" '.show.kind=="pinned" and .show.record.bundle_id==env.P2
   and .show.record.state=="ready" and .show.record.step.outcome=="stepped"'
-fylgja waypoint list --json > "$OUT/list-8a.json" 2> "$OUT/list-8a.err" ||
-  fail "case 8: waypoint list exited non-zero beside the stepped twin; see $OUT/list-8a.json and $OUT/list-8a.err"
-expect "$OUT/list-8a.json" '.status=="ok" and .waypoints.record.series==env.FS and .waypoints.record.sequence==2
-  and .waypoints.record.state=="ready" and .waypoints.record.towards==null
-  and [.waypoints.waypoints[] | select(.twin) | "\(.series)/\(.sequence)"] == [env.FS + "/2"]'
+fylgja stage list --branch "$FS" --json > "$OUT/list-8a.json" 2> "$OUT/list-8a.err" ||
+  fail "case 8: stage list exited non-zero beside the stepped twin; see $OUT/list-8a.json and $OUT/list-8a.err"
+expect "$OUT/list-8a.json" '.status=="ok" and .stages.record.proposed_change.branch==env.FS
+  and .stages.record.label=="mixed-link" and .stages.record.state=="ready" and .stages.record.towards==null
+  and [.stages.rows[] | select(.twin) | .ref] == [env.FS + "/mixed-link"]'
 
-# The step back to /1: the link's endpoints deleted, e1 restarted again, s1 re-cabled
-# live; the twin runs what Infrahub held when /1 was written, and e2 is still the create's.
+# The step back to seeded, named: the link's endpoints deleted, e1 restarted again, s1
+# re-cabled live; the twin runs what Infrahub held when seeded was marked, and e2 is still
+# the create's.
 start=$(now_ns)
 step8b_status=0
-fylgja twin step --waypoint "$FS/1" --allow-restart --json > "$OUT/step-8b.json" 2> "$OUT/step-8b.err" || step8b_status=$?
+fylgja twin step --stage "$FS/seeded" --allow-restart --json > "$OUT/step-8b.json" 2> "$OUT/step-8b.err" || step8b_status=$?
 STEP8B_TOOK=$(since "$start")
-echo "e2e: case 8: step back to $FS/1 took ${STEP8B_TOOK}s (exit $step8b_status)"
-[ "$step8b_status" -eq 0 ] || fail "case 8: twin step --waypoint $FS/1 exited $step8b_status; see $OUT/step-8b.json and $OUT/step-8b.err"
+echo "e2e: case 8: step back to $FS/seeded took ${STEP8B_TOOK}s (exit $step8b_status)"
+[ "$step8b_status" -eq 0 ] || fail "case 8: twin step --stage $FS/seeded exited $step8b_status; see $OUT/step-8b.json and $OUT/step-8b.err"
 expect "$OUT/step-8b.json" '.status=="ok" and .bundle_id==env.P1 and .step.outcome=="stepped"'
 RUN8B=$(jq -r .subject.run_id "$OUT/step-8b.json")
 export RUN8B
-expect "$TWIN/twin.json" '.state=="ready" and .bundle_id==env.P1 and .waypoint.sequence==1
+expect "$TWIN/twin.json" '.state=="ready" and .bundle_id==env.P1 and .stage.label=="seeded"
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN8B
-  and .step.from.waypoint.sequence==2 and .step.from.bundle_id==env.P2
+  and .step.from.stage.label=="mixed-link" and .step.from.bundle_id==env.P2
   and .step.reconcile.restarted == ["e1"] and all(.nodes[]; .holds==env.P1)'
 cp "$TWIN/twin.json" "$OUT/twin-8b.json"
 no_credential "the artifact marker" "$MARKER" "$TWIN/twin.json"
@@ -1539,11 +1655,11 @@ containers_of "$OUT/containers-8b.txt"
 [ "$(container_line "$OUT/containers-8-created.txt" e2)" = "$(container_line "$OUT/containers-8b.txt" e2)" ] ||
   fail "case 8: e2's container changed since the create; compare $OUT/containers-8-created.txt and $OUT/containers-8b.txt"
 readback_mixed 8b "$FS" "$OUT/artifacts-8-sealed-1.json"
-# The replace's removal, second half: /1's artifact never describes ethernet-1/3, and s1,
-# never restarted, no longer carries the description /2's push set.
-[ -z "$(s1_new_port_description)" ] || fail "case 8: s1's artifact at $FS/1 sets a description on ethernet-1/3, so its absence would show nothing"
+# The replace's removal, second half: seeded's artifact never describes ethernet-1/3, and
+# s1, never restarted, no longer carries the description mixed-link's push set.
+[ -z "$(s1_new_port_description)" ] || fail "case 8: s1's artifact at $FS/seeded sets a description on ethernet-1/3, so its absence would show nothing"
 gnmi_absent 8b "$S1_ADDR" '/interface[name=ethernet-1/3]/description'
-echo "e2e: case 8: s1 ethernet-1/3 carries no description after the step back to $FS/1: the replace removed what /2 added"
+echo "e2e: case 8: s1 ethernet-1/3 carries no description after the step back to $FS/seeded: the replace removed what mixed-link added"
 step_wait_settled 8b
 WAIT8B_AFTER=$WAIT_AFTER
 echo "e2e: case 8: settled after ${WAIT8A_AFTER}s and ${WAIT8B_AFTER}s"
@@ -1553,14 +1669,17 @@ destroy_twin 8 "done" "done"
 unset CREATE_REF
 READBACK=readback
 
-# The branch and its series go together; the product then lists none of the series.
+# The branch goes with its stages and its proposed change, as case 7's; the product then
+# lists no stage of it.
 if fixture -branch "$FS" -delete > "$OUT/delete-branch-8.out" 2>&1; then
-  fylgja waypoint list --series "$FS" --json > "$OUT/list-8-deleted.json" 2> "$OUT/list-8-deleted.err" ||
-    fail "case 8: waypoint list --series $FS exited non-zero after the delete; see $OUT/list-8-deleted.err"
-  expect "$OUT/list-8-deleted.json" '.waypoints.waypoints == []'
+  grep -qxF "deleted 2 stages, 1 proposed change, branch $FS" "$OUT/delete-branch-8.out" ||
+    fail "case 8: -delete on $FS did not report its two stages and its proposed change; see $OUT/delete-branch-8.out"
+  fylgja stage list --branch "$FS" --json > "$OUT/list-8-deleted.json" 2> "$OUT/list-8-deleted.err" ||
+    fail "case 8: stage list --branch $FS exited non-zero after the delete; see $OUT/list-8-deleted.err"
+  expect "$OUT/list-8-deleted.json" '.status=="ok" and .stages.branch==env.FS and .stages.rows == []'
   unset FS
 else
-  echo "e2e: case 8: branch $FS and its series were not deleted; remove them with: go run -tags fixture ./cmd/fylgja-fixture -branch $FS -delete" >&2
+  echo "e2e: case 8: branch $FS and its proposed change were not deleted; remove them with: go run -tags fixture ./cmd/fylgja-fixture -branch $FS -delete" >&2
 fi
 else
   skip_case 8
@@ -1575,9 +1694,9 @@ stop_server
 
 # $OUT holds the short-lived worker's stdout and stderr, the orphan's deploy output, every
 # twin show document, the checks' histories with their payloads decoded too, both boot
-# halves' output (boot-half.out, boot-half-6.out), case 7's plan
-# and list documents (plan-7.json, list-7-*.json), and case 8's step documents,
-# record copies and step histories, decoded (step-8*.json, twin-8*.json, history-step-8*),
+# halves' output (boot-half.out, boot-half-6.out), the plan and list documents of cases 7
+# and 8 (plan-*.json, list-*.json), and their step documents, record copies and step
+# histories, decoded (step-7*.json, step-8*.json, twin-7*.json, twin-8*.json, history-step-*),
 # every twin verify document (verify-*.json), and the API's
 # server's report and request log (server.log). A step history's push results
 # carry the device's diff by design, so they are searched for the marker and the
@@ -1624,10 +1743,10 @@ if ran 6; then
   echo "e2e: case 6: seed ${SEED6_TOOK}s, mixed twin $BID6 under run $RUN6"
 fi
 if ran 7; then
-  echo "e2e: case 7: plan ${PLAN7_TOOK}s, creates ${CREATE7A_TOOK}s and ${CREATE7B_TOOK}s"
+  echo "e2e: case 7: proposed change ${PROPOSE7_TOOK}s, plan ${PLAN7_TOOK}s, create ${CREATE7_TOOK}s, steps ${STEP7A_TOOK}s and ${STEP7B_TOOK}s; runs $RUN7A and $RUN7B"
 fi
 if ran 8; then
-  echo "e2e: case 8: steps ${STEP8A_TOOK}s and ${STEP8B_TOOK}s, create ${CREATE8_TOOK}s; runs $RUN8A and $RUN8B"
+  echo "e2e: case 8: proposed change ${PROPOSE8_TOOK}s, steps ${STEP8A_TOOK}s and ${STEP8B_TOOK}s, create ${CREATE8_TOOK}s; runs $RUN8A and $RUN8B"
 fi
 line="e2e: verify ${VERIFY1_TOOK}s (case 1), ${VERIFY5_TOOK}s (case 5)"
 if ran 6; then line+=", ${VERIFY6_TOOK}s (case 6)"; fi

@@ -16,15 +16,17 @@ can drive the twin, from the lab host or through an SSH tunnel from another mach
 `v0.1.0` is released; [what it built](docs/archive/v0.1-built.md) is recorded milestone by
 milestone, and the [roadmap](docs/roadmap.md) says what comes next.
 
-![A twin created from a waypoint, stepped to the next and verified](docs/recording/session.gif)
+![A pinned twin created, stepped to the next moment of its change and verified](docs/recording/session.gif)
 
 The asciinema cast beside it, [docs/recording/session.cast](docs/recording/session.cast),
-plays the same session as text.
+plays the same session as text. Both were recorded at `v0.1.0` and show a twin from a
+waypoint, which a proposed change's stages have since replaced, until they are remade at
+`v0.2.0`.
 
 Today it runs Nokia SR Linux and Arista EOS, alone or mixed in one twin. A vendor is a
-YAML file, not code ([psp/README.md](psp/README.md)). A twin built from a waypoint can
-step to the next one without a rebuild, and `twin verify` reports whether the running twin
-matches its intent.
+YAML file, not code ([psp/README.md](psp/README.md)). A twin built from a stage of a
+proposed change can step to another stage of it without a rebuild, and `twin verify`
+reports whether the running twin matches its intent.
 
 ## Built with an AI agent
 
@@ -259,74 +261,94 @@ in flight: none
 ## A stepping twin
 
 A walking twin keeps up with its branch by rebuilding: a destroy and a create, about a
-minute each time here. A twin built from a **waypoint** steps instead. A waypoint is a
-named, pinned reference into a branch, `<series>/<sequence>`, which you write in Infrahub
-after the changes it marks ([schema/README.md](schema/README.md) says how). `twin step`
-takes the running twin to another waypoint of its series and changes only what differs:
-containerlab re-cables the running lab, and only the nodes whose configuration moved are
-pushed. The push is a replace, so whatever the new waypoint drops is removed from the node.
-Same host, same services, `begins` lines left out as before.
+minute each time here. A twin built from a **stage** steps instead. A stage is a moment of
+a change under review, as Infrahub holds one: a proposed change, opened from the branch the
+change is built on. Every proposed change has two stages of its own, its **branch point**
+(`main` as it was when the branch was made) and its **head** (the branch as it is now), and
+you mark the moments between, each after the writes it seals
+([schema/README.md](schema/README.md) says how). A stage is named `<branch>/<label>`.
+`twin step` takes the running twin to another stage of the same proposed change and
+changes only what differs: containerlab re-cables the running lab, and only the nodes whose
+configuration moved are pushed. The push is a replace, so whatever the new stage drops is
+removed from the node. Same host, same services, `begins` lines left out as before.
 
 Start from a fresh fixture, since the walking twin's branch still has the port disabled.
-The fixture tool writes test series (their names begin `fylgja-test-`). Write `/1`, add a
-third link, wait for n1's and n3's artifacts to be re-rendered (their checksums move in
-Infrahub, here after about 8 seconds), then write `/2`:
+The fixture tool works on test branches (their names begin `fylgja-test-`): `-propose`
+opens a draft proposed change from one into `main` and waits for its checks, which render
+the branch's artifacts. Mark `seeded`, add a third link, wait for n1's and n3's artifacts
+to be re-rendered (their checksums move in Infrahub, here after about 10 seconds), then
+mark `third-link`:
 
 ```sh
-go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -delete    # the branch and its test series
+go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -delete    # its stages, its proposed change, the branch
 go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme            # seed it again
-go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -waypoint fylgja-test-readme/1 -description seeded
+go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -propose   # a draft into main; waits for its checks
+go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -stage seeded -description seeded
 go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -add-link  # n1:ethernet-1/3 <-> n3:ethernet-1/3
-go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -waypoint fylgja-test-readme/2 -description "third link"
+go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -stage third-link -description "third link"
 ```
 
-If the seed answers `graphql: None` straight after the delete, run it again before writing
-`/1`: Infrahub 1.11.2 can refuse to create a branch just after one of the same name was
-deleted ([verified facts](docs/verified-facts.md#infrahub-1112)).
+A stage marked before its artifacts are re-rendered is refused as stale
+(`stage.artifact.stale`), naming each device and how to regenerate; mark it again once they
+are. If the seed answers `graphql: None` straight after the delete, run it again: Infrahub
+1.11.2 can refuse to create a branch just after one of the same name was deleted
+([verified facts](docs/verified-facts.md#infrahub-1112)).
 
-**Plan the series.** `waypoint plan` reads and compiles every waypoint and shows what each
-step between them would change. It needs no lab and no worker:
+**Plan the stages.** `stage plan` reads and compiles every stage of the proposed change, in
+order, and shows what each step between them would change. It needs no lab and no worker.
+`main` holds no network here, so the branch point is refused at its read and the plan exits
+1; the head is the branch as it is now, which the second mark already seals, so it is last
+whatever its `at` and the step to it changes nothing:
 
 ```console
-$ bin/fylgja waypoint plan --series fylgja-test-readme
-series fylgja-test-readme (2 waypoints)
-fylgja-test-readme/1: branch fylgja-test-readme at 2026-10-07T11:52:21.501002+00:00 (written), "seeded"
-  bundle_id f857d51352836db586f6f1089ec9ca3324cc4bac05fb3a7badbb3cb37aec15d1
+$ bin/fylgja stage plan --branch fylgja-test-readme
+proposed change "fylgja-test-readme" (18df3345-c838-66db-33b1-c51e73aad544) on branch fylgja-test-readme → main, draft (4 stages)
+fylgja-test-readme/branch-point: refused (contract.node.missing)
+  rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
+step fylgja-test-readme/branch-point → fylgja-test-readme/seeded (— → f7f9624a…): not computed (fylgja-test-readme/branch-point was refused)
+fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-17T03:26:24.223609+00:00 (written), "seeded"
+  bundle_id f7f9624a20583f1d0b66278955a89a73c8351e4e241aa70b6946fa11345a59fd
   read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
-step fylgja-test-readme/1 → fylgja-test-readme/2 (f857d513… → 7eafd93c…):
+step fylgja-test-readme/seeded → fylgja-test-readme/third-link (f7f9624a… → a9f59959…):
   nodes: ~n1 (bootstrap, mapping); ~n3 (bootstrap, mapping)
   links: +n1:e1-3 — n3:e1-3
   artifacts: n1 device-config f0563480… → a5d72b0d…; n3 device-config 7efd0c0d… → 01125980…
-fylgja-test-readme/2: branch fylgja-test-readme at 2026-10-07T11:52:51.233406+00:00 (written), "third link"
-  bundle_id 7eafd93cc5a8ebdac69656dac4b4793d3351202a4cdbc929f744bff4ac3ac855
+fylgja-test-readme/third-link: branch fylgja-test-readme at 2026-10-17T03:26:34.491995+00:00 (written), "third link"
+  bundle_id a9f59959a06750a4d194cb9348b2a2b80c6e53cff5969afbdda783cf263347a9
   read: 3 devices (nokia_srlinux 3), 14 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
+step fylgja-test-readme/third-link → fylgja-test-readme/head (a9f59959… → e0c1ada0…): unchanged; the ids differ by provenance alone
+fylgja-test-readme/head: branch fylgja-test-readme at 2026-10-17T03:26:33.857618+00:00 (head)
+  bundle_id e0c1ada0b3bbd1f0a3c3fb511ea684d30747caf1077d4e1e7df55b9e7b6cb2ed
+  read: 3 devices (nokia_srlinux 3), 14 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
+rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
+1 finding(s): 1 rejection, 0 warning, 0 info
 ```
 
-**Create the twin at `/1`.** It is the same run as the walking twin's, pinned at the
-waypoint's instant, and it never follows:
+**Create the twin at `seeded`.** It is the same run as the walking twin's, pinned at the
+stage's instant, and it never follows:
 
 ```console
-$ bin/fylgja twin create --waypoint fylgja-test-readme/1
-waypoint fylgja-test-readme/1: branch fylgja-test-readme at 2026-10-07T11:52:21.501002+00:00 (written), "seeded"
+$ bin/fylgja twin create --stage fylgja-test-readme/seeded
+stage fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-17T03:26:24.223609+00:00 (written), "seeded"
 run fylgja-provision 01a11635-d5b5-7c3c-8df0-9dd946eb34bb
 …
 step deploy: done in 36.2s (3 nodes)
 …
-twin ready: bundle_id f857d51352836db586f6f1089ec9ca3324cc4bac05fb3a7badbb3cb37aec15d1
+twin ready: bundle_id f7f9624a20583f1d0b66278955a89a73c8351e4e241aa70b6946fa11345a59fd
 …
-pinned at 2026-10-07T11:52:21.501002+00:00, not following
+pinned at 2026-10-17T03:26:24.223609+00:00, not following
 ```
 
-**Step it.** With no `--waypoint`, `twin step` goes to the next waypoint of the series.
+**Step it.** With no `--stage`, `twin step` goes to the next stage of the proposed change.
 `--dry-run` makes every check the step makes, including containerlab's own plan for the
 running lab, and touches nothing:
 
 ```console
 $ bin/fylgja twin step --dry-run
 dry run: no lab, container, twin directory or run is changed
-twin: waypoint fylgja-test-readme/1 (bundle f857d513…), pinned at 2026-10-07T11:52:21.501002+00:00; 3 nodes
-waypoint fylgja-test-readme/2: branch fylgja-test-readme at 2026-10-07T11:52:51.233406+00:00 (written), "third link"
-step fylgja-test-readme/1 → fylgja-test-readme/2 (f857d513… → 7eafd93c…):
+twin: stage fylgja-test-readme/seeded (bundle f7f9624a…), pinned at 2026-10-17T03:26:24.223609+00:00; 3 nodes
+stage fylgja-test-readme/third-link: branch fylgja-test-readme at 2026-10-17T03:26:34.491995+00:00 (written), "third link"
+step fylgja-test-readme/seeded → fylgja-test-readme/third-link (f7f9624a… → a9f59959…):
   nodes: ~n1 (bootstrap, mapping); ~n3 (bootstrap, mapping)
   links: +n1:e1-3 — n3:e1-3
   artifacts: n1 device-config f0563480… → a5d72b0d…; n3 device-config 7efd0c0d… → 01125980…
@@ -349,7 +371,7 @@ step push n1: done in 2.5s
 step push n3: done in 2.5s
 step record: done in 0.0s
 step observe: settled after 5.7s (1 read)
-stepped to waypoint fylgja-test-readme/2 (bundle 7eafd93c…) in 4.1s: reconcile 0.5s; push n1 2.4s, n3 2.5s; settled after 5.7s
+stepped to stage fylgja-test-readme/third-link (bundle a9f59959…) in 4.1s: reconcile 0.5s; push n1 2.4s, n3 2.5s; settled after 5.7s
 …
 ```
 
@@ -357,42 +379,53 @@ The step took 4.1 seconds where a rebuild takes about a minute. SR Linux takes t
 live, so no container restarted (each still had the create's start time), n2 was neither
 touched nor pushed, and n1 and n3 were pushed their new artifacts by replace. After its
 record the run waits, as `twin verify --wait` would, until the twin conforms to its new
-intent; here the first read already did. `twin verify` sees the new link from both ends:
+intent; here the first read already did. `twin verify` sees the new link from both ends,
+and `stage list` marks the twin's stage:
 
 ```console
 $ bin/fylgja twin verify
-twin: waypoint fylgja-test-readme/2 (bundle 7eafd93c…), ready, pinned at 2026-10-07T11:52:51.233406+00:00; 3 nodes
-staged: bundle 7eafd93c…; 19 assertions over 3 nodes, 0 skipped
-n1 (172.20.20.3:57400, nokia_srlinux): host name n1; ethernet-1/1, ethernet-1/2, ethernet-1/3 enabled; neighbours n2 ethernet-1/1, n3 ethernet-1/2, n3 ethernet-1/3; record: holds 7eafd93c…
-n2 (172.20.20.4:57400, nokia_srlinux): host name n2; ethernet-1/1, ethernet-1/2 enabled; neighbours n1 ethernet-1/1, n3 ethernet-1/1; record: holds 7eafd93c…
-n3 (172.20.20.2:57400, nokia_srlinux): host name n3; ethernet-1/1, ethernet-1/2, ethernet-1/3 enabled; neighbours n2 ethernet-1/2, n1 ethernet-1/2, n1 ethernet-1/3; record: holds 7eafd93c…
+twin: stage fylgja-test-readme/third-link (bundle a9f59959…), ready, pinned at 2026-10-17T03:26:34.491995+00:00; 3 nodes
+staged: bundle a9f59959…; 19 assertions over 3 nodes, 0 skipped
+n1 (172.20.20.3:57400, nokia_srlinux): host name n1; ethernet-1/1, ethernet-1/2, ethernet-1/3 enabled; neighbours n2 ethernet-1/1, n3 ethernet-1/2, n3 ethernet-1/3; record: holds a9f59959…
+n2 (172.20.20.4:57400, nokia_srlinux): host name n2; ethernet-1/1, ethernet-1/2 enabled; neighbours n1 ethernet-1/1, n3 ethernet-1/1; record: holds a9f59959…
+n3 (172.20.20.2:57400, nokia_srlinux): host name n3; ethernet-1/1, ethernet-1/2, ethernet-1/3 enabled; neighbours n2 ethernet-1/2, n1 ethernet-1/2, n1 ethernet-1/3; record: holds a9f59959…
 skipped: none
 in flight: none
 held: 3 host names, 8 ports, 8 link ends, 3 record claims (the record's, not read); failed: none; unread: none
-$ bin/fylgja waypoint list
-series fylgja-test-readme (2 waypoints)
-  fylgja-test-readme/1  branch fylgja-test-readme  at 2026-10-07T11:52:21.501002+00:00 (written)  "seeded"
-  fylgja-test-readme/2  branch fylgja-test-readme  at 2026-10-07T11:52:51.233406+00:00 (written)  "third link"  ← twin
+$ bin/fylgja stage list
+proposed change "fylgja-test-readme" (18df3345-c838-66db-33b1-c51e73aad544) on branch fylgja-test-readme, draft (4 stages)
+  fylgja-test-readme/branch-point  main                at 2026-10-17T03:25:37.163062Z (branch point)  ""
+  fylgja-test-readme/seeded        fylgja-test-readme  at 2026-10-17T03:26:24.223609+00:00 (written)       "seeded"
+  fylgja-test-readme/third-link    fylgja-test-readme  at 2026-10-17T03:26:34.491995+00:00 (written)       "third link"  ← twin
+  fylgja-test-readme/head          fylgja-test-readme  at 2026-10-17T03:26:33.857618+00:00 (head)          ""
 ```
 
-**Step back.** A step can go to any waypoint of the series, backwards too. The replace
-takes the third link's configuration off n1 and n3, and containerlab removes the link:
+A step with no `--stage` from here goes to the head, and is `unchanged`: the two bundles
+differ in provenance alone, so nothing is pushed and the record moves to the head.
+
+**Step back.** A step can go to any stage of the proposed change, backwards too. The
+replace takes the third link's configuration off n1 and n3, and containerlab removes the
+link:
 
 ```console
-$ bin/fylgja twin step --waypoint fylgja-test-readme/1
+$ bin/fylgja twin step --stage fylgja-test-readme/seeded
 …
   links: -n1:e1-3 — n3:e1-3
 …
-stepped to waypoint fylgja-test-readme/1 (bundle f857d513…) in 4.7s: reconcile 0.5s; push n1 3.0s, n3 2.9s; settled after 5.0s
+stepped to stage fylgja-test-readme/seeded (bundle f7f9624a…) in 4.7s: reconcile 0.5s; push n1 3.0s, n3 2.9s; settled after 5.0s
 …
 ```
 
 `twin destroy` removes the twin as before, and the fixture tool's `-delete` removes the
-branch and its series. Not every step is this light. A cEOS node restarts in place when
-it is re-cabled, and a changed image or kind recreates a node, so a step that needs either
-is refused (`step.restart.required`, exit 1) until you pass `--allow-restart`. A step that
-fails once it has started leaves the twin up and `diverged` (exit 4), recorded with what
-each node was last known to hold, and a diverged twin accepts only `twin destroy`.
+stages, then the proposed change, then the branch: Infrahub refuses to delete a proposed
+change while a stage names it, and a branch deleted first leaves its proposed change behind,
+canceled. Not every step is this light. A cEOS node restarts in place when it is
+re-cabled, and a changed image or kind recreates a node, so a step that needs either is
+refused (`step.restart.required`, exit 1) until you pass `--allow-restart`. A step stays
+inside the proposed change the twin was built from: a stage of another is refused
+(`step.target.foreign`). A step that fails once it has started leaves the twin up and
+`diverged` (exit 4), recorded with what each node was last known to hold, and a diverged
+twin accepts only `twin destroy`.
 
 ## Pinned and frozen twins
 
@@ -480,7 +513,7 @@ machine-readable findings document. Exit statuses:
 ```sh
 make test            # tier 1: unit, golden, workflow and replay tests, every command through a server in the test's process; no infrastructure, seconds
 make test-contract   # tier 2: against a real Infrahub; needs local/.env
-make test-e2e        # tier 3: eight cases and eight live twins, SR Linux and EOS, every command through a server of its own; never in CI
+make test-e2e        # tier 3: eight cases and seven live twins, SR Linux and EOS, every command through a server of its own; never in CI
 make lint
 ```
 
@@ -517,7 +550,7 @@ a case.
 - [docs/development.md](docs/development.md): environment, layout, conventions, test tiers
 - [docs/verified-facts.md](docs/verified-facts.md): how Infrahub, containerlab, the network operating systems and Temporal were found to behave, with versions and dates
 - [psp/README.md](psp/README.md): the platform support package format, and which packages are supported
-- [schema/README.md](schema/README.md): the schema contract, and how to write a waypoint
+- [schema/README.md](schema/README.md): the schema contract, and how to mark a stage
 - [contracts/](contracts/): the CLI, the API and every format, as the tests hold them
 
 ## Contributing

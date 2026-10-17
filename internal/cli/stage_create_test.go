@@ -604,7 +604,8 @@ func decodeRecord(t *testing.T, record []byte) writtenRecord {
 // where its at came from, with provenance.at the resolved at and provenance.branch the
 // branch read: main for the branch point. The branch point's dry run, read on another
 // branch than its proposed change's, says the same id and that the twin would not follow,
-// because of the stage; which kind of stage it is changes neither.
+// because of the stage; which kind of stage it is changes neither. The text's closing line
+// names the stage: pinned at <at>, stage <branch>/<label>; not following.
 func TestCreateFromEachKindOfStage(t *testing.T) {
 	useStateRoot(t)
 	useService(t, nil)
@@ -683,6 +684,18 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 				t.Errorf("the run's following %+v, stopped %+v; a stage twin never follows", res.Following, res.FollowingStopped)
 			}
 			mustCarryNoToken(t, c.label, created, svc.started)
+
+			// In text, the closing line names the stage, as twin show's kind line does.
+			useService(t, &fakeService{runID: "run-2", result: readyResult()})
+			var err error
+			out := captureStdout(t, func() {
+				err = runCreate(context.Background(), &options{}, &createFlags{stage: ref})
+			})
+			if code, _ := exitOf(t, err); code != findings.ExitOK ||
+				!strings.HasSuffix(out, "\npinned at "+c.at+", stage "+ref+"; not following\n") {
+				t.Errorf("the text create: exit %d, stdout:\n%s\nwant it to end \"pinned at %s, stage %s; not following\"",
+					code, out, c.at, ref)
+			}
 		})
 	}
 	if distinct := slices.Compact(slices.Sorted(slices.Values(ids))); len(distinct) != 4 {

@@ -178,6 +178,9 @@ func provisionReport(opts *options, op string, subject *findings.Subject, in pro
 		switch {
 		case in.Source == wire.SourceBundle:
 			opts.note("not following (provisioned from a bundle)")
+		case in.Follow == nil && in.At != "" && in.Stage != nil:
+			// A stage twin's line names its stage, as twin show's kind line does.
+			opts.note("pinned at %s, stage %s; not following", in.At, in.Stage.Name())
 		case in.Follow == nil && in.At != "":
 			opts.note("pinned at %s, not following", in.At)
 		case in.Follow == nil:

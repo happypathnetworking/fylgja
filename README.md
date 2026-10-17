@@ -336,7 +336,7 @@ step deploy: done in 43.2s (3 nodes)
 …
 twin ready: bundle_id b63404c330b6144f78dc3dae5daf2d675e3ddd71eec11e899cb4af14dfa00efd
 …
-pinned at 2026-10-17T04:34:59.424352+00:00, not following
+pinned at 2026-10-17T04:34:59.424352+00:00, stage fylgja-test-readme/seeded; not following
 ```
 
 **Step it.** With no `--stage`, `twin step` goes to the next stage of the proposed change.

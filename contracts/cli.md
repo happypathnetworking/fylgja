@@ -378,8 +378,8 @@ query. `twin create --stage` never follows (`dry_run.follow.reason: stage`). `--
 `--at` or `--interval` beside `--stage` is `stage.flags.conflict` at `start`, naming the
 first in that order. The document carries `subject.stage`, as given, and the `stage` block
 once resolved; `intent read`'s summary line begins `stage change-1/cabled: …`. The twin's
-closing line is a pinned twin's, `pinned at …, not following`; `twin show`'s kind line
-names the stage (below).
+closing line names the stage, as `twin show`'s kind line does (below): `pinned at …, stage
+change-1/cabled; not following`.
 
 ### `twin step [--stage <branch>/<label>]`
 

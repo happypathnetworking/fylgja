@@ -56,7 +56,7 @@ R-03), never written.
 | `state` | `state.value`: `open`, `closed`, `merged`, `canceled` | **visibility**: `open` alone is visible to Fylgja (FR-009), draft or not |
 | `draft` | `is_draft.value` | printed; the list's `draft` field |
 | `stages` | `fylgja_stages { edges { node { id label { value updated_at } as_of { value updated_at } description { value } } } }` | the marks (§3) |
-| `validations` | `CoreArtifactValidator(proposed_change__ids:) { completed_at { value } }`, pinned at a stage's `at` | the generation stamp (§5) |
+| `validations` | `CoreArtifactValidator(proposed_change__ids:) { completed_at { value } }`, pinned at a mark's or the branch point's `at`, unpinned for the head | the generation stamp (§5) |
 | the branch | `Branch(name:) { branched_from created_at }` | the branch point's `at`; the rebase rule |
 
 **States and what Fylgja does**
@@ -75,8 +75,10 @@ after the proposed changes with the warning `stage.orphaned`, and nothing plans 
 creates from it ([D-047](../../docs/decisions.md#d-047)).
 
 A deleted source branch cancels its proposed change about 16 s later (§2.3); until then
-its stages list and every read of them fails on the missing branch (`operation.failed`
-naming the branch, as a deleted branch's read does today).
+its stages list, `stage list` warning `stage.unknown` that the branch does not exist and
+that its branch point and head have no `at`, and every resolution of one is refused
+`stage.unknown` with that wording before any read
+([contracts/stage-reference.md](contracts/stage-reference.md) step 3).
 
 ## 3. The stage
 
@@ -151,7 +153,7 @@ Contract: [contracts/stage-reference.md](contracts/stage-reference.md) §"Stamps
 
 | Field | From |
 |---|---|
-| `Latest` | the latest `updated_at` over every device's attributes and edges and its platform's stamped attributes (§R-07) and every artifact's `checksum.updated_at` |
+| `Latest` | the latest `updated_at` over every device's attributes and edges, its platform's stamped attributes (§R-07), every interface's edge, its `name`, `iftype`, `mgmt_only` and `enabled` and its `link` and `parent` edges, every link's `endpoints` edges, and every artifact's `checksum.updated_at` |
 | `Devices[name].Intent` | the latest over that device's own attributes, its edges, its platform's `vendor`, `nos` and `version`, its interfaces' edges and attributes, their `link` and `parent` edges, and the `endpoints` edges of every link an interface of its ends |
 | `Devices[name].IDs` | the device's `id`, then each of its interfaces' `id`s, as read: how an intent event names it |
 | `Devices[name].Artifacts[artifact name].Checksum` | that artifact's `checksum.updated_at` |
@@ -169,8 +171,10 @@ microsecond, formatted `2006-01-02T15:04:05.000000-07:00`.
 
 **The generation stamp** of a device at a stage = the later of its artifact's
 `Checksum` (the artifact of its package's `config.artifact_name`, pinned at `at`) and the
-proposed change's artifact validator's `completed_at` value (pinned at `at`; absent when
-no validator has run). **Stale** when the device's intent was written later than the
+proposed change's artifact validator's `completed_at` value (pinned at a mark's or the
+branch point's `at`, and unpinned for the head, whose `at` the completion never enters
+(R-06), so a run-check that regenerated identical bytes still counts; absent when no
+validator has run). **Stale** when the device's intent was written later than the
 generation stamp: written at the later of `Devices[name].Intent` and the latest intent
 event no later than `at` whose `Nodes` hold one of `Devices[name].IDs`; the events are read
 after the earliest `Checksum` judged (every one since the branch point when one is

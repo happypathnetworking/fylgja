@@ -41,14 +41,20 @@ type result struct {
 	doc  *findings.Document
 	raw  json.RawMessage
 	text string
+	// markdown is the report as markdown the server rendered beside the text, under
+	// render markdown on twin rehearse alone (015).
+	markdown string
 }
 
 func (r *result) Error() string { return string(r.doc.Status) }
 
-// options are the flags every client's command shares: --json alone. The override
-// directory of support packages is the server's.
+// options are the flags every client's command shares: --json, and twin rehearse's
+// --markdown, the one command with a markdown rendering, which no other command binds and
+// which cobra refuses beside --json. The override directory of support packages is the
+// server's.
 type options struct {
-	asJSON bool
+	asJSON   bool
+	markdown bool
 }
 
 // rootOptions are the root command's, which AddCommands binds and Report reads.
@@ -93,8 +99,9 @@ func operationOf(cmd *cobra.Command) string {
 // report renders whatever a command produced and returns the process exit code. A document
 // the server sent is printed as it came: under --json its bytes re-indented, which is
 // WriteJSON's output byte for byte, and otherwise the findings' text the server
-// rendered, on stderr where M12's report wrote WriteText's. The exit status is the
-// document's.
+// rendered, on stderr where M12's report wrote WriteText's. Under --markdown, the markdown
+// the server rendered is printed on stdout and nothing else is, the findings' text still on
+// stderr (015). The exit status is the document's.
 func report(opts *options, cmd *cobra.Command, err error) int {
 	var res *result
 	switch {
@@ -112,7 +119,15 @@ func report(opts *options, cmd *cobra.Command, err error) int {
 				_, _ = fmt.Fprintln(os.Stderr, "fylgja:", err)
 				return findings.ExitError
 			}
-		} else if _, err := os.Stderr.WriteString(res.text); err != nil {
+			return res.doc.Status.ExitCode()
+		}
+		if opts.markdown {
+			if _, err := os.Stdout.WriteString(res.markdown); err != nil {
+				_, _ = fmt.Fprintln(os.Stderr, "fylgja:", err)
+				return findings.ExitError
+			}
+		}
+		if _, err := os.Stderr.WriteString(res.text); err != nil {
 			return findings.ExitError
 		}
 		return res.doc.Status.ExitCode()

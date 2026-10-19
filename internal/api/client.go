@@ -339,7 +339,10 @@ type Answer struct {
 // Next is the answer's next frame. After the document it is io.EOF. An answer that ends, or
 // whose connection fails, before its document is *Cut; a line longer than the client's
 // bound is *FrameTooLarge, and nothing more of the answer is read. A frame of a kind this
-// build does not know is returned with no kind, for the caller to pass over.
+// build does not know is returned with no kind, for the caller to pass over. The document
+// frame carries the renderings the request asked for, as the server wrote them: its text
+// under RenderText and RenderMarkdown, and beside it under RenderMarkdown the markdown of an
+// operation that has one, twin.rehearse alone (015).
 func (a *Answer) Next() (Frame, error) {
 	if a.done {
 		return Frame{}, io.EOF

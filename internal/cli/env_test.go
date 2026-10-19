@@ -62,6 +62,7 @@ func clientCommands(t *testing.T) [][]string {
 		{"twin", "destroy"},
 		{"twin", "show"},
 		{"twin", "verify"},
+		{"twin", "rehearse", "--branch", "change-1"},
 		{"twin", "compile", "--ctm", repoPath("testdata", "ctm", "three-node.json"), "--out", filepath.Join(t.TempDir(), "out")},
 		{"intent", "read", "--branch", "fylgja-fixture"},
 		{"stage", "list"},

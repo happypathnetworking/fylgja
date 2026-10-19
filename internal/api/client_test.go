@@ -454,6 +454,40 @@ func TestAFrameOverTheClientsBoundIsRefused(t *testing.T) {
 
 // A frame of a kind this build does not know is returned with no kind, for the caller to
 // pass over.
+// A request for the markdown rendering says so, and its document frame comes back with the
+// markdown beside the text, as the server wrote them (015).
+func TestAMarkdownRequestReturnsTheDocumentsMarkdown(t *testing.T) {
+	got := make(chan Request, 1)
+	address := served(t, func(w http.ResponseWriter, r *http.Request) {
+		req, err := DecodeRequest(r.Body)
+		if err != nil {
+			t.Errorf("the server could not read the request: %v", err)
+		}
+		got <- req
+		apiAnswer(w)
+		_, _ = io.WriteString(w, frameLine(t, Frame{Out: "rehearsal ok\n"}))
+		doc := documentFrame(t)
+		doc.Text, doc.Markdown = "no findings\n", "## Fylgja rehearsed\n"
+		_, _ = io.WriteString(w, frameLine(t, doc))
+	})
+	ans, err := clientFor(t, address).Do(context.Background(), findings.OpTwinRehearse,
+		Request{Render: RenderMarkdown, Args: map[string]json.RawMessage{"branch": json.RawMessage(`"change-1"`)}},
+		"00112233445566778899aabbccddeeff", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if req := <-got; req.Render != RenderMarkdown || string(req.Args["branch"]) != `"change-1"` {
+		t.Errorf("request %+v", req)
+	}
+	if f, err := ans.Next(); err != nil || f.Kind() != KindOut || f.Out != "rehearsal ok\n" {
+		t.Errorf("%+v %v", f, err)
+	}
+	f, err := ans.Next()
+	if err != nil || f.Kind() != KindDocument || f.Text != "no findings\n" || f.Markdown != "## Fylgja rehearsed\n" {
+		t.Errorf("%+v %v; want the document with its text and its markdown", f, err)
+	}
+}
+
 func TestAFrameOfAnUnknownKindIsPassedOn(t *testing.T) {
 	address := served(t, func(w http.ResponseWriter, r *http.Request) {
 		apiAnswer(w)

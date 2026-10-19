@@ -59,8 +59,9 @@ type progress struct {
 // send is a command's one request and what it prints. args are the flags
 // that were given, at their values as given, so an absent key is a flag not given and
 // "interval": "" is --interval=; every guard is the server's. The rendering is the one
-// --json selects. Each out frame is printed to stdout and each err frame to stderr as it
-// arrives; the document ends the command, as a result report prints.
+// --json or --markdown selects. Each out frame is printed to stdout and each err frame to
+// stderr as it arrives, but under --markdown, whose stdout is the markdown alone, the out
+// frames go to stderr too; the document ends the command, as a result report prints.
 func send(ctx context.Context, opts *options, op string, args map[string]any, files []api.File, h handlers) error {
 	if ctx == nil {
 		ctx = context.Background()
@@ -70,8 +71,12 @@ func send(ctx context.Context, opts *options, op string, args map[string]any, fi
 		return transportFailure(op, err, progress{})
 	}
 	req := api.Request{Render: api.RenderText, Files: files}
-	if opts.asJSON {
+	out := io.Writer(os.Stdout)
+	switch {
+	case opts.asJSON:
 		req.Render = api.RenderJSON
+	case opts.markdown:
+		req.Render, out = api.RenderMarkdown, os.Stderr
 	}
 	if len(args) > 0 {
 		req.Args = make(map[string]json.RawMessage, len(args))
@@ -127,7 +132,7 @@ func send(ctx context.Context, opts *options, op string, args map[string]any, fi
 		}
 		switch f.Kind() {
 		case api.KindOut:
-			_, _ = io.WriteString(os.Stdout, f.Out)
+			_, _ = io.WriteString(out, f.Out)
 		case api.KindErr:
 			_, _ = io.WriteString(os.Stderr, f.Err)
 		case api.KindFiles:
@@ -156,7 +161,7 @@ func send(ctx context.Context, opts *options, op string, args map[string]any, fi
 			if written != nil {
 				return writeFailure(op, &doc, written)
 			}
-			return &result{doc: &doc, raw: f.Document, text: f.Text}
+			return &result{doc: &doc, raw: f.Document, text: f.Text, markdown: f.Markdown}
 		}
 		// A frame of a kind this build does not know is passed over.
 	}
@@ -191,11 +196,11 @@ func buildLine(client *api.Client, served string) {
 }
 
 // takesInterrupts is whether an operation starts a run the operator may interrupt, and so
-// names a stream for it: twin create, twin provision and twin step. twin destroy
-// takes none, as at M12.
+// names a stream for it: twin create, twin provision, twin step and twin rehearse (015).
+// twin destroy takes none, as at M12.
 func takesInterrupts(op string) bool {
 	switch op {
-	case findings.OpTwinCreate, findings.OpTwinProvision, findings.OpTwinStep:
+	case findings.OpTwinCreate, findings.OpTwinProvision, findings.OpTwinStep, findings.OpTwinRehearse:
 		return true
 	}
 	return false

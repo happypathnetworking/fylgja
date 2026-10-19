@@ -58,7 +58,9 @@ var harness struct {
 // field it became at every request: dialService is Dial,
 // dryRunRunner Runner, verifyReader Reader, verifySleep and verifyNow Sleep and Now,
 // showServiceBudget ServiceBudget, and pspDir, which a test sets through usePSPDir where it
-// gave options{pspDir: …}, is PSPDir. notifyInterrupt stays the client's own (interrupt.go).
+// gave options{pspDir: …}, is PSPDir. rehearsalCeiling, which no flag sets, is
+// RehearsalCeiling: a test lowers it under a rehearsal's deadline (015), and zero is
+// rehearsal.Ceiling. notifyInterrupt stays the client's own (interrupt.go).
 var (
 	dialService = func(ctx context.Context) (provision.Service, error) {
 		return provision.Dial(ctx, nil)
@@ -69,6 +71,7 @@ var (
 	verifyNow         func() time.Time
 	showServiceBudget = provision.ShowServiceBudget
 	pspDir            string
+	rehearsalCeiling  time.Duration
 )
 
 // version is the build of the harness's server and of its client: M12's unstamped version,
@@ -127,6 +130,7 @@ func handSeams() {
 	s.Reader = verifyReader
 	s.Sleep, s.Now = verifySleep, verifyNow
 	s.ServiceBudget = showServiceBudget
+	s.RehearsalCeiling = rehearsalCeiling
 	s.PSPDir = pspDir
 	if s.PSPDir == "" {
 		s.PSPDir = os.Getenv(lab.EnvPSPDir)

@@ -10,10 +10,10 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/provision"
 )
 
-// The API's token is in nothing the server writes. On every route, the twelve operations, the
+// The API's token is in nothing the server writes. On every route, the thirteen operations, the
 // interrupt and the paths that
-// name nothing served, with the right token, a wrong one and none: no frame, document, problem
-// body, header or log line carries either token.
+// name nothing served, with the right token, a wrong one and none, in every rendering, markdown
+// among them (015): no frame, document, problem body, header or log line carries either token.
 func TestTheTokenIsInNothingTheServerWrites(t *testing.T) {
 	_, srv, log, _ := testServer(t, func(c *call) error {
 		o := c.options()
@@ -26,7 +26,7 @@ func TestTheTokenIsInNothingTheServerWrites(t *testing.T) {
 	answers := 0
 	for _, path := range paths {
 		for _, token := range []string{testToken, wrongToken, ""} {
-			for _, render := range []string{api.RenderText, api.RenderJSON, ""} {
+			for _, render := range []string{api.RenderText, api.RenderJSON, api.RenderMarkdown, ""} {
 				header := map[string]string{api.HeaderStream: fmt.Sprintf("stream-%d", answers)}
 				resp, body := post(t, nil, srv.URL+path, token, `{"render":"`+render+`"}`, header)
 				answers++

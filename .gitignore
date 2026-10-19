@@ -5,6 +5,9 @@ local/
 bin/
 dist/
 
+# Python bytecode, which py_compile leaves beside infrahub/checks/
+__pycache__/
+
 # Go test and profiling artifacts
 *.test
 *.out

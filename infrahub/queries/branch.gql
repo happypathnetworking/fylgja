@@ -1,0 +1,8 @@
+# The cheap read the SDK requires of a check: InfrahubCheck runs its class's query before
+# validate() and refuses a class without one. Both of Fylgja's checks name it and ignore its
+# answer, since everything they conclude comes from Fylgja's API (contracts/checks.md).
+query fylgja_branch {
+  Branch {
+    name
+  }
+}

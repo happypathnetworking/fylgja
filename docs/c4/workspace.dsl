@@ -14,7 +14,7 @@ workspace "Fylgja" "A walking twin of network intent." {
         }
 
         fylgja = softwareSystem "Fylgja" "Reads intent from Infrahub, compiles it into a deterministic bundle, boots it as a twin and pushes each device's production configuration." {
-            cli = container "fylgja (client)" "Every command but the two roles. Sends one request to the API and prints what comes back." "Go, one static binary"
+            cli = container "fylgja (client)" "Every command but the two roles, twin rehearse among them. Sends one request to the API and prints what comes back; twin rehearse --markdown prints the report as the markdown the server rendered." "Go, one static binary"
             server = container "fylgja serve" "The API's server, on the lab host. Reads Infrahub, compiles, checks the host, starts and follows runs, reads the twin." "Go, the same binary; HTTP on 127.0.0.1:7650" {
                 handlers = component "server" "The handlers: each command's logic behind POST /v1/<noun>/<verb>." "internal/server"
                 api = component "api" "The wire: paths, frames, requests, problems, bounds. The client's side links it too." "internal/api"

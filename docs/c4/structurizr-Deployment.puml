@@ -28,7 +28,7 @@ Deployment_Node(Lab.Infrahubhost, "Infrahub host", $type="", $descr="Docker Comp
 }
 
 Deployment_Node(Lab.Operatorsmachine, "Operator's machine", $type="", $descr="FYLGJA_API_TOKEN; FYLGJA_API_ADDRESS, or an SSH tunnel to the lab host", $tags="Element", $link="") {
-  Container(Lab.Operatorsmachine.fylgjaclient_1, "fylgja (client)", $techn="Go, one static binary", $descr="Every command but the two roles. Sends one request to the API and prints what comes back.", $tags="Container", $link="")
+  Container(Lab.Operatorsmachine.fylgjaclient_1, "fylgja (client)", $techn="Go, one static binary", $descr="Every command but the two roles, twin rehearse among them. Sends one request to the API and prints what comes back; twin rehearse --markdown prints the report as the markdown the server rendered.", $tags="Container", $link="")
 }
 
 Deployment_Node(Lab.Labhost, "Lab host", $type="", $descr="Ubuntu, Docker, containerlab, the NOS images", $tags="Element", $link="") {

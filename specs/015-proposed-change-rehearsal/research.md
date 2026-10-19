@@ -869,3 +869,164 @@ booted and no token was printed: the token was compared by its sha256 alone.
   equal to `local/.env`'s by its sha256. No other `FYLGJA_*` name is there.
 - A client's `twin show`, from an environment holding the token alone, answered `twin:
   none: no lab fylgja, no twin directory`, exit 0, over loopback.
+
+### 5.2 The rehearsal by hand, on real twins (2026-10-19, 18:46Z–19:17Z; T041, SC-001–SC-004)
+
+Quickstart §3 on `fylgja-test-qs-2221702`, three SR Linux nodes, through the server on
+loopback, from `bin/fylgja` rebuilt at 18:46Z. The worker and the server were restarted
+from it and verified as `CLAUDE.md` says (each `exe` current; `INFRAHUB_*`, both logins,
+`FYLGJA_STATE_ROOT` and `FYLGJA_API_TOKEN` in each environment; both listen lines and the
+bridge's unencrypted line; both packages with their logins set; `lab fylgja absent; twin
+directory absent`). `free -m` read 18.5 GiB available, load average 1.9. The dev server
+was up. No token, password or configuration line is in any output: each output and the
+scratch servers' logs were matched with `grep -c` against each value and never printed.
+
+- **The composition** (18:47:12Z–18:48:31Z): the seed 24.1 s; a draft proposed change
+  `18e002bb-e29b-7f8f-33be-c51093ae2f38` in 39 s, three validators; `seeded` at
+  `18:48:16.255359`; `-add-link`, n1's and n3's checksums moved within 7 s; `third-link`
+  at `18:48:31.087099`. `stage plan`, exit 1 on the branch point's rejection as 014's
+  plan ends: the branch point refused `contract.node.missing`, `seeded` `d4012c00…`,
+  `third-link` `c29aba04…`, `head` `41899b0a…`, `third-link → head` unchanged, "the ids
+  differ by provenance alone". `head`'s `at`, the branch's latest stamp, precedes
+  `third-link`'s, which was written after it.
+- **1. Every stage passes.** Text (18:48:52Z), run `fylgja-rehearse
+  01a1557e-dfac-7d86-9984-951c1e2f533d`: the heading `4 stages; deadline 32m30s (ceiling
+  1h0m0s)`, the branch point's refusal under it, `seeded … ; baseline`. The provision's
+  deploy 45.0 s, readiness at most 0.4 s, the pushes 2.4–2.7 s; the baseline settled
+  after 4.3 s (1 read), 15 held; `third-link` stepped in 4.6 s (push n1 2.7 s, n3 2.8 s),
+  settled after 5.4 s, 19 held, passed; `head` unchanged in 1.0 s, settled after 4.4 s,
+  passed; the destroy's teardown 2.2 s; `rehearsal ok: 3 stages rehearsed, every one
+  passed; the twin is destroyed; 72.0s of the 1950s deadline`, exit 0, 82.4 s wall.
+  `twin show`, asked during the destroy, named the record `of rehearsal run
+  fylgja-rehearse 01a1557e-…`, the run `destroying the twin, step teardown`, and the
+  in-flight line its destroy child; afterwards no twin. `--json` (18:50:47Z): exit 0,
+  86.9 s, status `ok`, rows `refused`, `baseline`, `passed`, `passed` with no new
+  finding, `deadline_s` 1950, `used_s` 75.1, `reproduce` `[]`, `reclaimed` `null`, the
+  destroy's `removed` the lab (3 containers) and the twin directory, nothing on stderr;
+  the document validates against `contracts/findings.schema.json` with every contract
+  schema. `--markdown` (18:52:55Z): exit 0, 73.8 s; stdout the heading naming the
+  proposed change and its branch, the run line with `resolved_at`, `ok` and 62.9 s of the
+  1,950 s deadline (ceiling 3,600 s), the table's four rows, the drawing (the branch
+  point's edge dotted `not computed`, `seeded → third-link` naming the link, the two nodes
+  changed and their reasons and the artifacts by node, `third-link → head` `unchanged`),
+  Stages, Warnings `none`, Baseline findings `none`, the caveat, and no Reproduce block;
+  the progress and the findings on stderr.
+- **2. The failing stage** (18:54:27Z–18:57:56Z). `-add-interface n1:ethernet-1/99`,
+  `-generate` (n1's checksum alone moved), `bad-port` at `18:54:27.347172`. The plan:
+  5 stages, deadline 43m0s (2,580 s), `bad-port` and `head` each warned
+  `artifact.interface.unrepresented` at read and at compile, with
+  `omit.interface.unmappable`. The run: the baseline and `third-link` as before; `bad-port`'s
+  push to n1 `push.refused` (checksum `6237e7f9…`, D-035's message); `bad-port: diverged at
+  phase push: landed none; not landed n1 (push.refused); settled after 5.9s (1 read); 19
+  held, 0 failed, 0 skipped; failed`; `head: not reached`; `rehearsal nonconforming:
+  stage …/bad-port failed at phase push; the twin is destroyed; reproduce it by hand:`
+  and **five** commands, not the four quickstart §3 and T041 count: `twin create --stage
+  …/seeded`, `twin step --stage …/third-link --allow-restart`, `twin step --stage
+  …/bad-port --allow-restart`, `twin verify`, `twin destroy`. T013's rule steps through
+  every rehearsed stage up to the failed one, and `bad-port` is the second; the contract's
+  example has four because its failed stage is the first. Exit 5, 90.0 s; the rejections
+  `contract.node.missing`, `push.refused`, `rehearsal.stage.failed` and `step.diverged`.
+  **By hand**, the five commands: the create, exit 0 (52 s); the step to `third-link`,
+  exit 0 (stepped in 4.8 s, settled after 5.7 s); the step to `bad-port`, exit 4,
+  `push.refused` on n1 with the same checksum, landed none, diverged at `third-link`;
+  `twin verify`, exit 5 (its 19 reads held; three `verify.record.holds` failed, the
+  record's claim that the nodes hold `c29aba04…`, not the staged `49ab82e2…`); `twin
+  destroy`, exit 0,
+  the lab and the twin directory removed.
+- **3. The interrupt** (18:58:10Z): `SIGINT` to the client at 18:59:12.3Z, during
+  `third-link`'s step at reconcile. `run cancelled; waiting for its destroy`; the step
+  child finished its reconcile and recorded the twin diverged; the destroy ran (teardown
+  1.8 s). `third-link: cancelled at phase reconcile; error: the run was cancelled`, the two
+  later stages `not reached`, `rehearsal error: the run was cancelled at stage
+  …/third-link; the twin is destroyed`; `run.cancelled` for the rehearsal (filed at step
+  `record`, the last step its child reached before the destroy) and for the step child (at
+  reconcile), and `step.diverged`. Exit 2, 65.9 s; no twin, no lab.
+- **4. Beside a create of my own** (18:59:27Z): while `twin create --stage …/seeded`
+  deployed, `twin rehearse` was refused `run.in_flight` at `start`, naming
+  `fylgja-provision 01a15588-8037-…`, exit 1, in 8.1 s: the five stages are planned
+  first (R-02's order), and nothing waits for the create or starts. The create ended
+  exit 0. A rehearsal beside that hand twin (19:00:27Z) was refused `host.lab.present`
+  and `host.twin.present` at `host_check`, exit 1, in 10.0 s, and not reclaimed, since
+  its record names no rehearsal; `twin destroy` cleared it.
+- **5. A client gone** (19:00:48Z): the client killed with `SIGKILL` at 19:00:59.8Z, in
+  the baseline's deploy; the server logged `twin.rehearse` `client_gone` after 10.8 s. `twin
+  show` then read `kind: none; run fylgja-provision 01a15589-d5c9-… is at step deploy, and
+  the host holds its work; rehearsal run fylgja-rehearse 01a15589-d570-… is at stage
+  …/seeded, step deploy`, and `in flight: run fylgja-rehearse … at step provision (run
+  fylgja-provision … at step deploy), creating the twin at stage …/seeded`. At 19:01:50Z:
+  `kind: pinned at …, stage …/seeded, of rehearsal run fylgja-rehearse 01a15589-d570-…;
+  not following; rehearsal run … is at stage …/third-link, step reconcile`, and the
+  in-flight line its step child `stepping towards stage …/third-link`. By 19:02:17Z no
+  twin, nothing in flight, no lab. The run's own result, read from its history: outcome
+  `stage_failed` at `bad-port`, the verdicts `refused`, `baseline`, `passed`, `failed`,
+  `not_reached`, 75.4 s used, the destroy's removals. The report reached no one but the
+  history, as the spec's edge case says.
+- **6. The reclaim.** (a) 19:02:43Z: the worker killed with `SIGKILL` at 19:02:59.0Z, five
+  seconds into the baseline's deploy; `clab deploy` outlived it, the three containers up.
+  `twin show` named the rehearsal and its provision child at deploy, and a second
+  `twin rehearse` (19:03:37Z) was refused `run.in_flight` naming the rehearsal run
+  `01a1558b-93aa-…`, exit 1, in 10.4 s: the spec's "the worker dies mid-rehearsal".
+  **A run with no worker cannot end by itself**: it has no execution timeout, and its own
+  destroy needs a worker. Quickstart §3's "wait for the provision to be abandoned" needs
+  the run ended, and the one end that runs no destroy is the operator's terminate:
+  `temporal workflow terminate` at 19:03:55Z. Its provision child, under
+  `ParentClosePolicy` `ABANDON`, lived on. The worker was restarted at 19:05:06Z and
+  verified; its start-up report read the lab present with no record, an orphan. The
+  deploy's next attempt said `lab already present at deploy: recreating it with
+  --reconfigure`, and the child ended ready (the deploy 179.8 s in all), recording at
+  19:05:56.8Z `stage …/seeded, of rehearsal run fylgja-rehearse 01a1558b-93aa-…; not
+  following`. The first client, still following, answered only once that abandoned child
+  closed: `operation.failed [step record] … waiting for run 01a1558b-93aa-…: workflow
+  execution error (…): terminated`, exit 2, after 193.2 s. Then `twin rehearse --json`
+  (19:06:09Z): `reclaimed` naming the run, its destroy having removed the lab (3
+  containers) and the twin directory; the warning `rehearsal.twin.reclaimed` at `destroy`,
+  naming the destroy run `01a1558e-b93e-…`; then the run, `nonconforming` at `bad-port`,
+  exit 5, 92.0 s. (b) In text, with the worker up: a rehearsal terminated at 19:08:55.8Z
+  during `third-link`'s step; the abandoned step child stepped and settled (6.0 s), and its
+  record kept the rehearsal's mark (`stage …/third-link (stepped from …/seeded by run
+  fylgja-step 01a15591-1b01-…), of rehearsal run fylgja-rehearse 01a15590-5faf-…`); that
+  client ended `operation.failed` (`terminated`), exit 2. `twin rehearse` (19:09:13Z)
+  printed, after the plan, `reclaiming the twin of rehearsal run
+  01a15590-5faf-7a97-b502-69c3df9ea908`, `run fylgja-destroy 01a15591-8a80-…`, its steps,
+  `removed lab fylgja (3 containers)` and `removed twin directory …`, then `run
+  fylgja-rehearse 01a15591-93d2-…` and the rehearsal, `nonconforming`, exit 5, 81.9 s,
+  with `rehearsal.twin.reclaimed`.
+- **7. The deadline.** Two servers were built into the scratchpad from `git archive HEAD`,
+  each run on `127.0.0.1:7651` beside the tree's and stopped after its one request; the
+  tree, the worker and every flag were untouched. **The ceiling lowered**
+  (`server.Server.RehearsalCeiling` set to 30 min in `serve.go`): the heading read
+  `deadline 43m0s (ceiling 30m0s)`, then `rehearsal.deadline.unfit` at `start`, "the stages
+  need 43m0s (2580s) …, over the ceiling of 30m0s (1800s)", exit 1, 8.9 s, no run started.
+  **A lowered ceiling cannot cut a stage**: the run is given the deadline the stages'
+  budgets sum to, and the ceiling only refuses one over it before any run (R-02, R-09).
+  **The deadline lowered** (the server's computed deadline replaced by 62 s in
+  `rehearse.go`, so the run's `DeadlineS` was 62): 19:12:16Z, the heading `deadline 1m2s`;
+  the baseline 48.9 s (deploy 40.5 s), `third-link` passed in 10.4 s; the timer fired in
+  `bad-port`'s step at push, as n1 refused the push; the step child was cancelled and
+  recorded the twin diverged, and the destroy ran (teardown 1.8 s). `bad-port: cancelled
+  at phase push; error: the deadline passed`, `head: not reached`, `rehearsal error: the
+  deadline of 62s passed at stage …/bad-port; the twin is destroyed`; the rejection
+  `rehearsal.deadline.cut` at `push` "…: …/seeded took 48.9s, …/third-link took 10.4s", and
+  the step child's `run.cancelled`. Exit 2, 80.4 s; no twin.
+- **A defect, fixed**: the rehearsal's text never said what its own destroy removed. The
+  contract's text has `removed lab fylgja (3 containers)` and `removed twin directory …`
+  after the destroy's steps, as `twin destroy` and the reclaim print them, and `twin.rehearse`
+  printed neither. The server now prints them (`printCleanup`) once the run has closed,
+  before the stage lines; `internal/cli`'s `TestRehearseText`, which pins stdout whole,
+  holds the two lines and failed before the fix. Rebuilt, with the worker and the server
+  restarted and verified, `twin rehearse --markdown` (19:15:30Z) printed the two lines on
+  stderr after the destroy's steps. Its stdout was the failure's markdown: `nonconforming`,
+  77.2 s of 2,580 s; `bad-port`'s row `diverged at push 6.7s; not landed n1 (push.refused)`;
+  the drawing's `third-link → bad-port` edge `~n1 (mapping); artifacts n1`; the Findings;
+  the Reproduce block with the five commands. Exit 5, 90.1 s.
+- **Seen, not changed** (for converge): the markdown's Warnings list a warning once per
+  stage and step that filed it, naming no stage (four identical
+  `artifact.interface.unrepresented` lines here, read and compile for `bad-port` and
+  `head`), as the plan's warnings carry over. A client following a rehearsal that is
+  ended outside Fylgja (a terminate) answers only once the abandoned children close, which
+  with no worker is never: `Follow` follows each child to its end. The baseline's verify
+  line carries no counts (T029's departure).
+- **Left clean** (19:17:13Z): `-delete` removed 3 stages, the proposed change and the
+  branch. `Branch` lists `main` and `fylgja-fixture`; 0 proposed changes, stages, comments
+  and check definitions; the one registration `fylgja`; `clab inspect --all` `{}`; no
+  `local/twin`; no Schedule; no workflow running.

@@ -205,29 +205,32 @@ func TestFollowFollowsARehearsalsChildren(t *testing.T) {
 			return &sliceHistory{ctx: ctx, events: histories[workflowID]}
 		})
 
-	type seen struct{ step, workflowID, findingStep, outcome, detail, notice string }
+	// Each child's own events name the rehearsal they are Of, so a destroy that follows the
+	// rehearsal's own destroy first tells it from its own; the rehearsal's own events and the
+	// notices name none.
+	type seen struct{ step, workflowID, findingStep, outcome, detail, notice, of string }
 	var got []seen
 	err := (&Client{Client: mc}).Follow(context.Background(), WorkflowRehearse, "run-r", func(e Event) {
-		got = append(got, seen{e.Step, e.WorkflowID, e.FindingStep, e.Outcome, e.Detail, e.Notice})
+		got = append(got, seen{e.Step, e.WorkflowID, e.FindingStep, e.Outcome, e.Detail, e.Notice, e.Of})
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	want := []seen{
-		{"provision", WorkflowRehearse, findings.StepProvision, "", "", ""},
-		{"", "", "", "", "", "run fylgja-provision run-p"},
-		{"deploy", WorkflowProvision, findings.StepDeploy, "", "", ""},
-		{"provision", WorkflowRehearse, findings.StepProvision, EventDone, "", ""},
-		{"observe", WorkflowRehearse, findings.StepObserve, "", "", ""},
-		{"observe", WorkflowRehearse, findings.StepObserve, EventDone, "settled after 3.2s (2 reads)", ""},
-		{"step", WorkflowRehearse, "", "", "", ""},
-		{"", "", "", "", "", "run fylgja-step run-s"},
-		{"push n1", WorkflowStep, findings.StepPush, "", "", ""},
-		{"step", WorkflowRehearse, "", EventDone, "", ""},
-		{"destroy", WorkflowRehearse, findings.StepDestroy, "", "", ""},
-		{"", "", "", "", "", "run fylgja-destroy run-d"},
-		{"teardown", WorkflowDestroy, findings.StepTeardown, "", "", ""},
-		{"destroy", WorkflowRehearse, findings.StepDestroy, EventDone, "", ""},
+		{"provision", WorkflowRehearse, findings.StepProvision, "", "", "", ""},
+		{"", "", "", "", "", "run fylgja-provision run-p", ""},
+		{"deploy", WorkflowProvision, findings.StepDeploy, "", "", "", WorkflowRehearse},
+		{"provision", WorkflowRehearse, findings.StepProvision, EventDone, "", "", ""},
+		{"observe", WorkflowRehearse, findings.StepObserve, "", "", "", ""},
+		{"observe", WorkflowRehearse, findings.StepObserve, EventDone, "settled after 3.2s (2 reads)", "", ""},
+		{"step", WorkflowRehearse, "", "", "", "", ""},
+		{"", "", "", "", "", "run fylgja-step run-s", ""},
+		{"push n1", WorkflowStep, findings.StepPush, "", "", "", WorkflowRehearse},
+		{"step", WorkflowRehearse, "", EventDone, "", "", ""},
+		{"destroy", WorkflowRehearse, findings.StepDestroy, "", "", "", ""},
+		{"", "", "", "", "", "run fylgja-destroy run-d", ""},
+		{"teardown", WorkflowDestroy, findings.StepTeardown, "", "", "", WorkflowRehearse},
+		{"destroy", WorkflowRehearse, findings.StepDestroy, EventDone, "", "", ""},
 	}
 	if !slices.Equal(got, want) {
 		t.Errorf("events\n  %+v\nwant\n  %+v", got, want)

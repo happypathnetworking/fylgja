@@ -61,6 +61,9 @@ type Server struct {
 	// Getenv reads the host check's and verify's variables: the logins, the memory budget
 	// (os.LookupEnv).
 	Getenv func(string) (string, bool)
+	// RehearsalCeiling is the longest deadline twin rehearse admits; zero is
+	// rehearsal.Ceiling. A test lowers it, and no flag sets it (015).
+	RehearsalCeiling time.Duration
 	// Build is the server's --version, sent on every answer as Fylgja-Build.
 	Build string
 	// Log takes one line a request when it ends, and the dependencies' warnings of a

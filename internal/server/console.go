@@ -14,10 +14,11 @@ import (
 // What each writes depends on the rendering the client
 // asked for:
 //
-//	render  note           stderr
-//	"text"  out frames     err frames
-//	"json"  nothing        err frames   (as --json suppressed every note)
-//	absent  nothing        nothing
+//	render      note           stderr
+//	"text"      out frames     err frames
+//	"markdown"  out frames     err frames   (as "text", 015)
+//	"json"      nothing        err frames   (as --json suppressed every note)
+//	absent      nothing        nothing
 //
 // The moved code writes to it and never to the process's own streams.
 type console struct {
@@ -32,7 +33,7 @@ func newConsole(render string, f *frames) *console {
 
 // note is one line for stdout, as M12's options.note printed it without --json.
 func (c *console) note(format string, args ...any) {
-	if c.render != api.RenderText {
+	if !textual(c.render) {
 		return
 	}
 	_ = c.frames.write(api.Frame{Out: fmt.Sprintf(format+"\n", args...)})

@@ -158,7 +158,7 @@ func runTwinVerify(ctx context.Context, opts *options, f *verifyFlags) error {
 	}
 	block := report.Block(verify.TwinOf(*rec, stagedID), inFlight, service, wait)
 
-	printVerify(opts, report, block)
+	printVerify(opts, report, block, towardsOf(reads.inFlight))
 	if f.waitGiven {
 		opts.note("%s", waitLine(budget, waited))
 	}
@@ -315,7 +315,11 @@ func verifyStatus(r verify.Report) findings.Status {
 func verifyTwinLine(rec *wire.TwinRecord) string {
 	ref := "branch " + rec.Provenance.Branch
 	if rec.Stage != nil {
+		// A rehearsal's twin names its run after the stage (015).
 		ref = "stage " + rec.Stage.Name()
+		if r := rec.Rehearsal; r != nil {
+			ref += fmt.Sprintf(" of rehearsal run %s %s", r.WorkflowID, r.RunID)
+		}
 	} else if rec.Provenance.At != "" {
 		ref += " at " + rec.Provenance.At
 	}
@@ -332,7 +336,7 @@ func verifyTwinLine(rec *wire.TwinRecord) string {
 
 // printVerify writes one line per node, the skips, the runs in flight, the nodes the bundle
 // does not name and the counts (contracts/cli.md), from the read the block was built from.
-func printVerify(opts *options, r verify.Report, block *findings.VerifyBlock) {
+func printVerify(opts *options, r verify.Report, block *findings.VerifyBlock, towards map[string]string) {
 	claims := map[string]verify.Claim{}
 	for _, c := range r.Claims {
 		claims[c.Node] = c
@@ -359,7 +363,7 @@ func printVerify(opts *options, r verify.Report, block *findings.VerifyBlock) {
 		opts.note("%s", nodeLine(n, mine, claim, e))
 	}
 	opts.note("skipped: %s", skippedText(block.Skipped))
-	printInFlight(opts, block.Service, block.InFlight)
+	printInFlight(opts, block.Service, block.InFlight, towards)
 	if len(block.ExtraNodes) > 0 {
 		opts.note("not in the bundle: %s", strings.Join(block.ExtraNodes, ", "))
 	}

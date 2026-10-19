@@ -27,6 +27,8 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
+	"github.com/happypathnetworking/fylgja/internal/rehearsal"
+	"github.com/happypathnetworking/fylgja/internal/step"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
@@ -991,6 +993,9 @@ func TestTheConsoleRendersAsAsked(t *testing.T) {
 		text   string
 	}{
 		{api.RenderText, []string{"out:a line for stdout 1\n", "err:a line for stderr\n", "err:part of a line\n", "err:WARN"}, wantText.String()},
+		// An operation with no markdown rendering answers markdown as it answers text (015).
+		{api.RenderMarkdown, []string{"out:a line for stdout 1\n", "err:a line for stderr\n", "err:part of a line\n", "err:WARN"},
+			wantText.String()},
 		{api.RenderJSON, []string{"err:a line for stderr\n", "err:part of a line\n", "err:WARN"}, ""},
 		{"", nil, ""},
 	} {
@@ -1049,6 +1054,9 @@ func TestTheConsoleRendersAsAsked(t *testing.T) {
 		if last.Text != c.text {
 			t.Errorf("render %q: text %q, want %q", c.render, last.Text, c.text)
 		}
+		if last.Markdown != "" {
+			t.Errorf("render %q: twin verify's document carries markdown %q", c.render, last.Markdown)
+		}
 	}
 	// Absent, the warning went to the server's log under its operation, and the info line
 	// nowhere.
@@ -1058,6 +1066,47 @@ func TestTheConsoleRendersAsAsked(t *testing.T) {
 	}
 	if strings.Contains(l, "chatter") {
 		t.Errorf("the server's log carries a dependency's info line:\n%s", l)
+	}
+}
+
+// twin rehearse's document frame carries its markdown beside its text under render
+// markdown alone (015, research R-10): rehearsal.Markdown over the document and the plan's
+// steps, the comment a check posts, a refusal's before any stage was planned included. Under
+// text and json it carries none, and the frame is valid against the API's contract.
+func TestTheRehearsalsDocumentCarriesItsMarkdown(t *testing.T) {
+	steps := []step.Pair{step.NotComputed("change-1/branch-point", "change-1/seeded", "", "abcd", "change-1/branch-point was refused")}
+	planned := findings.NewDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1"}, nil)
+	planned.Rehearsal = &findings.RehearsalBlock{ProposedChange: findings.StageChange{ID: "pc-1", Name: "third link", Branch: "change-1"},
+		ResolvedAt: "2026-10-19T10:00:00Z", DeadlineS: 1950, CeilingS: 3600, Stages: []findings.RehearsalStage{
+			{Ref: "change-1/branch-point", Label: "branch-point", AtSource: "branch_point", Branch: "main",
+				At: "2026-10-16T17:20:19.944651+00:00", Role: "refused", Verdict: "refused", Findings: findings.List{}},
+			{Ref: "change-1/seeded", Label: "seeded", AtSource: "written", Branch: "change-1", At: "2026-10-16T17:25:30.118244+00:00",
+				Role: "not_reached", Verdict: "not_reached", Findings: findings.List{}}}, Reproduce: []string{}}
+	refused := findings.RuleErrorDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1"},
+		findings.RuleStageUnknown, "change-1", "branch change-1 is not on Infrahub")
+	for _, c := range []struct {
+		name  string
+		doc   *findings.Document
+		steps []step.Pair
+	}{{"a rehearsal planned", planned, steps}, {"a refusal before the plan", refused, nil}} {
+		_, srv, _, _ := testServer(t, func(c2 *call) error {
+			c2.steps = c.steps
+			return &result{doc: c.doc}
+		})
+		frame := apiSchema(t, "frame")
+		for _, render := range []string{api.RenderMarkdown, api.RenderText, api.RenderJSON} {
+			_, body := post(t, nil, srv.URL+api.Path(findings.OpTwinRehearse), testToken, `{"render":"`+render+`","args":{"branch":"change-1"}}`, nil)
+			ls := answerLines(t, body)
+			satisfies(t, frame, ls[len(ls)-1], c.name+" under "+render)
+			last := frameOf(t, ls[len(ls)-1])
+			want := ""
+			if render == api.RenderMarkdown {
+				want = rehearsal.Markdown(c.doc, c.steps)
+			}
+			if last.Markdown != want || render != api.RenderJSON && last.Text == "" && len(c.doc.Findings) > 0 {
+				t.Errorf("%s under %s: markdown %q, text %q; want markdown %q", c.name, render, last.Markdown, last.Text, want)
+			}
+		}
 	}
 }
 
@@ -1218,5 +1267,109 @@ func TestTheClientSpeaksToTheServer(t *testing.T) {
 	if _, err := other.Do(context.Background(), findings.OpPSPValidate,
 		api.Request{Files: []api.File{{Path: "a.yaml", Data: []byte("x: 1\n")}}}, "", nil); !errors.As(err, &refused) {
 		t.Errorf("another token: %T %v", err, err)
+	}
+}
+
+// rehearsalTwin is the record a rehearsal's baseline wrote (twin.json 7): change-1/seeded,
+// of rehearsal run r1; nil rehearsal for the hand twin of the same stage.
+func rehearsalTwin(rehearsal *wire.RehearsalRef) *wire.TwinRecord {
+	return &wire.TwinRecord{TwinVersion: "7", Lab: wire.LabName, BundleID: "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777",
+		Provenance: wire.Provenance{Branch: "change-1", At: "2026-10-16T17:25:30.118244+00:00"}, Source: wire.SourceIntent,
+		Run:       wire.RunRef{WorkflowID: provision.WorkflowProvision, RunID: "p1"},
+		Stage:     &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "seeded", AtSource: "written"},
+		Rehearsal: rehearsal, State: wire.StateReady,
+		Nodes: []wire.TwinNode{{Name: "n1"}, {Name: "n2"}, {Name: "n3"}}}
+}
+
+// twin show beside a rehearsal (015; contracts/rehearse-command.md): the kind line of a
+// rehearsal's twin names its run after the stage, a stepped one's too, and its JSON carries
+// record.rehearsal, null for a hand twin's; while the run is in flight the kind line ends
+// with where it is, its child's stage and step, and the in flight: line names the child and
+// the stage it is for; a baseline being built is the host's work, never an orphan.
+func TestShowNamesARehearsalAndWhereItIs(t *testing.T) {
+	of := &wire.RehearsalRef{WorkflowID: provision.WorkflowRehearse, RunID: "r1"}
+	lab3 := lab.LabState{Present: true, Nodes: []wire.LabNode{{Name: "n1", Container: "clab-fylgja-n1", State: "running"}}}
+	at := "2026-10-16T17:25:30.118244+00:00"
+	pinned := "pinned at " + at + ", stage change-1/seeded, of rehearsal run fylgja-rehearse r1; not following"
+
+	stepped := rehearsalTwin(of)
+	stepped.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "third-link", AtSource: "given"}
+	stepped.Step = &wire.StepRecord{Outcome: wire.StepStepped,
+		From: wire.StepSide{Stage: rehearsalTwin(nil).Stage}, To: wire.StepSide{Stage: stepped.Stage},
+		Run: wire.RunRef{WorkflowID: provision.WorkflowStep, RunID: "s1"}, EndedAt: "2026-10-19T10:02:00Z"}
+
+	for _, c := range []struct {
+		name     string
+		host     lab.HostState
+		runs     []provision.RunInFlight
+		kind     string
+		inFlight string
+	}{
+		{"a rehearsal's twin", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)}, nil, pinned, "in flight: none"},
+		{"a hand twin", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(nil)}, nil,
+			"pinned at " + at + ", stage change-1/seeded; not following", "in flight: none"},
+		{"a rehearsal's twin stepped", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: stepped}, nil,
+			"pinned at " + at + ", stage change-1/third-link (stepped from change-1/seeded by run fylgja-step s1, ended " +
+				"2026-10-19T10:02:00Z), of rehearsal run fylgja-rehearse r1; not following", "in flight: none"},
+		{"stepping", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)},
+			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "step",
+				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowStep, RunID: "s1", Step: "push", Towards: "change-1/third-link"}}},
+			pinned + "; rehearsal run fylgja-rehearse r1 is at stage change-1/third-link, step push",
+			"in flight: run fylgja-rehearse r1 at step step (run fylgja-step s1 at step push), stepping towards stage change-1/third-link"},
+		{"at the baseline's wait", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)},
+			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "observe"}},
+			pinned + "; rehearsal run fylgja-rehearse r1 is at stage change-1/seeded, step observe",
+			"in flight: run fylgja-rehearse r1 at step observe"},
+		{"destroying", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)},
+			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "destroy",
+				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowDestroy, RunID: "d1", Step: "teardown"}}},
+			pinned + "; rehearsal run fylgja-rehearse r1 is destroying the twin, step teardown",
+			"in flight: run fylgja-rehearse r1 at step destroy (run fylgja-destroy d1 at step teardown), destroying the twin"},
+		{"building the baseline", lab.HostState{Lab: lab3, TwinDirPresent: true},
+			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "provision",
+				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy", Towards: "change-1/seeded"}}},
+			"none; run fylgja-provision p1 is at step deploy, and the host holds its work; " +
+				"rehearsal run fylgja-rehearse r1 is at stage change-1/seeded, step deploy",
+			"in flight: run fylgja-rehearse r1 at step provision (run fylgja-provision p1 at step deploy), creating the twin at stage change-1/seeded"},
+	} {
+		block, text := decideShow(c.host, serviceReads{inFlight: c.runs}, "")
+		if text.kind != c.kind {
+			t.Errorf("%s: kind\n %q\nwant\n %q", c.name, text.kind, c.kind)
+		}
+		if c.runs != nil && !text.hostHeld {
+			t.Errorf("%s: a rehearsal in flight does not hold the host", c.name)
+		}
+		out := captureStdout(t, func() { printInFlight(testOptions(t, false), block.Service, block.InFlight, text.towards) })
+		if out != c.inFlight+"\n" {
+			t.Errorf("%s: %q, want %q", c.name, out, c.inFlight)
+		}
+		switch r := block.Record; {
+		case c.host.Twin == nil && r != nil:
+			t.Errorf("%s: a record %+v", c.name, r)
+		case c.host.Twin != nil && c.host.Twin.Rehearsal == nil && r.Rehearsal != nil:
+			t.Errorf("%s: record.rehearsal %+v", c.name, r.Rehearsal)
+		case c.host.Twin != nil && c.host.Twin.Rehearsal != nil && (r.Rehearsal == nil || *r.Rehearsal != findings.ShowRef{WorkflowID: "fylgja-rehearse", RunID: "r1"}):
+			t.Errorf("%s: record.rehearsal %+v", c.name, r.Rehearsal)
+		}
+	}
+}
+
+// twin verify beside a rehearsal (015): its first line names the rehearsal's run after the
+// stage, a hand twin's names none; a twin absent while the baseline is built names the run
+// whose work the host holds.
+func TestVerifyNamesARehearsal(t *testing.T) {
+	of := &wire.RehearsalRef{WorkflowID: provision.WorkflowRehearse, RunID: "r1"}
+	if got, want := verifyTwinLine(rehearsalTwin(of)), "twin: stage change-1/seeded of rehearsal run fylgja-rehearse r1 "+
+		"(bundle 5c6c1d96…), ready, pinned at 2026-10-16T17:25:30.118244+00:00; 3 nodes"; got != want {
+		t.Errorf("%q, want %q", got, want)
+	}
+	if got := verifyTwinLine(rehearsalTwin(nil)); strings.Contains(got, "rehearsal") {
+		t.Errorf("a hand twin's line %q", got)
+	}
+	runs := showRuns([]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "provision",
+		Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy"}}})
+	host := lab.HostState{Lab: lab.LabState{Present: true}, TwinDirPresent: true}
+	if _, message := twinAbsent(host, lab.PathsAt("/srv"), runs); !strings.HasSuffix(message, "; run fylgja-provision p1 is at step deploy") {
+		t.Errorf("%q", message)
 	}
 }

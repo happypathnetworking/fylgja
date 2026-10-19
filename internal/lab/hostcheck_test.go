@@ -1034,3 +1034,27 @@ func TestProbeLoginsUnset(t *testing.T) {
 		}
 	})
 }
+
+// NodePlans are the host check's plan of a bundle's nodes, budget for budget, read without
+// looking at the host: what a rehearsal's deadline sums before the host is read (015). The
+// host's runner is never asked; a bundle with no manifest is an error.
+func TestNodePlansAreTheHostChecks(t *testing.T) {
+	images := &fakeImages{held: map[string]bool{"ceos:4.32.0.2F": true}}
+	a := mixedActivities(t, images)
+	res := checkBundle(t, a, mixedBundle())
+	got, err := NodePlans(mixedBundle(), a.Registry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got, res.Nodes) || len(got) != 3 {
+		t.Errorf("NodePlans\n  %+v\nthe host check's\n  %+v", got, res.Nodes)
+	}
+	for _, n := range got {
+		if n.DeployTimeoutS == 0 || n.TimeoutS == 0 || n.Push.TimeoutS == 0 || n.DestroyTimeoutS == 0 {
+			t.Errorf("node %s plans no budget: %+v", n.Name, n)
+		}
+	}
+	if _, err := NodePlans(t.TempDir(), a.Registry); err == nil {
+		t.Error("a directory with no manifest was planned")
+	}
+}

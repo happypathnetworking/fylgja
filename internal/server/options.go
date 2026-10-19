@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/findings"
@@ -13,18 +14,27 @@ import (
 
 // options are what M12's commands shared beside their own flags, now taken from the request
 // each serves. asJSON is a rendering that prints no note, as --json
-// printed none: render "json", or none at all. pspDir is the server's override directory.
+// printed none: render "json", or none at all; "markdown" prints text's (015). pspDir is the server's override directory.
 // c is the request: its console stands where stdout and stderr stood, and its server holds
 // what M12's package variables held.
 type options struct {
 	asJSON bool
 	pspDir string
-	c      *call
+	// rehearsalCeiling is the longest deadline twin rehearse admits, rehearsal.Ceiling when
+	// zero (015): the server's, which a test lowers.
+	rehearsalCeiling time.Duration
+	c                *call
 }
 
 // options are the request's, as each M12 command resolved its own.
 func (c *call) options() *options {
-	return &options{asJSON: c.req.Render != api.RenderText, pspDir: c.s.PSPDir, c: c}
+	return &options{asJSON: !textual(c.req.Render), pspDir: c.s.PSPDir, rehearsalCeiling: c.s.RehearsalCeiling, c: c}
+}
+
+// textual is whether a rendering prints text's out and err frames: "text", and "markdown",
+// whose answer is text's with the document's markdown beside its text (015).
+func textual(render string) bool {
+	return render == api.RenderText || render == api.RenderMarkdown
 }
 
 // note prints a human-readable progress line: an out frame under render text. Suppressed

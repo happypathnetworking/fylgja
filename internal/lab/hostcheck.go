@@ -59,11 +59,7 @@ func (a *Activities) CheckHost(ctx context.Context, in wire.CheckHostInput) (wir
 			sources[n.PSP.ID] = n.PSP.Source
 			continue
 		}
-		plan := nodePlan(n.Name, n.Image, n.PSP.ID, n.PSP.Source, p)
-		if n.Artifact != nil {
-			plan.Artifact = &wire.PlanArtifact{File: n.Artifact.File, Checksum: n.Artifact.Checksum}
-		}
-		res.Nodes = append(res.Nodes, plan)
+		res.Nodes = append(res.Nodes, manifestNodePlan(n, p))
 		res.MemorySumMB += p.Image.Resources.MemoryMB
 		noteImage(needs, n.Name, p)
 	}
@@ -132,6 +128,36 @@ func (a *Activities) CheckHost(ctx context.Context, in wire.CheckHostInput) (wir
 // CLI's own process, so what it reports is what the run's host check would.
 func CheckHost(ctx context.Context, a *Activities, in wire.CheckHostInput) (wire.CheckHostResult, error) {
 	return a.CheckHost(ctx, in)
+}
+
+// NodePlans is each node of the bundle at bundlePath planned from reg as the host check
+// plans it, by name, without looking at the host: what a rehearsal's deadline sums from
+// every stage's budgets before the host is read (015, research R-09). A node whose package
+// reg does not hold is left out, as the host check leaves it out of its plan; the host check
+// refuses it.
+func NodePlans(bundlePath string, reg *psp.Registry) ([]wire.NodePlan, error) {
+	m, err := readManifest(bundlePath)
+	if err != nil {
+		return nil, err
+	}
+	var nodes []wire.NodePlan
+	for _, n := range m.Nodes {
+		if p, ok := reg.LookupID(n.PSP.ID); ok {
+			nodes = append(nodes, manifestNodePlan(n, p))
+		}
+	}
+	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
+	return nodes, nil
+}
+
+// manifestNodePlan is one manifest node planned from its package, with the artifact its
+// push carries.
+func manifestNodePlan(n compiler.ManifestNode, p *psp.PSP) wire.NodePlan {
+	plan := nodePlan(n.Name, n.Image, n.PSP.ID, n.PSP.Source, p)
+	if n.Artifact != nil {
+		plan.Artifact = &wire.PlanArtifact{File: n.Artifact.File, Checksum: n.Artifact.Checksum}
+	}
+	return plan
 }
 
 // HostState is what the host holds of a twin: lab fylgja as containerlab reports it,

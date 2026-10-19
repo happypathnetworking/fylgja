@@ -1,6 +1,9 @@
 package server
 
 import (
+	"context"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -77,6 +80,85 @@ func TestStepClosingCarriesTheWaitOnEveryOutcome(t *testing.T) {
 			if got, want := stepClosing(in, res), m11[outcome]+c.clause; got != want {
 				t.Errorf("%s with the wait %+v:\n got %q\nwant %q", outcome, c.wait, got, want)
 			}
+		}
+	}
+}
+
+// rehearsingService is a workflow service with a rehearsal in flight: a destroy follows the
+// rehearsal's own destroy, a fylgja-destroy run of the rehearsal's, to its end before its
+// own, and a create or a step is refused naming the rehearsal.
+type rehearsingService struct {
+	provision.Service
+	// own is whether the destroy's own run reports progress before the start fails.
+	own bool
+}
+
+func (s *rehearsingService) StopFollowing(context.Context, func(provision.Event)) (provision.FollowStop, error) {
+	return provision.FollowStop{}, nil
+}
+
+func (s *rehearsingService) StartDestroy(_ context.Context, onEvent func(provision.Event)) (provision.DestroyRun, error) {
+	onEvent(provision.Event{Notice: "cancelling rehearsal run r1; waiting for its destroy"})
+	onEvent(provision.Event{Notice: "run fylgja-destroy d1"})
+	onEvent(provision.Event{WorkflowID: provision.WorkflowDestroy, Step: "teardown", FindingStep: findings.StepTeardown,
+		Of: provision.WorkflowRehearse})
+	onEvent(provision.Event{Notice: "rehearsal run r1 closed: cancelled"})
+	if s.own {
+		onEvent(provision.Event{WorkflowID: provision.WorkflowDestroy, Step: "unstage", FindingStep: findings.StepUnstage})
+	}
+	return provision.DestroyRun{}, errors.New("the destroy run could not be followed")
+}
+
+func (s *rehearsingService) StartProvision(context.Context, provision.ProvisionInput) (string, error) {
+	return "", provision.InFlightRefusal(provision.WorkflowRehearse, "r1")
+}
+
+func (s *rehearsingService) StartStep(context.Context, provision.StepInput) (string, error) {
+	return "", provision.InFlightRefusal(provision.WorkflowRehearse, "r1")
+}
+
+func (s *rehearsingService) Close() {}
+
+// twin destroy during a rehearsal (015; contracts/rehearse-command.md): it prints the
+// cancel notice and follows the rehearsal's own destroy before its own, and that destroy's
+// progress is not its own: a failure after it alone is a failure to start, and one after
+// the destroy's own progress names the step it reached.
+func TestDestroyFollowsARehearsalsDestroyFirst(t *testing.T) {
+	for _, c := range []struct {
+		own  bool
+		step string
+	}{{false, findings.StepStart}, {true, findings.StepUnstage}} {
+		useService(t, &rehearsingService{own: c.own})
+		var err error
+		out := captureStdout(t, func() { err = runDestroy(context.Background(), testOptions(t, false)) })
+		_, doc := exitOf(t, err)
+		if len(doc.Findings) != 1 || doc.Findings[0].Step != c.step {
+			t.Errorf("own progress %v: %+v, want a failure at %s", c.own, doc.Findings, c.step)
+		}
+		if !strings.HasPrefix(out, "cancelling rehearsal run r1; waiting for its destroy\nrun fylgja-destroy d1\nstep teardown: begins\n"+
+			"rehearsal run r1 closed: cancelled\n") {
+			t.Errorf("own progress %v: printed\n%s", c.own, out)
+		}
+	}
+}
+
+// A create and a step beside a rehearsal are run.in_flight naming it, exit 1, through the
+// service's refusal (015).
+func TestACreateAndAStepBesideARehearsalNameIt(t *testing.T) {
+	useService(t, &rehearsingService{})
+	opts := testOptions(t, true)
+	for name, err := range map[string]error{
+		"create": runProvision(context.Background(), opts, findings.OpTwinCreate, &findings.Subject{},
+			provision.ProvisionInput{Source: wire.SourceIntent, Branch: "change-1"}),
+		"step": runStep(context.Background(), opts, findings.OpTwinStep, &findings.Subject{}, provision.StepInput{}, nil),
+	} {
+		code, doc := exitOf(t, err)
+		if code != findings.ExitRejected || len(doc.Findings) != 1 {
+			t.Fatalf("%s: exit %d, %+v", name, code, doc)
+		}
+		f := doc.Findings[0]
+		if f.Rule != findings.RuleRunInFlight || f.Object != provision.WorkflowRehearse || !strings.HasPrefix(f.Message, "rehearsal run r1 ") {
+			t.Errorf("%s: %+v", name, f)
 		}
 	}
 }

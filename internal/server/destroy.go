@@ -43,13 +43,13 @@ func runDestroy(ctx context.Context, opts *options) error {
 		return failure
 	}
 
-	// Only the destroy run's own steps are followed for a failure to name. A provisioning run
-	// or a step run (M11) it cancels and waits for first is not where the destroy is: a
-	// failure while waiting for that run is a failure to start. Each is announced as it is
-	// cancelled and as it closes, a step run's as "step run <id> closed: diverged" once its
-	// record is written (contracts/cli.md). Following stopped again after that run closed prints
-	// its own line as it comes (step 2a); failing to stop it is a failure at step follow, as
-	// above.
+	// Only the destroy run's own steps are followed for a failure to name. A rehearsal (015), a
+	// provisioning run or a step run (M11) it cancels and waits for first is not where the
+	// destroy is: a failure while waiting for that run is a failure to start. Each is
+	// announced as it is cancelled and as it closes, a step run's as "step run <id> closed:
+	// diverged" once its record is written (contracts/cli.md), and a rehearsal's own destroy is
+	// followed with it. Following stopped again after that run closed prints its own line as
+	// it comes (step 2a); failing to stop it is a failure at step follow, as above.
 	//
 	// The destroy is started on a context the request's end does not reach, so a client that
 	// goes away, or a server that stops, while the start waits for a worker leaves the destroy
@@ -85,7 +85,10 @@ func runDestroy(ctx context.Context, opts *options) error {
 	run, err := svc.StartDestroy(runCtx, func(e provision.Event) {
 		opts.c.eventFrame(e)
 		printEvent(opts, e)
-		if e.WorkflowID == provision.WorkflowDestroy {
+		// A rehearsal's own destroy, which StartDestroy follows to its end first, is a
+		// fylgja-destroy too, run as the rehearsal's child: only a destroy run of no other
+		// run's is this destroy's (015).
+		if e.WorkflowID == provision.WorkflowDestroy && e.Of == "" {
 			followed.observe(e)
 			startedOnce.Do(func() { close(started) })
 		}

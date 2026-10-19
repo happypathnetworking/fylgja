@@ -23,7 +23,7 @@ import (
 
 // inFlightService is the harness's fake service shared by two clients: the first start is
 // held open until released, and a start while it is open is refused as the workflow service
-// refuses a second run of the fixed identity (internal/provision/client.go, inFlightRefusal).
+// refuses a second run of the fixed identity (internal/provision/client.go, InFlightRefusal).
 type inFlightService struct {
 	*fakeService
 	entered, release chan struct{}

@@ -420,7 +420,7 @@ func (c *Client) StartProvision(ctx context.Context, in ProvisionInput) (string,
 			return "", err
 		}
 		if runID != "" {
-			return "", inFlightRefusal(workflowID, runID)
+			return "", InFlightRefusal(workflowID, runID)
 		}
 	}
 	// The start request is sent where an interrupt does not reach it. Cut short, it
@@ -433,7 +433,7 @@ func (c *Client) StartProvision(ctx context.Context, in ProvisionInput) (string,
 	cancelSend()
 	var started *serviceerror.WorkflowExecutionAlreadyStarted
 	if errors.As(err, &started) {
-		return "", inFlightRefusal(WorkflowProvision, started.RunId)
+		return "", InFlightRefusal(WorkflowProvision, started.RunId)
 	}
 	if err != nil {
 		return "", fmt.Errorf("starting %s: %w", WorkflowProvision, err)
@@ -444,9 +444,9 @@ func (c *Client) StartProvision(ctx context.Context, in ProvisionInput) (string,
 	return run.GetRunID(), nil
 }
 
-// inFlightRefusal is run.in_flight for a start refused beside workflowID's run in flight, exit
+// InFlightRefusal is run.in_flight for a start refused beside workflowID's run in flight, exit
 // 1, naming the run (contracts/cli.md; a step reuses M2's identifier).
-func inFlightRefusal(workflowID, runID string) *StartError {
+func InFlightRefusal(workflowID, runID string) *StartError {
 	var message string
 	switch workflowID {
 	case WorkflowProvision:
@@ -484,7 +484,7 @@ func (c *Client) StartStep(ctx context.Context, in StepInput) (string, error) {
 			return "", err
 		}
 		if runID != "" {
-			return "", inFlightRefusal(workflowID, runID)
+			return "", InFlightRefusal(workflowID, runID)
 		}
 	}
 	// Sent where an interrupt does not reach it, as StartProvision's is.
@@ -493,7 +493,7 @@ func (c *Client) StartStep(ctx context.Context, in StepInput) (string, error) {
 	cancelSend()
 	var started *serviceerror.WorkflowExecutionAlreadyStarted
 	if errors.As(err, &started) {
-		return "", inFlightRefusal(WorkflowStep, started.RunId)
+		return "", InFlightRefusal(WorkflowStep, started.RunId)
 	}
 	if err != nil {
 		return "", fmt.Errorf("starting %s: %w", WorkflowStep, err)
@@ -528,7 +528,7 @@ func (c *Client) StartRehearse(ctx context.Context, in RehearseInput) (string, e
 			return "", err
 		}
 		if runID != "" {
-			return "", inFlightRefusal(workflowID, runID)
+			return "", InFlightRefusal(workflowID, runID)
 		}
 	}
 	// Sent where an interrupt does not reach it, as StartProvision's is.
@@ -537,7 +537,7 @@ func (c *Client) StartRehearse(ctx context.Context, in RehearseInput) (string, e
 	cancelSend()
 	var started *serviceerror.WorkflowExecutionAlreadyStarted
 	if errors.As(err, &started) {
-		return "", inFlightRefusal(WorkflowRehearse, started.RunId)
+		return "", InFlightRefusal(WorkflowRehearse, started.RunId)
 	}
 	if err != nil {
 		return "", fmt.Errorf("starting %s: %w", WorkflowRehearse, err)
@@ -1138,6 +1138,10 @@ type Event struct {
 	// Notice is a line about a run rather than a step: the run being followed, one being
 	// cancelled or attached to. When it is set, the other fields are empty.
 	Notice string
+	// Of is the run whose child this event's run is, when it was followed as one: a check's
+	// rebuild, or a rehearsal's provision, step and destroy (015), so a destroy that follows a
+	// rehearsal's own destroy first tells it from its own. "" for a run followed on its own.
+	Of string
 }
 
 // isCheck reports whether workflowID is a check: the workflow service appends the scheduled
@@ -1287,7 +1291,7 @@ func (c *Client) Follow(ctx context.Context, workflowID, runID string, onEvent f
 		case enumspb.EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_STARTED:
 			child := ev.GetChildWorkflowExecutionStartedEventAttributes().GetWorkflowExecution()
 			onEvent(Event{Notice: fmt.Sprintf("run %s %s", child.GetWorkflowId(), child.GetRunId())})
-			_ = c.Follow(ctx, child.GetWorkflowId(), child.GetRunId(), onEvent)
+			_ = c.Follow(ctx, child.GetWorkflowId(), child.GetRunId(), childEvents(workflowID, onEvent))
 		case enumspb.EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_COMPLETED:
 			s, d := ended(ev.GetChildWorkflowExecutionCompletedEventAttributes().GetInitiatedEventId(), at)
 			emit(s.activityType, Event{Step: s.step, End: true, Outcome: EventDone, Duration: d})
@@ -1314,6 +1318,17 @@ func (c *Client) Follow(ctx context.Context, workflowID, runID string, onEvent f
 		}
 	}
 	return nil
+}
+
+// childEvents passes a child run's events on as those of parent's child: each names parent
+// as the run it is Of, unless a run nearer it already does.
+func childEvents(parent string, onEvent func(Event)) func(Event) {
+	return func(e Event) {
+		if e.Of == "" {
+			e.Of = parent
+		}
+		onEvent(e)
+	}
 }
 
 // stepName is the step an activity performs, named as contracts/cli.md names it. Teardown and
@@ -1529,7 +1544,7 @@ func ProvisionDocument(op string, subject *findings.Subject, res ProvisionResult
 		}
 		return doc
 	}
-	doc.Cleanup = cleanupBlock(res.Cleanup)
+	doc.Cleanup = CleanupBlockOf(res.Cleanup)
 	return doc
 }
 
@@ -1542,7 +1557,7 @@ func DestroyDocument(subject *findings.Subject, res DestroyResult, stop FollowSt
 	if len(res.Cleanup.Remaining) > 0 {
 		doc.Status = findings.StatusUnclean
 	}
-	doc.Cleanup = cleanupBlock(res.Cleanup)
+	doc.Cleanup = CleanupBlockOf(res.Cleanup)
 	if stop.Stopped {
 		doc.Following = &findings.FollowingBlock{Branch: stop.Branch, Stopped: true}
 	}
@@ -1596,7 +1611,9 @@ func cancelledFinding(subject *findings.Subject, res ProvisionResult) findings.F
 	}
 }
 
-func cleanupBlock(c CleanupResult) *findings.CleanupBlock {
+// CleanupBlockOf is what teardown and unstage did as a document's cleanup block, a step not
+// attempted written skipped: a destroy's, and a rehearsal's reclaim and its destroy (015).
+func CleanupBlockOf(c CleanupResult) *findings.CleanupBlock {
 	return &findings.CleanupBlock{
 		Teardown:  orSkipped(c.Teardown),
 		Unstage:   orSkipped(c.Unstage),

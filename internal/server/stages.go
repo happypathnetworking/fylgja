@@ -191,21 +191,54 @@ func runStagePlan(ctx context.Context, opts *options, f *stageFlags) error {
 	if refused := branchGuard(op, f.branch); refused != nil {
 		return refused
 	}
-	// Packages are loaded before anything is dialled, as a create loads them for its read.
-	reg, err := psp.Load(opts.pspDir)
-	if err != nil {
-		return loadFailureAt(op, nil, findings.StepRead, err)
-	}
-	paths, err := opts.paths()
-	if err != nil {
-		return failAt(op, nil, findings.StepCompile, op, "%v", err)
-	}
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	planned, err := planStages(ctx, opts, op, nil, f.branch,
+		func(pc stages.ProposedChange, n int) { opts.note("%s", heading(pc, true, n)) },
+		func(st stages.PlanStage) { printPlanned(opts, st) },
+		func(p step.Pair) { opts.note("%s", p.Text()) })
+	if err != nil {
+		return err
+	}
+	res := planned.res
+	doc := findings.NewDocument(op, nil, res.Findings)
+	if doc.Plan, err = res.Block(); err != nil {
+		return fail(op, nil, "%v", err)
+	}
+	return &result{doc: doc}
+}
+
+// plannedStages is a proposed change's stages as stage plan plans them: the plan, the
+// packages it compiled with, the state root its bundles are filed under, the reader it read
+// through, and the server's clock when it began.
+type plannedStages struct {
+	res    *stages.PlanResult
+	reg    *psp.Registry
+	paths  lab.Paths
+	reader stages.Reader
+	now    time.Time
+}
+
+// planStages is stage plan's plan of branch's open proposed change, which twin rehearse
+// plans with too (015), so a rehearsal's stages are the plan's by construction: the
+// packages, loaded before anything is dialled as a create loads them for its read; the state
+// root; the stage reader; then stages.Plan, each bundle and its CTM filed as the dry run
+// files them, with onChange, onStage and onStep as stages.Plan calls them. A failure is the
+// document the command ends with, subject its subject.
+func planStages(ctx context.Context, opts *options, op string, subject *findings.Subject, branch string,
+	onChange func(stages.ProposedChange, int), onStage func(stages.PlanStage), onStep func(step.Pair)) (plannedStages, error) {
+	reg, err := psp.Load(opts.pspDir)
+	if err != nil {
+		return plannedStages{}, loadFailureAt(op, subject, findings.StepRead, err)
+	}
+	paths, err := opts.paths()
+	if err != nil {
+		return plannedStages{}, failAt(op, subject, findings.StepCompile, op, "%v", err)
+	}
 	reader, err := intent.StageReaderFromEnv()
 	if err != nil {
-		return failAt(op, nil, findings.StepResolve, op, "%v", err)
+		return plannedStages{}, failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
 
 	// Each bundle and its CTM are filed as the dry run files them.
@@ -213,18 +246,12 @@ func runStagePlan(ctx context.Context, opts *options, f *stageFlags) error {
 		_, list, err := fileCompiled(ctx, paths.Bundles, files, id, snapshot)
 		return list, err
 	}
-	res, err := stages.Plan(ctx, reader, intentStamper{}, f.branch, reg, stages.NewPipeline(file), time.Now().UTC(),
-		func(pc stages.ProposedChange, n int) { opts.note("%s", heading(pc, true, n)) },
-		func(st stages.PlanStage) { printPlanned(opts, st) },
-		func(p step.Pair) { opts.note("%s", p.Text()) })
+	now := time.Now().UTC()
+	res, err := stages.Plan(ctx, reader, intentStamper{}, branch, reg, stages.NewPipeline(file), now, onChange, onStage, onStep)
 	if err != nil {
-		return failAt(op, nil, findings.StepResolve, op, "%v", err)
+		return plannedStages{}, failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
-	doc := findings.NewDocument(op, nil, res.Findings)
-	if doc.Plan, err = res.Block(); err != nil {
-		return fail(op, nil, "%v", err)
-	}
-	return &result{doc: doc}
+	return plannedStages{res: res, reg: reg, paths: paths, reader: reader, now: now}, nil
 }
 
 // printPlanned prints one planned stage: its resolution, bundle_id and what its read holds

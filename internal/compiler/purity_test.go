@@ -108,6 +108,9 @@ func TestCompilerNamesNoPlatform(t *testing.T) {
 		filepath.Join("..", "server"),
 		filepath.Join("..", "cli"),
 		filepath.Join("..", "tree"),
+		// 015: the rehearsal's rules, whose deadline sums each node's budgets from its
+		// package's plan, never a constant per platform.
+		filepath.Join("..", "rehearsal"),
 	} {
 		err := filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
 			if err != nil || d.IsDir() || !strings.HasSuffix(p, ".go") || strings.HasSuffix(p, "_test.go") {

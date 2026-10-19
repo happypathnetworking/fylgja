@@ -604,11 +604,12 @@ func (c *Client) MarkReady(id string) error {
 }
 
 // RunUserChecks asks for a proposed change's user checks and waits until each check
-// definition its source branch sees has run again to completed, then returns the checks as
-// UserChecksOf reads them. Infrahub runs the definitions the source branch sees, as they
-// were at its creation (research §1.2, §1.5), so a branch that sees none returns at once
-// with none. Each definition's validator is reused across runs and restarted by each
-// (research §1.2), so a validator is done only once its started_at has moved past what it
+// definition Infrahub runs on its source branch has run again to completed, then returns the
+// checks as UserChecksOf reads them. Infrahub runs the definitions the source branch sees, as
+// they were at its creation (research §1.2, §1.5), of each repository still registered
+// (checkDefinitionsOn), so a branch that sees none returns at once with none. Each
+// definition's validator is reused across runs and restarted by each (research §1.2), so a
+// validator is done only once its started_at has moved past what it
 // read before the call and it is completed: a completed one from the run before is not
 // this run's. At the bound the failure names each validator not done, a check Infrahub
 // timed out leaving its validator in_progress for good (research §1.4). A read that fails is
@@ -792,10 +793,14 @@ func (c *Client) userValidators(id string) ([]userValidator, error) {
 // checkDefinition is one check definition a branch sees.
 type checkDefinition struct{ id, name string }
 
-// checkDefinitionsOn lists the check definitions a branch sees: the ones Infrahub runs on
-// its proposed change, being main's as they were at the branch's creation (research §1.5).
+// checkDefinitionsOn lists the check definitions Infrahub runs on a branch's proposed
+// change: main's as they were at the branch's creation (research §1.5), each of a
+// repository that is still registered. Infrahub runs each registered repository's checks as
+// the branch sees them, and a repository is branch-agnostic, so a definition whose
+// registration was deleted after the branch was made stays on the branch with no
+// repository and never runs (015's research §5.5).
 func (c *Client) checkDefinitionsOn(branch string) ([]checkDefinition, error) {
-	raw, err := c.GraphQL(branch, `{ CoreCheckDefinition { edges { node { id name { value } } } } }`)
+	raw, err := c.GraphQL(branch, `{ CoreCheckDefinition { edges { node { id name { value } repository { node { id } } } } } }`)
 	if err != nil {
 		return nil, fmt.Errorf("listing the check definitions %s sees: %w", branch, err)
 	}
@@ -807,6 +812,11 @@ func (c *Client) checkDefinitionsOn(branch string) ([]checkDefinition, error) {
 					Name struct {
 						Value string `json:"value"`
 					} `json:"name"`
+					Repository struct {
+						Node *struct {
+							ID string `json:"id"`
+						} `json:"node"`
+					} `json:"repository"`
 				} `json:"node"`
 			} `json:"edges"`
 		} `json:"CoreCheckDefinition"`
@@ -816,6 +826,9 @@ func (c *Client) checkDefinitionsOn(branch string) ([]checkDefinition, error) {
 	}
 	out := make([]checkDefinition, 0, len(r.D.Edges))
 	for _, e := range r.D.Edges {
+		if e.Node.Repository.Node == nil {
+			continue
+		}
 		out = append(out, checkDefinition{id: e.Node.ID, name: e.Node.Name.Value})
 	}
 	return out, nil

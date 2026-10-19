@@ -427,16 +427,17 @@ func markStage(c *testsupport.Client, branch, id, label, at, description string)
 }
 
 // runUserChecks runs the open proposed change's user checks, waits for each check
-// definition the branch sees to run again to completed, and prints one line per check: its
-// name, its conclusion and its message's length, never the message, which a check fills.
-// A branch that sees no definition returns at once, saying so.
+// definition Infrahub runs on the branch to run again to completed, and prints one line per
+// check: its name, its conclusion and its message's length, never the message, which a
+// check fills. A branch that sees no definition of a registered repository returns at once,
+// saying so.
 func runUserChecks(c *testsupport.Client, branch, id string) error {
 	rows, err := c.RunUserChecks(id, userChecksWait)
 	if err != nil {
 		return err
 	}
 	if len(rows) == 0 {
-		fmt.Printf("no user check ran on proposed change %s on %s: the branch sees no check definition\n", id, branch)
+		fmt.Printf("no user check ran on proposed change %s on %s: the branch sees no check definition of a registered repository\n", id, branch)
 		return nil
 	}
 	for _, r := range rows {

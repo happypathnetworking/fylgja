@@ -395,7 +395,7 @@ func TestRehearseComposedByTheFixtureTool(t *testing.T) {
 	} else {
 		started := time.Now()
 		if out, want := fixture("-run-checks", "user"),
-			fmt.Sprintf("no user check ran on proposed change %s on %s: the branch sees no check definition\n", id, branch); out != want {
+			fmt.Sprintf("no user check ran on proposed change %s on %s: the branch sees no check definition of a registered repository\n", id, branch); out != want {
 			t.Errorf("-run-checks user printed %q, want %q", out, want)
 		}
 		if took := time.Since(started); took > 30*time.Second {

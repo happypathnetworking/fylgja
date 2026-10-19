@@ -111,7 +111,7 @@ class Cut(Fault):
     """The answer ended before its document: the server stopped, or the connection was lost.
     answer holds what was read of it, so a caller can tell a cut after the run's start."""
 
-    def __init__(self, address: str, cause: str, answer: Answer) -> None:
+    def __init__(self, address: str, cause: str, answer: "Answer") -> None:
         super().__init__(f"the API at {address} stopped answering before the command ended: {cause}")
         self.answer = answer
 

@@ -32,18 +32,19 @@ System_Boundary("Walkingtwin_boundary", "Walking twin", $tags="Software System")
 }
 
 System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
+  Container(Fylgja.fylgjaserve, "fylgja serve", $techn="Go, the same binary; HTTP on 127.0.0.1:7650 and on the Docker bridge", $descr="The API's server, on the lab host. Reads Infrahub, compiles, checks the host, starts and follows runs, reads the twin.", $tags="Container", $link="")
   Container(Fylgja.fylgjaworkerrun, "fylgja worker run", $techn="Go, the same binary", $descr="The lab-host worker: runs the workflows and the host-bound activities.", $tags="Container", $link="")
   Container(Fylgja.Workflowservice, "Workflow service", $techn="Temporal", $descr="Durable execution: run history, Schedule fylgja-follow.", $tags="Container", $link="")
   ContainerDb(Fylgja.Bundlestore, "Bundle store", $techn="Files", $descr="<state root>/bundles/<bundle_id>/: every bundle compiled or provisioned.", $tags="Container,Files", $link="")
   ContainerDb(Fylgja.Twindirectory, "Twin directory", $techn="Files", $descr="<state root>/twin/: the staged bundle, containerlab's directory, twin.json.", $tags="Container,Files", $link="")
   Container(Fylgja.containerlab, "containerlab", $techn="CLI", $descr="Deploys, reconciles, inspects and destroys lab fylgja.", $tags="Container", $link="")
   Container(Fylgja.fylgjaclient, "fylgja (client)", $techn="Go, one static binary", $descr="Every command but the two roles, twin rehearse among them. Sends one request to the API and prints what comes back; twin rehearse --markdown prints the report as the markdown the server rendered.", $tags="Container", $link="")
-  Container(Fylgja.fylgjaserve, "fylgja serve", $techn="Go, the same binary; HTTP on 127.0.0.1:7650", $descr="The API's server, on the lab host. Reads Infrahub, compiles, checks the host, starts and follows runs, reads the twin.", $tags="Container", $link="")
 }
 
 Rel(Operator, Infrahub, "Edits intent; opens proposed changes and marks stages", $techn="", $tags="Relationship", $link="")
 Rel(Operator, Fylgja.fylgjaclient, "Runs commands", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaclient, Fylgja.fylgjaserve, "POST /v1/<noun>/<verb>; bearer token", $techn="HTTP, NDJSON", $tags="Relationship", $link="")
+Rel(Infrahub, Fylgja.fylgjaserve, "Runs fylgja-step and fylgja-twin in its task worker, which ask for the stage plan and the rehearsal", $techn="HTTP, bearer token, plaintext", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve, Infrahub, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve, Fylgja.Workflowservice, "Starts, follows, cancels runs", $techn="gRPC", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve, Fylgja.Bundlestore, "Files and reads bundles", $techn="", $tags="Relationship", $link="")

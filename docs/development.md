@@ -280,6 +280,7 @@ internal/stages/       a proposed change's stages: the reference, its resolution
 internal/step/         the step between two bundles, a pure function of the two, held pure by a test; the push plan and the unapplied changes a step acts on
 internal/rehearsal/    a rehearsal's pure rules and renderings: the deadline, each stage's verdict, the report's block, its text lines, the reproduce commands and the markdown; imports findings, lab/wire and step alone, held pure by a test (no I/O, no clock, no environment); walked by the platform grep
 internal/testsupport/  build tag `contract || fixture`: the contract-test harness; never imported by product code (test-enforced)
+internal/checks/       tier 2's proof of the two Infrahub checks inside a running Infrahub (build tag `contract`): the tree's infrahub/checks/ served from the Docker bridge under test-only names; no product code
 internal/stage/        the read and compile stages shared by the server's stage handlers, the provisioning activities and the dry run; imports no Temporal
 internal/provision/    Temporal workflows (provision, destroy, reconcile, step) and control activities; the workflow service's client, which the server uses; worker registration and start-up report
 internal/lab/          host-bound activities: containerlab shell-out, host check and image presence, staging, deploy, the gNMI readiness probe (TLS or plaintext), the configuration push (json_rpc, eapi; merge or replace), twin.json; containerlab's plan and the reconcile, the step's stage and record, and the step's VerifyTwin
@@ -289,9 +290,9 @@ internal/*/testdata/contracts/<feature>/
 contracts/             the current formats' contracts: the CLI and the API (cli.md, api.md) and every JSON schema (findings, show, twin, manifest, CTM, PSP, step, verify, stages, API frames); the tests read them here
 schema/                Fylgja generics, the reference schema and the stage kind (YAML); infrahub.graphql, the default branch's SDL, committed, and genqlient's input (`make sdl`); README, with the guide to marking a stage
 psp/                   platform support packages (YAML) + JSON schema; README's Supported packages table
-.infrahub.yml          the artifacts template's manifest, which Infrahub reads at the repository root
+.infrahub.yml          the artifacts template's manifest and the two checks' registration, which Infrahub reads at the repository root
 SECURITY.md            the threat model (one bearer token over loopback HTTP, the credentials the server and the worker hold) and how to report a vulnerability
-infrahub/              the template's query and Jinja2 body (queries/, templates/)
+infrahub/              the template's query and Jinja2 body (queries/, templates/), and the two checks, fylgja-step and fylgja-twin, Python glue Infrahub's task workers run as clients of the API (checks/)
 testdata/              golden bundles, fixture CTMs, test-only packages (psp/heterogeneous, psp/lossy, psp/defects; never embedded), the boundary test's leaky fixture
 scripts/bring-up.sh    the bring-up script: a fresh Ubuntu 26.04 host to tiers 1 and 2 and the three processes; its `infrahub` part alone is CI's contract job (Local environment, above)
 scripts/infrahub/      docker-compose.override.yml, copied beside Infrahub's published Compose file under local/infrahub/: the 1.11.2 pin and the Neo4j cap
@@ -345,6 +346,7 @@ graph LR
     cmd_fylgja["cmd/fylgja"]
     fylgja["fylgja"]
     internal_bundle["internal/bundle"]
+    internal_checks["internal/checks"]
     internal_compiler["internal/compiler"]
     internal_conformance["internal/conformance"]
     internal_ctm["internal/ctm"]

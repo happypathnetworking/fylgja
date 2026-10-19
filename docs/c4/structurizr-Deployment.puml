@@ -18,20 +18,20 @@ left to right direction
 
 AddElementTag("Container,Files", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
 AddElementTag("Element", $bgColor="#ffffff", $borderColor="#444444", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
+AddElementTag("Container,External", $bgColor="#999999", $borderColor="#6b6b6b", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
 AddElementTag("Container", $bgColor="#438dd5", $borderColor="#2e6295", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
-AddElementTag("Software System,External", $bgColor="#999999", $borderColor="#6b6b6b", $fontColor="#ffffff", $sprite="", $shadowing="", $borderStyle="solid")
 
 AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle = "")
-
-Deployment_Node(Lab.Infrahubhost, "Infrahub host", $type="", $descr="Docker Compose, :8000; may be the lab host", $tags="Element", $link="") {
-  System(Lab.Infrahubhost.Infrahub_1, "Infrahub", $descr="The network source of truth. Holds intent on branches, versioned in time, and renders each device's configuration artifact.", $tags="Software System,External", $link="")
-}
 
 Deployment_Node(Lab.Operatorsmachine, "Operator's machine", $type="", $descr="FYLGJA_API_TOKEN; FYLGJA_API_ADDRESS, or an SSH tunnel to the lab host", $tags="Element", $link="") {
   Container(Lab.Operatorsmachine.fylgjaclient_1, "fylgja (client)", $techn="Go, one static binary", $descr="Every command but the two roles, twin rehearse among them. Sends one request to the API and prints what comes back; twin rehearse --markdown prints the report as the markdown the server rendered.", $tags="Container", $link="")
 }
 
 Deployment_Node(Lab.Labhost, "Lab host", $type="", $descr="Ubuntu, Docker, containerlab, the NOS images", $tags="Element", $link="") {
+  Deployment_Node(Lab.Labhost.fylgjaserve, "fylgja serve", $type="process", $descr="127.0.0.1:7650, and 172.17.0.1:7650 on docker0, the Docker bridge, in plaintext; FYLGJA_API_TOKEN, INFRAHUB_API_TOKEN, both node logins", $tags="Element", $link="") {
+    Container(Lab.Labhost.fylgjaserve.fylgjaserve_1, "fylgja serve", $techn="Go, the same binary; HTTP on 127.0.0.1:7650 and on the Docker bridge", $descr="The API's server, on the lab host. Reads Infrahub, compiles, checks the host, starts and follows runs, reads the twin.", $tags="Container", $link="")
+  }
+
   Deployment_Node(Lab.Labhost.fylgjaworkerrun, "fylgja worker run", $type="process", $descr="INFRAHUB_API_TOKEN, both node logins; no API token", $tags="Element", $link="") {
     Container(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, "fylgja worker run", $techn="Go, the same binary", $descr="The lab-host worker: runs the workflows and the host-bound activities.", $tags="Container", $link="")
   }
@@ -53,8 +53,12 @@ Deployment_Node(Lab.Labhost, "Lab host", $type="", $descr="Ubuntu, Docker, conta
 
   }
 
-  Deployment_Node(Lab.Labhost.fylgjaserve, "fylgja serve", $type="process", $descr="127.0.0.1:7650; FYLGJA_API_TOKEN, INFRAHUB_API_TOKEN, both node logins", $tags="Element", $link="") {
-    Container(Lab.Labhost.fylgjaserve.fylgjaserve_1, "fylgja serve", $techn="Go, the same binary; HTTP on 127.0.0.1:7650", $descr="The API's server, on the lab host. Reads Infrahub, compiles, checks the host, starts and follows runs, reads the twin.", $tags="Container", $link="")
+}
+
+Deployment_Node(Lab.Infrahubhost, "Infrahub host", $type="", $descr="Docker Compose, project fylgja-infrahub; the lab host, for its task workers to reach the API on the bridge", $tags="Element", $link="") {
+  Container(Lab.Infrahubhost.Infrahubserver_1, "Infrahub server", $techn="Python; Infrahub 1.11.2; GraphQL, REST", $descr="Infrahub's API at :8000: intent and artifacts on branches, proposed changes, stages and their comments.", $tags="Container,External", $link="")
+  Deployment_Node(Lab.Infrahubhost.taskworker, "task-worker (x2)", $type="container", $descr="host.docker.internal:7650, docker0's address by the Compose override's host-gateway entry; FYLGJA_API_ADDRESS and FYLGJA_API_TOKEN from the override", $tags="Element", $link="") {
+    Container(Lab.Infrahubhost.taskworker.Taskworker_1, "Task worker", $techn="Python; Infrahub 1.11.2", $descr="Infrahub's own, two replicas: renders the artifacts, and runs this repository's checks on a proposed change, fylgja-step and fylgja-twin, clients of Fylgja's API; fylgja-twin posts the rehearsal's report as a comment.", $tags="Container,External", $link="")
   }
 
 }
@@ -71,8 +75,10 @@ Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.containerlab_1, "
 Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.Docker.Labfylgja.NOSnode_1, "Reads for verify", $techn="gNMI", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.Docker.Labfylgja.NOSnode_1, "Probes; pushes the artifact; waits", $techn="gNMI; JSON-RPC or eAPI", $tags="Relationship", $link="")
 Rel(Lab.Labhost.containerlab_1, Lab.Labhost.Docker.Labfylgja.NOSnode_1, "Creates and cables", $techn="", $tags="Relationship", $link="")
-Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Infrahubhost.Infrahub_1, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
-Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Infrahubhost.Infrahub_1, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Infrahubhost.Infrahubserver_1, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Infrahubhost.Infrahubserver_1, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
+Rel(Lab.Infrahubhost.taskworker.Taskworker_1, Lab.Labhost.fylgjaserve.fylgjaserve_1, "fylgja-step asks for the stage plan; fylgja-twin for the rehearsal, in markdown", $techn="HTTP over the Docker bridge, bearer token, plaintext", $tags="Relationship", $link="")
+Rel(Lab.Infrahubhost.taskworker.Taskworker_1, Lab.Infrahubhost.Infrahubserver_1, "Reads the proposed change; posts fylgja-twin's comment; concludes each check", $techn="GraphQL", $tags="Relationship", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

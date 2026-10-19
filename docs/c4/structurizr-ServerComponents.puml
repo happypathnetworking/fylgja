@@ -23,6 +23,7 @@ AddBoundaryTag("Container", $bgColor="#ffffff", $borderColor="#2e6295", $fontCol
 
 System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
   Container_Boundary("Fylgja.fylgjaserve_boundary", "fylgja serve", $tags="Container") {
+    Component(Fylgja.fylgjaserve.server, "server", $techn="internal/server", $descr="The handlers: each command's logic behind POST /v1/<noun>/<verb>.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.api, "api", $techn="internal/api", $descr="The wire: paths, frames, requests, problems, bounds. The client's side links it too.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.stage, "stage", $techn="internal/stage", $descr="The read and compile pipelines, shared with the worker.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.stages, "stages", $techn="internal/stages", $descr="A proposed change's stages: references, resolution, staleness, list, plan and the step's target.", $tags="Component", $link="")
@@ -37,7 +38,6 @@ System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
     Component(Fylgja.fylgjaserve.bundle, "bundle", $techn="internal/bundle", $descr="The bundle format, canonical hashing, the store.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.psp, "psp", $techn="internal/psp", $descr="Platform support packages: loading and validation.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.findings, "findings", $techn="internal/findings", $descr="Findings, rules, the findings document, exit codes. The client's side links it too.", $tags="Component", $link="")
-    Component(Fylgja.fylgjaserve.server, "server", $techn="internal/server", $descr="The handlers: each command's logic behind POST /v1/<noun>/<verb>.", $tags="Component", $link="")
   }
 
 }

@@ -26,7 +26,9 @@ waypoint, which a proposed change's stages have since replaced, until they are r
 Today it runs Nokia SR Linux and Arista EOS, alone or mixed in one twin. A vendor is a
 YAML file, not code ([psp/README.md](psp/README.md)). A twin built from a stage of a
 proposed change can step to another stage of it without a rebuild, and `twin verify`
-reports whether the running twin matches its intent.
+reports whether the running twin matches its intent. A rehearsal takes a twin through every
+stage of a proposed change and destroys it, from the shell or from a check inside Infrahub
+that posts the report on the proposed change and fails it when a stage fails.
 
 ## Built with an AI agent
 
@@ -53,8 +55,8 @@ checked again, and each prints one line, `present`, `installed` or `skipped` wit
 |---|---|
 | `toolchain` | `make`, `git`, `curl`, `jq`, `xz-utils`, `file`; Go (Ubuntu's, which fetches the 1.26 toolchain `go.mod` names); golangci-lint 2.14.0; the Temporal CLI 1.9.1; gnmic 0.49.0; `.venv/` with `infrahub-sdk[ctl]` 1.23.2 |
 | `lab` | Docker and containerlab 0.79.0, with you in the groups `docker` and `clab_admins`; the AppArmor lines SR Linux's `rsyslogd` needs; the SR Linux image, pulled; the cEOS image, imported from the tar |
-| `infrahub` | Infrahub 1.11.2 on `:8000`, from its published Compose file, under `local/infrahub/`. Fylgja reads intent and each device's configuration from it, and never writes to it. The part prepares its `main`: Fylgja's schema (`schema/`), the empty group `fylgja-devices`, and this repository registered read-only, so that Infrahub renders each device's `device-config` artifact from the template here (`.infrahub.yml`, `infrahub/`). Then it seeds the fixture branch `fylgja-fixture` |
-| `fylgja` | `make build` → `bin/fylgja`, one static binary: the commands, the worker and the API's server; tiers 1 and 2 (see [Tests](#tests)); then three processes, left running and logging under `local/`: Temporal's file-backed dev server on `:7233`, the worker, and the API's server on `127.0.0.1:7650`, the last two with `local/` as their state root |
+| `infrahub` | Infrahub 1.11.2 on `:8000`, from its published Compose file, under `local/infrahub/`. Fylgja reads intent and each device's configuration from it, and never writes to it. The part prepares its `main`: Fylgja's schema (`schema/`), the empty group `fylgja-devices`, and this repository registered read-only, so that Infrahub renders each device's `device-config` artifact from the template here and runs the two checks of [A proposed change, rehearsed](#a-proposed-change-rehearsed) (`.infrahub.yml`, `infrahub/`); its Compose override gives Infrahub's task workers the API's address and token. Then it seeds the fixture branch `fylgja-fixture` |
+| `fylgja` | `make build` → `bin/fylgja`, one static binary: the commands, the worker and the API's server; tiers 1 and 2 (see [Tests](#tests)); then three processes, left running and logging under `local/`: Temporal's file-backed dev server on `:7233`, the worker, and the API's server on `127.0.0.1:7650` and on the host's Docker bridge address, where those checks reach it, the last two with `local/` as their state root |
 
 Before any part, when there is no `local/.env`, it writes one, readable by you alone:
 Infrahub's address and an admin token it makes, each platform's node login (the image's
@@ -424,6 +426,182 @@ inside the proposed change the twin was built from: a stage of another is refuse
 `diverged` (exit 4), recorded with what each node was last known to hold, and a diverged
 twin accepts only `twin destroy`.
 
+## A proposed change, rehearsed
+
+A stepping twin is driven by hand. A **rehearsal** makes the same moves unattended, through
+every stage of a proposed change: it builds a twin at the first stage that compiles, the
+**baseline**, and verifies it; steps it to each later stage in turn, verifying each; and
+destroys it, whatever happens. A stage **passes** when its step lands and its verify finds
+nothing the baseline did not already have, and the rehearsal stops at the first stage that
+does not. `twin rehearse --branch <b>` runs one from the shell. Inside Infrahub, two checks
+this repository ships run on every proposed change, when it is created and each time its
+checks are run again:
+
+- **`fylgja-step`** asks Fylgja for the plan, as `stage plan` prints it, in seconds, draft or
+  not. Its message is the plan. It fails when a stage is refused, but for a branch point
+  refused because `main` holds no network.
+- **`fylgja-twin`** skips a draft. Otherwise it asks Fylgja to rehearse the proposed change,
+  posts the report as a new comment on it, and concludes `success` when the rehearsal's
+  status is `ok` and `failure` otherwise, which blocks the merge. Its message is the
+  report's text.
+
+Both are Python glue in `infrahub/checks/` and clients of the API: every verdict is the
+server's, and Fylgja itself still writes nothing to Infrahub, the comment being the check's
+one write ([D-049](docs/decisions.md#d-049), [D-052](docs/decisions.md#d-052)).
+
+**What the checks need.** Two things the walk-throughs above did not:
+
+- **The checks, imported.** They reach Infrahub as the template does, through the
+  registration `fylgja` in `.infrahub.yml`, from `origin`'s `main`
+  ([docs/development.md](docs/development.md#local-environment)). A registration made after
+  they were there has them. One made before needs
+  `InfrahubReadOnlyRepositoryImportLastCommit` on the registration; both task workers then
+  fetch the commit, about 15 seconds after the import's own run, before a re-run sees the
+  checks. Read them back as `CoreCheckDefinition`: `fylgja-step`, timeout 300, and
+  `fylgja-twin`, timeout 4200. A branch made before the import never runs them, so seed
+  after it.
+- **The server where the checks reach it.** The checks run in Infrahub's task workers, on
+  Infrahub's own Compose network, where `127.0.0.1` is the container itself. So on the lab
+  host the API's server also listens on the host's Docker bridge address (`172.17.0.1` by
+  Docker's default), and the Compose override (`scripts/infrahub/docker-compose.override.yml`)
+  gives the task workers that address, as `host.docker.internal:7650`, and the API's token
+  from `local/.env`. The bring-up script starts the server so. The one the first
+  walk-through started listens on loopback alone: stop it and start it on both addresses.
+  Its report names both, and says the token crosses the bridge unencrypted. Any container on
+  the host can reach that address, the twin's nodes included, and the token is what guards
+  it; [SECURITY.md](SECURITY.md#the-threat-model) says what that means on a shared host.
+
+```sh
+FYLGJA_STATE_ROOT=/var/tmp/fylgja bin/fylgja serve --listen 127.0.0.1:7650 --listen "$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}'):7650" &
+```
+
+Start from a fresh fixture again, and open a draft. Its creation runs both checks:
+
+```console
+$ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -delete
+deleted 2 stages, 1 proposed change, branch fylgja-test-readme
+$ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme
+…
+$ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -propose
+proposed change 18e0… opened on fylgja-test-readme, draft; 5 validators concluded in 52s
+```
+
+In Infrahub, under Proposed changes, open `fylgja-test-readme` and its Checks tab.
+`Check: fylgja-twin` succeeded without asking Fylgja anything, its message `skipped: proposed
+change 18e0… is a draft; mark it ready for review and re-run the checks to rehearse it`.
+`Check: fylgja-step` succeeded too, its `Message` the plan of the two stages a proposed
+change has before any is marked, the branch point refused for want of a network on `main`:
+
+```text
+proposed change "fylgja-test-readme" (18e0…) on branch fylgja-test-readme → main, draft (2 stages)
+fylgja-test-readme/branch-point: refused (contract.node.missing)
+  rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
+step fylgja-test-readme/branch-point → fylgja-test-readme/head (— → …): not computed (fylgja-test-readme/branch-point was refused)
+fylgja-test-readme/head: branch fylgja-test-readme at … (head)
+…
+```
+
+Mark the two stages as before, then mark the proposed change ready for review, which runs
+nothing by itself:
+
+```sh
+go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -stage seeded -description seeded
+go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -add-link  # then wait for n1's and n3's checksums, as above
+go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -stage third-link -description "third link"
+go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -ready
+```
+
+**Run the checks again** from the proposed change's Checks tab. `fylgja-twin` takes as long
+as the rehearsal and a few seconds more. From a shell, the fixture tool asks for the same
+re-run and waits until both checks have concluded:
+
+```console
+$ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -run-checks user
+check fylgja-step: success (message … characters)
+check fylgja-twin: success (message … characters)
+```
+
+The comment is on the proposed change's Conversation tab, where Infrahub renders its table
+and its drawing. It is headed by the run and when the stages were resolved, so a later
+rehearsal's comment, a new one, is told from it:
+
+````markdown
+## Fylgja rehearsed proposed change "fylgja-test-readme" on fylgja-test-readme
+
+Run `fylgja-rehearse 01a1…`, stages resolved at …. Status **ok**. 72.0s of the 1950s deadline (ceiling 3600s).
+
+| stage | at | bundle | step | wait | verify | new findings | verdict |
+|---|---|---|---|---|---|---|---|
+| fylgja-test-readme/branch-point | … | — | | | | | refused (contract.node.missing) |
+| fylgja-test-readme/seeded | … | … | created | settled after 4.3s | 15 held, 0 failed, 0 skipped | — | baseline |
+| fylgja-test-readme/third-link | … | … | stepped 4.6s; push n1, n3 | settled after 5.4s | 19 held, 0 failed, 0 skipped | none | passed |
+| fylgja-test-readme/head | … | … | unchanged | settled after 4.4s | 19 held, 0 failed, 0 skipped | none | passed |
+
+```mermaid
+flowchart LR
+  s0["fylgja-test-readme/branch-point<br/>refused"]
+  s1["fylgja-test-readme/seeded<br/>baseline"]
+  s2["fylgja-test-readme/third-link<br/>passed"]
+  s3["fylgja-test-readme/head<br/>passed"]
+  s0 -. "not computed" .-> s1
+  s1 -- "+link n1:e1-3 — n3:e1-3; ~n1, ~n3 (bootstrap, mapping); artifacts n1, n3" --> s2
+  s2 -- "unchanged" --> s3
+```
+
+**Stages** (Infrahub's view does not show them):
+…
+````
+
+Below the drawing it lists the stages, with each one's branch, instant and description,
+since Infrahub's own view of the proposed change shows none; the warnings; the baseline's
+own findings, reported and failing nothing; and the caveat that a twin's fidelity is
+asserted, not measured. `fylgja-twin`'s message is the same report as text, as `twin
+rehearse` prints it. **The same rehearsal from the shell** needs no check and no ready
+proposed change:
+
+```console
+$ bin/fylgja twin rehearse --branch fylgja-test-readme
+rehearsal of proposed change "fylgja-test-readme" (18e0…) on branch fylgja-test-readme: 4 stages; deadline 32m30s (ceiling 1h0m0s)
+fylgja-test-readme/branch-point: refused (contract.node.missing)
+…
+fylgja-test-readme/seeded: branch fylgja-test-readme at … (written), "seeded"; baseline
+…
+run fylgja-rehearse 01a1…
+stage fylgja-test-readme/seeded: creating the twin
+run fylgja-provision 01a1…
+…
+stage fylgja-test-readme/third-link: stepping
+run fylgja-step 01a1…
+…
+destroying the twin
+run fylgja-destroy 01a1…
+…
+stage fylgja-test-readme/third-link: stepped in 4.6s (push n1 2.7s, n3 2.8s); settled after 5.4s (1 read); 19 held, 0 failed, 0 skipped; passed
+stage fylgja-test-readme/head: unchanged in 1.0s; settled after 4.4s (1 read); 19 held, 0 failed, 0 skipped; passed
+rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 72.0s of the 1950s deadline
+```
+
+`--markdown` prints the comment's markdown alone, and `--json` the document. There is one
+twin at a time: a rehearsal is refused while a run is in flight or a twin stands
+(`run.in_flight`, `host.twin.present`), and `fylgja-twin` asks again every 30 seconds until
+its own deadline. A rehearsal's own deadline is the sum of its stages' budgets, under a
+ceiling of an hour. A stage that **fails** stops the rehearsal there, its step diverged or its verify
+finding what the baseline did not have: the report says why, the stages after it read `not
+reached`, the twin is destroyed all the same, and the comment ends with the commands that
+reproduce it by hand, one `twin create`, a `twin step` for each stage up to the failed one,
+`twin verify` and `twin destroy`. The rehearsal ends `nonconforming`, exit 5, and
+`fylgja-twin` fails. Tier 3's case 9 makes one, with a port n1 does not have, refused at the
+push.
+
+`-delete` removes the stages first, since Infrahub refuses to delete a proposed change while
+a stage names it, then the proposed change, whose comments and checks go with it, then the
+branch:
+
+```console
+$ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -delete
+deleted 2 stages, 1 proposed change, branch fylgja-test-readme
+```
+
 ## Pinned and frozen twins
 
 Following the branch is the default. Three other kinds of twin never rebuild:
@@ -510,7 +688,7 @@ machine-readable findings document. Exit statuses:
 ```sh
 make test            # tier 1: unit, golden, workflow and replay tests, every command through a server in the test's process; no infrastructure, seconds
 make test-contract   # tier 2: against a real Infrahub; needs local/.env
-make test-e2e        # tier 3: eight cases and seven live twins, SR Linux and EOS, every command through a server of its own; never in CI
+make test-e2e        # tier 3: nine cases and nine live twins, SR Linux and EOS, every command through a server of its own, and a proposed change rehearsed by the checks inside Infrahub; never in CI
 make lint
 ```
 
@@ -524,17 +702,20 @@ the script makes Infrahub's token on the runner and never prints it.
 
 Tier 3 boots twins, so it is the operator's, on a lab host, and never runs in CI. It needs
 the dev server and a worker running from the repository root (the script leaves both),
-Docker, containerlab, Infrahub and both images, and takes about 19–20 minutes. Without the
-cEOS image it refuses before any case; `PLATFORMS` narrows it to the packages you name,
-and on an SR Linux-only host it ends on a partial pass, exit 0:
+Docker, containerlab, Infrahub and both images, and for case 9 the two checks imported and
+the API's server from the same tree on the Docker bridge, as [A proposed change,
+rehearsed](#a-proposed-change-rehearsed) starts it; it refuses before any case without
+them. It takes about 25 minutes. Without the cEOS image it refuses before any case too;
+`PLATFORMS` narrows it to the packages you name, and on an SR Linux-only host it ends on a
+partial pass, exit 0:
 
 ```console
 $ PLATFORMS=nokia_srlinux make test-e2e
 …
-E2E-PARTIAL: platforms nokia_srlinux; ran 1 2 3 4 5 7; skipped 6 (needs arista_eos: not in PLATFORMS; image ceos:4.32.0.2F absent) 8 (needs arista_eos: not in PLATFORMS; image ceos:4.32.0.2F absent)
+E2E-PARTIAL: platforms nokia_srlinux; ran 1 2 3 4 5 7 9; skipped 6 (needs arista_eos: not in PLATFORMS; image ceos:4.32.0.2F absent) 8 (needs arista_eos: not in PLATFORMS; image ceos:4.32.0.2F absent)
 ```
 
-Cases 6 and 8 build mixed twins, and each skip says why. A narrowed run takes about 11
+Cases 6 and 8 build mixed twins, and each skip says why. A narrowed run takes about 17
 minutes, leaves the host as clean as a full one, and never prints `E2E-OK` when it skipped
 a case.
 

@@ -25,6 +25,13 @@ const pollEvery = 2 * time.Second
 // §2.7); the client's own timeout is shorter, so the call gets its own.
 const rebaseWait = 180 * time.Second
 
+// pipelineWait bounds a proposed change's pipeline at its creation. Alone it concludes in
+// 21 s on a bare branch and 58 s on a seeded one, but tier 2 runs the packages beside each
+// other against one Infrahub: with 015's seeded branches beside 014's, seeded branches'
+// pipelines concluded after 119 s to 260 s, three were still rendering their artifacts at
+// 180 s, and seeding a branch took up to 96 s against 18 s alone (015's research §5.5).
+const pipelineWait = 6 * time.Minute
+
 // ProposedChangeRow is one proposed change as the harness reads it back.
 type ProposedChangeRow struct {
 	ID    string
@@ -136,7 +143,7 @@ func (c *Client) OpenProposedChange(branch string, draft bool) (string, error) {
 	if id == "" {
 		return "", fmt.Errorf("opening a proposed change on %s: Infrahub returned no id", branch)
 	}
-	return id, c.AwaitValidators(id, 180*time.Second)
+	return id, c.AwaitValidators(id, pipelineWait)
 }
 
 // ValidatorsOf lists a proposed change's validators: one on a bare branch, three on a

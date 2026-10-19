@@ -3085,6 +3085,162 @@ never queried.
 
 ---
 
+<a id="d-049"></a>
+## D-049 — A check posts the rehearsal's report as a comment; Fylgja writes nothing
+
+**Status:** Accepted 2026-10-19. Beside [D-026](#d-026), which stands. To be built by
+`015-proposed-change-rehearsal`.
+
+### Context
+
+F-007 and F-008 bring the rehearsal inside Infrahub's proposed-change workflow, whose unit of
+writing is a comment rendered as markdown, while Constitution III keeps every operation
+Fylgja makes on Infrahub a query. Verified on Infrahub 1.11.2 (2026-10-17,
+`specs/015-proposed-change-rehearsal/research.md` §1.3): a check runs in Infrahub's task
+worker with the source branch and the worker's own client, may create a `CoreChangeComment`
+on the proposed change, and its own message is plain text.
+
+### Options considered
+
+- **Fylgja posting the comment through the API's server.** Rejected: a write to Infrahub,
+  against Constitution III.
+- **The report in the check's message alone.** Rejected: a check's message renders as code,
+  not markdown.
+- **One comment edited on each run.** Rejected: Infrahub's comment carries no stamp, and a
+  history of rehearsals should stay readable.
+
+### Decision
+
+The two checks this repository ships, `fylgja-step` and `fylgja-twin`, are clients of the
+API and glue. `fylgja-twin` posts one new `CoreChangeComment` per run, carrying the report's
+markdown headed by the run and when the stages were resolved; it edits and deletes none, and
+writes nothing else. `fylgja-step` writes nothing. A comment that cannot be posted is logged
+and fails nothing.
+
+### Consequences
+
+- A proposed change's comments are its rehearsals' history.
+- A test's proposed change goes with its comments when deleted (research §1.6).
+- D-026 stands: Fylgja itself still writes nothing to Infrahub.
+
+---
+
+<a id="d-050"></a>
+## D-050 — The API's server listens on the host's Docker bridge beside loopback, in plaintext, under the one token
+
+**Status:** Accepted 2026-10-19. Supersedes the loopback default of [D-042](#d-042) for this
+deployment; D-042's token and its comparison stand. To be built by
+`015-proposed-change-rehearsal`.
+
+### Context
+
+Infrahub's task workers run on a Compose bridge where neither loopback nor
+`host.docker.internal` reaches the lab host (`specs/015-proposed-change-rehearsal/research.md`
+§1.1). Verified (2026-10-17): with `extra_hosts: host.docker.internal:host-gateway`, a
+container on that network resolves the name to the host's docker0 address (`172.17.0.1` by
+Docker's default), reaches a server bound there with the token, and is refused without it.
+
+### Options considered
+
+- **A relay container.** Rejected by the feature's brief: a second process to run and keep.
+- **Server TLS.** Rejected by the brief and by D-042: a key file would be the first
+  credential read from a file.
+- **The task workers on the host's network.** Rejected: Infrahub's Compose file stays
+  Infrahub's.
+
+### Decision
+
+`fylgja serve --listen` is repeatable. On the lab host the server listens on
+`127.0.0.1:7650` and on the bridge's address, `<docker0>:7650`. The Compose override gives
+the task workers the host-gateway entry, `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN`, and the
+bring-up script starts the server so.
+
+### Consequences
+
+- Any container on the host can reach the API, the twin's nodes included, and the bearer
+  check is what guards it. `SECURITY.md` says so.
+- The token is in the task workers' environment as well as in `local/.env`.
+- D-042's revisit, for a client that needs less than everything, stays deferred.
+
+---
+
+<a id="d-051"></a>
+## D-051 — `twin rehearse` is a fifth short workflow, `fylgja-rehearse`, that runs provision, step and destroy as children under their fixed ids, with a deadline derived from the stages' budgets
+
+**Status:** Accepted 2026-10-19. Beside [D-007](#d-007) and [D-036](#d-036). Constitution
+VIII is satisfied by this entry and its text is not amended: it admits a workflow through a
+decision-log entry, as the step and following workflows were admitted. To be built by
+`015-proposed-change-rehearsal`.
+
+### Context
+
+A rehearsal is a create, a verify, a step and a verify per later stage, and a destroy, run
+unattended for minutes, and it must destroy its twin whatever happens
+(`specs/015-proposed-change-rehearsal/spec.md`, FR-005).
+
+### Options considered
+
+- **The server driving the runs one by one.** Rejected: the server keeps nothing between
+  requests ([D-014](#d-014)), and [D-040](#d-040) leaves a run running when its client goes.
+- **One workflow scheduling the activities itself.** Rejected: it repeats the three
+  workflows' logic and their cleanup.
+- **A long-running workflow.** Rejected by [D-007](#d-007).
+
+### Decision
+
+`fylgja-rehearse` has a fixed id. Its children are `fylgja-provision` (already compiled),
+`fylgja-step` (allowing restarts, with the default wait) and `fylgja-destroy` on a
+disconnected context, each under its own fixed id; its baseline wait is `VerifyTwin`. It is
+refused beside any run in flight, and `twin destroy` cancels it and waits for its destroy.
+Its deadline is the sum of its stages' provision, step and wait budgets, from the packages
+and the mechanism constants, under a ceiling of Fylgja's own (3,600 s), enforced by a timer
+that cancels the children and then destroys. Its twin's record names it, and a rehearsal
+whose run is no longer running is destroyed by the next (the reclaim).
+
+### Consequences
+
+- The worker serves five workflows.
+- The twin record moves to `7`; its rehearsal mark is the only new state.
+- A step cut by the deadline records diverged ([D-036](#d-036)) before the destroy.
+- `fylgja-twin`'s check timeout (4,200 s) exceeds the ceiling by the destroy's budget, the
+  work before the start and a margin.
+
+---
+
+<a id="d-052"></a>
+## D-052 — The check concludes from the report's status alone; Fylgja's verdicts stay advisory
+
+**Status:** Accepted 2026-10-19. Beside [D-039](#d-039), which stands. To be built by
+`015-proposed-change-rehearsal`.
+
+### Context
+
+A stage that fails must block the merge (F-008), while D-039 keeps every Fylgja report
+advisory and no Fylgja operation reads one.
+
+### Options considered
+
+- **Fylgja refusing something on a failed stage.** Rejected: D-039.
+- **The check reading the stages' verdicts.** Rejected: two places would decide what fails.
+
+### Decision
+
+`twin.rehearse`'s document carries the verdicts and the status, and the check maps the status
+alone: `ok` is success and every other status is failure, with the report's text as the
+message either way. A draft proposed change is skipped with success. `fylgja-step` fails only
+on a refusal as intent, the stages unlistable, or Fylgja unreachable, a branch point refused
+for want of a network on `main` excepted: the one rule the Python holds, read from the
+finding's rule and `at_source`. A later `stage.plan` that carries the distinction itself
+retires it.
+
+### Consequences
+
+- The merge is gated by Infrahub's own rule over the check's conclusion; nothing in Fylgja
+  acts on the rehearsal.
+- The roadmap's F-007 row is reworded: `fylgja-step` posts no comment.
+
+---
+
 <a id="parked"></a>
 ## Parked
 

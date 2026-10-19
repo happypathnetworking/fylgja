@@ -4,10 +4,18 @@
 # One Jinja2 transformation renders a device's production configuration from the
 # Fylgja generics (FylgjaDevice, FylgjaInterface, FylgjaLink); one artifact definition
 # generates it for every device in the group `fylgja-devices`.
+# The checks are clients of Fylgja's API, glue on Infrahub's runtime (contracts/checks.md):
+# global, with no targets and no parameters, so Infrahub's task workers run each on every
+# proposed change, draft or not, reaching the API at FYLGJA_API_ADDRESS with
+# FYLGJA_API_TOKEN from their environment (the Compose override). fylgja-step asks for the
+# stage plan. Each binds the query fylgja_branch through its class's `query`, never a
+# `query:` key under its definition.
 
 queries:
   - name: device_config
     file_path: infrahub/queries/device_config.gql
+  - name: fylgja_branch
+    file_path: infrahub/queries/branch.gql
 
 jinja2_transforms:
   - name: srlinux_device_config
@@ -25,3 +33,8 @@ artifact_definitions:
     content_type: text/plain
     targets: fylgja-devices
     transformation: srlinux_device_config
+
+check_definitions:
+  - name: fylgja-step
+    file_path: infrahub/checks/fylgja_step.py
+    class_name: FylgjaStep

@@ -25,7 +25,8 @@
 #   infrahub   Infrahub 1.11.2 by its published Compose file and this repository's
 #              override, main prepared by the fixture tool, the fixture branch seeded
 #   fylgja     the build, tiers 1 and 2, then the dev server, the worker and the API's
-#              server started detached, each one's report read
+#              server started detached, each one's report read; the server on loopback
+#              and on the Docker bridge, where Infrahub's task workers reach it (D-050)
 #
 # Each item is verified, installed when missing and verified again, so a second run on a
 # set-up host installs nothing and ends the same way. Exit 0: every part run completed and
@@ -664,7 +665,7 @@ seed() {
 }
 
 part_infrahub() {
-  local c outcome running wanted state
+  local c outcome running wanted state override=present
 
   for c in docker go curl jq; do
     if ! command -v "$c" > /dev/null; then
@@ -692,13 +693,20 @@ part_infrahub() {
     item infrahub override present "(local/infrahub/docker-compose.override.yml)"
   else
     cp scripts/infrahub/docker-compose.override.yml "$COMPOSE_DIR/docker-compose.override.yml"
+    override=installed
     item infrahub override installed "(from scripts/infrahub/)"
   fi
 
+  # A copied or replaced override reaches a running container only when it is recreated:
+  # up -d runs then even with every service up, and recreates those whose configuration
+  # moved, the task workers among them, and leaves the rest and the volumes as they are.
   wanted=$(compose config --services | sort)
   running=$(compose ps --services --status running | sort)
-  if [ -n "$running" ] && [ "$running" = "$wanted" ]; then
+  if [ "$override" = present ] && [ -n "$running" ] && [ "$running" = "$wanted" ]; then
     item infrahub compose present "(project $COMPOSE_PROJECT, $(wc -l <<< "$running") services running)"
+  elif [ -n "$running" ] && [ "$running" = "$wanted" ]; then
+    compose up -d --quiet-pull
+    item infrahub compose installed "(project $COMPOSE_PROJECT, $(wc -l <<< "$wanted") services up; those the override moved recreated)"
   else
     compose up -d --quiet-pull
     item infrahub compose installed "(project $COMPOSE_PROJECT, $(wc -l <<< "$wanted") services started)"
@@ -743,8 +751,26 @@ part_infrahub() {
 
 # --- fylgja -------------------------------------------------------------------------------
 
-TIER1_S="" TIER2_S=""
+TIER1_S="" TIER2_S="" BRIDGE_ADDR=""
 declare -A ROLE_PID=()
+
+# bridge_address: BRIDGE_ADDR is the host's Docker bridge address, where host-gateway
+# resolves inside Infrahub's task workers and the server listens beside loopback (D-050).
+# A host with no bridge network fails the server's item, naming it.
+bridge_address() {
+  BRIDGE_ADDR=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}' 2> /dev/null) || BRIDGE_ADDR=""
+  [ -n "$BRIDGE_ADDR" ] ||
+    fail fylgja server "this host has no Docker network bridge with a gateway address (docker network inspect bridge): Infrahub's task workers reach the API's server there"
+}
+
+# report_wants ROLE: what the role's start-up report must name, for the run's lines.
+report_wants() {
+  if [ "$1" = serve ]; then
+    echo "127.0.0.1:7650 and $BRIDGE_ADDR:7650, and ${PLATFORMS[*]} with their logins set"
+  else
+    echo "${PLATFORMS[*]} with their logins set"
+  fi
+}
 
 # fylgja_pid ROLE: the pid of this tree's fylgja ROLE (worker or serve), if one runs.
 # pgrep -x, since -f also matches the shell that runs it; the role is in its cmdline.
@@ -763,12 +789,16 @@ fylgja_pid() {
 }
 
 # report_ok ROLE LOG FROM: the role's start-up report in LOG, from byte FROM, names every
-# package the host can run with its login set, and the server's names its listen address.
+# package the host can run with its login set, and the server's names both its listen
+# addresses and the bridge's unencrypted line, so a server on loopback alone is restarted.
 report_ok() {
-  local role=$1 log=$2 from=$3 text pkg
+  local role=$1 log=$2 from=$3 text pkg bridge_re
   text=$(tail -c "+$(( from + 1 ))" "$log" 2> /dev/null) || return 1
   if [ "$role" = serve ]; then
-    grep -q "^fylgja serve: listening on 127.0.0.1:7650 (API version 1, build " <<< "$text" || return 1
+    bridge_re=${BRIDGE_ADDR//./\\.}
+    grep -q "^fylgja serve: listening on 127\.0\.0\.1:7650 (API version 1, build " <<< "$text" || return 1
+    grep -q "^fylgja serve: listening on $bridge_re:7650 (API version 1, build " <<< "$text" || return 1
+    grep -q "^fylgja serve: $bridge_re:7650 is not a loopback address: the API's token is sent unencrypted on it$" <<< "$text" || return 1
   else
     grep -q "^fylgja worker: serving task queue " <<< "$text" || return 1
   fi
@@ -791,10 +821,11 @@ last_report_offset() {
 }
 
 # start_role ROLE LOG: started detached, as CLAUDE.md starts it, from a shell that loaded
-# local/.env; the dev server's CLI on the PATH it hands on.
+# local/.env; the dev server's CLI on the PATH it hands on. The server listens on loopback
+# first and on the bridge after it.
 start_role() {
   local role=$1 log=$2
-  local -a cmd=(bin/fylgja serve)
+  local -a cmd=(bin/fylgja serve --listen 127.0.0.1:7650 --listen "$BRIDGE_ADDR:7650")
   [ "$role" = worker ] && cmd=(bin/fylgja worker run)
   # shellcheck disable=SC2016
   with_env bash -c 'PATH="$(dirname "$1"):$PATH" setsid nohup env FYLGJA_STATE_ROOT="$2" "${@:4}" >> "$3" 2>&1 < /dev/null &' \
@@ -803,7 +834,9 @@ start_role() {
 
 ensure_role() {
   local role=$1 log="$ROOT/local/$2.log" name=$2 pid exe from pattern
-  pattern="^fylgja $role: listening on "
+  # The report's first line: the server's names loopback, listened on first, so a report's
+  # second listen line is not taken for its start.
+  pattern="^fylgja serve: listening on 127\.0\.0\.1:7650 (API version "
   [ "$role" = worker ] && pattern="^fylgja worker: serving task queue "
   if pid=$(fylgja_pid "$role"); then
     exe=$(readlink "/proc/$pid/exe" 2> /dev/null || true)
@@ -815,7 +848,7 @@ ensure_role() {
           item fylgja "$name" present "(pid $pid, this tree's bin/fylgja)"
           return
         fi
-        say "fylgja: $name: pid $pid's report does not name ${PLATFORMS[*]} with their logins set; restarting it"
+        say "fylgja: $name: pid $pid's report does not name $(report_wants "$role"); restarting it"
         kill "$pid"
         wait_for fylgja "$name" "pid $pid to exit" 30 "" bash -c "! kill -0 $pid"
         ;;
@@ -832,7 +865,7 @@ ensure_role() {
   touch "$log"
   from=$(wc -c < "$log")
   start_role "$role" "$log"
-  wait_for fylgja "$name" "its start-up report naming ${PLATFORMS[*]} with their logins set" "$REPORT_WAIT_S" \
+  wait_for fylgja "$name" "its start-up report naming $(report_wants "$role")" "$REPORT_WAIT_S" \
     "local/$name.log" report_ok "$role" "$log" "$from"
   pid=$(fylgja_pid "$role") || fail fylgja "$name" "it reported, then exited (local/$name.log)"
   ROLE_PID[$role]=$pid
@@ -880,6 +913,7 @@ part_fylgja() {
   TEMPORAL_PID=$(pgrep -f -o 'temporal server start-dev' || echo unknown)
 
   ensure_role worker worker
+  bridge_address
   ensure_role serve server
 }
 
@@ -908,7 +942,7 @@ if runs fylgja; then
   fi
   say "running: temporal (pid $TEMPORAL_PID, local/temporal.log)"
   say "running: worker (pid ${ROLE_PID[worker]}, local/worker.log; packages ${PLATFORMS[*]})"
-  say "running: server (pid ${ROLE_PID[serve]}, local/server.log, 127.0.0.1:7650; packages ${PLATFORMS[*]})"
+  say "running: server (pid ${ROLE_PID[serve]}, local/server.log, 127.0.0.1:7650 and $BRIDGE_ADDR:7650, the token crossing the bridge in the clear; packages ${PLATFORMS[*]})"
   say "to stop them: pkill -x fylgja; pkill -f 'temporal server start-dev'"
 fi
 say "DONE in $(( SECONDS - RUN_START ))s"

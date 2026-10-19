@@ -47,6 +47,11 @@ const ProvisionWorkflowID = "fylgja-provision"
 // needs it without importing internal/provision.
 const StepWorkflowID = "fylgja-step"
 
+// RehearseWorkflowID is the rehearsal workflow's fixed identity: a fifth short workflow
+// (D-051). The record's rehearsal names it, so the lab host needs it without importing
+// internal/provision.
+const RehearseWorkflowID = "fylgja-rehearse"
+
 // A record's state. twin.json 4 writes one of the two; a
 // record of 3 or earlier reads as "" and is shown as ready.
 const (
@@ -307,6 +312,11 @@ type RecordInput struct {
 	// the record as data. Nil in every input and recorded history of a run not created
 	// from a stage, and omitted when nil, so their activity payloads are byte-identical.
 	Stage *StageRef `json:"stage,omitempty"`
+	// Rehearsal is the rehearsal run whose baseline this create is (015), copied into the
+	// record as data, so a twin a dead rehearsal left can be told from a hand twin. Nil in
+	// every input and recorded history of a run a rehearsal did not start, and omitted when
+	// nil, as Stage is.
+	Rehearsal *RehearsalRef `json:"rehearsal,omitempty"`
 }
 
 // RecordResult is where the record was written and the record exactly as written, so
@@ -342,6 +352,11 @@ type TwinRecord struct {
 	// An earlier record, which has no key, reads as nil. Version 4 writes an explicit
 	// null, as stage does.
 	Step *StepRecord `json:"step"`
+	// Rehearsal names the rehearsal run whose baseline the twin is, or is nil for a twin no
+	// rehearsal created (015). A step's record keeps it. No omitempty: version 7 writes an
+	// explicit null for none, as stage does, and a record of 6 or earlier, which has no key,
+	// reads as nil.
+	Rehearsal *RehearsalRef `json:"rehearsal"`
 	// Superseded is set by lab.ReadRecord on a record of twin.json 5 or earlier that names
 	// the pinned reference it was created from in M10's shape, which this build no longer
 	// reads, so twin step's refusal can say so. Never written, and not carried across an
@@ -406,6 +421,13 @@ func (s *StageRef) Name() string {
 
 // RunRef is the provisioning run's identity in Temporal.
 type RunRef struct {
+	WorkflowID string `json:"workflow_id"`
+	RunID      string `json:"run_id"`
+}
+
+// RehearsalRef is a rehearsal run's identity in Temporal, as the record names it:
+// RehearseWorkflowID and the run's id (015).
+type RehearsalRef struct {
 	WorkflowID string `json:"workflow_id"`
 	RunID      string `json:"run_id"`
 }
@@ -792,4 +814,16 @@ type StepWait struct {
 type VerifyResult struct {
 	Wait     StepWait `json:"wait"`
 	Recorded bool     `json:"recorded"`
+	// Counts is the wait's last read counted by assertion kind, for a rehearsal's report
+	// (015, research R-07). Nil when no read was kept, and when a retry returned the wait
+	// the record already held, which keeps no counts; omitted when nil, so every recorded
+	// history replays.
+	Counts *VerifyCounts `json:"counts,omitempty"`
 }
+
+// VerifyCounts are a read's assertions and claims counted by kind, host_name,
+// port_enabled, neighbor and record, each held, failed (absent too), skipped and unread:
+// twin verify's own counts (contracts/verify.schema.json), which a rehearsal's stage
+// carries as its verify (contracts/rehearsal.schema.json). It is the verify block's type,
+// so the two are one shape and the wait's crosses in one assignment.
+type VerifyCounts = findings.VerifyCounts

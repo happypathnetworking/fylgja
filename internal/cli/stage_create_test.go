@@ -675,9 +675,9 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 			res, record := provisionOnSuite(t, paths, svc.started[0])
 			validateTwinJSON(t, record)
 			w := decodeRecord(t, record)
-			if res.BundleID != id || w.BundleID != id || w.TwinVersion != "6" || w.Source != wire.SourceIntent ||
+			if res.BundleID != id || w.BundleID != id || w.TwinVersion != "7" || w.Source != wire.SourceIntent ||
 				w.Provenance.Branch != c.branch || w.Provenance.At != c.at || !reflect.DeepEqual(w.Stage, &stage) || w.Step != nil {
-				t.Errorf("the run deployed %s and recorded\n%s\nwant %s, twin_version 6, provenance %s at %s, stage %+v, step null",
+				t.Errorf("the run deployed %s and recorded\n%s\nwant %s, twin_version 7, provenance %s at %s, stage %+v, step null",
 					res.BundleID, record, id, c.branch, c.at, stage)
 			}
 			if res.FollowingStopped != nil || res.Following != nil {
@@ -897,7 +897,7 @@ func TestCreateAlongMainAfterAStageTwin(t *testing.T) {
 	res, record := provisionOnSuite(t, paths, svc.started[0])
 	validateTwinJSON(t, record)
 	w := decodeRecord(t, record)
-	if res.BundleID != dry.BundleID || w.TwinVersion != "6" || w.Provenance.Branch != "main" || w.Provenance.At != mainAt ||
+	if res.BundleID != dry.BundleID || w.TwinVersion != "7" || w.Provenance.Branch != "main" || w.Provenance.At != mainAt ||
 		w.Stage != nil || !strings.Contains(string(record), `"stage": null`) {
 		t.Errorf("the run deployed %s (the dry run %s) and recorded\n%s\nwant main at %s, stage null", res.BundleID, dry.BundleID,
 			record, mainAt)

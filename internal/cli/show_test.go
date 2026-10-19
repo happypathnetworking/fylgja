@@ -332,6 +332,7 @@ func TestShowPinnedFromAStage(t *testing.T) {
 			}
 			generic["twin_version"] = "2"
 			delete(generic, "stage")
+			delete(generic, "rehearsal")
 			if b, err = json.Marshal(generic); err != nil {
 				t.Fatal(err)
 			}
@@ -1594,15 +1595,16 @@ func TestShowRecordsBeforeStages(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			// NewRecord writes the current version, 6 since 014; a create's 4 or 5 differs
-			// from it by the version and by M10's waypoint in place of the stage, since step
-			// is null in each.
+			// NewRecord writes the current version, 7 since 015; a create's 4 or 5 differs
+			// from it by the version, by M10's waypoint in place of the stage and by having no
+			// rehearsal, since step is null in each.
 			var generic map[string]any
 			if err := json.Unmarshal(raw, &generic); err != nil {
 				t.Fatal(err)
 			}
 			generic["twin_version"] = version
 			delete(generic, "stage")
+			delete(generic, "rehearsal")
 			generic["waypoint"] = map[string]any{"series": "demo", "sequence": 1, "description": "cut 1", "at_source": "given"}
 			if version == "3" {
 				delete(generic, "state")
@@ -1696,7 +1698,7 @@ func TestShowRecordsBeforeStages(t *testing.T) {
 
 // record5 is rec as a twin.json 5 worker wrote it: M10's waypoint in place of the stage at
 // the top level, the step's to side's for a twin that stepped and its from side's for one
-// that diverged, and on each side of the step.
+// that diverged, and on each side of the step; and no rehearsal, which 7 added (015).
 func record5(t *testing.T, rec wire.TwinRecord) []byte {
 	t.Helper()
 	raw, err := json.Marshal(rec)
@@ -1713,6 +1715,7 @@ func record5(t *testing.T, rec wire.TwinRecord) []byte {
 	}
 	generic["twin_version"] = "5"
 	delete(generic, "stage")
+	delete(generic, "rehearsal")
 	generic["waypoint"] = waypoint(1)
 	if step, ok := generic["step"].(map[string]any); ok {
 		for side, sequence := range map[string]int{"from": 1, "to": 2} {
@@ -1810,8 +1813,8 @@ func TestShowStepWait(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			paths := useStateRoot(t)
 			rec := steppedTwin(t, c.change)
-			if rec.TwinVersion != "6" {
-				t.Fatalf("lab.NewStepRecord wrote version %q, want 6", rec.TwinVersion)
+			if rec.TwinVersion != "7" {
+				t.Fatalf("lab.NewStepRecord wrote version %q, want 7", rec.TwinVersion)
 			}
 			rec.Step.Wait = c.wait
 			writeTwin(t, paths, rec)
@@ -1843,17 +1846,17 @@ func TestShowStepWait(t *testing.T) {
 	}
 }
 
-// A version 6 record written by a create (step: null) is shown exactly as the same record
+// A version 7 record written by a create (step: null) is shown exactly as the same record
 // written with M11's step shape: no step line and no step key.
-func TestShowCreatedVersion6RecordAsM11(t *testing.T) {
+func TestShowCreatedVersion7RecordAsM11(t *testing.T) {
 	show := func(write func(*testing.T, lab.Paths, wire.TwinRecord)) showOutput {
 		paths := useStateRoot(t)
 		write(t, paths, seededTwin(t))
 		return showWith(t, paths, "inspect-three.json", &fakeService{})
 	}
 	five, four := show(writeTwin), show(writeM11Twin)
-	if seededTwin(t).TwinVersion != "6" {
-		t.Fatalf("a create's record is version %q, want 6", seededTwin(t).TwinVersion)
+	if seededTwin(t).TwinVersion != "7" {
+		t.Fatalf("a create's record is version %q, want 7", seededTwin(t).TwinVersion)
 	}
 	if five.stdout != four.stdout {
 		t.Errorf("version 5 stdout:\n%s\nversion 4:\n%s", five.stdout, four.stdout)

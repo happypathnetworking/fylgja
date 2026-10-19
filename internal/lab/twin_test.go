@@ -19,7 +19,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 )
 
-// twinSchema is the current contract the record satisfies: twin.json 6, which NewRecord and
+// twinSchema is the current contract the record satisfies: twin.json 7, which NewRecord and
 // NewStepRecord write, under the module root's contracts/.
 func twinSchema(t *testing.T) *jsonschema.Schema {
 	t.Helper()
@@ -28,7 +28,8 @@ func twinSchema(t *testing.T) *jsonschema.Schema {
 
 // twinSchemaOf is feature's copy of twin.schema.json: "" is the current contract, and an
 // earlier feature's is its frozen copy under testdata/contracts/<feature>/, which keeps the
-// records its milestone wrote, such as M11's 4 (009-stepping) and M12's 5 (010-verify).
+// records its milestone wrote, such as M11's 4 (009-stepping), M12's 5 (010-verify) and
+// 014's 6 (014-proposed-change-stages).
 func twinSchemaOf(t *testing.T, feature string) *jsonschema.Schema {
 	t.Helper()
 	path := filepath.Join("..", "..", "contracts", "twin.schema.json")
@@ -171,12 +172,13 @@ func jsonOf(t *testing.T, v any) any {
 	return out
 }
 
-// A create's record is twin.json 6 (014): it names the stage the twin was created from, its
-// proposed change by id and source branch, its label, its description and where its at came
-// from, for each of the four sources, with step null; a branch-point twin reads the default
-// branch, so its provenance.branch is main. A record written with --branch or from a bundle
-// says "stage": null explicitly, and a step's record carries the same shape on each side.
-func TestRecord6(t *testing.T) {
+// A create's record names the stage the twin was created from (twin.json 6, 014, which 7
+// keeps): its proposed change by id and source branch, its label, its description and where
+// its at came from, for each of the four sources, with step null; a branch-point twin reads
+// the default branch, so its provenance.branch is main. A record written with --branch or
+// from a bundle says "stage": null explicitly, and a step's record carries the same shape on
+// each side.
+func TestRecordNamesItsStage(t *testing.T) {
 	s := twinSchema(t)
 	observed := "2026-10-16T09:31:02.118842Z"
 	for _, c := range []struct {
@@ -199,8 +201,8 @@ func TestRecord6(t *testing.T) {
 			got := jsonOf(t, rec).(map[string]any)
 			want := map[string]any{"proposed_change": map[string]any{"id": "pc-1", "branch": "change-1"},
 				"label": c.label, "description": c.description, "at_source": c.source}
-			if got["twin_version"] != "6" || !reflect.DeepEqual(got["stage"], want) {
-				t.Errorf("twin_version %v, stage %v; want 6 naming %v", got["twin_version"], got["stage"], want)
+			if got["twin_version"] != "7" || !reflect.DeepEqual(got["stage"], want) {
+				t.Errorf("twin_version %v, stage %v; want 7 naming %v", got["twin_version"], got["stage"], want)
 			}
 			if step, ok := got["step"]; !ok || step != nil {
 				t.Errorf("step %v (present %t); want an explicit null", step, ok)
@@ -242,8 +244,8 @@ func TestRecord6(t *testing.T) {
 			t.Errorf("step.from.stage %v, step.to.stage %v; want %v and %v", from["stage"], to["stage"],
 				jsonOf(t, mark("seeded")), jsonOf(t, f.To.Stage))
 		}
-		if !reflect.DeepEqual(got["stage"], to["stage"]) || got["twin_version"] != "6" {
-			t.Errorf("twin_version %v, stage %v; want 6 naming the stage the step went to", got["twin_version"], got["stage"])
+		if !reflect.DeepEqual(got["stage"], to["stage"]) || got["twin_version"] != "7" {
+			t.Errorf("twin_version %v, stage %v; want 7 naming the stage the step went to", got["twin_version"], got["stage"])
 		}
 	})
 }
@@ -288,13 +290,14 @@ func m10Waypoint(sequence int) map[string]any {
 	return map[string]any{"series": "demo", "sequence": sequence, "description": "after the first cut-over", "at_source": "written"}
 }
 
-// olderRecord is rec as a worker of twin.json version, 4 or 5, wrote it: the stage key gives
-// way to M10's, top at the top level and from and to on the step's sides (nil writes
-// null), and a 4's step has no wait.
+// olderRecord is rec as a worker of twin.json version, 4 or 5, wrote it: the rehearsal key
+// is not there, the stage key gives way to M10's, top at the top level and from and to on
+// the step's sides (nil writes null), and a 4's step has no wait.
 func olderRecord(t *testing.T, rec wire.TwinRecord, version string, top, from, to any) []byte {
 	t.Helper()
 	generic := jsonOf(t, rec).(map[string]any)
 	generic["twin_version"] = version
+	delete(generic, "rehearsal")
 	delete(generic, "stage")
 	generic["waypoint"] = top
 	if step, ok := generic["step"].(map[string]any); ok {
@@ -400,6 +403,164 @@ func TestRecord5ReadsWithNoStage(t *testing.T) {
 			t.Errorf("read stage %+v, superseded %t; want no stage, superseded", rec.Stage, rec.Superseded)
 		}
 	})
+}
+
+// rehearsal is the rehearsal run of contracts/rehearse-command.md's examples, as the record
+// names it (015).
+func rehearsal() *wire.RehearsalRef {
+	return &wire.RehearsalRef{WorkflowID: wire.RehearseWorkflowID, RunID: "01a1b2c3-0000-7000-8000-0000000000a1"}
+}
+
+// A create's record is twin.json 7 (015): a rehearsal's baseline names the rehearsal run, the
+// workflow fylgja-rehearse and its run id, and a twin no rehearsal created says "rehearsal":
+// null explicitly; a step's record keeps the create's, whichever it is. The contract refuses
+// a 7 record with no rehearsal key, or one naming another workflow or no run, and so does
+// NewRecord.
+func TestRecord7(t *testing.T) {
+	s := twinSchema(t)
+	observed := "2026-10-19T09:31:02.118842Z"
+	baseline := func() RecordFields {
+		f := fields(wire.SourceIntent, &observed)
+		f.Provenance.Branch, f.Provenance.At = "change-1", "2026-10-19T09:00:00+00:00"
+		f.Stage, f.Rehearsal = mark("seeded"), rehearsal()
+		return f
+	}
+
+	t.Run("a rehearsal's baseline", func(t *testing.T) {
+		rec, err := NewRecord(baseline())
+		if err != nil {
+			t.Fatal(err)
+		}
+		validateRecord(t, s, rec)
+		got := jsonOf(t, rec).(map[string]any)
+		want := map[string]any{"workflow_id": "fylgja-rehearse", "run_id": "01a1b2c3-0000-7000-8000-0000000000a1"}
+		if got["twin_version"] != "7" || !reflect.DeepEqual(got["rehearsal"], want) {
+			t.Errorf("twin_version %v, rehearsal %v; want 7 naming %v", got["twin_version"], got["rehearsal"], want)
+		}
+		if got["run"].(map[string]any)["workflow_id"] != wire.ProvisionWorkflowID {
+			t.Errorf("run %v; the record's run stays the provisioning run's", got["run"])
+		}
+	})
+
+	t.Run("a hand twin", func(t *testing.T) {
+		for label, f := range map[string]RecordFields{
+			"intent": fields(wire.SourceIntent, &observed),
+			"bundle": fields(wire.SourceBundle, nil),
+		} {
+			rec, err := NewRecord(f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			validateRecord(t, s, rec)
+			if got, ok := jsonOf(t, rec).(map[string]any)["rehearsal"]; !ok || got != nil {
+				t.Errorf("%s: rehearsal %v (present %t); a record naming no rehearsal must say null explicitly", label, got, ok)
+			}
+		}
+	})
+
+	t.Run("a step's record keeps the create's", func(t *testing.T) {
+		for label, ref := range map[string]*wire.RehearsalRef{"a rehearsal's": rehearsal(), "none": nil} {
+			prev := stepPrev(t)
+			prev.Rehearsal = ref
+			for _, outcome := range []string{wire.StepStepped, wire.StepDiverged} {
+				f := stepFields()
+				if outcome == wire.StepDiverged {
+					f.Outcome, f.Phase, f.Findings = wire.StepDiverged, "push", divergedFindings(findings.RulePushRefused, findings.StepPush)
+					f.Pushed[1].Outcome, f.Pushed[1].Rule, f.Pushed[1].TookS = wire.PushRefused, findings.RulePushRefused, nil
+				}
+				rec, err := NewStepRecord(prev, f)
+				if err != nil {
+					t.Fatal(err)
+				}
+				validateRecord(t, s, rec)
+				if !reflect.DeepEqual(rec.Rehearsal, ref) {
+					t.Errorf("%s, %s: rehearsal %+v, want the create's %+v", label, outcome, rec.Rehearsal, ref)
+				}
+			}
+		}
+	})
+
+	t.Run("the contract refuses a rehearsal it cannot hold", func(t *testing.T) {
+		rec, err := NewRecord(baseline())
+		if err != nil {
+			t.Fatal(err)
+		}
+		for label, change := range map[string]func(map[string]any){
+			"no rehearsal key": func(g map[string]any) { delete(g, "rehearsal") },
+			"another workflow": func(g map[string]any) { g["rehearsal"].(map[string]any)["workflow_id"] = "fylgja-step" },
+			"no run":           func(g map[string]any) { g["rehearsal"].(map[string]any)["run_id"] = "" },
+			"another key":      func(g map[string]any) { g["rehearsal"].(map[string]any)["stage"] = "change-1/seeded" },
+			"twin_version 6":   func(g map[string]any) { g["twin_version"] = "6" },
+		} {
+			generic := jsonOf(t, rec).(map[string]any)
+			change(generic)
+			v, err := jsonschema.UnmarshalJSON(strings.NewReader(mustJSON(t, generic)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Validate(v); err == nil {
+				t.Errorf("%s: twin.schema.json 7 accepts it", label)
+			}
+		}
+	})
+
+	t.Run("NewRecord refuses a rehearsal the contract would", func(t *testing.T) {
+		for label, ref := range map[string]*wire.RehearsalRef{
+			"another workflow": {WorkflowID: wire.StepWorkflowID, RunID: "01a1b2c3-0000-7000-8000-0000000000a1"},
+			"no run":           {WorkflowID: wire.RehearseWorkflowID},
+		} {
+			f := baseline()
+			f.Rehearsal = ref
+			if _, err := NewRecord(f); err == nil || !strings.Contains(err.Error(), "names its rehearsal as a fylgja-rehearse run by its id") {
+				t.Errorf("%s: err = %v, want a refusal saying a rehearsal is a fylgja-rehearse run by its id", label, err)
+			}
+		}
+	})
+}
+
+// mustJSON is v as JSON text.
+func mustJSON(t *testing.T, v any) string {
+	t.Helper()
+	b, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// A record of 6 or earlier still reads, with no rehearsal (015): a create's and a step's
+// record as a 014 worker wrote them, which twin.json 6's frozen contract accepts, read with
+// Rehearsal nil and everything else as written, so twin rehearse refuses such a twin and
+// never reclaims it.
+func TestRecord6ReadsWithNoRehearsal(t *testing.T) {
+	v6 := twinSchemaOf(t, "014-proposed-change-stages")
+	observed := "2026-10-16T09:31:02.118842Z"
+	staged := fields(wire.SourceIntent, &observed)
+	staged.Provenance.At, staged.Stage = "2026-10-16T09:00:00+00:00", mark("seeded")
+	create, err := NewRecord(staged)
+	if err != nil {
+		t.Fatal(err)
+	}
+	step, err := NewStepRecord(stepPrev(t), stepFields())
+	if err != nil {
+		t.Fatal(err)
+	}
+	step.Step.Wait = waits()["settled"]
+	for name, rec := range map[string]wire.TwinRecord{"a create": create, "a step": step} {
+		t.Run(name, func(t *testing.T) {
+			generic := jsonOf(t, rec).(map[string]any)
+			generic["twin_version"] = "6"
+			delete(generic, "rehearsal")
+			b := []byte(mustJSON(t, generic))
+			validateBytes(t, v6, b)
+			got := readBytes(t, b)
+			want := rec
+			want.TwinVersion = "6"
+			if got.Rehearsal != nil || !reflect.DeepEqual(got, want) {
+				t.Errorf("read %+v\nwant %+v, with no rehearsal", got, want)
+			}
+		})
+	}
 }
 
 func TestWriteRecordIsAtomicAndRoundTrips(t *testing.T) {
@@ -583,11 +744,11 @@ func TestRecordTwin(t *testing.T) {
 		if !reflect.DeepEqual(rec.Nodes, want) {
 			t.Errorf("nodes:\n got %+v\nwant %+v", rec.Nodes, want)
 		}
-		if rec.TwinVersion != "6" || rec.State != wire.StateReady || rec.Step != nil {
-			t.Errorf("twin_version %q, state %q, step %+v; want 6, ready and no step", rec.TwinVersion, rec.State, rec.Step)
+		if rec.TwinVersion != "7" || rec.State != wire.StateReady || rec.Step != nil {
+			t.Errorf("twin_version %q, state %q, step %+v; want 7, ready and no step", rec.TwinVersion, rec.State, rec.Step)
 		}
-		if rec.Stage != nil {
-			t.Errorf("stage = %+v, want nil for a run given none", rec.Stage)
+		if rec.Stage != nil || rec.Rehearsal != nil {
+			t.Errorf("stage = %+v, rehearsal = %+v; want nil for a run given neither", rec.Stage, rec.Rehearsal)
 		}
 		// The record names each artifact and holds none of it: the staged files'
 		// marker line is nowhere in what was written.
@@ -619,6 +780,26 @@ func TestRecordTwin(t *testing.T) {
 		}
 		if !reflect.DeepEqual(written.Stage, cabled()) {
 			t.Errorf("twin.json's stage = %+v, want %+v", written.Stage, cabled())
+		}
+		validateRecord(t, twinSchema(t), res.Record)
+	})
+
+	// The rehearsal whose baseline the create is reaches the record as data (015), as the
+	// stage does.
+	t.Run("names the rehearsal it was given", func(t *testing.T) {
+		a := staged(t)
+		in := input(a, deployed)
+		in.Stage, in.Rehearsal = cabled(), rehearsal()
+		res, err := record(t, a, in)
+		if err != nil {
+			t.Fatal(err)
+		}
+		written, err := ReadRecord(a.Paths.TwinJSON)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !reflect.DeepEqual(res.Record.Rehearsal, rehearsal()) || !reflect.DeepEqual(written.Rehearsal, rehearsal()) {
+			t.Errorf("rehearsal = %+v, twin.json's %+v; want %+v", res.Record.Rehearsal, written.Rehearsal, rehearsal())
 		}
 		validateRecord(t, twinSchema(t), res.Record)
 	})
@@ -665,10 +846,11 @@ func TestRecordTwin(t *testing.T) {
 	})
 }
 
-// A create writes twin.json 6: state ready, step null, and every node holding the record's
+// A create writes twin.json 7: state ready, step null, and every node holding the record's
 // bundle, each written out rather than left to a default; a create given no stage says
-// "stage": null (the version moves for the stage, 014, and a create has no step).
-func TestCreateWritesVersion6(t *testing.T) {
+// "stage": null, and one no rehearsal started "rehearsal": null (the version moves for the
+// rehearsal, 015, and a create has no step).
+func TestCreateWritesVersion7(t *testing.T) {
 	observed := "2026-09-15T14:22:12.000000Z"
 	rec, err := NewRecord(fields(wire.SourceIntent, &observed))
 	if err != nil {
@@ -679,7 +861,7 @@ func TestCreateWritesVersion6(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`"twin_version":"6"`, `"stage":null`, `"state":"ready"`, `"step":null`,
+	for _, want := range []string{`"twin_version":"7"`, `"stage":null`, `"rehearsal":null`, `"state":"ready"`, `"step":null`,
 		`"holds":"` + rec.BundleID + `"`} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("a create's record lacks %s:\n%s", want, b)
@@ -716,9 +898,9 @@ func waits() map[string]*wire.StepWait {
 }
 
 // A step's record with its wait filled, in every outcome and after a stepped or a diverged
-// step, is what twin.json 6 accepts, as 5 did; and the contract holds the key required, so a
-// step block with no wait is refused (contracts/twin.schema.json).
-func TestVersion6RecordCarriesEachWait(t *testing.T) {
+// step, is what twin.json 7 accepts, as 5 and 6 did; and the contract holds the key required,
+// so a step block with no wait is refused (contracts/twin.schema.json).
+func TestVersion7RecordCarriesEachWait(t *testing.T) {
 	s := twinSchema(t)
 	for name, w := range waits() {
 		for _, outcome := range []string{wire.StepStepped, wire.StepDiverged} {
@@ -759,7 +941,7 @@ func TestVersion6RecordCarriesEachWait(t *testing.T) {
 		t.Fatal(err)
 	}
 	if err := s.Validate(v); err == nil {
-		t.Error("twin.schema.json 6 accepts a step block with no wait key; it is required, null while the wait has not run")
+		t.Error("twin.schema.json 7 accepts a step block with no wait key; it is required, null while the wait has not run")
 	}
 }
 
@@ -788,10 +970,10 @@ func TestVersion4RecordReadsWithNoWait(t *testing.T) {
 	}
 }
 
-// A version 6 record, its wait null or written, reads back and writes again byte for byte:
+// A version 7 record, its wait null or written, reads back and writes again byte for byte:
 // nothing the wait added is lost or reshaped by a reader that writes the record again, as
 // VerifyTwin does.
-func TestVersion6RecordRoundTrips(t *testing.T) {
+func TestVersion7RecordRoundTrips(t *testing.T) {
 	shapes := map[string]*wire.StepWait{"wait null": nil}
 	for name, w := range waits() {
 		shapes[name] = w
@@ -1587,8 +1769,8 @@ func TestNewStepRecordFromAVersion3Record(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if rec.TwinVersion != TwinVersion || TwinVersion != "6" || rec.State != c.state || rec.Step == nil {
-				t.Errorf("record version %q, state %q, step %v; want version 6, state %s and a step block",
+			if rec.TwinVersion != TwinVersion || TwinVersion != "7" || rec.State != c.state || rec.Step == nil {
+				t.Errorf("record version %q, state %q, step %v; want version 7, state %s and a step block",
 					rec.TwinVersion, rec.State, rec.Step != nil, c.state)
 			}
 			if got := holdsOf(rec); !maps.Equal(got, map[string]string{"n1": c.holds}) {

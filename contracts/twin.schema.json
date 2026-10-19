@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://fylgja.dev/contracts/twin/v6",
-  "title": "Fylgja twin.json v6 — the twin’s record (M2, M5, M10, M11, M12, 014)",
-  "description": "Written by the record step into the twin directory after every node is ready; removed with the directory by unstage. Carries the manifest's provenance block (never observed_at from the bundle: D-023), observed_at when the run performed a read and an explicit statement that it is unknown when it did not (Constitution VI), the bundle_id, the provisioning run's identity, and the version of the binary that provisioned it. Nothing here is a credential. M5: twin_version is 2, and each node records the artifact it was pushed — name, content type, checksum and size, copied from the staged manifest — and how long its push took. Never the artifact’s bytes. Everything else is v1’s, with M4’s meaning. M7: unchanged (no new key); twin_version stays 2. M10: twin_version is 3, and the record names the waypoint the twin was created from — series, sequence, description and the at’s source — or null when it was created with --branch or from a bundle; provenance.at carries the at itself. Nothing else is new. A waypoint is only ever recorded on a pinned, intent-sourced record. M11: twin_version is 4. The record gains state (ready or diverged), a step block (the last step: outcome, the side it came from and the side it went to or towards, the step run, the phase that failed, containerlab's plan with each touched node's declared and reported link-change behaviour, every push with its outcome, the readiness and push timings, when it started and ended, and the failure's findings) or null for a twin that has not stepped, and nodes[].holds, the bundle_id whose bootstrap and artifact the node is last known to run, or null for a node containerlab restarted, recreated or created that no push landed on, which runs its baseline alone. After a stepped or unchanged step bundle_id, provenance, observed_at and waypoint are the target's; after a diverged step they stay the previous record's and step.to names the target. run stays the create's. A create writes a 4 record with state ready, step null and holds equal to bundle_id on every node. The record is written whole on every path after the step's stage. No device diff, no artifact or bootstrap line, no credential. M12: twin_version is 5. The step block gains wait: how verify's waiting form ended after the record (settled, expired, cancelled or incomplete), the budget, the reads, the seconds from the record until the twin settled or the wait ended, and the assertions still failing at the last read, or null while it has not run. A create writes a 5 record with step null. Nothing else is new. No device diff, no artifact or bootstrap line, no credential. 014: twin_version is 6. waypoint is gone: the record names the stage the twin was created from or stepped to — its proposed change by id and source branch, its label, description and the at's source (given, written, branch_point, head) — or null; step.from.stage and step.to.stage carry the same shape. A create writes a 6 record with step null. Nothing else is new. A record of 5 or earlier reads with no stage.",
+  "$id": "https://fylgja.dev/contracts/twin/v7",
+  "title": "Fylgja twin.json v7 — the twin’s record (M2, M5, M10, M11, M12, 014, 015)",
+  "description": "Written by the record step into the twin directory after every node is ready; removed with the directory by unstage. Carries the manifest's provenance block (never observed_at from the bundle: D-023), observed_at when the run performed a read and an explicit statement that it is unknown when it did not (Constitution VI), the bundle_id, the provisioning run's identity, and the version of the binary that provisioned it. Nothing here is a credential. M5: twin_version is 2, and each node records the artifact it was pushed — name, content type, checksum and size, copied from the staged manifest — and how long its push took. Never the artifact’s bytes. Everything else is v1’s, with M4’s meaning. M7: unchanged (no new key); twin_version stays 2. M10: twin_version is 3, and the record names the waypoint the twin was created from — series, sequence, description and the at’s source — or null when it was created with --branch or from a bundle; provenance.at carries the at itself. Nothing else is new. A waypoint is only ever recorded on a pinned, intent-sourced record. M11: twin_version is 4. The record gains state (ready or diverged), a step block (the last step: outcome, the side it came from and the side it went to or towards, the step run, the phase that failed, containerlab's plan with each touched node's declared and reported link-change behaviour, every push with its outcome, the readiness and push timings, when it started and ended, and the failure's findings) or null for a twin that has not stepped, and nodes[].holds, the bundle_id whose bootstrap and artifact the node is last known to run, or null for a node containerlab restarted, recreated or created that no push landed on, which runs its baseline alone. After a stepped or unchanged step bundle_id, provenance, observed_at and waypoint are the target's; after a diverged step they stay the previous record's and step.to names the target. run stays the create's. A create writes a 4 record with state ready, step null and holds equal to bundle_id on every node. The record is written whole on every path after the step's stage. No device diff, no artifact or bootstrap line, no credential. M12: twin_version is 5. The step block gains wait: how verify's waiting form ended after the record (settled, expired, cancelled or incomplete), the budget, the reads, the seconds from the record until the twin settled or the wait ended, and the assertions still failing at the last read, or null while it has not run. A create writes a 5 record with step null. Nothing else is new. No device diff, no artifact or bootstrap line, no credential. 014: twin_version is 6. waypoint is gone: the record names the stage the twin was created from or stepped to — its proposed change by id and source branch, its label, description and the at's source (given, written, branch_point, head) — or null; step.from.stage and step.to.stage carry the same shape. A create writes a 6 record with step null. Nothing else is new. A record of 5 or earlier reads with no stage. 015: twin_version is 7. The record names the rehearsal run whose baseline the twin is, the workflow fylgja-rehearse and its run id, or null for a twin no rehearsal created; a step's record keeps it. Nothing else is new. A record of 6 or earlier reads with no rehearsal.",
   "type": "object",
   "required": [
     "twin_version",
@@ -17,12 +17,13 @@
     "nodes",
     "stage",
     "state",
-    "step"
+    "step",
+    "rehearsal"
   ],
   "additionalProperties": false,
   "properties": {
     "twin_version": {
-      "const": "6"
+      "const": "7"
     },
     "lab": {
       "const": "fylgja",
@@ -259,6 +260,27 @@
             "branch_point",
             "head"
           ]
+        }
+      }
+    },
+    "rehearsal": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "description": "015: the rehearsal run whose baseline the twin is, passed to the record step as data (wire.RecordInput.Rehearsal), or null for a twin no rehearsal created. A step's record keeps it. twin rehearse reclaims a twin whose rehearsal run is no longer running, and refuses every other.",
+      "required": [
+        "workflow_id",
+        "run_id"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "workflow_id": {
+          "const": "fylgja-rehearse"
+        },
+        "run_id": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },

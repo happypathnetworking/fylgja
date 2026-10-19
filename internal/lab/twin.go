@@ -21,8 +21,9 @@ import (
 // says whether the twin is ready or diverged, carries its last step or null, and names
 // the bundle each node holds; version 5 carries the step's wait,
 // step.wait, or null while it has not run; version 6 names the stage the twin was created
-// from or stepped to, with its proposed change, in place of version 3's reference (014).
-const TwinVersion = "6"
+// from or stepped to, with its proposed change, in place of version 3's reference (014);
+// version 7 names the rehearsal run whose baseline the twin is, or null (015).
+const TwinVersion = "7"
 
 // ObservedAtUnknown is what twin.json says when no read took place, so a null
 // observed_at is an explicit statement rather than a missing value (Constitution VI).
@@ -40,13 +41,16 @@ type RecordFields struct {
 	RecordedAt time.Time
 	Nodes      []wire.TwinNode
 	Stage      *wire.StageRef // nil unless the server resolved the reference from a stage
+	// Rehearsal is nil unless a rehearsal run started the create, as its baseline (015).
+	Rehearsal *wire.RehearsalRef
 }
 
 // NewRecord builds twin.json's content and refuses a record the contract would not
 // accept: a twin created from intent always had a read, so its observed_at is known,
 // and a twin provisioned from a bundle never did, so its observed_at is null and the
 // note says why. A stage is recorded only on a pinned twin created from intent (014): a
-// bundle carries no stage, and a stage always resolves to an at.
+// bundle carries no stage, and a stage always resolves to an at. A rehearsal is recorded
+// only as the rehearsal workflow's run, by its id (015).
 func NewRecord(f RecordFields) (wire.TwinRecord, error) {
 	switch f.Source {
 	case wire.SourceIntent:
@@ -72,6 +76,10 @@ func NewRecord(f RecordFields) (wire.TwinRecord, error) {
 	if f.RunID == "" {
 		return wire.TwinRecord{}, fmt.Errorf("a twin record must name its provisioning run")
 	}
+	if r := f.Rehearsal; r != nil && (r.WorkflowID != wire.RehearseWorkflowID || r.RunID == "") {
+		return wire.TwinRecord{}, fmt.Errorf("a twin record names its rehearsal as a %s run by its id, not %q run %q",
+			wire.RehearseWorkflowID, r.WorkflowID, r.RunID)
+	}
 
 	nodes := append([]wire.TwinNode(nil), f.Nodes...)
 	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
@@ -96,6 +104,7 @@ func NewRecord(f RecordFields) (wire.TwinRecord, error) {
 		RecordedAt:    f.RecordedAt.UTC().Format(time.RFC3339Nano),
 		Nodes:         nodes,
 		Stage:         f.Stage,
+		Rehearsal:     f.Rehearsal,
 		State:         wire.StateReady,
 	}
 	if rec.ObservedAt == nil {
@@ -204,6 +213,7 @@ func (a *Activities) RecordTwin(_ context.Context, in wire.RecordInput) (wire.Re
 		RecordedAt: time.Now(),
 		Nodes:      nodes,
 		Stage:      in.Stage,
+		Rehearsal:  in.Rehearsal,
 	})
 	if err != nil {
 		return failed("%v", err)
@@ -220,7 +230,8 @@ func (a *Activities) RecordTwin(_ context.Context, in wire.RecordInput) (wire.Re
 // refuses it (014, research R-11). A version 3 or earlier one has no state, step or holds,
 // and reads with State "" (shown as ready), Step nil and every Holds nil (shown as the
 // record's bundle_id); a version 4 one's step has no wait and reads with Step.Wait nil, as
-// a version 5 or 6 one's does while its wait has not run.
+// a version 5, 6 or 7 one's does while its wait has not run. A record of version 6 or
+// earlier has no rehearsal key and reads with Rehearsal nil, as a hand twin's 7 does (015).
 func ReadRecord(path string) (wire.TwinRecord, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -285,7 +296,7 @@ type StagedTarget struct {
 }
 
 // NewStepRecord builds the record a step leaves (contracts/twin.schema.json
-// version 6) from the record the step started from, and refuses what the contract would
+// version 7) from the record the step started from, and refuses what the contract would
 // not accept, or what would claim more than the step did:
 //
 //   - a previous record that is not the step's from side (another bundle or stage), or
@@ -302,9 +313,9 @@ type StagedTarget struct {
 // bundles give it. After a diverged step the top level stays the previous record's; a
 // node whose push landed holds the target, one containerlab restarted, recreated or
 // created that no push reached holds nothing (null) and runs its baseline, and
-// every other node holds what it held. run and provisioned_by stay the create's. The
-// step's wait is null: the record is written before the wait, which VerifyTwin then
-// writes into it.
+// every other node holds what it held. run, provisioned_by and rehearsal stay the
+// create's. The step's wait is null: the record is written before the wait, which
+// VerifyTwin then writes into it.
 func NewStepRecord(prev wire.TwinRecord, f StepFields) (wire.TwinRecord, error) {
 	if !bundle.IsID(f.From.BundleID) || !bundle.IsID(f.To.BundleID) {
 		return wire.TwinRecord{}, fmt.Errorf("a step is between two bundle identities, not %q and %q", f.From.BundleID, f.To.BundleID)

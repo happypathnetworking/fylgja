@@ -21,6 +21,19 @@ SSH tunnel (`ssh -N -L 7650:127.0.0.1:7650 <lab host>` from a client's machine),
 proxy that terminates TLS, which a client addresses by an `https://` URL. A client follows
 no redirect, so it never sends the token to an address the operator did not give.
 
+**The bridge listener.** On the lab host the server also listens on the host's Docker
+bridge address (`docker0`, `172.17.0.1` by Docker's default), port 7650, so that
+Infrahub's task workers, on their own Compose network, reach it: the checks `fylgja-step`
+and `fylgja-twin` run there and are clients of the API. Any container on the host can
+reach that address, the twin's nodes included, and the bearer check is what guards it.
+The token is in the task workers' environment, which the Compose override gives them
+from `local/.env`, as well as in that file, so whoever can inspect those containers or
+read that file holds it. There is no TLS on the bridge, and the server's start-up report
+says the token is sent unencrypted on it. It is the same one token with no roles: the
+revisit [D-042](docs/decisions.md#d-042) names for the check inside Infrahub, a client
+that needs less than everything, is consciously deferred
+([D-050](docs/decisions.md#d-050)).
+
 **The server and the worker hold every credential.** Both run on the lab host with
 Infrahub's token and both node logins in their process environment. The server also
 holds the API's token, which the worker never reads; a client holds the API's token
@@ -30,8 +43,8 @@ is in a bundle, a finding, an answer, a log line or a start-up report.
 
 ### On a shared host
 
-- **The API's port** is on loopback, so any local user can reach it, but nothing is done
-  without the token.
+- **The API's port** is on loopback and on the Docker bridge, so any local user and any
+  container on the host can reach it, but nothing is done without the token.
 - **The environment and `local/.env` are the credentials.** Anyone who can read the
   environment of the operator's processes (as that user, or as root) or `local/.env` has
   every credential: the API's token, Infrahub's token and both node logins.

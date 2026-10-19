@@ -33,7 +33,7 @@
 #                names tier 3, the hand scenarios or a quiet host (or tier 2, when the
 #                sessions have no Infrahub credentials); or implement left a task unchecked.
 #                Attended (below), these are questions instead, and the loop stops here only
-#                on a "stop" verdict, a question nobody answered, or a stop flag
+#                on a "stop" verdict or a stop flag
 #   golden       a run moved testdata/golden/; review that commit, then run the loop again
 #   contract     a session wrote where it may not: converge outside tasks.md or above its
 #                phase, implement ticking another run's task, left uncommitted changes, moved
@@ -62,7 +62,10 @@
 # the script answers `paused` once it is between sessions, the attended session edits,
 # commits, writes `answer-<n>` for each question it settled and `resume`, and the script
 # checks the tree and plans again. A `stop` flag ends the loop at the next check. A verdict
-# that does not arrive within --verdict-timeout ends the loop at "operator", as unattended.
+# that does not arrive within --verdict-timeout is taken as `hold`: nothing runs, so nothing
+# is spent, until the attended session (restarted, if it died) lands an answer or a stop.
+# --skip starts the loop with tasks already skipped, as a `skip-<n>` would leave them: the
+# skill passes the tasks a previous run of the feature skipped and that are still unchecked.
 #
 # No commit may carry the token's value: every commit a session makes, and every commit
 # the script makes, is searched for it first, and the loop stops at "contract" on a match.
@@ -74,7 +77,8 @@
 #
 # Usage: scripts/converge-loop.sh [--max-passes N] [--budget-usd D] [--no-planned]
 #                                 [--no-converge] [--allow-dirty]
-#                                 [--attended [--live-budget-usd D] [--verdict-timeout S]]
+#                                 [--attended [--live-budget-usd D] [--verdict-timeout S]
+#                                             [--skip IDS]]
 #   --max-passes       convergence passes before stopping at "cap" (default 7)
 #   --budget-usd       ceiling per claude session, passed as --max-budget-usd (default 25)
 #   --no-planned       skip stage 1
@@ -83,7 +87,8 @@
 #                      the uncommitted-changes check is off
 #   --attended         an interactive session is watching (above)
 #   --live-budget-usd  ceiling for a live session (default twice --budget-usd)
-#   --verdict-timeout  seconds to wait for a verdict before stopping at "operator" (default 900)
+#   --verdict-timeout  seconds to wait for a verdict before taking it as hold (default 900)
+#   --skip             task IDs (T056 or "T056 T074", unchecked) skipped from the start
 #
 # Exit 0 for converged, rule and planned; 2 for operator, golden, contract and cap; 1 for
 # gate and error.
@@ -99,6 +104,7 @@ ALLOW_DIRTY=0
 PLANNED=1
 CONVERGE=1
 ATTENDED=0
+SKIP_ARG=""
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--max-passes) MAX_PASSES="$2"; shift 2 ;;
@@ -109,6 +115,7 @@ while [ $# -gt 0 ]; do
 	--no-converge) CONVERGE=0; shift ;;
 	--allow-dirty) ALLOW_DIRTY=1; shift ;;
 	--attended) ATTENDED=1; shift ;;
+	--skip) SKIP_ARG="$SKIP_ARG ${2//,/ }"; shift 2 ;;
 	*) echo "converge-loop: unknown argument $1" >&2; exit 2 ;;
 	esac
 done
@@ -163,6 +170,15 @@ BRANCH=$(git symbolic-ref --short HEAD)
 if [ "$ATTENDED" = 1 ] && [ "$LOGINS" = 0 ]; then
 	echo "converge-loop: --attended needs both node logins in local/.env for its live sessions" >&2
 	exit 2
+fi
+# A skip is an answer the attended session gave; unattended there is no one to have given it.
+if [ -n "$(echo $SKIP_ARG)" ]; then
+	[ "$ATTENDED" = 1 ] || { echo "converge-loop: --skip needs --attended" >&2; exit 2; }
+	for id in $SKIP_ARG; do
+		[[ $id =~ ^T[0-9]+$ ]] || { echo "converge-loop: --skip takes task IDs, not '$id'" >&2; exit 2; }
+		grep -qE "^\s*- \[ \] $id\b" "$TASKS" ||
+			{ echo "converge-loop: --skip $id is not an unchecked task of $TASKS" >&2; exit 2; }
+	done
 fi
 
 # Entries the hook kept for sessions before the loop (an operator's typed commands) are
@@ -291,13 +307,12 @@ finish() { # <outcome> <exit status> <sentence>
 
 # --- The attended protocol -------------------------------------------------------------
 #
-# OPEN holds the task ids of every question with a `continue` or `hold` verdict and no answer
-# yet, and SKIPPED those the attended session answered "skip" (left unchecked, with a note,
+# OPEN holds the task ids of every question with no answer yet, from the moment it is asked, and SKIPPED those the attended session answered "skip" (left unchecked, with a note,
 # for the operator); the planner leaves both out. ASKED holds every task id put to a
 # question, so the asked tasks answered and still unchecked can be implemented before the
 # next pass. QN numbers the questions from 1.
 OPEN=""
-SKIPPED=""
+SKIPPED="$(echo $SKIP_ARG)"
 ASKED=""
 QN=0
 
@@ -306,32 +321,35 @@ json_str() { python3 -c 'import json,sys; print(json.dumps(sys.argv[1]))' "$1"; 
 stop_requested() { [ "$ATTENDED" = 1 ] && [ -e "$ATT/stop" ]; }
 
 # Put a question to the attended session and act on its verdict. Unattended, this is the
-# "operator" stop it replaces. Returns on `continue` (the ids are now excluded) and after a
-# `hold` has been answered; exits on `stop`, on a stop flag, or when no verdict arrives.
+# "operator" stop it replaces. Returns on `continue` (the ids stay excluded) and after a
+# `hold` has been answered; exits on `stop` or a stop flag. No verdict within the timeout is
+# a `hold`: the attended session may be restarting, and a held loop runs and spends nothing.
 ask() { # <kind> <label> <ids> <report or -> <sentence>
 	local kind="$1" label="$2" ids="$3" report="$4" sentence="$5" verdict="" waited=0
 	[ "$ATTENDED" = 1 ] || finish operator 2 "$sentence"
 	QN=$((QN + 1))
 	ASKED="$ASKED $ids"
+	OPEN="$OPEN $ids"
 	printf '{"id":%d,"kind":%s,"run":%s,"tasks":%s,"report":%s,"sentence":%s,"asked_at":%s}\n' \
 		"$QN" "$(json_str "$kind")" "$(json_str "$label")" "$(json_str "$(echo $ids)")" \
 		"$(json_str "$report")" "$(json_str "$sentence")" "$(json_str "$(date -u +%FT%TZ)")" >> "$QUESTIONS"
 	say "- question $QN ($kind): $label, tasks $(echo $ids), report $report"
 	say "  $sentence"
-	while [ ! -s "$ATT/verdict-$QN" ]; do
+	while [ ! -s "$ATT/verdict-$QN" ] && [ "$waited" -lt "$VERDICT_TIMEOUT" ]; do
 		stop_requested && finish operator 2 "The attended session asked the loop to stop while question $QN waited for a verdict."
-		if [ "$waited" -ge "$VERDICT_TIMEOUT" ]; then
-			finish operator 2 "Question $QN had no verdict after ${VERDICT_TIMEOUT}s: $sentence"
-		fi
 		sleep 2
 		waited=$((waited + 2))
 	done
-	verdict=$(tr -d '[:space:]' < "$ATT/verdict-$QN")
-	say "  verdict $QN: $verdict"
+	if [ -s "$ATT/verdict-$QN" ]; then
+		verdict=$(tr -d '[:space:]' < "$ATT/verdict-$QN")
+		say "  verdict $QN: $verdict"
+	else
+		verdict=hold
+		say "  no verdict $QN after ${VERDICT_TIMEOUT}s, taken as hold"
+	fi
 	case "$verdict" in
-	continue) OPEN="$OPEN $ids" ;;
+	continue) ;;
 	hold)
-		OPEN="$OPEN $ids"
 		say "  holding for an answer to question $QN"
 		while [ ! -e "$ATT/answered-$QN" ] && [ ! -e "$ATT/skipped-$QN" ]; do
 			stop_requested && finish operator 2 "The attended session asked the loop to stop while question $QN was held."
@@ -525,7 +543,8 @@ else
 	say "Tier 2: the sessions have no Infrahub credentials, so tier 2 is the operator's."
 fi
 if [ "$ATTENDED" = 1 ]; then
-	say "Attended: questions in $QUESTIONS, verdicts and flags in $ATT/, live sessions at \$$LIVE_BUDGET_USD, verdicts within ${VERDICT_TIMEOUT}s."
+	say "Attended: questions in $QUESTIONS, verdicts and flags in $ATT/, live sessions at \$$LIVE_BUDGET_USD, verdicts within ${VERDICT_TIMEOUT}s or held."
+	[ -z "$SKIPPED" ] || say "Skipped from the start, left for the operator: $SKIPPED."
 fi
 
 # Implement the planned runs one at a time, reading the plan again before each. With <ids>,

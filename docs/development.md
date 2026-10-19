@@ -1067,7 +1067,8 @@ shape, and the rest follows from them:
 3. **The tree is written by one party at a time.** The script owns the tree from a session's
    start to its post-run checks; an edit or commit from the attended session inside that
    window would be blamed on the run and fail its contract check. So an answer lands only at
-   a pause point between sessions, under a handshake, never while a session runs.
+   a pause point between sessions, under a handshake, never while a session runs, or once
+   the loop has stopped.
 
 *Live sessions.* A run that needs the host (its route line names tier 3, the hand checks
 or a quiet host, or a task is tagged `[live]`) is not a question: attended, it runs as a
@@ -1093,8 +1094,11 @@ flag, so either side can be read with `ls` and `cat` and nothing is in memory al
 - `verdict-<id>`: `continue`, `hold` or `stop`, written by the attended session **before**
   it asks the operator, within a minute. `continue`: the script plans the next run with the
   question's tasks excluded and goes on. `hold`: the script waits for the answer. `stop`: the
-  loop ends as `operator`. No verdict within `--verdict-timeout` (900s) ends the loop as
-  unattended would have, so a dead attended session cannot hang it.
+  loop ends as `operator`. No verdict within `--verdict-timeout` (900s) is taken as `hold`:
+  the attended session may be restarting, and a held loop runs and spends nothing until an
+  answer or a `stop` lands. Stopping there instead, as unattended would, lost two of 014's
+  six questions to an attended session that could not take a turn: blocked in a question to
+  an absent operator, or restarted with its editor.
 - `pause`, `paused`, `resume`: the handshake. The attended session writes `pause` once it
   has an answer; the script, at its next between-sessions point (after the gates and the
   command log of the session that was running), writes `paused` and waits; the attended
@@ -1104,7 +1108,9 @@ flag, so either side can be read with `ls` and `cat` and nothing is in memory al
   exclusion, so the run's leftover tasks are listed again, as the planner lists any
   part-ticked run. A skip keeps it: the tasks stay unchecked, with a note under each saying
   why, and the loop goes on without them. A `converged` or `rule` stop names what is still
-  open or skipped.
+  open or skipped. The script keeps skips in memory, so the skill starts the next run of the
+  feature with `--skip` and the previous run's skipped tasks that are still unchecked; 014's
+  closing review ran three times as a live session for want of it.
 - `stop`: ends the loop at its next check, as `operator`.
 
 *What `--attended` changes in the script*: the planner runs before every session and takes
@@ -1112,7 +1118,8 @@ the open and skipped tasks as an exclusion list; a stop that unattended would ha
 becomes a question; a convergence pass with `[operator]` tasks asks about them and, on
 `continue`, implements the rest of the pass around them (unattended it stops before
 implementing anything); `[live]` tasks of a pass run as a live session; and a live session
-keeps the logins. Without `--attended` the script behaves as the unattended loop above.
+keeps the logins; and `--skip` is accepted. Without `--attended` the script behaves as the
+unattended loop above.
 
 *An answer that lands late is still built.* The script records every task it asks about.
 Before each convergence pass, and once more before it stops at `cap`, it lands a pending
@@ -1133,18 +1140,25 @@ run started on a wrong `continue` is self-limiting: its session finds the prereq
 missing, leaves its own task unchecked, and that becomes the next question. `[P]` tasks
 inside a run proceed as they always have, around the blocked sibling.
 
-*The skill* (`.claude/skills/converge-loop/SKILL.md`, beside the Spec Kit ones) tells the
-attended session to refuse a dirty tree, a held lock or a missing login; start the script
-detached with `--attended` and read the run directory from the summary's `Started` line;
-watch the summary and the questions file with `Monitor`, re-armed every 30 minutes; on a
-question, read the report, write the verdict, then ask with `AskUserQuestion` (the report's
-options plus `skip these tasks` and `stop the loop`); on an answer, pause, wait for `paused`,
-apply it where the repository's rules put it (a decision entry, a spec or plan edit, a note
-under the task, a tick), commit by hand, write `answer-<id>` or `skip-<id>` and `resume`; and
-on `## Stopped` report the outcome, the commits and what is still open. `/converge-loop stop`
-touches the stop flag. A `claude -p` started from inside an interactive session, its
+*The skill* (`.claude/skills/converge-loop/SKILL.md`, beside the Spec Kit ones, with
+`state.py`, which reads the run's state from disk) tells the attended session to refuse a
+dirty tree, a branch other than the feature's, a held lock, a missing login or the wrong
+model; start the script detached with `--attended` and the carried skips; watch the summary
+and the questions file with `Monitor`, and on every wake read `state.py` before acting, so a
+question that arrived while nothing watched still gets its verdict; on a question, read the
+report, write the verdict, then ask in plain text and end the turn (the report's options plus
+`skip these tasks` and `stop the loop`), never with `AskUserQuestion`, which blocks the
+session while the loop goes on; on an answer, show the operator any wording or value they did
+not give before landing it, then pause, wait for `paused` in the background, apply it where
+the repository's rules put it (a decision entry, a spec or plan edit, a note under the task, a
+tick), commit by hand, write `answer-<id>` or `skip-<id>` and `resume`; and on `## Stopped`
+report the outcome, the commits and what is still open, and offer a restart. `/converge-loop
+stop` touches the stop flag. A `claude -p` started from inside an interactive session, its
 `CLAUDE_*` variables inherited, runs and writes its transcript under the project as any
-session does, and `Monitor` wakes a session reliably over hours.
+session does. `Monitor` wakes a session reliably over hours while the session takes turns;
+it expires every 30 minutes, an expiry during a blocked tool call goes unseen, and it dies
+with the editor's process (observed 2026-10-17), which is why the skill reconciles on every
+wake rather than trusting the event stream.
 
 *What it does not change.* Nothing is pushed, and the attended session boots nothing. The
 command log stays one entry per headless session; the attended session itself is logged

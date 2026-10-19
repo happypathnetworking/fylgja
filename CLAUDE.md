@@ -42,7 +42,7 @@ and is not cited here; a bare milestone marker (`M7`) is resolved by the table b
   it runs. **Attended** (`/converge-loop`; "The attended loop"), its live sessions get the
   logins and run tier 3, the worker and the hand scenarios, and what would stop it is a
   question put to the operator by the session that started it; that session writes the
-  answer into the tree only while the loop says it is paused.
+  answer into the tree only while the loop says it is paused, or once it has stopped.
 - **A session never pushes.** `origin` is pushed by the operator; a moved remote-tracking
   ref stops the converge loop at `contract`.
 - **A changed decision** is a new entry in `docs/decisions.md` that supersedes the old one

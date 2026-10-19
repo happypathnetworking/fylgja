@@ -1,6 +1,6 @@
 version: "2"
 
-# Fourteen files carry `//go:build contract`, `fixture` or `e2e` and are invisible to a
+# Seventeen files carry `//go:build contract`, `fixture` or `e2e` and are invisible to a
 # default run — including cmd/fylgja-fixture, a whole program, and the conformance
 # suite's boot half. Lint them: a file no linter sees is a file whose defects surface
 # only when Infrahub is up, or a twin is.

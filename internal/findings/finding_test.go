@@ -167,6 +167,18 @@ var dataModelRules = []string{
 	"stage.main.moved",
 	"stage.twin.moved",
 	"step.stage.skipped",
+
+	// 015's rules (research R-08). Appended; the refusals before the start, an interrupt,
+	// a destroy that leaves something and the verify findings keep their identifiers.
+	"rehearsal.deadline.unfit",
+	"rehearsal.twin.reclaimed",
+	"rehearsal.steps.none",
+	"rehearsal.stage.failed",
+	"rehearsal.stage.error",
+	"rehearsal.baseline.failed",
+	"rehearsal.deadline.cut",
+	"rehearsal.stage.moved",
+	"rehearsal.change.closed",
 }
 
 // declaredRules reads the Rule* constants out of finding.go's syntax tree rather than
@@ -389,10 +401,10 @@ func TestOperationConstantsMatchTheContract(t *testing.T) {
 	}
 
 	// The newest schema enumerates every operation there is: M4's eight, 014's two (M10's
-	// two, renamed), M11's one and M12's one.
+	// two, renamed), M11's one, M12's one and 015's one.
 	all := []string{OpIntentRead, OpCompile, OpSchemaCheck, OpPSPValidate,
 		OpTwinCreate, OpTwinProvision, OpTwinDestroy, OpTwinShow,
-		OpStageList, OpStagePlan, OpTwinStep, OpTwinVerify}
+		OpStageList, OpStagePlan, OpTwinStep, OpTwinVerify, OpTwinRehearse}
 	sort.Strings(all)
 	raw, err := os.ReadFile(newestSchemaPath("findings.schema.json"))
 	if err != nil {

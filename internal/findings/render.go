@@ -29,6 +29,10 @@ const (
 
 	// M12: the twin read and verified against intent, with no run.
 	OpTwinVerify = "twin.verify"
+
+	// 015: a proposed change's stages rehearsed on a twin of its own, built, stepped,
+	// verified and destroyed by one run.
+	OpTwinRehearse = "twin.rehearse"
 )
 
 // Status maps onto the process exit code.
@@ -782,7 +786,8 @@ type ShowRun struct {
 // `pushed_in_s`, and the step `push` — conform to M5's, with show.schema.json added as a
 // resource under its $id. 014's — subject.stage, the stage block, record.stage in the show
 // block, and the stages and plan blocks of stage list and stage plan — conform to the
-// current contract, with stages.schema.json added under its $id as well. Each
+// current contract, with stages.schema.json added under its $id as well, and 015's
+// rehearsal block with rehearsal.schema.json. Each
 // milestone's copy is kept under testdata/contracts/, and the current contract is
 // contracts/findings.schema.json. No field of any block carries a byte of artifact content.
 type Document struct {
@@ -806,8 +811,11 @@ type Document struct {
 	Step *StepBlock `json:"step,omitempty"`
 	// Verify is twin verify's block (M12),
 	// present once the staged bundle was read and its assertions derived.
-	Verify   *VerifyBlock `json:"verify,omitempty"`
-	Findings List         `json:"findings"`
+	Verify *VerifyBlock `json:"verify,omitempty"`
+	// Rehearsal is twin rehearse's block (015), present once the proposed change was found
+	// and its stages resolved.
+	Rehearsal *RehearsalBlock `json:"rehearsal,omitempty"`
+	Findings  List            `json:"findings"`
 }
 
 // NewDocument builds a document, deriving status from the findings unless the caller
@@ -1110,4 +1118,174 @@ type StepTimingsBlock struct {
 type StepReadyAfter struct {
 	Node        string  `json:"node"`
 	ReadyAfterS float64 `json:"ready_after_s"`
+}
+
+// RehearsalBlock is twin rehearse's block (015; rehearsal.schema.json, $defs/rehearsal): the
+// proposed change rehearsed, when its stages were resolved, the deadline, the ceiling and the
+// time used, the dead rehearsal whose twin was reclaimed first, the run, the baseline's
+// findings, every stage in the proposed change's order with its role, its verdict and what
+// the run did at it, the destroy's cleanup and, when a stage failed, the commands that
+// reproduce it. Every list is sorted or in the stages' order, so the same run gives the same
+// block. No configuration line, device diff, artifact or bootstrap content, token or login;
+// the markdown rendering rides beside the document, not in it.
+type RehearsalBlock struct {
+	ProposedChange StageChange `json:"proposed_change"`
+	// ResolvedAt is when the server resolved and read the stages, RFC 3339 UTC: what the
+	// report and the comment are headed by.
+	ResolvedAt string `json:"resolved_at"`
+	// DeadlineS is the stages' budgets summed; CeilingS is Fylgja's ceiling, a mechanism
+	// constant.
+	DeadlineS int `json:"deadline_s"`
+	CeilingS  int `json:"ceiling_s"`
+	// UsedS is the run's whole time on its clock, 0 when the rehearsal was refused before
+	// any run.
+	UsedS float64 `json:"used_s"`
+	// Reclaimed is the dead rehearsal whose twin was destroyed before this one started, and
+	// what its destroy did; nil, written as an explicit null, when none was.
+	Reclaimed *RehearsalReclaim `json:"reclaimed"`
+	// Run is the fylgja-rehearse run once started, absent when refused before any run.
+	Run *ShowRef `json:"run,omitempty"`
+	// Baseline is the baseline stage and the findings its wait left failing; nil, written as
+	// null, when no stage compiled or the baseline was not built.
+	Baseline *RehearsalBaseline `json:"baseline"`
+	Stages   []RehearsalStage   `json:"stages"`
+	// Destroy is the destroy child's cleanup; nil, written as null, when the rehearsal was
+	// refused before any run.
+	Destroy *CleanupBlock `json:"destroy"`
+	// Reproduce is, when a stage failed, the commands that reproduce it by hand on the same
+	// stages, in order; none otherwise.
+	Reproduce []string `json:"reproduce"`
+}
+
+// MarshalJSON writes no stages and nothing to reproduce as [] rather than null: the contract
+// requires both lists.
+func (b RehearsalBlock) MarshalJSON() ([]byte, error) {
+	type plain RehearsalBlock
+	b.Stages = orEmpty(b.Stages)
+	b.Reproduce = orEmpty(b.Reproduce)
+	return json.Marshal(plain(b))
+}
+
+// RehearsalReclaim is the dead rehearsal whose twin was destroyed before a rehearsal
+// started: its run, and what the destroy did.
+type RehearsalReclaim struct {
+	Run     ShowRef      `json:"run"`
+	Cleanup CleanupBlock `json:"cleanup"`
+}
+
+// RehearsalBaseline is the baseline stage, by its reference, and the baseline findings: the
+// assertions its wait left failing, by identifier, object and message, which fail nothing
+// and against which every later stage's wait is compared by identifier and object.
+type RehearsalBaseline struct {
+	Ref      string            `json:"ref"`
+	Findings []StepWaitFailing `json:"findings"`
+}
+
+// MarshalJSON writes no baseline finding as [] rather than null: the contract requires the
+// list.
+func (b RehearsalBaseline) MarshalJSON() ([]byte, error) {
+	type plain RehearsalBaseline
+	b.Findings = orEmpty(b.Findings)
+	return json.Marshal(plain(b))
+}
+
+// RehearsalStage is one stage of a rehearsal, in the proposed change's order: the plan's
+// stage, the role the rehearsal gave it and the verdict it came to, and what the run did at
+// it. Branch and At are set once the stage resolved; BundleID once it compiled, nil for a
+// stage refused. Role is refused (the branch point passed over), baseline, rehearsed or
+// not_reached; Verdict is refused, baseline, passed, failed, error or not_reached.
+type RehearsalStage struct {
+	Ref         string  `json:"ref"`
+	Label       string  `json:"label"`
+	Description string  `json:"description"`
+	AtSource    string  `json:"at_source"`
+	Branch      string  `json:"branch,omitempty"`
+	At          string  `json:"at,omitempty"`
+	BundleID    *string `json:"bundle_id"`
+	Role        string  `json:"role"`
+	Verdict     string  `json:"verdict"`
+	// Findings are this stage's, each also in the document's own list: the plan's, the
+	// child's, and the wait's as warnings.
+	Findings List `json:"findings"`
+	// Provision is the baseline's child as it ended, nil on every other stage; Step the
+	// step child into a rehearsed stage, nil on the baseline, a refused stage and one not
+	// reached. Each nil is written as an explicit null.
+	Provision *RehearsalProvision `json:"provision"`
+	Step      *RehearsalStep      `json:"step"`
+	// Wait is the baseline's wait or a rehearsed stage's, nil when it did not run.
+	Wait *RehearsalWait `json:"wait"`
+	// Verify is the wait's last read counted by kind, nil when no read was made.
+	Verify *VerifyCounts `json:"verify"`
+	// NewFindings are the wait's failing assertions the baseline's wait did not have, by
+	// identifier then object.
+	NewFindings []StepWaitFailing `json:"new_findings"`
+	// TookS is the stage's whole time on the run's clock, its child and its wait; 0 for a
+	// stage refused or not reached.
+	TookS float64 `json:"took_s"`
+}
+
+// MarshalJSON writes no finding and no new finding as [] rather than null: the contract
+// requires both lists.
+func (s RehearsalStage) MarshalJSON() ([]byte, error) {
+	type plain RehearsalStage
+	if s.Findings == nil {
+		s.Findings = List{}
+	}
+	s.NewFindings = orEmpty(s.NewFindings)
+	return json.Marshal(plain(s))
+}
+
+// RehearsalProvision is the baseline's provision child as it ended: ready, rejected,
+// failed, cancelled or error, its run, the step it stopped at when it did not end ready,
+// and its cleanup when it made one.
+type RehearsalProvision struct {
+	Outcome string        `json:"outcome"`
+	Run     ShowRef       `json:"run"`
+	Step    string        `json:"step,omitempty"`
+	Cleanup *CleanupBlock `json:"cleanup,omitempty"`
+}
+
+// RehearsalStep is the step child into a rehearsed stage as it ended: stepped, unchanged,
+// diverged, rejected, error or cancelled, its run, the phase a diverged one stopped at, the
+// nodes containerlab restarted, recreated or created, each push's outcome, and the
+// timings. No content.
+type RehearsalStep struct {
+	Outcome   string           `json:"outcome"`
+	Run       ShowRef          `json:"run"`
+	Phase     string           `json:"phase,omitempty"`
+	Restarted []string         `json:"restarted"`
+	Recreated []string         `json:"recreated"`
+	Created   []string         `json:"created"`
+	Pushed    []RehearsalPush  `json:"pushed"`
+	Timings   StepTimingsBlock `json:"timings"`
+}
+
+// MarshalJSON writes every empty list as [] rather than null: the contract requires each.
+func (s RehearsalStep) MarshalJSON() ([]byte, error) {
+	type plain RehearsalStep
+	s.Restarted = orEmpty(s.Restarted)
+	s.Recreated = orEmpty(s.Recreated)
+	s.Created = orEmpty(s.Created)
+	s.Pushed = orEmpty(s.Pushed)
+	return json.Marshal(plain(s))
+}
+
+// RehearsalPush is one push of a rehearsed step and what came of it: landed, refused,
+// failed or not attempted, the finding's identifier for a refused or failed one, and how
+// long it took.
+type RehearsalPush struct {
+	Node    string   `json:"node"`
+	Outcome string   `json:"outcome"`
+	Rule    string   `json:"rule,omitempty"`
+	TookS   *float64 `json:"took_s,omitempty"`
+}
+
+// RehearsalWait is how a stage's wait ended (settled, expired, cancelled or incomplete), its
+// budget, the reads it made and the seconds from the record to the read that settled or to
+// its end.
+type RehearsalWait struct {
+	Outcome string  `json:"outcome"`
+	BudgetS int     `json:"budget_s"`
+	Reads   int     `json:"reads"`
+	AfterS  float64 `json:"after_s"`
 }

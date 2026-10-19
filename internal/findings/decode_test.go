@@ -14,12 +14,14 @@ import (
 
 // decodeDocuments is every document shape this package's tests build, and the shapes M12
 // added that no builder covers: a show of a version 5 record with each wait and with wait
-// null, a step document with each wait, and a verify block.
+// null, a step document with each wait, and a verify block; and 015's rehearsal documents
+// and a rehearsal's twin shown and verified.
 func decodeDocuments() []labelledDocument {
 	var docs []labelledDocument
 	for _, set := range [][]labelledDocument{
 		m1Documents(), m2Documents(), m4Documents(), m5Documents(), stageDocuments(), schemaCheckStageDocuments(),
 		listAndPlanDocuments(), stepDocuments(), showStepDocuments(), listStepDocuments(),
+		rehearsalDocuments(), rehearsalTwinDocuments(),
 	} {
 		docs = append(docs, set...)
 	}

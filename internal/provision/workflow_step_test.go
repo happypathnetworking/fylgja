@@ -355,9 +355,9 @@ func stepDocument(t *testing.T, in StepInput, res StepResult) *findings.Document
 }
 
 // mustValidateM11 validates a findings document against the current contract, under the
-// module root's contracts/, with the step, show, stages and verify schemas under their
-// $ids, and returns its bytes. The current contract extends M11's additively, so an M11
-// document still satisfies it.
+// module root's contracts/, with the step, show, stages, verify and rehearsal schemas under
+// their $ids, and returns its bytes. The current contract extends M11's additively, so an
+// M11 document still satisfies it.
 func mustValidateM11(t *testing.T, doc *findings.Document) []byte {
 	t.Helper()
 	load := func(name string) any {
@@ -373,7 +373,7 @@ func mustValidateM11(t *testing.T, doc *findings.Document) []byte {
 		return v
 	}
 	c := jsonschema.NewCompiler()
-	for _, name := range []string{"show.schema.json", "stages.schema.json", "step.schema.json", "verify.schema.json"} {
+	for _, name := range []string{"show.schema.json", "stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
 		if err := c.AddResource("https://fylgja.dev/schemas/"+name, load(name)); err != nil {
 			t.Fatal(err)
 		}

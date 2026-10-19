@@ -26,7 +26,7 @@ func apiSchema(t *testing.T, def string) *jsonschema.Schema {
 	t.Helper()
 	c := jsonschema.NewCompiler()
 	for _, name := range []string{"api.schema.json", "findings.schema.json", "show.schema.json",
-		"stages.schema.json", "step.schema.json", "verify.schema.json"} {
+		"stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
 		f, err := os.Open(contracts(name))
 		if err != nil {
 			t.Fatal(err)
@@ -93,7 +93,9 @@ func documentBytes(t *testing.T, doc *findings.Document) json.RawMessage {
 }
 
 // The twelve operations are the newest findings contract's, every one there is, and each
-// is POST /v1/<noun>/<verb>.
+// is POST /v1/<noun>/<verb>. twin.rehearse is the findings contract's (015, T009) before
+// the API serves it: the API gains it at T016, which drops it from the exception below,
+// as this test then fails until it does.
 func TestOperationsAreTheContractsAndTheirPaths(t *testing.T) {
 	raw, err := os.ReadFile(contracts("findings.schema.json"))
 	if err != nil {
@@ -110,6 +112,7 @@ func TestOperationsAreTheContractsAndTheirPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, want := slices.Sorted(slices.Values(Operations)), slices.Sorted(slices.Values(schema.Properties.Operation.Enum))
+	want = slices.DeleteFunc(want, func(op string) bool { return op == findings.OpTwinRehearse })
 	if !slices.Equal(got, want) {
 		t.Errorf("Operations = %v, the contract's enum %v", got, want)
 	}

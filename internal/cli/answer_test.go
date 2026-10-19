@@ -170,7 +170,7 @@ func apiContract(t *testing.T, def string) *jsonschema.Schema {
 	}
 	c := jsonschema.NewCompiler()
 	for _, name := range []string{"api.schema.json", "findings.schema.json", "show.schema.json",
-		"stages.schema.json", "step.schema.json", "verify.schema.json"} {
+		"stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
 		f, err := os.Open(repoPath("contracts", name))
 		if err != nil {
 			t.Fatal(err)

@@ -39,10 +39,10 @@ func compileSchema(t *testing.T, name string) *jsonschema.Schema {
 	}
 	c := jsonschema.NewCompiler()
 	// findings.schema.json refers to show.schema.json (M4), stages.schema.json (014),
-	// step.schema.json (M11) and verify.schema.json (M12) by their published $ids, which no
-	// consumer resolves over the network; each is supplied from the same directory, as
-	// internal/findings supplies them.
-	for _, ref := range []string{"show.schema.json", "stages.schema.json", "step.schema.json", "verify.schema.json"} {
+	// step.schema.json (M11), verify.schema.json (M12) and rehearsal.schema.json (015) by
+	// their published $ids, which no consumer resolves over the network; each is supplied
+	// from the same directory, as internal/findings supplies them.
+	for _, ref := range []string{"show.schema.json", "stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
 		rf, err := os.Open(filepath.Join(contractsDir(), ref))
 		if err != nil {
 			t.Fatalf("opening %s: %v", ref, err)

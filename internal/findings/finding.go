@@ -220,6 +220,24 @@ const (
 	RuleAPITokenRefused     = "api.token.refused"      // rejection, status error, exit 2, no step: FYLGJA_API_TOKEN when it is unset, holds a byte no header can carry or ends in a blank and nothing was sent, else the address that answered 401
 	RuleAPIVersionUnknown   = "api.version.unknown"    // rejection, status error, exit 2, no step: the address; it answered 404 naming the versions it serves, none of them this client's
 	RuleAPITransferTooLarge = "api.transfer.too_large" // rejection, status error, exit 2, no step: the operation; a request over the server's bound (413), or a frame of the answer over the client's
+
+	// 015, a proposed change rehearsed on a twin (D-051;
+	// specs/015-proposed-change-rehearsal/contracts/rehearse-command.md). Each comment
+	// gives the severity, the exit, the step, the object and when it fires. The refusals
+	// before the start keep their identifiers (stage.*, run.in_flight, host.*), an
+	// interrupt is run.cancelled and a destroy that leaves something cleanup.incomplete;
+	// the baseline's and each stage's verify findings are verify's, filed as warnings
+	// with the stage prefixed to their object, so none of those is a new rule. No step is
+	// added.
+	RuleRehearsalDeadlineUnfit  = "rehearsal.deadline.unfit"  // rejection, exit 1, start: the branch; the stages' budgets summed exceed the ceiling, naming the time the stages need and the ceiling
+	RuleRehearsalTwinReclaimed  = "rehearsal.twin.reclaimed"  // warning, exit 0, destroy: the dead rehearsal's run id; the twin of a rehearsal whose run was no longer running was destroyed before the start, naming what was removed
+	RuleRehearsalStepsNone      = "rehearsal.steps.none"      // warning, exit 0, resolve: the one compiled stage's <branch>/<label>; it was built, verified and destroyed, and no step was rehearsed
+	RuleRehearsalStageFailed    = "rehearsal.stage.failed"    // rejection, exit 5 (status nonconforming), the diverged phase's step, or observe for a finding: the stage's <branch>/<label>; the step diverged, naming the phase and the nodes landed and not, or its wait holds a finding the baseline's did not, naming it by rule and object
+	RuleRehearsalStageError     = "rehearsal.stage.error"     // rejection, exit 2, the step reached: the stage's <branch>/<label>; its step could not run, was rejected by its locks or cancelled before its stage, or its wait could not complete
+	RuleRehearsalBaselineFailed = "rehearsal.baseline.failed" // rejection, exit 3 (status failed), provision: the baseline's <branch>/<label>; the baseline could not be built, and the provision child's own findings stand beside it
+	RuleRehearsalDeadlineCut    = "rehearsal.deadline.cut"    // rejection, exit 2, the step reached: the <branch>/<label> of the stage in progress; the deadline passed, naming each finished stage's time and the deadline
+	RuleRehearsalStageMoved     = "rehearsal.stage.moved"     // warning, exit 0, resolve: the stage's <branch>/<label>; after the run, a rehearsed stage, the head included, no longer resolves to the (branch, at) it was rehearsed at, or is gone
+	RuleRehearsalChangeClosed   = "rehearsal.change.closed"   // warning, exit 0, resolve: the branch; after the run, the proposed change is no longer open
 )
 
 // Steps a finding can belong to, as contracts/findings.schema.json enumerates them. New

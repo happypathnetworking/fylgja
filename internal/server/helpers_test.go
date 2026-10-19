@@ -332,7 +332,7 @@ func findingsContract(t *testing.T, feature string) *jsonschema.Schema {
 	if err := c.AddResource("https://fylgja.dev/schemas/show.schema.json", load("show.schema.json")); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"stages.schema.json", "step.schema.json", "verify.schema.json"} {
+	for _, name := range []string{"stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
 		if _, err := os.Stat(contractPath(feature, name)); err == nil {
 			if err := c.AddResource("https://fylgja.dev/schemas/"+name, load(name)); err != nil {
 				t.Fatal(err)

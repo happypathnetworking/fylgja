@@ -193,7 +193,7 @@ func apiSchema(t *testing.T, def string) *jsonschema.Schema {
 	t.Helper()
 	c := jsonschema.NewCompiler()
 	for _, name := range []string{"api.schema.json", "findings.schema.json", "show.schema.json",
-		"stages.schema.json", "step.schema.json", "verify.schema.json"} {
+		"stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
 		f, err := os.Open(filepath.Join("..", "..", "contracts", name))
 		if err != nil {
 			t.Fatal(err)

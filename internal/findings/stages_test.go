@@ -24,9 +24,9 @@ func contractPath(feature, name string) string {
 }
 
 // currentResources are the blocks the current findings contract refers to by their $ids:
-// show.schema.json from M4, step.schema.json from M11, verify.schema.json from M12 and
-// stages.schema.json from 014.
-var currentResources = []string{"show.schema.json", "stages.schema.json", "step.schema.json", "verify.schema.json"}
+// show.schema.json from M4, step.schema.json from M11, verify.schema.json from M12,
+// stages.schema.json from 014 and rehearsal.schema.json from 015.
+var currentResources = []string{"show.schema.json", "stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"}
 
 // compileFeatureFindingsSchema loads one feature's copy of the findings contract with the
 // blocks it references added under their own $ids. A feature's findings contract that

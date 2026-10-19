@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 
@@ -388,6 +389,15 @@ func TestBuildRolesAndVerdicts(t *testing.T) {
 		if (b.Baseline != nil) != c.baseline {
 			t.Errorf("%s: baseline block %+v", c.e.name, b.Baseline)
 		}
+	}
+
+	// The run lists the stages after the one that stopped it as not reached (the workflow's
+	// result), which reads as a result that leaves them out.
+	listed := failedRun()
+	last := listed.in.Stages[len(listed.in.Stages)-1]
+	listed.res.Stages = append(slices.Clone(listed.res.Stages), StageResult{Ref: last.Ref, Verdict: VerdictNotReached})
+	if got, want := Build(listed.in, listed.res), Build(failedRun().in, failedRun().res); !reflect.DeepEqual(got, want) {
+		t.Errorf("a stage listed as not reached builds\n%+v\nwant as one left out\n%+v", got.Stages, want.Stages)
 	}
 
 	// The baseline's findings are its wait's; a later stage's repeat is a warning of its own,

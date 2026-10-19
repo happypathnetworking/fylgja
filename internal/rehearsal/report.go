@@ -98,15 +98,15 @@ type StepRun struct {
 
 // Build is the report's rehearsal block (research R-10; rehearsal.schema.json): every
 // stage of the plan in order, with the role the rehearsal gave it and what the run did at
-// it. A stage the run did not reach is not reached, whatever role it was given; one the
-// plan refused stays refused. Each stage's findings are the plan's, the child's, its wait's
-// failing assertions as warnings (StageFindings), and the rehearsal's own: the stage that
-// failed carries rehearsal.stage.failed, the one that could not be rehearsed
-// rehearsal.stage.error, or rehearsal.deadline.cut when the deadline passed (an
-// interrupt's is the server's run.cancelled), and a baseline not built
-// rehearsal.baseline.failed. The baseline block is set once the baseline was built, its
-// findings its wait's failing assertions; the commands that reproduce a failure are
-// Reproduce's.
+// it. A stage the run did not reach, absent from the result or listed there as not reached,
+// is not reached, whatever role it was given; one the plan refused stays refused. Each
+// stage's findings are the plan's, the child's, its wait's failing assertions as warnings
+// (StageFindings), and the rehearsal's own: the stage that failed carries
+// rehearsal.stage.failed, the one that could not be rehearsed rehearsal.stage.error, or
+// rehearsal.deadline.cut when the deadline passed (an interrupt's is the server's
+// run.cancelled), and a baseline not built rehearsal.baseline.failed. The baseline block is
+// set once the baseline was built, its findings its wait's failing assertions; the commands
+// that reproduce a failure are Reproduce's.
 func Build(in Input, res Result) findings.RehearsalBlock {
 	b := findings.RehearsalBlock{
 		ProposedChange: in.ProposedChange, ResolvedAt: in.ResolvedAt, DeadlineS: in.DeadlineS, CeilingS: in.CeilingS,
@@ -129,7 +129,9 @@ func Build(in Input, res Result) findings.RehearsalBlock {
 		switch {
 		case s.Role == RoleRefused:
 			st.Verdict = string(VerdictRefused)
-		case !ok:
+		case !ok, r.Verdict == VerdictNotReached:
+			// The run lists each stage after the one that stopped it as not reached; a result
+			// that leaves them out says the same.
 			st.Role, st.Verdict = RoleNotReached, string(VerdictNotReached)
 		default:
 			st.Verdict = string(r.Verdict)

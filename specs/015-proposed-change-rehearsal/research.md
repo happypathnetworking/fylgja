@@ -1030,3 +1030,65 @@ scratch servers' logs were matched with `grep -c` against each value and never p
   branch. `Branch` lists `main` and `fylgja-fixture`; 0 proposed changes, stages, comments
   and check definitions; the one registration `fylgja`; `clab inspect --all` `{}`; no
   `local/twin`; no Schedule; no workflow running.
+
+### 5.3 One query name in two registrations (2026-10-19, 19:36Z; T045)
+
+T045 asks, before the checks' first import, whether two read-only repositories may each
+register a `CoreGraphQLQuery` named `fylgja_branch`, as the test's registration and `fylgja`
+would once T054 has imported the checks. `GET /api/schema` on `main` already says
+`CoreGraphQLQuery` and `CoreCheckDefinition` each carry `name` `unique: true` and the
+uniqueness constraint `[name__value]`. A probe, a throwaway test since removed, served two
+repositories from the bridge with `testsupport.ServeRepository`, each holding only
+`.infrahub.yml` and the tree's `infrahub/queries/branch.gql` registered as `fylgja_branch`,
+and registered them as `fylgja-test-probe-a-<pid>` and `-b-<pid>`.
+
+- **The first imports**: its query was on `main` 15 s after the create, under its own
+  repository, `sync_status` `syncing` then `in-sync`.
+- **The second does not**: 16 s after its create its `sync_status` read `error-import`
+  (`operational_status` `online`), and it stayed so for the 94 s read. Its `Adding read only
+  repository` and `Pull latest commit` flows ended `Failed` on `CoreGraphQLQueryCreate`:
+  `Violates uniqueness constraint 'name'` (`http_status` 422). `fylgja_branch` stayed the
+  first's alone, and nothing of the second was imported: an import stops at its first
+  refused object, so a registration whose query collides registers no check either.
+- **Both deletes** removed their registrations and the query: afterwards `CoreReadOnlyRepository`
+  held `fylgja` alone, `CoreGraphQLQuery` `device_config` alone, and `CoreCheckDefinition`
+  counted 0.
+- Seen beside it: the two served repositories, of identical files committed in the same
+  second by the same fixed author, had the same commit (`0edef100…`).
+
+**So the test's scratch copy renames the query**: each class's `query = "fylgja_branch"`
+becomes `query = "fylgja_test_branch"`, registered under that name beside the test-only check
+names, and T054's re-run of the test is what proves the two registrations coexist.
+
+### 5.4 `fylgja-step` run outside Infrahub, against the real one (2026-10-19, 19:30Z–19:35Z; T042, T043)
+
+Before any import, the check's class was run on the development host with the venv's SDK
+(1.23.2), as Infrahub's task worker would run it but for the process: the tree's
+`infrahub/checks/` laid out as `commits/<sha>/infrahub/checks/` with no `__init__.py` and
+imported by `importlib.import_module("commits.<sha>.infrahub.checks.fylgja_step")`, the module
+name `extract_repo_file_information` gives it (read from the task worker's
+`/source/backend/infrahub/git/base.py`; `integrator.py` imports a check that way). **The
+relative import `from .fylgja_api import …` resolves** under it, the directories being namespace
+packages, so no `__init__.py` is added. The client was an Admin `InfrahubClient`; the API was
+the operator's server on loopback, through `FYLGJA_API_ADDRESS=127.0.0.1:7650`; `run()` was
+handed the query's answer, since `fylgja_branch` is not yet registered. No token was printed:
+each message was checked for both tokens and held neither.
+
+- **The glue's faults** (`call` against the server): a closed port `the API at 127.0.0.1:1 cannot
+  be reached: All connection attempts failed`; an unknown host `… cannot be reached: [Errno -2]
+  Name or service not known`; a wrong token `… refused this check's token (FYLGJA_API_TOKEN)`;
+  `/v9/…` `answered 404 Not Found`, since its `Fylgja-Api-Versions` names `1` (the server
+  logged `version_unknown`), as the Go client reads it; an address with a user `FYLGJA_API_ADDRESS
+  is not host:port …: nothing was sent`; each variable unset, and a token ending in a carriage
+  return, refused naming the variable with nothing sent; an interrupt for no open answer `the
+  answer the interrupt names has ended`. `stage.plan` on `fylgja-fixture`: no out or err frame,
+  the document `rejected` with `stage.unknown`, its text the findings.
+- **The plan passed** on `fylgja-test-step-smoke-2617353` (the fixture tool: seed, `-propose`,
+  `seeded`, `-add-link`, the checksums awaited, `third-link`): `passed=True` in 9.9 s, the
+  message the plan's text (four stages, three steps, the branch point `refused
+  (contract.node.missing)`), then the findings' text with the one rejection, as information.
+  Every frame of the plan was an `out` frame; none was `err`.
+- **A stale mark failed it**: `-set-role stale-role`, then `role-stale`: `passed=False` in
+  7.6 s, the `log_error` the findings' text, `stage.artifact.stale` on n1, n2 and n3 for
+  `role-stale` and for `head`.
+- `-delete` removed 3 stages, the proposed change and the branch; Infrahub read as it began.

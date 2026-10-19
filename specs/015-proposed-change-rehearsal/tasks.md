@@ -409,7 +409,7 @@ that decides nothing. Needs D-049 and D-052 accepted (T004, T005).
 concludes success, its message the plan's text with four stages and three steps. With a
 mark made stale, it concludes failure naming `stage.artifact.stale` and the device (T050).
 
-- [ ] T042 [US3] Load the `infrahub:infrahub-managing-checks` skill and read its SKILL.md and the rules it names for a Python check, applying them where `CLAUDE.md` and the plan's "The OpsMill skills" paragraph do not decide otherwise. Then create `infrahub/queries/branch.gql` (`query fylgja_branch { Branch { name } }`, with a header comment saying it is the cheap read the SDK requires and the checks ignore). Create `infrahub/checks/fylgja_api.py`, the shared glue of [contracts/checks.md](contracts/checks.md) and R-13, R-15 and R-16, deciding nothing:
+- [X] T042 [US3] Load the `infrahub:infrahub-managing-checks` skill and read its SKILL.md and the rules it names for a Python check, applying them where `CLAUDE.md` and the plan's "The OpsMill skills" paragraph do not decide otherwise. Then create `infrahub/queries/branch.gql` (`query fylgja_branch { Branch { name } }`, with a header comment saying it is the cheap read the SDK requires and the checks ignore). Create `infrahub/checks/fylgja_api.py`, the shared glue of [contracts/checks.md](contracts/checks.md) and R-13, R-15 and R-16, deciding nothing:
   - `variables()`: the two variables, or the name of the unset one;
   - `proposed_change(client, branch)`: through `client.filters(kind="CoreProposedChange", branch="main", source_branch__value=branch, state__value="open")`, its `id`, `name` and `is_draft`;
   - `call(address, token, operation_path, render, args, stream=None, deadline=None)`: one `POST` with `httpx` (streaming, no read timeout), read frame by frame to the document, returning the `out` and `err` lines, the document, its `text` and its `markdown`;
@@ -419,21 +419,21 @@ mark made stale, it concludes failure naming `stage.artifact.stale` and the devi
   - the failure wordings: unreachable, `401`, a `404` under `Fylgja-Api-Versions`, and an answer cut before its document. Each names the address and never the token.
 
   No module-level side effect. Stdlib and `httpx` only, as the task-worker image carries them (research §1.1).
-- [ ] T043 [US3] Create `infrahub/checks/fylgja_step.py`: `class FylgjaStep(InfrahubCheck)`, `query = "fylgja_branch"`, `timeout = 300`, `async def validate(self, data)` doing [contracts/checks.md](contracts/checks.md) "fylgja-step" steps 1–4 through `from .fylgja_api import …`:
+- [X] T043 [US3] Create `infrahub/checks/fylgja_step.py`: `class FylgjaStep(InfrahubCheck)`, `query = "fylgja_branch"`, `timeout = 300`, `async def validate(self, data)` doing [contracts/checks.md](contracts/checks.md) "fylgja-step" steps 1–4 through `from .fylgja_api import …`:
   - the variables (`log_error` naming the unset one, nothing sent);
   - the proposed change (`log_error` when none is open on `self.branch_name`);
   - `POST /v1/stage/plan` with `render: text` and `args.branch`;
   - `log_info` of the plan's text line by line, then the findings' text.
 
   The conclusion: `log_error` when the document's findings hold a rejection other than a branch point's (`at_source: branch_point`) lone `contract.node.missing`, when the status is `error`, or when Fylgja cannot be reached. It runs on drafts. Use `log_error` and `log_info` alone (no `log_warning`). Add `infrahub/checks/__init__.py` only if the relative import needs one under `commits.<sha>.infrahub.checks` (research §1.2). Check the syntax with `python3 -m py_compile infrahub/checks/*.py`, which adds no test framework.
-- [ ] T044 [US3] Register it in `.infrahub.yml` as [contracts/checks.md](contracts/checks.md) "Registration" gives it: the query `fylgja_branch` beside `device_config`, and `check_definitions` with `fylgja-step` (file, class). Extend the header comment for the checks. In `embed_test.go` (or a new root test file), add `TestInfrahubYAMLRegistersTheChecks`, which parses `.infrahub.yml` and checks:
+- [X] T044 [US3] Register it in `.infrahub.yml` as [contracts/checks.md](contracts/checks.md) "Registration" gives it: the query `fylgja_branch` beside `device_config`, and `check_definitions` with `fylgja-step` (file, class). Extend the header comment for the checks. In `embed_test.go` (or a new root test file), add `TestInfrahubYAMLRegistersTheChecks`, which parses `.infrahub.yml` and checks:
   - each check definition's `file_path` exists and defines `class <class_name>(InfrahubCheck)`;
   - each class sets `query = "fylgja_branch"` and a `timeout` (`fylgja-step` 300);
   - no definition carries `query:`, `targets` or `parameters`;
   - the query's file exists.
 
   `go test . -count=1`.
-- [ ] T045 [US3] Create `internal/checks/doc.go` (the package's purpose: tier 2's proof of the two checks inside Infrahub, R-18; the registration's names as constants) and `internal/checks/checks_contract_test.go` (build tag `contract`). `TestChecksInsideInfrahub`'s first half:
+- [X] T045 [US3] Create `internal/checks/doc.go` (the package's purpose: tier 2's proof of the two checks inside Infrahub, R-18; the registration's names as constants) and `internal/checks/checks_contract_test.go` (build tag `contract`). `TestChecksInsideInfrahub`'s first half:
   1. `BridgeAddress` (skip, saying why, when Docker reports none).
   2. A scratch repository from the tree's `infrahub/checks/` and `infrahub/queries/` under a `.infrahub.yml` of its own naming the two checks under test-only names, `fylgja-test-step` and `fylgja-test-twin`, pointing at the tree's files and classes, so that the artifact definition is not registered twice and the names never collide with the registration `fylgja`'s once T054 has imported the checks. The query `fylgja_branch` is pinned by the classes' `query` attribute, so its name cannot be test-only: before the first import, verify on this Infrahub that two read-only repositories may each register a `CoreGraphQLQuery` named `fylgja_branch` (register a second throwaway repository holding only that query beside `fylgja`, read both, delete it), and record the answer in `research.md` §5. If they may not, the scratch copy rewrites the class's `query` to `fylgja_test_branch` and registers the query under that name, and T054's re-run proves the two registrations coexist. The test reads validators by the test-only names (the package's constants).
   3. `ServeRepository`; `EnsureReadOnlyRepository("fylgja-test-checks-<pid>", …)` and `AwaitImport`, then 15 s for both task workers' fetches (research §1.5).

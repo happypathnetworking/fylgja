@@ -830,3 +830,42 @@ Each in the log's format, to be appended as D-049 to D-052 once the operator acc
 - **The four decision entries** (§3), the operator's at `analyze`.
 - **`make diagrams`** after the C4 model moves (R-11, the checks' container, the bridge in
   the deployment view).
+
+---
+
+<a id="5-verified-at-implement"></a>
+## 5. Verified at implement
+
+### 5.1 The server on the bridge, from inside a task worker (2026-10-19, 18:19Z; T037, SC-009)
+
+The override was applied in the loop's Run 10 (16:26Z: both task workers recreated, the
+other six services untouched), and the operator's two runs of the bring-up script's
+`fylgja` part left the server on both addresses (T036). This run restarted both processes
+from this tree and asked the server from where Infrahub's task workers stand. No twin was
+booted and no token was printed: the token was compared by its sha256 alone.
+
+- **Rebuilt and restarted** (18:19:05Z–18:19:24Z). `make build` relinked `bin/fylgja`
+  (a new inode, since the operator's commit had moved the stamp), which left the worker
+  and the server on a `(deleted)` binary; both were stopped with `pkill -x fylgja` and
+  started with `CLAUDE.md`'s two lines, statically linked, `0.1.0-dev`. Each `exe` reads
+  `bin/fylgja`, not deleted; each environment carries `INFRAHUB_ADDRESS`,
+  `INFRAHUB_API_TOKEN`, both logins, `FYLGJA_STATE_ROOT` and `FYLGJA_API_TOKEN`. The
+  server's report: `listening on 127.0.0.1:7650 (API version 1, build 0.1.0-dev)`, then
+  `listening on 172.17.0.1:7650 (…)` followed at once by `172.17.0.1:7650 is not a
+  loopback address: the API's token is sent unencrypted on it`, and both packages with
+  their logins set. The worker's: both packages, `host: lab fylgja absent; twin directory
+  absent`.
+- **From inside each task worker** (18:19:41Z–18:19:43Z), quickstart §2's `python -c`
+  request to `http://$FYLGJA_API_ADDRESS/v1/twin/show`: with the container's token, `200`,
+  `Fylgja-Api-Version: 1`, `Fylgja-Build: 0.1.0-dev`; without it, `401`. The same from
+  `task-worker-1` and `task-worker-2`. **From the host**, `curl` to `172.17.0.1:7650`
+  without the token: `401`. The server logged one line a request, `twin.show` `ok` (126 ms
+  and 110 ms) or `token_refused`, naming no address, and its log since the restart holds
+  no token.
+- **`docker inspect` of both task workers** (created 16:26:07Z, image `1.11.2`):
+  `ExtraHosts` is `["host.docker.internal:host-gateway"]`, and `getent hosts
+  host.docker.internal` inside each answers `172.17.0.1`, the bridge's gateway; the
+  environment holds `FYLGJA_API_ADDRESS=host.docker.internal:7650` and `FYLGJA_API_TOKEN`,
+  equal to `local/.env`'s by its sha256. No other `FYLGJA_*` name is there.
+- A client's `twin show`, from an environment holding the token alone, answered `twin:
+  none: no lab fylgja, no twin directory`, exit 0, over loopback.

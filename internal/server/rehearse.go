@@ -557,7 +557,8 @@ func (r *rehearsing) run(ctx context.Context, svc provision.Service, in provisio
 // reported is the rehearsal's document once its run closed: the block through
 // rehearsal.Build, its findings and the run's, the destroy's, the stages read again for
 // whether a rehearsed stage moved or the proposed change closed, and the status by
-// research R-08; then the text's line per stage and its closing line.
+// research R-08; then what the destroy removed, the text's line per stage and its closing
+// line.
 func (r *rehearsing) reported(ctx context.Context, runID string, res provision.RehearseResult, reached string) error {
 	block := rehearsal.Build(r.report(), resultOf(runID, res))
 	list := append(append(findings.List{}, r.before...), rehearsal.Findings(block)...)
@@ -579,6 +580,11 @@ func (r *rehearsing) reported(ctx context.Context, runID string, res provision.R
 	doc := findings.NewDocument(r.op, r.subject, list)
 	doc.Status = rehearsalStatus(res)
 	doc.Rehearsal = &block
+	// What the destroy removed, as twin destroy and the reclaim say it, straight after its
+	// progress lines; what remains is named by its cleanup.incomplete findings.
+	if d := res.Destroy; d != nil {
+		printCleanup(r.opts, d.Cleanup)
+	}
 	for _, l := range rehearsal.StageLines(block) {
 		r.opts.note("%s", l)
 	}

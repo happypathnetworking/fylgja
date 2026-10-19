@@ -826,9 +826,9 @@ func TestRehearseStagesReadAgainAfterTheRun(t *testing.T) {
 // proposed change, its branch, the stages and the deadline under the ceiling; each stage's
 // resolution, the baseline marked and the refused branch point with its rejection under it;
 // the run; each child preceded by the line naming its stage, the baseline's wait as its
-// verify, and the destroy; then, once the run has closed, one line per stage and the closing
-// line. The findings, the branch point's refusal among them, are on stderr as every
-// document prints them.
+// verify, and the destroy; then, once the run has closed, what the destroy removed, as twin
+// destroy says it, one line per stage and the closing line. The findings, the branch point's
+// refusal among them, are on stderr as every document prints them.
 func TestRehearseText(t *testing.T) {
 	rehearseHost(t)
 	rehearseInfrahub(t)
@@ -859,6 +859,8 @@ func TestRehearseText(t *testing.T) {
 		`destroying the twin`,
 		`run fylgja-destroy d1`,
 		`step teardown: done in 5.2s`,
+		`removed lab fylgja (3 containers)`,
+		`removed twin directory /srv/twin`,
 		`stage change-1/branch-point: refused (contract.node.missing)`,
 		`stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline`,
 		`stage change-1/third-link: stepped in 4.5s (push n1 2.5s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed`,

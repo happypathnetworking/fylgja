@@ -53,6 +53,31 @@ type ValidatorRow struct {
 	CompletedAt string
 }
 
+// userPollEvery is how often RunUserChecks reads the user validators again: a user check
+// starts 12–15 s after the run-check and lasts up to its own timeout (research §1.3, §1.5),
+// so a finer poll only adds load.
+const userPollEvery = 5 * time.Second
+
+// UserCheckRow is one user check of a proposed change as the harness reads it back: the
+// CoreStandardCheck under a CoreUserValidator, named as its definition is, with its
+// validator's state. A validator with no check, as a check Infrahub timed out leaves it
+// (research §1.4), reads as one row of its definition's name and its validator's
+// conclusion, with no severity and no message.
+type UserCheckRow struct {
+	Name           string
+	Conclusion     string
+	Severity       string
+	Message        string
+	ValidatorState string
+}
+
+// CommentRow is one comment on a proposed change, as Infrahub lists them. A comment has no
+// stamp and no author (research §1.2), so its text is all there is to tell two apart.
+type CommentRow struct {
+	ID   string
+	Text string
+}
+
 // testBranch refuses a branch that is not a test's. The fixture is named first, so the
 // refusal says why: it never has a proposed change.
 func testBranch(branch string) error {
@@ -562,6 +587,315 @@ func (c *Client) RunCheck(id string, timeout time.Duration) (string, error) {
 		}
 		time.Sleep(pollEvery)
 	}
+}
+
+// MarkReady sets a proposed change's is_draft to false. It starts nothing (research §1.5):
+// a caller that wants the checks to see it ready runs them again.
+func (c *Client) MarkReady(id string) error {
+	if _, err := c.testProposedChange(id); err != nil {
+		return err
+	}
+	raw, err := c.GraphQL("main", fmt.Sprintf(
+		`mutation { CoreProposedChangeUpdate(data: {id: %q, is_draft: {value: false}}) { ok } }`, id))
+	if err != nil {
+		return fmt.Errorf("marking proposed change %s ready for review: %w", id, err)
+	}
+	return okOf(raw, "CoreProposedChangeUpdate", fmt.Sprintf("marking proposed change %s ready for review", id))
+}
+
+// RunUserChecks asks for a proposed change's user checks and waits until each check
+// definition its source branch sees has run again to completed, then returns the checks as
+// UserChecksOf reads them. Infrahub runs the definitions the source branch sees, as they
+// were at its creation (research §1.2, §1.5), so a branch that sees none returns at once
+// with none. Each definition's validator is reused across runs and restarted by each
+// (research §1.2), so a validator is done only once its started_at has moved past what it
+// read before the call and it is completed: a completed one from the run before is not
+// this run's. At the bound the failure names each validator not done, a check Infrahub
+// timed out leaving its validator in_progress for good (research §1.4). A read that fails is
+// read again until the bound, as AwaitValidators does.
+func (c *Client) RunUserChecks(id string, timeout time.Duration) ([]UserCheckRow, error) {
+	branch, err := c.testProposedChange(id)
+	if err != nil {
+		return nil, err
+	}
+	defs, err := c.checkDefinitionsOn(branch)
+	if err != nil {
+		return nil, err
+	}
+	before, err := c.userValidators(id)
+	if err != nil {
+		return nil, err
+	}
+	started := map[string]string{}
+	for _, v := range before {
+		started[v.definitionID] = v.startedAt
+	}
+	raw, err := c.GraphQL("main", fmt.Sprintf(
+		`mutation { CoreProposedChangeRunCheck(data: {id: %q, check_type: USER}) { ok } }`, id))
+	if err != nil {
+		return nil, fmt.Errorf("asking proposed change %s's user checks: %w", id, err)
+	}
+	if err := okOf(raw, "CoreProposedChangeRunCheck", fmt.Sprintf("asking proposed change %s's user checks", id)); err != nil {
+		return nil, err
+	}
+	if len(defs) == 0 {
+		return c.UserChecksOf(id)
+	}
+	deadline := time.Now().Add(timeout)
+	var last string
+	for {
+		if vs, err := c.userValidators(id); err != nil {
+			last = err.Error()
+		} else if pending := rerunPending(defs, started, vs); len(pending) == 0 {
+			return userCheckRows(vs), nil
+		} else {
+			last = strings.Join(pending, ", ")
+		}
+		if !time.Now().Add(userPollEvery).Before(deadline) {
+			return nil, fmt.Errorf("proposed change %s: user checks not concluded within %s (last saw %s)", id, timeout, last)
+		}
+		time.Sleep(userPollEvery)
+	}
+}
+
+// rerunPending names each definition whose validator has not run again to completed since
+// started was read: none yet, not restarted, or in a state other than completed.
+func rerunPending(defs []checkDefinition, started map[string]string, vs []userValidator) []string {
+	byDefinition := map[string]userValidator{}
+	for _, v := range vs {
+		byDefinition[v.definitionID] = v
+	}
+	var pending []string
+	for _, d := range defs {
+		v, ok := byDefinition[d.id]
+		switch {
+		case !ok:
+			pending = append(pending, d.name+" not started")
+		case v.startedAt == "" || v.startedAt == started[d.id]:
+			pending = append(pending, d.name+" not restarted")
+		case v.state != "completed":
+			pending = append(pending, d.name+" "+v.state)
+		}
+	}
+	return pending
+}
+
+// UserChecksOf lists a proposed change's user checks, each CoreStandardCheck under a
+// CoreUserValidator with its validator's state, sorted by name.
+func (c *Client) UserChecksOf(id string) ([]UserCheckRow, error) {
+	if _, err := c.testProposedChange(id); err != nil {
+		return nil, err
+	}
+	vs, err := c.userValidators(id)
+	if err != nil {
+		return nil, err
+	}
+	return userCheckRows(vs), nil
+}
+
+// userCheckRows flattens validators into their checks, a validator with none read as one
+// row of its own, sorted by name.
+func userCheckRows(vs []userValidator) []UserCheckRow {
+	var out []UserCheckRow
+	for _, v := range vs {
+		if len(v.checks) == 0 {
+			out = append(out, UserCheckRow{Name: v.name, Conclusion: v.conclusion, ValidatorState: v.state})
+			continue
+		}
+		for _, ch := range v.checks {
+			if ch.Name == "" {
+				ch.Name = v.name
+			}
+			ch.ValidatorState = v.state
+			out = append(out, ch)
+		}
+	}
+	slices.SortStableFunc(out, func(a, b UserCheckRow) int { return strings.Compare(a.Name, b.Name) })
+	return out
+}
+
+// userValidator is one of a proposed change's user validators: its definition, its state
+// and its checks.
+type userValidator struct {
+	definitionID, name           string
+	state, conclusion, startedAt string
+	checks                       []UserCheckRow
+}
+
+// userValidators reads a proposed change's user validators with their checks, with no
+// guard: the waits poll it. Validators are read on the default branch, as the artifact
+// validators are.
+func (c *Client) userValidators(id string) ([]userValidator, error) {
+	raw, err := c.GraphQL("main", fmt.Sprintf(`{ CoreUserValidator(proposed_change__ids: [%q]) { edges { node {
+		state { value } conclusion { value } started_at { value }
+		check_definition { node { id name { value } } }
+		checks { edges { node { name { value } conclusion { value } severity { value } message { value } } } }
+	} } } }`, id))
+	if err != nil {
+		return nil, fmt.Errorf("reading proposed change %s's user validators: %w", id, err)
+	}
+	type value struct {
+		Value *string `json:"value"`
+	}
+	str := func(v value) string {
+		if v.Value == nil {
+			return ""
+		}
+		return *v.Value
+	}
+	var r struct {
+		V struct {
+			Edges []struct {
+				Node struct {
+					State      value `json:"state"`
+					Conclusion value `json:"conclusion"`
+					StartedAt  value `json:"started_at"`
+					Definition struct {
+						Node *struct {
+							ID   string `json:"id"`
+							Name value  `json:"name"`
+						} `json:"node"`
+					} `json:"check_definition"`
+					Checks struct {
+						Edges []struct {
+							Node struct {
+								Name       value `json:"name"`
+								Conclusion value `json:"conclusion"`
+								Severity   value `json:"severity"`
+								Message    value `json:"message"`
+							} `json:"node"`
+						} `json:"edges"`
+					} `json:"checks"`
+				} `json:"node"`
+			} `json:"edges"`
+		} `json:"CoreUserValidator"`
+	}
+	if err := json_Unmarshal(raw, &r); err != nil {
+		return nil, err
+	}
+	out := make([]userValidator, 0, len(r.V.Edges))
+	for _, e := range r.V.Edges {
+		n := e.Node
+		v := userValidator{state: str(n.State), conclusion: str(n.Conclusion), startedAt: str(n.StartedAt)}
+		if d := n.Definition.Node; d != nil {
+			v.definitionID, v.name = d.ID, str(d.Name)
+		}
+		for _, ch := range n.Checks.Edges {
+			v.checks = append(v.checks, UserCheckRow{Name: str(ch.Node.Name), Conclusion: str(ch.Node.Conclusion),
+				Severity: str(ch.Node.Severity), Message: str(ch.Node.Message)})
+		}
+		out = append(out, v)
+	}
+	return out, nil
+}
+
+// checkDefinition is one check definition a branch sees.
+type checkDefinition struct{ id, name string }
+
+// checkDefinitionsOn lists the check definitions a branch sees: the ones Infrahub runs on
+// its proposed change, being main's as they were at the branch's creation (research §1.5).
+func (c *Client) checkDefinitionsOn(branch string) ([]checkDefinition, error) {
+	raw, err := c.GraphQL(branch, `{ CoreCheckDefinition { edges { node { id name { value } } } } }`)
+	if err != nil {
+		return nil, fmt.Errorf("listing the check definitions %s sees: %w", branch, err)
+	}
+	var r struct {
+		D struct {
+			Edges []struct {
+				Node struct {
+					ID   string `json:"id"`
+					Name struct {
+						Value string `json:"value"`
+					} `json:"name"`
+				} `json:"node"`
+			} `json:"edges"`
+		} `json:"CoreCheckDefinition"`
+	}
+	if err := json_Unmarshal(raw, &r); err != nil {
+		return nil, err
+	}
+	out := make([]checkDefinition, 0, len(r.D.Edges))
+	for _, e := range r.D.Edges {
+		out = append(out, checkDefinition{id: e.Node.ID, name: e.Node.Name.Value})
+	}
+	return out, nil
+}
+
+// CommentsOf lists a proposed change's comments through its comments relationship, in
+// Infrahub's order.
+func (c *Client) CommentsOf(id string) ([]CommentRow, error) {
+	if _, err := c.testProposedChange(id); err != nil {
+		return nil, err
+	}
+	raw, err := c.GraphQL("main", fmt.Sprintf(
+		`{ CoreProposedChange(ids: [%q]) { edges { node { comments { edges { node { id text { value } } } } } } } }`, id))
+	if err != nil {
+		return nil, fmt.Errorf("listing proposed change %s's comments: %w", id, err)
+	}
+	var r struct {
+		P struct {
+			Edges []struct {
+				Node struct {
+					Comments struct {
+						Edges []struct {
+							Node struct {
+								ID   string `json:"id"`
+								Text struct {
+									Value string `json:"value"`
+								} `json:"text"`
+							} `json:"node"`
+						} `json:"edges"`
+					} `json:"comments"`
+				} `json:"node"`
+			} `json:"edges"`
+		} `json:"CoreProposedChange"`
+	}
+	if err := json_Unmarshal(raw, &r); err != nil {
+		return nil, err
+	}
+	if len(r.P.Edges) != 1 {
+		return nil, fmt.Errorf("proposed change %s: %d found, want one", id, len(r.P.Edges))
+	}
+	var out []CommentRow
+	for _, e := range r.P.Edges[0].Node.Comments.Edges {
+		out = append(out, CommentRow{ID: e.Node.ID, Text: e.Node.Text.Value})
+	}
+	return out, nil
+}
+
+// AddInterface writes one physical interface on a test branch's device: enabled, not
+// management, with no link. It renders nothing: Infrahub regenerates no artifact on its
+// own, so the caller generates, and the artifact then names a port the compile may omit
+// (research R-14). The fixture is refused, as every change is, and so is a second
+// interface of the name on the device.
+func (c *Client) AddInterface(branch, device, name string) error {
+	if branch == FixtureBranch {
+		return fmt.Errorf("branch %s: the fixture is never changed", branch)
+	}
+	if err := testBranch(branch); err != nil {
+		return err
+	}
+	dev, err := c.deviceID(branch, device)
+	if err != nil {
+		return err
+	}
+	present, err := c.ids(branch, "NetworkInterface", fmt.Sprintf(`(device__name__value: %q, name__value: %q)`, device, name))
+	if err != nil {
+		return err
+	}
+	if len(present) != 0 {
+		return fmt.Errorf("branch %s already holds %s:%s", branch, device, name)
+	}
+	id, err := c.create(branch, "NetworkInterface", fmt.Sprintf(
+		`{name: {value: %q}, iftype: {value: "physical"}, enabled: {value: true}, mgmt_only: {value: false}, device: {id: %q}}`,
+		name, dev))
+	if err != nil {
+		return err
+	}
+	if id == "" {
+		return fmt.Errorf("adding %s:%s on %s: Infrahub returned no id", device, name, branch)
+	}
+	return nil
 }
 
 // artifactCompletion is the latest completed_at value among a proposed change's artifact

@@ -129,13 +129,13 @@
           "type": "object",
           "required": ["out"],
           "additionalProperties": false,
-          "properties": { "out": { "type": "string", "description": "Text for stdout, whole lines, as M12 printed them. Under render text alone." } }
+          "properties": { "out": { "type": "string", "description": "Text for stdout, whole lines, as M12 printed them. Under render text, and under render markdown (015), which prints the same lines." } }
         },
         {
           "type": "object",
           "required": ["err"],
           "additionalProperties": false,
-          "properties": { "err": { "type": "string", "description": "Text for stderr, whole lines. Under either rendering." } }
+          "properties": { "err": { "type": "string", "description": "Text for stderr, whole lines. Under every rendering." } }
         },
         {
           "type": "object",

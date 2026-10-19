@@ -1,16 +1,19 @@
-# API contract: M13, version 1; 014's stage surface
+# API contract: M13, version 1; 014's stage surface; 015's rehearsal
 
 What crosses between a client and `fylgja serve`. The shapes are
 [api.schema.json](api.schema.json); the documents are M12's
 ([findings.schema.json](findings.schema.json) and the blocks beside it), as 014 moved them
-("014: the stage surface", at the end). The addresses,
+("014: the stage surface", at the end) and 015 added to them ("015: the rehearsal", after
+it). The addresses,
 the statuses, the frame kinds and the document are the contract; a sentence is contract
 only where it is quoted.
 
 ## Transport
 
-HTTP/1.1, JSON, no TLS (D-040, D-042). The server listens on `127.0.0.1:7650` unless
-`--listen` says otherwise. A client on another machine comes through an SSH tunnel or a
+HTTP/1.1, JSON, no TLS (D-040, D-042). The server listens on every address `--listen`
+gives, which is repeatable since 015, and on `127.0.0.1:7650` when none is; on the lab
+host, on loopback and on the host's Docker bridge, where Infrahub's task workers reach it
+(D-050). A client on another machine comes through an SSH tunnel or a
 proxy the operator runs; a client's address may be an `https://` URL for such a proxy.
 The API never redirects, and a client follows no redirect: a `3xx` is the status it
 answered, and nothing is sent to its `Location`.
@@ -52,6 +55,7 @@ frames. A dry run is its operation with `dry_run` set.
 | `twin.destroy` | `/v1/twin/destroy` | | | | no |
 | `twin.show` | `/v1/twin/show` | | | | no |
 | `twin.verify` | `/v1/twin/verify` | `wait`, `args` | | | no |
+| `twin.rehearse` | `/v1/twin/rehearse` | `branch` | | | from `start` |
 | `twin.compile` | `/v1/twin/compile` | `ctm`, `out` | the CTM | the bundle | no |
 | `stage.list` | `/v1/stage/list` | `branch` | | | no |
 | `stage.plan` | `/v1/stage/plan` | `branch` | | | no |
@@ -63,7 +67,7 @@ There is no other operation. In particular there is none to re-attach to a run, 
 runs or to fetch a filed bundle. Moved at 014: `waypoint.list` and `waypoint.plan`
 (`/v1/waypoint/list`, `/v1/waypoint/plan`, argument `series`) became `stage.list` and
 `stage.plan`, and `twin.create`, `twin.step` and `intent.read` take `stage` where they took
-`waypoint`.
+`waypoint`. Added at 015: `twin.rehearse`.
 
 **Arguments are as given.** An absent key is a flag that was not given; a present key is
 one that was, whatever its value (`"interval": ""` is `--interval=`). Every guard is the
@@ -90,7 +94,7 @@ with a message that begins `the request is not one: `, and no guard runs:
 - files on an operation that takes none (`twin.show takes no files`), a file that is
   `null` (`files[0] is not a file`) or has no path, data that is not base64, or bytes
   after the object;
-- a `render` other than `"text"` and `"json"`.
+- a `render` other than `"text"`, `"json"` and `"markdown"` (the last added at 015).
 
 [`$defs/request`](api.schema.json) is what a client sends. The server also reads `render:
 ""`, `"args": null` and `"files": null` as absent, and a file without `data` as one with
@@ -110,7 +114,7 @@ no bytes.
 | `{"run": {"workflow_id": "…", "run_id": "…"}}` | the run's identity |
 | `{"event": {…}}` | one step boundary of a run, or one notice about a run |
 | `{"files": [{"path": "…", "data": "<base64>"}]}` | the CTM (`ctm.json`), or every file of the bundle |
-| `{"document": {…}, "text": "…"}` | the command's findings document; `text` under `render: "text"` when it has findings |
+| `{"document": {…}, "text": "…", "markdown": "…"}` | the command's findings document; `text` under `render: "text"` or `"markdown"` when it has findings; `markdown` under `render: "markdown"` on `twin.rehearse` alone (015) |
 
 **What `render` asks for.**
 
@@ -119,6 +123,7 @@ no bytes.
 | absent | none | none | none |
 | `"text"` | every line the command printed without `--json` at M12 | every line it wrote to stderr | its findings as text |
 | `"json"` | none | what it wrote to stderr under `--json` | none |
+| `"markdown"` (015) | as under `"text"` | as under `"text"` | as under `"text"`; on `twin.rehearse`, `document.markdown` beside it |
 
 With `render` absent, a command that is one answer is its `document` frame alone, but for
 `intent.read` and `twin.compile`, whose `files` frame comes first. A run is its `start`,
@@ -150,7 +155,7 @@ own fault, with a body of [`$defs/problem`](api.schema.json).
 ## A run
 
 `twin.create`, `twin.provision` and `twin.step` start a run and stay open as its
-progress. `twin.destroy` is followed the same way and takes no interrupt. Its `start`
+progress, and so does `twin.rehearse` (015). `twin.destroy` is followed the same way and takes no interrupt. Its `start`
 comes once following has stopped, just before the destroy run is started, and opens no
 stream; its answer has no `run` frame, and the document's `subject.run_id` names the
 destroy run. An answer cut after its `start` says a run may have been started and was not
@@ -279,3 +284,70 @@ frames, the statuses and the files are as M13 left them.
   `stage`, `stages` and `plan` blocks of [stages.schema.json](stages.schema.json), which
   replaces `waypoints.schema.json`, and `twin.json` `6`'s stage in `show`, `step` and
   `verify`.
+
+## 015: the rehearsal
+
+A proposed change rehearsed on a twin ([D-049](../docs/decisions.md#d-049)–[D-052](../docs/decisions.md#d-052);
+[cli.md](cli.md), "015: the rehearsal", says what the command does and how it exits). The
+API's version stays `1`: a new operation, a new value of `render` and a new field of the
+`document` frame, each of which a client of M13 never asks for or ignores. Every other
+operation, the token, the statuses and the files are as 014 left them.
+
+| | Operation | Path | `args` | Files in | Files out | Takes an interrupt |
+|---|---|---|---|---|---|---|
+| added | `twin.rehearse` | `/v1/twin/rehearse` | `branch` | | | from `start` |
+
+- **`branch`** is the proposed change's source branch, as `--branch` gave it. Present and
+  empty is `--branch=`, refused `stage.ref.invalid` at `start`, exit 2; absent is
+  `operation.failed`, `--branch is required`, exit 2. Both are refused before the server
+  connects to Infrahub.
+- **The answer** is a run's ([A run](#a-run)). A refusal before the start, a stage refused,
+  the deadline unfit, a run in flight or the host held, is the `document` frame alone, after
+  the plan's `out` lines under a rendering, with no `start`. A **reclaim**, of a twin whose
+  record names a rehearsal run no longer running, is followed inside the answer before the
+  `start`: the notice `reclaiming the twin of rehearsal run <id>`, then its destroy's
+  events, with neither a `start` nor a `run` frame of their own. Then
+  `{"start": {"workflow_id": "fylgja-rehearse"}}`, the `run` frame, and the events of the
+  run and of each child, `fylgja-provision`, `fylgja-step` and `fylgja-destroy`, each child
+  announced by the notice `run <workflow> <id>` and, under a rendering, preceded by an
+  `out` line `stage <ref>: …`. The `document` frame comes once the run has closed and the
+  stages have been resolved again. Its document is `findings_version` `1`, operation
+  `twin.rehearse`, with the `rehearsal` block of
+  [rehearsal.schema.json](rehearsal.schema.json).
+- **`render: "markdown"`**: the `out` and `err` frames and `document.text` are as under
+  `"text"`, and on `twin.rehearse` the `document` frame carries `markdown`, the report as
+  GitHub-flavoured markdown, rendered from the document; it is a rendering, never part of
+  the document. Every other operation answers `"markdown"` as it answers `"text"`, with no
+  `markdown` field. [api.schema.json](api.schema.json)'s `render` enum, its `document` frame
+  and `start.workflow_id`'s enum, which gains `fylgja-rehearse`, move with it.
+- **The interrupt** is `POST /v1/streams/{stream}/interrupt`, from `start`, as for a create.
+  The first asks the run to cancel: it cancels the child in progress and destroys the twin,
+  and the answer goes on to the run's own end. The second ends the answer with
+  `run.cancelled`, and the run goes on to its destroy. An answer cut, or a client gone,
+  leaves the run running to its destroy.
+- **Beside a rehearsal**: `twin.show`'s `show.record.rehearsal` is `{workflow_id, run_id}` or
+  `null`, and `in_flight` names the rehearsal with its child; `twin.verify`'s
+  `verify.twin.rehearsal` likewise; `twin.destroy` cancels a rehearsal in flight, follows
+  its destroy after the notice `cancelling rehearsal run <id>; waiting for its destroy`, then
+  makes its own; `twin.create`, `twin.provision` and `twin.step` are refused `run.in_flight`,
+  naming it.
+
+**Clients inside Infrahub.** The checks `fylgja-step` and `fylgja-twin` run in Infrahub's
+task workers and are clients of the API like any other: they send the one token, read
+`Fylgja-Api-Version`, and never follow a redirect. `fylgja-step` asks `stage.plan` with
+`render: "text"`; `fylgja-twin` asks `twin.rehearse` with `render: "markdown"` and a
+`Fylgja-Stream`, reads the answer with no read timeout, and interrupts its run at its own
+deadline, or with a blocking call when Infrahub cancels it. They reach the server at
+`host.docker.internal:7650`, the host's Docker bridge address, which `--listen` names
+beside loopback on the lab host ([D-050](../docs/decisions.md#d-050)); the token crosses
+the bridge unencrypted, as the server's start-up report says, and
+[SECURITY.md](../SECURITY.md) says what that exposes. One token guards every address, a
+request is answered alike on each, and the request log names no address.
+
+By hand, the report as the comment carries it:
+
+```sh
+curl -sS -N -X POST -H "Authorization: Bearer $FYLGJA_API_TOKEN" \
+     -d '{"render":"markdown","args":{"branch":"change-1"}}' \
+     http://127.0.0.1:7650/v1/twin/rehearse | jq -r 'select(.document) | .markdown'
+```

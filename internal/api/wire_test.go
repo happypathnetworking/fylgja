@@ -92,10 +92,8 @@ func documentBytes(t *testing.T, doc *findings.Document) json.RawMessage {
 	return b.Bytes()
 }
 
-// The twelve operations are the newest findings contract's, every one there is, and each
-// is POST /v1/<noun>/<verb>. twin.rehearse is the findings contract's (015, T009) before
-// the API serves it: the API gains it at T016, which drops it from the exception below,
-// as this test then fails until it does.
+// The thirteen operations are the newest findings contract's, every one there is, and each
+// is POST /v1/<noun>/<verb>.
 func TestOperationsAreTheContractsAndTheirPaths(t *testing.T) {
 	raw, err := os.ReadFile(contracts("findings.schema.json"))
 	if err != nil {
@@ -112,7 +110,6 @@ func TestOperationsAreTheContractsAndTheirPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 	got, want := slices.Sorted(slices.Values(Operations)), slices.Sorted(slices.Values(schema.Properties.Operation.Enum))
-	want = slices.DeleteFunc(want, func(op string) bool { return op == findings.OpTwinRehearse })
 	if !slices.Equal(got, want) {
 		t.Errorf("Operations = %v, the contract's enum %v", got, want)
 	}
@@ -121,6 +118,7 @@ func TestOperationsAreTheContractsAndTheirPaths(t *testing.T) {
 		"twin.destroy": "/v1/twin/destroy", "twin.show": "/v1/twin/show", "twin.verify": "/v1/twin/verify",
 		"twin.compile": "/v1/twin/compile", "stage.list": "/v1/stage/list", "stage.plan": "/v1/stage/plan",
 		"intent.read": "/v1/intent/read", "schema.check": "/v1/schema/check", "psp.validate": "/v1/psp/validate",
+		"twin.rehearse": "/v1/twin/rehearse",
 	} {
 		if got := Path(op); got != path {
 			t.Errorf("Path(%s) = %s, want %s", op, got, path)
@@ -158,9 +156,11 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 		{"schema.check", map[string]json.RawMessage{"branch": str("fylgja-fixture")}, nil},
 		{"psp.validate", map[string]json.RawMessage{"files": mustJSON(t, []string{"a.yaml", "b.yaml"})},
 			[]File{{Path: "a.yaml", Data: []byte("psp_version: \"0.6\"\n")}, {Path: "b.yaml", Data: nil}}},
+		{"twin.rehearse", map[string]json.RawMessage{"branch": str("change-1")}, nil},
 	} {
 		t.Run(c.op, func(t *testing.T) {
-			for _, render := range []string{"", RenderText, RenderJSON} {
+			// 015: markdown is a rendering every operation is asked for and accepts.
+			for _, render := range []string{"", RenderText, RenderJSON, RenderMarkdown} {
 				raw, err := EncodeRequest(Request{Render: render, Args: c.args, Files: c.files})
 				if err != nil {
 					t.Fatal(err)
@@ -200,6 +200,11 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 	invalid(t, apiSchema(t, "args/$defs/stage.list"), `{"series":"demo"}`, "stage.list with a series")
 	invalid(t, apiSchema(t, "args/$defs/twin.provision"), `{"dry_run":true}`, "twin.provision without a bundle")
 	invalid(t, apiSchema(t, "args/$defs/twin.verify"), `{"args":["30s"]}`, "twin.verify's args without wait")
+	// 015: twin.rehearse takes the branch alone: no stage, no flag of twin step's, no dry run.
+	for _, arg := range []string{`{"stage":"change-1/head"}`, `{"allow_restart":true}`, `{"wait":"2m0s"}`, `{"dry_run":true}`} {
+		invalid(t, apiSchema(t, "args/$defs/twin.rehearse"), arg, "twin.rehearse with "+arg)
+	}
+	valid(t, apiSchema(t, "args/$defs/twin.rehearse"), []byte(`{}`), "twin.rehearse with no argument")
 	valid(t, apiSchema(t, "args/$defs/twin.verify"), []byte(`{}`), "twin.verify with no argument")
 }
 
@@ -211,7 +216,8 @@ func TestDecodeRequestIsStrict(t *testing.T) {
 	for _, c := range []struct{ label, raw, says string }{
 		{"an unknown key at the top", `{"render":"text","branch":"b"}`, `json: unknown field "branch"`},
 		{"an unknown key inside files[]", `{"files":[{"path":"a.yaml","data":"","mode":420}]}`, `json: unknown field "mode"`},
-		{"a render not known", `{"render":"html"}`, `render "html" is neither "text" nor "json"`},
+		{"a render not known", `{"render":"html"}`, `render "html" is not "text", "json" or "markdown"`},
+		{"a render spelled otherwise", `{"render":"Markdown"}`, `render "Markdown" is not "text", "json" or "markdown"`},
 		{"a file with no path", `{"files":[{"data":""}]}`, "files[0] has no path"},
 		{"a file whose data is not base64", `{"files":[{"path":"a","data":"%%%"}]}`, "illegal base64 data at input byte 0"},
 		{"a second value", `{} {}`, "more follows the object"},
@@ -265,6 +271,10 @@ func TestEveryFrameKindSatisfiesTheContract(t *testing.T) {
 	var refused findings.List
 	refused.Add(findings.Rejection, findings.RuleAPIUnreachable, "127.0.0.1:7650", "the API at 127.0.0.1:7650 cannot be reached")
 	refusedDoc := findings.NewDocument(findings.OpTwinShow, nil, refused)
+	var none findings.List
+	none.AddStep(findings.Warning, findings.StepResolve, findings.RuleRehearsalStepsNone, "change-1/seeded",
+		"one stage compiled: it is built, verified and destroyed, and no step is rehearsed")
+	rehearsed := findings.NewDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1", RunID: "01a1"}, none)
 	for _, c := range []struct {
 		label string
 		frame Frame
@@ -280,6 +290,17 @@ func TestEveryFrameKindSatisfiesTheContract(t *testing.T) {
 		{"files", Frame{Files: []File{{Path: "ctm.json", Data: []byte("{}\n")}}}, KindFiles},
 		{"document", Frame{Document: documentBytes(t, doc)}, KindDocument},
 		{"document with text", Frame{Document: documentBytes(t, refusedDoc), Text: "rejection api.unreachable 127.0.0.1:7650: …\n"}, KindDocument},
+		// 015: the rehearsal's start, run and children's events, and its document with the
+		// markdown beside its text.
+		{"rehearsal's start", Frame{Start: &RunRef{WorkflowID: "fylgja-rehearse"}}, KindStart},
+		{"rehearsal's run", Frame{Run: &RunRef{WorkflowID: "fylgja-rehearse", RunID: "01a1"}}, KindRun},
+		{"rehearsal's child's notice", Frame{Event: &Event{WorkflowID: "fylgja-rehearse", Notice: "run fylgja-provision 02b2"}}, KindEvent},
+		{"document with markdown", Frame{Document: documentBytes(t, rehearsed),
+			Text:     "warning rehearsal.steps.none [step resolve] change-1/seeded: …\n",
+			Markdown: "## Fylgja rehearsed proposed change \"third link\" on change-1\n"}, KindDocument},
+		{"document with markdown and no findings", Frame{Document: documentBytes(t,
+			findings.NewDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1", RunID: "01a1"}, nil)),
+			Markdown: "## …\n"}, KindDocument},
 	} {
 		raw := mustJSON(t, c.frame)
 		valid(t, frame, raw, c.label+" frame")
@@ -298,6 +319,8 @@ func TestEveryFrameKindSatisfiesTheContract(t *testing.T) {
 	invalid(t, frame, `{"start":{"workflow_id":"fylgja-follow"}}`, "a start of a workflow no request starts")
 	invalid(t, frame, `{"start":{"workflow_id":"fylgja-destroy","run_id":"01a1"}}`, "a start that names its run")
 	invalid(t, frame, `{"files":[]}`, "a files frame with none")
+	invalid(t, frame, `{"markdown":"## …\n"}`, "markdown with no document")
+	invalid(t, frame, `{"start":{"workflow_id":"fylgja-rehearse","run_id":"01a1"}}`, "a rehearsal's start that names its run")
 	var unknown Frame
 	if err := json.Unmarshal([]byte(`{"progress":{"pct":40}}`), &unknown); err != nil || unknown.Kind() != "" {
 		t.Errorf("a frame of a kind this build does not know decodes as %q, %v; a client ignores it", unknown.Kind(), err)

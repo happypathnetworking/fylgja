@@ -35,6 +35,7 @@ var operationArgs = map[string]map[string]string{
 	findings.OpIntentRead:    {"branch": argString, "at": argString, "stage": argString, "out": argString},
 	findings.OpSchemaCheck:   {"branch": argString},
 	findings.OpPSPValidate:   {"files": argStrings},
+	findings.OpTwinRehearse:  {"branch": argString},
 }
 
 // args are one request's arguments, read strictly: checkArgs has refused a name the
@@ -112,7 +113,7 @@ func (a args) strings(name string) []string {
 	return v
 }
 
-// handlers are the twelve operations' runs: each fills the flags M12's command filled from
+// handlers are the thirteen operations' runs: each fills the flags M12's command filled from
 // the request's arguments, a key's presence standing for cobra's Changed, and calls M12's
 // logic, which keeps its guards, their order, their identifiers and their words.
 var handlers = map[string]func(*call) error{
@@ -176,6 +177,10 @@ var handlers = map[string]func(*call) error{
 	findings.OpPSPValidate: func(c *call) error {
 		a := args(c.req.Args)
 		return runPSPValidate(c.options(), a.strings("files"), c.req.Files)
+	},
+	findings.OpTwinRehearse: func(c *call) error {
+		a := args(c.req.Args)
+		return runTwinRehearse(c.ctx, c.options(), &rehearseFlags{branch: a.string("branch"), branchGiven: a.given("branch")})
 	},
 }
 

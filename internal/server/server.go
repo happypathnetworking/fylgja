@@ -1,6 +1,6 @@
 // Package server is the API's server: the handlers of fylgja serve, the role that runs on
 // the lab host beside the worker and is the only way a user-facing client reaches the core
-// (D-040, D-041). M12's command logic lives here from the move: each of the twelve
+// (D-040, D-041). M12's command logic lives here from the move: each of the
 // operations is the command it is named after, reading and writing a per-request console
 // where the command read flags and wrote to stdout and stderr.
 //
@@ -103,7 +103,7 @@ func New(token string) *Server {
 	}
 }
 
-// operation is one of the twelve: its name, as the findings document names it and its path
+// operation is one of the thirteen: its name, as the findings document names it and its path
 // spells it; the handler, M12's command; and whether it takes the operator's interrupt
 // from its start frame.
 type operation struct {
@@ -112,7 +112,7 @@ type operation struct {
 	takesStream bool
 }
 
-// operations is the table of the twelve, each with its handler (handlers.go).
+// operations is the table of the thirteen, each with its handler (handlers.go).
 func operations() []operation {
 	ops := make([]operation, 0, len(api.Operations))
 	for _, name := range api.Operations {
@@ -122,11 +122,11 @@ func operations() []operation {
 }
 
 // takesStream is whether an operation starts a run the operator may interrupt: twin create,
-// twin provision and twin step. twin destroy is followed and takes none, as M12's took
-// none.
+// twin provision, twin step and twin rehearse (015). twin destroy is followed and takes
+// none, as M12's took none.
 func takesStream(op string) bool {
 	switch op {
-	case findings.OpTwinCreate, findings.OpTwinProvision, findings.OpTwinStep:
+	case findings.OpTwinCreate, findings.OpTwinProvision, findings.OpTwinStep, findings.OpTwinRehearse:
 		return true
 	}
 	return false
@@ -146,7 +146,7 @@ const (
 	outcomeStreamEnded    = "stream_ended"
 )
 
-// The names the log gives a request that is not one of the twelve.
+// The names the log gives a request that is not one of the thirteen.
 const (
 	logInterrupt = "interrupt"
 	logUnknown   = "unknown"
@@ -401,7 +401,7 @@ func (s *Server) logRequest(op, outcome string, began time.Time, level slog.Leve
 		"operation", op, "outcome", outcome, "duration", time.Since(began).Round(time.Millisecond))
 }
 
-// logName is the operation a path names, for the log alone: one of the twelve, the
+// logName is the operation a path names, for the log alone: one of the thirteen, the
 // interrupt, or unknown. No part of the path itself is logged.
 func logName(path string) string {
 	for _, op := range api.Operations {

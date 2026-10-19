@@ -78,9 +78,10 @@ const (
 	MaxStreamLength = 128
 )
 
-// Operations are the twelve, named as the findings document names them. Each is POST
+// Operations are the thirteen, named as the findings document names them. Each is POST
 // Path(op). There is no other: no health check, no listing of
-// runs, no fetch of a bundle.
+// runs, no fetch of a bundle. 015 adds twin.rehearse, which takes the branch and an
+// interrupt from its start.
 var Operations = []string{
 	findings.OpTwinCreate,
 	findings.OpTwinProvision,
@@ -94,6 +95,7 @@ var Operations = []string{
 	findings.OpIntentRead,
 	findings.OpSchemaCheck,
 	findings.OpPSPValidate,
+	findings.OpTwinRehearse,
 }
 
 // Path is an operation's path: its noun and its verb under the version,
@@ -112,11 +114,15 @@ func InterruptPath(stream string) string {
 const (
 	RenderText = "text" // what the command printed without --json at M12
 	RenderJSON = "json" // what it wrote to stderr under --json
+	// RenderMarkdown is text's frames, and on an operation that has a markdown rendering,
+	// twin.rehearse alone (015), the document frame's markdown beside its text; every other
+	// operation answers it as it answers text.
+	RenderMarkdown = "markdown"
 )
 
 // Request is one operation's body.
 type Request struct {
-	// Render is RenderText, RenderJSON or "".
+	// Render is RenderText, RenderJSON, RenderMarkdown or "".
 	Render string `json:"render,omitempty"`
 	// Args are the command's arguments as given: an absent key is a flag not given, and a
 	// present one a flag given, whatever its value. Each handler decodes them strictly.
@@ -200,9 +206,10 @@ func DecodeRequest(r io.Reader) (Request, error) {
 		return Request{}, fmt.Errorf("the request is not one: %w", err)
 	}
 	switch req.Render {
-	case "", RenderText, RenderJSON:
+	case "", RenderText, RenderJSON, RenderMarkdown:
 	default:
-		return Request{}, fmt.Errorf("the request is not one: render %q is neither %q nor %q", req.Render, RenderText, RenderJSON)
+		return Request{}, fmt.Errorf("the request is not one: render %q is not %q, %q or %q", req.Render, RenderText, RenderJSON,
+			RenderMarkdown)
 	}
 	for i, f := range req.Files {
 		if f.Path == "" {
@@ -391,9 +398,13 @@ type Frame struct {
 	// Files are the CTM (intent.read's ctm.json) or every file of a compiled bundle.
 	Files []File `json:"files,omitempty"`
 	// Document is the findings document, always the last frame; Text, beside it under
-	// RenderText, is its findings as text.
+	// RenderText and RenderMarkdown, is its findings as text.
 	Document json.RawMessage `json:"document,omitempty"`
 	Text     string          `json:"text,omitempty"`
+	// Markdown, beside it under RenderMarkdown on an operation that has a markdown
+	// rendering, twin.rehearse alone, is the report as markdown (015): a rendering, as the
+	// text is, never part of the document.
+	Markdown string `json:"markdown,omitempty"`
 }
 
 // The frames' kinds, as Frame.Kind names them.

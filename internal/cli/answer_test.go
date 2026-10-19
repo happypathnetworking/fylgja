@@ -521,6 +521,12 @@ func answerCases() []answerCase {
 			}
 			return answerWant{args: map[string]any{"files": paths}, files: files, kinds: []string{api.KindDocument}, status: findings.StatusRejected}
 		}},
+		// 015: twin.rehearse's guard, which refuses before any connection.
+		{"twin rehearse, refused (TestRehearseGuardsBeforeAnyConnection)", findings.OpTwinRehearse, func(t *testing.T) answerWant {
+			useStateRoot(t)
+			useService(t, nil)
+			return answerWant{kinds: []string{api.KindDocument}, status: findings.StatusError}
+		}},
 	}
 }
 

@@ -407,8 +407,8 @@ func TestTheRightTokenIsAnsweredWithTheVersionAndTheBuild(t *testing.T) {
 	carriesNoToken(t, "the log", log.String())
 }
 
-// From the move every operation of the twelve has its handler, M12's command, and the table
-// holds no other.
+// From the move every operation of the thirteen has its handler, M12's command or 015's, and
+// the table holds no other.
 func TestEveryOperationIsServed(t *testing.T) {
 	s := New(testToken)
 	if len(s.ops) != len(api.Operations) || len(handlers) != len(api.Operations) {
@@ -458,6 +458,11 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 			`twin.provision takes the bundle directory as its argument "bundle"`},
 		{findings.OpTwinVerify, `{"args":{"args":["x"]}}`, `twin.verify's argument "args" is given without "wait"`},
 		{findings.OpTwinVerify, `{"args":{"args":[]}}`, `twin.verify's argument "args" is given without "wait"`},
+		// 015: twin.rehearse takes the branch alone, and a string.
+		{findings.OpTwinRehearse, `{"args":{"stage":"change-1/head"}}`, `twin.rehearse takes no argument "stage"`},
+		{findings.OpTwinRehearse, `{"args":{"branch":"change-1","dry_run":true}}`, `twin.rehearse takes no argument "dry_run"`},
+		{findings.OpTwinRehearse, `{"args":{"branch":["change-1"]}}`, `twin.rehearse's argument "branch" is not a string`},
+		{findings.OpTwinRehearse, `{"files":[{"path":"a","data":""}]}`, "twin.rehearse takes no files"},
 	} {
 		resp, body := post(t, nil, srv.URL+api.Path(c.op), testToken, c.body, nil)
 		var p api.Problem
@@ -684,7 +689,7 @@ func TestABodyThatIsNotTheRequestIsRefused(t *testing.T) {
 	for _, c := range []struct{ body, says string }{
 		{`{"render":"text","nope":1}`, `json: unknown field "nope"`},
 		{`{"files":[{"path":"a","data":"","mode":420}]}`, `json: unknown field "mode"`},
-		{`{"render":"yaml"}`, `render "yaml" is neither "text" nor "json"`},
+		{`{"render":"yaml"}`, `render "yaml" is not "text", "json" or "markdown"`},
 		{`{"files":[{"path":"a","data":"%%%"}]}`, "illegal base64 data at input byte 0"},
 		{`{"files":[{"data":""}]}`, "files[0] has no path"},
 		{`not json`, "invalid character 'o' in literal null (expecting 'u')"},

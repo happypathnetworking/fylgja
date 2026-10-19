@@ -8,8 +8,9 @@
 # global, with no targets and no parameters, so Infrahub's task workers run each on every
 # proposed change, draft or not, reaching the API at FYLGJA_API_ADDRESS with
 # FYLGJA_API_TOKEN from their environment (the Compose override). fylgja-step asks for the
-# stage plan. Each binds the query fylgja_branch through its class's `query`, never a
-# `query:` key under its definition.
+# stage plan; fylgja-twin skips a draft, and otherwise asks for the rehearsal and posts its
+# report as a comment on the proposed change, its one write (D-049). Each binds the query
+# fylgja_branch through its class's `query`, never a `query:` key under its definition.
 
 queries:
   - name: device_config
@@ -38,3 +39,6 @@ check_definitions:
   - name: fylgja-step
     file_path: infrahub/checks/fylgja_step.py
     class_name: FylgjaStep
+  - name: fylgja-twin
+    file_path: infrahub/checks/fylgja_twin.py
+    class_name: FylgjaTwin

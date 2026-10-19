@@ -14,8 +14,11 @@ import (
 // checkTimeouts is each check definition .infrahub.yml registers, with the timeout its class
 // sets (contracts/checks.md): Infrahub makes the class's timeout the check's task timeout at
 // import, and a check it times out leaves its validator in_progress (research §1.4).
+// fylgja-twin's is the rehearsal's ceiling plus 600 s, which internal/rehearsal's
+// TestTheTwinCheckOutlastsItsRehearsal holds against the ceiling and the destroy (R-09).
 var checkTimeouts = map[string]int{
 	"fylgja-step": 300,
+	"fylgja-twin": 4200,
 }
 
 // checkQuery is the query every check's class binds: the cheap read the SDK requires.

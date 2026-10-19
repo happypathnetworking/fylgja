@@ -381,8 +381,10 @@ graph LR
     internal_provision --> internal_lab
     internal_provision --> internal_lab_wire
     internal_provision --> internal_psp
+    internal_provision --> internal_rehearsal
     internal_provision --> internal_stage
     internal_provision --> internal_step
+    internal_provision --> internal_verify
     internal_psp --> fylgja
     internal_psp --> internal_findings
     internal_rehearsal --> internal_findings

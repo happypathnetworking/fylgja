@@ -33,7 +33,7 @@ workspace "Fylgja" "A walking twin of network intent." {
                 findings = component "findings" "Findings, rules, the findings document, exit codes. The client's side links it too." "internal/findings"
             }
             worker = container "fylgja worker run" "The lab-host worker: runs the workflows and the host-bound activities." "Go, the same binary" {
-                workflows = component "provision" "The four workflows, their control activities, the worker's registration." "internal/provision"
+                workflows = component "provision" "The five workflows, the rehearsal running the provision, step and destroy as its children; their control activities; the worker's registration." "internal/provision"
                 wlab = component "lab" "The host-bound activities: deploy, readiness, push, reconcile, record, the wait." "internal/lab"
                 wstage = component "stage" "The read and compile pipelines." "internal/stage"
                 wverify = component "verify" "The readers and the wait." "internal/verify"
@@ -102,6 +102,8 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.worker.workflows -> fylgja.worker.wire "Schedules activities by name"
         fylgja.worker.workflows -> fylgja.worker.wlab "Registers the host-bound activities"
         fylgja.worker.workflows -> fylgja.worker.wstage "ReadIntent, Compile"
+        fylgja.worker.workflows -> fylgja.worker.wrehearsal "Classifies each stage"
+        fylgja.worker.workflows -> fylgja.worker.wverify "Takes the wait's default budget for the deadline"
         fylgja.worker.wlab -> fylgja.worker.wire "Takes and returns the payloads"
         fylgja.worker.wlab -> fylgja.worker.wverify "VerifyTwin waits"
         fylgja.worker.wverify -> fylgja.worker.wire "Reads the record's types"

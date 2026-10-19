@@ -247,7 +247,7 @@ cmd/fylgja/            main: the root command, `--json`, `--version` (the Makefi
 cmd/fylgja-fixture/    build tag `fixture`: schema load, seed (group join, generate), delete, SDL fetch, the tiers' changes to a throwaway branch, and its proposed change and stages. The only binary that writes to Infrahub
 embed.go               package fylgja: //go:embed of schema/*.yaml, psp/*.yaml, psp/*.json
 internal/api/          the API's wire (version, paths, headers, request, frames, event, files, problem, the bound) and the client that speaks it; imports internal/findings alone
-internal/server/       the API's server: the twelve handlers that hold the commands' logic, the token, the per-request console, the streams and the log; imports the core
+internal/server/       the API's server: the thirteen handlers that hold the commands' logic, the token, the per-request console, the streams and the log; imports the core
 internal/cli/          the client's commands: each builds one request, prints what comes back and exits by the document; imports cobra, internal/api, internal/findings and internal/tree and nothing else of the module (test-enforced)
 internal/tree/         a directory of regular files read into and written from a map, shared by internal/bundle and the client
 internal/intent/       Infrahub client (genqlient), conformance, CTM projection; the stage reader on the default branch's unnamed endpoints (proposed changes and their stages, orphans, the branch point, the artifact validators) and a branch's stamps
@@ -261,6 +261,7 @@ internal/verify/       the readers of a booted node; the assertions derived from
 internal/findings/     Finding, rule identifiers, the --json document, text and JSON rendering, exit codes
 internal/stages/       a proposed change's stages: the reference, its resolution to (branch, at), the staleness rule, the list and the plan; a step's target; walked by the platform grep
 internal/step/         the step between two bundles, a pure function of the two, held pure by a test; the push plan and the unapplied changes a step acts on
+internal/rehearsal/    a rehearsal's pure rules and renderings: the deadline, each stage's verdict, the report's block, its text lines, the reproduce commands and the markdown; imports findings, lab/wire and step alone, held pure by a test (no I/O, no clock, no environment); walked by the platform grep
 internal/testsupport/  build tag `contract || fixture`: the contract-test harness; never imported by product code (test-enforced)
 internal/stage/        the read and compile stages shared by the server's stage handlers, the provisioning activities and the dry run; imports no Temporal
 internal/provision/    Temporal workflows (provision, destroy, reconcile, step) and control activities; the workflow service's client, which the server uses; worker registration and start-up report
@@ -335,6 +336,7 @@ graph LR
     internal_lab_wire["internal/lab/wire"]
     internal_provision["internal/provision"]
     internal_psp["internal/psp"]
+    internal_rehearsal["internal/rehearsal"]
     internal_server["internal/server"]
     internal_stage["internal/stage"]
     internal_stages["internal/stages"]
@@ -383,6 +385,9 @@ graph LR
     internal_provision --> internal_step
     internal_psp --> fylgja
     internal_psp --> internal_findings
+    internal_rehearsal --> internal_findings
+    internal_rehearsal --> internal_lab_wire
+    internal_rehearsal --> internal_step
     internal_server --> internal_api
     internal_server --> internal_bundle
     internal_server --> internal_compiler
@@ -592,10 +597,11 @@ Rules:
   comments included, for every platform name the tree knows. The grep
   (`TestCompilerNamesNoPlatform`) walks named directories, not the whole of `internal/`:
   the compiler, `psp`, `lab`, `provision`, `stage`, `bundle`, `validate`, `step`,
-  `stages`, `verify`, `api`, `server`, `cli` and `tree`. A new package joins it only by
-  being added to that list. `internal/step` is also held pure by a test in the compiler's
-  shape. That grep is how [D-031](decisions.md#d-031) is enforced: a mechanism is keyed by
-  a format value, never by which platform is being provisioned.
+  `stages`, `verify`, `api`, `server`, `cli`, `tree` and `rehearsal`. A new package joins
+  it only by being added to that list. `internal/step` and `internal/rehearsal` are also
+  held pure by a test in the compiler's shape. That grep is how
+  [D-031](decisions.md#d-031) is enforced: a mechanism is keyed by a format value, never
+  by which platform is being provisioned.
 - **Contract tests use a real Infrahub, never a fake.** Generics resolution and
   time-travel are the integrations most likely to surprise us.
 - **Workflow tests use Temporal's `testsuite`**: retry, timeout, cancellation and

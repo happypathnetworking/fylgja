@@ -28,6 +28,7 @@ System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
     Component(Fylgja.fylgjaworkerrun.stage, "stage", $techn="internal/stage", $descr="The read and compile pipelines.", $tags="Component", $link="")
     Component(Fylgja.fylgjaworkerrun.verify, "verify", $techn="internal/verify", $descr="The readers and the wait.", $tags="Component", $link="")
     Component(Fylgja.fylgjaworkerrun.labwire, "lab/wire", $techn="internal/lab/wire", $descr="Activity names and the payloads crossing the task queue.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaworkerrun.rehearsal, "rehearsal", $techn="internal/rehearsal", $descr="A rehearsal's pure rules and renderings: the deadline, the verdict, the report and its markdown.", $tags="Component", $link="")
   }
 
 }
@@ -38,6 +39,7 @@ Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.stage, "ReadIntent,
 Rel(Fylgja.fylgjaworkerrun.lab, Fylgja.fylgjaworkerrun.labwire, "Takes and returns the payloads", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun.lab, Fylgja.fylgjaworkerrun.verify, "VerifyTwin waits", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun.verify, Fylgja.fylgjaworkerrun.labwire, "Reads the record's types", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaworkerrun.rehearsal, Fylgja.fylgjaworkerrun.labwire, "Compares the waits' findings; sums the node plans' budgets", $techn="", $tags="Relationship", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

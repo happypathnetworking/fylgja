@@ -26,6 +26,7 @@ workspace "Fylgja" "A walking twin of network intent." {
                 intent = component "intent" "The Infrahub client: intent, conformance, artifacts, proposed changes, stages, stamps, intent events." "internal/intent"
                 validate = component "validate" "Completeness and intent rules on the CTM." "internal/validate"
                 step = component "step" "The pure step between two bundles; the push plan." "internal/step"
+                rehearsal = component "rehearsal" "A rehearsal's pure rules and renderings: the deadline, the verdict, the report and its markdown." "internal/rehearsal"
                 compiler = component "compiler" "CTM + PSPs -> bundle. Pure. Its manifest is what the others read." "internal/compiler"
                 bundle = component "bundle" "The bundle format, canonical hashing, the store." "internal/bundle"
                 psp = component "psp" "Platform support packages: loading and validation." "internal/psp"
@@ -37,6 +38,7 @@ workspace "Fylgja" "A walking twin of network intent." {
                 wstage = component "stage" "The read and compile pipelines." "internal/stage"
                 wverify = component "verify" "The readers and the wait." "internal/verify"
                 wire = component "lab/wire" "Activity names and the payloads crossing the task queue." "internal/lab/wire"
+                wrehearsal = component "rehearsal" "A rehearsal's pure rules and renderings: the deadline, the verdict, the report and its markdown." "internal/rehearsal"
             }
             temporal = container "Workflow service" "Durable execution: run history, Schedule fylgja-follow." "Temporal"
             store = container "Bundle store" "<state root>/bundles/<bundle_id>/: every bundle compiled or provisioned." "Files" "Files"
@@ -93,6 +95,8 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.server.verify -> fylgja.server.compiler "Derives from the manifest"
         fylgja.server.validate -> fylgja.server.compiler "Surveys each device"
         fylgja.server.step -> fylgja.server.compiler "Compares two manifests"
+        fylgja.server.rehearsal -> fylgja.server.findings "Builds the report's block and words its findings"
+        fylgja.server.rehearsal -> fylgja.server.step "Draws what each step changed"
         fylgja.server.compiler -> fylgja.server.psp "Applies the mapping profile"
 
         fylgja.worker.workflows -> fylgja.worker.wire "Schedules activities by name"
@@ -101,6 +105,7 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.worker.wlab -> fylgja.worker.wire "Takes and returns the payloads"
         fylgja.worker.wlab -> fylgja.worker.wverify "VerifyTwin waits"
         fylgja.worker.wverify -> fylgja.worker.wire "Reads the record's types"
+        fylgja.worker.wrehearsal -> fylgja.worker.wire "Compares the waits' findings; sums the node plans' budgets"
 
         live = deploymentEnvironment "Lab" {
             deploymentNode "Operator's machine" "FYLGJA_API_TOKEN; FYLGJA_API_ADDRESS, or an SSH tunnel to the lab host" "" {

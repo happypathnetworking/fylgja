@@ -1179,3 +1179,80 @@ read 18.4 GiB available, load average 2.4; the dev server was up. No twin was bo
   searched for each token, password, secret key and login by its value: none, but for the
   images' five-character default inside `admin-state` and a containerlab log in the tests'
   data.
+
+### 5.6 The checks on `origin`'s `main`, imported on the host's registration (2026-10-19, 23:25Z–23:36Z; T054, R-21)
+
+The operator pushed this branch to `origin`'s `main` at 23:25:24Z, `9cba3c9` → `999456e`, a
+fast-forward (T054's note); at 23:28Z `git ls-remote origin` read `999456e` as
+`refs/heads/main`, this branch's head one commit ahead of it with a note in `tasks.md` alone.
+From `5207aae`, the registration's commit, `999456e` adds the two checks, their shared module,
+the query `fylgja_branch` and their `.infrahub.yml` entries; the template and `device_config`
+are unchanged. No twin was booted and no token was printed.
+
+- **Before** (23:28Z–23:29Z). `make build`, then the worker and the server stopped with
+  `pkill -x fylgja` and started with `CLAUDE.md`'s two lines (23:28:19Z), and verified: each
+  `exe` current, each environment carrying `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT` and
+  `FYLGJA_API_TOKEN`; the two listen lines, the bridge's followed by its unencrypted line; both
+  packages with their logins set; from each task worker `200 1 0.1.0-dev`, and `401` without
+  the token. `free -m` read 17,760 MiB available, load average 1.5; the dev server was up.
+  Infrahub's `main`, read-only: the registration `fylgja` `ref main`, `in-sync`, `online` at
+  `5207aae`; 0 check definitions; the query `device_config` alone; `main` and
+  `fylgja-fixture` alone; 0 proposed changes, stages, comments and user validators; the
+  schema hash `e43a1cde…`. Prefect (its API at the task manager's address on Compose's
+  network) held no flow run pending or running, and the minute sync completed each minute.
+- **The import** (23:29:33.99Z). `InfrahubReadOnlyRepositoryImportLastCommit(data: {id})` on
+  `main` answered `ok: true` in 0.3 s. Read every second: `sync_status` `syncing` at +10.7 s,
+  the query `fylgja_branch` at +15.4 s, **`fylgja-step` 300 and `fylgja-twin` 4200 at
+  +21.4 s**, and the commit `999456e`, `in-sync`, at +24.9 s. Prefect: `Import last commit
+  from read only git repository` 23:29:36.8–23:29:59.1, beside an `Import objects`
+  23:29:38.5–23:29:58.4. A second `Import last commit` followed at 23:30:02.9–23:30:08.3,
+  beside `Pull latest commit on fylgja` 23:30:02.9–23:30:12.7 and three `Import objects`.
+  Nothing in this run asked for it, and Prefect names neither a parent run nor an automation
+  for it; it began 1.3 s after a minute sync ended, and is not attributed here. Then **both
+  task workers' `Fetch git repository fylgja on <worker>` ran 23:30:12.9–23:30:13.9**: 39.9 s
+  after the call, and 14.8 s after the first import's flow ended, as §1.5 measured 13 s.
+- **After** (23:30:38Z). `CoreCheckDefinition` holds `fylgja-step` (timeout 300,
+  `infrahub/checks/fylgja_step.py`, `FylgjaStep`) and `fylgja-twin` (4200,
+  `infrahub/checks/fylgja_twin.py`, `FylgjaTwin`), each naming the repository `fylgja` and
+  the query `fylgja_branch`. `CoreGraphQLQuery` holds `device_config` and `fylgja_branch`. The
+  transform and the artifact definition are `srlinux_device_config` alone, as before, and
+  `main`'s hash is still `e43a1cde…`. **`fylgja-fixture`** (`0aba31a5…`) lists no check
+  definition and reads the registration at `5207aae`: made before the import, it never runs
+  the checks (§1.5), which is harmless and needs no rebase.
+- **`TestChecksInsideInfrahub` beside the imported checks** (23:31:11Z–23:35:30Z): **PASS in
+  249.9 s**, against 198.7 s alone at T050. The registration `fylgja-test-checks-<pid>`
+  imported in 10 s, the branch seeded in 30 s, the draft's pipeline concluded after 78 s, the
+  re-run with two marks `success` after 42 s (2,266 characters), the stale mark's `failure`
+  after 37 s (5,131). A watcher polling `CoreUserValidator` on `main` every 2 s read the
+  host's two checks on the test's draft beside the test-only pair, three times each, with
+  the same conclusions and message lengths. **`fylgja-step`** concluded `success` at the
+  creation (23:32:57–23:33:27, 30 s), `success` with two marks (14 s) and `failure` with the
+  stale mark (17 s). **`fylgja-twin`** concluded the draft's skip, `success`, in 18 s, 8 s
+  and 8 s. The server logged six `stage.plan`, two at each run (`rejected`: the branch point's
+  `contract.node.missing`, or the stale mark; 8.1–11.4 s), and the test's two `twin.show`;
+  no `twin.rehearse`. The draft's user validators appeared 43–54 s after its creation, before
+  its pipeline ended at 78 s.
+- **A hazard for tier 2 on this host, now that the checks are imported.** Every proposed
+  change opened here runs `fylgja-step` and `fylgja-twin` at its creation, and `fylgja-twin`
+  reads `is_draft` when it runs (§1.3: the user validators about 48 s after the create).
+  `TestRehearseComposedByTheFixtureTool` marks its draft ready (`-ready`, 0.2–0.3 s at T050)
+  straight after `-propose`. `-propose`'s wait, `testsupport.AwaitValidators`, ends once every
+  validator that exists has completed and an artifact validator is among them; it does not
+  wait for the user validators to exist. If the creation's user validators came after that
+  wait, `fylgja-twin` would read a ready proposed change and ask the operator's server for
+  `twin.rehearse`, booting a twin beside tier 2. The test's guard before `-run-checks user`
+  (`internal/server/rehearse_contract_test.go`, lines 389–407) covers a re-run, not the
+  creation's run. In this run the user validators came before the pipeline's end, and
+  T050's `-propose` waited 148–151 s, but no tier 2 has run beside the imported checks yet.
+  Case 9 awaits the draft's checks before its `-ready`, and no other test or case marks a
+  proposed change ready. This is for converge to weigh: for example, the test could await
+  the creation's user checks before `-ready` whenever `main` holds a definition, as case 9
+  does.
+- **Left clean** (23:36Z): `clab inspect --all` `{}`, no `local/twin`, no Schedule, no
+  workflow running; `main` and `fylgja-fixture` alone; 0 proposed changes, stages, comments
+  and user validators; the one registration `fylgja`, at `999456e`, with its two
+  definitions; no `fylgja-test-*` registration, definition or query. The test's output, the
+  watcher's log and the server's and worker's logs were searched for each token, password,
+  secret key and login of eight characters or more by its value, and the test's output and
+  the watcher's log for the shorter ones in a password's shape, as the test's `noCredential`
+  searches them: no hit.

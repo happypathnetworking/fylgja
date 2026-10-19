@@ -400,6 +400,7 @@ graph LR
     internal_server --> internal_lab_wire
     internal_server --> internal_provision
     internal_server --> internal_psp
+    internal_server --> internal_rehearsal
     internal_server --> internal_stage
     internal_server --> internal_stages
     internal_server --> internal_step

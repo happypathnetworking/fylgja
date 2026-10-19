@@ -59,6 +59,7 @@ Deployment_Node(Lab.Labhost, "Lab host", $type="", $descr="Ubuntu, Docker, conta
 
 }
 
+Rel(Lab.Operatorsmachine.fylgjaclient_1, Lab.Labhost.fylgjaserve.fylgjaserve_1, "POST /v1/<noun>/<verb>; bearer token", $techn="HTTP, NDJSON", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.temporalserverstartdev.Workflowservice_1, "Starts, follows, cancels runs", $techn="gRPC", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.temporalserverstartdev.Workflowservice_1, "Polls task queue fylgja", $techn="gRPC", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.Stateroot.Bundlestore_1, "Files and reads bundles", $techn="", $tags="Relationship", $link="")
@@ -72,7 +73,6 @@ Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.Docker.Labfylgja.
 Rel(Lab.Labhost.containerlab_1, Lab.Labhost.Docker.Labfylgja.NOSnode_1, "Creates and cables", $techn="", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Infrahubhost.Infrahub_1, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Infrahubhost.Infrahub_1, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
-Rel(Lab.Operatorsmachine.fylgjaclient_1, Lab.Labhost.fylgjaserve.fylgjaserve_1, "POST /v1/<noun>/<verb>; bearer token", $techn="HTTP, NDJSON", $tags="Relationship", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

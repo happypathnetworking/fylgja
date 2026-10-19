@@ -54,6 +54,7 @@ Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.compiler, "Reads manifests", $
 Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.lab, "Host check, inspect, dry run", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.verify, "Reads the twin", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.provision, "Starts and follows runs", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.rehearsal, "Decides the deadline; builds the report and its markdown", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.api, Fylgja.fylgjaserve.findings, "Carries the document", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.stages, Fylgja.fylgjaserve.stage, "Reads and compiles each stage", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.stages, Fylgja.fylgjaserve.intent, "Reads proposed changes, stages, stamps and intent events", $techn="", $tags="Relationship", $link="")

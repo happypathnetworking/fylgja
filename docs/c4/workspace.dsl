@@ -80,6 +80,7 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.server.handlers -> fylgja.server.lab "Host check, inspect, dry run"
         fylgja.server.handlers -> fylgja.server.verify "Reads the twin"
         fylgja.server.handlers -> fylgja.server.provisionClient "Starts and follows runs"
+        fylgja.server.handlers -> fylgja.server.rehearsal "Decides the deadline; builds the report and its markdown"
         fylgja.server.api -> fylgja.server.findings "Carries the document"
         fylgja.server.stages -> fylgja.server.stage "Reads and compiles each stage"
         fylgja.server.stages -> fylgja.server.intent "Reads proposed changes, stages, stamps and intent events"

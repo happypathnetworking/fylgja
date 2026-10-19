@@ -718,7 +718,7 @@ func TestBlock(t *testing.T) {
 			t.Errorf("link %s\nwant %s", link, want)
 		}
 		twin := jsonOf(t, v["twin"])
-		want = `{"bundle_id":"` + in.StagedID + `","stage":null,"state":"ready","source":"intent","nodes":3}`
+		want = `{"bundle_id":"` + in.StagedID + `","stage":null,"rehearsal":null,"state":"ready","source":"intent","nodes":3}`
 		if twin != canon(t, want) {
 			t.Errorf("twin %s\nwant %s", twin, want)
 		}
@@ -784,12 +784,14 @@ func TestBlock(t *testing.T) {
 			To:  wire.StepSide{Stage: &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "live", Description: "second", AtSource: "written"}, BundleID: target},
 			Run: wire.RunRef{WorkflowID: wire.StepWorkflowID, RunID: "01a3"}}
 		in.Record.Nodes[0].Holds = &prev // e1 refused its push and holds change-1/cabled
+		// A rehearsal's twin (015): the record names the run whose baseline it is.
+		in.Record.Rehearsal = &wire.RehearsalRef{WorkflowID: wire.RehearseWorkflowID, RunID: "01a1"}
 		r := read(t, in)
 		wait := &findings.VerifyWait{BudgetS: 20, Reads: 3, Outcome: "settled", AfterS: 2.1}
 		doc := document(t, schema, r, r.Block(TwinOf(in.Record, in.StagedID), nil, findings.ShowServiceOK, wait), findings.StatusNonconforming)
 		v := doc["verify"].(map[string]any)
 		want := `{"bundle_id":"` + target + `","stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"cabled","description":"first","at_source":"given"},` +
-			`"state":"diverged","source":"intent","nodes":3,"diverged":{"towards":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"live","description":"second","at_source":"written"},` +
+			`"rehearsal":{"workflow_id":"fylgja-rehearse","run_id":"01a1"},"state":"diverged","source":"intent","nodes":3,"diverged":{"towards":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"live","description":"second","at_source":"written"},` +
 			`"bundle_id":"` + target + `"},"run":{"workflow_id":"fylgja-step","run_id":"01a3"},"phase":"push"}}`
 		if got := jsonOf(t, v["twin"]); got != canon(t, want) {
 			t.Errorf("twin %s\nwant %s", got, want)

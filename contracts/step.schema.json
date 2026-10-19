@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/schemas/step.schema.json",
   "title": "fylgja twin step — the step block (M11, M12)",
-  "description": "The `step` block of the findings document fylgja twin step emits (operation twin.step), on the dry run and on the run. The two sides, M10's step between their bundles (stages.schema.json $defs/step since 014), containerlab's dry-run plan with each touched node's package declaration beside what containerlab reported, the push plan with each node's reasons, and, once a run closed, the step run, its outcome, the phase that failed, each push's outcome, the timings and when it started and ended. No device diff, artifact or bootstrap content, token or login. M12: wait, the step's waiting form after the record: budget_s on the dry run and before the run closed; outcome, reads, after_s and failing once the run closed and the wait ran; absent when the run was cancelled before the wait began. 014: each side names its stage (twin.json 6's shape) where it named a waypoint.",
+  "description": "The `step` block of the findings document fylgja twin step emits (operation twin.step), on the dry run and on the run. The two sides, M10's step between their bundles (stages.schema.json $defs/step since 014), containerlab's dry-run plan with each touched node's package declaration beside what containerlab reported, the push plan with each node's reasons, and, once a run closed, the step run, its outcome, the phase that failed, each push's outcome, the timings and when it started and ended. No device diff, artifact or bootstrap content, token or login. M12: wait, the step's waiting form after the record: budget_s on the dry run and before the run closed; outcome, reads, after_s and failing once the run closed and the wait ran; absent when the run was cancelled before the wait began. 014: each side names its stage (twin.json 6's shape) where it named a waypoint. 015: wait_counts, the wait's last read counted by kind as verify.schema.json counts them, optional beside wait.",
   "$defs": {
     "stage": {
       "type": ["object", "null"],
@@ -87,6 +87,18 @@
         "took_s": { "type": "number", "minimum": 0 }
       }
     },
+    "count": {
+      "type": "object",
+      "description": "015: one kind's count, as verify.schema.json's $defs/count",
+      "required": ["held", "failed"],
+      "additionalProperties": false,
+      "properties": {
+        "held": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0, "description": "failed and absent together" },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "unread": { "type": "integer", "minimum": 0 }
+      }
+    },
     "timings": {
       "type": "object",
       "additionalProperties": false,
@@ -133,6 +145,18 @@
             "reads": { "type": "integer", "minimum": 0 },
             "after_s": { "type": "number", "minimum": 0, "description": "seconds from the record to the read that settled, or to the wait's end otherwise" },
             "failing": { "type": "array", "items": { "type": "object", "required": ["rule", "object", "message"], "additionalProperties": false, "properties": { "rule": { "type": "string" }, "object": { "type": "string" }, "message": { "type": "string" } } }, "description": "the assertions still failing at the last read, and an unread node's operation.failed; [] when settled; never content" }
+          }
+        },
+        "wait_counts": {
+          "type": "object",
+          "description": "015: the wait's last read counted by kind, as twin verify counts its block; optional, absent when the wait made no read or has not ended",
+          "required": ["host_name", "port_enabled", "neighbor", "record"],
+          "additionalProperties": false,
+          "properties": {
+            "host_name": { "$ref": "#/$defs/count" },
+            "port_enabled": { "$ref": "#/$defs/count" },
+            "neighbor": { "$ref": "#/$defs/count" },
+            "record": { "$ref": "#/$defs/count" }
           }
         }
       }

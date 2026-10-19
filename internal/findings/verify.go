@@ -46,12 +46,15 @@ func orEmpty[T any](l []T) []T {
 // VerifyTwin is the twin as its record names it, and the staged bundle the assertions were
 // derived from.
 type VerifyTwin struct {
-	BundleID string          `json:"bundle_id"` // the staged bundle's
-	Stage    *ShowStage      `json:"stage"`
-	State    string          `json:"state"` // ready or diverged; a record before 4 reads ready
-	Source   string          `json:"source"`
-	Nodes    int             `json:"nodes"` // the record's node count
-	Diverged *VerifyDiverged `json:"diverged,omitempty"`
+	BundleID string     `json:"bundle_id"` // the staged bundle's
+	Stage    *ShowStage `json:"stage"`
+	// Rehearsal is the rehearsal run whose baseline the twin is, as a version 7 record names
+	// it (015); nil, written as null, when it names none and for an earlier record.
+	Rehearsal *ShowRef        `json:"rehearsal"`
+	State     string          `json:"state"` // ready or diverged; a record before 4 reads ready
+	Source    string          `json:"source"`
+	Nodes     int             `json:"nodes"` // the record's node count
+	Diverged  *VerifyDiverged `json:"diverged,omitempty"`
 }
 
 // VerifyDiverged is where a diverged twin's step was going and where it stopped.

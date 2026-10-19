@@ -610,6 +610,10 @@ type ShowRecord struct {
 	// Stage is the stage a version 6 record names (014), absent when it names none and
 	// for an earlier record.
 	Stage *ShowStage `json:"stage,omitempty"`
+	// Rehearsal is the rehearsal run whose baseline the twin is, as a version 7 record names
+	// it (015); absent when it names none and for an earlier record, as Stage is, so that a
+	// document of no rehearsal is the one M4 to M7's contracts accept.
+	Rehearsal *ShowRef `json:"rehearsal,omitempty"`
 	// State is a version 4 record's state, ready or diverged; absent for an earlier record,
 	// which has none.
 	State string `json:"state,omitempty"`

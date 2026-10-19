@@ -399,15 +399,16 @@ func short(id string) string {
 }
 
 // TwinInfo is the twin as its record names it, for the block: the staged
-// bundle the assertions were derived from, the record's stage, state, source and node
-// count, and where a diverged twin's step was going.
+// bundle the assertions were derived from, the record's stage, the rehearsal it is the
+// baseline of, its state, source and node count, and where a diverged twin's step was going.
 type TwinInfo struct {
-	BundleID string // the staged bundle's
-	Stage    *wire.StageRef
-	State    string // wire.StateReady or wire.StateDiverged; a record before 4 reads ready
-	Source   string
-	Nodes    int
-	Diverged *Divergence
+	BundleID  string // the staged bundle's
+	Stage     *wire.StageRef
+	Rehearsal *wire.RehearsalRef // nil for a twin no rehearsal built, and a record before 7
+	State     string             // wire.StateReady or wire.StateDiverged; a record before 4 reads ready
+	Source    string
+	Nodes     int
+	Diverged  *Divergence
 }
 
 // Divergence is a diverged record's step: the stage and bundle it was going to, its run
@@ -421,7 +422,7 @@ type Divergence struct {
 
 // TwinOf names the twin from its record and the staged bundle's id.
 func TwinOf(rec wire.TwinRecord, staged string) TwinInfo {
-	t := TwinInfo{BundleID: staged, Stage: rec.Stage, State: rec.State, Source: rec.Source, Nodes: len(rec.Nodes)}
+	t := TwinInfo{BundleID: staged, Stage: rec.Stage, Rehearsal: rec.Rehearsal, State: rec.State, Source: rec.Source, Nodes: len(rec.Nodes)}
 	if t.State == "" {
 		t.State = wire.StateReady
 	}
@@ -603,6 +604,9 @@ func (c counter) block(skips bool) findings.VerifyCount {
 
 func twinBlock(t TwinInfo) findings.VerifyTwin {
 	out := findings.VerifyTwin{BundleID: t.BundleID, Stage: StageBlock(t.Stage), State: t.State, Source: t.Source, Nodes: t.Nodes}
+	if r := t.Rehearsal; r != nil {
+		out.Rehearsal = &findings.ShowRef{WorkflowID: r.WorkflowID, RunID: r.RunID}
+	}
 	if d := t.Diverged; d != nil {
 		out.Diverged = &findings.VerifyDiverged{
 			Towards: findings.VerifyTowards{Stage: StageBlock(d.Towards), BundleID: d.TowardsBundle},

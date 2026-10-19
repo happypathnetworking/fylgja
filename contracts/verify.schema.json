@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/schemas/verify.schema.json",
   "title": "fylgja twin verify — the verify block (M12)",
-  "description": "The `verify` block of the findings document fylgja twin verify emits (operation twin.verify): the intent conformance report. The twin as its record names it; every assertion derived from the staged bundle's manifest with its outcome, grouped by node and by link; each node's configuration as the record claims it (nodes[].holds against the staged bundle), labelled recorded, never read; every cabled port intent disables, skipped with its reason; the counts by kind; the runs in flight as twin show reads them; and, with --wait, the wait. Advisory: no Fylgja operation reads it. No configuration line, artifact or bootstrap content, device diff, token or login anywhere: the values read are host names, admin states and neighbour names. 014: twin.stage and diverged.towards.stage name the stage (twin.json 6's shape) where they named a waypoint.",
+  "description": "The `verify` block of the findings document fylgja twin verify emits (operation twin.verify): the intent conformance report. The twin as its record names it; every assertion derived from the staged bundle's manifest with its outcome, grouped by node and by link; each node's configuration as the record claims it (nodes[].holds against the staged bundle), labelled recorded, never read; every cabled port intent disables, skipped with its reason; the counts by kind; the runs in flight as twin show reads them; and, with --wait, the wait. Advisory: no Fylgja operation reads it. No configuration line, artifact or bootstrap content, device diff, token or login anywhere: the values read are host names, admin states and neighbour names. 014: twin.stage and diverged.towards.stage name the stage (twin.json 6's shape) where they named a waypoint. 015: twin.rehearsal names the rehearsal run whose baseline the twin is, as twin.json 7 records it, or null.",
   "$defs": {
     "stage": {
       "type": ["object", "null"],
@@ -166,11 +166,21 @@
         "twin": {
           "type": "object",
           "description": "the twin as its record names it, and the staged bundle the assertions were derived from",
-          "required": ["bundle_id", "stage", "state", "source", "nodes"],
+          "required": ["bundle_id", "stage", "rehearsal", "state", "source", "nodes"],
           "additionalProperties": false,
           "properties": {
             "bundle_id": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "the staged bundle's identity (twin/bundle), which is the record's bundle_id for a ready twin and the target's for a diverged one whose stage landed" },
             "stage": { "$ref": "#/$defs/stage" },
+            "rehearsal": {
+              "type": ["object", "null"],
+              "description": "015: the rehearsal run whose baseline the twin is, as twin.json 7 records it; null when the record names none, and for a record of 6 or earlier",
+              "required": ["workflow_id", "run_id"],
+              "additionalProperties": false,
+              "properties": {
+                "workflow_id": { "const": "fylgja-rehearse" },
+                "run_id": { "type": "string", "minLength": 1 }
+              }
+            },
             "state": { "enum": ["ready", "diverged"], "description": "a record before 4 reads ready" },
             "source": { "enum": ["intent", "bundle"] },
             "nodes": { "type": "integer", "minimum": 0, "description": "the record's node count" },

@@ -63,9 +63,11 @@ run takes about 7, most of it tier 2. Its contract is
   `https://infrahub.opsmill.io/1.11.2` into `local/infrahub/docker-compose.yml`
   (git-ignored), with this repository's `scripts/infrahub/docker-compose.override.yml`
   copied beside it; the project `fylgja-infrahub` started with `local/.env` as its
-  environment file and awaited, up to 600 s, until `infrahub-server` is healthy and
-  `/api/info` answers 1.11.2; `fylgja-fixture -prepare-main`, which prepares `main` (What
-  Infrahub needs, below); then the fixture branch, `present` when it holds three `Ready`
+  environment file (and `up -d` run even with every service up when the override was
+  copied or replaced, so the task workers are recreated with it) and awaited, up to
+  600 s, until `infrahub-server` is healthy and `/api/info` answers 1.11.2;
+  `fylgja-fixture -prepare-main`, which prepares `main` (What Infrahub needs, below);
+  then the fixture branch, `present` when it holds three `Ready`
   artifacts, seeded when absent, cleaned and seeded when incomplete, the seed run once
   more on `graphql: None`. It runs alone on any host with `docker`, `go`, `curl` and `jq`
   on the `PATH`, and is what CI's contract job runs.
@@ -74,10 +76,13 @@ run takes about 7, most of it tier 2. Its contract is
   three-process paragraph below starts them, logging under `local/`. A process already
   running from this tree's `bin/fylgja` is `present`; one on a replaced or `(deleted)`
   binary is restarted. Each report is read: the dev server `SERVING`, and the worker's and
-  the server's naming every package the host can run with its login set. The last report
-  gives each part's counts, the tar and the platforms again, both tiers' times, how to run
-  tier 3, the three processes with their pids and logs, how to stop them (`pkill -x
-  fylgja; pkill -f 'temporal server start-dev'`), and `DONE` with the run's time.
+  the server's naming every package the host can run with its login set, the server's
+  naming loopback and the bridge as well, so a server on loopback alone is restarted.
+  The last report gives each part's counts, the tar and the platforms again, both tiers'
+  times, how to run tier 3, the three processes with their pids and logs, the server's
+  two addresses and that the token crosses the bridge in the clear, how to stop them
+  (`pkill -x fylgja; pkill -f 'temporal server start-dev'`), and `DONE` with the run's
+  time.
 
 **The cEOS tar.** The operator downloads `cEOS-lab-4.32.0.2F.tar` from Arista's software
 downloads, which need an account; the portal may name it `.tar.xz`, and the file is
@@ -169,6 +174,18 @@ Web UI at http://localhost:8233. `make temporal-dev` wraps the command.
 script's `fylgja` part leaves all three running. Start the worker and the server from
 shells that loaded `local/.env`, from the repository root,
 so they share one state root and one environment, the server adding `FYLGJA_API_TOKEN`.
+**The server listens on loopback and on the host's Docker bridge**
+([D-050](decisions.md#d-050)): `--listen 127.0.0.1:7650 --listen <bridge>:7650`, the
+bridge's address read with `docker network inspect bridge -f '{{(index .IPAM.Config
+0).Gateway}}'` (`172.17.0.1` by Docker's default), as `CLAUDE.md`'s start line and the
+script's `fylgja` part start it. Its report names both addresses, the bridge's followed by
+the line saying the token is sent unencrypted on it. Infrahub's task workers, where the
+checks run as clients, reach it there as `host.docker.internal:7650`: the Compose override
+gives them the `host-gateway` entry that name resolves to, `FYLGJA_API_ADDRESS` and
+`FYLGJA_API_TOKEN`, which Compose reads from `local/.env`. A changed override reaches the
+task workers only when they are recreated: `compose up -d` with the project's flags, which
+recreates the services whose configuration moved and leaves the rest and the volumes, and
+which the script's `infrahub` part runs whenever it copies or replaces the override.
 Every other command is a client of the server: from a shell that holds `FYLGJA_API_TOKEN`
 alone (and `FYLGJA_API_ADDRESS` off `127.0.0.1:7650`), on the lab host or, through
 `ssh -N -L 7650:127.0.0.1:7650 <lab host>`, on another machine with a binary built from
@@ -445,7 +462,7 @@ graph LR
 | `make test-contract` | tier 2: real Infrahub. Needs `local/.env`. Minutes. Runs `go test -count=1`, so it always asks the Infrahub in front of it: a cached result keys on the test binary, the environment and the files read, never on what a service answers. Its `-timeout 30m` is there because the packages share one Infrahub, which slows each of them well past the time it takes alone |
 | `make test-e2e` | tier 3: builds, then runs `scripts/e2e.sh`, eight cases and seven twins in one run (the [Test architecture](#test-architecture) describes them). Needs `make temporal-dev` and `make worker` running from the repository root, Docker, containerlab, **both** images and Infrahub; it starts its own server, so `make serve` need not run. `WORKER_LOG=<file>` adds the worker's log to its credential and marker greps. `PLATFORMS=<list>` narrows it to the cases a list of shipped packages can run, ending `E2E-PARTIAL` when it skipped one. Never in CI |
 | `make worker` | builds, then `fylgja worker run` on queue `fylgja` with the state root made absolute. Load `local/.env` in its shell first: it carries Infrahub's address and token and **both** node logins, and a worker started without them fails a create at the host check or the push. `docker` must be on its `PATH`, for the image-presence check. **Restart it after every rebuild** |
-| `make serve` | builds, then `fylgja serve` on `127.0.0.1:7650` with the state root made absolute, as `make worker` does. Load `local/.env` in its shell first: the server reads Infrahub's address and token, **both** node logins and `FYLGJA_API_TOKEN`, without which it refuses to start. `containerlab` and `docker` must be on its `PATH`. It prints where it listens (API version and build), its state root, that the workflow service and Infrahub are dialled on need, the memory budget and each package as the worker prints them, and one line a request on stderr. Detached: `setsid nohup env FYLGJA_STATE_ROOT="$PWD/local" bin/fylgja serve >> local/server.log 2>&1 < /dev/null &`. **Restart it after every rebuild** |
+| `make serve` | builds, then `fylgja serve` on `127.0.0.1:7650` with the state root made absolute, as `make worker` does. Load `local/.env` in its shell first: the server reads Infrahub's address and token, **both** node logins and `FYLGJA_API_TOKEN`, without which it refuses to start. `containerlab` and `docker` must be on its `PATH`. It prints where it listens (API version and build), its state root, that the workflow service and Infrahub are dialled on need, the memory budget and each package as the worker prints them, and one line a request on stderr. It listens on loopback alone; the lab host's server listens on the bridge as well, started as the three-process paragraph says. **Restart it after every rebuild** |
 | `make lint` | `gofmt`, `go vet`, `golangci-lint`. Runs with build tags `contract,fixture,e2e` (`.golangci.yml`), so the tagged files — `cmd/fylgja-fixture`, the contract tests and the boot half's tier-3 entry (`internal/conformance/boot_e2e_test.go`) — are linted too rather than only when Infrahub or a twin is up. `go vet -tags contract,fixture,e2e ./...` checks the same set |
 | `make diagrams` | validates the C4 model `docs/c4/workspace.dsl` and regenerates every committed diagram: the five views as C4-PlantUML and SVG under `docs/c4/`, the import graph above and `docs/diagrams/topologies.md`. Two images, pinned by digest in the Makefile (`STRUCTURIZR_IMAGE`, `PLANTUML_IMAGE`) and pulled on first use, do the model's part; `scripts/diagrams.sh` needs `go`. Needs Docker; no tier needs it, and a second run changes nothing |
 | `make sdl` | refetch Infrahub's SDL for the default branch, `main`, which carries the stage kind and its extension, into `schema/`. Infrahub's field order is not stable between fetches, so a refetch diffs by thousands of lines with nothing changed: compare two SDLs structurally, not by `diff`. The header is kept by hand |

@@ -231,17 +231,21 @@ if it is down.
 and `serve` itself is a request to `fylgja serve` ([D-040](docs/decisions.md#d-040),
 [D-041](docs/decisions.md#d-041)); `--version` and `--help` alone need no server. Start,
 stop and restart it yourself on the same occasions, detached, from a shell that has loaded
-`local/.env` (which carries `FYLGJA_API_TOKEN`; without it the server refuses to start):
+`local/.env` (which carries `FYLGJA_API_TOKEN`; without it the server refuses to start),
+on loopback and on the host's Docker bridge, where Infrahub's task workers reach it
+([D-050](docs/decisions.md#d-050)):
 
 ```
-set -a; . local/.env; set +a; setsid nohup env FYLGJA_STATE_ROOT="$PWD/local" bin/fylgja serve >> local/server.log 2>&1 < /dev/null &
+set -a; . local/.env; set +a; setsid nohup env FYLGJA_STATE_ROOT="$PWD/local" bin/fylgja serve --listen 127.0.0.1:7650 --listen "$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}'):7650" >> local/server.log 2>&1 < /dev/null &
 ```
 
 Then verify it: `/proc/<pid>/exe` is not `(deleted)`; its environment carries
 `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT` and `FYLGJA_API_TOKEN`; and its report
-(`local/server.log`) says `listening on 127.0.0.1:7650 (API version 1, build …)` and names
-both packages with their logins set. **Find both with `pgrep -x fylgja`** (`pgrep -f` also
-matches the shell that runs it) and tell them apart by `/proc/<pid>/cmdline`. The server
+(`local/server.log`) says `listening on 127.0.0.1:7650 (API version 1, build …)`, then
+`listening on 172.17.0.1:7650 (…)` (the bridge's address) followed straight away by
+`172.17.0.1:7650 is not a loopback address: the API's token is sent unencrypted on it`,
+and names both packages with their logins set. **Find both with `pgrep -x fylgja`**
+(`pgrep -f` also matches the shell that runs it) and tell them apart by `/proc/<pid>/cmdline`. The server
 dials nothing at start and keeps nothing between two requests, so a restart loses nothing
 but the answers it was sending, whose runs go on. It logs one line a request to
 `local/server.log`, never a token. `docker` and `containerlab` must be on the `PATH` of

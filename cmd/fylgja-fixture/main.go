@@ -3,7 +3,7 @@
 // Command fylgja-fixture prepares a local Infrahub for development: it loads the
 // generics contract and reference schema onto a branch and seeds the three-node fixture
 // or the mixed one, or makes following's branch change on a throwaway branch, or opens,
-// marks, checks and closes a throwaway branch's proposed change (D-045), or prepares main:
+// marks, readies, checks and closes a throwaway branch's proposed change (D-045), or prepares main:
 // the schema, the group and this repository's read-only registration (D-044). Development tooling, not the product —
 // it writes to Infrahub, which the product never does. Build-tagged so it cannot be built
 // by accident.
@@ -15,8 +15,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/happypathnetworking/fylgja/internal/testsupport"
 )
@@ -41,6 +43,9 @@ func main() {
 		"set every device's site on a throwaway branch and exit (regenerates to identical bytes)")
 	disablePort := flag.String("disable-port", "",
 		"disable one interface on a throwaway branch and exit, as <device>:<interface>")
+	addInterface := flag.String("add-interface", "",
+		"add one physical interface, enabled and uncabled, to a device on a "+testsupport.TestBranchPrefix+
+			"* -branch and exit, as <device>:<name> (render it with -generate)")
 	mixed := flag.Bool("mixed", false,
 		"seed the mixed fixture (two platforms, three devices) on a throwaway branch instead of the three-node one")
 	propose := flag.Bool("propose", false,
@@ -50,6 +55,11 @@ func main() {
 			"(head and branch-point are written too: a test writes what Fylgja must refuse)")
 	runCheck := flag.Bool("run-check", false,
 		"run a throwaway -branch's open proposed change's artifact checks, wait for its artifact validator, and exit")
+	runChecks := flag.String("run-checks", "",
+		"artifact or user: run a throwaway -branch's open proposed change's checks of that kind and exit; "+
+			"artifact is -run-check, user waits up to 4,500s for every user validator and prints each check's conclusion")
+	ready := flag.Bool("ready", false,
+		"mark a throwaway -branch's open proposed change ready for review (is_draft false), and exit; it starts no check")
 	closePC := flag.Bool("close", false, "close a throwaway -branch's open proposed change (its stages stay), and exit")
 	at := flag.String("at", "",
 		"with -stage: its as_of, verbatim; omitted, its at is when it was written")
@@ -82,8 +92,9 @@ func main() {
 		fmt.Fprintln(os.Stderr, "fylgja-fixture: -at and -description describe the stage -stage marks; give it")
 		os.Exit(1)
 	}
-	if *propose || *stage != "" || *runCheck || *closePC {
-		if err := proposal(*branch, *propose, *stage, *runCheck, *closePC, *at, *description); err != nil {
+	if *propose || *ready || *stage != "" || *runCheck || *runChecks != "" || *closePC {
+		if err := proposal(*branch, proposalFlags{propose: *propose, ready: *ready, label: *stage, runCheck: *runCheck,
+			runChecks: *runChecks, closePC: *closePC, at: *at, description: *description}); err != nil {
 			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
 			os.Exit(1)
 		}
@@ -106,8 +117,8 @@ func main() {
 		}
 		return
 	}
-	if *generate || *setRole != "" || *setSite != "" || *disablePort != "" {
-		if err := change(*branch, *generate, *setRole, *setSite, *disablePort); err != nil {
+	if *generate || *setRole != "" || *setSite != "" || *disablePort != "" || *addInterface != "" {
+		if err := change(*branch, *generate, *setRole, *setSite, *disablePort, *addInterface); err != nil {
 			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
 			os.Exit(1)
 		}
@@ -264,24 +275,50 @@ func addMixedLinkTo(branch string) error {
 	return nil
 }
 
+// proposalFlags are the proposed-change flags as given: -stage's label, with -at and
+// -description, and -run-checks' kind.
+type proposalFlags struct {
+	propose, ready  bool
+	label           string
+	runCheck        bool
+	runChecks       string
+	closePC         bool
+	at, description string
+}
+
+// The kinds -run-checks takes: artifact, which -run-check is, and user.
+const (
+	checksArtifact = "artifact"
+	checksUser     = "user"
+)
+
+// userChecksWait bounds -run-checks user: the live check's timeout of 4,200 s and a margin
+// (research R-09, R-20).
+const userChecksWait = 4500 * time.Second
+
 // proposal runs the one proposed-change flag given. Each is refused, before any request,
 // on the fixture and on a branch outside the test prefix: an operator's proposed change is
 // the operator's, and the fixture has none. More than one at once is refused rather than
-// run in an order the command line does not show.
-func proposal(branch string, propose bool, label string, runCheck, closePC bool, at, description string) error {
+// run in an order the command line does not show, and so is a kind -run-checks does not
+// take.
+func proposal(branch string, f proposalFlags) error {
 	var given []string
-	for _, f := range []struct {
+	for _, g := range []struct {
 		name string
 		set  bool
-	}{{"propose", propose}, {"stage", label != ""}, {"run-check", runCheck}, {"close", closePC}} {
-		if f.set {
-			given = append(given, "-"+f.name)
+	}{{"propose", f.propose}, {"ready", f.ready}, {"stage", f.label != ""}, {"run-check", f.runCheck},
+		{"run-checks", f.runChecks != ""}, {"close", f.closePC}} {
+		if g.set {
+			given = append(given, "-"+g.name)
 		}
 	}
 	if len(given) > 1 {
 		return fmt.Errorf("%s act on one proposed change one at a time; give one", strings.Join(given, " and "))
 	}
 	flagName := given[0]
+	if f.runChecks != "" && f.runChecks != checksArtifact && f.runChecks != checksUser {
+		return fmt.Errorf("-run-checks takes %s or %s, got %q", checksArtifact, checksUser, f.runChecks)
+	}
 	if branch == testsupport.FixtureBranch {
 		return fmt.Errorf("%s refuses branch %s: the fixture has no proposed change", flagName, branch)
 	}
@@ -293,7 +330,7 @@ func proposal(branch string, propose bool, label string, runCheck, closePC bool,
 	if err != nil {
 		return err
 	}
-	if propose {
+	if f.propose {
 		return openProposal(c, branch)
 	}
 	id, err := openProposalOf(c, branch)
@@ -301,9 +338,14 @@ func proposal(branch string, propose bool, label string, runCheck, closePC bool,
 		return err
 	}
 	switch {
-	case label != "":
-		return markStage(c, branch, id, label, at, description)
-	case runCheck:
+	case f.label != "":
+		return markStage(c, branch, id, f.label, f.at, f.description)
+	case f.ready:
+		if err := c.MarkReady(id); err != nil {
+			return err
+		}
+		fmt.Printf("proposed change %s on %s marked ready for review\n", id, branch)
+	case f.runCheck || f.runChecks == checksArtifact:
 		start := time.Now()
 		stamp, err := c.RunCheck(id, 120*time.Second)
 		if err != nil {
@@ -311,6 +353,8 @@ func proposal(branch string, propose bool, label string, runCheck, closePC bool,
 		}
 		fmt.Printf("artifact checks of proposed change %s on %s concluded: validator completed at %s, after %.0fs\n",
 			id, branch, stamp, time.Since(start).Seconds())
+	case f.runChecks == checksUser:
+		return runUserChecks(c, branch, id)
 	default:
 		if err := c.CloseProposedChange(id); err != nil {
 			return err
@@ -382,6 +426,35 @@ func markStage(c *testsupport.Client, branch, id, label, at, description string)
 	return nil
 }
 
+// runUserChecks runs the open proposed change's user checks, waits for each check
+// definition the branch sees to run again to completed, and prints one line per check: its
+// name, its conclusion and its message's length, never the message, which a check fills.
+// A branch that sees no definition returns at once, saying so.
+func runUserChecks(c *testsupport.Client, branch, id string) error {
+	rows, err := c.RunUserChecks(id, userChecksWait)
+	if err != nil {
+		return err
+	}
+	if len(rows) == 0 {
+		fmt.Printf("no user check ran on proposed change %s on %s: the branch sees no check definition\n", id, branch)
+		return nil
+	}
+	for _, r := range rows {
+		fmt.Printf("check %s: %s (message %s characters)\n", r.Name, r.Conclusion, grouped(utf8.RuneCountInString(r.Message)))
+	}
+	return nil
+}
+
+// grouped writes n with a comma between each group of three digits, as the contracts write
+// a count: 2,311.
+func grouped(n int) string {
+	s := strconv.Itoa(n)
+	for i := len(s) - 3; i > 0; i -= 3 {
+		s = s[:i] + "," + s[i:]
+	}
+	return s
+}
+
 // plural names a count with its noun's form.
 func plural(n int, one, many string) string {
 	if n == 1 {
@@ -399,10 +472,27 @@ func plural(n int, one, many string) string {
 // nothing when intent changes, so a change and its rendering are two
 // calls, and a caller that forgets the second sees the old bytes — which is the
 // behaviour the tiers are written against, not a bug to paper over here.
-func change(branch string, generate bool, role, site, port string) error {
+//
+// -add-interface (015) is narrower still: it refuses any branch outside the test prefix as
+// the proposed-change flags do, and a value that is not <device>:<name>, both before any
+// request. The port it adds is one the device's artifact names once generated, and the
+// compile may omit (research R-14): a rehearsal's stage made to fail at the push.
+func change(branch string, generate bool, role, site, port, addIface string) error {
 	if branch == testsupport.FixtureBranch {
 		return fmt.Errorf("this flag refuses branch %s: the fixture is written once and never changed; "+
 			"seed a throwaway branch and name it with -branch", branch)
+	}
+	var ifDevice, ifName string
+	if addIface != "" {
+		if !strings.HasPrefix(branch, testsupport.TestBranchPrefix) {
+			return fmt.Errorf("-add-interface refuses branch %s: every branch it changes begins %s; "+
+				"seed a throwaway branch and name it with -branch", branch, testsupport.TestBranchPrefix)
+		}
+		var ok bool
+		ifDevice, ifName, ok = strings.Cut(addIface, ":")
+		if !ok || ifDevice == "" || ifName == "" {
+			return fmt.Errorf("-add-interface takes <device>:<name>, got %q", addIface)
+		}
 	}
 	c, err := testsupport.NewClient()
 	if err != nil {
@@ -438,6 +528,12 @@ func change(branch string, generate bool, role, site, port string) error {
 			return err
 		}
 		fmt.Printf("interface %s on %s disabled on %s\n", iface, device, branch)
+	}
+	if addIface != "" {
+		if err := c.AddInterface(branch, ifDevice, ifName); err != nil {
+			return err
+		}
+		fmt.Printf("interface %s added on %s on %s: physical, enabled, no link; -generate renders it\n", ifName, ifDevice, branch)
 	}
 	if generate {
 		if err := c.GenerateArtifacts(branch); err != nil {

@@ -124,7 +124,7 @@ func stepLab() []wire.LabNode {
 func stepTwinHost() wire.HostReport {
 	st := stageCabled
 	return wire.HostReport{LabPresent: true, TwinDirPresent: true, Nodes: stepLab(),
-		Twin: &wire.TwinRecord{TwinVersion: "6", Lab: wire.LabName, BundleID: stepFrom, Stage: &st, State: wire.StateReady,
+		Twin: &wire.TwinRecord{TwinVersion: "7", Lab: wire.LabName, BundleID: stepFrom, Stage: &st, State: wire.StateReady,
 			Provenance: wire.Provenance{Branch: "change-1", At: stepFromAt}, Source: wire.SourceIntent,
 			Run: wire.RunRef{WorkflowID: WorkflowProvision, RunID: "run-0"}},
 		Phrase: "the twin of branch change-1 at " + stepFromAt + ", stage change-1/cabled"}
@@ -285,10 +285,22 @@ func (h *stepHarness) landed(_ context.Context, in wire.PushInput) (wire.PushRes
 }
 
 // settledWait answers the step's wait as VerifyTwin does on a twin that conforms at its
-// second read: settled, written into the record.
+// second read: settled, written into the record, with that read's counts.
 func settledWait(_ context.Context, in wire.VerifyInput) (wire.VerifyResult, error) {
+	counts := settledCounts()
 	return wire.VerifyResult{Wait: wire.StepWait{Outcome: wire.WaitSettled, BudgetS: in.BudgetS, Reads: 2, AfterS: 2.4,
-		From: in.From, EndedAt: "2026-10-02T09:16:13.400000Z", Failing: []wire.StepFinding{}}, Recorded: true}, nil
+		From: in.From, EndedAt: "2026-10-02T09:16:13.400000Z", Failing: []wire.StepFinding{}}, Recorded: true, Counts: &counts}, nil
+}
+
+// settledCounts is the read that settled, counted by kind, as settledWait answers it.
+func settledCounts() wire.VerifyCounts {
+	zero := func() *int { n := 0; return &n }
+	return wire.VerifyCounts{
+		HostName:    findings.VerifyCount{Held: 2, Unread: zero()},
+		PortEnabled: findings.VerifyCount{Held: 2, Skipped: zero(), Unread: zero()},
+		Neighbor:    findings.VerifyCount{Held: 2, Skipped: zero(), Unread: zero()},
+		Record:      findings.VerifyCount{Held: 2},
+	}
 }
 
 // recordAs answers the record step as RecordStep would, in the record's outline: the
@@ -1932,10 +1944,10 @@ func runStepWait(t *testing.T, c stepWaitCase, waitS int, wait any) stepWaitRun 
 	return stepWaitRun{res: res, record: recorded, verify: stepInputs[wire.VerifyInput](h, wire.ActVerifyTwin), calls: h.calls()}
 }
 
-// withoutTheWait is a result as the no-wait run reaches it: no wait, and none of the
-// warnings the wait adds.
+// withoutTheWait is a result as the no-wait run reaches it: no wait or counts, and none of
+// the warnings the wait adds.
 func withoutTheWait(res StepResult) StepResult {
-	res.Wait = nil
+	res.Wait, res.WaitCounts = nil, nil
 	res.Findings = slices.DeleteFunc(slices.Clone(res.Findings), func(f findings.Finding) bool {
 		return f.Rule == findings.RuleVerifyWaitUnsettled
 	})
@@ -1966,8 +1978,8 @@ func sameAsTheNoWaitRun(t *testing.T, base, got stepWaitRun, waitS int) {
 }
 
 // A wait that settles changes nothing the record step decided, after every record the run
-// writes or tries to, and the result carries the wait as the activity gave it; the status and
-// exit are the no-wait run's.
+// writes or tries to, and the result carries the wait and its counts as the activity gave
+// them (015); the status and exit are the no-wait run's, which carries no counts.
 func TestStepWaitsAfterEveryRecord(t *testing.T) {
 	for _, c := range stepWaitCases() {
 		t.Run(c.name, func(t *testing.T) {
@@ -1981,6 +1993,11 @@ func TestStepWaitsAfterEveryRecord(t *testing.T) {
 				EndedAt: "2026-10-02T09:16:13.400000Z", Failing: []wire.StepFinding{}}
 			if got.res.Wait == nil || !reflect.DeepEqual(*got.res.Wait, want) {
 				t.Errorf("wait %+v, want the activity's %+v", got.res.Wait, want)
+			}
+			if counts := settledCounts(); got.res.WaitCounts == nil || !reflect.DeepEqual(*got.res.WaitCounts, counts) ||
+				base.res.WaitCounts != nil {
+				t.Errorf("wait counts %+v (the no-wait run's %+v), want the activity's %+v", got.res.WaitCounts,
+					base.res.WaitCounts, counts)
 			}
 			if carries(got.res.Findings, findings.RuleVerifyWaitUnsettled, findings.StepObserve) {
 				t.Errorf("findings %v: a settled wait adds no warning", rules(got.res.Findings))
@@ -2054,6 +2071,10 @@ func TestStepWaitUnsettledAddsAWarningAlone(t *testing.T) {
 					got.res.Wait.BudgetS != 120 || got.res.Wait.From != base.res.EndedAt || !reflect.DeepEqual(got.res.Wait.Failing, w.failing) {
 					t.Errorf("wait %+v, want %s after %d reads, budget 120, from the record's time, failing %+v", got.res.Wait,
 						w.outcome, w.reads, w.failing)
+				}
+				// No answer here carries counts, and an activity that failed outright gave none.
+				if got.res.WaitCounts != nil {
+					t.Errorf("wait counts %+v, want none: the activity gave none", got.res.WaitCounts)
 				}
 				warning := findings.Finding{Severity: findings.Warning, Rule: findings.RuleVerifyWaitUnsettled,
 					Object: "default-test-run-id", Step: findings.StepObserve, Message: w.message}

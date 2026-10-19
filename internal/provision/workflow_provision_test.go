@@ -126,7 +126,43 @@ func TestProvisionCarriesTheStageToTheRecord(t *testing.T) {
 	}
 }
 
-// The field is omitted when nil, so an M2–M7 input and the record step's input for it
+// A rehearsal's baseline is a create from a stage (015): the same activities, with the
+// rehearsal run copied to the record step as data beside the stage, and nil there when the
+// run was not a rehearsal's.
+func TestProvisionCarriesTheRehearsalToTheRecord(t *testing.T) {
+	seeded := &StageInput{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "seeded",
+		Description: "the devices, no links", AtSource: "given"}
+	run := &wire.RehearsalRef{WorkflowID: wire.RehearseWorkflowID, RunID: "01a1b2c3-0000-7000-8000-0000000000a1"}
+	for label, given := range map[string]*wire.RehearsalRef{"a rehearsal's baseline": run, "a hand create": nil} {
+		t.Run(label, func(t *testing.T) {
+			h := newHarness(t)
+			var recorded wire.RecordInput
+			h.env.OnActivity(wire.ActRecordTwin, mock.Anything, mock.Anything).Return(
+				func(_ context.Context, in wire.RecordInput) (wire.RecordResult, error) {
+					recorded = in
+					rec := recordFor(in)
+					rec.Stage, rec.Rehearsal = in.Stage, in.Rehearsal
+					return wire.RecordResult{Path: in.TwinDir + "/twin.json", Record: rec}, nil
+				})
+			h.mockHappyPath()
+
+			res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "change-1", At: "2026-10-19T09:00:00+00:00",
+				Stage: seeded, Rehearsal: given})
+
+			if res.Outcome != OutcomeReady {
+				t.Fatalf("outcome %q, findings %+v; want ready", res.Outcome, res.Findings)
+			}
+			if !reflect.DeepEqual(recorded.Rehearsal, given) || !reflect.DeepEqual(recorded.Stage, seeded) {
+				t.Errorf("record input's rehearsal = %+v, stage %+v; want %+v and %+v", recorded.Rehearsal, recorded.Stage, given, seeded)
+			}
+			if res.Twin == nil || !reflect.DeepEqual(res.Twin.Rehearsal, given) {
+				t.Errorf("twin = %+v, want the record naming %+v", res.Twin, given)
+			}
+		})
+	}
+}
+
+// The fields are omitted when nil, so an M2–M7 input and the record step's input for it
 // serialise as they did: the recorded histories' payloads are byte-identical.
 func TestAnInputWithNoStageSerialisesAsBefore(t *testing.T) {
 	for label, v := range map[string]any{
@@ -137,8 +173,8 @@ func TestAnInputWithNoStageSerialisesAsBefore(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(b), `"stage"`) {
-			t.Errorf("%s with no stage serialises a stage key: %s", label, b)
+		if strings.Contains(string(b), `"stage"`) || strings.Contains(string(b), `"rehearsal"`) {
+			t.Errorf("%s with no stage or rehearsal serialises its key: %s", label, b)
 		}
 	}
 }

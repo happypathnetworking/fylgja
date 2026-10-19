@@ -100,6 +100,10 @@ type ProvisionInput struct {
 	// step writes into twin.json. The run branches on nothing of it. Nil in every input
 	// and recorded history of a run not created from a stage, and omitted when nil.
 	Stage *StageInput `json:"stage,omitempty"`
+	// Rehearsal is the rehearsal run whose baseline this run is (015), which the record step
+	// writes into twin.json. The run branches on nothing of it. Nil in every input and
+	// recorded history of a run a rehearsal did not start, and omitted when nil.
+	Rehearsal *wire.RehearsalRef `json:"rehearsal,omitempty"`
 }
 
 // StageInput names a stage as the record does: its proposed change by id and source
@@ -324,4 +328,8 @@ type StepResult struct {
 	// cancelled before the wait began, and every run of a history from before its marker.
 	// Nothing else of the result depends on it.
 	Wait *wire.StepWait `json:"wait,omitempty"`
+	// WaitCounts is the wait's last read counted by kind, as the activity answered it, for a
+	// rehearsal's report (015, research R-07). Nil when the activity gave none: the wait did
+	// not run, failed outright, kept no read, or was a retry's answer from the record.
+	WaitCounts *wire.VerifyCounts `json:"wait_counts,omitempty"`
 }

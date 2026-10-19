@@ -43,6 +43,9 @@ import (
 //     same in.From. The end of the window is not retried, since VerifyOptions sets
 //     the schedule-to-close equal to the start-to-close, and the run says the wait could not
 //     complete, with the timeout's finding, and the record's wait stays null.
+//   - The result counts the wait's last read by kind (015, research R-07), for a
+//     rehearsal's report; the record keeps no counts, so a retry that returns the wait the
+//     record holds carries none.
 func (a *Activities) VerifyTwin(ctx context.Context, in wire.VerifyInput) (wire.VerifyResult, error) {
 	stop := heartbeat(ctx)
 	defer stop()
@@ -123,7 +126,17 @@ func (a *Activities) VerifyTwin(ctx context.Context, in wire.VerifyInput) (wire.
 	if err != nil {
 		return failed(path, "the step's wait is not recorded: %v", err)
 	}
-	return wire.VerifyResult{Wait: wait, Recorded: recorded}, nil
+	return wire.VerifyResult{Wait: wait, Recorded: recorded, Counts: counts(w)}, nil
+}
+
+// counts is the wait's last read counted by kind, or nil when no read was kept: the
+// cancellation cut the first, and Last is the zero Report.
+func counts(w verify.WaitResult) *wire.VerifyCounts {
+	if w.Last.ReadAt.IsZero() {
+		return nil
+	}
+	c := w.Last.Counts()
+	return &c
 }
 
 // failing is what still fails at the wait's last read, as the record keeps it: each failed or

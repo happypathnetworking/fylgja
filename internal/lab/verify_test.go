@@ -24,7 +24,7 @@ import (
 )
 
 // The step's wait against a scratch twin directory
-// holding the three-node golden as the staged bundle and a version 6 record whose step
+// holding the three-node golden as the staged bundle and a version 7 record whose step
 // names the run, a fake node table in the suite's shape, and a fake clock, so every wait
 // runs in milliseconds.
 
@@ -786,6 +786,78 @@ func TestVerifyTwinKeepsNoReadACancellationCut(t *testing.T) {
 			noSecret(t, a, log, res)
 		})
 	}
+}
+
+// The result counts the wait's last read by kind (015, research R-07): the three-node twin's
+// three host names, six ports and six link ends, and the record's three claims; nil when no
+// read was kept, and when a retry returns the wait the record holds, which keeps no counts.
+func TestVerifyTwinCountsItsLastRead(t *testing.T) {
+	disabled := func(r *waitReader) {
+		r.set("172.20.20.2:57400", srlEnabledPath("ethernet-1/2"), srlEnabledAnswer("ethernet-1/2", "disable"))
+	}
+	for _, c := range []struct {
+		name    string
+		change  func(*waitReader)
+		budgetS int
+		before  bool // the run is cancelled before the first read
+		want    string
+	}{
+		{"settled", func(*waitReader) {}, 120, false,
+			`{"host_name":{"held":3,"failed":0,"unread":0},"port_enabled":{"held":6,"failed":0,"skipped":0,"unread":0},` +
+				`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"record":{"held":3,"failed":0}}`},
+		{"expired with a port disabled", disabled, 3, false,
+			`{"host_name":{"held":3,"failed":0,"unread":0},"port_enabled":{"held":5,"failed":1,"skipped":0,"unread":0},` +
+				`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"record":{"held":3,"failed":0}}`},
+		{"incomplete with a node unread", func(r *waitReader) {
+			disabled(r)
+			for _, path := range []string{"/system/name/host-name", srlEnabledPath("ethernet-1/1"), srlEnabledPath("ethernet-1/2"),
+				srlNeighborPath("ethernet-1/1"), srlNeighborPath("ethernet-1/2")} {
+				r.errs["172.20.20.3:57400 "+path] = errors.New("connection refused")
+			}
+		}, 2, false,
+			`{"host_name":{"held":2,"failed":0,"unread":1},"port_enabled":{"held":3,"failed":1,"skipped":0,"unread":2},` +
+				`"neighbor":{"held":4,"failed":0,"skipped":0,"unread":2},"record":{"held":3,"failed":0}}`},
+		{"cancelled before the first read", disabled, 120, true, "null"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r := healthyTwin()
+			c.change(r)
+			a, _, _ := waitingTwin(t, inspectThree(t), waitRunID, r)
+			ctx, cancel := context.WithCancelCause(context.Background())
+			defer cancel(nil)
+			if c.before {
+				cancel(temporal.NewCanceledError())
+			}
+			res, err := a.VerifyTwin(ctx, waitInput(c.budgetS))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got, _ := json.Marshal(res.Counts); string(got) != c.want {
+				t.Errorf("counts %s\nwant %s", got, c.want)
+			}
+			b, _ := os.ReadFile(a.Paths.TwinJSON)
+			if strings.Contains(string(b), "counts") || strings.Contains(string(b), "held") {
+				t.Errorf("twin.json keeps the counts; they are the result's alone:\n%s", b)
+			}
+		})
+	}
+
+	t.Run("a retry finds the wait written", func(t *testing.T) {
+		a, _, _ := waitingTwin(t, inspectThree(t), waitRunID, healthyTwin())
+		rec := waitRecord(t, waitRunID, func(*StepFields) {})
+		rec.Step.Wait = &wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 1, From: waitFromStamp,
+			EndedAt: waitFromStamp, Failing: []wire.StepFinding{}}
+		if err := WriteRecord(a.Paths.TwinJSON, rec); err != nil {
+			t.Fatal(err)
+		}
+		res, err := a.VerifyTwin(context.Background(), waitInput(120))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !res.Recorded || res.Counts != nil {
+			t.Errorf("recorded %t, counts %+v; want the written wait with no counts", res.Recorded, res.Counts)
+		}
+	})
 }
 
 // A record whose step names the run, but which will not take the wait, is operation.failed at

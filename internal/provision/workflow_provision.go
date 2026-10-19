@@ -207,6 +207,7 @@ func provisionHost(ctx workflow.Context, in ProvisionInput, res *ProvisionResult
 		ReadyAfter: ready,
 		Pushed:     pushed,
 		Stage:      in.Stage,
+		Rehearsal:  in.Rehearsal,
 	}); err != nil {
 		return stopAt(ctx, findings.StepRecord, staged.TwinDir, err)
 	}

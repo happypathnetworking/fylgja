@@ -140,7 +140,7 @@ func observeStep(ctx workflow.Context, in StepInput, res StepResult) StepResult 
 	answered := err == nil
 	switch {
 	case answered:
-		res.Wait = &r.Wait
+		res.Wait, res.WaitCounts = &r.Wait, r.Counts
 	case temporal.IsCanceledError(err):
 		// The cancellation settled the activity before it answered, so it never started: once
 		// started it answers a cancellation with its wait (WaitForCancellation). The wait did

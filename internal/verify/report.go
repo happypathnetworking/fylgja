@@ -468,9 +468,8 @@ func (r Report) Block(twin TwinInfo, inFlight []findings.ShowRun, service string
 	}
 
 	var (
-		hostNames, ports, neighbours counter
-		links                        = map[string]*findings.VerifyLink{}
-		portSkips, linkSkips         []findings.VerifySkip
+		links                = map[string]*findings.VerifyLink{}
+		portSkips, linkSkips []findings.VerifySkip
 	)
 	for _, a := range r.Assertions {
 		i, ok := index[a.Node]
@@ -479,18 +478,15 @@ func (r Report) Block(twin TwinInfo, inFlight []findings.ShowRun, service string
 		}
 		switch a.Kind {
 		case KindHostName:
-			hostNames.count(a.Outcome)
 			b.Nodes[i].HostName = findings.VerifyAssertion{Path: a.Path, Expected: a.Expected, Outcome: a.Outcome,
 				Read: readOf(a), Error: a.Error, Reason: a.Reason}
 		case KindPortEnabled:
-			ports.count(a.Outcome)
 			b.Nodes[i].Ports = append(b.Nodes[i].Ports, findings.VerifyPort{Port: a.Port, NodeName: a.NodeName, Path: a.Path,
 				Expected: a.Expected, Outcome: a.Outcome, Read: readOf(a), Error: a.Error, Reason: a.Reason})
 			if a.Outcome == Skipped {
 				portSkips = append(portSkips, findings.VerifySkip{Node: a.Node, Port: a.Port, Reason: a.Reason})
 			}
 		case KindNeighbor:
-			neighbours.count(a.Outcome)
 			l := links[a.Link]
 			if l == nil {
 				l = &findings.VerifyLink{ID: a.Link}
@@ -521,7 +517,6 @@ func (r Report) Block(twin TwinInfo, inFlight []findings.ShowRun, service string
 	}
 	b.Skipped = append(portSkips, linkSkips...)
 
-	var claims findings.VerifyCount
 	for _, c := range r.Claims {
 		var holds *string
 		if c.Holds != nil {
@@ -529,19 +524,46 @@ func (r Report) Block(twin TwinInfo, inFlight []findings.ShowRun, service string
 			holds = &h
 		}
 		b.Record = append(b.Record, findings.VerifyClaim{Node: c.Node, Holds: holds, Staged: c.Staged, Outcome: c.Outcome})
+	}
+	b.Counts = r.Counts()
+	return b
+}
+
+// Counts is the read's assertions counted by kind and outcome, for each node the read names,
+// and its claims, held or failed: the block's counts, and a rehearsal's stage's verify (015).
+func (r Report) Counts() findings.VerifyCounts {
+	read := map[string]bool{}
+	for _, n := range r.Nodes {
+		read[n.Node] = true
+	}
+	var hostNames, ports, neighbours counter
+	for _, a := range r.Assertions {
+		if !read[a.Node] {
+			continue
+		}
+		switch a.Kind {
+		case KindHostName:
+			hostNames.count(a.Outcome)
+		case KindPortEnabled:
+			ports.count(a.Outcome)
+		case KindNeighbor:
+			neighbours.count(a.Outcome)
+		}
+	}
+	var claims findings.VerifyCount
+	for _, c := range r.Claims {
 		if c.Outcome == Held {
 			claims.Held++
 		} else {
 			claims.Failed++
 		}
 	}
-	b.Counts = findings.VerifyCounts{
+	return findings.VerifyCounts{
 		HostName:    hostNames.block(false),
 		PortEnabled: ports.block(true),
 		Neighbor:    neighbours.block(true),
 		Record:      claims,
 	}
-	return b
 }
 
 // readOf is an assertion's read value for the block: nil when nothing was read.

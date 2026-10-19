@@ -11,6 +11,8 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/rehearsal"
+	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
 // Mechanism constants: they bound the machinery, never how long a platform may take.
@@ -298,5 +300,25 @@ func ChildOptions(workflowID string) workflow.ChildWorkflowOptions {
 		TaskQueue:           TaskQueue,
 		ParentClosePolicy:   enumspb.PARENT_CLOSE_POLICY_ABANDON,
 		WaitForCancellation: true,
+	}
+}
+
+// DeadlineMechanism is the mechanism constants a rehearsal's deadline sums (015, research
+// R-09): the bound of each activity its children run that no package decides, the margins
+// each package's own budget is given, and verify's one default wait, which every stage of a
+// rehearsal waits. internal/rehearsal takes them as a value, so it imports neither this
+// package nor verify.
+func DeadlineMechanism() rehearsal.Mechanism {
+	return rehearsal.Mechanism{
+		CheckHost:       CheckHostBudget,
+		Stage:           StageBudget,
+		Record:          RecordBudget,
+		PlanTeardown:    PlanTeardownBudget,
+		Unstage:         UnstageBudget,
+		InspectTwin:     InspectTwinBudget,
+		ReadinessMargin: ReadinessMargin,
+		PushMargin:      PushMargin,
+		VerifyMargin:    VerifyMargin,
+		Wait:            verify.DefaultBudget,
 	}
 }

@@ -68,7 +68,9 @@ type Service interface {
 	// Cancel asks the run to cancel. The run cleans up and then closes.
 	Cancel(ctx context.Context, workflowID, runID string) error
 	// StartDestroy destroys the twin through the destroy run and returns once that run has
-	// closed. A provisioning run in flight is cancelled and waited for first; following is
+	// closed. A rehearsal in flight is cancelled and followed to its end first, its own
+	// destroy included (015); then a provisioning run in flight is cancelled and waited for,
+	// and a step run in flight; following is
 	// then stopped again, as StopFollowing does, since a create that closed ready in the
 	// meantime has begun it; a destroy run in flight is attached to rather than doubled.
 	// onEvent receives every run's progress, and a Notice for each thing done to a run or a
@@ -91,17 +93,25 @@ type Service interface {
 	// exists, and otherwise the newest the service lists, unless a provisioning or destroy
 	// run has started since it closed. nil when there is none.
 	LastCheck(ctx context.Context, schedule *FollowingState) (*CheckRecord, error)
-	// InFlight names the provisioning run, the destroy run, the step run and the check in
-	// flight, each with the step its history has reached; a check's child run is its Child,
-	// and a step run names the stage it steps towards.
+	// InFlight names the rehearsal, the provisioning run, the destroy run, the step run and
+	// the check in flight, each with the step its history has reached; a rehearsal's or a
+	// check's child run is its Child, named once, and a step run, as either kind of run or as
+	// a rehearsal's child, names the stage it steps towards.
 	InFlight(ctx context.Context) ([]RunInFlight, error)
 	// StartStep starts the one step run and returns its run id once a worker has taken it
-	// (M11). A provisioning, destroy or step run in
+	// (M11). A rehearsal, provisioning, destroy or step run in
 	// flight is a *StartError carrying run.in_flight, naming the run; no worker to take it is
 	// one carrying run.worker.absent, with nothing left running.
 	StartStep(ctx context.Context, in StepInput) (runID string, err error)
 	// ResultOfStep waits for the step run to close and returns how it ended.
 	ResultOfStep(ctx context.Context, runID string) (StepResult, error)
+	// StartRehearse starts the one rehearsal run and returns its run id once a worker has
+	// taken it (015, D-051). A provisioning, destroy, step or rehearsal run in flight is a
+	// *StartError carrying run.in_flight, naming the run; no worker to take it is one
+	// carrying run.worker.absent, with nothing left running.
+	StartRehearse(ctx context.Context, in RehearseInput) (runID string, err error)
+	// ResultOfRehearse waits for the rehearsal run to close and returns how it ended.
+	ResultOfRehearse(ctx context.Context, runID string) (RehearseResult, error)
 	Close()
 }
 
@@ -138,7 +148,8 @@ type RunInFlight struct {
 	Step       string
 	Child      *RunInFlight
 	// Towards is the stage a fylgja-step run is stepping towards, <branch>/<label>, from
-	// its input; "" for every other run.
+	// its input, and, for a rehearsal's provisioning child, the baseline it builds (015); ""
+	// for every other run.
 	Towards string
 }
 
@@ -369,6 +380,18 @@ func stepStartOptions() client.StartWorkflowOptions {
 	}
 }
 
+// rehearseStartOptions start the one rehearsal run (015).
+// WorkflowExecutionErrorWhenAlreadyStarted makes a second rehearsal refuse rather than
+// attach to the first and report that run's result as its own, as provisionStartOptions
+// does for a create. Its absence is silent, which is why a test pins it.
+func rehearseStartOptions() client.StartWorkflowOptions {
+	return client.StartWorkflowOptions{
+		ID:                                       WorkflowRehearse,
+		TaskQueue:                                TaskQueue,
+		WorkflowExecutionErrorWhenAlreadyStarted: true,
+	}
+}
+
 // destroyStartOptions start the destroy run or, when one is already running, hand back
 // that run: USE_EXISTING attaches a second destroy to the first rather than running two
 // teardowns against one lab. Once the run has closed, the next destroy
@@ -387,15 +410,18 @@ func (c *Client) StartProvision(ctx context.Context, in ProvisionInput) (string,
 	if err := c.requireWorker(ctx); err != nil {
 		return "", err
 	}
-	// A step run holds the twin a create would refuse beside, so it is refused here, naming
-	// the step, before any run starts, rather than started and rejected at its
-	// host check by host.lab.present.
-	stepping, err := c.runningRun(ctx, WorkflowStep)
-	if err != nil {
-		return "", err
-	}
-	if stepping != "" {
-		return "", inFlightRefusal(WorkflowStep, stepping)
+	// A step run holds the twin a create would refuse beside, and a rehearsal holds the host
+	// for its own twin (015), so either is refused here, naming the run, before any run
+	// starts, rather than started and rejected at its host check by host.lab.present. The
+	// rehearsal is asked first: the step may be its child.
+	for _, workflowID := range []string{WorkflowRehearse, WorkflowStep} {
+		runID, err := c.runningRun(ctx, workflowID)
+		if err != nil {
+			return "", err
+		}
+		if runID != "" {
+			return "", inFlightRefusal(workflowID, runID)
+		}
 	}
 	// The start request is sent where an interrupt does not reach it. Cut short, it
 	// can leave a run the service had already started, with no run id to terminate it by,
@@ -427,6 +453,8 @@ func inFlightRefusal(workflowID, runID string) *StartError {
 		message = fmt.Sprintf("provisioning run %s is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it", runID)
 	case WorkflowDestroy:
 		message = fmt.Sprintf("destroy run %s is already in flight; wait for it to finish", runID)
+	case WorkflowRehearse:
+		message = fmt.Sprintf("rehearsal run %s is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it", runID)
 	default:
 		message = fmt.Sprintf("step run %s is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it", runID)
 	}
@@ -439,9 +467,10 @@ func inFlightRefusal(workflowID, runID string) *StartError {
 	}}
 }
 
-// StartStep implements Service, in StartProvision's shape. A provisioning or destroy run in
-// flight refuses it first, naming the run: a step
-// beside either would act on a twin that run is building or removing. A step run
+// StartStep implements Service, in StartProvision's shape. A rehearsal, provisioning or
+// destroy run in flight refuses it first, naming the run: a step beside a provisioning or
+// destroy run would act on a twin that run is building or removing, and a rehearsal's twin
+// is its own (015). A step run
 // in flight refuses it through the fixed id, as a second create is refused. Nothing is
 // started while no worker polls the queue, and a run no worker takes within the first-task
 // guard is terminated before anything in it ran.
@@ -449,7 +478,7 @@ func (c *Client) StartStep(ctx context.Context, in StepInput) (string, error) {
 	if err := c.requireWorker(ctx); err != nil {
 		return "", err
 	}
-	for _, workflowID := range []string{WorkflowProvision, WorkflowDestroy} {
+	for _, workflowID := range []string{WorkflowRehearse, WorkflowProvision, WorkflowDestroy} {
 		runID, err := c.runningRun(ctx, workflowID)
 		if err != nil {
 			return "", err
@@ -482,9 +511,56 @@ func (c *Client) ResultOfStep(ctx context.Context, runID string) (StepResult, er
 	return res, err
 }
 
+// StartRehearse implements Service, in StartStep's shape (015, research R-12). A
+// provisioning, destroy or step run in flight refuses it first, naming the run: the
+// rehearsal's own children would be refused beside each, and the server refused already
+// when it saw one (contracts/rehearse-command.md, step 4), so one here began since. A
+// rehearsal in flight refuses it through the fixed id, as a second step is refused. Nothing
+// is started while no worker polls the queue, and a run no worker takes within the
+// first-task guard is terminated before anything in it ran.
+func (c *Client) StartRehearse(ctx context.Context, in RehearseInput) (string, error) {
+	if err := c.requireWorker(ctx); err != nil {
+		return "", err
+	}
+	for _, workflowID := range []string{WorkflowProvision, WorkflowDestroy, WorkflowStep} {
+		runID, err := c.runningRun(ctx, workflowID)
+		if err != nil {
+			return "", err
+		}
+		if runID != "" {
+			return "", inFlightRefusal(workflowID, runID)
+		}
+	}
+	// Sent where an interrupt does not reach it, as StartProvision's is.
+	send, cancelSend := context.WithTimeout(context.WithoutCancel(ctx), StartRequestBudget)
+	run, err := c.ExecuteWorkflow(send, rehearseStartOptions(), Rehearse, in)
+	cancelSend()
+	var started *serviceerror.WorkflowExecutionAlreadyStarted
+	if errors.As(err, &started) {
+		return "", inFlightRefusal(WorkflowRehearse, started.RunId)
+	}
+	if err != nil {
+		return "", fmt.Errorf("starting %s: %w", WorkflowRehearse, err)
+	}
+	if err := c.awaitFirstTask(ctx, WorkflowRehearse, run.GetRunID()); err != nil {
+		return "", err
+	}
+	return run.GetRunID(), nil
+}
+
+// ResultOfRehearse implements Service.
+func (c *Client) ResultOfRehearse(ctx context.Context, runID string) (RehearseResult, error) {
+	var res RehearseResult
+	err := c.GetWorkflow(ctx, WorkflowRehearse, runID).Get(ctx, &res)
+	return res, err
+}
+
 // StartDestroy implements Service.
 //
-// A provisioning run in flight is cancelled and waited for first: its own cleanup removes
+// A rehearsal in flight is cancelled and followed to its end first, its children's progress
+// included: its step records diverged, its provision cleans up, and its own destroy runs
+// last whatever it was asked, so what it leaves is what that destroy left (015, research
+// R-12). A provisioning run in flight is cancelled and waited for next: its own cleanup removes
 // what it made, and the destroy run follows so that nothing it missed remains. A step run in
 // flight is cancelled and waited for next, until its record is
 // written. No signal: cancellation is the service's own request. Following is then
@@ -500,6 +576,30 @@ func (c *Client) StartDestroy(ctx context.Context, onEvent func(Event)) (Destroy
 
 	if err := c.requireWorker(ctx); err != nil {
 		return DestroyRun{}, err
+	}
+
+	rehearsing, err := c.runningRun(ctx, WorkflowRehearse)
+	if err != nil {
+		return DestroyRun{}, err
+	}
+	if rehearsing != "" {
+		notice("cancelling rehearsal run %s; waiting for its destroy", rehearsing)
+		if err := c.CancelWorkflow(ctx, WorkflowRehearse, rehearsing); err != nil {
+			return DestroyRun{}, fmt.Errorf("cancelling rehearsal run %s: %w", rehearsing, err)
+		}
+		// Progress is best effort; the close is what destroy waits for.
+		_ = c.Follow(ctx, WorkflowRehearse, rehearsing, onEvent)
+		var res RehearseResult
+		err := c.GetWorkflow(ctx, WorkflowRehearse, rehearsing).Get(ctx, &res)
+		var closedWithout *temporal.WorkflowExecutionError
+		switch {
+		case errors.As(err, &closedWithout):
+			notice("rehearsal run %s closed without a result: %v", rehearsing, err)
+		case err != nil:
+			return DestroyRun{}, fmt.Errorf("waiting for rehearsal run %s to close: %w", rehearsing, err)
+		default:
+			notice("rehearsal run %s closed: %s", rehearsing, res.Outcome)
+		}
 	}
 
 	provisioning, err := c.runningRun(ctx, WorkflowProvision)
@@ -812,7 +912,9 @@ func checkScheduledAt(workflowID string, started time.Time) time.Time {
 }
 
 // InFlight implements Service. A rebuild's provision or destroy is named once, as the
-// check's child, not again as an operator's run. A step run is named with its target.
+// check's child, not again as an operator's run, and a rehearsal's child likewise, as the
+// rehearsal's (015). A step run is named with its target, and a rehearsal's provisioning
+// child with the baseline it builds.
 func (c *Client) InFlight(ctx context.Context) ([]RunInFlight, error) {
 	resp, err := c.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{Namespace: c.Namespace, Query: runningChecksQuery})
 	if err != nil {
@@ -837,6 +939,28 @@ func (c *Client) InFlight(ctx context.Context) ([]RunInFlight, error) {
 	}
 
 	var runs []RunInFlight
+	rehearsing, err := c.runningRun(ctx, WorkflowRehearse)
+	if err != nil {
+		return nil, c.unreachable(err)
+	}
+	if rehearsing != "" {
+		run := RunInFlight{WorkflowID: WorkflowRehearse, RunID: rehearsing}
+		var child *commonpb.WorkflowExecution
+		if run.Step, child, err = c.historyStep(ctx, WorkflowRehearse, rehearsing); err != nil {
+			return nil, err
+		}
+		if child != nil {
+			run.Child = &RunInFlight{WorkflowID: child.GetWorkflowId(), RunID: child.GetRunId()}
+			if run.Child.Step, _, err = c.historyStep(ctx, run.Child.WorkflowID, run.Child.RunID); err != nil {
+				return nil, err
+			}
+			if run.Child.Towards, err = c.towards(ctx, run.Child.WorkflowID, run.Child.RunID); err != nil {
+				return nil, err
+			}
+			children[run.Child.WorkflowID+"/"+run.Child.RunID] = true
+		}
+		runs = append(runs, run)
+	}
 	for _, workflowID := range []string{WorkflowProvision, WorkflowDestroy, WorkflowStep} {
 		runID, err := c.runningRun(ctx, workflowID)
 		if err != nil {
@@ -850,7 +974,7 @@ func (c *Client) InFlight(ctx context.Context) ([]RunInFlight, error) {
 			return nil, err
 		}
 		if workflowID == WorkflowStep {
-			if run.Towards, err = c.stepTowards(ctx, runID); err != nil {
+			if run.Towards, err = c.towards(ctx, WorkflowStep, runID); err != nil {
 				return nil, err
 			}
 		}
@@ -859,11 +983,15 @@ func (c *Client) InFlight(ctx context.Context) ([]RunInFlight, error) {
 	return append(runs, checks...), nil
 }
 
-// stepTowards is the stage a step run steps towards, <branch>/<label>, read from the
-// input its history starts with, or "" when that input names
-// none.
-func (c *Client) stepTowards(ctx context.Context, runID string) (string, error) {
-	iter := c.GetWorkflowHistory(ctx, WorkflowStep, runID, false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
+// towards is the stage a run's input names, <branch>/<label>, read from the input its
+// history starts with: the stage a step run steps towards, or the one a provisioning run
+// builds (a rehearsal's baseline, 015). "" when that input names none, and for any other
+// run.
+func (c *Client) towards(ctx context.Context, workflowID, runID string) (string, error) {
+	if workflowID != WorkflowStep && workflowID != WorkflowProvision {
+		return "", nil
+	}
+	iter := c.GetWorkflowHistory(ctx, workflowID, runID, false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
 	if !iter.HasNext() {
 		return "", nil
 	}
@@ -871,12 +999,27 @@ func (c *Client) stepTowards(ctx context.Context, runID string) (string, error) 
 	if err != nil {
 		return "", c.unreachable(err)
 	}
-	var in StepInput
 	attrs := ev.GetWorkflowExecutionStartedEventAttributes()
-	if attrs == nil || converter.GetDefaultDataConverter().FromPayloads(attrs.GetInput(), &in) != nil || in.To.Stage == nil {
+	if attrs == nil {
 		return "", nil
 	}
-	return in.To.Stage.Name(), nil
+	dc := converter.GetDefaultDataConverter()
+	var stage *wire.StageRef
+	if workflowID == WorkflowStep {
+		var in StepInput
+		if dc.FromPayloads(attrs.GetInput(), &in) == nil {
+			stage = in.To.Stage
+		}
+	} else {
+		var in ProvisionInput
+		if dc.FromPayloads(attrs.GetInput(), &in) == nil {
+			stage = in.Stage
+		}
+	}
+	if stage == nil {
+		return "", nil
+	}
+	return stage.Name(), nil
 }
 
 // historyStep reads a run's history once, without waiting for more, and returns the step
@@ -942,7 +1085,7 @@ func (c *Client) historyStep(ctx context.Context, workflowID, runID string) (str
 	}
 	step := findingStep(scheduled[reached])
 	if step == "" {
-		step = scheduled[reached]
+		step = stepName(workflowID, scheduled[reached])
 	}
 	var child *commonpb.WorkflowExecution
 	if open[reached] {
@@ -1003,10 +1146,11 @@ func isCheck(workflowID string) bool {
 	return strings.HasPrefix(workflowID, WorkflowReconcile+"-")
 }
 
-// Workflow type names, as a check's history names its children.
+// Workflow type names, as a check's or a rehearsal's history names its children.
 const (
 	destroyWorkflowType   = "Destroy"
 	provisionWorkflowType = "Provision"
+	stepWorkflowType      = "Step"
 )
 
 // findingStep is the step, as findings name it, an activity or a check's child belongs to.
@@ -1175,8 +1319,19 @@ func (c *Client) Follow(ctx context.Context, workflowID, runID string, onEvent f
 // stepName is the step an activity performs, named as contracts/cli.md names it. Teardown and
 // unstage are a provisioning run's cleanup, and the whole of a destroy run. A check names
 // its two inspections, its stop and its children as its own steps (contracts/cli.md,
-// Progress lines), and a step run its inspection and its four activities (M11).
+// Progress lines), a step run its inspection and its four activities (M11), and a rehearsal
+// its three kinds of child (015: "at step step" while a step child runs).
 func stepName(workflowID, activityType string) string {
+	if workflowID == WorkflowRehearse {
+		switch activityType {
+		case provisionWorkflowType:
+			return "provision"
+		case stepWorkflowType:
+			return "step"
+		case destroyWorkflowType:
+			return "destroy"
+		}
+	}
 	if isCheck(workflowID) {
 		switch activityType {
 		case wire.ActInspectTwin, ActRunsInFlight:

@@ -76,6 +76,12 @@ type fakeService struct {
 	readOnly testing.TB
 	// stepResult answers ResultOfStep beside resultErr (M11).
 	stepResult provision.StepResult
+	// rehearseRun answers StartRehearse beside startErr, rehearseEvents answer Follow of the
+	// rehearsal's run, its children's events among them, and rehearseResult answers
+	// ResultOfRehearse beside resultErr (015).
+	rehearseRun    string
+	rehearseEvents []provision.Event
+	rehearseResult provision.RehearseResult
 
 	mu sync.Mutex
 	// calls logs StartProvision, StartDestroy and StopFollowing in the order they came.
@@ -83,6 +89,7 @@ type fakeService struct {
 	reads     []string
 	started   []provision.ProvisionInput
 	stepped   []provision.StepInput
+	rehearsed []provision.RehearseInput
 	abandoned bool
 	cancels   int
 	destroys  int
@@ -148,8 +155,12 @@ func (f *fakeService) StartProvision(ctx context.Context, in provision.Provision
 	return runID, err
 }
 
-func (f *fakeService) Follow(_ context.Context, _, _ string, onEvent func(provision.Event)) error {
-	for _, e := range f.events {
+func (f *fakeService) Follow(_ context.Context, workflowID, _ string, onEvent func(provision.Event)) error {
+	events := f.events
+	if workflowID == provision.WorkflowRehearse {
+		events = f.rehearseEvents
+	}
+	for _, e := range events {
 		onEvent(e)
 	}
 	if f.afterFollow != nil {
@@ -232,6 +243,36 @@ func (f *fakeService) ResultOfStep(ctx context.Context, _ string) (provision.Ste
 		}
 	}
 	return f.stepResult, f.resultErr
+}
+
+// StartRehearse and ResultOfRehearse answer with rehearseRun and startErr, and with
+// rehearseResult and resultErr (015). Each holds as StartProvision and Result do, under
+// startBlocks and release.
+func (f *fakeService) StartRehearse(ctx context.Context, in provision.RehearseInput) (string, error) {
+	f.mutating("StartRehearse")
+	f.mu.Lock()
+	f.calls = append(f.calls, "StartRehearse")
+	f.rehearsed = append(f.rehearsed, in)
+	blocks, runID, err := f.startBlocks, f.rehearseRun, f.startErr
+	f.mu.Unlock()
+	if blocks {
+		<-ctx.Done()
+		f.mu.Lock()
+		f.abandoned = true
+		f.mu.Unlock()
+	}
+	return runID, err
+}
+
+func (f *fakeService) ResultOfRehearse(ctx context.Context, _ string) (provision.RehearseResult, error) {
+	if f.release != nil {
+		select {
+		case <-f.release:
+		case <-ctx.Done():
+			return provision.RehearseResult{}, ctx.Err()
+		}
+	}
+	return f.rehearseResult, f.resultErr
 }
 
 func (f *fakeService) Close() {

@@ -38,9 +38,10 @@ func workerOptions() worker.Options {
 	return worker.Options{MaxHeartbeatThrottleInterval: HeartbeatThrottle}
 }
 
-// NewWorker assembles the one worker on task queue fylgja: the provisioning and destroy
-// runs, the check (registered under the type name Schedule fylgja-follow starts), the step
-// run (M11), the control
+// NewWorker assembles the one worker on task queue fylgja: its five workflows — the
+// provisioning and destroy runs, the check (registered under the type name Schedule
+// fylgja-follow starts), the step run (M11) and the rehearsal (015), which starts the other
+// three as its children by the type names they are registered under here — the control
 // activities and every host-bound activity, each registered by the name workflows
 // schedule it by (D-015). There is one registration site, here.
 func NewWorker(c client.Client, acts *lab.Activities, control *ControlActivities) worker.Worker {
@@ -49,6 +50,7 @@ func NewWorker(c client.Client, acts *lab.Activities, control *ControlActivities
 	w.RegisterWorkflow(Destroy)
 	w.RegisterWorkflowWithOptions(Reconcile, workflow.RegisterOptions{Name: reconcileWorkflowType})
 	w.RegisterWorkflow(Step)
+	w.RegisterWorkflow(Rehearse)
 	registerActivities(w, control.Names())
 	registerActivities(w, acts.Names())
 	return w

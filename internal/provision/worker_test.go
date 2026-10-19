@@ -510,7 +510,8 @@ func TestWorkerRegistersEveryScheduledActivity(t *testing.T) {
 		}
 	}
 
-	// The three workflows the CLI starts (M11 adds the step). The SDK offers no listing, but it refuses to register a workflow name
+	// The four workflows the server starts (M11 adds the step, 015 the rehearsal, which starts
+	// the first three as its children by these names). The SDK offers no listing, but it refuses to register a workflow name
 	// twice (SDK v1.49.0, internal/internal_worker.go, RegisterWorkflowWithOptions: a
 	// present workflowFuncMap entry panics "workflow name ... is already registered"), so a
 	// refused second registration is its word that the first happened. A lazy client dials
@@ -521,9 +522,16 @@ func TestWorkerRegistersEveryScheduledActivity(t *testing.T) {
 	}
 	defer c.Close()
 	w := NewWorker(c, &lab.Activities{}, &ControlActivities{})
-	for name, wf := range map[string]any{"Provision": Provision, "Destroy": Destroy, "Step": Step} {
+	for name, wf := range map[string]any{"Provision": Provision, "Destroy": Destroy, "Step": Step, "Rehearse": Rehearse} {
 		if msg := panics(func() { w.RegisterWorkflow(wf) }); !strings.Contains(msg, fmt.Sprintf("workflow name %q is already registered", name)) {
 			t.Errorf("registering %s again: %q; want the SDK to refuse it as already registered by NewWorker", name, msg)
+		}
+	}
+	// A rehearsal and a check start their children by type name, so each must be the name
+	// NewWorker registered it under.
+	for name, typeName := range map[string]string{"Provision": provisionWorkflowType, "Destroy": destroyWorkflowType, "Step": stepWorkflowType} {
+		if typeName != name {
+			t.Errorf("the children start %s as %q, which NewWorker does not register", name, typeName)
 		}
 	}
 	// A check is started by the Schedule, by the type name its action carries, so Reconcile

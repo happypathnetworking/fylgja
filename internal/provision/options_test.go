@@ -13,7 +13,9 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/psp"
+	"github.com/happypathnetworking/fylgja/internal/rehearsal"
 	"github.com/happypathnetworking/fylgja/internal/stage"
+	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
 // planFor builds a node plan from a package as the host check does: every budget is
@@ -332,5 +334,68 @@ func TestStepStartOptionsPinned(t *testing.T) {
 	}
 	if WorkflowStep != wire.StepWorkflowID {
 		t.Errorf("WorkflowStep = %q, want the wire's %q", WorkflowStep, wire.StepWorkflowID)
+	}
+}
+
+// A second rehearsal refuses rather than attaching to the first, as a second step does
+// (015, D-051): the fixed id and WorkflowExecutionErrorWhenAlreadyStarted, whose absence is
+// silent.
+func TestRehearseStartOptionsPinned(t *testing.T) {
+	o := rehearseStartOptions()
+	if o.ID != "fylgja-rehearse" || o.TaskQueue != "fylgja" || !o.WorkflowExecutionErrorWhenAlreadyStarted ||
+		o.WorkflowIDConflictPolicy != enumspb.WORKFLOW_ID_CONFLICT_POLICY_UNSPECIFIED {
+		t.Errorf("start options = {ID:%q TaskQueue:%q WorkflowExecutionErrorWhenAlreadyStarted:%v WorkflowIDConflictPolicy:%v}, "+
+			"want fylgja-rehearse, fylgja, true, unspecified", o.ID, o.TaskQueue, o.WorkflowExecutionErrorWhenAlreadyStarted,
+			o.WorkflowIDConflictPolicy)
+	}
+	if WorkflowRehearse != wire.RehearseWorkflowID {
+		t.Errorf("WorkflowRehearse = %q, want the wire's %q", WorkflowRehearse, wire.RehearseWorkflowID)
+	}
+}
+
+// The deadline sums the bounds the children's activities run under, so the mechanism it is
+// given must be those constants, each the one its activity's options use, and verify's
+// default wait: internal/rehearsal cannot import them, and a constant moved here without
+// the deadline would cut a rehearsal its own budgets allow (015, research R-09). With the
+// shipped SR Linux package's budgets, the fixture's rehearsal (the branch point refused, two
+// marks and the head) is research §1.7's 1,950 s.
+func TestDeadlineMechanismIsTheConstants(t *testing.T) {
+	m := DeadlineMechanism()
+	for _, c := range []struct {
+		field     string
+		got, want time.Duration
+	}{
+		{"CheckHost", m.CheckHost, CheckHostBudget},
+		{"Stage", m.Stage, StageBudget},
+		{"Record", m.Record, RecordBudget},
+		{"PlanTeardown", m.PlanTeardown, PlanTeardownBudget},
+		{"Unstage", m.Unstage, UnstageBudget},
+		{"InspectTwin", m.InspectTwin, InspectTwinBudget},
+		{"ReadinessMargin", m.ReadinessMargin, ReadinessMargin},
+		{"PushMargin", m.PushMargin, PushMargin},
+		{"VerifyMargin", m.VerifyMargin, VerifyMargin},
+		{"Wait", m.Wait, verify.DefaultBudget},
+		// The options the children's activities run under, read rather than restated.
+		{"CheckHost as CheckHostOptions", m.CheckHost, CheckHostOptions().StartToCloseTimeout},
+		{"Stage as StageOptions", m.Stage, StageOptions().StartToCloseTimeout},
+		{"Record as RecordOptions", m.Record, RecordOptions().StartToCloseTimeout},
+		{"PlanTeardown as PlanTeardownOptions", m.PlanTeardown, PlanTeardownOptions().StartToCloseTimeout},
+		{"Unstage as UnstageOptions", m.Unstage, UnstageOptions().StartToCloseTimeout},
+		{"InspectTwin as InspectTwinOptions", m.InspectTwin, InspectTwinOptions().StartToCloseTimeout},
+		{"Wait and VerifyMargin as VerifyOptions", m.Wait + m.VerifyMargin, VerifyOptions(int(verify.DefaultBudget / time.Second)).StartToCloseTimeout},
+	} {
+		if c.got != c.want {
+			t.Errorf("%s = %s, want %s", c.field, c.got, c.want)
+		}
+	}
+	if v := reflect.ValueOf(m); v.NumField() != 10 {
+		t.Errorf("rehearsal.Mechanism has %d fields, want the ten this test compares", v.NumField())
+	}
+
+	plan := srlinuxPlan(t)
+	stages := []rehearsal.DeadlineStage{{Role: rehearsal.RoleRefused}, {Role: rehearsal.RoleBaseline, Nodes: plan},
+		{Role: rehearsal.RoleRehearsed, Nodes: plan}, {Role: rehearsal.RoleRehearsed, Nodes: plan}}
+	if got := rehearsal.Deadline(m, stages); got != 1950*time.Second {
+		t.Errorf("the fixture's deadline = %s, want 1950s (570 + 630 + 630 + 120)", got)
 	}
 }

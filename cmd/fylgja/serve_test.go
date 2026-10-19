@@ -55,12 +55,12 @@ type heldImages map[string]bool
 
 func (h heldImages) Present(_ context.Context, ref string) (bool, error) { return h[ref], nil }
 
-// serveTestOptions are serve's options over two buffers, the environment env (a missing name
-// is unset), and a host that holds the imported image.
+// serveTestOptions are serve's options listening on listen alone, over two buffers, the
+// environment env (a missing name is unset), and a host that holds the imported image.
 func serveTestOptions(listen, pspDir string, env map[string]string) (*serveOptions, *lockedBuffer, *lockedBuffer) {
 	stdout, stderr := &lockedBuffer{}, &lockedBuffer{}
 	return &serveOptions{
-		listen: listen,
+		listen: []string{listen},
 		pspDir: pspDir,
 		stdout: stdout,
 		stderr: stderr,
@@ -154,13 +154,15 @@ func invalidPackageDir(t *testing.T) (dir, text string) {
 // stderr and exit 2, with nothing on stdout and nothing listening. Each case
 // also fails the checks after it: the token's case has a --listen that is not host:port, the
 // state root's an invalid package, and every case but the listen's own names an address the
-// test holds, so a refusal made after the listen would be the listen's.
+// test holds, so a refusal made after the listen would be the listen's. With two --listen
+// flags, the second's refusal comes before the first is listened on, or closes it.
 func TestServeRefusesToStartInOrder(t *testing.T) {
 	type refusal struct {
 		name string
 		// set up the case; it returns serve's options and the exact stderr wanted.
 		setup func(t *testing.T) (opts *serveOptions, stdout, stderr *lockedBuffer, want string)
-		// free is an address nothing listened on before the case, checked after it.
+		// free makes the first --listen an address nothing listened on before the case,
+		// checked after it.
 		free bool
 	}
 	token := map[string]string{api.EnvToken: serveToken}
@@ -183,6 +185,15 @@ func TestServeRefusesToStartInOrder(t *testing.T) {
 			dir, _ := invalidPackageDir(t)
 			unresolvableStateRoot(t)
 			o, out, errb := serveTestOptions("127.0.0.1", dir, token)
+			return o, out, errb, "fylgja serve: --listen 127.0.0.1 is not host:port\n"
+		}},
+		// Every value is checked before anything is read or listened on: a malformed second
+		// one is refused before the state root, and the first is never listened on.
+		{name: "a second --listen not host:port", free: true, setup: func(t *testing.T) (*serveOptions, *lockedBuffer, *lockedBuffer, string) {
+			dir, _ := invalidPackageDir(t)
+			unresolvableStateRoot(t)
+			o, out, errb := serveTestOptions("", dir, token)
+			o.listen = append(o.listen, "127.0.0.1")
 			return o, out, errb, "fylgja serve: --listen 127.0.0.1 is not host:port\n"
 		}},
 		{name: "the state root unresolvable", setup: func(t *testing.T) (*serveOptions, *lockedBuffer, *lockedBuffer, string) {
@@ -255,12 +266,25 @@ func TestServeRefusesToStartInOrder(t *testing.T) {
 			}
 			return o, out, errb, "fylgja serve: listening on " + addr + ": " + err.Error() + "\n"
 		}},
+		// The first address is listened on before the second is refused, and is closed by
+		// the refusal: the server listens on none.
+		{name: "the second address taken", free: true, setup: func(t *testing.T) (*serveOptions, *lockedBuffer, *lockedBuffer, string) {
+			t.Setenv(lab.EnvStateRoot, t.TempDir())
+			addr := holdAddress(t)
+			o, out, errb := serveTestOptions("", "", token)
+			o.listen = append(o.listen, addr)
+			_, err := net.Listen("tcp", addr)
+			if err == nil {
+				t.Fatalf("%s took a second listener", addr)
+			}
+			return o, out, errb, "fylgja serve: listening on " + addr + ": " + err.Error() + "\n"
+		}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			opts, stdout, stderr, want := c.setup(t)
 			if c.free {
-				opts.listen = freeAddress(t)
+				opts.listen[0] = freeAddress(t)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
@@ -276,7 +300,7 @@ func TestServeRefusesToStartInOrder(t *testing.T) {
 				t.Errorf("stdout %q, want nothing: the server never started", got)
 			}
 			if c.free {
-				nothingListens(t, opts.listen)
+				nothingListens(t, opts.listen[0])
 			}
 			for _, secret := range []string{serveToken, loginValue} {
 				if strings.Contains(stderr.String(), secret) {
@@ -473,6 +497,115 @@ func reportAddress(t *testing.T, stdout string) string {
 	return addr
 }
 
+// reportAddresses is every address the report's listen lines say the server listens on, in
+// the order printed.
+func reportAddresses(t *testing.T, stdout string) []string {
+	t.Helper()
+	const prefix = "fylgja serve: listening on "
+	var addrs []string
+	for _, line := range strings.Split(stdout, "\n") {
+		if !strings.HasPrefix(line, prefix) {
+			continue
+		}
+		addr, _, ok := strings.Cut(strings.TrimPrefix(line, prefix), " (")
+		if !ok {
+			t.Fatalf("the listen line %q does not say where it listens", line)
+		}
+		addrs = append(addrs, addr)
+	}
+	return addrs
+}
+
+// dialable is addr with a wildcard host replaced by loopback, which a test can connect to.
+func dialable(addr string) string {
+	return strings.Replace(addr, "0.0.0.0", "127.0.0.1", 1)
+}
+
+// Given --listen more than once, the server listens on every address: its report names each
+// in the order given with the port it got, and straight after each that is not loopback the
+// line saying the token is sent unencrypted on it, before the rest of the report. A request
+// on each is answered alike under the one token, and the log names no address
+// (contracts/server-and-host.md "fylgja serve").
+func TestServeListensOnEveryAddress(t *testing.T) {
+	opts, stdout, stderr, root, _, _ := serveEnvironment(t, "")
+	opts.listen = []string{"127.0.0.1:0", "0.0.0.0:0", "127.0.0.2:0"}
+	s := startServe(t, opts, stdout, stderr, 11)
+
+	addrs := reportAddresses(t, stdout.String())
+	if len(addrs) != len(opts.listen) {
+		t.Fatalf("the report names %d addresses, want %d:\n%s", len(addrs), len(opts.listen), stdout)
+	}
+	for i, addr := range addrs {
+		host, port, _ := net.SplitHostPort(addr)
+		if want := strings.Split(opts.listen[i], ":")[0]; host != want || port == "0" {
+			t.Errorf("listen line %d names %s, want the host --listen gave, %s, with the port it got", i+1, addr, want)
+		}
+	}
+	want := []string{
+		"fylgja serve: listening on " + addrs[0] + " (API version 1, build 0.1.0-test)",
+		"fylgja serve: listening on " + addrs[1] + " (API version 1, build 0.1.0-test)",
+		"fylgja serve: " + addrs[1] + " is not a loopback address: the API's token is sent unencrypted on it",
+		"fylgja serve: listening on " + addrs[2] + " (API version 1, build 0.1.0-test)",
+		fmt.Sprintf("fylgja serve: state root %s (bundles: %s, twin: %s)", root, filepath.Join(root, "bundles"), filepath.Join(root, "twin")),
+	}
+	if got := strings.Split(stdout.String(), "\n"); len(got) < len(want) || strings.Join(got[:len(want)], "\n") != strings.Join(want, "\n") {
+		t.Errorf("report:\n%s\nwant it to begin:\n%s", stdout, strings.Join(want, "\n"))
+	}
+	if n := strings.Count(stdout.String(), "is not a loopback address"); n != 1 {
+		t.Errorf("%d unencrypted lines, want 1, for the one address off loopback:\n%s", n, stdout)
+	}
+
+	// Each address answers a request without the token, and one with it, as the others do.
+	type answer struct {
+		status int
+		body   string
+	}
+	var first []answer
+	for i, addr := range addrs {
+		resp, err := http.Post("http://"+dialable(addr)+api.Path(findings.OpTwinShow), "application/json", strings.NewReader("{}"))
+		if err != nil {
+			t.Fatalf("%s does not answer: %v", addr, err)
+		}
+		body, _ := io.ReadAll(resp.Body)
+		_ = resp.Body.Close()
+		withToken, withBody := optionsStar(t, dialable(addr), serveToken)
+		got := []answer{{resp.StatusCode, string(body)}, {withToken.StatusCode, string(withBody)}}
+		if got[0].status != http.StatusUnauthorized || got[1].status != http.StatusNotFound {
+			t.Errorf("%s answered %d without the token and %d with it, want 401 and 404", addr, got[0].status, got[1].status)
+		}
+		if i == 0 {
+			first = got
+		} else if fmt.Sprint(got) != fmt.Sprint(first) {
+			t.Errorf("%s answered %v, want what %s answered, %v", addr, got, addrs[0], first)
+		}
+	}
+	deadline := time.Now().Add(5 * time.Second)
+	for len(requestLines(stderr.String())) < 2*len(addrs) && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if err := s.stop(t); err != nil {
+		t.Errorf("runServe returned %v once interrupted, want nil (exit 0)", err)
+	}
+	lines := requestLines(stderr.String())
+	if len(lines) != 2*len(addrs) {
+		t.Errorf("%d request lines for %d requests:\n%s", len(lines), 2*len(addrs), stderr)
+	}
+	for _, line := range lines {
+		for _, addr := range addrs {
+			_, port, _ := net.SplitHostPort(addr)
+			if strings.Contains(line, ":"+port) {
+				t.Errorf("a request line names the address %s: %s", addr, line)
+			}
+		}
+	}
+	for _, addr := range addrs {
+		if conn, err := net.DialTimeout("tcp", dialable(addr), time.Second); err == nil {
+			_ = conn.Close()
+			t.Errorf("%s still takes connections after the server stopped", addr)
+		}
+	}
+}
+
 // The start-up report, word for word, before the first request is taken: where it listens
 // with the API's version and the build, the state
 // root, that the workflow service and Infrahub are dialled when a request needs them, and the
@@ -666,6 +799,38 @@ func TestServeEndsWhenAcceptingFails(t *testing.T) {
 	addr := reportAddress(t, stdout.String())
 	if got, want := stderr.String(), "fylgja serve: serving on "+addr+": the test's listener is closed\n"; got != want {
 		t.Errorf("stderr %q, want %q", got, want)
+	}
+}
+
+// A failure to accept on one listener of several ends fylgja serve on all of them, naming
+// that listener's address, exit 2.
+func TestServeEndsOnEveryAddressWhenOneFailsToAccept(t *testing.T) {
+	opts, stdout, stderr, _, _, _ := serveEnvironment(t, "")
+	opts.listen = []string{"127.0.0.1:0", "127.0.0.2:0"}
+	failing := &failingListener{err: errors.New("the test's listener is closed")}
+	opts.netListen = func(network, address string) (net.Listener, error) {
+		ln, err := net.Listen(network, address)
+		if err != nil || !strings.HasPrefix(address, "127.0.0.2:") {
+			return ln, err
+		}
+		failing.Listener = ln
+		return failing, nil
+	}
+	err := runServe(context.Background(), opts, "0.1.0-test")
+	var exit exitStatus
+	if !errors.As(err, &exit) || int(exit) != findings.ExitError {
+		t.Fatalf("runServe = %v, want exit 2", err)
+	}
+	addrs := reportAddresses(t, stdout.String())
+	if len(addrs) != 2 {
+		t.Fatalf("the report names %v, want two addresses:\n%s", addrs, stdout)
+	}
+	if got, want := stderr.String(), "fylgja serve: serving on "+addrs[1]+": the test's listener is closed\n"; got != want {
+		t.Errorf("stderr %q, want %q", got, want)
+	}
+	if conn, err := net.DialTimeout("tcp", addrs[0], time.Second); err == nil {
+		_ = conn.Close()
+		t.Errorf("%s still takes connections after the server ended on %s", addrs[0], addrs[1])
 	}
 }
 

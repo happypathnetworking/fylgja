@@ -36,7 +36,8 @@ const (
 // serveOptions are fylgja serve's: its flags, and what it reads of its process, which a
 // test replaces.
 type serveOptions struct {
-	listen string
+	// listen is every address to listen on, in the order given; none is api.DefaultAddress.
+	listen []string
 	pspDir string
 
 	stdout, stderr io.Writer
@@ -46,7 +47,7 @@ type serveOptions struct {
 	// images answers whether the host holds an image that is not pulled, for the report's
 	// package lines, as the worker's does.
 	images lab.Images
-	// netListen makes the listener the server serves on; nil is net.Listen. A test gives
+	// netListen makes each listener the server serves on; nil is net.Listen. A test gives
 	// one whose Accept fails.
 	netListen func(network, address string) (net.Listener, error)
 }
@@ -81,8 +82,8 @@ func newServeCmd(version string) *cobra.Command {
 		},
 	}
 	cmd.SetFlagErrorFunc(func(_ *cobra.Command, err error) error { return serveExit(opts, "%v", err) })
-	cmd.Flags().StringVar(&opts.listen, "listen", api.DefaultAddress,
-		"host:port to listen on; an address that is not loopback carries the token unencrypted")
+	cmd.Flags().StringArrayVar(&opts.listen, "listen", []string{api.DefaultAddress},
+		"host:port to listen on, repeatable; an address that is not loopback carries the token unencrypted")
 	cmd.Flags().StringVar(&opts.pspDir, "psp-dir", "",
 		"directory of platform support packages overriding the embedded ones (or FYLGJA_PSP_DIR)")
 	return cmd
@@ -100,9 +101,15 @@ func runServe(ctx context.Context, opts *serveOptions, version string) error {
 	if !ok || token == "" {
 		return serveExit(opts, "%s is not set; the server does not start without the API's token", api.EnvToken)
 	}
-	host, _, err := net.SplitHostPort(opts.listen)
-	if err != nil {
-		return serveExit(opts, "--listen %s is not host:port", opts.listen)
+	listen := opts.listen
+	if len(listen) == 0 {
+		listen = []string{api.DefaultAddress}
+	}
+	// Every address is checked before any is listened on.
+	for _, addr := range listen {
+		if _, _, err := net.SplitHostPort(addr); err != nil {
+			return serveExit(opts, "--listen %s is not host:port", addr)
+		}
 	}
 	paths, err := lab.ResolvePaths()
 	if err != nil {
@@ -134,9 +141,18 @@ func runServe(ctx context.Context, opts *serveOptions, version string) error {
 	if netListen == nil {
 		netListen = net.Listen
 	}
-	ln, err := netListen("tcp", opts.listen)
-	if err != nil {
-		return serveExit(opts, "listening on %s: %v", opts.listen, err)
+	// Every listener is opened before any serves. A failure closes those already opened, so
+	// the server listens on none.
+	listeners := make([]listener, 0, len(listen))
+	for _, given := range listen {
+		ln, err := netListen("tcp", given)
+		if err != nil {
+			for _, l := range listeners {
+				_ = l.ln.Close()
+			}
+			return serveExit(opts, "listening on %s: %v", given, err)
+		}
+		listeners = append(listeners, listener{ln: ln, addr: reportedAddress(given, ln.Addr())})
 	}
 
 	logger := slog.New(slog.NewTextHandler(opts.stderr, nil))
@@ -147,13 +163,7 @@ func runServe(ctx context.Context, opts *serveOptions, version string) error {
 	s.Build = version
 	s.Log = logger
 
-	// The address as the operator gave it, with the port it got: one asked for as 0 is
-	// named by the port the system chose.
-	addr := opts.listen
-	if tcp, ok := ln.Addr().(*net.TCPAddr); ok {
-		addr = net.JoinHostPort(host, fmt.Sprint(tcp.Port))
-	}
-	for _, line := range serveReport(ctx, opts, reg, paths, addr, loopback(ln.Addr()), version) {
+	for _, line := range serveReport(ctx, opts, reg, paths, listeners, version) {
 		_, _ = fmt.Fprintln(opts.stdout, "fylgja serve: "+line)
 	}
 
@@ -166,23 +176,57 @@ func runServe(ctx context.Context, opts *serveOptions, version string) error {
 		// is compared, and log no line (contracts/api.md "The token").
 		DisableGeneralOptionsHandler: true,
 	}
-	served := make(chan error, 1)
-	go func() { served <- srv.Serve(ln) }()
+	// One server serves every listener; each Serve returns once, into served.
+	served := make(chan servedEnd, len(listeners))
+	for _, l := range listeners {
+		go func() { served <- servedEnd{addr: l.addr, err: srv.Serve(l.ln)} }()
+	}
+	// drain waits for every serving goroutine but those already received, once Close has
+	// been called. After Close, Serve returns http.ErrServerClosed; anything else is a
+	// failure that raced the stop, logged and not returned, since the stop is already decided.
+	drain := func(remaining int) {
+		for range remaining {
+			if end := <-served; !errors.Is(end.err, http.ErrServerClosed) {
+				logger.Warn("serving ended with an error while stopping", "addr", end.addr, "err", end.err)
+			}
+		}
+	}
 	select {
 	case <-ctx.Done():
-		// Every connection is closed at once, an answer in flight included. A run goes on,
-		// since the worker holds it, and its client reports the API unreachable.
+		// Every listener and every connection is closed at once, an answer in flight
+		// included. A run goes on, since the worker holds it, and its client reports the API
+		// unreachable.
 		_ = srv.Close()
-		// Waited for so the serving goroutine has ended before this returns. After Close,
-		// Serve returns http.ErrServerClosed; anything else is a failure that raced the
-		// cancellation, logged and not returned, since the stop was asked for.
-		if err := <-served; !errors.Is(err, http.ErrServerClosed) {
-			logger.Warn("serving ended with an error while stopping", "addr", addr, "err", err)
-		}
+		drain(len(listeners))
 		return nil
-	case err := <-served:
-		return serveExit(opts, "serving on %s: %v", addr, err)
+	case end := <-served:
+		// A failure to accept on one listener ends the server on all of them.
+		_ = srv.Close()
+		drain(len(listeners) - 1)
+		return serveExit(opts, "serving on %s: %v", end.addr, end.err)
 	}
+}
+
+// listener is one address the server listens on, and the address its report names.
+type listener struct {
+	ln   net.Listener
+	addr string
+}
+
+// servedEnd is what one listener's Serve returned.
+type servedEnd struct {
+	addr string
+	err  error
+}
+
+// reportedAddress is the address as the operator gave it, with the port it got: one asked
+// for as 0 is named by the port the system chose.
+func reportedAddress(given string, got net.Addr) string {
+	host, _, _ := net.SplitHostPort(given)
+	if tcp, ok := got.(*net.TCPAddr); ok {
+		return net.JoinHostPort(host, fmt.Sprint(tcp.Port))
+	}
+	return given
 }
 
 // listable refuses an override directory that is not a directory, or that cannot be
@@ -203,15 +247,18 @@ func listable(dir string) error {
 }
 
 // serveReport is what the server says once it listens and before it takes a request, one
-// line each with no prefix: where it listens, the API's
-// version and its build; that the address carries the token unencrypted when it is not
-// loopback; the state root; that the workflow service and Infrahub are dialled when a
+// line each with no prefix: each address it listens on, in the order given, with the API's
+// version and its build, each followed straight away, when it is not loopback, by a line
+// saying the token is sent unencrypted on it; the state root; that the workflow service and Infrahub are dialled when a
 // request needs them; and the worker's own lines for the memory budget and each package.
 // It names variables, never their values.
-func serveReport(ctx context.Context, opts *serveOptions, reg *psp.Registry, paths lab.Paths, addr string, isLoopback bool, version string) []string {
-	lines := []string{fmt.Sprintf("listening on %s (API version %s, build %s)", addr, api.Version, version)}
-	if !isLoopback {
-		lines = append(lines, addr+" is not a loopback address: the API's token is sent unencrypted on it")
+func serveReport(ctx context.Context, opts *serveOptions, reg *psp.Registry, paths lab.Paths, listeners []listener, version string) []string {
+	var lines []string
+	for _, l := range listeners {
+		lines = append(lines, fmt.Sprintf("listening on %s (API version %s, build %s)", l.addr, api.Version, version))
+		if !loopback(l.ln.Addr()) {
+			lines = append(lines, l.addr+" is not a loopback address: the API's token is sent unencrypted on it")
+		}
 	}
 	lines = append(lines,
 		fmt.Sprintf("state root %s (bundles: %s, twin: %s)", paths.Root, paths.Bundles, paths.Twin),

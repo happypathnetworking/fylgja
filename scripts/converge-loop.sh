@@ -153,7 +153,8 @@ else
 fi
 # What a live session is told instead: the host is its, by CLAUDE.md's rules.
 IMPLEMENT_LIVE_OK="This is a live run, and the host is yours by CLAUDE.md's rules: INFRAHUB_ADDRESS, INFRAHUB_API_TOKEN and both node logins are in your environment. Rebuild and restart the worker from this tree before any live run (CLAUDE.md's detached command, then verify it as CLAUDE.md says), start the dev server if it is down, read free -m before tier 3, run make test-e2e and the hand scenarios your tasks name, and leave the host clean when you stop: clab inspect --all is {}, no local/twin, no Schedule, no fylgja-test-* branch or series. You run headless: a reply that ends your turn ends the session and kills what you started, so never end your turn, or wait for a background task's notification, while a command you started still runs. make test-e2e outlasts one Bash call (about 17 minutes against the call's 10), so remove local/converge-e2e.out, start the tier detached with its exit status in that file, setsid nohup bash -c 'make test-e2e > local/converge-e2e.out 2>&1; echo exit \$? >> local/converge-e2e.out' < /dev/null > /dev/null 2>&1 &, then wait in foreground calls of under ten minutes, timeout 540 bash -c 'until grep -q ^exit local/converge-e2e.out; do sleep 10; done', repeated until it has exited, and read its result from that file; do the same for any other command that outlasts a call. Never print, log or commit the token or either login. A task the host refuses after a second attempt"
-# Attended, converge separates what needs a decision from what needs the host.
+# Attended, converge separates what needs a decision from what needs the host. Attended
+# requires tier 2 (below), so these tags take it as the sessions'.
 if [ "$ATTENDED" = 1 ]; then
 	CONVERGE_TAGS="[behaviour] when its fix changes what the code does; [pin] when it is a test, a doc or record line, or a named constant, with the code under test unchanged (the stopping rule in docs/development.md); [live] when it needs live infrastructure beyond tier 2 (tier 3, a twin, the worker, a hand scenario) and no decision; [operator] when it needs what only the operator can give: a choice between designs the artifacts do not settle, a change to spec.md, plan.md or docs/decisions.md, a golden or fixture id that would move. A tier-2 test is [pin] or [behaviour] like any other. Example: '- [ ] T<next id> [pin] Pin ...'"
 else
@@ -169,6 +170,12 @@ BRANCH=$(git symbolic-ref --short HEAD)
 
 if [ "$ATTENDED" = 1 ] && [ "$LOGINS" = 0 ]; then
 	echo "converge-loop: --attended needs both node logins in local/.env for its live sessions" >&2
+	exit 2
+fi
+# Attended, converge's tags take tier 2 as the sessions' (CONVERGE_TAGS above), and a live
+# session reaches Infrahub too, so both Infrahub variables are required, not optional.
+if [ "$ATTENDED" = 1 ] && [ "$TIER2" = 0 ]; then
+	echo "converge-loop: --attended needs INFRAHUB_ADDRESS and INFRAHUB_API_TOKEN in local/.env" >&2
 	exit 2
 fi
 # A skip is an answer the attended session gave; unattended there is no one to have given it.

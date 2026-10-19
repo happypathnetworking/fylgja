@@ -46,7 +46,8 @@ it reports `stopped` (within a minute) go to **Report**. Nothing else.
    - the branch is not the feature's: `git symbolic-ref --short HEAD` must equal the last
      path element of `.specify/feature.json`'s `feature_directory`;
    - another loop holds `local/converge-loop.lock` (`flock -n local/converge-loop.lock true`);
-   - `local/.env` lacks either node login (`--attended` refuses too, but say it first);
+   - `local/.env` lacks either node login, `INFRAHUB_ADDRESS` or `INFRAHUB_API_TOKEN`
+     (`--attended` refuses too, but say it first; check the names, never print a value);
    - this session is not on the model `docs/development.md`'s table gives `/converge-loop`
      (ask the operator to `/model` it first).
 2. **Carry the skips.** `python3 -I .claude/skills/converge-loop/state.py --carry` prints the

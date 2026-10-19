@@ -1118,8 +1118,10 @@ the open and skipped tasks as an exclusion list; a stop that unattended would ha
 becomes a question; a convergence pass with `[operator]` tasks asks about them and, on
 `continue`, implements the rest of the pass around them (unattended it stops before
 implementing anything); `[live]` tasks of a pass run as a live session; and a live session
-keeps the logins; and `--skip` is accepted. Without `--attended` the script behaves as the
-unattended loop above.
+keeps the logins; and `--skip` is accepted. `--attended` refuses to start without both node
+logins and both Infrahub variables: its converge tags take tier 2 as the sessions', which
+unattended depends on whether the variables are there. Without `--attended` the script
+behaves as the unattended loop above.
 
 *An answer that lands late is still built.* The script records every task it asks about.
 Before each convergence pass, and once more before it stops at `cap`, it lands a pending
@@ -1142,7 +1144,8 @@ inside a run proceed as they always have, around the blocked sibling.
 
 *The skill* (`.claude/skills/converge-loop/SKILL.md`, beside the Spec Kit ones, with
 `state.py`, which reads the run's state from disk) tells the attended session to refuse a
-dirty tree, a branch other than the feature's, a held lock, a missing login or the wrong
+dirty tree, a branch other than the feature's, a held lock, a missing login or Infrahub
+variable, or the wrong
 model; start the script detached with `--attended` and the carried skips; watch the summary
 and the questions file with `Monitor`, and on every wake read `state.py` before acting, so a
 question that arrived while nothing watched still gets its verdict; on a question, read the

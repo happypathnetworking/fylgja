@@ -1092,3 +1092,90 @@ each message was checked for both tokens and held neither.
   7.6 s, the `log_error` the findings' text, `stage.artifact.stale` on n1, n2 and n3 for
   `role-stale` and for `head`.
 - `-delete` removed 3 stages, the proposed change and the branch; Infrahub read as it began.
+
+### 5.5 The checks inside Infrahub, and tier 2 whole (2026-10-19, 20:04Z–21:22Z; T050, SC-005, SC-010)
+
+Run 15's rebuild had left the worker and the server on a `(deleted)` binary. `make build`,
+then both stopped with `pkill -x fylgja` and started with `CLAUDE.md`'s two lines, and
+verified: each `exe` current, each environment carrying `INFRAHUB_*`, both logins,
+`FYLGJA_STATE_ROOT` and `FYLGJA_API_TOKEN`; the two listen lines, the bridge's followed by its
+unencrypted line; both packages with their logins set; from each task worker `200 1
+0.1.0-dev`. They were restarted the same way after the fixes' rebuild (20:45Z). `free -m`
+read 18.4 GiB available, load average 2.4; the dev server was up. No twin was booted:
+`clab inspect --all` read `{}` and `local/twin` was absent throughout. No token was printed.
+
+- **`TestChecksInsideInfrahub` alone** (20:05:09Z): **PASS in 198.7 s** (200.6 s wall with
+  the compile), not skipped. The registration imported in 11 s, the branch seeded in 18 s,
+  the draft's pipeline concluded after 58 s, the re-run with two marks `success` after 37 s
+  (a message of 2,266 characters), the stale mark's `failure` after 31 s (5,131). A poll of
+  `CoreUserValidator` on `main` every 2 s beside it read each validator's stamps:
+  **`fylgja-test-step` took 18.9 s at the draft's creation, 13.6 s at the re-run with two
+  marks and 12.4 s with the stale mark** (`started_at` to `completed_at`), well inside
+  SC-005's minute; `fylgja-test-twin`'s skip took 13.4 s, 5.2 s and 4.0 s. The server logged
+  three `stage.plan` (`rejected`, the branch point's refusal or the stale mark; 6.4 s, 8.7 s
+  and 8.3 s) and two `twin.show`. Afterwards `main` and `fylgja-fixture` alone, 0 proposed
+  changes, stages, comments, check definitions and user validators, the query
+  `device_config` alone.
+- **Tier 2's first run** (20:09:02Z–20:39:07Z, 1,805.1 s, exit 2). Three tests failed at
+  `OpenProposedChange`'s 180 s bound on the pipeline, all between 20:10Z and 20:15Z:
+  `TestChecksInsideInfrahub` and `internal/stages`' `TestStagesListAndPlan` with the artifact
+  validator still `in_progress`, `TestRehearseRefusesBeforeAnyRun` with its last read cut
+  (`EOF`: Infrahub dropped the connection). Seeding a branch took 72–96 s there against 18 s
+  alone. And `internal/server` reached `go test`'s 30-minute timeout:
+  `TestRehearseComposedByTheFixtureTool`'s `-run-checks user` had waited 24 minutes.
+  - **What hung.** That test's branch was made at 20:14:24Z, while the checks' registration
+    lived on `main` (imported 20:09:43Z, deleted about 20:15:20Z). Once it was deleted, `main`
+    held no definition, so the test's guard ran the user run; but the branch still listed
+    `fylgja-test-step` and `fylgja-test-twin`, each with `repository` null, and
+    `RunUserChecks` waited for both. **Infrahub never runs them**: a run-check's
+    `trigger_user_checks` (the task worker's `/source/backend/infrahub/git/tasks.py`) runs, for
+    each repository in the branch's diff, that repository's `checks` as the source branch
+    sees them, and a repository is branch-agnostic, so a deleted one is in no branch's diff. A
+    throwaway probe, since removed, held it: with a registration, a new branch's two
+    definitions name its repository; after the registration's delete the branch still lists
+    both, `repository` null; a draft's user run then returned none in 0.6 s with the fix
+    below. The killed package's cleanup never ran: its branch and proposed change were
+    removed with `fylgja-fixture -delete` (`deleted 0 stages, 1 proposed change`), its
+    fixture tool's process killed and its temporary directory removed.
+  - **Seen beside it**: while the registration lived, other packages' proposed changes ran its
+    checks, as every proposed change runs every registered repository's: Prefect ran
+    `git-repository-trigger-user-checks` for `fylgja-test-checks-2706159` and for `fylgja` on
+    a stage test's draft (both `Failed` on its branch, already deleted). Prefect lists no
+    artifact generation and no user check as a flow run, so the stall itself is not
+    attributed; flow runs started about 20 s after they were scheduled throughout.
+  - **Fixed** (US2, US3's test support): `checkDefinitionsOn`, which `RunUserChecks` waits on,
+    lists the definitions of a repository still registered; the fixture tool's line reads
+    `no user check ran on proposed change <id> on <b>: the branch sees no check definition of
+    a registered repository`. `OpenProposedChange`'s bound is `pipelineWait`, 6 minutes.
+- **Tier 2's second run** (20:45:47Z–21:03:02Z, 1,034.7 s, exit 2): every package passed but
+  `internal/checks`. Its draft's pipeline concluded after 260 s, then n1's render after the
+  third link outlasted `checksumWait`'s 90 s (n3's moved, n1's did not). Pipelines elsewhere
+  concluded after 249 s, 185 s, 151 s, 134 s, 38 s and 23 s. While the registration lived,
+  two other packages' drafts, `TestRehearseRefusesBeforeAnyRun`'s and a stage test's, ran
+  `fylgja-test-step` (53.9 s and 62.3 s) and `fylgja-test-twin` (44.9 s and 49.3 s), their
+  plans reaching the server, beside the test's own (57.5 s and 46.2 s). The fixture tool's
+  branch, made while it lived, returned at once (`-run-checks user: 2.7s`, the new line).
+  - **Fixed**: `make test-contract` runs `internal/checks` after the rest, alone, in a second
+    `go test`, running both whatever the first answers and failing if either does. Its
+    registration makes every proposed change opened while it lives run its two checks, and
+    its waits, and SC-005's minute, are an otherwise idle Infrahub's. The package set is the
+    same 24 (`go list -tags contract ./...`).
+- **Tier 2's third run** (21:03:29Z–21:21:49Z): **`ok` in 1,099.7 s wall, exit 0**, every
+  package `ok`, no test skipped and none failed; **383 s longer than 014's 716.7 s**. The rest
+  ran in about 900 s (`internal/stages` 894.0 s the longest, `internal/stage` 648.4 s,
+  `internal/server` 606.1 s, `internal/intent` 254.3 s), then `internal/checks` in 199.5 s.
+  `TestRehearseRefusesBeforeAnyRun` passed in 299.8 s (its pipeline 192 s, the refusal in
+  8.7 s), `TestRehearseComposedByTheFixtureTool` in 303.7 s (`-run-checks user` 2.2 s, the
+  checks' registration having lived beside its branch), `TestChecksInsideInfrahub` in
+  199.5 s: imported in 21 s, seeded in 13 s, the draft's pipeline 56 s, the re-run `success`
+  after 38 s and the stale mark's `failure` after 26 s, the time from the run-check to the
+  conclusion, which bounds `fylgja-test-step`'s own from above, inside SC-005's minute. Its
+  three plans answered in 4.7 s, 7.6 s and 6.8 s. Pipelines beside each other, with no
+  registration but `fylgja`, still concluded after 192 s and 176 s: the 180 s bound would
+  have failed again.
+- **After it**, quickstart §5's query read `main` and `fylgja-fixture`; 0 proposed changes,
+  stages and comments; the one registration `fylgja`; 0 check definitions, as before T054.
+  `clab inspect --all` `{}`, no `local/twin`. The three runs' outputs and the solo run's were
+  searched for each token, password, secret key and login by its value: none, but for the
+  images' five-character default inside `admin-state` and a containerlab log in the tests'
+  data.

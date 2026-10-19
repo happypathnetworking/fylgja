@@ -1,5 +1,5 @@
 #!/bin/bash
-# Tier 3: eight cases in one run, making seven twins, through the workflow service and the
+# Tier 3: nine cases in one run, making nine twins, through the workflow service and the
 # operator's worker, leaving the host as it found it. Run by `make test-e2e` from the
 # repository root. Never runs in CI and never gates a PR. M3's four cases create with
 # --no-follow, so nothing checks their twins.
@@ -9,7 +9,9 @@
 # stops it in its trap. Each command runs with PATH, HOME and the API's address and token,
 # and nothing else of the script's environment. The script's own reads (gnmic, Docker,
 # containerlab, twin.json, the store), the boot half and the fixture tool stay direct, with
-# the full environment, and so does case 3's short-lived worker.
+# the full environment, and so does case 3's short-lived worker. Case 9's two rehearsals are
+# no command of the script's: the check fylgja-twin asks them from inside Infrahub's task
+# workers, of the operator's server on the host's Docker bridge (015).
 #
 # After every create and every rebuild: each node's first cabled interface reads,
 # over the gNMI its own package declares, the description its staged artifact sets (bootstrap
@@ -52,14 +54,28 @@
 #      both pushed, the new link seen from both ends over gNMI, twin.json 6 naming the step
 #      and its wait settled (M12); the step back with --stage seeded, settled too; destroy;
 #      the stages, the proposed change and the branch deleted
+#   9. a throwaway branch seeded and a draft proposed change opened on it (015): at the
+#      draft's creation the check fylgja-twin skipped it and fylgja-step passed, and no
+#      comment was posted; stage seeded, a third link, stage third-link; marked ready and the
+#      user checks run again: fylgja-twin rehearsed it on a twin and passed, its message
+#      saying rehearsal ok, one comment holding the table, the drawing and the stages, and no
+#      twin left; an interface n1 does not have, generated, stage bad-port, the checks run
+#      again: fylgja-twin failed, naming bad-port's push on n1, a second comment holding the
+#      commands that reproduce it and the head not reached; the branch deleted, and with its
+#      proposed change the comments and the validators
 #
 # Needs, all running from this directory: `make temporal-dev`, `make worker` (restarted
 # after every rebuild, since case 1's refusal is worded by the worker and case 5's checks
 # run on it), Docker, containerlab, the SR Linux image, the imported cEOS image (never
 # pulled; docs/development.md says how to import it), go (cases 1 and 6 run the boot half as
-# go test; cases 5 and 6 seed their branches with cmd/fylgja-fixture), and Infrahub with
-# fylgja-fixture seeded (local/.env). The API's server is the script's own, so no server the
-# operator runs is needed, and none is used: its port is one the system chooses.
+# go test; cases 5 to 9 seed their branches with cmd/fylgja-fixture), and Infrahub with
+# fylgja-fixture seeded (local/.env). Every command goes to the script's own server, whose
+# port is one the system chooses. Case 9 needs two things more, checked before anything
+# starts: the operator's server from this tree, listening on the Docker bridge with
+# local/.env's token as CLAUDE.md's start line has it (make serve listens on loopback alone),
+# which Infrahub's task workers reach and the script never starts or stops; and the checks
+# fylgja-step and fylgja-twin on main, pushed to origin's main and imported
+# (specs/015-proposed-change-rehearsal/quickstart.md §6).
 # Optional: WORKER_LOG names that worker's log, which the credential greps then cover too.
 # Optional: PLATFORMS narrows the run to a list of shipped packages (the stems of psp/*.yaml,
 # separated by commas or spaces): a case runs when every package it needs is in the list and
@@ -70,9 +86,10 @@
 #
 # Exit 0 prints E2E-OK when every case ran, or, when PLATFORMS skipped one, E2E-PARTIAL naming
 # the list, the cases that ran and each case skipped with its reason. Any failed check exits 1
-# after the trap's destroy and its deletion of the throwaway branches of cases 5, 6, 7 and 8
-# (7's and 8's with their stages and proposed changes); a lab, a twin directory or Schedule fylgja-follow
-# left behind after that destroy exits 99.
+# after the trap's destroy, which cancels a rehearsal in flight and waits for its own destroy,
+# and its deletion of the throwaway branches of cases 5 to 9 (7's, 8's and 9's with their
+# stages and proposed changes, 9's comments and validators going with its proposed change); a
+# lab, a twin directory or Schedule fylgja-follow left behind after that destroy exits 99.
 set -euo pipefail
 
 fail() {
@@ -83,7 +100,8 @@ fail() {
 # The packages each case needs, read by case_runs and the list's refusals alone: every
 # case boots SR Linux, and 6 and 8 boot EOS beside it.
 declare -A CASE_PACKAGES=([1]=nokia_srlinux [2]=nokia_srlinux [3]=nokia_srlinux [4]=nokia_srlinux
-  [5]=nokia_srlinux [6]="nokia_srlinux arista_eos" [7]=nokia_srlinux [8]="nokia_srlinux arista_eos")
+  [5]=nokia_srlinux [6]="nokia_srlinux arista_eos" [7]=nokia_srlinux [8]="nokia_srlinux arista_eos"
+  [9]=nokia_srlinux)
 mapfile -t KNOWN_PACKAGES < <(for f in psp/*.yaml; do basename "$f" .yaml; done | LC_ALL=C sort)
 # PLATFORMS, split; empty for a default run. Checked here, before local/.env is read and
 # before anything starts, so a refused list leaves nothing behind.
@@ -618,12 +636,14 @@ cleanup() {
   if [ -n "${SERVER_PID:-}" ]; then
     fylgja twin destroy --json > "$OUT/trap-destroy.json" 2> "$OUT/trap-destroy.err" || true
   fi
-  # The throwaway branches of cases 5, 6, 7 and 8, when they were made and not yet deleted;
-  # -delete removes case 7's and case 8's stages and proposed changes before their branches.
-  # A failure is reported, not fatal. The destroy above cancels a step in flight and waits
-  # for its record.
+  # The throwaway branches of cases 5 to 9, when they were made and not yet deleted; -delete
+  # removes the stages and proposed changes of cases 7, 8 and 9 before their branches, case
+  # 9's comments and validators with its proposed change. A failure is reported, not fatal.
+  # The destroy above cancels a step in flight and waits for its record, and a rehearsal in
+  # flight, case 9's check's, and waits for that run's own destroy; the comment the check
+  # posts on the cancelled run goes with its proposed change, or finds none to go on.
   local branch
-  for branch in "${FB:-}" "${FM:-}" "${FP:-}" "${FS:-}"; do
+  for branch in "${FB:-}" "${FM:-}" "${FP:-}" "${FS:-}" "${FR:-}"; do
     [ -n "$branch" ] || continue
     if ! fixture -branch "$branch" -delete > "$OUT/trap-delete-$branch.out" 2>&1; then
       echo "e2e: branch $branch was not deleted; remove it with: go run -tags fixture ./cmd/fylgja-fixture -branch $branch -delete" >&2
@@ -686,6 +706,42 @@ command -v temporal > /dev/null || fail "the Temporal CLI is neither on PATH nor
 if ! temporal operator cluster health --address "$TEMPORAL_ADDRESS" > "$OUT/health.out" 2>&1; then
   fail "the workflow service is not answering at $TEMPORAL_ADDRESS: start it with make temporal-dev"
 fi
+
+# Case 9's rehearsals are asked from inside Infrahub (R-19), so two things outside the script
+# are required first. Case 9 needs nokia_srlinux alone, which every list that selects a case
+# names, so it runs whenever any case does.
+#
+# The checks, on main: the registration fylgja imports them from origin's main, each with the
+# timeout its class declares. A branch runs the definitions main held at its creation, and
+# case 9 seeds its own, so an import any time before the run is enough.
+gql "" '{ CoreCheckDefinition { edges { node { name { value } timeout { value } } } } }' \
+  > "$OUT/check-definitions.json" 2> "$OUT/check-definitions.err" ||
+  fail "reading the check definitions on main failed; see $OUT/check-definitions.err"
+jq -e '[.CoreCheckDefinition.edges[].node | {name: .name.value, timeout: .timeout.value}]
+  | any(.[]; . == {name: "fylgja-step", timeout: 300}) and any(.[]; . == {name: "fylgja-twin", timeout: 4200})' \
+  "$OUT/check-definitions.json" > /dev/null ||
+  fail "case 9 needs the checks fylgja-step (timeout 300) and fylgja-twin (timeout 4200) on main, which holds $(jq -r '[.CoreCheckDefinition.edges[].node | "\(.name.value) (timeout \(.timeout.value))"] | if length == 0 then "none" else join(", ") end' "$OUT/check-definitions.json"): push them to origin's main and import them, as specs/015-proposed-change-rehearsal/quickstart.md §6 does"
+
+# The server the task workers reach: the operator's, on the Docker bridge's gateway at 7650,
+# where the Compose override points them (host.docker.internal:7650), with local/.env's
+# token, which curl reads from a header file so that it is in no process's arguments. It
+# must be this tree's build, as the script's own server is, since the rehearsals it serves
+# are what case 9 asserts. The script's own server stays on loopback.
+BRIDGE=$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}' 2> "$OUT/bridge.err") && [ -n "$BRIDGE" ] ||
+  fail "Docker reports no bridge network, the address Infrahub's task workers reach the server on; see $OUT/bridge.err"
+BUILD=$("$FYLGJA" --version | sed -n 's/^fylgja version //p')
+SERVE_REMEDY="start it from this tree with CLAUDE.md's start line, fylgja serve --listen 127.0.0.1:7650 --listen $BRIDGE:7650, from a shell that has loaded local/.env"
+# shellcheck disable=SC2031 # local/.env's token, not the one fylgja() sets in its subshell
+[ -n "${FYLGJA_API_TOKEN:-}" ] ||
+  fail "case 9 needs local/.env's FYLGJA_API_TOKEN, the token of the server Infrahub's task workers reach; set it and $SERVE_REMEDY"
+# shellcheck disable=SC2031
+bridge_status=$(curl -sS -o "$OUT/bridge-show.ndjson" -D "$OUT/bridge-show.headers" -w '%{http_code}' \
+  -H @<(printf 'Authorization: Bearer %s\n' "$FYLGJA_API_TOKEN") -H 'Content-Type: application/json' \
+  -d '{}' "http://$BRIDGE:7650/v1/twin/show" 2> "$OUT/bridge-show.err") || bridge_status="nothing"
+bridge_build=$(sed -n 's/^Fylgja-Build: *\([^[:space:]]*\).*/\1/Ip' "$OUT/bridge-show.headers" 2> /dev/null | tail -1)
+{ [ "$bridge_status" = 200 ] && [ "$bridge_build" = "$BUILD" ]; } ||
+  fail "case 9 needs the server Infrahub's task workers reach, at http://$BRIDGE:7650, from this tree (build $BUILD) and with local/.env's token: it answered $bridge_status${bridge_build:+, build $bridge_build}; $SERVE_REMEDY"
+echo "e2e: case 9's checks are on main, and the server on $BRIDGE:7650 answers, build $BUILD"
 
 # The script's own server, from the tree and in the script's full environment:
 # Infrahub's variables, both logins, the state root, and docker and containerlab on its PATH,
@@ -1704,6 +1760,197 @@ else
   skip_case 8
 fi
 
+# --- case 9: a proposed change rehearsed from inside Infrahub (015) -----------------
+if case_runs 9; then
+
+# user_checks NAME PC: the proposed change's user checks as test support's UserChecksOf reads
+# them, each CoreStandardCheck under a CoreUserValidator with its validator's state, a
+# validator with no check read as one row of its definition's name, sorted by name. Written
+# to $OUT/checks-NAME.json, where the credential and marker greps read each message.
+user_checks() {
+  gql "" "{ CoreUserValidator(proposed_change__ids: [\"$2\"]) { edges { node {
+    state { value } conclusion { value }
+    check_definition { node { name { value } } }
+    checks { edges { node { name { value } conclusion { value } severity { value } message { value } } } } } } } }" |
+    jq '[.CoreUserValidator.edges[].node
+      | (.check_definition.node.name.value // "") as $def | .state.value as $state
+      | if (.checks.edges | length) == 0
+        then {name: $def, conclusion: .conclusion.value, severity: null, message: null, validator_state: $state}
+        else .checks.edges[].node
+          | {name: (if (.name.value // "") == "" then $def else .name.value end), conclusion: .conclusion.value,
+             severity: .severity.value, message: .message.value, validator_state: $state}
+        end] | sort_by(.name)' > "$OUT/checks-$1.json"
+}
+
+# comments_of NAME PC: the proposed change's comments, as test support's CommentsOf reads them
+# through its comments relationship, [{id, text}] in Infrahub's order, written to
+# $OUT/comments-NAME.json, where the greps read each text.
+comments_of() {
+  gql "" "{ CoreProposedChange(ids: [\"$2\"]) { edges { node { comments { edges { node { id text { value } } } } } } } }" |
+    jq '[.CoreProposedChange.edges[].node.comments.edges[].node | {id, text: .text.value}]' > "$OUT/comments-$1.json"
+}
+
+# rehearsal_run CASE FILE: the run a rehearsal's comment names in its second paragraph, Run
+# `fylgja-rehearse <id>`; sets REHEARSAL_RUN and REHEARSAL_USED, the time it used against
+# its deadline, and fetches the run's history, whose payloads the greps read decoded.
+rehearsal_run() {
+  # shellcheck disable=SC2016 # the backticks are the markdown's code span, read literally
+  REHEARSAL_RUN=$(sed -n 's/^Run `fylgja-rehearse \([^`]*\)`.*/\1/p' "$2")
+  # shellcheck disable=SC2016
+  REHEARSAL_USED=$(sed -n 's/^Run `fylgja-rehearse [^`]*`, .* \([0-9.]*s of the [0-9]*s deadline\).*/\1/p' "$2")
+  [ -n "$REHEARSAL_RUN" ] || fail "case $1: the comment names no fylgja-rehearse run; see $2"
+  history_of "rehearse-$1" fylgja-rehearse "$REHEARSAL_RUN"
+  jq -e '.events[-1].eventType == "EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED"' "$OUT/history-rehearse-$1.json" > /dev/null ||
+    fail "case $1: rehearsal run $REHEARSAL_RUN did not complete; see $OUT/history-rehearse-$1.json"
+}
+
+# no_twin CASE: the rehearsal's own destroy left the host clear, as twin show reports it and as
+# containerlab and the state root say.
+no_twin() {
+  fylgja twin show --json > "$OUT/show-$1.json" 2> "$OUT/show-$1.err" ||
+    fail "case $1: twin show exited non-zero after the rehearsal; see $OUT/show-$1.err"
+  expect "$OUT/show-$1.json" '.show.kind == "none" and (.show.host.lab_present | not)
+    and (.show.host.twin_dir_present | not) and .show.in_flight == []'
+  [ "$(clab inspect --all --format json)" = "{}" ] || fail "case $1: containerlab reports a lab after the rehearsal"
+  [ ! -e "$TWIN" ] || fail "case $1: $TWIN is present after the rehearsal"
+}
+
+# A throwaway branch, set before seeding so the trap's -delete removes it and what hangs on
+# it: its stages, then its proposed change, which takes its comments and its validators with
+# it (research §1.6), then the branch. Seeded after the import of the checks, which the
+# preconditions required, so the branch runs them.
+FR="fylgja-test-e2e-rh-$$-$RANDOM"
+export FR
+start=$(now_ns)
+seed_status=0
+fixture -branch "$FR" > "$OUT/seed-9.out" 2> "$OUT/seed-9.err" || seed_status=$?
+SEED9_TOOK=$(since "$start")
+echo "e2e: case 9: seeding $FR took ${SEED9_TOOK}s (exit $seed_status)"
+[ "$seed_status" -eq 0 ] || fail "case 9: seeding $FR exited $seed_status; see $OUT/seed-9.err"
+
+# The draft. Its creation runs both checks after the rest of the pipeline, which -propose
+# waits for, so they are awaited here, bounded as tier 2's test bounds them: fylgja-twin
+# skips a draft, asking nothing of Fylgja, and fylgja-step plans the branch point and the
+# head, the branch point's refusal for want of a contract on main excepted. No comment is
+# posted on a draft.
+start=$(now_ns)
+fixture -branch "$FR" -propose > "$OUT/propose-9.out" 2> "$OUT/propose-9.err" ||
+  fail "case 9: -propose on $FR failed; see $OUT/propose-9.err"
+PROPOSE9_TOOK=$(since "$start")
+PC9=$(sed -n 's/^proposed change \([^ ]*\) opened on .*/\1/p' "$OUT/propose-9.out")
+[ -n "$PC9" ] || fail "case 9: -propose named no proposed change; see $OUT/propose-9.out"
+export PC9
+start=$(now_ns)
+until user_checks 9-draft "$PC9" 2> "$OUT/checks-9-draft.err" &&
+  jq -e '[.[] | select(.validator_state == "completed" and (.conclusion // "") != "") | .name] as $done
+    | all("fylgja-step", "fylgja-twin"; IN($done[]))' "$OUT/checks-9-draft.json" > /dev/null; do
+  [ "$(( ($(now_ns) - start) / 1000000000 ))" -lt 360 ] ||
+    fail "case 9: the draft's checks did not conclude within 360s of its pipeline; see $OUT/checks-9-draft.json"
+  sleep 5
+done
+DRAFT9_TOOK=$(since "$start")
+echo "e2e: case 9: a draft proposed change $PC9 opened on $FR in ${PROPOSE9_TOOK}s, its checks concluded ${DRAFT9_TOOK}s after"
+expect "$OUT/checks-9-draft.json" '(map(select(.name == "fylgja-twin")) | length == 1 and (.[0] | .conclusion == "success"
+    and ((.message // "") | contains("skipped: proposed change " + env.PC9 + " is a draft"))))
+  and (map(select(.name == "fylgja-step")) | length == 1 and .[0].conclusion == "success")'
+comments_of 9-draft "$PC9" 2> "$OUT/comments-9-draft.err" ||
+  fail "case 9: reading $PC9's comments failed; see $OUT/comments-9-draft.err"
+expect "$OUT/comments-9-draft.json" 'length == 0'
+
+# The two marks, each after the writes it seals and their rendering, as case 7 makes them,
+# then the proposed change marked ready, which starts nothing: the checks are run again.
+artifacts_of "$FR" "$OUT/artifacts-9-sealed-1.json" 2> "$OUT/artifacts-9-sealed-1.err" ||
+  fail "case 9: reading $FR's artifacts failed; see $OUT/artifacts-9-sealed-1.err"
+expect "$OUT/artifacts-9-sealed-1.json" 'length == 3 and all(.[]; .status == "Ready")'
+fixture -branch "$FR" -stage seeded -description seeded > "$OUT/stage-9-seeded.out" 2> "$OUT/stage-9-seeded.err" ||
+  fail "case 9: marking stage $FR/seeded failed; see $OUT/stage-9-seeded.err"
+fixture -branch "$FR" -add-link > "$OUT/add-link-9.out" 2> "$OUT/add-link-9.err" ||
+  fail "case 9: -add-link on $FR failed; see $OUT/add-link-9.err"
+await_checksums_moved 9 "$FR" "$OUT/artifacts-9-sealed-1.json" n1 n3
+fixture -branch "$FR" -stage third-link -description "third link" > "$OUT/stage-9-third-link.out" 2> "$OUT/stage-9-third-link.err" ||
+  fail "case 9: marking stage $FR/third-link failed; see $OUT/stage-9-third-link.err"
+fixture -branch "$FR" -ready > "$OUT/ready-9.out" 2> "$OUT/ready-9.err" ||
+  fail "case 9: -ready on $FR failed; see $OUT/ready-9.err"
+
+# The rehearsal, every stage passing. -run-checks waits until both checks have run again to
+# completed; fylgja-twin's run is the rehearsal: the baseline seeded built and verified,
+# third-link and the head stepped to, and the twin destroyed, then its comment and its
+# conclusion. Its message is the report's text, its comment the report's markdown.
+start=$(now_ns)
+fixture -branch "$FR" -run-checks user > "$OUT/run-checks-9a.out" 2> "$OUT/run-checks-9a.err" ||
+  fail "case 9: -run-checks user on $FR failed; see $OUT/run-checks-9a.err"
+REHEARSE9A_TOOK=$(since "$start")
+echo "e2e: case 9: the ready proposed change's checks concluded in ${REHEARSE9A_TOOK}s"
+user_checks 9a "$PC9" 2> "$OUT/checks-9a.err" || fail "case 9: reading $PC9's checks failed; see $OUT/checks-9a.err"
+expect "$OUT/checks-9a.json" '(map(select(.name == "fylgja-twin")) | length == 1 and (.[0] | .conclusion == "success"
+    and .validator_state == "completed" and ((.message // "") | contains("rehearsal ok"))))
+  and (map(select(.name == "fylgja-step")) | length == 1 and .[0].conclusion == "success")'
+comments_of 9a "$PC9" 2> "$OUT/comments-9a.err" || fail "case 9: reading $PC9's comments failed; see $OUT/comments-9a.err"
+expect "$OUT/comments-9a.json" 'length == 1 and (.[0].text | contains("Status **ok**")
+  and contains("| stage | at | bundle | step | wait | verify | new findings | verdict |")
+  and contains("```mermaid") and contains("**Stages**"))'
+jq -r '.[0].text' "$OUT/comments-9a.json" > "$OUT/comment-9a.md"
+COMMENT9A=$(jq -r '.[0].id' "$OUT/comments-9a.json")
+export COMMENT9A
+rehearsal_run 9a "$OUT/comment-9a.md"
+RUN9A=$REHEARSAL_RUN USED9A=$REHEARSAL_USED
+echo "e2e: case 9: rehearsal run $RUN9A passed, $USED9A; one comment, holding the table, the drawing and the stages"
+no_twin 9a
+
+# A stage made to fail: a port n1 does not have, rendered into n1's artifact alone, which the
+# compile omits and the node refuses at the push (research R-14). The rehearsal builds the
+# baseline, steps to third-link, and fails at bad-port's push on n1; the head is not reached.
+artifacts_of "$FR" "$OUT/artifacts-9b-before.json" 2> "$OUT/artifacts-9b-before.err" ||
+  fail "case 9: reading $FR's artifacts failed; see $OUT/artifacts-9b-before.err"
+fixture -branch "$FR" -add-interface n1:ethernet-1/99 -generate > "$OUT/add-interface-9.out" 2> "$OUT/add-interface-9.err" ||
+  fail "case 9: -add-interface n1:ethernet-1/99 -generate on $FR failed; see $OUT/add-interface-9.err"
+await_checksums_moved 9b "$FR" "$OUT/artifacts-9b-before.json" n1
+fixture -branch "$FR" -stage bad-port -description "a port n1 does not have" > "$OUT/stage-9-bad-port.out" 2> "$OUT/stage-9-bad-port.err" ||
+  fail "case 9: marking stage $FR/bad-port failed; see $OUT/stage-9-bad-port.err"
+start=$(now_ns)
+fixture -branch "$FR" -run-checks user > "$OUT/run-checks-9b.out" 2> "$OUT/run-checks-9b.err" ||
+  fail "case 9: -run-checks user on $FR failed; see $OUT/run-checks-9b.err"
+REHEARSE9B_TOOK=$(since "$start")
+echo "e2e: case 9: the checks concluded again in ${REHEARSE9B_TOOK}s"
+user_checks 9b "$PC9" 2> "$OUT/checks-9b.err" || fail "case 9: reading $PC9's checks failed; see $OUT/checks-9b.err"
+expect "$OUT/checks-9b.json" '(map(select(.name == "fylgja-twin")) | length == 1 and (.[0] | .conclusion == "failure"
+    and .validator_state == "completed" and ((.message // "")
+      | contains("stage " + env.FR + "/bad-port failed at phase push") and contains("not landed n1 (push.refused)"))))
+  and (map(select(.name == "fylgja-step")) | length == 1 and .[0].conclusion == "success")'
+comments_of 9b "$PC9" 2> "$OUT/comments-9b.err" || fail "case 9: reading $PC9's comments failed; see $OUT/comments-9b.err"
+expect "$OUT/comments-9b.json" 'length == 2 and any(.[]; .id == env.COMMENT9A)
+  and (map(select(.id != env.COMMENT9A)) | length == 1 and (.[0].text | contains("Status **nonconforming**")
+    and contains("**Reproduce by hand**") and contains("fylgja twin create --stage " + env.FR + "/seeded\n")
+    and contains("fylgja twin step --stage " + env.FR + "/bad-port --allow-restart\n")))'
+jq -r '.[] | select(.id != env.COMMENT9A) | .text' "$OUT/comments-9b.json" > "$OUT/comment-9b.md"
+COMMENT9B=$(jq -r '.[] | select(.id != env.COMMENT9A) | .id' "$OUT/comments-9b.json")
+grep -qE "^\| $FR/head \|.*\| not reached \|\$" "$OUT/comment-9b.md" ||
+  fail "case 9: the second comment's table has no row of $FR/head reading not reached; see $OUT/comment-9b.md"
+rehearsal_run 9b "$OUT/comment-9b.md"
+RUN9B=$REHEARSAL_RUN USED9B=$REHEARSAL_USED
+[ "$RUN9B" != "$RUN9A" ] || fail "case 9: the second comment names the first rehearsal's run $RUN9A"
+echo "e2e: case 9: rehearsal run $RUN9B failed at $FR/bad-port's push on n1, $USED9B; a second comment, with the commands that reproduce it"
+no_twin 9b
+
+# The branch goes with its stages and its proposed change, the comments and the validators
+# going with the proposed change, and Infrahub then holds nothing of it.
+if fixture -branch "$FR" -delete > "$OUT/delete-branch-9.out" 2>&1; then
+  grep -qxF "deleted 3 stages, 1 proposed change, branch $FR" "$OUT/delete-branch-9.out" ||
+    fail "case 9: -delete on $FR did not report its three stages and its proposed change; see $OUT/delete-branch-9.out"
+  infrahub_holds_none 9 "$FR"
+  gql "" "{ CoreChangeComment(ids: [\"$COMMENT9A\", \"$COMMENT9B\"]) { count }
+    CoreUserValidator(proposed_change__ids: [\"$PC9\"]) { count } }" \
+    > "$OUT/infrahub-after-9-comments.json" 2> "$OUT/infrahub-after-9-comments.err" ||
+    fail "case 9: reading Infrahub after $FR's delete failed; see $OUT/infrahub-after-9-comments.err"
+  expect "$OUT/infrahub-after-9-comments.json" '.CoreChangeComment.count == 0 and .CoreUserValidator.count == 0'
+  unset FR
+else
+  fail "case 9: -delete on $FR failed, leaving its branch, stages or proposed change; see $OUT/delete-branch-9.out"
+fi
+else
+  skip_case 9
+fi
+
 # --- credential hygiene over everything the run produced -----------------------
 
 # The script's server is stopped first, so its log is whole when it is searched. Every twin
@@ -1716,10 +1963,13 @@ stop_server
 # halves' output (boot-half.out, boot-half-6.out), the plan and list documents of cases 7
 # and 8 (plan-*.json, list-*.json), and their step documents, record copies and step
 # histories, decoded (step-7*.json, step-8*.json, twin-7*.json, twin-8*.json, history-step-*),
-# every twin verify document (verify-*.json), and the API's
+# every twin verify document (verify-*.json), case 9's checks with their messages
+# (checks-9*.json), its proposed change's comments (comments-9*.json, comment-9*.md) and its
+# two rehearsals' histories, decoded (history-rehearse-*), the answer of the server on the
+# bridge (bridge-show.*), and the API's
 # server's report and request log (server.log). A step history's push results
 # carry the device's diff by design, so they are searched for the marker and the
-# credentials, not for configuration lines.
+# credentials, not for configuration lines; so do a rehearsal's, its step children's results.
 scan=("$OUT" "$FYLGJA_STATE_ROOT/bundles")
 if [ -n "${WORKER_LOG:-}" ]; then
   [ -r "$WORKER_LOG" ] || fail "WORKER_LOG=$WORKER_LOG is not readable"
@@ -1766,6 +2016,9 @@ if ran 7; then
 fi
 if ran 8; then
   echo "e2e: case 8: proposed change ${PROPOSE8_TOOK}s, steps ${STEP8A_TOOK}s and ${STEP8B_TOOK}s, create ${CREATE8_TOOK}s; runs $RUN8A and $RUN8B"
+fi
+if ran 9; then
+  echo "e2e: case 9: seed ${SEED9_TOOK}s, proposed change ${PROPOSE9_TOOK}s and its checks ${DRAFT9_TOOK}s; checks with the rehearsals ${REHEARSE9A_TOOK}s ($USED9A) and ${REHEARSE9B_TOOK}s ($USED9B); runs $RUN9A and $RUN9B"
 fi
 line="e2e: verify ${VERIFY1_TOOK}s (case 1), ${VERIFY5_TOOK}s (case 5)"
 if ran 6; then line+=", ${VERIFY6_TOOK}s (case 6)"; fi

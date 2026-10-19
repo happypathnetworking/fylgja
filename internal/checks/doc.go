@@ -5,7 +5,9 @@
 // are proved here, from Go, as Infrahub runs them: its one test, under the build tag contract,
 // serves the tree's checks from the host's Docker bridge under a registration of its own,
 // opens a proposed change on a throwaway branch, and reads the checks' conclusions and
-// messages back from Infrahub's pipeline.
+// messages back from Infrahub's pipeline. make test-contract runs this package after the
+// others, alone: while its registration lives, every proposed change any test opens runs its
+// two checks, and its waits are those of an Infrahub with nothing else to do (research §5.5).
 //
 // The registration Infrahub imports from origin's main (D-044) declares the checks under
 // their own names; once it has imported them, a second registration of the same names would

@@ -31,8 +31,18 @@ test:
 # their branches, proposed changes and rebases in turn, so a package takes up to three
 # times as long as it does alone: internal/stages, about four and a half minutes alone,
 # outlasts go test's default ten-minute timeout here (014's research §8.10).
+# internal/checks runs after the rest, alone. Its registration on main makes every proposed
+# change opened while it lives run its two checks, the other packages' with them, and its
+# waits are those of an Infrahub with nothing else to do: beside the rest, its draft's
+# pipeline took 260 s against 58 s alone and a link's render outlasted its 90 s (015's
+# research §5.5). Both runs go on whatever the first answers, so one tier reports both.
+CHECKS_PKG     := github.com/happypathnetworking/fylgja/internal/checks
+CONTRACT_PKGS   = $(filter-out $(CHECKS_PKG),$(shell go list -tags contract $(PKGS)))
 test-contract:
-	go test -count=1 -timeout 30m -tags contract $(PKGS)
+	rc=0; \
+	go test -count=1 -timeout 30m -tags contract $(CONTRACT_PKGS) || rc=1; \
+	go test -count=1 -timeout 30m -tags contract $(CHECKS_PKG) || rc=1; \
+	exit $$rc
 
 # End-to-end tier: a booted NOS through Temporal. Needs the dev server (make
 # temporal-dev), a worker (make worker), Docker, containerlab, both images (SR Linux and

@@ -973,7 +973,7 @@ rate, so a command takes the same time on either; the choice is price against ju
 | analyze | Fable 5.1 | high | read-only, then the fixes are applied as follow-ups; a second pass is short |
 | checklist | Sonnet 5 | medium | optional |
 | implement, planned and converge-appended runs | Opus 5.5 | xhigh | Fable costs 2.5 times as much per token for no gain in speed; a converge-appended run is one or two tasks, so xhigh costs little |
-| converge | Opus 5.5 until it reports converged, then Fable 5.1 | xhigh | the same time per pass on either; the stopping rule below bounds the tail |
+| converge | Opus 5.5 | xhigh | every pass, the last included, as the converge loop runs it; the stopping rule below bounds the tail |
 | `/converge-loop` (the attended session) | Opus 5.5, the settings default | high | it implements nothing: the loop's own sessions are fixed by the script at Opus 5.5, xhigh. Its judgement is a reading — the `continue` or `hold` verdict, and where an answer belongs — not a design |
 
 Project settings that back this (`.claude/settings.json`): `model: "opus"` (an alias, Opus

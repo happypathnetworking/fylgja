@@ -3,6 +3,7 @@
 package checks
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/fs"
@@ -17,6 +18,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/stages"
 	"github.com/happypathnetworking/fylgja/internal/testsupport"
@@ -27,7 +29,10 @@ import (
 // Infrahub's task workers reach through the Compose override: on the development host, the
 // operator's, on the bridge (D-050). The test seeds a throwaway branch and deletes, however it
 // ends, the branch with what hangs on it, then its registration with its definitions and query.
-// It asks Fylgja for plans alone, so it boots no twin; still, boot none while it runs.
+// Its proposed change stays a draft, which fylgja-twin skips, so it asks Fylgja for plans
+// alone and boots no twin; still, boot none while it runs. It reads twin show from the API's
+// server at FYLGJA_API_ADDRESS (127.0.0.1:7650 when unset) with FYLGJA_API_TOKEN, which
+// local/.env holds.
 //
 //	set -a; . local/.env; set +a; go test -count=1 -tags contract ./internal/checks -run TestChecksInsideInfrahub -v
 
@@ -46,12 +51,14 @@ const (
 // none: there the test proves what it can and skips.
 var unreached = []string{"cannot be reached", "is not set in this task worker's environment"}
 
-// TestChecksInsideInfrahub proves fylgja-step as Infrahub runs it (FR-029, R-18): the tree's
-// check, imported from a registration of the test's own, runs in the pipeline of a draft
-// proposed change; with two marks it concludes success, its message the plan's text with its
-// four stages, three steps and the branch point's contract.node.missing; with a mark made
-// stale it concludes failure naming stage.artifact.stale and the device. Where the task
-// workers reach no server, it says so and skips.
+// TestChecksInsideInfrahub proves both checks as Infrahub runs them (FR-029, R-18): the tree's
+// checks, imported from a registration of the test's own, run in the pipeline of a draft
+// proposed change. fylgja-twin skips the draft at its creation and at each re-run, asks
+// nothing and posts no comment, and no twin is booted. fylgja-step, with two marks, concludes
+// success, its message the plan's text with its four stages, three steps and the branch
+// point's contract.node.missing; with a mark made stale it concludes failure naming
+// stage.artifact.stale and the device. Neither message carries a credential. Where the task
+// workers reach no server, the draft's skip is proved and the test says so and skips.
 func TestChecksInsideInfrahub(t *testing.T) {
 	c, err := testsupport.NewClient()
 	if err != nil {
@@ -98,12 +105,18 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	t.Logf("draft proposed change %s on %s, its pipeline concluded after %.0fs", id, branch, time.Since(started).Seconds())
 	// The draft's creation ran the checks; they conclude after the rest of the pipeline, so
 	// a re-run is asked for only once this run has ended and can be told from it.
+	// fylgja-twin's skip needs nothing of Fylgja's, so it is proved before the step's
+	// message says whether a server is reached.
+	skipped(t, awaitUserCheck(t, c, id, TestTwinCheck), id)
 	created := awaitUserCheck(t, c, id, TestStepCheck)
+	noCredential(t, created)
 	reached(t, created)
 	if created.Conclusion != "success" {
 		t.Errorf("at the draft's creation %s concluded %q, want success: the plan of the branch point and the head:\n%s",
 			TestStepCheck, created.Conclusion, created.Message)
 	}
+	// The skip booted nothing, as the server the task workers reach reports it.
+	noTwin(t)
 	if _, _, err := c.MarkStage(id, "seeded", "", "seeded"); err != nil {
 		t.Fatalf("marking seeded: %v", err)
 	}
@@ -153,6 +166,17 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	if !stale.MatchString(step.Message) {
 		t.Errorf("%s's message names no %s on n1:\n%s", TestStepCheck, findings.RuleStageArtifactStale, step.Message)
 	}
+
+	// A draft gets no comment, at its creation or at a re-run.
+	comments, err := c.CommentsOf(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(comments) != 0 {
+		t.Errorf("the draft %s holds %d comments, want none: %s posts only for a proposed change it rehearses",
+			id, len(comments), TestTwinCheck)
+	}
+	noTwin(t)
 }
 
 // repoPath is a path under the repository's root.
@@ -400,7 +424,8 @@ func awaitUserCheck(t *testing.T, c *testsupport.Client, id, name string) testsu
 	}
 }
 
-// rerun re-runs the proposed change's user checks and returns fylgja-test-step's.
+// rerun re-runs the proposed change's user checks, holds fylgja-test-twin to its skip of the
+// draft, and returns fylgja-test-step's. Neither message may carry a credential.
 func rerun(t *testing.T, c *testsupport.Client, id string) testsupport.UserCheckRow {
 	t.Helper()
 	started := time.Now()
@@ -408,14 +433,97 @@ func rerun(t *testing.T, c *testsupport.Client, id string) testsupport.UserCheck
 	if err != nil {
 		t.Fatalf("re-running the user checks: %v", err)
 	}
+	byName := map[string]testsupport.UserCheckRow{}
 	for _, r := range rows {
-		if r.Name == TestStepCheck {
-			t.Logf("%s re-run: %s after %.0fs, message %d characters", r.Name, r.Conclusion, time.Since(started).Seconds(), len(r.Message))
-			return r
+		byName[r.Name] = r
+	}
+	for _, name := range []string{TestTwinCheck, TestStepCheck} {
+		if _, ok := byName[name]; !ok {
+			t.Fatalf("the re-run's user checks are %+v; %s is not among them: was the branch made before the import?", rows, name)
 		}
 	}
-	t.Fatalf("the re-run's user checks are %+v; %s is not among them: was the branch made before the import?", rows, TestStepCheck)
-	return testsupport.UserCheckRow{}
+	skipped(t, byName[TestTwinCheck], id)
+	step := byName[TestStepCheck]
+	noCredential(t, step)
+	t.Logf("%s re-run: %s after %.0fs, message %d characters", step.Name, step.Conclusion, time.Since(started).Seconds(), len(step.Message))
+	return step
+}
+
+// skipped holds fylgja-test-twin to its skip of the draft id (FR-018, FR-020): success, asking
+// nothing of Fylgja, its message naming the proposed change.
+func skipped(t *testing.T, row testsupport.UserCheckRow, id string) {
+	t.Helper()
+	noCredential(t, row)
+	want := "skipped: proposed change " + id + " is a draft"
+	if row.Conclusion != "success" || !strings.Contains(row.Message, want) {
+		t.Errorf("on the draft %s %s concluded %q, want success with %q in its message:\n%s",
+			id, row.Name, row.Conclusion, want, row.Message)
+	}
+}
+
+// credentials are the names of the variables whose values no check's message may carry
+// (FR-023, SC-008): the tokens, the passwords and the secret key of the test's environment.
+var credentials = regexp.MustCompile(`^(FYLGJA|INFRAHUB)_\w*(TOKEN|PASSWORD|SECRET_KEY)$`)
+
+// shortCredential is a value too common to search for alone, as the cEOS image's default
+// login admin is: it leaks in a shape that carries it as a password (scripts/e2e.sh's
+// no_credential_contextual).
+const shortCredential = 8
+
+// noCredential fails the test when a check's message carries the value of a credential of
+// the test's environment, naming the variable and never the value or the message.
+func noCredential(t *testing.T, row testsupport.UserCheckRow) {
+	t.Helper()
+	for _, kv := range os.Environ() {
+		name, value, _ := strings.Cut(kv, "=")
+		if value == "" || !credentials.MatchString(name) {
+			continue
+		}
+		leaked := strings.Contains(row.Message, value)
+		if len(value) < shortCredential {
+			v := regexp.QuoteMeta(value)
+			leaked = regexp.MustCompile(`(-p ` + v + `|` + v + `:` + v + `|password=` + v + `|"password": ?"` + v + `")(\W|$)`).
+				MatchString(row.Message)
+		}
+		if leaked {
+			t.Errorf("%s's message (%d characters) carries the value of %s", row.Name, len(row.Message), name)
+		}
+	}
+}
+
+// noTwin holds the host to no twin, no lab and no run, as twin show reports it through the
+// API's server Infrahub's task workers reach: a draft's checks boot nothing.
+func noTwin(t *testing.T) {
+	t.Helper()
+	client, err := api.NewClient(os.LookupEnv, "")
+	if err != nil {
+		t.Fatalf("a client of the API's server, for twin show: %v (load local/.env, whose %s the server shares)", err, api.EnvToken)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	defer cancel()
+	answer, err := client.Do(ctx, findings.OpTwinShow, api.Request{}, "", nil)
+	if err != nil {
+		t.Fatalf("twin show through the API at %s: %v", client.Address(), err)
+	}
+	defer func() { _ = answer.Close() }()
+	for {
+		f, err := answer.Next()
+		if err != nil {
+			t.Fatalf("twin show through the API at %s: %v", client.Address(), err)
+		}
+		if f.Kind() != api.KindDocument {
+			continue
+		}
+		var doc findings.Document
+		if err := json.Unmarshal(f.Document, &doc); err != nil || doc.Show == nil {
+			t.Fatalf("twin show's document: %v (%s)", err, f.Document)
+		}
+		if s := doc.Show; s.Kind != findings.ShowKindNone || s.Host.LabPresent || s.Host.TwinDirPresent || len(s.InFlight) != 0 {
+			t.Errorf("twin show reports kind %q, lab present %t, twin directory present %t, %d runs in flight; want no twin, lab or run:\n%s",
+				s.Kind, s.Host.LabPresent, s.Host.TwinDirPresent, len(s.InFlight), f.Document)
+		}
+		return
+	}
 }
 
 // reached skips the test when the check says its task worker reaches no server: CI's

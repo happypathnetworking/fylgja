@@ -1529,6 +1529,65 @@ func TestStepDocumentCarriesTheWait(t *testing.T) {
 	}
 }
 
+// twin step's document carries the wait's last read counted by kind beside the wait, as twin
+// verify counts its block, once the run closed and its wait read; no key on the dry run, on a
+// wait that made no read and on a run cancelled before its wait, whatever the result holds
+// (015; step.schema.json's wait_counts). The text does not change. Each document satisfies
+// the contracts.
+func TestStepDocumentCarriesTheWaitCounts(t *testing.T) {
+	in := stepInput()
+	in.WaitS = 120
+	doc := findings.NewDocument(findings.OpTwinStep, &findings.Subject{Stage: "change-1/live"}, nil)
+	doc.Step = StepBlockOf(in, stepPlan())
+	if b := string(mustValidateM11(t, doc)); strings.Contains(b, `"wait_counts"`) {
+		t.Errorf("the dry run's document carries wait_counts: %s", b)
+	}
+
+	zero, one := 0, 1
+	settled := &wire.VerifyCounts{HostName: findings.VerifyCount{Held: 3, Unread: &zero},
+		PortEnabled: findings.VerifyCount{Held: 6, Skipped: &zero, Unread: &zero},
+		Neighbor:    findings.VerifyCount{Held: 6, Skipped: &zero, Unread: &zero}, Record: findings.VerifyCount{Held: 3}}
+	expired := &wire.VerifyCounts{HostName: findings.VerifyCount{Held: 3, Unread: &zero},
+		PortEnabled: findings.VerifyCount{Held: 6, Skipped: &zero, Unread: &zero},
+		Neighbor:    findings.VerifyCount{Held: 5, Failed: 1, Skipped: &one, Unread: &zero}, Record: findings.VerifyCount{Held: 3}}
+	subject := &findings.Subject{Stage: "change-1/live", RunID: "run-s"}
+	for _, c := range []struct {
+		name string
+		res  StepResult
+		want *wire.VerifyCounts
+	}{
+		{"settled", StepResult{Outcome: StepStepped, Wait: &wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 2, AfterS: 2.4,
+			Failing: []wire.StepFinding{}}, WaitCounts: settled}, settled},
+		{"expired", StepResult{Outcome: StepStepped, Wait: &wire.StepWait{Outcome: wire.WaitExpired, BudgetS: 120, Reads: 58, AfterS: 120,
+			Failing: []wire.StepFinding{{Rule: findings.RuleVerifyNeighbor, Object: "e1:Ethernet3", Message: "…"}}}, WaitCounts: expired}, expired},
+		{"cancelled before its first read", StepResult{Outcome: StepStepped, Wait: &wire.StepWait{Outcome: wire.WaitCancelled, BudgetS: 120}}, nil},
+		{"incomplete", StepResult{Outcome: StepStepped, Wait: &wire.StepWait{Outcome: wire.WaitIncomplete, BudgetS: 120,
+			Failing: []wire.StepFinding{{Rule: findings.RuleOperationFailed, Object: "/state/twin/twin.json", Message: "disk full"}}}}, nil},
+		{"cancelled before the wait", StepResult{Outcome: OutcomeCancelled, Phase: findings.StepPush, WaitCounts: settled}, nil},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			doc := StepDocument(subject, in, c.res)
+			if !reflect.DeepEqual(doc.Step.WaitCounts, c.want) {
+				t.Errorf("step.wait_counts %+v, want %+v", doc.Step.WaitCounts, c.want)
+			}
+			b := string(mustValidateM11(t, doc))
+			if c.want == nil {
+				if strings.Contains(b, `"wait_counts"`) {
+					t.Errorf("document carries wait_counts: %s", b)
+				}
+				return
+			}
+			want, err := json.Marshal(c.want)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(b, `"wait_counts":`+string(want)) {
+				t.Errorf("document %s\nwant it to carry wait_counts %s", b, want)
+			}
+		})
+	}
+}
+
 // A create beside a rehearsal is refused before any run starts, naming the rehearsal, not
 // the step or provision it may be running as its child (015, R-12).
 func TestStartProvisionRefusedBesideARehearsal(t *testing.T) {

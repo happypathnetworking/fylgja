@@ -965,6 +965,9 @@ type StepBlock struct {
 	// run closed, how it ended once the run
 	// closed and the wait ran; nil when the run closed without it.
 	Wait *StepWaitBlock `json:"wait,omitempty"`
+	// WaitCounts is the wait's last read counted by kind, as twin verify counts its block
+	// (015): nil on the dry run, before the run closed, and when the wait made no read.
+	WaitCounts *VerifyCounts `json:"wait_counts,omitempty"`
 }
 
 // MarshalJSON writes an empty push plan, and a run's empty pushes and awaited nodes, as []

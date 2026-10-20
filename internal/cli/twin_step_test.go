@@ -1775,6 +1775,9 @@ func TestStepInterrupt(t *testing.T) {
 		if code != findings.ExitUnclean || doc.Status != findings.StatusDiverged {
 			t.Fatalf("exit %d, status %s; want 4, diverged, as the run closed; findings %+v", code, doc.Status, doc.Findings)
 		}
+		if doc.Step == nil || doc.Step.Wait != nil || doc.Step.WaitCounts != nil {
+			t.Errorf("step block %+v, want one with neither wait nor wait_counts: the run was cancelled before its wait", doc.Step)
+		}
 		for _, f := range diverged.Findings {
 			if !slices.Contains(doc.Findings, f) {
 				t.Errorf("findings %+v lack the run's %+v", doc.Findings, f)
@@ -1937,12 +1940,17 @@ func TestStepDryRunWait(t *testing.T) {
 	if !strings.Contains(string(raw), `"wait":{"budget_s":30}`) {
 		t.Errorf("document %s, want step.wait {\"budget_s\":30}", raw)
 	}
+	if strings.Contains(string(raw), `"wait_counts"`) {
+		t.Errorf("the dry run's document carries wait_counts: %s", raw)
+	}
 }
 
 // The run prints how its wait ended after step record: and adds it to the closing line after
 // M11's timings, in the words the warning begins with; M11's line is otherwise byte for byte
 // what it was, and the exit is M11's (contracts/cli.md, twin step --wait).
-// An activity that failed outright prints that the wait could not complete.
+// An activity that failed outright prints that the wait could not complete. The document
+// carries the wait's last read counted by kind beside the wait when the wait read, and no
+// key otherwise (015).
 func TestStepRunReportsTheWait(t *testing.T) {
 	const m11 = "stepped to stage change-1/linked (bundle %s) in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s"
 	reconcile := 3.9
@@ -1954,23 +1962,31 @@ func TestStepRunReportsTheWait(t *testing.T) {
 		return provision.Event{WorkflowID: provision.WorkflowStep, Step: "observe", End: true, Outcome: provision.EventDone,
 			Duration: 2600 * time.Millisecond, Detail: detail}
 	}
+	zero, three := 0, 3
+	settledCounts := &wire.VerifyCounts{HostName: findings.VerifyCount{Held: 3, Unread: &zero},
+		PortEnabled: findings.VerifyCount{Held: 6, Skipped: &zero, Unread: &zero},
+		Neighbor:    findings.VerifyCount{Held: 6, Skipped: &zero, Unread: &zero}, Record: findings.VerifyCount{Held: 3}}
+	expiredCounts := &wire.VerifyCounts{HostName: findings.VerifyCount{Held: 3, Unread: &zero},
+		PortEnabled: findings.VerifyCount{Held: 6, Skipped: &zero, Unread: &zero},
+		Neighbor:    findings.VerifyCount{Held: 3, Failed: 3, Skipped: &three, Unread: &zero}, Record: findings.VerifyCount{Held: 3}}
 	for _, c := range []struct {
 		name     string
 		wait     *wire.StepWait
+		counts   *wire.VerifyCounts
 		event    provision.Event
 		progress string
 		clause   string
 	}{
-		{"settled", &wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 2, AfterS: 2.4, Failing: []wire.StepFinding{}},
+		{"settled", &wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 2, AfterS: 2.4, Failing: []wire.StepFinding{}}, settledCounts,
 			observed("settled after 2.4s (2 reads)"), "step observe: settled after 2.4s (2 reads)", "; settled after 2.4s"},
 		{"expired", &wire.StepWait{Outcome: wire.WaitExpired, BudgetS: 120, Reads: 58, AfterS: 120,
-			Failing: []wire.StepFinding{neighbor("s1:ethernet-1/3"), neighbor("e1:Ethernet3"), neighbor("e2:Ethernet1")}},
+			Failing: []wire.StepFinding{neighbor("s1:ethernet-1/3"), neighbor("e1:Ethernet3"), neighbor("e2:Ethernet1")}}, expiredCounts,
 			observed("expired after 120.0s (58 reads, 3 failing)"), "step observe: expired after 120.0s (58 reads, 3 failing)",
 			"; wait expired after 120.0s with 3 assertions failing"},
-		{"cancelled", &wire.StepWait{Outcome: wire.WaitCancelled, BudgetS: 120, Reads: 7, AfterS: 12.4},
+		{"cancelled", &wire.StepWait{Outcome: wire.WaitCancelled, BudgetS: 120, Reads: 7, AfterS: 12.4}, settledCounts,
 			observed("cancelled after 12.4s (7 reads)"), "step observe: cancelled after 12.4s (7 reads)", "; wait cancelled after 12.4s"},
 		{"incomplete, the activity failed", &wire.StepWait{Outcome: wire.WaitIncomplete, BudgetS: 120,
-			Failing: []wire.StepFinding{{Rule: findings.RuleOperationFailed, Object: "/state/twin/twin.json", Message: "disk full"}}},
+			Failing: []wire.StepFinding{{Rule: findings.RuleOperationFailed, Object: "/state/twin/twin.json", Message: "disk full"}}}, nil,
 			provision.Event{WorkflowID: provision.WorkflowStep, Step: "observe", End: true, Outcome: provision.EventFailed,
 				Duration: 100 * time.Millisecond, Rule: findings.RuleOperationFailed, Message: "reading the twin's record for the step's wait: disk full"},
 			"step observe: could not complete: reading the twin's record for the step's wait: disk full", "; wait could not complete"},
@@ -1978,11 +1994,11 @@ func TestStepRunReportsTheWait(t *testing.T) {
 		// timed out: the wait could not complete, as for one that failed outright.
 		{"incomplete, the window ended", &wire.StepWait{Outcome: wire.WaitIncomplete, BudgetS: 120,
 			Failing: []wire.StepFinding{{Rule: findings.RuleOperationFailed, Object: stepRunID,
-				Message: "activity ScheduleToClose timeout (type: ScheduleToClose)"}}},
+				Message: "activity ScheduleToClose timeout (type: ScheduleToClose)"}}}, nil,
 			provision.Event{WorkflowID: provision.WorkflowStep, Step: "observe", End: true, Outcome: provision.EventTimedOut,
 				Duration: 150 * time.Second, Message: "activity ScheduleToClose timeout"},
 			"step observe: could not complete: activity ScheduleToClose timeout", "; wait could not complete"},
-		{"the wait not run", nil, provision.Event{}, "", ""},
+		{"the wait not run", nil, nil, provision.Event{}, "", ""},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			stepHost(t, "plan-link-added.json", nil)
@@ -1995,7 +2011,7 @@ func TestStepRunReportsTheWait(t *testing.T) {
 					{Node: "s1", Reasons: []string{"artifact", "bootstrap"}, Outcome: wire.PushLanded, TookS: &s1Took}},
 				Timings: wire.StepTimings{ReconcileS: &reconcile, Readiness: map[string]float64{"e1": 54.8},
 					Push: map[string]float64{"e1": 1.6, "s1": 2.4}, WholeS: 71.2},
-				Record: &wire.TwinRecord{State: wire.StateReady}, Wait: c.wait,
+				Record: &wire.TwinRecord{State: wire.StateReady}, Wait: c.wait, WaitCounts: c.counts,
 				StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:15:41Z"}
 			if c.wait != nil && c.wait.Outcome != wire.WaitSettled {
 				res.Findings = findings.List{{Severity: findings.Warning, Rule: findings.RuleVerifyWaitUnsettled, Object: stepRunID,
@@ -2022,6 +2038,9 @@ func TestStepRunReportsTheWait(t *testing.T) {
 			case c.wait != nil && (w == nil || w.Outcome != c.wait.Outcome || w.Reads != c.wait.Reads || w.AfterS != c.wait.AfterS ||
 				len(w.Failing) != len(c.wait.Failing)):
 				t.Errorf("step.wait %+v, want the run's %+v", w, c.wait)
+			}
+			if got := out.doc.Step.WaitCounts; !reflect.DeepEqual(got, c.counts) {
+				t.Errorf("step.wait_counts %+v, want the run's %+v", got, c.counts)
 			}
 		})
 	}

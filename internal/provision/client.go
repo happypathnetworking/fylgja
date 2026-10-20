@@ -1715,7 +1715,8 @@ func StepDocument(subject *findings.Subject, in StepInput, res StepResult) *find
 		run.ReadyAfter = append(run.ReadyAfter, findings.StepReadyAfter{Node: r.Node, ReadyAfterS: r.ReadyAfterS})
 	}
 	block.StepRunBlock = run
-	// The wait, once the run closed: how it ended, or no key when it did not run.
+	// The wait, once the run closed: how it ended, or no key when it did not run; its last
+	// read's counts beside it, or no key when it made none.
 	block.Wait = nil
 	if w := res.Wait; w != nil {
 		block.Wait = &findings.StepWaitBlock{BudgetS: w.BudgetS, Outcome: w.Outcome, Reads: w.Reads, AfterS: w.AfterS,
@@ -1723,6 +1724,7 @@ func StepDocument(subject *findings.Subject, in StepInput, res StepResult) *find
 		for i, f := range w.Failing {
 			block.Wait.Failing[i] = findings.StepWaitFailing{Rule: f.Rule, Object: f.Object, Message: f.Message}
 		}
+		block.WaitCounts = res.WaitCounts
 	}
 	doc.Step = block
 	return doc

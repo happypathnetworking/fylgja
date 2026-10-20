@@ -184,7 +184,8 @@ proposed change by `branch_name`, the comment). Each check's query is `fylgja_br
 (`infrahub/queries/branch.gql`, `{ Branch { name } }`), the cheap read the SDK requires.
 The check's environment: `FYLGJA_API_ADDRESS` (`host.docker.internal:7650` from the
 override) and `FYLGJA_API_TOKEN` (from `local/.env` through Compose), nothing else of
-Fylgja's. Its message never carries a value of either.
+Fylgja's. Its message never carries the token; a fault names the address it tried, which
+is no credential, as US2's acceptance scenario 4 has it.
 
 **The comment**: a `CoreChangeThread` on the proposed change, labelled `Conversation` and
 unresolved as the view labels its own, holding one `CoreThreadComment` whose `text` is the

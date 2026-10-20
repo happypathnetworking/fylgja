@@ -40,8 +40,9 @@ before the import does not run them until rebased or recreated (research §1.5).
 Nothing else of Fylgja's, Infrahub's or a node's. The check's own client (`self.client`,
 the task worker's) is used for two reads and one write and nothing more: the proposed
 change by `source_branch__value = branch_name` and `state__value = open` (its `id`, `name`,
-`is_draft`), and `fylgja-twin`'s comment. No value of either variable, no token and no
-configuration line reaches a message, a comment or a log line (Constitution X).
+`is_draft`), and `fylgja-twin`'s comment. No token and no configuration line reaches a
+message, a comment or a log line, and of the two variables' values only the address does,
+which a fault names as the server it tried (Constitution X; US2's scenario 4).
 
 ## `fylgja-step` (`timeout = 300`)
 

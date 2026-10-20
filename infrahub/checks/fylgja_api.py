@@ -232,7 +232,7 @@ async def call(
     # redirects, so no redirect is followed and the token goes nowhere else (D-042).
     timeout = httpx.Timeout(DIAL_TIMEOUT, read=None)
     async with httpx.AsyncClient(timeout=timeout, trust_env=False, follow_redirects=False) as client:
-        request = client.build_request("POST", base + operation_path, json=body, headers=headers)
+        request = _request(client, base + operation_path, body, headers)
         try:
             response = await asyncio.wait_for(client.send(request, stream=True), HEADER_TIMEOUT)
         except TimeoutError:
@@ -337,12 +337,15 @@ def cause(exc: BaseException) -> str:
 
 def _base(address: str) -> str:
     """The server's root URL, from host:port or an http:// or https:// URL without a user or
-    password. An address refused is named by its variable alone, since it may hold one."""
+    password, its port 1 to 65535, as internal/api/client.go's baseURL takes it. An address
+    refused is named by its variable alone, since it may hold one."""
     if address.startswith(("http://", "https://")):
         try:
             url = httpx.URL(address)
         except httpx.InvalidURL:
             raise Fault(f"{ENV_ADDRESS} is not host:port or an http:// or https:// URL: nothing was sent") from None
+        if url.port is not None and not 1 <= url.port <= 65535:
+            raise Fault(f"{ENV_ADDRESS} is not host:port or an http:// or https:// URL: nothing was sent")
         if url.userinfo or not url.host or url.query or url.fragment:
             raise Fault(
                 f"{ENV_ADDRESS} is not an http:// or https:// URL of a server without a user or password: "
@@ -350,9 +353,30 @@ def _base(address: str) -> str:
             )
         return address.rstrip("/")
     host, sep, port = address.rpartition(":")
-    if not sep or not host or not port.isdigit() or "/" in address or "@" in address:
+    # httpx builds a request to a port over 65535, and the connect fails with an error that is
+    # not httpx's, so the range is checked here; isdigit alone would take any script's digits.
+    decimal = port.isascii() and port.isdigit() and 1 <= int(port) <= 65535
+    if not sep or not host or not decimal or "/" in address or "@" in address:
         raise Fault(f"{ENV_ADDRESS} is not host:port or an http:// or https:// URL: nothing was sent")
     return "http://" + address
+
+
+def _request(client: httpx.AsyncClient, url: str, body: dict[str, Any], headers: dict[str, str]) -> httpx.Request:
+    """The operation's request, built before anything is sent. A failure is the Fault naming
+    the variable at fault alone: httpx's own error quotes the value, the address it cannot
+    read (a host such as [::1) or the token's character it cannot encode and its position."""
+    try:
+        target = httpx.URL(url)
+    except Exception:  # noqa: BLE001 - whatever httpx cannot read of the address is the variable's
+        raise Fault(f"{ENV_ADDRESS} cannot be used: httpx cannot read it as a URL; nothing was sent") from None
+    try:
+        held = httpx.Headers(headers)
+    except Exception:  # noqa: BLE001 - the token is the one header value not the check's own
+        raise Fault(
+            f"{ENV_TOKEN} cannot be used: it holds a character httpx cannot encode in a request header; "
+            "nothing was sent"
+        ) from None
+    return client.build_request("POST", target, json=body, headers=held)
 
 
 async def _accept(response: httpx.Response, address: str) -> None:

@@ -651,7 +651,10 @@ registration (its definitions with it) in its cleanup, however it ends. **Where 
 workers reach no server** (`fylgja-step`'s message names the address as unreachable, or the
 variable as unset), the test **skips** after the draft's skip is proved, printing why: CI's
 contract job runs no server. On the development host it needs the operator's server on
-the bridge (R-17) from this tree. **Rationale**: FR-029; the registration imports from
+the bridge (R-17) from this tree (*proved from T073: once a check has reached a server, the
+test fails unless the `fylgja serve` listening on the bridge runs this tree's
+`bin/fylgja`, read at `/proc/<pid>/exe`, and says so when that cannot be read*).
+**Rationale**: FR-029; the registration imports from
 `origin`'s `main` alone (D-044), so the tree's checks reach Infrahub only through a
 registration the test makes; tier 2 is allowed to write to Infrahub through test support.
 **Alternatives**: a second permanent registration (rejected: two sets of checks would run
@@ -666,7 +669,9 @@ checks are glue, proved live).
 **Decision**: case 9 is SR Linux alone (`PLATFORMS=nokia_srlinux` runs it). Before it, the
 script requires the server the task workers reach: it asks `http://<bridge>:7650/v1/twin/show`
 with `local/.env`'s token through a header file and fails, naming the remedy (`CLAUDE.md`'s
-start line), unless `Fylgja-Build` is `bin/fylgja --version`'s; its own server stays on
+start line), unless `Fylgja-Build` is `bin/fylgja --version`'s (*and, since every unstamped
+build is the same version, unless the server's process runs this tree's `bin/fylgja`,
+neither `(deleted)` nor another file: T073*); its own server stays on
 loopback for its own commands. The case: a throwaway branch seeded, `-propose` (the draft's
 creation runs both checks: `fylgja-twin` skipped it, `fylgja-step` passed), `-stage
 seeded`, `-add-link`, the checksums awaited, `-stage third-link`, `-ready` (a new flag:

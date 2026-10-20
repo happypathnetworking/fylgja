@@ -69,7 +69,8 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	if err != nil {
 		t.Skipf("contract tests need a running Infrahub: %v", err)
 	}
-	if _, err := testsupport.BridgeAddress(); err != nil {
+	bridge, err := testsupport.BridgeAddress()
+	if err != nil {
 		t.Skipf("the checks are served from the Docker bridge, where Infrahub's task workers fetch them, and Docker reports none: %v", err)
 	}
 	t.Cleanup(func() { nothingLeft(t, c) })
@@ -116,6 +117,7 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	created := awaitUserCheck(t, c, id, TestStepCheck)
 	noCredential(t, created)
 	reached(t, created)
+	thisTreesServer(t, bridge)
 	if created.Conclusion != "success" {
 		t.Errorf("at the draft's creation %s concluded %q, want success: the plan of the branch point and the head:\n%s",
 			TestStepCheck, created.Conclusion, created.Message)
@@ -625,6 +627,75 @@ func reached(t *testing.T, row testsupport.UserCheckRow) {
 				row.Name, row.Conclusion, row.Message)
 		}
 	}
+}
+
+// thisTreesServer fails the test unless the server Infrahub's task workers reached, the
+// API's server on the bridge (D-050), runs this tree's bin/fylgja: every unstamped build has
+// the same version, so its build proves no tree. Its process is the fylgja serve whose
+// arguments listen on bridge:7650, and its /proc/<pid>/exe must be neither (deleted) nor
+// another file. One whose /proc entry this user cannot read, as a server started under sg
+// docker, is said and not compared.
+func thisTreesServer(t *testing.T, bridge string) {
+	t.Helper()
+	tree, err := filepath.Abs(repoPath("bin", "fylgja"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	listen := bridge + ":7650"
+	pid := bridgeServer(listen)
+	if pid == "" {
+		t.Fatalf("Infrahub's task workers reach a Fylgja server, and no fylgja serve process listens on %s by its arguments, "+
+			"so it cannot be proved this tree's %s: start it from this tree with CLAUDE.md's start line", listen, tree)
+	}
+	link := filepath.Join("/proc", pid, "exe")
+	exe, err := os.Readlink(link)
+	if err != nil {
+		t.Logf("the server on %s is pid %s, whose %s cannot be read (%v), as for a server started under sg docker: "+
+			"its binary is not compared with %s", listen, pid, link, err, tree)
+		return
+	}
+	if strings.HasSuffix(exe, " (deleted)") {
+		t.Fatalf("the server on %s, pid %s, runs a replaced binary (%s): restart it from this tree's %s", listen, pid, exe, tree)
+	}
+	running, err := os.Stat(link)
+	if err != nil {
+		t.Fatalf("the server on %s, pid %s: %v", listen, pid, err)
+	}
+	built, err := os.Stat(tree)
+	if err != nil {
+		t.Fatalf("this tree's binary: %v (make build)", err)
+	}
+	if !os.SameFile(running, built) {
+		t.Fatalf("the server on %s, pid %s, runs %s, not this tree's %s: restart it from this tree", listen, pid, exe, tree)
+	}
+	t.Logf("the server on %s is pid %s, running this tree's %s", listen, pid, tree)
+}
+
+// bridgeServer is the pid of the process named fylgja whose arguments are serve with a
+// --listen of listen, or "" when none is: the server the bring-up script and CLAUDE.md's
+// start line start on the bridge.
+func bridgeServer(listen string) string {
+	dirs, _ := filepath.Glob("/proc/[0-9]*")
+	for _, dir := range dirs {
+		comm, err := os.ReadFile(filepath.Join(dir, "comm"))
+		if err != nil || strings.TrimSpace(string(comm)) != "fylgja" {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(dir, "cmdline"))
+		if err != nil {
+			continue
+		}
+		args := strings.Split(strings.TrimRight(string(raw), "\x00"), "\x00")
+		if len(args) < 2 || args[1] != "serve" {
+			continue
+		}
+		for i, a := range args[2:] {
+			if a == "--listen="+listen || (a == "--listen" && i+3 < len(args) && args[i+3] == listen) {
+				return filepath.Base(dir)
+			}
+		}
+	}
+	return ""
 }
 
 // deviceChecksums are each device's device-config checksum on branch, as Infrahub lists it

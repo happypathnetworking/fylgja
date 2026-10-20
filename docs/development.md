@@ -71,9 +71,10 @@ run takes about 7, most of it tier 2. Its contract is
   artifacts, seeded when absent, cleaned and seeded when incomplete, the seed run once
   more on `graphql: None`. It runs alone on any host with `docker`, `go`, `curl` and `jq`
   on the `PATH`, and is what CI's contract job runs.
-- **`fylgja`**: `make build`, checked static with `file`; tier 1 and tier 2, each timed;
-  then the dev server, the worker and the API's server, started detached as the
-  three-process paragraph below starts them, logging under `local/`. A process already
+- **`fylgja`**: `make build`, checked static with `file`; then the dev server, the worker
+  and the API's server, started detached as the three-process paragraph below starts
+  them, logging under `local/`; then tier 1 and tier 2, each timed, so that tier 2's
+  `TestChecksInsideInfrahub` reaches this build's server on the bridge. A process already
   running from this tree's `bin/fylgja` is `present`; one on a replaced or `(deleted)`
   binary is restarted. Each report is read: the dev server `SERVING`, and the worker's and
   the server's naming every package the host can run with its login set, the server's
@@ -559,7 +560,9 @@ password and secret key. It deletes the branch, with its proposed change, thread
 validators, and the registration, with its definitions, however it ends. **Where the task
 workers reach no server**, as in CI's contract job, which runs none, it skips once the
 draft's skip is proved, saying why; on the development host it needs the lab host's
-server from this tree on the bridge. It took 199.5 s within the tier on 2026-10-19,
+server from this tree on the bridge, and once the checks have reached a server it fails
+unless that server's process runs this tree's `bin/fylgja`, as case 9's precondition
+compares it. It took 199.5 s within the tier on 2026-10-19,
 309.4 s alone on 2026-10-20 with its seventh step, the ready proposed change, and 252.8 s
 within the tier that day beside the host's imported checks.
 
@@ -568,8 +571,11 @@ image is present under the reference `psp/arista_eos.yaml` names, and stops sayi
 import it, since it is never pulled. That is a default run, and its `E2E-OK` means all
 nine cases. Case 9's needs are checked before any case too: `fylgja-step` and
 `fylgja-twin` among `main`'s check definitions, and the lab host's server answering on the
-bridge with `local/.env`'s token and this tree's build; without either it fails before
-any case, saying what to do. **`PLATFORMS=<list> make test-e2e`** narrows a run to a list of shipped
+bridge with `local/.env`'s token and this tree's build, its process (the `fylgja serve`
+whose arguments listen there) running this tree's `bin/fylgja`, neither `(deleted)` nor
+another file, since every unstamped build has the same version; without either it fails
+before any case, saying what to do. A server whose `/proc/<pid>/exe` the script cannot
+read, as one started under `sg docker`, is said and not compared. **`PLATFORMS=<list> make test-e2e`** narrows a run to a list of shipped
 package names (the stems of `psp/*.yaml`, comma- or space-separated). A case runs when the
 list names every package it needs (cases 1–5, 7 and 9 `nokia_srlinux`; 6 and 8 also
 `arista_eos`, in one table at the top of the script) and each account-gated image among

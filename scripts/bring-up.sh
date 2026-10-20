@@ -24,9 +24,9 @@
 #              SR Linux's rsyslogd needs, the SR Linux image, the cEOS import
 #   infrahub   Infrahub 1.11.2 by its published Compose file and this repository's
 #              override, main prepared by the fixture tool, the fixture branch seeded
-#   fylgja     the build, tiers 1 and 2, then the dev server, the worker and the API's
-#              server started detached, each one's report read; the server on loopback
-#              and on the Docker bridge, where Infrahub's task workers reach it (D-050)
+#   fylgja     the build; the dev server, the worker and the API's server started
+#              detached, each one's report read, the server on loopback and on the Docker
+#              bridge, where Infrahub's task workers reach it (D-050); then tiers 1 and 2
 #
 # Each item is verified, installed when missing and verified again, so a second run on a
 # set-up host installs nothing and ends the same way. Exit 0: every part run completed and
@@ -903,9 +903,8 @@ part_fylgja() {
     item fylgja build installed "(bin/fylgja $(bin/fylgja --version), static)"
   fi
 
-  timed_tier TIER1_S "tier 1" "$ROOT/local/bring-up-tier1.log" make test
-  timed_tier TIER2_S "tier 2" "$ROOT/local/bring-up-tier2.log" with_env make test-contract
-
+  # The three processes come before the tiers, so that tier 2 reaches this build's server on
+  # the bridge (TestChecksInsideInfrahub), never a replaced binary or none at all.
   if temporal_serving; then
     item fylgja temporal present "(SERVING at localhost:7233)"
   else
@@ -918,6 +917,9 @@ part_fylgja() {
   ensure_role worker worker
   bridge_address
   ensure_role serve server
+
+  timed_tier TIER1_S "tier 1" "$ROOT/local/bring-up-tier1.log" make test
+  timed_tier TIER2_S "tier 2" "$ROOT/local/bring-up-tier2.log" with_env make test-contract
 }
 
 # --- the run ------------------------------------------------------------------------------

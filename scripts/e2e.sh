@@ -742,7 +742,35 @@ bridge_status=$(curl -sS -o "$OUT/bridge-show.ndjson" -D "$OUT/bridge-show.heade
 bridge_build=$(sed -n 's/^Fylgja-Build: *\([^[:space:]]*\).*/\1/Ip' "$OUT/bridge-show.headers" 2> /dev/null | tail -1)
 { [ "$bridge_status" = 200 ] && [ "$bridge_build" = "$BUILD" ]; } ||
   fail "case 9 needs the server Infrahub's task workers reach, at http://$BRIDGE:7650, from this tree (build $BUILD) and with local/.env's token: it answered $bridge_status${bridge_build:+, build $bridge_build}; $SERVE_REMEDY"
-echo "e2e: case 9's checks are on main, and the server on $BRIDGE:7650 answers, build $BUILD"
+# Every unstamped build is the same version, so the build header alone proves no tree: the
+# server's process, the fylgja serve whose arguments listen on $BRIDGE:7650, must run this
+# tree's binary itself, neither replaced, (deleted), nor another file. A /proc entry this
+# shell cannot read, as for a server started under sg docker, is said and not compared.
+bridge_pid=""
+for pid in $(pgrep -x fylgja || true); do
+  mapfile -d '' -t args < "/proc/$pid/cmdline" 2> /dev/null || continue
+  [ "${args[1]:-}" = serve ] || continue
+  for (( i = 2; i < ${#args[@]}; i++ )); do
+    if [ "${args[i]}" = "--listen=$BRIDGE:7650" ] || { [ "${args[i]}" = --listen ] && [ "${args[i + 1]:-}" = "$BRIDGE:7650" ]; }; then
+      bridge_pid=$pid
+    fi
+  done
+  if [ -n "$bridge_pid" ]; then break; fi
+done
+[ -n "$bridge_pid" ] ||
+  fail "case 9 needs the server on $BRIDGE:7650 to run this tree's $FYLGJA, and no fylgja serve process listens there by its arguments; $SERVE_REMEDY"
+bridge_binary="its binary not compared"
+if bridge_exe=$(readlink "/proc/$bridge_pid/exe" 2> /dev/null); then
+  case $bridge_exe in
+    *" (deleted)") fail "case 9 needs the server on $BRIDGE:7650 to run this tree's $FYLGJA, and pid $bridge_pid runs a replaced binary ($bridge_exe): restart it; $SERVE_REMEDY" ;;
+  esac
+  [ "/proc/$bridge_pid/exe" -ef "$FYLGJA" ] ||
+    fail "case 9 needs the server on $BRIDGE:7650 to run this tree's $FYLGJA, and pid $bridge_pid runs $bridge_exe; $SERVE_REMEDY"
+  bridge_binary="this tree's $FYLGJA (pid $bridge_pid)"
+else
+  echo "e2e: note: the server on $BRIDGE:7650 is pid $bridge_pid, whose /proc/$bridge_pid/exe this shell cannot read, as for a server started under sg docker: its binary is not compared with $FYLGJA, only its build"
+fi
+echo "e2e: case 9's checks are on main, and the server on $BRIDGE:7650 answers, build $BUILD, $bridge_binary"
 
 # The script's own server, from the tree and in the script's full environment:
 # Infrahub's variables, both logins, the state root, and docker and containerlab on its PATH,

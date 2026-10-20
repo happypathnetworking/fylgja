@@ -370,8 +370,8 @@ M14 — Reproducible and visible: the cut (this repository's first commit) and t
 ## Build and test
 
 `scripts/bring-up.sh` (sets a fresh Ubuntu 26.04 host up: the toolchain, the lab host,
-Infrahub with `main` prepared and the fixture seeded, then the build, tiers 1 and 2 and
-the three processes left running; `--part NAME` runs one part, and `--part infrahub` is
+Infrahub with `main` prepared and the fixture seeded, then the build, the three processes,
+started before tiers 1 and 2 so that tier 2 reaches this build's server, and left running; `--part NAME` runs one part, and `--part infrahub` is
 what CI's contract job runs; a second run installs nothing; it asks for sudo, so it is
 the operator's) · `make build` → `bin/fylgja` (CGO disabled; must stay static; `make
 build VERSION=…` stamps `--version`) · `make test` (tier 1, no infrastructure; under 45s

@@ -1617,3 +1617,65 @@ message looked at in the UI" is done.
   `CoreChangeComment`, `CoreUserValidator` and `CoreStandardCheck` each count 0, as at §5.9's
   `-delete`; `clab inspect --all` is `{}`, with no `local/twin`, no Schedule and no workflow
   running. T057 is done.
+
+### 5.11 Convergence pass 1: tier 2 beside the imported checks, and the edge case settled (2026-10-20, 20:47Z–21:17Z; T065, T066)
+
+The loop's run of convergence pass 1's tasks, unattended: Infrahub's address and token and
+the API's token in its environment, no node login, no twin booted, the worker and the
+server left as they ran. Outputs in this session's scratchpad. No token was printed.
+
+- **The `-ready` that did not await the creation's checks** (§5.6's hazard).
+  `testsupport.AwaitUserChecks(id, timeout)` sends nothing: it reads the check definitions
+  of a registered repository the source branch sees, as `RunUserChecks` does, and polls the
+  user validators every 5 s until each definition has one reading `completed`; it returns
+  at once when the branch sees none, and at the bound names each `not started` or in its
+  state. `TestRehearseComposedByTheFixtureTool` calls it between `-propose` and `-ready`,
+  bounded at 6 minutes as `internal/checks` bounds a creation's checks; the code under test
+  is unchanged. Alone (20:47:51Z–20:49:50Z) it **passed in 113.7 s**: the seed 22 s,
+  `-propose` 62.7 s (`5 validators concluded in 63s`), and the host's `fylgja-step` and
+  `fylgja-twin` already `completed` on the draft 1 s into the wait, before `-ready`. The
+  server logged the creation's `stage.plan` (`rejected`, the branch point's
+  `contract.node.missing`, 7.0 s) and no `twin.rehearse`. Here, as at §5.6, the user
+  validators concluded inside `-propose`'s own wait; the new one holds `-ready` back when
+  they do not.
+- **The server on the bridge** (20:47:42Z), with no twin, by quickstart §2's request from
+  inside both task workers: `200`, `Fylgja-Api-Version` `1`, `Fylgja-Build` `0.1.0-dev`, a
+  240-byte answer, with the container's token, and `401` without it; `401` from the host
+  without one. The server and the worker read `(deleted)`: both were started at 20:28:35Z
+  by Run 23, and `bin/fylgja` was relinked at 20:30 with no Go source changed since. A loop
+  session holds no node login, so neither was restarted.
+- **Tier 2 whole** (20:56:01Z–21:16:21Z; `free -m` 17,638 MiB available, load average 4.1):
+  **PASS, wall time 1,220.1 s**, against 1,099.7 s at §5.5, under the `-timeout 30m`. The
+  first `go test` took about 965 s: `internal/stages` 960.4 s, `internal/stage` 657.2 s,
+  `internal/server` 651.6 s (`TestRehearseComposedByTheFixtureTool` with the wait among it)
+  and `internal/intent` 247.7 s. Then `internal/checks` alone took 252.8 s and reached its
+  seventh step, since the task workers reach the server. Every proposed change the tier
+  opened ran the host's two checks at its creation, as §5.6 foresaw: the server logged
+  thirteen `stage.plan` from 21:00:28Z to 21:16:04Z, each `rejected` (the branch point's
+  `contract.node.missing`, or `internal/checks`' stale mark), five of them while the first
+  `go test` ran. It logged two `twin.rehearse`, at 21:16:04Z and 21:16:06Z:
+  `internal/checks`' ready proposed change, asked for by its `fylgja-test-twin` and by the
+  host's `fylgja-twin`, each `rejected` before any boot (7.4 s and 6.9 s). No twin was
+  booted. Tier 1 had run just before it, hence the load average.
+- **After**: `twin show` printed `twin: none: no lab fylgja, no twin directory` and `in
+  flight: none`; `clab inspect --all` read `{}`, with no `local/twin`, no running workflow
+  and no Schedule. Quickstart §5's query, widened: `Branch` lists `main` and
+  `fylgja-fixture` alone; `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread`,
+  `CoreThreadComment`, `CoreChangeComment`, `CoreUserValidator` and `CoreStandardCheck`
+  each count 0; `CoreReadOnlyRepository` holds `fylgja` alone, at `d70ad24`, with
+  `fylgja-step` (300) and `fylgja-twin` (4200); `CoreGraphQLQuery` holds `device_config`
+  and `fylgja_branch`. No `fylgja-test-*` branch, registration, definition or query is
+  left. The tier's and the test's outputs, this session's task outputs and
+  `local/server.log` were searched for each token, password and secret key by its value: no
+  hit.
+- **A source branch deleted under a running rehearsal** (T066). The operator answered the
+  loop's question 3 with (a): the spec's edge case was amended to what runs (`824604f`).
+  What runs reads nothing of Infrahub during the run: every stage is resolved, compiled and
+  filed before the start (FR-003), and the children step from the store's bundles. A branch
+  deleted under it changes nothing of the run, which finishes on the stages it compiled and
+  runs its destroy. The one read after the run, `after` in `internal/server/rehearse.go`,
+  warns `rehearsal.stage.moved` naming the branch when the stages cannot be read again, or
+  `rehearsal.change.closed` once Infrahub has cancelled the proposed change, about 16 s
+  after its branch's delete (`docs/verified-facts.md`); the status stays the stages', as
+  FR-011 says of a moved stage. R-08's table, `contracts/rehearse-command.md` and
+  `contracts/cli.md` already said so. Nothing was built.

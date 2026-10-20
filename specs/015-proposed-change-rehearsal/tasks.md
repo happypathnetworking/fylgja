@@ -806,3 +806,126 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
 
   Per FR-032, FR-033 and D-053 (partial)
   - *2026-10-20, convergence pass 2's implement run:* `contracts/rehearse-command.md`'s "The text" is what runs: the progress lines, `stage <ref>: verify: settled after 3.2s (2 reads)` without counts, `destroying the twin`, then the destroy's `removed …` lines, the stage lines with the baseline's counts and the closing line; `deadline 32m30s`; and its markdown rendered from the document and the plan's steps. `CLAUDE.md`'s open item on the baseline's verify line is struck. `contracts/checks.md`: `fylgja-twin` reads the proposed change and decides a draft before the variables (step 1 and the table); each check logs the out and then the err frames once, when the answer ends or is cut; "What Infrahub shows" is the message as plain text with its line breaks and the report as a thread in the overview (D-053). `contracts/fixture-tool.md`: `CheckDefinitions` returns `[]CheckDefinitionRow{Name, Timeout}`, which tier 3 reads by GraphQL itself; `CommentsOf` reads each thread's comments (`CommentRow{ID, Thread, Text}`) and no `CoreChangeComment`; `AwaitUserChecks` and `OverviewThreads` are listed; `-run-checks user` waits for each definition the branch sees to be restarted and completed; the flags refuse before any request, and a helper given an id reads its source branch first, refusing before any write; `-delete` takes the threads too. `fylgja_api.py`'s module docstring and `post_comment`'s cite D-053, a thread holding one comment, comments only. R-13 and R-19 each carry a note that D-053 replaced `CoreChangeComment` (§5.9). Gates: `python3 -m py_compile infrahub/checks/*.py` and `go test . -count=1` pass.
+
+## Phase 13: Convergence
+
+- [ ] T078 [behaviour] Start no destroy when the baseline's provision child could not start because another run holds its id, and refuse the rehearsal instead.
+  - **The defect.** `Rehearse` (`internal/provision/workflow_rehearse.go`) runs `r.destroy()` on every path (about line 60). `started` files `run.in_flight` when `alreadyStarted(err)`, and the run still destroys. Here is how that goes wrong. A hand `twin create` passes `StartProvision`'s rehearsal check in the window between the server's in-flight read or `StartRehearse`'s own check (`client.go`, about lines 525–536) and `ExecuteWorkflow`. Then the rehearsal's baseline child is refused, and its `fylgja-destroy` child tears down the other run's lab (`workflow_destroy.go` destroys whatever lab is on the host). FR-007 says another run in flight refuses the rehearsal "before anything is touched", and FR-009 gives `rejected`, exit 1, to a rehearsal refused before any boot.
+  - **The fix.**
+    - When the baseline's provision child is refused because its id is held, the run touched nothing and starts no destroy child. Its result says the destroy was not needed, distinctly from `destroyNotRun`, which `rehearsalStatus` (`internal/server/rehearse.go`) reads as `unclean`.
+    - The server's status is `rejected`, exit 1, with `run.in_flight` naming the workflow that holds the id.
+    - A step child refused at start still destroys, since the rehearsal's own twin stands (`TestRehearseChildRefusedIsError`). A cut or cancellation before the baseline's child started may destroy as now, since there is no other run's lab.
+  - **Tests.** A workflow test in which the baseline child is refused `alreadyStarted`: no destroy child is started, the result carries `run.in_flight`, and the outcome is the one the server maps to `rejected`. A server test for the status and exit.
+  - **Gates.** `make test`, `make lint`. The nine recorded histories replay unchanged.
+
+  Per FR-007, FR-009 and FR-005 (contradicts)
+- [ ] T079 [behaviour] Keep a started run in the rehearsal's report when its answer is lost.
+  - **The defect.** In `run` (`internal/server/rehearse.go`, about lines 545–552), `subject.RunID` is set, then a failing `followRun` returns `r.failed(err)`. `followRun` fails when the result cannot be read ("waiting for run …"), or on the operator's second interrupt ("stopped waiting for run …"). `failed` builds the block from an empty `rehearsal.Result{}`. The result:
+    - the block has no `run`;
+    - `destroy` is `null`;
+    - every stage reads `not_reached`;
+    - the markdown opens "Fylgja did not rehearse … No run was started" (`markdown.go`, about lines 79–91), while the document's `subject.run_id` and its own finding name the run.
+    `fylgja-twin` posts that markdown as the comment.
+  - **The fix.**
+    - Once a run has started, the block carries `run`, and the markdown and the closing line say that it was started, that its end was not read and why, and that it goes on to its destroy. They point to `twin show`, as FR-021 words a lost connection, and never say "No run was started" or "every one passed" (`whatItCameTo` would print "0 stages rehearsed, every one passed" given a `Result` with a run alone).
+    - The stages keep a role and verdict the schema admits, and say nothing the answer did not learn.
+    - The document still validates against `contracts/rehearsal.schema.json` through `findings.schema.json`.
+  - **Tests.** Through the harness (`internal/cli/twin_rehearse_test.go`), with `fakeService`'s `resultErr` set, and with a second interrupt: the text, the JSON and `--markdown` each name the run and never say that none was started. Add a pinned markdown for the lost answer in `internal/rehearsal/markdown_test.go`.
+  - **Gates.** `make test`, `make lint`.
+
+  Per FR-012, FR-014, FR-021 and Constitution X (contradicts)
+- [ ] T080 [behaviour] Refuse `twin step` beside a running rehearsal as `run.in_flight` naming it, before anything else.
+  - **The defect.** `runTwinStep` (`internal/server/step.go`) reads the host and applies `provision.Ineligible` (about lines 89–98), finds the proposed change, and reads and compiles its target. Only then does it reach `svc.StartStep`, whose rehearsal check is in `provision/client.go` (about line 481). So beside a live rehearsal, a step can be refused as something else first:
+    - during the baseline's provision (a lab and no `twin.json`), `step.twin.unsteppable`, calling the rehearsal's twin "an orphan … fylgja twin destroy clears it";
+    - after a diverged stage, `step.twin.diverged`;
+    - or by the target rule.
+
+    Even a step that does reach `run.in_flight` has already read Infrahub and compiled a bundle. `contracts/rehearse-command.md` ("twin show, twin verify, twin destroy, stage list beside a rehearsal") says a step beside a rehearsal is `run.in_flight` naming it. `TestACreateAndAStepBesideARehearsalNameIt` calls `runStep` directly, so it never exercises this path.
+  - **The fix.** Ask the workflow service for runs in flight before the host read, as the rehearsal's own `holdingRun` does. A running `fylgja-rehearse` refuses the step with `inFlightRefusal`'s wording, before anything is read. Treat the dry run as `twin create --dry-run` is treated beside a rehearsal.
+  - **Tests.** A harness test running `twin step` through `runTwinStep` beside a rehearsal, during the baseline's provision (a lab, no record) and after a diverged stage, each refused `run.in_flight` naming the rehearsal's run, with nothing read from Infrahub.
+  - **Gates.** `make test`, `make lint`.
+
+  Per FR-008 and FR-007 (partial)
+- [ ] T081 [behaviour] Report `baseline_failed` only for a baseline whose provision ended `failed`.
+  - **The defect.** `outcome` (`internal/provision/workflow_rehearse.go`, about line 137) makes any baseline provision outcome but `ready` into `baseline_failed`. The server maps that to `failed`, exit 3, and `Build` files `rehearsal.baseline.failed`. FR-009 and `contracts/rehearse-command.md`'s exit table give `failed` only when "the baseline could not be built and the provision cleaned up", and `error`, exit 2, "when the rehearsal could not run". A provision that ended `error` (a step could not run), `rejected` (refused before the host was touched) or `cancelled` without the run's own cancellation or deadline is no build attempt that cleaned up.
+  - **The fix.** `baseline_failed` for `failed` alone. Each other outcome becomes `stage_error`: status `error`, exit 2, with `rehearsal.stage.error` on the baseline's stage, and the provision's own findings beside it. T019's note decided "any provision outcome but ready" before this was read against FR-009; amend that sentence in `research.md` §5.
+  - **Tests.** Extend `workflow_rehearse_test.go` (a baseline provision ending `error`, then `rejected`), `report_test.go` (the finding filed), and the harness's baseline-not-built case (the status and exit).
+  - **Gates.** `make test`, `make lint`.
+
+  Per FR-009, FR-002 and the spec's edge case "The baseline cannot be built" (contradicts)
+- [ ] T082 [behaviour] Count the baseline's stop-following activity in the deadline.
+  - **The defect.** The rehearsal's baseline runs with `StopFollowing: true` (`workflow_rehearse.go`, about line 162). So its provision runs `ActStopFollowing` under `FollowOptions()`, bounded by `FollowBudget` (30 s, `internal/provision/options.go`). `rehearsal.Deadline`'s baseline term (`internal/rehearsal/deadline.go`) has no such term, and `Mechanism` has no field for it. FR-006 sums "the baseline's provision budgets".
+  - **The fix.**
+    - Add `Follow` to `rehearsal.Mechanism`.
+    - Fill it in `provision.DeadlineMechanism()` from `FollowBudget`.
+    - Add it to the baseline's formula (`deadline.go`'s doc comment and data-model §4 alike).
+    - The fixture's 1,950 s becomes 1,980 s (`33m0s`). Move every test and record that cites the old figure: `TestDeadline`, `TestDeadlineMechanismIsTheConstants` (which counts `Mechanism`'s fields), the server, CLI, findings and report tests, `contracts/cli.md`, the README, `docs/glossary.md`, and in this feature `data-model.md`, `research.md` R-09, `quickstart.md` and `contracts/rehearse-command.md`. `plan.md`'s figure is T089's.
+    - The ceiling and the checks' timeouts do not move. `check_timeout_test.go` must still pass.
+  - **Gates.** `make test`, `make lint`.
+
+  Per FR-006 (partial)
+- [ ] T083 [behaviour] Keep the table, its stage references and their verdicts when the markdown is shortened to fit a comment.
+  - **The defect.** `fit` (`internal/rehearsal/markdown.go`, about line 138) keeps or drops the table as one part, so a table longer than what is left of `CommentMax` is dropped whole. `table` has no brief form, and `newCell` lists every new finding. `markdown_test.go` (about lines 277–299) pins the table left out at 60 stages, reasoning that the ceiling bounds the stages. That reasoning does not hold for two cases: a refusal before any run (`rehearsal.deadline.unfit`) is not bounded by the ceiling, and nothing bounds one stage's new findings. The spec's assumption "The report fits a comment and a message" says that a report which must be cut "keeps the table and the verdicts and says what was cut". `contracts/rehearse-command.md` ("Its length") drops the table last instead.
+  - **The fix.**
+    - Give the table a brief form before any section is dropped, and never drop the column of references and verdicts. In the brief form, the new-findings cell is a count, or the first few followed by `and n more`, and the step cell is its outcome alone.
+    - Keep the line saying what was shortened.
+    - Cut a proposed change's name in the heading with an ellipsis, so that `CommentMax` holds whatever the name.
+  - **Records.** Update `contracts/rehearse-command.md`'s "Its length" and `contracts/cli.md`'s matching sentence.
+  - **Tests.** Replace the 60-stage pin: the table kept with every reference and verdict. Add cases for a stage with many new findings, a refused rehearsal with many marks, and a name longer than the comment. Each stays within `CommentMax`.
+  - **Gates.** `make test`, `make lint`.
+
+  Per FR-014 and the spec's assumption "The report fits a comment and a message" (contradicts)
+- [ ] T084 [behaviour] In `infrahub/checks/fylgja_api.py`'s `call`, bound the read that follows the check's own interrupt, and send the interrupt on a cancellation that lands before `start` was read.
+  - **The defect.**
+    - At its deadline the check sends `interrupt_blocking` and then `await reader` with no bound (about lines 247–252), even when `interrupt_failure` says the interrupt was not delivered. With FR-007's retries a run may start late. If its interrupt then fails (the 10 s `INTERRUPT_TIMEOUT`), the read runs past the 4,200 s timeout, and Infrahub leaves the validator `in_progress`.
+    - On a `BaseException` the interrupt is sent only `if answer.started` (about line 257). The server starts the run regardless of the client once it has written `start`, so a cancellation between that write and the reader reading it sends none.
+  - **The fix.**
+    - After the interrupt, read for at most what the margin leaves (the check's timeout less its deadline, less a few seconds). Send the interrupt once more when the first was not delivered, since the server's second interrupt stops its wait.
+    - Then conclude failure as FR-021 words a cut.
+    - On a cancellation, send the blocking interrupt whenever a stream was named and no document came, started or not. The server answers a harmless `404` when nothing is open.
+  - **Verify.** Outside Infrahub, in the scratchpad, as T074 did: the module imported with the venv's SDK, against a fake server that names a stream and never ends, then one that refuses the interrupt. The check concludes inside its timeout, and its message names neither token. Then `python3 -m py_compile infrahub/checks/*.py`.
+  - **The host.** The registration runs the old code until the operator pushes and imports it (R-21).
+
+  Per FR-021 and SC-006 (partial)
+- [ ] T085 [pin] Make tier 3's case 9 prove what FR-030 and SC-008 say. Only `scripts/e2e.sh` changes.
+  - **The imported checks are this tree's.** The precondition (about lines 712–724) reads each `CoreCheckDefinition`'s name and timeout alone, so an earlier import passes it and case 9 asserts on Python that is not the tree's. T074's change is such a case until it is imported. The fix:
+    - Read the registration `fylgja`'s imported commit (`CoreReadOnlyRepository` `commit`) on `main`.
+    - Fail, naming `quickstart.md` §6, when that commit is unknown to the clone (say to fetch `origin`), or when `git diff --quiet <commit> -- infrahub .infrahub.yml` against the working tree differs.
+    - Do this as T073 did for the server.
+  - **The credentials the checks' process holds.** Add `no_credential` over `scan` for `INFRAHUB_SECURITY_SECRET_KEY`, `INFRAHUB_INITIAL_AGENT_TOKEN` and `INFRAHUB_INITIAL_ADMIN_PASSWORD`, each when `local/.env` sets it. The greps (about lines 2010–2021) cover the comments and the messages but not the secret key that SC-008 names.
+  - **Verify** the precondition's block extracted and run under `env -i bash`, as T073 did: it passes against a commit equal to the tree's, and refuses one that differs and one that is unknown. Then `bash -n` and `shellcheck scripts/bring-up.sh scripts/e2e.sh`. Do not run tier 3.
+
+  Per FR-030, SC-008 and FR-035 (partial)
+- [ ] T086 [pin] Test the rehearse workflow's remaining failure and cancellation paths, each ending in its destroy.
+  - **What is untested.** A coverage profile of `TestRehearse*` shows these never run in `internal/provision/workflow_rehearse.go`:
+    - a provision or step child that closed without a result (`closedWithout`), filed `operation.failed` on its run, outcome `stage_error`;
+    - a destroy child that started and then closed without a result (`unclean`, beside `TestRehearseDestroyNotStartedIsUnclean`);
+    - the run's own cancellation during the baseline's provision and during its wait;
+    - a cancellation or a cut before a child starts, and one between two stages.
+  - **What each test asserts.** The destroy child ran on a context no cancellation reached, as every test here asserts.
+  - **Gates.** The code is unchanged. `make test`.
+
+  Per FR-028 and FR-005 (partial)
+- [ ] T087 [pin] Pin the markdown's untested drawing and table forms in `internal/rehearsal/markdown_test.go`.
+  - **What is untested.** A coverage profile shows these never run:
+    - in `changed`: links removed, nodes added and removed, artifacts added and removed, and the empty change drawn `unchanged`;
+    - in `stepCell`: a step cancelled, rejected or not run, and a push not landed with no rule;
+    - the markdown of a run cut by the deadline, of a baseline not built, and of an unclean destroy. Their text is pinned already.
+  - **What the tests assert.** Each output is pinned. No line of content appears, by the marker convention. Each stays within `CommentMax`.
+  - **Gates.** The code is unchanged. `make test`.
+
+  Per FR-028 and FR-014 (partial)
+- [ ] T088 [pin] Correct this feature's records where they say the markdown is rendered from the block alone. These are doc lines only; no structure moves.
+  - **The lines.** `data-model.md` (about line 155, "Rendered by `rehearsal.Markdown` from the block alone") and `research.md` R-10 (about line 489). Both should say "from the document and the plan's step pairs", as T014's note and `contracts/rehearse-command.md` give it.
+  - **The section list.** data-model §7's list of the markdown's sections gains the Findings section (a status other than `ok`) and the shortening line (`CommentMax`).
+
+  Per FR-014 and FR-033 (partial)
+- [ ] T089 [operator] Amend two lines of `plan.md` that no longer say what runs. Converge does not write `plan.md`.
+  - **The lines.**
+    - Constitution Check row V says the markdown "is a function of the block alone". The markdown is rendered from the document and the plan's step pairs, which T014's note records as necessary: the block holds no step's difference.
+    - Performance Goals cites "a deadline of 1,950 s", which T082 moves to 1,980 s.
+  - **The operator chooses.**
+    - (a) Amend both lines (recommended).
+    - (b) Leave `plan.md` as the design-time record and note the departures in `research.md` §5.
+
+  Per plan (Constitution Check row V; Performance Goals) (contradicts)

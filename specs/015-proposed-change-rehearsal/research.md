@@ -1256,3 +1256,122 @@ are unchanged. No twin was booted and no token was printed.
   secret key and login of eight characters or more by its value, and the test's output and
   the watcher's log for the shorter ones in a password's shape, as the test's `noCredential`
   searches them: no hit.
+
+<a id="57-tier-3-whole-and-narrowed-2026-10-19-2343z-2026-10-20-0121z-t055"></a>
+### 5.7 Tier 3, whole and narrowed (2026-10-19, 23:43Z – 2026-10-20, 01:21Z; T055, FR-030, SC-002, SC-006, SC-008, SC-010)
+
+Before the first run (23:42Z) the worker and the server were found on a `(deleted)` binary;
+`make build`, both stopped and started with `CLAUDE.md`'s two lines, and verified: each
+`exe` current; each environment carrying `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN`, both
+logins, `FYLGJA_STATE_ROOT` and `FYLGJA_API_TOKEN`; the server's two listen lines, the
+bridge's followed by its unencrypted line; both packages named with their logins set. The
+dev server answered `SERVING`; no Schedule, no lab, no `local/twin`; Infrahub's `main` and
+`fylgja-fixture` alone, 0 proposed changes, stages and comments, `fylgja-step` 300 and
+`fylgja-twin` 4200 on the registration `fylgja` at `999456e`, `in-sync`. `free -m` read
+17,816 MiB available (load average 2.3). Each run was started detached as the prompt gives
+it, its output in `local/converge-e2e.out`, kept afterwards as `local/e2e-015-*.out`, with
+case 9's outputs copied beside them. Tier 3 found two defects; each was fixed with a tier-1
+test and the run repeated.
+
+- **Run 1** (23:43:08Z–23:57:18Z): case 9's preconditions passed in seconds (the checks
+  on `main`, the server on `172.17.0.1:7650` answering build `0.1.0-dev`); cases 1–6
+  passed; **case 7 failed** at its first record: `twin.json` read `twin_version` `"7"` and
+  the script expected `"6"`. 015 moved the record to `7` (T007) and left the four asserts of
+  cases 7 and 8 (`scripts/e2e.sh`) at 014's version, which only tier 3 reads. The trap left
+  the host clean. **Fixed**: the four asserts read `"7"` and `.rehearsal==null` (a hand
+  create's and a step's record name no rehearsal), with the header and comments; and
+  `TestE2EScriptExpectsTheRecordsVersion` (`internal/lab/twin_test.go`) holds every
+  `.twin_version` the script expects to `lab.TwinVersion`, so the next move fails tier 1.
+  No Go code changed, so the worker and the server stayed current.
+- **Run 2** (00:00:20Z–00:26:41Z): cases 1–8 passed; case 9's draft was skipped by
+  `fylgja-twin` and passed by `fylgja-step`; the ready proposed change's checks concluded in
+  113.5 s, the rehearsal `01a156b0…` passing in 78.0 s of the 1,950 s deadline with one
+  comment of 2,163 characters. After `bad-port` the checks concluded again in 118.7 s and
+  `fylgja-twin` failed as it should (its message 8,788 characters, naming `bad-port`'s push
+  on n1, the reproduce commands and `head` not reached), but **case 9 failed** on the
+  comments: one, not two. `fylgja-twin` had logged `the comment could not be posted: Text
+  attribute length should be less than 4096 characters.` at `INFO` and concluded on the
+  status alone, as FR-019 has it. **Infrahub 1.11.2's bound**, read in the image's source
+  (`/source/backend/infrahub/core/attribute.py`, `MAX_STRING_LENGTH = 4096` and
+  `validate_string_length`): a text attribute is refused when `3 + len(value.encode("utf-8"))
+  >= 4096`, a margin under Neo4j's index limit of 8,167 bytes, so a comment's text holds at
+  most **4,092 bytes**. The failing report's full markdown was over it: beside the table, the
+  drawing, the stages and the reproduce commands, its findings section carries each of four
+  rejections with its message (the push's refusal some 270 bytes), and its warnings four
+  `artifact.interface.unrepresented` of `n1:ethernet-1/99`, one from the read and one from
+  the compile of each of `bad-port` and `head`, some 250 bytes each. **Fixed**
+  in `internal/rehearsal/markdown.go`, under US2: `CommentMax` (4,092), and `Markdown`
+  renders whole whenever that fits, so no pinned output moved; a longer report names each
+  finding by its identifier and object alone, identical ones once with their count, since
+  the check's message holds the text; and should that still be too long, whole sections
+  are left out by rank (the baseline's findings first, then the drawing, the warnings, the
+  stages, the findings, the reproduce commands and the table), never inside a fence. The
+  heading, the run line and the caveat are always kept, and a line before the caveat says
+  what was shortened. `TestMarkdownFitsAComment` pins a report shaped as this one (its full
+  rendering over the bound, the shortened one under it with every section, `push.refused
+  n1 (×2)` and the warnings `(×4)`, and no message), and fourteen and sixty added stages
+  (the table kept, then left out). `contracts/cli.md` and `contracts/rehearse-command.md`
+  say so. `make test` passed (43.5 s); `make build`; the worker and the server restarted
+  from it (00:33:48Z) and verified as before.
+- **Run 3** (00:34:55Z–01:01:54Z): **`E2E-OK`, wall time 1,619.1 s**, nine cases and nine
+  twins, against 1,198.9 s at 014 with eight cases and quickstart §7's estimate of 25
+  minutes. Case 9 (`fylgja-test-e2e-rh-3724627-8717`): seed 21.5 s; the draft
+  `18e016df…` opened in 53.5 s, its checks concluded 0.1 s after `-propose`'s wait; the
+  ready proposed change's checks with the rehearsal 109.0 s, **the rehearsal `01a156d0…`
+  72.4 s of the 1,950 s deadline**, one comment of 2,176 bytes with the table, the drawing
+  and the stages; after `bad-port`, 113.9 s, **the rehearsal `01a156d2…` failing at
+  `bad-port`'s push on n1 in 77.1 s of the 2,580 s deadline**, the second comment 3,320
+  bytes: shortened, every section kept, the four findings and the warning `(×4)` by
+  identifier and object, the reproduce commands and `head` `not reached`. Both well under
+  SC-006's fifteen minutes. The other cases' creates took 40.3–93.9 s, and verify 2.9–4.5 s.
+- **Narrowed** (01:03:53Z–01:21:01Z), after the host rested to a load average of 1.4:
+  `PLATFORMS=nokia_srlinux make test-e2e` ended **`E2E-PARTIAL: platforms nokia_srlinux;
+  ran 1 2 3 4 5 7 9; skipped 6 (needs arista_eos: not in PLATFORMS) 8 (needs arista_eos:
+  not in PLATFORMS)`**, exit 0, **wall time 1,027.7 s**, against 665.7 s at 014. Case 9's
+  checks with the rehearsals 103.3 s (70.3 s of 1,950 s) and 104.0 s (71.2 s of 2,580 s),
+  the comments 2,193 and 3,345 bytes.
+- **After each run**: `clab inspect --all` found no container, no `local/twin`, no
+  Schedule; `Branch` listed `main` and `fylgja-fixture` alone, with 0 proposed changes,
+  stages, comments and user validators. The script's credential and marker greps, which
+  cover the comments and the checks' messages, passed in runs 3 and narrowed. Every kept
+  output, `local/server.log` and `local/worker.log` were searched besides for each token,
+  password and secret key of eight characters or more by its value: no hit.
+
+<a id="58-the-walk-through-by-hand-2026-10-20-0121z0127z-t056"></a>
+### 5.8 The walk-through by hand (2026-10-20, 01:21Z–01:27Z; T056, SC-012)
+
+`README.md`'s "A proposed change, rehearsed", followed on this host with the worker and the
+server from this tree (restarted at 00:33:48Z, unchanged since), the client's commands
+with `local/.env` loaded. Outputs in `local/t056/`.
+
+- `-delete`: the branch was absent, so the tool exited 1 (`Branch: fylgja-test-readme not
+  found`); the README's line stands for a reader who comes from the stepping section, whose
+  branch it deletes. Seed: 23.2 s, its two lines. `-propose`: 53.6 s, `proposed change
+  18e01843-9cb0-c335-33b3-c51c6053f556 opened on fylgja-test-readme, draft; 5 validators
+  concluded in 53s`.
+- The draft's checks, read through the API: `fylgja-twin` `success` in 7.5 s, its message
+  the skip naming the id; `fylgja-step` `success` in 18.3 s, its message (1,038
+  characters) the plan of the two stages, the branch point refused `contract.node.missing`,
+  the head's bundle `e26a0e65…`, then the finding. No comment.
+- `-stage seeded` at `01:23:39.142559`; `-add-link`, n1's and n3's checksums moved and
+  `Ready` 7.2 s after it returned; `-stage third-link` at `01:23:48.370039`; `-ready`.
+  `-run-checks user` in place of the view's button: 103.6 s, `check fylgja-step: success
+  (message 2,027 characters)`, `check fylgja-twin: success (message 3,693 characters)`.
+  `fylgja-step` took 13.6 s and `fylgja-twin` 87.8 s, its rehearsal `01a156e8-da76-…`
+  70.7 s of the 1,950 s deadline. One comment, `18e01873…`, 1,955 bytes, rendered whole:
+  the heading, the run line, four rows, the drawing, the four stages, no warnings, no
+  baseline findings, the caveat.
+- `bin/fylgja twin rehearse --branch fylgja-test-readme`: exit 0 in 83.1 s, `rehearsal ok:
+  3 stages rehearsed, every one passed; the twin is destroyed; 72.1s of the 1950s
+  deadline`, the deadline `32m30s` as the README had it; still one comment afterwards, since
+  Fylgja writes nothing to Infrahub.
+- **The README corrected** to these outputs: the seed's lines and the ids; the draft's two
+  checks with their times and `fylgja-step`'s whole message; the checksums' 7 seconds;
+  `fylgja-twin`'s time against the rehearsal's; `-run-checks`' message lengths; the comment
+  whole; `twin rehearse`'s lines, ids and times; the comment's bound (§5.7); and tier 3's
+  time, about 27 minutes (the narrowed run's 17 stood).
+- **Left for T057**, as the task says: the branch `fylgja-test-readme`, its proposed change
+  (ready for review, so a re-run of its checks would rehearse it and boot a twin), its two
+  stages, its one comment and its two user validators. Nothing else: no lab, no
+  `local/twin`, no Schedule, `main` and `fylgja-fixture` beside it. The outputs hold no
+  credential (§5.7's search).

@@ -166,7 +166,7 @@ free -m; set -a; . local/.env; set +a
 (make test-e2e > local/e2e-015.log 2>&1; echo $? > local/e2e-015.status) &
 ```
 
-Wait in foreground calls of under ten minutes. Expected: `E2E-OK` after about 25 minutes,
+Wait in foreground calls of under ten minutes. Expected: `E2E-OK` after about 27 minutes,
 nine cases and nine twins; case 9's lines: the draft skipped by `fylgja-twin`, the plan's
 pass, the rehearsal's success and its comment, then `bad-port` failing at `push` on n1 with
 `head` not reached and the second comment naming the commands; after it no twin, no

@@ -791,9 +791,11 @@ fylgja_pid() {
 # report_ok ROLE LOG FROM: the role's start-up report in LOG, from byte FROM, names every
 # package the host can run with its login set, and the server's names both its listen
 # addresses and the bridge's unencrypted line, so a server on loopback alone is restarted.
+# A log can hold NUL bytes (local/worker.log has a run of them), which bash cannot keep in a
+# variable: they are dropped before it reads the text.
 report_ok() {
   local role=$1 log=$2 from=$3 text pkg bridge_re
-  text=$(tail -c "+$(( from + 1 ))" "$log" 2> /dev/null) || return 1
+  text=$(tail -c "+$(( from + 1 ))" "$log" 2> /dev/null | tr -d '\0') || return 1
   if [ "$role" = serve ]; then
     bridge_re=${BRIDGE_ADDR//./\\.}
     grep -q "^fylgja serve: listening on 127\.0\.0\.1:7650 (API version 1, build " <<< "$text" || return 1
@@ -812,10 +814,11 @@ report_ok() {
 }
 
 # last_report_offset LOG PATTERN: the byte offset of the last line matching PATTERN, the
-# start of the running process's report.
+# start of the running process's report. The log is read as text (-a): past a NUL byte, grep
+# would list no match and say only "binary file matches".
 last_report_offset() {
   local line
-  line=$(grep -n "$2" "$1" 2> /dev/null | tail -1 | cut -d: -f1)
+  line=$(grep -an "$2" "$1" 2> /dev/null | tail -1 | cut -d: -f1)
   [ -n "$line" ] || { echo 0; return; }
   head -n $(( line - 1 )) "$1" | wc -c
 }

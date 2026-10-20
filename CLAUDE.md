@@ -478,8 +478,7 @@ Rewritten whole at each release's close, never appended to.
   rw,` is untried. From 014, the operator's: `infrahubctl schema format` would reorder
   `schema/fylgja-stage.yaml` (§8.2); `stage.main.moved` is untried by a write on `main`;
   and the recording shows M10's surface until it is remade at `v0.2.0`. From 015, for
-  converge or the operator: the markdown lists a warning once for each stage and step
-  that filed it, naming no stage, and the baseline's verify line carries no counts; a
-  client following a rehearsal terminated outside Fylgja answers only once its abandoned
-  children close (§5.2); and `local/worker.log` holds a run of NUL bytes that the bring-up script's
-  report warns of (T036).
+  converge or the operator: a client following a rehearsal terminated outside Fylgja
+  answers only once its abandoned children close (§5.2); and `local/worker.log` holds a
+  run of NUL bytes, their origin untraced, which the bring-up script reads past (T036,
+  T071).

@@ -36,6 +36,11 @@ import (
 // rehearseDevices are the three-node fixture's devices, which the seed renders.
 var rehearseDevices = []string{"n1", "n2", "n3"}
 
+// creationChecksWait bounds a creation's user checks, as internal/checks bounds them: the
+// validators appeared 43–54 s after a creation, and fylgja-step concluded in 30 s and
+// fylgja-twin's skip in 18 s (research §5.6).
+const creationChecksWait = 6 * time.Minute
+
 // contractClient returns a write-capable client, skipping when no Infrahub is configured.
 func contractClient(t *testing.T) *testsupport.Client {
 	t.Helper()
@@ -313,6 +318,17 @@ func TestRehearseComposedByTheFixtureTool(t *testing.T) {
 		t.Errorf("-propose printed %q; want it to begin %q", out, want)
 	}
 
+	// With a check registered on main, the creation's fylgja-twin may not have read the
+	// proposed change when -propose returns; marked ready before it does, it would rehearse
+	// it on a twin, which tier 2 never boots (research §5.6). So -ready waits for the
+	// creation's user checks to conclude on the draft.
+	started := time.Now()
+	rows, err := c.AwaitUserChecks(id, creationChecksWait)
+	if err != nil {
+		t.Fatalf("awaiting the creation's user checks before -ready: %v", err)
+	}
+	t.Logf("the creation's user checks concluded on the draft after %.0fs: %d check(s)", time.Since(started).Seconds(), len(rows))
+
 	if out, want := fixture("-ready"), fmt.Sprintf("proposed change %s on %s marked ready for review\n", id, branch); out != want {
 		t.Errorf("-ready printed %q, want %q", out, want)
 	}
@@ -393,7 +409,7 @@ func TestRehearseComposedByTheFixtureTool(t *testing.T) {
 	} else if len(defs) != 0 {
 		t.Logf("main holds the check definitions %+v: -run-checks user is not run here", defs)
 	} else {
-		started := time.Now()
+		started = time.Now()
 		if out, want := fixture("-run-checks", "user"),
 			fmt.Sprintf("no user check ran on proposed change %s on %s: the branch sees no check definition of a registered repository\n", id, branch); out != want {
 			t.Errorf("-run-checks user printed %q, want %q", out, want)

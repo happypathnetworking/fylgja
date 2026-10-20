@@ -667,8 +667,46 @@ func (c *Client) RunUserChecks(id string, timeout time.Duration) ([]UserCheckRow
 	}
 }
 
+// AwaitUserChecks waits, sending nothing, until each check definition Infrahub runs on a
+// proposed change's source branch (checkDefinitionsOn) has a validator reading completed,
+// then returns the checks as UserChecksOf reads them. It awaits the run already begun, as a
+// creation's: Infrahub starts the user checks after the rest of the pipeline, so a caller
+// that changes the proposed change straight after OpenProposedChange can be read by a check
+// that has not started yet (015's research §5.6). A branch that sees no definition returns at
+// once. At the bound the failure names each definition not started or in its state. A read
+// that fails is read again until the bound, as RunUserChecks does.
+func (c *Client) AwaitUserChecks(id string, timeout time.Duration) ([]UserCheckRow, error) {
+	branch, err := c.testProposedChange(id)
+	if err != nil {
+		return nil, err
+	}
+	defs, err := c.checkDefinitionsOn(branch)
+	if err != nil {
+		return nil, err
+	}
+	if len(defs) == 0 {
+		return c.UserChecksOf(id)
+	}
+	deadline := time.Now().Add(timeout)
+	var last string
+	for {
+		if vs, err := c.userValidators(id); err != nil {
+			last = err.Error()
+		} else if pending := rerunPending(defs, nil, vs); len(pending) == 0 {
+			return userCheckRows(vs), nil
+		} else {
+			last = strings.Join(pending, ", ")
+		}
+		if !time.Now().Add(userPollEvery).Before(deadline) {
+			return nil, fmt.Errorf("proposed change %s: user checks not concluded within %s (last saw %s)", id, timeout, last)
+		}
+		time.Sleep(userPollEvery)
+	}
+}
+
 // rerunPending names each definition whose validator has not run again to completed since
-// started was read: none yet, not restarted, or in a state other than completed.
+// started was read: none yet, not restarted, or in a state other than completed. With started
+// nil a validator need not have restarted, since the run awaited is the one already begun.
 func rerunPending(defs []checkDefinition, started map[string]string, vs []userValidator) []string {
 	byDefinition := map[string]userValidator{}
 	for _, v := range vs {
@@ -680,7 +718,7 @@ func rerunPending(defs []checkDefinition, started map[string]string, vs []userVa
 		switch {
 		case !ok:
 			pending = append(pending, d.name+" not started")
-		case v.startedAt == "" || v.startedAt == started[d.id]:
+		case started != nil && (v.startedAt == "" || v.startedAt == started[d.id]):
 			pending = append(pending, d.name+" not restarted")
 		case v.state != "completed":
 			pending = append(pending, d.name+" "+v.state)

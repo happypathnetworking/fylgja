@@ -481,24 +481,29 @@ Start from a fresh fixture again, and open a draft. Its creation runs both check
 $ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -delete
 deleted 2 stages, 1 proposed change, branch fylgja-test-readme
 $ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme
-…
+schema loaded on fylgja-test-readme
+three-node fixture seeded on fylgja-test-readme, with every artifact rendered and Ready
 $ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -propose
-proposed change 18e0… opened on fylgja-test-readme, draft; 5 validators concluded in 52s
+proposed change 18e01843-9cb0-c335-33b3-c51c6053f556 opened on fylgja-test-readme, draft; 5 validators concluded in 53s
 ```
 
 In Infrahub, under Proposed changes, open `fylgja-test-readme` and its Checks tab.
-`Check: fylgja-twin` succeeded without asking Fylgja anything, its message `skipped: proposed
-change 18e0… is a draft; mark it ready for review and re-run the checks to rehearse it`.
-`Check: fylgja-step` succeeded too, its `Message` the plan of the two stages a proposed
-change has before any is marked, the branch point refused for want of a network on `main`:
+`Check: fylgja-twin` succeeded in 8 seconds without asking Fylgja anything, its message
+`skipped: proposed change 18e01843-9cb0-c335-33b3-c51c6053f556 is a draft; mark it ready for
+review and re-run the checks to rehearse it`. `Check: fylgja-step` succeeded too, in 18
+seconds, its `Message` the plan of the two stages a proposed change has before any is
+marked, the branch point refused for want of a network on `main`, then its findings:
 
 ```text
-proposed change "fylgja-test-readme" (18e0…) on branch fylgja-test-readme → main, draft (2 stages)
+proposed change "fylgja-test-readme" (18e01843-9cb0-c335-33b3-c51c6053f556) on branch fylgja-test-readme → main, draft (2 stages)
 fylgja-test-readme/branch-point: refused (contract.node.missing)
   rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
-step fylgja-test-readme/branch-point → fylgja-test-readme/head (— → …): not computed (fylgja-test-readme/branch-point was refused)
-fylgja-test-readme/head: branch fylgja-test-readme at … (head)
-…
+step fylgja-test-readme/branch-point → fylgja-test-readme/head (— → e26a0e65…): not computed (fylgja-test-readme/branch-point was refused)
+fylgja-test-readme/head: branch fylgja-test-readme at 2026-10-20T01:21:59.327451+00:00 (head)
+  bundle_id e26a0e6578ce80add8f096da796187d56139f204e08cd13a1c9b32b7744f98ad
+  read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
+rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
+1 finding(s): 1 rejection, 0 warning, 0 info
 ```
 
 Mark the two stages as before, then mark the proposed change ready for review, which runs
@@ -506,19 +511,20 @@ nothing by itself:
 
 ```sh
 go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -stage seeded -description seeded
-go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -add-link  # then wait for n1's and n3's checksums, as above
+go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -add-link  # then wait for n1's and n3's checksums, as above (7 seconds here)
 go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -stage third-link -description "third link"
 go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -ready
 ```
 
 **Run the checks again** from the proposed change's Checks tab. `fylgja-twin` takes as long
-as the rehearsal and a few seconds more. From a shell, the fixture tool asks for the same
+as the rehearsal and some 15 seconds more, to plan the stages and post the comment (88
+seconds here, for a rehearsal of 71). From a shell, the fixture tool asks for the same
 re-run and waits until both checks have concluded:
 
 ```console
 $ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -run-checks user
-check fylgja-step: success (message … characters)
-check fylgja-twin: success (message … characters)
+check fylgja-step: success (message 2,027 characters)
+check fylgja-twin: success (message 3,693 characters)
 ```
 
 The comment is on the proposed change's Conversation tab, where Infrahub renders its table
@@ -528,14 +534,14 @@ rehearsal's comment, a new one, is told from it:
 ````markdown
 ## Fylgja rehearsed proposed change "fylgja-test-readme" on fylgja-test-readme
 
-Run `fylgja-rehearse 01a1…`, stages resolved at …. Status **ok**. 72.0s of the 1950s deadline (ceiling 3600s).
+Run `fylgja-rehearse 01a156e8-da76-7743-9ca7-53c29d65ddc5`, stages resolved at 2026-10-20T01:24:14Z. Status **ok**. 70.7s of the 1950s deadline (ceiling 3600s).
 
 | stage | at | bundle | step | wait | verify | new findings | verdict |
 |---|---|---|---|---|---|---|---|
-| fylgja-test-readme/branch-point | … | — | | | | | refused (contract.node.missing) |
-| fylgja-test-readme/seeded | … | … | created | settled after 4.3s | 15 held, 0 failed, 0 skipped | — | baseline |
-| fylgja-test-readme/third-link | … | … | stepped 4.6s; push n1, n3 | settled after 5.4s | 19 held, 0 failed, 0 skipped | none | passed |
-| fylgja-test-readme/head | … | … | unchanged | settled after 4.4s | 19 held, 0 failed, 0 skipped | none | passed |
+| fylgja-test-readme/branch-point | 2026-10-20T01:21:38.649050Z | — | | | | | refused (contract.node.missing) |
+| fylgja-test-readme/seeded | 2026-10-20T01:23:39.142559+00:00 | f278dcb6… | created | settled after 4.6s | 15 held, 0 failed, 0 skipped | — | baseline |
+| fylgja-test-readme/third-link | 2026-10-20T01:23:48.370039+00:00 | 9827fe8f… | stepped 5.1s; push n1, n3 | settled after 5.7s | 19 held, 0 failed, 0 skipped | none | passed |
+| fylgja-test-readme/head | 2026-10-20T01:23:46.627087+00:00 | 904addf9… | unchanged | settled after 5.9s | 19 held, 0 failed, 0 skipped | none | passed |
 
 ```mermaid
 flowchart LR
@@ -549,37 +555,60 @@ flowchart LR
 ```
 
 **Stages** (Infrahub's view does not show them):
-…
+
+- `fylgja-test-readme/branch-point` main at 2026-10-20T01:21:38.649050Z (branch point)
+- `fylgja-test-readme/seeded` fylgja-test-readme at 2026-10-20T01:23:39.142559+00:00 (written) "seeded"
+- `fylgja-test-readme/third-link` fylgja-test-readme at 2026-10-20T01:23:48.370039+00:00 (written) "third link"
+- `fylgja-test-readme/head` fylgja-test-readme at 2026-10-20T01:23:46.627087+00:00 (head)
+
+**Warnings**: none
+
+**Baseline findings** (reported, failing nothing): none
+
+*Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing.*
 ````
 
 Below the drawing it lists the stages, with each one's branch, instant and description,
 since Infrahub's own view of the proposed change shows none; the warnings; the baseline's
 own findings, reported and failing nothing; and the caveat that a twin's fidelity is
-asserted, not measured. `fylgja-twin`'s message is the same report as text, as `twin
-rehearse` prints it. **The same rehearsal from the shell** needs no check and no ready
-proposed change:
+asserted, not measured. A comment holds at most 4,092 bytes, all Infrahub keeps of one, so
+a longer report, a failure's with many findings, names each finding by its identifier and
+object alone and says so above the caveat. `fylgja-twin`'s message is the whole report as
+text, as `twin rehearse` prints it. **The same rehearsal from the shell** needs no check
+and no ready proposed change:
 
 ```console
 $ bin/fylgja twin rehearse --branch fylgja-test-readme
-rehearsal of proposed change "fylgja-test-readme" (18e0…) on branch fylgja-test-readme: 4 stages; deadline 32m30s (ceiling 1h0m0s)
+rehearsal of proposed change "fylgja-test-readme" (18e01843-9cb0-c335-33b3-c51c6053f556) on branch fylgja-test-readme: 4 stages; deadline 32m30s (ceiling 1h0m0s)
 fylgja-test-readme/branch-point: refused (contract.node.missing)
-…
-fylgja-test-readme/seeded: branch fylgja-test-readme at … (written), "seeded"; baseline
-…
-run fylgja-rehearse 01a1…
+  rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
+fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-20T01:23:39.142559+00:00 (written), "seeded"; baseline
+fylgja-test-readme/third-link: branch fylgja-test-readme at 2026-10-20T01:23:48.370039+00:00 (written), "third link"
+fylgja-test-readme/head: branch fylgja-test-readme at 2026-10-20T01:23:46.627087+00:00 (head)
+run fylgja-rehearse 01a156ea-612c-7982-a098-6825eedadb09
 stage fylgja-test-readme/seeded: creating the twin
-run fylgja-provision 01a1…
+run fylgja-provision 01a156ea-61f8-75a1-8979-1a531b5ad6aa
 …
+stage fylgja-test-readme/seeded: verify: settled after 4.9s (1 read)
 stage fylgja-test-readme/third-link: stepping
-run fylgja-step 01a1…
+run fylgja-step 01a156eb-29eb-713e-9d3d-fa436e8e2b0e
+…
+stage fylgja-test-readme/head: stepping
+run fylgja-step 01a156eb-555b-79f9-a1ee-517828abde9e
 …
 destroying the twin
-run fylgja-destroy 01a1…
+run fylgja-destroy 01a156eb-724d-70c9-a6a1-5be1450ce34b
 …
-stage fylgja-test-readme/third-link: stepped in 4.6s (push n1 2.7s, n3 2.8s); settled after 5.4s (1 read); 19 held, 0 failed, 0 skipped; passed
-stage fylgja-test-readme/head: unchanged in 1.0s; settled after 4.4s (1 read); 19 held, 0 failed, 0 skipped; passed
-rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 72.0s of the 1950s deadline
+removed lab fylgja (3 containers)
+removed twin directory /var/tmp/fylgja/twin
+stage fylgja-test-readme/branch-point: refused (contract.node.missing)
+stage fylgja-test-readme/seeded: created; settled after 4.9s (1 read); 15 held, 0 failed, 0 skipped; baseline
+stage fylgja-test-readme/third-link: stepped in 4.7s (push n1 2.6s, n3 2.7s); settled after 6.2s (1 read); 19 held, 0 failed, 0 skipped; passed
+stage fylgja-test-readme/head: unchanged in 1.1s; settled after 6.0s (1 read); 19 held, 0 failed, 0 skipped; passed
+rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 72.1s of the 1950s deadline
 ```
+
+It took 83 seconds end to end, and wrote nothing to Infrahub: the comment is the check's.
 
 `--markdown` prints the comment's markdown alone, and `--json` the document. There is one
 twin at a time: a rehearsal is refused while a run is in flight or a twin stands
@@ -705,7 +734,7 @@ the dev server and a worker running from the repository root (the script leaves 
 Docker, containerlab, Infrahub and both images, and for case 9 the two checks imported and
 the API's server from the same tree on the Docker bridge, as [A proposed change,
 rehearsed](#a-proposed-change-rehearsed) starts it; it refuses before any case without
-them. It takes about 25 minutes. Without the cEOS image it refuses before any case too;
+them. It takes about 27 minutes. Without the cEOS image it refuses before any case too;
 `PLATFORMS` narrows it to the packages you name, and on an SR Linux-only host it ends on a
 partial pass, exit 0:
 

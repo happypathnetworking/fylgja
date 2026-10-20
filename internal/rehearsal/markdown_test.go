@@ -90,7 +90,7 @@ func TestMarkdown(t *testing.T) {
 		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (contract.node.missing) |",
 		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | created | expired after 120.0s | 14 held, 1 failed, 0 skipped | — | baseline |",
 		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | stepped 4.5s; push n1, n3 | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | passed |",
-		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | diverged at push 29.8s; restarted n3; push n3; not landed n1 (push.refused) | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | failed |",
+		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | diverged at push 29.8s; restarted n3 61.2s; push n3; not landed n1 (push.refused) | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | failed |",
 		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | | | | | not reached |",
 		"",
 		"```mermaid",
@@ -154,6 +154,27 @@ func TestMarkdown(t *testing.T) {
 			t.Errorf("%s: the reproduce block is there %v, a stage failed %v:\n%s", e.name, !failure, failure, md)
 		}
 		carriesNoContent(t, e.name+"'s markdown", md)
+	}
+}
+
+// A step that restarted or recreated a node names each in its cell with the seconds its
+// readiness took (FR-004); one cut before its readiness names the node alone. The block is
+// the same either way, and the markdown still fits a comment.
+func TestMarkdownNamesTheRestartsTime(t *testing.T) {
+	for _, c := range []struct {
+		e    example
+		want string
+	}{
+		{restartedRun(), "| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | stepped 95.3s; restarted n3 61.2s; recreated n1 70.4s; push n1, n3 | settled after 6.1s |"},
+		{cutBeforeReadinessRun(), "| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | diverged at readiness 29.8s; restarted n3 | expired after 120.0s |"},
+	} {
+		md := Markdown(c.e.document(), pairs())
+		if !strings.Contains(md, c.want) {
+			t.Errorf("%s: the markdown does not hold %q:\n%s", c.e.name, c.want, md)
+		}
+		if len(md) > CommentMax {
+			t.Errorf("%s: the markdown is %d bytes, over the %d a comment holds", c.e.name, len(md), CommentMax)
+		}
 	}
 }
 

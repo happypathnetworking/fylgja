@@ -592,8 +592,12 @@ stage change-1/head: unchanged in 0.9s; settled after 1.0s (1 read); 19 held, 0 
 rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1950s deadline
 ```
 
-A failed stage's line says why (`diverged at phase push: landed n3; not landed n1
-(push.refused)`, or a finding the baseline did not have, by rule and object), the stages
+A step that restarted or recreated a node names each with the seconds its readiness took,
+as `twin show` words a step's readiness (`stage change-1/third-link: stepped in 95.3s
+(restarted n3 61.2s; push n1 2.5s, n3 2.6s); …`), and a node the step was cut before
+awaiting alone; the table's step cell names them alike.
+A failed stage's line says why (`diverged at phase push: restarted n3 61.2s; landed n3; not
+landed n1 (push.refused)`, or a finding the baseline did not have, by rule and object), the stages
 after it read `not reached`, and the closing line is `rehearsal nonconforming: stage
 change-1/bad-port failed at phase push; the twin is destroyed; reproduce it by hand:`, then
 the commands, one per line, indented: `fylgja twin create --stage` the baseline, `fylgja twin

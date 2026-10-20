@@ -278,7 +278,7 @@ const shellSafe = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012345678
 //	stage change-1/branch-point: refused (contract.node.missing)
 //	stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline
 //	stage change-1/third-link: stepped in 4.5s (push n1 2.5s, n3 2.6s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed
-//	stage change-1/bad-port: diverged at phase push: landed n3; not landed n1 (push.refused); …; failed
+//	stage change-1/bad-port: diverged at phase push: restarted n3 61.2s; landed n3; not landed n1 (push.refused); …; failed
 //	stage change-1/head: not reached
 func StageLines(b findings.RehearsalBlock) []string {
 	out := make([]string, 0, len(b.Stages))
@@ -398,7 +398,7 @@ func childText(s findings.RehearsalStage) string {
 	case wire.StepUnchanged:
 		return fmt.Sprintf("unchanged in %.1fs", st.Timings.WholeS)
 	case wire.StepDiverged:
-		return divergence(st)
+		return divergence(st, lifecycle(st)...)
 	case outcomeCancelled:
 		if st.Phase == "" {
 			return "cancelled before its stage"
@@ -413,15 +413,7 @@ func childText(s findings.RehearsalStage) string {
 // touched is the nodes containerlab's plan restarted, recreated or created, and each push
 // with its time.
 func touched(st *findings.RehearsalStep) []string {
-	var out []string
-	for _, l := range []struct {
-		verb  string
-		nodes []string
-	}{{"restarted", st.Restarted}, {"recreated", st.Recreated}, {"created", st.Created}} {
-		if len(l.nodes) > 0 {
-			out = append(out, l.verb+" "+strings.Join(l.nodes, ", "))
-		}
-	}
+	out := lifecycle(st)
 	var pushes []string
 	for _, p := range st.Pushed {
 		if p.TookS != nil {
@@ -436,6 +428,33 @@ func touched(st *findings.RehearsalStep) []string {
 	return out
 }
 
+// lifecycle is the nodes containerlab's plan restarted, recreated or created, by verb, each
+// restarted or recreated node with the seconds its readiness took, as twin show words a
+// step's readiness, and alone when the step was cut before its readiness:
+//
+//	restarted n3 61.2s; recreated n1 70.4s; created n4
+func lifecycle(st *findings.RehearsalStep) []string {
+	var out []string
+	for _, l := range []struct {
+		verb  string
+		nodes []string
+		timed bool
+	}{{"restarted", st.Restarted, true}, {"recreated", st.Recreated, true}, {"created", st.Created, false}} {
+		if len(l.nodes) == 0 {
+			continue
+		}
+		named := make([]string, len(l.nodes))
+		for i, n := range l.nodes {
+			named[i] = n
+			if s, ok := st.Timings.Readiness[n]; ok && l.timed {
+				named[i] = fmt.Sprintf("%s %.1fs", n, s)
+			}
+		}
+		out = append(out, l.verb+" "+strings.Join(named, ", "))
+	}
+	return out
+}
+
 func parenthesised(parts []string) string {
 	if len(parts) == 0 {
 		return ""
@@ -443,31 +462,36 @@ func parenthesised(parts []string) string {
 	return " (" + strings.Join(parts, "; ") + ")"
 }
 
-// divergence is a diverged step's why: the phase, and once a push was planned the nodes
-// whose push landed and those whose did not, with each one's identifier.
+// divergence is a diverged step's why: the phase, then the parts before what landed (the
+// stage line's nodes the plan restarted or recreated), and once a push was planned the
+// nodes whose push landed and those whose did not, with each one's identifier.
 //
 //	diverged at phase push: landed n3; not landed n1 (push.refused)
-func divergence(st *findings.RehearsalStep) string {
+//	diverged at phase push: restarted n3 61.2s; landed n3; not landed n1 (push.refused)
+func divergence(st *findings.RehearsalStep, before ...string) string {
 	line := "diverged at phase " + st.Phase
-	if len(st.Pushed) == 0 {
-		return line
-	}
-	var landed, not []string
-	for _, p := range st.Pushed {
-		switch {
-		case p.Outcome == wire.PushLanded:
-			landed = append(landed, p.Node)
-		case p.Rule != "":
-			not = append(not, fmt.Sprintf("%s (%s)", p.Node, p.Rule))
-		case p.Outcome == wire.PushNotAttempted:
-			not = append(not, p.Node+" (not attempted)")
-		default:
-			not = append(not, p.Node)
+	parts := before
+	if len(st.Pushed) > 0 {
+		var landed, not []string
+		for _, p := range st.Pushed {
+			switch {
+			case p.Outcome == wire.PushLanded:
+				landed = append(landed, p.Node)
+			case p.Rule != "":
+				not = append(not, fmt.Sprintf("%s (%s)", p.Node, p.Rule))
+			case p.Outcome == wire.PushNotAttempted:
+				not = append(not, p.Node+" (not attempted)")
+			default:
+				not = append(not, p.Node)
+			}
+		}
+		parts = append(parts, "landed "+orNone(landed))
+		if len(not) > 0 {
+			parts = append(parts, "not landed "+strings.Join(not, ", "))
 		}
 	}
-	parts := []string{"landed " + orNone(landed)}
-	if len(not) > 0 {
-		parts = append(parts, "not landed "+strings.Join(not, ", "))
+	if len(parts) == 0 {
+		return line
 	}
 	return line + ": " + strings.Join(parts, "; ")
 }

@@ -237,14 +237,7 @@ func stepCell(s findings.RehearsalStage) string {
 	default:
 		return "could not run"
 	}
-	for _, l := range []struct {
-		verb  string
-		nodes []string
-	}{{"restarted", st.Restarted}, {"recreated", st.Recreated}, {"created", st.Created}} {
-		if len(l.nodes) > 0 {
-			parts = append(parts, l.verb+" "+strings.Join(l.nodes, ", "))
-		}
-	}
+	parts = append(parts, lifecycle(st)...)
 	var landed, not []string
 	for _, p := range st.Pushed {
 		switch {

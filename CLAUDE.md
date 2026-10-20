@@ -105,7 +105,13 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   version from `https://infrahub.opsmill.io/1.11.2`, and this repository's
   `scripts/infrahub/docker-compose.override.yml` copied beside it; at
   http://localhost:8000. The override pins the three Infrahub services to `1.11.2`, since a
-  stray `VERSION` would move them, and caps Neo4j at heap 1g/2g and page cache 1g. Run
+  stray `VERSION` would move them, caps Neo4j at heap 1g/2g and page cache 1g, and gives
+  the two task workers `extra_hosts: host.docker.internal:host-gateway`,
+  `FYLGJA_API_ADDRESS: host.docker.internal:7650` and `FYLGJA_API_TOKEN:
+  ${FYLGJA_API_TOKEN}`, which Compose reads from `local/.env`, so the file holds no value
+  ([D-050](docs/decisions.md#d-050)). A changed override reaches them only when `up -d`
+  recreates them, which the bring-up script's `infrahub` part runs whenever it copies the
+  override. Run
   Compose from the repository root as the script does: `docker compose -p fylgja-infrahub
   --env-file local/.env -f local/infrahub/docker-compose.yml -f
   local/infrahub/docker-compose.override.yml <command>`. Volumes persist across `down`.
@@ -124,14 +130,24 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   `https://github.com/happypathnetworking/fylgja.git`, `ref main`, with no credential
   ([D-044](docs/decisions.md#d-044)), whose import made the query `device_config`, the
   transform `srlinux_device_config` and the definition `srlinux_device_config` → artifact
-  `device-config`, `text/plain`. `fylgja-fixture -prepare-main` loaded the schema, made
+  `device-config`, `text/plain`, and, imported at `d70ad24` on 2026-10-20, the query
+  `fylgja_branch` and the two checks beside the template in `.infrahub.yml`:
+  `fylgja-step` (`infrahub/checks/fylgja_step.py`, timeout 300) and `fylgja-twin`
+  (`fylgja_twin.py`, timeout 4200), global, which Infrahub's task workers run on every
+  proposed change, draft or not, at its creation and on a re-run of its user checks, as
+  clients of the API reaching the server on the bridge. `fylgja-twin` skips a draft,
+  rehearses a ready one on a twin and posts the report as a thread on it
+  ([D-049](docs/decisions.md#d-049)–[D-053](docs/decisions.md#d-053)).
+  `fylgja-fixture -prepare-main` loaded the schema, made
   the group and registered the repository, each only when absent. No credential is
   registered. **One template renders both platforms**: it branches on the device's
-  platform. **A template change reaches Infrahub
+  platform. **A template or check change reaches Infrahub
   only when asked**: once it is on `origin`'s `main`, which the operator pushes,
   `InfrahubReadOnlyRepositoryImportLastCommit(data: {id})` on `main` imports it (neither
-  the minute sync nor rewriting `ref` does); a branch then sees it only after
-  `BranchRebase` or re-creation, and each artifact only once generated again. `make sdl`
+  the minute sync nor rewriting `ref` does), and both task workers fetch it about 15 s
+  after the import's own flow, before which a run-check fails; a branch then sees it only
+  after `BranchRebase` or re-creation, so a branch made before a check's import never runs
+  it, and each artifact changes only once generated again. `make sdl`
   fetches the SDL from `main`. Prefect's `git_repositories_sync` runs every minute with
   one concurrency slot, so a run stuck `PENDING` blocks every import until it is
   cancelled.
@@ -155,8 +171,13 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   object file (`kind: Object`, `spec.kind: FylgjaStage`, `proposed_change` the proposed
   change's id), the UI (`Stage`, an object entry of its own) or `.venv/bin/infrahubctl
   object create FylgjaStage --set label=… --set proposed_change=<id>`; the guide is
-  `schema/README.md`. After the contract tier, `CoreProposedChange { count }` and
-  `FylgjaStage { count }` read 0, and `Branch` lists `main` and `fylgja-fixture` alone.
+  `schema/README.md`. After the contract tier, `CoreProposedChange`, `FylgjaStage`,
+  `CoreChangeThread` and `CoreUserValidator` count 0, `CoreReadOnlyRepository` holds
+  `fylgja` alone with its two check definitions, and `Branch` lists `main` and
+  `fylgja-fixture` alone. **Every proposed change opened here runs both checks** at its
+  creation, and once it is ready for review a re-run of its user checks rehearses it on a
+  twin through the server on the bridge: never mark one ready and re-run its checks while
+  tier 2 runs.
 - **containerlab 0.79.0** (its `.deb`; `/usr/bin/containerlab` setuid root) and **Docker
   29.8.1** with Compose 5.6.0, from Docker's repository. The user is in `clab_admins` and
   `docker`: `clab` runs without sudo. A shell begun before the bring-up script added the
@@ -220,8 +241,8 @@ set -a; . local/.env; set +a; setsid nohup env FYLGJA_STATE_ROOT="$PWD/local" bi
 Then verify what you started, never assume it: `/proc/<pid>/exe` is not `(deleted)`, the
 environment names carry `INFRAHUB_*` and both logins, and the start-up report names both
 packages. A rebuild does not always replace the binary, so read `/proc/<pid>/exe` rather
-than assuming either way. The worker serves four workflows (provision, destroy, the
-following check and step) and twenty activities; a worker on an older binary than the
+than assuming either way. The worker serves five workflows (provision, destroy, the
+following check, step and the rehearsal) and twenty activities; a worker on an older binary than the
 tree may lack one and fail a run at it. The start-up report names
 packages, never workflows or activities. A stopped worker lingers as a poller for about
 five minutes — harmless, and not a second worker. The dev server is the same: restart it
@@ -244,7 +265,10 @@ Then verify it: `/proc/<pid>/exe` is not `(deleted)`; its environment carries
 (`local/server.log`) says `listening on 127.0.0.1:7650 (API version 1, build …)`, then
 `listening on 172.17.0.1:7650 (…)` (the bridge's address) followed straight away by
 `172.17.0.1:7650 is not a loopback address: the API's token is sent unencrypted on it`,
-and names both packages with their logins set. **Find both with `pgrep -x fylgja`**
+and names both packages with their logins set. From inside each Infrahub task worker, a
+`POST` to `http://$FYLGJA_API_ADDRESS/v1/twin/show` with the container's token answers
+`200` with this build, and `401` without it
+(`specs/015-proposed-change-rehearsal/quickstart.md` §2). **Find both with `pgrep -x fylgja`**
 (`pgrep -f` also matches the shell that runs it) and tell them apart by `/proc/<pid>/cmdline`. The server
 dials nothing at start and keeps nothing between two requests, so a restart loses nothing
 but the answers it was sending, whose runs go on. It logs one line a request to
@@ -258,7 +282,7 @@ another machine comes through `ssh -N -L 7650:127.0.0.1:7650 <lab host>`, with a
 built from this tree.
 
 **Formats**: bundle `4` (a bundle of another format is refused), CTM `1`, PSP `0.6`
-(both shipped packages on `mode: replace`), `twin.json` `6`, contract `0.2`, findings `1`,
+(both shipped packages on `mode: replace`), `twin.json` `7`, contract `0.2`, findings `1`,
 the API `1` (`contracts/api.md`, the version in every path). The three goldens are
 three-node **`23f86a26…`**, lossy **`5773b6bb…`** and mixed **`391bcb96…`**, and the live
 fixture compiles to `47b2c449…` on this install (`b9d53ebc…` under the 24.04 install's
@@ -294,6 +318,14 @@ Re-verify on any upgrade.
   anew even when the bytes are identical. Infrahub refuses a proposed change's delete
   while a stage names it, and cancels an open one about 16 s after its branch is deleted:
   delete the stages, then the proposed change, then the branch (`fylgja-fixture -delete`).
+- **A check runs as the registration imported it**: every registered repository's checks
+  on a proposed change at its creation, draft or not, and again on
+  `CoreProposedChangeRunCheck(check_type: USER)`, as the source branch sees them, so a
+  definition imported after the branch's creation never runs on it. Its bound is its own
+  `timeout`; one Infrahub times out leaves its validator `in_progress` for ever, blocking
+  the merge. A proposed change's overview shows a comment only in a thread
+  (`CoreChangeThread` holding a `CoreThreadComment`), whose text holds at most 4,092
+  bytes, and deleting the proposed change takes its threads, comments and validators.
 - **A read pinned at exactly an attribute's `updated_at` sees the node and not the
   value**, and one microsecond later sees it. A rebase re-stamps a branch's whole content
   at the new `branched_from` and discards its earlier history from pinned reads.
@@ -349,8 +381,12 @@ runs golangci-lint and `shellcheck scripts/bring-up.sh scripts/e2e.sh`) · `make
 test-contract` (tier 2, real
 Infrahub, never cached; needs `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN`; CI's contract
 job on every push to `main`, against an Infrahub the script brings up on the runner, with
-no secret; about twelve minutes (716.7 s on 2026-10-17), `internal/stages` the longest
-package at 712.1 s, under the `-timeout 30m` it sets) · `make lint` (runs with build
+no secret; about eighteen minutes (1,099.7 s on 2026-10-19), `internal/stages` the
+longest package at 894.0 s, under the `-timeout 30m` it sets, then `internal/checks`
+alone in a second `go test` (199.5 s), whose `TestChecksInsideInfrahub` runs the tree's
+checks inside Infrahub's pipeline under a registration of its own, needs the server on the
+bridge from this tree here, and skips, saying why, where the task workers reach none, as in
+CI) · `make lint` (runs with build
 tags `contract,fixture,e2e`) ·
 `go test ./internal/compiler -update` regenerates the three goldens — review the diff,
 and commit a re-baseline on its own · the conformance suite's pure half is part of
@@ -362,12 +398,16 @@ infrahub-clean` (the fixture branch) · `make sdl` · `make diagrams` (needs Doc
 needs it) · **every command but `worker run` and `serve` needs a running server**, the
 pipeline's stage commands and `stage list` and `stage plan` included (`psp validate` and
 `twin compile` need neither Infrahub nor the workflow service, but they need the server) ·
-`make test-e2e` (tier 3, `scripts/e2e.sh`: eight cases, seven twins, `twin verify` on three of them and on the steps' waits, every
-command through a server the script starts itself with a token it makes; needs the dev
+`make test-e2e` (tier 3, `scripts/e2e.sh`: nine cases, nine twins, `twin verify` on three of them and on the steps' waits, every
+command through a server the script starts itself with a token it makes, but case 9, a
+proposed change rehearsed twice by `fylgja-twin` inside Infrahub, through the operator's
+server on the bridge; needs the dev
 server and a worker running from the repository root, Docker, containerlab, **both**
-images and Infrahub; about 19–20 minutes (1198.9 s on 2026-10-17); `WORKER_LOG=<file>`
+images and Infrahub, and for case 9 the server on the bridge from this tree and both
+checks imported on `main`, each checked before any case; about 26 minutes (1,536.9 s on
+2026-10-20); `WORKER_LOG=<file>`
 adds the worker's log to its credential greps; `PLATFORMS=nokia_srlinux` narrows it to
-the six cases SR Linux alone runs, about 11 minutes, ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
+the seven cases SR Linux alone runs, about 17 minutes, ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
 never `E2E-OK`; never in CI). A command that runs longer than one tool call (tier 3)
 starts detached with its exit status in a file, and is waited on in foreground calls of
 under ten minutes.
@@ -396,32 +436,52 @@ Rewritten whole at each release's close, never appended to.
 - **The release `v0.1.0`** was published on 2026-10-08, from the tag the operator pushed
   and the draft `release.yml` built.
 - **Release 0.2 is under way**: a proposed change rehearsed on a twin
-  ([roadmap](docs/roadmap.md#release-02)).
+  ([roadmap](docs/roadmap.md#release-02)). 014 and 015 are built.
 - **014 is built** (`014-proposed-change-stages`, F-023, 2026-10-17): a proposed change's
-  stages in place of M10's surface ([D-045](docs/decisions.md#d-045),
-  [D-046](docs/decisions.md#d-046), [D-048](docs/decisions.md#d-048); Constitution 1.3.0,
-  amended for D-048). `FylgjaStage` and its extension
-  on `main`, and M10's kind removed from it (`e43a1cde…`); `--stage`, `stage list` and
-  `stage plan`; the branch point read on `main` at `branched_from`, the head one
-  microsecond after the later of the branch's latest stamp and its latest intent event
-  (`InfrahubEvent`, the fourth named root; a removal moves no stamp), a stale stage
-  refused per device, by its stamps or an event naming it;
-  `twin.json` `6`, the findings' stage blocks and the API's two operations, with neither
-  the API's version nor the findings' moved. Tier 2 passed in 531.5 s, and in 716.7 s with
-  D-048 built (2026-10-17, `internal/stages` 712.1 s); tier 3 `E2E-OK` in 1125.5 s, and
-  in 1198.9 s with D-048 built; `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in 665.7 s; and
-  the hand scenarios and the README's stepping walk-through were followed by hand
-  (`specs/014-proposed-change-stages/research.md` §8). No golden, no fixture id and no
-  format but the twin record's moved. Its close drafts the upstream request for named
-  points in time for the operator to file, never filed by a session (T054), runs the
-  closing gates (T055), and is the operator's to review and commit (T056).
-- **Next**: `015-proposed-change-rehearsal`, F-007 and F-008 as one spec (its
-  [brief](specs/015-proposed-change-rehearsal/brief.md)), then F-014 as `016-probes`, then
-  F-012, then `v0.2.0`. On this install the branch point is refused
-  `contract.node.missing`, since `main` holds no network, so a rehearsal's baseline here
-  cannot be the branch point (research R-04).
+  stages in place of M10's surface ([D-045](docs/decisions.md#d-045)–[D-048](docs/decisions.md#d-048);
+  Constitution 1.3.0, amended for D-048). `FylgjaStage` and its extension on `main`, and
+  M10's kind removed from it (`e43a1cde…`); `--stage`, `stage list` and `stage plan`; the
+  branch point read on `main` at `branched_from`, the head one microsecond after the later
+  of the branch's latest stamp and its latest intent event (`InfrahubEvent`; a removal
+  moves no stamp), a stale stage refused per device, by its stamps or an event naming it;
+  `twin.json` `6` (`specs/014-proposed-change-stages/research.md` §8). Its upstream request
+  for named points in time is drafted (`specs/014-proposed-change-stages/upstream-request.md`),
+  the operator's to file, never a session's.
+- **015 is built** (`015-proposed-change-rehearsal`, F-007 and F-008, 2026-10-20): a
+  proposed change rehearsed on a twin ([D-049](docs/decisions.md#d-049)–[D-053](docs/decisions.md#d-053);
+  D-053 makes D-049's comment a thread). `twin rehearse --branch <b> [--markdown]`, the
+  operation `twin.rehearse`, and the fifth workflow `fylgja-rehearse`, whose children are
+  the provision, the steps and the destroy, bounded by a deadline its stages' budgets sum
+  to under a ceiling of 3,600 s; the baseline stage, the verdicts and the reclaim, in
+  `internal/rehearsal`; the markdown rendering, within a comment's 4,092 bytes; `twin.json`
+  `7`, the `6` frozen; `fylgja-step` and `fylgja-twin` in `infrahub/checks/`, on
+  `origin`'s `main` and imported at `d70ad24`; `fylgja serve --listen` repeated, the
+  server on the host's Docker bridge beside loopback, the override's task-worker entries
+  and the bring-up script's two parts; the fixture tool's `-ready`, `-run-checks` and
+  `-add-interface`. Neither the API's version nor the findings' moved, and no golden, no
+  fixture id and no format but the twin record's. Verified
+  (`specs/015-proposed-change-rehearsal/research.md` §5): the server reached from inside
+  both task workers; the rehearsal by hand on real twins, passing, failing at a push,
+  interrupted, beside a create, its client gone, reclaimed and cut by a lowered deadline;
+  tier 2 in 1,099.7 s (2026-10-19), and `TestChecksInsideInfrahub` alone in 309.4 s once
+  it read the thread (2026-10-20); tier 3 `E2E-OK` in 1,619.1 s, then 1,536.9 s with the
+  thread; `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in 1,027.7 s and 1,042.9 s; the README's
+  walk-through followed by hand twice; and the thread read by the operator in Infrahub's
+  overview, the table, the Mermaid drawing, the stages and the caveat whole. Its close runs
+  the closing gates (T063) and is the operator's to review and commit (T064).
+- **Next**: F-014 as `016-probes` (its [brief](specs/016-probes/brief.md)), then F-012,
+  then `v0.2.0`. On this install the branch point is refused `contract.node.missing`,
+  since `main` holds no network, so a rehearsal's baseline here is the first mark.
 - **Open**: Arista's own checksum for the tar is unread, owed at the operator's next
   download. On 26.04, whether the two AppArmor lines suffice without `/run/syslogd.pid*
   rw,` is untried. From 014, the operator's: `infrahubctl schema format` would reorder
   `schema/fylgja-stage.yaml` (§8.2); `stage.main.moved` is untried by a write on `main`;
-  and the recording shows M10's surface until it is remade at `v0.2.0`.
+  and the recording shows M10's surface until it is remade at `v0.2.0`. From 015, for
+  converge or the operator: tier 2 has not run whole since the checks were imported on
+  `main`, and `TestRehearseComposedByTheFixtureTool` marks its draft ready without
+  awaiting the creation's user checks, so here it could start a rehearsal beside the tier
+  (research §5.6); the markdown lists a warning once for each stage and step that filed
+  it, naming no stage, and the baseline's verify line carries no counts; a client
+  following a rehearsal terminated outside Fylgja answers only once its abandoned children
+  close (§5.2); and `local/worker.log` holds a run of NUL bytes that the bring-up script's
+  report warns of (T036).

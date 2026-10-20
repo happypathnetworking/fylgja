@@ -181,6 +181,18 @@ and links added or removed, nodes changed with their reasons, artifacts changed 
 a step not computed is a dotted edge. Under 1.11.2 a comment renders through react-markdown
 with `remark-gfm` (tables), `remark-breaks` and `rehype-mermaid` (research §1.2).
 
+**Its length** (`rehearsal.CommentMax`, found at T055, research §5.7): Infrahub 1.11.2
+refuses a text attribute when 3 and its UTF-8 length reach 4096 bytes, so the markdown is
+never longer than 4,092. A report that would be names each finding by its identifier and
+object alone, identical ones once with their count (``- `push.refused` n1 (×2)``), since the
+check's message holds the text; should that still be too long, whole sections are left
+out, the baseline's findings first, then the drawing, the warnings, the stages, the
+findings, the reproduce commands and the table. The heading, the run line and the caveat
+are always kept, and a line before the caveat says what was shortened: `*To fit what
+Infrahub keeps of a comment (4092 bytes), each finding is named by its identifier and
+object alone[, and … is left out]; fylgja-twin's message is the whole report as text.*`. A
+report that fits is rendered whole, as above.
+
 ## The API
 
 | Operation | Path | `args` | Files in | Files out | Takes an interrupt |

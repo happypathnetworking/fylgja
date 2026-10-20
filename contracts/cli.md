@@ -612,6 +612,12 @@ the findings that say why; the stages, since Infrahub's view of the proposed cha
 none; the warnings; the baseline's findings; on a failure the commands that reproduce it;
 and last the caveat, `*Fidelity is asserted, not measured: the twin's containers forward in
 software and keep their own timing.*`. An operator's string is escaped where it lands.
+It is never longer than 4,092 bytes, the longest text Infrahub keeps as a comment: a
+report that would be names each finding by its identifier and object alone, identical ones
+once with their count, and should that still be too long, leaves sections out whole, the
+baseline's findings first, then the drawing, the warnings, the stages, the findings, the
+reproduce commands and the table. A line before the caveat says what was shortened, and
+`fylgja-twin`'s message, the text, is the whole report.
 
 **Status and exit.** No status or exit is new.
 

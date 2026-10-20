@@ -358,8 +358,11 @@ read" that the build relies on, with its date.
 - **The proposed change closes or merges mid-rehearsal.** Its stages become invisible to
   Fylgja, but the rehearsal's references are already pinned and its branch still exists,
   so it finishes on them; the report's warning says the proposed change is no longer open.
-  A source branch deleted under it fails the next read, which ends the rehearsal `error`
-  after its destroy.
+  A source branch deleted under it changes nothing of the run: every stage was resolved and
+  compiled before the start, so the run finishes on them and its destroy runs; the read
+  after the run warns `rehearsal.stage.moved` naming the branch, or
+  `rehearsal.change.closed` once Infrahub has cancelled the proposed change, and the status
+  stays the stages'.
 - **A `main` that carries a network.** On a deployment whose `main` holds intent, the
   branch point compiles and is the baseline: the twin boots `main`'s network and the
   change is rehearsed against it, which is the design. The development host's `main` holds

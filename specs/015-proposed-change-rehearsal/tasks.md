@@ -731,6 +731,7 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
     - (b) Keep the spec: each fault names `FYLGJA_API_ADDRESS` instead of its value. That is a change to the checks, which reaches the host's Infrahub only on the operator's push and import (R-21).
 
   Per US2/AC4 and FR-020 (contradicts)
+  - *2026-10-20, the operator, answering the loop's question 4: (a).* US2's acceptance scenario 4 in `spec.md` now reads: "**Then** the check concludes failure saying so and naming the address it tried, without the token in its message, and nothing is booted." What is owed: data-model §9 and `contracts/checks.md` lines 43–44 follow it; nothing else is built.
 - [ ] T073 [operator] Settle how tier 2 and tier 3 prove that the server on the bridge is this tree's. `CLAUDE.md`'s Build and test, R-18 and R-19 require it: `TestChecksInsideInfrahub` "needs the server on the bridge from this tree", and case 9 fails "unless `Fylgja-Build` is `bin/fylgja --version`'s". Neither is proved.
   - **Tier 2.** `scripts/bring-up.sh`'s `fylgja` part runs `make test-contract` (line 904) before `ensure_role worker`, `bridge_address` and `ensure_role serve` (lines 915–917). On a second run after a change, `make build` has relinked `bin/fylgja`, so the test exercises the old, `(deleted)` server. On a fresh host no server is up yet, and the test skips.
   - **Tier 3.** Every unstamped build is `0.1.0-dev` (`Makefile`'s `VERSION ?=`), so case 9's `Fylgja-Build` comparison (`scripts/e2e.sh`, about line 743) passes for a server of any tree. `TestChecksInsideInfrahub` reads no build at all.
@@ -742,6 +743,7 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
     Recommended: (b), which moves no format.
 
   Per `CLAUDE.md` (Build and test), research R-18 and R-19, FR-029 and FR-030 (partial)
+  - *2026-10-20, the operator, answering the loop's question 4: (b).* Prove it, moving no format: the `fylgja` part ensures the worker and the server before its tiers, and case 9's precondition and `TestChecksInsideInfrahub` compare the running server's `/proc/<pid>/exe` with this tree's `bin/fylgja` (not `(deleted)`, the same file), saying so when `/proc` cannot be read.
 - [ ] T074 [behaviour] In `infrahub/checks/fylgja_api.py`'s `call`, build the request inside the handling that turns a failure into a fault.
   - **The defect.** `client.build_request` (about line 235) comes before the `try`. Two inputs escape `validate` uncaught: an address that `_base` accepts and httpx cannot parse (`httpx.InvalidURL`: a bad host, or a port over 65535), and a token that httpx cannot encode as ASCII (`UnicodeEncodeError`, whose text quotes the offending character and its position). The check's message is then Infrahub's `FATAL Error` with the exception's text, rather than a `log_error` naming the variable.
   - **The fix.** Make each a fault that names the variable alone (`FYLGJA_API_ADDRESS` or `FYLGJA_API_TOKEN` cannot be used: …), never its value or any part of it, before any request.
@@ -759,6 +761,7 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
     Recommended: (b).
 
   Per FR-014 (partial)
+  - *2026-10-20, the operator, answering the loop's question 4: (b).* Each warning a stage filed names its stages, once per stage, read from the block's per-stage `findings`; the run's own warnings stay as they are, and the brief form and `CommentMax` hold. A `[behaviour]` change to `markdown.go`, with `TestMarkdown` extended, as the option gives it.
 - [ ] T076 [pin] Correct the records where they say something other than what runs, as FR-033 and FR-032 ask. These are doc lines and schema descriptions alone; no structure moves.
   - **`docs/architecture.md`, about lines 1258–1266.**
     - The destroy's `removed …` lines come before the stage lines and the closing line (`reported`, `internal/server/rehearse.go`).

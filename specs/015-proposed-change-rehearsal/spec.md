@@ -161,8 +161,8 @@ proposed change, stage or comment remains.
    the host), **When** Infrahub runs the check, **Then** the check concludes failure with
    Fylgja's finding in its message, and posts the report it got.
 4. **Given** Fylgja cannot be reached from the task worker, or refuses the token, **When**
-   Infrahub runs the check, **Then** the check concludes failure saying so, without a value
-   of either variable in its message, and nothing is booted.
+   Infrahub runs the check, **Then** the check concludes failure saying so and naming the
+   address it tried, without the token in its message, and nothing is booted.
 5. **Given** a comment that cannot be posted, **When** the check has its report, **Then**
    the failure to post is in the check's message and the conclusion is the rehearsal's,
    not the comment's.

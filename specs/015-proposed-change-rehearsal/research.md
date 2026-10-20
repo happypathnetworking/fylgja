@@ -1500,13 +1500,14 @@ operator's to amend, as T081 amended 014's.
 > test's proposed change goes with its threads and their comments when deleted (§5.9).
 
 <a id="510-the-thread-imported-tier-3-and-the-walk-through-again-2026-10-20-1823z1926z-t057"></a>
-### 5.10 The thread imported, tier 3 and the walk-through again (2026-10-20, 18:23Z–19:26Z; T057)
+### 5.10 The thread imported, tier 3, the walk-through again and the reading (2026-10-20, 18:23Z–19:55Z; T057)
 
 The operator pushed the fix and D-053 to `origin`'s `main` (`999456e` → `d70ad24`, T057's
 note), and this run, the loop's Run 20 restarted, imported it, ran tier 3 whole and
 narrowed with case 9 reading threads, and followed the README's walk-through again to leave
-a fresh proposed change for the operator's reading. Outputs in `local/t057-2/`,
-`local/e2e-015-full-4.*` and `local/e2e-015-srl-2.*`. No token or password was printed.
+a fresh proposed change for the operator's reading; once the operator had read it, the run
+deleted it. Outputs in `local/t057-2/`, `local/t057-3/`, `local/e2e-015-full-4.*` and
+`local/e2e-015-srl-2.*`. No token or password was printed.
 
 - **Before** (18:23Z). The worker and the server were on a `(deleted)` binary: `make build`,
   both stopped with `pkill -x fylgja` and started with `CLAUDE.md`'s two lines (18:23:28Z),
@@ -1584,9 +1585,35 @@ a fresh proposed change for the operator's reading. Outputs in `local/t057-2/`,
   `local/server.log` and `local/worker.log` were searched for each token, password and
   secret key of eight characters or more by its value: no hit.
 
-**Still owed (T057 stays open)**: the reading, in a browser, of the thread in the overview
-of `http://localhost:8000/proposed-changes/18e0531d-0848-4684-33b7-c511bd30ba49`: the table,
-the Mermaid drawing (no error banner), the stages and the caveat, with `remark-breaks` in
-mind. The checks tab's messages were read at §5.9 and are unchanged. Then `-delete`. A
-session then records the reading here and fixes any rendering defect in
-`internal/rehearsal/markdown.go`, under US2, with a test.
+**The reading** (the operator, in a browser, at about 19:47Z by the screenshot's "24
+minutes ago"; T057's note): "Looks good", with a screenshot of the overview of
+`18e0531d-0848-4684-33b7-c511bd30ba49`. It shows the event `Agent created a thread`; the
+thread, labelled `Conversation`, authored `Agent` (the account the task worker's check
+writes as), with `Resolve thread` and `Reply`; and in it the report whole, as its markdown
+gives it. The heading. The run line: the run's id in code, its status **ok** in bold, 70.7 s
+of the 1,950 s deadline, the ceiling 3,600 s. The table: eight columns and four rows (the
+branch point refused `contract.node.missing`, `seeded` the baseline, `third-link` and the
+head passed), each bundle id cut to eight characters, long cells wrapping. The Mermaid
+drawing with its zoom controls and **no error banner**: four boxes whose `<br/>` show as
+line breaks, the dotted `not computed` edge, the step's edge labelled `+link n1:e1-3 —
+n3:e1-3; ~n1, ~n3 (bootstrap, mapping); artifacts n1, n3`, and the `unchanged` edge.
+**Stages** ("Infrahub's view does not show them") as a list of four, each stage in code;
+**Warnings** none; **Baseline findings** none; the caveat in italics. Nothing was seen
+broken, `remark-breaks` included, so nothing is Fylgja's to fix:
+`internal/rehearsal/markdown.go` and its tests are unchanged. With §5.9's reading of both
+checks' messages under the checks tab, §4's "the comment's table and Mermaid and a long
+message looked at in the UI" is done.
+
+- **`-delete`** (19:54:15Z), from this tree, the worker and the server first rebuilt and
+  restarted (both had read `(deleted)`) and verified as `CLAUDE.md` asks. Read through the
+  API at 19:54:02Z, what the walk-through left was unchanged: the branch, its proposed
+  change open and not a draft with `total_comments` 1, the stages `seeded` and
+  `third-link`, the thread `18e0534a-1076-…` (`Conversation`, unresolved) holding one
+  `CoreThreadComment` byte for byte `local/t057-2/11-comment.md` but for that file's closing
+  newline, no `CoreChangeComment`, and the two user validators `completed`, `success`.
+  Then `deleted 2 stages, 1 proposed change, branch fylgja-test-readme`, exit 0 in 7.2 s.
+- **After** (19:54:47Z): `Branch` lists `main` and `fylgja-fixture` alone, and
+  `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread`, `CoreThreadComment`,
+  `CoreChangeComment`, `CoreUserValidator` and `CoreStandardCheck` each count 0, as at §5.9's
+  `-delete`; `clab inspect --all` is `{}`, with no `local/twin`, no Schedule and no workflow
+  running. T057 is done.

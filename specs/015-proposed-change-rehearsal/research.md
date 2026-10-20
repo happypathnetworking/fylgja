@@ -1498,3 +1498,95 @@ operator's to amend, as T081 amended 014's.
 > else. Consequences: each rehearsal is a thread in the proposed change's overview, in the
 > order run; a reviewer may reply to it or resolve it, which nothing of Fylgja's reads; a
 > test's proposed change goes with its threads and their comments when deleted (§5.9).
+
+<a id="510-the-thread-imported-tier-3-and-the-walk-through-again-2026-10-20-1823z1926z-t057"></a>
+### 5.10 The thread imported, tier 3 and the walk-through again (2026-10-20, 18:23Z–19:26Z; T057)
+
+The operator pushed the fix and D-053 to `origin`'s `main` (`999456e` → `d70ad24`, T057's
+note), and this run, the loop's Run 20 restarted, imported it, ran tier 3 whole and
+narrowed with case 9 reading threads, and followed the README's walk-through again to leave
+a fresh proposed change for the operator's reading. Outputs in `local/t057-2/`,
+`local/e2e-015-full-4.*` and `local/e2e-015-srl-2.*`. No token or password was printed.
+
+- **Before** (18:23Z). The worker and the server were on a `(deleted)` binary: `make build`,
+  both stopped with `pkill -x fylgja` and started with `CLAUDE.md`'s two lines (18:23:28Z),
+  and verified: each `exe` current; each environment carrying `INFRAHUB_ADDRESS`,
+  `INFRAHUB_API_TOKEN`, both logins, `FYLGJA_STATE_ROOT` and `FYLGJA_API_TOKEN`; the two
+  listen lines, the bridge's followed by its unencrypted line; both packages with their
+  logins set. The dev server answered `SERVING`; no lab, no `local/twin`, no Schedule, no
+  workflow running. Infrahub's `main`: the registration `fylgja` `ref main`, `in-sync`,
+  `online` at `999456e`, with `fylgja-step` 300 and `fylgja-twin` 4200; `main` and
+  `fylgja-fixture` alone; 0 proposed changes, stages, threads, comments of either kind and
+  user validators. Prefect held no flow run pending or running.
+- **The import** (18:24:12.85Z). `InfrahubReadOnlyRepositoryImportLastCommit(data: {id})` on
+  `main` answered `ok: true`; `syncing` at +3.9 s, **`d70ad24`, `in-sync`, at +7.3 s**.
+  Prefect: `Import last commit from read only git repository` 18:24:14.3–18:24:19.8 beside
+  an `Import objects`; a second `Import last commit` 18:24:21.2–18:24:24.6 beside `Pull
+  latest commit on fylgja` 18:24:21.2–18:24:29.2 and three `Import objects`, as at §5.6 and
+  as unattributed; then **both task workers' `Fetch git repository fylgja` 18:24:29.4–
+  18:24:30.8**, 16.6 s after the call. Afterwards the two definitions, both naming the
+  repository `fylgja` and the query `fylgja_branch`, the queries `device_config` and
+  `fylgja_branch`, the transform and artifact definition `srlinux_device_config`, and
+  `main`'s hash `e43a1cde…`, each as before. Each task worker holds the commit's worktree
+  `commits/d70ad24…`, whose `fylgja_api.py` writes a `CoreChangeThread`; task-worker-2's
+  `main` worktree reads `d70ad24` and task-worker-1's still `9cba3c9`. Every `fylgja-twin`
+  run below posted a thread and no `CoreChangeComment`.
+- **Tier 3 whole** (18:25:01Z–18:50:38Z; `free -m` 17,748 MiB available, load average
+  1.8): **`E2E-OK`, wall time 1,536.9 s**, nine cases and nine twins. Case 9
+  (`fylgja-test-e2e-rh-2192569-17413`): seed 36.8 s; the draft `18e05132…` opened in 54.3 s,
+  its checks concluded 0.9 s after; the ready proposed change's checks with the rehearsal
+  103.4 s, the rehearsal `01a15aa3…` passing in 68.4 s of the 1,950 s deadline, **one comment
+  of 2,192 bytes alone in thread `18e05159-7762…`**; after `bad-port` 115.9 s, the rehearsal
+  `01a15aa5…` failing at `bad-port`'s push on n1 in 77.7 s of the 2,580 s deadline, **a second
+  comment of 3,344 bytes in a second thread, `18e05177-6351…`**; after `-delete`, both
+  threads, both comments and the user validators counted 0. Verify took 3.3–4.5 s.
+- **Narrowed** (18:55:29Z–19:12:52Z), after the host rested to a load average of 0.8:
+  `PLATFORMS=nokia_srlinux make test-e2e` ended **`E2E-PARTIAL: platforms nokia_srlinux;
+  ran 1 2 3 4 5 7 9; skipped 6 (needs arista_eos: not in PLATFORMS) 8 (needs arista_eos:
+  not in PLATFORMS)`**, exit 0, **wall time 1,042.9 s**. Case 9: checks with the rehearsals
+  109.0 s (68.9 s of 1,950 s) and 114.0 s (73.9 s of 2,580 s), the comments 2,192 and 3,344
+  bytes, each in its own thread, both gone after `-delete`.
+- **After each run**: `clab inspect --all` `{}`, no `local/twin`, no Schedule; `main` and
+  `fylgja-fixture` alone, with 0 proposed changes, stages, threads, comments of either kind
+  and user validators. The script's credential and marker greps, which cover the comments
+  and the checks' messages, passed in both runs.
+- **The walk-through** (19:20:16Z–19:25:42Z), `README.md`'s "A proposed change, rehearsed",
+  after the host rested to a load average of 1.2, with the client's commands from a shell
+  that had loaded `local/.env`. `-delete`: the branch was absent, exit 1, as at §5.8. Seed
+  16.7 s. `-propose` 56.0 s: `proposed change 18e0531d-0848-4684-33b7-c511bd30ba49 opened on
+  fylgja-test-readme, draft; 5 validators concluded in 55s`. The draft's checks:
+  `fylgja-twin` `success` in 10.3 s, its message the skip naming the id; `fylgja-step`
+  `success` in 17.9 s, its message 1,038 characters as at §5.8, the head's bundle
+  `2af3936f…`; no thread. `-stage seeded` at `19:21:55.635779`; `-add-link`, n1's and n3's
+  checksums moved and `Ready` within 9.3 s of its return; `-stage third-link` at
+  `19:22:07.489787`; `-ready`. `-run-checks user`: 98.0 s, `check fylgja-step: success
+  (message 2,027 characters)`, `check fylgja-twin: success (message 3,693 characters)`, the
+  same lengths as §5.8's. `fylgja-step` took 11.6 s and `fylgja-twin` 84.0 s, its rehearsal
+  `01a15ac3-fd7f-…` 70.7 s of the 1,950 s deadline. **One thread,
+  `18e0534a-1076-c85e-33b1-c5167c56a2b6`** (`CoreChangeThread`, `Conversation`, unresolved),
+  holding **one `CoreThreadComment`, `18e0534a-148b-36af-33b0-c51852e3803f`, 1,954 bytes**,
+  rendered whole: the heading, the run line, four rows, the drawing, the four stages, no
+  warnings, no baseline findings, the caveat. `total_comments` 1, no `CoreChangeComment`.
+  The proposed change's events end with the thread's `infrahub.node.updated` and **its
+  `infrahub.proposed_change_thread.created` at `19:23:49.295577Z`**, the one event by which
+  the overview lists a thread, naming `18e0534a-1076-…`. `bin/fylgja twin rehearse --branch
+  fylgja-test-readme`: exit 0 in 78.7 s, `rehearsal ok: 3 stages rehearsed, every one
+  passed; the twin is destroyed; 68.3s of the 1950s deadline`, the deadline `32m30s`; still
+  one thread and one comment afterwards. The README's outputs stand, within these runs'
+  spread; three of its sentences named a plain comment and now name the thread (D-053), and
+  `docs/decisions.md` gains D-053's anchor, which D-049's status and `spec.md` link to.
+- **Left for the operator's reading**, as T057's note asks, against the run's general "no
+  `fylgja-test-*` branch": the branch `fylgja-test-readme`, its proposed change
+  `18e0531d-0848-4684-33b7-c511bd30ba49` (open and ready for review, so a re-run of its
+  checks would rehearse it and boot a twin), its two stages, its one thread with its one
+  comment, and its two user validators. Nothing else: no lab, no `local/twin`, no Schedule,
+  `main` and `fylgja-fixture` beside it. The kept outputs, `local/t057-2/`,
+  `local/server.log` and `local/worker.log` were searched for each token, password and
+  secret key of eight characters or more by its value: no hit.
+
+**Still owed (T057 stays open)**: the reading, in a browser, of the thread in the overview
+of `http://localhost:8000/proposed-changes/18e0531d-0848-4684-33b7-c511bd30ba49`: the table,
+the Mermaid drawing (no error banner), the stages and the caveat, with `remark-breaks` in
+mind. The checks tab's messages were read at §5.9 and are unchanged. Then `-delete`. A
+session then records the reading here and fixes any rendering defect in
+`internal/rehearsal/markdown.go`, under US2, with a test.

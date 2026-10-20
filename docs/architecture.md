@@ -29,8 +29,11 @@ change as a story whose every chapter can be built again ([D-045](decisions.md#d
 topology. Verification, reporting and proposed-change integration are consumers of it,
 and nothing in the core acts on them. From M12 `twin verify` reads the running twin
 against the intent it was built from and reports what it found, and no Fylgja operation
-reads that report ([D-039](decisions.md#d-039)); reporting it on a proposed change is
-later. There is one twin at a time, and
+reads that report ([D-039](decisions.md#d-039)). From 015 a **rehearsal** builds a proposed
+change's stages on one twin in turn, verifies each and destroys the twin, and a check of
+Infrahub's posts its report on the proposed change; its verdicts are advisory too, and only
+the check's conclusion, which Infrahub's own merge rule reads, gates anything
+([D-051](decisions.md#d-051), [D-052](decisions.md#d-052)). There is one twin at a time, and
 its state lives where it already is — in containerlab and on disk — not in a database
 of Fylgja's own ([D-013](decisions.md#d-013), [D-014](decisions.md#d-014)).
 
@@ -72,7 +75,11 @@ marks their stages there, and runs Fylgja's commands. Fylgja reads intent and th
 artifacts from Infrahub over GraphQL and REST, then boots the walking twin, probes it,
 pushes each node its artifact and reads it back. Infrahub renders each artifact from the
 artifacts template, which it clones from the artifacts repository: this repository,
-registered there read-only ([§4.1](#41-intent-reader), [D-044](decisions.md#d-044)).
+registered there read-only ([§4.1](#41-intent-reader), [D-044](decisions.md#d-044)). From
+the same registration its task workers run this repository's two checks on every proposed
+change, clients of Fylgja's API that ask for the plan and the rehearsal, and the second
+posts the rehearsal's report on the proposed change ([§4.6](#46-operator-surface),
+[D-053](decisions.md#d-053)).
 
 ![The system context: the operator, Fylgja, Infrahub, the artifacts repository and the walking twin](c4/structurizr-Context.svg)
 
@@ -94,7 +101,7 @@ flowchart LR
     compile["compile<br/>PSPs 0.6, pure"]
     bundle[("bundle 4<br/>content-addressed")]
     provision["stage · deploy · readiness · push<br/>containerlab, the nodes"]
-    twin[("twin.json 6")]
+    twin[("twin.json 7")]
     verify["verify"]
     doc[("findings 1")]
     api --> ref --> read --> ctm --> compile --> bundle --> provision --> twin --> verify --> doc
@@ -106,7 +113,7 @@ flowchart LR
 | Read | intent reference | CTM, with provenance and each device's configuration artifact; or findings and no CTM | no — reads Infrahub |
 | Compile | CTM + PSPs | bundle: deployable topology, bootstrap and configuration artifact per node, manifest | **yes** |
 | Provision | bundle | a ready twin on the lab host, each node running its artifact | no — drives containerlab, pushes to the nodes |
-| Operate | the twin | show, destroy; reconcile from M4; step from M11, to another stage's bundle without a rebuild; verify from M12, which reads the twin against intent and changes nothing | no |
+| Operate | the twin | show, destroy; reconcile from M4; step from M11, to another stage's bundle without a rebuild; verify from M12, which reads the twin against intent and changes nothing; rehearse from 015, a proposed change's stages built, stepped and verified in turn on one twin, which is then destroyed | no |
 
 Every stage is runnable on its own from the CLI ([§4.6](#46-operator-surface)), through
 the API's server, on the same code path as its tests.
@@ -420,8 +427,9 @@ host memory. A run that dies at step five of eight must resume, and what it crea
 must be reclaimed. Temporal supplies durability, retries, heartbeats and history
 ([D-006](decisions.md#d-006)). Fylgja uses it for exactly that and no more: **short
 workflows with fixed IDs** ([D-007](decisions.md#d-007)): `fylgja-provision` and
-`fylgja-destroy`, the `reconcile` check, and `fylgja-step`, which waits for the twin to
-settle after its record.
+`fylgja-destroy`, the `reconcile` check, `fylgja-step`, which waits for the twin to
+settle after its record, and `fylgja-rehearse`, which runs the other three as its children
+under a deadline and ends in the destroy ([D-051](decisions.md#d-051)).
 
 **The twin's states.** There is one twin or none, and what a command may do depends on
 which state it is in:
@@ -429,14 +437,14 @@ which state it is in:
 ```mermaid
 stateDiagram-v2
     [*] --> none
-    none --> provisioning: twin create / twin provision, or a check's rebuild
+    none --> provisioning: twin create / twin provision, a check's rebuild, or a rehearsal
     provisioning --> ready: every push landed, and recorded
     provisioning --> none: failed or cancelled, cleaned up
-    ready --> stepping: twin step (a twin built from a stage)
+    ready --> stepping: twin step (a twin built from a stage), or a rehearsal's step
     stepping --> ready: stepped / unchanged, or stopped before the stage
     stepping --> diverged: failed or cancelled after the stage
-    ready --> destroying: twin destroy, or a check's rebuild
-    diverged --> destroying: twin destroy (the only command it accepts)
+    ready --> destroying: twin destroy, a check's rebuild, or a rehearsal's end
+    diverged --> destroying: twin destroy (the only command it accepts), or a rehearsal's end
     destroying --> none
 ```
 
@@ -446,7 +454,10 @@ answer in every state; with no twin, `verify` refuses as `verify.twin.absent`. `
 starts only from `ready`, and only on a twin built from a stage. `twin destroy` takes a
 `ready` or `diverged` twin down, and during `provisioning` or `stepping` cancels the run
 and waits for its cleanup or its record first. A following twin's check rebuilds it by a
-destroy and a provision of its own. `twin show` names the state: a `ready` twin by its kind
+destroy and a provision of its own. A rehearsal starts from `none`, or from a twin its own
+dead run left behind, which it reclaims first, and ends in `none`; while it runs, its
+children hold the twin, `twin create`, `twin provision` and `twin step` are refused, and
+`twin destroy` cancels it and waits for its destroy. `twin show` names the state: a `ready` twin by its kind
 (pinned, frozen, following, or from a bundle), a diverged one as kind `diverged`, no twin
 as `none`, and a run in flight by its step.
 
@@ -478,18 +489,29 @@ as `none`, and a run in flight by its step.
         VerifyTwin (M12, under GetVersion("verify")): after every record, stepped,
         unchanged or diverged, on the run's own context; skipped when the run was
         cancelled before it; never changes the step's outcome
+
+ rehearse   (015; workflow ID fixed: fylgja-rehearse; started by twin rehearse with every stage resolved, compiled and filed)
+   child provision (fylgja-provision, already compiled: the baseline stage) ─▶ VerifyTwin (the baseline's wait)
+     ─▶ child step (fylgja-step, restarts allowed, the default wait), one per later stage in order,
+        until a stage does not pass
+     ─▶ child destroy (fylgja-destroy), on a disconnected context, whatever happened
+        a timer on the run's clock, the deadline, cancels the children's context, and the destroy follows;
+        each stage's verdict is internal/rehearsal's, from the child's result and its wait
+        against the baseline's; no activity of its own but the baseline's VerifyTwin
 ```
 
-**Inside the worker.** `internal/provision` holds the four workflows, the five control
+**Inside the worker.** `internal/provision` holds the five workflows, the five control
 activities (`ReadIntent`, `Compile`, `RunsInFlight`, `StartFollowing`, `StopFollowing`)
 and the worker's registration. It schedules every activity by the name
 `internal/lab/wire` gives it, registers the fifteen host-bound activities `internal/lab`
 holds, and its `ReadIntent` and `Compile` read and compile through `internal/stage`, on the
 server's code path. The host-bound activities take and return wire's payloads, the only
 types that cross the task queue, and `VerifyTwin` waits on the twin through
-`internal/verify`, which reads the record's types from wire.
+`internal/verify`, which reads the record's types from wire. The rehearsal classifies each
+stage through `internal/rehearsal`, a pure package the server shares for the deadline and
+the report.
 
-![The worker's components: provision, lab, lab/wire, stage and verify](c4/structurizr-WorkerComponents.svg)
+![The worker's components: provision, lab, lab/wire, stage, verify and rehearsal](c4/structurizr-WorkerComponents.svg)
 
 *The worker's components, derived from [`c4/workspace.dsl`](c4/workspace.dsl) by `make diagrams`.*
 
@@ -503,7 +525,8 @@ types that cross the task queue, and `VerifyTwin` waits on the twin through
   `create` and at worker start, and `fylgja twin destroy` clears it whether or not a
   twin directory exists. For a step, cleanup is the record, not a teardown: a step that
   fails or is cancelled after its stage leaves the twin up and records it diverged
-  ([D-036](decisions.md#d-036)).
+  ([D-036](decisions.md#d-036)). For a rehearsal, cleanup is its destroy child, started
+  on a disconnected context from every path.
 - **Activities are idempotent and small.** `DeployLab` checks for the lab before
   deploying; `DestroyLab` tolerates absence; activities pass paths and hashes, never
   bundle bytes — Temporal caps payload size.
@@ -776,6 +799,92 @@ sequenceDiagram
     S-->>C: events, then the findings document
 ```
 
+**Rehearsing** ([D-051](decisions.md#d-051), [D-052](decisions.md#d-052)). `twin rehearse
+--branch <b>` builds an open proposed change's stages on one twin in turn, verifies each,
+and destroys the twin, in one run. The server does everything that touches nothing first:
+it plans the proposed change as `stage plan` does, every stage resolved, read, compiled and
+filed; takes the first compiled stage as the **baseline stage**, passing over a branch
+point refused `contract.node.missing` alone, as on a `main` with no network, and refusing
+the rehearsal for any other refused stage; sums the deadline (below) and refuses one over
+the ceiling (`rehearsal.deadline.unfit`); refuses beside any run in flight; reclaims a
+dead rehearsal's twin (below); runs the host check of the baseline's bundle in its own
+process; and builds each step's input from the plan's bundles, leaving containerlab's plan
+for the run to read. Then it starts `fylgja-rehearse`, whose children are the three short
+workflows under their own fixed IDs, so one twin at a time holds as it does by hand:
+
+1. **The baseline**: a `fylgja-provision` child from the baseline's bundle, already
+   compiled, as a rebuild's child is, its record naming the rehearsal; then `VerifyTwin` on
+   the children's context, so the deadline cuts it too, the wait under its default budget,
+   writing nothing into the record. What it still finds failing are the **baseline findings**: the twin before the
+   change, reported as warnings and failing nothing.
+2. **Each later stage**, in order: a `fylgja-step` child, restarts allowed, with the
+   default wait, which reads containerlab's plan itself. Its **verdict** is a pure function
+   of the child's result and its wait's failing assertions against the baseline's, by rule
+   and object (`rehearsal.Classify`): `passed` when it stepped or was unchanged and its wait
+   found nothing the baseline did not; `failed` when it diverged or its wait found
+   something new; `error` when the step could not run, was refused by its locks or
+   cancelled before its stage, or its wait left a node unread, since nothing was then
+   learned about the change. The run stops at the first stage that does not pass, and the
+   stages after it are `not reached`.
+3. **The destroy**: a `fylgja-destroy` child on a disconnected context, from every path.
+
+The **deadline** is the stages' budgets summed from their node plans, each the largest of
+its package's deploy, readiness, push and destroy budgets over the stage's nodes, plus the
+mechanism constants that already bound each activity and the wait's default: 1,950 s for
+the three SR Linux stages the fixture tool composes, of which a rehearsal on the
+development host uses about 70. A timer on the run's clock enforces it: it cancels the
+children's context, a step so cut records the twin diverged
+([D-036](decisions.md#d-036)), and the destroy follows. The **ceiling**, 3,600 s, is a constant of Fylgja's own, the operator's patience
+as the wait's budget is, and only refuses a rehearsal before any run. The operator's first
+interrupt cancels the run as the deadline does and waits for its destroy. The run returns
+one result in every case, never an error, and the server makes it the document: `ok` when
+every rehearsed stage passed, `nonconforming` (5) when one failed, `error` (2) for an
+`error` verdict, the deadline or an interrupt, `failed` (3) when the baseline could not be
+built, and `unclean` (4) when the destroy left something, whatever the stages did. Nothing
+in Fylgja acts on it; a check of Infrahub's maps its status to a conclusion
+([§4.6](#46-operator-surface)).
+
+**The reclaim.** The record names the rehearsal whose provision built the twin
+([§4.5](#45-lab-host-containerlab-and-the-twin-directory)). A rehearsal that finds a twin
+whose record names a `fylgja-rehearse` run no longer running destroys it first, through
+the destroy workflow as `twin destroy` would, and says so (`rehearsal.twin.reclaimed`).
+Any other twin, lab or orphan refuses it as it refuses a create. A rehearsal's run whose
+worker is gone does not end by itself: it holds the host, and the next is refused
+`run.in_flight`, until the worker returns and it ends in its destroy, or the operator
+terminates it and the next reclaims its twin.
+
+**A rehearsal, end to end.** Every refusal is made before the start; from the start the run
+ends in its destroy, whatever happened:
+
+```mermaid
+sequenceDiagram
+    participant C as client, or a check in Infrahub
+    participant S as fylgja serve
+    participant T as workflow service
+    participant R as fylgja-rehearse
+    participant P as fylgja-provision
+    participant St as fylgja-step
+    participant D as fylgja-destroy
+    C->>S: POST /v1/twin/rehearse
+    S->>S: plan every stage (Infrahub), the baseline, the deadline, runs in flight, the reclaim, the host check, the steps
+    S->>T: start fylgja-rehearse
+    S-->>C: start, run frames
+    T->>R: the run
+    R->>P: child: the baseline, already compiled
+    P-->>R: ready, recorded with the rehearsal
+    R->>R: VerifyTwin (the baseline's wait): the baseline findings
+    loop each later stage, until one does not pass
+        R->>St: child: the step, restarts allowed, then its wait
+        St-->>R: outcome and wait, classified against the baseline's findings
+    end
+    Note over R: the deadline's timer, or an interrupt, cancels the children's context
+    R->>D: child, on a disconnected context, whatever happened
+    D-->>R: cleanup status
+    R-->>T: each stage's verdict, the timings, the cleanup
+    T-->>S: the run's result
+    S-->>C: events, then the findings document, with its text or its markdown
+```
+
 ### 4.5 Lab host, containerlab, and the twin directory
 
 The lab host is a machine with Docker, containerlab, the NOS images it needs, one
@@ -800,7 +909,9 @@ reads bundles in the store; stages and records in the twin directory; has contai
 deploy, reconcile and destroy lab `fylgja`; and probes each node over gNMI, pushes it its
 artifact over JSON-RPC or eAPI, and waits on it after a step. containerlab creates the
 nodes and cables them. The operator also edits intent in Infrahub and marks stages
-there.
+there. Infrahub's task workers run this repository's two checks on every proposed change,
+and each reaches the server as a client does, over the host's Docker bridge with the API's
+token ([§4.6](#46-operator-surface)).
 
 ![Fylgja's containers: the client, the server, the worker, the workflow service, the bundle store, the twin directory and containerlab, with Infrahub and the twin's nodes](c4/structurizr-Containers.svg)
 
@@ -832,11 +943,11 @@ has no state root: it reads no store and no twin directory of its own.
     │                           a step swaps it for the target's (through .bundle.next and .bundle.prev)
     ├── clab-fylgja/            containerlab's working directory, placed here with CLAB_LABDIR_BASE; root-owned;
     │                           its .state.clab.yaml is what containerlab's plan for a step reads
-    └── twin.json               written last (version 6): provenance, observed_at (or why it is
+    └── twin.json               written last (version 7): provenance, observed_at (or why it is
                                 unknown), bundle_id, the run, the worker's version, the stage it
                                 was built from (its proposed change's id and branch, its label,
-                                description and where its at came from; or null), each node's
-                                address, its artifact
+                                description and where its at came from; or null), the rehearsal
+                                whose run built it (or null), each node's address, its artifact
                                 (name, content type, checksum, size; never the bytes), how long
                                 its push took and the bundle it holds; the state (ready or
                                 diverged), the last step (or null) and the step's wait (or null
@@ -846,14 +957,18 @@ has no state root: it reads no store and no twin directory of its own.
 **Where each role runs.** The client runs on the operator's machine with
 `FYLGJA_API_TOKEN`, and reaches the server at `FYLGJA_API_ADDRESS` or through an SSH
 tunnel to the lab host. The lab host (Ubuntu, Docker, containerlab and the NOS images) runs three
-processes: `fylgja serve` on `127.0.0.1:7650`, holding the API's token, Infrahub's token
-and both node logins; `fylgja worker run`, holding Infrahub's token and both node logins
+processes: `fylgja serve` on `127.0.0.1:7650` and on the host's Docker bridge,
+`172.17.0.1:7650` by Docker's default ([D-050](decisions.md#d-050)), holding the API's
+token, Infrahub's token and both node logins; `fylgja worker run`, holding Infrahub's token and both node logins
 and no API token; and the workflow service, Temporal's development server (`temporal
 server start-dev`) on `:7233`, its UI on `:8233`. The state root (`FYLGJA_STATE_ROOT`)
 holds `bundles/` and `twin/`, and containerlab runs as a command. Docker runs lab
 `fylgja`'s privileged containers, `clab-fylgja-<node>`, each with gNMI on `:57400` over
 TLS (SR Linux) or on `:6030` in plaintext (EOS), and JSON-RPC or eAPI on `:443`. Infrahub
-runs under Docker Compose on `:8000`, on the lab host or another machine.
+runs under Docker Compose on `:8000`, on the lab host or another machine; the checks need
+it on the lab host, where its task workers, on Compose's own network, reach the server on
+the bridge as `host.docker.internal:7650`, a name the Compose override's `host-gateway`
+entry resolves to the bridge's address, given them with the token by that override.
 
 ![The deployment: the operator's machine, the lab host's processes, ports and credentials, and Infrahub](c4/structurizr-Deployment.svg)
 
@@ -899,6 +1014,13 @@ unsteppable, saying `fylgja twin destroy` clears it. One that stepped or diverge
 stage of its step, in `twin show`, `twin verify` and `step.twin.diverged`, as the waypoint
 it was, in the refusal's words, never `none`.
 
+**The record names the rehearsal** ([D-051](decisions.md#d-051)). `twin.json` `7` carries
+`rehearsal`, `{workflow_id: fylgja-rehearse, run_id}` or `null`: the rehearsal whose
+provision child built the twin, kept by each step's record. `twin show` names it on its
+kind line and `twin verify` on its first, with the workflow service down too, and it is
+how a rehearsal tells a twin its own dead run left, which it reclaims, from the
+operator's, which refuses it. A record of `6` or earlier reads with no rehearsal.
+
 **What `twin verify` reads** ([D-038](decisions.md#d-038)). It reads containerlab, the
 record and the staged manifest, and writes nothing. Its assertions are derived from the
 manifest, whose mapping rows carry intent's `enabled` from bundle `4`: a port intent
@@ -933,9 +1055,10 @@ client of the API, and the API is the boundary of the core
 ([D-040](decisions.md#d-040), Constitution XI):
 
 ```
-fylgja serve         [--listen <host:port>] [--psp-dir <dir>]
+fylgja serve         [--listen <host:port>]... [--psp-dir <dir>]
                                                   # the API's server, on the lab host beside the worker; serves
-                                                  #   every command below but worker run
+                                                  #   every command below but worker run; --listen repeated, on
+                                                  #   the lab host loopback and the Docker bridge
 fylgja twin create   --branch <b> [--at <ts>] [--no-follow] [--interval <d>]
                                                   # all stages; refused while a twin exists; follows unless --at or --no-follow
 fylgja twin create   --stage <branch>/<label>
@@ -955,8 +1078,12 @@ fylgja twin show                                  # the host, twin.json, the kin
                                                   #   the step that brought it there with how its wait ended, each
                                                   #   node's artifact, the last and next check, runs in flight;
                                                   #   changes nothing
+fylgja twin rehearse --branch <b> [--markdown]    # an open proposed change's stages in turn on one twin: the first
+                                                  #   compiled built and verified, each later stepped and verified,
+                                                  #   stopped at the first that fails, then destroyed and reported;
+                                                  #   --markdown prints the report as markdown
 fylgja twin destroy                               # stops following first, cancels a step and waits for its record,
-                                                  #   then removes the twin
+                                                  #   or a rehearsal and waits for its destroy, then removes the twin
 
 fylgja intent read   --branch <b> [--at <ts>] --out ctm.json
 fylgja intent read   --stage <branch>/<label> --out ctm.json
@@ -1010,7 +1137,10 @@ a client run the core.
   and plan its push with `step`, verify and file a sent bundle with `bundle`, read
   manifests from `compiler`, check the host, inspect the lab and run containerlab's dry
   run with `internal/lab`, read the twin with `internal/verify`, and start and follow runs
-  with `internal/provision`'s client. `lab` verifies the staged bundle with `bundle`,
+  with `internal/provision`'s client. A rehearsal's handler sums its deadline and builds
+  the report's block, its stage lines and its markdown with `internal/rehearsal`, which
+  imports `findings`, `lab/wire` and `step` alone and holds no I/O, and which the worker's
+  workflow imports for each stage's verdict. `lab` verifies the staged bundle with `bundle`,
   reads the manifest from `compiler` and reads the nodes through `verify`'s readers;
   `verify` derives its assertions from the manifest, `validate` surveys each device as the
   compiler does, `step` compares two manifests, and the compiler applies each package's
@@ -1029,15 +1159,19 @@ a client run the core.
   document alone, after the `files` frame that `intent read` and `twin compile` send
   first; a run is its `start`, its `run`, its `event`s and its document, and `twin
   destroy` its `start`, its `event`s and its document, with no `run`. The CLI asks the
-  server to render the text as well, and prints each line as it arrives. A command that
+  server to render the text as well, and prints each line as it arrives. `twin rehearse
+  --markdown` asks for the markdown instead, a third rendering only the rehearsal has, which
+  the `document` frame carries beside the text; asked of another operation, it answers as
+  the text does. A command that
   ran is a success of the transport, whatever it decided. The transport's own statuses are
   for its own faults: `401` for the token, `404` for a version, a stream, a path under
   `/v1/` that names no operation or is asked with another method than `POST`, a path not
   in its clean form (`//v1/twin/show`) or `/v1` without its slash, never a redirect, `413`
   for the bound, `400` for a request the server cannot read, `409` for a stream already
   open.
-- **A run is two requests.** A create, a provision or a step is one request that starts
-  the run and stays open as its progress: a `start` frame, the run's identity, its events
+- **A run is two requests.** A create, a provision, a step or a rehearsal is one request
+  that starts the run and stays open as its progress: a `start` frame, the run's identity,
+  its events (a rehearsal's children's among them)
   and its document. The operator's interrupt is the second request,
   `POST /v1/streams/{stream}/interrupt`, delivered to the open one. The first abandons a
   start still waiting for a worker or cancels the run, and the second stops waiting.
@@ -1119,11 +1253,58 @@ its staged bundle, the target, with its divergence on the first line. `--wait` r
 again every second until every assertion read from a node holds or the budget expires.
 Nothing acts on the report: no command, check or step reads it.
 
-The API exposes what the CLI needs and nothing more: no re-attach to a run, no listing
+`twin rehearse` ([D-051](decisions.md#d-051)) runs in the server as a create does, with the
+rehearsal's run in place of the provision ([§4.4](#44-provisioner--temporal)). It prints
+the plan's stage lines with the baseline named, then the run as every run prints it, each
+child's lines under a `stage <ref>:` line, then one line per stage with its verdict, what
+the destroy removed and a closing line; on a failure, the commands that reproduce it by
+hand, from `twin create --stage <baseline>` through each `twin step --stage <ref>
+--allow-restart` to the failed stage, then `twin verify` and `twin destroy`. Its document
+carries a `rehearsal` block: the proposed change, when its stages were resolved, the
+deadline and the time used, the reclaim, the run, the baseline findings, each stage's
+role, bundle, step, wait, verify counts, new findings and verdict, the destroy's cleanup
+and the reproduce commands. Its **markdown** is rendered from that block alone: a heading
+naming the proposed change and the run, a table of the stages, a Mermaid drawing with one
+box per stage and one edge per step naming what it changed and never a line of
+configuration, the stages, the warnings, the baseline findings, the reproduce commands
+and the fidelity caveat. It is never longer than the 4,092 bytes Infrahub keeps of a
+comment: a longer report names each finding by its identifier and object alone, then
+leaves whole sections out by rank, and says what it shortened. `twin show` names a
+rehearsal in flight with its child and the stage it is at, and a twin by the rehearsal
+that built it.
+
+**The checks, inside Infrahub** ([D-049](decisions.md#d-049), [D-052](decisions.md#d-052),
+[D-053](decisions.md#d-053)). Beside the artifacts template this repository registers two
+checks (`.infrahub.yml`, `infrahub/checks/`), and Infrahub's task workers run both on
+every proposed change, draft or not, at its creation and on a re-run of its user checks.
+Each is Python glue on Infrahub's runtime and a client of the API, run in no process of
+Fylgja's: it finds the open proposed change by its source branch, sends one request to
+`FYLGJA_API_ADDRESS` with `FYLGJA_API_TOKEN`, both from the task worker's environment,
+reads the frames to the document, and concludes from its status. **`fylgja-step`**
+(timeout 300 s) asks for `stage.plan` and logs its text as its message. It fails only when
+a stage is refused as intent, the stages cannot be listed or Fylgja cannot be reached, a
+branch point refused `contract.node.missing` excepted, the one rule the Python holds, and
+writes nothing. **`fylgja-twin`** (timeout 4,200 s) passes a draft, saying it skipped it.
+Otherwise it asks for `twin.rehearse` in markdown, passes on `ok` and fails on every other
+status, with the report's text as its message either way, and posts the markdown on the
+proposed change as one new thread (`CoreChangeThread`, labelled `Conversation`, holding
+one `CoreThreadComment`), which the proposed change's overview shows, through the task
+worker's own Infrahub client. A thread that cannot be posted is logged and fails nothing.
+A host held by a run or a twin (`run.in_flight`, `host.lab.present`, `host.twin.present`)
+is asked again every 30 s until the check's own deadline nears. The timeout exceeds the
+ceiling by the destroy's budget, the work before the start and a margin, so the run's
+destroy ends inside it; when its deadline nears, or Infrahub cuts or cancels it, the check
+sends the run's interrupt by a blocking call, since an awaited one does not survive
+Infrahub's cut. Infrahub's merge rule reads the conclusion, so a failed stage blocks the
+merge, and nothing in Fylgja acts on the rehearsal. The server listens on the host's
+Docker bridge so that the task workers reach it
+([§4.5](#45-lab-host-containerlab-and-the-twin-directory), [D-050](decisions.md#d-050)).
+
+The API exposes what its clients need and nothing more: no re-attach to a run, no listing
 of runs, no fetch of a filed bundle. A UI is item 21 of the roadmap's
-[backlog](roadmap.md#backlog), and a second client of the same API. Infrahub
-proposed-change integration is a later consumer of the twin, not part of the core: items
-7 to 9 there.
+[backlog](roadmap.md#backlog), and another client of the same API. Infrahub's
+proposed-change integration is the two checks above, consumers of the twin outside the
+core.
 
 ### 4.7 Platform Support Packages
 
@@ -1209,14 +1390,15 @@ fixed.
 
 | Layer | Choice | Why |
 |---|---|---|
-| Everything Fylgja ships | **Go**, one static binary of three roles: the client's commands, the worker and, from M13, the API's server | one toolchain, one test framework, one artifact per host; no second runtime ([D-005](decisions.md#d-005), [D-018](decisions.md#d-018)) |
+| Everything Fylgja runs | **Go**, one static binary of three roles: the client's commands, the worker and, from M13, the API's server | one toolchain, one test framework, one artifact per host; no second runtime ([D-005](decisions.md#d-005), [D-018](decisions.md#d-018)) |
+| Infrahub's checks | **Python**, as Infrahub's task-worker image carries it: `infrahub-sdk`'s `InfrahubCheck` and `httpx`; from 015 | glue on Infrahub's runtime, as the template is: run by Infrahub's task workers, never by a process of Fylgja's, and deciding nothing but how a status maps to a conclusion; proved inside a running Infrahub by a Go contract test, with no Python test framework ([D-049](decisions.md#d-049), [D-052](decisions.md#d-052)) |
 | Durable execution | **Temporal**, self-hosted; `temporal server start-dev` until M8 | durable, resumable, inspectable provisioning; Go SDK and test suite ([D-006](decisions.md#d-006)) |
 | Source of truth | **Infrahub** 1.11.2, operator-provided; Fylgja only reads it | branches and points in time give a twin its reference; a flexible schema lets an organisation's own model implement Fylgja's generics; it renders each device's configuration ([D-001](decisions.md#d-001), [D-028](decisions.md#d-028)) |
 | Intent interface | GraphQL via `genqlient`, plus REST for the schema and artifact content | branch- and time-scoped queries typed at build time; schema drift fails the build, not the twin |
 | Lab runtime | containerlab, driven as a CLI | the interface operators already know ([D-008](decisions.md#d-008)) |
 | State | containerlab, files and Temporal; no database | nothing to keep in sync ([D-014](decisions.md#d-014), [D-026](decisions.md#d-026)) |
 | CLI | Cobra, noun-verb; from M13 a client of the API alone | ([D-019](decisions.md#d-019), [D-040](decisions.md#d-040)) |
-| API | Go's `net/http`, HTTP/1.1 on loopback by default; JSON requests answered in NDJSON frames; one bearer token from the environment; no TLS, roles or second token | no dependency added; a remote client comes through an SSH tunnel or a proxy the operator runs ([D-040](decisions.md#d-040), [D-042](decisions.md#d-042)) |
+| API | Go's `net/http`, HTTP/1.1 on loopback by default and, on the lab host, on the Docker bridge as well; JSON requests answered in NDJSON frames; one bearer token from the environment; no TLS, roles or second token | no dependency added; a remote client comes through an SSH tunnel or a proxy the operator runs, and Infrahub's task workers reach it on the bridge ([D-040](decisions.md#d-040), [D-042](decisions.md#d-042), [D-050](decisions.md#d-050)) |
 
 ---
 
@@ -1247,7 +1429,8 @@ To be stated in the product surface, not buried here.
   A twin built from a branch, or one that follows, cannot step: following still rebuilds.
   Two proposed changes cannot be stepped between, and a story along `main`'s own history
   has no stages, since a proposed change cannot have `main` as its source: it is
-  `--branch main --at`.
+  `--branch main --at`. A rehearsal walks every stage in turn, with no pause but each
+  step's wait.
 - **A rebase ends a proposed change's story until it is marked again**
   ([D-045](decisions.md#d-045)). Infrahub re-stamps a rebased branch's whole content and
   discards its earlier history from pinned reads, so every mark made before the rebase
@@ -1257,7 +1440,32 @@ To be stated in the product surface, not buried here.
   an install whose `main` holds the schema and no intent, as the development host's does,
   it is refused `contract.node.missing`, and a twin starts from the first mark.
 - **Infrahub's proposed-change view does not show stages.** They are listed by `stage
-  list`, and in the UI as objects of their own.
+  list`, in the UI as objects of their own, and in each rehearsal's thread.
+- **A rehearsal is bounded by its deadline** ([D-051](decisions.md#d-051)): its stages'
+  budgets summed, under a ceiling of an hour. A proposed change whose stages need more is
+  refused before any run, and a stage still running when the deadline passes is cut,
+  reported `error` (`rehearsal.deadline.cut`), and the twin destroyed. The deadline bites
+  only when something hangs: the three stages the fixture tool composes use about 70 s of
+  their 1,950 s.
+- **A rehearsal leaves no twin to look at.** Its twin is destroyed whatever happened, so
+  a failed stage is looked at by hand: the report gives the commands that reproduce it,
+  from a create of the baseline through each step to the failed stage, and the stages
+  outlive the rehearsal.
+- **A rehearsal's run needs its worker to end.** It has no execution timeout of its own,
+  and its destroy is a child the worker runs, so a rehearsal whose worker died holds the
+  host, the next refused `run.in_flight`, until the worker returns or the operator
+  terminates the run; the next rehearsal then reclaims its twin. A client still following
+  a run ended outside Fylgja answers only once its abandoned children close.
+- **A check's change reaches Infrahub only when imported.** Infrahub runs the checks its
+  registration imported from `origin`'s `main`, which the operator pushes and imports
+  (`InfrahubReadOnlyRepositoryImportLastCommit`). Each task worker fetches the commit some
+  15 s after the import, a run-check before both have fetched fails, and a branch created
+  before the import never runs the new checks until it is rebased or made again.
+- **A check Infrahub times out leaves its validator `in_progress` for ever**, which
+  blocks the merge and reads as still running in the proposed-change view. `fylgja-twin`'s
+  own deadline ends inside its timeout so that this does not happen, a check cut all the
+  same still sends its run's interrupt, and the rehearsal's deadline covers a check that
+  reached no server at all.
 - **A restarted node loses its push.** When a step adds or removes a link of a cEOS node,
   containerlab restarts it in place, and it returns about a minute later on its startup
   configuration. The step waits for it and
@@ -1307,9 +1515,14 @@ To be stated in the product surface, not buried here.
   differing management names in a mixed twin.
 - **The API has one token, no roles and no TLS** ([D-042](decisions.md#d-042)). Whoever
   holds the token can do everything the operator can. On an address off loopback the
-  token crosses unencrypted, and the server's start-up report says so. A client on another
-  machine comes through an SSH tunnel or a proxy the operator runs. Nothing re-attaches to
-  a run whose client went away: `twin show` names it, and `twin destroy` cancels it.
+  token crosses unencrypted, and the server's start-up report says so. On the lab host the
+  server listens on the Docker bridge as well, for Infrahub's task workers
+  ([D-050](decisions.md#d-050)): every container on the host reaches it there, the twin's
+  nodes included, the token is in the task workers' environment as well as in
+  `local/.env`, and the bearer check is what guards it ([SECURITY.md](../SECURITY.md)). A
+  client on another machine comes through an SSH tunnel or a proxy the operator runs.
+  Nothing re-attaches to a run whose client went away: `twin show` names it, and `twin
+  destroy` cancels it.
 - **RAM bounds everything.** Infrahub, Temporal and the twin share one development
   host. Scoped slices, not whole networks.
 - **Image availability gates coverage.** SR Linux is public; most others are not. cEOS

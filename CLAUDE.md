@@ -381,12 +381,12 @@ runs golangci-lint and `shellcheck scripts/bring-up.sh scripts/e2e.sh`) · `make
 test-contract` (tier 2, real
 Infrahub, never cached; needs `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN`; CI's contract
 job on every push to `main`, against an Infrahub the script brings up on the runner, with
-no secret; about eighteen minutes (1,099.7 s on 2026-10-19), `internal/stages` the
-longest package at 894.0 s, under the `-timeout 30m` it sets, then `internal/checks`
-alone in a second `go test` (199.5 s), whose `TestChecksInsideInfrahub` runs the tree's
-checks inside Infrahub's pipeline under a registration of its own, needs the server on the
-bridge from this tree here, and skips, saying why, where the task workers reach none, as in
-CI) · `make lint` (runs with build
+no secret; about twenty minutes (1,220.1 s on 2026-10-20, beside the imported checks),
+`internal/stages` the longest package at 960.4 s, under the `-timeout 30m` it sets, then
+`internal/checks` alone in a second `go test` (252.8 s), whose `TestChecksInsideInfrahub`
+runs the tree's checks inside Infrahub's pipeline under a registration of its own, needs
+the server on the bridge from this tree here, and skips, saying why, where the task workers
+reach none, as in CI) · `make lint` (runs with build
 tags `contract,fixture,e2e`) ·
 `go test ./internal/compiler -update` regenerates the three goldens — review the diff,
 and commit a re-baseline on its own · the conformance suite's pure half is part of
@@ -463,9 +463,10 @@ Rewritten whole at each release's close, never appended to.
   (`specs/015-proposed-change-rehearsal/research.md` §5): the server reached from inside
   both task workers; the rehearsal by hand on real twins, passing, failing at a push,
   interrupted, beside a create, its client gone, reclaimed and cut by a lowered deadline;
-  tier 2 in 1,099.7 s (2026-10-19), and `TestChecksInsideInfrahub` alone in 309.4 s once
-  it read the thread (2026-10-20); tier 3 `E2E-OK` in 1,619.1 s, then 1,536.9 s with the
-  thread; `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in 1,027.7 s and 1,042.9 s; the README's
+  tier 2 in 1,099.7 s (2026-10-19), then whole beside the imported checks in 1,220.1 s
+  (2026-10-20), and `TestChecksInsideInfrahub` alone in 309.4 s once it read the thread
+  (2026-10-20); tier 3 `E2E-OK` in 1,619.1 s, then 1,536.9 s with the thread;
+  `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in 1,027.7 s and 1,042.9 s; the README's
   walk-through followed by hand twice; and the thread read by the operator in Infrahub's
   overview, the table, the Mermaid drawing, the stages and the caveat whole. Its close runs
   the closing gates (T063) and is the operator's to review and commit (T064).
@@ -477,11 +478,8 @@ Rewritten whole at each release's close, never appended to.
   rw,` is untried. From 014, the operator's: `infrahubctl schema format` would reorder
   `schema/fylgja-stage.yaml` (§8.2); `stage.main.moved` is untried by a write on `main`;
   and the recording shows M10's surface until it is remade at `v0.2.0`. From 015, for
-  converge or the operator: tier 2 has not run whole since the checks were imported on
-  `main`, and `TestRehearseComposedByTheFixtureTool` marks its draft ready without
-  awaiting the creation's user checks, so here it could start a rehearsal beside the tier
-  (research §5.6); the markdown lists a warning once for each stage and step that filed
-  it, naming no stage, and the baseline's verify line carries no counts; a client
-  following a rehearsal terminated outside Fylgja answers only once its abandoned children
-  close (§5.2); and `local/worker.log` holds a run of NUL bytes that the bring-up script's
+  converge or the operator: the markdown lists a warning once for each stage and step
+  that filed it, naming no stage, and the baseline's verify line carries no counts; a
+  client following a rehearsal terminated outside Fylgja answers only once its abandoned
+  children close (§5.2); and `local/worker.log` holds a run of NUL bytes that the bring-up script's
   report warns of (T036).

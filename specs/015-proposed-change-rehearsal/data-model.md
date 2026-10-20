@@ -212,6 +212,7 @@ bridge from `docker network inspect bridge`, and its `infrahub` part re-runs `co
 
 Contract: [contracts/fixture-tool.md](contracts/fixture-tool.md). New: `-ready`,
 `-run-checks <artifact|user>`, `-add-interface <device>:<name>`; `MarkReady`,
-`RunUserChecks`, `UserChecksOf`, `CommentsOf`, `AddInterface`, `ServeRepository`,
-`DeleteRepository`. The deletion order is unchanged: stages, then proposed changes (their
+`RunUserChecks`, `AwaitUserChecks` (the run already begun, as a creation's, awaited without
+asking for one; convergence, T065), `UserChecksOf`, `CommentsOf`, `AddInterface`,
+`ServeRepository`, `DeleteRepository`. The deletion order is unchanged: stages, then proposed changes (their
 comments and validators go with them), then the branch.

@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -869,6 +870,26 @@ func TestCreateWritesVersion7(t *testing.T) {
 	}
 	if n := strings.Count(string(b), `"holds":"`+rec.BundleID+`"`); n != len(rec.Nodes) {
 		t.Errorf("%d nodes hold the record's bundle, want all %d:\n%s", n, len(rec.Nodes), b)
+	}
+}
+
+// Tier 3 reads the records its twins leave against the version this build writes: every
+// .twin_version scripts/e2e.sh expects is TwinVersion, so the version cannot move without
+// the script moving with it. 015 moved it to 7 and left cases 7 and 8 expecting 6, which
+// only tier 3 found (T055).
+func TestE2EScriptExpectsTheRecordsVersion(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "scripts", "e2e.sh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := regexp.MustCompile(`\.twin_version=="([^"]*)"`).FindAllSubmatch(raw, -1)
+	if len(expected) == 0 {
+		t.Fatal("scripts/e2e.sh expects no record's .twin_version")
+	}
+	for _, m := range expected {
+		if v := string(m[1]); v != TwinVersion {
+			t.Errorf("scripts/e2e.sh expects a record of twin.json %s, but this build writes %s", v, TwinVersion)
+		}
 	}
 }
 

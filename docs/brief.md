@@ -20,12 +20,14 @@ provides durable execution for provisioning.
   operator writes between them; it always resolves to a pinned reference.
 - **One twin at a time.** `create` is refused while a twin exists; the operator
   destroys first. Comparisons between references are sequential, and a twin built from a
-  stage steps to another stage of its proposed change without a rebuild.
+  stage steps to another stage of its proposed change without a rebuild. A rehearsal
+  builds a proposed change's stages on one twin in turn, verifies each, and destroys it.
 - **One lab host**, the development host, until remote hosts are built.
 - **Temporal runs short workflows with fixed IDs**: `provision`, `destroy`, a `reconcile`
-  check and `step`. Provisioning cleans up after itself on failure or cancellation. There
-  is no long-running lifecycle workflow, no TTL, no signals and no scheduled sweeper; an
-  orphan lab is detected at `create` and at worker start.
+  check, `step` and `rehearse`, whose children are the other three, under a deadline.
+  Provisioning cleans up after itself on failure or cancellation, and a rehearsal ends in
+  its destroy. There is no long-running lifecycle workflow, no TTL, no signals and no
+  scheduled sweeper; an orphan lab is detected at `create` and at worker start.
 - **State lives in containerlab and files.** The twin is the lab containerlab reports
   plus the manifest staged beside it; bundles live in a directory by content hash;
   Temporal keeps run history. No database.
@@ -39,7 +41,10 @@ provides durable execution for provisioning.
   configuration is an artifact Infrahub rendered for the branch, pushed to each node
   after boot.
 - **Every command goes through the API.** The CLI is a client of `fylgja serve`, which
-  runs on the lab host beside the worker; a client holds one token and an address.
+  runs on the lab host beside the worker; a client holds one token and an address. So are
+  the two checks this repository registers in Infrahub, which run on every proposed
+  change: one reports its stage plan, the other its rehearsal, posted on the proposed
+  change, and a stage that fails blocks the merge.
 
 ## Principles carried from the first design
 
@@ -62,7 +67,7 @@ the process environment only, never persisted.
 read ──▶ compile ──▶ provision ──▶ operate
 (Infrahub    (CTM →      (bundle →      (show, destroy,
  → CTM;       bundle;     running lab;   reconcile, step,
- conformance  pure)       pushed;        verify)
+ conformance  pure)       pushed;        verify, rehearse)
  + complete-              durable)
  ness checks)
 ```
@@ -71,18 +76,20 @@ No separate resolve or bind stage. The compiler emits a deployable topology with
 fixed lab name `fylgja` and containerlab's default management network; image
 overrides use the PSP override directory. `step` takes a twin built from a stage to
 another stage's bundle in place; `verify` reads the running twin against the intent it was
-built from and changes nothing.
+built from and changes nothing; `rehearse` builds, steps and verifies a proposed change's
+stages in turn, stops at the first that fails, destroys the twin and reports.
 
 ## CLI
 
 ```
-fylgja serve         [--listen <host:port>] [--psp-dir <dir>]
+fylgja serve         [--listen <host:port>]... [--psp-dir <dir>]
 fylgja worker run    [--psp-dir <dir>]
 
 fylgja twin create   --branch <b> [--at <ts>] [--no-follow] [--interval <d>]
 fylgja twin create   --stage <branch>/<label>
 fylgja twin step     [--stage <branch>/<label>] [--allow-restart] [--wait <duration>] [--dry-run]
 fylgja twin verify   [--wait[=<duration>]]
+fylgja twin rehearse --branch <b> [--markdown]
 fylgja twin show
 fylgja twin destroy
 
@@ -107,8 +114,8 @@ Decided once, not adopted until the work that needs them is planned
 - production state collection, and read-only substitutes for it;
 - platforms beyond SR Linux and EOS, IOL before PAN-OS.
 
-Posting a twin's verification on an Infrahub proposed change is not parked; it is on the
-[roadmap](roadmap.md).
+Posting a twin's verification on an Infrahub proposed change is not parked: a rehearsal's
+report is posted there from 015, and more of it is on the [roadmap](roadmap.md).
 
 ## Open questions
 

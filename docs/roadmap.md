@@ -23,10 +23,11 @@ operator on 2026-10-16, for an audience of OpsMill and prospective employers, wh
 in the README, a recording and the write-up. An engineer opens a proposed change in
 Infrahub, and two checks from this repository report on it. `fylgja-step` answers in
 seconds with the step from `main` to the source branch, stage by stage. `fylgja-twin`
-answers in minutes. It boots a twin at the branch's branch point, steps it through the
-stages the operator marked on the proposed change to the branch's head, verifies after
-every step, and tears it down. Probes measure loss across each step. A markdown comment on
-the proposed change carries the report, and a stage that fails blocks the merge. Nothing
+answers in minutes. It boots a twin at the first stage it can build, the branch point
+where `main` carries a network, steps it through the stages the operator marked on the
+proposed change to the branch's head, verifies after every step, and tears it down. Probes
+measure loss across each step. A thread on the proposed change carries the report in
+markdown, and a stage that fails blocks the merge. Nothing
 OpsMill publishes boots a twin per proposed change; their containerlab demos deploy by
 hand, after the merge. In order:
 
@@ -38,13 +39,16 @@ hand, after the merge. In order:
    [brief](../specs/014-proposed-change-stages/brief.md) holds the probe against the
    running Infrahub and what was decided, and its
    [research](../specs/014-proposed-change-stages/research.md) what the build verified.
-2. **`015-proposed-change-rehearsal`**, next: [F-007](#f-007) and [F-008](#f-008),
-   reshaped as one spec. It adds `twin rehearse` (a proposed change's stages created,
-   stepped and verified one by one, then reported and destroyed), the two checks, and the
-   server listening where Infrahub's task workers reach it. Its
-   [brief](../specs/015-proposed-change-rehearsal/brief.md).
-3. **`016-probes`**: [F-014](#f-014). The report gains its loss column, and the gate gains
-   a flow that has not recovered. Its [brief](../specs/016-probes/brief.md).
+2. **`015-proposed-change-rehearsal`**: [F-007](#f-007) and [F-008](#f-008), reshaped as
+   one spec, **built** (2026-10-20). It added `twin rehearse` (a proposed change's stages
+   built, stepped and verified one by one on one twin, which is then destroyed, and
+   reported), a fifth workflow, `fylgja-rehearse`, the two checks inside Infrahub, and the
+   server listening on the host's Docker bridge, where Infrahub's task workers reach it.
+   Its [brief](../specs/015-proposed-change-rehearsal/brief.md), and its
+   [research](../specs/015-proposed-change-rehearsal/research.md) for what the build
+   verified.
+3. **`016-probes`**, next: [F-014](#f-014). The report gains its loss column, and the gate
+   gains a flow that has not recovered. Its [brief](../specs/016-probes/brief.md).
 4. **[F-012](#f-012), the skill `fylgja-rehearsing-changes`**, as a chore: an agent reads
    a rehearsal's report and explains it, stage by stage, from a catalogue of the findings'
    rules generated from the code.
@@ -57,7 +61,11 @@ Every other feature keeps the order below. [F-023](#f-023)'s decision entries ar
 [D-046](decisions.md#d-046), which its plan drafted and the operator accepted, then
 [D-047](decisions.md#d-047), the orphan's cause, and [D-048](decisions.md#d-048), the head
 and the staleness rule reading the branch's events, which its implementation's live
-verification raised and the operator accepted on 2026-10-17; the other features have
+verification raised and the operator accepted on 2026-10-17. [F-007](#f-007) and
+[F-008](#f-008)'s are [D-049](decisions.md#d-049) to [D-052](decisions.md#d-052), which
+015's plan drafted and the operator accepted on 2026-10-19, and
+[D-053](decisions.md#d-053), the report posted as a thread, which its implementation's
+live verification raised and the operator accepted on 2026-10-20. The other features have
 neither a decision entry nor a researched estimate yet, and `plan` writes each entry
 after the live verification.
 
@@ -92,7 +100,8 @@ keep the numbers the order was set with; the first six are built ([the
 archive](archive/v0.1-built.md)), F-009 is removed and [F-010](#f-010) is folded into
 [F-011](#f-011).
 
-[F-023](#f-023) is built. None of the others has a spec or a decision entry, and only
+[F-023](#f-023), [F-007](#f-007) and [F-008](#f-008) are built. None of the others has a
+spec or a decision entry, and only
 [F-011](#f-011) has a probe behind its estimate. [F-023](#f-023), [F-011](#f-011),
 [F-013](#f-013), [F-014](#f-014), [F-015](#f-015), [F-017](#f-017) to [F-021](#f-021) and
 [F-022](#f-022) are each one spec, with one contract boundary and one new kind of
@@ -103,8 +112,8 @@ infrastructure. [F-007](#f-007) and
 | # | Feature | What it bundles | Needs | Hours | Why here |
 |---|---|---|---|---|---|
 | F-023 | **Stages of a proposed change** (built) | `FylgjaStage`, a moment of a proposed change marked by the operator; the branch point and the head derived; `--stage`, `stage list` and `stage plan` in place of M10's surface; the staleness check; M10's kind removed | nothing new | 4–6 | Everything 0.2 rehearses is a stage. Probed live on 2026-10-16; built first in 0.2, as 014, on 2026-10-17. |
-| F-007 | **`fylgja-step`, the pure check** | a check beside the artifacts template that answers in seconds with the step from `main` to the source branch, stage by stage, as a markdown comment on the proposed change; fails only when Fylgja refuses a stage as intent | [F-023](#f-023), the API | 3–4 | The first time Fylgja appears inside Infrahub's workflow. In 0.2 as 015. |
-| F-008 | **`fylgja-twin`, the live check** | a check that asks for `twin rehearse`: a twin booted at the branch point, stepped through the marked stages to the head, verified after every step and torn down; the report as a markdown comment; a stage that fails blocks the merge | [F-007](#f-007), stepping, verify, the API | 3–4 | Small, since stepping, verify and the API exist. In 0.2 as 015. |
+| F-007 | **`fylgja-step`, the pure check** (built) | a check beside the artifacts template that answers in seconds with the step from `main` to the source branch, stage by stage: the plan logged as text in its message, no comment; fails only when Fylgja refuses a stage as intent, the stages cannot be listed or Fylgja cannot be reached | [F-023](#f-023), the API | 3–4 | The first time Fylgja appears inside Infrahub's workflow. Built in 0.2 as 015, on 2026-10-20. |
+| F-008 | **`fylgja-twin`, the live check** (built) | a check that asks for `twin rehearse`: a twin built from the first stage that compiles, stepped through the marked stages to the head, verified after every step and destroyed; the report in markdown as a thread on the proposed change; a stage that fails blocks the merge | [F-007](#f-007), stepping, verify, the API | 3–4 | Small, since stepping, verify and the API exist. Built in 0.2 as 015, on 2026-10-20. |
 | F-010 | *Generic transform*, folded into [F-011](#f-011) | the shipped template already queries `FylgjaDevice`, so a DCIM device renders through it; what was left, the template documented as a reference transform, is a paragraph in [F-011](#f-011)'s README | — | — | Overtaken: Infrahub renders from the generics already. |
 | F-011 | **Second schema: the schema library's DCIM** | contract 0.3; OpsMill's DCIM schema implementing the generics; a DCIM-modelled twin; the template documented as a reference transform | nothing new | 4–6 | The strongest OpsMill signal, and the first test of Constitution III. Probed live on 2026-10-16. Opens 0.3. |
 | F-022 | **`infrahub-sync` into the DCIM** | a sync mapping from NetBox onto [F-011](#f-011)'s schema; a twin of a NetBox-sourced network | [F-011](#f-011), a NetBox instance | 3–5 | The source of truth stays where branching lives; the sync writes, not Fylgja. |
@@ -164,24 +173,30 @@ the branch point, each stage the operator marked on the proposed change
 already does this between two pinned references, so it needs no twin. The check lives
 beside the artifacts template in this repository, as the OpsMill skills describe it
 (`check_definitions` in `.infrahub.yml`, `InfrahubCheck`), and runs inside Infrahub's task
-worker, so it reaches Fylgja through the API, not by running the binary. The check writes
-the result, a markdown comment on the proposed change: Fylgja never writes to Infrahub
-([D-026](decisions.md#d-026), citing Constitution III). The report takes verify's advisory
-form ([D-039](decisions.md#d-039)), and the check fails only when Fylgja refuses a stage as
-intent, so a plan that compiles always lets the merge proceed. Built in 0.2 as part of
-`015-proposed-change-rehearsal`.
+worker, so it reaches Fylgja through the API, not by running the binary. Built by
+`015-proposed-change-rehearsal` on 2026-10-20: `fylgja-step` asks the API for the stage
+plan and logs it as text in its message, which Infrahub's checks tab shows, and posts no
+comment; Fylgja never writes to Infrahub ([D-026](decisions.md#d-026), citing Constitution
+III). The report takes verify's advisory form ([D-039](decisions.md#d-039)), and the check
+fails only when Fylgja refuses a stage as intent, cannot list the stages or cannot be
+reached, a branch point refused for want of a network on `main` excepted, so a plan that
+compiles always lets the merge proceed ([D-052](decisions.md#d-052)).
 
 <a id="f-008"></a>
 **F-008. `fylgja-twin`, the live check.** The second check asks Fylgja to `twin rehearse`
-the proposed change and answers in minutes: a twin booted at the branch's branch point,
-stepped through the marked stages to the branch's head, verified after every step, then
-torn down, with the report posted as a markdown comment. It fails at the first stage that
-diverges or adds a finding the baseline did not have, and a stage that fails blocks the
-merge. The check writes only its comment, and the stages outlive it, so a failure can be
-reproduced by hand. Open for 015's spec: a rehearsal takes minutes, so whether the check
-waits for it or a later check reads its result. With `016-probes` the report gains its
-loss column, and with [F-015](#f-015) what changed operationally. Built in 0.2 as part of
-`015-proposed-change-rehearsal`, whose
+the proposed change and answers in minutes: a twin built from the first stage that
+compiles, the branch point where `main` carries a network, stepped through the marked
+stages to the branch's head, verified after every step, then destroyed, with the report
+posted in markdown as a thread on the proposed change, which its overview shows. It fails
+at the first stage that diverges or adds a finding the baseline did not have, and a stage
+that fails blocks the merge. The check writes only its thread, and the stages outlive it,
+so a failure can be reproduced by hand from the commands the report gives. Built by
+`015-proposed-change-rehearsal` on 2026-10-20: the rehearsal is a fifth short workflow
+bounded by a deadline its stages' budgets sum to, under an hour's ceiling
+([D-051](decisions.md#d-051)), and the check waits for it, under a timeout of 70 minutes,
+and concludes from the report's status alone ([D-052](decisions.md#d-052),
+[D-053](decisions.md#d-053)). A draft is skipped. With `016-probes` the report gains its
+loss column, and with [F-015](#f-015) what changed operationally. Its
 [brief](../specs/015-proposed-change-rehearsal/brief.md) has the rest.
 
 <a id="f-010"></a>
@@ -401,11 +416,13 @@ show beyond a status line. It is a second client of the same API.
   became "MUST NOT send an `at` it composed from a clock of its own; an `at` read from
   Infrahub — a stamp it returned, or the first instant after one — MAY be passed as the
   operator's would be".
-- At 015: the check as the writer of a comment, beside [D-026](decisions.md#d-026); the
-  server listening on the Docker bridge, superseding [D-042](decisions.md#d-042)'s
-  loopback default for this deployment; `twin rehearse` as a fifth workflow beside the
-  brief's four; how the check maps the report to a conclusion, with Fylgja's verdict
-  staying advisory ([D-039](decisions.md#d-039)).
+- ~~At 015~~: written on 2026-10-19 as [D-049](decisions.md#d-049) to
+  [D-052](decisions.md#d-052) and built by 015: the check as the writer of a comment,
+  beside [D-026](decisions.md#d-026), made a thread by [D-053](decisions.md#d-053) on
+  2026-10-20; the server listening on the Docker bridge, superseding
+  [D-042](decisions.md#d-042)'s loopback default for this deployment; `twin rehearse` as a
+  fifth short workflow; and the check concluding from the report's status, Fylgja's
+  verdicts staying advisory ([D-039](decisions.md#d-039)).
 - At 016: probes as an input to a compile beside intent, hashed into the bundle; and
   [F-014](#f-014)'s own entries below.
 - At [F-011](#f-011), contract 0.3 ([Release 0.3](#release-03)): `role` and `site` dropped

@@ -9,8 +9,10 @@
 # proposed change, draft or not, reaching the API at FYLGJA_API_ADDRESS with
 # FYLGJA_API_TOKEN from their environment (the Compose override). fylgja-step asks for the
 # stage plan; fylgja-twin skips a draft, and otherwise asks for the rehearsal and posts its
-# report as a comment on the proposed change, its one write (D-049). Each binds the query
-# fylgja_branch through its class's `query`, never a `query:` key under its definition.
+# report as one comment in a new thread on the proposed change, which its overview shows: its
+# one write (D-049, D-053), the thread deleted only when its comment cannot be saved. Each
+# binds the query fylgja_branch through its class's `query`, never a `query:` key under its
+# definition.
 
 queries:
   - name: device_config

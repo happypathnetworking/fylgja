@@ -2,10 +2,11 @@
 
 Infrahub runs it on every open proposed change, at its creation and on each re-run of its
 checks. On a draft it asks nothing and passes. Otherwise it asks the API's twin.rehearse for
-the source branch, posts the report's markdown as one comment on the proposed change, logs
-the report's text as its message, and concludes by the report's status alone (D-052). The
-comment is its one write to Infrahub (D-049); every verdict, deadline and wording is the
-server's.
+the source branch, posts the report's markdown as one comment in a new thread on the proposed
+change, which its overview shows, logs the report's text as its message, and concludes by the
+report's status alone (D-052). That comment, in its thread, is its one write to Infrahub
+(D-049, D-053), the thread deleted only when its comment cannot be saved (FR-019); every
+verdict, deadline and wording is the server's.
 """
 
 import asyncio

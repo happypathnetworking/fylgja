@@ -58,7 +58,7 @@ Deployment_Node(Lab.Labhost, "Lab host", $type="", $descr="Ubuntu, Docker, conta
 Deployment_Node(Lab.Infrahubhost, "Infrahub host", $type="", $descr="Docker Compose, project fylgja-infrahub; the lab host, for its task workers to reach the API on the bridge", $tags="Element", $link="") {
   Container(Lab.Infrahubhost.Infrahubserver_1, "Infrahub server", $techn="Python; Infrahub 1.11.2; GraphQL, REST", $descr="Infrahub's API at :8000: intent and artifacts on branches, proposed changes, stages and their comments.", $tags="Container,External", $link="")
   Deployment_Node(Lab.Infrahubhost.taskworker, "task-worker (x2)", $type="container", $descr="host.docker.internal:7650, docker0's address by the Compose override's host-gateway entry; FYLGJA_API_ADDRESS and FYLGJA_API_TOKEN from the override", $tags="Element", $link="") {
-    Container(Lab.Infrahubhost.taskworker.Taskworker_1, "Task worker", $techn="Python; Infrahub 1.11.2", $descr="Infrahub's own, two replicas: renders the artifacts, and runs this repository's checks on a proposed change, fylgja-step and fylgja-twin, clients of Fylgja's API; fylgja-twin posts the rehearsal's report as a comment.", $tags="Container,External", $link="")
+    Container(Lab.Infrahubhost.taskworker.Taskworker_1, "Task worker", $techn="Python; Infrahub 1.11.2", $descr="Infrahub's own, two replicas: renders the artifacts, and runs this repository's checks on a proposed change, fylgja-step and fylgja-twin, clients of Fylgja's API; fylgja-twin posts the rehearsal's report as one comment in a new thread on the proposed change, which its overview shows.", $tags="Container,External", $link="")
   }
 
 }
@@ -78,7 +78,7 @@ Rel(Lab.Labhost.containerlab_1, Lab.Labhost.Docker.Labfylgja.NOSnode_1, "Creates
 Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Infrahubhost.Infrahubserver_1, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Infrahubhost.Infrahubserver_1, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
 Rel(Lab.Infrahubhost.taskworker.Taskworker_1, Lab.Labhost.fylgjaserve.fylgjaserve_1, "fylgja-step asks for the stage plan; fylgja-twin for the rehearsal, in markdown", $techn="HTTP over the Docker bridge, bearer token, plaintext", $tags="Relationship", $link="")
-Rel(Lab.Infrahubhost.taskworker.Taskworker_1, Lab.Infrahubhost.Infrahubserver_1, "Reads the proposed change; posts fylgja-twin's comment; concludes each check", $techn="GraphQL", $tags="Relationship", $link="")
+Rel(Lab.Infrahubhost.taskworker.Taskworker_1, Lab.Infrahubhost.Infrahubserver_1, "Reads the proposed change; posts fylgja-twin's comment in a new thread; concludes each check", $techn="GraphQL", $tags="Relationship", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

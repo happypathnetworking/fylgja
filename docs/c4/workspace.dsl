@@ -8,7 +8,7 @@ workspace "Fylgja" "A walking twin of network intent." {
 
         infrahub = softwareSystem "Infrahub" "The network source of truth. Holds intent on branches, versioned in time, and renders each device's configuration artifact." "External" {
             iserver = container "Infrahub server" "Infrahub's API at :8000: intent and artifacts on branches, proposed changes, stages and their comments." "Python; Infrahub 1.11.2; GraphQL, REST" "External"
-            taskWorker = container "Task worker" "Infrahub's own, two replicas: renders the artifacts, and runs this repository's checks on a proposed change, fylgja-step and fylgja-twin, clients of Fylgja's API; fylgja-twin posts the rehearsal's report as a comment." "Python; Infrahub 1.11.2" "External"
+            taskWorker = container "Task worker" "Infrahub's own, two replicas: renders the artifacts, and runs this repository's checks on a proposed change, fylgja-step and fylgja-twin, clients of Fylgja's API; fylgja-twin posts the rehearsal's report as one comment in a new thread on the proposed change, which its overview shows." "Python; Infrahub 1.11.2" "External"
         }
         artifacts = softwareSystem "Artifacts repository" "This repository, registered in Infrahub read-only: the artifacts template (.infrahub.yml, infrahub/templates/) that renders each device's configuration from the Fylgja generics, and beside it the two checks (infrahub/checks/) that ask Fylgja for a proposed change's plan and its rehearsal." "External"
 
@@ -60,7 +60,7 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.cli -> fylgja.server "POST /v1/<noun>/<verb>; bearer token" "HTTP, NDJSON"
         infrahub -> fylgja.server "Runs fylgja-step and fylgja-twin in its task worker, which ask for the stage plan and the rehearsal" "HTTP, bearer token, plaintext"
         infrahub.taskWorker -> fylgja.server "fylgja-step asks for the stage plan; fylgja-twin for the rehearsal, in markdown" "HTTP over the Docker bridge, bearer token, plaintext"
-        infrahub.taskWorker -> infrahub.iserver "Reads the proposed change; posts fylgja-twin's comment; concludes each check" "GraphQL"
+        infrahub.taskWorker -> infrahub.iserver "Reads the proposed change; posts fylgja-twin's comment in a new thread; concludes each check" "GraphQL"
         fylgja.server -> infrahub "Reads intent and artifacts" "GraphQL, REST"
         fylgja.server -> infrahub.iserver "Reads intent and artifacts" "GraphQL, REST"
         fylgja.server -> fylgja.temporal "Starts, follows, cancels runs" "gRPC"

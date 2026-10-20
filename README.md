@@ -441,13 +441,14 @@ checks are run again:
   not. Its message is the plan. It fails when a stage is refused, but for a branch point
   refused because `main` holds no network.
 - **`fylgja-twin`** skips a draft. Otherwise it asks Fylgja to rehearse the proposed change,
-  posts the report as a new comment on it, and concludes `success` when the rehearsal's
-  status is `ok` and `failure` otherwise, which blocks the merge. Its message is the
-  report's text.
+  posts the report as a comment in a new thread on it, and concludes `success` when the
+  rehearsal's status is `ok` and `failure` otherwise, which blocks the merge. Its message
+  is the report's text.
 
 Both are Python glue in `infrahub/checks/` and clients of the API: every verdict is the
-server's, and Fylgja itself still writes nothing to Infrahub, the comment being the check's
-one write ([D-049](docs/decisions.md#d-049), [D-052](docs/decisions.md#d-052)).
+server's, and Fylgja itself still writes nothing to Infrahub, the thread and its comment
+being the check's one write ([D-049](docs/decisions.md#d-049),
+[D-052](docs/decisions.md#d-052), [D-053](docs/decisions.md#d-053)).
 
 **What the checks need.** Two things the walk-throughs above did not:
 
@@ -623,8 +624,8 @@ reproduce it by hand, one `twin create`, a `twin step` for each stage up to the 
 push.
 
 `-delete` removes the stages first, since Infrahub refuses to delete a proposed change while
-a stage names it, then the proposed change, whose comments and checks go with it, then the
-branch:
+a stage names it, then the proposed change, whose threads, their comments and its checks go
+with it, then the branch:
 
 ```console
 $ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -delete

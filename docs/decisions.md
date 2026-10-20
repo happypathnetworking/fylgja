@@ -3241,6 +3241,7 @@ retires it.
 
 ---
 
+<a id="d-053"></a>
 ## D-053 — The check's comment is a thread on the proposed change, as its view shows one
 
 **Status:** Accepted 2026-10-20. Supersedes [D-049](#d-049) in the kind it names; the rest

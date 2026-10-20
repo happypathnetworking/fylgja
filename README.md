@@ -527,7 +527,7 @@ check fylgja-step: success (message 2,027 characters)
 check fylgja-twin: success (message 3,693 characters)
 ```
 
-The comment is on the proposed change's Conversation tab, where Infrahub renders its table
+The comment is a thread in the proposed change's Overview, where Infrahub renders its table
 and its drawing. It is headed by the run and when the stages were resolved, so a later
 rehearsal's comment, a new one, is told from it:
 

@@ -177,7 +177,7 @@ Contract: [contracts/checks.md](contracts/checks.md).
 | Check | Class, file | `timeout` | Asks | Writes | Concludes |
 |---|---|---|---|---|---|
 | `fylgja-step` | `FylgjaStep`, `infrahub/checks/fylgja_step.py` | 300 | `stage.plan` `{branch}` | nothing | success unless a stage is refused as intent (a branch point's `contract.node.missing` excepted), the stages unlistable, or Fylgja unreachable, refusing the token or the version; the plan's text as the message |
-| `fylgja-twin` | `FylgjaTwin`, `infrahub/checks/fylgja_twin.py` | 4200 | `twin.rehearse` `{branch}`, render `markdown`, with a stream | one `CoreChangeComment` (`text` the markdown, `change` the proposed change) per run | on a draft: success, nothing asked; else `ok` → success, any other status → failure; the report's text as the message |
+| `fylgja-twin` | `FylgjaTwin`, `infrahub/checks/fylgja_twin.py` | 4200 | `twin.rehearse` `{branch}`, render `markdown`, with a stream | one `CoreChangeThread` (`change` the proposed change, `label` `Conversation`) holding one `CoreThreadComment` (`text` the markdown) per run | on a draft: success, nothing asked; else `ok` → success, any other status → failure; the report's text as the message |
 
 Shared: `infrahub/checks/fylgja_api.py` (the two variables, the request, the frames, the
 proposed change by `branch_name`, the comment). Each check's query is `fylgja_branch`
@@ -186,10 +186,13 @@ The check's environment: `FYLGJA_API_ADDRESS` (`host.docker.internal:7650` from 
 override) and `FYLGJA_API_TOKEN` (from `local/.env` through Compose), nothing else of
 Fylgja's. Its message never carries a value of either.
 
-**The comment**: `CoreChangeComment` with `text` and `change` alone (no stamp, no author
-field in 1.11.2); its first line is the report's heading, which names the run and
+**The comment**: a `CoreChangeThread` on the proposed change, labelled `Conversation` and
+unresolved as the view labels its own, holding one `CoreThreadComment` whose `text` is the
+markdown, which the proposed change's overview shows; a `CoreChangeComment`, which it does
+not show, is never written (research §5.9). The comment carries no author or stamp field
+of its own in 1.11.2; its first line is the report's heading, which names the run and
 `resolved_at`, so comments of one proposed change read in order. A proposed change's
-delete takes its comments with it.
+delete takes its threads and their comments with it.
 
 ## 10. The server, the override and the host
 

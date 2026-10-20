@@ -133,7 +133,7 @@ reach none it skips after the draft's skip, saying so.
 
 ```sh
 make test-contract
-curl -s -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" -H 'Content-Type: application/json' "$INFRAHUB_ADDRESS/graphql" --data-binary '{"query":"{ Branch { name } CoreProposedChange { count } FylgjaStage { count } CoreChangeComment { count } CoreReadOnlyRepository { edges { node { name { value } } } } CoreCheckDefinition { count } }"}' | jq -c .data
+curl -s -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" -H 'Content-Type: application/json' "$INFRAHUB_ADDRESS/graphql" --data-binary '{"query":"{ Branch { name } CoreProposedChange { count } FylgjaStage { count } CoreChangeThread { count } CoreThreadComment { count } CoreReadOnlyRepository { edges { node { name { value } } } } CoreCheckDefinition { count } }"}' | jq -c .data
 ```
 
 Expected: green; §4's test among it, and `internal/server`'s `TestRehearseRefusesBeforeAnyRun`

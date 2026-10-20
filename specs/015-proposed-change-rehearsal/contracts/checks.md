@@ -72,10 +72,15 @@ Runs on every open proposed change, draft or not.
    180 s) nears, then `log_error` naming the run or the twin the last answer named. A
    retried refusal is logged and never posted; the comment is the final answer's document,
    once.
-4. **The comment**: once the document frame is read, one `CoreChangeComment` with `text`
-   the frame's `markdown` and `change` the proposed change, saved on `main`; a failure to
-   post is `log_info` (`the comment could not be posted: <error>`), never `log_error`, and
-   never a credential. A new comment each run; none is edited or deleted.
+4. **The comment**: once the document frame is read, one comment as the proposed change's
+   view writes and shows one (research §5.9): a `CoreChangeThread` with `change` the
+   proposed change, `label` `Conversation` and `resolved` false, then one
+   `CoreThreadComment` with `text` the frame's `markdown` and `thread` that thread, both
+   saved on `main`. The view's overview lists a thread through the event its creation
+   emits; a `CoreChangeComment` is counted and never shown. A failure to post is
+   `log_info` (`the comment could not be posted: <error>`), never `log_error`, and never a
+   credential; a thread whose comment could not be saved is deleted, as the view deletes
+   its own. A new comment each run; none is edited or deleted.
 5. **Conclusion**: the document's `status` alone: `ok` → success; `rejected`, `error`,
    `failed`, `unclean`, `nonconforming` → `log_error` with the document's text (the
    findings as the `text` field carries them) and the report's lines already logged.

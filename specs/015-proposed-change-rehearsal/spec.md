@@ -536,11 +536,14 @@ read" that the build relies on, with its date.
   and concludes success, so the engineer marks stages on the draft, marks it ready for
   review and re-runs the checks, and the tiers' throwaway drafts boot nothing.
 - **FR-019**: A comment that cannot be posted MUST be logged, without a credential, and
-  MUST NOT fail the check; the conclusion is the rehearsal's. Each run posts a new comment
-  and never edits or deletes one: a re-run adds its comment beside the earlier ones, each
-  headed by its run and the time its stages were resolved. The checks MUST write nothing
-  else to Infrahub: no stage, no series, no object, no edit. The comment is the check's
-  write, not Fylgja's ([D-026](../../docs/decisions.md#d-026)).
+  MUST NOT fail the check; the conclusion is the rehearsal's. Each run posts a new comment,
+  in a new thread on the proposed change that its view shows
+  ([D-053](../../docs/decisions.md#d-053)), and never edits or deletes one: a re-run adds
+  its thread beside the earlier ones, each comment headed by its run and the time its
+  stages were resolved. The checks MUST write nothing else to Infrahub: no stage, no
+  series, no other object, no edit; the one thing `fylgja-twin` deletes is the thread it
+  has just made, when the comment in it cannot be saved. The comment and its thread are the
+  check's write, not Fylgja's ([D-026](../../docs/decisions.md#d-026)).
 - **FR-020**: A check whose `FYLGJA_API_ADDRESS` or `FYLGJA_API_TOKEN` is unset MUST
   conclude failure naming the variable, before any request, and MUST echo no value of
   either; `fylgja-twin` decides the draft skip first, since it needs nothing of Fylgja's
@@ -727,8 +730,9 @@ read" that the build relies on, with its date.
 - **SC-006**: `fylgja-twin` concludes inside its timeout every time, with the destroy
   inside it; on the development host the fixture's three nodes and two marks rehearse in
   under fifteen minutes.
-- **SC-007**: After a rehearsal through the check, Infrahub holds one new comment on the
-  proposed change and nothing else of Fylgja's or the check's: the stage and proposed
+- **SC-007**: After a rehearsal through the check, Infrahub holds one new thread on the
+  proposed change, listed in its overview and holding one comment, and nothing else of
+  Fylgja's or the check's: the stage and proposed
   change counts are what the operator left, and every read Fylgja made is a query.
 - **SC-008**: No report, comment, check message, log line, record or run history carries
   the API's token, Infrahub's token, a login, a password or the secret key: tier 3's

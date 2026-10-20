@@ -3088,8 +3088,8 @@ never queried.
 <a id="d-049"></a>
 ## D-049 — A check posts the rehearsal's report as a comment; Fylgja writes nothing
 
-**Status:** Accepted 2026-10-19. Beside [D-026](#d-026), which stands. To be built by
-`015-proposed-change-rehearsal`.
+**Status:** Accepted 2026-10-19; superseded by [D-053](#d-053) on 2026-10-20 in the kind it
+names. Beside [D-026](#d-026), which stands. To be built by `015-proposed-change-rehearsal`.
 
 ### Context
 
@@ -3238,6 +3238,49 @@ retires it.
 - The merge is gated by Infrahub's own rule over the check's conclusion; nothing in Fylgja
   acts on the rehearsal.
 - The roadmap's F-007 row is reworded: `fylgja-step` posts no comment.
+
+---
+
+## D-053 — The check's comment is a thread on the proposed change, as its view shows one
+
+**Status:** Accepted 2026-10-20. Supersedes [D-049](#d-049) in the kind it names; the rest
+of D-049 stands: the checks as clients of the API and glue, one new comment per run
+carrying the report's markdown headed by the run, none edited, `fylgja-step` writing
+nothing, a comment that cannot be posted failing nothing. [D-026](#d-026) stands. Built by
+`015-proposed-change-rehearsal`.
+
+### Context
+
+D-049 named `CoreChangeComment`, which a check may create, and the reviewer reads the
+report in the proposed change's view (US2). Verified on Infrahub 1.11.2 (2026-10-20,
+`specs/015-proposed-change-rehearsal/research.md` §5.9): the overview lists the proposed
+change's events, and a comment appears there only in a thread, through the event a
+thread's creation emits; a `CoreChangeComment` is counted in `total_comments` and shown
+nowhere in the view; the operator read no comment in the overview of a proposed change
+that held one.
+
+### Options considered
+
+- **Keep `CoreChangeComment`.** Rejected: no reviewer sees it.
+- **An object or artifact thread.** Rejected: each is anchored to an object or an
+  artifact's line, and the report is the whole proposed change's.
+- **A `CoreChangeThread` holding one `CoreThreadComment`**, as the view's own *Add
+  comment* writes one. Chosen.
+
+### Decision
+
+`fylgja-twin` posts each run's report as one new `CoreChangeThread` on the proposed change,
+labelled `Conversation` and unresolved as the view labels its own, holding one
+`CoreThreadComment` whose text is the report's markdown, both on `main`. It deletes the
+thread it made when the comment cannot be saved, as the view does, and otherwise edits and
+deletes nothing and writes nothing else.
+
+### Consequences
+
+- Each rehearsal is a thread in the proposed change's overview, in the order run.
+- A reviewer may reply to it or resolve it, which nothing of Fylgja's reads.
+- A test's proposed change goes with its threads and their comments when deleted
+  (research §5.9).
 
 ---
 

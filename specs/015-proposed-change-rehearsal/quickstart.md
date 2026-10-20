@@ -98,22 +98,31 @@ go run -tags fixture ./cmd/fylgja-fixture -branch $B -generate
 until ck | jq -e --argjson b "$BEFORE" '. as $n | ($n - $b | length) == 1' > /dev/null; do sleep 1; done
 go run -tags fixture ./cmd/fylgja-fixture -branch $B -stage bad-port -description "a port n1 does not have"
 bin/fylgja twin rehearse --branch $B; echo "exit $?"
-bin/fylgja twin create --stage $B/third-link && bin/fylgja twin step --stage $B/bad-port --allow-restart; echo "exit $?"; bin/fylgja twin destroy
+bin/fylgja twin create --stage $B/seeded && bin/fylgja twin step --stage $B/third-link --allow-restart && bin/fylgja twin step --stage $B/bad-port --allow-restart; echo "exit $?"
+bin/fylgja twin verify; echo "exit $?"; bin/fylgja twin destroy
 bin/fylgja twin rehearse --branch $B & sleep 75; kill -INT %1; wait %1; echo "exit $?"; bin/fylgja twin show
 ```
 
-Expected: `bad-port` fails at phase `push`, n1 `push.refused`, `head` `not reached`, exit 5,
-the twin destroyed, the closing lines giving the four reproduce commands; run by hand, the
-create and the step end `diverged` at push the same way (exit 4), and the destroy clears
-it; the interrupt during the step cancels it (`run.cancelled`, the record diverged), the
-destroy runs, exit 2, and `twin show` reports no twin. A second `twin rehearse` started
-while a create of your own runs is refused `run.in_flight` at once.
+Expected: `bad-port` fails at phase `push`, n1 `push.refused`, `head` `not reached`, exit
+5, the twin destroyed, the closing lines giving five reproduce commands, since `bad-port`
+is the second rehearsed stage and each one up to it is stepped through: `twin create
+--stage $B/seeded`, `twin step --stage $B/third-link --allow-restart`, `twin step --stage
+$B/bad-port --allow-restart`, `twin verify` and `twin destroy`. Run by hand, the step to
+`bad-port` ends `diverged` at push the same way (exit 4), `twin verify` fails on the
+record's claim (exit 5), and the destroy clears it (research §5.2). The interrupt during
+the step cancels it (`run.cancelled`, the record diverged), the destroy runs, exit 2, and
+`twin show` reports no twin. A second `twin rehearse` started while a create of your own
+runs is refused `run.in_flight` at once.
 
-The reclaim: start a rehearsal, stop the worker while the baseline is being created, wait
-for the provision to be abandoned, restart the worker, then `twin rehearse` again: it
-prints `reclaiming the twin of rehearsal run …`, the destroy's lines, and goes on
-(`rehearsal.twin.reclaimed`). Finally `go run -tags fixture ./cmd/fylgja-fixture -branch
-$B -delete`.
+The reclaim needs the run ended, which a run with no worker cannot do by itself: it has no
+execution timeout, and its own destroy needs a worker (research §5.2). Start a rehearsal
+and stop the worker while the baseline is being deployed; end the run with `temporal
+workflow terminate --workflow-id fylgja-rehearse`, which runs no destroy; restart the
+worker, so that the abandoned provision child ends ready and records the twin naming the
+dead run; then run `twin rehearse` again: it prints `reclaiming the twin of rehearsal run
+…`, the destroy's lines, and goes on (`rehearsal.twin.reclaimed`). A client still following
+the terminated run answers only once that child closes, `operation.failed` (`terminated`),
+exit 2. Finally `go run -tags fixture ./cmd/fylgja-fixture -branch $B -delete`.
 
 ## 4. The checks by hand, through a test-only registration (US2, US3; before the push)
 

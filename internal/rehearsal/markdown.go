@@ -13,6 +13,11 @@ import (
 // Caveat is the markdown's last line: what a twin's fidelity is (FR-014).
 const Caveat = "*Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing.*"
 
+// CommentMax is the longest markdown Infrahub keeps as a comment, in bytes: 1.11.2 refuses a
+// text attribute when 3 and its UTF-8 length reach 4096 (infrahub/core/attribute.py,
+// validate_string_length), and fylgja-twin posts the markdown as one comment's text.
+const CommentMax = 4092
+
 // Markdown is the rehearsal's report as GitHub-flavoured markdown (FR-014; research R-10;
 // contracts/rehearse-command.md, "The markdown"), the comment a check posts on the proposed
 // change: the heading naming Fylgja, the proposed change and its branch; the run, when the
@@ -29,49 +34,135 @@ const Caveat = "*Fidelity is asserted, not measured: the twin's containers forwa
 // was found, is the heading, the status, the findings and the caveat. Every operator's
 // string is escaped where it lands: as markdown text, in a table cell, in a code span, and
 // in Mermaid's quoted labels, where ", < and > are #quot;, #lt; and #gt;.
+//
+// It is never longer than CommentMax, so that the comment is kept. A report that would be
+// names each finding by its identifier and object alone, identical ones once with their
+// count, since fylgja-twin's message, the report's text, holds every message. Should that
+// still be too long, whole sections are left out: the baseline's findings first, then the
+// drawing, the warnings, the stages, the findings, the reproduce commands and the table. A
+// note before the caveat says what was shortened. The heading, the status and the caveat
+// are always kept.
 func Markdown(doc *findings.Document, steps []step.Pair) string {
-	var out []string
+	if md := join(parts(doc, steps, false)); len(md) <= CommentMax {
+		return md
+	}
+	return fit(parts(doc, steps, true))
+}
+
+// part is a paragraph of the markdown, a section's title with its list, or a fenced block,
+// which fit keeps or leaves out whole: rank 0 always, then the lowest rank first. name is
+// what the note calls a part left out.
+type part struct {
+	text string
+	name string
+	rank int
+}
+
+// parts are the markdown's paragraphs in order. brief names each finding by its identifier
+// and object alone.
+func parts(doc *findings.Document, steps []step.Pair, brief bool) []part {
+	var out []part
 	b := doc.Rehearsal
 	if b == nil {
 		branch := ""
 		if doc.Subject != nil {
 			branch = doc.Subject.Branch
 		}
-		out = append(out, "## Fylgja did not rehearse branch "+inline(branch),
-			fmt.Sprintf("Status **%s**.", doc.Status))
-		out = append(out, findingsSection("Findings", rejections(doc.Findings))...)
-		out = append(out, warningsSection(doc.Findings)...)
-		return strings.Join(append(out, Caveat), "\n\n") + "\n"
+		out = append(out, part{text: "## Fylgja did not rehearse branch " + inline(branch)},
+			part{text: fmt.Sprintf("Status **%s**.", doc.Status)},
+			part{findingsSection("Findings", rejections(doc.Findings), brief), "the findings", 1},
+			part{warningsSection(doc.Findings, brief), "the warnings", 2})
+		return append(out, part{text: Caveat})
 	}
 
 	verb := "rehearsed"
 	if b.Run == nil {
 		verb = "did not rehearse"
 	}
-	out = append(out, fmt.Sprintf("## Fylgja %s proposed change %s on %s", verb, inline(fmt.Sprintf("%q", b.ProposedChange.Name)),
-		inline(b.ProposedChange.Branch)))
+	out = append(out, part{text: fmt.Sprintf("## Fylgja %s proposed change %s on %s", verb,
+		inline(fmt.Sprintf("%q", b.ProposedChange.Name)), inline(b.ProposedChange.Branch))})
 	if b.Run != nil {
-		out = append(out, fmt.Sprintf("Run %s, stages resolved at %s. Status **%s**. %.1fs of the %ds deadline (ceiling %ds).",
-			code(b.Run.WorkflowID+" "+b.Run.RunID), inline(b.ResolvedAt), doc.Status, b.UsedS, b.DeadlineS, b.CeilingS))
+		out = append(out, part{text: fmt.Sprintf("Run %s, stages resolved at %s. Status **%s**. %.1fs of the %ds deadline (ceiling %ds).",
+			code(b.Run.WorkflowID+" "+b.Run.RunID), inline(b.ResolvedAt), doc.Status, b.UsedS, b.DeadlineS, b.CeilingS)})
 	} else {
-		out = append(out, fmt.Sprintf("No run was started; stages resolved at %s. Status **%s**. Deadline %ds (ceiling %ds).",
-			inline(b.ResolvedAt), doc.Status, b.DeadlineS, b.CeilingS))
+		out = append(out, part{text: fmt.Sprintf("No run was started; stages resolved at %s. Status **%s**. Deadline %ds (ceiling %ds).",
+			inline(b.ResolvedAt), doc.Status, b.DeadlineS, b.CeilingS)})
 	}
-	out = append(out, table(*b), drawing(*b, steps))
+	out = append(out, part{table(*b), "the table", 1}, part{drawing(*b, steps), "the drawing", 6})
 	if doc.Status != findings.StatusOK {
-		out = append(out, findingsSection("Findings", rejections(doc.Findings))...)
+		out = append(out, part{findingsSection("Findings", rejections(doc.Findings), brief), "the findings", 3})
 	}
-	out = append(out, stagesSection(*b))
-	out = append(out, warningsSection(doc.Findings)...)
+	out = append(out, part{stagesSection(*b), "the stages", 4}, part{warningsSection(doc.Findings, brief), "the warnings", 5})
 	var baseline []findings.StepWaitFailing
 	if b.Baseline != nil {
 		baseline = b.Baseline.Findings
 	}
-	out = append(out, failingSection("Baseline findings", "(reported, failing nothing)", baseline)...)
+	out = append(out, part{failingSection("Baseline findings", "(reported, failing nothing)", baseline, brief),
+		"the baseline's findings", 7})
 	if len(b.Reproduce) > 0 {
-		out = append(out, "**Reproduce by hand**:", fenced("", strings.Join(b.Reproduce, "\n")))
+		out = append(out, part{"**Reproduce by hand**:\n\n" + fenced("", strings.Join(b.Reproduce, "\n")),
+			"the commands that reproduce it", 2})
 	}
-	return strings.Join(append(out, Caveat), "\n\n") + "\n"
+	return append(out, part{text: Caveat})
+}
+
+// join is the parts as the markdown: a blank line between two, and a newline at the end.
+func join(ps []part) string {
+	texts := make([]string, len(ps))
+	for i, p := range ps {
+		texts[i] = p.text
+	}
+	return strings.Join(texts, "\n\n") + "\n"
+}
+
+// fit is the brief parts within CommentMax: those of rank 0, then each other in rank order
+// while it fits beside the note, which is placed before the caveat, the last part.
+func fit(ps []part) string {
+	var names []string
+	for _, p := range ps {
+		if p.rank > 0 {
+			names = append(names, p.name)
+		}
+	}
+	// The note naming every part is the longest it can be. The size counts the blank line
+	// before each part and, one byte short of the first one's, the newline at the end.
+	size := -1 + len(fitNote(names)) + 2
+	order := make([]int, len(ps))
+	for i := range order {
+		order[i] = i
+	}
+	sort.SliceStable(order, func(i, j int) bool { return ps[order[i]].rank < ps[order[j]].rank })
+	kept := make([]bool, len(ps))
+	for _, i := range order {
+		if n := size + 2 + len(ps[i].text); ps[i].rank == 0 || n <= CommentMax {
+			kept[i], size = true, n
+		}
+	}
+	var out []part
+	var left []string
+	for i, p := range ps[:len(ps)-1] {
+		if kept[i] {
+			out = append(out, p)
+		} else {
+			left = append(left, p.name)
+		}
+	}
+	return join(append(out, part{text: fitNote(left)}, ps[len(ps)-1]))
+}
+
+// fitNote says what fit shortened: every finding named by its identifier and object alone,
+// and the parts left out.
+func fitNote(left []string) string {
+	note := "*To fit what Infrahub keeps of a comment (" + fmt.Sprint(CommentMax) +
+		" bytes), each finding is named by its identifier and object alone"
+	switch len(left) {
+	case 0:
+	case 1:
+		note += ", and " + left[0] + " is left out"
+	default:
+		note += ", and " + strings.Join(left[:len(left)-1], ", ") + " and " + left[len(left)-1] + " are left out"
+	}
+	return note + "; fylgja-twin's message is the whole report as text.*"
 }
 
 // table is one row per stage: the reference, the at, the bundle, the step's outcome with the
@@ -310,14 +401,14 @@ func stagesSection(b findings.RehearsalBlock) string {
 
 // warningsSection is the document's warnings, verify's aside: the baseline's are their own
 // section's, and a stage's wait is the table's.
-func warningsSection(l findings.List) []string {
+func warningsSection(l findings.List, brief bool) string {
 	var warnings findings.List
 	for _, f := range l {
 		if f.Severity == findings.Warning && !strings.HasPrefix(f.Rule, "verify.") {
 			warnings = append(warnings, f)
 		}
 	}
-	return findingsSection("Warnings", warnings)
+	return findingsSection("Warnings", warnings, brief)
 }
 
 func rejections(l findings.List) findings.List {
@@ -332,9 +423,9 @@ func rejections(l findings.List) findings.List {
 
 // findingsSection is a titled list of findings, each by identifier, object and message, in
 // the order WriteText prints them; none when there are none.
-func findingsSection(title string, l findings.List) []string {
+func findingsSection(title string, l findings.List, brief bool) string {
 	if len(l) == 0 {
-		return []string{"**" + title + "**: none"}
+		return "**" + title + "**: none"
 	}
 	sorted := append(findings.List{}, l...)
 	sort.SliceStable(sorted, func(i, j int) bool {
@@ -345,31 +436,55 @@ func findingsSection(title string, l findings.List) []string {
 	})
 	lines := make([]string, 0, len(sorted))
 	for _, f := range sorted {
-		lines = append(lines, findingLine(f.Rule, f.Object, f.Message))
+		lines = append(lines, findingLine(f.Rule, f.Object, f.Message, brief))
 	}
-	return []string{"**" + title + "**:", strings.Join(lines, "\n")}
+	return "**" + title + "**:\n\n" + strings.Join(counted(lines), "\n")
 }
 
 // failingSection is a titled list of failing assertions, the note after the title; none
 // when there are none.
-func failingSection(title, note string, fs []findings.StepWaitFailing) []string {
+func failingSection(title, note string, fs []findings.StepWaitFailing, brief bool) string {
 	head := "**" + title + "** " + note + ":"
 	if len(fs) == 0 {
-		return []string{head + " none"}
+		return head + " none"
 	}
 	lines := make([]string, 0, len(fs))
 	for _, f := range fs {
-		lines = append(lines, findingLine(f.Rule, f.Object, f.Message))
+		lines = append(lines, findingLine(f.Rule, f.Object, f.Message, brief))
 	}
-	return []string{head, strings.Join(lines, "\n")}
+	return head + "\n\n" + strings.Join(counted(lines), "\n")
 }
 
-func findingLine(rule, object, message string) string {
+// findingLine is a finding as a list item: its identifier, its object and, unless brief,
+// its message.
+func findingLine(rule, object, message string, brief bool) string {
 	line := "- " + code(rule)
 	if object != "" {
 		line += " " + inline(object)
 	}
+	if brief {
+		return line
+	}
 	return line + ": " + inline(message)
+}
+
+// counted is lines with each run of identical ones written once, followed by its count when
+// there are several: a brief list names one finding per stage that repeats it.
+func counted(lines []string) []string {
+	var out []string
+	for i := 0; i < len(lines); {
+		j := i + 1
+		for j < len(lines) && lines[j] == lines[i] {
+			j++
+		}
+		if j-i > 1 {
+			out = append(out, fmt.Sprintf("%s (×%d)", lines[i], j-i))
+		} else {
+			out = append(out, lines[i])
+		}
+		i = j
+	}
+	return out
 }
 
 // short is a bundle id's first eight characters and an ellipsis, as the text prints it.

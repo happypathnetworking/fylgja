@@ -1,10 +1,12 @@
 package rehearsal
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/step"
 )
 
@@ -152,6 +154,88 @@ func TestMarkdown(t *testing.T) {
 			t.Errorf("%s: the reproduce block is there %v, a stage failed %v:\n%s", e.name, !failure, failure, md)
 		}
 		carriesNoContent(t, e.name+"'s markdown", md)
+	}
+}
+
+// The markdown is kept by Infrahub as a comment, so it is never longer than CommentMax. A
+// failure's report that would be, as tier 3's bad-port was (T055: two stages each warning
+// twice of ethernet-1/99, and the push's long refusal), names its findings by identifier and
+// object alone, the repeated ones once with their count, and keeps every section. One with so
+// many stages that it is too long still is leaves sections out whole, the table and the
+// reproduce commands kept longest, and breaks no fence or table.
+func TestMarkdownFitsAComment(t *testing.T) {
+	const unrepresented = "artifact device-config names interface ethernet-1/99 at line 17, which the twin does not represent: " +
+		"omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)"
+	refusal := "node n1 refused artifact device-config (checksum 592e1578066373b636e0676ce1667e26): " + strings.Repeat("the node's message, cut ", 40)
+	doc := failedRun().document()
+	for range 2 {
+		doc.Findings.AddStep(findings.Warning, findings.StepRead, findings.RuleArtifactInterfaceUnrepresented, "n1:ethernet-1/99", unrepresented)
+		doc.Findings.AddStep(findings.Warning, findings.StepCompile, findings.RuleArtifactInterfaceUnrepresented, "n1:ethernet-1/99", unrepresented)
+	}
+	doc.Findings.AddStep(findings.Rejection, findings.StepPush, findings.RulePushRefused, "n1", refusal)
+	doc.Findings.AddStep(findings.Rejection, findings.StepPush, findings.RuleStepDiverged, stepRun+"2",
+		"step run "+stepRun+"2 towards stage change-1/bad-port stopped at phase push: landed n3; not landed n1 (push.refused)")
+	if full := join(parts(doc, pairs(), false)); len(full) <= CommentMax {
+		t.Fatalf("the example's full markdown is %d bytes, which a comment holds: it proves nothing", len(full))
+	}
+	md := Markdown(doc, pairs())
+	if len(md) > CommentMax {
+		t.Errorf("the markdown is %d bytes, over the %d a comment holds:\n%s", len(md), CommentMax, md)
+	}
+	for _, want := range []string{
+		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | diverged at push 29.8s;",
+		`  s3["change-1/bad-port<br/>failed"]`,
+		"**Findings**:\n\n- `contract.node.missing` main\n- `push.refused` n1 (×2)\n- `rehearsal.stage.failed` change-1/bad-port\n- `step.diverged` " + stepRun + "2\n\n",
+		"**Stages** (Infrahub's view does not show them):",
+		"**Warnings**:\n\n- `artifact.interface.unrepresented` n1:ethernet-1/99 (×4)\n\n",
+		"**Baseline findings** (reported, failing nothing):\n\n- `verify.neighbor` n1:ethernet-1/2\n\n",
+		"**Reproduce by hand**:\n\n```\nfylgja twin create --stage change-1/seeded\n",
+		"\n\n" + fitNote(nil) + "\n\n" + Caveat + "\n",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("the shortened markdown does not hold %q:\n%s", want, md)
+		}
+	}
+	for _, message := range []string{unrepresented, "the node's message", "invalid port ethernet-1/99", "sees no neighbour"} {
+		if strings.Contains(md, message) {
+			t.Errorf("the shortened markdown still holds a finding's message, %q:\n%s", message, md)
+		}
+	}
+
+	// Fourteen more stages keep the table and leave the drawing and the stages out; sixty, far
+	// past what the ceiling lets a rehearsal reach, leave the table out too and still fit.
+	for _, c := range []struct {
+		marks int
+		left  string
+		table bool
+	}{{14, "the drawing and the stages are left out", true}, {60, "the table, the drawing and the stages are left out", false}} {
+		e := passedRun()
+		for i := range c.marks {
+			s := head(RoleRehearsed)
+			s.Ref = fmt.Sprintf("%s/mark-%02d", change, i)
+			e.in.Stages = append(e.in.Stages, s)
+			e.res.Stages = append(e.res.Stages, StageResult{Ref: s.Ref, Verdict: VerdictPassed,
+				Step: stepTo(s.Ref, 3, wire.StepUnchanged, 0.9), Wait: wait(wire.WaitSettled, 1.0, 1), Counts: counts(8, 0), TookS: 1.9})
+		}
+		md := Markdown(e.document(), pairs())
+		if len(md) > CommentMax {
+			t.Errorf("%d more stages: the markdown is %d bytes, over the %d a comment holds", c.marks, len(md), CommentMax)
+		}
+		for _, want := range []string{
+			`## Fylgja rehearsed proposed change "third link" on change-1` + "\n\nRun `fylgja-rehearse " + rehearseRun + "`",
+			"\n\n*To fit what Infrahub keeps of a comment (4092 bytes), each finding is named by its identifier and object alone, and " +
+				c.left + "; fylgja-twin's message is the whole report as text.*\n\n" + Caveat + "\n",
+		} {
+			if !strings.Contains(md, want) {
+				t.Errorf("%d more stages: the markdown does not hold %q:\n%s", c.marks, want, md)
+			}
+		}
+		if got := strings.Contains(md, "| stage | at |") && strings.Contains(md, fmt.Sprintf("| change-1/mark-%02d |", c.marks-1)); got != c.table {
+			t.Errorf("%d more stages: the whole table is there %v, want %v:\n%s", c.marks, got, c.table, md)
+		}
+		if strings.Contains(md, "```") || strings.Contains(md, "**Stages**") {
+			t.Errorf("%d more stages: the drawing or the stages are there:\n%s", c.marks, md)
+		}
 	}
 }
 

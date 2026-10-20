@@ -1375,3 +1375,126 @@ with `local/.env` loaded. Outputs in `local/t056/`.
   stages, its one comment and its two user validators. Nothing else: no lab, no
   `local/twin`, no Schedule, `main` and `fylgja-fixture` beside it. The outputs hold no
   credential (§5.7's search).
+
+### 5.9 The comment in Infrahub's view, and why it was not there (2026-10-20, 17:55Z–18:15Z; T057, US2)
+
+**The operator's reading**, in a browser, of what T056 left (`tasks.md`, T057): the
+proposed change's overview showed **no comment**, although Infrahub held one; both checks'
+messages showed under the checks tab, as plain text with their line breaks kept, three
+messages each at `Level: INFO`: the check's own, the findings line, and Infrahub's `Check
+succesfully completed` (its spelling). The messages are as §1.2 read them and D-049 chose:
+nothing there is Fylgja's to fix.
+
+**Why**, read from 1.11.2's source in the image (`/source/frontend/app/src`,
+`/source/backend/infrahub`) and verified against the running instance:
+
+- The overview (`entities/proposed-changes/ui/overview.tsx`) is the proposed change's
+  **events** and an *Add comment* form. The events are `InfrahubEvent` filtered to the
+  proposed change as primary node and to the types `PROPOSED_CHANGE_EVENTS` names. The one
+  of them that shows a comment is `infrahub.proposed_change_thread.created`: its card reads
+  "<account> created a thread" and shows the thread its first related node names, with that
+  thread's `CoreThreadComment`s (`GetCoreThread`), each through `MarkdownRender`
+  (`remark-gfm`, `remark-breaks`, and Mermaid when a ```` ```mermaid ```` fence is present).
+  `infrahub.proposed_change.comment` is listed too, but nothing in the backend emits it.
+- The view's *Add comment* writes a `CoreChangeThread` (`change` the proposed change,
+  `label` `Conversation`, `resolved` false), then a `CoreThreadComment` (`text`, `thread`
+  that thread), and deletes the thread when the comment fails.
+- The backend (`events/generator.py`) emits `ProposedChangeThreadCreatedEvent` when a
+  `CoreChangeThread`, `CoreObjectThread`, `CoreArtifactThread` or `CoreFileThread` whose
+  `change` is a proposed change is created. A `CoreChangeComment` emits only
+  `infrahub.node.created`, with the comment as primary node. `CoreProposedChange.
+  total_comments` counts both kinds (`core/node/proposed_change.py`); no file of the
+  frontend reads `CoreChangeComment` but the generated types and the menu.
+- Live, on `18e01843-9cb0-c335-33b3-c51c6053f556` (`local/t057/`), before anything was
+  changed: one `CoreChangeComment`, `18e01873-9d1b-5f84-33bf-c51ebe0c3754`, 1,954 bytes of
+  UTF-8 text; no thread; `total_comments` 1. The overview's own query answered **0
+  events**; the proposed change's events were its `infrahub.node.created` and seven
+  `infrahub.node.updated`; the comment's one event was `infrahub.node.created` on `main`,
+  primary node the `CoreChangeComment`, related node the proposed change.
+
+So the defect is the kind D-049 named, not the markdown: §1.3 verified that a check may
+create a `CoreChangeComment`, and §1.2 read the rendering of a comment from the frontend's
+source, but neither read which comments the overview lists (§1.8 left the rendering for
+T057). The schema in the image declares `CoreProposedChange.threads` and
+`CoreThread.comments` as components with `on_delete: cascade`, as `comments` is.
+
+**The fix, Fylgja's to fix under US2**: `post_comment` (`infrahub/checks/fylgja_api.py`)
+posts the report as the view writes a comment: a `CoreChangeThread` on the proposed change,
+labelled `Conversation` and unresolved, then one `CoreThreadComment` in it with the report's
+markdown as its text, both on `main`; a thread whose comment cannot be saved is deleted, as
+the view deletes its own. The text's bound, `rehearsal.CommentMax`, holds unchanged: the
+thread's comment is a `CoreComment` whose `text` is the same `TextArea`. This supersedes
+D-049 in the kind it names, drafted below as D-053 for the operator.
+
+- **By hand** (18:00:10Z–18:00:30Z): the tree's `post_comment`, run from `.venv` with the
+  SDK as `INFRAHUB_API_TOKEN`'s account, on `18e01843…`, with the `CoreChangeComment`'s text:
+  `posted` in 6.3 s. The proposed change then held thread
+  `18e04eba-0463-9706-33b8-c51290b7b2fe` (`CoreChangeThread`, `Conversation`, unresolved)
+  with one comment, `18e04eba-a220-…`, byte for byte the report; `total_comments` 2. The
+  overview's own query answered **1 event**: `infrahub.proposed_change_thread.created` on
+  `main` at `18:00:14.678345Z`, primary node the proposed change, related node the thread,
+  read within 16 s of the post.
+- **`-delete`** (18:01Z), as the operator asked once the cause was found: `deleted 2 stages,
+  1 proposed change, branch fylgja-test-readme` in 14.3 s. Twenty seconds later
+  `CoreProposedChange`, `FylgjaStage`, `CoreChangeComment`, `CoreChangeThread`,
+  `CoreThreadComment`, `CoreUserValidator` and `CoreStandardCheck` each counted 0, and
+  `Branch` listed `main` and `fylgja-fixture` alone: **a proposed change's delete takes its
+  threads and their comments with it**, verified.
+- **The test** (tier 2, `internal/checks`' `TestChecksInsideInfrahub`, the tree's checks in
+  Infrahub's pipeline through the test's registration, R-18): a new step 7 marks the draft
+  ready with the stale mark standing and re-runs the user checks. Fylgja refuses the
+  rehearsal before any boot (the spec's edge case "A stage refused on the way in"), and
+  `fylgja-test-twin` must conclude failure naming `stage.artifact.stale` and post the report
+  (US2/AC3) as the overview shows it: each comment alone in its thread, `Status
+  **rejected**` and the rule in its text, and every thread named by a
+  `infrahub.proposed_change_thread.created` event of the proposed change within a minute.
+  Test support's `CommentsOf` now reads the comments of the proposed change's threads, and
+  `OverviewThreads` reads its events as the view does. The host's own registration's
+  `fylgja-twin` runs beside the test's and may post the same report, so the test asks for at
+  least one comment. **Passed** in 309.4 s (18:04Z–18:09Z): `fylgja-test-twin` concluded
+  failure after 31 s, message 3,873 characters, one comment posted in a thread the overview
+  lists; no twin. With the old `post_comment` swapped into the test's registration, the
+  same test **failed** at the comment, in 219.7 s (18:09Z–18:13Z): `fylgja-test-twin` concluded failure after 27 s as before, and then `the proposed change …, marked ready, holds no comment its overview shows`.
+- **Tier 3's case 9** reads the threads' comments too (`comments_of` in `scripts/e2e.sh`),
+  each rehearsal's comment alone in its own thread, and after `-delete` counts the threads
+  and their comments. It runs the checks the host's registration imported from `origin`'s
+  `main`, which still post a `CoreChangeComment`: **case 9 passes only once this fix is
+  pushed and imported** (R-21), so tier 3 was not run here.
+
+**Still owed (T057 stays open)**: the reading itself. No one has yet seen the report in the
+overview: the table, the Mermaid drawing (no error banner), the stages and the caveat, in a
+thread. It needs the fix on `origin`'s `main` and imported on the host's registration (the
+operator's push and import, R-21), then a proposed change rehearsed through the check (the
+README's walk-through), then the operator's reading. `remark-breaks` renders each single
+line break of the markdown as a break, which the reading should look at. Then `-delete`.
+
+**Records owed** (Run 21): `docs/verified-facts.md` gains that 1.11.2's proposed-change
+overview lists a comment only in a thread, through the event a thread's creation emits, a
+`CoreChangeComment` being counted and never shown, and that a proposed change's delete
+takes its threads and their comments; `docs/architecture.md` §4.6 says the check posts a
+thread. Once D-053 is accepted, `spec.md`'s FR-019 ("no object") and SC-007 ("one new
+comment"), and `plan.md`'s lines 81 and 160, which name `CoreChangeComment`, are the
+operator's to amend, as T081 amended 014's.
+
+> **D-053 — The check's comment is a thread on the proposed change, as its view shows
+> one.** Supersedes [D-049](../../docs/decisions.md#d-049) in the kind it names; D-049's
+> checks as clients of the API and glue, one new comment per run carrying the report's
+> markdown headed by the run, none edited, `fylgja-step` writing nothing, a comment that
+> cannot be posted failing nothing, and [D-026](../../docs/decisions.md#d-026) stand.
+> Context: D-049 named `CoreChangeComment`, which §1.3 verified a check may create, and the
+> reviewer reads the report in the proposed change's view (US2). Verified on 1.11.2
+> (2026-10-20, §5.9): the overview lists the proposed change's events, and a comment
+> appears there only in a thread, through the event a thread's creation emits; a
+> `CoreChangeComment` is counted in `total_comments` and shown nowhere in the view; the
+> operator read no comment in the overview of a proposed change that held one. Options:
+> keep `CoreChangeComment` (rejected: no reviewer sees it); an object or artifact thread
+> (rejected: each is anchored to an object or an artifact's line, and the report is the
+> whole proposed change's); a `CoreChangeThread` holding one `CoreThreadComment`, as the
+> view's own *Add comment* writes one (chosen). Decision: `fylgja-twin` posts each run's
+> report as one new `CoreChangeThread` on the proposed change, labelled `Conversation` and
+> unresolved as the view labels its own, holding one `CoreThreadComment` whose text is the
+> report's markdown, both on `main`; it deletes the thread it made when the comment cannot
+> be saved, as the view does, and otherwise edits and deletes nothing and writes nothing
+> else. Consequences: each rehearsal is a thread in the proposed change's overview, in the
+> order run; a reviewer may reply to it or resolve it, which nothing of Fylgja's reads; a
+> test's proposed change goes with its threads and their comments when deleted (§5.9).

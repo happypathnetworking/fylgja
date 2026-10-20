@@ -3,7 +3,8 @@
 It decides nothing. It reads the check's two variables, finds the open proposed change by its
 source branch with the check's own client, asks Fylgja's API one operation and reads the
 answer's frames to its document (contracts/api.md), sends the operator's interrupt, and posts
-a comment. Every verdict, deadline and wording of a report is the server's.
+the report on the proposed change as a new thread holding one comment (D-049, D-053). Every
+verdict, deadline and wording of a report is the server's.
 
 No sentence here carries the token, and none carries a variable's value but the address's: a
 fault names the variable, or the address it reached for. Stdlib and httpx alone, as Infrahub's
@@ -293,10 +294,11 @@ async def post_comment(client: Any, change_id: str, text: str) -> str | None:
     CoreChangeThread on the proposed change, then one CoreThreadComment in it whose text is the
     report's markdown, both saved on the default branch. The overview lists the proposed
     change's events, and only a thread's creation is one of them; a CoreChangeComment is
-    counted but never shown (research §5.9). It is the check's one write (D-049). A thread
-    whose comment cannot be saved is deleted, as the view deletes its own, so that no empty
-    thread is left. None when posted; otherwise why not, for the caller to log as
-    information, since a comment that cannot be posted fails nothing (FR-019).
+    counted but never shown (research §5.9). The thread and its comment are the check's one
+    write (D-049; D-053 made it a thread). A thread whose comment cannot be saved is deleted,
+    as the view deletes its own, so that no empty thread is left. None when posted; otherwise
+    why not, for the caller to log as information, since a comment that cannot be posted
+    fails nothing (FR-019).
     """
     thread = None
     try:

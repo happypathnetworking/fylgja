@@ -553,7 +553,9 @@ alone to its conclusion (FR-022): `fylgja-twin` `ok` → pass, anything else →
 with the document's text; `fylgja-step` passes unless the plan's findings hold a rejection
 other than `contract.node.missing` on the branch point (FR-017), the text as its message
 either way. The comment is `fylgja-twin`'s one write (`CoreChangeComment`, `text` the
-frame's `markdown`, `change` the proposed change), posted after the document is read, its
+frame's `markdown`, `change` the proposed change; *D-053 replaced the kind with a
+`CoreChangeThread` holding one `CoreThreadComment`, since the overview never shows a
+`CoreChangeComment`, §5.9*), posted after the document is read, its
 failure `log_info`'d without failing the check (FR-019). A transport fault, a `401` or a
 `404` under `Fylgja-Api-Versions` is `log_error` naming the address, never the token. The
 Python decides nothing else: no verdict, deadline or wording of its own. **Rationale**: the
@@ -677,8 +679,9 @@ creation runs both checks: `fylgja-twin` skipped it, `fylgja-step` passed), `-st
 seeded`, `-add-link`, the checksums awaited, `-stage third-link`, `-ready` (a new flag:
 `is_draft` false), `-run-checks user` (a new flag; waits for every user validator
 `completed`), then the `fylgja-twin` check read success with the report's text in its
-message, one `CoreChangeComment` with the table, the drawing and the stages, and the
-`twin.rehearse` run's history fetched; `twin show` reports no twin; then `-add-interface
+message, one `CoreChangeComment` (*D-053 replaced the kind: one thread, a
+`CoreChangeThread` holding one `CoreThreadComment`, §5.9*) with the table, the drawing and
+the stages, and the `twin.rehearse` run's history fetched; `twin show` reports no twin; then `-add-interface
 n1:ethernet-1/99`, `-generate`, the checksums awaited, `-stage bad-port`, `-run-checks
 user`, the check read failure naming `bad-port`, the phase `push` and n1, the second comment
 with the reproduce commands, `head`'s row `not reached`; then `-delete`, after which

@@ -88,7 +88,7 @@ No status, step, operation or exit is new beyond the operation.
 ### The text
 
 ```
-rehearsal of proposed change "third link" (18df…) on branch change-1, draft: 4 stages; deadline 32m0s (ceiling 1h0m0s)
+rehearsal of proposed change "third link" (18df…) on branch change-1, draft: 4 stages; deadline 32m30s (ceiling 1h0m0s)
 change-1/branch-point: refused (contract.node.missing)
   rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
 change-1/seeded: branch change-1 at 2026-10-16T17:25:30.118244+00:00 (written), "after the link is cabled"; baseline
@@ -100,35 +100,45 @@ run fylgja-provision 02b2…
 step host check: begins
 …
 step record: done in 0.1s
-stage change-1/seeded: verify: settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped
+stage change-1/seeded: verify: settled after 3.2s (2 reads)
 stage change-1/third-link: stepping
 run fylgja-step 03c3…
 …
 step observe: settled after 6.1s (4 reads)
-stage change-1/third-link: stepped in 4.5s (push n1 2.5s, n3 2.6s); settled after 6.1s; 19 held, 0 failed; passed
 stage change-1/head: stepping
 …
-stage change-1/head: unchanged in 0.9s; settled after 1.0s; passed
 destroying the twin
 run fylgja-destroy 04d4…
 …
 removed lab fylgja (3 containers)
 removed twin directory /srv/fylgja/local/twin
+stage change-1/branch-point: refused (contract.node.missing)
+stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline
+stage change-1/third-link: stepped in 4.5s (push n1 2.5s, n3 2.6s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed
+stage change-1/head: unchanged in 0.9s; settled after 1.0s (1 read); 19 held, 0 failed, 0 skipped; passed
 rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1950s deadline
 ```
 
-A failed stage's line names why (`diverged at phase push: landed n3; not landed n1
-(push.refused)`, or `failed: verify.neighbor n1:ethernet-1/3`), and the lines after it
-read `not reached`; the closing line says `rehearsal nonconforming: stage change-1/bad-port
-failed at phase push; the twin is destroyed; reproduce it by hand:` followed by the
-commands, one per line, indented. A refusal prints the plan's lines and the findings. The
-reclaim prints `reclaiming the twin of rehearsal run <id>` and the destroy's lines before
-the run. The findings, with the baseline's as warnings prefixed by the stage, print as every
-document prints them, on stderr.
+Each child's lines come under a `stage <ref>:` line, the destroy's under `destroying the
+twin`. The baseline's progress line names its verify's wait, `stage <ref>: verify: settled
+after …`, without its counts. Once the run has closed come what the destroy removed, then
+one line per stage, the baseline's counts on its own, and the closing line (T025, T029,
+T041). A step that restarted or recreated a node names each with the seconds its readiness
+took (`stepped in 95.3s (restarted n3 61.2s; push n1 2.5s, n3 2.6s)`), and a node the step
+was cut before awaiting alone (T070). A failed stage's line names why (`diverged at phase
+push: restarted n3 61.2s; landed n3; not landed n1 (push.refused)`, or `failed:
+verify.neighbor n1:ethernet-1/3`), and the lines after it read `not reached`; the closing
+line says `rehearsal nonconforming: stage change-1/bad-port failed at phase push; the twin
+is destroyed; reproduce it by hand:` followed by the commands, one per line, indented. A
+refusal prints the plan's lines and the findings. The reclaim prints `reclaiming the twin of
+rehearsal run <id>` and the destroy's lines before the run. The findings, with the
+baseline's as warnings prefixed by the stage, print as every document prints them, on
+stderr.
 
 ### The markdown
 
-Rendered from the `rehearsal` block alone (`rehearsal.Markdown`), GitHub-flavoured:
+Rendered from the document and the plan's steps between the stages (`rehearsal.Markdown`),
+GitHub-flavoured:
 
 ```markdown
 ## Fylgja rehearsed proposed change "third link" on change-1

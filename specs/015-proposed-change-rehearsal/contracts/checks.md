@@ -34,7 +34,7 @@ before the import does not run them until rebased or recreated (research §1.5).
 
 | Variable | From | Unset |
 |---|---|---|
-| `FYLGJA_API_ADDRESS` | the override: `host.docker.internal:7650` | `log_error` naming the variable, nothing sent, conclusion failure |
+| `FYLGJA_API_ADDRESS` | the override: `host.docker.internal:7650` | `log_error` naming the variable, nothing sent, conclusion failure; `fylgja-twin` on a draft reads neither variable and skips it |
 | `FYLGJA_API_TOKEN` | the override, from `local/.env` | the same |
 
 Nothing else of Fylgja's, Infrahub's or a node's. The check's own client (`self.client`,
@@ -49,8 +49,8 @@ which a fault names as the server it tried (Constitution X; US2's scenario 4).
 1. The variables; the proposed change (none open on the branch: `log_error`).
 2. `POST /v1/stage/plan` with `{"render": "text", "args": {"branch": <branch_name>}}`,
    read to its document.
-3. `log_info` the plan's text, line by line as the `out` frames carried it, then the
-   findings' text.
+3. Once the answer has ended, `log_info` the plan's text as the `out` frames carried it,
+   then the `err` frames' text, each once, then the findings' text.
 4. **Conclusion**: `log_error` when the document's findings hold a rejection, **except** a
    branch point (`at_source: branch_point`) whose one rejection is `contract.node.missing`;
    when the plan's status is `error` (`operation.failed`, the stages unlistable); and when
@@ -62,12 +62,15 @@ Runs on every open proposed change, draft or not.
 
 ## `fylgja-twin` (`timeout = 4200`)
 
-1. The variables; the proposed change. **A draft** (`is_draft`): `log_info` `skipped: proposed
-   change <id> is a draft; mark it ready for review and re-run the checks to rehearse it`,
-   conclusion success, nothing asked of Fylgja.
+1. The proposed change (none open on the branch: `log_error`), then the variables. **A
+   draft** (`is_draft`) is decided first, since it needs nothing of Fylgja's (FR-020):
+   `log_info` `skipped: proposed change <id> is a draft; mark it ready for review and re-run
+   the checks to rehearse it`, conclusion success, neither variable read and nothing asked
+   of Fylgja.
 2. `POST /v1/twin/rehearse` with `{"render": "markdown", "args": {"branch": <branch_name>}}`
    and `Fylgja-Stream: <16 random bytes in hex>`, streamed, no read timeout, read to its
-   document; every `out` and `err` frame logged as it comes.
+   document; the `out` frames and then the `err` frames logged once each, when the answer
+   ends or is cut (T046), since Infrahub shows every entry as a block of its own.
 3. **The host held** (`run.in_flight`, `host.lab.present`, `host.twin.present` before any
    `start`): wait 30 s and ask again, until the check's own deadline (its `timeout` less
    180 s) nears, then `log_error` naming the run or the twin the last answer named. A
@@ -101,9 +104,12 @@ status's mapping and nothing else ([D-052](../research.md#3-the-decision-entries
 
 ## What Infrahub shows
 
-- The check's message under `Message` in the proposed change's checks tab, as code.
-- The comment in the conversation tab, rendered: the table, the Mermaid drawing, the
-  stages, the warnings, the baseline findings, the reproduce commands, the caveat.
+- The check's message under `Message` in the proposed change's checks tab, as plain text
+  with its line breaks kept (research §5.9).
+- The report in the proposed change's overview, as the thread its creation lists
+  ("<account> created a thread"), its one comment rendered as markdown: the table, the
+  Mermaid drawing, the stages, the warnings, the baseline findings, the reproduce commands,
+  the caveat ([D-053](../../../docs/decisions.md#d-053)).
 - The validator `Check: fylgja-twin` `success` or `failure`; a failure blocks the merge
   (every validator but the data one must succeed).
 

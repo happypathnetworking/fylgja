@@ -712,3 +712,86 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - *2026-10-20, convergence pass 1's implement run:* `.infrahub.yml`'s header, `fylgja_twin.py`'s module docstring, and `docs/c4/workspace.dsl`'s task worker with its edge to the Infrahub server now say that the report is posted as one comment in a new thread on the proposed change, which its overview shows: the check's one write (D-049, D-053), the thread deleted only when its comment cannot be saved. `make diagrams` moved those two descriptions in `structurizr-Deployment.puml` and `.svg`, the one view that draws the task worker, and nothing else. `python3 -m py_compile infrahub/checks/*.py` is clean, and `go test . -count=1` passes with `TestInfrahubYAMLRegistersTheChecks`. The registration was not asked to import the commit: tier 3's precondition reads the definitions' names and timeouts alone, and neither moved.
 - [X] T069 [pin] Correct quickstart §3 (`specs/015-proposed-change-rehearsal/quickstart.md`) to what T041 found (research §5.2). First, `bad-port`'s failure gives **five** reproduce commands, not four, since it is the second rehearsed stage: `twin create --stage $B/seeded`, a step with `--allow-restart` to `third-link` and to `bad-port`, `twin verify` and `twin destroy`. Second, the reclaim's choreography needs the run ended, which a run with no worker cannot do by itself. So: stop the worker during the baseline's deploy; `temporal workflow terminate --workflow-id fylgja-rehearse`, which runs no destroy; restart the worker, so that the abandoned provision child ends ready and records the twin naming the dead run; then run `twin rehearse` again, which prints `reclaiming the twin of rehearsal run …` and goes on. Note too that a client still following the terminated run answers only once that child closes. A doc line alone. Per plan (quickstart §3) and FR-007 (partial)
   - *2026-10-20, convergence pass 1's implement run:* quickstart §3 gives `bad-port`'s five reproduce commands (`twin create --stage $B/seeded`, the steps to `third-link` and to `bad-port` with `--allow-restart`, `twin verify`, `twin destroy`), saying why: `bad-port` is the second rehearsed stage. Its hand line runs the five, and its expectation reads as research §5.2 found them: the step to `bad-port` `diverged` at push (exit 4), `twin verify` failing on the record's claim (exit 5), the destroy clearing it. The reclaim says why the run must be ended and how: the worker stopped during the baseline's deploy, `temporal workflow terminate --workflow-id fylgja-rehearse` (no destroy), the worker restarted so that the abandoned provision child ends ready and records the twin naming the dead run, then `twin rehearse` again, `reclaiming the twin of rehearsal run …`; and that a client still following the terminated run answers only once that child closes. A doc change alone.
+
+## Phase 12: Convergence
+
+- [ ] T070 [behaviour] Name the time a restart or a recreation cost in the rehearsal's text and table, as FR-004 says ("the report names each node restarted or recreated and the time it cost") and the spec's edge case "A step that restarts a node" puts it ("the row names the node restarted and the minute it cost"). The block already carries the time: `stepBlock` (`internal/rehearsal/report.go`) copies the step's `Timings.Readiness`, each awaited node's seconds. But `touched` (the text's stage line) and `stepCell` (`internal/rehearsal/markdown.go`, the table's step cell) name a restarted or recreated node alone, as `markdown_test.go`'s failed row pins it (`restarted n3`). `divergence`, the line of a diverged step, names no restart at all. Write each restarted or recreated node with its readiness seconds when the block holds them, as `twin show` words a step's readiness (`perNode`, `internal/server/show.go`: `restarted n3 61.2s`). Name a node with no readiness entry (the step cut before readiness) alone. Give the divergence line the same part. The JSON block does not change. Extend `report_test.go` and `markdown_test.go`: a stepped stage with a restarted and a recreated node; a diverged one cut before readiness; every pinned output of no restart unchanged; the markdown still within `CommentMax`. Show it in `contracts/cli.md`'s 015 text where a stage line is given. `make test`, `make lint`. Per FR-004 and spec Edge Cases "A step that restarts a node" (partial)
+- [ ] T071 [behaviour] Make `scripts/bring-up.sh` read a log holding NUL bytes as text, so that the `fylgja` part judges each running process by its own report (FR-026's verification).
+  - **The defect.** `local/worker.log` holds a run of 516 NUL bytes at offset 7,328,989 (T036's note). Past them, GNU grep 3.12 lists no match and says `binary file matches` on stderr, which `last_report_offset` discards. On this host that returns the offset of line 390's report rather than line 62,112's, the running worker's, 47 restarts later. `report_ok` then reads every report since line 390, and `$(tail -c …)` drops the NULs with bash's `ignored null byte` warning, which both of T036's runs printed. A worker whose own report lacks a login line would read `present` on an older report's.
+  - **The fix.** Use `grep -a` in `last_report_offset`, and strip NUL bytes from what `report_ok` reads (`tail -c … | tr -d '\0'`).
+  - **Verify** against scratch logs in the scratchpad, as T033 did. A NUL run between two reports gives the second's offset, with no warning. A later report lacking a login line is refused, although an earlier one had it. A log with no NUL reads as before. Then `bash -n` and `shellcheck scripts/bring-up.sh scripts/e2e.sh`. Do not run the script: it asks for sudo.
+  - **Record it.** `CLAUDE.md`'s State open item on the worker log's NUL bytes says that the script reads past them, their origin untraced.
+
+  Per FR-026 and T036's note (partial)
+- [ ] T072 [operator] Settle whether a check's message may name the API's address.
+  - **What the artifacts say.** US2's acceptance scenario 4 (`spec.md`) has a check that cannot reach Fylgja, or whose token is refused, conclude failure "without a value of either variable in its message". data-model §9 and `contracts/checks.md` (its environment section, lines 43–44) say the same. But `contracts/checks.md` (lines 57 and 88) gives the faults "naming the address".
+  - **What the code does.** `infrahub/checks/fylgja_api.py`'s six faults name it (`the API at {address} cannot be reached: …`, and the rest), as its module docstring says it does on purpose. The address is `FYLGJA_API_ADDRESS`'s value, `host.docker.internal:7650` in the task workers, and it is no credential (FR-023, FR-035).
+  - **The operator chooses one of two.**
+    - (a) Amend scenario 4 to "without the token in its message", the address named as the contract's faults name it, since it is what a reviewer needs to find an unreachable server. data-model §9 and `checks.md` lines 43–44 then follow, and nothing is built (recommended).
+    - (b) Keep the spec: each fault names `FYLGJA_API_ADDRESS` instead of its value. That is a change to the checks, which reaches the host's Infrahub only on the operator's push and import (R-21).
+
+  Per US2/AC4 and FR-020 (contradicts)
+- [ ] T073 [operator] Settle how tier 2 and tier 3 prove that the server on the bridge is this tree's. `CLAUDE.md`'s Build and test, R-18 and R-19 require it: `TestChecksInsideInfrahub` "needs the server on the bridge from this tree", and case 9 fails "unless `Fylgja-Build` is `bin/fylgja --version`'s". Neither is proved.
+  - **Tier 2.** `scripts/bring-up.sh`'s `fylgja` part runs `make test-contract` (line 904) before `ensure_role worker`, `bridge_address` and `ensure_role serve` (lines 915–917). On a second run after a change, `make build` has relinked `bin/fylgja`, so the test exercises the old, `(deleted)` server. On a fresh host no server is up yet, and the test skips.
+  - **Tier 3.** Every unstamped build is `0.1.0-dev` (`Makefile`'s `VERSION ?=`), so case 9's `Fylgja-Build` comparison (`scripts/e2e.sh`, about line 743) passes for a server of any tree. `TestChecksInsideInfrahub` reads no build at all.
+  - **The operator chooses.**
+    - (a) Amend the records to what is checked, a server of this version on the bridge, and build nothing.
+    - (b) Prove it. The `fylgja` part ensures the worker and the server before its tiers. Case 9's precondition and the test compare the running server's `/proc/<pid>/exe` with this tree's `bin/fylgja` (not `(deleted)`, the same file), saying so when `/proc` cannot be read, as for a server started under `sg docker`.
+    - (c) Stamp `Fylgja-Build` with the VCS revision and the modified flag the binary already carries (`vcs.revision`, `vcs.modified`), so that the header names the tree. That moves `--version`'s output and every record that quotes `0.1.0-dev`.
+
+    Recommended: (b), which moves no format.
+
+  Per `CLAUDE.md` (Build and test), research R-18 and R-19, FR-029 and FR-030 (partial)
+- [ ] T074 [behaviour] In `infrahub/checks/fylgja_api.py`'s `call`, build the request inside the handling that turns a failure into a fault.
+  - **The defect.** `client.build_request` (about line 235) comes before the `try`. Two inputs escape `validate` uncaught: an address that `_base` accepts and httpx cannot parse (`httpx.InvalidURL`: a bad host, or a port over 65535), and a token that httpx cannot encode as ASCII (`UnicodeEncodeError`, whose text quotes the offending character and its position). The check's message is then Infrahub's `FATAL Error` with the exception's text, rather than a `log_error` naming the variable.
+  - **The fix.** Make each a fault that names the variable alone (`FYLGJA_API_ADDRESS` or `FYLGJA_API_TOKEN` cannot be used: …), never its value or any part of it, before any request.
+  - **Verify** outside Infrahub in the scratchpad, as T046 did: the module imported as `commits.<sha>.infrahub.checks.fylgja_twin` with the venv's SDK, against no server. A port of 70000, and a token holding `é`, each conclude failure for both checks, with a message that names the variable and carries no character of the token. Then `python3 -m py_compile infrahub/checks/*.py`.
+  - **The host.** The registration runs the old code until the operator pushes and imports it (R-21). No tier needs that, since tier 3's precondition reads the definitions' names and timeouts alone.
+
+  Per FR-020, FR-023 and FR-035 (partial)
+- [ ] T075 [operator] Settle the markdown's Warnings, `CLAUDE.md`'s open item from 015.
+  - **What runs.** The section (`warningsSection`, `internal/rehearsal/markdown.go`) lists the document's warnings, verify's aside, sorted, each identical line once with its count (`counted`, since T055). It names no stage. A warning that the plan files for each stage reading it, at read and at compile, therefore reads as one line marked `(×4)` for two stages. Research §5.2 saw four identical `artifact.interface.unrepresented` lines for `bad-port` and `head`, before `counted`. `stage plan` prints such a warning under each stage instead.
+  - **What the artifacts settle.** FR-014 asks for "014's warnings" and settles neither form.
+  - **The operator chooses one of two.**
+    - (a) Keep it, and strike the open item.
+    - (b) Each warning a stage filed names its stages, once per stage (`… n1:ethernet-1/99 (stages bad-port, head)`), read from the block's per-stage `findings`. The run's own warnings (`stage.main.moved`, the reclaim, the moved and closed warnings) stay as they are, and the brief form and `CommentMax` hold. That is a `[behaviour]` change to `markdown.go`, with `TestMarkdown` extended.
+
+    Recommended: (b).
+
+  Per FR-014 (partial)
+- [ ] T076 [pin] Correct the records where they say something other than what runs, as FR-033 and FR-032 ask. These are doc lines and schema descriptions alone; no structure moves.
+  - **`docs/architecture.md`, about lines 1258–1266.**
+    - The destroy's `removed …` lines come before the stage lines and the closing line (`reported`, `internal/server/rehearse.go`).
+    - The destroy child is announced by `destroying the twin`, not a `stage <ref>:` line.
+    - The markdown is rendered from the document and the plan's steps, not "from that block alone". `contracts/cli.md` (about line 605, "from the document alone") and `contracts/api.md` (about line 319) say the same, as `api.schema.json` already does.
+  - **`show.record.rehearsal`.** It is absent when the record names no rehearsal (`render.go`'s `omitempty`; `show.schema.json` says so), not `null`: `contracts/cli.md` about line 663 and `contracts/api.md` about lines 328–329. `verify.twin.rehearsal` is `null`.
+  - **`contracts/api.md`.**
+    - About line 308: the reclaim's line is an `out` line under a rendering (`opts.note`), not an event's notice.
+    - About lines 311–313: the destroy child is preceded by `destroying the twin`.
+  - **`contracts/cli.md`, about line 569.** The example's `deadline 32m0s` is `32m30s`, the 1,950 s its closing line names.
+  - **`contracts/rehearsal.schema.json`'s descriptions.**
+    - `wait` is `null` when the wait did not run, not absent; the key is required.
+    - The role `refused` also marks every stage the plan refused in a refused rehearsal's block, not only a branch point passed over. `docs/glossary.md` (about line 1032) says the same as the schema now does.
+    - If a test or a record holds the feature's copy under `specs/015-proposed-change-rehearsal/contracts/` equal to it, change that copy alike.
+  - **`fylgja-step` fails in more cases than "only" admits.** It also fails on a variable unset, a token or version refused, and no open proposed change (`fylgja_step.py`), as `contracts/cli.md` has it. Correct `docs/architecture.md` (about lines 1284–1286) and `docs/glossary.md` (about line 196).
+  - **Tier 3's time.** `scripts/bring-up.sh`'s last report (about line 941) gives "about 19–20 minutes". Write about 26 minutes, and about 17 narrowed, as `CLAUDE.md` gives them, and align the README's "about 27 minutes" with it.
+  - **Gates.** `make test` (the schema tests read the contracts), `make lint`, `bash -n` and `shellcheck scripts/bring-up.sh scripts/e2e.sh`.
+
+  Per FR-032 and FR-033 (partial)
+- [ ] T077 [pin] Bring the feature's contracts and the checks' docstrings into line with what runs, as T069 did for quickstart §3.
+  - **`specs/015-proposed-change-rehearsal/contracts/rehearse-command.md`, "The text".** The stage lines come once the run has closed, after the destroy's `removed …` lines (T025, T041). The baseline's progress line is `stage <ref>: verify: settled after …` with no counts, and its counts are on its stage line after the run (T029). The deadline is `32m30s` for 1,950 s. Strike the open item "the baseline's verify line carries no counts" from `CLAUDE.md`'s State, since the stage line carries them.
+  - **`contracts/checks.md`.**
+    - `fylgja-twin` decides the draft skip before the variables (step 1 and the table; FR-020).
+    - The out and err frames are logged once, when the answer ends or is cut (T046), not "as it comes" nor "line by line".
+    - "What Infrahub shows": the report is in a thread in the proposed change's overview, not the conversation tab. A check's message is plain text with its line breaks kept, not code (research §5.9).
+  - **`contracts/fixture-tool.md`.**
+    - `CheckDefinitions` returns `[]CheckDefinitionRow{Name, Timeout}`.
+    - `CommentsOf` reads each thread's comments, `Thread` beside `ID` and `Text`, and no `CoreChangeComment`.
+    - Add `AwaitUserChecks` and `OverviewThreads`.
+    - `-run-checks user` waits for the definitions of a registered repository that the branch sees, each restarted (research §5.5), not every validator.
+    - A helper given an id reads its proposed change's branch before refusing, so the guard holds before any write, not before any request. The flags refuse before any request.
+  - **`infrahub/checks/fylgja_api.py`.** The module docstring ("posts a comment") and `post_comment`'s (which cites D-049 alone) say a thread holding one comment, citing D-053. These are comments only, and the registration need not import them.
+  - **Research.** Add a one-line note to research R-13 and R-19, each naming `CoreChangeComment`, that D-053 replaced the kind (§5.9).
+  - **Gates.** `python3 -m py_compile infrahub/checks/*.py` and `go test . -count=1`.
+
+  Per FR-032, FR-033 and D-053 (partial)

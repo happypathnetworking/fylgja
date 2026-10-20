@@ -29,10 +29,10 @@ import (
 // Infrahub's task workers reach through the Compose override: on the development host, the
 // operator's, on the bridge (D-050). The test seeds a throwaway branch and deletes, however it
 // ends, the branch with what hangs on it, then its registration with its definitions and query.
-// Its proposed change stays a draft, which fylgja-twin skips, so it asks Fylgja for plans
-// alone and boots no twin; still, boot none while it runs. It reads twin show from the API's
-// server at FYLGJA_API_ADDRESS (127.0.0.1:7650 when unset) with FYLGJA_API_TOKEN, which
-// local/.env holds.
+// Its proposed change is a draft, which fylgja-twin skips, until a stale mark stands; marked
+// ready then, its rehearsal is refused before any boot, so no twin is booted; still, boot
+// none while it runs. It reads twin show from the API's server at FYLGJA_API_ADDRESS
+// (127.0.0.1:7650 when unset) with FYLGJA_API_TOKEN, which local/.env holds.
 //
 //	set -a; . local/.env; set +a; go test -count=1 -tags contract ./internal/checks -run TestChecksInsideInfrahub -v
 
@@ -44,6 +44,8 @@ const (
 	fetchWait     = 15 * time.Second
 	userCheckWait = 6 * time.Minute
 	checksumWait  = 90 * time.Second
+	// eventWait bounds Infrahub's event log's lag behind a write: a few seconds (D-048).
+	eventWait = time.Minute
 )
 
 // unreached are the glue's sentences for a task worker that reaches no server
@@ -57,7 +59,10 @@ var unreached = []string{"cannot be reached", "is not set in this task worker's 
 // nothing and posts no comment, and no twin is booted. fylgja-step, with two marks, concludes
 // success, its message the plan's text with its four stages, three steps and the branch
 // point's contract.node.missing; with a mark made stale it concludes failure naming
-// stage.artifact.stale and the device. Neither message carries a credential. Where the task
+// stage.artifact.stale and the device. Marked ready with that mark standing, fylgja-twin asks
+// for the rehearsal, which Fylgja refuses before any boot, concludes failure naming
+// stage.artifact.stale, and posts the report as a comment in a thread the proposed change's
+// overview lists (US2/AC3; research §5.9). No message carries a credential. Where the task
 // workers reach no server, the draft's skip is proved and the test says so and skips.
 func TestChecksInsideInfrahub(t *testing.T) {
 	c, err := testsupport.NewClient()
@@ -177,6 +182,88 @@ func TestChecksInsideInfrahub(t *testing.T) {
 			id, len(comments), TestTwinCheck)
 	}
 	noTwin(t)
+
+	// 7. Marked ready with the stale mark standing, the rehearsal is refused before any boot,
+	// and fylgja-test-twin concludes failure and posts the report it got (US2/AC3) as one
+	// comment its overview shows (research §5.9).
+	if err := c.MarkReady(id); err != nil {
+		t.Fatal(err)
+	}
+	started = time.Now()
+	rows, err := c.RunUserChecks(id, userCheckWait)
+	if err != nil {
+		t.Fatalf("re-running the user checks: %v", err)
+	}
+	var twin *testsupport.UserCheckRow
+	for i := range rows {
+		if rows[i].Name == TestTwinCheck {
+			twin = &rows[i]
+		}
+	}
+	if twin == nil {
+		t.Fatalf("the re-run's user checks are %+v; %s is not among them", rows, TestTwinCheck)
+	}
+	noCredential(t, *twin)
+	reached(t, *twin)
+	t.Logf("%s on the proposed change marked ready: %s after %.0fs, message %d characters",
+		twin.Name, twin.Conclusion, time.Since(started).Seconds(), len(twin.Message))
+	if twin.Conclusion != "failure" || !strings.Contains(twin.Message, findings.RuleStageArtifactStale) {
+		t.Errorf("with a stale mark %s concluded %q, want failure naming %s:\n%s",
+			TestTwinCheck, twin.Conclusion, findings.RuleStageArtifactStale, twin.Message)
+	}
+	posted(t, c, id)
+	noTwin(t)
+}
+
+// posted holds the proposed change id to the comments fylgja-twin posted on a refused
+// rehearsal: at least one, each its thread's only comment, each the report's markdown with
+// the status rejected and the stale finding, and each thread listed by the proposed change's
+// overview once Infrahub's event log has it (research §5.9). The host's own registration,
+// whose fylgja-twin runs beside the test's, may post one more, the same report.
+func posted(t *testing.T, c *testsupport.Client, id string) {
+	t.Helper()
+	comments, err := c.CommentsOf(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(comments) == 0 {
+		t.Fatalf("the proposed change %s, marked ready, holds no comment its overview shows: %s posts the report it got", id, TestTwinCheck)
+	}
+	threads := map[string]int{}
+	for _, cm := range comments {
+		threads[cm.Thread]++
+		for _, want := range []string{"Status **rejected**", findings.RuleStageArtifactStale} {
+			if !strings.Contains(cm.Text, want) {
+				t.Errorf("comment %s does not carry %q:\n%s", cm.ID, want, cm.Text)
+			}
+		}
+	}
+	for thread, n := range threads {
+		if n != 1 {
+			t.Errorf("thread %s holds %d comments, want the report alone", thread, n)
+		}
+	}
+	deadline := time.Now().Add(eventWait)
+	for {
+		listed, err := c.OverviewThreads(id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		missing := []string{}
+		for thread := range threads {
+			if !slices.Contains(listed, thread) {
+				missing = append(missing, thread)
+			}
+		}
+		if len(missing) == 0 {
+			t.Logf("%d comment(s) posted, each in a thread the overview lists", len(comments))
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("after %s the overview of %s lists threads %v, not %v: the comment would not be seen", eventWait, id, listed, missing)
+		}
+		time.Sleep(2 * time.Second)
+	}
 }
 
 // repoPath is a path under the repository's root.

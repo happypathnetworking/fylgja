@@ -58,11 +58,12 @@
 #      draft's creation the check fylgja-twin skipped it and fylgja-step passed, and no
 #      comment was posted; stage seeded, a third link, stage third-link; marked ready and the
 #      user checks run again: fylgja-twin rehearsed it on a twin and passed, its message
-#      saying rehearsal ok, one comment holding the table, the drawing and the stages, and no
-#      twin left; an interface n1 does not have, generated, stage bad-port, the checks run
-#      again: fylgja-twin failed, naming bad-port's push on n1, a second comment holding the
-#      commands that reproduce it and the head not reached; the branch deleted, and with its
-#      proposed change the comments and the validators
+#      saying rehearsal ok, one comment in a thread of the proposed change, which its overview
+#      shows, holding the table, the drawing and the stages, and no twin left; an interface n1
+#      does not have, generated, stage bad-port, the checks run again: fylgja-twin failed,
+#      naming bad-port's push on n1, a second comment in a second thread holding the commands
+#      that reproduce it and the head not reached; the branch deleted, and with its proposed
+#      change the threads, their comments and the validators
 #
 # Needs, all running from this directory: `make temporal-dev`, `make worker` (restarted
 # after every rebuild, since case 1's refusal is worded by the worker and case 5's checks
@@ -88,7 +89,7 @@
 # the list, the cases that ran and each case skipped with its reason. Any failed check exits 1
 # after the trap's destroy, which cancels a rehearsal in flight and waits for its own destroy,
 # and its deletion of the throwaway branches of cases 5 to 9 (7's, 8's and 9's with their
-# stages and proposed changes, 9's comments and validators going with its proposed change); a
+# stages and proposed changes, 9's threads and validators going with its proposed change); a
 # lab, a twin directory or Schedule fylgja-follow left behind after that destroy exits 99.
 set -euo pipefail
 
@@ -1782,12 +1783,13 @@ user_checks() {
         end] | sort_by(.name)' > "$OUT/checks-$1.json"
 }
 
-# comments_of NAME PC: the proposed change's comments, as test support's CommentsOf reads them
-# through its comments relationship, [{id, text}] in Infrahub's order, written to
-# $OUT/comments-NAME.json, where the greps read each text.
+# comments_of NAME PC: the comments the proposed change's overview shows, each comment of each
+# of its threads, as test support's CommentsOf reads them (research §5.9), [{id, thread, text}]
+# in Infrahub's order, written to $OUT/comments-NAME.json, where the greps read each text.
 comments_of() {
-  gql "" "{ CoreProposedChange(ids: [\"$2\"]) { edges { node { comments { edges { node { id text { value } } } } } } } }" |
-    jq '[.CoreProposedChange.edges[].node.comments.edges[].node | {id, text: .text.value}]' > "$OUT/comments-$1.json"
+  gql "" "{ CoreProposedChange(ids: [\"$2\"]) { edges { node { threads { edges { node { id comments { edges { node { id text { value } } } } } } } } } } }" |
+    jq '[.CoreProposedChange.edges[].node.threads.edges[].node | .id as $t | .comments.edges[].node | {id, thread: $t, text: .text.value}]' \
+      > "$OUT/comments-$1.json"
 }
 
 # rehearsal_run CASE FILE: the run a rehearsal's comment names in its second paragraph, Run
@@ -1918,12 +1920,13 @@ expect "$OUT/checks-9b.json" '(map(select(.name == "fylgja-twin")) | length == 1
       | contains("stage " + env.FR + "/bad-port failed at phase push") and contains("not landed n1 (push.refused)"))))
   and (map(select(.name == "fylgja-step")) | length == 1 and .[0].conclusion == "success")'
 comments_of 9b "$PC9" 2> "$OUT/comments-9b.err" || fail "case 9: reading $PC9's comments failed; see $OUT/comments-9b.err"
-expect "$OUT/comments-9b.json" 'length == 2 and any(.[]; .id == env.COMMENT9A)
+expect "$OUT/comments-9b.json" 'length == 2 and any(.[]; .id == env.COMMENT9A) and (map(.thread) | unique | length == 2)
   and (map(select(.id != env.COMMENT9A)) | length == 1 and (.[0].text | contains("Status **nonconforming**")
     and contains("**Reproduce by hand**") and contains("fylgja twin create --stage " + env.FR + "/seeded\n")
     and contains("fylgja twin step --stage " + env.FR + "/bad-port --allow-restart\n")))'
 jq -r '.[] | select(.id != env.COMMENT9A) | .text' "$OUT/comments-9b.json" > "$OUT/comment-9b.md"
 COMMENT9B=$(jq -r '.[] | select(.id != env.COMMENT9A) | .id' "$OUT/comments-9b.json")
+THREADS9=$(jq -c 'map(.thread)' "$OUT/comments-9b.json")
 grep -qE "^\| $FR/head \|.*\| not reached \|\$" "$OUT/comment-9b.md" ||
   fail "case 9: the second comment's table has no row of $FR/head reading not reached; see $OUT/comment-9b.md"
 rehearsal_run 9b "$OUT/comment-9b.md"
@@ -1932,17 +1935,18 @@ RUN9B=$REHEARSAL_RUN USED9B=$REHEARSAL_USED
 echo "e2e: case 9: rehearsal run $RUN9B failed at $FR/bad-port's push on n1, $USED9B; a second comment, with the commands that reproduce it"
 no_twin 9b
 
-# The branch goes with its stages and its proposed change, the comments and the validators
-# going with the proposed change, and Infrahub then holds nothing of it.
+# The branch goes with its stages and its proposed change, the threads with their comments and
+# the validators going with the proposed change, and Infrahub then holds nothing of it.
 if fixture -branch "$FR" -delete > "$OUT/delete-branch-9.out" 2>&1; then
   grep -qxF "deleted 3 stages, 1 proposed change, branch $FR" "$OUT/delete-branch-9.out" ||
     fail "case 9: -delete on $FR did not report its three stages and its proposed change; see $OUT/delete-branch-9.out"
   infrahub_holds_none 9 "$FR"
-  gql "" "{ CoreChangeComment(ids: [\"$COMMENT9A\", \"$COMMENT9B\"]) { count }
+  gql "" "{ CoreChangeThread(ids: $THREADS9) { count } CoreThreadComment(ids: [\"$COMMENT9A\", \"$COMMENT9B\"]) { count }
     CoreUserValidator(proposed_change__ids: [\"$PC9\"]) { count } }" \
     > "$OUT/infrahub-after-9-comments.json" 2> "$OUT/infrahub-after-9-comments.err" ||
     fail "case 9: reading Infrahub after $FR's delete failed; see $OUT/infrahub-after-9-comments.err"
-  expect "$OUT/infrahub-after-9-comments.json" '.CoreChangeComment.count == 0 and .CoreUserValidator.count == 0'
+  expect "$OUT/infrahub-after-9-comments.json" '.CoreChangeThread.count == 0 and .CoreThreadComment.count == 0
+    and .CoreUserValidator.count == 0'
   unset FR
 else
   fail "case 9: -delete on $FR failed, leaving its branch, stages or proposed change; see $OUT/delete-branch-9.out"

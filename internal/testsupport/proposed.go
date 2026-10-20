@@ -78,11 +78,12 @@ type UserCheckRow struct {
 	ValidatorState string
 }
 
-// CommentRow is one comment on a proposed change, as Infrahub lists them. A comment has no
-// stamp and no author (research §1.2), so its text is all there is to tell two apart.
+// CommentRow is one comment on a proposed change as its overview shows it: a comment in one
+// of the proposed change's threads (research §5.9), its text what tells two apart.
 type CommentRow struct {
-	ID   string
-	Text string
+	ID     string
+	Thread string
+	Text   string
 }
 
 // testBranch refuses a branch that is not a test's. The fixture is named first, so the
@@ -841,14 +842,15 @@ func (c *Client) checkDefinitionsOn(branch string) ([]checkDefinition, error) {
 	return out, nil
 }
 
-// CommentsOf lists a proposed change's comments through its comments relationship, in
-// Infrahub's order.
+// CommentsOf lists the comments a proposed change's overview shows: each comment of each of
+// its threads, through its threads relationship, in Infrahub's order. A CoreChangeComment,
+// which Infrahub counts but its overview never shows, is not among them (research §5.9).
 func (c *Client) CommentsOf(id string) ([]CommentRow, error) {
 	if _, err := c.testProposedChange(id); err != nil {
 		return nil, err
 	}
 	raw, err := c.GraphQL("main", fmt.Sprintf(
-		`{ CoreProposedChange(ids: [%q]) { edges { node { comments { edges { node { id text { value } } } } } } } }`, id))
+		`{ CoreProposedChange(ids: [%q]) { edges { node { threads { edges { node { id comments { edges { node { id text { value } } } } } } } } } } }`, id))
 	if err != nil {
 		return nil, fmt.Errorf("listing proposed change %s's comments: %w", id, err)
 	}
@@ -856,16 +858,23 @@ func (c *Client) CommentsOf(id string) ([]CommentRow, error) {
 		P struct {
 			Edges []struct {
 				Node struct {
-					Comments struct {
+					Threads struct {
 						Edges []struct {
 							Node struct {
-								ID   string `json:"id"`
-								Text struct {
-									Value string `json:"value"`
-								} `json:"text"`
+								ID       string `json:"id"`
+								Comments struct {
+									Edges []struct {
+										Node struct {
+											ID   string `json:"id"`
+											Text struct {
+												Value string `json:"value"`
+											} `json:"text"`
+										} `json:"node"`
+									} `json:"edges"`
+								} `json:"comments"`
 							} `json:"node"`
 						} `json:"edges"`
-					} `json:"comments"`
+					} `json:"threads"`
 				} `json:"node"`
 			} `json:"edges"`
 		} `json:"CoreProposedChange"`
@@ -877,8 +886,51 @@ func (c *Client) CommentsOf(id string) ([]CommentRow, error) {
 		return nil, fmt.Errorf("proposed change %s: %d found, want one", id, len(r.P.Edges))
 	}
 	var out []CommentRow
-	for _, e := range r.P.Edges[0].Node.Comments.Edges {
-		out = append(out, CommentRow{ID: e.Node.ID, Text: e.Node.Text.Value})
+	for _, t := range r.P.Edges[0].Node.Threads.Edges {
+		for _, e := range t.Node.Comments.Edges {
+			out = append(out, CommentRow{ID: e.Node.ID, Thread: t.Node.ID, Text: e.Node.Text.Value})
+		}
+	}
+	return out, nil
+}
+
+// ThreadCreated is the event by which a proposed change's overview lists a thread, and the
+// only one by which it lists a comment (research §5.9).
+const ThreadCreated = "infrahub.proposed_change_thread.created"
+
+// OverviewThreads lists the threads a proposed change's overview shows, oldest first, as the
+// view reads them from Infrahub's event log: each ThreadCreated event whose primary node is
+// the proposed change names its thread as its first related node. The log lags its writes by
+// a few seconds (D-048), so a caller that has just written waits for it.
+func (c *Client) OverviewThreads(id string) ([]string, error) {
+	if _, err := c.testProposedChange(id); err != nil {
+		return nil, err
+	}
+	raw, err := c.GraphQL("main", fmt.Sprintf(
+		`{ InfrahubEvent(primary_node__ids: [%q], event_type: [%q], order: ASC, limit: 50) { edges { node { related_nodes { id } } } } }`,
+		id, ThreadCreated))
+	if err != nil {
+		return nil, fmt.Errorf("reading proposed change %s's overview: %w", id, err)
+	}
+	var r struct {
+		E struct {
+			Edges []struct {
+				Node struct {
+					Related []struct {
+						ID string `json:"id"`
+					} `json:"related_nodes"`
+				} `json:"node"`
+			} `json:"edges"`
+		} `json:"InfrahubEvent"`
+	}
+	if err := json_Unmarshal(raw, &r); err != nil {
+		return nil, err
+	}
+	var out []string
+	for _, e := range r.E.Edges {
+		if len(e.Node.Related) > 0 {
+			out = append(out, e.Node.Related[0].ID)
+		}
 	}
 	return out, nil
 }

@@ -36,6 +36,10 @@ RENDER_MARKDOWN = "markdown"
 # The default branch, where the proposed change and its comments live (research §1.2).
 DEFAULT_BRANCH = "main"
 
+# THREAD_LABEL is the label the proposed change's view gives the thread it opens for a comment
+# written in its overview, and so the one a comment posted here carries (research §5.9).
+THREAD_LABEL = "Conversation"
+
 # DIAL_TIMEOUT bounds a connection, as the Go client's api.DialTimeout does; HEADER_TIMEOUT the
 # wait for an answer's headers, which the server sends before it works (api.HeaderTimeout).
 # Nothing bounds the answer once it has begun: a rehearsal's frames come minutes apart.
@@ -285,20 +289,37 @@ def interrupt_blocking(address: str, token: str, stream: str) -> str | None:
 
 
 async def post_comment(client: Any, change_id: str, text: str) -> str | None:
-    """One CoreChangeComment on the proposed change, saved on the default branch: text the
-    report's markdown, change the proposed change (research §1.2, §1.3). It is the check's one
-    write (D-049). None when posted; otherwise why not, for the caller to log as information,
-    since a comment that cannot be posted fails nothing (FR-019).
+    """One comment on the proposed change, as its view's overview shows one and writes one: a
+    CoreChangeThread on the proposed change, then one CoreThreadComment in it whose text is the
+    report's markdown, both saved on the default branch. The overview lists the proposed
+    change's events, and only a thread's creation is one of them; a CoreChangeComment is
+    counted but never shown (research §5.9). It is the check's one write (D-049). A thread
+    whose comment cannot be saved is deleted, as the view deletes its own, so that no empty
+    thread is left. None when posted; otherwise why not, for the caller to log as
+    information, since a comment that cannot be posted fails nothing (FR-019).
     """
+    thread = None
     try:
-        comment = await client.create(
-            kind="CoreChangeComment",
+        thread = await client.create(
+            kind="CoreChangeThread",
             branch=DEFAULT_BRANCH,
-            data={"text": text, "change": change_id},
+            data={"change": change_id, "label": THREAD_LABEL, "resolved": False},
+        )
+        await thread.save()
+        comment = await client.create(
+            kind="CoreThreadComment",
+            branch=DEFAULT_BRANCH,
+            data={"text": text, "thread": thread.id},
         )
         await comment.save()
     except Exception as exc:  # noqa: BLE001 - reported, and the conclusion stays the report's
-        return cause(exc)
+        failure = cause(exc)
+        if thread is not None and thread.id:
+            try:
+                await thread.delete()
+            except Exception as left:  # noqa: BLE001 - reported beside the first
+                failure += f"; its empty thread {thread.id} could not be deleted: {cause(left)}"
+        return failure
     return None
 
 

@@ -736,7 +736,7 @@ names no address. [SECURITY.md](../SECURITY.md) says what the bridge listener ex
 | Format | Version | Change |
 |---|---|---|
 | the API | `1` | `twin.rehearse`; `render: markdown` and the `document` frame's `markdown`; `start.workflow_id` `fylgja-rehearse` ([api.md](api.md)) |
-| findings | `1` | operation `twin.rehearse`; the `rehearsal` block ([rehearsal.schema.json](rehearsal.schema.json)); `show.record.rehearsal`, `verify.twin.rehearsal`; the nine identifiers |
+| findings | `1` | operation `twin.rehearse`; the `rehearsal` block ([rehearsal.schema.json](rehearsal.schema.json)); `show.record.rehearsal`, `verify.twin.rehearsal`; `step.wait_counts` ([step.schema.json](step.schema.json)); the nine identifiers |
 | `twin.json` | `7` | `rehearsal` |
 | bundle manifest, PSP, CTM, contract | `4`, `0.6`, `1`, `0.2` | none |
 
@@ -750,7 +750,10 @@ One workflow is added, `fylgja-rehearse` ([D-051](../docs/decisions.md#d-051)), 
 fixed id, its children `fylgja-provision`, `fylgja-step` and `fylgja-destroy` under theirs;
 the worker serves five. No activity, budget or version marker is added or changed, and the
 nine recorded histories replay. `StepResult` gains `wait_counts` and `wire.VerifyResult`
-`counts`, each omitted when absent.
+`counts`, each omitted when absent. `twin step`'s block carries `wait_counts` beside `wait`,
+the wait's last read counted by kind as `twin verify` counts its block, once the run closed
+and its wait read: absent on the dry run, on a wait that made no read and on a run
+cancelled before its wait. Its text does not change.
 
 ### Tier 3 (`scripts/e2e.sh`)
 

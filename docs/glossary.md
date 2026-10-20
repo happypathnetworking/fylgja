@@ -12,10 +12,11 @@ bundle bytes ([§4.4](architecture.md#44-provisioner--temporal)).
 **API** — From M13 ([D-040](decisions.md#d-040), [D-041](decisions.md#d-041),
 the constitution's XI): the boundary of Fylgja's core. Its *server*, `fylgja serve`,
 answers HTTP requests with the documents Fylgja already versions. A user-facing *client*,
-the CLI first, reaches the core through it alone, for every command, and holds the *API
-token* and no other credential. Version `1` is the first element of every path. There are
-twelve operations, one per command, each `POST /v1/<noun>/<verb>` (`/v1/twin/create` …
-`/v1/psp/validate`), and one more call, the interrupt of a *stream*. Each is answered in
+the CLI first and from 015 the two *checks (Infrahub)*, reaches the core through it alone,
+for every command, and holds the *API token* and no other credential. Version `1` is the
+first element of every path. There are thirteen operations, one per command, each `POST
+/v1/<noun>/<verb>` (`/v1/twin/create` … `/v1/twin/rehearse`), and one more call, the
+interrupt of a *stream*. Each is answered in
 *frames*, the last always the *findings document*. There is no health check, no listing of
 runs and no fetch of a filed bundle. Test code and test tools are excepted: they call the
 core, and read the nodes, the containers and the record, directly, and no shipped client
@@ -49,7 +50,8 @@ device's `device-config` *artifact* for the devices in the *target group*, branc
 the device's platform, so one definition serves both vendors. Infrahub renders from it
 once this repository is registered there, read-only on `main` with no credential
 ([D-028](decisions.md#d-028), [D-044](decisions.md#d-044);
-[development.md](development.md#local-environment)).
+[development.md](development.md#local-environment)). The same registration carries the
+two *checks (Infrahub)*.
 
 **Assertion (of verify)** — From M12: one fact `twin verify` expects of a running twin,
 derived from the staged bundle's manifest by a pure function (`verify.Derive`) and never
@@ -84,7 +86,24 @@ loaded with `load startup`; on cEOS it is `flash:startup-config` (containerlab's
 management), made the session's whole content by `rollback clean-config` and `copy
 startup-config session-config`. It is containerlab's: Fylgja never reads, writes or
 saves it, and it is re-verified on a containerlab or image upgrade
-([D-033](decisions.md#d-033)).
+([D-033](decisions.md#d-033)). Not a *rehearsal*'s *baseline stage* or its *baseline
+findings*.
+
+**Baseline finding** — From 015 ([D-051](decisions.md#d-051)): an assertion a
+*rehearsal*'s *baseline stage* still finds failing once its twin is built, by the wait
+after its create: what the twin looks like before the change. Each is reported as a
+warning whose object names the stage (`b/seeded: n1:ethernet-1/2`) and in the report's own
+section, and fails nothing; a *rehearsed stage* fails only by a finding not among them,
+compared by rule and object. Not M11's *baseline*.
+
+**Baseline stage** — From 015 ([D-051](decisions.md#d-051)): the first *stage* of a
+*proposed change* that compiles, from which a *rehearsal* creates its twin and against
+whose *baseline findings* each later stage is judged: the *branch point* where `main`
+carries a network, else the first *mark*. A branch point refused `contract.node.missing`
+alone, as on the *development host*, is passed over and shown `refused`; any other refused
+stage refuses the rehearsal. When it is the only stage that compiles, it is rehearsed alone
+with the warning `rehearsal.steps.none`. Not M11's *baseline*, a node's deploy
+configuration.
 
 **Bootstrap** — The minimal per-node startup file the compiler emits from the PSP:
 hostname, cabled ports enabled, link-layer discovery on, under the package's
@@ -108,6 +127,15 @@ history from pinned reads, so every *mark* written before it falls before the br
 and is refused (`stage.at.before_branch_point`, naming the rebase). On a `main` that holds
 the schema and no network, as the *development host*'s does, it is refused
 `contract.node.missing` and the plan goes on to the next stage.
+
+**Bridge listener** — From 015 ([D-050](decisions.md#d-050)): the *server*'s second address
+on the lab host, beside `127.0.0.1:7650`: the host's Docker bridge (`docker0`,
+`172.17.0.1:7650` by Docker's default), where Infrahub's task workers, on Compose's own
+network, reach the *API* as `host.docker.internal:7650`, the name and the *API token* the
+Compose override gives them. Plaintext under the one token: every container on the host
+reaches it, the twin's nodes included, the bearer check is what guards it, and the
+server's start-up report says the token is sent unencrypted there
+([SECURITY.md](../SECURITY.md)).
 
 **Bring-up script** — `scripts/bring-up.sh`, the launch's: takes a fresh Ubuntu 26.04
 host to tiers 1 and 2 passing and the dev server, the worker and the API's server running.
@@ -156,10 +184,28 @@ compares the `bundle_id` with `twin.json`'s. It ends with one of seven outcomes:
 - `cancelled`: `twin destroy` cancelled it.
 
 `twin show` reports the last one ([§4.4](architecture.md#44-provisioner--temporal),
-[D-026](decisions.md#d-026)).
+[D-026](decisions.md#d-026)). Not a *check (Infrahub)*.
+
+**Check (Infrahub)** — From 015 ([D-049](decisions.md#d-049), [D-052](decisions.md#d-052),
+[D-053](decisions.md#d-053)): one of the two check definitions this repository registers
+beside the *artifacts template* (`.infrahub.yml`, `infrahub/checks/`), Python glue that
+Infrahub's task workers run on every *proposed change*, draft or not, at its creation and
+whenever its user checks run again, each concluding success or failure with a message. A
+*client* of the *API*: it reaches the *server* at the *bridge listener* with the *API
+token* from the task worker's environment, and concludes by the document's status alone.
+`fylgja-step` (timeout 300 s) asks for the stage plan, fails only on a stage refused as
+intent, the stages unlistable or Fylgja unreachable, and writes nothing. `fylgja-twin`
+(timeout 4,200 s) passes a draft, saying it skipped it; otherwise it asks for the
+*rehearsal*, passes on `ok` alone, and posts the markdown report as one new thread on the
+proposed change, a `CoreChangeThread` holding one `CoreThreadComment`, which the proposed
+change's overview shows. Infrahub's merge rule reads the conclusion, so a failed stage
+blocks the merge. A change to a check reaches Infrahub only once it is on `origin`'s `main`
+and imported ([development.md](development.md#local-environment)). Not the *check* of a
+following twin.
 
 **Client** — From M13 ([D-040](decisions.md#d-040)): a program that reaches Fylgja
-through the *API* alone. The CLI is the first. Every command but the two *roles*, `fylgja
+through the *API* alone. The CLI is the first, and from 015 the two *checks (Infrahub)*
+are clients too, from inside Infrahub's task workers. Every command but the two *roles*, `fylgja
 serve` and `fylgja worker run`, is a client's command: one request to the server, which
 prints what comes back and exits by the document's status. Its environment is
 `FYLGJA_API_ADDRESS` (default `127.0.0.1:7650`) and the *API token*, and its files are
@@ -229,6 +275,17 @@ projection of intent, and the only place synthesized nodes can live
 rewritten for its reader, from a private development repository whose record of how
 Fylgja was built stays private ([D-043](decisions.md#d-043)). The *launch* is the second.
 
+**Deadline (of a rehearsal)** — From 015 ([D-051](decisions.md#d-051)): how long a
+*rehearsal* may run before its destroy: its stages' budgets summed from their node plans,
+each the largest of its packages' deploy, readiness, push and destroy budgets over the
+stage's nodes, plus the mechanism constants that bound each activity and the wait's
+default. It is 1,950 s for the three SR Linux stages the fixture tool composes. Over the
+**ceiling**, 3,600 s, a constant of Fylgja's own, a rehearsal is refused before any run
+(`rehearsal.deadline.unfit`); a stage still running when it passes is cut, its *verdict*
+`error` (`rehearsal.deadline.cut`), and the twin destroyed. `fylgja-twin`'s timeout,
+4,200 s, exceeds the ceiling by the destroy's budget, the work before the start and a
+margin.
+
 **Decision log** — [decisions.md](decisions.md): one entry per decision in force, with
 the options it rejected and why, cited by `D-0NN`. Append-only from this repository's
 first commit: a change is a new entry that supersedes the old one.
@@ -249,8 +306,8 @@ the *bring-up script*; the guest does not nest, so it has no `/dev/kvm`. Until t
 it ran Ubuntu 24.04, where most *verified facts* were first verified.
 
 **Disconnected context (Temporal)** — A workflow context that keeps running after the
-parent is cancelled. Cleanup in `provision` runs on one, and so does the record of a step
-that failed or was cancelled after its stage.
+parent is cancelled. Cleanup in `provision` runs on one, and so do the record of a step
+that failed or was cancelled after its stage and a *rehearsal*'s destroy.
 
 **Diverged** — From M11: the state of a twin whose *step* failed or was cancelled after it
 touched the host (from the stage on). The twin stays up, part on the *stage (of a proposed
@@ -295,10 +352,11 @@ never stops anything. The rules are listed in [contracts/cli.md](../contracts/cl
 **Findings document** — The JSON document every command ends with (findings format `1`,
 [contracts/findings.schema.json](../contracts/findings.schema.json)): the operation, a
 status, the *findings*, and the operation's own block (`twin`, `show`, `plan`, `step`,
-`verify` and others). Its status decides the exit: `ok` 0, `rejected` 1 (before the host
+`verify`, `rehearsal` and others). Its status decides the exit: `ok` 0, `rejected` 1 (before the host
 was touched), `error` 2, `failed` 3 (after the host was touched, cleanup complete),
 `unclean` or `diverged` 4, `nonconforming` 5. Without `--json` the CLI prints its text
-rendering.
+rendering, and `twin rehearse --markdown` its markdown, a third rendering the *rehearsal*
+alone has.
 
 **Fixture branch** — `fylgja-fixture`: the three-node SR Linux topology on the reference
 schema, written once by `make infrahub-seed` and by no test, which tier 2 reads and tier
@@ -310,8 +368,11 @@ seeds and deletes branches (the fixture branch, the mixed one, throwaway ones), 
 them as the tests need (`-add-link`, `-disable-port`, `-set-role`), generates their
 artifacts and waits for them, and gives a throwaway branch its *proposed change* and
 *marks*: `-propose` opens a draft and waits for its validators, `-stage` marks one,
-`-run-check` asks the proposed change's artifact checks, `-close` closes it, and `-delete`
-removes the stages, then the proposed changes, then the branch. With `-prepare-main` it
+`-run-check` asks the proposed change's artifact checks, `-ready` marks it ready for
+review, `-run-checks user` runs its *checks (Infrahub)* again and waits for them,
+`-add-interface` writes an interface a device lacks, for a stage made to fail, `-close`
+closes it, and `-delete` removes the stages, then the proposed changes, with their threads
+and validators, then the branch. With `-prepare-main` it
 prepares `main`: the schema, the group `fylgja-devices` and this repository's read-only
 registration, each made only when absent.
 
@@ -327,7 +388,7 @@ when a later create or provision replaces it. Contrast *pinned* and *frozen twin
 kind: `out` and `err` (text for stdout and stderr), `start` (the server begins to start a
 run), `run` (the run's identity), `event` (one step boundary, or a notice), `files` (the
 CTM or a bundle, base64) and `document` (the findings document, with its text when a
-rendering was asked for). The answer is `application/x-ndjson`, and its last frame is
+rendering was asked for, and a *rehearsal*'s markdown beside it when that was). The answer is `application/x-ndjson`, and its last frame is
 always `document`. One with no `document` frame did not finish. By default an answer is
 the `document` frame alone, after the `files` frame of `intent read` and `twin compile`,
 and after a run's `start`, `run` and `event` frames (a destroy's `start` and `event` frames,
@@ -449,8 +510,9 @@ in Go duration syntax. Default 5 minutes, floor 10 seconds. Held only by the Sch
 and refused with `--at` or `--no-follow`.
 
 **Kind (of a twin)** — What `twin show` calls the twin on the host: `following`,
-`pinned` (built from an `at` or a *stage*, stepped or not), `frozen`, from a bundle
-(`twin provision`), `diverged`, or `none`.
+`pinned` (built from an `at` or a *stage*, stepped or not; a *rehearsal*'s twin is pinned,
+and its kind line names the rehearsal's run), `frozen`, from a bundle (`twin provision`),
+`diverged`, or `none`.
 
 **Lab host** — A machine with Docker, containerlab, NOS images, one `fylgja worker run`
 process and one `fylgja serve` process beside it ([D-041](decisions.md#d-041)). The
@@ -633,7 +695,11 @@ one frees the branch, and deleting the branch cancels it about sixteen seconds l
 pipeline regenerates the branch's artifacts at its creation and on a run-check, never as
 the branch is edited. From `014-proposed-change-stages` ([D-045](decisions.md#d-045)) it
 is the home of the *stages*, found by its source branch; Fylgja reads it, with its
-artifact validators, as one of Infrahub's own kinds and never writes it.
+artifact validators, as one of Infrahub's own kinds and never writes it. From 015 its
+pipeline runs the two *checks (Infrahub)* at its creation and on a re-run of its user
+checks, and `fylgja-twin` posts each *rehearsal*'s report on it as a thread of its own,
+which its overview shows; deleting it deletes its threads, their comments and its
+validators with it ([D-053](decisions.md#d-053)).
 
 **Provenance** — Per-object tag in the CTM (`intent`, `observed`, `synthesized`), and
 the block in every manifest recording branch, `at`, schema hash and contract
@@ -687,6 +753,13 @@ ready node, once, in tier 3.
 `provision` workflows as children, under their fixed IDs, to the newly compiled bundle. A
 failed rebuild stops *following*.
 
+**Reclaim** — From 015 ([D-051](decisions.md#d-051)): the destroy, before a *rehearsal*
+starts, of a twin whose `twin.json` names a rehearsal run that is no longer running, run
+through the `destroy` workflow as `twin destroy` runs it, followed in the rehearsal's
+answer and reported as the warning `rehearsal.twin.reclaimed`. A twin whose record names
+no rehearsal, a lab and an orphan are never reclaimed: each refuses the rehearsal as it
+refuses a create.
+
 **Reconcile** — From M11: containerlab applying a changed topology to a running lab,
 `clab deploy` without `--reconfigure`, the third phase of a *step*. It re-cables, restarts,
 recreates, creates or removes each node as its plan says; what it will do is read first
@@ -717,6 +790,26 @@ until it is remade at `v0.2.0`.
 
 **Reference schema** — The concrete Infrahub schema Fylgja ships implementing its
 generics, so a greenfield install has something to populate.
+
+**Rehearsal** — From 015 ([D-051](decisions.md#d-051), [D-052](decisions.md#d-052)): `twin
+rehearse --branch <b>`, the operation `twin.rehearse`: one run over an open *proposed
+change* that creates a twin from its *baseline stage* and verifies it, *steps* it to each
+later stage in order and verifies after each, stops at the first stage that does not pass,
+destroys the twin whatever happened, and reports. The *server* plans every stage, decides
+the baseline and the *deadline*, *reclaims* a dead rehearsal's twin and checks the host
+before anything starts. The run is the `fylgja-rehearse` workflow, whose children are
+`provision`, `step` and `destroy` under their own fixed IDs, so one twin at a time holds.
+Its document carries a `rehearsal` block with each stage's *verdict*, rendered as text and
+as markdown, which `fylgja-twin` posts on the proposed change. It ends `ok` (0),
+`nonconforming` (5) when a stage failed, `error` (2), `failed` (3) when the baseline could
+not be built, `unclean` (4) when the destroy left something, or `rejected` (1) before any
+run. Run by the operator's hand or by the *check (Infrahub)* `fylgja-twin`, and advisory,
+as every report is ([§4.4](architecture.md#44-provisioner--temporal)).
+
+**Rehearsed stage** — From 015: a *stage* after the *baseline stage* to which a
+*rehearsal* steps its twin, then verifies it, in the proposed change's order. Its
+*verdict* is `passed`, `failed` or `error`, or `not reached` when an earlier one did not
+pass.
 
 **Release** — A tagged version (`v0.1.0`, `v0.2.0`) and the set of *features* it ships,
 set with the operator and recorded as a section of the roadmap (`roadmap.md#release-02`)
@@ -750,11 +843,12 @@ and prints the *step (of a series)* between each consecutive pair. A series name
 `fylgja-test-*` belongs to a test, and the test that wrote it deletes it
 ([D-032](decisions.md#d-032)).
 
-**Server** — From M13 ([D-041](decisions.md#d-041)): `fylgja serve [--listen <host:port>]
-[--psp-dir <dir>]`, the *API*'s side, a third *role* of the one binary. It runs on the
-*lab host* beside the worker as a process of its own, with the worker's state root and
-environment plus the *API token*, and listens on `127.0.0.1:7650` unless `--listen` says
-otherwise. Its handlers hold the commands' logic: it makes every refusal, reads the host
+**Server** — From M13 ([D-041](decisions.md#d-041)): `fylgja serve [--listen
+<host:port>]... [--psp-dir <dir>]`, the *API*'s side, a third *role* of the one binary. It
+runs on the *lab host* beside the worker as a process of its own, with the worker's state
+root and environment plus the *API token*, and listens on `127.0.0.1:7650` unless
+`--listen` says otherwise; repeated, it listens on each address given, and on the lab host
+it listens on loopback and the *bridge listener* ([D-050](decisions.md#d-050)). Its handlers hold the commands' logic: it makes every refusal, reads the host
 in its own process, and starts, follows and cancels runs through the *workflow service*.
 It loads the packages, dials the workflow service and reads Infrahub per request, and
 keeps nothing between two requests but the channel of each open *stream*
@@ -870,8 +964,8 @@ provenance alone), and every node holds the target's bundle. `twin show` still c
 `pinned`, and adds `stepped from change-1/cabled by run fylgja-step …` to the kind line.
 
 **Stream** — From M13: an *API* answer that is a run's progress. A client names it
-(`Fylgja-Stream`, 16 random bytes in hex) on the request of a create, a provision or a
-step, and the server holds that request's interrupt channel under the name while the
+(`Fylgja-Stream`, 16 random bytes in hex) on the request of a create, a provision, a
+step or a *rehearsal*, and the server holds that request's interrupt channel under the name while the
 request is open, and nothing once it ends. From the `start` frame, the operator's
 interrupt is `POST /v1/streams/{stream}/interrupt`, delivered to the open request: the
 first abandons a start still waiting for a worker or cancels the run, and the second stops
@@ -903,8 +997,9 @@ host move ([D-015](decisions.md#d-015)).
 **Tier 1**, `make test`: no infrastructure, under 45 seconds, in CI on every push and pull
 request. **Tier 2**, `make test-contract`: the *contract tests*, against a real Infrahub,
 in CI on every push to `main` against one the *Infrahub part* brings up. **Tier 3**, `make
-test-e2e`: eight cases on booted NOS images through a server and a worker, on demand and
-never in CI, narrowed by a *platform list* when asked. A **hand check** is a scenario run by hand on the host, read by someone
+test-e2e`: nine cases on booted NOS images through a server and a worker, the ninth a
+proposed change rehearsed by the *checks (Infrahub)*, on demand and never in CI, narrowed
+by a *platform list* when asked. A **hand check** is a scenario run by hand on the host, read by someone
 present.
 
 **Twin directory** — `twin/` under the *state root*: `bundle/`, a copy of the staged
@@ -913,7 +1008,7 @@ own working directory; and `twin.json`. Present exactly while a twin is provisio
 being provisioned; removed whole by unstage. With containerlab, the whole state of the
 twin ([D-014](decisions.md#d-014)).
 
-**`twin.json`** — The twin's record, version `6`, written last by the record step and
+**`twin.json`** — The twin's record, version `7`, written last by the record step and
 removed with the *twin directory*
 ([contracts/twin.schema.json](../contracts/twin.schema.json)): the manifest's provenance
 block, `observed_at` (or an explicit statement that it is unknown, when no read took
@@ -921,13 +1016,26 @@ place), `bundle_id`, the provisioning run's identity, the version of the worker 
 that provisioned it, and each node's management address, *artifact* (name, content type,
 checksum, size, never the bytes) and how long its *push* took; the *stage* the twin was
 built from (its proposed change's id and branch, its label, description and where its `at`
-came from: `given`, `written`, `branch_point` or `head`), or an explicit `null`; `state`
+came from: `given`, `written`, `branch_point` or `head`), or an explicit `null`; the
+*rehearsal* whose run built it (`fylgja-rehearse` and the run's id, kept by each step's
+record), or `null`, by which a rehearsal knows a twin to *reclaim*; `state`
 (`ready` or *diverged*); the last *step* (its sides, run, outcome, *phase*, containerlab's
 plan with each package's declaration, each node's push outcome, the timings, and the
 step's `wait`, `null` until `VerifyTwin` writes it), or `null`; and on each node `holds`,
 the bundle whose content it runs. A step rewrites it whole, on every path after its stage.
-Older versions are read where a twin may still carry one; a record of `5` or earlier names
-M10's *waypoint*, which reads as no stage, so its twin shows as pinned and cannot step.
+Older versions are read where a twin may still carry one: a `6` names no rehearsal, and a
+record of `5` or earlier names M10's *waypoint*, which reads as no stage, so its twin shows
+as pinned and cannot step.
+
+**Verdict (of a stage)** — From 015 ([D-051](decisions.md#d-051)): what a *rehearsal*
+concluded of one stage, a pure function of its child run's result and its wait against the
+*baseline findings*, by rule and object (`rehearsal.Classify`): `refused` (a branch point
+passed over), `baseline`, `passed` (stepped or unchanged, and nothing new found), `failed`
+(diverged, or a finding the baseline did not have; status `nonconforming`), `error` (the
+step could not run, was refused by its locks or cancelled before its stage, its wait left
+a node unread, or the deadline or an interrupt cut it, so nothing was learned about the
+change; status `error`), or `not reached`. Advisory: only a *check (Infrahub)*'s
+conclusion, from the document's status, gates a merge ([D-052](decisions.md#d-052)).
 
 **Verified fact** — Something about a dependency checked against the running system,
 not taken from its documentation: how Infrahub, containerlab, a NOS, Temporal or the
@@ -971,9 +1079,11 @@ attribute. The resolved reference is printed before every run and recorded in
 **Worker (Temporal)** — The process that polls the task queue and runs workflow and
 activity code: `fylgja worker run`, one per lab host.
 
-**Workflow (Temporal)** — Durable, deterministic orchestration code. Fylgja has four, each
-short: `provision`, `destroy`, `reconcile` (a *check*) and `step` (`fylgja-step`), which
-ends with `VerifyTwin` ([D-007](decisions.md#d-007)).
+**Workflow (Temporal)** — Durable, deterministic orchestration code. Fylgja has five, each
+short: `provision`, `destroy`, `reconcile` (a *check*), `step` (`fylgja-step`), which
+ends with `VerifyTwin`, and `rehearse` (`fylgja-rehearse`), whose children are the
+provision, the steps and the destroy, bounded by its *deadline*
+([D-007](decisions.md#d-007), [D-051](decisions.md#d-051)).
 
 **Workflow service** — The Temporal service the worker polls and the server starts,
 follows and cancels runs through: `temporal server start-dev`, file-backed, on `:7233`,

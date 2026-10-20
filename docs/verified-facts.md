@@ -9,8 +9,9 @@ it, as the [development guide](development.md#verification-is-just-in-time) says
 session needs in every task is also in `CLAUDE.md`; this document holds the rest, read on
 demand.
 
-Terms are the [glossary](glossary.md)'s. Dates are 2026. A date alone is a verification on
-the development host's first release, Ubuntu 24.04.1; *(26.04, 10-08)* beside it is a
+Terms are the [glossary](glossary.md)'s. Dates are 2026. A date alone up to 10-08 is a
+verification on the development host's first release, Ubuntu 24.04.1, and a later one on
+Ubuntu 26.04, where the host has run since; *(26.04, 10-08)* beside an earlier date is a
 re-verification on Ubuntu 26.04 on that date, made when the bring-up script set the
 development host up again there, or on a fresh 26.04 VM before it.
 
@@ -295,6 +296,82 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   1.5 s after held none; on an idle host the first read to hold one was 6.6 s after the
   return. So a head read in that window does not see a removal yet. *(10-17)*
 
+**Checks, and the proposed change's view (015)**
+
+Read in the image's source (`/source/backend`, `/source/python_sdk`,
+`/source/frontend/app/src`) and seen live on the 26.04 development host, through throwaway
+registrations served from the host's Docker bridge, the tree's checks and the host's
+registration `fylgja`.
+
+- **A check is an `InfrahubCheck` the task worker builds** with the source branch, the
+  worker's own client (`http://infrahub-server:8000`, default branch `main`, timeout 60)
+  and no initializer, so its `proposed_change_id` is always `""`: a check finds its
+  proposed change by its source branch (`filters(kind="CoreProposedChange", branch="main",
+  source_branch__value=…, state__value="open")`, with `is_draft` readable). `query` is
+  required, a cheap `{ Branch { name } }` will do, and its answer reaches `validate`
+  unwrapped. It has `log_error` and `log_info` and no `log_warning`; the check's message is
+  its entries as `Message: … Level: …` blocks, a long multi-line entry stored whole, with
+  `Check succesfully completed` (sic) appended on a pass, and an exception out of
+  `validate` reads `FATAL Error/n:` (sic), conclusion `failure`. *(10-17)*
+- **The module is `commits.<sha>.infrahub.checks.<stem>`** for a check at
+  `infrahub/checks/<stem>.py`, with the worktree's root on `sys.path`, so the repository's
+  `infrahub/` directory does not shadow Infrahub's own package, and a relative import
+  between two files of one directory resolves with no `__init__.py`. *(10-17, 10-19)*
+- **A check's bound is its own `timeout`**, read from the class at import into
+  `CoreCheckDefinition.timeout` (a change needs a re-import) and applied as a Prefect task
+  timeout; a check longer than the SDK's default of 60 s runs to its own and the pipeline
+  waits for it. `INFRAHUB_MISC_MAXIMUM_VALIDATOR_EXECUTION_TIME`, which the published
+  Compose file sets, is read by nothing. *(10-17)*
+- **A timed-out check leaves its validator `in_progress` for ever**, conclusion
+  `unknown`, with no `CoreStandardCheck`, across re-runs, and nothing in the task workers'
+  logs names it. The merge rule wants every validator but the data validator concluded
+  `success` (`Unable to merge proposed change containing failing checks`), so it blocks the
+  merge. Past the cut an `await` runs nothing; a blocking call made in a `BaseException`
+  handler still reaches a server. *(10-17)*
+- **Validators and checks are reused across runs**: one `CoreUserValidator` per
+  repository and definition, labelled `Check: <name>`, restarted at each run, holding one
+  `CoreStandardCheck` rewritten in place (`message`, `conclusion` by `passed`, `severity`
+  `info` or `critical`). *(10-17)*
+- **When the checks run.** At a proposed change's creation, draft or not, every registered
+  repository's checks run (the user validators 43–54 s after the create, a data-only change
+  included); `CoreProposedChangeRunCheck(check_type: USER)` runs them again alone, in about
+  20 s, with no artifact validator and no checksum moved; `is_draft` set to `false` starts
+  nothing. A run runs, for each repository in the branch's diff, that repository's checks
+  as the source branch sees them: a definition imported after the branch's creation never
+  runs on it, and a branch made while a since-deleted registration lived still lists its
+  definitions, `repository` null, which never run. *(10-17, 10-19)*
+- **An import reaches the task workers after it.** `InfrahubReadOnlyRepositoryImportLastCommit`
+  on `fylgja` made `fylgja_branch` and both check definitions 15–21 s after the call, and
+  `in-sync` at 25 s (10-19), or `in-sync` at 7.3 s (10-20); a second `Import last commit`
+  and `Pull latest commit` follow each import, unasked and unattributed. Each task worker
+  then fetches the commit in a flow of its own (`Fetch git repository <name> on <worker>`),
+  both done 13–17 s after the import's own flow; a run-check 6 s after an import failed on
+  the worker that had not fetched (`SHA … could not be resolved`) and started no
+  validator. *(10-17, 10-19, 10-20)*
+- **`CoreGraphQLQuery` and `CoreCheckDefinition` names are unique on `main`**: a second
+  registration declaring a query name the first holds goes `error-import` (`Violates
+  uniqueness constraint 'name'`, 422) and imports nothing at all, its checks included.
+  Deleting a `CoreReadOnlyRepository` deletes its definitions and its query. *(10-17,
+  10-19)*
+- **The task worker's client writes comments and threads** on `main`. A
+  `CoreChangeComment` (`text`, `change`; no `created_at` or `created_by` field) is counted
+  in `total_comments` and **shown nowhere in the proposed change's overview**, which lists
+  the proposed change's events: a comment appears there only in a thread, through
+  `infrahub.proposed_change_thread.created`, which the creation of a `CoreChangeThread` (or
+  an object, artifact or file thread) on the proposed change emits, read within 16 s. The
+  view's *Add comment* writes a `CoreChangeThread` (`label` `Conversation`, `resolved`
+  false), then a `CoreThreadComment` in it, and deletes the thread when the comment fails.
+  Written so by a check, the thread is authored by the task worker's account, `Agent`, and
+  its markdown renders with GFM tables, single line breaks kept (`remark-breaks`) and a
+  Mermaid block with no error banner; a check's message shows as plain text under
+  `Message`. *(10-20)*
+- **A comment's text holds at most 4,092 bytes**: a text attribute is refused, `Text
+  attribute length should be less than 4096 characters.`, when `3 + len(utf8) >= 4096`
+  (`core/attribute.py`), a thread's comment as a plain one. *(10-20)*
+- **`CoreProposedChangeDelete` takes its comments, threads with their comments,
+  validators and checks with it**, a validator stuck `in_progress` included, since each
+  hangs on it by a cascading relationship. *(10-17, 10-20)*
+
 **Artifacts and repositories**
 
 - Infrahub regenerates no artifact on its own: not on a data change, a group join or a
@@ -482,7 +559,9 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
 - The chassis is the `7220 IXR-D2L`, containerlab's default `type` for `nokia_srlinux`.
   Its front ports are `ethernet-1/1` to `ethernet-1/58`, beside `lo0` and `mgmt0`: a push
   naming `ethernet-1/99` is refused `invalid port 99, max is 58`, and one naming
-  `ethernet-2/1` `invalid slot 2`. *(09-19)*
+  `ethernet-2/1` `invalid slot 2`. *(09-19)* Seen again as a rehearsal's step pushing an
+  artifact that names `ethernet-1/99`: `push.refused` on that node alone. *(26.04, 10-19,
+  10-20)*
 - The node's name for a port is `ethernet-1/1`, not containerlab's endpoint name `e1-1`:
   `set / interface e1-1 admin-state enable` is refused. *(09-15)*
 - Every LLDP adjacency forms before `clab deploy` returns, so a read after the twin is
@@ -602,6 +681,10 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   flight. *(09-15)*
 - A worker that stopped stays listed as polling its queue for about five minutes.
   *(09-15)*
+- **A run whose worker is gone does not end by itself**: with no execution timeout it
+  stays running, and only a terminate ends it, which runs nothing of the workflow's own
+  cleanup. A child started under `ParentClosePolicy: ABANDON` lives on after its parent's
+  terminate, and runs to its end once a worker returns. *(Server 1.32, 10-19)*
 - The CLI's installer (`https://temporal.download/cli.sh`, `--version 1.9.1`) puts it in
   `~/.temporalio/bin` and adds that to no shell file's `PATH`, so a login shell has no
   `temporal` until something else adds it. *(10-07; 26.04, 10-07)*
@@ -654,6 +737,19 @@ re-verified here.
   passes. Nobody looked on 24.04. *(26.04, 10-08)*
 - A guest that does not nest has no `/dev/kvm`, which only a `vrnetlab_vm` package would
   need. *(09-30; 26.04, 10-08)*
+- **The Docker bridge is how Infrahub's task workers reach the host.** `docker0` is
+  `172.17.0.1/16`; Infrahub's Compose network `fylgja-infrahub_default` is
+  `172.18.0.0/16`, gateway `172.18.0.1`. With no `/etc/docker/daemon.json`,
+  `host-gateway` resolves to `172.17.0.1` on Docker 29.8.1. In a task worker as published,
+  `host.docker.internal` does not resolve; with the override's `extra_hosts:
+  ["host.docker.internal:host-gateway"]` it resolves to `172.17.0.1`, and a server listening
+  there answers it, `200` with the API's token and `401` without, Docker's inter-network
+  isolation not applying since the address is the host's own. The published task worker's
+  environment holds `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN` and nothing of Fylgja's;
+  it has `git` 2.47.3, Python 3.14.7 and `httpx` 0.28.1. *(10-17, 10-19)*
+- **A changed Compose override reaches a service only when it is recreated**: `docker
+  compose … up -d` recreated the two task workers, whose entry and environment had moved,
+  and left the other six services and the volumes as they were. *(10-19)*
 - Infrahub idles at about 5 GiB, and its Neo4j, uncapped, once took the headroom a twin
   needs and killed an end-to-end run; capped at heap 1g/2g and page cache 1g, it does not.
   *(09-21)* On 26.04: 5.2 GiB idle across its eight containers, Neo4j 2.12 GiB under the

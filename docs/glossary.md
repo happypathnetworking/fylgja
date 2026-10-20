@@ -193,8 +193,9 @@ Infrahub's task workers run on every *proposed change*, draft or not, at its cre
 whenever its user checks run again, each concluding success or failure with a message. A
 *client* of the *API*: it reaches the *server* at the *bridge listener* with the *API
 token* from the task worker's environment, and concludes by the document's status alone.
-`fylgja-step` (timeout 300 s) asks for the stage plan, fails only on a stage refused as
-intent, the stages unlistable or Fylgja unreachable, and writes nothing. `fylgja-twin`
+`fylgja-step` (timeout 300 s) asks for the stage plan, fails on a stage refused as intent,
+the stages unlistable, no open proposed change, or Fylgja not to be asked (a variable unset,
+the API unreachable, its token or version refused), and writes nothing. `fylgja-twin`
 (timeout 4,200 s) passes a draft, saying it skipped it; otherwise it asks for the
 *rehearsal*, passes on `ok` alone, and posts the markdown report as one new thread on the
 proposed change, a `CoreChangeThread` holding one `CoreThreadComment`, which the proposed
@@ -1029,8 +1030,9 @@ as pinned and cannot step.
 
 **Verdict (of a stage)** — From 015 ([D-051](decisions.md#d-051)): what a *rehearsal*
 concluded of one stage, a pure function of its child run's result and its wait against the
-*baseline findings*, by rule and object (`rehearsal.Classify`): `refused` (a branch point
-passed over), `baseline`, `passed` (stepped or unchanged, and nothing new found), `failed`
+*baseline findings*, by rule and object (`rehearsal.Classify`): `refused` (a stage the plan
+refused: a branch point passed over, or in a refused rehearsal every stage whose refusal
+refused it), `baseline`, `passed` (stepped or unchanged, and nothing new found), `failed`
 (diverged, or a finding the baseline did not have; status `nonconforming`), `error` (the
 step could not run, was refused by its locks or cancelled before its stage, its wait left
 a node unread, or the deadline or an interrupt cut it, so nothing was learned about the

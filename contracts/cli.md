@@ -566,7 +566,7 @@ run: when it passes, the child in progress is cancelled (a provision cleans up; 
 records the twin `diverged`) and the destroy follows.
 
 ```
-rehearsal of proposed change "third link" (18df…) on branch change-1, draft: 4 stages; deadline 32m0s (ceiling 1h0m0s)
+rehearsal of proposed change "third link" (18df…) on branch change-1, draft: 4 stages; deadline 32m30s (ceiling 1h0m0s)
 change-1/branch-point: refused (contract.node.missing)
   rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
 change-1/seeded: branch change-1 at 2026-10-16T17:25:30.118244+00:00 (written), "after the link is cabled"; baseline
@@ -607,7 +607,7 @@ prints them, the baseline's and each stage's verify findings as warnings whose o
 prefixed by the stage (`change-1/seeded: n1:ethernet-1/2`).
 
 **The markdown** (`--markdown`, and the comment `fylgja-twin` posts) is rendered from the
-document alone, GitHub-flavoured: a heading naming the proposed change and its branch; the
+document and the plan's steps between the stages, GitHub-flavoured: a heading naming the proposed change and its branch; the
 run, when the stages were resolved, the status and the time used against the deadline and
 the ceiling; a table, one row per stage (its `at`, bundle, step, wait, counts, new findings
 and verdict); a Mermaid drawing of the stages, each edge the step's changes by node, link
@@ -666,9 +666,10 @@ Nine, each `rehearsal.*`. `run.cancelled`, `run.in_flight`, `run.worker.absent`,
   `; rehearsal run fylgja-rehearse 01a1… is at stage change-1/third-link, step push`;
   `in_flight` names the rehearsal with its child and the stage it is at, `in flight: run
   fylgja-rehearse 01a1… at step step (run fylgja-step 03c3… at step push), stepping towards
-  stage change-1/third-link`. `show.record.rehearsal` is `{workflow_id, run_id}` or `null`.
+  stage change-1/third-link`. `show.record.rehearsal` is `{workflow_id, run_id}`, absent when the record names
+  no rehearsal.
 - `twin verify`'s first line names the rehearsal's run after the stage, and
-  `verify.twin.rehearsal` carries it.
+  `verify.twin.rehearsal` carries it, `null` when the record names none.
 - `twin destroy` during a rehearsal prints `cancelling rehearsal run 01a1…; waiting for its
   destroy`, follows that destroy, then makes its own, which finds nothing. `twin create`,
   `twin provision` and `twin step` beside a rehearsal are `run.in_flight`, naming it.

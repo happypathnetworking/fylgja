@@ -1256,14 +1256,15 @@ Nothing acts on the report: no command, check or step reads it.
 `twin rehearse` ([D-051](decisions.md#d-051)) runs in the server as a create does, with the
 rehearsal's run in place of the provision ([§4.4](#44-provisioner--temporal)). It prints
 the plan's stage lines with the baseline named, then the run as every run prints it, each
-child's lines under a `stage <ref>:` line, then one line per stage with its verdict, what
-the destroy removed and a closing line; on a failure, the commands that reproduce it by
-hand, from `twin create --stage <baseline>` through each `twin step --stage <ref>
+stage's child's lines under a `stage <ref>:` line and the destroy's under `destroying the
+twin`, then what the destroy removed, one line per stage with its verdict and a closing
+line; on a failure, the commands that reproduce it by hand, from `twin create --stage <baseline>` through each `twin step --stage <ref>
 --allow-restart` to the failed stage, then `twin verify` and `twin destroy`. Its document
 carries a `rehearsal` block: the proposed change, when its stages were resolved, the
 deadline and the time used, the reclaim, the run, the baseline findings, each stage's
 role, bundle, step, wait, verify counts, new findings and verdict, the destroy's cleanup
-and the reproduce commands. Its **markdown** is rendered from that block alone: a heading
+and the reproduce commands. Its **markdown** is rendered from the document and the plan's
+steps between the stages, which the drawing's edges name: a heading
 naming the proposed change and the run, a table of the stages, a Mermaid drawing with one
 box per stage and one edge per step naming what it changed and never a line of
 configuration, the stages, the warnings, the baseline findings, the reproduce commands
@@ -1281,10 +1282,11 @@ Each is Python glue on Infrahub's runtime and a client of the API, run in no pro
 Fylgja's: it finds the open proposed change by its source branch, sends one request to
 `FYLGJA_API_ADDRESS` with `FYLGJA_API_TOKEN`, both from the task worker's environment,
 reads the frames to the document, and concludes from its status. **`fylgja-step`**
-(timeout 300 s) asks for `stage.plan` and logs its text as its message. It fails only when
-a stage is refused as intent, the stages cannot be listed or Fylgja cannot be reached, a
-branch point refused `contract.node.missing` excepted, the one rule the Python holds, and
-writes nothing. **`fylgja-twin`** (timeout 4,200 s) passes a draft, saying it skipped it.
+(timeout 300 s) asks for `stage.plan` and logs its text as its message. It fails when a
+stage is refused as intent, a branch point refused `contract.node.missing` excepted, the
+one rule the Python holds, when the stages cannot be listed, when the source branch has no
+open proposed change, and when Fylgja cannot be asked: a variable unset, the API
+unreachable, or its token or version refused. It writes nothing. **`fylgja-twin`** (timeout 4,200 s) passes a draft, saying it skipped it.
 Otherwise it asks for `twin.rehearse` in markdown, passes on `ok` and fails on every other
 status, with the report's text as its message either way, and posts the markdown on the
 proposed change as one new thread (`CoreChangeThread`, labelled `Conversation`, holding

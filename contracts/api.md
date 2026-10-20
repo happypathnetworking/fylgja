@@ -305,18 +305,20 @@ operation, the token, the statuses and the files are as 014 left them.
   the deadline unfit, a run in flight or the host held, is the `document` frame alone, after
   the plan's `out` lines under a rendering, with no `start`. A **reclaim**, of a twin whose
   record names a rehearsal run no longer running, is followed inside the answer before the
-  `start`: the notice `reclaiming the twin of rehearsal run <id>`, then its destroy's
-  events, with neither a `start` nor a `run` frame of their own. Then
+  `start`: under a rendering, the `out` line `reclaiming the twin of rehearsal run <id>`,
+  then its destroy's events, with neither a `start` nor a `run` frame of their own. Then
   `{"start": {"workflow_id": "fylgja-rehearse"}}`, the `run` frame, and the events of the
   run and of each child, `fylgja-provision`, `fylgja-step` and `fylgja-destroy`, each child
   announced by the notice `run <workflow> <id>` and, under a rendering, preceded by an
-  `out` line `stage <ref>: …`. The `document` frame comes once the run has closed and the
+  `out` line: `stage <ref>: …` before the provision and each step, `destroying the twin`
+  before the destroy. The `document` frame comes once the run has closed and the
   stages have been resolved again. Its document is `findings_version` `1`, operation
   `twin.rehearse`, with the `rehearsal` block of
   [rehearsal.schema.json](rehearsal.schema.json).
 - **`render: "markdown"`**: the `out` and `err` frames and `document.text` are as under
   `"text"`, and on `twin.rehearse` the `document` frame carries `markdown`, the report as
-  GitHub-flavoured markdown, rendered from the document; it is a rendering, never part of
+  GitHub-flavoured markdown, rendered from the document and the plan's steps between the
+  stages; it is a rendering, never part of
   the document. Every other operation answers `"markdown"` as it answers `"text"`, with no
   `markdown` field. [api.schema.json](api.schema.json)'s `render` enum, its `document` frame
   and `start.workflow_id`'s enum, which gains `fylgja-rehearse`, move with it.
@@ -325,9 +327,9 @@ operation, the token, the statuses and the files are as 014 left them.
   and the answer goes on to the run's own end. The second ends the answer with
   `run.cancelled`, and the run goes on to its destroy. An answer cut, or a client gone,
   leaves the run running to its destroy.
-- **Beside a rehearsal**: `twin.show`'s `show.record.rehearsal` is `{workflow_id, run_id}` or
-  `null`, and `in_flight` names the rehearsal with its child; `twin.verify`'s
-  `verify.twin.rehearsal` likewise; `twin.destroy` cancels a rehearsal in flight, follows
+- **Beside a rehearsal**: `twin.show`'s `show.record.rehearsal` is `{workflow_id, run_id}`,
+  absent when the record names no rehearsal, and `in_flight` names the rehearsal with its
+  child; `twin.verify`'s `verify.twin.rehearsal` is the same or `null`; `twin.destroy` cancels a rehearsal in flight, follows
   its destroy after the notice `cancelling rehearsal run <id>; waiting for its destroy`, then
   makes its own; `twin.create`, `twin.provision` and `twin.step` are refused `run.in_flight`,
   naming it.

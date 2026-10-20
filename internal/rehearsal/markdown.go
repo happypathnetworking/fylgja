@@ -2,6 +2,7 @@ package rehearsal
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -70,8 +71,8 @@ func parts(doc *findings.Document, steps []step.Pair, brief bool) []part {
 		}
 		out = append(out, part{text: "## Fylgja did not rehearse branch " + inline(branch)},
 			part{text: fmt.Sprintf("Status **%s**.", doc.Status)},
-			part{findingsSection("Findings", rejections(doc.Findings), brief), "the findings", 1},
-			part{warningsSection(doc.Findings, brief), "the warnings", 2})
+			part{findingsSection("Findings", rejections(doc.Findings), brief, nil), "the findings", 1},
+			part{warningsSection(doc.Findings, nil, brief), "the warnings", 2})
 		return append(out, part{text: Caveat})
 	}
 
@@ -90,9 +91,9 @@ func parts(doc *findings.Document, steps []step.Pair, brief bool) []part {
 	}
 	out = append(out, part{table(*b), "the table", 1}, part{drawing(*b, steps), "the drawing", 6})
 	if doc.Status != findings.StatusOK {
-		out = append(out, part{findingsSection("Findings", rejections(doc.Findings), brief), "the findings", 3})
+		out = append(out, part{findingsSection("Findings", rejections(doc.Findings), brief, nil), "the findings", 3})
 	}
-	out = append(out, part{stagesSection(*b), "the stages", 4}, part{warningsSection(doc.Findings, brief), "the warnings", 5})
+	out = append(out, part{stagesSection(*b), "the stages", 4}, part{warningsSection(doc.Findings, b.Stages, brief), "the warnings", 5})
 	var baseline []findings.StepWaitFailing
 	if b.Baseline != nil {
 		baseline = b.Baseline.Findings
@@ -393,15 +394,74 @@ func stagesSection(b findings.RehearsalBlock) string {
 }
 
 // warningsSection is the document's warnings, verify's aside: the baseline's are their own
-// section's, and a stage's wait is the table's.
-func warningsSection(l findings.List, brief bool) string {
+// section's, and a stage's wait is the table's. A warning a stage filed, as the plan files
+// one for each stage that reads it at read and at compile, is listed once, naming each stage
+// that filed it, as stage plan prints it under each (FR-014):
+//
+//	`artifact.interface.unrepresented` n1:ethernet-1/99: … (stages bad-port, head)
+//
+// The run's own warnings are listed as they came: the rehearsal's, and stage.main.moved,
+// which the plan files on the branch point but which is the branch's.
+func warningsSection(l findings.List, stages []findings.RehearsalStage, brief bool) string {
+	filed := stagesFiling(stages)
 	var warnings findings.List
+	listed := map[warningKey]bool{}
 	for _, f := range l {
-		if f.Severity == findings.Warning && !strings.HasPrefix(f.Rule, "verify.") {
-			warnings = append(warnings, f)
+		if f.Severity != findings.Warning || strings.HasPrefix(f.Rule, "verify.") {
+			continue
+		}
+		if k := keyOf(f); filed[k] != nil {
+			if listed[k] {
+				continue
+			}
+			listed[k] = true
+		}
+		warnings = append(warnings, f)
+	}
+	return findingsSection("Warnings", warnings, brief, func(f findings.Finding) string {
+		labels := filed[keyOf(f)]
+		if labels == nil {
+			return ""
+		}
+		word := "stage"
+		if len(labels) > 1 {
+			word = "stages"
+		}
+		named := make([]string, len(labels))
+		for i, l := range labels {
+			named[i] = inline(l)
+		}
+		return " (" + word + " " + strings.Join(named, ", ") + ")"
+	})
+}
+
+// warningKey is a warning as its line names it, its step aside: the plan files the same one
+// at read and at compile.
+type warningKey struct{ rule, object, message string }
+
+func keyOf(f findings.Finding) warningKey { return warningKey{f.Rule, f.Object, f.Message} }
+
+// stagesFiling is each warning a stage filed, but the run's own, with the labels of the
+// stages that filed it, each once, in the stages' order.
+func stagesFiling(stages []findings.RehearsalStage) map[warningKey][]string {
+	filed := map[warningKey][]string{}
+	for _, s := range stages {
+		for _, f := range s.Findings {
+			if f.Severity != findings.Warning || runsOwn(f.Rule) {
+				continue
+			}
+			k := keyOf(f)
+			if !slices.Contains(filed[k], s.Label) {
+				filed[k] = append(filed[k], s.Label)
+			}
 		}
 	}
-	return findingsSection("Warnings", warnings, brief)
+	return filed
+}
+
+// runsOwn is whether a warning is the run's or its branch's rather than a stage's.
+func runsOwn(rule string) bool {
+	return rule == findings.RuleStageMainMoved || strings.HasPrefix(rule, "rehearsal.")
 }
 
 func rejections(l findings.List) findings.List {
@@ -415,8 +475,9 @@ func rejections(l findings.List) findings.List {
 }
 
 // findingsSection is a titled list of findings, each by identifier, object and message, in
-// the order WriteText prints them; none when there are none.
-func findingsSection(title string, l findings.List, brief bool) string {
+// the order WriteText prints them, each followed by what suffix, when given, adds to it; none
+// when there are none.
+func findingsSection(title string, l findings.List, brief bool, suffix func(findings.Finding) string) string {
 	if len(l) == 0 {
 		return "**" + title + "**: none"
 	}
@@ -429,7 +490,11 @@ func findingsSection(title string, l findings.List, brief bool) string {
 	})
 	lines := make([]string, 0, len(sorted))
 	for _, f := range sorted {
-		lines = append(lines, findingLine(f.Rule, f.Object, f.Message, brief))
+		line := findingLine(f.Rule, f.Object, f.Message, brief)
+		if suffix != nil {
+			line += suffix(f)
+		}
+		lines = append(lines, line)
 	}
 	return "**" + title + "**:\n\n" + strings.Join(counted(lines), "\n")
 }

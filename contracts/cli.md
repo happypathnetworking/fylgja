@@ -613,7 +613,9 @@ the ceiling; a table, one row per stage (its `at`, bundle, step, wait, counts, n
 and verdict); a Mermaid drawing of the stages, each edge the step's changes by node, link
 and artifact, never a line of content, a step not computed dotted; on any status but `ok`
 the findings that say why; the stages, since Infrahub's view of the proposed change shows
-none; the warnings; the baseline's findings; on a failure the commands that reproduce it;
+none; the warnings, each one a stage filed listed once with the stages that filed it
+(``- `artifact.interface.unrepresented` n1:ethernet-1/99: … (stages bad-port, head)``), the
+run's own as they came; the baseline's findings; on a failure the commands that reproduce it;
 and last the caveat, `*Fidelity is asserted, not measured: the twin's containers forward in
 software and keep their own timing.*`. An operator's string is escaped where it lands.
 It is never longer than 4,092 bytes, the longest text Infrahub keeps as a comment: a

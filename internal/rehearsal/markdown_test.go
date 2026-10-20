@@ -178,6 +178,54 @@ func TestMarkdownNamesTheRestartsTime(t *testing.T) {
 	}
 }
 
+// A warning a stage filed is listed once, naming each stage that filed it, however many
+// steps filed it (FR-014; T075); the run's own warnings are listed as they came, the
+// branch's stage.main.moved too, although the plan files it on the branch point.
+func TestMarkdownNamesEachWarningsStages(t *testing.T) {
+	const unrepresented = "artifact device-config names interface ethernet-1/99 at line 17, which the twin does not represent"
+	moved := "main has moved since change-1's branch point"
+	e := failedRun()
+	e.in.Stages[0].Findings.AddStep(findings.Warning, findings.StepResolve, findings.RuleStageMainMoved, change, moved)
+	for _, i := range []int{3, 4} {
+		e.in.Stages[i].Findings.AddStep(findings.Warning, findings.StepRead, findings.RuleArtifactInterfaceUnrepresented, "n1:ethernet-1/99", unrepresented)
+		e.in.Stages[i].Findings.AddStep(findings.Warning, findings.StepCompile, findings.RuleArtifactInterfaceUnrepresented, "n1:ethernet-1/99", unrepresented)
+	}
+	e.in.Stages[4].Findings.AddStep(findings.Warning, findings.StepCompile, findings.RuleArtifactInterfaceUnrepresented, "n2:ethernet-1/98",
+		"artifact device-config names interface ethernet-1/98")
+	doc := e.document()
+	doc.Findings.AddStep(findings.Warning, findings.StepResolve, findings.RuleRehearsalStageMoved, change+"/head", "stage change-1/head moved")
+	md := Markdown(doc, pairs())
+	want := strings.Join([]string{
+		"**Warnings**:",
+		"",
+		"- `artifact.interface.unrepresented` n1:ethernet-1/99: " + unrepresented + " (stages bad-port, head)",
+		"- `artifact.interface.unrepresented` n2:ethernet-1/98: artifact device-config names interface ethernet-1/98 (stage head)",
+		"- `rehearsal.stage.moved` change-1/head: stage change-1/head moved",
+		"- `stage.main.moved` change-1: " + moved,
+		"",
+	}, "\n")
+	if !strings.Contains(md, want) {
+		t.Errorf("the warnings are not\n%s\nin:\n%s", want, md)
+	}
+	if len(md) > CommentMax {
+		t.Errorf("the markdown is %d bytes, over the %d a comment holds", len(md), CommentMax)
+	}
+
+	// Brief, each is named by identifier and object, its stages kept.
+	brief := join(parts(doc, pairs(), true))
+	if want := "- `artifact.interface.unrepresented` n1:ethernet-1/99 (stages bad-port, head)\n" +
+		"- `artifact.interface.unrepresented` n2:ethernet-1/98 (stage head)\n" +
+		"- `rehearsal.stage.moved` change-1/head\n- `stage.main.moved` change-1\n"; !strings.Contains(brief, want) {
+		t.Errorf("the brief warnings are not\n%s\nin:\n%s", want, brief)
+	}
+
+	// A label is the operator's, escaped where it lands.
+	e.in.Stages[4].Label = "he*ad"
+	if md := Markdown(e.document(), pairs()); !strings.Contains(md, "(stages bad-port, he\\*ad)") {
+		t.Errorf("an escaped label is not in:\n%s", md)
+	}
+}
+
 // The markdown is kept by Infrahub as a comment, so it is never longer than CommentMax. A
 // failure's report that would be, as tier 3's bad-port was (T055: two stages each warning
 // twice of ethernet-1/99, and the push's long refusal), names its findings by identifier and
@@ -188,11 +236,14 @@ func TestMarkdownFitsAComment(t *testing.T) {
 	const unrepresented = "artifact device-config names interface ethernet-1/99 at line 17, which the twin does not represent: " +
 		"omitted (omit.interface.unmappable: rule ethernet matched, but {port} is 99, outside its range 1..58; no such port on the node)"
 	refusal := "node n1 refused artifact device-config (checksum 592e1578066373b636e0676ce1667e26): " + strings.Repeat("the node's message, cut ", 40)
-	doc := failedRun().document()
-	for range 2 {
-		doc.Findings.AddStep(findings.Warning, findings.StepRead, findings.RuleArtifactInterfaceUnrepresented, "n1:ethernet-1/99", unrepresented)
-		doc.Findings.AddStep(findings.Warning, findings.StepCompile, findings.RuleArtifactInterfaceUnrepresented, "n1:ethernet-1/99", unrepresented)
+	// The plan files the warning for each stage that reads the artifact, at read and at
+	// compile, as the server hands it to the block.
+	e := failedRun()
+	for _, i := range []int{3, 4} {
+		e.in.Stages[i].Findings.AddStep(findings.Warning, findings.StepRead, findings.RuleArtifactInterfaceUnrepresented, "n1:ethernet-1/99", unrepresented)
+		e.in.Stages[i].Findings.AddStep(findings.Warning, findings.StepCompile, findings.RuleArtifactInterfaceUnrepresented, "n1:ethernet-1/99", unrepresented)
 	}
+	doc := e.document()
 	doc.Findings.AddStep(findings.Rejection, findings.StepPush, findings.RulePushRefused, "n1", refusal)
 	doc.Findings.AddStep(findings.Rejection, findings.StepPush, findings.RuleStepDiverged, stepRun+"2",
 		"step run "+stepRun+"2 towards stage change-1/bad-port stopped at phase push: landed n3; not landed n1 (push.refused)")
@@ -208,7 +259,7 @@ func TestMarkdownFitsAComment(t *testing.T) {
 		`  s3["change-1/bad-port<br/>failed"]`,
 		"**Findings**:\n\n- `contract.node.missing` main\n- `push.refused` n1 (×2)\n- `rehearsal.stage.failed` change-1/bad-port\n- `step.diverged` " + stepRun + "2\n\n",
 		"**Stages** (Infrahub's view does not show them):",
-		"**Warnings**:\n\n- `artifact.interface.unrepresented` n1:ethernet-1/99 (×4)\n\n",
+		"**Warnings**:\n\n- `artifact.interface.unrepresented` n1:ethernet-1/99 (stages bad-port, head)\n\n",
 		"**Baseline findings** (reported, failing nothing):\n\n- `verify.neighbor` n1:ethernet-1/2\n\n",
 		"**Reproduce by hand**:\n\n```\nfylgja twin create --stage change-1/seeded\n",
 		"\n\n" + fitNote(nil) + "\n\n" + Caveat + "\n",

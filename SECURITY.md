@@ -14,8 +14,9 @@ whoever holds the token can do everything the operator can, from reading intent 
 building, stepping and destroying the twin ([D-042](docs/decisions.md#d-042)).
 
 **The token is sent in the clear.** The server speaks HTTP/1.1 and terminates no TLS. It
-listens on `127.0.0.1:7650` unless `--listen` says otherwise; told otherwise, its
-start-up report says the token is sent unencrypted on that address. Keeping the token
+listens on `127.0.0.1:7650` unless `--listen`, which may be given more than once, says
+otherwise, and for each address off loopback its start-up report says the token is sent
+unencrypted on it. Keeping the token
 confidential is the transport's work, and the transport is the operator's: loopback, an
 SSH tunnel (`ssh -N -L 7650:127.0.0.1:7650 <lab host>` from a client's machine), or a
 proxy that terminates TLS, which a client addresses by an `https://` URL. A client follows
@@ -39,7 +40,8 @@ Infrahub's token and both node logins in their process environment. The server a
 holds the API's token, which the worker never reads; a client holds the API's token
 alone. `local/.env`, kept at mode `0600`, is the one file that holds a value. Fylgja
 reads the process environment only, and never prints, logs or persists a credential: none
-is in a bundle, a finding, an answer, a log line or a start-up report.
+is in a bundle, a finding, an answer, a log line, a start-up report, a check's message or
+the thread a check posts.
 
 ### On a shared host
 
@@ -67,7 +69,8 @@ what you found, how to reproduce it, and the version (`fylgja --version`) or com
 applies to.
 
 **In scope**: the `fylgja` binary (the API's server, the worker and the client's
-commands), the scripts under `scripts/`, and the workflows under `.github/workflows/`.
+commands), the two checks under `infrahub/checks/` that Infrahub's task workers run, the
+scripts under `scripts/`, and the workflows under `.github/workflows/`.
 
 **Not in scope**:
 

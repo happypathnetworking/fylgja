@@ -327,9 +327,10 @@ other stage with a rejection, or a stage that `failed`, refuses the whole rehear
 the plan's findings: status `rejected`, exit 1 (or `error`, exit 2, for `operation.failed`
 and `intent.at.precision`, as `stage plan` ends). The first compiled stage is the baseline;
 the stages after it are rehearsed in order. One compiled stage alone is rehearsed as the
-baseline with the warning `rehearsal.steps.none`, and ends `ok` when its verify is clean
-(FR-003's last sentence, clarify's answer). **Rationale**: FR-003 names the one exception
-and nothing else.
+baseline with the warning `rehearsal.steps.none`, and ends `ok` whatever its verify finds,
+its findings reported as the baseline's, since nothing was compared (FR-003's last sentence
+and FR-009, as the operator settled at T096, §5.14; clarify's answer asked for the clean
+case). **Rationale**: FR-003 names the one exception and nothing else.
 
 <a id="r-04"></a>
 ### R-04 The host: runs in flight refuse, a dead rehearsal's twin is reclaimed, anything else refuses as today

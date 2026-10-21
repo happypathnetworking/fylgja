@@ -481,4 +481,7 @@ Rewritten whole at each release's close, never appended to.
   converge or the operator: a client following a rehearsal terminated outside Fylgja
   answers only once its abandoned children close (§5.2); and `local/worker.log` holds a
   run of NUL bytes, their origin untraced, which the bring-up script reads past (T036,
-  T071).
+  T071). From 015's convergence pass 3, the operator's: the checks changed since `d70ad24`
+  (T068's comments, T074, T084) reach the host's registration only once `origin`'s `main`
+  carries them and they are imported, and tier 3's case 9 refuses until then, since it now
+  compares the imported commit with the tree (T085).

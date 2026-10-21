@@ -3345,11 +3345,14 @@ three-node seed (`SeedThreeNode`), three SR Linux nodes n1–n3 in a triangle of
 links under contract `0.2`, with the devices joined to `fylgja-devices` and their
 `device-config` artifacts generated on `main`.
 
-- **`-seed-main` opens the window.** Like `-prepare-main`, it takes no `-branch`. It
-  refuses when `main` already holds a device.
-- **`-clear-main` closes the window.** It deletes what `-seed-main` wrote, links first, and
-  leaves `fylgja-devices` empty. It refuses when `main` holds anything of Fylgja's kinds
-  beyond the baseline, such as a merged change, naming what it found, and deletes nothing.
+- **`-seed-main` opens the window.** Like `-prepare-main`, it takes no `-branch`, and it
+  takes no other flag. It refuses when `main` already holds anything of the baseline's
+  kinds (the contract, a platform, a device, an interface or a link).
+- **`-clear-main` closes the window.** It deletes what `-seed-main` wrote, links first, then
+  any of the devices' artifacts Infrahub left, and leaves `fylgja-devices` empty. It
+  refuses while any `fylgja-test-*` branch exists, and when `main` holds anything of those
+  kinds beyond the baseline, such as a merged change, naming what it found. Either refusal
+  deletes nothing. A baseline left half-written by a failed seed is still removed.
 - **The order of the window.** The gates run first. Then the baseline is seeded, and only
   after that is any demo branch created, so that its stages carry no `stage.main.moved`.
   Before the window closes, every demo branch is deleted by `-delete` (stages, proposed

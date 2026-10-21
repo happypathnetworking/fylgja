@@ -37,6 +37,11 @@ from .fylgja_api import (
 # the destroy's whole budget and the server's work before the run's start (data-model §4).
 DEADLINE_MARGIN_S = 180
 
+# CLOSE_MARGIN_S is how long before its timeout the check stops reading an answer it has
+# interrupted: whatever the answer has not said by then is a cut, and the check concludes
+# before Infrahub's timeout would leave its validator in_progress (FR-021).
+CLOSE_MARGIN_S = 15
+
 # RETRY_S is the wait between two asks while the host is held (R-15).
 RETRY_S = 30
 
@@ -44,11 +49,15 @@ RETRY_S = 30
 # rehearsal asks again once they clear, where every other refusal is final at once (R-15).
 HELD = frozenset({"run.in_flight", "host.lab.present", "host.twin.present"})
 
-# LOST is FR-021's sentence for an answer cut once the run had started.
-LOST = (
-    "the connection to Fylgja was lost while the rehearsal ran; the run goes on to its destroy "
-    "and no report will be posted; re-run the checks once fylgja twin show reports no twin"
+# GOES_ON is what FR-021 says of a run whose answer was cut: it goes on to its destroy, and
+# nothing reports it here.
+GOES_ON = (
+    "the run goes on to its destroy and no report will be posted; re-run the checks once fylgja twin show "
+    "reports no twin"
 )
+
+# LOST is FR-021's sentence for an answer cut once the run had started.
+LOST = "the connection to Fylgja was lost while the rehearsal ran; " + GOES_ON
 
 
 class FylgjaTwin(InfrahubCheck):
@@ -64,6 +73,7 @@ class FylgjaTwin(InfrahubCheck):
     async def validate(self, data: dict[str, Any]) -> None:
         began = time.monotonic()
         deadline = began + self.timeout - DEADLINE_MARGIN_S
+        close_by = began + self.timeout - CLOSE_MARGIN_S
         # The draft skip needs nothing of Fylgja's, so it comes before the variables (FR-020).
         try:
             change = await proposed_change(self.client, self.branch_name)
@@ -98,11 +108,12 @@ class FylgjaTwin(InfrahubCheck):
                     {"branch": self.branch_name},
                     stream=secrets.token_hex(16),
                     deadline=deadline,
+                    close_by=close_by,
                 )
             except Cut as fault:
                 self._print(fault.answer)
                 if fault.answer.interrupted:
-                    self.log_error(f"{asked_to_cancel(self.timeout, fault.answer)}; then {fault}")
+                    self.log_error(f"{asked_to_cancel(self.timeout, fault.answer)}; then {fault}; {GOES_ON}")
                 elif fault.answer.started:
                     self.log_error(f"{LOST} ({fault})")
                 else:

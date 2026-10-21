@@ -1706,3 +1706,21 @@ worker and the server left as they ran.
   `rehearsal.stage.error` on the baseline's stage at the step the provision stopped at,
   the provision's own findings beside it. `TestRehearseBaselineEndedOtherwiseIsError`,
   `notBuiltErrorRun` and `TestRehearseBaselineNotBuilt` pin it.
+- **`fylgja-twin`'s read after its own interrupt, bounded** (T084). Verified outside
+  Infrahub in this session's scratchpad, as T074 was: the three modules imported as
+  `commits.c<sha>.infrahub.checks.*` with the venv's SDK (`infrahub-sdk` 1.23.2, httpx
+  0.28.1), a fake client giving one ready proposed change, and a fake API on loopback that
+  answers `start`, `run` and one `out` frame and never ends; the check's timeout lowered to
+  30 s, its deadline margin to 20 s and its close margin to 5 s, the interrupt's bound to
+  2 s. With the interrupt answered `204`, the check sent it once and concluded failure at
+  25.0 s: `this check's own deadline, 10 s after it began, passed with the rehearsal still
+  answering: its run was asked to cancel; then the API at 127.0.0.1:… stopped answering
+  before the command ended: no document came within 15 s of the interrupt; the run goes on
+  to its destroy and no report will be posted; re-run the checks once fylgja twin show
+  reports no twin`. With it answered `500`, it sent it twice and concluded at 25.0 s, the
+  message saying `the interrupt was not delivered: the API at … answered 500 Internal Server
+  Error`. Neither message nor any log carried the token. A cancellation one second into an
+  answer whose `start` the fake held back three seconds sent the interrupt once. The same
+  harness against the previous commit's modules ran past 50 s, killed by `timeout`: the
+  read after the interrupt had no bound. The registration runs the old code until the
+  operator pushes and imports it (R-21).

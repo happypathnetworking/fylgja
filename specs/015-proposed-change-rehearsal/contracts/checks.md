@@ -93,11 +93,17 @@ Runs on every open proposed change, draft or not.
 6. **The connection lost mid-rehearsal** (the answer cut after `start`): `log_error` `the
    connection to Fylgja was lost while the rehearsal ran; the run goes on to its destroy
    and no report will be posted; re-run the checks once fylgja twin show reports no twin`.
-7. **The check's own deadline** while the answer is still open: the interrupt is sent, the
-   answer read on to its document or its cut, and `log_error` says the run was asked to
-   cancel. **Cancelled or timed out by Infrahub** (`BaseException` in the handler): the
-   interrupt is sent with a blocking call, never an `await` (research §1.4), and the
-   exception re-raised; Infrahub leaves the validator `in_progress`, which blocks the merge.
+7. **The check's own deadline** while the answer is still open: the interrupt is sent, and
+   once more when it was not delivered, since the server takes a second as its first or
+   stops its wait on it; the answer is read on to its document or its cut, but no later
+   than 15 s before the check's timeout, past which it is a cut; and `log_error` says the
+   run was asked to cancel and, on a cut, `the run goes on to its destroy and no report will
+   be posted; re-run the checks once fylgja twin show reports no twin` (T084). **Cancelled
+   or timed out by Infrahub** (`BaseException` in the handler) while the answer has given no
+   document, the run started or not: the interrupt is sent with a blocking call, never an
+   `await` (research §1.4), and the exception re-raised; the server starts the run whatever
+   becomes of the client once it has written `start`, and answers a harmless `404` when
+   nothing is open. Infrahub leaves the validator `in_progress`, which blocks the merge.
 
 The message is the report's text; the comment is its markdown; the conclusion is the
 status's mapping and nothing else ([D-052](../research.md#3-the-decision-entries-drafted)).

@@ -207,6 +207,7 @@ async def call(
     args: dict[str, Any],
     stream: str | None = None,
     deadline: float | None = None,
+    close_by: float | None = None,
 ) -> Answer:
     """One POST of an operation to Fylgja's API, its answer read frame by frame to the document.
 
@@ -216,10 +217,15 @@ async def call(
 
     With stream, 16 random bytes in hex, the request names its answer under Fylgja-Stream, and
     from the run's start an interrupt reaches the run. If deadline (a time.monotonic() value)
-    passes with the answer still open, the interrupt is sent and the answer read on to its
-    document or its cut. If the check is cancelled or timed out once the run started, the
-    interrupt is sent with a blocking call, since nothing is awaited in that handler (research
-    §1.4), and the cancellation goes on.
+    passes with the answer still open, the interrupt is sent, and once more when it was not
+    delivered, since the server takes a second as its first or stops its wait on it; then the
+    answer is read on to its document or its cut, until close_by when it is given, past which
+    it is Cut: the check must conclude before Infrahub's timeout, which would leave its
+    validator in_progress (FR-021). If the check is cancelled or timed out while an answer
+    named by stream has given no document, started or not, the interrupt is sent with a
+    blocking call, since nothing is awaited in that handler (research §1.4), and the
+    cancellation goes on: the server starts the run whatever becomes of the client once it
+    has written start, and answers 404, harmless, when nothing is open.
     """
     base = _base(address)
     body: dict[str, Any] = {"args": args}
@@ -249,12 +255,21 @@ async def call(
                     if not done:
                         answer.interrupted = True
                         answer.interrupt_failure = interrupt_blocking(address, token, stream)
+                        if answer.interrupt_failure is not None:
+                            answer.interrupt_failure = interrupt_blocking(address, token, stream)
+                        if close_by is not None:
+                            interrupted_at = time.monotonic()
+                            done, _ = await asyncio.wait({reader}, timeout=max(0.0, close_by - interrupted_at))
+                            if not done:
+                                reader.cancel()
+                                waited = time.monotonic() - interrupted_at
+                                raise Cut(address, f"no document came within {waited:.0f} s of the interrupt", answer)
                 await reader
             except Fault:
                 raise
             except BaseException:
                 reader.cancel()
-                if stream and answer.started and answer.document is None and not answer.interrupted:
+                if stream and answer.document is None:
                     interrupt_blocking(address, token, stream)
                 raise
         finally:

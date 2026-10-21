@@ -301,7 +301,8 @@ read" that the build relies on, with its date.
 - **One stage alone resolves.** Nothing is marked and the branch point is refused for want
   of a network on `main`, as at the creation of an unmarked proposed change on this
   install: the head is booted, verified and destroyed, reported as the baseline with a
-  warning that no step was rehearsed, `ok` when clean; the engineer who wants the story
+  warning that no step was rehearsed, `ok` whatever its verify finds, its findings reported
+  as the baseline's; the engineer who wants the story
   marks stages and re-runs the checks (FR-003).
 - **The baseline cannot be built.** The provision fails, by a deploy, a readiness timeout
   or a push the node refuses, and cleans up as every provision does. The report says the
@@ -417,7 +418,8 @@ read" that the build relies on, with its date.
   `stage plan` prints it, and neither check fails for it. Any other refusal of any stage,
   the branch point's included, refuses the rehearsal. When one stage alone resolves, the
   rehearsal MUST still boot it, verify it and destroy it, reporting it as the baseline with
-  a warning that no step was rehearsed; it ends `ok` when that verify is clean.
+  a warning that no step was rehearsed; it ends `ok`, its verify's findings reported as the
+  baseline's, since nothing was compared (FR-009).
 - **FR-004**: A step whose plan restarts or recreates a node MUST proceed, as `twin step
   --allow-restart` does, since the rehearsal's twin is its own: the node is awaited and
   pushed again, and the report names each node restarted or recreated and the time it
@@ -443,8 +445,9 @@ read" that the build relies on, with its date.
   report MUST say so. Any other twin, lab or run in flight MUST refuse the rehearsal before
   anything is touched, under the refusals every command makes today, naming what holds the
   host and how to clear it. No new lock, and no waiting inside Fylgja: `fylgja-twin`
-  retries the refused request until its own deadline, then concludes failure naming the
-  twin, posting the last refusal's report as its comment as it posts any report it got;
+  retries the refused request while what remains of its own deadline still covers the
+  refused run's deadline, the destroy's budget and the allowance before `start` (FR-021),
+  then concludes failure naming what holds the host, posting the last refusal's report as its comment as it posts any report it got;
   the hand command is refused once and does not retry.
 - **FR-008**: The rehearsal's twin MUST be known as the rehearsal's: its record and `twin
   show` say it belongs to a rehearsal and name the run, and `twin show` while it runs
@@ -564,7 +567,10 @@ read" that the build relies on, with its date.
   FR-006). The check's own deadline MUST be at least the ceiling, the destroy's whole
   budget and the time the server spends before `start` (the plan, a reclaim, the host
   check), so that a rehearsal which uses every budget is never interrupted by its own
-  check.
+  check. The time the server spends before `start` is an allowance of 300 s, not a bound
+  the server enforces. The check interrupts the run 240 s before its timeout and stops
+  reading the answer 120 s before it, which leaves the interrupted run's destroy its 120 s
+  and the comment's two saves theirs.
   A check whose connection to Fylgja is lost mid-rehearsal MUST conclude failure saying the
   connection was lost, that the run goes on to its destroy and that no report will be
   posted; nothing re-attaches to the run and no past report is fetched
@@ -818,8 +824,8 @@ read" that the build relies on, with its date.
 - **The ceiling is Fylgja's own**, the operator's patience as the wait budget is
   ([D-039](../../docs/decisions.md#d-039)), not a package field; its value and the checks'
   timeouts are the plan's, set after the fixture's rehearsal is measured. The plan sets
-  the ceiling at 3,600 s, `fylgja-twin`'s timeout at 4,200 s and its own deadline 180 s
-  short of that.
+  the ceiling at 3,600 s, `fylgja-twin`'s timeout at 4,260 s and its own deadline 240 s
+  short of that (T097).
 - **Marking a proposed change ready for review starts no pipeline** (verified at 014:
   `is_draft` set to `false` starts nothing), so the engineer re-runs the checks from the
   proposed-change view, or runs `twin rehearse` by hand, once the draft is marked ready;

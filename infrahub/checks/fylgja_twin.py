@@ -180,12 +180,15 @@ class FylgjaTwin(InfrahubCheck):
 
 
 def holders(answer: Answer) -> list[str]:
-    """What holds the host, when the answer is a refusal before any start whose every rejection
-    says the host is held (R-15), the branch point's lone contract.node.missing passed over as
-    fylgja-step passes it over (FR-017): each as its rule and object, the run or the twin it
-    names. Empty for any other answer, which is final. An answer interrupted before any start
-    is the refusal it carries, since no run was asked to cancel."""
-    if answer.started:
+    """What holds the host, when the answer is a refusal whose every rejection says the host is
+    held (R-15), the branch point's lone contract.node.missing passed over as fylgja-step passes
+    it over (FR-017): each as its rule and object, the run or the twin it names. That holds
+    whether the server found the holder before its start frame or after it: the start refused
+    by a run begun since the host was read or by the rehearsal's fixed id, or a run refused at
+    its baseline's start, touched nothing (T106). Empty for any other answer, which is final,
+    and for one whose run was asked to cancel. An answer interrupted before any start is the
+    refusal it carries, since no run was asked to cancel."""
+    if answer.started and answer.interrupted:
         return []
     document = answer.document or {}
     if document.get("status") != "rejected":

@@ -77,9 +77,13 @@ Runs on every open proposed change, draft or not.
    and `Fylgja-Stream: <16 random bytes in hex>`, streamed, no read timeout, read to its
    document; the `out` frames and then the `err` frames logged once each, when the answer
    ends or is cut (T046), since Infrahub shows every entry as a block of its own.
-3. **The host held** (`run.in_flight`, `host.lab.present`, `host.twin.present` before any
-   `start`, the branch point's lone `contract.node.missing` passed over as `fylgja-step`
-   passes it over, read in `fylgja_api.py` for both; T093): wait 30 s and ask again while
+3. **The host held** (a `rejected` answer whose every rejection is `run.in_flight`,
+   `host.lab.present` or `host.twin.present`, the branch point's lone
+   `contract.node.missing` passed over as `fylgja-step` passes it over, read in
+   `fylgja_api.py` for both; T093), whether the server found the holder before its `start`
+   frame or after it: a start refused by a run begun since the host was read or by the
+   rehearsal's fixed id, or a run refused at its baseline's start, touched nothing (T106).
+   An answer whose run was asked to cancel is final. Wait 30 s and ask again while
    what would remain of the check's own deadline (its `timeout` less 240 s) at the next ask
    still covers the refused rehearsal's deadline (the block's `deadline_s`), the destroy's
    budget (`DESTROY_S`, 120 s) and the allowance before `start` (`ALLOWANCE_S`, 300 s), so

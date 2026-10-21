@@ -603,7 +603,12 @@ after the plan carries the plan's stage findings in front of its own, so on a `m
 network a held refusal had read as final; and the retry stops once what would remain of the
 check's own deadline at the next ask, its `timeout` less 240 s, no longer covers the
 refused rehearsal's `deadline_s`, the destroy's 120 s and the 300 s allowance, so that no run
-it starts is interrupted by it, FR-007 narrowed for FR-021's sake.*)
+it starts is interrupted by it, FR-007 narrowed for FR-021's sake. Since T106: a held
+refusal is retried whether the server found the holder before its `start` frame or after
+it, since the server writes `start` before `StartRehearse`, which still refuses a run begun
+since the host was read and the rehearsal's fixed id, and a run refused at its baseline's
+start closes `rejected` having touched nothing; an answer whose run was asked to cancel stays
+final. The registration runs the change only once the operator pushes and imports it, R-21.*)
 
 <a id="r-16"></a>
 ### R-16 Cancellation from Infrahub's side: the interrupt is sent synchronously, and the deadline covers the rest

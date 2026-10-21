@@ -744,9 +744,12 @@ import never running them.
   Docker bridge (`--listen`, below). Either variable unset is a failure naming it, with
   nothing sent; Fylgja unreachable, refusing the token or the version, or its answer cut,
   is a failure naming the address. Nothing else of Fylgja's, Infrahub's or a node's.
-- **The host held**: when the rehearsal is refused before any start by `run.in_flight`,
-  `host.lab.present` or `host.twin.present` alone, the branch point's lone
-  `contract.node.missing` passed over as `fylgja-step` passes it over, `fylgja-twin` asks
+- **The host held**: when the rehearsal is refused by `run.in_flight`, `host.lab.present`
+  or `host.twin.present` alone, the branch point's lone `contract.node.missing` passed over
+  as `fylgja-step` passes it over, whether the server found the holder before `start` or
+  after it (a start refused by a run begun since the host was read or by the rehearsal's
+  fixed id, or a run refused at its baseline's start, each touching nothing), and no run was
+  asked to cancel, `fylgja-twin` asks
   again every 30 s while what would remain of its own deadline, its `timeout` less 240 s,
   at the next ask still covers the refused rehearsal's deadline (its block's `deadline_s`),
   the destroy's budget (120 s) and the 300 s allowed before `start`, so that no run it

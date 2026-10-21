@@ -305,21 +305,33 @@ func StageLines(b findings.RehearsalBlock) []string {
 	return out
 }
 
-// Closing is the text's last line: the status, what the rehearsal came to, the twin's end,
-// and on ok the time used against the deadline; on a failure the commands that reproduce
-// it follow, one per line, indented.
+// Closing is the text's last line, from the document and its block: the status, what the
+// rehearsal came to, the twin's end, and on ok the time used against the deadline; on a
+// failure the commands that reproduce it follow, one per line, indented. A run whose end was
+// not read says it was started, why its end was not read, and that it goes on to its
+// destroy, and never what its stages came to (FR-021).
 //
 //	rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1950s deadline
 //	rehearsal nonconforming: stage change-1/bad-port failed at phase push; the twin is destroyed; reproduce it by hand:
 //	  fylgja twin create --stage change-1/seeded
-func Closing(b findings.RehearsalBlock, status findings.Status) string {
-	parts := []string{whatItCameTo(b, status)}
+//	rehearsal error: run fylgja-rehearse 01a1… was started and its end was not read (waiting for run 01a1…: …); it goes on to its destroy, and fylgja twin show says where it is
+func Closing(doc *findings.Document) string {
+	status := doc.Status
+	if doc.Rehearsal == nil {
+		return fmt.Sprintf("rehearsal %s: nothing was started", status)
+	}
+	b := *doc.Rehearsal
+	var parts []string
 	switch {
 	case b.Run == nil:
+		parts = []string{whatItCameTo(b, status)}
+	case endUnread(b, status):
+		parts = []string{fmt.Sprintf("run %s %s was started and its end was not read (%s)", b.Run.WorkflowID, b.Run.RunID,
+			orNone(whyUnread(doc))), "it goes on to its destroy, and fylgja twin show says where it is"}
 	case b.Destroy == nil && status == findings.StatusRejected:
-		parts = append(parts, "no destroy was needed")
+		parts = []string{whatItCameTo(b, status), "no destroy was needed"}
 	default:
-		parts = append(parts, destroyText(b.Destroy))
+		parts = []string{whatItCameTo(b, status), destroyText(b.Destroy)}
 	}
 	if status == findings.StatusOK {
 		parts = append(parts, fmt.Sprintf("%.1fs of the %ds deadline", b.UsedS, b.DeadlineS))
@@ -365,8 +377,43 @@ func whatItCameTo(b findings.RehearsalBlock, status findings.Status) string {
 	return fmt.Sprintf("%d stages rehearsed, every one passed", built)
 }
 
-// reachedAny is whether the run reached a stage: false in a block refused before any run, and
-// in one whose run was refused at its baseline's start.
+// endUnread is whether the block is a started run's whose end was not read: the answer was lost
+// waiting for its result, or the operator's second interrupt stopped waiting. Its block names
+// the run and nothing the answer did not learn: no stage reached, no destroy (FR-021).
+func endUnread(b findings.RehearsalBlock, status findings.Status) bool {
+	return b.Run != nil && b.Destroy == nil && !reachedAny(b) && status != findings.StatusRejected
+}
+
+// unfiled are the document's rejections that no stage of its block filed: on a run whose end
+// was not read, why it was not.
+func unfiled(doc *findings.Document) findings.List {
+	type key struct{ rule, step, object, message string }
+	filed := map[key]bool{}
+	if doc.Rehearsal != nil {
+		for _, f := range Findings(*doc.Rehearsal) {
+			filed[key{f.Rule, f.Step, f.Object, f.Message}] = true
+		}
+	}
+	var out findings.List
+	for _, f := range doc.Findings {
+		if f.Severity == findings.Rejection && !filed[key{f.Rule, f.Step, f.Object, f.Message}] {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// whyUnread is why a run's end was not read: unfiled's messages.
+func whyUnread(doc *findings.Document) []string {
+	var out []string
+	for _, f := range unfiled(doc) {
+		out = append(out, f.Message)
+	}
+	return out
+}
+
+// reachedAny is whether the run reached a stage: false in a block refused before any run, in
+// one whose run was refused at its baseline's start, and in one whose end was not read.
 func reachedAny(b findings.RehearsalBlock) bool {
 	for _, s := range b.Stages {
 		if s.Role == RoleBaseline || s.Role == RoleRehearsed {

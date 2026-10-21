@@ -32,7 +32,10 @@ const CommentMax = 4092
 // changed and never a line of it: the block holds no step's difference
 // (rehearsal.schema.json leaves it to stage plan's), and the warnings and a refusal's
 // reasons are the document's. A document with no block, refused before the proposed change
-// was found, is the heading, the status, the findings and the caveat. Every operator's
+// was found, is the heading, the status, the findings and the caveat. A run that reached no
+// stage says why in its run line: refused at its baseline's start, it touched nothing; and
+// one whose end was not read was started, says why, and goes on to its destroy, its stages
+// not read (FR-021). Every operator's
 // string is escaped where it lands: as markdown text, in a table cell, in a code span, and
 // in Mermaid's quoted labels, where ", < and > are #quot;, #lt; and #gt;.
 //
@@ -76,13 +79,22 @@ func parts(doc *findings.Document, steps []step.Pair, brief bool) []part {
 		return append(out, part{text: Caveat})
 	}
 
+	unread := endUnread(*b, doc.Status)
 	verb := "rehearsed"
-	if b.Run == nil || !reachedAny(*b) {
+	switch {
+	case unread:
+		verb = "started rehearsing"
+	case b.Run == nil || !reachedAny(*b):
 		verb = "did not rehearse"
 	}
 	out = append(out, part{text: fmt.Sprintf("## Fylgja %s proposed change %s on %s", verb,
 		inline(fmt.Sprintf("%q", b.ProposedChange.Name)), inline(b.ProposedChange.Branch))})
 	switch {
+	case unread:
+		out = append(out, part{text: fmt.Sprintf("Run %s was started, and its end was not read: %s. It goes on to its destroy, "+
+			"and %s says where it is. Stages resolved at %s. Status **%s**. Deadline %ds (ceiling %ds).",
+			code(b.Run.WorkflowID+" "+b.Run.RunID), whyText(doc, brief), code("fylgja twin show"), inline(b.ResolvedAt),
+			doc.Status, b.DeadlineS, b.CeilingS)})
 	case b.Run != nil && !reachedAny(*b) && doc.Status == findings.StatusRejected:
 		out = append(out, part{text: fmt.Sprintf("Run %s touched nothing, since a run already holds the id of its baseline's "+
 			"provision, and no destroy was needed; stages resolved at %s. Status **%s**. Deadline %ds (ceiling %ds).",
@@ -94,7 +106,7 @@ func parts(doc *findings.Document, steps []step.Pair, brief bool) []part {
 		out = append(out, part{text: fmt.Sprintf("No run was started; stages resolved at %s. Status **%s**. Deadline %ds (ceiling %ds).",
 			inline(b.ResolvedAt), doc.Status, b.DeadlineS, b.CeilingS)})
 	}
-	out = append(out, part{table(*b), "the table", 1}, part{drawing(*b, steps), "the drawing", 6})
+	out = append(out, part{table(*b, unread), "the table", 1}, part{drawing(*b, steps, unread), "the drawing", 6})
 	if doc.Status != findings.StatusOK {
 		out = append(out, part{findingsSection("Findings", rejections(doc.Findings), brief, nil), "the findings", 3})
 	}
@@ -171,9 +183,23 @@ func fitNote(left []string) string {
 	return note + "; fylgja-twin's message is the whole report as text.*"
 }
 
+// whyText is why a run's end was not read: the messages of the document's rejections no stage
+// filed, or, brief, their identifiers.
+func whyText(doc *findings.Document, brief bool) string {
+	if !brief {
+		return inline(orNone(whyUnread(doc)))
+	}
+	var rules []string
+	for _, f := range unfiled(doc) {
+		rules = append(rules, code(f.Rule))
+	}
+	return orNone(rules)
+}
+
 // table is one row per stage: the reference, the at, the bundle, the step's outcome with the
-// nodes it touched, the wait's outcome, the counts, the new findings and the verdict.
-func table(b findings.RehearsalBlock) string {
+// nodes it touched, the wait's outcome, the counts, the new findings and the verdict, which
+// reads not read for a stage of a run whose end was not read.
+func table(b findings.RehearsalBlock, unread bool) string {
 	lines := []string{
 		"| stage | at | bundle | step | wait | verify | new findings | verdict |",
 		"|---|---|---|---|---|---|---|---|",
@@ -193,7 +219,7 @@ func table(b findings.RehearsalBlock) string {
 		if s.Verify != nil {
 			counts = countsText(*s.Verify)
 		}
-		lines = append(lines, row(cell(s.Ref), at, bundle, cell(stepCell(s)), wait, counts, cell(newCell(s)), cell(verdictCell(s))))
+		lines = append(lines, row(cell(s.Ref), at, bundle, cell(stepCell(s)), wait, counts, cell(newCell(s)), cell(verdictCell(s, unread))))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -277,10 +303,19 @@ func newCell(s findings.RehearsalStage) string {
 }
 
 // verdictCell is the verdict as the text words it: refused with what refused it, not
-// reached in two words.
-func verdictCell(s findings.RehearsalStage) string {
+// reached in two words, and not read on a run whose end was not read.
+func verdictCell(s findings.RehearsalStage, unread bool) string {
 	if Verdict(s.Verdict) == VerdictRefused {
 		return refusedText(s)
+	}
+	return shownVerdict(s, unread)
+}
+
+// shownVerdict is a stage's verdict in words, but not read where the run's end was not read
+// and the block says not reached for want of knowing more.
+func shownVerdict(s findings.RehearsalStage, unread bool) string {
+	if unread && Verdict(s.Verdict) == VerdictNotReached {
+		return "not read"
 	}
 	return verdictWords(s.Verdict)
 }
@@ -290,10 +325,10 @@ func verdictWords(v string) string { return strings.ReplaceAll(v, "_", " ") }
 // drawing is the Mermaid flowchart: one node per stage labelled with its reference and
 // verdict, and one edge per pair of stages labelled with what the step between them
 // changed, dotted where the plan computed none.
-func drawing(b findings.RehearsalBlock, steps []step.Pair) string {
+func drawing(b findings.RehearsalBlock, steps []step.Pair, unread bool) string {
 	lines := []string{"```mermaid", "flowchart LR"}
 	for i, s := range b.Stages {
-		lines = append(lines, fmt.Sprintf("  s%d[\"%s<br/>%s\"]", i, mermaid(s.Ref), mermaid(verdictWords(s.Verdict))))
+		lines = append(lines, fmt.Sprintf("  s%d[\"%s<br/>%s\"]", i, mermaid(s.Ref), mermaid(shownVerdict(s, unread))))
 	}
 	for i := 1; i < len(b.Stages); i++ {
 		from, to := b.Stages[i-1].Ref, b.Stages[i].Ref

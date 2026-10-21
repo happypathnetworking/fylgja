@@ -643,7 +643,13 @@ reproduce commands and the table. A line before the caveat says what was shorten
 **The operator** interrupts once: the run is cancelled and its destroy waited for, `run
 cancelled; waiting for its destroy`, the rehearsal ending `error` with `run.cancelled`. A
 second interrupt stops waiting (`run.cancelled`), and the run goes on to its destroy. A
-client that goes away leaves the run running to its destroy.
+client that goes away leaves the run running to its destroy. An answer that stops waiting,
+or whose result cannot be read, keeps the run it started: the block names it, every stage
+`not_reached` and `destroy` `null`, and the closing line and the markdown say it was
+started, why its end was not read and that it goes on to its destroy, which `twin show`
+follows (`rehearsal error: run fylgja-rehearse <id> was started and its end was not read
+(<why>); it goes on to its destroy, and fylgja twin show says where it is`), with no stage
+line.
 
 ### Identifiers
 

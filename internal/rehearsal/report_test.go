@@ -285,9 +285,20 @@ func heldRun() example {
 		findings.StatusRejected}
 }
 
+// lostRun is a run that started and whose end was not read: the answer lost waiting for its
+// result, so the block knows the run alone (T079).
+func lostRun() example {
+	return example{"error, the run's end not read",
+		input(1950, branchPoint(), seeded(), thirdLink(RoleRehearsed), head(RoleRehearsed)), Result{Run: run()},
+		findings.StatusError}
+}
+
+// lostWhy is why lostRun's end was not read, as the server's wait files it.
+const lostWhy = "waiting for run " + rehearseRun + ": the workflow service did not answer"
+
 func examples() []example {
 	return []example{passedRun(), failedRun(), newFindingRun(), cutRun(), notBuiltRun(), uncleanRun(), aloneRun(), refusedRun(),
-		heldRun()}
+		heldRun(), lostRun()}
 }
 
 // document is the example's findings document as the server would send it: the block, its
@@ -304,6 +315,8 @@ func (e example) document() *findings.Document {
 	case e.res.Outcome == OutcomeRejected:
 		list.AddStep(findings.Rejection, findings.StepProvision, findings.RuleRunInFlight, wire.ProvisionWorkflowID,
 			"the rehearsal's fylgja-provision could not start: a run is already in flight under its id")
+	case e.res.Outcome == "":
+		list.AddStep(findings.Rejection, findings.StepProvision, findings.RuleOperationFailed, findings.StepProvision, lostWhy)
 	}
 	if e.res.Run != nil {
 		subject.RunID = e.res.Run.RunID
@@ -632,12 +645,14 @@ func TestStageLinesAndClosing(t *testing.T) {
 			"stage change-1/branch-point: refused (contract.node.missing)",
 			"stage change-1/seeded: not reached", "stage change-1/third-link: not reached",
 		}, "rehearsal rejected: the run touched nothing, since a run already holds the id of its baseline's provision; no destroy was needed"},
+		{lostRun(), nil, "rehearsal error: run fylgja-rehearse " + rehearseRun + " was started and its end was not read (" + lostWhy +
+			"); it goes on to its destroy, and fylgja twin show says where it is"},
 	} {
 		b := Build(c.e.in, c.e.res)
 		if got := StageLines(b); c.lines != nil && !reflect.DeepEqual(got, c.lines) {
 			t.Errorf("%s: stage lines\n%s\nwant\n%s", c.e.name, strings.Join(got, "\n"), strings.Join(c.lines, "\n"))
 		}
-		if got := Closing(b, c.e.status); got != c.closing {
+		if got := Closing(c.e.document()); got != c.closing {
 			t.Errorf("%s: closing\n%s\nwant\n%s", c.e.name, got, c.closing)
 		}
 	}
@@ -676,14 +691,14 @@ func TestStageLinesAndClosing(t *testing.T) {
 	if got, want := StageLines(b)[1], "stage change-1/third-link: rejected; error: its step was rejected"; got != want {
 		t.Errorf("a step rejected: %s, want %s", got, want)
 	}
-	if got, want := Closing(b, findings.StatusError),
+	if got, want := closingOf(b, findings.StatusError),
 		"rehearsal error: stage change-1/third-link could not be rehearsed: its step was rejected; the twin is destroyed"; got != want {
 		t.Errorf("a step rejected: %s, want %s", got, want)
 	}
 	cancelled := cutRun()
 	cancelled.res.Outcome = OutcomeCancelled
 	b = Build(cancelled.in, cancelled.res)
-	if got, want := Closing(b, findings.StatusError),
+	if got, want := closingOf(b, findings.StatusError),
 		"rehearsal error: the run was cancelled at stage change-1/third-link; the twin is destroyed"; got != want {
 		t.Errorf("a run cancelled: %s, want %s", got, want)
 	}
@@ -695,6 +710,35 @@ func TestStageLinesAndClosing(t *testing.T) {
 	if got, want := StageLines(b)[3],
 		"stage change-1/head: unchanged in 0.9s; incomplete after 120.0s (40 reads); 19 held, 0 failed, 0 skipped; error: its wait ended incomplete after 120.0s"; got != want {
 		t.Errorf("a wait incomplete: %s, want %s", got, want)
+	}
+}
+
+// closingOf is the closing line of a document holding b under status.
+func closingOf(b findings.RehearsalBlock, status findings.Status) string {
+	return Closing(&findings.Document{Status: status, Rehearsal: &b})
+}
+
+// A run whose end was not read keeps its run in the block and every stage as the answer left
+// it, not reached, with no destroy and no finding of the rehearsal's own: the answer learned
+// nothing of them. Its closing line never says that no run was started or that every stage
+// passed (T079).
+func TestBlockOfARunWhoseEndWasNotRead(t *testing.T) {
+	e := lostRun()
+	doc := e.document()
+	b := doc.Rehearsal
+	if b.Run == nil || b.Run.RunID != rehearseRun || b.Destroy != nil || b.Baseline != nil || len(b.Reproduce) != 0 {
+		t.Errorf("the block %+v; want the run, no destroy, no baseline and nothing to reproduce", b)
+	}
+	for _, s := range b.Stages[1:] {
+		if s.Role != RoleNotReached || s.Verdict != string(VerdictNotReached) || len(s.Findings) != 0 {
+			t.Errorf("stage %s: %s %s %v; want not reached, with nothing filed", s.Ref, s.Role, s.Verdict, s.Findings)
+		}
+	}
+	closing := Closing(doc)
+	for _, never := range []string{"nothing was started", "every one passed", "the twin is destroyed", "did not report"} {
+		if strings.Contains(closing, never) {
+			t.Errorf("the closing line says %q: %s", never, closing)
+		}
 	}
 }
 

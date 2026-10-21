@@ -549,9 +549,27 @@ func (r *rehearsing) run(ctx context.Context, svc provision.Service, in provisio
 		func(ctx context.Context) (provision.RehearseResult, error) { return svc.ResultOfRehearse(ctx, runID) },
 		"run cancelled; waiting for its destroy", p.print)
 	if err != nil {
-		return r.failed(err)
+		return r.lost(runID, err)
 	}
 	return r.reported(ctx, runID, res, p.followed.get())
+}
+
+// lost is the document of a run that started and whose end was not read: its result could
+// not be read, or the operator's second interrupt stopped waiting. The block names the run,
+// and every stage as the answer left it, not reached, with no destroy, since none was read;
+// the closing line and the markdown say the run was started, why its end was not read, and
+// that it goes on to its destroy, which twin show follows (FR-021). No stage line is
+// printed: the answer learned nothing of them.
+func (r *rehearsing) lost(runID string, err error) error {
+	res, ok := err.(*result)
+	if !ok {
+		return err
+	}
+	block := rehearsal.Build(r.report(), rehearsal.Result{Run: &findings.ShowRef{WorkflowID: provision.WorkflowRehearse, RunID: runID}})
+	res.doc.Findings = append(append(append(findings.List{}, r.before...), rehearsal.Findings(block)...), res.doc.Findings...)
+	res.doc.Rehearsal = &block
+	r.opts.note("%s", rehearsal.Closing(res.doc))
+	return res
 }
 
 // reported is the rehearsal's document once its run closed: the block through
@@ -588,7 +606,7 @@ func (r *rehearsing) reported(ctx context.Context, runID string, res provision.R
 	for _, l := range rehearsal.StageLines(block) {
 		r.opts.note("%s", l)
 	}
-	r.opts.note("%s", rehearsal.Closing(block, doc.Status))
+	r.opts.note("%s", rehearsal.Closing(doc))
 	return &result{doc: doc}
 }
 

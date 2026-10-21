@@ -390,6 +390,55 @@ func TestMarkdownOfARefusal(t *testing.T) {
 		}
 	}
 
+	// A run whose end was not read says it was started, why its end was not read, and that it
+	// goes on to its destroy; its stages read not read, and nothing says no run was started
+	// (T079).
+	if got, want := Markdown(lostRun().document(), pairs()), strings.Join([]string{
+		`## Fylgja started rehearsing proposed change "third link" on change-1`,
+		"",
+		"Run `fylgja-rehearse " + rehearseRun + "` was started, and its end was not read: " + lostWhy + ". It goes on to its destroy, " +
+			"and `fylgja twin show` says where it is. Stages resolved at 2026-10-17T14:02:11Z. Status **error**. Deadline 1950s (ceiling 3600s).",
+		"",
+		"| stage | at | bundle | step | wait | verify | new findings | verdict |",
+		"|---|---|---|---|---|---|---|---|",
+		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (contract.node.missing) |",
+		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | | | | | not read |",
+		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | | | | | not read |",
+		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | | | | | not read |",
+		"",
+		"```mermaid",
+		"flowchart LR",
+		`  s0["change-1/branch-point<br/>refused"]`,
+		`  s1["change-1/seeded<br/>not read"]`,
+		`  s2["change-1/third-link<br/>not read"]`,
+		`  s3["change-1/head<br/>not read"]`,
+		`  s0 -. "not computed" .-> s1`,
+		`  s1 -- "+link n1:e1-3 — n3:e1-3; ~n1, ~n3 (bootstrap, mapping); artifacts n1, n3" --> s2`,
+		`  s2 -- "unchanged" --> s3`,
+		"```",
+		"",
+		"**Findings**:",
+		"",
+		"- `contract.node.missing` main: branch defines FylgjaContract but holds no instance of it",
+		"- `operation.failed` provision: " + lostWhy,
+		"",
+		"**Stages** (Infrahub's view does not show them):",
+		"",
+		"- `change-1/branch-point` main at 2026-10-16T17:20:19.944651+00:00 (branch point)",
+		"- `change-1/seeded` change-1 at 2026-10-16T17:25:30.118244+00:00 (written) \"after the link is cabled\"",
+		"- `change-1/third-link` change-1 at 2026-10-16T17:30:00.000000+00:00 (given) \"third link\"",
+		"- `change-1/head` change-1 at 2026-10-16T17:30:11.884302+00:00 (head)",
+		"",
+		"**Warnings**: none",
+		"",
+		"**Baseline findings** (reported, failing nothing): none",
+		"",
+		Caveat,
+		"",
+	}, "\n"); got != want {
+		t.Errorf("the markdown of a run whose end was not read:\n%s\nwant:\n%s", got, want)
+	}
+
 	var unknown findings.List
 	unknown.AddStep(findings.Rejection, findings.StepResolve, findings.RuleStageUnknown, "change-9",
 		"branch change-9 has no open proposed change")

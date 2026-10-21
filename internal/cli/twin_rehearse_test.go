@@ -3,6 +3,7 @@ package cli
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"os"
 	"slices"
@@ -624,6 +625,77 @@ func TestRehearseInterruptCancelsTheRun(t *testing.T) {
 		!strings.Contains(stdout, "stage "+thirdRef+": cancelled at phase push; error: the run was cancelled\n") ||
 		!strings.Contains(stdout, "stage "+headRef+": not reached\n") {
 		t.Errorf("stdout:\n%s\nwant the cancel's line after the step's, third-link cancelled and the head not reached", stdout)
+	}
+}
+
+// The answer lost (T079): a run whose result cannot be read, and one whose follow the
+// operator's second interrupt stopped, each keep the run in the report. The text's closing
+// line, the JSON's block and the markdown name it, say that its end was not read and why and
+// that it goes on to its destroy, and none says that no run was started, that every stage
+// passed or that the twin is destroyed; no stage line is printed, since the answer learned
+// nothing of the stages; exit 2.
+func TestRehearseAnswerLost(t *testing.T) {
+	rehearseHost(t)
+	rehearseInfrahub(t)
+	never := []string{"No run was started", "nothing was started", "every one passed", "the twin is destroyed",
+		"stage " + seededRef + ": created", ": not reached"}
+	const unread = "waiting for run " + rehearseRun + ": the workflow service did not answer"
+	const stopped = "stopped waiting for run " + rehearseRun + "; it continues on the workflow service, and fylgja twin destroy will wait for it"
+	for _, c := range []struct {
+		name, why string
+		service   func(interrupts chan os.Signal) *fakeService
+	}{
+		{"its result unread", unread, func(chan os.Signal) *fakeService {
+			svc := okRun()
+			svc.resultErr = errors.New("the workflow service did not answer")
+			return svc
+		}},
+		{"a second interrupt", stopped, func(interrupts chan os.Signal) *fakeService {
+			svc := okRun()
+			svc.release = make(chan struct{})
+			svc.afterFollow = func() { interrupts <- os.Interrupt; interrupts <- os.Interrupt }
+			return svc
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			interrupts := useInterrupts(t)
+			useService(t, c.service(interrupts))
+			code, stdout, _ := rehearse(t, "--branch", lessLink)
+			closing := "rehearsal error: run fylgja-rehearse " + rehearseRun + " was started and its end was not read (" + c.why +
+				"); it goes on to its destroy, and fylgja twin show says where it is\n"
+			if code != findings.ExitError || !strings.HasSuffix(stdout, closing) {
+				t.Errorf("exit %d, stdout:\n%s\nwant 2, ending:\n%s", code, stdout, closing)
+			}
+
+			interrupts = useInterrupts(t)
+			useService(t, c.service(interrupts))
+			code, doc, raw := rehearseDoc(t, "--branch", lessLink)
+			if code != findings.ExitError || doc.Status != findings.StatusError || doc.Rehearsal == nil || doc.Rehearsal.Run == nil ||
+				doc.Rehearsal.Run.RunID != rehearseRun || doc.Rehearsal.Destroy != nil || doc.Subject.RunID != rehearseRun {
+				t.Errorf("exit %d, status %s; want 2, error, the block naming the run and no destroy:\n%s", code, doc.Status, raw)
+			}
+			for _, f := range doc.Findings {
+				if strings.HasPrefix(f.Rule, "rehearsal.") || f.Rule == findings.RuleCleanupIncomplete {
+					t.Errorf("the document files %s, which the answer did not learn: %+v", f.Rule, f)
+				}
+			}
+
+			interrupts = useInterrupts(t)
+			useService(t, c.service(interrupts))
+			code, md, _ := rehearse(t, "--branch", lessLink, "--markdown")
+			if want := `## Fylgja started rehearsing proposed change "change pc-1" on change-1` + "\n\nRun `fylgja-rehearse " +
+				rehearseRun + "` was started, and its end was not read: "; code != findings.ExitError || !strings.HasPrefix(md, want) ||
+				!strings.Contains(md, "It goes on to its destroy, and `fylgja twin show` says where it is.") {
+				t.Errorf("exit %d, the markdown:\n%s\nwant 2, beginning:\n%s", code, md, want)
+			}
+			for _, out := range []string{stdout, md} {
+				for _, n := range never {
+					if strings.Contains(out, n) {
+						t.Errorf("the report says %q:\n%s", n, out)
+					}
+				}
+			}
+		})
 	}
 }
 

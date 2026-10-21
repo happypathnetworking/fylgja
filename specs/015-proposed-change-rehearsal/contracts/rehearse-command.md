@@ -73,6 +73,11 @@ whose verdict is not `passed`. The deadline is a timer on the run's clock: when 
 children's context is cancelled (a provision cleans up; a step records diverged, D-036), and
 the destroy follows. The operator's first interrupt cancels the run the same way and waits
 for its destroy; the second stops waiting (`run.cancelled`, the run goes on to its destroy).
+An answer that stops waiting so, or whose result cannot be read, keeps the run it started:
+the block names it, with every stage `not_reached` and `destroy` `null`, since the answer
+learned nothing of them, and the closing line says `rehearsal error: run fylgja-rehearse
+<id> was started and its end was not read (<why>); it goes on to its destroy, and fylgja twin
+show says where it is`, with no stage line (T079).
 A client that goes away leaves the run running to its destroy.
 
 ### Status and exit
@@ -134,7 +139,10 @@ verify.neighbor n1:ethernet-1/3`), and the lines after it read `not reached`; th
 line says `rehearsal nonconforming: stage change-1/bad-port failed at phase push; the twin
 is destroyed; reproduce it by hand:` followed by the commands, one per line, indented. A
 refusal prints the plan's lines and the findings. The reclaim prints `reclaiming the twin of
-rehearsal run <id>` and the destroy's lines before the run. The findings, with the
+rehearsal run <id>` and the destroy's lines before the run. A run whose baseline provision
+could not start because another run holds its id prints `rehearsal rejected: the run touched
+nothing, since a run already holds the id of its baseline's provision; no destroy was needed`
+(T078). The findings, with the
 baseline's as warnings prefixed by the stage, print as every document prints them, on
 stderr.
 
@@ -187,6 +195,14 @@ fylgja twin destroy
 
 *Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing.*
 ```
+
+**A run that did not reach a stage.** One whose baseline provision could not start, another
+run holding its id, is headed `## Fylgja did not rehearse proposed change …`, its run line
+saying that it touched nothing and needed no destroy (T078). One whose end was not read is
+headed `## Fylgja started rehearsing proposed change …`, its run line saying that it was
+started, why its end was not read, and that it goes on to its destroy, which `fylgja twin
+show` follows; its stages read `not read` in the table and the drawing, and nothing says that
+no run was started (T079).
 
 **The warnings** list each warning a stage filed once, however many of its steps filed it,
 naming the stages that did (``- `artifact.interface.unrepresented` n1:ethernet-1/99: …

@@ -14,7 +14,7 @@ const (
 	OutcomeOK             = "ok"              // every rehearsed stage passed
 	OutcomeStageFailed    = "stage_failed"    // a stage failed: diverged, or a finding the baseline did not have
 	OutcomeStageError     = "stage_error"     // a stage's step could not run, or its wait could not complete
-	OutcomeBaselineFailed = "baseline_failed" // the baseline's provision did not end ready
+	OutcomeBaselineFailed = "baseline_failed" // the baseline's provision ended failed, and cleaned up
 	OutcomeCut            = "cut"             // the deadline passed
 	OutcomeCancelled      = "cancelled"       // the run itself was cancelled
 	OutcomeRejected       = "rejected"        // the baseline's provision could not start, a run holding its id: nothing touched, no destroy
@@ -580,6 +580,9 @@ func verdictPhrase(s findings.RehearsalStage) string {
 		switch {
 		case carries(s.Findings, findings.RuleRehearsalDeadlineCut):
 			return "error: the deadline passed"
+		case carries(s.Findings, findings.RuleRehearsalStageError) && s.Provision != nil && s.Provision.Outcome != provisionReady:
+			// The child's part says how the provision ended.
+			return "error"
 		case carries(s.Findings, findings.RuleRehearsalStageError):
 			return "error: " + errorWhy(s)
 		}

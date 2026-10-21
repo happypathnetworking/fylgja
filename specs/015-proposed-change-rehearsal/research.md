@@ -1687,3 +1687,20 @@ server left as they ran. Outputs in this session's scratchpad. No token was prin
   after its branch's delete (`docs/verified-facts.md`); the status stays the stages', as
   FR-011 says of a moved stage. R-08's table, `contracts/rehearse-command.md` and
   `contracts/cli.md` already said so. Nothing was built.
+
+### 5.12 Convergence pass 3 (2026-10-21; T078–T088)
+
+The loop's run of convergence pass 3's tasks, unattended: no node login, no twin booted, the
+worker and the server left as they ran.
+
+- **A baseline whose provision did not end ready** (T081). T019's note decided
+  `baseline_failed` "for any provision outcome but `ready`", before that was read against
+  FR-009, which gives `failed`, exit 3, only when "the baseline could not be built and the
+  provision cleaned up", and `error`, exit 2, when the rehearsal could not run. That sentence
+  is amended: `baseline_failed` is a provision that ended `failed` alone. One that ended
+  `error` (a step could not run), `rejected` (refused before the host was touched) or
+  `cancelled` without the run's own cancellation or deadline tried no build and cleaned
+  nothing up, and ends the run `stage_error`: status `error`, exit 2,
+  `rehearsal.stage.error` on the baseline's stage at the step the provision stopped at,
+  the provision's own findings beside it. `TestRehearseBaselineEndedOtherwiseIsError`,
+  `notBuiltErrorRun` and `TestRehearseBaselineNotBuilt` pin it.

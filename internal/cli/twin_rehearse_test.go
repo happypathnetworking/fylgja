@@ -834,6 +834,34 @@ func TestRehearseBaselineNotBuilt(t *testing.T) {
 		t.Errorf("exit %d, status %s, findings %v, baseline %+v; want 3, failed, the provision's finding beside the baseline's, "+
 			"no baseline block", code, doc.Status, rulesOf(doc.Findings), doc.Rehearsal.Baseline)
 	}
+
+	// A provision that ended error or rejected tried no build and cleaned nothing up: the
+	// rehearsal could not run, error, exit 2, rehearsal.stage.error on the baseline at the
+	// step the provision stopped at, its own finding beside it, and never
+	// rehearsal.baseline.failed (FR-009; T081).
+	for _, outcome := range []string{provision.OutcomeError, provision.OutcomeRejected} {
+		res := res
+		res.Outcome = rehearsal.OutcomeStageError
+		res.Stages = slices.Clone(res.Stages)
+		base := res.Stages[1]
+		p := *base.Provision
+		p.Outcome, p.Step = outcome, findings.StepHostCheck
+		p.Findings = findings.List{{Severity: findings.Rejection, Rule: findings.RuleOperationFailed, Object: "lab fylgja",
+			Step: findings.StepHostCheck, Message: "host check: the host could not be inspected"}}
+		p.Cleanup = provision.CleanupResult{Teardown: provision.CleanupSkipped, Unstage: provision.CleanupSkipped}
+		base.Provision = &p
+		res.Stages[1] = base
+		useService(t, &fakeService{rehearseRun: rehearseRun, rehearseEvents: rehearseEvents(), rehearseResult: res})
+
+		code, doc, _ := rehearseDoc(t, "--branch", lessLink)
+		stageErr := findingOf(t, doc, findings.RuleRehearsalStageError)
+		if code != findings.ExitError || doc.Status != findings.StatusError || stageErr.Object != seededRef ||
+			stageErr.Step != findings.StepHostCheck || carriesRule(doc.Findings, findings.RuleRehearsalBaselineFailed) ||
+			!carriesRule(doc.Findings, findings.RuleOperationFailed) {
+			t.Errorf("%s: exit %d, status %s, findings %v; want 2, error, rehearsal.stage.error at host_check beside the "+
+				"provision's own finding, no rehearsal.baseline.failed", outcome, code, doc.Status, rulesOf(doc.Findings))
+		}
+	}
 }
 
 // The destroy left the lab: unclean, exit 4, through cleanup.incomplete, though every stage

@@ -32,8 +32,8 @@ import (
 // The deadline's firing ends the stage in progress error and the run cut; the run's own
 // cancellation, the operator's interrupt or twin destroy, cancels the children the same way
 // and ends the run cancelled. Either way a provision cleans up, a step records diverged
-// (D-036), and the destroy follows. A baseline that is not built ends the run
-// baseline_failed with no stage rehearsed. A baseline whose provision could not start
+// (D-036), and the destroy follows. A baseline whose provision ended failed ends the run
+// baseline_failed with no stage rehearsed; one whose provision ended otherwise, stage_error. A baseline whose provision could not start
 // because another run holds its id ends the run rejected: nothing was touched, and the
 // destroy, which removes whatever lab the host holds, would tear down that run's (FR-007).
 // The run branches only on each stage's role, the children's outcomes and the verdicts,
@@ -135,8 +135,9 @@ func (r *rehearsing) stages(stages []RehearseStage) {
 
 // outcome is the run's outcome when stage st stopped it: a baseline whose provision could not
 // start because a run holds its id, cut by the deadline, cancelled by the run's own
-// cancellation, a baseline whose provision did not end ready, a stage that failed, or one
-// that could not be rehearsed.
+// cancellation, a baseline whose provision ended failed, having tried to build it and
+// cleaned up (FR-009), a stage that failed, or one that could not be rehearsed, a baseline
+// whose provision ended error, rejected or cancelled among them.
 func (r *rehearsing) outcome(s RehearseStage, st RehearsedStage) string {
 	switch {
 	case s.Role == rehearsal.RoleBaseline && st.Run == nil && r.held:
@@ -145,7 +146,7 @@ func (r *rehearsing) outcome(s RehearseStage, st RehearsedStage) string {
 		return rehearsal.OutcomeCut
 	case r.ctx.Err() != nil:
 		return rehearsal.OutcomeCancelled
-	case s.Role == rehearsal.RoleBaseline && st.Provision != nil && st.Provision.Outcome != OutcomeReady:
+	case s.Role == rehearsal.RoleBaseline && st.Provision != nil && st.Provision.Outcome == OutcomeFailed:
 		return rehearsal.OutcomeBaselineFailed
 	case st.Verdict == rehearsal.VerdictFailed:
 		return rehearsal.OutcomeStageFailed

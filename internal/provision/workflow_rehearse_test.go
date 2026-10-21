@@ -429,6 +429,34 @@ func TestRehearseBaselineNotBuilt(t *testing.T) {
 	}
 }
 
+// A baseline whose provision ended other than failed did not try to build it and clean up:
+// a step that could not run (error), a refusal before the host was touched (rejected), or a
+// cancellation the run did not ask for. Each is stage_error, which the server makes error,
+// exit 2, and never baseline_failed, which FR-009 keeps for a build that cleaned up (T081).
+// The destroy still runs.
+func TestRehearseBaselineEndedOtherwiseIsError(t *testing.T) {
+	for _, outcome := range []string{OutcomeError, OutcomeRejected, OutcomeCancelled} {
+		t.Run(outcome, func(t *testing.T) {
+			h := newRehearseHarness(t)
+			h.provision = func(_ workflow.Context, in ProvisionInput) (ProvisionResult, error) {
+				return ProvisionResult{Outcome: outcome, BundleID: in.BundleID, Step: findings.StepHostCheck,
+					Findings: findings.List{{Severity: findings.Rejection, Rule: findings.RuleOperationFailed, Step: findings.StepHostCheck,
+						Object: "lab fylgja", Message: "the host check could not run"}},
+					Cleanup: CleanupResult{Teardown: CleanupSkipped, Unstage: CleanupSkipped}}, nil
+			}
+
+			res := h.run(fixtureRehearsal())
+
+			wantRehearsal(t, h, res, rehearsal.OutcomeStageError,
+				[]string{"change-1/branch-point refused", "change-1/seeded error", "change-1/third-link not_reached", "change-1/head not_reached"},
+				[]string{childProvision, childDestroy})
+			if base := res.Stages[1]; base.Provision == nil || base.Provision.Outcome != outcome || base.Wait != nil {
+				t.Errorf("baseline %+v, want the provision's %s result and no wait", base, outcome)
+			}
+		})
+	}
+}
+
 // A step its own locks reject is error, not a verdict on the change: the rehearsal stops
 // there and ends stage_error after its destroy (FR-002).
 func TestRehearseStepRejectedIsError(t *testing.T) {

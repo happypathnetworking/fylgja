@@ -246,6 +246,19 @@ func notBuiltRun() example {
 		findings.StatusFailed}
 }
 
+// notBuiltErrorRun is notBuiltRun whose provision ended error, a step that could not run,
+// rather than failed: no build was tried and cleaned up, so the run is stage_error (T081).
+func notBuiltErrorRun() example {
+	e := notBuiltRun()
+	e.name, e.status = "error, the baseline's provision could not run", findings.StatusError
+	e.res.Outcome = OutcomeStageError
+	var unread findings.List
+	unread.AddStep(findings.Rejection, findings.StepDeploy, findings.RuleOperationFailed, "lab fylgja", "the deploy could not run")
+	base := &e.res.Stages[0]
+	base.Findings, base.Provision.Outcome, base.Provision.Step = unread, outcomeError, findings.StepDeploy
+	return e
+}
+
 func uncleanRun() example {
 	e := passedRun()
 	e.name, e.status = "unclean, every stage passed and the destroy left the lab", findings.StatusUnclean
@@ -504,6 +517,7 @@ func TestBuildFilesTheRehearsalsOwnFindings(t *testing.T) {
 			"the deadline of 1950s passed at stage change-1/third-link: change-1/seeded took 88.1s"},
 		{notBuiltRun(), 1, findings.RuleRehearsalBaselineFailed, findings.StepProvision,
 			"the baseline change-1/seeded could not be built: its provision ended failed at readiness"},
+		{notBuiltErrorRun(), 1, findings.RuleRehearsalStageError, findings.StepDeploy, "its provision ended error at deploy"},
 	} {
 		b := Build(c.e.in, c.e.res)
 		var found *findings.Finding
@@ -632,6 +646,11 @@ func TestStageLinesAndClosing(t *testing.T) {
 			"stage change-1/seeded: not built: its provision ended failed at readiness",
 			"stage change-1/third-link: not reached",
 		}, "rehearsal failed: the baseline change-1/seeded could not be built: its provision ended failed at readiness; the twin is destroyed"},
+		{notBuiltErrorRun(), []string{
+			"stage change-1/branch-point: refused (contract.node.missing)",
+			"stage change-1/seeded: not built: its provision ended error at deploy; error",
+			"stage change-1/third-link: not reached",
+		}, "rehearsal error: stage change-1/seeded could not be rehearsed: its provision ended error at deploy; the twin is destroyed"},
 		{uncleanRun(), nil,
 			"rehearsal unclean: 3 stages rehearsed, every one passed; the destroy left lab fylgja (1 container); twin destroy clears it"},
 		{aloneRun(), []string{

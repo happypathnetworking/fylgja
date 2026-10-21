@@ -34,8 +34,9 @@ it (R-08):
                                                or the run's baseline provision refused at its start, its id held: nothing touched, no destroy
  ok (0)                                      : every rehearsed stage passed; warnings and the baseline's findings notwithstanding
  nonconforming (5)                           : a stage failed (diverged, or a finding the baseline lacked); the twin destroyed
- error (2)                                   : a stage's step could not run, was rejected by its locks or cancelled, its wait incomplete; the deadline; the interrupt; after the destroy
- failed (3)                                  : the baseline's provision did not end ready and cleaned up
+ error (2)                                   : a stage's step could not run, was rejected by its locks or cancelled, its wait incomplete; the baseline's
+                                               provision ended error, rejected or cancelled (T081); the deadline; the interrupt; after the destroy
+ failed (3)                                  : the baseline's provision ended failed and cleaned up
  unclean (4)                                 : the destroy left something, whatever the stages did
 ```
 

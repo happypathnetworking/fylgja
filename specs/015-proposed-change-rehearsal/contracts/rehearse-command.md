@@ -86,8 +86,8 @@ A client that goes away leaves the run running to its destroy.
 |---|---|---|
 | `ok` | 0 | every rehearsed stage passed; the baseline's findings and the warnings notwithstanding |
 | `rejected` | 1 | refused before any run: a stage refused, the deadline unfit, a run in flight, the host held; or the run's baseline provision refused at its start, another run holding its id, the run touching nothing and starting no destroy |
-| `error` | 2 | a stage's step could not run, was rejected by its locks or cancelled before its stage; its wait incomplete; the deadline cut the rehearsal; the operator's interrupt; `operation.failed`; after the destroy |
-| `failed` | 3 | the baseline could not be built and the provision cleaned up |
+| `error` | 2 | a stage's step could not run, was rejected by its locks or cancelled before its stage; the baseline's provision ended `error`, `rejected` or `cancelled`, building nothing to clean up (T081); its wait incomplete; the deadline cut the rehearsal; the operator's interrupt; `operation.failed`; after the destroy |
+| `failed` | 3 | the baseline could not be built: its provision ended `failed` and cleaned up |
 | `unclean` | 4 | the destroy left something; `cleanup.incomplete` says what and that `twin destroy` clears it |
 | `nonconforming` | 5 | a stage failed: diverged, or a finding the baseline did not have; the twin destroyed |
 
@@ -285,8 +285,8 @@ rehearsal.
 | `rehearsal.twin.reclaimed` | warning, 0, `destroy` | a twin of a rehearsal whose run was no longer running was destroyed before the start; names the run and what was removed |
 | `rehearsal.steps.none` | warning, 0, `resolve` | one stage alone compiled: it was built, verified and destroyed, and no step was rehearsed |
 | `rehearsal.stage.failed` | rejection, 5 (`nonconforming`), the phase's step for a divergence, `observe` for a finding | the stage failed; names the phase and the nodes landed and not landed, or the finding by rule and object |
-| `rehearsal.stage.error` | rejection, 2, the step reached | the stage's step could not run, was rejected by its locks or cancelled before its stage, or its wait could not complete |
-| `rehearsal.baseline.failed` | rejection, 3, `provision` | the baseline could not be built; the provision child's own findings stand beside it |
+| `rehearsal.stage.error` | rejection, 2, the step reached | the stage's step could not run, was rejected by its locks or cancelled before its stage, or its wait could not complete; or the baseline's provision ended `error`, `rejected` or `cancelled`, at the step it stopped at |
+| `rehearsal.baseline.failed` | rejection, 3, `provision` | the baseline could not be built: its provision ended `failed`; the provision child's own findings stand beside it |
 | `rehearsal.deadline.cut` | rejection, 2, the step reached | the deadline passed: names the stage in progress, each finished stage's time and the deadline |
 | `rehearsal.stage.moved` | warning, 0, `resolve` | after the run, a rehearsed stage no longer resolves to the `(branch, at)` it was rehearsed at, or is gone; the head included |
 | `rehearsal.change.closed` | warning, 0, `resolve` | after the run, the proposed change is no longer open |

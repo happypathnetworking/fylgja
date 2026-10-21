@@ -1740,3 +1740,48 @@ worker and the server left as they ran.
   first, as quickstart §6 says. The final greps add Infrahub's secret key, agent token and
   admin password, each that `local/.env` sets (SC-008). `bash -n` and `shellcheck
   scripts/bring-up.sh scripts/e2e.sh` are clean; tier 3 was not run.
+
+### 5.13 Convergence pass 4 (2026-10-21; T090–T092)
+
+The loop's run of convergence pass 4's tasks, unattended: no node login, no twin booted, the
+worker and the server left as they ran.
+
+- **The bring-up script keeps a process only when its log's report is its own** (T090).
+  `ensure_role` now reads `/proc/<pid>/fd/1` of a fylgja running from this tree and keeps it
+  only when that is `local/<role>.log`, and, for the server, when `listens_on` finds both
+  `--listen 127.0.0.1:7650` and `--listen <bridge>:7650` among its arguments (either form, as
+  case 9 reads them); any other is restarted, saying why, before `report_ok` is read. An
+  unreadable `fd/1` fails the item, as an unreadable binary does. Verified in this
+  session's scratchpad with `fylgja_pid`, `report_ok`, `report_wants`,
+  `last_report_offset`, `listens_on`, `as_started` and `ensure_role` extracted and run under
+  `env -i bash`, against stand-in processes named `fylgja` (a copy of `bash` looping on
+  `sleep`, since `sleep` takes no argument but an interval) that were the harness's own
+  children, `pgrep` confined to them, so the host's server and worker were never found,
+  and `fail`, `item`, `say`, `wait_for`, `start_role` and `kill` stubbed to record. The logs
+  held a full earlier report each, the server's naming both addresses and both packages.
+  Ten cases passed: a server writing elsewhere with both `--listen` values, and `make
+  serve`'s loopback alone, were restarted though the log's report named both; a server
+  writing to the log but lacking the bridge's `--listen`, or loopback's, was restarted; a
+  server started as `start_role` starts it, and one given `--listen=`, was kept; a worker
+  writing elsewhere was restarted, and one writing to its log kept; one started as
+  `start_role` starts it, whose log's last report named loopback alone, was restarted as
+  before; and an unreadable `fd/1` failed the item with nothing killed. Read only against
+  the host's running server and worker, `as_started` kept both. `bash -n` and `shellcheck
+  scripts/bring-up.sh scripts/e2e.sh` are clean; the script was not run, since it asks for
+  sudo.
+- **The reclaim's destroy refuses, never cancels** (T091). `provision.Service` gains
+  `StartReclaim`: after the worker check it asks for a rehearsal, then a provisioning, then a
+  step run in flight, and refuses on the first found with `InFlightRefusal`'s `run.in_flight`
+  naming it, with nothing cancelled, following not stopped and no run started; with none it
+  goes on as `StartDestroy` does from its second stop of following, attaching to a destroy
+  in flight. The server's reclaim calls it, so a run begun between the rehearsal's read of
+  the runs in flight and the reclaim refuses the rehearsal, exit 1, with no `reclaimed`
+  block. `twin destroy` keeps `StartDestroy`. The reclaim's reads and its start are now a
+  few requests apart, not the host's inspect. `TestReclaimRefusesARunInFlight` pins it
+  against a script where a Schedule exists, and fails when `StartReclaim` is pointed at
+  `StartDestroy`; `TestRehearseReclaimRefusedByARunBegunSinceTheRead` pins the server's
+  refusal.
+- **Three doc lines say what runs** (T092): `show.record.rehearsal` absent when the record
+  names none and `verify.twin.rehearsal` `null`, in the feature's copy as T076 made them in
+  `contracts/cli.md` and `contracts/api.md`; and `stage list` marking a rehearsal's twin as
+  any twin's while the run is in flight or its dead twin waits, in both contracts.

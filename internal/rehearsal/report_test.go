@@ -264,6 +264,22 @@ func notBuiltErrorRun() example {
 	return e
 }
 
+// unverifiedRun is a baseline built whose wait could not complete: VerifyTwin failed without
+// an interruption, so the workflow reads the stage as error with an incomplete wait whose
+// failing holds the operation.failed it synthesised, and keeps no baseline findings (T100).
+func unverifiedRun() example {
+	failing := wire.StepFinding{Rule: findings.RuleOperationFailed, Object: rehearseRun,
+		Message: "activity verify_twin failed: the workflow service did not answer"}
+	return example{"error, the baseline built and its wait incomplete",
+		input(1980, branchPoint(), seeded(), thirdLink(RoleRehearsed)),
+		Result{Outcome: OutcomeStageError, Run: run(), UsedS: 64.0, Destroy: destroyed(), Stages: []StageResult{
+			{Ref: change + "/seeded", Verdict: VerdictError, Provision: &Provision{Outcome: provisionReady, RunID: provisionRun},
+				Wait:  &wire.StepWait{Outcome: wire.WaitIncomplete, BudgetS: 120, From: resolvedAt, Failing: []wire.StepFinding{failing}},
+				TookS: 61.8},
+		}},
+		findings.StatusError}
+}
+
 func uncleanRun() example {
 	e := passedRun()
 	e.name, e.status = "unclean, every stage passed and the destroy left the lab", findings.StatusUnclean
@@ -315,8 +331,8 @@ func lostRun() example {
 const lostWhy = "waiting for run " + rehearseRun + ": the workflow service did not answer"
 
 func examples() []example {
-	return []example{passedRun(), failedRun(), newFindingRun(), cutRun(), notBuiltRun(), uncleanRun(), aloneRun(), refusedRun(),
-		heldRun(), lostRun()}
+	return []example{passedRun(), failedRun(), newFindingRun(), cutRun(), notBuiltRun(), unverifiedRun(), uncleanRun(), aloneRun(),
+		refusedRun(), heldRun(), lostRun()}
 }
 
 // document is the example's findings document as the server would send it: the block, its
@@ -463,6 +479,7 @@ func TestBuildRolesAndVerdicts(t *testing.T) {
 			{"not_reached", "not_reached"}}, true},
 		{cutRun(), []rv{{"baseline", "baseline"}, {"rehearsed", "error"}, {"not_reached", "not_reached"}}, true},
 		{notBuiltRun(), []rv{{"refused", "refused"}, {"baseline", "error"}, {"not_reached", "not_reached"}}, false},
+		{unverifiedRun(), []rv{{"refused", "refused"}, {"baseline", "error"}, {"not_reached", "not_reached"}}, false},
 		{refusedRun(), []rv{{"not_reached", "not_reached"}, {"not_reached", "not_reached"}, {"not_reached", "not_reached"},
 			{"not_reached", "not_reached"}}, false},
 		{heldRun(), []rv{{"refused", "refused"}, {"not_reached", "not_reached"}, {"not_reached", "not_reached"}}, false},
@@ -495,6 +512,35 @@ func TestBuildRolesAndVerdicts(t *testing.T) {
 	if len(third.NewFindings) != 0 || !carriesFinding(third.Findings, findings.Warning, findings.RuleVerifyNeighbor,
 		change+"/third-link: n1:ethernet-1/2") {
 		t.Errorf("third-link's findings %v, new %v", third.Findings, third.NewFindings)
+	}
+
+	// A baseline whose wait settled keeps its findings as one that expired does.
+	settled := passedRun()
+	settled.res.Stages[0].Wait = wait(wire.WaitSettled, 3.2, 2, baselineFinding)
+	if b := Build(settled.in, settled.res); b.Baseline == nil ||
+		!reflect.DeepEqual(b.Baseline.Findings, []findings.StepWaitFailing{findings.StepWaitFailing(baselineFinding)}) {
+		t.Errorf("a settled baseline's findings are %+v", b.Baseline)
+	}
+
+	// A baseline built whose wait could not complete is error and has no baseline findings:
+	// the operation.failed its wait holds is why the stage is error, a warning of the stage's
+	// in the document's list beside rehearsal.stage.error, and never a finding the baseline
+	// had (T100).
+	unverified := unverifiedRun()
+	doc := unverified.document()
+	seeded := doc.Rehearsal.Stages[1]
+	if doc.Rehearsal.Baseline != nil {
+		t.Errorf("a baseline whose wait was incomplete has baseline findings %+v", doc.Rehearsal.Baseline)
+	}
+	for _, l := range []findings.List{seeded.Findings, doc.Findings} {
+		if !carriesFinding(l, findings.Warning, findings.RuleOperationFailed, change+"/seeded: "+rehearseRun) ||
+			!carriesFinding(l, findings.Rejection, findings.RuleRehearsalStageError, change+"/seeded") {
+			t.Errorf("the reason is not filed: %v", l)
+		}
+	}
+	if got, want := Closing(doc), "rehearsal error: stage change-1/seeded could not be rehearsed: its wait ended incomplete after 0.0s; "+
+		"the twin is destroyed"; got != want {
+		t.Errorf("closing %s, want %s", got, want)
 	}
 }
 

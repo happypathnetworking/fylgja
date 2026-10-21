@@ -157,6 +157,28 @@ func TestMarkdown(t *testing.T) {
 	}
 }
 
+// A baseline built whose wait could not complete has no baseline findings: the
+// operation.failed its wait holds is listed among the warnings, the stage's, beside the
+// rehearsal.stage.error that makes the status error, and never under the Baseline findings
+// (T100).
+func TestMarkdownOfABaselineNotVerified(t *testing.T) {
+	md := Markdown(unverifiedRun().document(), pairs())
+	for _, want := range []string{
+		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | created | incomplete after 0.0s | | — | error |",
+		"**Findings**:\n\n- `contract.node.missing` main: branch defines FylgjaContract but holds no instance of it\n" +
+			"- `rehearsal.stage.error` change-1/seeded: its wait ended incomplete after 0.0s\n\n",
+		"**Warnings**:\n\n- `operation.failed` change-1/seeded: " + rehearseRun + ": activity verify\\_twin failed: the workflow service did not answer (stage seeded)\n\n",
+		"**Baseline findings** (reported, failing nothing): none\n\n",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("the markdown does not hold %q:\n%s", want, md)
+		}
+	}
+	if len(md) > CommentMax {
+		t.Errorf("the markdown is %d bytes, over the %d a comment holds", len(md), CommentMax)
+	}
+}
+
 // A step that restarted or recreated a node names each in its cell with the seconds its
 // readiness took (FR-004); one cut before its readiness names the node alone, and one cut at
 // its push its pushes, landed and not (T094). The block is the same either way, and the

@@ -191,7 +191,7 @@
             },
             { "type": "null" }
           ],
-          "description": "null when no stage compiled, the baseline was not built, or the run was started and its end was not read"
+          "description": "set once the baseline's verdict is baseline, its wait settled or expired; null when no stage compiled, the baseline was not built, the baseline was built and its wait did not settle or expire (its verdict error, its wait's failing assertions in the stage's findings alone), or the run was started and its end was not read"
         },
         "stages": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/stage" } },
         "destroy": { "oneOf": [{ "$ref": "#/$defs/cleanup" }, { "type": "null" }], "description": "the destroy child's cleanup; null when the rehearsal was refused before any run, when its run was refused at its baseline's start, another run holding the provision's id, and touched nothing, and when the run was started and its end was not read, run then set" },

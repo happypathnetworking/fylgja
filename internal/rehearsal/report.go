@@ -106,8 +106,10 @@ type StepRun struct {
 // rehearsal.stage.failed, the one that could not be rehearsed rehearsal.stage.error, or
 // rehearsal.deadline.cut when the deadline passed (an interrupt's is the server's
 // run.cancelled), and a baseline not built rehearsal.baseline.failed. The baseline block is
-// set once the baseline was built, its findings its wait's failing assertions; the commands
-// that reproduce a failure are Reproduce's.
+// set once the baseline's verdict is baseline, built and its wait settled or expired, its
+// findings that wait's failing assertions, which fail nothing; a baseline built whose wait
+// did not settle or expire is error, compared with nothing, and its wait's failing are the
+// stage's alone. The commands that reproduce a failure are Reproduce's.
 func Build(in Input, res Result) findings.RehearsalBlock {
 	b := findings.RehearsalBlock{
 		ProposedChange: in.ProposedChange, ResolvedAt: in.ResolvedAt, DeadlineS: in.DeadlineS, CeilingS: in.CeilingS,
@@ -146,7 +148,7 @@ func Build(in Input, res Result) findings.RehearsalBlock {
 			st.TookS = r.TookS
 			st.Findings = append(st.Findings, r.Findings...)
 			st.Findings = append(st.Findings, StageFindings(s.Ref, r.Wait)...)
-			if s.Role == RoleBaseline && r.Provision != nil && r.Provision.Outcome == provisionReady {
+			if s.Role == RoleBaseline && r.Verdict == VerdictBaseline {
 				b.Baseline = &findings.RehearsalBaseline{Ref: s.Ref, Findings: failingOf(r.Wait)}
 			}
 			st.Findings = append(st.Findings, ownFindings(st, r, res.Outcome, in.DeadlineS, finished)...)

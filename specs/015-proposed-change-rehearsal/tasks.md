@@ -1341,3 +1341,4 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - Record the answer in research §5 and append the task it needs.
 
   Per FR-016 and FR-017 (missing)
+  - *2026-10-21, the operator, answering the loop's question 7: (a), keep it.* `spec.md`'s Edge Cases gain "A source branch Fylgja cannot name", after "A stage refused on the way in": Infrahub accepts a `/` in a branch's name, 014's reference syntax refuses it (`stage.ref.invalid`), both checks conclude failure with that refusal in their message and nothing is booted, a branch to rehearse being named without a `/`. What is owed: the README's walk-through says the same, and the answer is recorded in research §5; nothing of the code changes. Widening the syntax (c) stays a later feature's.

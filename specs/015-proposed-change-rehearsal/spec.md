@@ -298,6 +298,11 @@ read" that the build relies on, with its date.
   the plan's findings, and the host is untouched. The branch point refused for want of a
   network on `main` is the one exception: the baseline falls to the first stage that
   resolves, and the refused row stays in the report (FR-003).
+- **A source branch Fylgja cannot name.** Infrahub accepts a branch whose name holds a `/`
+  (`feature/x`), which 014's reference syntax refuses (`stage.ref.invalid`). Both checks
+  conclude failure on its proposed change, `fylgja-step` at its creation and `fylgja-twin`
+  once it is ready for review, with that refusal in their message, and nothing is booted:
+  a branch to rehearse is named without a `/`.
 - **One stage alone resolves.** Nothing is marked and the branch point is refused for want
   of a network on `main`, as at the creation of an unmarked proposed change on this
   install: the head is booted, verified and destroyed, reported as the baseline with a

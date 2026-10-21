@@ -809,8 +809,9 @@ func longestRun(s string, c rune) int {
 }
 
 // mermaid is text inside one of Mermaid's quoted labels: # first, since Mermaid reads
-// #…; as an entity, then the quote that would end the label and the angle brackets it would
-// read as markup, each as its entity; a line break as a space.
+// #…; as an entity, then the quote that would end the label, the backtick that would open a
+// markdown string closed only by `", and the angle brackets it would read as markup, each as
+// its entity; a line break as a space.
 func mermaid(s string) string {
-	return strings.NewReplacer("#", "#35;", `"`, "#quot;", "<", "#lt;", ">", "#gt;", "\n", " ", "\r", " ").Replace(s)
+	return strings.NewReplacer("#", "#35;", `"`, "#quot;", "`", "#96;", "<", "#lt;", ">", "#gt;", "\n", " ", "\r", " ").Replace(s)
 }

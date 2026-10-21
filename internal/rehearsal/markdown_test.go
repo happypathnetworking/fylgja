@@ -547,6 +547,26 @@ func TestMarkdownEscapes(t *testing.T) {
 	if got := mermaid("a \"b\" <c> #d\ne"); got != "a #quot;b#quot; #lt;c#gt; #35;d e" {
 		t.Errorf("mermaid = %q", got)
 	}
+	// A branch name may begin with a backtick, and a label opening "` is a Mermaid markdown
+	// string closed only by `": a backtick is written as its entity, in a node's label and in an
+	// edge's (T109).
+	ticked := passedRun()
+	ticked.in.Stages[3].Ref = "`odd/head"
+	ticked.res.Stages[2].Ref = "`odd/head"
+	ps := append(pairs(), step.Between(change+"/third-link", "`odd/head",
+		step.Step{From: thirdID, To: headID, NodesAdded: []string{"n`4"}}))
+	drawn := drawing(Build(ticked.in, ticked.res), ps, false)
+	for _, want := range []string{`  s3["#96;odd/head<br/>passed"]`, `  s2 -- "+n#96;4" --> s3`} {
+		if !strings.Contains(drawn, want) {
+			t.Errorf("the drawing does not hold %s:\n%s", want, drawn)
+		}
+	}
+	if inner := strings.TrimSuffix(strings.TrimPrefix(drawn, "```mermaid"), "```"); strings.Contains(inner, "`") {
+		t.Errorf("a raw backtick reached the drawing's labels:\n%s", drawn)
+	}
+	if got := mermaid("`a`"); got != "#96;a#96;" {
+		t.Errorf("mermaid = %q", got)
+	}
 	if got := code("a`b``c"); got != "```a`b``c```" {
 		t.Errorf("code = %q", got)
 	}

@@ -232,8 +232,9 @@ naming the stages that did (``- `artifact.interface.unrepresented` n1:ethernet-1
 own are listed as they came: the rehearsal's, and `stage.main.moved`, which the plan files
 on the branch point but which is the branch's.
 
-A Mermaid label is quoted; `"` in a name is written `#quot;`, `<` and `>` as `#lt;` and
-`#gt;`; a line break is `<br/>`. An edge's label is the step's text with no content: nodes
+A Mermaid label is quoted; `"` in a name is written `#quot;`, `` ` `` as `#96;` (a label
+opening ``"` `` is a Mermaid markdown string; T109), `<` and `>` as `#lt;` and `#gt;`; a line
+break is `<br/>`. An edge's label is the step's text with no content: nodes
 and links added or removed, nodes changed with their reasons, artifacts changed by node;
 a step not computed is a dotted edge. Under 1.11.2 a comment renders through react-markdown
 with `remark-gfm` (tables), `remark-breaks` and `rehype-mermaid` (research §1.2).

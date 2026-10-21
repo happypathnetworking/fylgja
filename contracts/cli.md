@@ -412,7 +412,8 @@ step change-1/cabled → change-1/live (f857d513… → 7eafd93c…):
 The target is the next stage of the twin's own proposed change when none is given, the head
 when no mark follows; the one given otherwise, forward or back, the head included when it
 has moved since the record. Each refusal below is made at `resolve`, before the from bundle,
-the host check and containerlab's plan, exit 1:
+the host check and containerlab's plan, exit 1; a rehearsal in flight is refused before any
+of them, `run.in_flight` naming it (015):
 
 | Rule | When | Wording (shape) |
 |---|---|---|
@@ -683,6 +684,10 @@ Nine, each `rehearsal.*`. `run.cancelled`, `run.in_flight`, `run.worker.absent`,
 - `twin destroy` during a rehearsal prints `cancelling rehearsal run 01a1…; waiting for its
   destroy`, follows that destroy, then makes its own, which finds nothing. `twin create`,
   `twin provision` and `twin step` beside a rehearsal are `run.in_flight`, naming it.
+  `twin step` asks the workflow service first, after its flags' guards and before it reads
+  the host or Infrahub, so it is never refused as an orphan during the baseline's provision
+  or as diverged after a failed stage; its dry run asks nothing, as `twin create --dry-run`
+  does not.
 - `stage list` marks nothing of a rehearsal: its twin is gone when it ends.
 
 ### `twin.json` 7

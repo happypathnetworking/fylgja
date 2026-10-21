@@ -225,24 +225,37 @@ type stepHostFixture struct {
 	fromID string
 	// before is how many requests Infrahub had answered once the fixture was built.
 	before int
+	// svc is the workflow service useNoRunsInFlight installed.
+	svc *fakeService
+}
+
+// useNoRunsInFlight is the workflow service a step refused before its run sees: it answers
+// the step's first question, the runs in flight, with none, and fails the test should the
+// step start or cancel anything (T080).
+func useNoRunsInFlight(t *testing.T) *fakeService {
+	t.Helper()
+	svc := &fakeService{readOnly: t}
+	useService(t, svc)
+	return svc
 }
 
 // stepHost is a host running the mixed twin, built from stage change-1/sealed by run
 // createRunID: the state root, the fake Infrahub, containerlab answering inspect-three.json
-// and plan, both logins set and no host budget, and no workflow service. The from bundle is
-// built and filed through stage plan's own path, as a create's compile files it, and
-// twin.json 6 records it; change adjusts the record before it is written.
+// and plan, both logins set and no host budget, and a workflow service with no run in
+// flight that starts nothing (useNoRunsInFlight). The from bundle is built and filed through
+// stage plan's own path, as a create's compile files it, and twin.json 6 records it; change
+// adjusts the record before it is written.
 func stepHost(t *testing.T, plan string, change func(*lab.RecordFields)) *stepHostFixture {
 	t.Helper()
 	paths := useStateRoot(t)
-	useService(t, nil)
+	svc := useNoRunsInFlight(t)
 	mixedDryRunEnv(t)
 	infra := stepInfrahub(t)
 	infra.start()
 	fromID := buildStage(t, paths, "sealed")
 	writeTwin(t, paths, stepRecordOf(t, fromID, change))
 	return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-three.json", plan), fromID: fromID,
-		before: len(infra.requests())}
+		before: len(infra.requests()), svc: svc}
 }
 
 // compiledStage is what stage plan's path hands its filing for one label.
@@ -813,6 +826,59 @@ func TestStepDryRunRefusals(t *testing.T) {
 			if got := stateRootListing(t, h.paths.Twin); !slices.Equal(got, twinDir) {
 				t.Errorf("the twin directory changed under a dry run:\n%v\nwas\n%v", got, twinDir)
 			}
+			if len(h.svc.reads) != 0 || len(h.svc.calls) != 0 {
+				t.Errorf("the dry run asked the workflow service %v %v; want nothing, as twin create --dry-run", h.svc.reads, h.svc.calls)
+			}
+		})
+	}
+}
+
+// Beside a rehearsal in flight a step is refused run.in_flight, naming the rehearsal's run,
+// before the host or Infrahub is read (FR-007, FR-008; T080): during the baseline's
+// provision, where the host holds a lab and no record and the step would call the
+// rehearsal's twin an orphan, and after a diverged stage, where it would refuse the twin as
+// diverged. Nothing is started, and containerlab is asked nothing.
+func TestStepBesideARehearsalNamesItBeforeAnyRead(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		host func(t *testing.T) *stepHostFixture
+		run  provision.RunInFlight
+	}{
+		{"during the baseline's provision", func(t *testing.T) *stepHostFixture {
+			paths := useStateRoot(t)
+			infra := stepInfrahub(t)
+			infra.start()
+			return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-three.json", ""),
+				before: len(infra.requests())}
+		}, provision.RunInFlight{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "provision",
+			Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: findings.StepDeploy}}},
+		{"after a diverged stage", divergedStepHost, provision.RunInFlight{WorkflowID: provision.WorkflowRehearse, RunID: "r1",
+			Step: "destroy", Child: &provision.RunInFlight{WorkflowID: provision.WorkflowDestroy, RunID: "d1", Step: findings.StepTeardown}}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := c.host(t)
+			svc := &fakeService{readOnly: t, inFlight: []provision.RunInFlight{c.run}}
+			useService(t, svc)
+			h.clab.calls = nil
+
+			out := runStepCmd(t, "--allow-restart")
+			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleRunInFlight, Step: findings.StepStart,
+				Object:  provision.WorkflowRehearse,
+				Message: "rehearsal run r1 is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it"}
+			if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || len(out.doc.Findings) != 1 || got != want {
+				t.Errorf("exit %d, findings %+v; want 1 and %+v alone", out.code, out.doc.Findings, want)
+			}
+			if asked := len(h.infra.requests()) > h.before; asked {
+				t.Errorf("Infrahub was asked %+v; want nothing read", h.infra.requests()[h.before:])
+			}
+			if len(h.clab.calls) != 0 {
+				t.Errorf("containerlab or docker was asked %v; want nothing read", h.clab.calls)
+			}
+			svc.mu.Lock()
+			defer svc.mu.Unlock()
+			if len(svc.calls) != 0 {
+				t.Errorf("the service was asked %v; want nothing started", svc.calls)
+			}
 		})
 	}
 }
@@ -964,7 +1030,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 	}{
 		{name: "no lab and no twin directory", host: func(t *testing.T) *stepHostFixture {
 			paths := useStateRoot(t)
-			useService(t, nil)
+			useNoRunsInFlight(t)
 			infra := stepInfrahub(t)
 			infra.start()
 			return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-empty.json", "")}
@@ -972,7 +1038,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			"no twin: no lab fylgja and no twin directory; only a twin built from a stage steps (fylgja twin create --stage)")},
 		{name: "an orphan", host: func(t *testing.T) *stepHostFixture {
 			paths := useStateRoot(t)
-			useService(t, nil)
+			useNoRunsInFlight(t)
 			infra := stepInfrahub(t)
 			infra.start()
 			return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-three.json", "")}
@@ -1003,7 +1069,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			}},
 		{name: "a leftover twin directory", host: func(t *testing.T) *stepHostFixture {
 			paths := useStateRoot(t)
-			useService(t, nil)
+			useNoRunsInFlight(t)
 			infra := stepInfrahub(t)
 			infra.start()
 			if err := os.MkdirAll(filepath.Join(paths.Twin, "bundle"), 0o755); err != nil {
@@ -2531,14 +2597,10 @@ func TestStepFailureCarriesTheMovedStage(t *testing.T) {
 			step: findings.StepHostCheck, setup: func(t *testing.T, _ *stepHostFixture, _ compiledStage) {
 				t.Setenv(lab.EnvHostMemoryMB, "lots")
 			}},
-		{name: "the run's dial fails", run: true, code: findings.ExitError, rule: findings.RuleOperationFailed,
+		{name: "the run's start fails", run: true, code: findings.ExitError, rule: findings.RuleOperationFailed,
 			step: findings.StepStart, setup: func(t *testing.T, _ *stepHostFixture, _ compiledStage) {
 				useInterrupts(t)
-				saved := dialService
-				t.Cleanup(func() { dialService = saved })
-				dialService = func(context.Context) (provision.Service, error) {
-					return nil, errors.New("the workflow service's client could not be built")
-				}
+				useService(t, &fakeService{startErr: errors.New("the workflow service's client could not start the run")})
 			}},
 		{name: "the store emptied of the from bundle", code: findings.ExitRejected, rule: findings.RuleStepBundleMissing,
 			step: findings.StepResolve, setup: func(t *testing.T, h *stepHostFixture, old compiledStage) {

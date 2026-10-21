@@ -27,11 +27,20 @@ import (
 // does not answer fails.
 func countDials(t *testing.T) *atomic.Int32 {
 	t.Helper()
+	return countDialsTo(t, nil)
+}
+
+// countDialsTo is countDials answered by svc, or unreachable when svc is nil.
+func countDialsTo(t *testing.T, svc provision.Service) *atomic.Int32 {
+	t.Helper()
 	var n atomic.Int32
 	saved := dialService
 	t.Cleanup(func() { dialService = saved })
 	dialService = func(context.Context) (provision.Service, error) {
 		n.Add(1)
+		if svc != nil {
+			return svc, nil
+		}
 		return nil, &provision.UnreachableError{Address: "localhost:7233", Err: errors.New("connection refused")}
 	}
 	return &n
@@ -81,8 +90,9 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 		step bool
 		want findings.Finding
 		code int
-		// asked is whether Infrahub is asked before the refusal: a target refused before the
-		// workflow service, by what Infrahub names.
+		// asked is whether Infrahub is asked before the refusal: a target refused by what
+		// Infrahub names. A non-dry step asks the workflow service first whether a rehearsal is
+		// running (T080), so such a step was dialled once, after its flags' guards.
 		asked bool
 	}{
 		// twin create (M1, M4, 014).
@@ -161,6 +171,9 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 				infra.start()
 			}
 			dials := countDials(t)
+			if c.step && c.asked {
+				dials = countDialsTo(t, &fakeService{readOnly: t})
+			}
 			want := c.code
 			if want == 0 {
 				want = findings.ExitError
@@ -177,8 +190,12 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 			if code != want || doc.Status != status || len(doc.Findings) != 1 || doc.Findings[0] != c.want {
 				t.Errorf("exit %d, status %s, findings %+v\nwant exit %d, %s, with %+v alone", code, doc.Status, doc.Findings, want, status, c.want)
 			}
-			if n := dials.Load(); n != 0 {
-				t.Errorf("the workflow service was dialled %d times before the refusal", n)
+			dialled := int32(0)
+			if c.step && c.asked {
+				dialled = 1
+			}
+			if n := dials.Load(); n != dialled {
+				t.Errorf("the workflow service was dialled %d times before the refusal, want %d", n, dialled)
 			}
 			if asked := len(infra.requests()) > before; asked != c.asked {
 				t.Errorf("Infrahub asked before the refusal: %v, want %v (%+v)", asked, c.asked, infra.requests()[before:])

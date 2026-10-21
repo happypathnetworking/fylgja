@@ -42,9 +42,10 @@ type stepFlags struct {
 	waitS int
 }
 
-// runTwinStep steps the stage twin. Everything up to the run is decided here, before any
-// connection to the workflow service, each refusal ending the command with its document:
-// --stage as given; the packages; the host, whose twin must be a stage twin that is not
+// runTwinStep steps the stage twin. Everything up to the run is decided here, each refusal
+// ending the command with its document: --stage as given; the packages; a rehearsal in
+// flight, asked of the workflow service before anything else is read, since the twin and the
+// host are its own (015; T080); the host, whose twin must be a stage twin that is not
 // diverged; the record's proposed change and the target (014: research R-16), with stage
 // list's stage.twin.moved beside it when the record's stage has moved; the target's
 // resolution, read, compile and filing on stage plan's path; the from bundle out of the
@@ -84,6 +85,8 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	}
 	if f.dryRun {
 		opts.note("dry run: no lab, container, twin directory or run is changed")
+	} else if refused := rehearsalHolds(ctx, opts, op, subject); refused != nil {
+		return refused
 	}
 
 	// The host, read as twin show reads it, changing nothing.
@@ -231,6 +234,32 @@ func stepTo(ctx context.Context, opts *options, f *stepFlags, op string, subject
 		return finish(op, subject, list)
 	}
 	return runStep(ctx, opts, op, subject, in, list)
+}
+
+// rehearsalHolds refuses a step beside a rehearsal in flight, run.in_flight naming it, before
+// the host or Infrahub is read: during the baseline's provision the host holds a lab and no
+// record, and after a diverged stage a diverged twin, each of which the step would otherwise
+// refuse under a rule that calls the rehearsal's twin an orphan or diverged
+// (contracts/rehearse-command.md; FR-007, FR-008). The workflow service is asked as the
+// rehearsal's own holdingRun asks it; a dry run dials none, as twin create --dry-run does
+// not, and StartStep refuses a provisioning or destroy run as before. nil when no rehearsal
+// is running.
+func rehearsalHolds(ctx context.Context, opts *options, op string, subject *findings.Subject) error {
+	svc, err := opts.dial(ctx)
+	if err != nil {
+		return startFailure(op, subject, findings.StepStart, err)
+	}
+	defer svc.Close()
+	runs, err := svc.InFlight(ctx)
+	if err != nil {
+		return startFailure(op, subject, findings.StepStart, err)
+	}
+	for _, r := range runs {
+		if r.WorkflowID == provision.WorkflowRehearse {
+			return &result{doc: provision.InFlightRefusal(r.WorkflowID, r.RunID).Document(op, subject)}
+		}
+	}
+	return nil
 }
 
 // withFound carries list, what the command had found before it failed, onto the document

@@ -715,7 +715,10 @@ runs the host check on the target with the presence refusals dropped, and reads
 containerlab's plan (`clab deploy --dry-run --format json` on the store's copy of the
 target, with `CLAB_LABDIR_BASE` at the twin directory, which reads containerlab's state
 there and writes nothing). Every refusal is made there, before any connection to the
-workflow service. Then it starts `fylgja-step`, which re-applies the host-bound rules
+workflow service but one: since 015 it first asks the workflow service whether a rehearsal
+is running, whose twin and host the step would otherwise misread as an orphan or a
+diverged twin, and is refused `run.in_flight` naming it; its dry run asks nothing. Then it
+starts `fylgja-step`, which re-applies the host-bound rules
 as second locks and runs:
 
 1. **`inspect`, `host check`, `plan reconcile`**: reads only. A refusal is `rejected`,
@@ -1233,7 +1236,8 @@ declares live)`, or `nothing to apply`) and the push plan with each node's reaso
 dry run prints the same lines, the host check's `memory:` and `host:` lines and a verdict,
 and changes no lab, container, twin directory or run; like every dry run it files the
 target's bundle and CTM. Every refusal it can make, it makes before any connection to the
-workflow service. `twin show` keeps the kind `pinned` for a stepped twin and names the
+workflow service, but a rehearsal in flight, which it asks the service for before reading
+anything (015). `twin show` keeps the kind `pinned` for a stepped twin and names the
 step on its kind line and in its record block (`stepped from change-1/cabled by run
 fylgja-step …; reconcile 3.9s (restart e1); readiness e1 54.8s; push e1 1.6s, s1 2.4s`). A
 diverged twin is the kind `diverged`, in one line: where it was going, the run, the phase,

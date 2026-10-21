@@ -262,7 +262,10 @@ report that fits is rendered whole, as above.
   carries `rehearsal`.
 - `twin destroy` during a rehearsal prints `cancelling rehearsal run 01a1…; waiting for its
   destroy`, follows it, then its own destroy, which finds nothing; a create or a step beside
-  a rehearsal is `run.in_flight` naming it.
+  a rehearsal is `run.in_flight` naming it. A step asks the workflow service first, before
+  it reads the host or Infrahub, so it is never refused as an orphan during the baseline's
+  provision or as diverged after a failed stage; its dry run asks nothing, as `twin create
+  --dry-run` does not (T080).
 - `stage list` marks nothing of a rehearsal: its twin is gone when it ends.
 
 ## `twin.json` 7

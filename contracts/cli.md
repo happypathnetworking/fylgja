@@ -636,9 +636,12 @@ It is never longer than 4,092 bytes, the longest text Infrahub keeps as a commen
 report that would be names each finding by its identifier and object alone, identical ones
 once with their count, gives the table each step by its outcome and its new findings by the
 first two and how many more, and cuts a long proposed change's name in the heading with an
-ellipsis; should that still be too long, it leaves sections out whole, the baseline's
-findings first, then the drawing, the warnings, the stages, the findings and the reproduce
-commands. The table is never left out: it shrinks to each stage's reference and verdict,
+ellipsis; should that still be too long, it leaves sections out whole, by an order of
+preference: the baseline's findings first, then the drawing, the warnings, the stages, the
+findings and the reproduce commands. The sections are kept from the last of that order back
+while each still fits, so one earlier in it is kept when it fits once a later one was left
+out: a long drawing can be left out while the baseline's findings are kept. The table is
+never left out: it shrinks to each stage's reference and verdict,
 then, should even that be too long, to as many stages as fit and `… and <n> more`. A line
 before the caveat says what was shortened, and `fylgja-twin`'s message, the text, is the
 whole report.
@@ -688,9 +691,12 @@ Nine, each `rehearsal.*`. `run.cancelled`, `run.in_flight`, `run.worker.absent`,
 - `twin show`'s kind line for a rehearsal's twin is `pinned at …, stage change-1/seeded, of
   rehearsal run fylgja-rehearse 01a1…; not following`, and while the run is in flight it ends
   `; rehearsal run fylgja-rehearse 01a1… is at stage change-1/third-link, step push`;
-  `in_flight` names the rehearsal with its child and the stage it is at, `in flight: run
-  fylgja-rehearse 01a1… at step step (run fylgja-step 03c3… at step push), stepping towards
-  stage change-1/third-link`. `show.record.rehearsal` is `{workflow_id, run_id}`, absent
+  `in_flight` names the rehearsal with its child in flight, its provision, a step or its
+  destroy, each by `workflow_id`, `run_id` and `step`, and no stage; the text's line adds the
+  stage it is at, `in flight: run fylgja-rehearse 01a1… at step step (run fylgja-step 03c3…
+  at step push), stepping towards stage change-1/third-link`, and `notes` carries the kind
+  line's `rehearsal run fylgja-rehearse 01a1… is at stage change-1/third-link, step push`.
+  `show.record.rehearsal` is `{workflow_id, run_id}`, absent
   when the record names no rehearsal.
 - `twin verify`'s first line names the rehearsal's run after the stage, and
   `verify.twin.rehearsal` carries it, `null` when the record names none.

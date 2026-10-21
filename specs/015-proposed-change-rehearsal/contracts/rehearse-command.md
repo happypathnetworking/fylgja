@@ -238,9 +238,12 @@ object alone, identical ones once with their count (``- `push.refused` n1 (×2)`
 check's message holds the text; gives the table brief, each step by its outcome alone
 (`diverged at push`) and its new findings by the first two and how many more (`… and 198
 more`); and cuts a proposed change's name, or a branch's, in the heading to 120 bytes with
-an ellipsis. Should that still be too long, whole sections are left out, the baseline's
-findings first, then the drawing, the warnings, the stages, the findings and the reproduce
-commands. **The table is never left out, and keeps every stage's reference and verdict**:
+an ellipsis. Should that still be too long, whole sections are left out by an order of
+preference, the baseline's findings first, then the drawing, the warnings, the stages, the
+findings and the reproduce commands: they are kept from the last of it back while each still
+fits, so one earlier in it is kept when it fits once a later one was left out, as a long
+drawing is left out while the baseline's findings are kept (T105). **The table is never
+left out, and keeps every stage's reference and verdict**:
 should the brief table not fit beside the heading, the run line and the caveat, it gives
 each stage's reference and verdict alone (`| stage | verdict |`), and should even that not
 fit, as no ceiling bounds a refusal's stages, as many stages as fit in order and a last row

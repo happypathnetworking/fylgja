@@ -44,8 +44,11 @@ const CommentMax = 4092
 // count, since fylgja-twin's message, the report's text, holds every message; the table
 // names each step by its outcome and its new findings by the first few; and the heading
 // cuts a long proposed change's name with an ellipsis. Should that still be too long, whole
-// sections are left out: the baseline's findings first, then the drawing, the warnings, the
-// stages, the findings and the reproduce commands. The table is never left out: it gives
+// sections are left out by an order of preference: the baseline's findings first, then the
+// drawing, the warnings, the stages, the findings and the reproduce commands. They are kept
+// from the last of it back while each still fits, so one earlier in it is kept when it fits
+// once a later one was left out: a long drawing can go while the baseline's findings stay.
+// The table is never left out: it gives
 // each stage's reference and verdict alone, then, should even that be too long, as many
 // stages as fit and how many are left out. A note before the caveat says what was
 // shortened. The heading, the status and the caveat are always kept.

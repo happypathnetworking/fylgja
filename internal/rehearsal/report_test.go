@@ -594,6 +594,76 @@ func TestReproduce(t *testing.T) {
 		t.Errorf("failed at the third rehearsed stage: %q, want %q", got, want)
 	}
 
+	// A mark sharing the branch and at of the last stage a command named, the baseline's or a
+	// step's, is left out, since twin step would refuse it step.target.current: the pair is one
+	// command, and a failed stage so left out is reproduced by the verify alone (T099).
+	copyOf := func(s Stage, label string) Stage {
+		s.Ref, s.Label, s.Role = change+"/"+label, label, RoleRehearsed
+		return s
+	}
+	// unchangedAt is an unchanged step into ref whose wait holds failing, new the ones the
+	// baseline's did not.
+	unchangedAt := func(ref string, n int, v Verdict, w *wire.StepWait, c *wire.VerifyCounts, newFindings ...wire.StepFinding) StageResult {
+		return StageResult{Ref: ref, Verdict: v, Step: stepTo(ref, n, wire.StepUnchanged, 0.9), Wait: w, Counts: c,
+			NewFindings: newFindings, TookS: w.AfterS + 0.9}
+	}
+	added := wire.StepFinding{Rule: findings.RuleVerifyNeighbor, Object: "n1:ethernet-1/3",
+		Message: "node n1 (172.20.20.2): port ethernet-1/3 sees no neighbour"}
+	sharing := newFindingRun()
+	sharing.in.Stages = []Stage{seeded(), copyOf(seeded(), "seeded-copy"), thirdLink(RoleRehearsed), head(RoleRehearsed)}
+	sharing.res.Stages = []StageResult{sharing.res.Stages[0], unchangedAt(change+"/seeded-copy", 1, VerdictPassed,
+		wait(wire.WaitSettled, 1.0, 1), counts(6, 0)),
+		sharing.res.Stages[1]}
+	pairOf := failedRun()
+	pairOf.in.Stages = []Stage{branchPoint(), seeded(), thirdLink(RoleRehearsed), copyOf(thirdLink(RoleRehearsed), "third-copy"),
+		badPort(RoleRehearsed), head(RoleRehearsed)}
+	pairOf.res.Stages = []StageResult{pairOf.res.Stages[0], pairOf.res.Stages[1], unchangedAt(change+"/third-copy", 3, VerdictPassed,
+		wait(wire.WaitExpired, 120, 58, baselineFinding), counts(8, 1)),
+		pairOf.res.Stages[2]}
+	failedCopy := failedRun()
+	failedCopy.in.Stages = []Stage{branchPoint(), seeded(), thirdLink(RoleRehearsed), copyOf(thirdLink(RoleRehearsed), "third-copy"),
+		head(RoleRehearsed)}
+	failedCopy.res.Stages = []StageResult{failedCopy.res.Stages[0], failedCopy.res.Stages[1],
+		unchangedAt(change+"/third-copy", 3, VerdictFailed, wait(wire.WaitExpired, 120, 61, baselineFinding, added), counts(8, 2), added)}
+	for _, c := range []struct {
+		name string
+		e    example
+		want []string
+	}{
+		{"a mark at the baseline's at", sharing, []string{
+			"fylgja twin create --stage change-1/seeded",
+			"fylgja twin step --stage change-1/third-link --allow-restart",
+			"fylgja twin verify", "fylgja twin destroy",
+		}},
+		{"two marks sharing an at before the failed stage", pairOf, []string{
+			"fylgja twin create --stage change-1/seeded",
+			"fylgja twin step --stage change-1/third-link --allow-restart",
+			"fylgja twin step --stage change-1/bad-port --allow-restart",
+			"fylgja twin verify", "fylgja twin destroy",
+		}},
+		{"a failed stage at the at of the stage before it", failedCopy, []string{
+			"fylgja twin create --stage change-1/seeded",
+			"fylgja twin step --stage change-1/third-link --allow-restart",
+			"fylgja twin verify", "fylgja twin destroy",
+		}},
+	} {
+		b := Build(c.e.in, c.e.res)
+		if !reflect.DeepEqual(b.Reproduce, c.want) {
+			t.Errorf("%s: %q, want %q", c.name, b.Reproduce, c.want)
+		}
+		doc := c.e.document()
+		if closing := Closing(doc); !strings.HasSuffix(closing, "reproduce it by hand:\n  "+strings.Join(c.want, "\n  ")) {
+			t.Errorf("%s: the closing line does not end with the commands:\n%s", c.name, closing)
+		}
+		md := Markdown(doc, nil)
+		if !strings.Contains(md, "**Reproduce by hand**:\n\n```\n"+strings.Join(c.want, "\n")+"\n```\n") {
+			t.Errorf("%s: the markdown does not reproduce it with %q:\n%s", c.name, c.want, md)
+		}
+		if len(md) > CommentMax {
+			t.Errorf("%s: the markdown is %d bytes, over the %d a comment holds", c.name, len(md), CommentMax)
+		}
+	}
+
 	// A label is any characters but a slash and white space: one a shell would read is
 	// quoted, so each command runs as given.
 	for ref, want := range map[string]string{

@@ -235,8 +235,12 @@ func Findings(b findings.RehearsalBlock) findings.List {
 
 // Reproduce is the commands that reproduce a failed stage by hand on the same stages, in
 // order (FR-015): the create from the baseline, a step with --allow-restart to each
-// rehearsed stage up to and including the failed one, the verify and the destroy. None when
-// no stage failed: a stage the run could not rehearse taught nothing to reproduce.
+// rehearsed stage up to and including the failed one, the verify and the destroy. A
+// rehearsed stage at the branch and at of the last stage a command named, the baseline
+// included, is left out: twin step refuses it step.target.current, since the record still
+// names that stage, and the next step starts from the same bundle the rehearsal's did. A
+// failed stage left out so reproduces as the verify after the steps before it. None when no
+// stage failed: a stage the run could not rehearse taught nothing to reproduce.
 func Reproduce(b findings.RehearsalBlock) []string {
 	failed := -1
 	for i, s := range b.Stages {
@@ -249,13 +253,20 @@ func Reproduce(b findings.RehearsalBlock) []string {
 		return []string{}
 	}
 	var out []string
+	var branch, at string // the last stage a command named
 	for _, s := range b.Stages[:failed+1] {
 		switch s.Role {
 		case RoleBaseline:
 			out = append(out, "fylgja twin create --stage "+shellWord(s.Ref))
 		case RoleRehearsed:
+			if s.At != "" && s.Branch == branch && s.At == at {
+				continue
+			}
 			out = append(out, "fylgja twin step --stage "+shellWord(s.Ref)+" --allow-restart")
+		default:
+			continue
 		}
+		branch, at = s.Branch, s.At
 	}
 	return append(out, "fylgja twin verify", "fylgja twin destroy")
 }

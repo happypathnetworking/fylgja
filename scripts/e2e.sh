@@ -722,6 +722,21 @@ jq -e '[.CoreCheckDefinition.edges[].node | {name: .name.value, timeout: .timeou
   | any(.[]; . == {name: "fylgja-step", timeout: 300}) and any(.[]; . == {name: "fylgja-twin", timeout: 4200})' \
   "$OUT/check-definitions.json" > /dev/null ||
   fail "case 9 needs the checks fylgja-step (timeout 300) and fylgja-twin (timeout 4200) on main, which holds $(jq -r '[.CoreCheckDefinition.edges[].node | "\(.name.value) (timeout \(.timeout.value))"] | if length == 0 then "none" else join(", ") end' "$OUT/check-definitions.json"): push them to origin's main and import them, as specs/015-proposed-change-rehearsal/quickstart.md §6 does"
+# The definitions' names and timeouts pass for an earlier import too, and case 9 asserts on
+# the Python the task workers run, which must be this tree's, as the server's binary must be
+# below: the registration fylgja's imported commit, read on main, is one this clone knows,
+# and infrahub/ and .infrahub.yml in the working tree are as that commit holds them.
+gql "" '{ CoreReadOnlyRepository(name__value: "fylgja") { edges { node { commit { value } } } } }' \
+  > "$OUT/registration.json" 2> "$OUT/registration.err" ||
+  fail "reading the registration fylgja on main failed; see $OUT/registration.err"
+IMPORTED=$(jq -r '.CoreReadOnlyRepository.edges[0].node.commit.value // ""' "$OUT/registration.json")
+IMPORT_REMEDY="push them to origin's main and import them, as specs/015-proposed-change-rehearsal/quickstart.md §6 does"
+[ -n "$IMPORTED" ] ||
+  fail "case 9 needs the registration fylgja on main, with the commit it imported, and main holds none; register it and $IMPORT_REMEDY"
+git cat-file -e "$IMPORTED^{commit}" 2> /dev/null ||
+  fail "case 9 needs the checks the registration fylgja imported, at commit $IMPORTED, to be this tree's, and this clone does not know that commit: fetch origin (git fetch origin) and run again, as specs/015-proposed-change-rehearsal/quickstart.md §6 says"
+git diff --quiet "$IMPORTED" -- infrahub .infrahub.yml ||
+  fail "case 9 needs the checks the registration fylgja imported, at commit $IMPORTED, to be this tree's, and $(git diff --name-only "$IMPORTED" -- infrahub .infrahub.yml | paste -sd ' ' -) differ here; $IMPORT_REMEDY"
 
 # The server the task workers reach: the operator's, on the Docker bridge's gateway at 7650,
 # where the Compose override points them (host.docker.internal:7650), with local/.env's
@@ -770,7 +785,7 @@ if bridge_exe=$(readlink "/proc/$bridge_pid/exe" 2> /dev/null); then
 else
   echo "e2e: note: the server on $BRIDGE:7650 is pid $bridge_pid, whose /proc/$bridge_pid/exe this shell cannot read, as for a server started under sg docker: its binary is not compared with $FYLGJA, only its build"
 fi
-echo "e2e: case 9's checks are on main, and the server on $BRIDGE:7650 answers, build $BUILD, $bridge_binary"
+echo "e2e: case 9's checks are on main, imported at this tree's ${IMPORTED:0:12}, and the server on $BRIDGE:7650 answers, build $BUILD, $bridge_binary"
 
 # The script's own server, from the tree and in the script's full environment:
 # Infrahub's variables, both logins, the state root, and docker and containerlab on its PATH,
@@ -2016,6 +2031,14 @@ if [ -n "${FYLGJA_API_TOKEN:-}" ]; then
   no_credential "local/.env's API token" "$FYLGJA_API_TOKEN" "${scan[@]}"
 fi
 no_credential "the probe password" "$FYLGJA_SRLINUX_PASSWORD" "${scan[@]}"
+# Infrahub's own secrets, which Compose reads from local/.env and Fylgja never does: the task
+# workers that run the checks hold them (SC-008), so the comments, the messages and every
+# output are searched for each that local/.env sets.
+for secret in INFRAHUB_SECURITY_SECRET_KEY INFRAHUB_INITIAL_AGENT_TOKEN INFRAHUB_INITIAL_ADMIN_PASSWORD; do
+  if [ -n "${!secret:-}" ]; then
+    no_credential "local/.env's $secret" "${!secret}" "${scan[@]}"
+  fi
+done
 # The EOS password is the image's published default, `admin`: too common a word for the
 # strong grep, so it is searched for in the shapes that would be a leak.
 no_credential_contextual "the EOS password" "$FYLGJA_EOS_PASSWORD" "${scan[@]}"

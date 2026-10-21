@@ -1724,3 +1724,16 @@ worker and the server left as they ran.
   harness against the previous commit's modules ran past 50 s, killed by `timeout`: the
   read after the interrupt had no bound. The registration runs the old code until the
   operator pushes and imports it (R-21).
+- **Tier 3's case 9 proves the imported checks are this tree's** (T085). The precondition
+  reads the registration `fylgja`'s imported commit on `main` (`CoreReadOnlyRepository`
+  `commit`, `d70ad242…` on this install) and refuses a commit the clone does not know
+  (fetch `origin`) or one whose `infrahub/` and `.infrahub.yml` differ from the working
+  tree, naming the files, as T073 proved the server's binary. Its block, extracted and run
+  under `env -i bash` with `gql` stubbed: `HEAD` passed; `d70ad24` was refused naming
+  `.infrahub.yml`, `fylgja_api.py` and `fylgja_twin.py`; an unknown commit was refused with
+  the fetch; an empty one was refused. Run once against the live registration, read only,
+  it refused as `d70ad24` did: the tree's checks have moved since that import (T068's
+  comments, T074, T084), so tier 3's case 9 now needs the operator's push and import
+  first, as quickstart §6 says. The final greps add Infrahub's secret key, agent token and
+  admin password, each that `local/.env` sets (SC-008). `bash -n` and `shellcheck
+  scripts/bring-up.sh scripts/e2e.sh` are clean; tier 3 was not run.

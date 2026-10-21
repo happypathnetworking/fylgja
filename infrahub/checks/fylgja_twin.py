@@ -40,6 +40,10 @@ from .fylgja_api import (
 # margin less CLOSE_MARGIN_S, the read after the interrupt, covers the destroy's budget.
 DEADLINE_MARGIN_S = 240
 
+# CONCLUSION_S is what the comment leaves of the check's timeout for its conclusion: the
+# comment's calls to Infrahub are bounded by the rest (T110).
+CONCLUSION_S = 5
+
 # DESTROY_S is the destroy's whole budget (PlanTeardown, the largest package's destroy and
 # Unstage), and ALLOWANCE_S the time allowed the server before the run's start: the plan, a
 # reclaim and the host check, an allowance, not a bound the server enforces (FR-021).
@@ -145,7 +149,9 @@ class FylgjaTwin(InfrahubCheck):
         # The final answer: its lines, its one comment, then its conclusion.
         self._print(answer)
         if answer.markdown:
-            failure = await post_comment(self.client, change.id, answer.markdown)
+            failure = await post_comment(
+                self.client, change.id, answer.markdown, by=began + self.timeout - CONCLUSION_S
+            )
         else:
             failure = "Fylgja's answer carried no markdown"
         if failure:

@@ -55,7 +55,8 @@ INTERRUPT_TIMEOUT = 10.0
 # answer has not said by then is a cut, and the check concludes before Infrahub's timeout,
 # which would leave its validator in_progress (FR-021). It covers what the check does after
 # an answer that comes just before it: fylgja-twin's comment, a thread and its comment saved
-# by the SDK, each with its 60 s timeout.
+# by the SDK, each with its 60 s timeout. A third call, the empty thread's delete, has no room
+# of its own, so post_comment bounds every call by the time the check gives it (T110).
 CLOSE_MARGIN_S = 120
 
 # FR-017's one exception, the one rule the checks hold beside the status's mapping (D-052):
@@ -365,7 +366,11 @@ def interrupt_blocking(address: str, token: str, stream: str) -> str | None:
     return str(Unexpected(address, f"{response.status_code} {response.reason_phrase}"))
 
 
-async def post_comment(client: Any, change_id: str, text: str) -> str | None:
+class Unfinished(Exception):
+    """A call of post_comment's that the time it was given cut, or left no room for."""
+
+
+async def post_comment(client: Any, change_id: str, text: str, by: float | None = None) -> str | None:
     """One comment on the proposed change, as its view's overview shows one and writes one: a
     CoreChangeThread on the proposed change, then one CoreThreadComment in it whose text is the
     report's markdown, both saved on the default branch. The overview lists the proposed
@@ -375,30 +380,61 @@ async def post_comment(client: Any, change_id: str, text: str) -> str | None:
     as the view deletes its own, so that no empty thread is left. None when posted; otherwise
     why not, for the caller to log as information, since a comment that cannot be posted
     fails nothing (FR-019).
+
+    With by, a time.monotonic() value, every call to Infrahub is bounded by what remains
+    before it, so that the check concludes before its timeout (FR-021; T110): a call that
+    runs past it is cut, and one with no time left is not made, the empty thread's delete
+    among them, each named in what is returned.
     """
     thread = None
     try:
-        thread = await client.create(
-            kind="CoreChangeThread",
-            branch=DEFAULT_BRANCH,
-            data={"change": change_id, "label": THREAD_LABEL, "resolved": False},
+        thread = await _within(
+            client.create(
+                kind="CoreChangeThread",
+                branch=DEFAULT_BRANCH,
+                data={"change": change_id, "label": THREAD_LABEL, "resolved": False},
+            ),
+            by,
+            "the thread's creation",
         )
-        await thread.save()
-        comment = await client.create(
-            kind="CoreThreadComment",
-            branch=DEFAULT_BRANCH,
-            data={"text": text, "thread": thread.id},
+        await _within(thread.save(), by, "the thread's save")
+        comment = await _within(
+            client.create(
+                kind="CoreThreadComment",
+                branch=DEFAULT_BRANCH,
+                data={"text": text, "thread": thread.id},
+            ),
+            by,
+            "the comment's creation",
         )
-        await comment.save()
+        await _within(comment.save(), by, "the comment's save")
     except Exception as exc:  # noqa: BLE001 - reported, and the conclusion stays the report's
         failure = cause(exc)
         if thread is not None and thread.id:
             try:
-                await thread.delete()
+                await _within(thread.delete(), by, "the delete")
+            except Unfinished as left:
+                failure += f"; its empty thread {thread.id} is left: {left}"
             except Exception as left:  # noqa: BLE001 - reported beside the first
                 failure += f"; its empty thread {thread.id} could not be deleted: {cause(left)}"
         return failure
     return None
+
+
+async def _within(call: Any, by: float | None, what: str) -> Any:
+    """call awaited within what remains before by, or Unfinished naming what was cut or not
+    made; awaited whole without by."""
+    if by is None:
+        return await call
+    left = by - time.monotonic()
+    if left <= 0:
+        if hasattr(call, "close"):
+            call.close()
+        raise Unfinished(f"{what} was not made: no time remained before the check's timeout")
+    try:
+        return await asyncio.wait_for(call, left)
+    except TimeoutError:
+        raise Unfinished(f"{what} was cut after {left:.0f} s, at the check's timeout") from None
 
 
 def cause(exc: BaseException) -> str:

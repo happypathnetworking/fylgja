@@ -100,7 +100,12 @@ Runs on every open proposed change, draft or not.
    emits; a `CoreChangeComment` is counted and never shown. A failure to post is
    `log_info` (`the comment could not be posted: <error>`), never `log_error`, and never a
    credential; a thread whose comment could not be saved is deleted, as the view deletes
-   its own. A new comment each run; none is edited or deleted.
+   its own. Every call to Infrahub the comment makes, the empty thread's delete included,
+   is bounded by what remains of the check's `timeout` less 5 s for its conclusion
+   (`asyncio.wait_for`): a call that runs past it is cut, one with no time left is not
+   made, and either is a comment that could not be posted, named in that line, the
+   conclusion staying the report's (FR-019, FR-021; T110). A new comment each run; none is
+   edited or deleted.
 5. **Conclusion**: the document's `status` alone: `ok` → success; `rejected`, `error`,
    `failed`, `unclean`, `nonconforming` → `log_error` with the document's text (the
    findings as the `text` field carries them) and the report's lines already logged.

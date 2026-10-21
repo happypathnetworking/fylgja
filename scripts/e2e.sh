@@ -1847,6 +1847,20 @@ rehearsal_run() {
   history_of "rehearse-$1" fylgja-rehearse "$REHEARSAL_RUN"
   jq -e '.events[-1].eventType == "EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED"' "$OUT/history-rehearse-$1.json" > /dev/null ||
     fail "case $1: rehearsal run $REHEARSAL_RUN did not complete; see $OUT/history-rehearse-$1.json"
+  # Each child the run started, as its history names them: its provision, its steps and its
+  # destroy, whose histories the greps read too (SC-008), a step's push results carrying the
+  # device's diff by design, as cases 7 and 8's do.
+  jq -r '.events[] | select(.eventType == "EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_STARTED")
+    | .childWorkflowExecutionStartedEventAttributes.workflowExecution | "\(.workflowId) \(.runId)"' \
+    "$OUT/history-rehearse-$1.json" > "$OUT/children-rehearse-$1.txt"
+  if ! grep -q '^fylgja-provision ' "$OUT/children-rehearse-$1.txt" || ! grep -q '^fylgja-destroy ' "$OUT/children-rehearse-$1.txt"; then
+    fail "case $1: rehearsal run $REHEARSAL_RUN started no provision or no destroy; see $OUT/children-rehearse-$1.txt"
+  fi
+  local n=0 workflow run
+  while read -r workflow run; do
+    n=$((n + 1))
+    history_of "rehearse-$1-$n-$workflow" "$workflow" "$run"
+  done < "$OUT/children-rehearse-$1.txt"
 }
 
 # no_twin CASE: the rehearsal's own destroy left the host clear, as twin show reports it and as
@@ -1859,6 +1873,41 @@ no_twin() {
   [ "$(clab inspect --all --format json)" = "{}" ] || fail "case $1: containerlab reports a lab after the rehearsal"
   [ ! -e "$TWIN" ] || fail "case $1: $TWIN is present after the rehearsal"
 }
+
+# stage_lines CASE ERE...: fylgja-twin's message in $OUT/checks-CASE.json, written to
+# $OUT/message-CASE.txt, holds exactly one line matching each ERE: the report's text gives one
+# line per stage after the run, which ends with its verdict (FR-030), and the plan's lines and
+# the run's progress name the stages too, each in another shape.
+stage_lines() {
+  local case=$1 re n
+  shift
+  jq -r '.[] | select(.name == "fylgja-twin") | .message // ""' "$OUT/checks-$case.json" > "$OUT/message-$case.txt"
+  for re in "$@"; do
+    n=$(grep -cE -- "$re" "$OUT/message-$case.txt" || true)
+    [ "$n" -eq 1 ] || fail "case $case: fylgja-twin's message holds $n lines matching $re, want one; see $OUT/message-$case.txt"
+  done
+}
+
+# run_checks_named CASE CONCLUSION: -run-checks user's output, $OUT/run-checks-CASE.out, names
+# fylgja-twin with its conclusion, as contracts/fixture-tool.md gives the line.
+run_checks_named() {
+  grep -qE "^check fylgja-twin: $2 \(message [0-9,]+ characters\)\$" "$OUT/run-checks-$1.out" ||
+    fail "case 9: -run-checks user names no check fylgja-twin concluding $2; see $OUT/run-checks-$1.out"
+}
+
+# overview_threads NAME PC: the threads the proposed change's overview lists, oldest first, as
+# test support's OverviewThreads reads them from Infrahub's event log: each thread-created
+# event whose primary node is the proposed change names its thread first among its related
+# nodes (research §5.9). Written to $OUT/overview-NAME.json.
+overview_threads() {
+  gql "" "{ InfrahubEvent(primary_node__ids: [\"$2\"], event_type: [\"infrahub.proposed_change_thread.created\"], order: ASC, limit: 50) {
+    edges { node { related_nodes { id } } } } }" |
+    jq '[.InfrahubEvent.edges[].node.related_nodes[0].id // empty]' > "$OUT/overview-$1.json"
+}
+
+# rehearsal.Caveat, the markdown's last line, which every comment keeps (FR-014).
+CAVEAT="*Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing.*"
+export CAVEAT
 
 # A throwaway branch, set before seeding so the trap's -delete removes it and what hangs on
 # it: its stages, then its proposed change, which takes its comments and its validators with
@@ -1926,14 +1975,17 @@ fixture -branch "$FR" -run-checks user > "$OUT/run-checks-9a.out" 2> "$OUT/run-c
   fail "case 9: -run-checks user on $FR failed; see $OUT/run-checks-9a.err"
 REHEARSE9A_TOOK=$(since "$start")
 echo "e2e: case 9: the ready proposed change's checks concluded in ${REHEARSE9A_TOOK}s"
+run_checks_named 9a success
 user_checks 9a "$PC9" 2> "$OUT/checks-9a.err" || fail "case 9: reading $PC9's checks failed; see $OUT/checks-9a.err"
 expect "$OUT/checks-9a.json" '(map(select(.name == "fylgja-twin")) | length == 1 and (.[0] | .conclusion == "success"
     and .validator_state == "completed" and ((.message // "") | contains("rehearsal ok"))))
   and (map(select(.name == "fylgja-step")) | length == 1 and .[0].conclusion == "success")'
+stage_lines 9a "^stage $FR/branch-point: refused \\(contract\\.node\\.missing\\)\$" "^stage $FR/seeded: created; .*; baseline\$" \
+  "^stage $FR/third-link: .*; passed\$" "^stage $FR/head: .*; passed\$"
 comments_of 9a "$PC9" 2> "$OUT/comments-9a.err" || fail "case 9: reading $PC9's comments failed; see $OUT/comments-9a.err"
 expect "$OUT/comments-9a.json" 'length == 1 and (.[0].text | contains("Status **ok**")
   and contains("| stage | at | bundle | step | wait | verify | new findings | verdict |")
-  and contains("```mermaid") and contains("**Stages**"))'
+  and contains("```mermaid") and contains("**Stages**") and endswith("\n\n" + env.CAVEAT + "\n"))'
 jq -r '.[0].text' "$OUT/comments-9a.json" > "$OUT/comment-9a.md"
 COMMENT9A=$(jq -r '.[0].id' "$OUT/comments-9a.json")
 export COMMENT9A
@@ -1957,21 +2009,44 @@ fixture -branch "$FR" -run-checks user > "$OUT/run-checks-9b.out" 2> "$OUT/run-c
   fail "case 9: -run-checks user on $FR failed; see $OUT/run-checks-9b.err"
 REHEARSE9B_TOOK=$(since "$start")
 echo "e2e: case 9: the checks concluded again in ${REHEARSE9B_TOOK}s"
+run_checks_named 9b failure
 user_checks 9b "$PC9" 2> "$OUT/checks-9b.err" || fail "case 9: reading $PC9's checks failed; see $OUT/checks-9b.err"
 expect "$OUT/checks-9b.json" '(map(select(.name == "fylgja-twin")) | length == 1 and (.[0] | .conclusion == "failure"
     and .validator_state == "completed" and ((.message // "")
       | contains("stage " + env.FR + "/bad-port failed at phase push") and contains("not landed n1 (push.refused)"))))
   and (map(select(.name == "fylgja-step")) | length == 1 and .[0].conclusion == "success")'
+stage_lines 9b "^stage $FR/branch-point: refused \\(contract\\.node\\.missing\\)\$" "^stage $FR/seeded: created; .*; baseline\$" \
+  "^stage $FR/third-link: .*; passed\$" "^stage $FR/bad-port: diverged at phase push: .*; failed\$" "^stage $FR/head: not reached\$"
 comments_of 9b "$PC9" 2> "$OUT/comments-9b.err" || fail "case 9: reading $PC9's comments failed; see $OUT/comments-9b.err"
+# The failure's comment: its table, its drawing, the five commands that reproduce it in order
+# (FR-015), and the caveat last.
+# shellcheck disable=SC2016 # the backticks are the markdown's fences, read literally by jq
 expect "$OUT/comments-9b.json" 'length == 2 and any(.[]; .id == env.COMMENT9A) and (map(.thread) | unique | length == 2)
   and (map(select(.id != env.COMMENT9A)) | length == 1 and (.[0].text | contains("Status **nonconforming**")
-    and contains("**Reproduce by hand**") and contains("fylgja twin create --stage " + env.FR + "/seeded\n")
-    and contains("fylgja twin step --stage " + env.FR + "/bad-port --allow-restart\n")))'
+    and contains("```mermaid") and contains("**Reproduce by hand**:\n\n```\n"
+      + "fylgja twin create --stage " + env.FR + "/seeded\n"
+      + "fylgja twin step --stage " + env.FR + "/third-link --allow-restart\n"
+      + "fylgja twin step --stage " + env.FR + "/bad-port --allow-restart\n"
+      + "fylgja twin verify\nfylgja twin destroy\n```\n")
+    and endswith("\n\n" + env.CAVEAT + "\n")))'
 jq -r '.[] | select(.id != env.COMMENT9A) | .text' "$OUT/comments-9b.json" > "$OUT/comment-9b.md"
 COMMENT9B=$(jq -r '.[] | select(.id != env.COMMENT9A) | .id' "$OUT/comments-9b.json")
 THREADS9=$(jq -c 'map(.thread)' "$OUT/comments-9b.json")
+grep -qE "^\| $FR/bad-port \|.*\| failed \|\$" "$OUT/comment-9b.md" ||
+  fail "case 9: the second comment's table has no row of $FR/bad-port reading failed; see $OUT/comment-9b.md"
 grep -qE "^\| $FR/head \|.*\| not reached \|\$" "$OUT/comment-9b.md" ||
   fail "case 9: the second comment's table has no row of $FR/head reading not reached; see $OUT/comment-9b.md"
+# Both threads are listed in the proposed change's overview, the reason D-053 made each
+# comment a thread (SC-007), once Infrahub's event log has them: it lags its writes by a few
+# seconds (D-048), so the read is repeated for a minute, as tier 2's test waits.
+start=$(now_ns)
+until overview_threads 9 "$PC9" 2> "$OUT/overview-9.err" &&
+  jq -e --argjson want "$THREADS9" '. as $listed | all($want[]; IN($listed[]))' "$OUT/overview-9.json" > /dev/null; do
+  [ "$(( ($(now_ns) - start) / 1000000000 ))" -lt 60 ] ||
+    fail "case 9: after 60s the overview of $PC9 lists threads $(jq -c . "$OUT/overview-9.json" 2> /dev/null || echo none), not each of $THREADS9; see $OUT/overview-9.err"
+  sleep 2
+done
+echo "e2e: case 9: both threads listed in $PC9's overview after $(since "$start")s"
 rehearsal_run 9b "$OUT/comment-9b.md"
 RUN9B=$REHEARSAL_RUN USED9B=$REHEARSAL_USED
 [ "$RUN9B" != "$RUN9A" ] || fail "case 9: the second comment names the first rehearsal's run $RUN9A"
@@ -2012,15 +2087,32 @@ stop_server
 # histories, decoded (step-7*.json, step-8*.json, twin-7*.json, twin-8*.json, history-step-*),
 # every twin verify document (verify-*.json), case 9's checks with their messages
 # (checks-9*.json), its proposed change's comments (comments-9*.json, comment-9*.md) and its
-# two rehearsals' histories, decoded (history-rehearse-*), the answer of the server on the
-# bridge (bridge-show.*), and the API's
+# two rehearsals' histories and each of their children's, its provision, its steps and its
+# destroy, decoded (history-rehearse-*), the overview's threads (overview-9.json), the answer
+# of the server on the bridge (bridge-show.*), and the API's
 # server's report and request log (server.log). A step history's push results
 # carry the device's diff by design, so they are searched for the marker and the
-# credentials, not for configuration lines; so do a rehearsal's, its step children's results.
+# credentials, not for configuration lines; so do a rehearsal's step children's.
+# Case 9's stage.plan and twin.rehearse went to the operator's server on the bridge, not to
+# the script's: its log, local/server.log by CLAUDE.md's start line, is searched too (SC-008).
+# The worker's log is searched when WORKER_LOG names it, and the line after the greps says
+# whether it was.
 scan=("$OUT" "$FYLGJA_STATE_ROOT/bundles")
+searched="the run's outputs and the bundle store"
+BRIDGE_LOG=""
+if ran 9; then
+  BRIDGE_LOG="$FYLGJA_STATE_ROOT/server.log"
+  [ -r "$BRIDGE_LOG" ] ||
+    fail "case 9 went through the server on $BRIDGE:7650, whose log $BRIDGE_LOG, as CLAUDE.md's start line writes it, is not readable"
+  scan+=("$BRIDGE_LOG")
+  searched+=", the log of the server on the bridge ($BRIDGE_LOG)"
+fi
 if [ -n "${WORKER_LOG:-}" ]; then
   [ -r "$WORKER_LOG" ] || fail "WORKER_LOG=$WORKER_LOG is not readable"
   scan+=("$WORKER_LOG")
+  searched+=" and the worker's log ($WORKER_LOG)"
+else
+  searched+=", and not the worker's log, since WORKER_LOG is unset"
 fi
 no_credential "the Infrahub token" "$INFRAHUB_API_TOKEN" "${scan[@]}"
 no_credential "the API's token" "$API_TOKEN" "${scan[@]}"
@@ -2044,14 +2136,15 @@ done
 no_credential_contextual "the EOS password" "$FYLGJA_EOS_PASSWORD" "${scan[@]}"
 
 # The marker: every output, record copy, twin show document, check result,
-# history, the server's log and the worker log. A read's CTM (ctm-*.json) and a compiled bundle
+# history, the servers' logs and the worker log. A read's CTM (ctm-*.json) and a compiled bundle
 # (compiled-*/) carry the artifact by design, as the bundle store does, so they are left
 # out, and the store with them.
-if grep -rqsF --exclude='ctm-*.json' --exclude-dir='compiled-*' -- "$MARKER" "$OUT" ${WORKER_LOG:+"$WORKER_LOG"}; then
+if grep -rqsF --exclude='ctm-*.json' --exclude-dir='compiled-*' -- "$MARKER" "$OUT" ${BRIDGE_LOG:+"$BRIDGE_LOG"} ${WORKER_LOG:+"$WORKER_LOG"}; then
   echo "e2e: LEAK: the artifact marker found in:" >&2
-  grep -rlsF --exclude='ctm-*.json' --exclude-dir='compiled-*' -- "$MARKER" "$OUT" ${WORKER_LOG:+"$WORKER_LOG"} >&2 || true
+  grep -rlsF --exclude='ctm-*.json' --exclude-dir='compiled-*' -- "$MARKER" "$OUT" ${BRIDGE_LOG:+"$BRIDGE_LOG"} ${WORKER_LOG:+"$WORKER_LOG"} >&2 || true
   exit 1
 fi
+echo "e2e: no credential and no marker in $searched"
 
 # The timings are recorded, not asserted: a slow host is the host's.
 for t in "${CREATE_TIMES[@]}"; do

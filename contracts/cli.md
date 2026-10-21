@@ -627,8 +627,9 @@ document and the plan's steps between the stages, GitHub-flavoured: a heading na
 run, when the stages were resolved, the status and the time used against the deadline and
 the ceiling; a table, one row per stage (its `at`, bundle, step, wait, counts, new
 verification failures and verdict: the wait's failing assertions the baseline's wait did not
-have, so a refused push, which the step and the verdict carry, is not one); a Mermaid drawing of the stages, each edge the step's changes by node, link
-and artifact, never a line of content, a step not computed dotted; on any status but `ok`
+have, so a refused push, which the step and the verdict carry, is not one); a Mermaid drawing of the stages, top to bottom, each edge the step's changes by node,
+link and artifact, never a line of content, a step not computed dotted, and each stage that
+failed or erred outlined red by a class (Infrahub drops a node's style attribute); on any status but `ok`
 the findings that say why; the stages, since Infrahub's view of the proposed change shows
 none; the warnings, each one a stage filed listed once with the stages that filed it
 (``- `artifact.interface.unrepresented` n1:ethernet-1/99: … (stages bad-port, head)``), the

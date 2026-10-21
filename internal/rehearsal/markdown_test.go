@@ -52,7 +52,7 @@ func TestMarkdown(t *testing.T) {
 		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |",
 		"",
 		"```mermaid",
-		"flowchart LR",
+		"flowchart TD",
 		`  s0["change-1/branch-point<br/>refused"]`,
 		`  s1["change-1/seeded<br/>baseline"]`,
 		`  s2["change-1/third-link<br/>passed"]`,
@@ -94,7 +94,7 @@ func TestMarkdown(t *testing.T) {
 		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | | | | | not reached |",
 		"",
 		"```mermaid",
-		"flowchart LR",
+		"flowchart TD",
 		`  s0["change-1/branch-point<br/>refused"]`,
 		`  s1["change-1/seeded<br/>baseline"]`,
 		`  s2["change-1/third-link<br/>passed"]`,
@@ -104,6 +104,8 @@ func TestMarkdown(t *testing.T) {
 		`  s1 -- "+link n1:e1-3 — n3:e1-3; ~n1, ~n3 (bootstrap, mapping); artifacts n1, n3" --> s2`,
 		`  s2 -- "~n1 (mapping); artifacts n1" --> s3`,
 		`  s3 -- "unchanged" --> s4`,
+		"  classDef failed stroke:#d32f2f,stroke-width:3px",
+		"  class s3 failed",
 		"```",
 		"",
 		"**Findings**:",
@@ -634,7 +636,7 @@ func TestMarkdownOfARefusal(t *testing.T) {
 		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | | | | | not read |",
 		"",
 		"```mermaid",
-		"flowchart LR",
+		"flowchart TD",
 		`  s0["change-1/branch-point<br/>refused"]`,
 		`  s1["change-1/seeded<br/>not read"]`,
 		`  s2["change-1/third-link<br/>not read"]`,
@@ -767,22 +769,22 @@ func TestMarkdownOfACutAFailedBaselineAndAnUncleanDestroy(t *testing.T) {
 			base +
 			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | cancelled at readiness | | | | error |\n" +
 			"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | | | | | not reached |\n\n" +
-			"```mermaid\nflowchart LR\n" + `  s0["change-1/seeded<br/>baseline"]` + "\n" + `  s1["change-1/third-link<br/>error"]` + "\n" +
+			"```mermaid\nflowchart TD\n" + `  s0["change-1/seeded<br/>baseline"]` + "\n" + `  s1["change-1/third-link<br/>error"]` + "\n" +
 			`  s2["change-1/head<br/>not reached"]` + "\n" +
 			`  s0 -- "+link n1:e1-3 — n3:e1-3; ~n1, ~n3 (bootstrap, mapping); artifacts n1, n3" --> s1` + "\n" +
-			`  s1 -- "unchanged" --> s2` + "\n```\n\n**Findings**:\n\n" +
+			`  s1 -- "unchanged" --> s2` + "\n" + failedClass("s1") + "```\n\n**Findings**:\n\n" +
 			"- `rehearsal.deadline.cut` change-1/third-link: the deadline of 1980s passed at stage change-1/third-link: change-1/seeded took 88.1s\n\n"},
 		{"not built", notBuiltRun().document(), head("failed", "243.0s") + bp +
 			"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | not built (failed at readiness) | | | — | error |\n" +
 			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | | | | | not reached |\n\n" +
-			"```mermaid\nflowchart LR\n" + `  s0["change-1/branch-point<br/>refused"]` + "\n" + `  s1["change-1/seeded<br/>error"]` + "\n" +
-			`  s2["change-1/third-link<br/>not reached"]` + "\n" + `  s0 -. "not computed" .-> s1` + "\n" + link + "```\n\n**Findings**:\n\n" +
+			"```mermaid\nflowchart TD\n" + `  s0["change-1/branch-point<br/>refused"]` + "\n" + `  s1["change-1/seeded<br/>error"]` + "\n" +
+			`  s2["change-1/third-link<br/>not reached"]` + "\n" + `  s0 -. "not computed" .-> s1` + "\n" + link + failedClass("s1") + "```\n\n**Findings**:\n\n" +
 			missed + "- `readiness.timeout` n2: n2 did not answer its probe within 60s\n" +
 			"- `rehearsal.baseline.failed` change-1/seeded: the baseline change-1/seeded could not be built: its provision ended failed at readiness\n\n"},
 		{"unclean", uncleanDoc, head("unclean", "118.4s") + bp + base +
 			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | stepped 4.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | none | passed |\n" +
 			"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |\n\n" +
-			"```mermaid\nflowchart LR\n" + `  s0["change-1/branch-point<br/>refused"]` + "\n" + `  s1["change-1/seeded<br/>baseline"]` + "\n" +
+			"```mermaid\nflowchart TD\n" + `  s0["change-1/branch-point<br/>refused"]` + "\n" + `  s1["change-1/seeded<br/>baseline"]` + "\n" +
 			`  s2["change-1/third-link<br/>passed"]` + "\n" + `  s3["change-1/head<br/>passed"]` + "\n" + `  s0 -. "not computed" .-> s1` + "\n" +
 			link + `  s2 -- "unchanged" --> s3` + "\n```\n\n**Findings**:\n\n" + "- `cleanup.incomplete` lab fylgja: clab destroy exited 1; fylgja twin destroy clears it\n" +
 			missed + "\n"},
@@ -796,4 +798,10 @@ func TestMarkdownOfACutAFailedBaselineAndAnUncleanDestroy(t *testing.T) {
 		}
 		carriesNoContent(t, c.name+"'s markdown", md)
 	}
+}
+
+// failedClass is the drawing's lines that outline the named stages red: Infrahub's renderer
+// keeps a class and drops a node's style attribute.
+func failedClass(nodes string) string {
+	return "  classDef failed stroke:#d32f2f,stroke-width:3px\n  class " + nodes + " failed\n"
 }

@@ -550,7 +550,7 @@ Run `fylgja-rehearse 01a156e8-da76-7743-9ca7-53c29d65ddc5`, stages resolved at 2
 | fylgja-test-readme/head | 2026-10-20T01:23:46.627087+00:00 | 904addf9… | unchanged | settled after 5.9s | 19 held, 0 failed, 0 skipped | none | passed |
 
 ```mermaid
-flowchart LR
+flowchart TD
   s0["fylgja-test-readme/branch-point<br/>refused"]
   s1["fylgja-test-readme/seeded<br/>baseline"]
   s2["fylgja-test-readme/third-link<br/>passed"]
@@ -574,7 +574,8 @@ flowchart LR
 *Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing.*
 ````
 
-Below the drawing it lists the stages, with each one's branch, instant and description,
+The drawing runs top to bottom, and a stage that failed or erred is outlined red. Below
+the drawing the report lists the stages, with each one's branch, instant and description,
 since Infrahub's own view of the proposed change shows none; the warnings; the baseline's
 own findings, reported and failing nothing; and the caveat that a twin's fidelity is
 asserted, not measured. A comment holds at most 4,092 bytes, all Infrahub keeps of one, so

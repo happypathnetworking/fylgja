@@ -487,9 +487,13 @@ func verdictWords(v string) string { return strings.ReplaceAll(v, "_", " ") }
 
 // drawing is the Mermaid flowchart: one node per stage labelled with its reference and
 // verdict, and one edge per pair of stages labelled with what the step between them
-// changed, dotted where the plan computed none.
+// changed, dotted where the plan computed none. It runs top to bottom, since Infrahub
+// draws it at the thread's width with a frame its zoom does not grow, so a drawing
+// across would be shrunk past reading. A stage that failed or erred is outlined red by a
+// class: Infrahub's renderer drops a node's style attribute and keeps the drawing's own
+// style block.
 func drawing(b findings.RehearsalBlock, steps []step.Pair, unread bool) string {
-	lines := []string{"```mermaid", "flowchart LR"}
+	lines := []string{"```mermaid", "flowchart TD"}
 	for i, s := range b.Stages {
 		lines = append(lines, fmt.Sprintf("  s%d[\"%s<br/>%s\"]", i, mermaid(s.Ref), mermaid(shownVerdict(s, unread))))
 	}
@@ -507,6 +511,16 @@ func drawing(b findings.RehearsalBlock, steps []step.Pair, unread bool) string {
 		} else {
 			lines = append(lines, fmt.Sprintf("  s%d -. \"%s\" .-> s%d", i-1, mermaid(label), i))
 		}
+	}
+	var failed []string
+	for i, s := range b.Stages {
+		if v := Verdict(s.Verdict); v == VerdictFailed || v == VerdictError {
+			failed = append(failed, fmt.Sprintf("s%d", i))
+		}
+	}
+	if len(failed) > 0 {
+		lines = append(lines, "  classDef failed stroke:#d32f2f,stroke-width:3px",
+			"  class "+strings.Join(failed, ",")+" failed")
 	}
 	return strings.Join(append(lines, "```"), "\n")
 }

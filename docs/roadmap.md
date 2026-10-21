@@ -25,11 +25,14 @@ Infrahub, and two checks from this repository report on it. `fylgja-step` answer
 seconds with the step from `main` to the source branch, stage by stage. `fylgja-twin`
 answers in minutes. It boots a twin at the first stage it can build, the branch point
 where `main` carries a network, steps it through the stages the operator marked on the
-proposed change to the branch's head, verifies after every step, and tears it down. Probes
-measure loss across each step. A thread on the proposed change carries the report in
-markdown, and a stage that fails blocks the merge. Nothing
-OpsMill publishes boots a twin per proposed change; their containerlab demos deploy by
-hand, after the merge. In order:
+proposed change to the branch's head, verifies after every step, and tears it down. A
+thread on the proposed change carries the report in markdown, and a stage that fails
+blocks the merge. Nothing OpsMill publishes boots a twin per proposed change; their
+containerlab demos deploy by hand, after the merge. On 2026-10-21 the operator moved
+probes ([F-014](#f-014)) and the agent skill ([F-012](#f-012)) to
+[Release 0.3](#release-03), so that 0.2 is ready to show sooner: the rehearsal
+demonstrates without a loss column or an agent explaining its report, and the DCIM
+([F-011](#f-011)) stays in 0.3 with its contract. In order:
 
 1. **`014-proposed-change-stages`**: [F-023](#f-023), **built** (2026-10-17). A stage is
    a moment of a proposed change (superseding [D-032](decisions.md#d-032)). A
@@ -47,12 +50,7 @@ hand, after the merge. In order:
    Its [brief](../specs/015-proposed-change-rehearsal/brief.md), and its
    [research](../specs/015-proposed-change-rehearsal/research.md) for what the build
    verified.
-3. **`016-probes`**, next: [F-014](#f-014). The report gains its loss column, and the gate
-   gains a flow that has not recovered. Its [brief](../specs/016-probes/brief.md).
-4. **[F-012](#f-012), the skill `fylgja-rehearsing-changes`**, as a chore: an agent reads
-   a rehearsal's report and explains it, stage by stage, from a catalogue of the findings'
-   rules generated from the code.
-5. **`v0.2.0`**: the recording of a rehearsed proposed change, the write-up updated, and
+3. **`v0.2.0`**: the recording of a rehearsed proposed change, the write-up updated, and
    the upstream request for named points in time drafted for the operator to file.
 
 Every other feature keeps the order below. [F-023](#f-023)'s decision entries are
@@ -69,10 +67,9 @@ live verification raised and the operator accepted on 2026-10-20. The other feat
 neither a decision entry nor a researched estimate yet, and `plan` writes each entry
 after the live verification.
 
-**At 0.2's close**, [F-023](#f-023), [F-007](#f-007), [F-008](#f-008), [F-012](#f-012) and
-[F-014](#f-014) are built and move to a Release 0.2 table in the archive, beside v0.1's;
-[F-015](#f-015)'s need, "[F-008](#f-008)", becomes "the rehearsal"; and the phase table is
-re-ranged. The
+**At 0.2's close**, [F-023](#f-023), [F-007](#f-007) and [F-008](#f-008) are built and
+move to a Release 0.2 table in the archive, beside v0.1's; [F-015](#f-015)'s need,
+"[F-008](#f-008)", becomes "the rehearsal"; and the phase table is re-ranged. The
 webhook-triggered check, once F-009, is removed rather than kept waiting: Infrahub runs a
 proposed change's checks at its creation and on a retry, not on a branch update, so a
 webhook adds nothing while that holds, and [D-026](decisions.md#d-026) keeps the compare
@@ -84,7 +81,12 @@ Not yet set with the operator. It opens with [F-011](#f-011), the schema library
 implementing the generics under contract 0.3, then [F-022](#f-022), the sync into it,
 because a contract bump defines a release: 0.2 moves the twin record, the API and the CLI
 for stages while the contract stays 0.2, and 0.3 moves the contract once, with nothing
-added to the generics in between. What contract 0.3 changes is listed under [Decisions the
+added to the generics in between. It also takes two features moved from 0.2 on
+2026-10-21: [F-014](#f-014), probes, as `016-probes`, whose
+[brief](../specs/016-probes/brief.md) was written against 015 and is re-read against
+0.2's close before it is specified; and [F-012](#f-012), the skill
+`fylgja-rehearsing-changes`, as a chore. Their places in 0.3's order are set with the
+rest. What contract 0.3 changes is listed under [Decisions the
 order needs](#decisions-the-order-needs). The rest of the order below is untouched until
 0.3 is set.
 
@@ -92,13 +94,12 @@ order needs](#decisions-the-order-needs). The rest of the order below is untouch
 
 The Infrahub-facing features come first, then observing, then object storage and remote
 hosts, a third platform, Ixia-c and a WebUI. [Release 0.2](#release-02) takes
-[F-023](#f-023), [F-007](#f-007), [F-008](#f-008), [F-014](#f-014) and [F-012](#f-012) out
-of this order first, and [Release 0.3](#release-03) opens with [F-011](#f-011) and
-[F-022](#f-022); the
-rest keep it. Read-only production data stays [parked](decisions.md#parked). The features
-keep the numbers the order was set with; the first six are built ([the
-archive](archive/v0.1-built.md)), F-009 is removed and [F-010](#f-010) is folded into
-[F-011](#f-011).
+[F-023](#f-023), [F-007](#f-007) and [F-008](#f-008) out of this order first, and
+[Release 0.3](#release-03) opens with [F-011](#f-011) and [F-022](#f-022) and takes
+[F-014](#f-014) and [F-012](#f-012); the rest keep it. Read-only production data stays
+[parked](decisions.md#parked). The features keep the numbers the order was set with; the
+first six are built ([the archive](archive/v0.1-built.md)), F-009 is removed and
+[F-010](#f-010) is folded into [F-011](#f-011).
 
 [F-023](#f-023), [F-007](#f-007) and [F-008](#f-008) are built. None of the others has a
 spec or a decision entry, and only
@@ -198,8 +199,8 @@ so a failure can be reproduced by hand from the commands the report gives. Built
 bounded by a deadline its stages' budgets sum to, under an hour's ceiling
 ([D-051](decisions.md#d-051)), and the check waits for it, under a timeout of 70 minutes,
 and concludes from the report's status alone ([D-052](decisions.md#d-052),
-[D-053](decisions.md#d-053)). A draft is skipped. With `016-probes` the report gains its
-loss column, and with [F-015](#f-015) what changed operationally. Its
+[D-053](decisions.md#d-053)). A draft is skipped. With `016-probes`, in 0.3, the report
+gains its loss column, and with [F-015](#f-015) what changed operationally. Its
 [brief](../specs/015-proposed-change-rehearsal/brief.md) has the rest.
 
 <a id="f-010"></a>
@@ -291,7 +292,8 @@ report means, so that is the skill's substance:
   Infrahub by its own means, which OpsMill's `infrahub-managing-objects` skill covers; the
   skill gives the regenerate-first rule and the object file's shape, no more.
 
-In the 0.2 recording it is the demo's second act: the check posts its report on the
+In a release's recording it is the demo's second act (0.3's, since it moved from 0.2 on
+2026-10-21): the check posts its report on the
 proposed change, and an agent explains the report in the thread. **Deferred**: the MCP
 server, a client of the API, until a consumer that cannot run a binary appears, since
 OpsMill's Infrahub MCP server already lets an agent holding both skills correlate

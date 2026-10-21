@@ -470,9 +470,10 @@ Rewritten whole at each release's close, never appended to.
   walk-through followed by hand twice; and the thread read by the operator in Infrahub's
   overview, the table, the Mermaid drawing, the stages and the caveat whole. Its close runs
   the closing gates (T063) and is the operator's to review and commit (T064).
-- **Next**: F-014 as `016-probes` (its [brief](specs/016-probes/brief.md)), then F-012,
-  then `v0.2.0`. On this install the branch point is refused `contract.node.missing`,
-  since `main` holds no network, so a rehearsal's baseline here is the first mark.
+- **Next**: `v0.2.0`. F-014, `016-probes` (its [brief](specs/016-probes/brief.md)),
+  and F-012 moved to 0.3 on 2026-10-21, where F-011 stays. On this install the branch
+  point is refused `contract.node.missing`, since `main` holds no network, so a
+  rehearsal's baseline here is the first mark.
 - **Open**: Arista's own checksum for the tar is unread, owed at the operator's next
   download. On 26.04, whether the two AppArmor lines suffice without `/run/syslogd.pid*
   rw,` is untried. From 014, the operator's: `infrahubctl schema format` would reorder

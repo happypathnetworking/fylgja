@@ -1,4 +1,9 @@
-# Specify brief: 0.2 spec 3 of 3: probes (F-014)
+# Specify brief: probes (F-014), moved to 0.3
+
+**Moved to [Release 0.3](../../docs/roadmap.md#release-03) on 2026-10-21**, so that 0.2 is
+ready to show sooner. The brief below was written as 0.2's third spec and is unchanged
+but for this note and the prompt: where it says 0.2, read the release that takes it, and
+re-read it against 0.2's close before specifying.
 
 This is what `/speckit-specify` reads for roadmap F-014, the second feature of the
 roadmap's [Release 0.2 section](../../docs/roadmap.md#release-02). It was written on 2026-10-16 in the
@@ -10,7 +15,7 @@ spec and close before specifying. Specify what the operator gets, not a new desi
 The prompt:
 
 ```
-SPECIFY_FEATURE_DIRECTORY=specs/016-probes. 0.2, the third of its three specs: probes, as docs/roadmap.md's F-014 and Release 0.2 section define it. Read specs/016-probes/brief.md first: it holds what changes, the decisions to treat as settled, the questions left for clarify, the exit criteria and every record to read. Specify what the operator gets, not a new design.
+SPECIFY_FEATURE_DIRECTORY=specs/016-probes. 0.3: probes, as docs/roadmap.md's F-014 and Release 0.3 section define it. Read specs/016-probes/brief.md first: it holds what changes, the decisions to treat as settled, the questions left for clarify, the exit criteria and every record to read. Specify what the operator gets, not a new design.
 ```
 
 ## Where the shape is fixed

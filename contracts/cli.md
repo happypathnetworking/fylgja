@@ -683,8 +683,8 @@ Nine, each `rehearsal.*`. `run.cancelled`, `run.in_flight`, `run.worker.absent`,
   `; rehearsal run fylgja-rehearse 01a1… is at stage change-1/third-link, step push`;
   `in_flight` names the rehearsal with its child and the stage it is at, `in flight: run
   fylgja-rehearse 01a1… at step step (run fylgja-step 03c3… at step push), stepping towards
-  stage change-1/third-link`. `show.record.rehearsal` is `{workflow_id, run_id}`, absent when the record names
-  no rehearsal.
+  stage change-1/third-link`. `show.record.rehearsal` is `{workflow_id, run_id}`, absent
+  when the record names no rehearsal.
 - `twin verify`'s first line names the rehearsal's run after the stage, and
   `verify.twin.rehearsal` carries it, `null` when the record names none.
 - `twin destroy` during a rehearsal prints `cancelling rehearsal run 01a1…; waiting for its
@@ -694,7 +694,12 @@ Nine, each `rehearsal.*`. `run.cancelled`, `run.in_flight`, `run.worker.absent`,
   the host or Infrahub, so it is never refused as an orphan during the baseline's provision
   or as diverged after a failed stage; its dry run asks nothing, as `twin create --dry-run`
   does not.
-- `stage list` marks nothing of a rehearsal: its twin is gone when it ends.
+- `stage list` marks a rehearsal's twin as it marks any twin. While the run is in flight,
+  and while a dead rehearsal's twin waits for its reclaim, the record names a stage of the
+  proposed change, whose row carries `← twin`, or `← twin (diverged towards …)` after a
+  failed step (its `stages.rows[].twin` true under `--json`); nothing there names the
+  rehearsal, which `twin show` does. Once the rehearsal ends its twin is gone, and no row
+  is marked.
 
 ### `twin.json` 7
 

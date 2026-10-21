@@ -671,6 +671,12 @@ func TestReproduce(t *testing.T) {
 		head(RoleRehearsed)}
 	failedCopy.res.Stages = []StageResult{failedCopy.res.Stages[0], failedCopy.res.Stages[1],
 		unchangedAt(change+"/third-copy", 3, VerdictFailed, wait(wire.WaitExpired, 120, 61, baselineFinding, added), counts(8, 2), added)}
+	// A failed stage at the baseline's at has no step before the verify, so the verify waits as
+	// the rehearsal's wait did, twin create waiting for no settle (T107).
+	failedAtBaseline := newFindingRun()
+	failedAtBaseline.in.Stages = []Stage{seeded(), copyOf(seeded(), "seeded-copy"), head(RoleRehearsed)}
+	failedAtBaseline.res.Stages = []StageResult{failedAtBaseline.res.Stages[0],
+		unchangedAt(change+"/seeded-copy", 1, VerdictFailed, wait(wire.WaitExpired, 120, 61, added), counts(6, 1), added)}
 	for _, c := range []struct {
 		name string
 		e    example
@@ -691,6 +697,10 @@ func TestReproduce(t *testing.T) {
 			"fylgja twin create --stage change-1/seeded",
 			"fylgja twin step --stage change-1/third-link --allow-restart",
 			"fylgja twin verify", "fylgja twin destroy",
+		}},
+		{"a failed stage at the baseline's at", failedAtBaseline, []string{
+			"fylgja twin create --stage change-1/seeded",
+			"fylgja twin verify --wait", "fylgja twin destroy",
 		}},
 	} {
 		b := Build(c.e.in, c.e.res)

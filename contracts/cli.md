@@ -616,7 +616,9 @@ twin verify` and `fylgja twin destroy`. A rehearsed stage at the branch and `at`
 stage a command named, the baseline's or a step's, has no step of its own, since `twin step`
 would refuse it `step.target.current` and the twin is already there: run in order, the
 commands make the rehearsal's steps and its verify, and a failed stage so left out is
-reproduced by the verify after the steps before it. The findings print on stderr as every
+reproduced by the verify after the steps before it. With no step before it, as for a failed
+stage at the baseline's `at`, the verify is `fylgja twin verify --wait`: `twin create` waits
+for no settle, and the rehearsal compared a whole wait. The findings print on stderr as every
 document prints them, the baseline's and each stage's verify findings as warnings whose object is
 prefixed by the stage (`change-1/seeded: n1:ethernet-1/2`).
 

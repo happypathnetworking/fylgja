@@ -198,7 +198,7 @@
         "reproduce": {
           "type": "array",
           "items": { "type": "string" },
-          "description": "when a stage failed: the commands that reproduce it by hand on the same stages, in order (twin create --stage, twin step --stage … --allow-restart per stage to the failed one, twin verify, twin destroy), a rehearsed stage at the branch and at of the last stage a command named having no step of its own, since twin step would refuse it step.target.current; [] otherwise"
+          "description": "when a stage failed: the commands that reproduce it by hand on the same stages, in order (twin create --stage, twin step --stage … --allow-restart per stage to the failed one, twin verify, twin destroy), a rehearsed stage at the branch and at of the last stage a command named having no step of its own, since twin step would refuse it step.target.current, and the verify twin verify --wait when no step precedes it, since twin create waits for no settle; [] otherwise"
         }
       }
     }

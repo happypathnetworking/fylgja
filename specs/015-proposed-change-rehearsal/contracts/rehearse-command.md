@@ -152,7 +152,9 @@ destroy`. A rehearsed stage at the branch and `at` of the last stage a command n
 baseline's or a step's, has no step of its own, since `twin step` would refuse it
 `step.target.current` and the twin is already there; run in order, the commands make the
 rehearsal's steps and its verify (FR-015), and a failed stage so left out is reproduced by
-the verify after the steps before it (T099). A
+the verify after the steps before it (T099). With no step before it, as for a failed stage at
+the baseline's `at`, the verify is `fylgja twin verify --wait`, since `twin create` waits for
+no settle and the rehearsal compared a whole wait (FR-002; T107). A
 refusal prints the plan's lines and the findings. The reclaim prints `reclaiming the twin of
 rehearsal run <id>` and the destroy's lines before the run. A run whose baseline provision
 could not start because another run holds its id prints `rehearsal rejected: the run touched

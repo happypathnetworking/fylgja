@@ -241,8 +241,10 @@ func Findings(b findings.RehearsalBlock) findings.List {
 // rehearsed stage at the branch and at of the last stage a command named, the baseline
 // included, is left out: twin step refuses it step.target.current, since the record still
 // names that stage, and the next step starts from the same bundle the rehearsal's did. A
-// failed stage left out so reproduces as the verify after the steps before it. None when no
-// stage failed: a stage the run could not rehearse taught nothing to reproduce.
+// failed stage left out so reproduces as the verify after the steps before it. The verify
+// waits when no step precedes it, as the rehearsal's wait did (FR-002): twin create waits
+// for no settle, and a step's own wait has run before a verify that follows one. None when
+// no stage failed: a stage the run could not rehearse taught nothing to reproduce.
 func Reproduce(b findings.RehearsalBlock) []string {
 	failed := -1
 	for i, s := range b.Stages {
@@ -256,6 +258,7 @@ func Reproduce(b findings.RehearsalBlock) []string {
 	}
 	var out []string
 	var branch, at string // the last stage a command named
+	verify := "fylgja twin verify --wait"
 	for _, s := range b.Stages[:failed+1] {
 		switch s.Role {
 		case RoleBaseline:
@@ -265,12 +268,13 @@ func Reproduce(b findings.RehearsalBlock) []string {
 				continue
 			}
 			out = append(out, "fylgja twin step --stage "+shellWord(s.Ref)+" --allow-restart")
+			verify = "fylgja twin verify"
 		default:
 			continue
 		}
 		branch, at = s.Branch, s.At
 	}
-	return append(out, "fylgja twin verify", "fylgja twin destroy")
+	return append(out, verify, "fylgja twin destroy")
 }
 
 // shellWord is a reference as a shell reads it: as it is when every character is one no

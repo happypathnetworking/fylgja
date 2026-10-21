@@ -147,7 +147,7 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 			beforeID, reconfiguredID)
 	}
 
-	if err := c.SeedFourthNode(branch); err != nil {
+	if err := c.SeedFourthNode(branch, "n1"); err != nil {
 		t.Fatalf("changing the branch after T: %v", err)
 	}
 

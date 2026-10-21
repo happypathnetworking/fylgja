@@ -269,14 +269,15 @@ func (c *Client) generateFor(branch string, deviceIDs []string) error {
 	return c.GenerateArtifacts(branch)
 }
 
-// SeedFourthNode changes a branch seeded by SeedThreeNode: interface ethernet-1/3 on n1,
+// SeedFourthNode changes a branch seeded by SeedThreeNode: interface ethernet-1/3 on peer,
 // device n4 on the same platform with mgmt0, lo0 and ethernet-1/1, and a link
-// n4:ethernet-1/1 <-> n1:ethernet-1/3. It is the change the reproducibility proof makes
-// after T, chosen because the compiler emits it — a node, a link and a bootstrap line —
-// so a read that saw it compiles to a different topology, not only a different manifest.
-// The change is made once per branch: a branch that already has n4 is
-// refused.
-func (c *Client) SeedFourthNode(branch string) error {
+// n4:ethernet-1/1 <-> peer:ethernet-1/3. It is the change the reproducibility proof makes
+// after T, on n1, chosen because the compiler emits it — a node, a link and a bootstrap
+// line — so a read that saw it compiles to a different topology, not only a different
+// manifest; and a demo's last stage, on n2, beside the third link that takes n1's and n3's
+// ethernet-1/3 (D-054). The change is made once per branch: a branch that already has n4,
+// or whose peer already has ethernet-1/3, is refused.
+func (c *Client) SeedFourthNode(branch, peer string) error {
 	ids := func(kind, filter string) ([]string, error) { return c.ids(branch, kind, filter) }
 
 	platforms, err := ids("NetworkPlatform", "")
@@ -286,12 +287,12 @@ func (c *Client) SeedFourthNode(branch string) error {
 	if len(platforms) != 1 {
 		return fmt.Errorf("branch %s holds %d platforms, want the fixture's one", branch, len(platforms))
 	}
-	n1s, err := ids("NetworkDevice", `(name__value: "n1")`)
+	peers, err := ids("NetworkDevice", fmt.Sprintf(`(name__value: %q)`, peer))
 	if err != nil {
 		return err
 	}
-	if len(n1s) != 1 {
-		return fmt.Errorf("branch %s holds %d devices named n1, want one", branch, len(n1s))
+	if len(peers) != 1 {
+		return fmt.Errorf("branch %s holds %d devices named %s, want one", branch, len(peers), peer)
 	}
 	n4s, err := ids("NetworkDevice", `(name__value: "n4")`)
 	if err != nil {
@@ -300,13 +301,20 @@ func (c *Client) SeedFourthNode(branch string) error {
 	if len(n4s) != 0 {
 		return fmt.Errorf("branch %s already holds device n4: the change is made once per branch", branch)
 	}
+	taken, err := ids("NetworkInterface", fmt.Sprintf(`(device__name__value: %q, name__value: "ethernet-1/3")`, peer))
+	if err != nil {
+		return err
+	}
+	if len(taken) != 0 {
+		return fmt.Errorf("branch %s already holds %s:ethernet-1/3: cable n4 to another peer", branch, peer)
+	}
 
 	iface := func(device, name, iftype, extra string) (string, error) {
 		return c.create(branch, "NetworkInterface", fmt.Sprintf(
 			`{name: {value: %q}, iftype: {value: %q}, device: {id: %q}%s}`, name, iftype, device, extra))
 	}
 
-	n1e3, err := iface(n1s[0], "ethernet-1/3", "physical", "")
+	peerE3, err := iface(peers[0], "ethernet-1/3", "physical", "")
 	if err != nil {
 		return err
 	}
@@ -327,10 +335,10 @@ func (c *Client) SeedFourthNode(branch string) error {
 		return err
 	}
 	if _, err := c.create(branch, "NetworkLink",
-		fmt.Sprintf(`{endpoints: [{id: %q}, {id: %q}]}`, n4e1, n1e3)); err != nil {
+		fmt.Sprintf(`{endpoints: [{id: %q}, {id: %q}]}`, n4e1, peerE3)); err != nil {
 		return err
 	}
-	// n4 is a device like any other: it needs its own artifact, and n1's changes too
+	// n4 is a device like any other: it needs its own artifact, and the peer's changes too
 	// (a new cabled port is a new line in the rendering), so the whole branch is
 	// regenerated rather than only the addition.
 	return c.generateFor(branch, []string{n4})

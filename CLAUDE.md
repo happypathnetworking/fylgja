@@ -73,7 +73,9 @@ and is not cited here; a bare milestone marker (`M7`) is resolved by the table b
   - **Some writes go to `main` on purpose**, against `workflow-branch-for-crud`: the group
     `fylgja-devices` and the repository registration (`fylgja-fixture -prepare-main`);
     stages and other branch-agnostic objects, which land in no branch's diff; and what
-    a check posts on a proposed change. Every other write goes to a branch, as the rule
+    a check posts on a proposed change; and a demo's three-node baseline, for a window
+    `-seed-main` opens and `-clear-main` closes ([D-054](docs/decisions.md#d-054)), with no
+    tier 2 or tier 3 while it is open. Every other write goes to a branch, as the rule
     says: the fixture's own branch, a test's `fylgja-test-*` one. This Infrahub is not
     throwaway, since its volumes hold the admin token.
 

@@ -4,7 +4,8 @@
 // generics contract and reference schema onto a branch and seeds the three-node fixture
 // or the mixed one, or makes following's branch change on a throwaway branch, or opens,
 // marks, readies, checks and closes a throwaway branch's proposed change (D-045), or prepares main:
-// the schema, the group and this repository's read-only registration (D-044). Development tooling, not the product —
+// the schema, the group and this repository's read-only registration (D-044), or opens and
+// closes a demo's window, the three-node baseline on main (D-054). Development tooling, not the product —
 // it writes to Infrahub, which the product never does. Build-tagged so it cannot be built
 // by accident.
 package main
@@ -33,6 +34,9 @@ func main() {
 	sdl := flag.String("sdl", "", "write the branch's GraphQL SDL to this path and exit")
 	addLink := flag.Bool("add-link", false,
 		"add link n1:ethernet-1/3 <-> n3:ethernet-1/3 to a seeded throwaway branch and exit")
+	addFourthNode := flag.String("add-fourth-node", "",
+		"add device n4, cabled n4:ethernet-1/1 <-> <peer>:ethernet-1/3, to a "+testsupport.TestBranchPrefix+
+			"* -branch seeded with the three-node fixture, render every artifact, and exit; takes the peer's name")
 	addMixedLink := flag.Bool("add-mixed-link", false,
 		"add link s1:ethernet-1/3 <-> e1:Ethernet3 to a throwaway branch seeded with -mixed, render both artifacts, and exit")
 	generate := flag.Bool("generate", false,
@@ -72,6 +76,12 @@ func main() {
 		"with -prepare-main: the repository's HTTPS location")
 	repoRef := flag.String("repository-ref", testsupport.RepositoryRef, "with -prepare-main: the ref the registration tracks")
 	wait := flag.Duration("wait", 300*time.Second, "with -prepare-main: how long to wait for the import")
+	seedMain := flag.Bool("seed-main", false,
+		"write the three-node baseline onto main, which must hold no network, for a demo's window (D-054), "+
+			"and exit; takes no other flag")
+	clearMain := flag.Bool("clear-main", false,
+		"delete the baseline -seed-main wrote, and nothing else, once no "+testsupport.TestBranchPrefix+
+			"* branch exists, and exit; takes no other flag")
 	flag.Parse()
 
 	// -prepare-main is refused or allowed before any request: it writes main, so a flag
@@ -79,6 +89,17 @@ func main() {
 	if err := checkPrepareFlags(*prepare, *wait); err != nil {
 		fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
 		os.Exit(1)
+	}
+	if err := checkBaselineFlags(*seedMain, *clearMain); err != nil {
+		fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
+		os.Exit(1)
+	}
+	if *seedMain || *clearMain {
+		if err := baseline(*seedMain); err != nil {
+			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
+			os.Exit(1)
+		}
+		return
 	}
 	if *prepare {
 		if err := prepareMain(*schemaDir, *repoName, *repoLocation, *repoRef, *wait); err != nil {
@@ -105,6 +126,13 @@ func main() {
 	// written once, by the seed, and by nothing afterwards.
 	if *addLink {
 		if err := addThirdLink(*branch); err != nil {
+			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *addFourthNode != "" {
+		if err := addFourthNodeTo(*branch, *addFourthNode); err != nil {
 			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
 			os.Exit(1)
 		}
@@ -172,6 +200,69 @@ func checkPrepareFlags(prepare bool, wait time.Duration) error {
 		return fmt.Errorf("-wait must be positive, got %s", wait)
 	}
 	return nil
+}
+
+// checkBaselineFlags refuses -seed-main and -clear-main together, and either beside any
+// other flag, -branch among them: each acts on main alone, so a flag beside it is a
+// mistake, never a narrowing. It reads only the command line, so it refuses before any
+// request.
+func checkBaselineFlags(seed, clear bool) error {
+	if !seed && !clear {
+		return nil
+	}
+	if seed && clear {
+		return fmt.Errorf("-seed-main and -clear-main open and close the window; give one")
+	}
+	own := "seed-main"
+	if clear {
+		own = "clear-main"
+	}
+	var other []string
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name != own {
+			other = append(other, "-"+f.Name)
+		}
+	})
+	if len(other) > 0 {
+		sort.Strings(other)
+		return fmt.Errorf("-%s acts on main alone and combines with no other flag: %s was given", own, strings.Join(other, ", "))
+	}
+	return nil
+}
+
+// baseline opens or closes a demo's window (D-054): -seed-main writes the three-node
+// fixture onto main, -clear-main removes it, each refusing when main is not as it expects.
+func baseline(seed bool) error {
+	c, err := testsupport.NewClient()
+	if err != nil {
+		return err
+	}
+	if seed {
+		if err := c.SeedMainBaseline(); err != nil {
+			return err
+		}
+		fmt.Printf("three-node baseline seeded on %s, with every artifact rendered and Ready; "+
+			"no tier 2 or tier 3 until -clear-main removes it\n", testsupport.DefaultBranch)
+		return nil
+	}
+	done, err := c.ClearMainBaseline()
+	if err != nil {
+		if done == (testsupport.ClearedBaseline{}) {
+			return err
+		}
+		return fmt.Errorf("%w (deleted before it: %s)", err, clearedLine(done))
+	}
+	fmt.Printf("baseline removed from %s: %s\n", testsupport.DefaultBranch, clearedLine(done))
+	return nil
+}
+
+// clearedLine says what -clear-main deleted, and how many of the devices' artifacts
+// Infrahub had already removed with them.
+func clearedLine(d testsupport.ClearedBaseline) string {
+	return fmt.Sprintf("%s, %s, %s, %s, %s; artifacts: %d gone with their devices, %d deleted",
+		plural(d.Links, "link", "links"), plural(d.Interfaces, "interface", "interfaces"),
+		plural(d.Devices, "device", "devices"), plural(d.Platforms, "platform", "platforms"),
+		plural(d.Contracts, "contract", "contracts"), d.ArtifactsWithDevices, d.Artifacts)
 }
 
 // prepareMain makes main what every branch needs before it can render (D-028, D-044):
@@ -253,6 +344,34 @@ func addThirdLink(branch string) error {
 		return err
 	}
 	fmt.Printf("link n1:ethernet-1/3 <-> n3:ethernet-1/3 added on %s\n", branch)
+	return nil
+}
+
+// addFourthNodeTo adds n4 to a three-node test branch, cabled to peer's ethernet-1/3: the
+// last stage of a demo's change (D-054), a node a step adds to a running lab. It refuses,
+// before any request, the fixture, a branch outside the test prefix and a peer that is not
+// a plain device name. Every artifact is rendered, but a rewrite is not awaited: a caller
+// that seals the change waits for n4's artifact and the peer's checksum.
+func addFourthNodeTo(branch, peer string) error {
+	if branch == testsupport.FixtureBranch {
+		return fmt.Errorf("-add-fourth-node refuses branch %s: the fixture is never changed; seed a throwaway branch and name it with -branch",
+			branch)
+	}
+	if !strings.HasPrefix(branch, testsupport.TestBranchPrefix) {
+		return fmt.Errorf("-add-fourth-node refuses branch %s: every branch it changes begins %s; "+
+			"seed a throwaway branch and name it with -branch", branch, testsupport.TestBranchPrefix)
+	}
+	if strings.ContainsAny(peer, ": \t/") {
+		return fmt.Errorf("-add-fourth-node takes the peer device's name, such as n2, got %q", peer)
+	}
+	c, err := testsupport.NewClient()
+	if err != nil {
+		return err
+	}
+	if err := c.SeedFourthNode(branch, peer); err != nil {
+		return err
+	}
+	fmt.Printf("device n4 added on %s, link n4:ethernet-1/1 <-> %s:ethernet-1/3, every artifact rendered\n", branch, peer)
 	return nil
 }
 

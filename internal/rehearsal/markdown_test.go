@@ -158,15 +158,17 @@ func TestMarkdown(t *testing.T) {
 }
 
 // A step that restarted or recreated a node names each in its cell with the seconds its
-// readiness took (FR-004); one cut before its readiness names the node alone. The block is
-// the same either way, and the markdown still fits a comment.
+// readiness took (FR-004); one cut before its readiness names the node alone, and one cut at
+// its push its pushes, landed and not (T094). The block is the same either way, and the
+// markdown still fits a comment.
 func TestMarkdownNamesTheRestartsTime(t *testing.T) {
 	for _, c := range []struct {
 		e    example
 		want string
 	}{
 		{restartedRun(), "| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | stepped 95.3s; restarted n3 61.2s; recreated n1 70.4s; push n1, n3 | settled after 6.1s |"},
-		{cutBeforeReadinessRun(), "| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | diverged at readiness 29.8s; restarted n3 | expired after 120.0s |"},
+		{cutBeforeReadinessRun(), "| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | cancelled at readiness; restarted n3 | | | | error |"},
+		{cutAtPushRun(), "| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | cancelled at push; restarted n3 61.2s; push n3; not landed n1 | | | | error |"},
 	} {
 		md := Markdown(c.e.document(), pairs())
 		if !strings.Contains(md, c.want) {

@@ -183,26 +183,31 @@ func restartedRun() example {
 	return e
 }
 
-// cutBeforeReadinessRun is failedRun whose step to bad-port restarted n3 and diverged at its
-// readiness, before n3 answered and before any push.
+// cutBeforeReadinessRun is failedRun cut by the deadline at bad-port, as the step workflow
+// ends a step cut after its stage: cancelled at phase readiness, having restarted n3, before
+// n3 answered and before any push, so with no readiness time, no push and no wait (T094).
 func cutBeforeReadinessRun() example {
 	e := failedRun()
-	e.name = "nonconforming, a step diverged before its restarted node answered"
-	st := e.res.Stages[2].Step
-	st.Phase, st.Step, st.Pushed, st.Timings.Readiness, st.Timings.Push = findings.StepReadiness, findings.StepReadiness, nil, nil, nil
-	var timeout findings.List
-	timeout.AddStep(findings.Rejection, findings.StepReadiness, findings.RuleReadinessTimeout, "n3", "n3 did not answer its probe within 90s")
-	e.res.Stages[2].Findings = timeout
+	e.name, e.status = "error, the deadline cut a step before its restarted node answered", findings.StatusError
+	e.res.Outcome, e.res.UsedS = OutcomeCut, 2618.2
+	bad := &e.res.Stages[2]
+	bad.Verdict, bad.Wait, bad.Counts, bad.Findings, bad.TookS = VerdictError, nil, nil, nil, 2321.3
+	st := bad.Step
+	st.Outcome, st.Phase, st.Step = outcomeCancelled, findings.StepReadiness, findings.StepReadiness
+	st.Pushed, st.Timings.Readiness, st.Timings.Push = nil, nil, nil
 	return e
 }
 
-func carriesMessage(l findings.List, rule, message string) bool {
-	for _, f := range l {
-		if f.Rule == rule && f.Message == message {
-			return true
-		}
-	}
-	return false
+// cutAtPushRun is cutBeforeReadinessRun cut later, at its push: n3 answered after its
+// restart and its push landed, and n1's was not attempted (T094).
+func cutAtPushRun() example {
+	e := cutBeforeReadinessRun()
+	e.name = "error, the deadline cut a step at its push"
+	st := e.res.Stages[2].Step
+	st.Phase, st.Step = findings.StepPush, findings.StepPush
+	st.Pushed = []wire.StepPush{landed("n3", 2.4), {Node: "n1", Reasons: []string{"artifact"}, Outcome: wire.PushNotAttempted}}
+	st.Timings.Readiness, st.Timings.Push = map[string]float64{"n3": 61.2}, map[string]float64{"n3": 2.4}
+	return e
 }
 
 func newFindingRun() example {
@@ -678,7 +683,7 @@ func TestStageLinesAndClosing(t *testing.T) {
 
 	// A step that restarted or recreated a node names each with the seconds its readiness
 	// took (FR-004), as twin show does; one cut before its readiness names the node alone,
-	// and the finding that fails the stage keeps its why.
+	// and one cut at its push names its pushes, landed and not, as a divergence does (T094).
 	for _, c := range []struct {
 		name string
 		e    example
@@ -687,17 +692,22 @@ func TestStageLinesAndClosing(t *testing.T) {
 	}{
 		{"stepped, a node restarted and one recreated", restartedRun(), 2,
 			"stage change-1/third-link: stepped in 95.3s (restarted n3 61.2s; recreated n1 70.4s; push n1 2.5s, n3 2.6s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed"},
-		{"diverged before its readiness answered", cutBeforeReadinessRun(), 3,
-			"stage change-1/bad-port: diverged at phase readiness: restarted n3; expired after 120.0s (58 reads); 18 held, 1 failed, 0 skipped; failed"},
+		{"cut before its readiness answered", cutBeforeReadinessRun(), 3,
+			"stage change-1/bad-port: cancelled at phase readiness: restarted n3; error: the deadline passed"},
+		{"cut at its push", cutAtPushRun(), 3,
+			"stage change-1/bad-port: cancelled at phase push: restarted n3 61.2s; landed n3; not landed n1 (not attempted); error: the deadline passed"},
 	} {
 		b := Build(c.e.in, c.e.res)
 		if got := StageLines(b)[c.at]; got != c.want {
 			t.Errorf("%s: %s\nwant %s", c.name, got, c.want)
 		}
 	}
+	// The block is what it was: the cut stage's finding is the deadline's, and its step
+	// still carries the node it restarted.
 	cut := Build(cutBeforeReadinessRun().in, cutBeforeReadinessRun().res)
-	if got := cut.Stages[3].Findings; !carriesMessage(got, findings.RuleRehearsalStageFailed, "diverged at phase readiness") {
-		t.Errorf("diverged before its readiness answered: the stage's findings %v", got)
+	if got := cut.Stages[3]; !carries(got.Findings, findings.RuleRehearsalDeadlineCut) ||
+		carries(got.Findings, findings.RuleRehearsalStageFailed) || got.Step == nil || !reflect.DeepEqual(got.Step.Restarted, []string{"n3"}) {
+		t.Errorf("cut before its readiness answered: the stage's findings %v, its step %+v", got.Findings, got.Step)
 	}
 
 	// A step that could not run, and a run the operator cancelled, each say so.

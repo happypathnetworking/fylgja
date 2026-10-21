@@ -137,7 +137,11 @@ after …`, without its counts. Once the run has closed come what the destroy re
 one line per stage, the baseline's counts on its own, and the closing line (T025, T029,
 T041). A step that restarted or recreated a node names each with the seconds its readiness
 took (`stepped in 95.3s (restarted n3 61.2s; push n1 2.5s, n3 2.6s)`), and a node the step
-was cut before awaiting alone (T070). A failed stage's line names why (`diverged at phase
+was cut before awaiting alone (T070). A step the deadline or an interrupt cut keeps its phase
+and names what it touched, as a diverged one does (`cancelled at phase push: restarted n3
+61.2s; landed n3; not landed n1 (not attempted)`, `cancelled at phase readiness: restarted
+n3`), and the table's cell alike (`cancelled at push; restarted n3 61.2s; push n3; not landed
+n1`; T094). A failed stage's line names why (`diverged at phase
 push: restarted n3 61.2s; landed n3; not landed n1 (push.refused)`, or `failed:
 verify.neighbor n1:ethernet-1/3`), and the lines after it read `not reached`; the closing
 line says `rehearsal nonconforming: stage change-1/bad-port failed at phase push; the twin

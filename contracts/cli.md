@@ -602,7 +602,10 @@ rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4
 A step that restarted or recreated a node names each with the seconds its readiness took,
 as `twin show` words a step's readiness (`stage change-1/third-link: stepped in 95.3s
 (restarted n3 61.2s; push n1 2.5s, n3 2.6s); …`), and a node the step was cut before
-awaiting alone; the table's step cell names them alike.
+awaiting alone; the table's step cell names them alike. A step the deadline or an interrupt
+cut keeps its phase and names what it touched, as a diverged one does: `cancelled at phase
+push: restarted n3 61.2s; landed n3; not landed n1 (not attempted)`, or `cancelled at phase
+readiness: restarted n3`.
 A failed stage's line says why (`diverged at phase push: restarted n3 61.2s; landed n3; not
 landed n1 (push.refused)`, or a finding the baseline did not have, by rule and object), the stages
 after it read `not reached`, and the closing line is `rehearsal nonconforming: stage

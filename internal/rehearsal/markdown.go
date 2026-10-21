@@ -354,7 +354,8 @@ func row(cells ...string) string {
 }
 
 // stepCell is what the stage's child did, in a cell: created, or the step's outcome with its
-// time, the nodes containerlab's plan touched and the pushes that landed and did not.
+// time, the nodes containerlab's plan touched and the pushes that landed and did not. A step
+// cut at a phase names them too, as a diverged one does (FR-004).
 func stepCell(s findings.RehearsalStage) string {
 	if p := s.Provision; p != nil {
 		if p.Outcome == provisionReady {
@@ -378,7 +379,7 @@ func stepCell(s findings.RehearsalStage) string {
 		if st.Phase == "" {
 			return "cancelled before its stage"
 		}
-		return "cancelled at " + st.Phase
+		parts = append(parts, "cancelled at "+st.Phase)
 	case outcomeRejected:
 		return "rejected"
 	default:

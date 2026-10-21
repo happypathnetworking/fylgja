@@ -592,7 +592,8 @@ func TestRehearseRefusedBranchPointAndAStaleMark(t *testing.T) {
 
 // Scenario 7: the operator's interrupt from the start, while third-link's step runs, asks
 // the run to cancel and waits for its destroy; the run closes cancelled, and the rehearsal
-// ends run.cancelled at the step its children reached, naming the stage, exit 2.
+// ends run.cancelled at the step its children reached, naming the stage, exit 2. The cut
+// step's line keeps its phase and names the push that landed (T094).
 func TestRehearseInterruptCancelsTheRun(t *testing.T) {
 	rehearseHost(t)
 	rehearseInfrahub(t)
@@ -623,7 +624,7 @@ func TestRehearseInterruptCancelsTheRun(t *testing.T) {
 			svc.cancels, code, doc.Status, cancelled)
 	}
 	if !strings.Contains(stdout, "\nstep push n1: done in 2.5s\nrun cancelled; waiting for its destroy\n") ||
-		!strings.Contains(stdout, "stage "+thirdRef+": cancelled at phase push; error: the run was cancelled\n") ||
+		!strings.Contains(stdout, "stage "+thirdRef+": cancelled at phase push: landed n1; error: the run was cancelled\n") ||
 		!strings.Contains(stdout, "stage "+headRef+": not reached\n") {
 		t.Errorf("stdout:\n%s\nwant the cancel's line after the step's, third-link cancelled and the head not reached", stdout)
 	}

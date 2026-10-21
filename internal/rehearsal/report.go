@@ -169,7 +169,7 @@ func ownFindings(st findings.RehearsalStage, r StageResult, outcome string, dead
 	case st.Verdict == string(VerdictFailed):
 		step, why := findings.StepObserve, "its wait holds a finding the baseline's did not: "+findingsText(st.NewFindings)
 		if s := st.Step; s != nil && s.Outcome == wire.StepDiverged {
-			step, why = orStep(s.Phase, findings.StepObserve), divergence(s)
+			step, why = orStep(s.Phase, findings.StepObserve), atPhase("diverged", s)
 		}
 		l.AddStep(findings.Rejection, step, findings.RuleRehearsalStageFailed, st.Ref, why)
 	case st.Verdict == string(VerdictError) && outcome == OutcomeCut:
@@ -465,12 +465,14 @@ func childText(s findings.RehearsalStage) string {
 	case wire.StepUnchanged:
 		return fmt.Sprintf("unchanged in %.1fs", st.Timings.WholeS)
 	case wire.StepDiverged:
-		return divergence(st, lifecycle(st)...)
+		return atPhase("diverged", st, lifecycle(st)...)
 	case outcomeCancelled:
 		if st.Phase == "" {
 			return "cancelled before its stage"
 		}
-		return "cancelled at phase " + st.Phase
+		// A step the deadline or an interrupt cut keeps its phase and names what it touched,
+		// as a divergence does (FR-004).
+		return atPhase("cancelled", st, lifecycle(st)...)
 	case outcomeRejected:
 		return "rejected"
 	}
@@ -529,14 +531,16 @@ func parenthesised(parts []string) string {
 	return " (" + strings.Join(parts, "; ") + ")"
 }
 
-// divergence is a diverged step's why: the phase, then the parts before what landed (the
-// stage line's nodes the plan restarted or recreated), and once a push was planned the
-// nodes whose push landed and those whose did not, with each one's identifier.
+// atPhase is a step that ended at a phase, diverged or cut by the deadline or an interrupt:
+// how it ended and the phase, then the parts before what landed (the stage line's nodes the
+// plan restarted or recreated), and once a push was planned the nodes whose push landed and
+// those whose did not, with each one's identifier.
 //
 //	diverged at phase push: landed n3; not landed n1 (push.refused)
 //	diverged at phase push: restarted n3 61.2s; landed n3; not landed n1 (push.refused)
-func divergence(st *findings.RehearsalStep, before ...string) string {
-	line := "diverged at phase " + st.Phase
+//	cancelled at phase readiness: restarted n3
+func atPhase(ended string, st *findings.RehearsalStep, before ...string) string {
+	line := ended + " at phase " + st.Phase
 	parts := before
 	if len(st.Pushed) > 0 {
 		var landed, not []string

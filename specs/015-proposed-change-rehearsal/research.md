@@ -339,7 +339,9 @@ start asks it) whether `fylgja-rehearse`, `fylgja-provision`, `fylgja-step` or
 `fylgja-destroy` is running: any of them is `run.in_flight`, exit 1, naming the run, before
 the host is read. Then it inspects the host in its own process. **A twin whose record
 carries a `rehearsal` block (R-06) naming a `fylgja-rehearse` run that is not running is
-reclaimed**: the server runs the destroy through `StartDestroy` as `twin destroy` does,
+reclaimed**: the server runs the destroy through `StartDestroy` as `twin destroy` does
+(*through `StartReclaim` since T091, which reads the runs in flight again and refuses,
+never cancels, a rehearsal, provisioning or step run begun since the first read: §5.13*),
 its events in the answer under the notice `reclaiming the twin of rehearsal run <id>`,
 and the report's `reclaimed` block says what the destroy removed; a destroy that leaves
 something refuses the rehearsal with `cleanup.incomplete`. Then the host check of the

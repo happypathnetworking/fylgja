@@ -1792,6 +1792,99 @@ func TestDestroyCancelsInFlightRehearsal(t *testing.T) {
 	}
 }
 
+// The reclaim's destroy start (015, T091, FR-007) refuses beside a step run, a rehearsal
+// or a provisioning run in flight, naming the run, exit 1: nothing is cancelled, following
+// is not stopped though a Schedule exists, and no destroy run is started. The rehearsal is
+// asked first, since the other two may be its children. With none in flight it stops
+// following again and starts the destroy run, or attaches to one in flight, as StartDestroy
+// does.
+func TestReclaimRefusesARunInFlight(t *testing.T) {
+	for _, c := range []struct {
+		name    string
+		running map[string]string
+		object  string
+		message string
+	}{
+		{"a step run", map[string]string{WorkflowStep: "run-s"}, WorkflowStep,
+			"step run run-s is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it"},
+		{"a rehearsal", map[string]string{WorkflowRehearse: "run-r"}, WorkflowRehearse,
+			"rehearsal run run-r is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it"},
+		{"a provisioning run", map[string]string{WorkflowProvision: "run-p"}, WorkflowProvision,
+			"provisioning run run-p is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it"},
+		{"a rehearsal and its step child", map[string]string{WorkflowRehearse: "run-r", WorkflowStep: "run-s"}, WorkflowRehearse,
+			"rehearsal run run-r is already in flight; wait for it to finish, or run fylgja twin destroy to cancel it"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			s := scriptDestroy("", "", "run-d", nothingToRemove())
+			for workflowID, runID := range c.running {
+				s.runs[workflowID] = running(workflowID, runID)
+			}
+			s.described = []*client.ScheduleDescription{describedSchedule(t, "fylgja-fixture", 5*time.Minute)}
+			var notices []string
+
+			run, err := (&Client{Client: s.mc}).StartReclaim(context.Background(), func(e Event) {
+				if e.Notice != "" {
+					notices = append(notices, e.Notice)
+				}
+			})
+			var refused *StartError
+			if !errors.As(err, &refused) {
+				t.Fatalf("error = %v, want a *StartError", err)
+			}
+			f := refused.Finding
+			if f.Rule != findings.RuleRunInFlight || f.Object != c.object || f.Step != findings.StepStart || f.Message != c.message {
+				t.Errorf("finding %+v\nwant run.in_flight on %s at start: %q", f, c.object, c.message)
+			}
+			doc := refused.Document(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1"})
+			if doc.Status.ExitCode() != findings.ExitRejected {
+				t.Errorf("exit %d, want %d", doc.Status.ExitCode(), findings.ExitRejected)
+			}
+			if run.RunID != "" || run.FollowingStopped.Stopped || len(notices) != 0 {
+				t.Errorf("run %+v, notices %v; want nothing done", run, notices)
+			}
+			s.mu.Lock()
+			defer s.mu.Unlock()
+			if len(s.seq) != 0 {
+				t.Errorf("calls in order %v, want none", s.seq)
+			}
+			s.mc.AssertNotCalled(t, "CancelWorkflow", mock.Anything, mock.Anything, mock.Anything)
+			s.mc.AssertNotCalled(t, "ScheduleClient")
+			s.mc.AssertNotCalled(t, "ListWorkflow", mock.Anything, mock.Anything)
+			s.mc.AssertNotCalled(t, "ExecuteWorkflow", mock.Anything, mock.Anything, mock.Anything)
+		})
+	}
+
+	t.Run("none: following stopped, the destroy run started", func(t *testing.T) {
+		s := scriptDestroy("", "", "run-d", nothingToRemove())
+		s.described = []*client.ScheduleDescription{describedSchedule(t, "fylgja-fixture", 5*time.Minute)}
+		run, err := (&Client{Client: s.mc}).StartReclaim(context.Background(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if run.RunID != "run-d" || run.Attached || !run.FollowingStopped.Stopped {
+			t.Errorf("run %+v, want a fresh run-d after following stopped", run)
+		}
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		if want := []string{"delete", "start destroy"}; !slices.Equal(s.seq, want) {
+			t.Errorf("calls in order %v, want %v", s.seq, want)
+		}
+		s.mc.AssertNotCalled(t, "CancelWorkflow", mock.Anything, mock.Anything, mock.Anything)
+	})
+
+	t.Run("a destroy in flight: attached", func(t *testing.T) {
+		s := scriptDestroy("", "run-d", "run-d", nothingToRemove())
+		run, err := (&Client{Client: s.mc}).StartReclaim(context.Background(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !run.Attached || run.RunID != "run-d" {
+			t.Errorf("run %+v, want attached to run-d", run)
+		}
+		s.mc.AssertNotCalled(t, "CancelWorkflow", mock.Anything, mock.Anything, mock.Anything)
+	})
+}
+
 // InFlight names a rehearsal at the child it runs and that child at its own step, with the
 // stage the child is at, and never names the child again as an operator's run (015, R-12):
 // a step child as "at step step", a provisioning child as "at step provision" with the

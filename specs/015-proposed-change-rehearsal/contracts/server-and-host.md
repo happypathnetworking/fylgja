@@ -83,7 +83,9 @@ says the port is on loopback and the bridge.
 Before a rehearsal starts (research R-04): a run in flight refuses it (`run.in_flight`,
 naming `fylgja-rehearse`, `fylgja-provision`, `fylgja-step` or `fylgja-destroy`'s run); a
 twin whose record's `rehearsal` names a run that is not running is destroyed first (the
-destroy run, followed in the answer; `rehearsal.twin.reclaimed`); any other lab, twin
+destroy run, followed in the answer; `rehearsal.twin.reclaimed`), by a start that refuses,
+never cancels, a rehearsal, provisioning or step run begun since the first look
+(`run.in_flight`, naming it); any other lab, twin
 directory or orphan refuses it as the host check refuses a create, naming what holds the
 host and `twin destroy`. No lock is added and nothing waits inside Fylgja; `fylgja-twin`
 retries (contracts/checks.md).

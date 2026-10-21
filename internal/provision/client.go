@@ -78,6 +78,11 @@ type Service interface {
 	// run.worker.absent; stopping following failing is a *FollowStopError. What that second
 	// stop did is the result's FollowingStopped, beside an error too.
 	StartDestroy(ctx context.Context, onEvent func(Event)) (DestroyRun, error)
+	// StartReclaim destroys the twin a rehearsal no longer running left, as StartDestroy
+	// does, but cancels nothing (015, FR-007): a rehearsal, provisioning or step run in
+	// flight is a *StartError carrying run.in_flight, naming the run, with nothing
+	// cancelled, stopped or started. A destroy run in flight is attached to.
+	StartReclaim(ctx context.Context, onEvent func(Event)) (DestroyRun, error)
 	// StopFollowing deletes Schedule fylgja-follow, then cancels a check in flight and waits
 	// for it to close, passing its progress and its child's to onEvent. twin destroy runs it
 	// before anything else, and StartDestroy again once no provisioning run is in flight;
@@ -653,6 +658,41 @@ func (c *Client) StartDestroy(ctx context.Context, onEvent func(Event)) (Destroy
 			notice("step run %s closed: %s", stepping, StepClosedAs(res))
 		}
 	}
+
+	return c.destroy(ctx, onEvent)
+}
+
+// StartReclaim implements Service.
+//
+// The rehearsal is asked first, as StartProvision asks it: the provisioning or step run in
+// flight may be its child. Whatever is found is refused, never cancelled, so a run that
+// started after the rehearsal's own read of the runs in flight is left to run: an
+// operator's twin step on a dead rehearsal's twin, or a second check's rehearsal on the twin
+// both found dead.
+func (c *Client) StartReclaim(ctx context.Context, onEvent func(Event)) (DestroyRun, error) {
+	if onEvent == nil {
+		onEvent = func(Event) {}
+	}
+	if err := c.requireWorker(ctx); err != nil {
+		return DestroyRun{}, err
+	}
+	for _, workflowID := range []string{WorkflowRehearse, WorkflowProvision, WorkflowStep} {
+		runID, err := c.runningRun(ctx, workflowID)
+		if err != nil {
+			return DestroyRun{}, err
+		}
+		if runID != "" {
+			return DestroyRun{}, InFlightRefusal(workflowID, runID)
+		}
+	}
+	return c.destroy(ctx, onEvent)
+}
+
+// destroy is StartDestroy and StartReclaim once no rehearsal, provisioning or step run is in
+// flight: following stopped again, then the destroy run started, or attached to, and
+// followed to its close.
+func (c *Client) destroy(ctx context.Context, onEvent func(Event)) (DestroyRun, error) {
+	notice := func(format string, args ...any) { onEvent(Event{Notice: fmt.Sprintf(format, args...)}) }
 
 	// Following is looked at again (contracts/cli.md, step 2a). A create that closed ready
 	// between the command's stop and the look above was neither stopped nor cancelled, and its

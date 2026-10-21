@@ -48,7 +48,7 @@ type fakeService struct {
 	// start, as a start waiting for a worker to take the run does; it then answers runID and
 	// startErr.
 	startBlocks bool
-	// destroyRun, destroyErr and destroyEvents answer StartDestroy.
+	// destroyRun, destroyErr and destroyEvents answer StartDestroy, and StartReclaim.
 	destroyRun    provision.DestroyRun
 	destroyErr    error
 	destroyEvents []provision.Event
@@ -196,6 +196,20 @@ func (f *fakeService) StartDestroy(_ context.Context, onEvent func(provision.Eve
 	f.mutating("StartDestroy")
 	f.mu.Lock()
 	f.calls = append(f.calls, "StartDestroy")
+	f.destroys++
+	f.mu.Unlock()
+	for _, e := range f.destroyEvents {
+		onEvent(e)
+	}
+	return f.destroyRun, f.destroyErr
+}
+
+// StartReclaim answers as StartDestroy does, under its own name in calls: the rehearsal's
+// reclaim (015, T091). A test that has it refuse sets destroyErr to the refusal.
+func (f *fakeService) StartReclaim(_ context.Context, onEvent func(provision.Event)) (provision.DestroyRun, error) {
+	f.mutating("StartReclaim")
+	f.mu.Lock()
+	f.calls = append(f.calls, "StartReclaim")
 	f.destroys++
 	f.mu.Unlock()
 	for _, e := range f.destroyEvents {

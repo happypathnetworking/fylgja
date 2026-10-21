@@ -965,7 +965,9 @@ step histories replay unchanged). It starts no activity of its own but the basel
 `VerifyTwin`, holds no signal and no TTL, and returns one result in every case, never an
 error. `StartDestroy` cancels a rehearsal in flight and waits for it before its own
 destroy; `StartProvision` and `StartStep` refuse beside one (`run.in_flight`), and
-`InFlight` lists it with its child.
+`InFlight` lists it with its child. The rehearsal's reclaim destroys through
+`StartReclaim`, which reads the runs in flight again and refuses beside a rehearsal,
+provisioning or step run, naming it, where `StartDestroy` would cancel it.
 
 **Naming.**
 

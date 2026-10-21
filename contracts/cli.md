@@ -551,9 +551,11 @@ stages' budgets into the **deadline** and refuses one over the ceiling, 3,600 s
 **reclaims** a twin whose record names a rehearsal run that is no longer running, by its
 destroy, followed in the answer after `reclaiming the twin of rehearsal run <id>`
 (`rehearsal.twin.reclaimed`; `cleanup.incomplete`, exit 4, when that destroy leaves
-something), and otherwise checks the host for the baseline's bundle as a dry run does,
-under the `host.*` identifiers, exit 1; then starts `fylgja-rehearse` and follows it and
-its children; and after the run closes, resolves the stages again for
+something), a destroy that cancels nothing: a rehearsal, provisioning or step run it finds
+in flight, begun since the first look, refuses the rehearsal (`run.in_flight`, naming it,
+exit 1, no `reclaimed` block); and otherwise checks the host for the baseline's bundle as
+a dry run does, under the `host.*` identifiers, exit 1; then starts `fylgja-rehearse` and
+follows it and its children; and after the run closes, resolves the stages again for
 `rehearsal.stage.moved` and `rehearsal.change.closed`.
 
 **The run.** `fylgja-rehearse` creates the twin from the baseline (`fylgja-provision`, the

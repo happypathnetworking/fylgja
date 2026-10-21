@@ -434,11 +434,12 @@ func (r *rehearsing) failed(err error) error {
 
 // host is steps 4 and 5 (research R-04): the runs in flight through the service, then the
 // host in this process. The twin of a rehearsal whose run is no longer running is reclaimed
-// through the destroy run, its progress in the answer before the start; a destroy that
-// leaves something refuses the rehearsal with cleanup.incomplete, exit 4. Then the host
-// check of the baseline's bundle, as a dry run makes it, every refusal it makes under its
-// identifier at host_check. Any other record, a hand twin's or an orphan's, is the host
-// check's to refuse, and is never reclaimed. nil when the host takes the baseline.
+// through the destroy run, which refuses rather than cancels a run begun since the read, its
+// progress in the answer before the start; a destroy that leaves something refuses the
+// rehearsal with cleanup.incomplete, exit 4. Then the host check of the baseline's bundle,
+// as a dry run makes it, every refusal it makes under its identifier at host_check. Any
+// other record, a hand twin's or an orphan's, is the host check's to refuse, and is never
+// reclaimed. nil when the host takes the baseline.
 func (r *rehearsing) host(ctx context.Context, svc provision.Service, baseline rehearsalRow) error {
 	op, subject := r.op, r.subject
 	runs, err := svc.InFlight(ctx)
@@ -496,13 +497,15 @@ func holdingRun(runs []provision.RunInFlight) *provision.RunInFlight {
 }
 
 // reclaim destroys the twin dead's rehearsal left, through the destroy run as twin destroy
-// starts and follows it, its progress in the answer under the notice that names the dead
-// run, with no frame of its own before the rehearsal's start. What it removed is the block's
-// reclaimed and the warning rehearsal.twin.reclaimed; a destroy that leaves something
-// refuses the rehearsal, cleanup.incomplete, exit 4. nil once the twin is gone.
+// follows it, its progress in the answer under the notice that names the dead run, with no
+// frame of its own before the rehearsal's start. The start reads the runs in flight again
+// and cancels none: one begun since host's read refuses the rehearsal, run.in_flight naming
+// it, exit 1, with no reclaimed block. What the destroy removed is the block's reclaimed and
+// the warning rehearsal.twin.reclaimed; a destroy that leaves something refuses the
+// rehearsal, cleanup.incomplete, exit 4. nil once the twin is gone.
 func (r *rehearsing) reclaim(ctx context.Context, svc provision.Service, dead wire.RehearsalRef) error {
 	r.opts.note("reclaiming the twin of rehearsal run %s", dead.RunID)
-	run, err := svc.StartDestroy(ctx, func(e provision.Event) {
+	run, err := svc.StartReclaim(ctx, func(e provision.Event) {
 		r.opts.c.eventFrame(e)
 		printEvent(r.opts, e)
 	})

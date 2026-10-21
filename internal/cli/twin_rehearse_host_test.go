@@ -47,8 +47,8 @@ type reclaimingService struct {
 	t     *testing.T
 }
 
-func (s *reclaimingService) StartDestroy(ctx context.Context, onEvent func(provision.Event)) (provision.DestroyRun, error) {
-	run, err := s.fakeService.StartDestroy(ctx, onEvent)
+func (s *reclaimingService) StartReclaim(ctx context.Context, onEvent func(provision.Event)) (provision.DestroyRun, error) {
+	run, err := s.fakeService.StartReclaim(ctx, onEvent)
 	if err == nil && len(run.Result.Cleanup.Remaining) == 0 {
 		if rmErr := os.RemoveAll(s.paths.Twin); rmErr != nil {
 			s.t.Error(rmErr)
@@ -139,8 +139,8 @@ func TestRehearseReclaimsADeadRehearsalsTwin(t *testing.T) {
 		r.Cleanup.Teardown != provision.CleanupDone || r.Cleanup.Unstage != provision.CleanupDone {
 		t.Errorf("reclaimed %+v; want r0 and the destroy's clean cleanup", r)
 	}
-	if !slices.Equal(svc.calls, []string{"StartDestroy", "StartRehearse"}) || len(svc.rehearsed) != 1 {
-		t.Errorf("the service was asked %v; want the destroy, then the one rehearsal", svc.calls)
+	if !slices.Equal(svc.calls, []string{"StartReclaim", "StartRehearse"}) || len(svc.rehearsed) != 1 {
+		t.Errorf("the service was asked %v; want the reclaim's destroy, then the one rehearsal", svc.calls)
 	}
 }
 
@@ -176,8 +176,54 @@ func TestRehearseReclaimLeavingTheHostUnclean(t *testing.T) {
 		!slices.Equal(doc.Rehearsal.Reclaimed.Cleanup.Remaining, []string{"lab fylgja"}) {
 		t.Errorf("the report's reclaimed block %+v; want what remains named", doc.Rehearsal)
 	}
-	if !slices.Equal(svc.calls, []string{"StartDestroy"}) || len(svc.rehearsed) != 0 {
-		t.Errorf("the service was asked %v; want the destroy alone, nothing started", svc.calls)
+	if !slices.Equal(svc.calls, []string{"StartReclaim"}) || len(svc.rehearsed) != 0 {
+		t.Errorf("the service was asked %v; want the reclaim's destroy alone, nothing started", svc.calls)
+	}
+}
+
+// Scenario 5, a run begun between the rehearsal's read of the runs in flight and its reclaim
+// (T091, FR-007): an operator's twin step on the dead rehearsal's twin. The reclaim's destroy
+// start reads the runs in flight again and refuses beside the step run rather than cancel
+// it, so the rehearsal is refused run.in_flight naming it, exit 1, with no reclaimed block:
+// nothing is cancelled or destroyed, the twin and its lab stay, and no run is started.
+func TestRehearseReclaimRefusedByARunBegunSinceTheRead(t *testing.T) {
+	paths, clab := reclaimHost(t, rehearsalsTwin(t, &wire.RehearsalRef{WorkflowID: provision.WorkflowRehearse, RunID: deadRun}))
+	rehearseInfrahub(t)
+	svc := okRun()
+	svc.destroyErr = provision.InFlightRefusal(provision.WorkflowStep, "s1")
+	useService(t, svc)
+	useInterrupts(t)
+
+	code, doc, raw := rehearseDoc(t, "--branch", lessLink)
+	if code != findings.ExitRejected || doc.Status != findings.StatusRejected {
+		t.Fatalf("exit %d, status %s; want 1, rejected\n%s", code, doc.Status, raw)
+	}
+	refusal := findingOf(t, doc, findings.RuleRunInFlight)
+	if refusal.Severity != findings.Rejection || refusal.Object != provision.WorkflowStep ||
+		!strings.Contains(refusal.Message, "step run s1 is already in flight") {
+		t.Errorf("run.in_flight %+v; want a rejection naming step run s1", refusal)
+	}
+	for _, f := range doc.Findings {
+		if f.Rule == findings.RuleRehearsalTwinReclaimed || f.Rule == findings.RuleCleanupIncomplete {
+			t.Errorf("a refused reclaim filed %s: %+v", f.Rule, f)
+		}
+	}
+	if doc.Rehearsal == nil {
+		t.Fatalf("the refusal carries no rehearsal block\n%s", raw)
+	}
+	if doc.Rehearsal.Reclaimed != nil {
+		t.Errorf("the refusal carries a reclaimed block: %+v", doc.Rehearsal.Reclaimed)
+	}
+	if !slices.Equal(svc.calls, []string{"StartReclaim"}) || len(svc.rehearsed) != 0 || svc.cancels != 0 {
+		t.Errorf("the service was asked %v, %d cancels; want the reclaim's refusing start alone", svc.calls, svc.cancels)
+	}
+	if _, err := os.Stat(paths.TwinJSON); err != nil {
+		t.Errorf("the twin record is gone: %v", err)
+	}
+	for _, call := range clab.calls {
+		if strings.Contains(strings.Join(call, " "), "destroy") {
+			t.Errorf("containerlab was asked to destroy: %v", call)
+		}
 	}
 }
 

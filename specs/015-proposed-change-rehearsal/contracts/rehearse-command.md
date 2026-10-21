@@ -46,6 +46,10 @@ Each step's refusal ends the request with its document and nothing started:
    does, its events in the answer after the notice `reclaiming the twin of rehearsal run
    <id>`, the warning `rehearsal.twin.reclaimed` filed, the report's `reclaimed` block set;
    a destroy that leaves something refuses the rehearsal with `cleanup.incomplete`, exit 4.
+   The reclaim never cancels a run: its start reads the runs in flight again, and a
+   rehearsal, provisioning or step run begun since step 4 refuses the rehearsal,
+   `run.in_flight` naming it, exit 1, with nothing cancelled or destroyed and no `reclaimed`
+   block. A destroy run in flight is attached to.
    Then the host check of the baseline bundle, in this process as a dry run makes it: a
    lab or a twin directory (`host.lab.present`, `host.twin.present`, naming what holds the
    host and that `twin destroy` clears it), the memory sum, an unset login, an absent image,

@@ -17,6 +17,7 @@ const (
 	OutcomeBaselineFailed = "baseline_failed" // the baseline's provision did not end ready
 	OutcomeCut            = "cut"             // the deadline passed
 	OutcomeCancelled      = "cancelled"       // the run itself was cancelled
+	OutcomeRejected       = "rejected"        // the baseline's provision could not start, a run holding its id: nothing touched, no destroy
 )
 
 // provisionReady is the provision workflow's outcome for a twin built and recorded.
@@ -312,8 +313,12 @@ func StageLines(b findings.RehearsalBlock) []string {
 //	rehearsal nonconforming: stage change-1/bad-port failed at phase push; the twin is destroyed; reproduce it by hand:
 //	  fylgja twin create --stage change-1/seeded
 func Closing(b findings.RehearsalBlock, status findings.Status) string {
-	parts := []string{whatItCameTo(b)}
-	if b.Run != nil {
+	parts := []string{whatItCameTo(b, status)}
+	switch {
+	case b.Run == nil:
+	case b.Destroy == nil && status == findings.StatusRejected:
+		parts = append(parts, "no destroy was needed")
+	default:
 		parts = append(parts, destroyText(b.Destroy))
 	}
 	if status == findings.StatusOK {
@@ -326,11 +331,15 @@ func Closing(b findings.RehearsalBlock, status findings.Status) string {
 	return line + "; reproduce it by hand:\n  " + strings.Join(b.Reproduce, "\n  ")
 }
 
-// whatItCameTo is the closing line's account of the stages: nothing started, the stage
-// that failed or could not be rehearsed, the baseline not built, or every stage passed.
-func whatItCameTo(b findings.RehearsalBlock) string {
-	if b.Run == nil {
+// whatItCameTo is the closing line's account of the stages: nothing started, a run refused at
+// its baseline's start, the stage that failed or could not be rehearsed, the baseline not
+// built, or every stage passed.
+func whatItCameTo(b findings.RehearsalBlock, status findings.Status) string {
+	switch {
+	case b.Run == nil:
 		return "nothing was started"
+	case !reachedAny(b) && status == findings.StatusRejected:
+		return "the run touched nothing, since a run already holds the id of its baseline's provision"
 	}
 	built := 0
 	for _, s := range b.Stages {
@@ -354,6 +363,17 @@ func whatItCameTo(b findings.RehearsalBlock) string {
 		return "the baseline alone was built and verified, and no step was rehearsed"
 	}
 	return fmt.Sprintf("%d stages rehearsed, every one passed", built)
+}
+
+// reachedAny is whether the run reached a stage: false in a block refused before any run, and
+// in one whose run was refused at its baseline's start.
+func reachedAny(b findings.RehearsalBlock) bool {
+	for _, s := range b.Stages {
+		if s.Role == RoleBaseline || s.Role == RoleRehearsed {
+			return true
+		}
+	}
+	return false
 }
 
 // errorAt is why the rehearsal stopped at a stage it could not rehearse: the deadline, the

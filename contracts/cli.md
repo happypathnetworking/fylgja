@@ -559,7 +559,11 @@ its children; and after the run closes, resolves the stages again for
 bundle already compiled, never following, its record naming the rehearsal) and waits for it
 to settle under the step's default budget, verifying it; steps it to each later stage in
 order (`fylgja-step`, with `--allow-restart`'s behaviour and the default wait); and destroys
-it (`fylgja-destroy`), always. It stops at the first stage whose verdict is not `passed`. A
+it (`fylgja-destroy`), always, but when the baseline's provision could not start because
+another run began under its id since the server looked: then it touched nothing, starts no
+destroy, which would tear down that run's lab, and ends `rejected`, `run.in_flight` naming
+`fylgja-provision`, the closing line `rehearsal rejected: the run touched nothing, since a
+run already holds the id of its baseline's provision; no destroy was needed`. It stops at the first stage whose verdict is not `passed`. A
 stage **passes** when its step lands and its wait finds nothing the baseline's did not;
 the baseline's own findings are reported and fail nothing. The deadline is a timer on the
 run: when it passes, the child in progress is cancelled (a provision cleans up; a step
@@ -630,7 +634,7 @@ reproduce commands and the table. A line before the caveat says what was shorten
 | Status | Exit | When |
 |---|---|---|
 | `ok` | 0 | every rehearsed stage passed; the baseline's findings and the warnings notwithstanding |
-| `rejected` | 1 | refused before any run: a stage refused, the deadline unfit, a run in flight, the host held |
+| `rejected` | 1 | refused before any run: a stage refused, the deadline unfit, a run in flight, the host held; or the run's baseline provision refused at its start, another run holding its id, the run touching nothing and starting no destroy |
 | `error` | 2 | a stage's step could not run, was rejected by its locks or was cancelled before its stage; its wait incomplete; the deadline cut the rehearsal; the operator's interrupt; `operation.failed`; each after the destroy |
 | `failed` | 3 | the baseline could not be built, and its provision cleaned up |
 | `unclean` | 4 | the destroy left something; `cleanup.incomplete` says what, and that `twin destroy` clears it |

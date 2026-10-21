@@ -397,7 +397,7 @@ type RehearseRefusal struct {
 // RehearseResult is how a rehearsal run ended (data-model §6). One shape in every case.
 type RehearseResult struct {
 	// Outcome is one of rehearsal.OutcomeOK, OutcomeStageFailed, OutcomeStageError,
-	// OutcomeBaselineFailed, OutcomeCut and OutcomeCancelled.
+	// OutcomeBaselineFailed, OutcomeCut, OutcomeCancelled and OutcomeRejected.
 	Outcome string `json:"outcome"`
 	// Stages is every stage of the input in order: the refused one passed over, each the run
 	// came to with its verdict, and every one after the stage that stopped the run not
@@ -411,7 +411,8 @@ type RehearseResult struct {
 	EndedAt     string  `json:"ended_at"`
 	UsedS       float64 `json:"used_s"`
 	// Destroy is how the destroy child ended; when it could not start or closed without a
-	// result, what it could not check is its remaining, under cleanup.incomplete.
+	// result, what it could not check is its remaining, under cleanup.incomplete. nil when the
+	// run was rejected: it touched nothing, so no destroy was needed.
 	Destroy *DestroyResult `json:"destroy,omitempty"`
 	// Findings are the run's own: a child that could not start or closed without a result.
 	// Each child's own findings stay in its result.

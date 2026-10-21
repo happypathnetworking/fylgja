@@ -826,7 +826,9 @@ workflows under their own fixed IDs, so one twin at a time holds as it does by h
    cancelled before its stage, or its wait left a node unread, since nothing was then
    learned about the change. The run stops at the first stage that does not pass, and the
    stages after it are `not reached`.
-3. **The destroy**: a `fylgja-destroy` child on a disconnected context, from every path.
+3. **The destroy**: a `fylgja-destroy` child on a disconnected context, from every path
+   but one: a baseline whose `fylgja-provision` could not start because another run holds
+   its id touched nothing, and the destroy would tear down that run's lab.
 
 The **deadline** is the stages' budgets summed from their node plans, each the largest of
 its package's deploy, readiness, push and destroy budgets over the stage's nodes, plus the
@@ -840,7 +842,9 @@ interrupt cancels the run as the deadline does and waits for its destroy. The ru
 one result in every case, never an error, and the server makes it the document: `ok` when
 every rehearsed stage passed, `nonconforming` (5) when one failed, `error` (2) for an
 `error` verdict, the deadline or an interrupt, `failed` (3) when the baseline could not be
-built, and `unclean` (4) when the destroy left something, whatever the stages did. Nothing
+built, `unclean` (4) when the destroy left something, whatever the stages did, and
+`rejected` (1) when the baseline's provision could not start, another run holding its id,
+with `run.in_flight` and no destroy. Nothing
 in Fylgja acts on it; a check of Infrahub's maps its status to a conclusion
 ([§4.6](#46-operator-surface)).
 
@@ -854,7 +858,9 @@ worker is gone does not end by itself: it holds the host, and the next is refuse
 terminates it and the next reclaims its twin.
 
 **A rehearsal, end to end.** Every refusal is made before the start; from the start the run
-ends in its destroy, whatever happened:
+ends in its destroy, whatever happened, but when its baseline's provision cannot start
+because another run took its id since the server looked: that run touched nothing, starts no
+destroy, which would tear down the other's lab, and is `rejected`, `run.in_flight`:
 
 ```mermaid
 sequenceDiagram

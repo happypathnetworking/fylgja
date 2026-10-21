@@ -194,7 +194,7 @@
           "description": "null when no stage compiled or the baseline was not built"
         },
         "stages": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/stage" } },
-        "destroy": { "oneOf": [{ "$ref": "#/$defs/cleanup" }, { "type": "null" }], "description": "the destroy child's cleanup; null when the rehearsal was refused before any run" },
+        "destroy": { "oneOf": [{ "$ref": "#/$defs/cleanup" }, { "type": "null" }], "description": "the destroy child's cleanup; null when the rehearsal was refused before any run, or its run was refused at its baseline's start, another run holding the provision's id, and touched nothing" },
         "reproduce": {
           "type": "array",
           "items": { "type": "string" },

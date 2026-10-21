@@ -565,7 +565,7 @@ func (r *rehearsing) reported(ctx context.Context, runID string, res provision.R
 	list = append(list, res.Findings...)
 	if d := res.Destroy; d != nil {
 		list = append(list, d.Findings...)
-	} else {
+	} else if res.Outcome != rehearsal.OutcomeRejected {
 		list.AddStep(findings.Rejection, findings.StepDestroy, findings.RuleCleanupIncomplete, runID, fmt.Sprintf(
 			"rehearsal run %s closed without its destroy's report, so what the host holds is not known; fylgja twin show "+
 				"says what it holds, and fylgja twin destroy clears it", runID))
@@ -592,12 +592,17 @@ func (r *rehearsing) reported(ctx context.Context, runID string, res provision.R
 	return &result{doc: doc}
 }
 
-// rehearsalStatus is how a rehearsal that ran ends (research R-08): unclean, exit 4, when its
-// destroy left something, whatever the stages did; otherwise ok when every rehearsed stage
-// passed, nonconforming, exit 5, when a stage failed, failed, exit 3, when the baseline could
-// not be built, and error, exit 2, when a stage could not be rehearsed, the deadline cut the
+// rehearsalStatus is how a rehearsal that ran ends (research R-08): rejected, exit 1, when its
+// baseline's provision could not start because another run holds its id, which touched
+// nothing and needs no destroy (FR-007, FR-009); unclean, exit 4, when its destroy left
+// something, whatever the stages did; otherwise ok when every rehearsed stage passed,
+// nonconforming, exit 5, when a stage failed, failed, exit 3, when the baseline could not be
+// built, and error, exit 2, when a stage could not be rehearsed, the deadline cut the
 // rehearsal or the run was cancelled.
 func rehearsalStatus(res provision.RehearseResult) findings.Status {
+	if res.Outcome == rehearsal.OutcomeRejected {
+		return findings.StatusRejected
+	}
 	if d := res.Destroy; d == nil || len(d.Cleanup.Remaining) > 0 {
 		return findings.StatusUnclean
 	}

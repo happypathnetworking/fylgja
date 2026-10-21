@@ -273,21 +273,40 @@ func refusedRun() example {
 	return e
 }
 
+// heldRun is a run refused at its baseline's start, another run holding the provision's id:
+// no stage reached, nothing touched, and no destroy (T078).
+func heldRun() example {
+	return example{"rejected, the baseline's provision held by another run",
+		input(1950, branchPoint(), seeded(), thirdLink(RoleRehearsed)),
+		Result{Outcome: OutcomeRejected, Run: run(), UsedS: 0.1, Stages: []StageResult{
+			{Ref: change + "/seeded", Verdict: VerdictNotReached},
+			{Ref: change + "/third-link", Verdict: VerdictNotReached},
+		}},
+		findings.StatusRejected}
+}
+
 func examples() []example {
-	return []example{passedRun(), failedRun(), newFindingRun(), cutRun(), notBuiltRun(), uncleanRun(), aloneRun(), refusedRun()}
+	return []example{passedRun(), failedRun(), newFindingRun(), cutRun(), notBuiltRun(), uncleanRun(), aloneRun(), refusedRun(),
+		heldRun()}
 }
 
 // document is the example's findings document as the server would send it: the block, its
-// findings, and the refusal's own finding when no run began.
+// findings, the refusal's own finding when no run began, and the run's own run.in_flight when
+// it was refused at its baseline's start.
 func (e example) document() *findings.Document {
 	b := Build(e.in, e.res)
 	list := Findings(b)
 	subject := &findings.Subject{Branch: change}
-	if e.res.Run != nil {
-		subject.RunID = e.res.Run.RunID
-	} else {
+	switch {
+	case e.res.Run == nil:
 		list.AddStep(findings.Rejection, findings.StepStart, findings.RuleRehearsalDeadlineUnfit, change,
 			"the stages need 3840s, over the ceiling of 3600s")
+	case e.res.Outcome == OutcomeRejected:
+		list.AddStep(findings.Rejection, findings.StepProvision, findings.RuleRunInFlight, wire.ProvisionWorkflowID,
+			"the rehearsal's fylgja-provision could not start: a run is already in flight under its id")
+	}
+	if e.res.Run != nil {
+		subject.RunID = e.res.Run.RunID
 	}
 	doc := findings.NewDocument(findings.OpTwinRehearse, subject, list)
 	doc.Status = e.status
@@ -415,6 +434,7 @@ func TestBuildRolesAndVerdicts(t *testing.T) {
 		{notBuiltRun(), []rv{{"refused", "refused"}, {"baseline", "error"}, {"not_reached", "not_reached"}}, false},
 		{refusedRun(), []rv{{"not_reached", "not_reached"}, {"not_reached", "not_reached"}, {"not_reached", "not_reached"},
 			{"not_reached", "not_reached"}}, false},
+		{heldRun(), []rv{{"refused", "refused"}, {"not_reached", "not_reached"}, {"not_reached", "not_reached"}}, false},
 	} {
 		b := Build(c.e.in, c.e.res)
 		if got := roles(b); !reflect.DeepEqual(got, c.want) {
@@ -608,6 +628,10 @@ func TestStageLinesAndClosing(t *testing.T) {
 			"stage change-1/seeded: not reached", "stage change-1/third-link: not reached",
 			"stage change-1/bad-port: not reached", "stage change-1/head: not reached",
 		}, "rehearsal rejected: nothing was started"},
+		{heldRun(), []string{
+			"stage change-1/branch-point: refused (contract.node.missing)",
+			"stage change-1/seeded: not reached", "stage change-1/third-link: not reached",
+		}, "rehearsal rejected: the run touched nothing, since a run already holds the id of its baseline's provision; no destroy was needed"},
 	} {
 		b := Build(c.e.in, c.e.res)
 		if got := StageLines(b); c.lines != nil && !reflect.DeepEqual(got, c.lines) {

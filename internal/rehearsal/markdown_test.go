@@ -374,6 +374,22 @@ func TestMarkdownOfARefusal(t *testing.T) {
 		}
 	}
 
+	// A run refused at its baseline's start, another run holding the provision's id, says the
+	// run touched nothing and needed no destroy, and rehearsed nothing (T078).
+	md = Markdown(heldRun().document(), pairs())
+	for _, want := range []string{
+		`## Fylgja did not rehearse proposed change "third link" on change-1`,
+		"Run `fylgja-rehearse " + rehearseRun + "` touched nothing, since a run already holds the id of its baseline's provision, " +
+			"and no destroy was needed; stages resolved at 2026-10-17T14:02:11Z. Status **rejected**. Deadline 1950s (ceiling 3600s).",
+		`  s1["change-1/seeded<br/>not reached"]`,
+		"**Findings**:\n\n- `contract.node.missing` main: branch defines FylgjaContract but holds no instance of it\n" +
+			"- `run.in_flight` fylgja-provision: the rehearsal's fylgja-provision could not start: a run is already in flight under its id",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("the held rehearsal's markdown does not hold %q:\n%s", want, md)
+		}
+	}
+
 	var unknown findings.List
 	unknown.AddStep(findings.Rejection, findings.StepResolve, findings.RuleStageUnknown, "change-9",
 		"branch change-9 has no open proposed change")

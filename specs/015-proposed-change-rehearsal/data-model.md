@@ -23,14 +23,15 @@ the server (R-10).
 | the baseline stage | the first compiled stage in order | built as a child `fylgja-provision` (already compiled: `BundleID`, `BundlePath`, `ObservedAt`, `Stage`, `Rehearsal`, `StopFollowing: true`), then its wait as `VerifyTwin` on the run's context, `From` the record's `recorded_at`, `BudgetS` the default |
 | a rehearsed stage | each compiled stage after the baseline, in order | a child `fylgja-step` with a `StepInput` the server built (R-05), whose wait is the step's own (`observe`) |
 | the deadline | `rehearsal.Deadline` (R-09) | the stages' budgets summed from the node plans and the mechanism constants, under `rehearsal.Ceiling` (3,600 s); a workflow timer that cancels the children's context |
-| the destroy | a child `fylgja-destroy` on a disconnected context | always, last |
+| the destroy | a child `fylgja-destroy` on a disconnected context | always, last, but after a baseline whose provision could not start because another run holds its id: that run touched nothing (T078) |
 | the reclaim | the server, before the start (R-04) | a twin whose record's `rehearsal` names a run that is not running is destroyed first, through the destroy run |
 
 **States of the run**, as the result's `outcome` says it and the document's status maps
 it (R-08):
 
 ```
- rejected (before any run; exit 1)           : a stage refused (014's rules), the deadline unfit, a run in flight, the host held
+ rejected (before any run; exit 1)           : a stage refused (014's rules), the deadline unfit, a run in flight, the host held;
+                                               or the run's baseline provision refused at its start, its id held: nothing touched, no destroy
  ok (0)                                      : every rehearsed stage passed; warnings and the baseline's findings notwithstanding
  nonconforming (5)                           : a stage failed (diverged, or a finding the baseline lacked); the twin destroyed
  error (2)                                   : a stage's step could not run, was rejected by its locks or cancelled, its wait incomplete; the deadline; the interrupt; after the destroy
@@ -123,7 +124,7 @@ RehearseInput    {ProposedChange {ID, Name, Branch, Draft}, ResolvedAt, Deadline
 RehearseStage    {Ref, Label, Description, AtSource, Branch, At, BundleID, BundlePath,
                   Refused *{Rule, Message}, Role, Diff (the pair, stages.schema.json $defs/step),
                   Provision *ProvisionInput (the baseline), Step *StepInput (a rehearsed stage), WaitS}
-RehearseResult   {Outcome (ok | stage_failed | stage_error | baseline_failed | cut | cancelled),
+RehearseResult   {Outcome (ok | stage_failed | stage_error | baseline_failed | cut | cancelled | rejected),
                   Stages []RehearsedStage, Reached (the stage the run stopped at), DeadlineHit,
                   StartedAt, EndedAt, UsedS, Destroy *DestroyResult, Findings}
 RehearsedStage   {Ref, Verdict, Run *RunRef, Provision *ProvisionResult, Step *StepResult,
@@ -131,7 +132,8 @@ RehearsedStage   {Ref, Verdict, Run *RunRef, Provision *ProvisionResult, Step *S
 ```
 
 The workflow branches on `Role`, the children's outcomes and the verdict, never on a
-stage's content; every path ends in the destroy child. `StepResult` gains `WaitCounts
+stage's content; every path ends in the destroy child but `rejected`'s, whose baseline
+provision could not start because another run holds its id, so nothing was touched. `StepResult` gains `WaitCounts
 *wire.VerifyCounts`, `wire.VerifyResult` gains `Counts *VerifyCounts`, both omitted when
 nil, so every recorded history replays. No new activity.
 

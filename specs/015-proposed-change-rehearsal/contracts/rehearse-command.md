@@ -65,7 +65,10 @@ the baseline (already compiled, as a rebuild's child is; `StopFollowing: true`; 
 carrying the rehearsal), then `VerifyTwin` (the baseline's wait, the default budget, from the
 record's time, written into no record), then `fylgja-step` per later stage in order
 (`--allow-restart`'s behaviour; the default wait; the run reads containerlab's plan itself),
-then `fylgja-destroy` on a disconnected context, always. The run stops at the first stage
+then `fylgja-destroy` on a disconnected context, always, but when the baseline's
+`fylgja-provision` could not start because another run holds its id: that run touched
+nothing, starts no destroy, which would tear down the other run's lab, and is `rejected`,
+exit 1, `run.in_flight` naming `fylgja-provision` (FR-007). The run stops at the first stage
 whose verdict is not `passed`. The deadline is a timer on the run's clock: when it passes, the
 children's context is cancelled (a provision cleans up; a step records diverged, D-036), and
 the destroy follows. The operator's first interrupt cancels the run the same way and waits
@@ -77,7 +80,7 @@ A client that goes away leaves the run running to its destroy.
 | Status | Exit | When |
 |---|---|---|
 | `ok` | 0 | every rehearsed stage passed; the baseline's findings and the warnings notwithstanding |
-| `rejected` | 1 | refused before any run: a stage refused, the deadline unfit, a run in flight, the host held |
+| `rejected` | 1 | refused before any run: a stage refused, the deadline unfit, a run in flight, the host held; or the run's baseline provision refused at its start, another run holding its id, the run touching nothing and starting no destroy |
 | `error` | 2 | a stage's step could not run, was rejected by its locks or cancelled before its stage; its wait incomplete; the deadline cut the rehearsal; the operator's interrupt; `operation.failed`; after the destroy |
 | `failed` | 3 | the baseline could not be built and the provision cleaned up |
 | `unclean` | 4 | the destroy left something; `cleanup.incomplete` says what and that `twin destroy` clears it |

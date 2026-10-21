@@ -5,6 +5,7 @@ import (
 	"errors"
 	"reflect"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -765,6 +766,40 @@ func TestRehearseChildRefusedIsError(t *testing.T) {
 	}
 	if st := res.Stages[2]; st.Run != nil || st.Step != nil {
 		t.Errorf("stage %+v, want no run", st)
+	}
+}
+
+// A baseline whose provision cannot start because another run holds its id touched nothing:
+// the rehearsal is rejected, filing run.in_flight naming the held id, every stage after the
+// passed-over branch point not reached, and it starts no destroy, which would tear down the
+// other run's lab (FR-007, FR-009; T078). The rehearsal runs under fylgja-provision here, for
+// the suite to refuse the child.
+func TestRehearseBaselineHeldTouchesNothing(t *testing.T) {
+	h := newRehearseHarness(t)
+	h.env.SetStartWorkflowOptions(client.StartWorkflowOptions{ID: WorkflowProvision})
+
+	res := h.run(fixtureRehearsal())
+
+	if res.Outcome != rehearsal.OutcomeRejected {
+		t.Errorf("outcome %q, want %q", res.Outcome, rehearsal.OutcomeRejected)
+	}
+	if got, want := verdicts(res), []string{"change-1/branch-point refused", "change-1/seeded not_reached",
+		"change-1/third-link not_reached", "change-1/head not_reached"}; !slices.Equal(got, want) {
+		t.Errorf("stages %v\nwant %v", got, want)
+	}
+	if got := h.calls(); len(got) != 0 {
+		t.Errorf("started %v, want nothing: no child ran, and no destroy", got)
+	}
+	if res.Destroy != nil {
+		t.Errorf("destroy %+v, want none: the run touched nothing", res.Destroy)
+	}
+	wantRules(t, res.Findings, [2]string{findings.RuleRunInFlight, findings.StepProvision})
+	if f := res.Findings[0]; f.Object != WorkflowProvision || f.Severity != findings.Rejection ||
+		!strings.Contains(f.Message, "touched nothing and ran no destroy") {
+		t.Errorf("run.in_flight = %+v, want a rejection naming fylgja-provision and saying nothing was touched", f)
+	}
+	if res.DeadlineHit || res.StartedAt == "" || res.EndedAt == "" {
+		t.Errorf("deadline hit %v, times %q to %q", res.DeadlineHit, res.StartedAt, res.EndedAt)
 	}
 }
 

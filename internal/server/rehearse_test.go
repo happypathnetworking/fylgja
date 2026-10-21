@@ -433,6 +433,7 @@ func TestRehearsalStatusIsR08s(t *testing.T) {
 		{rehearsal.OutcomeOK, left, findings.StatusUnclean},
 		{rehearsal.OutcomeStageFailed, left, findings.StatusUnclean},
 		{rehearsal.OutcomeOK, nil, findings.StatusUnclean},
+		{rehearsal.OutcomeRejected, nil, findings.StatusRejected},
 	} {
 		if got := rehearsalStatus(provision.RehearseResult{Outcome: c.outcome, Destroy: c.destroy}); got != c.want {
 			t.Errorf("%s with destroy %+v: %s, want %s", c.outcome, c.destroy, got, c.want)
@@ -744,6 +745,25 @@ func TestRehearsalReportedOnceTheRunCloses(t *testing.T) {
 	if doc.Status != findings.StatusFailed || !carriesRule(doc.Findings, findings.RuleRehearsalBaselineFailed) ||
 		!carriesRule(doc.Findings, findings.RuleOperationFailed) {
 		t.Errorf("not built: %s %+v", doc.Status, doc.Findings)
+	}
+
+	// Refused at its baseline's start, another run holding the provision's id: rejected,
+	// exit 1, with the run's run.in_flight, and no destroy needed, so no cleanup.incomplete
+	// (T078).
+	held := provision.RehearseResult{Outcome: rehearsal.OutcomeRejected, UsedS: 0.1, Reached: "change-1/seeded",
+		Stages: []provision.RehearsedStage{{Ref: "change-1/branch-point", Verdict: rehearsal.VerdictRefused},
+			{Ref: "change-1/seeded", Verdict: rehearsal.VerdictNotReached},
+			{Ref: "change-1/third-link", Verdict: rehearsal.VerdictNotReached}, {Ref: "change-1/head", Verdict: rehearsal.VerdictNotReached}}}
+	held.Findings.AddStep(findings.Rejection, findings.StepProvision, findings.RuleRunInFlight, provision.WorkflowProvision,
+		"the rehearsal's fylgja-provision could not start: a run is already in flight under its id")
+	doc, out = reportedOf(t, held)
+	if doc.Status != findings.StatusRejected || doc.Status.ExitCode() != 1 || !carriesRule(doc.Findings, findings.RuleRunInFlight) ||
+		carriesRule(doc.Findings, findings.RuleCleanupIncomplete) || doc.Rehearsal.Destroy != nil || doc.Rehearsal.Run == nil {
+		t.Errorf("held: %s %+v %+v", doc.Status, doc.Findings, doc.Rehearsal)
+	}
+	if !strings.Contains(out, "stage change-1/seeded: not reached\n") || !strings.Contains(out,
+		"rehearsal rejected: the run touched nothing, since a run already holds the id of its baseline's provision; no destroy was needed\n") {
+		t.Errorf("held: the text:\n%s", out)
 	}
 
 	unclean := ok

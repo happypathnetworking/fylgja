@@ -26,15 +26,19 @@ import (
 //     classified by rehearsal.Classify against the baseline findings. The run stops at the
 //     first stage whose verdict rehearsal.Stop says stops it, and every later stage is not
 //     reached;
-//  4. always, last: a child fylgja-destroy, on a context no cancellation reaches.
+//  4. last: a child fylgja-destroy, on a context no cancellation reaches, unless the run
+//     touched nothing.
 //
 // The deadline's firing ends the stage in progress error and the run cut; the run's own
 // cancellation, the operator's interrupt or twin destroy, cancels the children the same way
 // and ends the run cancelled. Either way a provision cleans up, a step records diverged
 // (D-036), and the destroy follows. A baseline that is not built ends the run
-// baseline_failed with no stage rehearsed. The run branches only on each stage's role, the
-// children's outcomes and the verdicts, reads no clock but the workflow's, and starts no
-// activity but VerifyTwin. It returns one result in every case, never an error.
+// baseline_failed with no stage rehearsed. A baseline whose provision could not start
+// because another run holds its id ends the run rejected: nothing was touched, and the
+// destroy, which removes whatever lab the host holds, would tear down that run's (FR-007).
+// The run branches only on each stage's role, the children's outcomes and the verdicts,
+// reads no clock but the workflow's, and starts no activity but VerifyTwin. It returns one
+// result in every case, never an error.
 func Rehearse(ctx workflow.Context, in RehearseInput) (RehearseResult, error) {
 	started := workflow.Now(ctx).UTC()
 	res := RehearseResult{Stages: []RehearsedStage{}, Findings: findings.List{}, StartedAt: started.Format(time.RFC3339Nano)}
@@ -56,8 +60,10 @@ func Rehearse(ctx workflow.Context, in RehearseInput) (RehearseResult, error) {
 	r.stages(in.Stages)
 	stopTimer()
 
-	// 4.
-	r.destroy()
+	// 4. A run refused at its baseline's start touched nothing.
+	if res.Outcome != rehearsal.OutcomeRejected {
+		r.destroy()
+	}
 
 	ended := workflow.Now(ctx).UTC()
 	res.EndedAt = ended.Format(time.RFC3339Nano)
@@ -67,12 +73,14 @@ func Rehearse(ctx workflow.Context, in RehearseInput) (RehearseResult, error) {
 
 // rehearsing is one rehearsal run as it goes: its own context, the children's, which the
 // deadline and the run's cancellation both cancel, the baseline findings once the baseline's
-// wait has read every node, and the result it fills.
+// wait has read every node, whether the last child refused at its start was refused because
+// a run holds its id, and the result it fills.
 type rehearsing struct {
 	ctx      workflow.Context
 	children workflow.Context
 	cut      workflow.CancelFunc
 	baseline []wire.StepFinding
+	held     bool
 	res      *RehearseResult
 }
 
@@ -125,11 +133,14 @@ func (r *rehearsing) stages(stages []RehearseStage) {
 	}
 }
 
-// outcome is the run's outcome when stage st stopped it: cut by the deadline, cancelled by
-// the run's own cancellation, a baseline whose provision did not end ready, a stage that
-// failed, or one that could not be rehearsed.
+// outcome is the run's outcome when stage st stopped it: a baseline whose provision could not
+// start because a run holds its id, cut by the deadline, cancelled by the run's own
+// cancellation, a baseline whose provision did not end ready, a stage that failed, or one
+// that could not be rehearsed.
 func (r *rehearsing) outcome(s RehearseStage, st RehearsedStage) string {
 	switch {
+	case s.Role == rehearsal.RoleBaseline && st.Run == nil && r.held:
+		return rehearsal.OutcomeRejected
 	case r.res.DeadlineHit:
 		return rehearsal.OutcomeCut
 	case r.ctx.Err() != nil:
@@ -147,7 +158,8 @@ func (r *rehearsing) outcome(s RehearseStage, st RehearsedStage) string {
 // time and under the stage's wait budget. The wait's run is this run, which the record does
 // not name, so the wait is written into no record. A wait that read every node, settled or
 // expired, gives the baseline findings and the verdict baseline; anything else is error, since
-// no later stage could be compared with it.
+// no later stage could be compared with it. A provision refused at its start because a run
+// holds its id did not reach the stage: not reached, and the run rejected.
 func (r *rehearsing) baselineStage(s RehearseStage) RehearsedStage {
 	began := workflow.Now(r.ctx)
 	st := RehearsedStage{Ref: s.Ref, Verdict: rehearsal.VerdictError}
@@ -163,6 +175,9 @@ func (r *rehearsing) baselineStage(s RehearseStage) RehearsedStage {
 	child := workflow.ExecuteChildWorkflow(workflow.WithChildOptions(r.children, ChildOptions(WorkflowProvision)),
 		provisionWorkflowType, in)
 	if st.Run = r.started(child, WorkflowProvision, findings.StepProvision); st.Run == nil {
+		if r.held {
+			st.Verdict = rehearsal.VerdictNotReached
+		}
 		return r.took(st, began)
 	}
 	var provisioned ProvisionResult
@@ -236,16 +251,24 @@ func (r *rehearsing) took(st RehearsedStage, began time.Time) RehearsedStage {
 
 // started waits for a child to start and returns its run. A child the deadline or the run's
 // cancellation stopped before it started files nothing, since the outcome says why; one
-// refused because a run holds its id files run.in_flight, and one refused otherwise
-// operation.failed, at step.
+// refused because a run holds its id files run.in_flight and sets held, and one refused
+// otherwise operation.failed, at step. The baseline's provision is the run's first child, so
+// its refusal says the rehearsal touched nothing.
 func (r *rehearsing) started(child workflow.ChildWorkflowFuture, workflowID, step string) *wire.RunRef {
 	var run workflow.Execution
 	err := child.GetChildWorkflowExecution().Get(r.children, &run)
+	r.held = false
 	switch {
 	case err == nil:
 		return &wire.RunRef{WorkflowID: workflowID, RunID: run.RunID}
 	case r.interrupted():
+	case alreadyStarted(err) && workflowID == WorkflowProvision:
+		r.held = true
+		r.res.Findings.AddStep(findings.Rejection, step, findings.RuleRunInFlight, workflowID, fmt.Sprintf(
+			"the rehearsal's %s could not start: a run is already in flight under its id, so the rehearsal touched nothing "+
+				"and ran no destroy; wait for that run to finish, or run fylgja twin destroy to cancel it", workflowID))
 	case alreadyStarted(err):
+		r.held = true
 		r.res.Findings.AddStep(findings.Rejection, step, findings.RuleRunInFlight, workflowID,
 			fmt.Sprintf("the rehearsal's %s could not start: a run is already in flight under its id", workflowID))
 	default:

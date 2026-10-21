@@ -77,15 +77,20 @@ func parts(doc *findings.Document, steps []step.Pair, brief bool) []part {
 	}
 
 	verb := "rehearsed"
-	if b.Run == nil {
+	if b.Run == nil || !reachedAny(*b) {
 		verb = "did not rehearse"
 	}
 	out = append(out, part{text: fmt.Sprintf("## Fylgja %s proposed change %s on %s", verb,
 		inline(fmt.Sprintf("%q", b.ProposedChange.Name)), inline(b.ProposedChange.Branch))})
-	if b.Run != nil {
+	switch {
+	case b.Run != nil && !reachedAny(*b) && doc.Status == findings.StatusRejected:
+		out = append(out, part{text: fmt.Sprintf("Run %s touched nothing, since a run already holds the id of its baseline's "+
+			"provision, and no destroy was needed; stages resolved at %s. Status **%s**. Deadline %ds (ceiling %ds).",
+			code(b.Run.WorkflowID+" "+b.Run.RunID), inline(b.ResolvedAt), doc.Status, b.DeadlineS, b.CeilingS)})
+	case b.Run != nil:
 		out = append(out, part{text: fmt.Sprintf("Run %s, stages resolved at %s. Status **%s**. %.1fs of the %ds deadline (ceiling %ds).",
 			code(b.Run.WorkflowID+" "+b.Run.RunID), inline(b.ResolvedAt), doc.Status, b.UsedS, b.DeadlineS, b.CeilingS)})
-	} else {
+	default:
 		out = append(out, part{text: fmt.Sprintf("No run was started; stages resolved at %s. Status **%s**. Deadline %ds (ceiling %ds).",
 			inline(b.ResolvedAt), doc.Status, b.DeadlineS, b.CeilingS)})
 	}

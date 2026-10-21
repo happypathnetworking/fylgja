@@ -256,7 +256,7 @@ func (t tableOf) within(brief string, room int) (string, tableShrunk) {
 func moreRow(left int) string { return row(fmt.Sprintf("… and %d more", left), "") }
 
 // fitNote says what fit shortened: every finding named by its identifier and object alone,
-// the table's steps and new findings briefly or each stage's reference and verdict alone
+// the table's steps and new verification failures briefly or each stage's reference and verdict alone
 // with how many stages are left out of it, when there is a table, and the parts left out.
 func fitNote(left []string, t tableShrunk) string {
 	note := "*To fit what Infrahub keeps of a comment (" + fmt.Sprint(CommentMax) +
@@ -268,7 +268,7 @@ func fitNote(left []string, t tableShrunk) string {
 	case t.verdicts:
 		note += "; the table gives each stage's reference and verdict alone"
 	default:
-		note += ", and the table each step by its outcome and its new findings by the first few"
+		note += ", and the table each step by its outcome and its new verification failures by the first few"
 	}
 	switch len(left) {
 	case 0:
@@ -318,7 +318,7 @@ func whyText(doc *findings.Document, brief bool) string {
 // alone and the new findings the first few and how many more.
 func table(b findings.RehearsalBlock, unread, brief bool) string {
 	lines := []string{
-		"| stage | at | bundle | step | wait | verify | new findings | verdict |",
+		"| stage | at | bundle | step | wait | verify | new verification failures | verdict |",
 		"|---|---|---|---|---|---|---|---|",
 	}
 	for _, s := range b.Stages {

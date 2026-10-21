@@ -998,7 +998,7 @@ func TestRehearseMarkdown(t *testing.T) {
 	if !strings.HasPrefix(stdout, `## Fylgja rehearsed proposed change `) || !strings.HasSuffix(stdout, rehearsal.Caveat+"\n") {
 		t.Errorf("stdout:\n%s\nwant the markdown, from its heading to its caveat", stdout)
 	}
-	for _, want := range []string{"\n| stage | at | bundle | step | wait | verify | new findings | verdict |\n", "\n```mermaid\nflowchart LR\n"} {
+	for _, want := range []string{"\n| stage | at | bundle | step | wait | verify | new verification failures | verdict |\n", "\n```mermaid\nflowchart LR\n"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("the markdown lacks %q:\n%s", want, stdout)
 		}

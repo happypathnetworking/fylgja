@@ -542,7 +542,7 @@ rehearsal's comment, a new one, is told from it:
 
 Run `fylgja-rehearse 01a156e8-da76-7743-9ca7-53c29d65ddc5`, stages resolved at 2026-10-20T01:24:14Z. Status **ok**. 70.7s of the 1980s deadline (ceiling 3600s).
 
-| stage | at | bundle | step | wait | verify | new findings | verdict |
+| stage | at | bundle | step | wait | verify | new verification failures | verdict |
 |---|---|---|---|---|---|---|---|
 | fylgja-test-readme/branch-point | 2026-10-20T01:21:38.649050Z | — | | | | | refused (contract.node.missing) |
 | fylgja-test-readme/seeded | 2026-10-20T01:23:39.142559+00:00 | f278dcb6… | created | settled after 4.6s | 15 held, 0 failed, 0 skipped | — | baseline |

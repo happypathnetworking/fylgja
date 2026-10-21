@@ -625,8 +625,9 @@ prefixed by the stage (`change-1/seeded: n1:ethernet-1/2`).
 **The markdown** (`--markdown`, and the comment `fylgja-twin` posts) is rendered from the
 document and the plan's steps between the stages, GitHub-flavoured: a heading naming the proposed change and its branch; the
 run, when the stages were resolved, the status and the time used against the deadline and
-the ceiling; a table, one row per stage (its `at`, bundle, step, wait, counts, new findings
-and verdict); a Mermaid drawing of the stages, each edge the step's changes by node, link
+the ceiling; a table, one row per stage (its `at`, bundle, step, wait, counts, new
+verification failures and verdict: the wait's failing assertions the baseline's wait did not
+have, so a refused push, which the step and the verdict carry, is not one); a Mermaid drawing of the stages, each edge the step's changes by node, link
 and artifact, never a line of content, a step not computed dotted; on any status but `ok`
 the findings that say why; the stages, since Infrahub's view of the proposed change shows
 none; the warnings, each one a stage filed listed once with the stages that filed it
@@ -636,8 +637,8 @@ and last the caveat, `*Fidelity is asserted, not measured: the twin's containers
 software and keep their own timing.*`. An operator's string is escaped where it lands.
 It is never longer than 4,092 bytes, the longest text Infrahub keeps as a comment: a
 report that would be names each finding by its identifier and object alone, identical ones
-once with their count, gives the table each step by its outcome and its new findings by the
-first two and how many more, and cuts a long proposed change's name in the heading with an
+once with their count, gives the table each step by its outcome and its new verification failures
+by the first two and how many more, and cuts a long proposed change's name in the heading with an
 ellipsis; should that still be too long, it leaves sections out whole, by an order of
 preference: the baseline's findings first, then the drawing, the warnings, the stages, the
 findings and the reproduce commands. The sections are kept from the last of that order back

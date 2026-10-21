@@ -44,7 +44,7 @@ func TestMarkdown(t *testing.T) {
 		"",
 		"Run `fylgja-rehearse 01a1b2c3-0000-7000-8000-0000000000aa`, stages resolved at 2026-10-17T14:02:11Z. Status **ok**. 118.4s of the 1980s deadline (ceiling 3600s).",
 		"",
-		"| stage | at | bundle | step | wait | verify | new findings | verdict |",
+		"| stage | at | bundle | step | wait | verify | new verification failures | verdict |",
 		"|---|---|---|---|---|---|---|---|",
 		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (contract.node.missing) |",
 		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | baseline |",
@@ -85,7 +85,7 @@ func TestMarkdown(t *testing.T) {
 		"",
 		"Run `fylgja-rehearse 01a1b2c3-0000-7000-8000-0000000000aa`, stages resolved at 2026-10-17T14:02:11Z. Status **nonconforming**. 301.6s of the 2610s deadline (ceiling 3600s).",
 		"",
-		"| stage | at | bundle | step | wait | verify | new findings | verdict |",
+		"| stage | at | bundle | step | wait | verify | new verification failures | verdict |",
 		"|---|---|---|---|---|---|---|---|",
 		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (contract.node.missing) |",
 		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | created | expired after 120.0s | 14 held, 1 failed, 0 skipped | — | baseline |",
@@ -337,7 +337,7 @@ func TestMarkdownFitsAComment(t *testing.T) {
 		left  string
 		row   string
 	}{
-		{14, "and the table each step by its outcome and its new findings by the first few", "the drawing and the stages are left out",
+		{14, "and the table each step by its outcome and its new verification failures by the first few", "the drawing and the stages are left out",
 			"| change-1/mark-13 | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |"},
 		{60, "; the table gives each stage's reference and verdict alone", "the drawing and the stages are left out",
 			"| change-1/mark-59 | passed |"},
@@ -626,7 +626,7 @@ func TestMarkdownOfARefusal(t *testing.T) {
 		"Run `fylgja-rehearse " + rehearseRun + "` was started, and its end was not read: " + lostWhy + ". It goes on to its destroy, " +
 			"and `fylgja twin show` says where it is. Stages resolved at 2026-10-17T14:02:11Z. Status **error**. Deadline 1980s (ceiling 3600s).",
 		"",
-		"| stage | at | bundle | step | wait | verify | new findings | verdict |",
+		"| stage | at | bundle | step | wait | verify | new verification failures | verdict |",
 		"|---|---|---|---|---|---|---|---|",
 		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (contract.node.missing) |",
 		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | | | | | not read |",
@@ -745,7 +745,7 @@ func TestMarkdownOfACutAFailedBaselineAndAnUncleanDestroy(t *testing.T) {
 	head := func(status, used string) string {
 		return `## Fylgja rehearsed proposed change "third link" on change-1` + "\n\nRun `fylgja-rehearse " + rehearseRun +
 			"`, stages resolved at 2026-10-17T14:02:11Z. Status **" + status + "**. " + used + " of the 1980s deadline (ceiling 3600s).\n\n" +
-			"| stage | at | bundle | step | wait | verify | new findings | verdict |\n|---|---|---|---|---|---|---|---|\n"
+			"| stage | at | bundle | step | wait | verify | new verification failures | verdict |\n|---|---|---|---|---|---|---|---|\n"
 	}
 	const (
 		bp     = "| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (contract.node.missing) |\n"

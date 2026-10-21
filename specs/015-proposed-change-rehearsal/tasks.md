@@ -1134,7 +1134,7 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
 
 ## Phase 16: Convergence
 
-- [ ] T099 [behaviour] Make the reproduce commands leave out a step `twin step` would refuse, so that, run by hand in order, they make the same steps and the same verify.
+- [X] T099 [behaviour] Make the reproduce commands leave out a step `twin step` would refuse, so that, run by hand in order, they make the same steps and the same verify.
   - **The defect.**
     - `Reproduce` (`internal/rehearsal/report.go`, about lines 240–261) emits `fylgja twin step --stage <ref> --allow-restart` for every rehearsed stage up to the failed one.
     - Two marks with different labels can share one branch and `at`; 014 orders them by label. The rehearsal steps between them `unchanged` and `passed`.
@@ -1146,7 +1146,8 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Gates.** `make test`, `make lint`.
 
   Per FR-015 and FR-014 (contradicts)
-- [ ] T100 [behaviour] Report baseline findings only for a baseline whose verdict is `baseline`.
+  - *2026-10-21, convergence pass 6's implement run:* `Reproduce` keeps the branch and `at` of the last stage a command named, the baseline's included, and leaves out a rehearsed stage at both; a failed stage so left out is reproduced by the verify after the steps before it. `TestReproduce` pins a mark at the baseline's `at` (the defect's `seeded`, `seeded-copy`, then `third-link` failing), two marks sharing an `at` before the failed stage, and a failed `unchanged` stage at the `at` of the one before it, each with its closing line and its markdown's fenced commands, within `CommentMax`; it fails on the old code, and every earlier pin is unchanged. `contracts/cli.md` and the feature's `rehearse-command.md` say it where they describe the commands, and both copies of `rehearsal.schema.json`'s `reproduce` too.
+- [X] T100 [behaviour] Report baseline findings only for a baseline whose verdict is `baseline`.
   - **The defect.**
     - `Build` (`internal/rehearsal/report.go`, about lines 149–150) sets the block's `baseline` whenever the baseline's provision ended `ready`, whatever the stage's verdict.
     - When the baseline's `VerifyTwin` fails without an interruption, the workflow builds an `incomplete` wait whose `failing` holds a synthesised `operation.failed` (`internal/provision/workflow_rehearse.go`, about lines 206–209). It reads the stage as `error` and keeps no baseline findings: `r.baseline` is set only on a wait that settled or expired.
@@ -1158,7 +1159,8 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Gates.** `make test`, `make lint`.
 
   Per FR-002, FR-012 and Constitution X (contradicts)
-- [ ] T101 [behaviour] Keep the shortened markdown of a document with no block within `CommentMax`, and stop its note naming a table it does not have.
+  - *2026-10-21, convergence pass 6's implement run:* `Build` sets `baseline` only on a baseline stage whose verdict is `baseline`. `unverifiedRun`, a baseline `ready` whose wait is `incomplete` holding the workflow's `operation.failed`, verdict `error`, joins `examples()`, so `TestBlockValidates` holds it to the contracts; `TestBuildRolesAndVerdicts` pins its null baseline, the `operation.failed` as the stage's warning in its findings and the document's beside `rehearsal.stage.error`, its closing line, and a settled baseline keeping its findings as the expired one does; `TestMarkdownOfABaselineNotVerified` pins `**Baseline findings** … none` with the reason under the warnings. Both fail on the old condition. Both copies of `rehearsal.schema.json` say `baseline` is also null when the baseline's wait did not settle or expire.
+- [X] T101 [behaviour] Keep the shortened markdown of a document with no block within `CommentMax`, and stop its note naming a table it does not have.
   - **The defect.**
     - `fit` (`internal/rehearsal/markdown.go`, about lines 162–210) sizes the note with `tableShrunk{verdicts: true, left: stages}`. With no block, `stages` is 0, so the size counts the clause `; the table gives each stage's reference and verdict alone` (58 bytes).
     - With no table, `shrunk` stays the zero value. `fitNote` then writes its default clause, `, and the table each step by its outcome and its new findings by the first few` (78 bytes).
@@ -1168,7 +1170,8 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Gates.** `make test`, `make lint`.
 
   Per FR-014 and the spec's assumption "The report fits a comment and a message" (contradicts)
-- [ ] T102 [pin] Prove tier 2's own check test leaves nothing behind, and that no credential reaches its comments. Only `internal/checks/checks_contract_test.go` changes; the code under test is unchanged.
+  - *2026-10-21, convergence pass 6's implement run:* `tableShrunk` gains `none`: with no table part, `fit` sizes the note it writes and `fitNote` names no table. `TestMarkdownWithNoBlockFitsAComment` finds the fewest `operation.failed` rejections whose brief list is left out and sweeps the last one's object a byte at a time across the boundary, 90 documents: each within `CommentMax`, its note naming no table, its heading, status, note and caveat kept, the findings both kept within 20 bytes of the bound and left out. On the old code it reached 4,094 bytes and named a table. The shortened markdowns with a block are unchanged.
+- [X] T102 [pin] Prove tier 2's own check test leaves nothing behind, and that no credential reaches its comments. Only `internal/checks/checks_contract_test.go` changes; the code under test is unchanged.
   - **What is missing.**
     - `TestChecksInsideInfrahub` posts threads and comments, through each registration's `fylgja-twin`, and creates user validators.
     - `nothingLeft` (about line 775) reads the registrations, the definitions and the query alone.
@@ -1181,7 +1184,8 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Gates.** `go vet -tags contract ./internal/checks`, `make lint`.
 
   Per SC-010, FR-029, FR-035 and quickstart §5 (partial)
-- [ ] T103 [pin] Make tier 3's case 9 assert what FR-030 names of the message and the comments. Only `scripts/e2e.sh` changes.
+  - *2026-10-21, convergence pass 6's implement run:* `leftovers` keeps, by kind, the test's proposed change, and a cleanup registered after it opens, so run before the branch's delete, reads its stages, user validators, threads and comments while it stands; `posted` adds each thread and comment it reads and holds every comment's text to `carriesNoCredential`, the check `noCredential` now makes over a message (every `FYLGJA_*`/`INFRAHUB_*` token, password and secret key set). `nothingLeft`, last of the cleanups, requires each kept id gone on `main` by `ids:` and no `CoreUserValidator` naming the proposed change. Run: the server on the bridge was restarted from this tree by CLAUDE.md's start line, then `go test -count=1 -tags contract ./internal/checks -run TestChecksInsideInfrahub -v` passed in 297.8 s; before its delete the proposed change held 3 stages, 4 user validators, 2 threads and 2 comments, each gone after, and `main` then held `main` and `fylgja-fixture`, the registration `fylgja` with its two checks, and no proposed change, stage, thread, comment or validator. `go vet -tags contract ./internal/checks` and `make lint` are clean. No twin was booted.
+- [X] T103 [pin] Make tier 3's case 9 assert what FR-030 names of the message and the comments. Only `scripts/e2e.sh` changes.
   - **What is missing** (about lines 1928–1975).
     - 9a's `fylgja-twin` message is checked for `rehearsal ok` alone. Check for one stage line per stage too: the baseline and `passed` for each rehearsed stage.
     - 9b's comment is checked for the create at `seeded` and the step to `bad-port`. Check for the five reproduce commands in order: the create at `seeded`, the steps to `third-link` and to `bad-port` with `--allow-restart`, `fylgja twin verify` and `fylgja twin destroy`. Check that `bad-port`'s row reads `failed`.
@@ -1190,7 +1194,8 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Verify.** Extract the new `expect`s and greps and run them under `env -i bash` against a comment and a message from tier 1. To get them, render `rehearsal.Markdown` and `Text` of `failedRun` and of a passing run, as T085 and T073 verified their blocks. Each must pass against them and fail when the line it names is removed. Then `bash -n` and `shellcheck scripts/bring-up.sh scripts/e2e.sh`. Do not run tier 3.
 
   Per FR-030 and SC-003 (partial)
-- [ ] T104 [pin] Make tier 3's case 9 prove SC-007's overview and SC-008's whole reach. Only `scripts/e2e.sh` changes.
+  - *2026-10-21, convergence pass 6's implement run:* `stage_lines` holds `fylgja-twin`'s message to exactly one line per stage after the run (9a: the branch point refused, `seeded` `; baseline`, `third-link` and the head `; passed`; 9b too, `bad-port` `diverged at phase push: …; failed` and the head `not reached`), written to `message-9*.txt`; `run_checks_named` reads `run-checks-9a.out` and `-9b.out` for `check fylgja-twin: success` then `failure`; 9b's comment must hold the drawing and the five commands in order inside their fence, and `bad-port`'s row `failed`; both comments end with the caveat (`CAVEAT`, `rehearsal.Caveat`'s text). Extracted under `env -i bash`, they pass against tier 1's `Markdown` and stage lines and closing of `passedRun` and `failedRun` (rendered by a scratch test, removed) and against the last tier-3 run's case-9 outputs (`local/e2e-015-full-4.outputs`), and each of 20 mutations removing a line an assertion names fails them, on both. `bash -n` and `shellcheck scripts/bring-up.sh scripts/e2e.sh` are clean. Tier 3 was not run.
+- [X] T104 [pin] Make tier 3's case 9 prove SC-007's overview and SC-008's whole reach. Only `scripts/e2e.sh` changes.
   - **The overview.** Case 9 reads threads and comments (`comments_of`) but never whether the proposed change's overview lists each thread. SC-007 says "listed in its overview", the reason D-053 made the comment a thread. Read the overview's thread-created events by GraphQL, as `testsupport.OverviewThreads` reads them. Require both of case 9's threads to be listed, waiting as `posted` waits.
   - **The greps** (about line 2020) leave out three places SC-008 names:
     - `local/server.log`, the log of the operator's server on the bridge, which served case 9's `stage.plan` and `twin.rehearse`. The script's own `$OUT/server.log` served neither.
@@ -1199,7 +1204,8 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Verify.** Extract the overview read and the history fetch and run them under `env -i bash` with `gql` and `temporal` stubbed, as T085 did. Then `bash -n` and `shellcheck scripts/bring-up.sh scripts/e2e.sh`. Do not run tier 3.
 
   Per SC-007, SC-008, FR-035 and D-053 (partial)
-- [ ] T105 [pin] Correct three records where they say something other than what runs. Doc lines and schema descriptions alone; no structure moves.
+  - *2026-10-21, convergence pass 6's implement run:* `overview_threads` reads the thread-created events as `testsupport.OverviewThreads` does, and case 9 waits for both its threads to be listed, every 2 s for 60 s, as tier 2's `posted` waits. `rehearsal_run` fetches each child its parent's history started (`EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_STARTED`: the provision, the steps, the destroy), requiring a provision and a destroy, into `history-rehearse-<case>-<n>-<workflow>.*`: the run's result names no run for its destroy, so the history's events are read rather than the result. The credential and marker greps add `local/server.log` when case 9 ran, refusing when it is unreadable, and a line after the greps names what was searched and whether the worker's log was; `E2E-OK` and `E2E-PARTIAL` are unchanged. Verified under `env -i bash` with `gql` and `temporal` stubbed: both threads listed after a lagging read, one never listed failing; the last tier-3 run's 9b history giving its four children, each fetched; a history without its destroy failing. The overview query itself, run against the live Infrahub for that run's proposed change, lists its two comments' threads. `bash -n` and shellcheck are clean. Tier 3 was not run.
+- [X] T105 [pin] Correct three records where they say something other than what runs. Doc lines and schema descriptions alone; no structure moves.
   - **`contracts/show.schema.json`.** `in_flight[].child` (about line 596) is described as "for a check: its child run in flight". A rehearsal in flight carries its provision, step or destroy child there too (`internal/server/show.go`, `runInFlight`). Say so there, and in the schema's 015 note.
   - **`contracts/cli.md`** (about line 687) says "`in_flight` names the rehearsal with its child and the stage it is at". The JSON entry holds no stage: the stage is in the text's `in flight:` line and in `notes`. Say so.
   - **The order in which a shortened markdown leaves sections out.**
@@ -1209,3 +1215,4 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Gates.** `make test` (the schema tests read the contracts), `make lint`.
 
   Per FR-032 and FR-014 (partial)
+  - *2026-10-21, convergence pass 6's implement run:* `show.schema.json`'s `in_flight[].child` and its 015 note say a rehearsal's provision, step or destroy child is there, and that the stage it is at is in the text's `in flight:` line and `notes`, not the entry; `contracts/cli.md` says `in_flight` names the rehearsal with its child and no stage, the text's line and `notes` naming the stage. The feature's `rehearse-command.md`, `contracts/cli.md` and `Markdown`'s doc comment give the order sections are left out in as one of preference, kept from its last back while each fits, so a long drawing can go while the baseline's findings stay. No structure moved.

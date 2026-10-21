@@ -1870,3 +1870,46 @@ The checks' changes reach the host's registration only once the operator pushes 
 `origin`'s `main` and imports them (R-21). `TestChecksInsideInfrahub` was not run: it needs
 the server on the bridge running this tree's binary, and the one running is a replaced
 binary whose restart needs the node logins this session does not hold.
+
+### 5.15 Convergence pass 6 (2026-10-21; T099–T105)
+
+The loop's run of convergence pass 6's tasks: no twin booted, the worker left as it ran (a
+replaced binary). The server on the bridge, which ran a replaced binary too, was restarted
+from this tree by CLAUDE.md's start line, which loads `local/.env`, its node logins with it,
+so that T102's tier-2 test could prove this tree's checks; pass 5 had left it.
+
+- **The reproduce commands leave out a step `twin step` refuses** (T099). Two marks at one
+  branch and `at` rehearse as an `unchanged` step, and by hand the second is refused
+  `step.target.current`. `Reproduce` now leaves out a rehearsed stage at the branch and `at`
+  of the last stage a command named, the baseline's included; a failed stage so left out is
+  reproduced by the verify after the steps before it. The block, the text and the markdown
+  move together.
+- **Baseline findings only from a baseline that is one** (T100). A baseline built whose
+  `VerifyTwin` failed is `error` with an `incomplete` wait holding the workflow's own
+  `operation.failed`; the block copied that into `baseline.findings`, and the markdown printed
+  it as a finding that fails nothing. `Build` now sets `baseline` on the verdict `baseline`
+  alone; the reason stays the stage's warning beside `rehearsal.stage.error`.
+- **A shortened document with no block** (T101). `fit` sized the note with the table's
+  shortest clause and `fitNote` wrote its longest, 20 bytes more, and named a table the
+  document lacks: swept a byte at a time across the boundary, the old code reached 4,094
+  bytes, which Infrahub refuses. With no table the note names none and is sized as written.
+- **Tier 2 leaves nothing and posts no credential** (T102). The test reads back, after its
+  cleanups, each stage, user validator, thread and comment its proposed change held, and holds
+  each comment to the credential check its messages had. It passed in 297.8 s: 3 stages, 4
+  validators, 2 threads and 2 comments held, each gone after.
+- **Tier 3's case 9 asserts the message, the comments, the overview and every log** (T103,
+  T104). One stage line per stage in each `fylgja-twin` message, `-run-checks`' conclusions,
+  the failure's drawing and five commands in order, `bad-port`'s row, the caveat on both
+  comments; both threads in the overview's thread-created events; each child of each
+  rehearsal (from the parent's child-started events, since the result names no run for its
+  destroy) and the bridge server's `local/server.log` in the greps, with a line saying whether
+  the worker's log was searched. Verified under `env -i bash` against tier 1's renders, against
+  the last tier-3 run's case-9 outputs (`local/e2e-015-full-4.outputs`), with each of 20
+  mutations caught, and with `gql` and `temporal` stubbed; the overview query, run against
+  the live Infrahub for that run's proposed change, lists its two comments' threads. Tier 3
+  was not run.
+- **The records say what runs** (T105): a rehearsal's child in `show.schema.json`'s
+  `in_flight[].child`, its stage in the text and `notes` and not the entry, and the order a
+  shortened markdown leaves sections out in as one of preference, kept greedily.
+
+The checks did not change; no golden, format or fixture id moved.

@@ -71,6 +71,16 @@ next one.
 | [D-042](#d-042) | The API's token is one shared secret from the process environment, sent as a bearer credential and compared before anything else | API |
 | [D-043](#d-043) | The development record stays private: this repository began as one commit of cleaned code and rewritten documents, and development continues here | Repository |
 | [D-044](#d-044) | The artifacts template lives in this repository, and Infrahub registers it read-only on a ref with no credential | Config |
+| [D-045](#d-045) | A stage is a moment of a proposed change: the branch point read on `main`, the operator's marks, and the head | Intent |
+| [D-046](#d-046) | A stage's generation stamp is the later of its artifact's checksum stamp and the artifact validation; staleness per device | Intent |
+| [D-047](#d-047) | A stage is orphaned when its proposed change no longer names it | Intent |
+| [D-048](#d-048) | The head and the staleness rule also read the branch's intent events, so a removal is seen | Intent |
+| [D-049](#d-049) | A check posts the rehearsal's report as a comment; Fylgja writes nothing | Verification |
+| [D-050](#d-050) | The API's server listens on the host's Docker bridge beside loopback, in plaintext, under the one token | API |
+| [D-051](#d-051) | `twin rehearse` is a fifth short workflow whose children are provision, step and destroy, under a derived deadline | Orchestration |
+| [D-052](#d-052) | The check concludes from the report's status alone; Fylgja's verdicts stay advisory | Verification |
+| [D-053](#d-053) | The check's comment is a thread on the proposed change, as its view shows one | Verification |
+| [D-054](#d-054) | For a demo, `main` carries the fixture's three-node network for a window the fixture tool opens and closes | Testing |
 
 ---
 
@@ -3282,6 +3292,94 @@ deletes nothing and writes nothing else.
 - A reviewer may reply to it or resolve it, which nothing of Fylgja's reads.
 - A test's proposed change goes with its threads and their comments when deleted
   (research §5.9).
+
+---
+
+<a id="d-054"></a>
+## D-054 — For a demo, `main` carries the fixture's three-node network for a window the fixture tool opens and closes
+
+**Status:** Accepted 2026-10-21. Beside [D-028](#d-028) and [D-044](#d-044), whose writes
+to `main` stand, and [D-045](#d-045), whose branch point is read on `main` as before. To
+be built for `v0.2.0`'s demo, in `cmd/fylgja-fixture`.
+
+### Context
+
+A rehearsal boots the first stage it can build ([D-051](#d-051)), and the first is the
+branch point, read on `main` at the branch's `branched_from` ([D-045](#d-045)). `main`
+holds no network on the development host or on CI's runner, so the branch point is
+refused `contract.node.missing` and passed over, and the rehearsal starts at the
+operator's first mark. Release 0.2's recording is meant to show the whole story the
+[roadmap](roadmap.md#release-02) tells: a twin booted at the branch point where `main`
+carries a network, then stepped through the marked stages to the head.
+
+The tiers assume a `main` with no network. A `fylgja-test-*` branch made from `main` sees
+`main` as it was at its creation, and test support's three-node seed does nothing when
+the branch already holds a device. So on a seeded `main` every throwaway branch would hold
+`main`'s devices instead of its own, and the assertions that read the branch point refused
+(`internal/stages`, `internal/checks`, tier 3's case 9 and the README's walk-through)
+would fail. CI's contract job brings up its own Infrahub, whose `main` stays empty
+whatever this host holds.
+
+### Options considered
+
+- **No baseline: show the branch point refused.** Rejected: the recording would show the
+  rehearsal starting at a mark, which the README's walk-through already shows, and not the
+  branch point booting, which is what 0.2 is meant to show.
+- **A permanent baseline on `main`.** Rejected for 0.2: the tiers would need to read their
+  branches' devices beside `main`'s, and CI's contract job would need to seed `main` the
+  same way so that both test one setup. That is a feature, with its own spec, and not
+  release preparation.
+- **A second Infrahub instance for the demo.** Rejected: the host runs one Compose project
+  ([D-020](#d-020)), and a second one would need its own registration, override and
+  tokens, plus about 5 GiB beside a twin.
+- **An object file loaded by `infrahubctl`.** Rejected: the fixture tool is the one binary
+  that writes intent, and its three-node seed is already the topology the goldens and
+  `fylgja-fixture` describe. A second description of it would drift from the first.
+- **Fixture-tool flags that write the three-node seed to `main` and remove exactly what
+  they wrote.** Chosen.
+
+### Decision
+
+For a demo or a recording, and only then, `main` carries a **baseline**: test support's
+three-node seed (`SeedThreeNode`), three SR Linux nodes n1–n3 in a triangle of three
+links under contract `0.2`, with the devices joined to `fylgja-devices` and their
+`device-config` artifacts generated on `main`.
+
+- **`-seed-main` opens the window.** Like `-prepare-main`, it takes no `-branch`. It
+  refuses when `main` already holds a device.
+- **`-clear-main` closes the window.** It deletes what `-seed-main` wrote, links first, and
+  leaves `fylgja-devices` empty. It refuses when `main` holds anything of Fylgja's kinds
+  beyond the baseline, such as a merged change, naming what it found, and deletes nothing.
+- **The order of the window.** The gates run first. Then the baseline is seeded, and only
+  after that is any demo branch created, so that its stages carry no `stage.main.moved`.
+  Before the window closes, every demo branch is deleted by `-delete` (stages, proposed
+  changes, branches).
+- **While the window is open**, no tier 2 or tier 3 runs, nobody follows the README's
+  walk-through, and no proposed change is merged into `main`.
+
+Fylgja itself does not change: nothing under `internal/` knows about the window.
+
+### Consequences
+
+- The demo's branch point compiles and boots, and its rehearsal reports a baseline built
+  at the branch point.
+- `stage.main.moved` can be tried with a real write on `main`, which 014 left open: a
+  throwaway branch with a proposed change and a stage, made before `-seed-main`, should be
+  warned about after it.
+- `main`'s history keeps the window. A read pinned inside it sees the baseline after
+  `-clear-main`, and Infrahub offers no purge, so this Infrahub stays not throwaway, as
+  `CLAUDE.md` says.
+- `CLAUDE.md`'s list of writes made to `main` on purpose gains the baseline, and
+  `docs/development.md`'s fixture-tool paragraph gains both flags.
+- **Owed to the running 1.11.2, in the window, then to
+  [verified-facts.md](verified-facts.md):**
+  - `fylgja-fixture`, made before the seed, sees none of it and still compiles to
+    `47b2c449…`;
+  - a branch made after the seed reads the baseline at its branch point;
+  - after `-clear-main`, no artifact of a deleted device is left on `main`, and a new
+    branch's branch point is refused `contract.node.missing` again.
+- Revisit if a release wants a baseline on `main` at all times. That would be a feature,
+  as above.
 
 ---
 

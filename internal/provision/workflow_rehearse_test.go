@@ -866,3 +866,150 @@ func TestRehearseDeadlineOf(t *testing.T) {
 		}
 	}
 }
+
+// A child that closed without a result, failed or terminated, is operation.failed on its run
+// and its stage error, the run stage_error, and the destroy still runs (FR-028; T086): the
+// baseline's provision and a rehearsed stage's step alike.
+func TestRehearseChildClosedWithoutAResult(t *testing.T) {
+	failure := temporal.NewNonRetryableApplicationError("the child's history could not be replayed", "panic", nil)
+	for _, c := range []struct {
+		name   string
+		set    func(h *rehearseHarness)
+		stages []string
+		calls  []string
+		step   string
+		at     int
+	}{
+		{"the baseline's provision", func(h *rehearseHarness) {
+			h.provision = func(workflow.Context, ProvisionInput) (ProvisionResult, error) { return ProvisionResult{}, failure }
+		}, []string{"change-1/branch-point refused", "change-1/seeded error", "change-1/third-link not_reached", "change-1/head not_reached"},
+			[]string{childProvision, childDestroy}, findings.StepProvision, 1},
+		{"a rehearsed stage's step", func(h *rehearseHarness) {
+			h.step = func(workflow.Context, StepInput) (StepResult, error) { return StepResult{}, failure }
+		}, []string{"change-1/branch-point refused", "change-1/seeded baseline", "change-1/third-link error", "change-1/head not_reached"},
+			[]string{childProvision, verifyTwin, childStep, childDestroy}, findings.StepStart, 2},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := newRehearseHarness(t)
+			c.set(h)
+
+			res := h.run(fixtureRehearsal())
+
+			wantRehearsal(t, h, res, rehearsal.OutcomeStageError, c.stages, c.calls)
+			wantRules(t, res.Findings, [2]string{findings.RuleOperationFailed, c.step})
+			st := res.Stages[c.at]
+			if st.Run == nil || res.Findings[0].Object != st.Run.RunID || st.Provision != nil || st.Step != nil {
+				t.Errorf("stage %+v, finding %+v; want the child's run named, and no result", st, res.Findings[0])
+			}
+		})
+	}
+}
+
+// A destroy that started and closed without a result checked nothing it can vouch for: its
+// result says so under cleanup.incomplete naming its run, the lab and the twin directory
+// remaining unchecked, and the stages' outcome stands (T086).
+func TestRehearseDestroyClosedWithoutAResultIsUnclean(t *testing.T) {
+	h := newRehearseHarness(t)
+	h.destroy = func(workflow.Context) (DestroyResult, error) {
+		return DestroyResult{}, temporal.NewNonRetryableApplicationError("terminated", "terminated", nil)
+	}
+
+	res := h.run(fixtureRehearsal())
+
+	if res.Outcome != rehearsal.OutcomeOK || res.Destroy == nil || len(res.Destroy.Cleanup.Remaining) != 1 ||
+		res.Destroy.Cleanup.Teardown != CleanupSkipped || res.Destroy.Cleanup.Unstage != CleanupSkipped {
+		t.Fatalf("outcome %q, destroy %+v; want ok, and the destroy checking nothing, its remaining named", res.Outcome, res.Destroy)
+	}
+	wantRules(t, res.Destroy.Findings, [2]string{findings.RuleCleanupIncomplete, findings.StepDestroy})
+	if f := res.Destroy.Findings[0]; f.Object == WorkflowDestroy || !strings.Contains(f.Message, "run "+f.Object+" closed without a result") {
+		t.Errorf("cleanup.incomplete = %+v, want it naming the destroy's run", f)
+	}
+	if got := h.calls(); !slices.Contains(got, childDestroy) {
+		t.Errorf("started %v, want the destroy child", got)
+	}
+}
+
+// The run's own cancellation during the baseline's provision, during the baseline's wait, and
+// before its first child started each end the run cancelled, the baseline error, every later
+// stage not reached and nothing of the run's own filed, and the destroy runs where no
+// cancellation reaches it (FR-005, FR-028; T086).
+func TestRehearseCancelledBeforeTheBaselineIsBuilt(t *testing.T) {
+	notBuilt := []string{"change-1/branch-point refused", "change-1/seeded error", "change-1/third-link not_reached", "change-1/head not_reached"}
+	t.Run("during the baseline's provision", func(t *testing.T) {
+		h := newRehearseHarness(t)
+		h.provision = func(ctx workflow.Context, in ProvisionInput) (ProvisionResult, error) {
+			_ = workflow.Sleep(ctx, time.Hour)
+			if ctx.Err() == nil {
+				return ProvisionResult{}, errors.New("the cancellation never reached the provision child")
+			}
+			return ProvisionResult{Outcome: OutcomeCancelled, BundleID: in.BundleID, Step: findings.StepDeploy, Findings: findings.List{},
+				Cleanup: CleanupResult{Teardown: CleanupDone, Unstage: CleanupDone}}, nil
+		}
+		h.env.RegisterDelayedCallback(h.env.CancelWorkflow, time.Minute)
+
+		res := h.run(fixtureRehearsal())
+
+		wantRehearsal(t, h, res, rehearsal.OutcomeCancelled, notBuilt, []string{childProvision, childDestroy})
+		if base := res.Stages[1]; base.Provision == nil || base.Provision.Outcome != OutcomeCancelled || base.Wait != nil ||
+			len(res.Findings) != 0 || res.DeadlineHit {
+			t.Errorf("baseline %+v, findings %+v; want its cancelled provision, no wait and nothing filed", base, res.Findings)
+		}
+	})
+
+	t.Run("during the baseline's wait", func(t *testing.T) {
+		h := newRehearseHarness(t)
+		reached := make(chan struct{})
+		var once sync.Once
+		h.env.SetOnActivityCanceledListener(func(*activity.Info) { once.Do(func() { close(reached) }) })
+		h.verify = func(ctx context.Context, _ wire.VerifyInput) (wire.VerifyResult, error) {
+			select {
+			case <-reached:
+			case <-ctx.Done():
+			case <-time.After(10 * time.Second):
+				return wire.VerifyResult{}, errors.New("the cancellation never reached the wait")
+			}
+			return wire.VerifyResult{}, context.Canceled
+		}
+		// The suite moves a timer only on the wall clock while an activity runs.
+		h.env.RegisterDelayedCallback(h.env.CancelWorkflow, time.Second)
+
+		res := h.run(fixtureRehearsal())
+
+		wantRehearsal(t, h, res, rehearsal.OutcomeCancelled, notBuilt, []string{childProvision, verifyTwin, childDestroy})
+		if base := res.Stages[1]; base.Provision == nil || base.Provision.Outcome != OutcomeReady || base.Wait != nil ||
+			len(res.Findings) != 0 || res.DeadlineHit {
+			t.Errorf("baseline %+v, findings %+v; want its ready provision, no wait and nothing filed", base, res.Findings)
+		}
+	})
+
+	t.Run("before the first child started", func(t *testing.T) {
+		h := newRehearseHarness(t)
+		h.env.RegisterDelayedCallback(h.env.CancelWorkflow, 0)
+
+		res := h.run(fixtureRehearsal())
+
+		wantRehearsal(t, h, res, rehearsal.OutcomeCancelled, notBuilt, []string{childDestroy})
+		if base := res.Stages[1]; base.Run != nil || base.Provision != nil || len(res.Findings) != 0 {
+			t.Errorf("baseline %+v, findings %+v; want no child and nothing filed", base, res.Findings)
+		}
+	})
+}
+
+// A child the deadline cut that then closes without a result files nothing of the run's own:
+// the outcome, cut, says why, the stage is error and the destroy follows (T086).
+func TestRehearseCutChildClosedWithoutAResultFilesNothing(t *testing.T) {
+	h := newRehearseHarness(t)
+	h.step = func(ctx workflow.Context, in StepInput) (StepResult, error) {
+		_ = workflow.Sleep(ctx, time.Hour)
+		return StepResult{}, temporal.NewCanceledError("the step child was cancelled")
+	}
+
+	res := h.run(fixtureRehearsal())
+
+	wantRehearsal(t, h, res, rehearsal.OutcomeCut,
+		[]string{"change-1/branch-point refused", "change-1/seeded baseline", "change-1/third-link error", "change-1/head not_reached"},
+		[]string{childProvision, verifyTwin, childStep, childDestroy})
+	if st := res.Stages[2]; st.Run == nil || st.Step != nil || len(res.Findings) != 0 || !res.DeadlineHit {
+		t.Errorf("stage %+v, findings %+v; want its run, no result and nothing filed", st, res.Findings)
+	}
+}

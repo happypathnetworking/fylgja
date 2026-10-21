@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -987,7 +988,10 @@ func TestRehearseMarkdown(t *testing.T) {
 
 	code, stdout, stderr := rehearse(t, "--branch", lessLink, "--markdown")
 	served, _ := ask(t, findings.OpTwinRehearse, api.RenderMarkdown, map[string]any{"branch": lessLink}, nil).document(t, "markdown")
-	if code != findings.ExitOK || stdout == "" || stdout != served.Markdown {
+	// Each request resolves its stages at its own second, which the run line names.
+	resolved := regexp.MustCompile(`stages resolved at [0-9T:Z-]+\.`)
+	sameRun := func(md string) string { return resolved.ReplaceAllString(md, "stages resolved at <when>.") }
+	if code != findings.ExitOK || stdout == "" || sameRun(stdout) != sameRun(served.Markdown) {
 		t.Errorf("exit %d, stdout:\n%s\nwant 0 and the markdown the server renders alone:\n%s", code, stdout, served.Markdown)
 	}
 	if !strings.HasPrefix(stdout, `## Fylgja rehearsed proposed change `) || !strings.HasSuffix(stdout, rehearsal.Caveat+"\n") {

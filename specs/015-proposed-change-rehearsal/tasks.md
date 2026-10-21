@@ -1131,3 +1131,81 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
 
   Per FR-032, FR-033 and FR-012 (partial)
   - *2026-10-21, convergence pass 5's implement run:* the architecture's and the glossary's reclaim say its destroy cancels nothing, a rehearsal, provisioning or step run begun since the read refusing the rehearsal (`run.in_flight`, no `reclaimed` block), as `contracts/cli.md` and `docs/development.md` say; the roadmap's F-007 row and paragraph add the failures `none_open`, a variable unset or unusable, a refused token, an unknown API version, and T095's own deadline; `contracts/cli.md`'s checks table names `none_open` in both checks' "Concludes" cells; both copies of `rehearsal.schema.json` describe a run whose end was not read (`destroy` null with `run` set, `used_s` 0, `baseline` null), `not_reached` covering T078's baseline and a lost run's stages, and the run's own warnings riding in the document's findings beside the block; the two test comments count thirteen operations. No structure moved.
+
+## Phase 16: Convergence
+
+- [ ] T099 [behaviour] Make the reproduce commands leave out a step `twin step` would refuse, so that, run by hand in order, they make the same steps and the same verify.
+  - **The defect.**
+    - `Reproduce` (`internal/rehearsal/report.go`, about lines 240–261) emits `fylgja twin step --stage <ref> --allow-restart` for every rehearsed stage up to the failed one.
+    - Two marks with different labels can share one branch and `at`; 014 orders them by label. The rehearsal steps between them `unchanged` and `passed`.
+    - By hand, after the create or the step to the first, `twin step --stage <the second>` is refused `step.target.current`, exit 1: "a mark sharing the record's at is the twin's own reference under another label" (`internal/stages/target.go`, about lines 80–85).
+    - Example: `seeded` and `seeded-copy`, both on `change-1` at the same `at`, then `third-link` fails. The second command is refused, and the operator cannot follow the rest as given.
+  - **The fix.** Leave out a rehearsed stage whose `branch` and `at` (in the block) equal those of the last stage a command was emitted for, the baseline included. The twin's record then still names that stage, so the next step starts where the rehearsal's did. This applies to the failed stage too: an `unchanged` step that failed on its verify reproduces as the verify alone after the steps before it. The `reproduce` array in the block, the text and the markdown all read from `Reproduce`, so they move together.
+  - **Tests.** In `report_test.go`, two marks sharing an `at` before a failed stage: one step command for the pair, not two. A failed stage that shares the `at` of the stage before it: no step to it, the verify still last. Every existing pin of `Reproduce` unchanged. The markdown within `CommentMax`.
+  - **Records.** Say it where `contracts/cli.md` and the feature's `contracts/rehearse-command.md` describe the reproduce commands.
+  - **Gates.** `make test`, `make lint`.
+
+  Per FR-015 and FR-014 (contradicts)
+- [ ] T100 [behaviour] Report baseline findings only for a baseline whose verdict is `baseline`.
+  - **The defect.**
+    - `Build` (`internal/rehearsal/report.go`, about lines 149–150) sets the block's `baseline` whenever the baseline's provision ended `ready`, whatever the stage's verdict.
+    - When the baseline's `VerifyTwin` fails without an interruption, the workflow builds an `incomplete` wait whose `failing` holds a synthesised `operation.failed` (`internal/provision/workflow_rehearse.go`, about lines 206–209). It reads the stage as `error` and keeps no baseline findings: `r.baseline` is set only on a wait that settled or expired.
+    - The block still copies that `operation.failed`, the reason the rehearsal ends `error`, into `baseline.findings`. The markdown then prints it under "**Baseline findings** (reported, failing nothing)", and the text prints it as the baseline's.
+    - `rehearsal.schema.json` describes the baseline findings as the baseline's wait's failing assertions, which fail nothing (FR-002). The block disagrees with what the workflow compared against.
+  - **The fix.** Set `baseline` only when the baseline stage's verdict is `baseline`, its wait settled or expired. Otherwise leave it `null`; the stage's own findings still say why it is `error`.
+  - **Tests.** In `report_test.go` and `markdown_test.go`: a baseline provision `ready` whose wait is `incomplete`, `failing` holding `operation.failed`, verdict `error`. Assert `baseline` is `null`, no Baseline findings section, and the reason in the stage's findings and the document's. A settled baseline with findings and an expired one keep theirs. Each document validates against the contracts.
+  - **Records.** In both copies of `rehearsal.schema.json`, say in `baseline`'s description that it is also `null` when the baseline's wait did not settle or expire.
+  - **Gates.** `make test`, `make lint`.
+
+  Per FR-002, FR-012 and Constitution X (contradicts)
+- [ ] T101 [behaviour] Keep the shortened markdown of a document with no block within `CommentMax`, and stop its note naming a table it does not have.
+  - **The defect.**
+    - `fit` (`internal/rehearsal/markdown.go`, about lines 162–210) sizes the note with `tableShrunk{verdicts: true, left: stages}`. With no block, `stages` is 0, so the size counts the clause `; the table gives each stage's reference and verdict alone` (58 bytes).
+    - With no table, `shrunk` stays the zero value. `fitNote` then writes its default clause, `, and the table each step by its outcome and its new findings by the first few` (78 bytes).
+    - So every shortened document with no block names a table it lacks, and its budget is 20 bytes short. For example, 107 `operation.failed` rejections of 520-byte messages, status `error`, give 4,094 bytes, which Infrahub refuses.
+  - **The fix.** With no table part, `fitNote` names no table, and `fit` sizes the note it will write.
+  - **Tests.** In `markdown_test.go`, documents with no block and many long findings, sized across the boundary: each within `CommentMax`, and the note naming no table. The shortened markdowns with a block are unchanged.
+  - **Gates.** `make test`, `make lint`.
+
+  Per FR-014 and the spec's assumption "The report fits a comment and a message" (contradicts)
+- [ ] T102 [pin] Prove tier 2's own check test leaves nothing behind, and that no credential reaches its comments. Only `internal/checks/checks_contract_test.go` changes; the code under test is unchanged.
+  - **What is missing.**
+    - `TestChecksInsideInfrahub` posts threads and comments, through each registration's `fylgja-twin`, and creates user validators.
+    - `nothingLeft` (about line 775) reads the registrations, the definitions and the query alone.
+    - Nothing reads back, after `DeleteTestBranch`, the threads `posted` collected, their comments, or `CoreUserValidator` on the test's proposed changes. Quickstart §5 and SC-010 ask for 0 proposed changes, stages, threads and comments after tier 2.
+    - `posted` (about line 225) runs no credential check over a comment's text. `noCredential` covers the messages alone (FR-035, SC-008).
+  - **The fix.**
+    - Keep the ids `posted` reads. After the cleanups, require each thread and comment to be gone, and no `CoreUserValidator` to name the test's proposed changes, each read on `main`.
+    - Run the same credential check over every comment's text that `noCredential` runs over a message: the API's token, Infrahub's token and the secret key, each when set.
+  - **Run.** `go test -count=1 -tags contract ./internal/checks -run TestChecksInsideInfrahub -v` when the server on the bridge runs this tree's binary, as `thisTreesServer` requires; otherwise it skips, saying why. No twin is booted.
+  - **Gates.** `go vet -tags contract ./internal/checks`, `make lint`.
+
+  Per SC-010, FR-029, FR-035 and quickstart §5 (partial)
+- [ ] T103 [pin] Make tier 3's case 9 assert what FR-030 names of the message and the comments. Only `scripts/e2e.sh` changes.
+  - **What is missing** (about lines 1928–1975).
+    - 9a's `fylgja-twin` message is checked for `rehearsal ok` alone. Check for one stage line per stage too: the baseline and `passed` for each rehearsed stage.
+    - 9b's comment is checked for the create at `seeded` and the step to `bad-port`. Check for the five reproduce commands in order: the create at `seeded`, the steps to `third-link` and to `bad-port` with `--allow-restart`, `fylgja twin verify` and `fylgja twin destroy`. Check that `bad-port`'s row reads `failed`.
+    - Check 9b's comment for the drawing (```` ```mermaid ````), and both comments for the fidelity caveat (`rehearsal.Caveat`'s text).
+    - `run-checks-9a.out` and `-9b.out` are never read. Check that each names `check fylgja-twin:` with its conclusion, `success` then `failure`, as `contracts/fixture-tool.md` gives the line.
+  - **Verify.** Extract the new `expect`s and greps and run them under `env -i bash` against a comment and a message from tier 1. To get them, render `rehearsal.Markdown` and `Text` of `failedRun` and of a passing run, as T085 and T073 verified their blocks. Each must pass against them and fail when the line it names is removed. Then `bash -n` and `shellcheck scripts/bring-up.sh scripts/e2e.sh`. Do not run tier 3.
+
+  Per FR-030 and SC-003 (partial)
+- [ ] T104 [pin] Make tier 3's case 9 prove SC-007's overview and SC-008's whole reach. Only `scripts/e2e.sh` changes.
+  - **The overview.** Case 9 reads threads and comments (`comments_of`) but never whether the proposed change's overview lists each thread. SC-007 says "listed in its overview", the reason D-053 made the comment a thread. Read the overview's thread-created events by GraphQL, as `testsupport.OverviewThreads` reads them. Require both of case 9's threads to be listed, waiting as `posted` waits.
+  - **The greps** (about line 2020) leave out three places SC-008 names:
+    - `local/server.log`, the log of the operator's server on the bridge, which served case 9's `stage.plan` and `twin.rehearse`. The script's own `$OUT/server.log` served neither.
+    - the children's histories of each case-9 rehearsal: its provision, its steps and its destroy. `rehearsal_run` fetches the parent `fylgja-rehearse` history alone (about line 506). Fetch each child's history by the run ids its comment's block or the run's result names, as cases 1, 7 and 8 fetch their provision and step histories, and add each to `scan`.
+    - the worker's log, read only when `WORKER_LOG` is set. Keep it optional, but name in the closing line whether it was searched.
+  - **Verify.** Extract the overview read and the history fetch and run them under `env -i bash` with `gql` and `temporal` stubbed, as T085 did. Then `bash -n` and `shellcheck scripts/bring-up.sh scripts/e2e.sh`. Do not run tier 3.
+
+  Per SC-007, SC-008, FR-035 and D-053 (partial)
+- [ ] T105 [pin] Correct three records where they say something other than what runs. Doc lines and schema descriptions alone; no structure moves.
+  - **`contracts/show.schema.json`.** `in_flight[].child` (about line 596) is described as "for a check: its child run in flight". A rehearsal in flight carries its provision, step or destroy child there too (`internal/server/show.go`, `runInFlight`). Say so there, and in the schema's 015 note.
+  - **`contracts/cli.md`** (about line 687) says "`in_flight` names the rehearsal with its child and the stage it is at". The JSON entry holds no stage: the stage is in the text's `in flight:` line and in `notes`. Say so.
+  - **The order in which a shortened markdown leaves sections out.**
+    - The feature's `contracts/rehearse-command.md` (about lines 234–236), `contracts/cli.md` (about line 637) and `Markdown`'s doc comment (`internal/rehearsal/markdown.go`) each give the order: the baseline's findings first, then the drawing, the warnings, the stages, the findings and the reproduce commands.
+    - `fit` keeps the parts by that preference, but greedily: a later part that still fits is kept after an earlier one was left out. With a long drawing, for example, the drawing is left out while the baseline's findings are kept.
+    - Say that the order is one of preference, and that a part later in it is kept when it still fits.
+  - **Gates.** `make test` (the schema tests read the contracts), `make lint`.
+
+  Per FR-032 and FR-014 (partial)

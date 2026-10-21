@@ -549,3 +549,113 @@ func TestMarkdownOfARefusal(t *testing.T) {
 		t.Errorf("a document with no block:\n%s\nwant:\n%s", got, want)
 	}
 }
+
+// What a step changed is drawn by name for every kind of change: links removed, nodes added
+// and removed, artifacts added and removed, by node; and a step with no change at all, not
+// marked unchanged, is drawn unchanged (T087).
+func TestMarkdownDrawsEveryChange(t *testing.T) {
+	gone := step.Step{From: thirdID, To: badID,
+		LinksRemoved:     []step.LinkRef{{ID: "l3", A: step.NodePort{Node: "n1", Port: "e1-3"}, B: step.NodePort{Node: "n3", Port: "e1-3"}}},
+		NodesAdded:       []string{"n4"},
+		NodesRemoved:     []string{"n2"},
+		ArtifactsAdded:   []step.ArtifactRef{{Node: "n4", Name: "device-config"}},
+		ArtifactsRemoved: []step.ArtifactRef{{Node: "n2", Name: "device-config"}}}
+	for _, c := range []struct {
+		name string
+		s    step.Step
+		want string
+	}{
+		{"removed and added", gone, "-link n1:e1-3 — n3:e1-3; +n4; -n2; artifacts n2, n4"},
+		{"no change", step.Step{From: thirdID, To: headID}, "unchanged"},
+	} {
+		if got := changed(c.s); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+	md := Markdown(passedRun().document(), []step.Pair{step.Between(change+"/seeded", change+"/third-link", gone)})
+	if want := `  s1 -- "-link n1:e1-3 — n3:e1-3; +n4; -n2; artifacts n2, n4" --> s2`; !strings.Contains(md, want) {
+		t.Errorf("the drawing does not hold %s:\n%s", want, md)
+	}
+	carriesNoContent(t, "the drawing of every change", md)
+}
+
+// A step cell names a step cancelled before its stage or at a phase, rejected, one that
+// could not run, and a push that did not land with no identifier, by its node alone (T087).
+func TestStepCellOfEveryOutcome(t *testing.T) {
+	cell := func(outcome, phase string, pushed ...findings.RehearsalPush) string {
+		return stepCell(findings.RehearsalStage{Step: &findings.RehearsalStep{Outcome: outcome, Phase: phase, Pushed: pushed,
+			Timings: findings.StepTimingsBlock{WholeS: 7.5}}})
+	}
+	for _, c := range []struct{ got, want string }{
+		{cell(outcomeCancelled, ""), "cancelled before its stage"},
+		{cell(outcomeCancelled, findings.StepReadiness), "cancelled at readiness"},
+		{cell(outcomeRejected, ""), "rejected"},
+		{cell(outcomeError, ""), "could not run"},
+		{stepCell(findings.RehearsalStage{}), ""},
+		{cell(wire.StepDiverged, findings.StepPush, findings.RehearsalPush{Node: "n1", Outcome: wire.PushLanded},
+			findings.RehearsalPush{Node: "n3", Outcome: "failed"}), "diverged at push 7.5s; push n1; not landed n3"},
+	} {
+		if c.got != c.want {
+			t.Errorf("step cell %q, want %q", c.got, c.want)
+		}
+	}
+}
+
+// The markdown of a run the deadline cut, of a baseline not built and of a destroy that left
+// the lab, each pinned but for its stages, which TestMarkdown pins (T087).
+func TestMarkdownOfACutAFailedBaselineAndAnUncleanDestroy(t *testing.T) {
+	head := func(status, used string) string {
+		return `## Fylgja rehearsed proposed change "third link" on change-1` + "\n\nRun `fylgja-rehearse " + rehearseRun +
+			"`, stages resolved at 2026-10-17T14:02:11Z. Status **" + status + "**. " + used + " of the 1980s deadline (ceiling 3600s).\n\n" +
+			"| stage | at | bundle | step | wait | verify | new findings | verdict |\n|---|---|---|---|---|---|---|---|\n"
+	}
+	const (
+		bp     = "| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (contract.node.missing) |\n"
+		base   = "| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | baseline |\n"
+		link   = `  s1 -- "+link n1:e1-3 — n3:e1-3; ~n1, ~n3 (bootstrap, mapping); artifacts n1, n3" --> s2` + "\n"
+		missed = "- `contract.node.missing` main: branch defines FylgjaContract but holds no instance of it\n"
+		tail   = "**Warnings**: none\n\n**Baseline findings** (reported, failing nothing): none\n\n" + Caveat + "\n"
+	)
+	unclean := uncleanRun()
+	uncleanDoc := unclean.document()
+	uncleanDoc.Findings.AddStep(findings.Rejection, findings.StepTeardown, findings.RuleCleanupIncomplete, "lab fylgja",
+		"clab destroy exited 1; fylgja twin destroy clears it")
+	for _, c := range []struct {
+		name  string
+		doc   *findings.Document
+		heads string
+	}{
+		{"cut", cutRun().document(), head("error", "2001.2s") +
+			base +
+			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | cancelled at readiness | | | | error |\n" +
+			"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | | | | | not reached |\n\n" +
+			"```mermaid\nflowchart LR\n" + `  s0["change-1/seeded<br/>baseline"]` + "\n" + `  s1["change-1/third-link<br/>error"]` + "\n" +
+			`  s2["change-1/head<br/>not reached"]` + "\n" +
+			`  s0 -- "+link n1:e1-3 — n3:e1-3; ~n1, ~n3 (bootstrap, mapping); artifacts n1, n3" --> s1` + "\n" +
+			`  s1 -- "unchanged" --> s2` + "\n```\n\n**Findings**:\n\n" +
+			"- `rehearsal.deadline.cut` change-1/third-link: the deadline of 1980s passed at stage change-1/third-link: change-1/seeded took 88.1s\n\n"},
+		{"not built", notBuiltRun().document(), head("failed", "243.0s") + bp +
+			"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | not built (failed at readiness) | | | — | error |\n" +
+			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | | | | | not reached |\n\n" +
+			"```mermaid\nflowchart LR\n" + `  s0["change-1/branch-point<br/>refused"]` + "\n" + `  s1["change-1/seeded<br/>error"]` + "\n" +
+			`  s2["change-1/third-link<br/>not reached"]` + "\n" + `  s0 -. "not computed" .-> s1` + "\n" + link + "```\n\n**Findings**:\n\n" +
+			missed + "- `readiness.timeout` n2: n2 did not answer its probe within 60s\n" +
+			"- `rehearsal.baseline.failed` change-1/seeded: the baseline change-1/seeded could not be built: its provision ended failed at readiness\n\n"},
+		{"unclean", uncleanDoc, head("unclean", "118.4s") + bp + base +
+			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | stepped 4.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | none | passed |\n" +
+			"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |\n\n" +
+			"```mermaid\nflowchart LR\n" + `  s0["change-1/branch-point<br/>refused"]` + "\n" + `  s1["change-1/seeded<br/>baseline"]` + "\n" +
+			`  s2["change-1/third-link<br/>passed"]` + "\n" + `  s3["change-1/head<br/>passed"]` + "\n" + `  s0 -. "not computed" .-> s1` + "\n" +
+			link + `  s2 -- "unchanged" --> s3` + "\n```\n\n**Findings**:\n\n" + "- `cleanup.incomplete` lab fylgja: clab destroy exited 1; fylgja twin destroy clears it\n" +
+			missed + "\n"},
+	} {
+		md := Markdown(c.doc, pairs())
+		if !strings.HasPrefix(md, c.heads+"**Stages** (Infrahub's view does not show them):\n") || !strings.HasSuffix(md, tail) {
+			t.Errorf("%s: the markdown:\n%s\nwant it to begin:\n%s**Stages** …\nand end:\n%s", c.name, md, c.heads, tail)
+		}
+		if len(md) > CommentMax {
+			t.Errorf("%s: %d bytes, over %d", c.name, len(md), CommentMax)
+		}
+		carriesNoContent(t, c.name+"'s markdown", md)
+	}
+}

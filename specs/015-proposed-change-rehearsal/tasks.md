@@ -1219,7 +1219,7 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
 
 ## Phase 17: Convergence
 
-- [ ] T106 [behaviour] Make `fylgja-twin` retry a host held by a run that the server or the run finds only after the `start` frame.
+- [X] T106 [behaviour] Make `fylgja-twin` retry a host held by a run that the server or the run finds only after the `start` frame.
   - **The defect.**
     - The server writes `start` (`internal/server/rehearse.go`, `run`, about line 538) before `svc.StartRehearse` runs (about line 543).
     - `StartRehearse` (`internal/provision/client.go`, about lines 526–553) still refuses `run.in_flight`, status `rejected`, with no `run` frame, in two cases:
@@ -1243,7 +1243,8 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Gates.** `make test`, `make lint`.
 
   Per FR-007 and the edge case "Two rehearsals at once" (contradicts)
-- [ ] T107 [behaviour] Make the reproduce commands wait in their verify when no step comes before it.
+  - *2026-10-21, convergence pass 7's implement run:* `holders` returns nothing only on an answer whose run was asked to cancel (`started` and `interrupted`); a `rejected` document whose every rejection, past the branch point's lone `contract.node.missing`, is in `HELD` is held whether or not a `start` came. The final message and `asked_to_cancel` are unchanged. **Verified** under `.venv/bin/python -I` on frames the Go harness's server wrote to a scratch test's `POST /v1/twin/rehearse`, `render: markdown`, as the check asks (the scratch test removed): `StartRehearse` refused after `start` by a step run and a provisioning run begun since the read and by the fixed id, and a run closed `rejected` at its baseline's start, each held and asked again, then success on the next answer, where `HEAD`'s concluded failure on the first; a started, interrupted answer final, `asked_to_cancel`; a held answer after `start` past what the deadline covers names the holder, not a cancel. T093's cases (a rehearsal, a step run under a check, a hand twin and an orphan lab before any start, `run.in_flight` alone, a stale mark beside it, a held refusal interrupted before `start`) answer as `HEAD`'s. `py_compile` clean. Records: the feature's `checks.md` step 3, `contracts/cli.md`'s checks section, R-15's note. The registration runs the old check until the operator's push and import (R-21).
+- [X] T107 [behaviour] Make the reproduce commands wait in their verify when no step comes before it.
   - **The defect.** Since T099, `Reproduce` (`internal/rehearsal/report.go`, about lines 246–275) leaves out a failed stage at the baseline's branch and `at`. That stage was an `unchanged` step whose own wait found a new finding. The commands are then `twin create`, `fylgja twin verify` and `twin destroy`. `twin create` waits for no settle, and `twin verify` without `--wait` reads each node once. So by hand, the verify reads straight after the deploy, while the rehearsal compared a whole wait (FR-002, "verify's waiting form"). FR-015 asks for the same verify.
   - **The fix.** When no step command precedes the verify, emit `fylgja twin verify --wait`. When a step precedes it, the step's own default wait has run, and the commands are unchanged. The block's `reproduce`, the text and the markdown move together.
   - **Tests.** In `report_test.go`, a failed `unchanged` stage at the baseline's `at`: the create, `fylgja twin verify --wait`, then the destroy. Every earlier pin of `Reproduce` is unchanged, and the markdown stays within `CommentMax`. The test fails on the old code.
@@ -1251,7 +1252,8 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Gates.** `make test`, `make lint`.
 
   Per FR-015 and FR-002 (partial)
-- [ ] T108 [behaviour] Stop the markdown and the stage's error message from saying a comparison or a step that never happened.
+  - *2026-10-21, convergence pass 7's implement run:* `Reproduce` writes `fylgja twin verify --wait` when no step command precedes the verify, and `fylgja twin verify` after a step, whose own wait has run; the block, the text and the markdown move together. `TestReproduce` gains a failed `unchanged` stage at the baseline's `at` (the create, `fylgja twin verify --wait`, the destroy), its closing line and markdown within `CommentMax`; it fails on the old code, and every earlier pin is unchanged. Records: `contracts/cli.md`, the feature's `rehearse-command.md`, both copies of `rehearsal.schema.json`'s `reproduce`.
+- [X] T108 [behaviour] Stop the markdown and the stage's error message from saying a comparison or a step that never happened.
   - **The defect.**
     - `newCell` (`internal/rehearsal/markdown.go`, about lines 447–456) gives `findingsText(s.NewFindings)`, which is `none`, for any rehearsed stage whose wait is non-nil.
     - That includes a wait that ended `incomplete` or `cancelled`. `Classify` then compared nothing and returned `error` with no new findings.
@@ -1265,7 +1267,8 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Gates.** `make test`, `make lint`.
 
   Per FR-014 and FR-012 (partial)
-- [ ] T109 [behaviour] Escape a backtick in the Mermaid drawing's labels.
+  - *2026-10-21, convergence pass 7's implement run:* the new findings cell, whole and brief, reads `not compared` on a rehearsed stage whose wait ended other than settled or expired (`compared`, as `Classify`'s `comparable`); `errorWhy` says `its provision did not run` for a baseline with no child. `TestMarkdownOfAStageNotCompared` (a stepped stage, its wait `incomplete` failing `verify.neighbor`) and `TestBaselineWhoseProvisionDidNotStart` (its closing line, its `rehearsal.stage.error` and no stage line naming a step) each fail on the old code. Records: the feature's `rehearse-command.md` lists the cell's forms.
+- [X] T109 [behaviour] Escape a backtick in the Mermaid drawing's labels.
   - **The defect.** `mermaid()`'s label escaping (`internal/rehearsal/markdown.go`, about lines 485 and 805–807) escapes `"`, `<`, `>`, `#` and newlines, but not a backtick.
     - Every node label starts with its stage's reference, and Infrahub and `stages.BranchPattern` both allow a branch name that begins with a backtick.
     - With such a name the label opens with ``"` ``, which Mermaid's lexer reads as a markdown string closed only by `` `" ``. The drawing then fails to parse, and the comment shows no drawing (FR-014).
@@ -1274,7 +1277,8 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Gates.** `make test`, `make lint`.
 
   Per FR-014 (partial)
-- [ ] T110 [behaviour] Bound `fylgja-twin`'s comment, the empty thread's delete included, so that the check concludes before its timeout.
+  - *2026-10-21, convergence pass 7's implement run:* `mermaid()` writes a backtick `#96;`. `TestMarkdownEscapes` draws a head whose reference begins with a backtick and an edge whose step adds a node named with one: the node's and the edge's labels hold `#96;`, the drawing no raw backtick; it fails on the old code. The feature's `rehearse-command.md` names the entity.
+- [X] T110 [behaviour] Bound `fylgja-twin`'s comment, the empty thread's delete included, so that the check concludes before its timeout.
   - **The defect.**
     - `CLOSE_MARGIN_S` (`infrahub/checks/fylgja_api.py`, about line 59) is 120 s. FR-021 says it leaves "the comment's two saves theirs", each 60 s under the SDK.
     - `post_comment` (about lines 380–398) makes a third call, `thread.delete()`, also up to 60 s, when the comment's save fails.
@@ -1288,7 +1292,8 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Gates.** `make test`, `make lint`.
 
   Per FR-021 and FR-019 (partial)
-- [ ] T111 [behaviour] Make `scripts/bring-up.sh`'s `infrahub` part call the Compose services present only when the task workers carry the override.
+  - *2026-10-21, convergence pass 7's implement run:* `post_comment` takes `by`, and bounds each call to Infrahub, the two creates, the two saves and the empty thread's delete, by what remains before it (`asyncio.wait_for`); a call with no time left is not made, and either is named in what it returns (`the comment's save was cut after 3 s, at the check's timeout; its empty thread T1 is left: the delete was not made: …`). `fylgja-twin` gives it its timeout less `CONCLUSION_S` (5 s). FR-021's numbers did not move. **Verified** under `.venv/bin/python -I` with a stub client whose calls sleep: given 3 s, a slow thread save, a slow comment save beside a slow delete, a failed save leaving no time for the delete and a delete cut midway each returned in 3.0 s naming what was cut; given room, a post and a failed save with its delete behave as `HEAD`'s. `py_compile` clean. Records: the feature's `checks.md` step 4. The registration runs the old check until the operator's push and import (R-21).
+- [X] T111 [behaviour] Make `scripts/bring-up.sh`'s `infrahub` part call the Compose services present only when the task workers carry the override.
   - **The defect.**
     - The part reports `infrahub compose present` when the override file in `local/infrahub/` equals the tree's and every service runs (about lines 690–706). Nothing reads whether the running task workers were created from that override.
     - Example: one run copies a changed override, then its `up -d` fails or is interrupted. Or the operator recreated Infrahub without the override file. A second run finds the file identical and every service running, and keeps them.
@@ -1301,10 +1306,12 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Gates.** `make lint`.
 
   Per FR-025 and FR-026 (partial)
-- [ ] T112 [pin] Correct the README's order of the bring-up script's `fylgja` part. `README.md` (the `fylgja` row, about line 59) says "tiers 1 and 2 (see Tests); then three processes". Since tier 2's check test needs this build's server on the bridge, the script starts the processes first (`scripts/bring-up.sh`, about lines 956–960). `CLAUDE.md` and `docs/development.md` already give that order. Say the processes come before the tiers, and why. Doc line alone. **Gates.** none beyond `make lint`.
+  - *2026-10-21, convergence pass 7's implement run:* `workers_carry_override` reads each running `task-worker` container's variable names through `docker inspect`'s template (`{{index (split . "=") 0}}`), never a value; the part reports `infrahub compose present` only when each carries `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN`, and otherwise runs `compose up -d`, saying the task workers lacked them. **Verified** under `env -i bash` on the function and the decision block extracted from the script, `docker` and `compose` stubbed: both names on both workers keep `present`; a token or an address missing on one, or neither, runs `up -d`; a copied override runs it as before. The extracted function, run read-only against this host's two task workers, finds both names. `bash -n` and shellcheck clean. The script was not run. Records: the feature's `server-and-host.md`.
+- [X] T112 [pin] Correct the README's order of the bring-up script's `fylgja` part. `README.md` (the `fylgja` row, about line 59) says "tiers 1 and 2 (see Tests); then three processes". Since tier 2's check test needs this build's server on the bridge, the script starts the processes first (`scripts/bring-up.sh`, about lines 956–960). `CLAUDE.md` and `docs/development.md` already give that order. Say the processes come before the tiers, and why. Doc line alone. **Gates.** none beyond `make lint`.
 
   Per FR-033 (partial)
-- [ ] T113 [pin] Make tier 3's case 9 assert each stage in the comment's table and in its stage list, in the plan's order. Only `scripts/e2e.sh` changes.
+  - *2026-10-21, convergence pass 7's implement run:* the `fylgja` row says the three processes start after the build and before tiers 1 and 2, since tier 2's check test runs the checks inside Infrahub against this build's server on the bridge, as `scripts/bring-up.sh`'s `part_fylgja` orders them.
+- [X] T113 [pin] Make tier 3's case 9 assert each stage in the comment's table and in its stage list, in the plan's order. Only `scripts/e2e.sh` changes.
   - **What is missing.**
     - 9a's comment is checked for the table's header row, the drawing's fence and the `**Stages**` heading (about lines 1986–1988). No stage's row is checked, and no entry under `**Stages**`.
     - 9b's comment is checked for two rows (about lines 2035–2038) and no stage entry.
@@ -1312,7 +1319,8 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Verify.** Extract the assertions and run them under `env -i bash` against tier 1's `Markdown` of `passedRun` and `failedRun` and against `local/e2e-015-full-4.outputs`, as T103 did. Each must pass, and fail when a row is removed or two are swapped. Then `bash -n` and `shellcheck scripts/bring-up.sh scripts/e2e.sh`. Do not run tier 3.
 
   Per FR-030 and SC-001 (partial)
-- [ ] T114 [pin] Test that the deadline never cuts the rehearsal's destroy. Only `internal/provision/workflow_rehearse_test.go` changes.
+  - *2026-10-21, convergence pass 7's implement run:* `comment_stages` requires the comment's table rows, by first and last cell, and its `**Stages**` references, each exactly the plan's stages in order; 9a's comment the branch point `refused (contract.node.missing)`, `seeded` `baseline`, `third-link` and the head `passed`, 9b's those with `bad-port` `failed` and the head `not reached`, replacing 9b's two single-row greps. Extracted under `env -i bash`, it passes against tier 1's `Markdown` of `passedRun` and `failedRun` (rendered by a scratch test, removed) and against `local/e2e-015-full-4.outputs`; each of 64 mutations, every row and stage entry removed and every adjacent pair swapped, in both comments of both, fails it. `bash -n` and shellcheck clean. Tier 3 was not run.
+- [X] T114 [pin] Test that the deadline never cuts the rehearsal's destroy. Only `internal/provision/workflow_rehearse_test.go` changes.
   - **What is missing.** In every deadline test the faked destroy child returns at once (the harness's default, about line 66). Only the cancellation test (about line 675) has a slow destroy. So `wantRehearsal`'s check that the destroy was never cancelled proves little on the deadline paths.
   - **The fix.** Add a test in which the deadline cuts a step, and the destroy child then runs past where the deadline would have fired again. Assert:
     - the destroy completes and is not cancelled;
@@ -1323,10 +1331,12 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **Gates.** `make test`, `make lint`.
 
   Per FR-028 and FR-005 (partial)
-- [ ] T115 [pin] Make tier 2's check test read back that its branch is gone. Only `internal/checks/checks_contract_test.go` changes. `nothingLeft` (about line 888) reads back the proposed change, its stages, validators, threads and comments, and the registration, but not the branch. It relies on `DeleteTestBranch`'s error. Require, read on `main` after the cleanups, that the test's `fylgja-test-*` branch is absent, as `internal/server/rehearse_contract_test.go` reads `BranchExists` (SC-010). **Run.** `go test -count=1 -tags contract ./internal/checks -run TestChecksInsideInfrahub -v` when the server on the bridge runs this tree's binary; otherwise it skips, saying why. No twin is booted. **Gates.** `go vet -tags contract ./internal/checks`, `make lint`.
+  - *2026-10-21, convergence pass 7's implement run:* `TestRehearseDeadlineNeverCutsTheDestroy`: the deadline cuts a step, then the destroy runs for the deadline and a minute more, past where the deadline would have fired again; and the stages end before the deadline, the destroy running past it. Each requires the destroy uncancelled and run to its end, its cleanup carried, the outcome (`cut`, `ok`) and whether the deadline was hit. With `stopTimer()` removed the second fails (the deadline hit during the destroy); with the destroy on the children's context the first fails (the destroy could not start, `canceled`).
+- [X] T115 [pin] Make tier 2's check test read back that its branch is gone. Only `internal/checks/checks_contract_test.go` changes. `nothingLeft` (about line 888) reads back the proposed change, its stages, validators, threads and comments, and the registration, but not the branch. It relies on `DeleteTestBranch`'s error. Require, read on `main` after the cleanups, that the test's `fylgja-test-*` branch is absent, as `internal/server/rehearse_contract_test.go` reads `BranchExists` (SC-010). **Run.** `go test -count=1 -tags contract ./internal/checks -run TestChecksInsideInfrahub -v` when the server on the bridge runs this tree's binary; otherwise it skips, saying why. No twin is booted. **Gates.** `go vet -tags contract ./internal/checks`, `make lint`.
 
   Per SC-010 and FR-029 (partial)
-- [ ] T116 [operator] Settle what both checks conclude on a proposed change whose source branch Fylgja cannot name.
+  - *2026-10-21, convergence pass 7's implement run:* `seededBranch` keeps the test's branch in `leftovers` as soon as it is made, and `nothingLeft`, the test's first cleanup and so its last to run, reads it on `main` with `BranchExists` after the branch's delete, rather than relying on `DeleteTestBranch`'s error. **Run**: the server on the bridge ran a replaced binary, so it was restarted from this tree's build by CLAUDE.md's start line (its report and environment names checked); then `go test -count=1 -tags contract ./internal/checks -run TestChecksInsideInfrahub -v` passed in 262.1 s, proving pid 730996 this tree's server, `after the test branch fylgja-test-ck-1792584790-5205 is gone`, and its 3 stages, 4 validators, 2 threads and 2 comments gone. Read on `main` after: `Branch` lists `main` and `fylgja-fixture`, proposed changes, stages, threads and user validators count 0, and `fylgja` is the one registration. No twin was booted. `go vet -tags contract ./internal/checks` clean.
+- [X] T116 [operator] Settle what both checks conclude on a proposed change whose source branch Fylgja cannot name.
   - **What runs.**
     - Infrahub 1.11.2 accepts a branch named `feature/x`. Its `validate_branch_name` rejects only a leading or trailing `/`, `//` and `/.`.
     - Fylgja's `stages.BranchPattern` (`^[^/\s]+$`, 014) refuses it. `branchGuard` answers `stage.ref.invalid`, status `error`.
@@ -1342,3 +1352,4 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
 
   Per FR-016 and FR-017 (missing)
   - *2026-10-21, the operator, answering the loop's question 7: (a), keep it.* `spec.md`'s Edge Cases gain "A source branch Fylgja cannot name", after "A stage refused on the way in": Infrahub accepts a `/` in a branch's name, 014's reference syntax refuses it (`stage.ref.invalid`), both checks conclude failure with that refusal in their message and nothing is booted, a branch to rehearse being named without a `/`. What is owed: the README's walk-through says the same, and the answer is recorded in research §5; nothing of the code changes. Widening the syntax (c) stays a later feature's.
+  - *2026-10-21, convergence pass 7's implement run:* the owed records: the README's "What the checks need" gains "A source branch named without a `/`" (both checks conclude failure on such a branch's proposed change with `stage.ref.invalid` in their message, and nothing is booted), and research §5.16 records the answer with what Infrahub 1.11.2 and 014's syntax accept. Nothing of the code changed.

@@ -1918,3 +1918,54 @@ so that T102's tier-2 test could prove this tree's checks; pass 5 had left it.
   shortened markdown leaves sections out in as one of preference, kept greedily.
 
 The checks did not change; no golden, format or fixture id moved.
+
+### 5.16 Convergence pass 7 (2026-10-21; T106–T116)
+
+The loop's run of convergence pass 7's tasks: no twin booted, the worker left as it ran (a
+replaced binary). The server on the bridge, which ran a replaced binary, was restarted from
+this tree's build by CLAUDE.md's start line, so that T115's tier-2 test could prove this
+tree's checks, as pass 6 did.
+
+- **A held host found after `start` is retried** (T106). The server writes `start` before
+  `StartRehearse`, which still refuses a run begun since the host was read and the
+  rehearsal's fixed id, and a run refused at its baseline's start closes `rejected` having
+  touched nothing; `holders` read any answer that `started` as final, so two checks re-run
+  within seconds failed the second on its first ask. Frames the Go harness's server wrote
+  show the order: `out` lines, `start`, then the document `rejected` on `run.in_flight`.
+  `holders` now takes such a refusal as held, and only an answer whose run was asked to
+  cancel as final.
+- **The verify reproduces the rehearsal's wait** (T107): with no step before it, as for a
+  failed stage at the baseline's `at`, the reproduce commands' verify is `fylgja twin verify
+  --wait`, since `twin create` waits for no settle.
+- **No comparison claimed where none ran** (T108): a rehearsed stage whose wait ended
+  `incomplete` or `cancelled` reads `not compared` in the table's new findings cell, not
+  `none`, and a baseline whose provision could not start says its provision, not a step, did
+  not run.
+- **A backtick in a Mermaid label** (T109) is `#96;`: a branch may begin with one, and a
+  label opening ``"` `` is a Mermaid markdown string closed only by `` `" ``.
+- **The comment is bounded** (T110): every call `post_comment` makes to Infrahub, the empty
+  thread's delete included, is bounded by the check's timeout less 5 s, so the check
+  concludes before Infrahub's timeout would leave its validator `in_progress`.
+- **The task workers are read, not the override file** (T111): the bring-up script's
+  `infrahub` part reports `present` only when each running task worker carries
+  `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN`, read by name through `docker inspect`'s
+  template (`{{index (split . "=") 0}}`, verified on Docker 29.8.1 against this host's two
+  task workers, which print names alone), and runs `compose up -d` otherwise.
+- **Pins** (T112–T115): the README gives the `fylgja` part's order, processes before tiers;
+  tier 3's case 9 requires each comment's table rows and stage list in the plan's order; the
+  rehearsal's destroy is tested to outlast where the deadline would fire, the test catching
+  a removed `stopTimer()` and a destroy on the children's context; tier 2's check test reads
+  its branch back gone, and passed so in 262.1 s against this tree's server, `main` holding
+  nothing of it after.
+- **A source branch Fylgja cannot name** (T116; the operator's answer to the loop's question
+  7, (a)). Infrahub 1.11.2 accepts a branch named `feature/x`, its `validate_branch_name`
+  refusing only a leading or trailing `/`, `//` and `/.`; 014's reference syntax
+  (`stages.BranchPattern`, `^[^/\s]+$`) refuses it, `stage.ref.invalid`. The answer keeps
+  what runs: both checks conclude failure on such a branch's proposed change with that
+  refusal in their message, and nothing is booted; a branch to rehearse is named without a
+  `/`. `spec.md`'s edge case "A source branch Fylgja cannot name" and the README's
+  walk-through ("What the checks need") say so; nothing of the code changed. Widening the
+  syntax, (c), is a later feature's.
+
+T106's and T110's checks reach the host's registration only once the operator pushes them
+to `origin`'s `main` and imports them (R-21). No golden, format or fixture id moved.

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://fylgja.dev/schemas/rehearsal.schema.json",
   "title": "fylgja twin rehearse — the rehearsal block (015)",
-  "description": "The `rehearsal` block of the findings document fylgja twin rehearse emits (operation twin.rehearse): the proposed change rehearsed, when its stages were resolved, the deadline and the time used, whether a dead rehearsal's twin was reclaimed, the run, the baseline's findings, one entry per stage in order with its reference, its bundle or its refusal, its role, the step into it, its wait, its verify's counts, the findings new against the baseline and its verdict, the destroy's outcome, and, when a stage failed, the commands that reproduce it. Every list is sorted or in the stages' order, so the same run gives the same document. No configuration line, device diff, artifact or bootstrap content, token or login (Constitution X). The markdown rendering is not in the block: it rides beside the document in its frame (contracts/api.md, 015).",
+  "description": "The `rehearsal` block of the findings document fylgja twin rehearse emits (operation twin.rehearse): the proposed change rehearsed, when its stages were resolved, the deadline and the time used, whether a dead rehearsal's twin was reclaimed, the run, the baseline's findings, one entry per stage in order with its reference, its bundle or its refusal, its role, the step into it, its wait, its verify's counts, the findings new against the baseline and its verdict, the destroy's outcome, and, when a stage failed, the commands that reproduce it. Every list is sorted or in the stages' order, so the same run gives the same document. No configuration line, device diff, artifact or bootstrap content, token or login (Constitution X). The markdown rendering is not in the block: it rides beside the document in its frame (contracts/api.md, 015). The run's own warnings (rehearsal.twin.reclaimed, rehearsal.stage.moved, rehearsal.change.closed) ride in the document's findings beside the block; each stage's ride in its findings.",
   "$defs": {
     "ref": {
       "type": "string",
@@ -120,7 +120,7 @@
         "bundle_id": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "null when the stage was refused" },
         "role": {
           "enum": ["refused", "baseline", "rehearsed", "not_reached"],
-          "description": "refused: a stage the plan refused: a branch point refused contract.node.missing, passed over (FR-003), or in a refused rehearsal's block every stage whose refusal refused it. baseline: the first compiled stage, created and verified. rehearsed: stepped to and verified. not_reached: after a stage that was not passed"
+          "description": "refused: a stage the plan refused: a branch point refused contract.node.missing, passed over (FR-003), or in a refused rehearsal's block every stage whose refusal refused it. baseline: the first compiled stage, created and verified. rehearsed: stepped to and verified. not_reached: after a stage that was not passed, the baseline of a run that touched nothing because another run held its provision's id, and every stage but a refused one of a run whose end was not read"
         },
         "verdict": {
           "enum": ["refused", "baseline", "passed", "failed", "error", "not_reached"],
@@ -164,7 +164,7 @@
         "resolved_at": { "type": "string", "description": "RFC 3339 UTC: when the server resolved and read the stages, the plan's first read; what the report and the comment are headed by" },
         "deadline_s": { "type": "integer", "minimum": 0, "description": "the stages' summed budgets (data-model.md §4)" },
         "ceiling_s": { "type": "integer", "minimum": 0, "description": "Fylgja's ceiling, a mechanism constant" },
-        "used_s": { "type": "number", "minimum": 0, "description": "the run's whole time on its clock; 0 when refused before any run" },
+        "used_s": { "type": "number", "minimum": 0, "description": "the run's whole time on its clock; 0 when refused before any run, and when the run was started and its end was not read" },
         "reclaimed": {
           "oneOf": [
             {
@@ -191,10 +191,10 @@
             },
             { "type": "null" }
           ],
-          "description": "null when no stage compiled or the baseline was not built"
+          "description": "null when no stage compiled, the baseline was not built, or the run was started and its end was not read"
         },
         "stages": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/stage" } },
-        "destroy": { "oneOf": [{ "$ref": "#/$defs/cleanup" }, { "type": "null" }], "description": "the destroy child's cleanup; null when the rehearsal was refused before any run, or its run was refused at its baseline's start, another run holding the provision's id, and touched nothing" },
+        "destroy": { "oneOf": [{ "$ref": "#/$defs/cleanup" }, { "type": "null" }], "description": "the destroy child's cleanup; null when the rehearsal was refused before any run, when its run was refused at its baseline's start, another run holding the provision's id, and touched nothing, and when the run was started and its end was not read, run then set" },
         "reproduce": {
           "type": "array",
           "items": { "type": "string" },

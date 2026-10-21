@@ -112,7 +112,7 @@ infrastructure. [F-007](#f-007) and
 | # | Feature | What it bundles | Needs | Hours | Why here |
 |---|---|---|---|---|---|
 | F-023 | **Stages of a proposed change** (built) | `FylgjaStage`, a moment of a proposed change marked by the operator; the branch point and the head derived; `--stage`, `stage list` and `stage plan` in place of M10's surface; the staleness check; M10's kind removed | nothing new | 4–6 | Everything 0.2 rehearses is a stage. Probed live on 2026-10-16; built first in 0.2, as 014, on 2026-10-17. |
-| F-007 | **`fylgja-step`, the pure check** (built) | a check beside the artifacts template that answers in seconds with the step from `main` to the source branch, stage by stage: the plan logged as text in its message, no comment; fails only when Fylgja refuses a stage as intent, the stages cannot be listed or Fylgja cannot be reached | [F-023](#f-023), the API | 3–4 | The first time Fylgja appears inside Infrahub's workflow. Built in 0.2 as 015, on 2026-10-20. |
+| F-007 | **`fylgja-step`, the pure check** (built) | a check beside the artifacts template that answers in seconds with the step from `main` to the source branch, stage by stage: the plan logged as text in its message, no comment; fails only when Fylgja refuses a stage as intent, the stages cannot be listed, the source branch has no open proposed change, Fylgja cannot be asked (a variable unset or unusable, the API unreachable, its token refused, its API version unknown) or the plan does not answer by the check's own deadline | [F-023](#f-023), the API | 3–4 | The first time Fylgja appears inside Infrahub's workflow. Built in 0.2 as 015, on 2026-10-20. |
 | F-008 | **`fylgja-twin`, the live check** (built) | a check that asks for `twin rehearse`: a twin built from the first stage that compiles, stepped through the marked stages to the head, verified after every step and destroyed; the report in markdown as a thread on the proposed change; a stage that fails blocks the merge | [F-007](#f-007), stepping, verify, the API | 3–4 | Small, since stepping, verify and the API exist. Built in 0.2 as 015, on 2026-10-20. |
 | F-010 | *Generic transform*, folded into [F-011](#f-011) | the shipped template already queries `FylgjaDevice`, so a DCIM device renders through it; what was left, the template documented as a reference transform, is a paragraph in [F-011](#f-011)'s README | — | — | Overtaken: Infrahub renders from the generics already. |
 | F-011 | **Second schema: the schema library's DCIM** | contract 0.3; OpsMill's DCIM schema implementing the generics; a DCIM-modelled twin; the template documented as a reference transform | nothing new | 4–6 | The strongest OpsMill signal, and the first test of Constitution III. Probed live on 2026-10-16. Opens 0.3. |
@@ -178,9 +178,12 @@ worker, so it reaches Fylgja through the API, not by running the binary. Built b
 plan and logs it as text in its message, which Infrahub's checks tab shows, and posts no
 comment; Fylgja never writes to Infrahub ([D-026](decisions.md#d-026), citing Constitution
 III). The report takes verify's advisory form ([D-039](decisions.md#d-039)), and the check
-fails only when Fylgja refuses a stage as intent, cannot list the stages or cannot be
-reached, a branch point refused for want of a network on `main` excepted, so a plan that
-compiles always lets the merge proceed ([D-052](decisions.md#d-052)).
+fails only when Fylgja refuses a stage as intent, a branch point refused for want of a
+network on `main` excepted, cannot list the stages, cannot be asked (a variable unset or
+unusable, the API unreachable, its token refused, its API version unknown) or does not
+answer by the check's own deadline, and when the source branch has no open proposed
+change, so a plan that compiles always lets the merge proceed
+([D-052](decisions.md#d-052)).
 
 <a id="f-008"></a>
 **F-008. `fylgja-twin`, the live check.** The second check asks Fylgja to `twin rehearse`

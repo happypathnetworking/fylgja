@@ -758,8 +758,10 @@ failed rebuild stops *following*.
 
 **Reclaim** — From 015 ([D-051](decisions.md#d-051)): the destroy, before a *rehearsal*
 starts, of a twin whose `twin.json` names a rehearsal run that is no longer running, run
-through the `destroy` workflow as `twin destroy` runs it, followed in the rehearsal's
-answer and reported as the warning `rehearsal.twin.reclaimed`. A twin whose record names
+through the `destroy` workflow by a start that, unlike `twin destroy`'s, cancels nothing (a
+rehearsal, provisioning or step run begun since the rehearsal read the runs in flight
+refuses the rehearsal, `run.in_flight` naming it), followed in the rehearsal's answer and
+reported as the warning `rehearsal.twin.reclaimed`. A twin whose record names
 no rehearsal, a lab and an orphan are never reclaimed: each refuses the rehearsal as it
 refuses a create.
 

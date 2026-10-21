@@ -25,7 +25,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/provision"
 )
 
-// The answers of the twelve operations as the wire carries them. Each is asked of the
+// The answers of the thirteen operations as the wire carries them. Each is asked of the
 // harness's server three times, over the harness's fakes, as a client other than the CLI
 // asks: with no rendering, with "json" and with "text". These tests live beside the
 // harness, whose fakes (Infrahub, the workflow service, the nodes) are this package's test

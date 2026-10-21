@@ -247,7 +247,7 @@ func headerText(h http.Header) string {
 	return b.String()
 }
 
-// routes are every path the API serves: the twelve operations and the interrupt.
+// routes are every path the API serves: the thirteen operations and the interrupt.
 func routes() []string {
 	out := make([]string, 0, len(api.Operations)+1)
 	for _, op := range api.Operations {

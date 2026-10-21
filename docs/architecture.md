@@ -854,7 +854,9 @@ in Fylgja acts on it; a check of Infrahub's maps its status to a conclusion
 **The reclaim.** The record names the rehearsal whose provision built the twin
 ([§4.5](#45-lab-host-containerlab-and-the-twin-directory)). A rehearsal that finds a twin
 whose record names a `fylgja-rehearse` run no longer running destroys it first, through
-the destroy workflow as `twin destroy` would, and says so (`rehearsal.twin.reclaimed`).
+the destroy workflow, and says so (`rehearsal.twin.reclaimed`); unlike `twin destroy`, that
+destroy cancels nothing: a rehearsal, provisioning or step run begun since the rehearsal
+read the runs in flight refuses it (`run.in_flight`, naming the run, no `reclaimed` block).
 Any other twin, lab or orphan refuses it as it refuses a create. A rehearsal's run whose
 worker is gone does not end by itself: it holds the host, and the next is refused
 `run.in_flight`, until the worker returns and it ends in its destroy, or the operator

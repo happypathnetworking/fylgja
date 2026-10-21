@@ -603,6 +603,36 @@ func TestBuildFilesTheRehearsalsOwnFindings(t *testing.T) {
 	}
 }
 
+// A baseline whose provision could not start, for a reason other than a run holding its id,
+// has no step: its closing line and its finding name the provision (T108).
+func TestBaselineWhoseProvisionDidNotStart(t *testing.T) {
+	e := notBuiltErrorRun()
+	e.name = "error, the baseline's provision could not start"
+	var unstarted findings.List
+	unstarted.AddStep(findings.Rejection, findings.StepProvision, findings.RuleOperationFailed, wire.ProvisionWorkflowID,
+		"the child workflow could not start: the workflow service did not answer")
+	e.res.Destroy, e.res.Stages = destroyed(), []StageResult{{Ref: change + "/seeded", Verdict: VerdictError, Findings: unstarted, TookS: 0.4}}
+	doc := e.document()
+	var own []findings.Finding
+	for _, f := range doc.Rehearsal.Stages[1].Findings {
+		if f.Rule == findings.RuleRehearsalStageError {
+			own = append(own, f)
+		}
+	}
+	if len(own) != 1 || own[0].Message != "its provision did not run" {
+		t.Errorf("the baseline's own finding: %+v, want one rehearsal.stage.error saying its provision did not run", own)
+	}
+	want := "rehearsal error: stage change-1/seeded could not be rehearsed: its provision did not run; the twin is destroyed"
+	if got := Closing(doc); got != want {
+		t.Errorf("closing:\n%s\nwant\n%s", got, want)
+	}
+	for _, line := range StageLines(*doc.Rehearsal) {
+		if strings.Contains(line, "step") {
+			t.Errorf("a stage line names a step the baseline does not have: %s", line)
+		}
+	}
+}
+
 func TestReproduce(t *testing.T) {
 	if got := Build(passedRun().in, passedRun().res).Reproduce; got == nil || len(got) != 0 {
 		t.Errorf("no stage failed: %#v, want []", got)

@@ -221,6 +221,11 @@ started, why its end was not read, and that it goes on to its destroy, which `fy
 show` follows; its stages read `not read` in the table and the drawing, and nothing says that
 no run was started (T079).
 
+**The new findings cell** reads `—` on the baseline; on a rehearsed stage whose wait settled
+or expired, `none` or each finding the baseline's did not have, by rule and object; on one
+whose wait ended incomplete or cancelled, which was compared with nothing, `not compared`
+(T108); and nothing on a stage refused or not reached.
+
 **The warnings** list each warning a stage filed once, however many of its steps filed it,
 naming the stages that did (``- `artifact.interface.unrepresented` n1:ethernet-1/99: …
 (stages bad-port, head)``), as `stage plan` prints one under each stage (T075). The run's

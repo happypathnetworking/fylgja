@@ -179,6 +179,36 @@ func TestMarkdownOfABaselineNotVerified(t *testing.T) {
 	}
 }
 
+// A rehearsed stage whose wait ended incomplete was compared with nothing, so its new
+// findings cell says not compared, never none, the brief cell too (T108).
+func TestMarkdownOfAStageNotCompared(t *testing.T) {
+	e := passedRun()
+	e.name, e.status = "error, a step's wait incomplete", findings.StatusError
+	e.res.Outcome = OutcomeStageError
+	e.res.Stages = e.res.Stages[:2]
+	third := &e.res.Stages[1]
+	third.Verdict, third.Counts = VerdictError, counts(8, 1)
+	third.Wait = &wire.StepWait{Outcome: wire.WaitIncomplete, BudgetS: 120, Reads: 3, AfterS: 9.4, From: resolvedAt,
+		Failing: []wire.StepFinding{{Rule: findings.RuleVerifyNeighbor, Object: "n1:ethernet-1/3",
+			Message: "node n1 (172.20.20.2): port ethernet-1/3 sees no neighbour"}}}
+	b := Build(e.in, e.res)
+	for _, brief := range []bool{false, true} {
+		tbl := table(b, false, brief)
+		var row string
+		for _, line := range strings.Split(tbl, "\n") {
+			if strings.HasPrefix(line, "| change-1/third-link |") {
+				row = line
+			}
+		}
+		if !strings.HasSuffix(row, "| incomplete after 9.4s | 18 held, 1 failed, 0 skipped | not compared | error |") {
+			t.Errorf("brief %v: the stage's row does not say it was not compared: %q", brief, row)
+		}
+	}
+	if md := Markdown(e.document(), pairs()); strings.Contains(md, "| none | error |") || len(md) > CommentMax {
+		t.Errorf("the markdown says a stage never compared had no new findings, or is over a comment:\n%s", md)
+	}
+}
+
 // A step that restarted or recreated a node names each in its cell with the seconds its
 // readiness took (FR-004); one cut before its readiness names the node alone, and one cut at
 // its push its pushes, landed and not (T094). The block is the same either way, and the

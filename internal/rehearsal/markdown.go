@@ -438,22 +438,31 @@ const newFew = 2
 
 // newBrief is the new findings cell brief: the first few, then how many more.
 func newBrief(s findings.RehearsalStage) string {
-	if s.Role != RoleRehearsed || s.Wait == nil || len(s.NewFindings) <= newFew {
+	if s.Role != RoleRehearsed || !compared(s.Wait) || len(s.NewFindings) <= newFew {
 		return newCell(s)
 	}
 	return fmt.Sprintf("%s and %d more", findingsText(s.NewFindings[:newFew]), len(s.NewFindings)-newFew)
 }
 
 // newCell is the stage's new findings: a dash on the baseline, none or each by rule and
-// object on a rehearsed stage whose wait ran, and nothing elsewhere.
+// object on a rehearsed stage whose wait settled or expired, not compared on one whose wait
+// ended otherwise, since Classify compared nothing there (T108), and nothing elsewhere.
 func newCell(s findings.RehearsalStage) string {
 	switch {
 	case s.Role == RoleBaseline:
 		return "—"
-	case s.Role == RoleRehearsed && s.Wait != nil:
+	case s.Role == RoleRehearsed && compared(s.Wait):
 		return findingsText(s.NewFindings)
+	case s.Role == RoleRehearsed && s.Wait != nil:
+		return "not compared"
 	}
 	return ""
+}
+
+// compared is whether a stage's wait was compared with the baseline's: it settled or
+// expired, as Classify's comparable says of the wait it was given.
+func compared(w *findings.RehearsalWait) bool {
+	return w != nil && (w.Outcome == wire.WaitSettled || w.Outcome == wire.WaitExpired)
 }
 
 // verdictCell is the verdict as the text words it: refused with what refused it, not

@@ -631,6 +631,10 @@ func errorWhy(s findings.RehearsalStage) string {
 		}
 	}
 	if s.Step == nil && s.Provision == nil {
+		if s.Role == RoleBaseline {
+			// The baseline has no step: its child is the provision (T108).
+			return "its provision did not run"
+		}
 		return "its step did not run"
 	}
 	if w := s.Wait; w != nil {

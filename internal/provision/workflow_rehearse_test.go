@@ -563,6 +563,71 @@ func TestRehearseDeadlineCutsAStepAndDestroys(t *testing.T) {
 	}
 }
 
+// The deadline never cuts the destroy (FR-005, FR-028; T114). Cut at a step, the run's destroy
+// then runs for longer than a whole deadline, where the deadline would have fired again, and
+// ends uncancelled with its cleanup: the destroy runs on a context the deadline's cut of the
+// children does not reach. Ended before the deadline, the run's destroy runs past where the
+// deadline would have fired, which it does not, the timer stopped with the stages: the run is
+// ok, its deadline not hit.
+func TestRehearseDeadlineNeverCutsTheDestroy(t *testing.T) {
+	deadline := 1980 * time.Second
+	for _, c := range []struct {
+		name    string
+		cut     bool
+		outcome string
+		stages  []string
+	}{
+		{"the deadline cuts a step", true, rehearsal.OutcomeCut,
+			[]string{"change-1/branch-point refused", "change-1/seeded baseline", "change-1/third-link error", "change-1/head not_reached"}},
+		{"the stages end before the deadline", false, rehearsal.OutcomeOK,
+			[]string{"change-1/branch-point refused", "change-1/seeded baseline", "change-1/third-link passed", "change-1/head passed"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := newRehearseHarness(t)
+			if c.cut {
+				h.step = func(ctx workflow.Context, in StepInput) (StepResult, error) {
+					_ = workflow.Sleep(ctx, time.Hour)
+					if ctx.Err() == nil {
+						return StepResult{}, errors.New("the deadline never reached the step child")
+					}
+					return StepResult{Outcome: OutcomeCancelled, Phase: findings.StepPush, Step: findings.StepPush, Findings: findings.List{}}, nil
+				}
+			}
+			var destroyBegan time.Time
+			var destroyRan time.Duration
+			h.destroy = func(ctx workflow.Context) (DestroyResult, error) {
+				destroyBegan = workflow.Now(ctx)
+				if err := workflow.Sleep(ctx, deadline+time.Minute); err != nil {
+					return DestroyResult{Findings: findings.List{}, Cleanup: CleanupResult{Teardown: CleanupDone, Unstage: CleanupSkipped,
+						Remaining: []string{"twin directory (not checked: the destroy run was cancelled)"}}}, nil
+				}
+				destroyRan = workflow.Now(ctx).Sub(destroyBegan)
+				return destroyedClean(), nil
+			}
+
+			res := h.run(fixtureRehearsal())
+
+			calls := []string{childProvision, verifyTwin, childStep, childStep, childDestroy}
+			if c.cut {
+				calls = []string{childProvision, verifyTwin, childStep, childDestroy}
+			}
+			wantRehearsal(t, h, res, c.outcome, c.stages, calls)
+			if res.DeadlineHit != c.cut {
+				t.Errorf("deadline hit %v, want %v: the timer must stop with the stages", res.DeadlineHit, c.cut)
+			}
+			if destroyRan < deadline+time.Minute {
+				t.Errorf("the destroy ran %s, want it run to its end, %s", destroyRan, deadline+time.Minute)
+			}
+			if want := destroyedClean(); res.Destroy == nil || !reflect.DeepEqual(res.Destroy.Cleanup, want.Cleanup) {
+				t.Errorf("destroy %+v, want its cleanup %+v", res.Destroy, want.Cleanup)
+			}
+			if res.UsedS < (deadline + time.Minute).Seconds() {
+				t.Errorf("the run used %.1fs, want it to have waited for the destroy's %s", res.UsedS, deadline+time.Minute)
+			}
+		})
+	}
+}
+
 // A stage the deadline cut is error whatever its child says: a step that finished stepped and
 // settled although its cancellation had arrived is still the stage in progress when the
 // deadline passed, and the run is cut there (FR-002).

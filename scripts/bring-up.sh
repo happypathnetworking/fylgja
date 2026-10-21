@@ -823,6 +823,37 @@ last_report_offset() {
   head -n $(( line - 1 )) "$1" | wc -c
 }
 
+# listens_on PID ADDRESS: the process's arguments listen on ADDRESS, as --listen ADDRESS or
+# --listen=ADDRESS, read as tier 3's case 9 reads them.
+listens_on() {
+  local -a args
+  local i
+  mapfile -d '' -t args < "/proc/$1/cmdline" 2> /dev/null || return 1
+  for (( i = 1; i < ${#args[@]}; i++ )); do
+    if [ "${args[i]}" = "--listen=$2" ] || { [ "${args[i]}" = --listen ] && [ "${args[i + 1]:-}" = "$2" ]; }; then
+      return 0
+    fi
+  done
+  return 1
+}
+
+# as_started ROLE PID LOG OUT: the process runs as start_role starts it, or it prints how it
+# does not. OUT, its standard output, must be LOG, so that LOG's last start-up report is its
+# own: make serve and make worker print theirs to their own terminal, and an earlier
+# process's report in LOG would pass for it. A server's arguments must also listen on
+# loopback and on the bridge, so one on loopback alone (make serve) is restarted.
+as_started() {
+  local role=$1 pid=$2 log=$3 out=$4 addr
+  if [ "$out" != "$log" ]; then
+    echo "writes its output to $out, not local/$(basename "$log"), so that log's report is not its own"
+    return 1
+  fi
+  [ "$role" = serve ] || return 0
+  for addr in 127.0.0.1:7650 "$BRIDGE_ADDR:7650"; do
+    listens_on "$pid" "$addr" || { echo "has no --listen $addr among its arguments"; return 1; }
+  done
+}
+
 # start_role ROLE LOG: started detached, as CLAUDE.md starts it, from a shell that loaded
 # local/.env; the dev server's CLI on the PATH it hands on. The server listens on loopback
 # first and on the bridge after it.
@@ -836,7 +867,7 @@ start_role() {
 }
 
 ensure_role() {
-  local role=$1 log="$ROOT/local/$2.log" name=$2 pid exe from pattern
+  local role=$1 log="$ROOT/local/$2.log" name=$2 pid exe out why from pattern
   # The report's first line: the server's names loopback, listened on first, so a report's
   # second listen line is not taken for its start.
   pattern="^fylgja serve: listening on 127\.0\.0\.1:7650 (API version "
@@ -845,13 +876,21 @@ ensure_role() {
     exe=$(readlink "/proc/$pid/exe" 2> /dev/null || true)
     case $exe in
       "$ROOT/bin/fylgja")
-        from=$(last_report_offset "$log" "$pattern")
-        if report_ok "$role" "$log" "$from"; then
-          ROLE_PID[$role]=$pid
-          item fylgja "$name" present "(pid $pid, this tree's bin/fylgja)"
-          return
+        # The log's last report is judged only once the process is known to have written it.
+        out=$(readlink "/proc/$pid/fd/1" 2> /dev/null || true)
+        [ -n "$out" ] ||
+          fail fylgja "$name" "a fylgja $name runs whose output this shell cannot read (pid $pid, /proc/$pid/fd/1 unreadable); stop it and run again"
+        if ! why=$(as_started "$role" "$pid" "$log" "$out"); then
+          say "fylgja: $name: pid $pid $why; restarting it"
+        else
+          from=$(last_report_offset "$log" "$pattern")
+          if report_ok "$role" "$log" "$from"; then
+            ROLE_PID[$role]=$pid
+            item fylgja "$name" present "(pid $pid, this tree's bin/fylgja)"
+            return
+          fi
+          say "fylgja: $name: pid $pid's report does not name $(report_wants "$role"); restarting it"
         fi
-        say "fylgja: $name: pid $pid's report does not name $(report_wants "$role"); restarting it"
         kill "$pid"
         wait_for fylgja "$name" "pid $pid to exit" 30 "" bash -c "! kill -0 $pid"
         ;;

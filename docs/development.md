@@ -75,10 +75,13 @@ run takes about 7, most of it tier 2. Its contract is
   and the API's server, started detached as the three-process paragraph below starts
   them, logging under `local/`; then tier 1 and tier 2, each timed, so that tier 2's
   `TestChecksInsideInfrahub` reaches this build's server on the bridge. A process already
-  running from this tree's `bin/fylgja` is `present`; one on a replaced or `(deleted)`
-  binary is restarted. Each report is read: the dev server `SERVING`, and the worker's and
-  the server's naming every package the host can run with its login set, the server's
-  naming loopback and the bridge as well, so a server on loopback alone is restarted.
+  running from this tree's `bin/fylgja` is `present` when its output is its log under
+  `local/` and, for the server, its arguments listen on loopback and on the bridge; one on
+  a replaced or `(deleted)` binary, writing elsewhere (`make worker`, `make serve`) or
+  listening on less is restarted, saying why. Each report is read: the dev server
+  `SERVING`, and the worker's and the server's naming every package the host can run with
+  its login set, the server's naming loopback and the bridge as well, so a server on
+  loopback alone is restarted.
   The last report gives each part's counts, the tar and the platforms again, both tiers'
   times, how to run tier 3, the three processes with their pids and logs, the server's
   two addresses and that the token crosses the bridge in the clear, how to stop them
@@ -171,8 +174,10 @@ temporal server start-dev --db-filename local/temporal.db
 Web UI at http://localhost:8233. `make temporal-dev` wraps the command.
 
 **Three processes on the lab host.** The dev server (`make temporal-dev`), the worker
-(`make worker`) and the API's server (`make serve`, [D-041](decisions.md#d-041)). The
-script's `fylgja` part leaves all three running. Start the worker and the server from
+(`make worker`) and the API's server ([D-041](decisions.md#d-041)). `make serve` listens
+on loopback alone, which Infrahub's task workers cannot reach: the lab host's server is
+started with the two `--listen` values below, as `CLAUDE.md`'s start line gives them.
+The script's `fylgja` part leaves all three running. Start the worker and the server from
 shells that loaded `local/.env`, from the repository root,
 so they share one state root and one environment, the server adding `FYLGJA_API_TOKEN`.
 **The server listens on loopback and on the host's Docker bridge**
@@ -180,8 +185,12 @@ so they share one state root and one environment, the server adding `FYLGJA_API_
 bridge's address read with `docker network inspect bridge -f '{{(index .IPAM.Config
 0).Gateway}}'` (`172.17.0.1` by Docker's default), as `CLAUDE.md`'s start line and the
 script's `fylgja` part start it. Its report names both addresses, the bridge's followed by
-the line saying the token is sent unencrypted on it. Infrahub's task workers, where the
-checks run as clients, reach it there as `host.docker.internal:7650`: the Compose override
+the line saying the token is sent unencrypted on it. The part keeps a running worker or
+server only when its output is `local/worker.log` or `local/server.log`, so that the log's
+last report is its own, and, for the server, when its arguments listen on both addresses;
+it restarts any other, saying why, so one from `make worker` or `make serve` is replaced.
+Infrahub's task workers, where the checks run as clients, reach it there as
+`host.docker.internal:7650`: the Compose override
 gives them the `host-gateway` entry that name resolves to, `FYLGJA_API_ADDRESS` and
 `FYLGJA_API_TOKEN`, which Compose reads from `local/.env`. A changed override reaches the
 task workers only when they are recreated: `compose up -d` with the project's flags, which

@@ -50,8 +50,11 @@ file.
 - **`fylgja`**: the bridge address is read from `docker network inspect bridge -f
   '{{(index .IPAM.Config 0).Gateway}}'` (a host with no `bridge` network fails the item
   naming it); the server is started with `--listen 127.0.0.1:7650 --listen <bridge>:7650`;
-  `report_ok` requires both listen lines and the bridge's unencrypted line, so a server
-  running from this tree on loopback alone is restarted; the last report's `running:
+  `report_ok` requires both listen lines and the bridge's unencrypted line, and a running
+  process is judged by that report only when its standard output (`/proc/<pid>/fd/1`) is
+  the log read and, for the server, its arguments hold both `--listen` values, so a server
+  running from this tree on loopback alone is restarted, `make serve`'s among them, though
+  an earlier server's report in the log names both; the last report's `running:
   server` line names both addresses and says the token crosses the bridge in the clear.
   A second run keeps a server that reports both.
 

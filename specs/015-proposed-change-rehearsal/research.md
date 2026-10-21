@@ -1969,3 +1969,30 @@ tree's checks, as pass 6 did.
 
 T106's and T110's checks reach the host's registration only once the operator pushes them
 to `origin`'s `main` and imports them (R-21). No golden, format or fixture id moved.
+
+### 5.17 Tier 3 after the loop's cap, against the imported checks (2026-10-21, 14:35Z–15:24Z; by hand)
+
+The attended loop stopped at `cap` after pass 7. The operator pushed `3c3e79a` to `origin`'s
+`main` (14:27:41Z) and imported it on the registration `fylgja`, which then read `3c3e79a…`,
+`in-sync`, `fylgja-step` 300 and `fylgja-twin` 4260 (T064's note). Then, by hand:
+
+- **The processes.** `make build` (static), the worker and the server restarted from this
+  tree, each on a live `bin/fylgja` with `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT` and
+  `FYLGJA_API_TOKEN` among its environment's names; the server's report named
+  `127.0.0.1:7650` and `172.17.0.1:7650`, the bridge's unencrypted line and both packages
+  with their logins set; from inside each task worker, `twin/show` answered `200 1
+  0.1.0-dev` with the token and `401` without. `free -m` read 17,424 MiB available, not
+  about 24 GiB: Infrahub held about 10 GiB, its server's workers 3.8 GiB and Neo4j 3.3 GiB,
+  its cap. Nothing was restarted for it, and both tiers passed.
+- **Tier 3 whole**: `E2E-OK`, wall time 1,596.8 s (1,536.9 s on 2026-10-20). Case 9's
+  precondition read the checks imported at this tree's `3c3e79a` and the server on the
+  bridge this tree's binary. Its rehearsals: passed in 62.2 s of the 1,980 s deadline
+  (T082's figure), and failed at `bad-port`'s push on n1 in 78.5 s of 2,610 s, a second
+  thread naming the reproduce commands; both threads listed in the overview; T113's rows
+  and stage entries in the plan's order held. No credential and no marker in the outputs,
+  the bundle store, the server's log or the worker's.
+- **Narrowed** (`PLATFORMS=nokia_srlinux`), after four minutes' rest: `E2E-PARTIAL`, exit 0,
+  wall time 1,038.8 s, ran cases 1–5, 7 and 9, skipped 6 and 8; case 9's rehearsals in
+  72.1 s of 1,980 s and 86.3 s of 2,610 s.
+- **Afterwards**: `clab inspect --all` read `{}`, no `local/twin`, and `main` listed `main`
+  and `fylgja-fixture` alone with 0 proposed changes, stages, threads and user validators.

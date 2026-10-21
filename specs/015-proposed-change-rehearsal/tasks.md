@@ -1000,3 +1000,126 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
 
   Per FR-032 and FR-033 (partial)
   - *2026-10-21, convergence pass 4's implement run:* the feature's `rehearse-command.md` says `show.record.rehearsal` is absent when the record names no rehearsal and `verify.twin.rehearsal` is `null` then, as `contracts/cli.md` and `contracts/api.md` do (`render.go`'s `omitempty`, `verify.go`'s none, both schemas). Both contracts say `stage list` marks a rehearsal's twin as any twin's, `← twin` or `← twin (diverged towards …)`, `stages.rows[].twin` true, while the run is in flight or a dead rehearsal's twin waits for its reclaim, nothing there naming the rehearsal, and no row marked once the twin is gone. No structure moved.
+
+---
+
+## Phase 15: Convergence
+
+- [ ] T093 [behaviour] Make `fylgja-twin` retry a held host when the branch point is passed over, and name a refusal as a refusal when the check's own deadline passes during it.
+  - **The defect.**
+    - `holders` (`infrahub/checks/fylgja_twin.py`, about lines 170–181) returns `[]`, a final answer, when any rejection's rule is outside `HELD` (`run.in_flight`, `host.lab.present`, `host.twin.present`).
+    - Every refusal the server makes after the plan carries the block's stage findings in front of its own. Both `rehearsing.failed` and `rehearsing.refuse` prepend `rehearsal.Findings(block)` (`internal/server/rehearse.go`, about lines 414 and 430). On a branch point passed over, those findings include its one rejection, `contract.node.missing` at `read` (`rehearsalStages` copies the row's findings, about line 137).
+    - So on a `main` that holds no network, as on this install and on CI, a `run.in_flight` or `host.*` refusal never reads as held. The check concludes failure on its first ask, and never retries as FR-007 and R-15 say. Two proposed changes' checks at once, or a re-run while the earlier rehearsal is still destroying, fail at once. Nothing in tiers 1–3 or research §5 exercises the retry.
+    - Second defect: the loop's stop test (`time.monotonic() + RETRY_S >= deadline`, about line 126) lets the last ask begin up to 30 s before the deadline. The plan takes 5–10 s before the server refuses. When the deadline passes during that plan, `call` sends the interrupt and marks the answer `interrupted`. The refusal then comes back interrupted with no `start`:
+      - `holders` returns `[]`, since it returns early on `interrupted`;
+      - the message takes the `asked_to_cancel` branch, "its run was asked to cancel", though no run existed;
+      - the held sentence naming what holds the host is dropped.
+  - **The fix.**
+    - Move `fylgja_step.py`'s `_branch_point_refusal` and `_key` into `fylgja_api.py`, taking a list of stages: a stage whose `at_source` is `branch_point` and whose one rejection is `contract.node.missing`. `refuses` passes it `plan.stages`, and `holders` passes `rehearsal.stages`.
+    - `holders` drops that one rejection by key before testing the rest against `HELD`, as `refuses` drops it. FR-017's exception stays the one rule the checks hold beyond the mapping, read in one place.
+    - `holders` returns `[]` on a started answer alone, not on an interrupted one. In the final message, `asked_to_cancel` is said only when the answer `started`. An interrupted answer with no `start` is the refusal it carries: the held sentence when it is held, the document's text otherwise.
+  - **Verify** in the scratchpad, since the repository has no Python test framework (Constitution I). Import `fylgja_api` and the two checks from a copy, or extract the functions with `ast`, under `.venv/bin/python -I`. Feed documents shaped as the server's refusals:
+    - the branch point `refused` with `at_source` `branch_point` and its `contract.node.missing` at `read`, beside `run.in_flight` (held);
+    - the same beside `host.lab.present` and `host.twin.present` (held);
+    - a stale mark's `stage.artifact.stale` beside `run.in_flight` (final);
+    - `run.in_flight` alone, as on a `main` carrying a network (held);
+    - a held refusal marked interrupted with no start: held, and its message names the holder, not a cancel;
+    - a started, interrupted answer: `asked_to_cancel`, as before.
+
+    `fylgja-step`'s `refuses` must give the same answers as before on a passing plan, a branch point's lone refusal and a stale mark. Take one document from the Go harness rather than by hand: `twin rehearse --json` refused by a run in flight on an empty `main`, as in `internal/cli/twin_rehearse_host_test.go`. Then `python3 -m py_compile` on the three files.
+  - **Records.** `specs/015-proposed-change-rehearsal/contracts/checks.md` and `contracts/cli.md`'s checks section say that the retry passes over the branch point's lone refusal, as `fylgja-step` does. Add a note to research R-15. The change reaches the host's registration only on the operator's push and import (R-21).
+  - **Gates.** `make test`, `make lint`.
+
+  Per FR-007, FR-021 and research R-15 (contradicts)
+- [ ] T094 [behaviour] Name the nodes a cut step restarted or recreated, and its pushes, in the rehearsal's text line and table cell, as a diverged step's are named.
+  - **The defect.**
+    - A step child the deadline or an interrupt cuts after its stage ends `cancelled` with its phase set, not `diverged` (`internal/provision/workflow_step.go`, about lines 329–335).
+    - Both renderers return early on `cancelled` and drop `lifecycle(st)` and the pushes landed and not landed:
+      - the text: `childText`, `internal/rehearsal/report.go`, about lines 469–473, giving `cancelled at phase <phase>`;
+      - the table: `stepCell`, `internal/rehearsal/markdown.go`, about lines 377–381, giving `cancelled at <phase>`.
+    - The block's JSON still carries `restarted`, `recreated` and `pushed`.
+    - FR-004 says "the report names each node restarted or recreated and the time it cost". The feature's `rehearse-command.md` (about lines 138–140) says a node "the step was cut before awaiting" is named alone (T070).
+    - T070's pin `cutBeforeReadinessRun` (`internal/rehearsal/report_test.go`, about line 188) models the cut as `diverged at readiness`, which a real cut never produces. A deadline that cuts a stage while cEOS restarts a node therefore names no node.
+  - **The fix.**
+    - On `cancelled` with a phase, both renderers keep their lead (`cancelled at phase <phase>`, `cancelled at <phase>`).
+    - Each then appends what it appends for a divergence: `lifecycle(st)`, each restarted or recreated node with its readiness seconds, or alone when cut before its readiness; and the pushes landed and not landed.
+    - `cancelled before its stage` is unchanged.
+  - **Tests.**
+    - Re-model `cutBeforeReadinessRun` as the step workflow ends it: `cancelled`, phase `readiness`, `Restarted: [n3]`, no readiness time. Assert that the text line and the table cell both name `restarted n3`.
+    - Add a cut at `push`: one landed, one not landed. Assert both are named.
+    - Each test fails without the fix.
+  - **Records.** The feature's `rehearse-command.md` "The text" and `contracts/cli.md` say the cut step's line keeps its phase and names what it touched.
+  - **Gates.** `make test`, `make lint`.
+
+  Per FR-004 and FR-006 (partial)
+- [ ] T095 [behaviour] Give `fylgja-step` a deadline of its own, short of its `timeout`, so that a slow plan concludes failure rather than leaving its validator `in_progress`.
+  - **The defect.**
+    - `FylgjaStep.timeout` is 300 (`infrahub/checks/fylgja_step.py`, about line 29).
+    - Its `call` passes no `deadline` and no `close_by`. `call` bounds only the headers (`HEADER_TIMEOUT`), and reads the frames with `read=None` (`infrahub/checks/fylgja_api.py`, about lines 240–270).
+    - `call` applies its deadline only with a `stream`, and `stage.plan` takes no interrupt.
+    - The server does not bound the plan under 300 s: each stage's read may take up to `stage.ReadTimeout` (5 min), on top of 60 s for each Infrahub request.
+    - A plan slower than 300 s (an Infrahub under load, four stages) is cut by Prefect. Research §1.4 found such a check leaves its validator `in_progress` for ever, with no conclusion and the merge blocked. FR-021 makes the check's own deadline, not Infrahub's, what ends an overrun, and says `fylgja-step`'s timeout is "long enough for the plan".
+  - **The fix.**
+    - Let `call` bound the read of an answer with no stream by `close_by`: past it the reader is cancelled and the response closed, which cancels the request's context on the server. The call raises `Cut` naming how long it waited.
+    - `fylgja-step` passes `close_by = began + timeout - CLOSE_MARGIN_S`, the margin shared with `fylgja-twin` and moved to `fylgja_api.py`. It concludes failure: the plan did not answer within the check's own deadline, nothing was started, and a re-run of the checks asks again.
+    - `fylgja-twin`'s use of `call` is unchanged.
+  - **Verify** in the scratchpad under `.venv/bin/python -I`, with a stub HTTP server on loopback that sends `200`, `Fylgja-Api-Version: 1`, then nothing:
+    - `call` with a `close_by` two seconds away raises `Cut` within about two seconds;
+    - the stub sees its connection closed;
+    - a stub that sends the document in time answers as before.
+
+    Then `python3 -m py_compile` on the three files.
+  - **Records.** The feature's `contracts/checks.md` and `contracts/cli.md`'s checks table add `fylgja-step`'s own deadline and its failure. The change reaches the host's registration only on the operator's push and import (R-21).
+  - **Gates.** `make test`, `make lint`.
+
+  Per FR-021 and SC-005 (partial)
+- [ ] T096 [operator] Settle how a rehearsal of one stage alone ends when its verify is not clean.
+  - **What the artifacts say.**
+    - FR-003, the clarify answer of 2026-10-17 and the edge case "One stage alone resolves" say the one-stage rehearsal "ends `ok` when that verify is clean", which leaves an unclean verify open.
+    - FR-009 says `ok` holds "warnings and the baseline's findings notwithstanding".
+  - **What runs.**
+    - The baseline's verdict is `baseline` whenever its wait settled or expired (`internal/provision/workflow_rehearse.go`, about line 212), and `Stop(VerdictBaseline)` is false. So the run ends `ok` whatever the baseline's findings, and `fylgja-twin` concludes success.
+    - On this install every unmarked proposed change rehearses its head alone, so a head whose links fail `verify.neighbor` passes the check.
+  - **The choice.**
+    - (a) Keep what runs: nothing was compared, so nothing fails. Reword FR-003, the edge case and research R-03 to say the rehearsal ends `ok` with its findings reported as the baseline's.
+    - (b) A rehearsal of one stage alone whose verify reports a finding ends `nonconforming`, exit 5, with a `rehearsal.stage.failed` naming it. That is a behaviour task in `internal/provision` and `internal/rehearsal`, with its tests, the contracts and `cli.md`'s identifiers.
+  - Either way, record the answer in research §5 and append the task it needs.
+
+  Per FR-003 against FR-009 (contradicts)
+- [ ] T097 [operator] Settle how `fylgja-twin`'s retries and its own deadline fit FR-021's promise that a rehearsal using every budget is never interrupted by its own check.
+  - **What the artifacts say.**
+    - FR-007: the check "retries the refused request until its own deadline".
+    - FR-021: its own deadline "MUST be at least the ceiling, the destroy's whole budget and the time the server spends before `start` … so that a rehearsal which uses every budget is never interrupted by its own check".
+  - **What runs.**
+    - A run that starts on a later ask, t seconds after the check began, has only 4,020 − t s before the check interrupts it. That holds whatever its own deadline, which may be up to 3,600 s.
+    - The 300 s allowed for the work before `start` is assumed, not bounded (`internal/rehearsal/check_timeout_test.go`, about line 18; data-model §4). The plan alone may take up to `stage.ReadTimeout` (5 min) per stage, beside the reclaim and the host check.
+    - `CLOSE_MARGIN_S` (15 s) must also cover the comment's two SDK saves, each with a 60 s timeout, after a document that arrives just before `close_by`.
+  - **The choice.**
+    - (a) Stop retrying once what remains of the check's own deadline is less than what the refused rehearsal's run needs: its block's `deadline_s`, the destroy's budget and the allowance before `start`. Then conclude failure naming the holder. This narrows FR-007's "until its own deadline" and keeps FR-021.
+    - (b) Keep the retries and reword FR-021 to promise this for the first ask alone.
+    - Beside either: whether the server bounds its work before `start`, or the allowance stays an allowance said so; and whether `CLOSE_MARGIN_S` grows to cover the comment's saves.
+  - Record the answer in research §5 and append the tasks it needs.
+
+  Per FR-007 against FR-021 (contradicts)
+- [ ] T098 [pin] Correct the records where they say something other than what runs. These are doc lines, schema descriptions and test comments alone; no structure moves.
+  - **The reclaim.** Since T091, the reclaim's destroy goes through `StartReclaim`, which refuses a run in flight and never cancels one. Two records still say it destroys "as `twin destroy` would" or "runs it":
+    - `docs/architecture.md` (about lines 855–857);
+    - `docs/glossary.md`'s *Reclaim* (about lines 757–760).
+
+    Say what `contracts/cli.md` and `docs/development.md` say.
+  - **F-007's "fails only when".** `docs/roadmap.md` (the F-007 row, about line 115, and about lines 180–182) leaves out failures that `fylgja_step.py` and `fylgja_api.py` also conclude:
+    - no open proposed change on the branch (`none_open`);
+    - a variable unset or unusable;
+    - a refused token;
+    - an unknown API version.
+
+    T076 corrected the same sentence in the architecture and the glossary. D-052 is append-only and stays.
+  - **`contracts/cli.md`'s checks table** (about lines 723–724). Both checks' "Concludes" cells leave out the failure `no open proposed change has source branch <b>: nothing was asked of Fylgja`, which `fylgja-twin` concludes before its draft test. The feature's `contracts/checks.md` (about lines 49 and 64) states it.
+  - **`rehearsal.schema.json`'s descriptions**, in both copies (`contracts/` and the feature's), do not cover what runs:
+    - T079's block for a run whose end was not read: `run` is set while `destroy` is `null`, `used_s` is 0, `baseline` is `null` and every stage is `not_reached`. Correct the descriptions of `destroy`, `used_s` and `baseline`.
+    - The role `not_reached` is described as "after a stage that was not passed". It must also cover T078's baseline, not reached because another run held its id.
+    - The block's description must say that the run's own warnings (`rehearsal.twin.reclaimed`, `rehearsal.stage.moved`, `rehearsal.change.closed`) ride in the document's findings beside the block, while each stage's warnings ride in its `findings`.
+  - **Test comments.** `internal/server/server_test.go` (about line 250) and `internal/cli/answer_test.go` (about line 28) say "the twelve operations"; `api.Operations` holds thirteen.
+  - **Gates.** `make test` (the schema tests read the contracts), `make lint`.
+
+  Per FR-032, FR-033 and FR-012 (partial)

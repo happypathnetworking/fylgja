@@ -255,14 +255,14 @@ func TestMarkdownFitsAComment(t *testing.T) {
 		t.Errorf("the markdown is %d bytes, over the %d a comment holds:\n%s", len(md), CommentMax, md)
 	}
 	for _, want := range []string{
-		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | diverged at push 29.8s;",
+		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | diverged at push | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | failed |",
 		`  s3["change-1/bad-port<br/>failed"]`,
 		"**Findings**:\n\n- `contract.node.missing` main\n- `push.refused` n1 (×2)\n- `rehearsal.stage.failed` change-1/bad-port\n- `step.diverged` " + stepRun + "2\n\n",
 		"**Stages** (Infrahub's view does not show them):",
 		"**Warnings**:\n\n- `artifact.interface.unrepresented` n1:ethernet-1/99 (stages bad-port, head)\n\n",
 		"**Baseline findings** (reported, failing nothing):\n\n- `verify.neighbor` n1:ethernet-1/2\n\n",
 		"**Reproduce by hand**:\n\n```\nfylgja twin create --stage change-1/seeded\n",
-		"\n\n" + fitNote(nil) + "\n\n" + Caveat + "\n",
+		"\n\n" + fitNote(nil, tableShrunk{}) + "\n\n" + Caveat + "\n",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("the shortened markdown does not hold %q:\n%s", want, md)
@@ -274,13 +274,20 @@ func TestMarkdownFitsAComment(t *testing.T) {
 		}
 	}
 
-	// Fourteen more stages keep the table and leave the drawing and the stages out; sixty, far
-	// past what the ceiling lets a rehearsal reach, leave the table out too and still fit.
+	// Fourteen more stages keep the brief table, every step by its outcome, and leave the
+	// drawing and the stages out; sixty, which no section left out makes fit, keep each
+	// stage's reference and verdict in the table, and still fit (T083).
 	for _, c := range []struct {
 		marks int
+		table string
 		left  string
-		table bool
-	}{{14, "the drawing and the stages are left out", true}, {60, "the table, the drawing and the stages are left out", false}} {
+		row   string
+	}{
+		{14, "and the table each step by its outcome and its new findings by the first few", "the drawing and the stages are left out",
+			"| change-1/mark-13 | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |"},
+		{60, "; the table gives each stage's reference and verdict alone", "the drawing and the stages are left out",
+			"| change-1/mark-59 | passed |"},
+	} {
 		e := passedRun()
 		for i := range c.marks {
 			s := head(RoleRehearsed)
@@ -295,19 +302,101 @@ func TestMarkdownFitsAComment(t *testing.T) {
 		}
 		for _, want := range []string{
 			`## Fylgja rehearsed proposed change "third link" on change-1` + "\n\nRun `fylgja-rehearse " + rehearseRun + "`",
-			"\n\n*To fit what Infrahub keeps of a comment (4092 bytes), each finding is named by its identifier and object alone, and " +
-				c.left + "; fylgja-twin's message is the whole report as text.*\n\n" + Caveat + "\n",
+			"\n" + c.row + "\n",
+			c.table, "; " + c.left + "; fylgja-twin's message is the whole report as text.*\n\n" + Caveat + "\n",
 		} {
 			if !strings.Contains(md, want) {
 				t.Errorf("%d more stages: the markdown does not hold %q:\n%s", c.marks, want, md)
 			}
 		}
-		if got := strings.Contains(md, "| stage | at |") && strings.Contains(md, fmt.Sprintf("| change-1/mark-%02d |", c.marks-1)); got != c.table {
-			t.Errorf("%d more stages: the whole table is there %v, want %v:\n%s", c.marks, got, c.table, md)
-		}
+		wantStagesInTheTable(t, fmt.Sprintf("%d more stages", c.marks), md, Build(e.in, e.res), false)
 		if strings.Contains(md, "```") || strings.Contains(md, "**Stages**") {
 			t.Errorf("%d more stages: the drawing or the stages are there:\n%s", c.marks, md)
 		}
+	}
+}
+
+// wantStagesInTheTable fails unless the markdown's table has a row for each of the block's
+// stages that begins with its reference and ends with its verdict.
+func wantStagesInTheTable(t *testing.T, label, md string, b findings.RehearsalBlock, unread bool) {
+	t.Helper()
+	for _, s := range b.Stages {
+		begins, ends := "\n| "+cell(s.Ref)+" |", " | "+cell(verdictCell(s, unread))+" |\n"
+		found := false
+		for _, line := range strings.SplitAfter(md, "\n") {
+			if strings.HasPrefix("\n"+line, begins) && strings.HasSuffix(line, ends[3:]) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("%s: no table row begins %q and ends %q:\n%s", label, begins[1:], ends[3:], md)
+		}
+	}
+}
+
+// What the ceiling does not bound still fits a comment, the table kept (T083): a stage with
+// many new findings names the first few and counts the rest; a rehearsal refused before any
+// run with many marks keeps every stage's reference and verdict, and with more marks than
+// fit, as many as do and how many are left out; and a proposed change's name longer than a
+// comment is cut in the heading with an ellipsis.
+func TestMarkdownFitsWhatTheCeilingDoesNotBound(t *testing.T) {
+	// One stage's new findings.
+	e := newFindingRun()
+	var many []wire.StepFinding
+	for i := range 200 {
+		many = append(many, wire.StepFinding{Rule: findings.RuleVerifyNeighbor, Object: fmt.Sprintf("n1:ethernet-1/%d", i+1),
+			Message: "node n1 (172.20.20.2): port sees no neighbour"})
+	}
+	e.res.Stages[1].NewFindings, e.res.Stages[1].Wait = many, wait(wire.WaitExpired, 120, 61, many...)
+	md := Markdown(e.document(), pairs())
+	if len(md) > CommentMax || !strings.Contains(md, "| verify.neighbor n1:ethernet-1/1, verify.neighbor n1:ethernet-1/10 and 198 more | failed |") {
+		t.Errorf("many new findings: %d bytes, want the first two and 198 more within %d:\n%s", len(md), CommentMax, md)
+	}
+	wantStagesInTheTable(t, "many new findings", md, Build(e.in, e.res), false)
+
+	// A refusal with many marks.
+	for _, c := range []struct {
+		marks int
+		left  int
+	}{{80, 0}, {300, -1}} {
+		e := refusedRun()
+		for i := range c.marks {
+			s := head(RoleRehearsed)
+			s.Ref = fmt.Sprintf("%s/mark-%03d", change, i)
+			e.in.Stages = append(e.in.Stages, s)
+		}
+		md := Markdown(e.document(), pairs())
+		if len(md) > CommentMax {
+			t.Errorf("a refusal with %d marks: the markdown is %d bytes, over %d", c.marks, len(md), CommentMax)
+		}
+		b := Build(e.in, e.res)
+		if c.left == 0 {
+			wantStagesInTheTable(t, fmt.Sprintf("a refusal with %d marks", c.marks), md, b, false)
+			continue
+		}
+		// As many stages as fit, in order, then how many are left out, which the note names.
+		rows := strings.Count(md, " | not reached |\n")
+		left := len(b.Stages) - rows
+		if rows == 0 || left <= 0 || !strings.Contains(md, fmt.Sprintf("\n| … and %d more | |\n", left)) ||
+			!strings.Contains(md, fmt.Sprintf("the table gives each stage's reference and verdict alone, and the last %d are left out of it", left)) ||
+			!strings.Contains(md, fmt.Sprintf("| change-1/mark-%03d | not reached |\n", rows-len(e.in.Stages)+c.marks-1)) {
+			t.Errorf("a refusal with %d marks: %d rows, %d left out:\n%s", c.marks, rows, left, md)
+		}
+	}
+
+	// A name longer than a comment.
+	e = failedRun()
+	e.in.ProposedChange.Name = strings.Repeat("a long name ", 500)
+	md = Markdown(e.document(), pairs())
+	heading, _, _ := strings.Cut(md, "\n")
+	if len(md) > CommentMax || len(heading) > 200 || !strings.HasPrefix(heading, `## Fylgja rehearsed proposed change "a long name a long`) ||
+		!strings.Contains(heading, `…" on change-1`) {
+		t.Errorf("a long name: %d bytes, heading %q; want within %d, the name cut with an ellipsis", len(md), heading, CommentMax)
+	}
+	wantStagesInTheTable(t, "a long name", md, Build(e.in, e.res), false)
+	if got := clip("ab€cd", 6); got != "ab…" {
+		t.Errorf("clip cut a rune: %q", got)
 	}
 }
 

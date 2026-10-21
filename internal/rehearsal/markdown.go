@@ -41,11 +41,14 @@ const CommentMax = 4092
 //
 // It is never longer than CommentMax, so that the comment is kept. A report that would be
 // names each finding by its identifier and object alone, identical ones once with their
-// count, since fylgja-twin's message, the report's text, holds every message. Should that
-// still be too long, whole sections are left out: the baseline's findings first, then the
-// drawing, the warnings, the stages, the findings, the reproduce commands and the table. A
-// note before the caveat says what was shortened. The heading, the status and the caveat
-// are always kept.
+// count, since fylgja-twin's message, the report's text, holds every message; the table
+// names each step by its outcome and its new findings by the first few; and the heading
+// cuts a long proposed change's name with an ellipsis. Should that still be too long, whole
+// sections are left out: the baseline's findings first, then the drawing, the warnings, the
+// stages, the findings and the reproduce commands. The table is never left out: it gives
+// each stage's reference and verdict alone, then, should even that be too long, as many
+// stages as fit and how many are left out. A note before the caveat says what was
+// shortened. The heading, the status and the caveat are always kept.
 func Markdown(doc *findings.Document, steps []step.Pair) string {
 	if md := join(parts(doc, steps, false)); len(md) <= CommentMax {
 		return md
@@ -55,27 +58,43 @@ func Markdown(doc *findings.Document, steps []step.Pair) string {
 
 // part is a paragraph of the markdown, a section's title with its list, or a fenced block,
 // which fit keeps or leaves out whole: rank 0 always, then the lowest rank first. name is
-// what the note calls a part left out.
+// what the note calls a part left out. The table, which fit shrinks rather than leaves out,
+// carries its block for its shorter forms.
 type part struct {
-	text string
-	name string
-	rank int
+	text  string
+	name  string
+	rank  int
+	table *tableOf
+}
+
+// tableOf is the table's block and whether its run's end was not read, for the table's
+// shorter forms.
+type tableOf struct {
+	b      findings.RehearsalBlock
+	unread bool
 }
 
 // parts are the markdown's paragraphs in order. brief names each finding by its identifier
-// and object alone.
+// and object alone, the table's steps and new findings briefly, and cuts the heading's
+// names.
 func parts(doc *findings.Document, steps []step.Pair, brief bool) []part {
 	var out []part
 	b := doc.Rehearsal
+	name := func(s string) string {
+		if brief {
+			return clip(s, nameMax)
+		}
+		return s
+	}
 	if b == nil {
 		branch := ""
 		if doc.Subject != nil {
 			branch = doc.Subject.Branch
 		}
-		out = append(out, part{text: "## Fylgja did not rehearse branch " + inline(branch)},
+		out = append(out, part{text: "## Fylgja did not rehearse branch " + inline(name(branch))},
 			part{text: fmt.Sprintf("Status **%s**.", doc.Status)},
-			part{findingsSection("Findings", rejections(doc.Findings), brief, nil), "the findings", 1},
-			part{warningsSection(doc.Findings, nil, brief), "the warnings", 2})
+			part{text: findingsSection("Findings", rejections(doc.Findings), brief, nil), name: "the findings", rank: 1},
+			part{text: warningsSection(doc.Findings, nil, brief), name: "the warnings", rank: 2})
 		return append(out, part{text: Caveat})
 	}
 
@@ -88,7 +107,7 @@ func parts(doc *findings.Document, steps []step.Pair, brief bool) []part {
 		verb = "did not rehearse"
 	}
 	out = append(out, part{text: fmt.Sprintf("## Fylgja %s proposed change %s on %s", verb,
-		inline(fmt.Sprintf("%q", b.ProposedChange.Name)), inline(b.ProposedChange.Branch))})
+		inline(fmt.Sprintf("%q", name(b.ProposedChange.Name))), inline(name(b.ProposedChange.Branch)))})
 	switch {
 	case unread:
 		out = append(out, part{text: fmt.Sprintf("Run %s was started, and its end was not read: %s. It goes on to its destroy, "+
@@ -106,20 +125,22 @@ func parts(doc *findings.Document, steps []step.Pair, brief bool) []part {
 		out = append(out, part{text: fmt.Sprintf("No run was started; stages resolved at %s. Status **%s**. Deadline %ds (ceiling %ds).",
 			inline(b.ResolvedAt), doc.Status, b.DeadlineS, b.CeilingS)})
 	}
-	out = append(out, part{table(*b, unread), "the table", 1}, part{drawing(*b, steps, unread), "the drawing", 6})
+	out = append(out, part{text: table(*b, unread, brief), name: "the table", table: &tableOf{*b, unread}},
+		part{text: drawing(*b, steps, unread), name: "the drawing", rank: 6})
 	if doc.Status != findings.StatusOK {
-		out = append(out, part{findingsSection("Findings", rejections(doc.Findings), brief, nil), "the findings", 3})
+		out = append(out, part{text: findingsSection("Findings", rejections(doc.Findings), brief, nil), name: "the findings", rank: 3})
 	}
-	out = append(out, part{stagesSection(*b), "the stages", 4}, part{warningsSection(doc.Findings, b.Stages, brief), "the warnings", 5})
+	out = append(out, part{text: stagesSection(*b), name: "the stages", rank: 4},
+		part{text: warningsSection(doc.Findings, b.Stages, brief), name: "the warnings", rank: 5})
 	var baseline []findings.StepWaitFailing
 	if b.Baseline != nil {
 		baseline = b.Baseline.Findings
 	}
-	out = append(out, part{failingSection("Baseline findings", "(reported, failing nothing)", baseline, brief),
-		"the baseline's findings", 7})
+	out = append(out, part{text: failingSection("Baseline findings", "(reported, failing nothing)", baseline, brief),
+		name: "the baseline's findings", rank: 7})
 	if len(b.Reproduce) > 0 {
-		out = append(out, part{"**Reproduce by hand**:\n\n" + fenced("", strings.Join(b.Reproduce, "\n")),
-			"the commands that reproduce it", 2})
+		out = append(out, part{text: "**Reproduce by hand**:\n\n" + fenced("", strings.Join(b.Reproduce, "\n")),
+			name: "the commands that reproduce it", rank: 2})
 	}
 	return append(out, part{text: Caveat})
 }
@@ -133,18 +154,39 @@ func join(ps []part) string {
 	return strings.Join(texts, "\n\n") + "\n"
 }
 
-// fit is the brief parts within CommentMax: those of rank 0, then each other in rank order
-// while it fits beside the note, which is placed before the caveat, the last part.
+// fit is the brief parts within CommentMax: those of rank 0, the table among them, then each
+// other in rank order while it fits beside the note, which is placed before the caveat, the
+// last part. The table is never left out: should the brief one not fit beside the other
+// parts of rank 0, it gives each stage's reference and verdict alone, and should even that
+// not fit, as many stages as do and how many are left out.
 func fit(ps []part) string {
 	var names []string
+	stages := 0
 	for _, p := range ps {
 		if p.rank > 0 {
 			names = append(names, p.name)
 		}
+		if p.table != nil {
+			stages = len(p.table.b.Stages)
+		}
 	}
-	// The note naming every part is the longest it can be. The size counts the blank line
-	// before each part and, one byte short of the first one's, the newline at the end.
-	size := -1 + len(fitNote(names)) + 2
+	// The note naming every part, and the table cut to no stage, is the longest it can be.
+	// The size counts the blank line before each part and, one byte short of the first
+	// one's, the newline at the end.
+	size := -1 + len(fitNote(names, tableShrunk{verdicts: true, left: stages})) + 2
+	for _, p := range ps {
+		if p.rank == 0 && p.table == nil {
+			size += 2 + len(p.text)
+		}
+	}
+	var shrunk tableShrunk
+	for i, p := range ps {
+		if p.table == nil {
+			continue
+		}
+		ps[i].text, shrunk = p.table.within(p.text, CommentMax-size-2)
+		size += 2 + len(ps[i].text)
+	}
 	order := make([]int, len(ps))
 	for i := range order {
 		order[i] = i
@@ -152,7 +194,11 @@ func fit(ps []part) string {
 	sort.SliceStable(order, func(i, j int) bool { return ps[order[i]].rank < ps[order[j]].rank })
 	kept := make([]bool, len(ps))
 	for _, i := range order {
-		if n := size + 2 + len(ps[i].text); ps[i].rank == 0 || n <= CommentMax {
+		if ps[i].rank == 0 {
+			kept[i] = true
+			continue
+		}
+		if n := size + 2 + len(ps[i].text); n <= CommentMax {
 			kept[i], size = true, n
 		}
 	}
@@ -165,22 +211,86 @@ func fit(ps []part) string {
 			left = append(left, p.name)
 		}
 	}
-	return join(append(out, part{text: fitNote(left)}, ps[len(ps)-1]))
+	return join(append(out, part{text: fitNote(left, shrunk)}, ps[len(ps)-1]))
 }
 
+// tableShrunk is how far fit shrank the table: to each stage's reference and verdict, and
+// how many stages it left out.
+type tableShrunk struct {
+	verdicts bool
+	left     int
+}
+
+// within is the table within room bytes: brief as it is, or each stage's reference and
+// verdict alone, or as many of those rows as fit and a last one counting the rest.
+func (t tableOf) within(brief string, room int) (string, tableShrunk) {
+	if len(brief) <= room {
+		return brief, tableShrunk{}
+	}
+	lines := []string{"| stage | verdict |", "|---|---|"}
+	size := len(lines[0]) + 1 + len(lines[1])
+	n := len(t.b.Stages)
+	rows := make([]string, n)
+	for i, s := range t.b.Stages {
+		rows[i] = row(cell(s.Ref), cell(verdictCell(s, t.unread)))
+	}
+	for _, r := range rows {
+		size += 1 + len(r)
+	}
+	if size <= room {
+		return strings.Join(append(lines, rows...), "\n"), tableShrunk{verdicts: true}
+	}
+	for n > 0 && size+1+len(moreRow(len(rows)-n)) > room {
+		n--
+		size -= 1 + len(rows[n])
+	}
+	return strings.Join(append(append(lines, rows[:n]...), moreRow(len(rows)-n)), "\n"), tableShrunk{verdicts: true, left: len(rows) - n}
+}
+
+// moreRow is the verdicts table's last row when stages are left out of it.
+func moreRow(left int) string { return row(fmt.Sprintf("… and %d more", left), "") }
+
 // fitNote says what fit shortened: every finding named by its identifier and object alone,
-// and the parts left out.
-func fitNote(left []string) string {
+// the table's steps and new findings briefly or each stage's reference and verdict alone
+// with how many stages are left out of it, and the parts left out.
+func fitNote(left []string, t tableShrunk) string {
 	note := "*To fit what Infrahub keeps of a comment (" + fmt.Sprint(CommentMax) +
 		" bytes), each finding is named by its identifier and object alone"
+	switch {
+	case t.left > 0:
+		note += fmt.Sprintf("; the table gives each stage's reference and verdict alone, and the last %d are left out of it", t.left)
+	case t.verdicts:
+		note += "; the table gives each stage's reference and verdict alone"
+	default:
+		note += ", and the table each step by its outcome and its new findings by the first few"
+	}
 	switch len(left) {
 	case 0:
 	case 1:
-		note += ", and " + left[0] + " is left out"
+		note += "; " + left[0] + " is left out"
 	default:
-		note += ", and " + strings.Join(left[:len(left)-1], ", ") + " and " + left[len(left)-1] + " are left out"
+		note += "; " + strings.Join(left[:len(left)-1], ", ") + " and " + left[len(left)-1] + " are left out"
 	}
 	return note + "; fylgja-twin's message is the whole report as text.*"
+}
+
+// nameMax is the most of a proposed change's name, or a branch's, a brief heading keeps, in
+// bytes: enough to tell one from another, and short enough that the heading always fits.
+const nameMax = 120
+
+// clip is s cut to at most limit bytes, at a rune's edge, with an ellipsis when cut.
+func clip(s string, limit int) string {
+	if len(s) <= limit {
+		return s
+	}
+	cut := 0
+	for i := range s {
+		if i > limit-len("…") {
+			break
+		}
+		cut = i
+	}
+	return s[:cut] + "…"
 }
 
 // whyText is why a run's end was not read: the messages of the document's rejections no stage
@@ -198,8 +308,9 @@ func whyText(doc *findings.Document, brief bool) string {
 
 // table is one row per stage: the reference, the at, the bundle, the step's outcome with the
 // nodes it touched, the wait's outcome, the counts, the new findings and the verdict, which
-// reads not read for a stage of a run whose end was not read.
-func table(b findings.RehearsalBlock, unread bool) string {
+// reads not read for a stage of a run whose end was not read. Brief, the step is its outcome
+// alone and the new findings the first few and how many more.
+func table(b findings.RehearsalBlock, unread, brief bool) string {
 	lines := []string{
 		"| stage | at | bundle | step | wait | verify | new findings | verdict |",
 		"|---|---|---|---|---|---|---|---|",
@@ -219,7 +330,11 @@ func table(b findings.RehearsalBlock, unread bool) string {
 		if s.Verify != nil {
 			counts = countsText(*s.Verify)
 		}
-		lines = append(lines, row(cell(s.Ref), at, bundle, cell(stepCell(s)), wait, counts, cell(newCell(s)), cell(verdictCell(s, unread))))
+		stepped, found := stepCell(s), newCell(s)
+		if brief {
+			stepped, found = stepOutcome(s), newBrief(s)
+		}
+		lines = append(lines, row(cell(s.Ref), at, bundle, cell(stepped), wait, counts, cell(found), cell(verdictCell(s, unread))))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -288,6 +403,38 @@ func stepCell(s findings.RehearsalStage) string {
 		parts = append(parts, "not landed "+strings.Join(not, ", "))
 	}
 	return strings.Join(parts, "; ")
+}
+
+// stepOutcome is the step cell brief: what the stage's child came to, without its nodes and
+// times.
+func stepOutcome(s findings.RehearsalStage) string {
+	if p := s.Provision; p != nil {
+		if p.Outcome == provisionReady {
+			return "created"
+		}
+		return "not built"
+	}
+	st := s.Step
+	switch {
+	case st == nil:
+		return ""
+	case st.Outcome == wire.StepDiverged:
+		return "diverged at " + st.Phase
+	case st.Outcome == wire.StepStepped, st.Outcome == wire.StepUnchanged, st.Outcome == outcomeCancelled, st.Outcome == outcomeRejected:
+		return st.Outcome
+	}
+	return "could not run"
+}
+
+// newFew is how many new findings a brief cell names before it counts the rest.
+const newFew = 2
+
+// newBrief is the new findings cell brief: the first few, then how many more.
+func newBrief(s findings.RehearsalStage) string {
+	if s.Role != RoleRehearsed || s.Wait == nil || len(s.NewFindings) <= newFew {
+		return newCell(s)
+	}
+	return fmt.Sprintf("%s and %d more", findingsText(s.NewFindings[:newFew]), len(s.NewFindings)-newFew)
 }
 
 // newCell is the stage's new findings: a dash on the baseline, none or each by rule and

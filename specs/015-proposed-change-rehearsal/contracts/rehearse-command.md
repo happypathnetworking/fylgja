@@ -220,13 +220,22 @@ with `remark-gfm` (tables), `remark-breaks` and `rehype-mermaid` (research §1.2
 refuses a text attribute when 3 and its UTF-8 length reach 4096 bytes, so the markdown is
 never longer than 4,092. A report that would be names each finding by its identifier and
 object alone, identical ones once with their count (``- `push.refused` n1 (×2)``), since the
-check's message holds the text; should that still be too long, whole sections are left
-out, the baseline's findings first, then the drawing, the warnings, the stages, the
-findings, the reproduce commands and the table. The heading, the run line and the caveat
-are always kept, and a line before the caveat says what was shortened: `*To fit what
-Infrahub keeps of a comment (4092 bytes), each finding is named by its identifier and
-object alone[, and … is left out]; fylgja-twin's message is the whole report as text.*`. A
-report that fits is rendered whole, as above.
+check's message holds the text; gives the table brief, each step by its outcome alone
+(`diverged at push`) and its new findings by the first two and how many more (`… and 198
+more`); and cuts a proposed change's name, or a branch's, in the heading to 120 bytes with
+an ellipsis. Should that still be too long, whole sections are left out, the baseline's
+findings first, then the drawing, the warnings, the stages, the findings and the reproduce
+commands. **The table is never left out, and keeps every stage's reference and verdict**:
+should the brief table not fit beside the heading, the run line and the caveat, it gives
+each stage's reference and verdict alone (`| stage | verdict |`), and should even that not
+fit, as no ceiling bounds a refusal's stages, as many stages as fit in order and a last row
+`| … and <n> more | |` (T083). The heading, the run line, the table and the caveat are
+always kept, and a line before the caveat says what was shortened: `*To fit what Infrahub
+keeps of a comment (4092 bytes), each finding is named by its identifier and object alone,
+and the table each step by its outcome and its new findings by the first few[; … are left
+out]; fylgja-twin's message is the whole report as text.*`, the table's clause reading `;
+the table gives each stage's reference and verdict alone[, and the last <n> are left out
+of it]` when it was shrunk further. A report that fits is rendered whole, as above.
 
 ## The API
 

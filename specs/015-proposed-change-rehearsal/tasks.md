@@ -941,3 +941,59 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
 
   Per plan (Constitution Check row V; Performance Goals) (contradicts)
   - *2026-10-21, the operator, answering the loop's question 5: (a), landed.* `plan.md`'s Constitution Check row V now says the markdown "is a function of the document and the plan's step pairs, since the block holds no step's changes", and its Performance Goals "a deadline of 1,980 s", T082's figure.
+
+## Phase 14: Convergence
+
+- [ ] T090 [behaviour] Make `scripts/bring-up.sh`'s `fylgja` part judge the running server and worker by their own start-up reports, not by the newest report in their logs.
+  - **The defect.**
+    - `ensure_role` (about lines 838–858) finds a process with `fylgja_pid`. That function matches ` serve` or ` worker run` in the process's arguments and never reads the `--listen` values.
+    - `ensure_role` then checks only that the process's binary is this tree's `bin/fylgja`.
+    - `report_ok` reads the newest start-up report in `local/server.log` or `local/worker.log`. Nothing ties that report to the running pid: neither the pid's arguments nor where its output goes.
+    - So a server started by `make serve` passes on an earlier server's report. `make serve` runs `bin/fylgja serve` (`Makefile`, line 107), on loopback alone, with its output on its own terminal. `docs/development.md`'s three-process paragraph names it as the way to start the server. The earlier report names both addresses, so the part prints `server: present` and its last line names `127.0.0.1:7650 and <bridge>:7650`, though nothing listens on the bridge. Tier 2's `TestChecksInsideInfrahub` then skips at `reached`, and the part reports the tier passed with the checks unproved.
+    - A worker started by `make worker` passes the same way on an earlier worker's login lines.
+    - FR-026 says the part MUST start the server on loopback and on the bridge address and "verify its report names both". `contracts/server-and-host.md` says "a server running from this tree on loopback alone is restarted".
+  - **The fix.**
+    - Keep a running process only when its standard output is the log the part reads, so that the last report in that log is its own. That is, `readlink /proc/<pid>/fd/1` is `$ROOT/local/<role>.log`, as `start_role` and `CLAUDE.md`'s start lines leave it.
+    - For the server, also require `--listen 127.0.0.1:7650` and `--listen <bridge>:7650` among its arguments, read from `/proc/<pid>/cmdline` as case 9's precondition and `bridgeServer` read them.
+    - Restart any other process, saying why, as the part restarts one whose report names too little.
+    - Treat an unreadable `fd/1` as the part treats an unreadable binary today.
+  - **Records.** `docs/development.md`'s three-process paragraph (about lines 173–174) gives `make serve` as the API's server, then says the server listens on loopback and the bridge. Its own row (about line 496) says `make serve` listens on loopback alone. Make the paragraph say so too, and point to the start line it gives.
+  - **Verify** in the scratchpad, with `fylgja_pid`, `report_ok`, `last_report_offset` and the new check extracted and run under `env -i bash`, as T071 and T073 did. Use stand-in processes named `fylgja` (a copy of `sleep`) with the arguments under test, whose output goes to a log or elsewhere:
+    - one whose output is not the log is refused, though the log holds a full report naming both addresses;
+    - a server whose arguments lack the bridge's `--listen` is refused;
+    - one started as `start_role` starts it, its report in its own log, passes.
+
+    Then run `bash -n` and `shellcheck scripts/bring-up.sh scripts/e2e.sh`. Do not run the script: it asks for sudo.
+
+  Per FR-026, US4/AC6 and contracts/server-and-host.md (partial)
+- [ ] T091 [behaviour] Make the reclaim's destroy refuse a run that started after the rehearsal read the runs in flight, rather than cancel it.
+  - **The defect.**
+    - `rehearsing.host` (`internal/server/rehearse.go`, about lines 442–461) reads `svc.InFlight` once and refuses on `holdingRun`. It then inspects the host and reclaims a dead rehearsal's twin through `svc.StartDestroy` (about line 505).
+    - `StartDestroy` (`internal/provision/client.go`, about lines 571–657) is `twin destroy`'s. It cancels whatever rehearsal, provisioning or step run it finds in flight, follows that run to its end, and then destroys.
+    - So a run that starts between the read and the reclaim is cancelled, and its twin destroyed. FR-007 says any other run in flight "MUST refuse the rehearsal before anything is touched". Two cases:
+      - The operator runs `twin step` by hand on a dead rehearsal's twin, which nothing refuses while no rehearsal runs, just as a `fylgja-twin` retry reads the runs in flight. The reclaim cancels the operator's step mid-phase and destroys the twin.
+      - Two checks reclaim the same dead twin, and the second's destroy finds the first's new rehearsal running and cancels it.
+    - The window is about a second: the host's inspect between the read and the destroy's own reads. T078 closed the same kind of window at the baseline's start.
+  - **The fix.**
+    - The reclaim's destroy cancels nothing. Give `provision.Service` a start of the destroy run that reads the runs in flight first, as `StartDestroy` does. A method of its own or an option of `StartDestroy`: either will do.
+    - When that start finds a rehearsal, provisioning or step run in flight, it returns that run with nothing cancelled, stopped or started. The server then refuses the rehearsal with `provision.InFlightRefusal`'s document: `run.in_flight` naming that run, exit 1, and no `reclaimed` block.
+    - A destroy run already in flight is attached to, as `StartDestroy` attaches.
+    - `twin destroy` keeps the cancelling `StartDestroy`.
+  - **Tests.**
+    - `internal/provision/client_test.go`, beside `TestDestroyCancelsInFlightStep` and `TestDestroyCancelsInFlightRehearsal`: the refusing start finds a step run, then a rehearsal run, in flight. It refuses naming each and cancels nothing.
+    - `internal/cli/twin_rehearse_host_test.go`: a fake service whose refusing destroy start finds a step run in flight. The rehearsal is refused `run.in_flight` naming it, exit 1. Nothing is cancelled or destroyed, and no run is started.
+    - `TestRehearseReclaimsADeadRehearsalsTwin` and `TestRehearseReclaimLeavingTheHostUnclean` still pass.
+  - **Records.** The feature's `contracts/rehearse-command.md` (step 5 of "What the server does, in order") and `contracts/cli.md`'s reclaim say that the reclaim refuses a run it finds in flight, and never cancels one.
+  - **Gates.** `make test`, `make lint`.
+
+  Per FR-007 and US4/AC5 (contradicts)
+- [ ] T092 [pin] Correct two lines of the feature's contract, and one of `contracts/cli.md`, where they say something other than what runs. Doc lines alone; no structure moves.
+  - **`show.record.rehearsal`.** `specs/015-proposed-change-rehearsal/contracts/rehearse-command.md` (about lines 265–266) says it "carries `{workflow_id, run_id}` or `null`". In fact the key is absent when the record names no rehearsal: `findings.ShowRecord`'s `Rehearsal` is `omitempty` (`internal/findings/render.go`, about line 620), and `show.schema.json` says so. T076 corrected `contracts/cli.md` and `contracts/api.md`, not this copy. Say what they say: `show.record.rehearsal` absent when the record names none, `verify.twin.rehearsal` `null`.
+  - **`stage list` beside a rehearsal.** `rehearse-command.md` (about line 278) and `contracts/cli.md` (about line 695) say "`stage list` marks nothing of a rehearsal: its twin is gone when it ends". That holds only once the twin is gone.
+    - While a rehearsal runs, and while a dead rehearsal's twin waits for its reclaim, the twin's record names a stage of the proposed change.
+    - `stages.List` marks that stage as it marks any twin's (`Twin: record != nil && record.names(st)`, `internal/stages/list.go`, about line 134). So `stage list` prints `← twin`, or `← twin (diverged towards …)` (`internal/server/stages.go`, about lines 126–128), and nothing there names the rehearsal; `twin show` does.
+
+    Say so in both.
+  - **Gates.** `make test` (the schema tests read the contracts).
+
+  Per FR-032 and FR-033 (partial)

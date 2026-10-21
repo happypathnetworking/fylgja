@@ -664,6 +664,22 @@ seed() {
   fail infrahub fixture "make infrahub-seed failed (local/bring-up-seed.log)"
 }
 
+# workers_carry_override: whether every running task worker carries the override's two
+# variables, read by name alone through docker inspect's template, never a value (T111). The
+# file in local/infrahub/ equal to the tree's says nothing of the running containers: a run
+# whose up -d failed or was interrupted, or an Infrahub recreated without the override, leaves
+# the task workers without them, and both checks failing for want of them.
+workers_carry_override() {
+  local ids id names
+  ids=$(compose ps -q task-worker) || return 1
+  [ -n "$ids" ] || return 1
+  for id in $ids; do
+    names=$(docker inspect -f '{{range .Config.Env}}{{index (split . "=") 0}}{{println}}{{end}}' "$id") || return 1
+    grep -qx FYLGJA_API_ADDRESS <<< "$names" || return 1
+    grep -qx FYLGJA_API_TOKEN <<< "$names" || return 1
+  done
+}
+
 part_infrahub() {
   local c outcome running wanted state override=present
 
@@ -699,11 +715,15 @@ part_infrahub() {
 
   # A copied or replaced override reaches a running container only when it is recreated:
   # up -d runs then even with every service up, and recreates those whose configuration
-  # moved, the task workers among them, and leaves the rest and the volumes as they are.
+  # moved, the task workers among them, and leaves the rest and the volumes as they are. It
+  # runs too when the override is in place but a running task worker lacks its variables.
   wanted=$(compose config --services | sort)
   running=$(compose ps --services --status running | sort)
-  if [ "$override" = present ] && [ -n "$running" ] && [ "$running" = "$wanted" ]; then
+  if [ "$override" = present ] && [ -n "$running" ] && [ "$running" = "$wanted" ] && workers_carry_override; then
     item infrahub compose present "(project $COMPOSE_PROJECT, $(wc -l <<< "$running") services running)"
+  elif [ "$override" = present ] && [ -n "$running" ] && [ "$running" = "$wanted" ]; then
+    compose up -d --quiet-pull
+    item infrahub compose installed "(project $COMPOSE_PROJECT, $(wc -l <<< "$wanted") services up; the task workers lacked FYLGJA_API_ADDRESS or FYLGJA_API_TOKEN and were recreated)"
   elif [ -n "$running" ] && [ "$running" = "$wanted" ]; then
     compose up -d --quiet-pull
     item infrahub compose installed "(project $COMPOSE_PROJECT, $(wc -l <<< "$wanted") services up; those the override moved recreated)"

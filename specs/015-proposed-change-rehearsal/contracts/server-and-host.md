@@ -46,7 +46,13 @@ file.
 
 - **`infrahub`**: when the override is copied or replaced (`item infrahub override
   installed`), `compose up -d` runs even when every service is running, so the task workers
-  are recreated with the entry and the variables.
+  are recreated with the entry and the variables. A second run that finds the override in
+  place and every service running reads each running task worker's environment variable
+  names (`docker inspect`, names only, never a value), and reports `infrahub compose
+  present` only when each carries `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN`; otherwise it
+  runs `compose up -d` as for a copied override, since an earlier `up -d` that failed or was
+  interrupted, or an Infrahub recreated without the override, leaves the file in place and
+  the task workers without them (T111).
 - **`fylgja`**: the bridge address is read from `docker network inspect bridge -f
   '{{(index .IPAM.Config 0).Gateway}}'` (a host with no `bridge` network fails the item
   naming it); the server is started with `--listen 127.0.0.1:7650 --listen <bridge>:7650`;

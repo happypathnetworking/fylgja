@@ -920,7 +920,7 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
   - **The section list.** data-model §7's list of the markdown's sections gains the Findings section (a status other than `ok`) and the shortening line (`CommentMax`).
 
   Per FR-014 and FR-033 (partial)
-- [ ] T089 [operator] Amend two lines of `plan.md` that no longer say what runs. Converge does not write `plan.md`.
+- [X] T089 [operator] Amend two lines of `plan.md` that no longer say what runs. Converge does not write `plan.md`.
   - **The lines.**
     - Constitution Check row V says the markdown "is a function of the block alone". The markdown is rendered from the document and the plan's step pairs, which T014's note records as necessary: the block holds no step's difference.
     - Performance Goals cites "a deadline of 1,950 s", which T082 moves to 1,980 s.
@@ -929,3 +929,4 @@ entries (T002–T005); `make diagrams` (T017, T022, T030, T049).
     - (b) Leave `plan.md` as the design-time record and note the departures in `research.md` §5.
 
   Per plan (Constitution Check row V; Performance Goals) (contradicts)
+  - *2026-10-21, the operator, answering the loop's question 5: (a), landed.* `plan.md`'s Constitution Check row V now says the markdown "is a function of the document and the plan's step pairs, since the block holds no step's changes", and its Performance Goals "a deadline of 1,980 s", T082's figure.

@@ -158,28 +158,29 @@ func join(ps []part) string {
 // other in rank order while it fits beside the note, which is placed before the caveat, the
 // last part. The table is never left out: should the brief one not fit beside the other
 // parts of rank 0, it gives each stage's reference and verdict alone, and should even that
-// not fit, as many stages as do and how many are left out.
+// not fit, as many stages as do and how many are left out. A document with no block has no
+// table, and its note names none.
 func fit(ps []part) string {
 	var names []string
-	stages := 0
+	longest := tableShrunk{none: true}
 	for _, p := range ps {
 		if p.rank > 0 {
 			names = append(names, p.name)
 		}
 		if p.table != nil {
-			stages = len(p.table.b.Stages)
+			longest = tableShrunk{verdicts: true, left: len(p.table.b.Stages)}
 		}
 	}
-	// The note naming every part, and the table cut to no stage, is the longest it can be.
+	// The note naming every part, and any table cut to no stage, is the longest it can be.
 	// The size counts the blank line before each part and, one byte short of the first
 	// one's, the newline at the end.
-	size := -1 + len(fitNote(names, tableShrunk{verdicts: true, left: stages})) + 2
+	size := -1 + len(fitNote(names, longest)) + 2
 	for _, p := range ps {
 		if p.rank == 0 && p.table == nil {
 			size += 2 + len(p.text)
 		}
 	}
-	var shrunk tableShrunk
+	shrunk := tableShrunk{none: longest.none}
 	for i, p := range ps {
 		if p.table == nil {
 			continue
@@ -215,8 +216,9 @@ func fit(ps []part) string {
 }
 
 // tableShrunk is how far fit shrank the table: to each stage's reference and verdict, and
-// how many stages it left out.
+// how many stages it left out; none when there is no table to shrink.
 type tableShrunk struct {
+	none     bool
 	verdicts bool
 	left     int
 }
@@ -252,11 +254,12 @@ func moreRow(left int) string { return row(fmt.Sprintf("… and %d more", left),
 
 // fitNote says what fit shortened: every finding named by its identifier and object alone,
 // the table's steps and new findings briefly or each stage's reference and verdict alone
-// with how many stages are left out of it, and the parts left out.
+// with how many stages are left out of it, when there is a table, and the parts left out.
 func fitNote(left []string, t tableShrunk) string {
 	note := "*To fit what Infrahub keeps of a comment (" + fmt.Sprint(CommentMax) +
 		" bytes), each finding is named by its identifier and object alone"
 	switch {
+	case t.none:
 	case t.left > 0:
 		note += fmt.Sprintf("; the table gives each stage's reference and verdict alone, and the last %d are left out of it", t.left)
 	case t.verdicts:

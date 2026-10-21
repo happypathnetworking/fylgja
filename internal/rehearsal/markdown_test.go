@@ -359,6 +359,70 @@ func wantStagesInTheTable(t *testing.T, label, md string, b findings.RehearsalBl
 	}
 }
 
+// A document with no block, refused before the proposed change was found, has no table, so
+// its shortened markdown's note names none and is sized as written: with findings enough
+// that their brief list lands on every byte across the boundary, each is within CommentMax
+// (T101).
+func TestMarkdownWithNoBlockFitsAComment(t *testing.T) {
+	message := "the deploy could not run: " + strings.Repeat("the workflow service's message, cut ", 14)
+	doc := func(n, pad int) *findings.Document {
+		var l findings.List
+		for i := range n {
+			object := fmt.Sprintf("lab fylgja node n%03d", i)
+			if i == n-1 {
+				object += strings.Repeat("x", pad)
+			}
+			l.AddStep(findings.Rejection, findings.StepDeploy, findings.RuleOperationFailed, object, message)
+		}
+		d := findings.NewDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-9"}, l)
+		d.Status = findings.StatusError
+		return d
+	}
+	// The fewest findings whose brief list is left out, unpadded; one fewer, padded by up to
+	// one finding's line and more, crosses the boundary a byte at a time.
+	n := 40
+	for strings.Contains(Markdown(doc(n, 0), nil), "**Findings**:") {
+		n++
+	}
+	kept, keptNear, leftOut := 0, 0, 0
+	for _, n := range []int{n - 1, n} {
+		for pad := 0; pad <= 44; pad++ {
+			d := doc(n, pad)
+			if full := join(parts(d, nil, false)); len(full) <= CommentMax {
+				t.Fatalf("%d findings: the full markdown is %d bytes, which a comment holds: it proves nothing", n, len(full))
+			}
+			md := Markdown(d, nil)
+			if len(md) > CommentMax {
+				t.Errorf("%d findings, the last padded by %d: the markdown is %d bytes, over the %d a comment holds", n, pad, len(md), CommentMax)
+			}
+			if strings.Contains(md, "table") {
+				t.Errorf("%d findings, the last padded by %d: the markdown names a table it does not have:\n%s", n, pad, md)
+			}
+			if !strings.HasPrefix(md, "## Fylgja did not rehearse branch change-9\n\nStatus **error**.\n\n") ||
+				!strings.HasSuffix(md, "; fylgja-twin's message is the whole report as text.*\n\n"+Caveat+"\n") {
+				t.Errorf("%d findings, the last padded by %d: the heading, the status, the note or the caveat is lost:\n%s", n, pad, md)
+			}
+			switch {
+			case strings.Contains(md, "**Findings**:"):
+				kept++
+				if len(md) > CommentMax-20 {
+					keptNear++
+				}
+			case strings.Contains(md, "the findings is left out"):
+				leftOut++
+			}
+		}
+	}
+	if kept == 0 || keptNear == 0 || leftOut == 0 {
+		t.Errorf("the sweep does not cross the boundary: the findings kept %d times, %d within 20 bytes of it, left out %d", kept, keptNear, leftOut)
+	}
+	if got, want := fitNote(nil, tableShrunk{none: true}),
+		"*To fit what Infrahub keeps of a comment (4092 bytes), each finding is named by its identifier and object alone; "+
+			"fylgja-twin's message is the whole report as text.*"; got != want {
+		t.Errorf("the note with no table: %s, want %s", got, want)
+	}
+}
+
 // What the ceiling does not bound still fits a comment, the table kept (T083): a stage with
 // many new findings names the first few and counts the rest; a rehearsal refused before any
 // run with many marks keeps every stage's reference and verdict, and with more marks than

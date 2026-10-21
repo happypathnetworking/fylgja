@@ -89,14 +89,16 @@ A later stage's wait is compared against them by `(rule, object)`. Not M11's *ba
 largest of each budget over the stage's nodes (Constitution II):
 
 ```
-baseline  = CheckHost 30 + Stage 60 + deploy + (readiness + 15) + (push + 15) + Record 30 + (wait 120 + 30)
+baseline  = CheckHost 30 + StopFollowing 30 + Stage 60 + deploy + (readiness + 15) + (push + 15) + Record 30 + (wait 120 + 30)
 step      = InspectTwin 30 + CheckHost 30 + CheckHost 30 (the plan) + Stage 60 + deploy + (readiness + 15) + (push + 15) + Record 30 + (wait 120 + 30)
 destroy   = PlanTeardown 30 + destroy + Unstage 30
 deadline  = baseline + Σ steps + destroy ; refused when > Ceiling (3600)
 ```
 
-The fixture (SR Linux: deploy 180, readiness 60, push 30, destroy 60): 570 + 630 + 630 +
-120 = 1,950 s for the branch point refused, two marks and the head. The check's
+The fixture (SR Linux: deploy 180, readiness 60, push 30, destroy 60): 600 + 630 + 630 +
+120 = 1,980 s for the branch point refused, two marks and the head; the baseline's
+stop-following bound (`FollowBudget`, 30 s), which its provision runs before it builds, was
+added at T082, the figure 1,950 s before it. The check's
 `timeout` is the ceiling, the destroy's whole budget (120 s), 300 s for the work before
 `start` and a margin of 180 s: 4,200 s.
 

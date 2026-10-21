@@ -535,7 +535,7 @@ rehearsal's comment, a new one, is told from it:
 ````markdown
 ## Fylgja rehearsed proposed change "fylgja-test-readme" on fylgja-test-readme
 
-Run `fylgja-rehearse 01a156e8-da76-7743-9ca7-53c29d65ddc5`, stages resolved at 2026-10-20T01:24:14Z. Status **ok**. 70.7s of the 1950s deadline (ceiling 3600s).
+Run `fylgja-rehearse 01a156e8-da76-7743-9ca7-53c29d65ddc5`, stages resolved at 2026-10-20T01:24:14Z. Status **ok**. 70.7s of the 1980s deadline (ceiling 3600s).
 
 | stage | at | bundle | step | wait | verify | new findings | verdict |
 |---|---|---|---|---|---|---|---|
@@ -580,7 +580,7 @@ and no ready proposed change:
 
 ```console
 $ bin/fylgja twin rehearse --branch fylgja-test-readme
-rehearsal of proposed change "fylgja-test-readme" (18e01843-9cb0-c335-33b3-c51c6053f556) on branch fylgja-test-readme: 4 stages; deadline 32m30s (ceiling 1h0m0s)
+rehearsal of proposed change "fylgja-test-readme" (18e01843-9cb0-c335-33b3-c51c6053f556) on branch fylgja-test-readme: 4 stages; deadline 33m0s (ceiling 1h0m0s)
 fylgja-test-readme/branch-point: refused (contract.node.missing)
   rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
 fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-20T01:23:39.142559+00:00 (written), "seeded"; baseline
@@ -606,7 +606,7 @@ stage fylgja-test-readme/branch-point: refused (contract.node.missing)
 stage fylgja-test-readme/seeded: created; settled after 4.9s (1 read); 15 held, 0 failed, 0 skipped; baseline
 stage fylgja-test-readme/third-link: stepped in 4.7s (push n1 2.6s, n3 2.7s); settled after 6.2s (1 read); 19 held, 0 failed, 0 skipped; passed
 stage fylgja-test-readme/head: unchanged in 1.1s; settled after 6.0s (1 read); 19 held, 0 failed, 0 skipped; passed
-rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 72.1s of the 1950s deadline
+rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 72.1s of the 1980s deadline
 ```
 
 It took 83 seconds end to end, and wrote nothing to Infrahub: the comment is the check's.

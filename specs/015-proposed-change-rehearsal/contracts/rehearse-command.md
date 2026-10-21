@@ -96,7 +96,7 @@ No status, step, operation or exit is new beyond the operation.
 ### The text
 
 ```
-rehearsal of proposed change "third link" (18df…) on branch change-1, draft: 4 stages; deadline 32m30s (ceiling 1h0m0s)
+rehearsal of proposed change "third link" (18df…) on branch change-1, draft: 4 stages; deadline 33m0s (ceiling 1h0m0s)
 change-1/branch-point: refused (contract.node.missing)
   rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
 change-1/seeded: branch change-1 at 2026-10-16T17:25:30.118244+00:00 (written), "after the link is cabled"; baseline
@@ -124,7 +124,7 @@ stage change-1/branch-point: refused (contract.node.missing)
 stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline
 stage change-1/third-link: stepped in 4.5s (push n1 2.5s, n3 2.6s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed
 stage change-1/head: unchanged in 0.9s; settled after 1.0s (1 read); 19 held, 0 failed, 0 skipped; passed
-rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1950s deadline
+rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1980s deadline
 ```
 
 Each child's lines come under a `stage <ref>:` line, the destroy's under `destroying the
@@ -154,7 +154,7 @@ GitHub-flavoured:
 ```markdown
 ## Fylgja rehearsed proposed change "third link" on change-1
 
-Run `fylgja-rehearse 01a1…`, stages resolved at 2026-10-17T14:02:11Z. Status **ok**. 118.4s of the 1950s deadline (ceiling 3600s).
+Run `fylgja-rehearse 01a1…`, stages resolved at 2026-10-17T14:02:11Z. Status **ok**. 118.4s of the 1980s deadline (ceiling 3600s).
 
 | stage | at | bundle | step | wait | verify | new findings | verdict |
 |---|---|---|---|---|---|---|---|

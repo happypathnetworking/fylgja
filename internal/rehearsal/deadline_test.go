@@ -9,12 +9,13 @@ import (
 
 // mechanism is research §1.7's constants: the host check, the stage, the record, the
 // teardown's plan, the unstage and the twin's inspection 30 or 60 s, the margins 15, 15 and
-// 30 s, and verify's default wait of 120 s.
+// 30 s, and verify's default wait of 120 s; and the baseline's stop-following bound, 30 s
+// (T082).
 var mechanism = Mechanism{
 	CheckHost: 30 * time.Second, Stage: 60 * time.Second, Record: 30 * time.Second,
 	PlanTeardown: 30 * time.Second, Unstage: 30 * time.Second, InspectTwin: 30 * time.Second,
 	ReadinessMargin: 15 * time.Second, PushMargin: 15 * time.Second, VerifyMargin: 30 * time.Second,
-	Wait: 120 * time.Second,
+	Wait: 120 * time.Second, Follow: 30 * time.Second,
 }
 
 // node is one node's plan with its package's four budgets: deploy, readiness, push and
@@ -46,19 +47,19 @@ func TestDeadline(t *testing.T) {
 		stages []DeadlineStage
 		want   time.Duration
 	}{
-		// The fixture's branch point is refused and adds nothing: the baseline 570, two
-		// marks and the head 630 each, the destroy 120.
+		// The fixture's branch point is refused and adds nothing: the baseline 600, its
+		// stop-following among it, two marks and the head 630 each, the destroy 120.
 		{"the fixture's refused branch point, two marks and the head",
 			append([]DeadlineStage{{Role: RoleRefused}}, stagesOf([]string{RoleBaseline, RoleRehearsed, RoleRehearsed}, fixtureNodes())...),
-			1950 * time.Second},
+			1980 * time.Second},
 		{"a compiled branch point", stagesOf([]string{RoleBaseline, RoleRehearsed, RoleRehearsed, RoleRehearsed}, fixtureNodes()),
-			2580 * time.Second},
+			2610 * time.Second},
 		// Each budget is the largest over a stage's nodes: deploy 300 and readiness 90 from
-		// the EOS node, push and destroy alike; the baseline 720, each step 780.
+		// the EOS node, push and destroy alike; the baseline 750, each step 780.
 		{"the mixed fixture's three stages", stagesOf([]string{RoleBaseline, RoleRehearsed, RoleRehearsed}, mixed),
-			2400 * time.Second},
+			2430 * time.Second},
 		{"one stage alone is the baseline and the destroy", stagesOf([]string{RoleBaseline}, fixtureNodes()),
-			(570 + 120) * time.Second},
+			(600 + 120) * time.Second},
 	} {
 		if got := Deadline(mechanism, c.stages); got != c.want {
 			t.Errorf("%s: Deadline = %v, want %v", c.name, got, c.want)
@@ -71,15 +72,15 @@ func TestDeadline(t *testing.T) {
 	// A stage of SR Linux and EOS nodes takes each budget's largest, whichever node holds it:
 	// the deploy from one node and the destroy from another.
 	odd := []wire.NodePlan{node("a", 100, 10, 5, 200), node("b", 300, 90, 40, 60)}
-	want := (30 + 60 + 300 + (90 + 15) + (40 + 15) + 30 + (120 + 30) + 30 + 200 + 30) * time.Second
+	want := (30 + 30 + 60 + 300 + (90 + 15) + (40 + 15) + 30 + (120 + 30) + 30 + 200 + 30) * time.Second
 	if got := Deadline(mechanism, stagesOf([]string{RoleBaseline}, odd)); got != want {
 		t.Errorf("a stage of two nodes' budgets: Deadline = %v, want %v", got, want)
 	}
 
-	// Six marks of the mixed twin need 720 + 6×780 + 120 = 5,520 s, over the ceiling.
+	// Six marks of the mixed twin need 750 + 6×780 + 120 = 5,550 s, over the ceiling.
 	over := Deadline(mechanism, stagesOf([]string{RoleBaseline, RoleRehearsed, RoleRehearsed, RoleRehearsed,
 		RoleRehearsed, RoleRehearsed, RoleRehearsed}, mixed))
-	if over != 5520*time.Second || Fits(over, Ceiling) {
+	if over != 5550*time.Second || Fits(over, Ceiling) {
 		t.Errorf("a stage list over the ceiling: Deadline = %v, fits %v", over, Fits(over, Ceiling))
 	}
 	if !Fits(Ceiling, Ceiling) || Fits(Ceiling+time.Second, Ceiling) {

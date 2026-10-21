@@ -141,7 +141,7 @@ func rehearsalDocuments() []labelledDocument {
 	failed.Status = StatusNonconforming
 	failed.Rehearsal = &RehearsalBlock{
 		ProposedChange: StageChange{ID: "pc-1", Name: "third link", Branch: rehearsalChange, Draft: true},
-		ResolvedAt:     rehearsalResAt, DeadlineS: 2580, CeilingS: 3600, UsedS: 301.6,
+		ResolvedAt:     rehearsalResAt, DeadlineS: 2610, CeilingS: 3600, UsedS: 301.6,
 		Reclaimed: &RehearsalReclaim{Run: rehearsalRun("fylgja-rehearse", reclaimedRunID), Cleanup: *destroyed},
 		Run:       &ShowRef{WorkflowID: "fylgja-rehearse", RunID: rehearseRunID},
 		Baseline:  &RehearsalBaseline{Ref: "change-1/seeded", Findings: []StepWaitFailing{baselineFinding}},
@@ -156,7 +156,7 @@ func rehearsalDocuments() []labelledDocument {
 	// The run the deadline cut, during the step into change-1/live.
 	var cut List
 	cut.AddStep(Rejection, StepReadiness, RuleRehearsalDeadlineCut, "change-1/live",
-		"the deadline of 1950s passed at stage change-1/live: change-1/seeded took 88.1s")
+		"the deadline of 1980s passed at stage change-1/live: change-1/seeded took 88.1s")
 	cutSeeded := seededStage("baseline")
 	cutSeeded.Provision = &RehearsalProvision{Outcome: "ready", Run: rehearsalRun("fylgja-provision", provisionRunID)}
 	cutSeeded.Wait = &RehearsalWait{Outcome: "settled", BudgetS: 120, Reads: 2, AfterS: 3.2}
@@ -171,7 +171,7 @@ func rehearsalDocuments() []labelledDocument {
 	errored.Status = StatusError
 	errored.Rehearsal = &RehearsalBlock{
 		ProposedChange: StageChange{ID: "pc-1", Name: "third link", Branch: rehearsalChange},
-		ResolvedAt:     rehearsalResAt, DeadlineS: 1950, CeilingS: 3600, UsedS: 1971.2,
+		ResolvedAt:     rehearsalResAt, DeadlineS: 1980, CeilingS: 3600, UsedS: 2001.2,
 		Run:      &ShowRef{WorkflowID: "fylgja-rehearse", RunID: rehearseRunID},
 		Baseline: &RehearsalBaseline{Ref: "change-1/seeded"},
 		Stages:   []RehearsalStage{cutSeeded, cutLive, headStage("not_reached", "not_reached")},
@@ -193,7 +193,7 @@ func rehearsalDocuments() []labelledDocument {
 	baselineFailed.Status = StatusFailed
 	baselineFailed.Rehearsal = &RehearsalBlock{
 		ProposedChange: StageChange{ID: "pc-1", Name: "third link", Branch: rehearsalChange},
-		ResolvedAt:     rehearsalResAt, DeadlineS: 1950, CeilingS: 3600, UsedS: 243.0,
+		ResolvedAt:     rehearsalResAt, DeadlineS: 1980, CeilingS: 3600, UsedS: 243.0,
 		Run:     &ShowRef{WorkflowID: "fylgja-rehearse", RunID: rehearseRunID},
 		Stages:  []RehearsalStage{unbuilt, liveStage("rehearsed", "not_reached")},
 		Destroy: &CleanupBlock{Teardown: "nothing", Unstage: "nothing"},

@@ -1618,7 +1618,7 @@ func rehearseInput() RehearseInput {
 	return RehearseInput{
 		ProposedChange: findings.StageChange{ID: "pc-1", Name: "third link", Branch: "change-1", Draft: false},
 		ResolvedAt:     "2026-10-17T14:02:11.000000Z",
-		DeadlineS:      1950,
+		DeadlineS:      1980,
 		CeilingS:       3600,
 		Stages: []RehearseStage{
 			{Ref: "change-1/branch-point", Label: "branch-point", AtSource: "branch_point", Role: "refused",

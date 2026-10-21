@@ -260,8 +260,8 @@ func TestRehearseEveryStagePasses(t *testing.T) {
 		}
 		in := svc.rehearsed[0]
 		if in.ProposedChange != (findings.StageChange{ID: "pc-1", Name: "change pc-1", Branch: lessLink, Draft: true}) ||
-			in.DeadlineS != 1950 || in.CeilingS != 3600 || in.Version != version || in.ResolvedAt == "" {
-			t.Errorf("the run's input %+v; want pc-1, a 1950s deadline under the 3600s ceiling, this build", in)
+			in.DeadlineS != 1980 || in.CeilingS != 3600 || in.Version != version || in.ResolvedAt == "" {
+			t.Errorf("the run's input %+v; want pc-1, a 1980s deadline under the 3600s ceiling, this build", in)
 		}
 		var roles []string
 		for _, s := range in.Stages {
@@ -294,7 +294,7 @@ func TestRehearseEveryStagePasses(t *testing.T) {
 			"stage " + seededRef + ": created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline\n",
 			"stage " + thirdRef + ": stepped in 4.5s (push n1 2.5s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed\n",
 			"stage " + headRef + ": unchanged in 4.5s; settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed\n",
-			"rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1950s deadline\n",
+			"rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1980s deadline\n",
 		} {
 			if !strings.Contains(stdout, want) {
 				t.Errorf("the text lacks %q:\n%s", want, stdout)
@@ -334,9 +334,9 @@ func TestRehearseEveryStagePasses(t *testing.T) {
 		for _, s := range in.Stages {
 			roles = append(roles, s.Role)
 		}
-		if !slices.Equal(roles, []string{"baseline", "rehearsed", "rehearsed", "rehearsed"}) || in.DeadlineS != 2580 ||
+		if !slices.Equal(roles, []string{"baseline", "rehearsed", "rehearsed", "rehearsed"}) || in.DeadlineS != 2610 ||
 			in.Stages[0].Provision == nil || in.Stages[0].Branch != "main" || in.Stages[0].At != fakeBranchedFrom {
-			t.Errorf("roles %v, deadline %ds, the branch point %+v; want it the baseline, three stages rehearsed, 2580s",
+			t.Errorf("roles %v, deadline %ds, the branch point %+v; want it the baseline, three stages rehearsed, 2610s",
 				roles, in.DeadlineS, in.Stages[0])
 		}
 		if want := []string{pointRef + " baseline baseline", seededRef + " rehearsed passed", thirdRef + " rehearsed passed",
@@ -709,7 +709,7 @@ func TestRehearseDeadlineCut(t *testing.T) {
 	cut := stepped(thirdRef, "s1", provision.OutcomeCancelled, nil, rehearsal.VerdictError)
 	cut.Step.Phase, cut.Step.Step = findings.StepReadiness, findings.StepReadiness
 	res := rehearsedRun(rehearsal.OutcomeCut, nil, cut, provision.RehearsedStage{Ref: headRef, Verdict: rehearsal.VerdictNotReached})
-	res.DeadlineHit, res.Reached, res.UsedS = true, thirdRef, 1950.2
+	res.DeadlineHit, res.Reached, res.UsedS = true, thirdRef, 1980.2
 	newSvc := func() *fakeService {
 		return &fakeService{rehearseRun: rehearseRun, rehearseEvents: rehearseEvents(thirdRef), rehearseResult: res}
 	}
@@ -726,7 +726,7 @@ func TestRehearseDeadlineCut(t *testing.T) {
 	code, doc, _ := rehearseDoc(t, "--branch", lessLink)
 	f := findingOf(t, doc, findings.RuleRehearsalDeadlineCut)
 	if code != findings.ExitError || doc.Status != findings.StatusError || f.Object != thirdRef || f.Step != findings.StepReadiness ||
-		!strings.Contains(f.Message, "the deadline of 1950s passed at stage "+thirdRef) || !strings.Contains(f.Message, seededRef+" took 70.0s") {
+		!strings.Contains(f.Message, "the deadline of 1980s passed at stage "+thirdRef) || !strings.Contains(f.Message, seededRef+" took 70.0s") {
 		t.Errorf("exit %d, status %s, %+v; want 2, error, the cut naming the stage, the baseline's time and the deadline", code, doc.Status, f)
 	}
 	if doc.Rehearsal.Destroy == nil || doc.Rehearsal.Stages[3].Verdict != string(rehearsal.VerdictNotReached) {
@@ -746,10 +746,10 @@ func TestRehearseDeadlineOverTheCeiling(t *testing.T) {
 	code, doc, raw := rehearseDoc(t, "--branch", lessLink)
 	f := findingOf(t, doc, findings.RuleRehearsalDeadlineUnfit)
 	if code != findings.ExitRejected || doc.Status != findings.StatusRejected || f.Step != findings.StepStart || f.Object != lessLink ||
-		!strings.Contains(f.Message, "32m30s (1950s)") || !strings.Contains(f.Message, "30m0s (1800s)") {
-		t.Errorf("exit %d, status %s, %+v; want 1, rejected, unfit at start naming 1950s and the 1800s ceiling\n%s", code, doc.Status, f, raw)
+		!strings.Contains(f.Message, "33m0s (1980s)") || !strings.Contains(f.Message, "30m0s (1800s)") {
+		t.Errorf("exit %d, status %s, %+v; want 1, rejected, unfit at start naming 1980s and the 1800s ceiling\n%s", code, doc.Status, f, raw)
 	}
-	if doc.Rehearsal == nil || doc.Rehearsal.DeadlineS != 1950 || doc.Rehearsal.CeilingS != 1800 || doc.Rehearsal.Run != nil {
+	if doc.Rehearsal == nil || doc.Rehearsal.DeadlineS != 1980 || doc.Rehearsal.CeilingS != 1800 || doc.Rehearsal.Run != nil {
 		t.Errorf("the block %+v; want the deadline and the ceiling named, no run", doc.Rehearsal)
 	}
 	startedNothing(t, "over the ceiling", clab, nil)
@@ -772,7 +772,7 @@ func TestRehearseJSON(t *testing.T) {
 		t.Fatalf("exit %d, operation %s, subject %+v; want 0, twin.rehearse on %s, run %s, with a block\n%s",
 			code, doc.Operation, doc.Subject, lessLink, rehearseRun, raw)
 	}
-	if b.DeadlineS != 1950 || b.CeilingS != 3600 || b.UsedS != 118.4 || b.Run == nil || b.Run.RunID != rehearseRun ||
+	if b.DeadlineS != 1980 || b.CeilingS != 3600 || b.UsedS != 118.4 || b.Run == nil || b.Run.RunID != rehearseRun ||
 		b.Destroy == nil || len(b.Destroy.Removed) != 2 || len(b.Reproduce) != 0 || b.ProposedChange.ID != "pc-1" {
 		t.Errorf("the block %+v; want the deadline, the time used, the run, the destroy and no reproduce", b)
 	}
@@ -803,8 +803,8 @@ func TestRehearseOneStage(t *testing.T) {
 	none := findingOf(t, doc, findings.RuleRehearsalStepsNone)
 	in := svc.rehearsed[0]
 	if code != findings.ExitOK || doc.Status != findings.StatusOK || none.Severity != findings.Warning || none.Step != findings.StepResolve ||
-		len(in.Stages) != 2 || in.Stages[1].Role != rehearsal.RoleBaseline || in.DeadlineS != 690 {
-		t.Errorf("exit %d, status %s, %+v, the run's stages %+v, deadline %ds; want 0, ok, the warning, the head the baseline, 690s\n%s",
+		len(in.Stages) != 2 || in.Stages[1].Role != rehearsal.RoleBaseline || in.DeadlineS != 720 {
+		t.Errorf("exit %d, status %s, %+v, the run's stages %+v, deadline %ds; want 0, ok, the warning, the head the baseline, 720s\n%s",
 			code, doc.Status, none, in.Stages, in.DeadlineS, raw)
 	}
 }
@@ -939,7 +939,7 @@ func TestRehearseText(t *testing.T) {
 	code, stdout, stderr := rehearse(t, "--branch", lessLink)
 	missing := "rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it"
 	want := strings.Join([]string{
-		`rehearsal of proposed change "change pc-1" (pc-1) on branch change-1, draft: 4 stages; deadline 32m30s (ceiling 1h0m0s)`,
+		`rehearsal of proposed change "change pc-1" (pc-1) on branch change-1, draft: 4 stages; deadline 33m0s (ceiling 1h0m0s)`,
 		`change-1/branch-point: refused (contract.node.missing)`,
 		`  ` + missing,
 		`change-1/seeded: branch change-1 at 2026-10-16T08:30:00.000000+00:00 (written), "after the link is cabled"; baseline`,
@@ -966,7 +966,7 @@ func TestRehearseText(t *testing.T) {
 		`stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline`,
 		`stage change-1/third-link: stepped in 4.5s (push n1 2.5s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed`,
 		`stage change-1/head: unchanged in 4.5s; settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed`,
-		`rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1950s deadline`,
+		`rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1980s deadline`,
 	}, "\n") + "\n"
 	if code != findings.ExitOK || stdout != want {
 		t.Errorf("exit %d, stdout:\n%s\nwant 0 and:\n%s", code, stdout, want)

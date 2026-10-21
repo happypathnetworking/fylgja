@@ -42,7 +42,7 @@ func TestMarkdown(t *testing.T) {
 	if want := strings.Join([]string{
 		`## Fylgja rehearsed proposed change "third link" on change-1`,
 		"",
-		"Run `fylgja-rehearse 01a1b2c3-0000-7000-8000-0000000000aa`, stages resolved at 2026-10-17T14:02:11Z. Status **ok**. 118.4s of the 1950s deadline (ceiling 3600s).",
+		"Run `fylgja-rehearse 01a1b2c3-0000-7000-8000-0000000000aa`, stages resolved at 2026-10-17T14:02:11Z. Status **ok**. 118.4s of the 1980s deadline (ceiling 3600s).",
 		"",
 		"| stage | at | bundle | step | wait | verify | new findings | verdict |",
 		"|---|---|---|---|---|---|---|---|",
@@ -83,7 +83,7 @@ func TestMarkdown(t *testing.T) {
 	if want := strings.Join([]string{
 		`## Fylgja rehearsed proposed change "third link" on change-1`,
 		"",
-		"Run `fylgja-rehearse 01a1b2c3-0000-7000-8000-0000000000aa`, stages resolved at 2026-10-17T14:02:11Z. Status **nonconforming**. 301.6s of the 2580s deadline (ceiling 3600s).",
+		"Run `fylgja-rehearse 01a1b2c3-0000-7000-8000-0000000000aa`, stages resolved at 2026-10-17T14:02:11Z. Status **nonconforming**. 301.6s of the 2610s deadline (ceiling 3600s).",
 		"",
 		"| stage | at | bundle | step | wait | verify | new findings | verdict |",
 		"|---|---|---|---|---|---|---|---|",
@@ -380,7 +380,7 @@ func TestMarkdownOfARefusal(t *testing.T) {
 	for _, want := range []string{
 		`## Fylgja did not rehearse proposed change "third link" on change-1`,
 		"Run `fylgja-rehearse " + rehearseRun + "` touched nothing, since a run already holds the id of its baseline's provision, " +
-			"and no destroy was needed; stages resolved at 2026-10-17T14:02:11Z. Status **rejected**. Deadline 1950s (ceiling 3600s).",
+			"and no destroy was needed; stages resolved at 2026-10-17T14:02:11Z. Status **rejected**. Deadline 1980s (ceiling 3600s).",
 		`  s1["change-1/seeded<br/>not reached"]`,
 		"**Findings**:\n\n- `contract.node.missing` main: branch defines FylgjaContract but holds no instance of it\n" +
 			"- `run.in_flight` fylgja-provision: the rehearsal's fylgja-provision could not start: a run is already in flight under its id",
@@ -397,7 +397,7 @@ func TestMarkdownOfARefusal(t *testing.T) {
 		`## Fylgja started rehearsing proposed change "third link" on change-1`,
 		"",
 		"Run `fylgja-rehearse " + rehearseRun + "` was started, and its end was not read: " + lostWhy + ". It goes on to its destroy, " +
-			"and `fylgja twin show` says where it is. Stages resolved at 2026-10-17T14:02:11Z. Status **error**. Deadline 1950s (ceiling 3600s).",
+			"and `fylgja twin show` says where it is. Stages resolved at 2026-10-17T14:02:11Z. Status **error**. Deadline 1980s (ceiling 3600s).",
 		"",
 		"| stage | at | bundle | step | wait | verify | new findings | verdict |",
 		"|---|---|---|---|---|---|---|---|",

@@ -311,7 +311,7 @@ func StageLines(b findings.RehearsalBlock) []string {
 // not read says it was started, why its end was not read, and that it goes on to its
 // destroy, and never what its stages came to (FR-021).
 //
-//	rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1950s deadline
+//	rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1980s deadline
 //	rehearsal nonconforming: stage change-1/bad-port failed at phase push; the twin is destroyed; reproduce it by hand:
 //	  fylgja twin create --stage change-1/seeded
 //	rehearsal error: run fylgja-rehearse 01a1… was started and its end was not read (waiting for run 01a1…: …); it goes on to its destroy, and fylgja twin show says where it is

@@ -27,7 +27,7 @@ make build && make test && make lint
 Expected: green, under 45 s wall uncached. Among the tests that must exist and pass:
 `internal/rehearsal`'s `TestVerdict` (a finding the baseline had, one it did not, one the
 baseline alone had, a divergence at each phase, a wait incomplete, a stage not reached, a
-settled wait, `verify.record.holds` ignored), `TestDeadline` (the fixture's 1,950 s, the
+settled wait, `verify.record.holds` ignored), `TestDeadline` (the fixture's 1,980 s, the
 mixed fixture's, the ceiling refused), `TestMarkdown` (the table, the drawing with a refused
 branch point, an unchanged edge and a failed stage, the escaping, the caveat, the reproduce
 commands, no content line), `TestReproduce`, `TestBlockValidates` against
@@ -87,7 +87,7 @@ Expected: the plan as 014 prints it (the branch point refused, three ids); the r
 prints the stage lines, the provision's, the baseline's verify (`settled`, 15 held), the
 two steps (`stepped` with n1 and n3 pushed, then `unchanged`), the destroy, and `rehearsal
 ok`, exit 0; `twin show` reports no twin; the document's rows read `refused`, `baseline`,
-`passed`, `passed`, `deadline_s` 1950, `reproduce` empty; the markdown begins with the
+`passed`, `passed`, `deadline_s` 1980, `reproduce` empty; the markdown begins with the
 heading naming the run and `resolved_at`, then the table.
 
 Then the failing stage, the interrupt and the reclaim:

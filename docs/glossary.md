@@ -280,7 +280,7 @@ Fylgja was built stays private ([D-043](decisions.md#d-043)). The *launch* is th
 *rehearsal* may run before its destroy: its stages' budgets summed from their node plans,
 each the largest of its packages' deploy, readiness, push and destroy budgets over the
 stage's nodes, plus the mechanism constants that bound each activity and the wait's
-default. It is 1,950 s for the three SR Linux stages the fixture tool composes. Over the
+default. It is 1,980 s for the three SR Linux stages the fixture tool composes. Over the
 **ceiling**, 3,600 s, a constant of Fylgja's own, a rehearsal is refused before any run
 (`rehearsal.deadline.unfit`); a stage still running when it passes is cut, its *verdict*
 `error` (`rehearsal.deadline.cut`), and the twin destroyed. `fylgja-twin`'s timeout,

@@ -138,7 +138,7 @@ type example struct {
 
 func passedRun() example {
 	return example{"ok, the branch point refused and the head unchanged",
-		input(1950, branchPoint(), seeded(), thirdLink(RoleRehearsed), head(RoleRehearsed)),
+		input(1980, branchPoint(), seeded(), thirdLink(RoleRehearsed), head(RoleRehearsed)),
 		Result{Outcome: OutcomeOK, Run: run(), UsedS: 118.4, Destroy: destroyed(), Stages: []StageResult{
 			built(wait(wire.WaitSettled, 3.2, 2), counts(6, 0), 52.6),
 			{Ref: change + "/third-link", Verdict: VerdictPassed,
@@ -160,7 +160,7 @@ func failedRun() example {
 	refused.AddStep(findings.Rejection, findings.StepPush, findings.RulePushRefused, "n1",
 		"n1 refused artifact device-config (checksum 9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3) at line 12: invalid port ethernet-1/99")
 	return example{"nonconforming, a stage diverged at its push",
-		input(2580, branchPoint(), seeded(), thirdLink(RoleRehearsed), badPort(RoleRehearsed), head(RoleRehearsed)),
+		input(2610, branchPoint(), seeded(), thirdLink(RoleRehearsed), badPort(RoleRehearsed), head(RoleRehearsed)),
 		Result{Outcome: OutcomeStageFailed, Run: run(), UsedS: 301.6, Destroy: destroyed(), Stages: []StageResult{
 			built(wait(wire.WaitExpired, 120, 58, baselineFinding), counts(6, 1), 172.4),
 			{Ref: change + "/third-link", Verdict: VerdictPassed,
@@ -209,7 +209,7 @@ func newFindingRun() example {
 	added := wire.StepFinding{Rule: findings.RuleVerifyNeighbor, Object: "n1:ethernet-1/3",
 		Message: "node n1 (172.20.20.2): port ethernet-1/3 sees no neighbour"}
 	return example{"nonconforming, a finding the baseline did not have",
-		input(1950, seeded(), thirdLink(RoleRehearsed), head(RoleRehearsed)),
+		input(1980, seeded(), thirdLink(RoleRehearsed), head(RoleRehearsed)),
 		Result{Outcome: OutcomeStageFailed, Run: run(), UsedS: 190.2, Destroy: destroyed(), Stages: []StageResult{
 			built(wait(wire.WaitSettled, 3.2, 2), counts(6, 0), 52.6),
 			{Ref: change + "/third-link", Verdict: VerdictFailed,
@@ -224,8 +224,8 @@ func cutRun() example {
 	cut := stepTo(change+"/third-link", 1, outcomeCancelled, 1861.9)
 	cut.Phase, cut.Step = findings.StepReadiness, findings.StepReadiness
 	return example{"error, the deadline cut a step",
-		input(1950, seeded(), thirdLink(RoleRehearsed), head(RoleRehearsed)),
-		Result{Outcome: OutcomeCut, Run: run(), UsedS: 1971.2, Destroy: destroyed(), Stages: []StageResult{
+		input(1980, seeded(), thirdLink(RoleRehearsed), head(RoleRehearsed)),
+		Result{Outcome: OutcomeCut, Run: run(), UsedS: 2001.2, Destroy: destroyed(), Stages: []StageResult{
 			built(wait(wire.WaitSettled, 3.2, 2), counts(6, 0), 88.1),
 			{Ref: change + "/third-link", Verdict: VerdictError, Step: cut, TookS: 1861.9},
 		}},
@@ -236,7 +236,7 @@ func notBuiltRun() example {
 	var timeout findings.List
 	timeout.AddStep(findings.Rejection, findings.StepReadiness, findings.RuleReadinessTimeout, "n2", "n2 did not answer its probe within 60s")
 	return example{"failed, the baseline not built",
-		input(1950, branchPoint(), seeded(), thirdLink(RoleRehearsed)),
+		input(1980, branchPoint(), seeded(), thirdLink(RoleRehearsed)),
 		Result{Outcome: OutcomeBaselineFailed, Run: run(), UsedS: 243.0,
 			Destroy: &findings.CleanupBlock{Teardown: "nothing", Unstage: "nothing"}, Stages: []StageResult{
 				{Ref: change + "/seeded", Verdict: VerdictError, Findings: timeout, TookS: 241.3,
@@ -272,7 +272,7 @@ func aloneRun() example {
 	s.Findings.AddStep(findings.Warning, findings.StepResolve, findings.RuleRehearsalStepsNone, s.Ref,
 		"one stage compiled: it is built, verified and destroyed, and no step is rehearsed")
 	return example{"ok, one stage alone",
-		input(690, s),
+		input(720, s),
 		Result{Outcome: OutcomeOK, Run: run(), UsedS: 61.2, Destroy: destroyed(), Stages: []StageResult{
 			built(wait(wire.WaitSettled, 3.2, 2), counts(6, 0), 55.3),
 		}},
@@ -290,7 +290,7 @@ func refusedRun() example {
 // no stage reached, nothing touched, and no destroy (T078).
 func heldRun() example {
 	return example{"rejected, the baseline's provision held by another run",
-		input(1950, branchPoint(), seeded(), thirdLink(RoleRehearsed)),
+		input(1980, branchPoint(), seeded(), thirdLink(RoleRehearsed)),
 		Result{Outcome: OutcomeRejected, Run: run(), UsedS: 0.1, Stages: []StageResult{
 			{Ref: change + "/seeded", Verdict: VerdictNotReached},
 			{Ref: change + "/third-link", Verdict: VerdictNotReached},
@@ -302,7 +302,7 @@ func heldRun() example {
 // result, so the block knows the run alone (T079).
 func lostRun() example {
 	return example{"error, the run's end not read",
-		input(1950, branchPoint(), seeded(), thirdLink(RoleRehearsed), head(RoleRehearsed)), Result{Run: run()},
+		input(1980, branchPoint(), seeded(), thirdLink(RoleRehearsed), head(RoleRehearsed)), Result{Run: run()},
 		findings.StatusError}
 }
 
@@ -514,7 +514,7 @@ func TestBuildFilesTheRehearsalsOwnFindings(t *testing.T) {
 		{newFindingRun(), 1, findings.RuleRehearsalStageFailed, findings.StepObserve,
 			"its wait holds a finding the baseline's did not: verify.neighbor n1:ethernet-1/3"},
 		{cutRun(), 1, findings.RuleRehearsalDeadlineCut, findings.StepReadiness,
-			"the deadline of 1950s passed at stage change-1/third-link: change-1/seeded took 88.1s"},
+			"the deadline of 1980s passed at stage change-1/third-link: change-1/seeded took 88.1s"},
 		{notBuiltRun(), 1, findings.RuleRehearsalBaselineFailed, findings.StepProvision,
 			"the baseline change-1/seeded could not be built: its provision ended failed at readiness"},
 		{notBuiltErrorRun(), 1, findings.RuleRehearsalStageError, findings.StepDeploy, "its provision ended error at deploy"},
@@ -614,7 +614,7 @@ func TestStageLinesAndClosing(t *testing.T) {
 			"stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline",
 			"stage change-1/third-link: stepped in 4.5s (push n1 2.5s, n3 2.6s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed",
 			"stage change-1/head: unchanged in 0.9s; settled after 1.0s (1 read); 19 held, 0 failed, 0 skipped; passed",
-		}, "rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1950s deadline"},
+		}, "rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1980s deadline"},
 		{failedRun(), []string{
 			"stage change-1/branch-point: refused (contract.node.missing)",
 			"stage change-1/seeded: created; expired after 120.0s (58 reads); 14 held, 1 failed, 0 skipped; baseline",
@@ -640,7 +640,7 @@ func TestStageLinesAndClosing(t *testing.T) {
 			"stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline",
 			"stage change-1/third-link: cancelled at phase readiness; error: the deadline passed",
 			"stage change-1/head: not reached",
-		}, "rehearsal error: the deadline of 1950s passed at stage change-1/third-link; the twin is destroyed"},
+		}, "rehearsal error: the deadline of 1980s passed at stage change-1/third-link; the twin is destroyed"},
 		{notBuiltRun(), []string{
 			"stage change-1/branch-point: refused (contract.node.missing)",
 			"stage change-1/seeded: not built: its provision ended failed at readiness",
@@ -655,7 +655,7 @@ func TestStageLinesAndClosing(t *testing.T) {
 			"rehearsal unclean: 3 stages rehearsed, every one passed; the destroy left lab fylgja (1 container); twin destroy clears it"},
 		{aloneRun(), []string{
 			"stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline",
-		}, "rehearsal ok: the baseline alone was built and verified, and no step was rehearsed; the twin is destroyed; 61.2s of the 690s deadline"},
+		}, "rehearsal ok: the baseline alone was built and verified, and no step was rehearsed; the twin is destroyed; 61.2s of the 720s deadline"},
 		{refusedRun(), []string{
 			"stage change-1/seeded: not reached", "stage change-1/third-link: not reached",
 			"stage change-1/bad-port: not reached", "stage change-1/head: not reached",

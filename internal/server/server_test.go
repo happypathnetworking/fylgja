@@ -1077,7 +1077,7 @@ func TestTheRehearsalsDocumentCarriesItsMarkdown(t *testing.T) {
 	steps := []step.Pair{step.NotComputed("change-1/branch-point", "change-1/seeded", "", "abcd", "change-1/branch-point was refused")}
 	planned := findings.NewDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1"}, nil)
 	planned.Rehearsal = &findings.RehearsalBlock{ProposedChange: findings.StageChange{ID: "pc-1", Name: "third link", Branch: "change-1"},
-		ResolvedAt: "2026-10-19T10:00:00Z", DeadlineS: 1950, CeilingS: 3600, Stages: []findings.RehearsalStage{
+		ResolvedAt: "2026-10-19T10:00:00Z", DeadlineS: 1980, CeilingS: 3600, Stages: []findings.RehearsalStage{
 			{Ref: "change-1/branch-point", Label: "branch-point", AtSource: "branch_point", Branch: "main",
 				At: "2026-10-16T17:20:19.944651+00:00", Role: "refused", Verdict: "refused", Findings: findings.List{}},
 			{Ref: "change-1/seeded", Label: "seeded", AtSource: "written", Branch: "change-1", At: "2026-10-16T17:25:30.118244+00:00",

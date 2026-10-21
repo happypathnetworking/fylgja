@@ -450,16 +450,18 @@ compiled stage's node plan (the host check's `wire.NodePlan`s, read in the serve
 dry run reads them), per node the largest of each budget over the stage's nodes
 (Constitution II), plus the mechanism constants:
 
-- the baseline: `CheckHostBudget` + `StageBudget` + deploy + (readiness + `ReadinessMargin`)
-  + (push + `PushMargin`) + `RecordBudget`, plus the wait `DefaultBudget` + `VerifyMargin`;
+- the baseline: `CheckHostBudget` + `FollowBudget` (its stop-following, added at T082) +
+  `StageBudget` + deploy + (readiness + `ReadinessMargin`) + (push + `PushMargin`) +
+  `RecordBudget`, plus the wait `DefaultBudget` + `VerifyMargin`;
 - each later stage: `InspectTwinBudget` + `CheckHostBudget` + `CheckHostBudget` (the plan)
   + `StageBudget` + deploy (the reconcile) + (readiness + margin) + (push + margin) +
   `RecordBudget` + (`DefaultBudget` + `VerifyMargin`);
 - the destroy: `PlanTeardownBudget` + destroy + `UnstageBudget`.
 
 For the fixture (three SR Linux nodes, the branch point refused, two marks and the head):
-570 + 630 + 630 + 120 = **1,950 s**; with a compiled branch point 2,580 s; the mixed
-fixture's three stages 2,400 s. **The ceiling is `rehearsal.Ceiling = 3600 s`**, a
+600 + 630 + 630 + 120 = **1,980 s**; with a compiled branch point 2,610 s; the mixed
+fixture's three stages 2,430 s (1,950, 2,580 and 2,400 s before T082 counted the baseline's
+stop-following, as §5's records of those runs cite them). **The ceiling is `rehearsal.Ceiling = 3600 s`**, a
 mechanism constant of Fylgja's own, the operator's patience as the wait budget is (D-039;
 the spec's assumption): a rehearsal whose deadline exceeds it is refused up front
 (`rehearsal.deadline.unfit`, naming the time and the ceiling). **`fylgja-twin`'s

@@ -320,5 +320,6 @@ func DeadlineMechanism() rehearsal.Mechanism {
 		PushMargin:      PushMargin,
 		VerifyMargin:    VerifyMargin,
 		Wait:            verify.DefaultBudget,
+		Follow:          FollowBudget,
 	}
 }

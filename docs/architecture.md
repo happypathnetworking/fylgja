@@ -835,7 +835,7 @@ workflows under their own fixed IDs, so one twin at a time holds as it does by h
 
 The **deadline** is the stages' budgets summed from their node plans, each the largest of
 its package's deploy, readiness, push and destroy budgets over the stage's nodes, plus the
-mechanism constants that already bound each activity and the wait's default: 1,950 s for
+mechanism constants that already bound each activity and the wait's default: 1,980 s for
 the three SR Linux stages the fixture tool composes, of which a rehearsal on the
 development host uses about 70. A timer on the run's clock enforces it: it cancels the
 children's context, a step so cut records the twin diverged
@@ -1458,7 +1458,7 @@ To be stated in the product surface, not buried here.
   refused before any run, and a stage still running when the deadline passes is cut,
   reported `error` (`rehearsal.deadline.cut`), and the twin destroyed. The deadline bites
   only when something hangs: the three stages the fixture tool composes use about 70 s of
-  their 1,950 s.
+  their 1,980 s.
 - **A rehearsal leaves no twin to look at.** Its twin is destroyed whatever happened, so
   a failed stage is looked at by hand: the report gives the commands that reproduce it,
   from a create of the baseline through each step to the failed stage, and the stages

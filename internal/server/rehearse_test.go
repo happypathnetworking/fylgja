@@ -376,7 +376,7 @@ func jsonEqual(t *testing.T, a, b any) bool {
 
 // The deadline is summed from each compiled stage's node plans as the host check plans them
 // from the store's copy, and never from the host: the fixture's case, the branch point
-// refused and three SR Linux stages, is 1,950 s (research R-09), and the node plans are
+// refused and three SR Linux stages, is 1,980 s (research R-09), and the node plans are
 // lab.CheckHost's own.
 func TestRehearsalDeadlineFromTheStore(t *testing.T) {
 	plan := rehearsePlan(t)
@@ -397,8 +397,8 @@ func TestRehearsalDeadlineFromTheStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if deadline != 1950*time.Second || len(nodes) != 3 {
-		t.Errorf("deadline %s over %d stages, want 32m30s over 3", deadline, len(nodes))
+	if deadline != 1980*time.Second || len(nodes) != 3 {
+		t.Errorf("deadline %s over %d stages, want 33m0s over 3", deadline, len(nodes))
 	}
 	t.Setenv("FYLGJA_SRLINUX_USERNAME", "admin")
 	t.Setenv("FYLGJA_SRLINUX_PASSWORD", "not-the-real-one")
@@ -630,7 +630,7 @@ func reportedOf(t *testing.T, res provision.RehearseResult) (*findings.Document,
 	_, rows, _ := rehearsalStages(plan)
 	r := &rehearsing{opts: testOptions(t, false), op: findings.OpTwinRehearse, subject: &findings.Subject{Branch: rehearseBranch,
 		RunID: "r1"}, planned: plannedStages{res: plan, reader: unreadStages{}, now: time.Date(2026, 10, 19, 10, 0, 0, 0, time.UTC)},
-		rows: rows, ceiling: rehearsal.Ceiling, deadlineS: 1950}
+		rows: rows, ceiling: rehearsal.Ceiling, deadlineS: 1980}
 	var err error
 	out := captureStdout(t, func() { err = r.reported(context.Background(), "r1", res, findings.StepPush) })
 	_, doc := exitOf(t, err)
@@ -676,7 +676,7 @@ func TestRehearsalReportedOnceTheRunCloses(t *testing.T) {
 		steppedTo("change-1/head", provision.StepUnchanged, settled, rehearsal.VerdictPassed))
 	doc, out := reportedOf(t, ok)
 	if doc.Status != findings.StatusOK || doc.Rehearsal == nil || doc.Rehearsal.Run.RunID != "r1" || doc.Subject.RunID != "r1" ||
-		doc.Rehearsal.DeadlineS != 1950 || doc.Rehearsal.CeilingS != 3600 || doc.Rehearsal.ResolvedAt != "2026-10-19T10:00:00Z" {
+		doc.Rehearsal.DeadlineS != 1980 || doc.Rehearsal.CeilingS != 3600 || doc.Rehearsal.ResolvedAt != "2026-10-19T10:00:00Z" {
 		t.Fatalf("ok: %s %+v", doc.Status, doc.Rehearsal)
 	}
 	// The branch point passed over keeps its one rejection under its stage, and the status
@@ -695,7 +695,7 @@ func TestRehearsalReportedOnceTheRunCloses(t *testing.T) {
 		"stage change-1/seeded: created; settled after 3.2s (2 reads); baseline\n",
 		"stage change-1/third-link: stepped in 4.5s (push n1 2.5s); settled after 6.1s (4 reads); passed\n",
 		"stage change-1/head: unchanged in 4.5s; settled after 6.1s (4 reads); passed\n",
-		"rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1950s deadline\n",
+		"rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1980s deadline\n",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("ok: the text lacks %q:\n%s", want, out)
@@ -789,7 +789,7 @@ func TestRehearseInputIsWhatTheServerDecided(t *testing.T) {
 	}
 	paths := lab.PathsAt(t.TempDir())
 	paths.Bundles = fileGoldens(t, "three-node", "mixed")
-	r := &rehearsing{opts: testOptions(t, false), rows: rows, ceiling: 40 * time.Minute, deadlineS: 1950,
+	r := &rehearsing{opts: testOptions(t, false), rows: rows, ceiling: 40 * time.Minute, deadlineS: 1980,
 		planned: plannedStages{res: plan, reg: reg, paths: paths, now: time.Date(2026, 10, 19, 10, 0, 0, 123, time.UTC)}}
 	_, nodes, err := r.deadline()
 	if err != nil {
@@ -800,7 +800,7 @@ func TestRehearseInputIsWhatTheServerDecided(t *testing.T) {
 		t.Fatal(err)
 	}
 	if in.ProposedChange != (findings.StageChange{ID: rehearseChange.ID, Name: "third link", Branch: rehearseBranch, Draft: true}) ||
-		in.ResolvedAt != "2026-10-19T10:00:00Z" || in.DeadlineS != 1950 || in.CeilingS != 2400 ||
+		in.ResolvedAt != "2026-10-19T10:00:00Z" || in.DeadlineS != 1980 || in.CeilingS != 2400 ||
 		in.Version != helperServer.Build || len(in.Stages) != 4 || in.Stages[1].BundlePath != filepath.Join(paths.Bundles, in.Stages[1].BundleID) {
 		t.Errorf("%+v", in)
 	}

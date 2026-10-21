@@ -146,12 +146,12 @@ func (h *rehearseHarness) run(in RehearseInput) RehearseResult {
 	return res
 }
 
-// rehearsalOf is a rehearsal's input over stages, under the fixture's 1,950 s deadline.
+// rehearsalOf is a rehearsal's input over stages, under the fixture's 1,980 s deadline.
 func rehearsalOf(stages ...RehearseStage) RehearseInput {
 	return RehearseInput{
 		ProposedChange: findings.StageChange{ID: "pc-1", Name: "third link", Branch: rehearsalBranch},
 		ResolvedAt:     "2026-10-17T14:02:11.000000Z",
-		DeadlineS:      1950,
+		DeadlineS:      1980,
 		CeilingS:       3600,
 		Stages:         stages,
 		Version:        "0.1.0-test",
@@ -554,8 +554,8 @@ func TestRehearseDeadlineCutsAStepAndDestroys(t *testing.T) {
 	if !res.DeadlineHit || res.Reached != "change-1/third-link" {
 		t.Errorf("deadline hit %v at %q, want hit at the stage in progress", res.DeadlineHit, res.Reached)
 	}
-	if cutAt <= 0 || cutAt >= time.Hour || res.UsedS < 1950 || res.UsedS > 1951 {
-		t.Errorf("the step was cut after %s and the run used %.1fs; want the step cut before its hour and the run ending at its 1950s deadline",
+	if cutAt <= 0 || cutAt >= time.Hour || res.UsedS < 1980 || res.UsedS > 1981 {
+		t.Errorf("the step was cut after %s and the run used %.1fs; want the step cut before its hour and the run ending at its 1980s deadline",
 			cutAt, res.UsedS)
 	}
 	if st := res.Stages[2]; st.Step == nil || st.Step.Phase != findings.StepPush || st.TookS <= 0 {
@@ -857,7 +857,7 @@ func TestRehearseDeadlineOf(t *testing.T) {
 		deadlineS, ceilingS int
 		want                time.Duration
 	}{
-		{1950, 3600, 1950 * time.Second},
+		{1980, 3600, 1980 * time.Second},
 		{0, 3000, 3000 * time.Second},
 		{0, 0, rehearsal.Ceiling},
 	} {

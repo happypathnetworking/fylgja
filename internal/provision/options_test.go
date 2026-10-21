@@ -358,7 +358,8 @@ func TestRehearseStartOptionsPinned(t *testing.T) {
 // default wait: internal/rehearsal cannot import them, and a constant moved here without
 // the deadline would cut a rehearsal its own budgets allow (015, research R-09). With the
 // shipped SR Linux package's budgets, the fixture's rehearsal (the branch point refused, two
-// marks and the head) is research §1.7's 1,950 s.
+// marks and the head) is 1,980 s: research §1.7's 1,950 s and the baseline's stop-following
+// bound, 30 s (T082).
 func TestDeadlineMechanismIsTheConstants(t *testing.T) {
 	m := DeadlineMechanism()
 	for _, c := range []struct {
@@ -375,6 +376,7 @@ func TestDeadlineMechanismIsTheConstants(t *testing.T) {
 		{"PushMargin", m.PushMargin, PushMargin},
 		{"VerifyMargin", m.VerifyMargin, VerifyMargin},
 		{"Wait", m.Wait, verify.DefaultBudget},
+		{"Follow", m.Follow, FollowBudget},
 		// The options the children's activities run under, read rather than restated.
 		{"CheckHost as CheckHostOptions", m.CheckHost, CheckHostOptions().StartToCloseTimeout},
 		{"Stage as StageOptions", m.Stage, StageOptions().StartToCloseTimeout},
@@ -383,19 +385,20 @@ func TestDeadlineMechanismIsTheConstants(t *testing.T) {
 		{"Unstage as UnstageOptions", m.Unstage, UnstageOptions().StartToCloseTimeout},
 		{"InspectTwin as InspectTwinOptions", m.InspectTwin, InspectTwinOptions().StartToCloseTimeout},
 		{"Wait and VerifyMargin as VerifyOptions", m.Wait + m.VerifyMargin, VerifyOptions(int(verify.DefaultBudget / time.Second)).StartToCloseTimeout},
+		{"Follow as FollowOptions", m.Follow, FollowOptions().StartToCloseTimeout},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s = %s, want %s", c.field, c.got, c.want)
 		}
 	}
-	if v := reflect.ValueOf(m); v.NumField() != 10 {
-		t.Errorf("rehearsal.Mechanism has %d fields, want the ten this test compares", v.NumField())
+	if v := reflect.ValueOf(m); v.NumField() != 11 {
+		t.Errorf("rehearsal.Mechanism has %d fields, want the eleven this test compares", v.NumField())
 	}
 
 	plan := srlinuxPlan(t)
 	stages := []rehearsal.DeadlineStage{{Role: rehearsal.RoleRefused}, {Role: rehearsal.RoleBaseline, Nodes: plan},
 		{Role: rehearsal.RoleRehearsed, Nodes: plan}, {Role: rehearsal.RoleRehearsed, Nodes: plan}}
-	if got := rehearsal.Deadline(m, stages); got != 1950*time.Second {
-		t.Errorf("the fixture's deadline = %s, want 1950s (570 + 630 + 630 + 120)", got)
+	if got := rehearsal.Deadline(m, stages); got != 1980*time.Second {
+		t.Errorf("the fixture's deadline = %s, want 1980s (600 + 630 + 630 + 120)", got)
 	}
 }

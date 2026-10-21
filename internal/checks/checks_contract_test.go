@@ -105,7 +105,7 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	time.Sleep(fetchWait)
 
 	// 4. A branch made after the import, a draft, and two marks.
-	branch := seededBranch(t, c)
+	branch := seededBranch(t, c, left)
 	started = time.Now()
 	id, err := c.OpenProposedChange(branch, true)
 	if err != nil {
@@ -478,13 +478,14 @@ func countOf(t *testing.T, c *testsupport.Client, filtered string) int {
 // seededBranch makes a branch fylgja-test-ck-<ts>-<n>, loads the schema and seeds the
 // three-node fixture with its artifacts rendered. When the test ends it is deleted with what
 // hangs on it, stages first, then proposed changes (their comments and validators with them,
-// research §1.6), then the branch.
-func seededBranch(t *testing.T, c *testsupport.Client) string {
+// research §1.6), then the branch, which is kept in left for nothingLeft to read back gone.
+func seededBranch(t *testing.T, c *testsupport.Client, left leftovers) string {
 	t.Helper()
 	name := fmt.Sprintf("%sck-%d-%d", testsupport.TestBranchPrefix, time.Now().Unix(), rand.Intn(9999))
 	if err := c.CreateBranch(name); err != nil {
 		t.Fatalf("creating branch: %v", err)
 	}
+	left.add(kindBranch, name)
 	t.Cleanup(func() {
 		if err := c.DeleteTestBranch(name); err != nil {
 			t.Errorf("deleting branch %s and what hangs on it: %v", name, err)
@@ -791,18 +792,19 @@ func awaitMoved(t *testing.T, c *testsupport.Client, branch string, before map[s
 }
 
 // The kinds of what hangs on the test's proposed change, which deleting it takes (research
-// §1.6) and nothingLeft requires gone.
+// §1.6) and nothingLeft requires gone, and the test's branch, kept by its name.
 const (
 	kindProposedChange = "CoreProposedChange"
 	kindStage          = "FylgjaStage"
 	kindValidator      = "CoreUserValidator"
 	kindThread         = "CoreChangeThread"
 	kindComment        = "CoreThreadComment"
+	kindBranch         = "Branch"
 )
 
 // leftovers are the ids, by kind, of the test's proposed change and of what hangs on it:
 // its stages, its user validators, and the threads and comments fylgja-twin posted, the
-// host's own registration's among them.
+// host's own registration's among them; and the name of the test's branch.
 type leftovers map[string][]string
 
 func (l leftovers) add(kind, id string) {
@@ -882,11 +884,19 @@ func quotedIDs(ids []string) string {
 
 // nothingLeft fails the test when anything of a test's registration remains on main once
 // its cleanups have run: a fylgja-test- repository, check definition or the query TestQuery;
-// or anything of its proposed change, each read on main by the ids left kept: the proposed
-// change, its stages, its user validators, and its threads and comments, nor any user
-// validator still naming it (SC-010; quickstart §5).
+// its fylgja-test- branch, read back rather than taken from its delete's error; or anything
+// of its proposed change, each read on main by the ids left kept: the proposed change, its
+// stages, its user validators, and its threads and comments, nor any user validator still
+// naming it (SC-010; quickstart §5).
 func nothingLeft(t *testing.T, c *testsupport.Client, left leftovers) {
 	t.Helper()
+	for _, name := range left[kindBranch] {
+		if exists, err := c.BranchExists(name); err != nil || exists {
+			t.Errorf("after the test branch %s exists: %t (%v)", name, exists, err)
+		} else {
+			t.Logf("after the test branch %s is gone", name)
+		}
+	}
 	gone := true
 	for _, kind := range []string{kindProposedChange, kindStage, kindValidator, kindThread, kindComment} {
 		if ids := left[kind]; len(ids) > 0 {

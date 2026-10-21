@@ -62,8 +62,10 @@ var unreached = []string{"cannot be reached", "is not set in this task worker's 
 // stage.artifact.stale and the device. Marked ready with that mark standing, fylgja-twin asks
 // for the rehearsal, which Fylgja refuses before any boot, concludes failure naming
 // stage.artifact.stale, and posts the report as a comment in a thread the proposed change's
-// overview lists (US2/AC3; research §5.9). No message carries a credential. Where the task
-// workers reach no server, the draft's skip is proved and the test says so and skips.
+// overview lists (US2/AC3; research §5.9). No message and no comment carries a credential
+// (FR-035, SC-008), and once its cleanups have run main holds none of its proposed change's
+// stages, validators, threads or comments (SC-010). Where the task workers reach no server,
+// the draft's skip is proved and the test says so and skips.
 func TestChecksInsideInfrahub(t *testing.T) {
 	c, err := testsupport.NewClient()
 	if err != nil {
@@ -73,7 +75,8 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	if err != nil {
 		t.Skipf("the checks are served from the Docker bridge, where Infrahub's task workers fetch them, and Docker reports none: %v", err)
 	}
-	t.Cleanup(func() { nothingLeft(t, c) })
+	left := leftovers{}
+	t.Cleanup(func() { nothingLeft(t, c, left) })
 
 	// 2. The tree's checks and queries, registered under test-only names.
 	name := fmt.Sprintf("%s%d", RepositoryPrefix, os.Getpid())
@@ -108,6 +111,10 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	if err != nil {
 		t.Fatalf("opening a proposed change on %s: %v", branch, err)
 	}
+	// Registered after the branch's delete, so run before it: what hangs on the proposed
+	// change is read while it stands, for nothingLeft to require gone.
+	left.add(kindProposedChange, id)
+	t.Cleanup(func() { left.read(t, c, id) })
 	t.Logf("draft proposed change %s on %s, its pipeline concluded after %.0fs", id, branch, time.Since(started).Seconds())
 	// The draft's creation ran the checks; they conclude after the rest of the pipeline, so
 	// a re-run is asked for only once this run has ended and can be told from it.
@@ -213,16 +220,17 @@ func TestChecksInsideInfrahub(t *testing.T) {
 		t.Errorf("with a stale mark %s concluded %q, want failure naming %s:\n%s",
 			TestTwinCheck, twin.Conclusion, findings.RuleStageArtifactStale, twin.Message)
 	}
-	posted(t, c, id)
+	posted(t, c, id, left)
 	noTwin(t)
 }
 
 // posted holds the proposed change id to the comments fylgja-twin posted on a refused
 // rehearsal: at least one, each its thread's only comment, each the report's markdown with
-// the status rejected and the stale finding, and each thread listed by the proposed change's
-// overview once Infrahub's event log has it (research §5.9). The host's own registration,
-// whose fylgja-twin runs beside the test's, may post one more, the same report.
-func posted(t *testing.T, c *testsupport.Client, id string) {
+// the status rejected and the stale finding and no credential's value, and each thread
+// listed by the proposed change's overview once Infrahub's event log has it (research §5.9).
+// The host's own registration, whose fylgja-twin runs beside the test's, may post one more,
+// the same report. Each thread and comment it reads is kept in left, for nothingLeft.
+func posted(t *testing.T, c *testsupport.Client, id string, left leftovers) {
 	t.Helper()
 	comments, err := c.CommentsOf(id)
 	if err != nil {
@@ -234,6 +242,9 @@ func posted(t *testing.T, c *testsupport.Client, id string) {
 	threads := map[string]int{}
 	for _, cm := range comments {
 		threads[cm.Thread]++
+		left.add(kindThread, cm.Thread)
+		left.add(kindComment, cm.ID)
+		carriesNoCredential(t, "comment "+cm.ID, cm.Text)
 		for _, want := range []string{"Status **rejected**", findings.RuleStageArtifactStale} {
 			if !strings.Contains(cm.Text, want) {
 				t.Errorf("comment %s does not carry %q:\n%s", cm.ID, want, cm.Text)
@@ -563,19 +574,28 @@ const shortCredential = 8
 // the test's environment, naming the variable and never the value or the message.
 func noCredential(t *testing.T, row testsupport.UserCheckRow) {
 	t.Helper()
+	carriesNoCredential(t, row.Name+"'s message", row.Message)
+}
+
+// carriesNoCredential fails the test when text, a check's message or a comment's, carries
+// the value of a credential of the test's environment, each one set: the API's token,
+// Infrahub's tokens and passwords, and the secret key. It names what carries it and the
+// variable, never the value or the text.
+func carriesNoCredential(t *testing.T, what, text string) {
+	t.Helper()
 	for _, kv := range os.Environ() {
 		name, value, _ := strings.Cut(kv, "=")
 		if value == "" || !credentials.MatchString(name) {
 			continue
 		}
-		leaked := strings.Contains(row.Message, value)
+		leaked := strings.Contains(text, value)
 		if len(value) < shortCredential {
 			v := regexp.QuoteMeta(value)
 			leaked = regexp.MustCompile(`(-p ` + v + `|` + v + `:` + v + `|password=` + v + `|"password": ?"` + v + `")(\W|$)`).
-				MatchString(row.Message)
+				MatchString(text)
 		}
 		if leaked {
-			t.Errorf("%s's message (%d characters) carries the value of %s", row.Name, len(row.Message), name)
+			t.Errorf("%s (%d characters) carries the value of %s", what, len(text), name)
 		}
 	}
 }
@@ -770,10 +790,122 @@ func awaitMoved(t *testing.T, c *testsupport.Client, branch string, before map[s
 	}
 }
 
-// nothingLeft fails the test when anything of a test's registration remains on main once
-// its cleanups have run: a fylgja-test- repository, check definition or the query TestQuery.
-func nothingLeft(t *testing.T, c *testsupport.Client) {
+// The kinds of what hangs on the test's proposed change, which deleting it takes (research
+// §1.6) and nothingLeft requires gone.
+const (
+	kindProposedChange = "CoreProposedChange"
+	kindStage          = "FylgjaStage"
+	kindValidator      = "CoreUserValidator"
+	kindThread         = "CoreChangeThread"
+	kindComment        = "CoreThreadComment"
+)
+
+// leftovers are the ids, by kind, of the test's proposed change and of what hangs on it:
+// its stages, its user validators, and the threads and comments fylgja-twin posted, the
+// host's own registration's among them.
+type leftovers map[string][]string
+
+func (l leftovers) add(kind, id string) {
+	if id != "" && !slices.Contains(l[kind], id) {
+		l[kind] = append(l[kind], id)
+	}
+}
+
+// read keeps the ids of what hangs on the proposed change id while it stands, however the
+// test ended: its stages, its user validators, and each of its threads with its comments.
+func (l leftovers) read(t *testing.T, c *testsupport.Client, id string) {
 	t.Helper()
+	raw, err := c.GraphQL("main", fmt.Sprintf(`{
+		CoreProposedChange(ids: [%[1]q]) { edges { node { threads { edges { node { id comments { edges { node { id } } } } } } } } }
+		CoreUserValidator(proposed_change__ids: [%[1]q]) { edges { node { id } } }
+		FylgjaStage(proposed_change__ids: [%[1]q]) { edges { node { id } } }
+	}`, id))
+	if err != nil {
+		t.Errorf("reading what hangs on proposed change %s before its delete: %v", id, err)
+		return
+	}
+	type ids struct {
+		Edges []struct {
+			Node struct {
+				ID string `json:"id"`
+			} `json:"node"`
+		} `json:"edges"`
+	}
+	var r struct {
+		P struct {
+			Edges []struct {
+				Node struct {
+					Threads struct {
+						Edges []struct {
+							Node struct {
+								ID       string `json:"id"`
+								Comments ids    `json:"comments"`
+							} `json:"node"`
+						} `json:"edges"`
+					} `json:"threads"`
+				} `json:"node"`
+			} `json:"edges"`
+		} `json:"CoreProposedChange"`
+		V ids `json:"CoreUserValidator"`
+		S ids `json:"FylgjaStage"`
+	}
+	if err := json.Unmarshal(raw, &r); err != nil {
+		t.Errorf("reading what hangs on proposed change %s before its delete: %v (%s)", id, err, raw)
+		return
+	}
+	for _, p := range r.P.Edges {
+		for _, th := range p.Node.Threads.Edges {
+			l.add(kindThread, th.Node.ID)
+			for _, cm := range th.Node.Comments.Edges {
+				l.add(kindComment, cm.Node.ID)
+			}
+		}
+	}
+	for _, e := range r.V.Edges {
+		l.add(kindValidator, e.Node.ID)
+	}
+	for _, e := range r.S.Edges {
+		l.add(kindStage, e.Node.ID)
+	}
+	t.Logf("before its delete proposed change %s holds %d stage(s), %d user validator(s), %d thread(s) and %d comment(s)",
+		id, len(l[kindStage]), len(l[kindValidator]), len(l[kindThread]), len(l[kindComment]))
+}
+
+// quotedIDs is ids as a GraphQL list of strings.
+func quotedIDs(ids []string) string {
+	q := make([]string, len(ids))
+	for i, id := range ids {
+		q[i] = fmt.Sprintf("%q", id)
+	}
+	return "[" + strings.Join(q, ", ") + "]"
+}
+
+// nothingLeft fails the test when anything of a test's registration remains on main once
+// its cleanups have run: a fylgja-test- repository, check definition or the query TestQuery;
+// or anything of its proposed change, each read on main by the ids left kept: the proposed
+// change, its stages, its user validators, and its threads and comments, nor any user
+// validator still naming it (SC-010; quickstart §5).
+func nothingLeft(t *testing.T, c *testsupport.Client, left leftovers) {
+	t.Helper()
+	gone := true
+	for _, kind := range []string{kindProposedChange, kindStage, kindValidator, kindThread, kindComment} {
+		if ids := left[kind]; len(ids) > 0 {
+			if n := countOf(t, c, fmt.Sprintf(`%s(ids: %s)`, kind, quotedIDs(ids))); n != 0 {
+				t.Errorf("after the test main holds %d of the %d %s the test's proposed change had", n, len(ids), kind)
+				gone = false
+			}
+		}
+	}
+	if ids := left[kindProposedChange]; len(ids) > 0 {
+		if n := countOf(t, c, fmt.Sprintf(`%s(proposed_change__ids: %s)`, kindValidator, quotedIDs(ids))); n != 0 {
+			t.Errorf("after the test main holds %d %s naming the test's proposed change", n, kindValidator)
+			gone = false
+		}
+	}
+	if gone && len(left[kindProposedChange]) > 0 {
+		t.Logf("after the test nothing remains of its proposed change: its %d stage(s), %d user validator(s), %d thread(s) and %d comment(s) are gone",
+			len(left[kindStage]), len(left[kindValidator]), len(left[kindThread]), len(left[kindComment]))
+	}
 	raw, err := c.GraphQL("main", `{ CoreReadOnlyRepository { edges { node { name { value } } } } }`)
 	if err != nil {
 		t.Errorf("reading the registrations after the test: %v", err)

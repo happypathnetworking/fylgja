@@ -468,8 +468,8 @@ Rewritten whole at each release's close, never appended to.
   (2026-10-20); tier 3 `E2E-OK` in 1,619.1 s, then 1,536.9 s with the thread;
   `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in 1,027.7 s and 1,042.9 s; the README's
   walk-through followed by hand twice; and the thread read by the operator in Infrahub's
-  overview, the table, the Mermaid drawing, the stages and the caveat whole. Its close runs
-  the closing gates (T063) and is the operator's to review and commit (T064).
+  overview, the table, the Mermaid drawing, the stages and the caveat whole. It closed on
+  2026-10-21: the closing gates (T063), the operator's review (T064), and merged to `main`.
 - **Next**: `v0.2.0`. F-014, `016-probes` (its [brief](specs/016-probes/brief.md)),
   and F-012 moved to 0.3 on 2026-10-21, where F-011 stays. On this install the branch
   point is refused `contract.node.missing`, since `main` holds no network, so a

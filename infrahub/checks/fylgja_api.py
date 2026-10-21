@@ -43,12 +43,28 @@ THREAD_LABEL = "Conversation"
 
 # DIAL_TIMEOUT bounds a connection, as the Go client's api.DialTimeout does; HEADER_TIMEOUT the
 # wait for an answer's headers, which the server sends before it works (api.HeaderTimeout).
-# Nothing bounds the answer once it has begun: a rehearsal's frames come minutes apart.
+# Nothing bounds the answer once it has begun but a check's own close_by: a rehearsal's
+# frames come minutes apart.
 DIAL_TIMEOUT = 5.0
 HEADER_TIMEOUT = 30.0
 
 # INTERRUPT_TIMEOUT bounds the blocking interrupt, which holds the task worker's event loop.
 INTERRUPT_TIMEOUT = 10.0
+
+# CLOSE_MARGIN_S is how long before its timeout a check stops reading an answer: whatever the
+# answer has not said by then is a cut, and the check concludes before Infrahub's timeout,
+# which would leave its validator in_progress (FR-021). It covers what the check does after
+# an answer that comes just before it: fylgja-twin's comment, a thread and its comment saved
+# by the SDK, each with its 60 s timeout.
+CLOSE_MARGIN_S = 120
+
+# FR-017's one exception, the one rule the checks hold beside the status's mapping (D-052):
+# a branch point refused contract.node.missing, for want of a network on main, is not a
+# refusal of the change, and the other stages decide. It reads the finding's rule and the
+# stage's at_source and nothing else: fylgja-step passes it over in the plan, and fylgja-twin
+# in a refusal that says the host is held.
+RULE_NODE_MISSING = "contract.node.missing"
+AT_BRANCH_POINT = "branch_point"
 
 # MAX_PROBLEM_BYTES bounds what is read of a transport fault's body, as api.MaxProblemBytes.
 MAX_PROBLEM_BYTES = 64 * 1024
@@ -113,12 +129,14 @@ class Unexpected(Fault):
 
 
 class Cut(Fault):
-    """The answer ended before its document: the server stopped, or the connection was lost.
-    answer holds what was read of it, so a caller can tell a cut after the run's start."""
+    """The answer ended before its document: the server stopped, the connection was lost, or
+    the check stopped reading it at close_by, when late is set. answer holds what was read of
+    it, so a caller can tell a cut after the run's start."""
 
-    def __init__(self, address: str, cause: str, answer: "Answer") -> None:
+    def __init__(self, address: str, cause: str, answer: "Answer", late: bool = False) -> None:
         super().__init__(f"the API at {address} stopped answering before the command ended: {cause}")
         self.answer = answer
+        self.late = late
 
 
 @dataclass(frozen=True)
@@ -199,6 +217,39 @@ def none_open(branch: str) -> str:
     return f"no open proposed change has source branch {branch}: nothing was asked of Fylgja"
 
 
+def rejections_past_branch_point(
+    found: list[dict[str, Any]] | None, stages: list[dict[str, Any]] | None
+) -> list[dict[str, Any]]:
+    """A document's rejections, in order, but for the branch point's lone contract.node.missing
+    among stages (FR-017's exception): the plan's stages for stage.plan, the rehearsal block's
+    for twin.rehearse. Each stage's findings are also in the document's own list
+    (stages.schema.json, rehearsal.schema.json), where the one passed over is found by key."""
+    rejections = [f for f in found or [] if f.get("severity") == "rejection"]
+    for excused in branch_point_refusal(stages):
+        key = finding_key(excused)
+        for i, f in enumerate(rejections):
+            if finding_key(f) == key:
+                del rejections[i]
+                break
+    return rejections
+
+
+def branch_point_refusal(stages: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
+    """The branch point's one rejection when it is contract.node.missing, else none."""
+    for stage in stages or []:
+        if stage.get("at_source") != AT_BRANCH_POINT:
+            continue
+        rejections = [f for f in stage.get("findings") or [] if f.get("severity") == "rejection"]
+        if len(rejections) == 1 and rejections[0].get("rule") == RULE_NODE_MISSING:
+            return rejections
+    return []
+
+
+def finding_key(finding: dict[str, Any]) -> tuple[Any, ...]:
+    """A finding as the document's list and a stage's both carry it."""
+    return tuple(finding.get(k) for k in ("severity", "rule", "object", "step", "message"))
+
+
 async def call(
     address: str,
     token: str,
@@ -221,7 +272,9 @@ async def call(
     delivered, since the server takes a second as its first or stops its wait on it; then the
     answer is read on to its document or its cut, until close_by when it is given, past which
     it is Cut: the check must conclude before Infrahub's timeout, which would leave its
-    validator in_progress (FR-021). If the check is cancelled or timed out while an answer
+    validator in_progress (FR-021). An answer with no stream, which takes no interrupt, is read
+    until close_by when it is given, past which it is Cut, late, and closed, which ends the
+    request's work on the server. If the check is cancelled or timed out while an answer
     named by stream has given no document, started or not, the interrupt is sent with a
     blocking call, since nothing is awaited in that handler (research §1.4), and the
     cancellation goes on: the server starts the run whatever becomes of the client once it
@@ -240,6 +293,7 @@ async def call(
     timeout = httpx.Timeout(DIAL_TIMEOUT, read=None)
     async with httpx.AsyncClient(timeout=timeout, trust_env=False, follow_redirects=False) as client:
         request = _request(client, base + operation_path, body, headers)
+        sent = time.monotonic()
         try:
             response = await asyncio.wait_for(client.send(request, stream=True), HEADER_TIMEOUT)
         except TimeoutError:
@@ -263,7 +317,14 @@ async def call(
                             if not done:
                                 reader.cancel()
                                 waited = time.monotonic() - interrupted_at
-                                raise Cut(address, f"no document came within {waited:.0f} s of the interrupt", answer)
+                                why = f"no document came within {waited:.0f} s of the interrupt"
+                                raise Cut(address, why, answer, late=True)
+                elif close_by is not None and not stream:
+                    done, _ = await asyncio.wait({reader}, timeout=max(0.0, close_by - time.monotonic()))
+                    if not done:
+                        reader.cancel()
+                        waited = time.monotonic() - sent
+                        raise Cut(address, f"no document came within {waited:.0f} s of the request", answer, late=True)
                 await reader
             except Fault:
                 raise

@@ -5,37 +5,58 @@ re-run of its checks. It asks the API's stage.plan for the source branch and log
 text and its findings' text as its message. It writes nothing to Infrahub.
 """
 
+import time
 from typing import Any
 
 from infrahub_sdk.checks import InfrahubCheck
 
-from .fylgja_api import RENDER_TEXT, Fault, call, none_open, path, proposed_change, variables
-
-# FR-017's one exception, the one rule the check holds beside the status's mapping (D-052):
-# a branch point refused contract.node.missing, for want of a network on main, is not a
-# refusal of the change, and the plan's other stages decide. It reads the finding's rule and
-# the stage's at_source and nothing else.
-RULE_NODE_MISSING = "contract.node.missing"
-AT_BRANCH_POINT = "branch_point"
+from .fylgja_api import (
+    CLOSE_MARGIN_S,
+    RENDER_TEXT,
+    Cut,
+    Fault,
+    call,
+    none_open,
+    path,
+    proposed_change,
+    rejections_past_branch_point,
+    variables,
+)
 
 
 class FylgjaStep(InfrahubCheck):
     """The plan of every stage of the proposed change, in seconds: failure when a stage is refused
-    as intent, when the stages cannot be listed, or when Fylgja cannot be reached or refuses the
-    token or the version; success otherwise, warnings included."""
+    as intent, when the stages cannot be listed, when the plan does not answer by the check's own
+    deadline, or when Fylgja cannot be reached or refuses the token or the version; success
+    otherwise, warnings included."""
 
     # The cheap read the SDK requires (infrahub/queries/branch.gql); its answer is not used.
     query = "fylgja_branch"
     timeout = 300
 
     async def validate(self, data: dict[str, Any]) -> None:
+        # Its own deadline, short of its timeout: a plan that has not answered by then is cut,
+        # and the check concludes before Infrahub's timeout would leave its validator
+        # in_progress (FR-021).
+        close_by = time.monotonic() + self.timeout - CLOSE_MARGIN_S
         try:
             address, token = variables()
             change = await proposed_change(self.client, self.branch_name)
             if change is None:
                 self.log_error(none_open(self.branch_name))
                 return
-            answer = await call(address, token, path("stage.plan"), RENDER_TEXT, {"branch": self.branch_name})
+            answer = await call(
+                address, token, path("stage.plan"), RENDER_TEXT, {"branch": self.branch_name}, close_by=close_by
+            )
+        except Cut as fault:
+            if fault.late:
+                self.log_error(
+                    f"the stage plan did not answer by this check's own deadline, {self.timeout - CLOSE_MARGIN_S} s "
+                    f"after it began ({fault}): nothing was started, and a re-run of the checks asks again"
+                )
+            else:
+                self.log_error(str(fault))
+            return
         except Fault as fault:
             self.log_error(str(fault))
             return
@@ -61,28 +82,5 @@ def refuses(document: dict[str, Any]) -> bool:
         return False
     if status != "rejected":
         return True
-    rejections = [f for f in document.get("findings") or [] if f.get("severity") == "rejection"]
-    for excused in _branch_point_refusal(document):
-        key = _key(excused)
-        for i, f in enumerate(rejections):
-            if _key(f) == key:
-                del rejections[i]
-                break
-    return bool(rejections)
-
-
-def _branch_point_refusal(document: dict[str, Any]) -> list[dict[str, Any]]:
-    """The branch point's one rejection when it is contract.node.missing, else none. Each stage's
-    findings are also in the document's own list (contracts/stages.schema.json)."""
-    for stage in (document.get("plan") or {}).get("stages") or []:
-        if stage.get("at_source") != AT_BRANCH_POINT:
-            continue
-        rejections = [f for f in stage.get("findings") or [] if f.get("severity") == "rejection"]
-        if len(rejections) == 1 and rejections[0].get("rule") == RULE_NODE_MISSING:
-            return rejections
-    return []
-
-
-def _key(finding: dict[str, Any]) -> tuple[Any, ...]:
-    """A finding as the document's list and a stage's both carry it."""
-    return tuple(finding.get(k) for k in ("severity", "rule", "object", "step", "message"))
+    stages = (document.get("plan") or {}).get("stages")
+    return bool(rejections_past_branch_point(document.get("findings"), stages))

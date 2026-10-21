@@ -470,7 +470,9 @@ the spec's assumption): a rehearsal whose deadline exceeds it is refused up fron
 `timeout` is 4,200 s**: the ceiling, the destroy's whole budget (120 s), 300 s for the
 work before `start` (the plan, a reclaim, the host check) and a margin of 180 s, so a run
 that uses every budget ends before the check's own deadline and the destroy runs inside
-the check (FR-006, FR-021); **`fylgja-step`'s is 300 s**
+the check (FR-006, FR-021) (*4,260 s since T097, §5.14: the 300 s an allowance the server
+does not enforce, and a margin of 240 s, the check reading the interrupted run's answer
+for 120 s of it and keeping the last 120 s for the comment's two saves*); **`fylgja-step`'s is 300 s**
 (a plan of the fixture takes 5–10 s). The workflow enforces the deadline with a timer on
 the run's own clock that cancels the children's context; a step cut mid-way records
 diverged (D-036) and the destroy follows; the report says `rehearsal.deadline.cut`. The
@@ -541,7 +543,8 @@ the run's input and history. **Rationale**: FR-008, FR-012, the API's shape for 
 ### R-13 The checks: two files and a shared module under `infrahub/checks/`, one query, glue alone
 
 **Decision**: `infrahub/checks/fylgja_step.py` (`class FylgjaStep(InfrahubCheck)`,
-`timeout = 300`), `infrahub/checks/fylgja_twin.py` (`class FylgjaTwin`, `timeout = 4200`)
+`timeout = 300`), `infrahub/checks/fylgja_twin.py` (`class FylgjaTwin`, `timeout = 4200`,
+*4260 since T097*)
 and `infrahub/checks/fylgja_api.py` (the shared glue: the two variables, the request, the
 frames, the proposed change by branch, the comment), imported relatively, which 1.2's
 module naming allows; one query `infrahub/queries/proposed_change.gql`
@@ -593,6 +596,13 @@ newline carrying a foreign line (rejected: an injection, not a change); a rename
 (`timeout` less 180 s) nears, then `log_error`s naming the twin or the run the last
 answer named. Every other refusal is final at once. The hand command is refused once.
 **Rationale**: clarify's answer; the hand operator reads the refusal and acts.
+(*Since T093 and T097, §5.14: the branch point's lone `contract.node.missing` is passed over
+before the held test, as `fylgja-step` passes it over, since every refusal the server makes
+after the plan carries the plan's stage findings in front of its own, so on a `main` with no
+network a held refusal had read as final; and the retry stops once what would remain of the
+check's own deadline at the next ask, its `timeout` less 240 s, no longer covers the
+refused rehearsal's `deadline_s`, the destroy's 120 s and the 300 s allowance, so that no run
+it starts is interrupted by it, FR-007 narrowed for FR-021's sake.*)
 
 <a id="r-16"></a>
 ### R-16 Cancellation from Infrahub's side: the interrupt is sent synchronously, and the deadline covers the rest

@@ -1295,8 +1295,9 @@ reads the frames to the document, and concludes from its status. **`fylgja-step`
 (timeout 300 s) asks for `stage.plan` and logs its text as its message. It fails when a
 stage is refused as intent, a branch point refused `contract.node.missing` excepted, the
 one rule the Python holds, when the stages cannot be listed, when the source branch has no
-open proposed change, and when Fylgja cannot be asked: a variable unset, the API
-unreachable, or its token or version refused. It writes nothing. **`fylgja-twin`** (timeout 4,200 s) passes a draft, saying it skipped it.
+open proposed change, when Fylgja cannot be asked: a variable unset, the API
+unreachable, or its token or version refused, and when the plan has not answered by the
+check's own deadline, 120 s before its timeout. It writes nothing. **`fylgja-twin`** (timeout 4,260 s) passes a draft, saying it skipped it.
 Otherwise it asks for `twin.rehearse` in markdown, passes on `ok` and fails on every other
 status, with the report's text as its message either way, and posts the markdown on the
 proposed change as one new thread (`CoreChangeThread`, labelled `Conversation`, holding

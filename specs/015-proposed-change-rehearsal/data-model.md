@@ -99,8 +99,13 @@ The fixture (SR Linux: deploy 180, readiness 60, push 30, destroy 60): 600 + 630
 120 = 1,980 s for the branch point refused, two marks and the head; the baseline's
 stop-following bound (`FollowBudget`, 30 s), which its provision runs before it builds, was
 added at T082, the figure 1,950 s before it. The check's
-`timeout` is the ceiling, the destroy's whole budget (120 s), 300 s for the work before
-`start` and a margin of 180 s: 4,200 s.
+`timeout` is the ceiling, the destroy's whole budget (120 s), an allowance of 300 s for the
+work before `start` (the plan, a reclaim, the host check), which the server does not
+enforce, and a margin of 240 s: 4,260 s (T097). Its own deadline, 4,020 s after it began, is
+where it interrupts the run; it reads the interrupted run's answer for 120 s more, the
+destroy's budget, and keeps its last 120 s for the comment's two saves. A held refusal is
+asked again only while what would remain of that deadline at the next ask covers the refused
+rehearsal's `deadline_s`, the destroy's budget and the allowance (FR-007).
 
 ## 5. The twin record: `twin.json` `7`
 
@@ -184,8 +189,8 @@ Contract: [contracts/checks.md](contracts/checks.md).
 
 | Check | Class, file | `timeout` | Asks | Writes | Concludes |
 |---|---|---|---|---|---|
-| `fylgja-step` | `FylgjaStep`, `infrahub/checks/fylgja_step.py` | 300 | `stage.plan` `{branch}` | nothing | success unless a stage is refused as intent (a branch point's `contract.node.missing` excepted), the stages unlistable, or Fylgja unreachable, refusing the token or the version; the plan's text as the message |
-| `fylgja-twin` | `FylgjaTwin`, `infrahub/checks/fylgja_twin.py` | 4200 | `twin.rehearse` `{branch}`, render `markdown`, with a stream | one `CoreChangeThread` (`change` the proposed change, `label` `Conversation`) holding one `CoreThreadComment` (`text` the markdown) per run | on a draft: success, nothing asked; else `ok` → success, any other status → failure; the report's text as the message |
+| `fylgja-step` | `FylgjaStep`, `infrahub/checks/fylgja_step.py` | 300 | `stage.plan` `{branch}` | nothing | success unless a stage is refused as intent (a branch point's `contract.node.missing` excepted), the stages unlistable, the plan unanswered by the check's own deadline 120 s before its timeout, or Fylgja unreachable, refusing the token or the version; the plan's text as the message |
+| `fylgja-twin` | `FylgjaTwin`, `infrahub/checks/fylgja_twin.py` | 4260 | `twin.rehearse` `{branch}`, render `markdown`, with a stream | one `CoreChangeThread` (`change` the proposed change, `label` `Conversation`) holding one `CoreThreadComment` (`text` the markdown) per run | on a draft: success, nothing asked; else `ok` → success, any other status → failure; the report's text as the message |
 
 Shared: `infrahub/checks/fylgja_api.py` (the two variables, the request, the frames, the
 proposed change by `branch_name`, the comment). Each check's query is `fylgja_branch`

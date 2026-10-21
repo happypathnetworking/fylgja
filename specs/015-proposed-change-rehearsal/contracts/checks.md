@@ -48,19 +48,25 @@ which a fault names as the server it tried (Constitution X; US2's scenario 4).
 
 1. The variables; the proposed change (none open on the branch: `log_error`).
 2. `POST /v1/stage/plan` with `{"render": "text", "args": {"branch": <branch_name>}}`,
-   read to its document.
+   read to its document, but no later than the check's own deadline, 120 s before its
+   `timeout` (180 s after it began; `CLOSE_MARGIN_S`, shared with `fylgja-twin`): past it
+   the answer is closed, which ends the plan's work on the server (T095).
 3. Once the answer has ended, `log_info` the plan's text as the `out` frames carried it,
    then the `err` frames' text, each once, then the findings' text.
 4. **Conclusion**: `log_error` when the document's findings hold a rejection, **except** a
    branch point (`at_source: branch_point`) whose one rejection is `contract.node.missing`;
    when the plan's status is `error` (`operation.failed`, the stages unlistable); and when
    Fylgja cannot be reached (a dial error, a `401`, a `404` under `Fylgja-Api-Versions`, an
-   answer cut before its document), naming the address and never the token. A plan whose
-   every other stage compiled passes, `stage.main.moved` and the other warnings included.
+   answer cut before its document), naming the address and never the token; and when the
+   plan has not answered by the check's own deadline: `the stage plan did not answer by this
+   check's own deadline, 180 s after it began (<the cut>): nothing was started, and a re-run
+   of the checks asks again`, rather than Infrahub's timeout leaving the validator
+   `in_progress` (FR-021). A plan whose every other stage compiled passes,
+   `stage.main.moved` and the other warnings included.
 
 Runs on every open proposed change, draft or not.
 
-## `fylgja-twin` (`timeout = 4200`)
+## `fylgja-twin` (`timeout = 4260`)
 
 1. The proposed change (none open on the branch: `log_error`), then the variables. **A
    draft** (`is_draft`) is decided first, since it needs nothing of Fylgja's (FR-020):
@@ -72,10 +78,16 @@ Runs on every open proposed change, draft or not.
    document; the `out` frames and then the `err` frames logged once each, when the answer
    ends or is cut (T046), since Infrahub shows every entry as a block of its own.
 3. **The host held** (`run.in_flight`, `host.lab.present`, `host.twin.present` before any
-   `start`): wait 30 s and ask again, until the check's own deadline (its `timeout` less
-   180 s) nears, then `log_error` naming the run or the twin the last answer named. A
-   retried refusal is logged and never posted; the comment is the final answer's document,
-   once.
+   `start`, the branch point's lone `contract.node.missing` passed over as `fylgja-step`
+   passes it over, read in `fylgja_api.py` for both; T093): wait 30 s and ask again while
+   what would remain of the check's own deadline (its `timeout` less 240 s) at the next ask
+   still covers the refused rehearsal's deadline (the block's `deadline_s`), the destroy's
+   budget (`DESTROY_S`, 120 s) and the allowance before `start` (`ALLOWANCE_S`, 300 s), so
+   that no run the check starts is interrupted by it (FR-007, FR-021; T097); then
+   `log_error` naming the run or the twin the last answer named and what the remainder does
+   not cover. A retried refusal is logged and never posted; the comment is the final
+   answer's document, once. An answer interrupted before any `start` is the refusal it
+   carries, held or final: no run was asked to cancel.
 4. **The comment**: once the document frame is read, one comment as the proposed change's
    view writes and shows one (research §5.9): a `CoreChangeThread` with `change` the
    proposed change, `label` `Conversation` and `resolved` false, then one
@@ -96,9 +108,12 @@ Runs on every open proposed change, draft or not.
 7. **The check's own deadline** while the answer is still open: the interrupt is sent, and
    once more when it was not delivered, since the server takes a second as its first or
    stops its wait on it; the answer is read on to its document or its cut, but no later
-   than 15 s before the check's timeout, past which it is a cut; and `log_error` says the
-   run was asked to cancel and, on a cut, `the run goes on to its destroy and no report will
-   be posted; re-run the checks once fylgja twin show reports no twin` (T084). **Cancelled
+   than 120 s before the check's timeout (`CLOSE_MARGIN_S`), past which it is a cut; and,
+   once the run had started, `log_error` says the run was asked to cancel and, on a cut,
+   `the run goes on to its destroy and no report will be posted; re-run the checks once
+   fylgja twin show reports no twin` (T084). Before any `start` it says the deadline passed
+   before the rehearsal's run started (T093). The read after the interrupt, 120 s, covers
+   the interrupted run's destroy, and the last 120 s the comment's two saves (T097). **Cancelled
    or timed out by Infrahub** (`BaseException` in the handler) while the answer has given no
    document, the run started or not: the interrupt is sent with a blocking call, never an
    `await` (research §1.4), and the exception re-raised; the server starts the run whatever

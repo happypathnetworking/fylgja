@@ -232,7 +232,7 @@ on the proposed change they run for, through Infrahub's own task worker
   (`infrahub/queries/branch.gql`, `{ Branch { name } }`, which an `InfrahubCheck` must name
   and the checks ignore) and two global check definitions, `fylgja-step`
   (`infrahub/checks/fylgja_step.py`, `FylgjaStep`, timeout 300 s) and `fylgja-twin`
-  (`fylgja_twin.py`, `FylgjaTwin`, timeout 4,200 s), beside their shared glue,
+  (`fylgja_twin.py`, `FylgjaTwin`, timeout 4,260 s), beside their shared glue,
   `fylgja_api.py`, which each imports relatively. Infrahub's task workers run both on every
   proposed change at its creation and on a re-run of its user checks, each reaching the
   server on the bridge (the three-process paragraph above). The registration imported them

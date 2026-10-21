@@ -162,7 +162,7 @@ sleep 30
 curl -s -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" -H 'Content-Type: application/json' "$INFRAHUB_ADDRESS/graphql" --data-binary '{"query":"{ CoreCheckDefinition { edges { node { name { value } timeout { value } } } } }"}' | jq -c '[.data.CoreCheckDefinition.edges[].node | {name: .name.value, timeout: .timeout.value}]'
 ```
 
-Expected: `fylgja-step` 300 and `fylgja-twin` 4200. Then the README's proposed-change
+Expected: `fylgja-step` 300 and `fylgja-twin` 4260 (4200 at an import before T097). Then the README's proposed-change
 walk-through by hand on a fresh `fylgja-test-readme` branch: `-propose` (the draft skipped,
 the plan passed), two stages, `-ready`, the checks re-run from the proposed-change view,
 the comment with its table and drawing read in the UI, `fylgja-step`'s message read under

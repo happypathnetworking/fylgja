@@ -292,7 +292,7 @@ const (
 	checksUser     = "user"
 )
 
-// userChecksWait bounds -run-checks user: the live check's timeout of 4,200 s and a margin
+// userChecksWait bounds -run-checks user: the live check's timeout of 4,260 s and a margin
 // (research R-09, R-20).
 const userChecksWait = 4500 * time.Second
 

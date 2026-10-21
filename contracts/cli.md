@@ -723,8 +723,8 @@ import never running them.
 
 | Check | `timeout` | Asks | Concludes |
 |---|---|---|---|
-| `fylgja-step` | 300 | `stage.plan`, `render: "text"`, on every open proposed change, draft or not | failure when the document holds a rejection, but for a branch point (`at_source: branch_point`) whose one rejection is `contract.node.missing`; when the plan's status is `error`; and when Fylgja cannot be reached. Success otherwise, warnings included. Its message is the plan's text and the findings' |
-| `fylgja-twin` | 4200 | nothing on a draft, `twin.rehearse`, `render: "markdown"`, with a `Fylgja-Stream`, otherwise | on a draft, success, its message `skipped: proposed change <id> is a draft; mark it ready for review and re-run the checks to rehearse it`. Otherwise by the document's status alone: `ok` success, every other status failure, which blocks the merge. Its message is the report's text; it posts the answer's markdown as one new comment on the proposed change, as the proposed change's view writes and shows one: a `CoreChangeThread` labelled `Conversation` holding one `CoreThreadComment` (a `CoreChangeComment` would be counted and never shown). A comment it cannot post is logged and fails nothing, and the thread it made for it is deleted |
+| `fylgja-step` | 300 | `stage.plan`, `render: "text"`, on every open proposed change, draft or not | failure when no open proposed change has the source branch (`no open proposed change has source branch <b>: nothing was asked of Fylgja`); when the document holds a rejection, but for a branch point (`at_source: branch_point`) whose one rejection is `contract.node.missing`; when the plan's status is `error`; when the plan has not answered by the check's own deadline, its `timeout` less 120 s (`the stage plan did not answer by this check's own deadline, 180 s after it began (…): nothing was started, and a re-run of the checks asks again`); and when Fylgja cannot be reached. Success otherwise, warnings included. Its message is the plan's text and the findings' |
+| `fylgja-twin` | 4260 | nothing on a draft, `twin.rehearse`, `render: "markdown"`, with a `Fylgja-Stream`, otherwise | failure when no open proposed change has the source branch (`no open proposed change has source branch <b>: nothing was asked of Fylgja`), before its draft test; on a draft, success, its message `skipped: proposed change <id> is a draft; mark it ready for review and re-run the checks to rehearse it`. Otherwise by the document's status alone: `ok` success, every other status failure, which blocks the merge. Its message is the report's text; it posts the answer's markdown as one new comment on the proposed change, as the proposed change's view writes and shows one: a `CoreChangeThread` labelled `Conversation` holding one `CoreThreadComment` (a `CoreChangeComment` would be counted and never shown). A comment it cannot post is logged and fails nothing, and the thread it made for it is deleted |
 
 - **What each needs**: `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN` in the task workers'
   environment, which the Compose override gives them (`host.docker.internal:7650`, and the
@@ -733,13 +733,21 @@ import never running them.
   nothing sent; Fylgja unreachable, refusing the token or the version, or its answer cut,
   is a failure naming the address. Nothing else of Fylgja's, Infrahub's or a node's.
 - **The host held**: when the rehearsal is refused before any start by `run.in_flight`,
-  `host.lab.present` or `host.twin.present` alone, `fylgja-twin` asks again every 30 s until
-  its own deadline, its `timeout` less 180 s, nears, then fails naming what held it. A
-  retried refusal is logged and never posted.
+  `host.lab.present` or `host.twin.present` alone, the branch point's lone
+  `contract.node.missing` passed over as `fylgja-step` passes it over, `fylgja-twin` asks
+  again every 30 s while what would remain of its own deadline, its `timeout` less 240 s,
+  at the next ask still covers the refused rehearsal's deadline (its block's `deadline_s`),
+  the destroy's budget (120 s) and the 300 s allowed before `start`, so that no run it
+  starts is interrupted by it; then it fails naming what holds the host. A retried refusal
+  is logged and never posted; the last one's markdown is the comment.
 - **Cut short**: an answer cut after the run started is a failure saying `the connection to
   Fylgja was lost while the rehearsal ran; the run goes on to its destroy and no report will
   be posted; re-run the checks once fylgja twin show reports no twin`. At the check's own
-  deadline it sends the interrupt and reads the answer on to its end. Cancelled or timed out
+  deadline it sends the interrupt and reads the answer on to its end, but no later than
+  120 s before its timeout, past which it is a cut; it says the run was asked to cancel only
+  once the run had started, and an answer interrupted before any start is the refusal it
+  carries. `fylgja-step` stops reading the plan 120 s before its timeout, which closes the
+  request and ends the plan's work on the server. Cancelled or timed out
   by Infrahub, it sends the interrupt with a blocking call; Infrahub then leaves the
   validator `in_progress`, which blocks the merge.
 - No message, comment or log line carries a token, a password or a configuration line.
@@ -795,7 +803,7 @@ cancelled before its wait. Its text does not change.
 
 Case 9 is added, SR Linux alone, so `PLATFORMS=nokia_srlinux` runs it; the run makes nine
 twins. Before anything starts, the script requires `fylgja-step` (300) and `fylgja-twin`
-(4200) on `main`, and the server the task workers reach, at `http://<bridge>:7650`,
+(4260) on `main`, and the server the task workers reach, at `http://<bridge>:7650`,
 answering with local/.env's token and the tree's build: the operator's, never started or
 stopped by the script, whose own server stays on loopback. Case 9 seeds a throwaway
 branch and opens a draft, whose creation's checks read `fylgja-twin` skipped and

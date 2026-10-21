@@ -459,7 +459,7 @@ being the check's one write ([D-049](docs/decisions.md#d-049),
   `InfrahubReadOnlyRepositoryImportLastCommit` on the registration; both task workers then
   fetch the commit, about 15 seconds after the import's own run, before a re-run sees the
   checks. Read them back as `CoreCheckDefinition`: `fylgja-step`, timeout 300, and
-  `fylgja-twin`, timeout 4200. A branch made before the import never runs them, so seed
+  `fylgja-twin`, timeout 4260. A branch made before the import never runs them, so seed
   after it.
 - **The server where the checks reach it.** The checks run in Infrahub's task workers, on
   Infrahub's own Compose network, where `127.0.0.1` is the container itself. So on the lab
@@ -613,8 +613,8 @@ It took 83 seconds end to end, and wrote nothing to Infrahub: the comment is the
 
 `--markdown` prints the comment's markdown alone, and `--json` the document. There is one
 twin at a time: a rehearsal is refused while a run is in flight or a twin stands
-(`run.in_flight`, `host.twin.present`), and `fylgja-twin` asks again every 30 seconds until
-its own deadline. A rehearsal's own deadline is the sum of its stages' budgets, under a
+(`run.in_flight`, `host.twin.present`), and `fylgja-twin` asks again every 30 seconds while
+what remains of its own deadline still covers the rehearsal it would start. A rehearsal's own deadline is the sum of its stages' budgets, under a
 ceiling of an hour. A stage that **fails** stops the rehearsal there, its step diverged or its verify
 finding what the baseline did not have: the report says why, the stages after it read `not
 reached`, the twin is destroyed all the same, and the comment ends with the commands that

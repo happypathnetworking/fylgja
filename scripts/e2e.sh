@@ -719,9 +719,9 @@ gql "" '{ CoreCheckDefinition { edges { node { name { value } timeout { value } 
   > "$OUT/check-definitions.json" 2> "$OUT/check-definitions.err" ||
   fail "reading the check definitions on main failed; see $OUT/check-definitions.err"
 jq -e '[.CoreCheckDefinition.edges[].node | {name: .name.value, timeout: .timeout.value}]
-  | any(.[]; . == {name: "fylgja-step", timeout: 300}) and any(.[]; . == {name: "fylgja-twin", timeout: 4200})' \
+  | any(.[]; . == {name: "fylgja-step", timeout: 300}) and any(.[]; . == {name: "fylgja-twin", timeout: 4260})' \
   "$OUT/check-definitions.json" > /dev/null ||
-  fail "case 9 needs the checks fylgja-step (timeout 300) and fylgja-twin (timeout 4200) on main, which holds $(jq -r '[.CoreCheckDefinition.edges[].node | "\(.name.value) (timeout \(.timeout.value))"] | if length == 0 then "none" else join(", ") end' "$OUT/check-definitions.json"): push them to origin's main and import them, as specs/015-proposed-change-rehearsal/quickstart.md §6 does"
+  fail "case 9 needs the checks fylgja-step (timeout 300) and fylgja-twin (timeout 4260) on main, which holds $(jq -r '[.CoreCheckDefinition.edges[].node | "\(.name.value) (timeout \(.timeout.value))"] | if length == 0 then "none" else join(", ") end' "$OUT/check-definitions.json"): push them to origin's main and import them, as specs/015-proposed-change-rehearsal/quickstart.md §6 does"
 # The definitions' names and timeouts pass for an earlier import too, and case 9 asserts on
 # the Python the task workers run, which must be this tree's, as the server's binary must be
 # below: the registration fylgja's imported commit, read on main, is one this clone knows,

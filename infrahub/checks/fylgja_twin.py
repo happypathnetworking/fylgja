@@ -17,6 +17,7 @@ from typing import Any
 from infrahub_sdk.checks import InfrahubCheck
 
 from .fylgja_api import (
+    CLOSE_MARGIN_S,
     RENDER_MARKDOWN,
     Answer,
     Cut,
@@ -26,6 +27,7 @@ from .fylgja_api import (
     path,
     post_comment,
     proposed_change,
+    rejections_past_branch_point,
     variables,
 )
 
@@ -34,13 +36,15 @@ from .fylgja_api import (
 # run cancels and destroys. A check Infrahub times out leaves its validator in_progress and
 # the merge blocked (research §1.4), so this deadline, not Infrahub's, is what ends a
 # rehearsal that overruns (FR-021, R-16). The timeout less this margin covers the ceiling,
-# the destroy's whole budget and the server's work before the run's start (data-model §4).
-DEADLINE_MARGIN_S = 180
+# the destroy's whole budget and the allowance before the run's start (data-model §4); the
+# margin less CLOSE_MARGIN_S, the read after the interrupt, covers the destroy's budget.
+DEADLINE_MARGIN_S = 240
 
-# CLOSE_MARGIN_S is how long before its timeout the check stops reading an answer it has
-# interrupted: whatever the answer has not said by then is a cut, and the check concludes
-# before Infrahub's timeout would leave its validator in_progress (FR-021).
-CLOSE_MARGIN_S = 15
+# DESTROY_S is the destroy's whole budget (PlanTeardown, the largest package's destroy and
+# Unstage), and ALLOWANCE_S the time allowed the server before the run's start: the plan, a
+# reclaim and the host check, an allowance, not a bound the server enforces (FR-021).
+DESTROY_S = 120
+ALLOWANCE_S = 300
 
 # RETRY_S is the wait between two asks while the host is held (R-15).
 RETRY_S = 30
@@ -62,13 +66,14 @@ LOST = "the connection to Fylgja was lost while the rehearsal ran; " + GOES_ON
 
 class FylgjaTwin(InfrahubCheck):
     """The proposed change's stages rehearsed on a twin: success when the report's status is ok,
-    or on a draft, which is skipped; failure on every other status, when the host stays held
-    until the check's own deadline, when that deadline cuts the run, and when Fylgja cannot be
-    reached, refuses the token or the version, or its answer is cut."""
+    or on a draft, which is skipped; failure on every other status, when the host is still held
+    once what remains of the check's own deadline no longer covers the run it asks for, when
+    that deadline cuts the run, and when Fylgja cannot be reached, refuses the token or the
+    version, or its answer is cut."""
 
     # The cheap read the SDK requires (infrahub/queries/branch.gql); its answer is not used.
     query = "fylgja_branch"
-    timeout = 4200
+    timeout = 4260
 
     async def validate(self, data: dict[str, Any]) -> None:
         began = time.monotonic()
@@ -91,10 +96,11 @@ class FylgjaTwin(InfrahubCheck):
             self.log_error(str(fault))
             return
 
-        # Ask, and ask again every RETRY_S while the host is held, until the deadline nears.
-        # A cancellation by Infrahub while an answer is open interrupts its run from call's
-        # handler, with a blocking call (R-16); between two answers no run of this check's is
-        # open, and nothing is sent.
+        # Ask, and ask again every RETRY_S while the host is held and what would remain of the
+        # check's own deadline at the next ask still covers the run it asks for (FR-007, FR-021),
+        # so that no run this check starts is interrupted by it. A cancellation by Infrahub
+        # while an answer is open interrupts its run from call's handler, with a blocking call
+        # (R-16); between two answers no run of this check's is open, and nothing is sent.
         asks = 0
         logged: tuple[str, ...] = ()
         while True:
@@ -112,10 +118,12 @@ class FylgjaTwin(InfrahubCheck):
                 )
             except Cut as fault:
                 self._print(fault.answer)
-                if fault.answer.interrupted:
+                if fault.answer.started and fault.answer.interrupted:
                     self.log_error(f"{asked_to_cancel(self.timeout, fault.answer)}; then {fault}; {GOES_ON}")
                 elif fault.answer.started:
                     self.log_error(f"{LOST} ({fault})")
+                elif fault.answer.interrupted:
+                    self.log_error(f"{passed_before_start(self.timeout)}; then {fault}")
                 else:
                     self.log_error(str(fault))
                 return
@@ -123,7 +131,8 @@ class FylgjaTwin(InfrahubCheck):
                 self.log_error(str(fault))
                 return
             held = holders(answer)
-            if not held or time.monotonic() + RETRY_S >= deadline:
+            remains = deadline - time.monotonic() - RETRY_S
+            if not held or remains < needs(answer):
                 break
             # A retried refusal is logged, once while it says the same, and never posted.
             this = (*answer.out, *answer.err, answer.text)
@@ -146,12 +155,15 @@ class FylgjaTwin(InfrahubCheck):
         status = document.get("status")
         text = answer.text.rstrip("\n")
         said: list[str] = []
-        if answer.interrupted:
+        if answer.started and answer.interrupted:
             said.append(asked_to_cancel(self.timeout, answer))
         elif held:
+            asked = f"{asks} ask" if asks == 1 else f"{asks} asks"
             said.append(
-                f"the host was still held as this check's own deadline neared, {time.monotonic() - began:.0f} s "
-                f"after it began and after {asks} asks, by " + ", ".join(held)
+                f"the host was still held by {', '.join(held)} after {asked}, {time.monotonic() - began:.0f} s "
+                f"after this check began: what would remain of its own deadline at another ask, "
+                f"{max(0, remains):.0f} s, does not cover the rehearsal's deadline of {deadline_of(answer)} s, "
+                f"the destroy's {DESTROY_S} s and the {ALLOWANCE_S} s allowed before its start"
             )
         if status == "ok" and not said:
             if text:
@@ -169,21 +181,35 @@ class FylgjaTwin(InfrahubCheck):
 
 def holders(answer: Answer) -> list[str]:
     """What holds the host, when the answer is a refusal before any start whose every rejection
-    says the host is held (R-15): each as its rule and object, the run or the twin it names.
-    Empty for any other answer, which is final."""
-    if answer.started or answer.interrupted:
+    says the host is held (R-15), the branch point's lone contract.node.missing passed over as
+    fylgja-step passes it over (FR-017): each as its rule and object, the run or the twin it
+    names. Empty for any other answer, which is final. An answer interrupted before any start
+    is the refusal it carries, since no run was asked to cancel."""
+    if answer.started:
         return []
     document = answer.document or {}
     if document.get("status") != "rejected":
         return []
-    rejections = [f for f in document.get("findings") or [] if f.get("severity") == "rejection"]
+    stages = (document.get("rehearsal") or {}).get("stages")
+    rejections = rejections_past_branch_point(document.get("findings"), stages)
     if not rejections or any(f.get("rule") not in HELD for f in rejections):
         return []
     return [f"{f.get('rule')} {f.get('object')}" for f in rejections]
 
 
+def deadline_of(answer: Answer) -> int:
+    """The deadline of the rehearsal the answer refused, from its block (data-model §4)."""
+    return int(((answer.document or {}).get("rehearsal") or {}).get("deadline_s") or 0)
+
+
+def needs(answer: Answer) -> int:
+    """What a run started by another ask needs of the check's own deadline (FR-007, FR-021): the
+    refused rehearsal's deadline, the destroy's budget and the allowance before its start."""
+    return deadline_of(answer) + DESTROY_S + ALLOWANCE_S
+
+
 def asked_to_cancel(timeout: int, answer: Answer) -> str:
-    """The sentence for the check's own deadline passing with the answer open (FR-021)."""
+    """The sentence for the check's own deadline passing with the run started (FR-021)."""
     sentence = (
         f"this check's own deadline, {timeout - DEADLINE_MARGIN_S} s after it began, passed with the "
         "rehearsal still answering: its run was asked to cancel"
@@ -191,3 +217,11 @@ def asked_to_cancel(timeout: int, answer: Answer) -> str:
     if answer.interrupt_failure:
         sentence += f", but the interrupt was not delivered: {answer.interrupt_failure}"
     return sentence
+
+
+def passed_before_start(timeout: int) -> str:
+    """The sentence for the check's own deadline passing before the run's start (FR-021)."""
+    return (
+        f"this check's own deadline, {timeout - DEADLINE_MARGIN_S} s after it began, passed before the "
+        "rehearsal's run started"
+    )

@@ -194,9 +194,10 @@ whenever its user checks run again, each concluding success or failure with a me
 *client* of the *API*: it reaches the *server* at the *bridge listener* with the *API
 token* from the task worker's environment, and concludes by the document's status alone.
 `fylgja-step` (timeout 300 s) asks for the stage plan, fails on a stage refused as intent,
-the stages unlistable, no open proposed change, or Fylgja not to be asked (a variable unset,
-the API unreachable, its token or version refused), and writes nothing. `fylgja-twin`
-(timeout 4,200 s) passes a draft, saying it skipped it; otherwise it asks for the
+the stages unlistable, no open proposed change, Fylgja not to be asked (a variable unset,
+the API unreachable, its token or version refused), or the plan unanswered by its own
+deadline, and writes nothing. `fylgja-twin`
+(timeout 4,260 s) passes a draft, saying it skipped it; otherwise it asks for the
 *rehearsal*, passes on `ok` alone, and posts the markdown report as one new thread on the
 proposed change, a `CoreChangeThread` holding one `CoreThreadComment`, which the proposed
 change's overview shows. Infrahub's merge rule reads the conclusion, so a failed stage
@@ -284,8 +285,9 @@ default. It is 1,980 s for the three SR Linux stages the fixture tool composes. 
 **ceiling**, 3,600 s, a constant of Fylgja's own, a rehearsal is refused before any run
 (`rehearsal.deadline.unfit`); a stage still running when it passes is cut, its *verdict*
 `error` (`rehearsal.deadline.cut`), and the twin destroyed. `fylgja-twin`'s timeout,
-4,200 s, exceeds the ceiling by the destroy's budget, the work before the start and a
-margin.
+4,260 s, exceeds the ceiling by the destroy's budget, the allowance for the work before the
+start and a margin, and it asks again for a held host only while what remains of its own
+deadline covers the run it would start.
 
 **Decision log** — [decisions.md](decisions.md): one entry per decision in force, with
 the options it rejected and why, cited by `D-0NN`. Append-only from this repository's

@@ -1890,6 +1890,27 @@ stage_lines() {
 
 # run_checks_named CASE CONCLUSION: -run-checks user's output, $OUT/run-checks-CASE.out, names
 # fylgja-twin with its conclusion, as contracts/fixture-tool.md gives the line.
+# comment_stages: the case's comment holds one table row per stage and nothing more, in the
+# plan's order, each with its verdict, and lists each stage's reference under **Stages** in
+# the same order (FR-030, SC-001). Each argument is a stage's label and its verdict cell, as
+# label=verdict; a row is read by its first cell and its last.
+comment_stages() {
+  local case=$1 md pair want_rows="" want_refs="" rows refs
+  shift
+  md=$OUT/comment-$case.md
+  for pair in "$@"; do
+    want_rows+="$FR/${pair%%=*} | ${pair#*=}"$'\n'
+    want_refs+="$FR/${pair%%=*}"$'\n'
+  done
+  rows=$(grep -E '^\| ' "$md" | grep -vE '^\| stage \|' | sed -E 's/^\| ([^|]*) \|.*\| ([^|]*) \|$/\1 | \2/' || true)
+  # shellcheck disable=SC2016 # the backticks are the markdown's code spans, read literally by sed
+  refs=$(awk '/^\*\*Stages\*\*/ { on = 1; next } on && /^\*\*/ { exit } on' "$md" | sed -nE 's/^- `([^`]*)` .*/\1/p')
+  [ "$rows"$'\n' = "$want_rows" ] ||
+    fail "case $case: the comment's table rows read $(tr '\n' ';' <<< "$rows"), not $(tr '\n' ';' <<< "$want_rows") in order; see $md"
+  [ "$refs"$'\n' = "$want_refs" ] ||
+    fail "case $case: the comment's stages list $(tr '\n' ' ' <<< "$refs"), not $(tr '\n' ' ' <<< "$want_refs") in order; see $md"
+}
+
 run_checks_named() {
   grep -qE "^check fylgja-twin: $2 \(message [0-9,]+ characters\)\$" "$OUT/run-checks-$1.out" ||
     fail "case 9: -run-checks user names no check fylgja-twin concluding $2; see $OUT/run-checks-$1.out"
@@ -1987,6 +2008,7 @@ expect "$OUT/comments-9a.json" 'length == 1 and (.[0].text | contains("Status **
   and contains("| stage | at | bundle | step | wait | verify | new findings | verdict |")
   and contains("```mermaid") and contains("**Stages**") and endswith("\n\n" + env.CAVEAT + "\n"))'
 jq -r '.[0].text' "$OUT/comments-9a.json" > "$OUT/comment-9a.md"
+comment_stages 9a "branch-point=refused (contract.node.missing)" seeded=baseline third-link=passed head=passed
 COMMENT9A=$(jq -r '.[0].id' "$OUT/comments-9a.json")
 export COMMENT9A
 rehearsal_run 9a "$OUT/comment-9a.md"
@@ -2032,10 +2054,8 @@ expect "$OUT/comments-9b.json" 'length == 2 and any(.[]; .id == env.COMMENT9A) a
 jq -r '.[] | select(.id != env.COMMENT9A) | .text' "$OUT/comments-9b.json" > "$OUT/comment-9b.md"
 COMMENT9B=$(jq -r '.[] | select(.id != env.COMMENT9A) | .id' "$OUT/comments-9b.json")
 THREADS9=$(jq -c 'map(.thread)' "$OUT/comments-9b.json")
-grep -qE "^\| $FR/bad-port \|.*\| failed \|\$" "$OUT/comment-9b.md" ||
-  fail "case 9: the second comment's table has no row of $FR/bad-port reading failed; see $OUT/comment-9b.md"
-grep -qE "^\| $FR/head \|.*\| not reached \|\$" "$OUT/comment-9b.md" ||
-  fail "case 9: the second comment's table has no row of $FR/head reading not reached; see $OUT/comment-9b.md"
+comment_stages 9b "branch-point=refused (contract.node.missing)" seeded=baseline third-link=passed bad-port=failed \
+  "head=not reached"
 # Both threads are listed in the proposed change's overview, the reason D-053 made each
 # comment a thread (SC-007), once Infrahub's event log has them: it lags its writes by a few
 # seconds (D-048), so the read is repeated for a minute, as tier 2's test waits.

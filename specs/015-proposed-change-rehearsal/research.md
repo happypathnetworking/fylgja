@@ -1796,3 +1796,77 @@ worker and the server left as they ran.
   names none and `verify.twin.rehearsal` `null`, in the feature's copy as T076 made them in
   `contracts/cli.md` and `contracts/api.md`; and `stage list` marking a rehearsal's twin as
   any twin's while the run is in flight or its dead twin waits, in both contracts.
+
+### 5.14 Convergence pass 5 (2026-10-21; T093–T098)
+
+The loop's run of convergence pass 5's tasks, unattended: no node login, no twin booted, the
+worker and the server left as they ran.
+
+- **A held host reads as held past the branch point** (T093). Every refusal the server makes
+  after the plan carries the block's stage findings in front of its own, so on a `main` with
+  no network a `run.in_flight` or `host.*` refusal also carried the branch point's
+  `contract.node.missing`, and `holders` read it as final: the check concluded failure on its
+  first ask. `fylgja_api.py` now holds FR-017's exception once
+  (`rejections_past_branch_point`, `branch_point_refusal`, `finding_key`), `fylgja-step`'s
+  `refuses` passing it the plan's stages and `holders` the block's. `holders` returns nothing
+  on a started answer alone; an answer interrupted before any `start` is the refusal it
+  carries, and the final message says the run was asked to cancel only once it had started.
+  Verified in this session's scratchpad under `.venv/bin/python -I`, the three modules and
+  `HEAD`'s copied into packages, with the venv's SDK, on documents the Go harness wrote
+  (`twin rehearse --json` refused on an empty `main` by a step run in flight under a check, a
+  rehearsal in flight, an orphan lab and a hand twin, and on a `main` carrying the network by
+  a step run; `stage plan --json` passing, refused by the branch point alone, and by a stale
+  mark): each held one read as held (`run.in_flight fylgja-step`, `run.in_flight
+  fylgja-rehearse`, `host.lab.present lab fylgja`, that and `host.twin.present <dir>`), where
+  `HEAD`'s `holders` read the first as final; a stale mark's `stage.artifact.stale` beside
+  `run.in_flight`, and a branch point refused under a second rejection, read as final; and
+  `refuses` gave `HEAD`'s answer on all seven documents. With `call` and the clock faked: a
+  held answer then `ok` was asked twice and passed; one held and interrupted before any
+  start named its holder and no cancel; a final one interrupted before any start logged its
+  text alone; one started and interrupted said its run was asked to cancel; and a cut
+  interrupted before any start said the deadline passed before the run started.
+- **A cut step names what it touched** (T094). A step the deadline or an interrupt cuts
+  after its stage ends `cancelled` with its phase, and its text line and table cell now name
+  its restarts and pushes as a divergence does (`cancelled at phase readiness: restarted n3`;
+  `cancelled at push; restarted n3 61.2s; push n3; not landed n1`). `cutBeforeReadinessRun`
+  is re-modelled as the step workflow ends a cut, and `cutAtPushRun` added; both fail
+  without the change. The block does not move.
+- **`fylgja-step`'s own deadline** (T095). `call` reads an answer with no stream until
+  `close_by`, past which it is `Cut`, `late`, and the response closed, which ends the
+  request's work on the server; `fylgja-step` passes `close_by` 120 s before its timeout
+  (`CLOSE_MARGIN_S`, now in `fylgja_api.py` and shared, so its own deadline is 180 s after it
+  began; the plan takes 5–10 s here) and concludes failure saying the plan did not answer by
+  it, nothing was started, and a re-run asks again. Verified against a stub on loopback
+  answering `200` and `Fylgja-Api-Version: 1`, then nothing: `call` with `close_by` 2 s away
+  raised the late `Cut` at 2.0 s (`no document came within 2 s of the request`) and the
+  stub's read reached the end of its connection; a document sent in time, and a call with no
+  `close_by`, answered as before; `FylgjaStep` with its timeout lowered to the margin plus 2 s
+  concluded failure in 2 s with the deadline's sentence.
+- **One stage alone ends `ok` whatever its verify finds** (T096). The operator answered
+  (a), keep what runs: nothing was compared, so nothing fails, and the verify's findings are
+  reported as the baseline's (FR-009). `spec.md`'s FR-003 and the edge case "One stage alone
+  resolves" were amended by the operator; R-03 now says the same. Nothing of the code moves.
+- **The retry stops while the run it would start still fits** (T097). The operator answered
+  (a), with the allowance kept an allowance and the margins' option B: `fylgja-twin` asks
+  again only while what would remain of its own deadline at the next ask covers the refused
+  rehearsal's `deadline_s`, the destroy's budget (`DESTROY_S`, 120 s) and the allowance
+  before `start` (`ALLOWANCE_S`, 300 s), then concludes failure naming the holder and what the
+  remainder does not cover; `timeout = 4260`, `DEADLINE_MARGIN_S = 240`, `CLOSE_MARGIN_S =
+  120`, so the check reads the interrupted run's answer for 120 s, the destroy's budget, and
+  keeps its last 120 s for the comment's two 60 s saves. With the clock faked, two held asks
+  of 1,000 s each stopped at the second, 1,960 s remaining against 2,400 s needed, the
+  comment the last refusal's markdown; a held rehearsal of 3,600 s was not asked again, since
+  4,020 s less the 30 s wait is under its 4,020 s. `TestTheTwinCheckOutlastsItsRehearsal`
+  holds the margins against the destroy's budget and the saves, and fails on the old ones
+  (a read of 60 s; a close margin of 15 s). The records of 4,200 s and 180 s moved, but
+  `docs/decisions.md`'s D-051, append-only, and `CLAUDE.md`, which says what the host's
+  registration imported at `d70ad24`; tier 3's case 9 now asks the registration for 4260.
+- **The records say what runs** (T098): the reclaim's destroy in the architecture and the
+  glossary, F-007's failures in the roadmap, the checks table's `none_open` failure,
+  `rehearsal.schema.json`'s descriptions of a run whose end was not read, a baseline not
+  reached and the run's own warnings, in both copies, and the operations counted thirteen.
+
+The checks' changes reach the host's registration only once the operator pushes them to
+`origin`'s `main` and imports them (R-21). `TestChecksInsideInfrahub` was not run: it needs
+the server on the bridge running this tree's binary, and the one running is a replaced
+binary whose restart needs the node logins this session does not hold.

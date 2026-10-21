@@ -450,7 +450,7 @@ server's, and Fylgja itself still writes nothing to Infrahub, the thread and its
 being the check's one write ([D-049](docs/decisions.md#d-049),
 [D-052](docs/decisions.md#d-052), [D-053](docs/decisions.md#d-053)).
 
-**What the checks need.** Two things the walk-throughs above did not:
+**What the checks need.** Three things the walk-throughs above did not:
 
 - **The checks, imported.** They reach Infrahub as the template does, through the
   registration `fylgja` in `.infrahub.yml`, from `origin`'s `main`
@@ -471,6 +471,11 @@ being the check's one write ([D-049](docs/decisions.md#d-049),
   Its report names both, and says the token crosses the bridge unencrypted. Any container on
   the host can reach that address, the twin's nodes included, and the token is what guards
   it; [SECURITY.md](SECURITY.md#the-threat-model) says what that means on a shared host.
+- **A source branch named without a `/`.** Infrahub accepts a branch named `feature/x`,
+  which a stage's reference cannot name (`stage.ref.invalid`). On such a branch's proposed
+  change both checks conclude `failure` with that refusal in their message, `fylgja-step` at
+  its creation and `fylgja-twin` once it is ready for review, and nothing is booted. Name a
+  branch to rehearse without a `/`.
 
 ```sh
 FYLGJA_STATE_ROOT=/var/tmp/fylgja bin/fylgja serve --listen 127.0.0.1:7650 --listen "$(docker network inspect bridge -f '{{(index .IPAM.Config 0).Gateway}}'):7650" &

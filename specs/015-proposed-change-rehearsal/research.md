@@ -489,7 +489,8 @@ and the reproduce commands. The text (FR-013) prints the run's progress as every
 each child's lines under a `stage <ref>:` heading the server prints as it sees the child
 start (the children come in the input's order), then one line per stage with its verdict,
 then the findings as every document prints them. The markdown (FR-014) is rendered from
-the block by `internal/rehearsal` (R-11): the heading naming Fylgja, the proposed change,
+the document and the plan's step pairs by `internal/rehearsal` (R-11), since the block holds
+no step's changes (T014's note; T088): the heading naming Fylgja, the proposed change,
 the run and `resolved_at`; the table; a Mermaid `flowchart LR` with one node per stage and
 one edge per step labelled with what the step changed (nodes and links added or removed,
 artifacts changed, by name, never a line); the stages as `stage list` prints them; the

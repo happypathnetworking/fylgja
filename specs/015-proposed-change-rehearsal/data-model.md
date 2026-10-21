@@ -155,10 +155,13 @@ Contracts: [contracts/rehearsal.schema.json](contracts/rehearsal.schema.json),
 - **The markdown** (`render: "markdown"`, `document.markdown`, `twin rehearse
   --markdown`): the heading (Fylgja, the proposed change, the run, `resolved_at`, the
   status), the table (one row per stage), the Mermaid drawing (one node per stage, one
-  edge per step labelled with what it changed), the stages as `stage list` prints them,
-  the warnings, the baseline findings, the reproduce commands on a failure, the fidelity
-  caveat. Rendered by `rehearsal.Markdown` from the block alone; never a configuration
-  line, a device diff, a token or a login.
+  edge per step labelled with what it changed), on a status other than `ok` the findings
+  that say why, the stages as `stage list` prints them, the warnings, the baseline
+  findings, the reproduce commands on a failure, the line saying what was shortened when
+  the report had to be to fit `CommentMax` (4,092 bytes), and the fidelity caveat.
+  Rendered by `rehearsal.Markdown` from the document and the plan's step pairs, since the
+  block holds no step's changes; never a configuration line, a device diff, a token or a
+  login.
 - **The reproduce commands** (`reproduce`): `fylgja twin create --stage <baseline>`, one
   `fylgja twin step --stage <ref> --allow-restart` per rehearsed stage up to the failed one,
   `fylgja twin verify`, `fylgja twin destroy`; `[]` when no stage failed.

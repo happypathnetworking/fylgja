@@ -6,7 +6,7 @@ name: release
 # nothing (FR-037). It refuses a tag whose commit's ci run did not succeed, so the tagged
 # commit reaches main, and its ci run ends, before the tag is pushed.
 #
-# The notes below are the launch's (v0.1.0); a later release rewrites them.
+# The notes below are v0.2.0's; a later release rewrites them.
 
 on:
   push:
@@ -41,24 +41,56 @@ jobs:
       - run: |
           cp bin/fylgja fylgja-linux-amd64 && sha256sum fylgja-linux-amd64 > SHA256SUMS
           {
-            echo "Fylgja $GITHUB_REF_NAME: the launch."
+            echo "Fylgja $GITHUB_REF_NAME: a proposed change rehearsed on a twin."
             cat <<'EOF'
 
           Fylgja builds a walking twin of a network from its intent: an Infrahub branch, and
           optionally a point in time, compiled into a deterministic bundle and booted as a
           containerlab topology on Nokia SR Linux and Arista EOS, each device pushed the
-          configuration Infrahub rendered for it. Milestones M1–M7 and M10–M14 are built;
-          M8 (object storage and a Temporal cluster) and M9 (remote hosts) are not
-          (docs/roadmap.md).
+          configuration Infrahub rendered for it.
 
-          Attached: `fylgja-linux-amd64`, one statically linked binary for Linux on amd64
-          (the commands, the worker and the API's server), built on this release's runner
-          from the tagged commit, and `SHA256SUMS` (`sha256sum -c SHA256SUMS`).
+          New in 0.2 (docs/archive/v0.2-built.md):
 
-          A lab host is stood up from a clone of the tagged tree by `scripts/bring-up.sh`, on
-          Ubuntu 26.04 (README, What it needs). A client on another machine builds its own
-          binary from the tree (`make build`, Go 1.26) and reaches the lab host's server
-          through `ssh -N -L 7650:127.0.0.1:7650 <lab host>`, holding the API's token alone.
+          - Stages of a proposed change: `FylgjaStage`, a moment of a proposed change marked by the
+            operator, with the branch point and the head derived; `--stage`, `stage list` and
+            `stage plan` in place of waypoints, which are removed.
+          - `twin rehearse`: a proposed change's stages built, stepped and verified one by one on one
+            twin, which is then destroyed, and reported.
+          - Two checks inside Infrahub, from this repository: `fylgja-step` answers in seconds with
+            the plan; `fylgja-twin` rehearses a ready proposed change on a twin, posts the report as a
+            thread on it, and fails it, blocking the merge, when a stage fails.
+          - The API's server also listens on the host's Docker bridge, where Infrahub's task workers
+            reach it.
+
+          Formats: `twin.json` 7. The contract (0.2), the API (1), the findings and the goldens are
+          unchanged.
+
+          Attached: `fylgja-linux-amd64`, one statically linked binary for Linux on amd64 (the
+          commands, the worker and the API's server), built on this release's runner from the
+          tagged commit, and `SHA256SUMS` (`sha256sum -c SHA256SUMS`).
+
+          Upgrading a v0.1.0 lab host:
+
+          1. Destroy any twin with the v0.1.0 binary (`fylgja twin destroy`): the twin record's
+             format moved.
+          2. Check out the tag and run `scripts/bring-up.sh`. It copies the new Compose override and
+             recreates Infrahub's task workers, loads the stage kind on `main`, and restarts the
+             worker and the API's server, which now also listens on the Docker bridge.
+          3. Remove the waypoint kind from `main`, once, after deleting any waypoint:
+             `.venv/bin/infrahubctl schema load --branch main specs/014-proposed-change-stages/migration/fylgja-waypoint-absent.yaml`.
+          4. Import the checks on the registration `fylgja`
+             (`InfrahubReadOnlyRepositoryImportLastCommit`, README, "A proposed change, rehearsed").
+             A branch made before the import never runs them.
+
+          A client on another machine builds its own binary from the tag (`make build`, Go 1.26)
+          and reaches the lab host's server through `ssh -N -L 7650:127.0.0.1:7650 <lab host>`,
+          holding the API's token alone.
+
+          Known limitation: a rehearsal terminated outside Fylgja (`temporal workflow terminate`)
+          leaves a client following it, and a `fylgja-twin` check, waiting until its abandoned child
+          runs close, which with no worker is never. Cancel a rehearsal through Fylgja instead:
+          interrupt `twin rehearse`, or run `twin destroy`.
+          Fixing it is in Release 0.3.
           EOF
           } > "$RUNNER_TEMP/notes.md"
           gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft --verify-tag \

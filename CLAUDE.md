@@ -418,73 +418,50 @@ under ten minutes.
 
 Rewritten whole at each release's close, never appended to.
 
-- **M14 is built**: the cut, this repository's one first commit
-  ([D-043](docs/decisions.md#d-043)), and the launch (`013-launch`). M1–M7 and M10–M14
-  are built; M8 and M9 are not.
-- **The launch** made the repository public at its start (2026-10-07), with
-  `SECURITY.md`, the ruleset `main`, private vulnerability reporting and pull requests
-  closed by `pull-requests.yml`; then `scripts/bring-up.sh` with its SR Linux-only path,
-  CI's contract job against a real Infrahub with no secret, Infrahub rendering from this
-  repository (D-044), tier 3's `PLATFORMS`, the recording, the write-up, the release
-  workflow, and the five Infrahub behaviours, each dropped on the operator's word.
-- **Verified** as SC-001–SC-012 record (`specs/013-launch/research.md` §3): the script's
-  full run on a fresh 26.04 VM to tiers 1 and 2, tier 3 `E2E-OK` there, a second run that
-  installed nothing, the run with no tar and its `E2E-PARTIAL`; CI's two jobs green and a
-  pull request closed; the development host's registration, on 24.04, with tiers 2 and 3
-  (case 1 deploying `b9d53ebc…`); `PLATFORMS` narrowed and whole there; and the
-  development host reinstalled on 26.04 by the script, tiers 1, 2 and 3 passing there and
-  its host and containerlab facts re-verified, but for a twin beside tier 2 and `sr_cli`
-  under pressure, left untried on purpose. No golden and no format version moved.
-- **The release `v0.1.0`** was published on 2026-10-08, from the tag the operator pushed
-  and the draft `release.yml` built.
-- **Release 0.2 is under way**: a proposed change rehearsed on a twin
-  ([roadmap](docs/roadmap.md#release-02)). 014 and 015 are built.
-- **014 is built** (`014-proposed-change-stages`, F-023, 2026-10-17): a proposed change's
-  stages in place of M10's surface ([D-045](docs/decisions.md#d-045)–[D-048](docs/decisions.md#d-048);
-  Constitution 1.3.0, amended for D-048). `FylgjaStage` and its extension on `main`, and
-  M10's kind removed from it (`e43a1cde…`); `--stage`, `stage list` and `stage plan`; the
-  branch point read on `main` at `branched_from`, the head one microsecond after the later
-  of the branch's latest stamp and its latest intent event (`InfrahubEvent`; a removal
-  moves no stamp), a stale stage refused per device, by its stamps or an event naming it;
-  `twin.json` `6` (`specs/014-proposed-change-stages/research.md` §8). Its upstream request
-  for named points in time is drafted (`specs/014-proposed-change-stages/upstream-request.md`),
-  the operator's to file, never a session's.
-- **015 is built** (`015-proposed-change-rehearsal`, F-007 and F-008, 2026-10-20): a
-  proposed change rehearsed on a twin ([D-049](docs/decisions.md#d-049)–[D-053](docs/decisions.md#d-053);
-  D-053 makes D-049's comment a thread). `twin rehearse --branch <b> [--markdown]`, the
-  operation `twin.rehearse`, and the fifth workflow `fylgja-rehearse`, whose children are
-  the provision, the steps and the destroy, bounded by a deadline its stages' budgets sum
-  to under a ceiling of 3,600 s; the baseline stage, the verdicts and the reclaim, in
-  `internal/rehearsal`; the markdown rendering, within a comment's 4,092 bytes; `twin.json`
-  `7`, the `6` frozen; `fylgja-step` and `fylgja-twin` in `infrahub/checks/`, on
-  `origin`'s `main` and imported at `d70ad24`; `fylgja serve --listen` repeated, the
-  server on the host's Docker bridge beside loopback, the override's task-worker entries
-  and the bring-up script's two parts; the fixture tool's `-ready`, `-run-checks` and
-  `-add-interface`. Neither the API's version nor the findings' moved, and no golden, no
-  fixture id and no format but the twin record's. Verified
-  (`specs/015-proposed-change-rehearsal/research.md` §5): the server reached from inside
-  both task workers; the rehearsal by hand on real twins, passing, failing at a push,
-  interrupted, beside a create, its client gone, reclaimed and cut by a lowered deadline;
-  tier 2 in 1,099.7 s (2026-10-19), then whole beside the imported checks in 1,220.1 s
-  (2026-10-20), and `TestChecksInsideInfrahub` alone in 309.4 s once it read the thread
-  (2026-10-20); tier 3 `E2E-OK` in 1,619.1 s, then 1,536.9 s with the thread;
-  `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in 1,027.7 s and 1,042.9 s; the README's
-  walk-through followed by hand twice; and the thread read by the operator in Infrahub's
-  overview, the table, the Mermaid drawing, the stages and the caveat whole. It closed on
-  2026-10-21: the closing gates (T063), the operator's review (T064), and merged to `main`.
-- **Next**: `v0.2.0`. F-014, `016-probes` (its [brief](specs/016-probes/brief.md)),
-  and F-012 moved to 0.3 on 2026-10-21, where F-011 stays. On this install the branch
-  point is refused `contract.node.missing`, since `main` holds no network, so a
-  rehearsal's baseline here is the first mark.
-- **Open**: Arista's own checksum for the tar is unread, owed at the operator's next
-  download. On 26.04, whether the two AppArmor lines suffice without `/run/syslogd.pid*
-  rw,` is untried. From 014, the operator's: `infrahubctl schema format` would reorder
-  `schema/fylgja-stage.yaml` (§8.2); `stage.main.moved` is untried by a write on `main`;
-  and the recording shows M10's surface until it is remade at `v0.2.0`. From 015, for
-  converge or the operator: a client following a rehearsal terminated outside Fylgja
-  answers only once its abandoned children close (§5.2); and `local/worker.log` holds a
-  run of NUL bytes, their origin untraced, which the bring-up script reads past (T036,
-  T071). From 015's convergence pass 3, the operator's: the checks changed since `d70ad24`
-  (T068's comments, T074, T084) reach the host's registration only once `origin`'s `main`
-  carries them and they are imported, and tier 3's case 9 refuses until then, since it now
-  compares the imported commit with the tree (T085).
+- **Release 0.1** (`v0.1.0`, 2026-10-08): M1–M7 and M10–M14 built, M8 and M9 not; the cut,
+  this repository's one first commit ([D-043](docs/decisions.md#d-043)), and the launch
+  (`013-launch`), as [the archive](docs/archive/v0.1-built.md) records.
+- **Release 0.2 closed** (2026-10-21), `v0.2.0` the operator's to tag: a proposed change
+  rehearsed on a twin before it merges ([the archive](docs/archive/v0.2-built.md)).
+  - **014** (`014-proposed-change-stages`, F-023, 2026-10-17): a proposed change's stages
+    in place of M10's waypoints ([D-045](docs/decisions.md#d-045)–[D-048](docs/decisions.md#d-048);
+    Constitution 1.3.0); `FylgjaStage` on `main` and the waypoint kind removed
+    (`e43a1cde…`); `--stage`, `stage list`, `stage plan`; `twin.json` `6`.
+  - **015** (`015-proposed-change-rehearsal`, F-007 and F-008, 2026-10-20):
+    `twin rehearse` and the fifth workflow `fylgja-rehearse`; `fylgja-step` and
+    `fylgja-twin` in `infrahub/checks/`, imported at `3c3e79a`; the report as a thread
+    ([D-049](docs/decisions.md#d-049)–[D-053](docs/decisions.md#d-053)); the server on the
+    Docker bridge; `twin.json` `7`.
+  - **The release's own work** (2026-10-21): the report made legible in Infrahub's view
+    (the column `new verification failures`, `48399a7`; the drawing top to bottom with a
+    failed or erred stage outlined red by a class, `88bc630`); [D-054](docs/decisions.md#d-054)'s
+    demo window and the fixture tool's `-seed-main`, `-clear-main` and `-add-fourth-node`
+    (`d828a86`); the recording (`docs/recording/session.cast` and `.gif`) and four
+    screenshots of a rehearsed proposed change, made in the window on a three-node baseline
+    and read by the operator; the write-up's Release 0.2 figures, counted from 014's and
+    015's command logs; `release.yml`'s notes with a v0.1.0 host's upgrade; and
+    `TestPinnedReadReproducesItsBundle`'s race fixed (it read the branch before n1's
+    checksum moved after `SeedFourthNode`).
+  - **Verified at the close**: CI green on `dc7dcea` (one contract re-run, GitHub's
+    slowdown); tier 1 and lint on the final code; tier 2 whole in 1,262 s but for one race in `TestPinnedReadReproducesItsBundle`,
+    then `internal/stage` again with it fixed (228 s); tier 3 `E2E-OK` in 1,650.6 s and
+    `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in 1,113.5 s, case 9 on the new report;
+    the demo window's facts in `docs/verified-facts.md` (10-21): a branch made before a
+    write on `main` does not see it, `stage.main.moved` against a real write, no artifact
+    validator for a branch with no change, artifacts deleted with their devices, and how
+    the view renders a comment's markdown. Infrahub left as the contract tier leaves it,
+    `main` holding no network. No golden, no contract, API or findings version moved.
+- **Next**: Release 0.3, not yet set with the operator ([roadmap](docs/roadmap.md#release-03)):
+  F-011 opens it, with F-022, F-014 (`016-probes`, its [brief](specs/016-probes/brief.md)
+  re-read first), F-012, and the follow of a rehearsal terminated outside Fylgja (015's
+  research §5.2). `infrahubctl schema format`'s order (014 research §8.2) is taken up with
+  contract 0.3.
+- **Open, the operator's**: tag and publish `v0.2.0` once `release/0.2` is on `main` and
+  green; file 014's upstream request for named points in time
+  (`specs/014-proposed-change-stages/upstream-request.md`) and a report of Infrahub's
+  view: a code block's first line indented (`pre > code` inline with a left padding) and a
+  zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read Arista's own
+  checksum for the cEOS tar at the next download.
+- **Open, for a session**: the fixture tool's `-propose` waits its 6 minutes for an
+  artifact validator a branch with no change from `main` never gets (D-054's window);
+  bound with `timeout` there, as the release's demo did.

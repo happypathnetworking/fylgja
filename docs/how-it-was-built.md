@@ -92,6 +92,25 @@ cut; the decision log held 44 entries and the verified-facts record 80 at the cu
 All models together took about 3.9 billion input tokens, most of them cache reads, and
 wrote about 18.3 million.
 
+### Release 0.2
+
+The two specs of Release 0.2 were specified in this repository, and their command logs,
+kept on the development host and out of git, are counted the same way: by a script that
+printed numbers alone, read by the operator before it was committed. The launch logged
+only four of its passes and is left out again.
+
+| Spec | Features | Hours | Passes | Convergence passes | Fable 5.1 h | Opus 5.5 h |
+|---|--:|--:|--:|--:|--:|--:|
+| 014 — Stages of a proposed change | 1 | 13.2 | 46 | 10 | 1.1 | 12.1 |
+| 015 — A proposed change rehearsed | 2 | 18.5 | 46 | 7 | 1.8 | 16.7 |
+| **all** | **3** | **31.7** | **92** | **17** | **2.9** | **28.8** |
+
+By command, the 92 passes were 2 specify, 1 clarify, 2 plan, 2 tasks, 3 analyze, 65
+implement and 17 converge. The two specs hold 218 tasks: 35 `[behaviour]`, 48 `[pin]` and
+26 `[operator]` among them; in 015, `[behaviour]` tasks outnumber `[pin]` ones, 25 to 19. At 0.2's close the decision log
+holds 54 entries and the verified-facts record 148. Both models together took about 1.26
+billion input tokens and wrote about 6.1 million.
+
 ## What the hours say
 
 - **The agent's working time is small and countable.** Eleven milestones and the cut took

@@ -13,15 +13,18 @@ itself; state lives in containerlab, a few files and Temporal, and there is no d
 There is one twin at a time, on one lab host. Every command is a request to Fylgja's API,
 which `fylgja serve` answers on the lab host, so a shell that holds the API's token alone
 can drive the twin, from the lab host or through an SSH tunnel from another machine.
-`v0.1.0` is released; [what it built](docs/archive/v0.1-built.md) is recorded milestone by
-milestone, and the [roadmap](docs/roadmap.md) says what comes next.
+`v0.2.0` is released: a proposed change rehearsed on a twin before it merges. What
+[v0.1](docs/archive/v0.1-built.md) and [v0.2](docs/archive/v0.2-built.md) built is recorded,
+and the [roadmap](docs/roadmap.md) says what comes next.
 
-![A pinned twin created, stepped to the next moment of its change and verified](docs/recording/session.gif)
+![A proposed change's stages listed, then rehearsed on one twin: booted at the branch point, stepped through two stages, refused at the third, and destroyed](docs/recording/session.gif)
 
 The asciinema cast beside it, [docs/recording/session.cast](docs/recording/session.cast),
-plays the same session as text. Both were recorded at `v0.1.0` and show a twin from a
-waypoint, which a proposed change's stages have since replaced, until they are remade at
-`v0.2.0`.
+plays the same session as text. Both were recorded at `v0.2.0`, with the fixture's three
+nodes written to `main` for the recording alone ([D-054](docs/decisions.md#d-054)), so that
+the branch point is the baseline; on a `main` that holds no network, as here otherwise, it is
+refused and the first marked stage is. [What the rehearsal posts in
+Infrahub](#a-proposed-change-rehearsed) is shown below.
 
 Today it runs Nokia SR Linux and Arista EOS, alone or mixed in one twin. A vendor is a
 YAML file, not code ([psp/README.md](psp/README.md)). A twin built from a stage of a
@@ -534,8 +537,16 @@ check fylgja-twin: success (message 3,693 characters)
 ```
 
 The comment is a thread in the proposed change's Overview, where Infrahub renders its table
-and its drawing. It is headed by the run and when the stages were resolved, so a later
-rehearsal's comment, a new one, is told from it:
+and its drawing. Here are the Checks tab and the thread of the rehearsal recorded for
+`v0.2.0`, whose branch point is the baseline on `main` ([D-054](docs/decisions.md#d-054)):
+
+![A proposed change's Checks tab: Data Integrity, fylgja-step and fylgja-twin all succeeded](docs/recording/rehearsal-checks-passing.png)
+
+![The rehearsal's thread in the proposed change's Overview: every stage passed, with the table, the drawing, the stages and the caveat](docs/recording/rehearsal-thread-passing.png)
+
+The thread's markdown below is this walk-through's own rehearsal. It is headed by the run
+and when the stages were resolved, so a later rehearsal's comment, a new one, is told from
+it:
 
 ````markdown
 ## Fylgja rehearsed proposed change "fylgja-test-readme" on fylgja-test-readme
@@ -627,7 +638,11 @@ reached`, the twin is destroyed all the same, and the comment ends with the comm
 reproduce it by hand, one `twin create`, a `twin step` for each stage up to the failed one,
 `twin verify` and `twin destroy`. The rehearsal ends `nonconforming`, exit 5, and
 `fylgja-twin` fails. Tier 3's case 9 makes one, with a port n1 does not have, refused at the
-push.
+push. The recording's has a port n4 does not have; its stage is outlined red in the drawing:
+
+![The Checks tab after a failing rehearsal: fylgja-twin failed](docs/recording/rehearsal-checks-failing.png)
+
+![The failing rehearsal's thread: the stage bad-port failed at the push, head not reached, the findings and the commands that reproduce it](docs/recording/rehearsal-thread-failing.png)
 
 `-delete` removes the stages first, since Infrahub refuses to delete a proposed change while
 a stage names it, then the proposed change, whose threads, their comments and its checks go

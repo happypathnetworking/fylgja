@@ -150,6 +150,21 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	if err := c.SeedFourthNode(branch, "n1"); err != nil {
 		t.Fatalf("changing the branch after T: %v", err)
 	}
+	// SeedFourthNode's generate returns once every artifact is Ready, which can come before
+	// n1's is rewritten for its new port, so the unpinned read below waits for n1's checksum
+	// to move and n4's artifact to be listed, as the role change's wait above does. 240s
+	// bounds it, as scripts/e2e.sh bounds the same wait on a loaded host.
+	for deadline := time.Now().Add(240 * time.Second); ; {
+		listed := artifactsOf(t, c, branch, "device-config")
+		if listed["n1"].Checksum != regenerated.Checksum && listed["n4"].Checksum != "" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("240s after n4 was added, n1's artifact checksum is %s (still %s?) and n4's is %q",
+				listed["n1"].Checksum, regenerated.Checksum, listed["n4"].Checksum)
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
 
 	after, afterID, snapshot := read(at)
 	counts("the read at T after the change", snapshot, seeded)

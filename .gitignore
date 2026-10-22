@@ -32,3 +32,16 @@ coverage.*
 # publishes it here, and nothing commits it (docs/development.md).
 commands/
 specs/*/commands/
+
+# Spec Kit's own files, installed on each host by `specify init --here --integration claude
+# --script sh` and not redistributed here (MIT, GitHub, Inc.; D-056). The constitution, the
+# amended plan template and extensions.yml are this repository's and stay tracked.
+.claude/skills/speckit-*/
+.specify/scripts/
+.specify/templates/*
+!.specify/templates/plan-template.md
+.specify/integrations/
+.specify/workflows/
+.specify/init-options.json
+.specify/integration.json
+.specify/memory/.constitution-template.json

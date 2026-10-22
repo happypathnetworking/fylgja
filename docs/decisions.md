@@ -82,6 +82,7 @@ next one.
 | [D-053](#d-053) | The check's comment is a thread on the proposed change, as its view shows one | Verification |
 | [D-054](#d-054) | For a demo, `main` carries the fixture's three-node network for a window the fixture tool opens and closes | Testing |
 | [D-055](#d-055) | The contracts' `$id` namespace is this repository's GitHub URL | Contract |
+| [D-056](#d-056) | Spec Kit's files are installed on each host, not carried in the tree | Repository |
 
 ---
 
@@ -3435,6 +3436,54 @@ not part of the formats they freeze.
 - A client that validates a document against these schemas by `$id` updates one prefix.
 - A new schema takes an id under the same prefix, and `psp/psp.schema.json` stays
   identical to `contracts/psp.schema.json`, as `internal/psp`'s contract test requires.
+
+## D-056 — Spec Kit's files are installed on each host, not carried in the tree
+
+**Status:** Accepted 2026-10-22. Found by the release's hygiene check before `v0.2.0`.
+Beside [D-043](#d-043), which keeps the development record private and development here.
+
+### Context
+
+The cut carried what `specify init` had written on 2026-09-12 (Spec Kit 0.14.4.dev0): ten
+`speckit-*` skills under `.claude/skills/`, five scripts under `.specify/scripts/bash/`,
+five templates, and the install's metadata. Nineteen of those files were byte-identical to
+what the tool wrote, as its manifests record; one, `.specify/templates/plan-template.md`,
+was amended here for the Constitution Check. They are GitHub's work under the MIT licence,
+whose notice did not travel with them, so the public tree redistributed them without it.
+The workflow needs them on disk: the command-log hook and `scripts/converge-loop.sh` run
+`check-prerequisites.sh`, and every Spec Kit command is one of the skills.
+`scripts/bring-up.sh` and CI never touch them.
+
+### Options considered
+
+- **Keep them tracked and add the notice.** Rejected: compliant and exactly reproducible,
+  but the tree would go on shipping another project's files, and each Spec Kit upgrade
+  would be a commit of them.
+- **Vendor a pinned copy under a `third_party/` path.** Rejected: the same, moved.
+- **A bring-up part that installs Spec Kit.** Rejected for now: the script sets up the lab
+  host, and a network install it cannot pin to the version that built this project widens
+  it for one developer workflow.
+- **Untrack the unmodified files and the metadata, ignore them, document the install.**
+  Chosen.
+
+### Decision
+
+The nineteen unmodified files and Spec Kit's install metadata are untracked and
+git-ignored; they stay on the development host's disk. A fresh clone installs Spec Kit
+(`uv tool install specify-cli`, then `specify init --here --integration claude --script
+sh`) before its first Spec Kit command, and gets the current release's files. The
+repository keeps what is its own: the constitution, the amended plan template, with Spec
+Kit's MIT notice beside it in `.specify/LICENSE.spec-kit`, and `.specify/extensions.yml`.
+
+### Consequences
+
+- The hook, the loop and the skills are unchanged on this host. Elsewhere, until `specify
+  init` runs, the hook records no feature directory and the loop stops at its first line.
+- A newer Spec Kit writes different prompt text; the files this project was built with
+  remain readable in the history before this entry.
+- `specs/013-launch/brief.md`'s link to `.specify/templates/spec-template.md` dangles in
+  the public tree and is left as the launch's record.
+- Revisit if the bring-up script grows a developer-workflow part.
 
 ---
 

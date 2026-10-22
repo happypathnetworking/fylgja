@@ -344,8 +344,8 @@ docs/diagrams/         the fixture topologies (generated) and the schema's entit
 specs/                 Spec Kit features (NNN-slug), created by the first feature here
 commands/              git-ignored: the command log the hooks publish (see below)
 local/                 git-ignored, the default state root: .env, temporal.db, bundles/ (with bundles/.reads/, a read's CTM before compile names its bundle), twin/, command-log/; infrahub/, the Compose project's two files; the three processes' and the bring-up script's logs
-.specify/              Spec Kit: the constitution (memory/constitution.md, amended only by citing a decision-log entry), templates and scripts
-.claude/               Claude Code: the project settings, the command-log hook and the Spec Kit skills
+.specify/              the constitution (memory/constitution.md, amended only by citing a decision-log entry), the amended plan template and extensions.yml; Spec Kit's own scripts, templates and install metadata are installed per host and git-ignored (Spec Kit workflow, below)
+.claude/               Claude Code: the project settings, the command-log hook and the converge-loop skill; the speckit-* skills are installed per host and git-ignored
 .github/workflows/     ci.yml (the lint and unit jobs; the contract job on pushes to main), pull-requests.yml (comments the Contributing sentence on a pull request and closes it) and release.yml (a tag's draft release); Test architecture, below
 ```
 
@@ -1037,6 +1037,21 @@ sequence is `/speckit-specify` → `clarify` → `plan` → `tasks` →
 `analyze` → `implement` → `converge`, repeating `converge` until nothing is added.
 Auto-commit hooks stay off; commit with a conventional-commit message whose body says
 *why*.
+
+**Spec Kit's own files are installed, not tracked.** The `speckit-*` skills under
+`.claude/skills/`, the scripts under `.specify/scripts/`, Spec Kit's templates and its
+install metadata (`.specify/integrations/`, `.specify/workflows/`, `init-options.json`,
+`integration.json`) are GitHub's, under the MIT licence, and git-ignored here
+([D-056](decisions.md#d-056)). A fresh clone installs them first: `uv tool install
+specify-cli` (Spec Kit's README), then `specify init --here --integration claude --script
+sh`, which writes the current release's files. The files this project was built with came
+from Spec Kit 0.14.4.dev0, installed 2026-09-12; the ten commands, `converge` included,
+are still upstream, and the prompt text a newer release writes differs in detail. What
+this repository keeps is its own: the constitution, `.specify/templates/plan-template.md`
+(Spec Kit's plan template with the Constitution Check amended here, under
+`.specify/LICENSE.spec-kit`) and `.specify/extensions.yml`. Without the installed files,
+the command-log hook runs and records no feature directory, and `scripts/converge-loop.sh`
+stops at its first line.
 
 **The specify prompt carries decisions, not restatement.** Every command starts from
 `CLAUDE.md`'s reading list — brief, architecture, decision log, roadmap, this document —

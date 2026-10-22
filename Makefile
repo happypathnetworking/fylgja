@@ -13,7 +13,7 @@ PKGS := ./...
 VERSION ?= 0.1.0-dev
 LDFLAGS := -X main.version=$(VERSION)
 
-.PHONY: all build test test-contract test-e2e lint sdl generate diagrams clean \
+.PHONY: all build test test-contract test-e2e lint linkcheck sdl generate diagrams clean \
         temporal-dev worker serve infrahub-schema infrahub-seed infrahub-clean command-log
 
 all: build
@@ -52,6 +52,11 @@ test-e2e: build
 
 lint:
 	golangci-lint run
+
+# The tracked Markdown's relative links and anchors (scripts/linkcheck.py). A hand tool;
+# not a CI step.
+linkcheck:
+	python3 -I scripts/linkcheck.py
 
 # Publishes the Spec Kit command log the hooks keep in local/command-log/ and commits each
 # commands/ directory it touches (docs/development.md). The hooks write no tracked file, so

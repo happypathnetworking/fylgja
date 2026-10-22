@@ -443,7 +443,13 @@ Rewritten whole at each release's close, never appended to.
     and read by the operator; the write-up's Release 0.2 figures, counted from 014's and
     015's command logs; `release.yml`'s notes with a v0.1.0 host's upgrade; and
     `TestPinnedReadReproducesItsBundle`'s race fixed (it read the branch before n1's
-    checksum moved after `SeedFourthNode`).
+    checksum moved after `SeedFourthNode`); and, on 10-22, the release's hygiene check:
+    the recording's one home path neutralised before it went public, the roadmap's
+    audience line and 013's host details reworded, the schemas' `$id` namespace moved from
+    `fylgja.dev`, never ours, to this repository's URL ([D-055](docs/decisions.md#d-055)),
+    Spec Kit's own files untracked and installed per host by `specify init`
+    ([D-056](docs/decisions.md#d-056); `scripts/bring-up.sh` unchanged), twelve dangling
+    links fixed, and `scripts/linkcheck.py` kept as `make linkcheck`, a hand tool.
   - **Verified at the close**: CI green on `dc7dcea` (one contract re-run, GitHub's
     slowdown); tier 1 and lint on the final code; tier 2 whole in 1,262 s but for one race in `TestPinnedReadReproducesItsBundle`,
     then `internal/stage` again with it fixed (228 s); tier 3 `E2E-OK` in 1,650.6 s and
@@ -452,18 +458,26 @@ Rewritten whole at each release's close, never appended to.
     write on `main` does not see it, `stage.main.moved` against a real write, no artifact
     validator for a branch with no change, artifacts deleted with their devices, and how
     the view renders a comment's markdown. Infrahub left as the contract tier leaves it,
-    `main` holding no network. No golden, no contract, API or findings version moved.
+    `main` holding no network. On 10-22, after the hygiene commits: tier 1 and lint again
+    on the final tree, `make linkcheck` clean, and the credential greps over the tree, every
+    ref's history and the recording, nothing found; tiers 2 and 3 not re-run, since the
+    code change since the close is one constant and the ids the tests register, which
+    tier 1 covers, and CI's contract job runs on `main`'s push. No golden, no contract,
+    API or findings version moved; the schemas' `$id` prefix did
+    ([D-055](docs/decisions.md#d-055)).
 - **Next**: Release 0.3, not yet set with the operator ([roadmap](docs/roadmap.md#release-03)):
   F-011 opens it, with F-022, F-014 (`016-probes`, its [brief](specs/016-probes/brief.md)
   re-read first), F-012, and the follow of a rehearsal terminated outside Fylgja (015's
   research §5.2). `infrahubctl schema format`'s order (014 research §8.2) is taken up with
   contract 0.3.
 - **Open, the operator's**: tag and publish `v0.2.0` once `release/0.2` is on `main` and
-  green; file 014's upstream request for named points in time
-  (`specs/014-proposed-change-stages/upstream-request.md`) and a report of Infrahub's
-  view: a code block's first line indented (`pre > code` inline with a left padding) and a
-  zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read Arista's own
-  checksum for the cEOS tar at the next download.
+  green (`main` fast-forwards to it; the pull-request workflow closes every pull request,
+  so push `main`, wait for CI, then push the tag, and `release.yml` drafts the release);
+  file 014's upstream request for named points in time
+  (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
+  Infrahub's view: a code block's first line indented (`pre > code` inline with a left
+  padding) and a zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read
+  Arista's own checksum for the cEOS tar at the next download.
 - **Open, for a session**: the fixture tool's `-propose` waits its 6 minutes for an
   artifact validator a branch with no change from `main` never gets (D-054's window);
   bound with `timeout` there, as the release's demo did.

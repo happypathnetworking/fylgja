@@ -63,7 +63,10 @@ jobs:
             reach it.
 
           Formats: `twin.json` 7. The contract (0.2), the API (1), the findings and the goldens are
-          unchanged.
+          unchanged. The schemas' `$id`s under `contracts/` begin
+          `https://github.com/happypathnetworking/fylgja/` where they began `https://fylgja.dev/`, a
+          domain that was never this project's; a client that registers them by `$id` updates that
+          prefix (D-055). The documents the schemas describe are unchanged.
 
           Attached: `fylgja-linux-amd64`, one statically linked binary for Linux on amd64 (the
           commands, the worker and the API's server), built on this release's runner from the

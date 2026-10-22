@@ -20,7 +20,7 @@ specified: `F-014`, probes, is specified as `016-probes`.
 ## Release 0.2
 
 **Released as `v0.2.0`: a proposed change rehearsed on a twin before it merges.** Set with the
-operator on 2026-10-16, for an audience of OpsMill and prospective employers, who see it
+operator on 2026-10-16, for an audience outside the project, OpsMill first, who see it
 in the README, a recording and the write-up. An engineer opens a proposed change in
 Infrahub, and two checks from this repository report on it. `fylgja-step` answers in
 seconds with the step from `main` to the source branch, stage by stage. `fylgja-twin`

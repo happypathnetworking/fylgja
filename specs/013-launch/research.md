@@ -466,7 +466,7 @@ host path, a process id or a private path elsewhere.
 Ubuntu 24.04.1, kernel 6.8.0-142, 10 CPUs, 32,095 MiB, 8 GiB swap; the user in
 `clab_admins` and `docker`; `/etc/apparmor.d/local/usr.sbin.rsyslogd` carries the two
 lines plus `/run/syslogd.pid* rw,`; the worker and the API's server run from this tree
-(`/proc/<pid>/cwd` and `exe` under `fylgja-public/`); the dev server runs. Nothing else
+(`/proc/<pid>/cwd` and `exe` under the clone); the dev server runs. Nothing else
 in `local/` but what development.md lists.
 
 ---
@@ -514,7 +514,7 @@ and the date; a fact that no longer holds is a finding (FR-015).
   clone https://github.com/happypathnetworking/fylgja.git` in an empty temporary
   directory succeeded and held `README.md`, `LICENSE` and `SECURITY.md`. The
   `-c credential.helper=` is what makes it a stranger's clone: the development host's
-  `~/.gitconfig` names `gh auth git-credential` as the helper for `https://github.com`,
+  `~/.gitconfig` names a credential helper for `https://github.com`,
   and a trace of `git credential fill` shows git running it without the override and
   stopping at `terminal prompts disabled` with it.
 - **A pull request**: #1, from a throwaway branch `pr-check` made through the API, opened
@@ -669,7 +669,7 @@ the server's reports as naming both packages with their logins set, the dev serv
 - **The VM** (R-05): Ubuntu 26.04.1 LTS, kernel `7.0.0-38-generic`, 10 vCPUs, 31,065 MiB,
   8 GiB swap, a 59 GB root; no `/dev/kvm`. A clone of `013-launch` at `5207aae`, the tar
   `cEOS-lab-4.32.0.2F.tar` in the clone's parent directory. The operator's user was in
-  `sudo` and had passwordless sudo by a file under `/etc/sudoers.d/`, which the operator
+  `sudo` and had passwordless sudo, which the operator
   removes before the second run (T031) so that its prompt is exercised.
 - **The run** (T029), by the operator: `scripts/bring-up.sh 2>&1 | tee /tmp/bring-up.out`,
   begun 22:25:46Z, ended `bring-up: DONE in 1685s`, exit 0. The first report:
@@ -969,7 +969,7 @@ the server's reports as naming both packages with their logins set, the dev serv
 - **The VM** (T043): the first VM, reinstalled by the operator: Ubuntu 26.04.1 LTS, kernel
   `7.0.0-38-generic`, 10 vCPUs, 31,065 MiB, 8 GiB swap, sudo-rs 0.2.13; no Docker,
   containerlab, Go, Temporal or `make`; no file named `cEOS*` anywhere on its disk. The
-  user in `sudo` with passwordless sudo by a file under `/etc/sudoers.d/`, finding 2's
+  user in `sudo` with passwordless sudo, finding 2's
   configuration (`sudo -n true` exits 0, `sudo -n -v` exits 1).
 - **The clone**: `git clone -b 013-launch https://github.com/happypathnetworking/fylgja.git`
   with no credential, at `6cabd94`, and this tree's `scripts/bring-up.sh` copied over it
@@ -1118,7 +1118,7 @@ same-named branch's create run as well. Afterwards Infrahub held `main` and
 ### 3.12 Recorded: the development host on Ubuntu 26.04, 2026-10-08
 
 - **The install** (T052), by the operator, after T047 had read the figures: a fresh Ubuntu
-  26.04.1 LTS on the same QEMU/KVM guest, hostname `fylgja-26`, kernel `7.0.0-38-generic`,
+  26.04.1 LTS on the same QEMU/KVM guest, kernel `7.0.0-38-generic`,
   10 vCPUs, 31,065 MiB, 8 GiB swap (`/swap.img`), a 157 GB root; no `/dev/kvm`. A clone of
   `013-launch` at `b7276f9` (05:30:12Z), the tar `cEOS-lab-4.32.0.2F.tar` in the clone's
   parent directory (sha256 `89a567d5…`, the recorded one), then `scripts/bring-up.sh`. Its
@@ -1130,8 +1130,7 @@ same-named branch's create run as well. Afterwards Infrahub held `main` and
   complete after 47s`); the seed and the build 05:48; tier 1 05:50 and tier 2 05:57, every
   package `ok` in both; the dev server, the worker and the API's server started at 05:57.
   Compose's one project is `fylgja-infrahub`, running from `local/infrahub/` with the
-  override. `~/projects/infrahub-dev` and its stopped `infrahub-dev` project went with the
-  old disk.
+  override. The earlier install's Compose project went with the old disk.
 - **Versions**, each the VM's (§3.4): Docker `29.8.1` from Docker's repository
   (`containerd.io` `2.3.6`, Compose plugin `5.6.0`, cgroup v2 with the `systemd` driver);
   containerlab `0.79.0` from its `.deb`, `/usr/bin/containerlab` setuid root; Go `go1.26.0`,
@@ -1145,7 +1144,7 @@ same-named branch's create run as well. Afterwards Infrahub held `main` and
 - **The session's groups.** This Claude Code session's shell, and the user's systemd
   manager (`systemd --user`), began before the lab part added the groups, so neither has
   `docker` or `clab_admins`. `getent` lists the user in both, and the processes the script
-  started in its fresh login session carry both (983 and 982). Docker commands ran through
+  started in its fresh login session carry both. Docker commands ran through
   `sg docker`. Nesting `sg docker` and `sg clab_admins` keeps only the inner group, so a
   first tier-3 attempt, run that way, stopped at case 1's host check: `clab inspect`
   could not reach the Docker socket. Nothing was deployed. `sg docker` alone was enough
@@ -1154,7 +1153,7 @@ same-named branch's create run as well. Afterwards Infrahub held `main` and
   does not need `clab_admins` in the calling process's groups. A login session that
   begins after the run has both groups.
 - **The worker and the API's server**, as the script left them: from this tree
-  (`/proc/<pid>/cwd` and `exe` under `~/projects/fylgja`, not `(deleted)`), each
+  (`/proc/<pid>/cwd` and `exe` under the clone, not `(deleted)`), each
   environment carrying `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT` and
   `FYLGJA_API_TOKEN`, each report naming both packages with their logins set, the server
   `listening on 127.0.0.1:7650 (API version 1, build 0.1.0-dev)`. Clients answered through

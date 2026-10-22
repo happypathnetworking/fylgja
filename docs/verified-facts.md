@@ -83,7 +83,8 @@ development host up again there, or on a fresh 26.04 VM before it.
   request it has no effect on, and the client is not told. A malformed `at` is refused on
   a mutation while a well-formed one is discarded. Not yet reported upstream.
 - On a host where Infrahub runs in Docker beside Fylgja, a local clock read after a seed
-  returns sees the whole seed, since both share the kernel's clock (verified under WSL2).
+  returns sees the whole seed, since both share the kernel's clock (verified on an earlier
+  host where Docker ran in a VM).
   *(09-16)*
 - This Infrahub reads anonymously: no token is 200 on GraphQL, the schema and storage,
   and a wrong token is 401, so no token exists that reads intent and cannot read content.

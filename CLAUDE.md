@@ -423,8 +423,9 @@ Rewritten whole at each release's close, never appended to.
 - **Release 0.1** (`v0.1.0`, 2026-10-08): M1–M7 and M10–M14 built, M8 and M9 not; the cut,
   this repository's one first commit ([D-043](docs/decisions.md#d-043)), and the launch
   (`013-launch`), as [the archive](docs/archive/v0.1-built.md) records.
-- **Release 0.2 closed** (2026-10-21), `v0.2.0` the operator's to tag: a proposed change
-  rehearsed on a twin before it merges ([the archive](docs/archive/v0.2-built.md)).
+- **Release 0.2** (`v0.2.0`, closed 2026-10-21; tagged at `450c380` and published as a
+  pre-release on 2026-10-22): a proposed change rehearsed on a twin before it merges
+  ([the archive](docs/archive/v0.2-built.md)).
   - **014** (`014-proposed-change-stages`, F-023, 2026-10-17): a proposed change's stages
     in place of M10's waypoints ([D-045](docs/decisions.md#d-045)–[D-048](docs/decisions.md#d-048);
     Constitution 1.3.0); `FylgjaStage` on `main` and the waypoint kind removed
@@ -470,10 +471,7 @@ Rewritten whole at each release's close, never appended to.
   re-read first), F-012, and the follow of a rehearsal terminated outside Fylgja (015's
   research §5.2). `infrahubctl schema format`'s order (014 research §8.2) is taken up with
   contract 0.3.
-- **Open, the operator's**: tag and publish `v0.2.0` once `release/0.2` is on `main` and
-  green (`main` fast-forwards to it; the pull-request workflow closes every pull request,
-  so push `main`, wait for CI, then push the tag, and `release.yml` drafts the release);
-  file 014's upstream request for named points in time
+- **Open, the operator's**: file 014's upstream request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left
   padding) and a zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read

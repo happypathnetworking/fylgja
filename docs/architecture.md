@@ -1277,8 +1277,10 @@ deadline and the time used, the reclaim, the run, the baseline findings, each st
 role, bundle, step, wait, verify counts, new findings and verdict, the destroy's cleanup
 and the reproduce commands. Its **markdown** is rendered from the document and the plan's
 steps between the stages, which the drawing's edges name: a heading
-naming the proposed change and the run, a table of the stages, a Mermaid drawing with one
-box per stage and one edge per step naming what it changed and never a line of
+naming the proposed change and the run, a table of the stages, whose column `new
+verification failures` holds the wait's failing assertions the baseline's did not have, a
+Mermaid drawing, top to bottom, with one box per stage, a failed or erred one outlined red
+by a class, and one edge per step naming what it changed and never a line of
 configuration, the stages, the warnings, the baseline findings, the reproduce commands
 and the fidelity caveat. It is never longer than the 4,092 bytes Infrahub keeps of a
 comment: a longer report names each finding by its identifier and object alone, then

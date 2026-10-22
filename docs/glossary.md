@@ -300,6 +300,12 @@ must render, or a production name the profile must refuse (`no_rule`) or find ou
 range under a named rule (`out_of_range`). Only the suite reads them, so changing one
 moves no `bundle_id`.
 
+**Demo window** — From `v0.2.0` ([D-054](decisions.md#d-054)): the time the fixture's
+three-node network is on `main`, written by the fixture tool's `-seed-main` and removed by
+`-clear-main`, so that a demo's or a recording's branch point is a baseline that boots.
+No tier 2 or tier 3 runs while it is open, since a throwaway branch made from `main` would
+hold its devices. `main` holds no network otherwise.
+
 **`destroy` (workflow)** — The short Temporal workflow that removes the lab and the
 twin directory. Fixed ID; works on an orphan lab too ([D-007](decisions.md#d-007)).
 
@@ -377,7 +383,8 @@ review, `-run-checks user` runs its *checks (Infrahub)* again and waits for them
 closes it, and `-delete` removes the stages, then the proposed changes, with their threads
 and validators, then the branch. With `-prepare-main` it
 prepares `main`: the schema, the group `fylgja-devices` and this repository's read-only
-registration, each made only when absent.
+registration, each made only when absent. `-seed-main` and `-clear-main` open and close a
+*demo window*, and `-add-fourth-node` adds n4 to a throwaway branch, cabled to a peer.
 
 **Following** — From M4: a twin built from an unpinned reference is checked every
 *interval* and rebuilt when its `bundle_id` moves. `twin create` begins it unless `--at`

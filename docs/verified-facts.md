@@ -213,6 +213,23 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
 - **Deleting the source branch cancels its open proposed change asynchronously**: the
   `BranchDelete` returned after 8 s, the proposed change read `open` 2 s later and
   `canceled` 16 s after the call, still naming the branch. *(10-16)*
+- **A network on `main`** ([D-054](decisions.md#d-054)'s window, written by
+  `-seed-main` and removed by `-clear-main`):
+  - A branch made before a write on `main` does not see it. `fylgja-fixture`, and a
+    throwaway branch made two minutes before the seed, kept their own three devices, and
+    the fixture still compiled to `47b2c449…`.
+  - A branch made after the seed reads `main`'s network as its own data and at its branch
+    point (3 devices, 3 links).
+  - `stage.main.moved` is warned against a real write: one warning on the earlier
+    branch's `stage list` naming `main`'s latest write (the seed's end, `19:24:40.538763Z`)
+    and the branch point (`19:22:44.514878Z`), exit 0, nothing refused. The branch point
+    still reads `main` as it was, refused `contract.node.missing`.
+  - A proposed change from a branch with no change from `main` gets no artifact
+    validator, only Data Integrity and the user checks. The fixture tool's `-propose`,
+    which waits for one whenever the group has members, times out after 6 minutes there.
+  - Deleting a device on `main` deletes its artifacts with it (3 of 3) and leaves the
+    group empty. A branch made after `-clear-main` has its branch point refused
+    `contract.node.missing` again. *(10-21)*
 - **`CoreProposedChangeDelete` is refused while a `FylgjaStage` names the proposed change**,
   with the kind on `main`: `Cannot delete CoreProposedChange '<id>'. It is linked to
   mandatory relationship proposed_change on node FylgjaStage '<id>'`
@@ -365,6 +382,16 @@ registration `fylgja`.
   its markdown renders with GFM tables, single line breaks kept (`remark-breaks`) and a
   Mermaid block with no error banner; a check's message shows as plain text under
   `Message`. *(10-20)*
+- **How the view renders a comment's markdown**, tried in the comment box's *Preview*,
+  which renders without posting:
+  - A Mermaid node's `style` attribute is dropped, so a `style sN …` line does nothing. The
+    drawing's own `<style>` block and its classes are kept, so a `classDef` with `class sN …`
+    restyles a node.
+  - A drawing is scaled to the thread's width. Its zoom buttons scale it inside a frame
+    that does not grow, so a zoomed drawing is cropped.
+  - A code block's `code` is `display: inline` with `padding-left: 5.6px`, so its first
+    line alone is indented, whatever the info string (none, `text`, `sh`, `console`) and
+    for an indented block too. *(10-21)*
 - **A comment's text holds at most 4,092 bytes**: a text attribute is refused, `Text
   attribute length should be less than 4096 characters.`, when `3 + len(utf8) >= 4096`
   (`core/attribute.py`), a thread's comment as a plain one. *(10-20)*

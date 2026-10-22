@@ -64,7 +64,7 @@ func TestSchemaIDMovesWithTheFormat(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatal(err)
 	}
-	if want := "https://fylgja.dev/psp/v" + FormatVersion; doc.ID != want || schemaID != want {
+	if want := "https://github.com/happypathnetworking/fylgja/psp/v" + FormatVersion; doc.ID != want || schemaID != want {
 		t.Errorf("psp.schema.json's $id is %q and the loader registers it as %q; format %s wants %q in both",
 			doc.ID, schemaID, FormatVersion, want)
 	}

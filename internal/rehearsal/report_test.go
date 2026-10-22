@@ -380,7 +380,7 @@ func findingsSchema(t *testing.T) *jsonschema.Schema {
 	}
 	c := jsonschema.NewCompiler()
 	for _, name := range []string{"show.schema.json", "stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
-		if err := c.AddResource("https://fylgja.dev/schemas/"+name, load(name)); err != nil {
+		if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/"+name, load(name)); err != nil {
 			t.Fatal(err)
 		}
 	}

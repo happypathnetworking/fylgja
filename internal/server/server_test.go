@@ -209,7 +209,7 @@ func apiSchema(t *testing.T, def string) *jsonschema.Schema {
 			t.Fatal(err)
 		}
 	}
-	s, err := c.Compile("https://fylgja.dev/schemas/api.schema.json#/$defs/" + def)
+	s, err := c.Compile("https://github.com/happypathnetworking/fylgja/schemas/api.schema.json#/$defs/" + def)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://fylgja.dev/contracts/findings/v1",
+  "$id": "https://github.com/happypathnetworking/fylgja/contracts/findings/v1",
   "title": "Fylgja findings document v1 (--json) — M5 extension",
   "description": "Additive to M1's findings format: every M1 document still validates. Added: operations twin.create, twin.provision, twin.destroy; statuses failed (exit 3) and unclean (exit 4); subject.bundle and subject.run_id; blocks twin (success of create/provision), cleanup (failure of create/provision, and destroy), dry_run. findings_version stays \"1\". M4: operation twin.show; the `show` block (show.schema.json); the `following` block on twin.create and twin.destroy; `dry_run.follow`. findings_version stays \"1\": every M1–M3 document still validates. M5: the step enum gains push; dry_run.nodes[] gains artifact (what would be pushed, by name, content type, checksum and size); twin.nodes[] may carry artifact {name, checksum} and pushed_in_s. findings_version stays 1: additive. No artifact content anywhere. M6: dry_run gains lossy_mappings and shared_ports; nothing else changes.",
   "type": "object",
@@ -467,8 +467,8 @@
       }
     },
     "show": {
-      "description": "twin.show: see show.schema.json. Referenced by its $id: a relative reference would resolve against this schema's $id to https://fylgja.dev/contracts/findings/show.schema.json, which nothing defines",
-      "$ref": "https://fylgja.dev/schemas/show.schema.json"
+      "description": "twin.show: see show.schema.json. Referenced by its $id: a relative reference would resolve against this schema's $id to https://github.com/happypathnetworking/fylgja/contracts/findings/show.schema.json, which nothing defines",
+      "$ref": "https://github.com/happypathnetworking/fylgja/schemas/show.schema.json"
     }
   }
 }

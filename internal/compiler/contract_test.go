@@ -52,7 +52,7 @@ func compileSchema(t *testing.T, name string) *jsonschema.Schema {
 		if err != nil {
 			t.Fatalf("parsing %s: %v", ref, err)
 		}
-		if err := c.AddResource("https://fylgja.dev/schemas/"+ref, refDoc); err != nil {
+		if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/"+ref, refDoc); err != nil {
 			t.Fatalf("adding %s: %v", ref, err)
 		}
 	}

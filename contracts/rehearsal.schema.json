@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://fylgja.dev/schemas/rehearsal.schema.json",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/rehearsal.schema.json",
   "title": "fylgja twin rehearse — the rehearsal block (015)",
   "description": "The `rehearsal` block of the findings document fylgja twin rehearse emits (operation twin.rehearse): the proposed change rehearsed, when its stages were resolved, the deadline and the time used, whether a dead rehearsal's twin was reclaimed, the run, the baseline's findings, one entry per stage in order with its reference, its bundle or its refusal, its role, the step into it, its wait, its verify's counts, the findings new against the baseline and its verdict, the destroy's outcome, and, when a stage failed, the commands that reproduce it. Every list is sorted or in the stages' order, so the same run gives the same document. No configuration line, device diff, artifact or bootstrap content, token or login (Constitution X). The markdown rendering is not in the block: it rides beside the document in its frame (contracts/api.md, 015). The run's own warnings (rehearsal.twin.reclaimed, rehearsal.stage.moved, rehearsal.change.closed) ride in the document's findings beside the block; each stage's ride in its findings.",
   "$defs": {
@@ -90,7 +90,7 @@
             }
           }
         },
-        "timings": { "$ref": "https://fylgja.dev/schemas/step.schema.json#/$defs/timings" }
+        "timings": { "$ref": "https://github.com/happypathnetworking/fylgja/schemas/step.schema.json#/$defs/timings" }
       }
     },
     "wait": {
@@ -160,7 +160,7 @@
       "required": ["proposed_change", "resolved_at", "deadline_s", "ceiling_s", "used_s", "reclaimed", "baseline", "stages", "destroy", "reproduce"],
       "additionalProperties": false,
       "properties": {
-        "proposed_change": { "$ref": "https://fylgja.dev/schemas/stages.schema.json#/$defs/proposed_change" },
+        "proposed_change": { "$ref": "https://github.com/happypathnetworking/fylgja/schemas/stages.schema.json#/$defs/proposed_change" },
         "resolved_at": { "type": "string", "description": "RFC 3339 UTC: when the server resolved and read the stages, the plan's first read; what the report and the comment are headed by" },
         "deadline_s": { "type": "integer", "minimum": 0, "description": "the stages' summed budgets (data-model.md §4)" },
         "ceiling_s": { "type": "integer", "minimum": 0, "description": "Fylgja's ceiling, a mechanism constant" },

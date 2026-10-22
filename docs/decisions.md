@@ -81,6 +81,7 @@ next one.
 | [D-052](#d-052) | The check concludes from the report's status alone; Fylgja's verdicts stay advisory | Verification |
 | [D-053](#d-053) | The check's comment is a thread on the proposed change, as its view shows one | Verification |
 | [D-054](#d-054) | For a demo, `main` carries the fixture's three-node network for a window the fixture tool opens and closes | Testing |
+| [D-055](#d-055) | The contracts' `$id` namespace is this repository's GitHub URL | Contract |
 
 ---
 
@@ -3383,6 +3384,57 @@ Fylgja itself does not change: nothing under `internal/` knows about the window.
     branch's branch point is refused `contract.node.missing` again.
 - Revisit if a release wants a baseline on `main` at all times. That would be a feature,
   as above.
+
+## D-055 — The contracts' `$id` namespace is this repository's GitHub URL
+
+**Status:** Accepted 2026-10-22. Found by the release's hygiene check before `v0.2.0`; no
+earlier entry chose the namespace.
+
+### Context
+
+Every schema under `contracts/` (and `psp/psp.schema.json`, its copy of the package
+schema) carries a JSON Schema `$id`, and since the cut each was a URL under
+`https://fylgja.dev/`: `…/contracts/twin/v7`, `…/schemas/show.schema.json`, `…/psp/v0.6`.
+The schemas refer to one another by those URLs (`findings.schema.json` to the blocks'
+schemas, `api.schema.json` to findings), the tests register each document under its `$id`
+before compiling, and `internal/psp` compares the package schema's `$id` with a constant.
+The frozen copies under each package's `testdata/contracts/` carry the same ids.
+`fylgja.dev` was never this project's: the name belongs to someone else and answers on the
+web, so a validator that resolved `$id`s by fetching would fetch a stranger's document
+under this project's name. JSON Schema promises no retrieval by `$id`, and nothing here
+fetches; the id is the name a document is registered and referred to by. No bundle, record,
+finding or golden carries it, so the namespace is metadata of the contracts, not part of
+any format.
+
+### Options considered
+
+- **Keep `fylgja.dev`.** Rejected: the project names a domain it does not control, in
+  sixty-six files, and a reader cannot tell.
+- **The company's domain.** Rejected: nothing is served there either, and the repository
+  already has a home whose name it uses as its module path.
+- **A URN (`urn:fylgja:contracts:twin:v7`).** Rejected: valid and never resolvable, but
+  unfamiliar, and the ids' path shape (`contracts/<name>/v<N>`, `schemas/<file>`), which
+  the documents and tests read, would be rewritten rather than re-rooted.
+- **The repository's URL, `https://github.com/happypathnetworking/fylgja/`, as the
+  prefix.** Chosen.
+
+### Decision
+
+Every `$id` and cross-document `$ref` that began `https://fylgja.dev/` begins
+`https://github.com/happypathnetworking/fylgja/`, and nothing after the prefix changes:
+`https://github.com/happypathnetworking/fylgja/contracts/twin/v7`,
+`…/schemas/show.schema.json`, `…/psp/v0.6`. The tests' registrations and `internal/psp`'s
+constant follow. The ids remain identifiers: no document is served at those paths, and
+nothing resolves them. The frozen copies are renamed with the rest, since the namespace is
+not part of the formats they freeze.
+
+### Consequences
+
+- No format version moves: not `twin.json` `7`, the bundle manifest `4`, the CTM `1`, PSP
+  `0.6`, findings `1` or the API `1`. The goldens and every bundle id are unchanged.
+- A client that validates a document against these schemas by `$id` updates one prefix.
+- A new schema takes an id under the same prefix, and `psp/psp.schema.json` stays
+  identical to `contracts/psp.schema.json`, as `internal/psp`'s contract test requires.
 
 ---
 

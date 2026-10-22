@@ -724,7 +724,7 @@ func mustValidateM5(t *testing.T, doc *findings.Document, label string) {
 		return v
 	}
 	c := jsonschema.NewCompiler()
-	if err := c.AddResource("https://fylgja.dev/schemas/show.schema.json", load("show.schema.json")); err != nil {
+	if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/show.schema.json", load("show.schema.json")); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.AddResource("m5-findings.schema.json", load("findings.schema.json")); err != nil {

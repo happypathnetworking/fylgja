@@ -15,7 +15,7 @@ import (
 // schemaID is the PSP format schema's `$id`, which moves with the format: each format's
 // schema has said `v` and its version since `0.2`. The schema is registered under it, and
 // TestSchemaIDMovesWithTheFormat holds the document's `$id` to it.
-const schemaID = "https://fylgja.dev/psp/v" + FormatVersion
+const schemaID = "https://github.com/happypathnetworking/fylgja/psp/v" + FormatVersion
 
 // compiledSchema is the PSP format schema, compiled once.
 func compiledSchema() (*jsonschema.Schema, error) {

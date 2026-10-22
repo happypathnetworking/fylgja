@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://fylgja.dev/schemas/stages.schema.json",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/stages.schema.json",
   "title": "Fylgja stage blocks — 014",
   "description": "The three stage blocks of the findings document, referenced from findings.schema.json by this $id: `resolved`, the reference one stage resolves to (the `stage` block on twin.create, twin.create --dry-run, intent.read with --stage and twin.step once its target resolved); `list`, stage.list's `stages` block; `plan`, stage.plan's `plan` block, whose steps are step.Diff's result. Replaces waypoints.schema.json (M10, M11): a stage is a moment of a proposed change (D-045), named <branch>/<label>, with two derived stages, branch-point and head, beside the operator's marks. Every fact the text prints and no more: artifacts by name and checksum, bootstraps as changed or not, never a line of either (Constitution X). Every list is sorted, so the same input gives the same document.",
   "$defs": {

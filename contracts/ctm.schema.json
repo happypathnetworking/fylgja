@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://fylgja.dev/contracts/ctm/v1",
+  "$id": "https://github.com/happypathnetworking/fylgja/contracts/ctm/v1",
   "title": "Fylgja CTM (Canonical Topology Model) file v1 — M5 extension",
   "description": "Written by `fylgja intent read`, read by `fylgja twin compile`, and used as a fixture. Envelope per D-012 and D-023; per-object provenance tag per D-010. Ported from an earlier format, with the envelope reshaped. M5: a device gains `artifact`, the configuration Infrahub rendered for it, fetched by the read in the same pass and at the same `at` as the intent, verified against Infrahub’s checksum, content as UTF-8 text. ctm_version stays 1: a CTM whose device lacks the field is refused by validation and by `twin compile` as artifact.missing naming each device, not as an unknown version. A CTM file therefore holds configuration and lives only in the bundle store. M7: unchanged; CTM 1.",
   "type": "object",

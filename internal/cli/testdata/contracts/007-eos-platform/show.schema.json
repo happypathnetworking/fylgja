@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://fylgja.dev/schemas/show.schema.json",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/show.schema.json",
   "title": "fylgja twin show — the show block — M5 extension",
   "description": "The `show` block of the findings document `fylgja twin show --json` emits (operation twin.show). One document, from containerlab, the twin directory and the workflow service; every fact the text output reports, and no credential. M5: host.nodes[] gains artifact, the name and checksum twin.json records for the node, or null for a node the record does not name (an orphan’s, or a record that cannot be read). in_flight steps may be push. No artifact content. M7: host.nodes[] gains psp, the package id from twin.json, or null.",
   "type": "object",

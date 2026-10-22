@@ -48,7 +48,7 @@ func compileFeatureFindingsSchema(t *testing.T, feature string, resources ...str
 	}
 	c := jsonschema.NewCompiler()
 	for _, name := range resources {
-		if err := c.AddResource("https://fylgja.dev/schemas/"+name, load(name)); err != nil {
+		if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/"+name, load(name)); err != nil {
 			t.Fatal(err)
 		}
 	}

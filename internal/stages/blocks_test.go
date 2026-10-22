@@ -29,7 +29,7 @@ func blocksSchema(t *testing.T, def string) *jsonschema.Schema {
 	if err != nil {
 		t.Fatal(err)
 	}
-	const id = "https://fylgja.dev/schemas/stages.schema.json"
+	const id = "https://github.com/happypathnetworking/fylgja/schemas/stages.schema.json"
 	c := jsonschema.NewCompiler()
 	if err := c.AddResource(id, doc); err != nil {
 		t.Fatal(err)

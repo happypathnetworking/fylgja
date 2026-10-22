@@ -310,7 +310,7 @@ of it]` when it was shrunk further. A report that fits is rendered whole, as abo
 
 ## `twin.json` 7
 
-`contracts/twin.schema.json`, `$id https://fylgja.dev/contracts/twin/v7`, `twin_version`
+`contracts/twin.schema.json`, `$id https://github.com/happypathnetworking/fylgja/contracts/twin/v7`, `twin_version`
 `"7"`: `rehearsal` is required, `{"workflow_id": "fylgja-rehearse", "run_id": "…"}` or
 `null`; everything else of `6` stands. A create's record writes it from its input, a step's
 record keeps it. The `6` schema is frozen under

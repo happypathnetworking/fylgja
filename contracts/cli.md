@@ -721,7 +721,7 @@ Nine, each `rehearsal.*`. `run.cancelled`, `run.in_flight`, `run.worker.absent`,
 ### `twin.json` 7
 
 `twin_version` `"7"` ([twin.schema.json](twin.schema.json), `$id
-https://fylgja.dev/contracts/twin/v7`): `rehearsal` is required, `{"workflow_id":
+https://github.com/happypathnetworking/fylgja/contracts/twin/v7`): `rehearsal` is required, `{"workflow_id":
 "fylgja-rehearse", "run_id": "…"}` for a rehearsal's twin and `null` otherwise. A create's
 record writes it from its input and a step's record keeps it. Everything else of `6`
 stands, and a `6` record reads with no rehearsal.

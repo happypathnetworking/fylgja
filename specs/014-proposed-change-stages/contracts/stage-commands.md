@@ -193,7 +193,7 @@ tests; the current contracts are the record of the format.
 
 ## `twin.json` 6
 
-`contracts/twin.schema.json`, `$id https://fylgja.dev/contracts/twin/v6`, `twin_version`
+`contracts/twin.schema.json`, `$id https://github.com/happypathnetworking/fylgja/contracts/twin/v6`, `twin_version`
 `"6"`. `waypoint` is gone; `stage` is required, an object or `null`:
 
 ```json

@@ -329,12 +329,12 @@ func findingsContract(t *testing.T, feature string) *jsonschema.Schema {
 		return v
 	}
 	c := jsonschema.NewCompiler()
-	if err := c.AddResource("https://fylgja.dev/schemas/show.schema.json", load("show.schema.json")); err != nil {
+	if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/show.schema.json", load("show.schema.json")); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
 		if _, err := os.Stat(contractPath(feature, name)); err == nil {
-			if err := c.AddResource("https://fylgja.dev/schemas/"+name, load(name)); err != nil {
+			if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/"+name, load(name)); err != nil {
 				t.Fatal(err)
 			}
 		}

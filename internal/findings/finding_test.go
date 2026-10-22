@@ -731,7 +731,7 @@ func compileM4FindingsSchema(t *testing.T) *jsonschema.Schema {
 		return doc
 	}
 	c := jsonschema.NewCompiler()
-	if err := c.AddResource("https://fylgja.dev/schemas/show.schema.json", load("show.schema.json")); err != nil {
+	if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/show.schema.json", load("show.schema.json")); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.AddResource("m4-findings.schema.json", load("findings.schema.json")); err != nil {
@@ -1036,7 +1036,7 @@ func compileM5FindingsSchema(t *testing.T) *jsonschema.Schema {
 		return doc
 	}
 	c := jsonschema.NewCompiler()
-	if err := c.AddResource("https://fylgja.dev/schemas/show.schema.json", load("show.schema.json")); err != nil {
+	if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/show.schema.json", load("show.schema.json")); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.AddResource("m5-findings.schema.json", load("findings.schema.json")); err != nil {
@@ -1228,7 +1228,7 @@ func compileM6FindingsSchema(t *testing.T) *jsonschema.Schema {
 		return doc
 	}
 	c := jsonschema.NewCompiler()
-	if err := c.AddResource("https://fylgja.dev/schemas/show.schema.json", load("show.schema.json")); err != nil {
+	if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/show.schema.json", load("show.schema.json")); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.AddResource("m6-findings.schema.json", load("findings.schema.json")); err != nil {

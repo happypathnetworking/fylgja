@@ -510,7 +510,7 @@ thing that no longer exists would mislead.
 
 **Decision**: `contracts/findings.schema.json` loses the `waypoint` blocks and operations
 and gains the `stage` ones, `waypoints.schema.json` is deleted and `stages.schema.json`
-added under `https://fylgja.dev/schemas/stages.schema.json`; `findings_version` stays `1`
+added under `https://github.com/happypathnetworking/fylgja/schemas/stages.schema.json`; `findings_version` stays `1`
 (FR-022). The frozen `008-waypoints` copies under `internal/findings/testdata/contracts/`
 go with their readers (`waypoint_test.go` and the M10 cases of `step_test.go`), since no
 test holds a waypoint document any more. `twin.schema.json` `5` is frozen under

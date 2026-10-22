@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://fylgja.dev/schemas/api.schema.json",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/api.schema.json",
   "title": "Fylgja API, version 1",
   "description": "M13: what crosses the API beside the documents Fylgja already versions. A request is $defs/request with the args of its operation ($defs/args). An answer is application/x-ndjson, each line one $defs/frame, the last a document frame whose document is findings.schema.json's, unchanged at findings_version 1. A transport fault's body is $defs/problem. The CTM, the bundle and a support package cross inside $defs/file, as bytes, and are validated by their own schemas (ctm.schema.json, manifest.schema.json, psp.schema.json), never here. No token, login, configuration line or device diff appears in any of these. 014: the operations stage.list and stage.plan replace waypoint.list and waypoint.plan, and twin.create, twin.step and intent.read take stage where they took waypoint; the version stays 1, since the API is pre-1.0 and every other operation is unchanged. 015: the operation twin.rehearse (its args the branch; an interrupt from its start, whose workflow is fylgja-rehearse), and the rendering markdown, whose document frame carries the report as markdown beside its text on twin.rehearse alone; the version stays 1, since a client of M13 ignores a new operation, a render value it does not send and a frame field it does not know.",
   "$defs": {
@@ -181,7 +181,7 @@
           "required": ["document"],
           "additionalProperties": false,
           "properties": {
-            "document": { "$ref": "https://fylgja.dev/contracts/findings/v1" },
+            "document": { "$ref": "https://github.com/happypathnetworking/fylgja/contracts/findings/v1" },
             "text": { "type": "string", "description": "Under render text or markdown, when the document has findings: they as text, for stderr, as M12's report printed them." },
             "markdown": { "type": "string", "minLength": 1, "description": "015: under render markdown, on twin.rehearse alone, the report as GitHub-flavoured markdown, rendered from the document and the plan's steps; a rendering, never part of the document. Absent on every other operation and rendering." }
           }

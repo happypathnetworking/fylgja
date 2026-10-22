@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://fylgja.dev/contracts/findings/v1",
+  "$id": "https://github.com/happypathnetworking/fylgja/contracts/findings/v1",
   "title": "Fylgja findings document v1 (--json)",
   "description": "M1's findings document. Added to the format it was ported from: operation `intent.read`; top-level `bundle_id` (twin.compile); `verified.generics[].kinds` is now the list of implementing kind names. Removed: `verified.objects` (schema check reads no intent).",
   "type": "object",

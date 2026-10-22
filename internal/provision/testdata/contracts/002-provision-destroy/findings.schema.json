@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://fylgja.dev/contracts/findings/v1",
+  "$id": "https://github.com/happypathnetworking/fylgja/contracts/findings/v1",
   "title": "Fylgja findings document v1 (--json) — M2 extension",
   "description": "Additive to M1's findings format: every M1 document still validates. Added: operations twin.create, twin.provision, twin.destroy; statuses failed (exit 3) and unclean (exit 4); subject.bundle and subject.run_id; blocks twin (success of create/provision), cleanup (failure of create/provision, and destroy), dry_run. findings_version stays \"1\".",
   "type": "object",

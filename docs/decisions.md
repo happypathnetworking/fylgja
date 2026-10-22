@@ -1693,7 +1693,7 @@ What it is:
 ### Decision
 
 - **A waypoint is a name for a pinned reference.** The kind is `FylgjaWaypoint`
-  ([schema/fylgja-waypoint.yaml](../schema/fylgja-waypoint.yaml)). It has a series, a
+  ([schema/fylgja-waypoint.yaml](https://github.com/happypathnetworking/fylgja/blob/1982b7263e0e79c80988ea2055266f3fcc697c72/schema/fylgja-waypoint.yaml), as the tree held it before 014 removed it). It has a series, a
   sequence, a branch, an optional `as_of` and a description. It is unique on series and
   sequence, and branch-agnostic. `--waypoint <series>/<sequence>` on `twin create`, `intent
   read` and `twin step` is resolved to `(branch, at)` before any run starts, at the
@@ -3386,6 +3386,7 @@ Fylgja itself does not change: nothing under `internal/` knows about the window.
 - Revisit if a release wants a baseline on `main` at all times. That would be a feature,
   as above.
 
+<a id="d-055"></a>
 ## D-055 — The contracts' `$id` namespace is this repository's GitHub URL
 
 **Status:** Accepted 2026-10-22. Found by the release's hygiene check before `v0.2.0`; no
@@ -3437,6 +3438,7 @@ not part of the formats they freeze.
 - A new schema takes an id under the same prefix, and `psp/psp.schema.json` stays
   identical to `contracts/psp.schema.json`, as `internal/psp`'s contract test requires.
 
+<a id="d-056"></a>
 ## D-056 — Spec Kit's files are installed on each host, not carried in the tree
 
 **Status:** Accepted 2026-10-22. Found by the release's hygiene check before `v0.2.0`.
@@ -3481,8 +3483,8 @@ Kit's MIT notice beside it in `.specify/LICENSE.spec-kit`, and `.specify/extensi
   init` runs, the hook records no feature directory and the loop stops at its first line.
 - A newer Spec Kit writes different prompt text; the files this project was built with
   remain readable in the history before this entry.
-- `specs/013-launch/brief.md`'s link to `.specify/templates/spec-template.md` dangles in
-  the public tree and is left as the launch's record.
+- `specs/013-launch/brief.md`'s link to `.specify/templates/spec-template.md` points at
+  the file as the launch's commit holds it, in this repository's history.
 - Revisit if the bring-up script grows a developer-workflow part.
 
 ---

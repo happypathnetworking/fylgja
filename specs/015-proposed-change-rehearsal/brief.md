@@ -235,7 +235,7 @@ Read in this order, after `CLAUDE.md`'s list.
 
 | Record | What it gives |
 |---|---|
-| [docs/roadmap.md](../../docs/roadmap.md): [Release 0.2](../../docs/roadmap.md#release-02), [F-007](../../docs/roadmap.md#f-007) and [F-008](../../docs/roadmap.md#f-008), [Decisions the order needs](../../docs/roadmap.md#decisions-the-order-needs) | the scope and the decisions owed |
+| [docs/roadmap.md](../../docs/roadmap.md): [Release 0.2](../../docs/roadmap.md#release-02), [F-007](../../docs/archive/v0.2-built.md#f-007) and [F-008](../../docs/archive/v0.2-built.md#f-008), [Decisions the order needs](../../docs/roadmap.md#decisions-the-order-needs) | the scope and the decisions owed |
 | [014's brief](../014-proposed-change-stages/brief.md), and its spec once written | the stages this feature rehearses |
 | [docs/decisions.md](../../docs/decisions.md): D-026, D-036, D-038, D-039, D-040–D-042, D-044, and 014's entries | what this feature builds on and supersedes |
 | [.specify/memory/constitution.md](../../.specify/memory/constitution.md) 1.3.0: I, III, VI, VII, X | the Constitution Check |

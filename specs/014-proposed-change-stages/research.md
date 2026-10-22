@@ -414,7 +414,7 @@ operator:
 
 > **D-046 — A stage's generation stamp is the later of its artifact's checksum stamp and
 > the proposed change's artifact validation; staleness is judged per device.** Refines
-> [D-045](#d-045). A regeneration to identical bytes writes no checksum and no storage id,
+> [D-045](../../docs/decisions.md#d-045). A regeneration to identical bytes writes no checksum and no storage id,
 > so an intent edit the template does not render would leave a stage stale under D-045's
 > rule with no remedy that clears it; the proposed change's artifact validator is re-run on
 > every run-check, identical bytes or not, and its `completed_at` moves (verified 2026-10-16

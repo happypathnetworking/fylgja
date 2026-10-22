@@ -12,7 +12,7 @@ underspecified. Specify what the operator gets, not a new design. The
 [References](#references) section names every file to read, with what each gives.
 
 This is the first feature specified in this repository, so there is no earlier spec here
-to follow: the spec takes [the template](../../.specify/templates/spec-template.md)'s
+to follow: the spec takes [the template](https://github.com/happypathnetworking/fylgja/blob/dc7dcea78fc0310fcd702b48eeeb76e3e6f9de98/.specify/templates/spec-template.md)'s
 shape, and the records it builds on are the documents of the first commit.
 
 The prompt:

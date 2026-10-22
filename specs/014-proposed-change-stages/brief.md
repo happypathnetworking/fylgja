@@ -264,8 +264,8 @@ Still the plan's:
 |---|---|
 | [docs/roadmap.md](../../docs/roadmap.md): [Release 0.2](../../docs/roadmap.md#release-02), [Decisions the order needs](../../docs/roadmap.md#decisions-the-order-needs) | the scope and the decisions owed |
 | [docs/decisions.md](../../docs/decisions.md): D-012, D-028, D-032, D-036, the [open questions](../../docs/decisions.md#open-questions) | what this pass supersedes and keeps |
-| [schema/fylgja-waypoint.yaml](../../schema/fylgja-waypoint.yaml), [schema/README.md](../../schema/README.md) | the kind and guide this pass replaces |
-| [contracts/waypoints.schema.json](../../contracts/waypoints.schema.json), [contracts/twin.schema.json](../../contracts/twin.schema.json), [contracts/api.md](../../contracts/api.md), [contracts/cli.md](../../contracts/cli.md) | the documents that move |
-| [internal/waypoint](../../internal/waypoint), [internal/findings/finding.go](../../internal/findings/finding.go) (`waypoint.*`, `step.target.*`), [internal/cli](../../internal/cli), [internal/testsupport](../../internal/testsupport), [cmd/fylgja-fixture](../../cmd/fylgja-fixture) | what M10 built |
+| [schema/fylgja-waypoint.yaml](https://github.com/happypathnetworking/fylgja/blob/1982b7263e0e79c80988ea2055266f3fcc697c72/schema/fylgja-waypoint.yaml), [schema/README.md](../../schema/README.md) | the kind and guide this pass replaces |
+| [contracts/waypoints.schema.json](https://github.com/happypathnetworking/fylgja/blob/1982b7263e0e79c80988ea2055266f3fcc697c72/contracts/waypoints.schema.json), [contracts/twin.schema.json](../../contracts/twin.schema.json), [contracts/api.md](../../contracts/api.md), [contracts/cli.md](../../contracts/cli.md) | the documents that move |
+| [internal/waypoint](https://github.com/happypathnetworking/fylgja/tree/1982b7263e0e79c80988ea2055266f3fcc697c72/internal/waypoint), [internal/findings/finding.go](../../internal/findings/finding.go) (`waypoint.*`, `step.target.*`), [internal/cli](../../internal/cli), [internal/testsupport](../../internal/testsupport), [cmd/fylgja-fixture](../../cmd/fylgja-fixture) | what M10 built |
 | [scripts/e2e.sh](../../scripts/e2e.sh) (cases 7, 8), [README.md](../../README.md), [docs/recording](../../docs/recording) | the walk-throughs and cases that move |
 | [docs/ideas.md](../../docs/ideas.md): the persistent fixture series | the idea this pass closes |

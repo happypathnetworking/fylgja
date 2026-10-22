@@ -794,11 +794,13 @@ unpushed nodes fail it. The step's wait never waits on a claim
 ([D-038](decisions.md#d-038)).
 
 **Recording** — The README's recorded session: `docs/recording/session.cast`, an
-asciinema cast of `twin create --waypoint`, `twin step` and `twin verify` run through the
-*API* from a shell holding the *API token* alone, and `session.gif`, rendered from it.
-Every frame was read for a credential before it was committed ([README](../README.md)).
-It was made at `v0.1.0` and shows the *waypoint*, which the *stage* has since replaced,
-until it is remade at `v0.2.0`.
+asciinema cast of `stage list` and `twin rehearse` run through the *API* from a shell
+holding the *API token* alone, and `session.gif`, rendered from it. Every frame was read
+for a credential before it was committed ([README](../README.md)). It was first made at
+`v0.1.0`, showing the *waypoint*, and remade at `v0.2.0`: a proposed change's stages
+listed, then rehearsed on one twin (a *rehearsal*), booted at the *branch point*, stepped
+through two *stages (of a proposed change)*, refused at a third and destroyed. Beside it,
+four screenshots show what the checks post in Infrahub, passing and failing.
 
 **Reference schema** — The concrete Infrahub schema Fylgja ships implementing its
 generics, so a greenfield install has something to populate.

@@ -338,7 +338,7 @@ scripts/e2e.sh         the body of `make test-e2e`
 scripts/diagrams.sh    writes the import graph below and docs/diagrams/topologies.md; run by `make diagrams`
 scripts/converge-loop.sh  the converge loop (Spec Kit workflow, below)
 docs/                  brief, architecture, decisions, roadmap, glossary, development, verified-facts, ideas, and how-it-was-built, the one-page write-up of how Fylgja was built
-docs/recording/        session.cast, the README's recorded session (a pinned create, a step and a verify, recorded at v0.1.0 and remade at v0.2.0), and session.gif, rendered from it
+docs/recording/        session.cast, the README's recorded session (stage list, then twin rehearse: a proposed change's stages rehearsed on one twin; recorded at v0.1.0 with waypoints and remade at v0.2.0), session.gif, rendered from it, and four screenshots of what the checks post in Infrahub
 docs/c4/               workspace.dsl, the C4 model, and its five views exported as .puml and .svg
 docs/diagrams/         the fixture topologies (generated) and the schema's entity diagram
 specs/                 Spec Kit features (NNN-slug), created by the first feature here

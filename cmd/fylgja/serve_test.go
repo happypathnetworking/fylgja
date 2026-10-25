@@ -209,6 +209,18 @@ func TestServeRefusesToStartInOrder(t *testing.T) {
 			o, out, errb := serveTestOptions("", "", map[string]string{})
 			return o, out, errb, "fylgja serve: FYLGJA_API_TOKEN is not set; the server does not start without the API's token\n"
 		}},
+		// 017: a default scope no request could name is refused before anything is read.
+		{name: "a malformed default scope", free: true, setup: func(t *testing.T) (*serveOptions, *lockedBuffer, *lockedBuffer, string) {
+			dir, _ := invalidPackageDir(t)
+			unresolvableStateRoot(t)
+			o, out, errb := serveTestOptions("", dir, map[string]string{api.EnvToken: serveToken, "FYLGJA_DEFAULT_SCOPE": "fylgja"})
+			return o, out, errb, "fylgja serve: FYLGJA_DEFAULT_SCOPE fylgja is not tag:<name>\n"
+		}},
+		{name: "a default scope of two words", free: true, setup: func(t *testing.T) (*serveOptions, *lockedBuffer, *lockedBuffer, string) {
+			t.Setenv(lab.EnvStateRoot, t.TempDir())
+			o, out, errb := serveTestOptions("", "", map[string]string{api.EnvToken: serveToken, "FYLGJA_DEFAULT_SCOPE": "tag:a b"})
+			return o, out, errb, "fylgja serve: FYLGJA_DEFAULT_SCOPE tag:a b is not tag:<name>\n"
+		}},
 		{name: "--listen not host:port", setup: func(t *testing.T) (*serveOptions, *lockedBuffer, *lockedBuffer, string) {
 			dir, _ := invalidPackageDir(t)
 			unresolvableStateRoot(t)
@@ -494,7 +506,8 @@ func (s *serving) stop(t *testing.T) error {
 // serveEnvironment sets the process environment a server reads at each request, and
 // returns serve's options reading it: the token, a scratch state root, the workflow service
 // and Infrahub at listeners that record a connection, Infrahub's token, one login variable
-// set and the rest unset, and no memory budget or override directory.
+// set and the rest unset, no memory budget or override directory, and the fixture's default
+// scope (017).
 func serveEnvironment(t *testing.T, listen string) (opts *serveOptions, stdout, stderr *lockedBuffer, root, temporal string, recorders []*recordingListener) {
 	t.Helper()
 	root = t.TempDir()
@@ -512,6 +525,7 @@ func serveEnvironment(t *testing.T, listen string) (opts *serveOptions, stdout, 
 		"FYLGJA_EOS_PASSWORD":     "",
 		lab.EnvHostMemoryMB:       "",
 		lab.EnvPSPDir:             "",
+		"FYLGJA_DEFAULT_SCOPE":    "tag:fylgja",
 	} {
 		t.Setenv(name, value)
 	}
@@ -564,7 +578,7 @@ func dialable(addr string) string {
 func TestServeListensOnEveryAddress(t *testing.T) {
 	opts, stdout, stderr, root, _, _ := serveEnvironment(t, "")
 	opts.listen = []string{"127.0.0.1:0", "0.0.0.0:0", "127.0.0.2:0"}
-	s := startServe(t, opts, stdout, stderr, 11)
+	s := startServe(t, opts, stdout, stderr, 12)
 
 	addrs := reportAddresses(t, stdout.String())
 	if len(addrs) != len(opts.listen) {
@@ -643,7 +657,7 @@ func TestServeListensOnEveryAddress(t *testing.T) {
 
 // The start-up report, word for word, before the first request is taken: where it listens
 // with the API's version and the build, the state
-// root, that the workflow service and Infrahub are dialled when a request needs them, and the
+// root, the default scope (017), that the workflow service and Infrahub are dialled when a request needs them, and the
 // worker's budget and package lines with the login variables' presence in the worker's words.
 // A listen address that is not loopback says the token is sent unencrypted on it. Neither the
 // token nor a login value is printed, and neither the workflow service nor Infrahub has been
@@ -659,9 +673,9 @@ func TestServeReportsBeforeTakingARequest(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			opts, stdout, stderr, root, temporal, recorders := serveEnvironment(t, c.listen)
-			lines := 8
+			lines := 9
 			if !c.loopback {
-				lines = 9
+				lines = 10
 			}
 			s := startServe(t, opts, stdout, stderr, lines)
 
@@ -675,6 +689,7 @@ func TestServeReportsBeforeTakingARequest(t *testing.T) {
 			}
 			want = append(want,
 				fmt.Sprintf("fylgja serve: state root %s (bundles: %s, twin: %s)", root, filepath.Join(root, "bundles"), filepath.Join(root, "twin")),
+				"fylgja serve: default scope: tag:fylgja",
 				"fylgja serve: the workflow service ("+temporal+", namespace default) and Infrahub are dialled when a request needs them",
 				"fylgja serve: host memory budget: unset (memory sums will be warnings)",
 				"fylgja serve: probe login arista_eos: FYLGJA_EOS_USERNAME unset, FYLGJA_EOS_PASSWORD unset",
@@ -717,6 +732,78 @@ func TestServeReportsBeforeTakingARequest(t *testing.T) {
 	}
 }
 
+// The default scope is reported after the state root, and is the scope a request naming none
+// is read under (017): set, a request with no scope goes on to Infrahub; unset or empty, the
+// report says so and such a request is scope.unset, naming the variable, with Infrahub never
+// dialled.
+func TestServeReportsAndServesItsDefaultScope(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		value *string
+		line  string
+	}{
+		{"set", ptr("tag:lab-b"), "fylgja serve: default scope: tag:lab-b"},
+		{"unset", nil, "fylgja serve: default scope: unset (a request that names no scope is refused)"},
+		{"empty", ptr(""), "fylgja serve: default scope: unset (a request that names no scope is refused)"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			opts, stdout, stderr, _, _, recorders := serveEnvironment(t, "127.0.0.1:0")
+			infrahub := recorders[1]
+			if c.value != nil {
+				t.Setenv("FYLGJA_DEFAULT_SCOPE", *c.value)
+			} else if err := os.Unsetenv("FYLGJA_DEFAULT_SCOPE"); err != nil {
+				t.Fatal(err)
+			}
+			s := startServe(t, opts, stdout, stderr, 9)
+			lines := strings.Split(stdout.String(), "\n")
+			if len(lines) < 3 || !strings.HasPrefix(lines[1], "fylgja serve: state root ") || lines[2] != c.line {
+				t.Errorf("report:\n%s\nwant %q after the state root", stdout, c.line)
+			}
+
+			req, err := http.NewRequest(http.MethodPost, "http://"+reportAddress(t, stdout.String())+api.Path(findings.OpIntentRead),
+				strings.NewReader(`{"render":"json","args":{"branch":"fylgja-test-serve","out":"ctm.json"}}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			req.Header.Set("Authorization", "Bearer "+serveToken)
+			resp, err := http.DefaultClient.Do(req)
+			if err != nil {
+				t.Fatalf("the request was not answered: %v", err)
+			}
+			defer func() { _ = resp.Body.Close() }()
+			if c.value != nil && *c.value != "" {
+				deadline := time.Now().Add(10 * time.Second)
+				for infrahub.accepted.Load() == 0 {
+					if time.Now().After(deadline) {
+						t.Fatal("a request naming no scope never reached Infrahub under the default")
+					}
+					time.Sleep(5 * time.Millisecond)
+				}
+			} else {
+				body, _ := io.ReadAll(resp.Body)
+				var frame api.Frame
+				var doc findings.Document
+				lines := strings.Split(strings.TrimSpace(string(body)), "\n")
+				if err := json.Unmarshal([]byte(lines[len(lines)-1]), &frame); err != nil || json.Unmarshal(frame.Document, &doc) != nil {
+					t.Fatalf("the answer's last line is not a document frame:\n%s", body)
+				}
+				if len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleScopeUnset || doc.Findings[0].Object != "FYLGJA_DEFAULT_SCOPE" ||
+					doc.Status.ExitCode() != findings.ExitError {
+					t.Errorf("the document %+v; want scope.unset naming FYLGJA_DEFAULT_SCOPE alone, exit 2", doc)
+				}
+				if n := infrahub.accepted.Load(); n != 0 {
+					t.Errorf("Infrahub took %d connections, want none before scope.unset", n)
+				}
+			}
+			if err := s.stop(t); err != nil {
+				t.Errorf("runServe returned %v once interrupted, want nil (exit 0)", err)
+			}
+		})
+	}
+}
+
+func ptr(s string) *string { return &s }
+
 // Interrupted, the server closes its listener and every connection at once, an answer in
 // flight included, and exits 0. The answer here is schema check's, held
 // open by an Infrahub that takes the connection and never answers; its client sees the
@@ -724,7 +811,7 @@ func TestServeReportsBeforeTakingARequest(t *testing.T) {
 func TestServeStopsAtOnceAndExitsZero(t *testing.T) {
 	opts, stdout, stderr, _, _, recorders := serveEnvironment(t, "127.0.0.1:0")
 	infrahub := recorders[1]
-	s := startServe(t, opts, stdout, stderr, 8)
+	s := startServe(t, opts, stdout, stderr, 9)
 	addr := reportAddress(t, stdout.String())
 
 	req, err := http.NewRequest(http.MethodPost, "http://"+addr+api.Path(findings.OpSchemaCheck),
@@ -876,7 +963,7 @@ func TestServeLogsTheHTTPServersErrorsAsWarnings(t *testing.T) {
 	l := &failingListener{}
 	l.temporary.Store(true)
 	listenFailing(t, opts, l)
-	s := startServe(t, opts, stdout, stderr, 8)
+	s := startServe(t, opts, stdout, stderr, 9)
 	addr := reportAddress(t, stdout.String())
 
 	// A request is taken once the retried Accept has passed.
@@ -946,7 +1033,7 @@ func requestLines(stderr string) []string {
 // serve).
 func TestServeAnswersOptionsStarThroughTheAPI(t *testing.T) {
 	opts, stdout, stderr, _, _, _ := serveEnvironment(t, "127.0.0.1:0")
-	s := startServe(t, opts, stdout, stderr, 8)
+	s := startServe(t, opts, stdout, stderr, 9)
 	addr := reportAddress(t, stdout.String())
 
 	for _, c := range []struct {

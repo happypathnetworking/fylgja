@@ -353,6 +353,8 @@ env_value() {
     FYLGJA_API_TOKEN) head -c 24 /dev/urandom | base64 ;;
     INFRAHUB_ADDRESS) echo http://localhost:8000 ;;
     INFRAHUB_API_TOKEN | INFRAHUB_INITIAL_ADMIN_TOKEN) echo "$ADMIN_TOKEN" ;;
+    # The fixture's tag (017): the scope a request that names none is read under.
+    FYLGJA_DEFAULT_SCOPE) echo tag:fylgja ;;
     # Empty on purpose: the embedded packages. A directory that does not exist would refuse
     # the roles' start.
     FYLGJA_PSP_DIR) echo "" ;;
@@ -399,6 +401,11 @@ if [ ! -e local/.env ]; then
   )
   unset ADMIN_TOKEN
   ENV_LINE="local/.env: scaffolded from .env.example (mode 0600)"
+elif ! grep -q '^FYLGJA_DEFAULT_SCOPE=' local/.env; then
+  # A file kept from before 017 names no default scope. The server starts without one, so
+  # this is a note and not a refusal; the file is the operator's, kept byte for byte, and
+  # read here by name alone, never a value.
+  ENV_LINE="local/.env: kept; it names no FYLGJA_DEFAULT_SCOPE, so the server starts with no default scope and refuses a request that names none, the checks' among them: add FYLGJA_DEFAULT_SCOPE='tag:fylgja' to it"
 fi
 
 # (7) The first report.

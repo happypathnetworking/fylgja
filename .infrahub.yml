@@ -1,9 +1,10 @@
 ---
 # Infrahub repository configuration for this repository, registered on main as the
 # read-only repository `fylgja` (D-044).
-# One Jinja2 transformation renders a device's production configuration from the
-# Fylgja generics (FylgjaDevice, FylgjaInterface, FylgjaLink); one artifact definition
-# generates it for every device in the group `fylgja-devices`.
+# One Jinja2 transformation renders a device's production configuration from the schema
+# library's DCIM (DcimDevice, its DcimPlatform and OrganizationManufacturer, its
+# InterfacePhysical ports and their DcimCable), SR Linux or EOS by the device's platform;
+# one artifact definition generates it for every device in the group `fylgja-devices`.
 # The checks are clients of Fylgja's API, glue on Infrahub's runtime (contracts/checks.md):
 # global, with no targets and no parameters, so Infrahub's task workers run each on every
 # proposed change, draft or not, reaching the API at FYLGJA_API_ADDRESS with
@@ -22,7 +23,7 @@ queries:
 
 jinja2_transforms:
   - name: srlinux_device_config
-    description: SR Linux configuration for one device, from the Fylgja generics.
+    description: One device's configuration, SR Linux or EOS by its platform, from the schema library's DCIM.
     query: device_config
     template_path: infrahub/templates/device_config.j2
     watch:

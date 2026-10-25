@@ -1,34 +1,38 @@
-# One device with its platform and interfaces, and each interface's link with both
-# endpoints. Reads the Fylgja generics only (never the concrete kinds), so it renders for
-# any schema that implements the contract.
+# One device of the schema library's DCIM, by name: its description, its platform with the
+# platform's manufacturer, and every interface with its kind, name, status and role; for a
+# physical port, its cable with every end's port and device. The cable is reached through
+# the generic DcimConnector and its ends through DcimEndpoint, whose fields DcimInterface
+# holds. The template renders the physical ports alone.
 query device_config($device: String!) {
-  FylgjaDevice(name__value: $device) {
+  DcimDevice(name__value: $device) {
     edges {
       node {
         name { value }
-        role { value }
-        site { value }
+        description { value }
         platform {
           node {
-            vendor { value }
-            nos { value }
-            version { value }
+            name { value }
+            manufacturer { node { name { value } } }
           }
         }
         interfaces {
           edges {
             node {
+              __typename
               name { value }
-              iftype { value }
-              mgmt_only { value }
-              enabled { value }
-              link {
-                node {
-                  endpoints {
-                    edges {
-                      node {
-                        name { value }
-                        device { node { name { value } } }
+              status { value }
+              role { value }
+              ... on InterfacePhysical {
+                connector {
+                  node {
+                    connected_endpoints {
+                      edges {
+                        node {
+                          ... on DcimInterface {
+                            name { value }
+                            device { node { name { value } } }
+                          }
+                        }
                       }
                     }
                   }

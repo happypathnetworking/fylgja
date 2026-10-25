@@ -932,3 +932,186 @@ the vendored library and the stage kind loaded on `main`".
 - The goldens re-baselined on a commit of their own from the hand-predicted artifacts, and
   again on a second commit of their own if the real render after the re-seed differs (T060).
 - `make diagrams` after the C4 and the schema entity diagram move.
+
+---
+
+<a id="5-verified"></a>
+## 5. Verified at implement
+
+What implement verified, each fact with how it was verified and the wall time (UTC) the
+answer carries, as §1 is written; each that holds goes into
+[verified-facts.md](../../docs/verified-facts.md) at the close (T067).
+
+<a id="5-1"></a>
+### 5.1 The template's renders, predicted (T016; 2026-10-25, 21:52Z–22:02Z)
+
+**These bytes are predicted, to be checked at T060.** Infrahub's pipeline renders nothing
+from the rewritten template until the operator's push of `origin`'s `main` (T057) and its
+import (T058). The bytes were worked by hand from `infrahub/templates/device_config.j2`'s
+text, over the fixtures of data-model §12 and [R-15](#r-15), and T019 takes them as
+`testdata/ctm/three-node.json`'s and `mixed.json`'s artifacts. Each document below ends in
+one newline and holds no other trailing whitespace. Its MD5 is the checksum the fixtures
+record, as `CoreArtifact.checksum` is the MD5 of the stored bytes. The marker is the
+device's `description`: `FYLGJA-MARKER-fixture` on the fixture branch's `n1`–`n3`, and
+`FYLGJA-MARKER-mixed-fixture` on `s1`, `e1` and `e2`. That is the suffix rule applied to
+`mixed.json`'s branch, `mixed-fixture`. A mixed seed on a throwaway branch carries that
+branch's suffix, and its bytes differ from these in the header's second line alone.
+
+The three-node fixture (links `n1:ethernet-1/1|n2:ethernet-1/1`,
+`n1:ethernet-1/2|n3:ethernet-1/2`, `n2:ethernet-1/2|n3:ethernet-1/1`):
+
+**`n1`** (SR Linux; 707 bytes, MD5 `597f6263eb7e0b539679b3956270876f`):
+
+```text
+# n1: production configuration rendered by Infrahub (fylgja-artifacts)
+# platform Nokia SR Linux; FYLGJA-MARKER-fixture
+set / system name host-name n1
+set / network-instance default type default
+set / interface ethernet-1/1 description "to n2 ethernet-1/1"
+set / interface ethernet-1/1 admin-state enable
+set / interface ethernet-1/1 subinterface 0 admin-state enable
+set / network-instance default interface ethernet-1/1.0
+set / interface ethernet-1/2 description "to n3 ethernet-1/2"
+set / interface ethernet-1/2 admin-state enable
+set / interface ethernet-1/2 subinterface 0 admin-state enable
+set / network-instance default interface ethernet-1/2.0
+# mgmt0: out-of-band management, left to the platform
+```
+
+**`n2`** (SR Linux; 707 bytes, MD5 `5ac21560015ad6bb1e881358115d0b7a`):
+
+```text
+# n2: production configuration rendered by Infrahub (fylgja-artifacts)
+# platform Nokia SR Linux; FYLGJA-MARKER-fixture
+set / system name host-name n2
+set / network-instance default type default
+set / interface ethernet-1/1 description "to n1 ethernet-1/1"
+set / interface ethernet-1/1 admin-state enable
+set / interface ethernet-1/1 subinterface 0 admin-state enable
+set / network-instance default interface ethernet-1/1.0
+set / interface ethernet-1/2 description "to n3 ethernet-1/1"
+set / interface ethernet-1/2 admin-state enable
+set / interface ethernet-1/2 subinterface 0 admin-state enable
+set / network-instance default interface ethernet-1/2.0
+# mgmt0: out-of-band management, left to the platform
+```
+
+**`n3`** (SR Linux; 707 bytes, MD5 `e93df96400ddbada7daa1a0777d9d3e3`):
+
+```text
+# n3: production configuration rendered by Infrahub (fylgja-artifacts)
+# platform Nokia SR Linux; FYLGJA-MARKER-fixture
+set / system name host-name n3
+set / network-instance default type default
+set / interface ethernet-1/1 description "to n2 ethernet-1/2"
+set / interface ethernet-1/1 admin-state enable
+set / interface ethernet-1/1 subinterface 0 admin-state enable
+set / network-instance default interface ethernet-1/1.0
+set / interface ethernet-1/2 description "to n1 ethernet-1/2"
+set / interface ethernet-1/2 admin-state enable
+set / interface ethernet-1/2 subinterface 0 admin-state enable
+set / network-instance default interface ethernet-1/2.0
+# mgmt0: out-of-band management, left to the platform
+```
+
+The mixed fixture (links `e1:Ethernet1|s1:ethernet-1/1`, `e1:Ethernet2/1|e2:Ethernet1`,
+`e2:Ethernet3/1/1|s1:ethernet-1/2`):
+
+**`s1`** (SR Linux; 711 bytes, MD5 `5e2a65f4dd4f5968c76e99f53fc3ff89`):
+
+```text
+# s1: production configuration rendered by Infrahub (fylgja-artifacts)
+# platform Nokia SR Linux; FYLGJA-MARKER-mixed-fixture
+set / system name host-name s1
+set / network-instance default type default
+set / interface ethernet-1/1 description "to e1 Ethernet1"
+set / interface ethernet-1/1 admin-state enable
+set / interface ethernet-1/1 subinterface 0 admin-state enable
+set / network-instance default interface ethernet-1/1.0
+set / interface ethernet-1/2 description "to e2 Ethernet3/1/1"
+set / interface ethernet-1/2 admin-state enable
+set / interface ethernet-1/2 subinterface 0 admin-state enable
+set / network-instance default interface ethernet-1/2.0
+# mgmt0: out-of-band management, left to the platform
+```
+
+**`e1`** (EOS; 319 bytes, MD5 `6b31a6de32516a4becb79002db56b1f7`):
+
+```text
+! e1: production configuration rendered by Infrahub (fylgja-artifacts)
+! platform Arista EOS; FYLGJA-MARKER-mixed-fixture
+hostname e1
+interface Ethernet1
+description to s1 ethernet-1/1
+no shutdown
+interface Ethernet2/1
+description to e2 Ethernet1
+no shutdown
+! Management1: out-of-band management, left to the platform
+```
+
+**`e2`** (EOS; 323 bytes, MD5 `e6a46383814336980c408a48410105e3`):
+
+```text
+! e2: production configuration rendered by Infrahub (fylgja-artifacts)
+! platform Arista EOS; FYLGJA-MARKER-mixed-fixture
+hostname e2
+interface Ethernet1
+description to e1 Ethernet2/1
+no shutdown
+interface Ethernet3/1/1
+description to s1 ethernet-1/2
+no shutdown
+! Management1: out-of-band management, left to the platform
+```
+
+Against today's artifacts, each document loses its loopback (`lo0`, `Loopback0`) and
+moves its header's second line from `platform <vendor> <nos> <version>; role <role>` to
+`platform <Manufacturer> <Platform>; <description>`. Every other line is as today's,
+the EOS dialect's unindented `description` and `no shutdown` included: the template's
+`-%}` strips the next line's indentation, as it always has, and tier 3 has proved those
+bytes on cEOS.
+
+How far the prediction was checked before the import:
+
+- **The local render reproduces the pipeline's, for today's template.** `.venv/bin/infrahubctl
+  render srlinux_device_config device=<d> --branch fylgja-fixture --out <file>` (SDK
+  1.23.2; read-only) of the template at `9255232` gave, for `n1`, `n2` and `n3`, bytes
+  whose MD5 equals each device's live `CoreArtifact.checksum` (`43e8fd0c…`, `ecb03029…`,
+  `ae0c3a87…`) and `testdata/ctm/three-node.json`'s content. The SDK's file-based
+  environment has `trim_blocks` and `lstrip_blocks` and the default `Undefined`, so an
+  attribute read on a null node fails the render. This is why the template guards the
+  platform and the manufacturer. Its filter allowlist (`infrahub_sdk/template/filters.py`)
+  admits `sort` in the worker and local contexts, though not the core's, and the
+  artifacts render in the worker, as today's template, which sorts, shows. The skill's
+  `jinja2-template` rule lists `sort` as unavailable.
+- **The rewritten query and template, rendered locally over the library's kinds, equal the
+  prediction.** On the throwaway branch `fylgja-test-017-t016` (created from `main` at
+  21:59:19Z; the six files of §1.2, fetched at `26336e9` into the scratchpad with their
+  SHA-256 prefixes checked, loaded in one `infrahubctl schema load` in 24.1 s; the branch's
+  hash `4161a1ab…`, not the plan's branch's `908871c3…`, since a branch's hash is its own),
+  a seed made through the SDK by a session's script wrote the two fixtures together. The
+  objects were the tag `fylgja`, `Nokia` and `Arista`, `SR Linux` and `EOS`, the four
+  locations, the six devices and their 18 ports and six cables, labelled by the link's
+  id. `infrahubctl render` of the tree's query and template rendered each of the six
+  devices byte-identical to the prediction. That run is also the skill's dry-run
+  (`deployment-gql-dry-run`): the query ran against the library's live schema with no
+  GraphQL error. Its answer listed each interface's `__typename`. `n1`'s `lo0` and `e1`'s
+  `Loopback0`, added as `InterfaceVirtual`s to prove the skip, answered `InterfaceVirtual`
+  with no `connector`, and neither rendered.
+- **Probes the fixtures do not hold rendered without failing.** On the same branch:
+  - `x1`, with no platform and no description: the SR Linux dialect, the header's second
+    line `# platform ` (empty), and a port of `status: disabled` as `admin-state disable`.
+  - `x2`, whose platform `Orphan OS` has no manufacturer: `# platform Orphan OS; edge`.
+  - `x3`, on EOS: a disabled port as `interface Ethernet1` then `shutdown`, with no
+    description.
+  - A three-ended cable (`x1`, `x2`, `x3`) gave each end the description of one of the
+    other two, the last as the answer lists them, an order the template does not fix.
+    The read omits such a cable (`omit.cable.ends`).
+  - A one-ended cable gave its port no description.
+- **The branch was deleted** at 22:01:59Z (the delete took 47 s). Afterwards `Branch` lists
+  `main` and `fylgja-fixture` alone, `main`'s hash is `e43a1cde…` with no `Dcim*` kind, and
+  `BuiltinTag` and `CoreProposedChange` count 0 on `main`.
+
+What this does not prove, and T060 does: the render by Infrahub's pipeline in its task
+workers, from the imported commit.

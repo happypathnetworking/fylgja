@@ -40,17 +40,17 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Constitution 1.3.0 (`.specify/memory/constitution.md`). Mark each gate PASS, N/A (say
+Constitution 2.0.0 (`.specify/memory/constitution.md`). Mark each gate PASS, N/A (say
 why), or VIOLATION (justify in Complexity Tracking). Cite the principle number.
 
 | # | Gate | Status |
 |---|---|---|
 | I | Go only; static binary; no second runtime; pure-Go deps; PSPs and schema embedded | |
-| II | Platforms are data: no compiler change for a platform; no vendor-homogeneity assumption; budgets/timeouts/readiness from the PSP | |
-| III | Queries only the Fylgja generics; never past a generic; least demanded; graduate-don't-gate; `iftype` is kind, `mgmt_only` is the use-flag; unimplemented `iftype` rejects; conformance and completeness checked separately | |
+| II | Platforms are data: no compiler change for a platform; no vendor-homogeneity assumption; budgets/timeouts/readiness and the manufacturer and platform pairs from the PSP | |
+| III | The CTM is the contract; the reader names its model version; approximations and omissions in the envelope's fidelity list, copied by the compiler; nothing read the mapping does not name; the read-only test's list; wiring derived from what was mapped; conformance and completeness checked separately | |
 | IV | No configuration rendered; bootstrap from the PSP only; production config is an Infrahub artifact | |
 | V | Compiler pure (test-enforced); bundle deterministic, self-describing, content-addressed, deployable as emitted; `twin compile` shares the test code path | |
-| VI | Provenance recorded (branch, `at`, schema hash, contract version in the bundle; `observed_at` in the CTM envelope and `twin.json`, never in the bundle); `at` passed verbatim or not at all | |
+| VI | Provenance recorded (branch, `at`, schema hash, scope, mapping and model version in the bundle; `observed_at` in the CTM envelope and `twin.json`, never in the bundle); `at` passed verbatim or not at all | |
 | VII | One twin at a time: create refused while lab `fylgja` exists; orphan detection at create and worker start; nothing per-twin | |
 | VIII | Temporal: `provision`/`destroy` with fixed IDs; deterministic workflow code; idempotent activities passing references; heartbeats with PSP budgets; cleanup on a disconnected context; one task queue; host-bound code in `internal/lab` | |
 | IX | No database; containerlab + twin directory + bundle store + Temporal history | |
@@ -58,7 +58,7 @@ why), or VIOLATION (justify in Complexity Tracking). Cite the principle number.
 | XI | The API is the boundary: a user-facing client reaches the core through the API alone; every refusal is the server's; payloads are the versioned documents; test code excepted, with no second path in a shipped client; held by an import test | |
 
 **Blessed layers** (do not flag as complexity): the CTM (D-010), the PSP abstraction
-(D-016), the generics contract (D-002).
+(D-016), the mapping, one per source, documented (D-057).
 
 **Must flag** (rejected designs; return only via a new decision-log entry): a binding
 stage (D-011), a database (D-014), a long-running workflow, signal or TTL (D-007),

@@ -1,6 +1,18 @@
 <!--
 Sync Impact Report
-- Version change: 1.2.1 → 1.3.0 (2026-10-17, MINOR: Principle III materially expanded).
+- Version change: 1.3.0 → 2.0.0 (2026-10-25, MAJOR: Principle III redefined). III read
+  "The Generics Are the Contract"; it now reads "The CTM Is the Contract; a Reader Maps
+  One Source": a reader maps one source's model onto the CTM by one documented mapping,
+  names the model version it reads, records approximations and omissions in the
+  envelope's fidelity list, and reads nothing the mapping does not name. VI records the
+  scope and the mapping with the model version in place of the contract version. II adds
+  the manufacturer and platform pairs a package matches to what comes from the PSP. The
+  Gate Adjustments bless the mapping in place of the generics contract and reword the CTM
+  bullet; the tier gate loads the vendored library and the stage kind in place of the
+  reference schema. Source: D-057, superseding D-002, D-003 and D-004. Templates:
+  .specify/templates/plan-template.md's Constitution Check names 2.0.0, and its rows II,
+  III and VI and its blessed layers read the amended text.
+- 1.2.1 → 1.3.0 (2026-10-17, MINOR: Principle III materially expanded).
   III's exceptions named the Infrahub-owned kinds a stage relates to; it now also allows
   the branch's event log (`InfrahubEvent`), read for when intent last changed, removals
   included, since a removal moves no stamp the reader reads (verified on Infrahub 1.11.2,
@@ -50,37 +62,34 @@ A platform MUST be added by writing a Platform Support Package (`psp/`) and noth
 else. A platform is "supported" only when its PSP passes the conformance suite. If a
 new platform requires a compiler change, the abstraction is wrong and the change MUST
 be rejected until the abstraction is fixed. A single twin is heterogeneous: no
-component MAY assume all nodes share a vendor. Budgets, timeouts and readiness MUST
-come from the PSP, never from a global constant.
-*Rationale: D-016, D-021.*
+component MAY assume all nodes share a vendor. Budgets, timeouts, readiness and the
+manufacturer and platform pairs a package matches MUST come from the PSP, never from a
+global constant.
+*Rationale: D-016, D-021, D-057.*
 
-### III. The Generics Are the Contract
-Fylgja MUST query only its own Infrahub generics (`schema/`). Specifically:
-- MUST NOT reach past a generic to a concrete kind.
+### III. The CTM Is the Contract; a Reader Maps One Source
+The CTM MUST be the one contract between a source of truth and the compiler. A reader
+MUST read one source's model, as a named version of it, by one documented mapping, and
+nothing the mapping does not name; it MUST read the least possible. Specifically:
+- MUST name, in every CTM's envelope, the reader and the model version it reads.
+- MUST record every approximation (a CTM field read from a source field whose meaning is
+  near and not identical) and every omission (an object inside or touching the scope left
+  out) in the envelope's fidelity list, which the compiler copies into the manifest
+  unchanged; the compiler MUST hold no table of any source's approximations.
 - MAY read an Infrahub-owned kind that a Fylgja kind relates to or depends on
-  (`CoreProposedChange`, its validators, `Branch`), each named as an exception in the
-  read-only test with the reason it is Infrahub's unit and not the operator's model;
-  never a concrete kind of anyone's model (D-045).
-- MAY read the branch's event log (`InfrahubEvent`), named in the read-only test, for
-  when intent last changed, removals included. An event's kind is read only to map it to
-  a generic through the schema's `used_by`, and never queried; Infrahub's own events are
-  never intent (D-048).
-- MUST demand the least possible; every required attribute is a constraint imposed on
-  someone else's model.
-- MUST graduate, not gate: optional generics unlock features; when absent, dependent
-  behaviour skips with a recorded reason.
-- MUST NOT claim a name that carries established operational meaning unless the same
-  meaning is intended, and MUST check candidate names against Infrahub's reserved
-  names before deciding.
-- Wiring behaviour MUST be derived from `iftype` and `mgmt_only` by the compiler,
-  never declared in the schema. `iftype` is kind only.
-- An unimplemented `iftype` value MUST be an explicit compile-time rejection, never a
-  silent fall-through.
-- MUST reserve only structure that is confidently known; MUST NOT reserve structure
-  that is a guess.
-- MUST validate schema conformance and data completeness separately, report all
+  (`CoreProposedChange`, its validators, `Branch`, `BuiltinTag` as the scope's tag), each
+  named in the read-only test with its reason, and the branch's event log
+  (`InfrahubEvent`) for when intent last changed, removals included, an event's kind read
+  only to be mapped through the schema's `used_by` and never queried (D-048); the
+  read-only test MUST hold the list of kinds the reader queries.
+- MUST NOT claim a meaning the source does not carry: where the mapping approximates, the
+  manifest says so.
+- Wiring behaviour MUST be derived by the compiler from what the reader mapped
+  (`mgmt_only`, the links), never declared in a schema.
+- MUST validate schema conformance (the kinds and fields the mapping reads, as the named
+  model version has them) and data completeness (inside the scope) separately, report all
   findings in one pass, and produce no CTM on failure.
-*Rationale: D-002, D-003, D-004, D-045, D-048.*
+*Rationale: D-010, D-045, D-048, D-057.*
 
 ### IV. Fylgja Never Renders Configuration
 Fylgja MUST consume the artifacts Infrahub renders for the branch under test and push
@@ -104,7 +113,8 @@ compiler.
 
 ### VI. Intent Is Addressed
 Every CTM and bundle MUST record its provenance: branch, `at` if supplied, the schema
-hash Infrahub reports, and the contract version. `observed_at`, the UTC time the read
+hash Infrahub reports, the scope, and the mapping with the model version it read.
+`observed_at`, the UTC time the read
 began, MUST be recorded on every read, pinned or not, in the CTM and in the twin
 directory, and MUST NOT appear in the bundle, so that the same intent hashes the same
 whenever it was read. When the operator supplies `at`, it MUST be passed verbatim on
@@ -173,12 +183,12 @@ second path for them. The boundary MUST be held by a test over imports.
 The default simplicity / single-data-model gate MUST NOT flag the following three
 layers. Each is blessed with its justification:
 
-- **The CTM (Canonical Topology Model).** Synthesized nodes are not in Infrahub and
-  cannot live in types generated from Infrahub; something Infrahub does not own must
-  be the compiler's input. The CTM MUST stay a near-copy of the generated types until
-  a synthesized node needs more. *(D-010)*
+- **The CTM (Canonical Topology Model).** The one contract between a source of truth
+  and the compiler: a reader maps its source onto it and a synthesized node is added to
+  it, so nothing any source owns is the compiler's input. It MUST carry only what the
+  compiler consumes and what provenance and fidelity require. *(D-010, D-057)*
 - **The Platform Support Package abstraction.** Required by Principle II. *(D-016)*
-- **The generics contract.** Required by Principle III. *(D-002)*
+- **The mapping, one per source, documented.** Required by Principle III. *(D-057)*
 
 Conversely, the gate MUST flag any plan that introduces a binding stage, a database, a
 long-running workflow, or per-twin resources; each of those was considered and
@@ -192,7 +202,7 @@ Detail lives in `docs/development.md`; these are the gates.
 
 - **Three test tiers.** Pure, golden-file and Temporal test-suite tests run on every
   PR and need no infrastructure. Contract tests run against a real Infrahub with the
-  reference schema loaded — a fake Infrahub MUST NOT be used. End-to-end tests with a
+  vendored library and the stage kind loaded on `main` — a fake Infrahub MUST NOT be used. End-to-end tests with a
   booted NOS run on demand and MUST NOT gate a PR. *(D-017)*
 - **Verification is just-in-time and recorded.** Before an implementation task
   depends on how Infrahub, containerlab or Temporal behaves, the behaviour MUST be
@@ -224,4 +234,4 @@ Detail lives in `docs/development.md`; these are the gates.
   preceded 1.0.0 at the repository root is retired and MUST NOT be edited in its
   place.
 
-**Version**: 1.3.0 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-17
+**Version**: 2.0.0 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-25

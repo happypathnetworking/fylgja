@@ -83,6 +83,7 @@ next one.
 | [D-054](#d-054) | For a demo, `main` carries the fixture's three-node network for a window the fixture tool opens and closes | Testing |
 | [D-055](#d-055) | The contracts' `$id` namespace is this repository's GitHub URL | Contract |
 | [D-056](#d-056) | Spec Kit's files are installed on each host, not carried in the tree | Repository |
+| [D-057](#d-057) | The CTM is the contract; a reader maps one source's model onto it; the Infrahub reader reads the schema library's DCIM at a pinned commit | Contract |
 
 ---
 
@@ -128,7 +129,7 @@ Infrahub.
 <a id="d-002"></a>
 ## D-002 — Schema contract as Infrahub generics; a reference schema is shipped
 
-**Status:** Accepted 2026-09-14
+**Status:** Accepted 2026-09-14; superseded by [D-057](#d-057) on 2026-10-25.
 
 ### Context
 
@@ -172,7 +173,7 @@ the generic.
 <a id="d-003"></a>
 ## D-003 — Interface contract: `iftype` is kind, `mgmt_only` is the one use-flag
 
-**Status:** Accepted 2026-09-14
+**Status:** Accepted 2026-09-14; superseded by [D-057](#d-057) on 2026-10-25.
 
 ### Context
 
@@ -223,7 +224,7 @@ addition.
 <a id="d-004"></a>
 ## D-004 — Reserve only confident structure: keep `parent`, defer the VLAN generic
 
-**Status:** Accepted 2026-09-14
+**Status:** Accepted 2026-09-14; superseded by [D-057](#d-057) on 2026-10-25.
 
 ### Context
 
@@ -3486,6 +3487,81 @@ Kit's MIT notice beside it in `.specify/LICENSE.spec-kit`, and `.specify/extensi
 - `specs/013-launch/brief.md`'s link to `.specify/templates/spec-template.md` points at
   the file as the launch's commit holds it, in this repository's history.
 - Revisit if the bring-up script grows a developer-workflow part.
+
+---
+
+<a id="d-057"></a>
+## D-057 — The CTM is the contract; a reader maps one source's model onto it; the Infrahub reader reads the schema library's DCIM at a pinned commit
+
+**Status:** Accepted 2026-10-25, by the operator, at `017-dcim-reader`'s converge loop
+(drafted by its plan, research §3.1). Supersedes [D-002](#d-002), [D-003](#d-003) and
+[D-004](#d-004) whole. Beside [D-010](#d-010) (the CTM, now the contract),
+[D-016](#d-016) and [D-031](#d-031) (the package, which now also declares its platforms),
+[D-028](#d-028) and [D-044](#d-044) (unchanged), [D-045](#d-045) (the stage kind,
+untouched). To be built by `017-dcim-reader`.
+
+### Context
+
+D-002 made Fylgja's four generics the contract so that any Infrahub schema could implement
+them and Infrahub would resolve one query across the implementers. They met a model
+somebody else wrote on 2026-10-16, OpsMill's schema library, and could inherit into its
+DCIM only after adaptation on one side or the other ([verified
+facts](verified-facts.md), "Inheriting from two generics"). Release 0.3 adds NetBox as a
+second source of truth, read directly; a reader of NetBox maps a fixed, DCIM-shaped model
+onto the CTM whatever the contract says, and once one reader works that way the generics
+make the Infrahub reader the odd one out. Nothing in the compiler, the bootstrap or verify
+ever consumed an address, a loopback, a role or a site: the configuration Infrahub renders
+carries them.
+
+### Options considered
+
+- **A layer-1 generics contract carried into the library by an overlay schema.** Designed
+  first; rejected by the operator on 2026-10-25: an overlay is still something every user
+  loads, and NetBox cannot load it.
+- **A mapping declared as data per install.** Rejected: D-002's "mini-ETL language", now
+  with two sources.
+- **The CTM as the contract and one documented mapping per source.** Chosen.
+
+### Decision
+
+- The CTM is the contract, versioned by `ctm_version`. A reader maps one source's model
+  onto it, by one documented mapping, names the model version it reads in every CTM's
+  envelope, records every place the source's meaning is near the CTM's and not identical
+  as an approximation and every object it leaves out as an omission, in the envelope's
+  fidelity list, which the compiler copies into the manifest unchanged, and reads nothing
+  the mapping does not name. The read-only test holds the list of kinds a reader queries.
+- The Infrahub reader reads OpsMill's schema library's DCIM at commit `26336e9`, vendored
+  under `schema/dcim/` with its licence, by the mapping in
+  [`specs/017-dcim-reader/contracts/mapping.md`](../specs/017-dcim-reader/contracts/mapping.md):
+  a device is a `DcimDevice` carrying the scope's tag, a port an `InterfacePhysical`,
+  `mgmt_only` its `role: management` and `enabled` its `status != disabled` (approximated),
+  a link a `DcimCable` with exactly two physical ends in the scope, any other cable omitted
+  and recorded; the platform's version is absent. Conformance is per kind and per field
+  against what the pinned commit loads, reported in one pass; completeness is strict inside
+  the scope.
+- A twin is of a scope, a tag on each device the request names (`--scope tag:<name>`) or
+  the server's default (`FYLGJA_DEFAULT_SCOPE`), recorded in the CTM, the manifest and the
+  record. A package declares the manufacturer and platform pairs it is (`platform.matches`),
+  matched exactly; nothing is added to anyone's model to key a package or a scope.
+- What survives of D-003 and D-004: wiring is derived by the compiler from what the reader
+  mapped (`mgmt_only`, the cables), never declared in a schema; a reader never claims a
+  meaning the source does not carry, and says so where it approximates.
+
+### Consequences
+
+- Constitution III is rewritten and VI reworded (2.0.0); the generics contract leaves the
+  blessed layers and the mapping takes its place.
+- `schema/`'s generics and reference schema go; `FylgjaStage` stays. The CTM moves to `2`,
+  the manifest to `5`, `twin.json` to `8`, the package to `0.7`; the goldens move.
+- The development host's `main` is migrated by two removal documents and `-prepare-main`;
+  a DCIM user loads nothing of Fylgja's but the stage kind, and `fylgja schema check` says
+  whether their DCIM is the one the reader reads; a diverged DCIM needs a reader of its
+  own, which the [production shape](roadmap.md#the-production-shape) makes a seam.
+- The library calls itself experimental: the commit is pinned, and moving it is a change
+  to the mapping's table, verified against the running Infrahub.
+- Revisit when the library publishes a release, when NetBox's reader (F-025) shows the CTM
+  wants a field this one cannot fill, or when the library's `DcimEndpoint` gains a second
+  implementer.
 
 ---
 

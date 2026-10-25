@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/happypathnetworking/fylgja/contracts/bundle-manifest/v4",
-  "title": "Fylgja bundle manifest v4 — per-platform forwarding, bootstrap delivery, intent’s enabled state per row",
-  "description": "From M6’s v2: bundle_version was 3 at M7 (D-025 and its M6 notes) and is 4 at M12 (below). `fidelity.production_forwarding` is an object, one entry per platform in the bundle keyed by its package id, so a mixed bundle asserts each platform’s forwarding and M1’s fidelity.forwarding.mixed refusal retires; `mapping[].node_name` is on every row (null on a row without a port) and `fidelity.lossy` is always present ([] when empty), ending M6’s one exception to the empty-list rule; every node gains `bootstrap` {file, via}: the bootstrap file the bundle carries for it and whether containerlab applies it at deploy (startup_config, the topology names it) or the push sends its lines before the artifact’s (push, the topology node has no startup-config; M7). A v2 or v1 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions. Everything else is v2’s. From M5’s v2, bundle_version still 2 at M6: a mapping row may carry `node_name`, the node’s own name for its port, present only where it differs from `interface`; `fidelity.lossy` records every lossy mapping and every shared port, present only when it has content; omissions gain the rule omit.interface.shared. Both fields are the one deliberate exception to M1’s rule that every empty list is emitted as []: a bundle with nothing lossy in it is byte-identical to M5’s, so the goldens and both fixture ids stand and no following twin is rebuilt by the upgrade. The exception expires with M7’s bundle_version bump for per-platform forwarding (D-025), which makes both fields unconditional in the same move. From v1: bundle_version is 2, and every node gains `artifact`, the configuration file the bundle carries for it beside its bootstrap (M5). A v1 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions. Nothing of Infrahub’s — artifact, storage or definition identifiers, a time of generation — appears, so bundle_id moves for the artifact’s bytes or name and for nothing else. Everything else is v1’s. M12: bundle_version is 4. Every mapping row carries enabled, the interface's intent admin state (the CTM's enabled, true when unset), so the bundle says what intent says of each port: twin verify asserts nothing of a cabled port whose row says false, and records the skip. The topology, the bootstrap and every configs file are unchanged by the field.",
+  "$id": "https://github.com/happypathnetworking/fylgja/contracts/bundle-manifest/v5",
+  "title": "Fylgja bundle manifest v5 — the scope and the mapping in the provenance, every interface a port, the reader’s fidelity list",
+  "description": "From M6’s v2: bundle_version was 3 at M7 (D-025 and its M6 notes) and is 4 at M12 (below). `fidelity.production_forwarding` is an object, one entry per platform in the bundle keyed by its package id, so a mixed bundle asserts each platform’s forwarding and M1’s fidelity.forwarding.mixed refusal retires; `mapping[].node_name` is on every row (null on a row without a port) and `fidelity.lossy` is always present ([] when empty), ending M6’s one exception to the empty-list rule; every node gains `bootstrap` {file, via}: the bootstrap file the bundle carries for it and whether containerlab applies it at deploy (startup_config, the topology names it) or the push sends its lines before the artifact’s (push, the topology node has no startup-config; M7). A v2 or v1 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions. Everything else is v2’s. From M5’s v2, bundle_version still 2 at M6: a mapping row may carry `node_name`, the node’s own name for its port, present only where it differs from `interface`; `fidelity.lossy` records every lossy mapping and every shared port, present only when it has content; omissions gain the rule omit.interface.shared. Both fields are the one deliberate exception to M1’s rule that every empty list is emitted as []: a bundle with nothing lossy in it is byte-identical to M5’s, so the goldens and both fixture ids stand and no following twin is rebuilt by the upgrade. The exception expires with M7’s bundle_version bump for per-platform forwarding (D-025), which makes both fields unconditional in the same move. From v1: bundle_version is 2, and every node gains `artifact`, the configuration file the bundle carries for it beside its bootstrap (M5). A v1 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions. Nothing of Infrahub’s — artifact, storage or definition identifiers, a time of generation — appears, so bundle_id moves for the artifact’s bytes or name and for nothing else. Everything else is v1’s. M12: bundle_version is 4. Every mapping row carries enabled, the interface's intent admin state (the CTM's enabled, true when unset), so the bundle says what intent says of each port: twin verify asserts nothing of a cabled port whose row says false, and records the skip. The topology, the bootstrap and every configs file are unchanged by the field. 017 (D-057): bundle_version is 5. The provenance names the scope the read was made under and the mapping that produced the CTM ({reader, model, version}), copied from the CTM envelope, in place of the generics contract’s version; a mapping row loses `iftype`, since every interface of a CTM 2 is a port (configured-not-cabled is an uncabled port); and `fidelity.read` is the CTM envelope’s fidelity list, the reader’s own rows of what it approximated and omitted, copied unchanged by the compiler, which holds no table of any source’s rows. A v4 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions. Everything else is v4’s.",
   "type": "object",
   "required": [
     "bundle_version",
@@ -16,15 +16,16 @@
   "additionalProperties": false,
   "properties": {
     "bundle_version": {
-      "const": "4"
+      "const": "5"
     },
     "provenance": {
       "type": "object",
-      "description": "The provenance block: the intent's address, copied from the CTM envelope minus `observed_at`. Nothing about the read, the host, the clock or the build.",
+      "description": "The provenance block: the intent's address, copied from the CTM envelope minus `observed_at` and `fidelity` (which is fidelity.read). Nothing about the read, the host, the clock or the build. 017: `scope` and `mapping` in place of `contract_version`.",
       "required": [
         "branch",
         "schema_hash",
-        "contract_version"
+        "scope",
+        "mapping"
       ],
       "additionalProperties": false,
       "properties": {
@@ -39,8 +40,34 @@
         "schema_hash": {
           "type": "string"
         },
-        "contract_version": {
-          "type": "string"
+        "scope": {
+          "type": "string",
+          "pattern": "^tag:\\S+$",
+          "description": "017: the scope the read was made under, tag:<name>, as the CTM envelope records it."
+        },
+        "mapping": {
+          "type": "object",
+          "description": "017: which reader produced the CTM and which version of which model it read, as the CTM envelope records it.",
+          "required": [
+            "reader",
+            "model",
+            "version"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "reader": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
         }
       }
     },
@@ -153,13 +180,12 @@
     },
     "mapping": {
       "type": "array",
-      "description": "One row per interface in intent. Sorted by (device, interface). M7: `node_name` on every row. M12: `enabled` on every row.",
+      "description": "One row per interface in intent. Sorted by (device, interface). M7: `node_name` on every row. M12: `enabled` on every row. 017: no `iftype`; every interface is a port.",
       "items": {
         "type": "object",
         "required": [
           "device",
           "interface",
-          "iftype",
           "mgmt_only",
           "port",
           "disposition",
@@ -173,14 +199,6 @@
           },
           "interface": {
             "type": "string"
-          },
-          "iftype": {
-            "enum": [
-              "physical",
-              "loopback",
-              "svi",
-              "subinterface"
-            ]
           },
           "mgmt_only": {
             "type": "boolean"
@@ -269,13 +287,14 @@
     },
     "fidelity": {
       "type": "object",
-      "description": "Asserted, never measured (D-022); `basis` says so in the bundle itself (Constitution X). M7: `production_forwarding` per platform; `lossy` always present.",
+      "description": "Asserted, never measured (D-022); `basis` says so in the bundle itself (Constitution X). M7: `production_forwarding` per platform; `lossy` always present. 017: `read`, the reader’s fidelity list.",
       "required": [
         "basis",
         "production_forwarding",
         "approximations",
         "omitted",
-        "lossy"
+        "lossy",
+        "read"
       ],
       "additionalProperties": false,
       "properties": {
@@ -369,6 +388,42 @@
                     }
                   }
                 }
+              }
+            }
+          }
+        },
+        "read": {
+          "type": "array",
+          "description": "017 (Constitution X; FR-029): the CTM envelope’s fidelity list, copied unchanged: one row per field the reader approximated and per source object it omitted, sorted by (disposition, object). Beside the packages’ `approximations` and the compiler’s `omitted` and `lossy`; [] only for a reader that wrote none.",
+          "items": {
+            "type": "object",
+            "required": [
+              "disposition",
+              "object",
+              "source",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "disposition": {
+                "enum": [
+                  "approximated",
+                  "omitted"
+                ]
+              },
+              "object": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The CTM field approximated (`interface.mgmt_only`, `interface.enabled`, `platform.version`) or the source object omitted (a cable, by its label or its id)."
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The source field or kind the row was read from: `InterfacePhysical.role`, `InterfacePhysical.status`, `DcimPlatform`, `DcimCable`."
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
               }
             }
           }

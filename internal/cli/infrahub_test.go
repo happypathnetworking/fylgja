@@ -499,6 +499,7 @@ func (f *fakeInfrahub) stampPages(branch, at string, c *ctm.CTM) map[string]any 
 					},
 				})
 			}
+			vendor, nos := fakeGenericsPlatform(d.Platform.Package)
 			devices = append(devices, map[string]any{
 				"__typename": "NetworkDevice",
 				"id":         "dev-" + d.Name,
@@ -507,10 +508,10 @@ func (f *fakeInfrahub) stampPages(branch, at string, c *ctm.CTM) map[string]any 
 				"site":       written,
 				"platform": map[string]any{"properties": written, "node": map[string]any{
 					"__typename": "NetworkPlatform",
-					"vendor":     map[string]any{"value": d.Platform.Vendor, "updated_at": intentAt},
-					"nos":        map[string]any{"value": d.Platform.NOS, "updated_at": intentAt},
+					"vendor":     map[string]any{"value": vendor, "updated_at": intentAt},
+					"nos":        map[string]any{"value": nos, "updated_at": intentAt},
 					"version":    map[string]any{"value": d.Platform.Version, "updated_at": intentAt},
-					"model":      fakeValue(d.Platform.Model),
+					"model":      fakeValue(""),
 				}},
 				"interfaces": map[string]any{"edges": ifaces},
 				"artifacts": fakeEdges([]any{map[string]any{
@@ -577,6 +578,21 @@ func fakeEdges[T any](nodes []T) map[string]any {
 	return map[string]any{"edges": out}
 }
 
+// fakeGenericsPlatform is the generics' vendor and nos of a CTM "2" package: the fake
+// serves every fixture's device as the generics model holds it, each interface a
+// physical one, for the bridged reader (017's T023) to read back.
+func fakeGenericsPlatform(pkg string) (vendor, nos string) {
+	switch pkg {
+	case "nokia_srlinux":
+		return "nokia", "srlinux"
+	case "arista_eos":
+		return "arista", "eos"
+	case "chassisos":
+		return "example", "chassisos"
+	}
+	return pkg, pkg
+}
+
 // devicePage is one page holding every device of c, read from branch at at, each as the
 // reference kind NetworkDevice with its artifact Ready in the object store under the
 // branch, the at and its name, so a step's two reads of one branch serve two artifacts.
@@ -589,18 +605,14 @@ func (f *fakeInfrahub) devicePage(branch, at string, c *ctm.CTM) map[string]any 
 			if in.Link != "" {
 				link = map[string]any{"__typename": "NetworkLink", "id": in.Link}
 			}
-			var parent any
-			if in.Parent != "" {
-				parent = map[string]any{"__typename": "NetworkInterface", "name": fakeValue(in.Parent)}
-			}
 			ifaces = append(ifaces, map[string]any{
 				"__typename": "NetworkInterface",
 				"id":         d.Name + ":" + in.Name,
 				"name":       fakeValue(in.Name),
-				"iftype":     fakeValue(in.Iftype),
+				"iftype":     fakeValue("physical"),
 				"mgmt_only":  fakeValue(in.MgmtOnly),
 				"enabled":    fakeValue(in.Enabled == nil || *in.Enabled),
-				"parent":     map[string]any{"node": parent},
+				"parent":     map[string]any{"node": nil},
 				"addresses":  fakeEdges[any](nil),
 				"link":       map[string]any{"node": link},
 			})
@@ -613,18 +625,19 @@ func (f *fakeInfrahub) devicePage(branch, at string, c *ctm.CTM) map[string]any 
 		}
 		f.storage[storageID] = a.Content
 		f.mu.Unlock()
+		vendor, nos := fakeGenericsPlatform(d.Platform.Package)
 		nodes = append(nodes, map[string]any{
 			"__typename": "NetworkDevice",
 			"id":         "id-" + d.Name,
 			"name":       fakeValue(d.Name),
-			"role":       fakeValue(d.Role),
-			"site":       fakeValue(d.Site),
+			"role":       fakeValue(""),
+			"site":       fakeValue(""),
 			"platform": map[string]any{"node": map[string]any{
 				"__typename": "NetworkPlatform",
-				"vendor":     fakeValue(d.Platform.Vendor),
-				"nos":        fakeValue(d.Platform.NOS),
+				"vendor":     fakeValue(vendor),
+				"nos":        fakeValue(nos),
 				"version":    fakeValue(d.Platform.Version),
-				"model":      fakeValue(d.Platform.Model),
+				"model":      fakeValue(""),
 			}},
 			"interfaces": fakeEdges(ifaces),
 			"artifacts": fakeEdges([]any{map[string]any{

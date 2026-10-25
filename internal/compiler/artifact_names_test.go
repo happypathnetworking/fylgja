@@ -39,9 +39,9 @@ func TestFirstLineNamingIsATokenRule(t *testing.T) {
 // do before they ask what its artifact names.
 func surveyFor(t *testing.T, d ctm.Device) DeviceSurvey {
 	t.Helper()
-	p, ok := lossyRegistry(t).Lookup(d.Platform.NOS)
+	p, ok := lossyRegistry(t).LookupID(d.Platform.Package)
 	if !ok {
-		t.Fatalf("no package for nos %q", d.Platform.NOS)
+		t.Fatalf("no package %q", d.Platform.Package)
 	}
 	prof, err := psp.NewProfile(p)
 	if err != nil {
@@ -53,7 +53,7 @@ func surveyFor(t *testing.T, d ctm.Device) DeviceSurvey {
 func chassisDevice(artifact string, interfaces ...ctm.Interface) ctm.Device {
 	return ctm.Device{
 		Name:       "c1",
-		Platform:   ctm.Platform{Vendor: "example", NOS: "chassisos", Version: "0"},
+		Platform:   ctm.Platform{Package: "chassisos"},
 		Interfaces: interfaces,
 		Artifact: &ctm.Artifact{
 			Name: "device-config", ContentType: "text/plain",
@@ -72,21 +72,20 @@ func objectsWarned(t *testing.T, d ctm.Device) []string {
 }
 
 // Which rows are eligible at all, before the artifact is read: one the node calls
-// something else, and one the twin does not represent. A row the twin gives no port —
-// every loopback, on every platform — is neither, however often the artifact names it.
-// Without that exception the tree's every artifact
-// would warn about its loopback.
+// something else, and one the twin does not represent. An interface the CTM does not
+// carry has no row — every loopback, on every platform, since a CTM "2" holds ports
+// alone — so it draws nothing, however often the artifact names it. Otherwise the
+// tree's every artifact would warn about its loopback.
 func TestArtifactNamesWarnsOnRenamedAndOmittedRowsOnly(t *testing.T) {
 	d := chassisDevice(
 		"hostname c1\n"+
 			"interface Ethernet1/1\n"+ // renamed: the node calls it Ethernet1
 			"interface Ethernet1/53\n"+ // omitted: out of the rule's range, uncabled
-			"interface Loopback0\n"+ // portless: the node calls it nothing
+			"interface Loopback0\n"+ // no row: the CTM carries ports alone
 			"interface Management1\n", // renamed: the node calls it Management0
-		ctm.Interface{Name: "Ethernet1/1", Iftype: ctm.IftypePhysical},
-		ctm.Interface{Name: "Ethernet1/53", Iftype: ctm.IftypePhysical},
-		ctm.Interface{Name: "Loopback0", Iftype: ctm.IftypeLoopback},
-		ctm.Interface{Name: "Management1", Iftype: ctm.IftypePhysical, MgmtOnly: true},
+		ctm.Interface{Name: "Ethernet1/1"},
+		ctm.Interface{Name: "Ethernet1/53"},
+		ctm.Interface{Name: "Management1", MgmtOnly: true},
 	)
 	want := []string{"c1:Ethernet1/1", "c1:Ethernet1/53", "c1:Management1"}
 	if got := objectsWarned(t, d); !equalStrings(got, want) {
@@ -99,7 +98,7 @@ func TestArtifactNamesWarnsOnRenamedAndOmittedRowsOnly(t *testing.T) {
 // recorded in the manifest either way.
 func TestArtifactNamesSaysNothingAboutALineTheArtifactLacks(t *testing.T) {
 	d := chassisDevice("hostname c1\ninterface Ethernet1/2\n",
-		ctm.Interface{Name: "Ethernet1/1", Iftype: ctm.IftypePhysical},
+		ctm.Interface{Name: "Ethernet1/1"},
 	)
 	if got := objectsWarned(t, d); len(got) != 0 {
 		t.Errorf("warned about %v; the artifact names none of them", got)
@@ -111,7 +110,7 @@ func TestArtifactNamesSaysNothingAboutALineTheArtifactLacks(t *testing.T) {
 // mistake into two findings, which is how M6 settled it for the refusals too: the missing
 // name is reported, and nothing else about that interface.
 func TestArtifactNamesSkipsAnInterfaceWithNoName(t *testing.T) {
-	d := chassisDevice("hostname c1\n", ctm.Interface{Name: "", Iftype: ctm.IftypePhysical})
+	d := chassisDevice("hostname c1\n", ctm.Interface{Name: ""})
 	if got := objectsWarned(t, d); len(got) != 0 {
 		t.Errorf("warned about %v for an interface with no name", got)
 	}
@@ -120,7 +119,7 @@ func TestArtifactNamesSkipsAnInterfaceWithNoName(t *testing.T) {
 // A device carrying no artifact is refused by name, by validation and by the compiler
 // alike (M5). There is nothing here to read and nothing to add to that.
 func TestArtifactNamesSaysNothingWithoutAnArtifact(t *testing.T) {
-	d := chassisDevice("", ctm.Interface{Name: "Ethernet1/1", Iftype: ctm.IftypePhysical})
+	d := chassisDevice("", ctm.Interface{Name: "Ethernet1/1"})
 	d.Artifact = nil
 	if got := ArtifactNames(d, surveyFor(t, d)); got != nil {
 		t.Errorf("warnings %+v for a device with no artifact", got)

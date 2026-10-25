@@ -49,25 +49,26 @@ func TestMap(t *testing.T) {
 		wantDisp Disposition
 		refusal  string // the rule of the one refusal expected, if any
 	}{
-		{"one-to-one", ctm.Interface{Name: "ethernet-1/1", Iftype: ctm.IftypePhysical}, "e1-1", DispConfiguredNotCabled, ""},
-		{"double digits", ctm.Interface{Name: "ethernet-1/49", Iftype: ctm.IftypePhysical}, "e1-49", DispConfiguredNotCabled, ""},
-		{"the bound's end", ctm.Interface{Name: "ethernet-1/58", Iftype: ctm.IftypePhysical}, "e1-58", DispConfiguredNotCabled, ""},
-		{"cabled", ctm.Interface{Name: "ethernet-1/2", Iftype: ctm.IftypePhysical, Link: "n1:ethernet-1/2|n2:ethernet-1/2"}, "e1-2", DispCabled, ""},
-		{"breakout child", ctm.Interface{Name: "ethernet-1/1/1", Iftype: ctm.IftypePhysical}, "e1-1-1", DispConfiguredNotCabled, ""},
-		{"management bypasses patterns", ctm.Interface{Name: "mgmt0", Iftype: ctm.IftypePhysical, MgmtOnly: true}, "mgmt0", DispManagement, ""},
-		{"management name need not match a pattern", ctm.Interface{Name: "anything", Iftype: ctm.IftypePhysical, MgmtOnly: true}, "mgmt0", DispManagement, ""},
-		{"loopback has no port", ctm.Interface{Name: "lo0", Iftype: ctm.IftypeLoopback}, "", DispConfiguredNotCabled, ""},
-		{"foreign naming matches no rule", ctm.Interface{Name: "Ethernet1", Iftype: ctm.IftypePhysical}, "", DispOmitted, findings.RuleInterfaceRuleUnmatched},
-		{"partial name matches no rule", ctm.Interface{Name: "ethernet-1", Iftype: ctm.IftypePhysical}, "", DispOmitted, findings.RuleInterfaceRuleUnmatched},
+		{"one-to-one", ctm.Interface{Name: "ethernet-1/1"}, "e1-1", DispConfiguredNotCabled, ""},
+		{"double digits", ctm.Interface{Name: "ethernet-1/49"}, "e1-49", DispConfiguredNotCabled, ""},
+		{"the bound's end", ctm.Interface{Name: "ethernet-1/58"}, "e1-58", DispConfiguredNotCabled, ""},
+		{"cabled", ctm.Interface{Name: "ethernet-1/2", Link: "n1:ethernet-1/2|n2:ethernet-1/2"}, "e1-2", DispCabled, ""},
+		{"breakout child", ctm.Interface{Name: "ethernet-1/1/1"}, "e1-1-1", DispConfiguredNotCabled, ""},
+		{"management bypasses patterns", ctm.Interface{Name: "mgmt0", MgmtOnly: true}, "mgmt0", DispManagement, ""},
+		{"management name need not match a pattern", ctm.Interface{Name: "anything", MgmtOnly: true}, "mgmt0", DispManagement, ""},
+		// Every interface is a port (017): a loopback's name is one no rule matches.
+		{"a loopback's name is a port's", ctm.Interface{Name: "lo0"}, "", DispOmitted, findings.RuleInterfaceRuleUnmatched},
+		{"foreign naming matches no rule", ctm.Interface{Name: "Ethernet1"}, "", DispOmitted, findings.RuleInterfaceRuleUnmatched},
+		{"partial name matches no rule", ctm.Interface{Name: "ethernet-1"}, "", DispOmitted, findings.RuleInterfaceRuleUnmatched},
 		// The image has one slot and 58 front ports: M1's patterns mapped
 		// these onto ports the node does not have.
-		{"another slot is out of range", ctm.Interface{Name: "ethernet-3/7", Iftype: ctm.IftypePhysical}, "", DispOmitted, ""},
-		{"past the last port is out of range", ctm.Interface{Name: "ethernet-1/59", Iftype: ctm.IftypePhysical}, "", DispOmitted, ""},
+		{"another slot is out of range", ctm.Interface{Name: "ethernet-3/7"}, "", DispOmitted, ""},
+		{"past the last port is out of range", ctm.Interface{Name: "ethernet-1/59"}, "", DispOmitted, ""},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			s := SurveyDevice(ctm.Device{Name: "n1", Interfaces: []ctm.Interface{c.in}}, prof, id)
-			if s.Err != nil || len(s.Rows) != 1 {
+			if len(s.Rows) != 1 {
 				t.Fatalf("survey = %+v", s)
 			}
 			if c.refusal != "" {
@@ -94,19 +95,39 @@ func TestMap(t *testing.T) {
 	}
 }
 
-// An unhandled iftype is the survey's error, and the survey carries on past it so
-// validation still hears every other interface.
-func TestSurveyNamesAnUnhandledIftypeAndCarriesOn(t *testing.T) {
-	prof, id := srlinuxProfile(t)
-	s := SurveyDevice(ctm.Device{Name: "n1", Interfaces: []ctm.Interface{
-		{Name: "ae1", Iftype: "lag"},
-		{Name: "Ethernet99", Iftype: ctm.IftypePhysical, Link: "n1:Ethernet99|n2:ethernet-1/1"},
-	}}, prof, id)
-	if s.Err == nil {
-		t.Error("an unhandled iftype produced no error")
+// Every interface is a port (017, R-09): a CTM "2" carries no interface kind, so every
+// interface but the management port is a data port, cabled when it terminates a link
+// and configured-not-cabled otherwise, with a port of its own. No row is portless.
+func TestEveryInterfaceIsAPort(t *testing.T) {
+	c, err := ctm.Load(filepath.Join("..", "..", "testdata", "ctm", "three-node.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-	if len(s.Refusals) != 1 || s.Refusals[0].Object != "n1:Ethernet99" {
-		t.Errorf("refusals %+v, want the linked unmappable interface after the unhandled one", s.Refusals)
+	n1 := c.Device("n1")
+	n1.Interfaces = append(n1.Interfaces, ctm.Interface{Name: "ethernet-1/3"}, ctm.Interface{Name: "ethernet-1/4/1"})
+	files, list := Compile(c, embeddedRegistry(t))
+	if list.Rejected() {
+		t.Fatalf("refused: %v", list)
+	}
+	var m Manifest
+	if err := json.Unmarshal(files[ManifestFile], &m); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.Mapping) != 11 {
+		t.Errorf("%d rows, want one per interface (11)", len(m.Mapping))
+	}
+	for _, r := range m.Mapping {
+		in := c.Device(r.Device).Interface(r.Interface)
+		want := DispConfiguredNotCabled
+		switch {
+		case in.MgmtOnly:
+			want = DispManagement
+		case in.Link != "":
+			want = DispCabled
+		}
+		if r.Disposition != want || r.Port == nil || r.NodeName == nil {
+			t.Errorf("%s:%s = %s, port %v; want %s with a port", r.Device, r.Interface, r.Disposition, r.Port, want)
+		}
 	}
 }
 

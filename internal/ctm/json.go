@@ -3,7 +3,6 @@ package ctm
 import (
 	"encoding/json"
 	"fmt"
-	"net/netip"
 	"os"
 	"sort"
 	"strings"
@@ -19,7 +18,7 @@ func CanonicalLinkID(a, b Endpoint) string {
 }
 
 // Normalize puts a CTM into canonical form: every list sorted by its canonical key,
-// defaults filled in, derived fields computed. Compilation is
+// defaults filled in. Compilation is
 // deterministic because its input is normalized first — the compiler never has to
 // care what order intent arrived in.
 //
@@ -37,6 +36,18 @@ func Normalize(c *CTM) {
 	if c.Links == nil {
 		c.Links = []Link{}
 	}
+	// The fidelity list is required too: [] says the reader approximated and omitted
+	// nothing, which a missing list could not say.
+	if c.Envelope.Fidelity == nil {
+		c.Envelope.Fidelity = []FidelityRow{}
+	}
+	sort.SliceStable(c.Envelope.Fidelity, func(x, y int) bool {
+		a, b := c.Envelope.Fidelity[x], c.Envelope.Fidelity[y]
+		if a.Disposition != b.Disposition {
+			return a.Disposition < b.Disposition
+		}
+		return a.Object < b.Object
+	})
 	for i := range c.Devices {
 		d := &c.Devices[i]
 		if d.Provenance == "" {
@@ -51,15 +62,6 @@ func Normalize(c *CTM) {
 				t := true
 				in.Enabled = &t
 			}
-			for k := range in.Addresses {
-				a := &in.Addresses[k]
-				if a.Family == "" {
-					a.Family = familyOf(a.CIDR)
-				}
-			}
-			sort.SliceStable(in.Addresses, func(x, y int) bool {
-				return in.Addresses[x].CIDR < in.Addresses[y].CIDR
-			})
 		}
 		sort.SliceStable(d.Interfaces, func(x, y int) bool {
 			return d.Interfaces[x].Name < d.Interfaces[y].Name
@@ -79,24 +81,6 @@ func Normalize(c *CTM) {
 	sort.SliceStable(c.Links, func(x, y int) bool { return c.Links[x].ID < c.Links[y].ID })
 }
 
-// familyOf derives the address family from a CIDR, leaving it empty when the value
-// does not parse — a malformed address is validation's problem to report, not
-// normalization's to guess at.
-func familyOf(cidr string) string {
-	s := cidr
-	if i := strings.IndexByte(s, '/'); i >= 0 {
-		s = s[:i]
-	}
-	addr, err := netip.ParseAddr(s)
-	if err != nil {
-		return ""
-	}
-	if addr.Is4() {
-		return "ipv4"
-	}
-	return "ipv6"
-}
-
 // Marshal encodes a CTM as canonical JSON: normalized ordering, fixed field order
 // from the struct definitions, two-space indent, LF endings, trailing newline.
 func Marshal(c *CTM) ([]byte, error) {
@@ -110,15 +94,26 @@ func Marshal(c *CTM) ([]byte, error) {
 
 // Unmarshal decodes a serialized CTM and normalizes it. Unknown fields are rejected:
 // a typo in a fixture should fail loudly rather than be silently ignored.
+//
+// The version is read first, on its own: a CTM of another version carries fields this
+// one does not (a "1" carries contract_version and iftype), and it is refused for its
+// version, naming both, rather than for the first field the strict decode trips on.
+// Nothing converts one (FR-028).
 func Unmarshal(data []byte) (*CTM, error) {
+	var head struct {
+		CTMVersion string `json:"ctm_version"`
+	}
+	if err := json.Unmarshal(data, &head); err != nil {
+		return nil, fmt.Errorf("decoding CTM: %w", err)
+	}
+	if head.CTMVersion != "" && head.CTMVersion != Version {
+		return nil, fmt.Errorf("unsupported ctm_version %q, expected %q", head.CTMVersion, Version)
+	}
 	dec := json.NewDecoder(strings.NewReader(string(data)))
 	dec.DisallowUnknownFields()
 	var c CTM
 	if err := dec.Decode(&c); err != nil {
 		return nil, fmt.Errorf("decoding CTM: %w", err)
-	}
-	if c.CTMVersion != "" && c.CTMVersion != Version {
-		return nil, fmt.Errorf("unsupported ctm_version %q, expected %q", c.CTMVersion, Version)
 	}
 	Normalize(&c)
 	return &c, nil

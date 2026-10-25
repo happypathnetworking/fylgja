@@ -127,6 +127,16 @@ func (r *Registry) Platforms() []string {
 	return out
 }
 
+// IDs lists the packages' platform ids, sorted: what a CTM's platform.package may name.
+func (r *Registry) IDs() []string {
+	out := make([]string, 0, len(r.byID))
+	for k := range r.byID {
+		out = append(out, k)
+	}
+	sort.Strings(out)
+	return out
+}
+
 // Parse decodes one package. Unknown fields are rejected so a typo in a contributed
 // package fails at load rather than silently doing nothing.
 func Parse(data []byte, path, origin string) (*PSP, error) {

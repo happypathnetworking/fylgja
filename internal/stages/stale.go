@@ -58,7 +58,7 @@ func Stale(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 	var devices []judged
 	floor, unstamped := "", false
 	for name, d := range stamps.Devices {
-		pkg, ok := reg.Lookup(d.Platform.NOS)
+		pkg, ok := reg.Lookup(d.NOS)
 		if !ok {
 			continue
 		}

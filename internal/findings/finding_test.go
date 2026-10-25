@@ -30,12 +30,8 @@ var dataModelRules = []string{
 	"data.required.missing",
 	"device.name.duplicate",
 	"platform.unsupported",
-	"interface.iftype.unimplemented",
-	"interface.mgmt_only.iftype",
-	"interface.parent.missing",
 	"link.endpoints.count",
 	"link.endpoints.same_device",
-	"link.endpoint.iftype",
 	"interface.unmappable.linked",
 	"ctm.devices.empty",
 	// Compiler omissions.
@@ -361,9 +357,9 @@ func TestEveryOperationRendersAValidDocument(t *testing.T) {
 
 	rejected := List{{
 		Severity: Rejection,
-		Rule:     RuleIftypeUnimplemented,
-		Object:   "n1:irb0",
-		Message:  `iftype "svi" is reserved in the contract but not implemented at M1`,
+		Rule:     RuleInterfaceRuleUnmatched,
+		Object:   "n1:Ethernet99",
+		Message:  "no rule of the nokia_srlinux profile matches this production name (tried: ethernet, mgmt); the profile or the intent must be fixed",
 	}}
 	withLocation := List{{
 		Severity: Warning,

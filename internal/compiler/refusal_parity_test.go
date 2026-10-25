@@ -131,12 +131,12 @@ func TestCollapsingParentAndChildCabledRaisesBoth(t *testing.T) {
 		c := loadCTM(t, "testdata", "ctm", "defects", "port-collision.json")
 		parent, child := "c1:Ethernet1/49|c2:Ethernet1/1", "c1:Ethernet1/49/1|c2:Ethernet1/2"
 		c.Device("c1").Interfaces = []ctm.Interface{
-			{Name: "Ethernet1/49", Iftype: ctm.IftypePhysical, Link: parent},
-			{Name: "Ethernet1/49/1", Iftype: ctm.IftypePhysical, Link: child},
+			{Name: "Ethernet1/49", Link: parent},
+			{Name: "Ethernet1/49/1", Link: child},
 		}
 		c.Device("c2").Interfaces = []ctm.Interface{
-			{Name: "Ethernet1/1", Iftype: ctm.IftypePhysical, Link: parent},
-			{Name: "Ethernet1/2", Iftype: ctm.IftypePhysical, Link: child},
+			{Name: "Ethernet1/1", Link: parent},
+			{Name: "Ethernet1/2", Link: child},
 		}
 		c.Links = []ctm.Link{
 			{ID: parent, Endpoints: []ctm.Endpoint{{Device: "c1", Interface: "Ethernet1/49"}, {Device: "c2", Interface: "Ethernet1/1"}}},
@@ -160,7 +160,7 @@ func TestPortCollisionNamesItsUncabledMembers(t *testing.T) {
 	got := bothCallers(t, func() *ctm.CTM {
 		c := loadCTM(t, "testdata", "ctm", "defects", "port-collision.json")
 		c1 := c.Device("c1")
-		c1.Interfaces = append(c1.Interfaces, ctm.Interface{Name: "Ethernet3/1", Iftype: ctm.IftypePhysical})
+		c1.Interfaces = append(c1.Interfaces, ctm.Interface{Name: "Ethernet3/1"})
 		return c
 	})
 	wantRefusals(t, got, refusal{rule: findings.RuleInterfacePortCollision, object: "c1:eth1",
@@ -175,7 +175,7 @@ func TestMappingRefusalsOnTwoDevicesInOnePass(t *testing.T) {
 	got := bothCallers(t, func() *ctm.CTM {
 		c := loadCTM(t, "testdata", "ctm", "defects", "rule-unmatched.json")
 		n3 := c.Device("n3")
-		n3.Interfaces = append(n3.Interfaces, ctm.Interface{Name: "Port-Channel1", Iftype: ctm.IftypePhysical})
+		n3.Interfaces = append(n3.Interfaces, ctm.Interface{Name: "Port-Channel1"})
 		return c
 	})
 	const tried = "no rule of the nokia_srlinux profile matches this production name (tried: ethernet, breakout); the profile or the intent must be fixed"

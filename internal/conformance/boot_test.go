@@ -348,7 +348,7 @@ func TestBootHalfFaked(t *testing.T) {
 			change: func(in *BootInput, f *fakeReader) {
 				port := "e1-3"
 				in.Manifest.Mapping = append(in.Manifest.Mapping, compiler.MappingRow{Device: "n1", Interface: "ethernet-1/3",
-					Iftype: "physical", Port: &port, Disposition: compiler.DispCabled})
+					Port: &port, Disposition: compiler.DispCabled})
 				f.answers[a1+" "+enabledPath("ethernet-1/3")] = leaf("srl_nokia-interfaces:interface[name=ethernet-1/3]/admin-state", "enable")
 				f.answers[a1+" "+discoveringPath("ethernet-1/3")] = leaf("srl_nokia-system:system/srl_nokia-lldp:lldp/interface[name=ethernet-1/3]/admin-state", "enable")
 			},
@@ -790,8 +790,8 @@ func mixedTwin(t *testing.T) (BootInput, *fakeReader) {
 			{Name: "s1", Platform: "nokia_srlinux", PSP: compiler.ManifestPSP{ID: "nokia_srlinux", Source: "embedded"}},
 		},
 		Mapping: []compiler.MappingRow{
-			{Device: "e1", Interface: "Ethernet1", Iftype: "physical", Port: &eosPort, NodeName: &eosName, Disposition: compiler.DispCabled},
-			{Device: "s1", Interface: "ethernet-1/1", Iftype: "physical", Port: &srlPort, NodeName: &srlName, Disposition: compiler.DispCabled},
+			{Device: "e1", Interface: "Ethernet1", Port: &eosPort, NodeName: &eosName, Disposition: compiler.DispCabled},
+			{Device: "s1", Interface: "ethernet-1/1", Port: &srlPort, NodeName: &srlName, Disposition: compiler.DispCabled},
 		},
 		Links: []compiler.CabledLink{{
 			ID: "e1:Ethernet1|s1:ethernet-1/1",

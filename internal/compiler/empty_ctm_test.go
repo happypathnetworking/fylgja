@@ -31,11 +31,12 @@ func TestCompileRejectsAnEmptyCTM(t *testing.T) {
 	} {
 		t.Run(tc.label, func(t *testing.T) {
 			c := &ctm.CTM{Envelope: ctm.Envelope{
-				Branch:          "fylgja-fixture",
-				At:              tc.at,
-				ObservedAt:      "2026-09-08T12:00:00.000000Z",
-				SchemaHash:      "fixture",
-				ContractVersion: "0.2",
+				Branch:     "fylgja-fixture",
+				At:         tc.at,
+				ObservedAt: "2026-09-08T12:00:00.000000Z",
+				SchemaHash: "fixture",
+				Scope:      "tag:fylgja",
+				Mapping:    ctm.Mapping{Reader: ctm.ReaderInfrahubDCIM, Model: ctm.ModelSchemaLibrary, Version: ctm.ModelVersion},
 			}}
 			files, list := Compile(c, reg)
 			if files != nil {

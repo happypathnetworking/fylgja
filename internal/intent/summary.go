@@ -49,10 +49,10 @@ type PackageCount struct {
 // A twin of one platform is the same sentence with one entry, so the reader never has to
 // know whether this read was mixed to know what the line means. It is kept apart from
 // Counts because Counts is a comparable struct that tier 2 holds whole reads to, and
-// because the count needs the registry: a device's package is the one its platform
-// resolves to, not anything the CTM states.
+// because Counts is a comparable struct. A device's package is the one its platform
+// resolved to, which CTM 2 states (platform.package).
 //
-// A device no package covers is counted under its platform's name. A read like that is
+// A device no package covers is counted under what its CTM names. A read like that is
 // refused as platform.unsupported and prints no summary at all, so this is what the line
 // would say rather than what it says.
 func DevicesByPackage(c *ctm.CTM, reg *psp.Registry) []PackageCount {
@@ -61,11 +61,7 @@ func DevicesByPackage(c *ctm.CTM, reg *psp.Registry) []PackageCount {
 	}
 	n := map[string]int{}
 	for _, d := range c.Devices {
-		id := d.Platform.NOS
-		if p, ok := reg.Lookup(d.Platform.NOS); ok {
-			id = p.Platform.ID
-		}
-		n[id]++
+		n[d.Platform.Package]++
 	}
 	out := make([]PackageCount, 0, len(n))
 	for id, devices := range n {

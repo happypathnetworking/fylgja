@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/psp"
@@ -139,7 +138,7 @@ func change2() intent.ProposedChange {
 
 // device is one SR Linux device's stamps: its intent and its artifact's checksum stamp.
 func device(intentAt, checksum string) intent.DeviceStamps {
-	return intent.DeviceStamps{Platform: ctm.Platform{Vendor: "nokia", NOS: "srlinux"}, Intent: intentAt,
+	return intent.DeviceStamps{NOS: "srlinux", Intent: intentAt,
 		Artifacts: map[string]string{"device-config": checksum}}
 }
 

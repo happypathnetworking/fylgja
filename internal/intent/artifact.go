@@ -86,7 +86,7 @@ func listArtifacts(n deviceNode) []listedArtifact {
 type pending struct {
 	index int // into the CTM's devices, which Normalize has not yet reordered
 	name  string
-	nos   string
+	pkg   string // the CTM's platform.package
 	node  deviceNode
 }
 
@@ -126,13 +126,13 @@ func (c *Client) fetchArtifacts(ctx context.Context, devices []ctm.Device, nodes
 		if i >= len(nodes) {
 			break
 		}
-		work = append(work, pending{index: i, name: d.Name, nos: d.Platform.NOS, node: nodes[i]})
+		work = append(work, pending{index: i, name: d.Name, pkg: d.Platform.Package, node: nodes[i]})
 	}
 	sort.SliceStable(work, func(i, j int) bool { return work[i].name < work[j].name })
 
 	var ready []selected
 	for _, p := range work {
-		pkg, ok := reg.Lookup(p.nos)
+		pkg, ok := reg.LookupID(p.pkg)
 		if !ok {
 			// Validation names this device `platform.unsupported`; a second finding
 			// about the same device would bury the one worth fixing, and there is no

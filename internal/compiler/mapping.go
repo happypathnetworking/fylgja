@@ -21,11 +21,6 @@ type DeviceSurvey struct {
 	// Refusals are rejections: validation files every one of them, and the compiler
 	// reports them as its guards, word for word, and builds nothing.
 	Refusals findings.List
-	// Err is an interface no disposition exists for: an iftype validation rejects
-	// before compilation. Validation has already named it; the compiler fails loudly
-	// rather than guess (D-004). The survey carries on past it, so validation still
-	// hears every other interface's refusal.
-	Err error
 }
 
 // SurveyDevice decides every interface on one device through the platform's profile.
@@ -33,10 +28,9 @@ type DeviceSurvey struct {
 // One function, called by validation and by the compiler, so a CTM that reads clean
 // compiles, and a refusal is worded the same whichever raised it.
 //
-// Wiring is derived here, never declared in the contract: intent says what an interface
-// *is* (`iftype`) and how it is used (`mgmt_only`), and the compiler decides what that
-// means for a twin. Putting the decision in the schema would push Fylgja's
-// implementation into someone else's model (D-003).
+// Wiring is derived here, never declared in the CTM: every interface is a port, and
+// intent says only whether it is the management port (`mgmt_only`) and which link it
+// terminates; the compiler decides what that means for a twin (017, D-057).
 //
 // The translation is data: the rules come from the platform's support package, and
 // this code never branches on which platform it is holding (Constitution II). pspID is
@@ -49,7 +43,7 @@ func SurveyDevice(d ctm.Device, prof *psp.Profile, pspID string) DeviceSurvey {
 
 	for _, in := range d.Interfaces {
 		enabled := in.IsEnabled()
-		row := MappingRow{Device: d.Name, Interface: in.Name, Iftype: in.Iftype, MgmtOnly: in.MgmtOnly, Enabled: &enabled}
+		row := MappingRow{Device: d.Name, Interface: in.Name, MgmtOnly: in.MgmtOnly, Enabled: &enabled}
 		object := d.Name + ":" + in.Name
 
 		switch {
@@ -68,12 +62,9 @@ func SurveyDevice(d ctm.Device, prof *psp.Profile, pspID string) DeviceSurvey {
 			port := out.Port
 			row.Port, row.NodeName, row.Disposition = &port, nodeName(out), DispManagement
 
-		case in.Iftype == ctm.IftypeLoopback:
-			// Configured by the platform, never cabled. It has no node port, because a
-			// loopback is not a port.
-			row.Disposition = DispConfiguredNotCabled
-
-		case in.Iftype == ctm.IftypePhysical:
+		default:
+			// Every other interface is a port (017): cabled when it terminates a link,
+			// configured-not-cabled otherwise.
 			out := prof.Apply(in.Name, false)
 			if out.Kind != psp.Mapped {
 				row.Disposition = DispOmitted
@@ -88,14 +79,6 @@ func SurveyDevice(d ctm.Device, prof *psp.Profile, pspID string) DeviceSurvey {
 				row.Disposition = DispConfiguredNotCabled
 			}
 			placed = append(placed, placement{row: len(s.Rows), out: out, cabled: in.Link != ""})
-
-		default:
-			// Validation rejects unimplemented kinds before compilation, so reaching
-			// here means the two disagree.
-			if s.Err == nil {
-				s.Err = fmt.Errorf("interface %s: unhandled iftype %q reached the compiler", object, in.Iftype)
-			}
-			continue
 		}
 		s.Rows = append(s.Rows, row)
 	}
@@ -220,8 +203,8 @@ func (s *DeviceSurvey) share(device string, placed []placement) {
 // breakout refuses a breakout parent cabled beside a cabled child: no
 // platform cables a broken-out port and one of its lanes at once, so the twin could
 // honour only one of the two links intent asks for. The parent is the name the
-// child's rule renders from the child's own values; intent's parent field is not
-// consulted (D-004). One finding per parent, naming every cabled child.
+// child's rule renders from the child's own values, never from intent (D-004). One
+// finding per parent, naming every cabled child.
 func (s *DeviceSurvey) breakout(d ctm.Device, placed []placement) {
 	cabled := map[string]bool{}
 	for _, in := range d.Interfaces {
@@ -333,7 +316,7 @@ func Survey(c *ctm.CTM, reg *psp.Registry) SurveyCounts {
 	ctm.Normalize(c)
 	var entries []LossyMapping
 	for _, d := range c.Devices {
-		p, ok := reg.Lookup(d.Platform.NOS)
+		p, ok := reg.LookupID(d.Platform.Package)
 		if !ok {
 			continue
 		}

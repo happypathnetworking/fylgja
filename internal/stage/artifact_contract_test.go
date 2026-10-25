@@ -281,11 +281,6 @@ func artifactDetection(t *testing.T, c *testsupport.Client, branch string, reg *
 	if !maps.Equal(contentOf(unmoved), now) {
 		t.Error("a site change, regenerated, changed an artifact's bytes")
 	}
-	for _, d := range unmoved.Devices {
-		if d.Site != "" && d.Name != "n1" {
-			t.Errorf("device %s has site %q; only n1's was set", d.Name, d.Site)
-		}
-	}
 }
 
 // A device with no current artifact is refused by name, and the read writes no CTM.

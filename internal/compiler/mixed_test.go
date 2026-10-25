@@ -181,19 +181,17 @@ func TestMixedLinksCableEachEndAsItsProfileRendersIt(t *testing.T) {
 	}
 }
 
-// Every row carries the node's own name for its port, and a row the twin gives no port
-// carries null — on both platforms, whatever each calls its loopback (bundle "3"; D-025).
+// Every row carries the node's own name for its port, on both platforms (bundle "3";
+// D-025). Every interface of a CTM "2" is a port, so no row of this fixture is portless:
+// a loopback, which each platform calls its own name, is not read (017).
 func TestMixedRowsCarryEveryNodeName(t *testing.T) {
 	b := compileMixed(t)
 	for object, want := range map[string]string{
 		"e1:Ethernet1":     `port eth1 node_name "Ethernet1" cabled`,
 		"e1:Ethernet2/1":   `port eth2_1 node_name "Ethernet2/1" cabled`,
-		"e1:Loopback0":     `port null node_name null configured-not-cabled`,
 		"e1:Management1":   `port eth0 node_name "Management0" management`,
 		"e2:Ethernet3/1/1": `port eth3_1_1 node_name "Ethernet3/1/1" cabled`,
-		"e2:Loopback0":     `port null node_name null configured-not-cabled`,
 		"s1:ethernet-1/1":  `port e1-1 node_name "ethernet-1/1" cabled`,
-		"s1:lo0":           `port null node_name null configured-not-cabled`,
 		"s1:mgmt0":         `port mgmt0 node_name "mgmt0" management`,
 	} {
 		if got := describe(b.mappingRow(t, object)); got != want {
@@ -267,7 +265,7 @@ func TestMixedWarnsOnlyAboutTheManagementNames(t *testing.T) {
 	if list.Rejected() || files == nil {
 		t.Fatalf("the mixed fixture was refused: %v", list)
 	}
-	const message = "artifact device-config names interface Management1 at line 12, " +
+	const message = "artifact device-config names interface Management1 at line 10, " +
 		"which the node calls Management0; the line is pushed as production wrote it"
 	var got []string
 	for _, f := range list {

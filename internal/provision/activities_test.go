@@ -230,7 +230,7 @@ func TestCompileActivity(t *testing.T) {
 
 	t.Run("a rejected read's copy is removed", func(t *testing.T) {
 		c := newControl(t)
-		defect := repoPath("testdata", "ctm", "defects", "iftype-unimplemented.json")
+		defect := repoPath("testdata", "ctm", "defects", "platform-unsupported.json")
 		res, err := c.Compile(ctx, CompileInput{CTMPath: stageRead(t, c, defect, "run-4")})
 		if err != nil {
 			t.Fatal(err)

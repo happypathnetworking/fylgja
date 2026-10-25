@@ -216,8 +216,9 @@ func TestCheckHostClearHost(t *testing.T) {
 	if res.Findings.Rejected() {
 		t.Errorf("findings %+v refuse a clear host", res.Findings)
 	}
-	if res.Provenance.Branch != "fylgja-fixture" || res.Provenance.ContractVersion != "0.2" {
-		t.Errorf("provenance = %+v, want the manifest's", res.Provenance)
+	// The manifest's, as record 7 holds it until twin.json 8 (017's T025).
+	if want := (wire.Provenance{Branch: "fylgja-fixture", At: "2026-09-08T12:00:00Z", SchemaHash: "fixture"}); res.Provenance != want {
+		t.Errorf("provenance = %+v, want the manifest's %+v", res.Provenance, want)
 	}
 	if len(f.calls) != 1 || !reflect.DeepEqual(f.calls[0].args, inspectArgs) {
 		t.Errorf("runner saw %+v, want only %v", f.calls, inspectArgs)

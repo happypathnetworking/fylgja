@@ -49,13 +49,13 @@ func TestMixedSeedReads(t *testing.T) {
 
 	platforms := map[string]string{}
 	for _, d := range snapshot.Devices {
-		platforms[d.Name] = d.Platform.NOS
+		platforms[d.Name] = d.Platform.Package
 		a := d.Artifact
 		if a == nil || a.Name != "device-config" || a.ContentType != "text/plain" {
 			t.Fatalf("device %s was read with artifact %+v, want a Ready device-config", d.Name, a)
 		}
 	}
-	if want := map[string]string{"e1": "eos", "e2": "eos", "s1": "srlinux"}; len(platforms) != 3 ||
+	if want := map[string]string{"e1": "arista_eos", "e2": "arista_eos", "s1": "nokia_srlinux"}; len(platforms) != 3 ||
 		platforms["e1"] != want["e1"] || platforms["e2"] != want["e2"] || platforms["s1"] != want["s1"] {
 		t.Fatalf("the branch read as %v, want %v", platforms, want)
 	}

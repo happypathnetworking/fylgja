@@ -45,7 +45,7 @@ func checkArtifacts(c *ctm.CTM, reg *psp.Registry, list *findings.List) {
 			continue
 		}
 		seen[d.Name] = true
-		p, ok := reg.Lookup(d.Platform.NOS)
+		p, ok := reg.LookupID(d.Platform.Package)
 		if !ok {
 			continue
 		}

@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"time"
-
-	"github.com/happypathnetworking/fylgja/internal/ctm"
 )
 
 // Stamps is when a branch's intent and its artifacts were last written, as one read at
@@ -25,9 +23,11 @@ type Stamps struct {
 
 // DeviceStamps is one device's side of the staleness rule (D-046).
 type DeviceStamps struct {
-	// Platform picks the device's package from the registry, whose config.artifact_name
-	// names which of Artifacts is its configuration (Constitution II).
-	Platform ctm.Platform
+	// NOS is the generics' platform nos, which picks the device's package from the
+	// registry, whose config.artifact_name names which of Artifacts is its configuration
+	// (Constitution II). CTM 2 names a package where the generics name a nos, so the
+	// stamps keep the nos until 017's T049 resolves the library's pair instead.
+	NOS string
 	// IDs are the device's own id, then each of its interfaces' as read: an intent event
 	// names the device when one is its primary node or a peer of its relationships
 	// (D-048).
@@ -102,7 +102,7 @@ func (c *Client) Stamps(ctx context.Context) (Stamps, error) {
 		for a, fold := range d.artifacts {
 			artifacts[a] = fold.stamp
 		}
-		out.Devices[name] = DeviceStamps{Platform: d.platform, IDs: d.ids, Intent: d.intent.stamp, Artifacts: artifacts}
+		out.Devices[name] = DeviceStamps{NOS: d.nos, IDs: d.ids, Intent: d.intent.stamp, Artifacts: artifacts}
 	}
 	return out, nil
 }
@@ -122,7 +122,7 @@ func (f *stampFold) take(stamp string, at time.Time) {
 
 // deviceFold is one device's stamps while the pages are read.
 type deviceFold struct {
-	platform  ctm.Platform
+	nos       string
 	ids       []string
 	intent    stampFold
 	artifacts map[string]*stampFold
@@ -175,9 +175,9 @@ func (r *stampReader) device(n stampDeviceNode) {
 	if p := platform.GetNode(); p != nil {
 		// The platform's vendor, nos and version reach every device on it: the template
 		// renders them into its artifact, and nos picks its package (R-07). model reaches
-		// neither and is projected but not stamped.
-		vendor, nos, version, model := p.GetVendor(), p.GetNos(), p.GetVersion(), p.GetModel()
-		d.platform = ctm.Platform{Vendor: vendor.GetValue(), NOS: nos.GetValue(), Version: version.GetValue(), Model: model.GetValue()}
+		// neither and is not stamped.
+		vendor, nos, version := p.GetVendor(), p.GetNos(), p.GetVersion()
+		d.nos = nos.GetValue()
 		for _, stamp := range []string{vendor.GetUpdated_at(), nos.GetUpdated_at(), version.GetUpdated_at()} {
 			r.see(stamp, &d.intent)
 		}

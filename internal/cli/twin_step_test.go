@@ -105,7 +105,7 @@ func withMixedLink(t *testing.T) *ctm.CTM {
 			continue
 		}
 		enabled := true
-		d.Interfaces = append(d.Interfaces, ctm.Interface{Name: name, Iftype: "physical", Enabled: &enabled, Link: link})
+		d.Interfaces = append(d.Interfaces, ctm.Interface{Name: name, Enabled: &enabled, Link: link})
 		d.Artifact.Content += extra
 		sum := md5.Sum([]byte(d.Artifact.Content))
 		d.Artifact.Checksum = hex.EncodeToString(sum[:])
@@ -544,7 +544,7 @@ func stepDryRunLines(fromID, toID string) []string {
 		"step change-1/sealed → change-1/linked (" + short(fromID) + " → " + short(toID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
 		"  links: +e1:eth3 — s1:e1-3",
-		"  artifacts: e1 device-config 644a78b3… → 9f22a736…; s1 device-config 34df00ec… → 5612b2a0…",
+		"  artifacts: e1 device-config 6b31a6de… → d4c6f28c…; s1 device-config 5e2a65f4… → 2dcd7d9a…",
 		"reconcile: restart e1 (added link; arista_eos declares restart); live s1 (nokia_srlinux declares live)",
 		"push: e1 (artifact, restarted); s1 (artifact, bootstrap); e2 untouched",
 		// M12: the step's wait after its record, at the default budget.
@@ -1543,7 +1543,7 @@ func TestStepRuns(t *testing.T) {
 				Record: &wire.TwinRecord{State: wire.StateDiverged},
 				Findings: findings.List{
 					{Severity: findings.Rejection, Rule: findings.RulePushRefused, Object: "e1", Step: findings.StepPush,
-						Message: "node e1 refused artifact device-config (checksum 9f22a736…) at line 7: Invalid input"},
+						Message: "node e1 refused artifact device-config (checksum d4c6f28c…) at line 7: Invalid input"},
 					diverged(findings.StepPush)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
 			closing: func(fromID, toID string) string {
@@ -1567,7 +1567,7 @@ func TestStepRuns(t *testing.T) {
 				Wait:   &wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 2, AfterS: 1.9, Failing: []wire.StepFinding{}},
 				Findings: findings.List{
 					{Severity: findings.Rejection, Rule: findings.RulePushRefused, Object: "e1", Step: findings.StepPush,
-						Message: "node e1 refused artifact device-config (checksum 9f22a736…) at line 7: Invalid input"},
+						Message: "node e1 refused artifact device-config (checksum d4c6f28c…) at line 7: Invalid input"},
 					diverged(findings.StepPush)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
 			closing: func(fromID, toID string) string {
@@ -2251,7 +2251,7 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 		"step change-1/linked → change-1/sealed (" + short(linkedID) + " → " + short(sealedID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
 		"  links: -e1:eth3 — s1:e1-3",
-		"  artifacts: e1 device-config 9f22a736… → 644a78b3…; s1 device-config 5612b2a0… → 34df00ec…",
+		"  artifacts: e1 device-config d4c6f28c… → 6b31a6de…; s1 device-config 2dcd7d9a… → 5e2a65f4…",
 		"reconcile: restart e1 (deleted endpoint; arista_eos declares restart); live s1 (nokia_srlinux declares live)",
 		"push: e1 (artifact, restarted); s1 (artifact, bootstrap); e2 untouched",
 	}

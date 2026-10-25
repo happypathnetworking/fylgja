@@ -114,7 +114,6 @@ type mappingKey struct {
 	port, nodeName string
 	hasPort        bool
 	hasNodeName    bool
-	iftype         string
 	mgmtOnly       bool
 }
 
@@ -216,7 +215,7 @@ func read(which string, b Bundle) (*side, error) {
 			rows = map[string]mappingKey{}
 			s.mapping[r.Device] = rows
 		}
-		k := mappingKey{iftype: r.Iftype, mgmtOnly: r.MgmtOnly}
+		k := mappingKey{mgmtOnly: r.MgmtOnly}
 		if r.Port != nil {
 			k.port, k.hasPort = *r.Port, true
 		}

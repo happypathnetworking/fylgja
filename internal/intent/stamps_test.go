@@ -11,8 +11,6 @@ import (
 	"strings"
 	"sync"
 	"testing"
-
-	"github.com/happypathnetworking/fylgja/internal/ctm"
 )
 
 // fakeStamps is a branch's IntentStamps as Infrahub's GraphQL answers it, paged, and
@@ -200,8 +198,8 @@ func TestStampsPerDevice(t *testing.T) {
 	if len(got.Devices) != 3 {
 		t.Errorf("%d devices, want 3", len(got.Devices))
 	}
-	if p := got.Devices["n1"].Platform; p != (ctm.Platform{Vendor: "nokia", NOS: "srlinux", Version: "24.7"}) {
-		t.Errorf("n1's platform = %+v", p)
+	if p := got.Devices["n1"].NOS; p != "srlinux" {
+		t.Errorf("n1's platform nos = %q", p)
 	}
 	if got.Latest != roleEdit {
 		t.Errorf("Latest = %q, want %q", got.Latest, roleEdit)
@@ -296,11 +294,11 @@ func TestStampsPlatform(t *testing.T) {
 	if got.Latest != edited {
 		t.Errorf("Latest = %q, want the platform's version %q", got.Latest, edited)
 	}
-	if p := got.Devices["n1"].Platform; p != (ctm.Platform{Vendor: "nokia", NOS: "srlinux", Version: "24.10"}) {
-		t.Errorf("n1's platform = %+v", p)
+	if p := got.Devices["n1"].NOS; p != "srlinux" {
+		t.Errorf("n1's platform nos = %q", p)
 	}
-	if p := got.Devices["n2"].Platform; p != (ctm.Platform{Vendor: "arista", NOS: "eos", Version: "4.32", Model: "ceos"}) {
-		t.Errorf("n2's platform = %+v", p)
+	if p := got.Devices["n2"].NOS; p != "eos" {
+		t.Errorf("n2's platform nos = %q", p)
 	}
 }
 

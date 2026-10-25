@@ -534,7 +534,7 @@ func TestStagePlanMainMoved(t *testing.T) {
 	}
 
 	_, stdout, _ := runStage(t, "plan", "--branch", lessLink)
-	if !strings.Contains(stdout, "  read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports\n"+
+	if !strings.Contains(stdout, "  read: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports\n"+
 		"  warning stage.main.moved [step resolve] change-1: "+want+"\n") {
 		t.Errorf("the warning is not printed under the branch point:\n%s", stdout)
 	}
@@ -612,18 +612,18 @@ func TestStagePlanText(t *testing.T) {
 		`step change-1/branch-point → change-1/cabled (— → ` + cabled[:8] + `…): not computed (change-1/branch-point was refused)`,
 		`change-1/cabled: branch change-1 at ` + cabledAt + ` (written), "the leaf cabled"`,
 		`  bundle_id ` + cabled,
-		`  read: 3 devices (nokia_srlinux 3), 12 interfaces, 2 links, 3 artifacts, 0 lossy mappings, 0 shared ports`,
+		`  read: 3 devices (nokia_srlinux 3), 9 interfaces, 2 links, 3 artifacts, 0 lossy mappings, 0 shared ports`,
 		`step change-1/cabled → change-1/live (` + cabled[:8] + `… → ` + live[:8] + `…):`,
 		`  nodes: ~n2 (bootstrap); ~n3 (bootstrap)`,
 		`  links: +n2:e1-2 — n3:e1-1`,
 		`  artifacts: unchanged`,
 		`change-1/live: branch change-1 at ` + planLiveAt + ` (given), "the leaf live"`,
 		`  bundle_id ` + live,
-		`  read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports`,
+		`  read: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports`,
 		`step change-1/live → change-1/head (` + live[:8] + `… → ` + head[:8] + `…): unchanged; the ids differ by provenance alone`,
 		`change-1/head: branch change-1 at ` + planHeadAt + ` (head)`,
 		`  bundle_id ` + head,
-		`  read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports`,
+		`  read: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports`,
 	}, "\n") + "\n"
 	if stdout != want {
 		t.Errorf("stage plan printed\n%s\nwant\n%s", stdout, want)

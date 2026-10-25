@@ -25,12 +25,13 @@ import (
 
 const fixtureBundleID = "23f86a2678a49a324a04ae458703be8252e2e30d6712d6b6094ce1ccd5c2988e"
 
-// fixtureArtifacts are the fixture bundle's artifact checksums, by node: what the
-// re-created fylgja-fixture branch rendered, 861 bytes each.
+// fixtureArtifacts are the fixture bundle's artifact checksums, by node: what 017's
+// template renders for the fylgja-fixture branch, 707 bytes each, predicted at T016
+// (research §5.1) and checked against a render at T060.
 var fixtureArtifacts = map[string]string{
-	"n1": "43e8fd0c2de5f4646f74a51d34742824",
-	"n2": "ecb03029ea805a09c54d2cd6a0e59ac9",
-	"n3": "ae0c3a87085839354cbb2ca10f71e487",
+	"n1": "597f6263eb7e0b539679b3956270876f",
+	"n2": "5ac21560015ad6bb1e881358115d0b7a",
+	"n3": "e93df96400ddbada7daa1a0777d9d3e3",
 }
 
 // fakeService stands in for the workflow service: it starts nothing and answers with a
@@ -327,7 +328,7 @@ func readyResult() provision.ProvisionResult {
 			Name: name, Container: "clab-fylgja-" + name, Image: "ghcr.io/nokia/srlinux:24.7.1",
 			PSP:      wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
 			MgmtIPv4: "172.20.20." + string(rune('2'+i)), ReadyAfterS: 0.9,
-			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[name], Size: 861},
+			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[name], Size: 707},
 			PushedInS: 0.7,
 		})
 	}

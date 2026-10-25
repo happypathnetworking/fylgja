@@ -42,7 +42,7 @@ func (a *Activities) CheckHost(ctx context.Context, in wire.CheckHostInput) (wir
 	}
 
 	res := wire.CheckHostResult{
-		Provenance: wire.Provenance(m.Provenance),
+		Provenance: recordProvenance(m.Provenance),
 		Findings:   findings.List{},
 	}
 	if budgetSet {
@@ -432,6 +432,15 @@ func readManifest(bundleDir string) (compiler.Manifest, error) {
 		return compiler.Manifest{}, fmt.Errorf("reading %s: %w", path, err)
 	}
 	return m, nil
+}
+
+// recordProvenance is the manifest's provenance as twin.json 7 records it. A bundle "5"
+// names the scope and the mapping in place of the generics contract's version, which
+// record 7 has no place for: until twin.json 8 carries the manifest's block verbatim
+// (017's T025), the record keeps the branch, the pin and the schema hash, and an empty
+// contract_version, since no contract version was read.
+func recordProvenance(p compiler.Provenance) wire.Provenance {
+	return wire.Provenance{Branch: p.Branch, At: p.At, SchemaHash: p.SchemaHash}
 }
 
 // exists reports whether anything is at path, without following a final symlink.

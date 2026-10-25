@@ -74,11 +74,18 @@ func (c *Client) Fetch(ctx context.Context, conf *Conformance, observedAt string
 			Branch:     c.cfg.Branch,
 			At:         c.cfg.At,
 			ObservedAt: observedAt,
+			// The bridge (017's T023, until T039 reads the library's DCIM): this reader
+			// is given the request's scope and records it, but reads every device of the
+			// branch; its mapping is the generics', which is what it reads, and it writes
+			// no fidelity row.
+			Scope:    ScopePrefix + c.cfg.Scope,
+			Mapping:  ctm.Mapping{Reader: bridgeReader, Model: bridgeModel},
+			Fidelity: []ctm.FidelityRow{},
 		},
 	}
 	if conf != nil {
 		out.Envelope.SchemaHash = conf.SchemaHash
-		out.Envelope.ContractVersion = conf.Version
+		out.Envelope.Mapping.Version = conf.Version
 	}
 
 	// The device nodes are kept beside the devices they projected into, so the artifact
@@ -96,7 +103,7 @@ func (c *Client) Fetch(ctx context.Context, conf *Conformance, observedAt string
 			if node == nil {
 				continue
 			}
-			out.Devices = append(out.Devices, projectDevice(node))
+			out.Devices = append(out.Devices, projectDevice(node, reg))
 			nodes = append(nodes, node)
 		}
 		if offset+pageSize >= page.GetCount() {
@@ -138,20 +145,31 @@ func (c *Client) Fetch(ctx context.Context, conf *Conformance, observedAt string
 	return out, list, nil
 }
 
-// projectDevice copies one device and its interfaces. Everything read from Infrahub
-// is tagged `intent`: the other provenances exist for objects Infrahub does not know
-// about, which is the CTM's reason for being (D-010).
-func projectDevice(n deviceNode) ctm.Device {
-	name, role, site := n.GetName(), n.GetRole(), n.GetSite()
+// The generics reader's mapping, as the bridge records it (017's T023): the reader and
+// the model it reads. The version is the contract version the branch declares, which
+// conformance has checked.
+const (
+	bridgeReader = "infrahub-generics"
+	bridgeModel  = "fylgja-generics"
+)
+
+// projectDevice copies one device and its ports. Everything read from Infrahub is tagged
+// `intent`: the other provenances exist for objects Infrahub does not know about, which
+// is the CTM's reason for being (D-010).
+//
+// The bridge (017's T023, until T039): the platform is the package the registry finds
+// for the generics' platform nos, and the nos itself where none does, so validation's
+// platform.unsupported names what the branch declared; such a CTM is refused and never
+// written. Role and site are not CTM 2's.
+func projectDevice(n deviceNode, reg *psp.Registry) ctm.Device {
+	name := n.GetName()
 	d := ctm.Device{
 		Name:       name.GetValue(),
-		Role:       role.GetValue(),
-		Site:       site.GetValue(),
 		Provenance: ctm.ProvenanceIntent,
 	}
 	platformEdge := n.GetPlatform()
 	if p := platformEdge.GetNode(); p != nil {
-		d.Platform = projectPlatform(p)
+		d.Platform = projectPlatform(p, reg)
 	}
 	interfaces := n.GetInterfaces()
 	for _, edge := range interfaces.GetEdges() {
@@ -159,54 +177,49 @@ func projectDevice(n deviceNode) ctm.Device {
 		if in == nil {
 			continue
 		}
-		d.Interfaces = append(d.Interfaces, projectInterface(in))
+		if port, ok := projectInterface(in); ok {
+			d.Interfaces = append(d.Interfaces, port)
+		}
 	}
 	return d
 }
 
-// projectPlatform copies the platform join key.
-func projectPlatform(p PlatformFields) ctm.Platform {
-	vendor, nos, ver, model := p.GetVendor(), p.GetNos(), p.GetVersion(), p.GetModel()
-	return ctm.Platform{
-		Vendor:  vendor.GetValue(),
-		NOS:     nos.GetValue(),
-		Version: ver.GetValue(),
-		Model:   model.GetValue(),
+// projectPlatform resolves the generics' platform to its package (the bridge).
+func projectPlatform(p PlatformFields, reg *psp.Registry) ctm.Platform {
+	nos := p.GetNos()
+	if pkg, ok := reg.Lookup(nos.GetValue()); ok {
+		return ctm.Platform{Package: pkg.Platform.ID}
 	}
+	return ctm.Platform{Package: nos.GetValue()}
 }
 
-// projectInterface copies one interface in production naming.
-func projectInterface(in InterfaceFields) ctm.Interface {
+// projectInterface copies one port in production naming. CTM 2 holds ports alone, so the
+// bridge (017's T023, until T039) skips every interface the generics do not type
+// physical: a loopback, a subinterface, an SVI. Its parent and addresses are not CTM 2's.
+func projectInterface(in InterfaceFields) (ctm.Interface, bool) {
 	ifName, ifType, mgmtOnly := in.GetName(), in.GetIftype(), in.GetMgmt_only()
+	if ifType.GetValue() != iftypePhysical {
+		return ctm.Interface{}, false
+	}
 	iface := ctm.Interface{
 		Name:       ifName.GetValue(),
-		Iftype:     ifType.GetValue(),
 		MgmtOnly:   mgmtOnly.GetValue(),
 		Provenance: ctm.ProvenanceIntent,
 	}
 	enabledAttr := in.GetEnabled()
 	enabled := enabledAttr.GetValue()
 	iface.Enabled = &enabled
-	parentEdge := in.GetParent()
-	if p := parentEdge.GetNode(); p != nil {
-		pn := p.GetName()
-		iface.Parent = pn.GetValue()
-	}
-	addresses := in.GetAddresses()
-	for _, a := range addresses.GetEdges() {
-		if an := a.GetNode(); an != nil {
-			addr := an.GetAddress()
-			iface.Addresses = append(iface.Addresses, ctm.Address{CIDR: addr.GetValue()})
-		}
-	}
 	// An unlinked interface still carries a `link` object with a nil node; only a
 	// non-nil node means the interface actually terminates a link.
 	linkEdge := in.GetLink()
 	if l := linkEdge.GetNode(); l != nil {
 		iface.Link = l.GetId()
 	}
-	return iface
+	return iface, true
 }
+
+// iftypePhysical is the generics' iftype of a port (the bridge).
+const iftypePhysical = "physical"
 
 // projectLink copies one link, resolving its endpoints to (device, interface) names.
 func projectLink(n linkNode) ctm.Link {

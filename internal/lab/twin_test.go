@@ -638,15 +638,17 @@ func TestRecordTwin(t *testing.T) {
 	}
 	ready := []wire.ReadinessResult{{Node: "n3", ReadyAfterS: 1.102}, {Node: "n1", ReadyAfterS: 0.761}, {Node: "n2", ReadyAfterS: 0.897}}
 	pushed := []wire.PushResult{
-		{Node: "n2", PushedInS: 0.62, Checksum: "ecb03029ea805a09c54d2cd6a0e59ac9", Size: 861},
-		{Node: "n1", PushedInS: 0.7, Checksum: "43e8fd0c2de5f4646f74a51d34742824", Size: 861},
-		{Node: "n3", PushedInS: 0.65, Checksum: "ae0c3a87085839354cbb2ca10f71e487", Size: 861},
+		{Node: "n2", PushedInS: 0.62, Checksum: "5ac21560015ad6bb1e881358115d0b7a", Size: 707},
+		{Node: "n1", PushedInS: 0.7, Checksum: "597f6263eb7e0b539679b3956270876f", Size: 707},
+		{Node: "n3", PushedInS: 0.65, Checksum: "e93df96400ddbada7daa1a0777d9d3e3", Size: 707},
 	}
 	artifact := func(checksum string) *wire.TwinArtifact {
-		return &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: checksum, Size: 861}
+		return &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: checksum, Size: 707}
 	}
-	// The golden manifest's provenance block, which the plan carries and the record copies.
-	provenance := wire.Provenance{Branch: "fylgja-fixture", At: "2026-09-08T12:00:00Z", SchemaHash: "fixture", ContractVersion: "0.2"}
+	// The golden manifest's provenance block, which the plan carries and the record copies:
+	// until twin.json 8 (017's T025), without the scope and the mapping record 7 has no
+	// place for, and with no contract version, since a bundle "5" read none.
+	provenance := wire.Provenance{Branch: "fylgja-fixture", At: "2026-09-08T12:00:00Z", SchemaHash: "fixture"}
 	input := func(a *Activities, nodes []wire.LabNode) wire.RecordInput {
 		return wire.RecordInput{
 			TwinDir:    a.Paths.Twin,
@@ -736,11 +738,11 @@ func TestRecordTwin(t *testing.T) {
 		holds := goldenID
 		want := []wire.TwinNode{
 			{Name: "n1", Container: "clab-fylgja-n1", Image: image, PSP: srlinux, MgmtIPv4: "172.20.20.2", ReadyAfterS: 0.761,
-				Artifact: artifact("43e8fd0c2de5f4646f74a51d34742824"), PushedInS: 0.7, Holds: &holds},
+				Artifact: artifact("597f6263eb7e0b539679b3956270876f"), PushedInS: 0.7, Holds: &holds},
 			{Name: "n2", Container: "clab-fylgja-n2", Image: image, PSP: srlinux, MgmtIPv4: "172.20.20.3", ReadyAfterS: 0.897,
-				Artifact: artifact("ecb03029ea805a09c54d2cd6a0e59ac9"), PushedInS: 0.62, Holds: &holds},
+				Artifact: artifact("5ac21560015ad6bb1e881358115d0b7a"), PushedInS: 0.62, Holds: &holds},
 			{Name: "n3", Container: "clab-fylgja-n3", Image: image, PSP: srlinux, MgmtIPv4: "172.20.20.4", ReadyAfterS: 1.102,
-				Artifact: artifact("ae0c3a87085839354cbb2ca10f71e487"), PushedInS: 0.65, Holds: &holds},
+				Artifact: artifact("e93df96400ddbada7daa1a0777d9d3e3"), PushedInS: 0.65, Holds: &holds},
 		}
 		if !reflect.DeepEqual(rec.Nodes, want) {
 			t.Errorf("nodes:\n got %+v\nwant %+v", rec.Nodes, want)

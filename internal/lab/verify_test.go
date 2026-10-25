@@ -185,7 +185,7 @@ func waitRecord(t *testing.T, run string, change func(*StepFields)) wire.TwinRec
 	if err != nil {
 		t.Fatal(err)
 	}
-	staged := &StagedTarget{BundleID: goldenID, Provenance: wire.Provenance(m.Provenance),
+	staged := &StagedTarget{BundleID: goldenID, Provenance: recordProvenance(m.Provenance),
 		PSP: map[string]wire.PSPRef{}, Artifacts: map[string]*wire.TwinArtifact{}}
 	observed := "2026-10-03T11:58:00.000000Z"
 	create := RecordFields{BundleID: stepFromID, ObservedAt: &observed, Source: wire.SourceIntent, Stage: mark("seeded"),

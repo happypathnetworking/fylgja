@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/bundle"
@@ -253,8 +254,12 @@ func checkInvariants(t *testing.T, fixture string, files map[string][]byte) {
 		// stamp, no source, and above all no observed_at (D-023).
 		if m.Provenance.Branch != c.Envelope.Branch || m.Provenance.At != c.Envelope.At ||
 			m.Provenance.SchemaHash != c.Envelope.SchemaHash ||
-			m.Provenance.ContractVersion != c.Envelope.ContractVersion {
+			m.Provenance.Scope != c.Envelope.Scope || m.Provenance.Mapping != c.Envelope.Mapping {
 			t.Errorf("provenance %+v does not match the CTM envelope %+v", m.Provenance, c.Envelope)
+		}
+		// The reader's fidelity list, verbatim (FR-029).
+		if !reflect.DeepEqual(m.Fidelity.Read, c.Envelope.Fidelity) {
+			t.Errorf("fidelity.read %+v is not the CTM's fidelity list %+v", m.Fidelity.Read, c.Envelope.Fidelity)
 		}
 
 		// From bundle "3" a node name is written on every row with a port — equal to
@@ -293,12 +298,12 @@ func TestBundleCarriesNoBuildOrReadIdentity(t *testing.T) {
 	if err := json.Unmarshal(files[ManifestFile], &m); err != nil {
 		t.Fatal(err)
 	}
-	for _, key := range []string{"source", "observed_at", "schema_version"} {
+	for _, key := range []string{"source", "observed_at", "schema_version", "contract_version", "fidelity"} {
 		if _, ok := m.Provenance[key]; ok {
 			t.Errorf("provenance block still carries %q: %v", key, m.Provenance)
 		}
 	}
-	for _, key := range []string{"branch", "at", "schema_hash", "contract_version"} {
+	for _, key := range []string{"branch", "at", "schema_hash", "scope", "mapping"} {
 		if _, ok := m.Provenance[key]; !ok {
 			t.Errorf("provenance block is missing %q: %v", key, m.Provenance)
 		}

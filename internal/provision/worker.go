@@ -121,18 +121,13 @@ func LoginLines(ctx context.Context, reg *psp.Registry, images lab.Images, geten
 	if reg == nil {
 		return nil
 	}
-	// Registry.index answers an id with the package whose NOS sorts first; so does this.
+	// One line per package id, answered as Registry.index answers it: by the package whose
+	// NOS sorts first.
 	byID := map[string]*psp.PSP{}
-	var ids []string
-	for _, nos := range reg.Platforms() {
-		p, _ := reg.Lookup(nos)
-		if _, seen := byID[p.Platform.ID]; seen {
-			continue
-		}
-		byID[p.Platform.ID] = p
-		ids = append(ids, p.Platform.ID)
+	ids := reg.IDs()
+	for _, id := range ids {
+		byID[id], _ = reg.LookupID(id)
 	}
-	sort.Strings(ids)
 
 	lines := make([]string, 0, len(ids))
 	for _, id := range ids {

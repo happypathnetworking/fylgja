@@ -1,11 +1,12 @@
 // Package ctm holds the Canonical Topology Model — the compiler's input and
 // `intent read`'s output.
 //
-// The CTM is a thin projection of Fylgja's Infrahub generics plus provenance. It is
+// The CTM is the contract between a source of truth and the compiler (D-057): a reader
+// maps one source's model onto it by one documented mapping, and the envelope names
+// which reader produced it and which version of which model it read. It is
 // deliberately not a second source of truth: it exists because synthesized nodes
-// (boundary stubs, service mocks, traffic generators) are absent from Infrahub and so
-// cannot live in types generated from it (D-010). At M1 it is close to a copy of the
-// generated types, and should stay that thin.
+// (boundary stubs, service mocks, traffic generators) are absent from any source and so
+// cannot live in types generated from one (D-010).
 //
 // Struct field order is significant: it fixes the field order of the canonical JSON
 // encoding, which the golden tests compare byte for byte.
@@ -15,30 +16,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 )
-
-// Interface kinds. `iftype` says what an interface *is*; use is not encoded here
-// (D-003). Wiring behaviour is derived from it by the compiler.
-const (
-	IftypePhysical     = "physical"
-	IftypeLoopback     = "loopback"
-	IftypeSVI          = "svi"
-	IftypeSubinterface = "subinterface"
-)
-
-// ImplementedIftypes are the kinds the M1 compiler handles. Any other declared kind
-// is an explicit rejection, never a silent fall-through to physical.
-var ImplementedIftypes = map[string]bool{
-	IftypePhysical: true,
-	IftypeLoopback: true,
-}
-
-// KnownIftypes are the kinds the contract declares, implemented or not.
-var KnownIftypes = map[string]bool{
-	IftypePhysical:     true,
-	IftypeLoopback:     true,
-	IftypeSVI:          true,
-	IftypeSubinterface: true,
-}
 
 // Provenance says where one device, interface or link came from (D-010). Every object
 // is Intent at M1; the other two exist because the CTM's reason for being is holding
@@ -62,43 +39,76 @@ const (
 func (p Provenance) IsZero() bool { return p == "" || p == ProvenanceIntent }
 
 // Envelope addresses the intent exactly: which branch, at what instant if the
-// operator pinned one, when it was read, and against which schema and contract
-// (D-012, D-023).
+// operator pinned one, when it was read, against which schema, under which scope, by
+// which mapping, and what that mapping could not carry (D-012, D-023, D-057).
 //
 // `at` is present iff the operator supplied it — Fylgja never invents one.
 // `observed_at` is recorded on every read and never reaches the bundle: it is how the
 // read is reproduced, not part of what was read (Constitution VI, D-023).
 type Envelope struct {
-	Branch          string `json:"branch"`
-	At              string `json:"at,omitempty"`
-	ObservedAt      string `json:"observed_at"`
-	SchemaHash      string `json:"schema_hash"`
-	ContractVersion string `json:"contract_version"`
+	Branch     string `json:"branch"`
+	At         string `json:"at,omitempty"`
+	ObservedAt string `json:"observed_at"`
+	SchemaHash string `json:"schema_hash"`
+	// Scope is the scope the read was made under, tag:<name> (017).
+	Scope string `json:"scope"`
+	// Mapping names the reader that produced this CTM and the model version it read.
+	Mapping Mapping `json:"mapping"`
+	// Fidelity is the reader's list of what it approximated and what it omitted, sorted
+	// by (disposition, object) and written [] rather than null. The compiler copies it
+	// into the manifest unchanged and holds no table of any source's rows (FR-029).
+	Fidelity []FidelityRow `json:"fidelity"`
 }
 
-// Platform is the join key to a Platform Support Package.
+// Mapping says which reader produced a CTM and which version of which model it read:
+// what a CTM's mapping was, which Constitution VI's version of the contract became.
+type Mapping struct {
+	Reader  string `json:"reader"`
+	Model   string `json:"model"`
+	Version string `json:"version"`
+}
+
+// The Infrahub reader of the schema library's DCIM, at the commit it was written
+// against (017).
+const (
+	ReaderInfrahubDCIM = "infrahub-dcim"
+	ModelSchemaLibrary = "opsmill/schema-library"
+	ModelVersion       = "26336e9"
+)
+
+// FidelityRow is one field a reader approximated, or one source object it omitted
+// (Constitution X). Its meaning is the reader's: no other package interprets a row.
+type FidelityRow struct {
+	// Disposition is "approximated" or "omitted".
+	Disposition string `json:"disposition"`
+	// Object is the CTM field approximated, or the source object omitted.
+	Object string `json:"object"`
+	// Source is the source field or kind the row was read from.
+	Source string `json:"source"`
+	Reason string `json:"reason"`
+}
+
+// The two dispositions of a fidelity row.
+const (
+	FidelityApproximated = "approximated"
+	FidelityOmitted      = "omitted"
+)
+
+// Platform names the support package a device's platform resolved to, and the
+// platform's version when the source carries one.
 type Platform struct {
-	Vendor  string `json:"vendor"`
-	NOS     string `json:"nos"`
+	// Package is the package's platform.id.
+	Package string `json:"package"`
 	Version string `json:"version,omitempty"`
-	Model   string `json:"model,omitempty"`
 }
 
-// Address is an interface address. Carried at M1, never configured: startup
-// configuration is platform bootstrap only (Constitution IV).
-type Address struct {
-	CIDR   string `json:"cidr"`
-	Family string `json:"family,omitempty"`
-}
-
-// Interface is one interface in production naming.
+// Interface is one port in production naming: cabled when it terminates a link, the
+// management port when MgmtOnly, configured-not-cabled otherwise. A source's non-port
+// interfaces are never read (017).
 type Interface struct {
 	Name       string     `json:"name"`
-	Iftype     string     `json:"iftype"`
 	MgmtOnly   bool       `json:"mgmt_only"`
 	Enabled    *bool      `json:"enabled,omitempty"`
-	Parent     string     `json:"parent,omitempty"`
-	Addresses  []Address  `json:"addresses,omitempty"`
 	Link       string     `json:"link,omitempty"`
 	Provenance Provenance `json:"provenance,omitzero"`
 }
@@ -110,8 +120,6 @@ func (i Interface) IsEnabled() bool { return i.Enabled == nil || *i.Enabled }
 type Device struct {
 	Name       string      `json:"name"`
 	Platform   Platform    `json:"platform"`
-	Role       string      `json:"role,omitempty"`
-	Site       string      `json:"site,omitempty"`
 	Interfaces []Interface `json:"interfaces"`
 	// Artifact is the rendered configuration this device runs in production (M5,
 	// D-028). Last before Provenance: the canonical encoding follows struct order, so
@@ -184,21 +192,18 @@ type CTM struct {
 }
 
 // Version is the serialized CTM format version.
-const Version = "1"
-
-// ContractVersion is the generics contract this build understands. A branch declaring
-// anything else is rejected before any other rule runs: findings against a contract
-// Fylgja does not understand would be noise.
 //
-// 0.2 at M5: conformance now demands that every kind implementing FylgjaDevice also
-// inherit CoreArtifactTarget, without which no artifact can be rendered for it, so an
-// implementing branch has something new to declare. The generics themselves
-// are unchanged.
+// "2" at 017: the platform is the package it resolved to, every interface is a port, and
+// the envelope carries the scope, the mapping and the fidelity list in place of the
+// generics contract's version (D-057). Nothing converts a "1".
+const Version = "2"
+
+// ContractVersion is the generics contract the generics reader understands. 017
+// removes it with the generics reader's contract check, its last user.
 const ContractVersion = "0.2"
 
-// RequiredGenerics are the generics every conforming schema must have at least one
-// concrete kind implementing. Kept deliberately short: each one is a constraint
-// imposed on somebody else's model.
+// RequiredGenerics are the generics the generics reader's conformance demands. 017
+// removes them with that conformance, their last user.
 var RequiredGenerics = []string{
 	DeviceGeneric,
 	"FylgjaInterface",
@@ -206,17 +211,17 @@ var RequiredGenerics = []string{
 	"FylgjaPlatform",
 }
 
-// ContractKind is the singleton node kind carrying the contract version.
+// ContractKind is the singleton node kind carrying the generics contract's version. 017
+// removes it with the generics reader's contract check.
 const ContractKind = "FylgjaContract"
 
-// DeviceGeneric is the generic a device kind implements; it is the first of
-// RequiredGenerics.
+// DeviceGeneric is the generic a device kind implements under the generics contract.
+// 017 removes it with the generics' stamps and events, its last users.
 const DeviceGeneric = "FylgjaDevice"
 
 // ArtifactTargetGeneric is Infrahub's own generic for a node an artifact can be rendered
-// for. Contract 0.2 demands it of every kind implementing DeviceGeneric: it is
-// not Fylgja's to require of the other generics, and not one of RequiredGenerics,
-// because a kind implementing it and not DeviceGeneric is no concern of Fylgja's.
+// for, which the generics contract demands of every device kind. 017 removes it with the
+// generics reader's conformance.
 const ArtifactTargetGeneric = "CoreArtifactTarget"
 
 // Device returns the named device, or nil.

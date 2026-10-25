@@ -33,7 +33,12 @@ const (
 	// bundle deploys the same twin, but a twin staged from it would have
 	// verify assert a port intent disables, so it is refused as each earlier version is,
 	// naming both.
-	bundleVersion = "4"
+	//
+	// "5" at 017: the provenance names the scope and the mapping the CTM was read under,
+	// a mapping row has no iftype, and fidelity.read carries the reader's list. A "4" was
+	// read through the generics contract, which this build no longer reads, so its
+	// record could say neither; it is refused naming both.
+	bundleVersion = "5"
 )
 
 // ErrInvalid reports a directory that is not a bundle this build can read: no manifest, a

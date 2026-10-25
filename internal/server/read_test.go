@@ -17,12 +17,12 @@ func TestReadSummaryCountsTheLossyRecord(t *testing.T) {
 	for _, c := range []struct {
 		fixture, pspDir, want string
 	}{
-		{"three-node.json", "", "wrote ctm.json: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, " +
+		{"three-node.json", "", "wrote ctm.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, " +
 			"0 lossy mappings, 0 shared ports (branch fylgja-fixture, at 2026-09-08T12:00:00Z, schema fixture)"},
 		{"lossy.json", repoPath("testdata", "psp", "lossy"), "wrote ctm.json: 3 devices (chassisos 2, nokia_srlinux 1), " +
-			"19 interfaces, 3 links, 3 artifacts, 9 lossy mappings, 3 shared ports " +
+			"16 interfaces, 3 links, 3 artifacts, 9 lossy mappings, 3 shared ports " +
 			"(branch lossy-fixture, at 2026-09-19T12:00:00Z, schema fixture)"},
-		{"mixed.json", "", "wrote ctm.json: 3 devices (arista_eos 2, nokia_srlinux 1), 12 interfaces, 3 links, 3 artifacts, " +
+		{"mixed.json", "", "wrote ctm.json: 3 devices (arista_eos 2, nokia_srlinux 1), 9 interfaces, 3 links, 3 artifacts, " +
 			"0 lossy mappings, 0 shared ports (branch mixed-fixture, at 2026-09-20T12:00:00Z, schema fixture)"},
 	} {
 		t.Run(c.fixture, func(t *testing.T) {

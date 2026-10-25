@@ -12,6 +12,7 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
 	"github.com/happypathnetworking/fylgja/internal/compiler"
+	"github.com/happypathnetworking/fylgja/internal/ctm"
 )
 
 // goldens are the three bundles M7 left, the step's inputs; M11 never re-baselined them,
@@ -118,7 +119,8 @@ func TestDiffNamesEachEdit(t *testing.T) {
 				{
 					name: "copies differing in the whole provenance",
 					b: edited(t, a, idB, func(m *compiler.Manifest, _ map[string][]byte) {
-						m.Provenance = compiler.Provenance{Branch: "change-1", SchemaHash: "fe9eca98", ContractVersion: "0.2"}
+						m.Provenance = compiler.Provenance{Branch: "change-1", SchemaHash: "fe9eca98", Scope: "tag:other",
+							Mapping: ctm.Mapping{Reader: "infrahub-generics", Model: "fylgja-generics", Version: "0.2"}}
 					}),
 					want: Step{From: idA, To: idB, Unchanged: true},
 				},
@@ -227,9 +229,9 @@ func addFourthNode(t *testing.T, a Bundle) Bundle {
 		m.Nodes[0].Artifact.Checksum = "9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3"
 		files["configs/n1.cli"] = append(files["configs/n1.cli"], "set / interface ethernet-1/3 admin-state enable\n"...)
 		m.Mapping = append(m.Mapping,
-			compiler.MappingRow{Device: "n1", Interface: "ethernet-1/3", Iftype: "physical", Port: strPtr("e1-3"),
+			compiler.MappingRow{Device: "n1", Interface: "ethernet-1/3", Port: strPtr("e1-3"),
 				NodeName: strPtr("ethernet-1/3"), Disposition: compiler.DispCabled},
-			compiler.MappingRow{Device: "n4", Interface: "ethernet-1/1", Iftype: "physical", Port: strPtr("e1-1"),
+			compiler.MappingRow{Device: "n4", Interface: "ethernet-1/1", Port: strPtr("e1-1"),
 				NodeName: strPtr("ethernet-1/1"), Disposition: compiler.DispCabled})
 		m.Links = append(m.Links, compiler.CabledLink{ID: "n1:ethernet-1/3|n4:ethernet-1/1",
 			A: compiler.NodePort{Node: "n1", Port: "e1-3"}, B: compiler.NodePort{Node: "n4", Port: "e1-1"}})
@@ -251,7 +253,7 @@ func TestDiffNodeAdded(t *testing.T) {
 		LinksAdded: []LinkRef{{ID: "n1:ethernet-1/3|n4:ethernet-1/1",
 			A: NodePort{Node: "n1", Port: "e1-3"}, B: NodePort{Node: "n4", Port: "e1-1"}}},
 		ArtifactsChanged: []ArtifactChange{{Node: "n1", Name: "device-config",
-			From: "43e8fd0c2de5f4646f74a51d34742824", To: "9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3"}},
+			From: "597f6263eb7e0b539679b3956270876f", To: "9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3"}},
 		ArtifactsAdded: []ArtifactRef{{Node: "n4", Name: "device-config"}},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -263,7 +265,7 @@ func TestDiffNodeAdded(t *testing.T) {
 		"step change-1/seeded → change-1/third-link (35aea06f… → 9c2d01e7…):",
 		"  nodes: +n4; ~n1 (bootstrap, mapping)",
 		"  links: +n1:e1-3 — n4:e1-1",
-		"  artifacts: n1 device-config 43e8fd0c… → 9a0177b2…; n4 device-config added",
+		"  artifacts: n1 device-config 597f6263… → 9a0177b2…; n4 device-config added",
 	}, "\n")
 	if text != wantText {
 		t.Errorf("text:\n%s\nwant:\n%s", text, wantText)
@@ -278,7 +280,7 @@ func TestDiffNodeAdded(t *testing.T) {
 		"step change-1/third-link → change-1/seeded (9c2d01e7… → 35aea06f…):",
 		"  nodes: -n4; ~n1 (bootstrap, mapping)",
 		"  links: -n1:e1-3 — n4:e1-1",
-		"  artifacts: n1 device-config 9a0177b2… → 43e8fd0c…; n4 device-config removed",
+		"  artifacts: n1 device-config 9a0177b2… → 597f6263…; n4 device-config removed",
 	}, "\n") {
 		t.Errorf("reversed text:\n%s", text)
 	}
@@ -301,7 +303,7 @@ func TestPairTextOrder(t *testing.T) {
 		"step change-1/seeded → change-1/third-link (35aea06f… → 9c2d01e7…):",
 		"  nodes: -n1; ~n2 (bootstrap)",
 		"  links: unchanged",
-		"  artifacts: n1 device-config removed; n3 device-config ae0c3a87… → 9a0177b2…",
+		"  artifacts: n1 device-config removed; n3 device-config e93df964… → 9a0177b2…",
 	}, "\n")
 	if got := Between("change-1/seeded", "change-1/third-link", s).Text(); got != want {
 		t.Errorf("text:\n%s\nwant:\n%s", got, want)
@@ -504,7 +506,7 @@ func TestPairJSONSatisfiesTheContract(t *testing.T) {
 		})
 	}
 	raw, _ := json.Marshal(Between("change-1/seeded", "change-1/third-link", changed))
-	for _, whole := range []string{idA, idB, "43e8fd0c2de5f4646f74a51d34742824", "9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3"} {
+	for _, whole := range []string{idA, idB, "597f6263eb7e0b539679b3956270876f", "9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3"} {
 		if !strings.Contains(string(raw), `"`+whole+`"`) {
 			t.Errorf("the JSON does not carry %s whole: %s", whole, raw)
 		}
@@ -581,7 +583,7 @@ func TestDiffRefusesABundleFromFormat3(t *testing.T) {
 	now := golden(t, "three-node", idB)
 
 	_, err = Diff(old, now)
-	want := "the from bundle " + idA + `: manifest.json: is bundle version "3"; this build compares "4"`
+	want := "the from bundle " + idA + `: manifest.json: is bundle version "3"; this build compares "5"`
 	if err == nil || err.Error() != want {
 		t.Fatalf("Diff = %v, want %q", err, want)
 	}

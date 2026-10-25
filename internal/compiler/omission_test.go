@@ -123,7 +123,7 @@ func TestUnmappableLinkedIsARejectionNotAnOmission(t *testing.T) {
 				t.Fatal(err)
 			}
 			d := c.Device("n1")
-			pkg, _ := reg.Lookup(d.Platform.NOS)
+			pkg, _ := reg.LookupID(d.Platform.Package)
 			prof, err := psp.NewProfile(pkg)
 			if err != nil {
 				t.Fatal(err)

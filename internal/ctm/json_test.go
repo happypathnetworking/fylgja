@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -15,27 +16,36 @@ func sample() *CTM {
 	f := false
 	return &CTM{
 		Envelope: Envelope{
-			Branch:          "fylgja-fixture",
-			At:              "2026-09-08T12:00:00Z",
-			ObservedAt:      "2026-09-08T12:00:00.000000Z",
-			SchemaHash:      "fixture",
-			ContractVersion: "0.2",
+			Branch:     "fylgja-fixture",
+			At:         "2026-09-08T12:00:00Z",
+			ObservedAt: "2026-09-08T12:00:00.000000Z",
+			SchemaHash: "fixture",
+			Scope:      "tag:fylgja",
+			Mapping:    Mapping{Reader: ReaderInfrahubDCIM, Model: ModelSchemaLibrary, Version: ModelVersion},
+			// Out of order on purpose: Normalize sorts by (disposition, object).
+			Fidelity: []FidelityRow{
+				{Disposition: FidelityOmitted, Object: "platform.version", Source: "DcimPlatform",
+					Reason: "the library's platform carries no version"},
+				{Disposition: FidelityApproximated, Object: "interface.mgmt_only", Source: "InterfacePhysical.role",
+					Reason: "the management port is the port whose role is management; the library has no management-only flag"},
+				{Disposition: FidelityApproximated, Object: "interface.enabled", Source: "InterfacePhysical.status",
+					Reason: "a port is enabled unless its status is disabled; the library's status is not an admin state"},
+			},
 		},
 		Devices: []Device{
 			{
 				Name:     "n2",
-				Platform: Platform{Vendor: "nokia", NOS: "srlinux", Version: "24.7"},
+				Platform: Platform{Package: "nokia_srlinux"},
 				Interfaces: []Interface{
-					{Name: "lo0", Iftype: IftypeLoopback, Addresses: []Address{{CIDR: "10.0.0.2/32"}}},
-					{Name: "ethernet-1/1", Iftype: IftypePhysical, Link: "n1:ethernet-1/1|n2:ethernet-1/1"},
-					{Name: "mgmt0", Iftype: IftypePhysical, MgmtOnly: true, Enabled: &f},
+					{Name: "mgmt0", MgmtOnly: true, Enabled: &f},
+					{Name: "ethernet-1/1", Link: "n1:ethernet-1/1|n2:ethernet-1/1"},
 				},
 			},
 			{
 				Name:     "n1",
-				Platform: Platform{Vendor: "nokia", NOS: "srlinux", Version: "24.7"},
+				Platform: Platform{Package: "nokia_srlinux", Version: "24.7"},
 				Interfaces: []Interface{
-					{Name: "ethernet-1/1", Iftype: IftypePhysical, Link: "n1:ethernet-1/1|n2:ethernet-1/1"},
+					{Name: "ethernet-1/1", Link: "n1:ethernet-1/1|n2:ethernet-1/1"},
 				},
 			},
 		},
@@ -66,8 +76,15 @@ func TestMarshalIsCanonical(t *testing.T) {
 		t.Error("devices are not sorted by name")
 	}
 	// Interfaces sorted within a device.
-	if strings.Index(s, `"ethernet-1/1"`) > strings.Index(s, `"lo0"`) {
+	if strings.Index(s, `"ethernet-1/1"`) > strings.Index(s, `"mgmt0"`) {
 		t.Error("interfaces are not sorted by name")
+	}
+	// The fidelity list sorted by (disposition, object).
+	enabled := strings.Index(s, `"interface.enabled"`)
+	mgmt := strings.Index(s, `"interface.mgmt_only"`)
+	version := strings.Index(s, `"platform.version"`)
+	if enabled < 0 || enabled > mgmt || mgmt > version {
+		t.Error("the fidelity list is not sorted by disposition, then object")
 	}
 	// Endpoints sorted within a link.
 	if strings.Index(s, `"device": "n1"`) > strings.Index(s, `"device": "n2"`) {
@@ -119,8 +136,10 @@ func TestEnvelopeRoundTrips(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := back.Envelope, sample().Envelope; got != want {
-		t.Errorf("envelope round trip: got %+v, want %+v", got, want)
+	want := sample()
+	Normalize(want)
+	if got := back.Envelope; !reflect.DeepEqual(got, want.Envelope) {
+		t.Errorf("envelope round trip: got %+v, want %+v", got, want.Envelope)
 	}
 }
 
@@ -140,12 +159,12 @@ func TestUnpinnedEnvelopeOmitsAt(t *testing.T) {
 
 func TestNormalizeFillsDefaults(t *testing.T) {
 	c, err := Unmarshal([]byte(`{
-      "ctm_version": "1",
+      "ctm_version": "2",
       "envelope": {"branch": "b", "observed_at": "2026-09-08T12:00:00.000000Z",
-        "schema_hash": "fixture", "contract_version": "0.2"},
-      "devices": [{"name": "n1", "platform": {"vendor": "nokia", "nos": "srlinux"},
-        "interfaces": [{"name": "lo0", "iftype": "loopback",
-          "addresses": [{"cidr": "2001:db8::1/128"}, {"cidr": "10.0.0.1/32"}]}]}],
+        "schema_hash": "fixture", "scope": "tag:fylgja",
+        "mapping": {"reader": "infrahub-dcim", "model": "opsmill/schema-library", "version": "26336e9"}},
+      "devices": [{"name": "n1", "platform": {"package": "nokia_srlinux"},
+        "interfaces": [{"name": "ethernet-1/1"}]}],
       "links": []}`))
 	if err != nil {
 		t.Fatal(err)
@@ -154,11 +173,15 @@ func TestNormalizeFillsDefaults(t *testing.T) {
 	if !in.IsEnabled() {
 		t.Error("enabled should default to true")
 	}
-	if got := in.Addresses[0]; got.CIDR != "10.0.0.1/32" || got.Family != "ipv4" {
-		t.Errorf("addresses not sorted or family not derived: %+v", got)
+	if c.Envelope.Fidelity == nil || len(c.Envelope.Fidelity) != 0 {
+		t.Errorf("a CTM with no fidelity list should read as [], got %#v", c.Envelope.Fidelity)
 	}
-	if got := in.Addresses[1].Family; got != "ipv6" {
-		t.Errorf("ipv6 family not derived, got %q", got)
+	b, err := Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(b, []byte(`"fidelity": []`)) {
+		t.Errorf("an empty fidelity list must be written [], never null or omitted:\n%s", b)
 	}
 }
 
@@ -240,8 +263,9 @@ func TestNormalizeIsIdempotent(t *testing.T) {
 }
 
 func TestUnmarshalRejectsUnknownField(t *testing.T) {
-	_, err := Unmarshal([]byte(`{"ctm_version":"1","envelope":{"branch":"b","observed_at":"x",
-	  "schema_hash":"h","contract_version":"0.2"},"devices":[],"links":[],"typo":true}`))
+	_, err := Unmarshal([]byte(`{"ctm_version":"2","envelope":{"branch":"b","observed_at":"x",
+	  "schema_hash":"h","scope":"tag:fylgja","mapping":{"reader":"r","model":"m","version":"v"},
+	  "fidelity":[]},"devices":[],"links":[],"typo":true}`))
 	if err == nil {
 		t.Error("expected an unknown field to be rejected")
 	}
@@ -251,7 +275,7 @@ func TestUnmarshalRejectsUnknownField(t *testing.T) {
 // a CTM carrying the old top-level `provenance` block must fail loudly, not read as one
 // with no envelope at all.
 func TestUnmarshalRejectsTheOldProvenanceBlock(t *testing.T) {
-	_, err := Unmarshal([]byte(`{"ctm_version":"1","provenance":{"source":"fixture","at":"x",
+	_, err := Unmarshal([]byte(`{"ctm_version":"2","provenance":{"source":"fixture","at":"x",
 	  "contract_version":"0.2"},"devices":[],"links":[]}`))
 	if err == nil {
 		t.Error("expected the old top-level `provenance` block to be rejected")
@@ -259,10 +283,37 @@ func TestUnmarshalRejectsTheOldProvenanceBlock(t *testing.T) {
 }
 
 func TestUnmarshalRejectsUnsupportedVersion(t *testing.T) {
-	_, err := Unmarshal([]byte(`{"ctm_version":"2","envelope":{"branch":"b","observed_at":"x",
-	  "schema_hash":"h","contract_version":"0.2"},"devices":[],"links":[]}`))
+	_, err := Unmarshal([]byte(`{"ctm_version":"3","envelope":{"branch":"b","observed_at":"x",
+	  "schema_hash":"h","scope":"tag:fylgja","mapping":{"reader":"r","model":"m","version":"v"},
+	  "fidelity":[]},"devices":[],"links":[]}`))
 	if err == nil {
 		t.Error("expected an unsupported ctm_version to be rejected")
+	}
+}
+
+// A CTM "1" is refused for its version, naming both, and not for the first of its
+// fields "2" lacks (contract_version, iftype): nothing converts one (FR-028). The
+// fixture is a "1" as the last build of that format wrote it, valid against the frozen
+// copy of its contract, so the refusal is of a real "1" and not of a malformed file.
+func TestVersion1IsRefused(t *testing.T) {
+	path := filepath.Join("..", "..", "testdata", "ctm", "defects", "version-1.json")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	frozen := compileSchemaAt(t, filepath.Join("testdata", "contracts", "017-dcim-reader", "ctm.schema.json"))
+	if err := frozen.Validate(asAny(t, b)); err != nil {
+		t.Fatalf("version-1.json must be a valid CTM 1 (the frozen contract):\n%v", err)
+	}
+	_, err = Unmarshal(b)
+	if err == nil {
+		t.Fatal("a CTM 1 must be refused")
+	}
+	if got, want := err.Error(), `unsupported ctm_version "1", expected "2"`; got != want {
+		t.Errorf("refusal = %q, want %q", got, want)
+	}
+	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), `ctm_version "1"`) {
+		t.Errorf("Load of a CTM 1 = %v, want the version refusal", err)
 	}
 }
 
@@ -276,11 +327,14 @@ func TestCanonicalLinkIDIsOrderIndependent(t *testing.T) {
 
 func compileCTMSchema(t *testing.T) *jsonschema.Schema {
 	t.Helper()
+	// The current contract, under the module root's contracts/: only the current copy
+	// describes what this build writes. The "1" is frozen under testdata/contracts/.
+	return compileSchemaAt(t, filepath.Join("..", "..", "contracts", "ctm.schema.json"))
+}
+
+func compileSchemaAt(t *testing.T, path string) *jsonschema.Schema {
+	t.Helper()
 	const name = "ctm.schema.json"
-	// The current contract, under the module root's contracts/: the format gained
-	// `artifact` on a device at M5, which M1's copy forbids by additionalProperties, so
-	// only the current copy describes what this build writes, as for the findings schema.
-	path := filepath.Join("..", "..", "contracts", name)
 	f, err := os.Open(path)
 	if err != nil {
 		t.Fatalf("opening %s: %v", path, err)
@@ -288,15 +342,15 @@ func compileCTMSchema(t *testing.T) *jsonschema.Schema {
 	defer func() { _ = f.Close() }()
 	doc, err := jsonschema.UnmarshalJSON(f)
 	if err != nil {
-		t.Fatalf("parsing %s: %v", name, err)
+		t.Fatalf("parsing %s: %v", path, err)
 	}
 	c := jsonschema.NewCompiler()
 	if err := c.AddResource(name, doc); err != nil {
-		t.Fatalf("adding %s: %v", name, err)
+		t.Fatalf("adding %s: %v", path, err)
 	}
 	s, err := c.Compile(name)
 	if err != nil {
-		t.Fatalf("compiling %s (a consumer could not load this schema): %v", name, err)
+		t.Fatalf("compiling %s (a consumer could not load this schema): %v", path, err)
 	}
 	return s
 }
@@ -369,13 +423,13 @@ func TestMarshalledCTMSatisfiesContract(t *testing.T) {
 // Intent arriving from Infrahub is not schema-checked on the way in, so Fylgja cannot
 // rely on the serialization format to keep malformed shapes out -- it has to reject
 // them itself, by rule, naming the object. These fixtures are how those rules stay
-// under test: a link with one endpoint, which `minItems` forbids, and an iftype the
-// contract never declared, which the enum forbids. Both are shapes a branch can
-// genuinely hold.
+// under test: a link with one endpoint, which `minItems` forbids, a shape a branch can
+// genuinely hold. version-1.json is a CTM "1", which this contract does not describe
+// and Unmarshal refuses (TestVersion1IsRefused).
 var deliberatelyInvalidFixtures = map[string]bool{
 	"five.json":              true, // a link with one endpoint
 	"link-one-endpoint.json": true, // the same, alone
-	"iftype-undeclared.json": true, // an iftype outside the contract's vocabulary
+	"version-1.json":         true, // a CTM "1", valid against the frozen copy alone
 }
 
 // The exemption is asserted rather than assumed: if one of these ever became schema
@@ -389,8 +443,8 @@ func TestMalformedFixturesAreDeliberatelyInvalid(t *testing.T) {
 				t.Fatal(err)
 			}
 			if err := schema.Validate(asAny(t, b)); err == nil {
-				t.Errorf("%s is expected to be schema-invalid (it exercises link.endpoints.count); "+
-					"if it has been corrected, that rule has lost its fixture", name)
+				t.Errorf("%s is expected to be schema-invalid (it exercises link.endpoints.count or the "+
+					"version refusal); if it has been corrected, that rule has lost its fixture", name)
 			}
 		})
 	}

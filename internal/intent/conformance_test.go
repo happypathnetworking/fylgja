@@ -259,6 +259,21 @@ func edges(nodes []any) map[string]any {
 	return map[string]any{"edges": out}
 }
 
+// genericsPlatform is the generics' vendor and nos of a CTM "2" package, as the bridged
+// reader (017's T023) reads them back: every CTM fixture's device is served as the
+// generics model holds it, each interface a physical one.
+func genericsPlatform(pkg string) (vendor, nos string) {
+	switch pkg {
+	case "nokia_srlinux":
+		return "nokia", "srlinux"
+	case "arista_eos":
+		return "arista", "eos"
+	case "chassisos":
+		return "example", "chassisos"
+	}
+	return pkg, pkg
+}
+
 // devicePage is one page holding every device, each as the reference kind NetworkDevice.
 func (f *fakeInfrahub) devicePage() map[string]any {
 	nodes := make([]any, 0, len(f.devices))
@@ -269,19 +284,15 @@ func (f *fakeInfrahub) devicePage() map[string]any {
 			if in.Link != "" {
 				link = map[string]any{"__typename": "NetworkLink", "id": in.Link}
 			}
-			var parent any
-			if in.Parent != "" {
-				parent = map[string]any{"__typename": "NetworkInterface", "name": value(in.Parent)}
-			}
 			enabled := in.Enabled == nil || *in.Enabled
 			ifaces = append(ifaces, map[string]any{
 				"__typename": "NetworkInterface",
 				"id":         d.Name + ":" + in.Name,
 				"name":       value(in.Name),
-				"iftype":     value(in.Iftype),
+				"iftype":     value("physical"),
 				"mgmt_only":  value(in.MgmtOnly),
 				"enabled":    value(enabled),
-				"parent":     map[string]any{"node": parent},
+				"parent":     map[string]any{"node": nil},
 				"addresses":  edges(nil),
 				"link":       map[string]any{"node": link},
 			})
@@ -297,18 +308,19 @@ func (f *fakeInfrahub) devicePage() map[string]any {
 				"definition":   map[string]any{"node": map[string]any{"artifact_name": value(a.DefinitionName)}},
 			})
 		}
+		vendor, nos := genericsPlatform(d.Platform.Package)
 		nodes = append(nodes, map[string]any{
 			"__typename": "NetworkDevice",
 			"id":         "id-" + d.Name,
 			"name":       value(d.Name),
-			"role":       value(d.Role),
-			"site":       value(d.Site),
+			"role":       value(""),
+			"site":       value(""),
 			"platform": map[string]any{"node": map[string]any{
 				"__typename": "NetworkPlatform",
-				"vendor":     value(d.Platform.Vendor),
-				"nos":        value(d.Platform.NOS),
+				"vendor":     value(vendor),
+				"nos":        value(nos),
 				"version":    value(d.Platform.Version),
-				"model":      value(d.Platform.Model),
+				"model":      value(""),
 			}},
 			"interfaces": edges(ifaces),
 			"artifacts":  edges(arts),

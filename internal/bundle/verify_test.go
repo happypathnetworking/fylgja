@@ -1,6 +1,7 @@
 package bundle
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io/fs"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/compiler"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // goldenThreeNode is the fixture bundle's directory and the identity it hashes to.
@@ -170,15 +172,15 @@ func TestVerifyRefusals(t *testing.T) {
 		editManifest(t, dir, func(m map[string]any) {
 			m["nodes"].([]any)[0].(map[string]any)["artifact"].(map[string]any)["checksum"] = strings.Repeat("0", 32)
 		})
-		wantInvalid(t, dir, "n1", "configs/n1.device-config", "hashes to 43e8fd0c2de5f4646f74a51d34742824",
+		wantInvalid(t, dir, "n1", "configs/n1.device-config", "hashes to 597f6263eb7e0b539679b3956270876f",
 			"not the checksum 00000000000000000000000000000000")
 	})
 	t.Run("an artifact file whose length is not its entry's size", func(t *testing.T) {
 		dir := copyGolden(t, "b")
 		editManifest(t, dir, func(m map[string]any) {
-			m["nodes"].([]any)[2].(map[string]any)["artifact"].(map[string]any)["size"] = 860
+			m["nodes"].([]any)[2].(map[string]any)["artifact"].(map[string]any)["size"] = 706
 		})
-		wantInvalid(t, dir, "n3", "configs/n3.device-config", "is 861 bytes", "not the size 860")
+		wantInvalid(t, dir, "n3", "configs/n3.device-config", "is 707 bytes", "not the size 706")
 	})
 	// A "3" manifest promises a bootstrap entry for every node (manifest.schema.json
 	// requires `bootstrap`). On a node whose bootstrap reaches it
@@ -213,8 +215,9 @@ func TestVerifyRefusals(t *testing.T) {
 	// configuration file at all; a "2" carries one but nothing that says how each node's
 	// bootstrap reaches it, so its push nodes would boot with containerlab's default
 	// alone; a "3" says nothing of which ports intent disables, so verify would assert
-	// them. None is deployable by this build, and none may fail late.
-	for _, have := range []string{"1", "2", "3"} {
+	// them; a "4" was read through the generics and names no scope or mapping. None is
+	// deployable by this build, and none may fail late.
+	for _, have := range []string{"1", "2", "3", "4"} {
 		t.Run("a bundle from format "+have, func(t *testing.T) {
 			dir := copyGolden(t, "b")
 			path := filepath.Join(dir, "manifest.json")
@@ -243,9 +246,9 @@ func TestVerifyRefusals(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		mustWrite(t, path, strings.Replace(string(b), `"bundle_version": "4"`, `"bundle_version": "3"`, 1))
+		mustWrite(t, path, strings.Replace(string(b), `"bundle_version": "5"`, `"bundle_version": "3"`, 1))
 		_, err = Verify(dir)
-		if want := dir + ` is bundle_version "3"; this build deploys bundle_version "4"`; err == nil || err.Error() != want {
+		if want := dir + ` is bundle_version "3"; this build deploys bundle_version "5"`; err == nil || err.Error() != want {
 			t.Fatalf("Verify = %v, want %q", err, want)
 		}
 	})
@@ -259,11 +262,39 @@ func TestVerifyRefusals(t *testing.T) {
 			t.Fatal(err)
 		}
 		mustWrite(t, path, strings.Replace(string(b),
-			`"bundle_version": "`+bundleVersion+`"`, `"bundle_version": "5"`, 1))
+			`"bundle_version": "`+bundleVersion+`"`, `"bundle_version": "6"`, 1))
 		_, err = Verify(dir)
 		var unsupported *ErrVersionUnsupported
-		if !errors.As(err, &unsupported) || unsupported.Have != "5" || unsupported.Want != bundleVersion {
-			t.Fatalf("Verify = %v, want *ErrVersionUnsupported naming 5 and %s", err, bundleVersion)
+		if !errors.As(err, &unsupported) || unsupported.Have != "6" || unsupported.Want != bundleVersion {
+			t.Fatalf("Verify = %v, want *ErrVersionUnsupported naming 6 and %s", err, bundleVersion)
+		}
+	})
+	// A real "4": the three-node golden's manifest as the last build of that format wrote
+	// it (contract 0.2, an iftype on every row), valid against the frozen copy of its
+	// contract, so the refusal is of a bundle a v0.2 host deployed and not of an edited
+	// "5". twin provision reports it as bundle.version.unsupported naming both.
+	t.Run("a manifest 4 as the last build of that format wrote it", func(t *testing.T) {
+		b, err := os.ReadFile(filepath.Join("testdata", "three-node-4.manifest.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		frozen := compileManifestSchema(t, filepath.Join("testdata", "contracts", "017-dcim-reader", "manifest.schema.json"))
+		v, err := jsonschema.UnmarshalJSON(bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := frozen.Validate(v); err != nil {
+			t.Fatalf("three-node-4.manifest.json is not a valid manifest 4:\n%v", err)
+		}
+		dir := copyGolden(t, "b")
+		mustWrite(t, filepath.Join(dir, "manifest.json"), string(b))
+		_, err = Verify(dir)
+		var unsupported *ErrVersionUnsupported
+		if !errors.As(err, &unsupported) || unsupported.Have != "4" || unsupported.Want != bundleVersion {
+			t.Fatalf("Verify = %v, want *ErrVersionUnsupported naming 4 and %s", err, bundleVersion)
+		}
+		if want := dir + ` is bundle_version "4"; this build deploys bundle_version "5"`; err.Error() != want {
+			t.Errorf("Verify = %q, want %q", err, want)
 		}
 	})
 	t.Run("bytes altered under the identity they were stored as", func(t *testing.T) {
@@ -291,6 +322,29 @@ func TestVerifyRefusals(t *testing.T) {
 			t.Errorf("Verify = %v, want a plain error: nothing was examined", err)
 		}
 	})
+}
+
+func compileManifestSchema(t *testing.T, path string) *jsonschema.Schema {
+	t.Helper()
+	const name = "manifest.schema.json"
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	doc, err := jsonschema.UnmarshalJSON(f)
+	if err != nil {
+		t.Fatalf("parsing %s: %v", path, err)
+	}
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource(name, doc); err != nil {
+		t.Fatal(err)
+	}
+	s, err := c.Compile(name)
+	if err != nil {
+		t.Fatalf("compiling %s: %v", path, err)
+	}
+	return s
 }
 
 func wantInvalid(t *testing.T, dir string, says ...string) {

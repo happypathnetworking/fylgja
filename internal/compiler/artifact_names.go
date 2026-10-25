@@ -22,10 +22,9 @@ import (
 //
 // One warning per row of the device whose disposition is omitted, or whose node name is
 // present and differs from the production name, and only where the artifact actually
-// names it. A row with no port draws nothing even though its node name is nil: the twin
-// gives it no port, so the node calls it nothing at all, and its own disposition already
-// says so. Without that exception every loopback in
-// every artifact would warn.
+// names it. An interface the CTM does not carry has no row and draws nothing: a loopback,
+// which a CTM "2" never holds, is configured by the artifact and has no port to name.
+// Otherwise every loopback in every artifact would warn.
 //
 // It is worded here, once, for both callers: validation files these at step read and the
 // compiler at step compile, and an operator must not be able to tell from the message

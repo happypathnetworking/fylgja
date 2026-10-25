@@ -113,7 +113,7 @@ func TestDryRunCountsTheLossyRecord(t *testing.T) {
 		err = dryRunReport(context.Background(), testOptions(t, false), findings.OpTwinCreate, &findings.Subject{Branch: c.Envelope.Branch},
 			reg, paths, dir, lossyID, read, nil, follow)
 	})
-	want := "read: 3 devices (chassisos 2, nokia_srlinux 1), 19 interfaces, 3 links, 3 artifacts, " +
+	want := "read: 3 devices (chassisos 2, nokia_srlinux 1), 16 interfaces, 3 links, 3 artifacts, " +
 		"9 lossy mappings, 3 shared ports (branch lossy-fixture, at 2026-09-19T12:00:00Z, schema fixture)\n"
 	if code, _ := exitOf(t, err); code != findings.ExitOK || !strings.Contains(out, "\n"+want) {
 		t.Errorf("exit %d, stdout:\n%s\nwant %q", code, out, want)

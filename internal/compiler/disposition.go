@@ -20,7 +20,6 @@ const (
 type MappingRow struct {
 	Device    string `json:"device"`
 	Interface string `json:"interface"`
-	Iftype    string `json:"iftype"`
 	MgmtOnly  bool   `json:"mgmt_only"`
 	// Enabled is the interface's intent admin state (ctm.Interface.IsEnabled), written
 	// true or false on every row from bundle "4". A row read from a "3" manifest has no

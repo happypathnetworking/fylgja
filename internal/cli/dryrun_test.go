@@ -173,7 +173,7 @@ func TestProvisionDryRunOnAClearHost(t *testing.T) {
 			t.Errorf("node %+v, want the SR Linux image, package and budget", n)
 		}
 		// What would be pushed, as the manifest names it.
-		want := findings.DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[n.Name], Size: 861}
+		want := findings.DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[n.Name], Size: 707}
 		if n.Artifact == nil || *n.Artifact != want {
 			t.Errorf("node %s artifact %+v, want %+v", n.Name, n.Artifact, want)
 		}
@@ -228,9 +228,9 @@ func TestProvisionDryRunTextReport(t *testing.T) {
 		"dry run: no lab, container, twin directory or run is created",
 		"bundle_id " + fixtureBundleID + "  stored: " + filepath.Join(paths.Bundles, fixtureBundleID),
 		"nodes:",
-		"  n1  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n1"] + " (861 bytes)",
-		"  n2  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n2"] + " (861 bytes)",
-		"  n3  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n3"] + " (861 bytes)",
+		"  n1  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n1"] + " (707 bytes)",
+		"  n2  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n2"] + " (707 bytes)",
+		"  n3  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n3"] + " (707 bytes)",
 		"mapping: 0 lossy mappings, 0 shared ports",
 		"memory: sum 6144 MiB; host budget unset",
 		"host: lab fylgja absent; twin directory absent",
@@ -498,6 +498,7 @@ func TestCreateDryRunFromAStage(t *testing.T) {
 	pc.BranchedFrom, pc.CreatedAt = "2026-09-01T00:00:00.000000+00:00", "2026-09-01T00:00:00.000000+00:00"
 	f.start()
 
+	readID := bridgedFixtureBundleID(t)
 	var err error
 	out := captureStdout(t, func() {
 		err = runCreate(context.Background(), &options{}, &createFlags{stage: "fylgja-fixture/cabled", dryRun: true})
@@ -509,9 +510,9 @@ func TestCreateDryRunFromAStage(t *testing.T) {
 	for i, want := range []string{
 		`stage fylgja-fixture/cabled: branch fylgja-fixture at 2026-09-08T12:00:00Z (given), "the leaf cabled"`,
 		"dry run: no lab, container, twin directory or run is created",
-		"read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports " +
+		"read: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports " +
 			"(branch fylgja-fixture, at 2026-09-08T12:00:00Z, schema fixture)",
-		"bundle_id " + fixtureBundleID + "  stored: " + filepath.Join(paths.Bundles, fixtureBundleID),
+		"bundle_id " + readID + "  stored: " + filepath.Join(paths.Bundles, readID),
 	} {
 		if i >= len(lines) || lines[i] != want {
 			t.Errorf("stdout line %d is not %q:\n%s", i+1, want, out)
@@ -538,7 +539,7 @@ func TestCreateDryRunFromAStage(t *testing.T) {
 	want := findings.StageBlock{Ref: "fylgja-fixture/cabled", Branch: "fylgja-fixture", Label: "cabled",
 		ProposedChange: findings.StageChange{ID: "pc-1", Name: "change pc-1", Branch: "fylgja-fixture"},
 		At:             fixtureAt, AtSource: findings.AtSourceGiven, Description: "the leaf cabled"}
-	if code != findings.ExitOK || doc.BundleID != fixtureBundleID || doc.Stage == nil || *doc.Stage != want ||
+	if code != findings.ExitOK || doc.BundleID != readID || doc.Stage == nil || *doc.Stage != want ||
 		doc.DryRun == nil || doc.DryRun.Follow == nil || doc.DryRun.Follow.Reason != findings.FollowReasonStage ||
 		doc.Subject.Stage != "fylgja-fixture/cabled" || doc.Subject.Branch != "fylgja-fixture" || doc.Subject.At != fixtureAt {
 		t.Errorf("exit %d, document %+v; want 0 naming the golden bundle, the stage and the reason stage", code, doc)

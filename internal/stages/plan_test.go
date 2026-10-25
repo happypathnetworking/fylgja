@@ -56,7 +56,7 @@ func (f *fakePipeline) pipeline() Pipeline {
 				c.Links = c.Links[:len(c.Links)-1]
 			}
 			if f.unsupported[branch] {
-				c.Devices[0].Platform.NOS = "nosuch"
+				c.Devices[0].Platform.Package = "nosuch"
 			}
 			return c, f.readWarnings[branch], nil
 		},
@@ -151,7 +151,7 @@ func TestPlanStages(t *testing.T) {
 		t.Errorf("live → head: %+v; want unchanged between the two ids", s)
 	}
 	if st := res.Stages[2]; st.Description != "after its configuration is live" || st.AtSource != AtGiven ||
-		st.Read.Counts != (intent.Counts{Devices: 3, Interfaces: 12, Links: 3, Artifacts: 3}) || st.BundleID() != ids[1] {
+		st.Read.Counts != (intent.Counts{Devices: 3, Interfaces: 9, Links: 3, Artifacts: 3}) || st.BundleID() != ids[1] {
 		t.Errorf("live: %+v, read %+v", st, st.Read)
 	}
 	mustHoldTheStagesFindings(t, res)

@@ -16,8 +16,10 @@ import (
 // is wrong, so naming the object is as much the contract as naming the rule.
 //
 // The table is exhaustive over testdata/ctm/defects/ except five.json, which carries
-// five defects at once and belongs to TestAllDefectsReportedInOnePass. A fixture added
-// to that directory without a row here fails TestEveryDefectFixtureIsCovered.
+// five defects at once and belongs to TestAllDefectsReportedInOnePass, and
+// version-1.json, a CTM "1" no rule here reads, which ctm.Unmarshal refuses
+// (TestVersion1IsRefused). A fixture added to that directory without a row here fails
+// TestEveryDefectFixtureIsCovered.
 var singleDefects = []struct {
 	fixture string
 	rule    string
@@ -25,16 +27,10 @@ var singleDefects = []struct {
 }{
 	{"device-duplicate.json", findings.RuleDeviceNameDuplicate, "n1"},
 	{"devices-empty.json", findings.RuleDevicesEmpty, "fylgja-fixture"},
-	{"iftype-subinterface.json", findings.RuleIftypeUnimplemented, "n1:lo0"},
-	{"iftype-undeclared.json", findings.RuleIftypeUnimplemented, "n1:lo0"},
-	{"iftype-unimplemented.json", findings.RuleIftypeUnimplemented, "n1:lo0"},
-	{"link-endpoint-loopback.json", findings.RuleLinkEndpointIftype, "n1:ethernet-1/1|n2:ethernet-1/1"},
 	{"link-one-endpoint.json", findings.RuleLinkEndpointsCount, "n1:ethernet-1/1|n2:ethernet-1/1"},
 	{"link-same-device.json", findings.RuleLinkEndpointsSameDev, "n1:ethernet-1/1|n1:ethernet-1/2"},
-	{"mgmt-only-loopback.json", findings.RuleMgmtOnlyIftype, "n2:lo0"},
-	{"parent-missing.json", findings.RuleParentMissing, "n1:lo0"},
 	{"platform-unsupported.json", findings.RulePlatformUnsupported, "n2"},
-	{"required-missing.json", findings.RuleRequiredMissing, "n3"},
+	{"required-missing.json", findings.RuleRequiredMissing, "envelope.schema_hash"},
 
 	// What the mapping profile cannot map. port-collision.json is
 	// on the design-case platform; the others are SR Linux's.
@@ -96,7 +92,10 @@ func TestSingleDefectFixtures(t *testing.T) {
 
 // A defect fixture with no row above would be a file nobody asserts anything about.
 func TestEveryDefectFixtureIsCovered(t *testing.T) {
-	covered := map[string]bool{"five.json": true} // covered by TestAllDefectsReportedInOnePass
+	covered := map[string]bool{
+		"five.json":      true, // covered by TestAllDefectsReportedInOnePass
+		"version-1.json": true, // covered by internal/ctm's TestVersion1IsRefused
+	}
 	for _, tc := range singleDefects {
 		covered[tc.fixture] = true
 	}
@@ -112,34 +111,6 @@ func TestEveryDefectFixtureIsCovered(t *testing.T) {
 			t.Errorf("testdata/ctm/defects/%s has no row in singleDefects: "+
 				"a defect fixture nothing asserts on is a fixture that has stopped testing anything", e.Name())
 		}
-	}
-}
-
-// Both halves of `interface.iftype.unimplemented` are exercised: a kind the contract
-// declares but M1 does not implement, and a kind the contract never declared. They are
-// one rule with two messages, and conflating them would let an undeclared kind fall
-// through to physical -- wiring a twin nobody asked for (D-004).
-func TestUnimplementedAndUndeclaredIftypesAreDistinguished(t *testing.T) {
-	for _, tc := range []struct {
-		fixture string
-		message string
-	}{
-		{"iftype-subinterface.json", "reserved in the contract but not implemented"},
-		{"iftype-unimplemented.json", "reserved in the contract but not implemented"},
-		{"iftype-undeclared.json", "not in the contract"},
-	} {
-		t.Run(tc.fixture, func(t *testing.T) {
-			c, reg := load(t, "defects/"+tc.fixture)
-			var found bool
-			for _, f := range Validate(c, reg) {
-				if f.Rule == findings.RuleIftypeUnimplemented && strings.Contains(f.Message, tc.message) {
-					found = true
-				}
-			}
-			if !found {
-				t.Errorf("no %s finding whose message contains %q", findings.RuleIftypeUnimplemented, tc.message)
-			}
-		})
 	}
 }
 

@@ -139,28 +139,60 @@ func TestLossyGoldenManifestSatisfiesContract(t *testing.T) {
 // that such a bundle stayed byte-identical to M5's and no golden or following twin moved
 // for the upgrade; that exception was written to expire with the next bundle_version
 // bump, and this is it. The schema now requires both, so an absence is refused rather
-// than read as "none".
+// than read as "none". two-mgmt.json is the fixture with nothing lossy and a row with no
+// port, its second management port, since every interface of a CTM "2" is a port and the
+// three-node fixture's every row has one. Bundle "5"'s fidelity.read is required alike.
 func TestNothingLossyStillCarriesBothFields(t *testing.T) {
 	schema := compileSchema(t, "manifest.schema.json")
-	files := compileFixture(t, "testdata/ctm/three-node.json")
+	files := compileFixture(t, "testdata/ctm/two-mgmt.json")
 	manifest := files[ManifestFile]
 	for _, field := range []string{`"lossy": []`, `"node_name": null`} {
 		if !bytes.Contains(manifest, []byte(field)) {
-			t.Errorf("the three-node manifest does not carry %s:\n%s", field, manifest)
+			t.Errorf("the two-mgmt manifest does not carry %s:\n%s", field, manifest)
 		}
 	}
-	mustValidate(t, schema, manifest, "three-node manifest with an empty lossy record")
+	mustValidate(t, schema, manifest, "two-mgmt manifest with an empty lossy record")
 
-	without := bytes.Replace(manifest, []byte(`    "omitted": [],
-    "lossy": []
-  }`), []byte(`    "omitted": []
-  }`), 1)
-	if bytes.Equal(without, manifest) {
-		t.Fatal("could not remove fidelity.lossy from the manifest; the test needs updating")
+	for _, field := range []string{"lossy", "read"} {
+		start := bytes.Index(manifest, []byte(`    "`+field+`": [`))
+		if start < 0 {
+			t.Fatalf("could not find fidelity.%s in the manifest; the test needs updating", field)
+		}
+		without := removeMember(manifest, start)
+		if err := schema.Validate(asAny(t, without)); err == nil {
+			t.Errorf("a manifest without fidelity.%s satisfied manifest.schema.json; the contract requires it", field)
+		}
 	}
-	if err := schema.Validate(asAny(t, without)); err == nil {
-		t.Error("a manifest without fidelity.lossy satisfied manifest.schema.json; the contract requires it from bundle 3")
+}
+
+// removeMember drops the object member starting at start, a key at the manifest's
+// fidelity depth, with the comma that separates it from its neighbour.
+func removeMember(doc []byte, start int) []byte {
+	depth, end := 0, start
+	for i := bytes.IndexByte(doc[start:], '[') + start; i < len(doc); i++ {
+		switch doc[i] {
+		case '[', '{':
+			depth++
+		case ']', '}':
+			depth--
+		}
+		if depth == 0 {
+			end = i + 1
+			break
+		}
 	}
+	out := append([]byte{}, doc[:start]...)
+	rest := doc[end:]
+	if bytes.HasPrefix(rest, []byte(",\n")) {
+		rest = rest[2:]
+	} else {
+		// The last member: drop the comma before it instead.
+		out = bytes.TrimRight(out, " \n")
+		out = bytes.TrimSuffix(out, []byte(","))
+		out = append(out, '\n')
+		rest = bytes.TrimLeft(rest, "\n")
+	}
+	return append(out, rest...)
 }
 
 // `basis` is `const: "asserted"` in the schema, so a manifest that does not say

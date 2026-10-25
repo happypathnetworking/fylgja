@@ -72,11 +72,10 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 	profs := make([]*psp.Profile, len(c.Devices))
 	surveys := make([]DeviceSurvey, len(c.Devices))
 	for i, d := range c.Devices {
-		p, ok := reg.Lookup(d.Platform.NOS)
+		p, ok := reg.LookupID(d.Platform.Package)
 		if !ok {
 			// Validation rejects this first; reaching it means the two disagree.
-			list.Add(findings.Rejection, findings.RulePlatformUnsupported, d.Name,
-				fmt.Sprintf("no support package for platform %q", d.Platform.NOS))
+			list.Add(findings.Rejection, findings.RulePlatformUnsupported, d.Name, UnsupportedPackage(d.Platform.Package, reg))
 			return nil, list
 		}
 		prof, err := psp.NewProfile(p)
@@ -85,10 +84,6 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 			return nil, list
 		}
 		survey := SurveyDevice(d, prof, p.Platform.ID)
-		if survey.Err != nil {
-			list.Add(findings.Rejection, findings.RuleIftypeUnimplemented, d.Name, survey.Err.Error())
-			return nil, list
-		}
 		list = append(list, survey.Refusals...)
 		// The artifact's names against the rows, filed with this device's refusals and
 		// before any rejection ends the pass: a warning never refuses a bundle,
@@ -184,7 +179,7 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 
 		mNodes = append(mNodes, ManifestNode{
 			Name:           d.Name,
-			Platform:       d.Platform.NOS,
+			Platform:       p.Platform.NOS,
 			PSP:            ManifestPSP{ID: p.Platform.ID, Source: p.Origin},
 			Image:          p.Image.Ref,
 			ManagementPort: prof.ManagementPort(),
@@ -245,6 +240,10 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 			Approximations:       approx,
 			Omitted:              omitted,
 			Lossy:                lossy,
+			// The reader's list, copied verbatim: what the source's mapping could not
+			// carry is the reader's to say, and the compiler holds no table of any
+			// source's rows (FR-029).
+			Read: c.Envelope.Fidelity,
 		},
 	}
 	manifestBytes, err := marshalManifest(manifest)
@@ -269,6 +268,16 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 		files[path.Join(ConfigsDir, cfg.Name)] = cfg.Content
 	}
 	return files, list
+}
+
+// UnsupportedPackage words platform.unsupported for a device whose package the registry
+// lacks, naming the package and the registry's. Validation files it and the compiler's
+// guard mirrors it, so the two callers word it alike.
+func UnsupportedPackage(pkg string, reg *psp.Registry) string {
+	if pkg == "" {
+		return fmt.Sprintf("device names no support package; supported: %v", reg.IDs())
+	}
+	return fmt.Sprintf("no support package %q; supported: %v", pkg, reg.IDs())
 }
 
 // ConfigFile is one node's startup configuration within the bundle.

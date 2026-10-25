@@ -211,7 +211,7 @@ func TestAnUnsupportedPlatformIsNotAlsoArtifactMissing(t *testing.T) {
 	c, reg := fixtureWithout(t, "n2")
 	for i := range c.Devices {
 		if c.Devices[i].Name == "n2" {
-			c.Devices[i].Platform.NOS = "acme_os"
+			c.Devices[i].Platform.Package = "acme_os"
 		}
 	}
 	for label, list := range map[string]findings.List{

@@ -22,9 +22,9 @@ func mixedLinkAdded(t *testing.T, a Bundle) Bundle {
 		}
 		files["configs/s1.cli"] = append(files["configs/s1.cli"], "set / interface ethernet-1/3 admin-state enable\n"...)
 		m.Mapping = append(m.Mapping,
-			compiler.MappingRow{Device: "e1", Interface: "Ethernet3", Iftype: "physical", Port: strPtr("eth3"),
+			compiler.MappingRow{Device: "e1", Interface: "Ethernet3", Port: strPtr("eth3"),
 				NodeName: strPtr("Ethernet3"), Disposition: compiler.DispCabled},
-			compiler.MappingRow{Device: "s1", Interface: "ethernet-1/3", Iftype: "physical", Port: strPtr("e1-3"),
+			compiler.MappingRow{Device: "s1", Interface: "ethernet-1/3", Port: strPtr("e1-3"),
 				NodeName: strPtr("ethernet-1/3"), Disposition: compiler.DispCabled})
 		m.Links = append(m.Links, compiler.CabledLink{ID: "e1:Ethernet3|s1:ethernet-1/3",
 			A: compiler.NodePort{Node: "e1", Port: "eth3"}, B: compiler.NodePort{Node: "s1", Port: "e1-3"}})

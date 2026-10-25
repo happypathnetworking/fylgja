@@ -112,9 +112,9 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
 	// The scope is the record's (017): until twin.json 8 carries provenance.scope (T025) and
-	// the step reads it from there (T046), the step reads under none, which the generics
-	// reader does not filter by.
-	ch, list, err := stages.Find(ctx, reader, intentStamper{}, rec.Stage.ProposedChange.Branch, "")
+	// the step reads it from there (T046), the step reads under the server's default, which
+	// the bridged generics reader records in the CTM 2 envelope and does not filter by.
+	ch, list, err := stages.Find(ctx, reader, intentStamper{}, rec.Stage.ProposedChange.Branch, opts.c.s.DefaultScope)
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}

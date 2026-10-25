@@ -30,7 +30,10 @@ func checkEnvelope(c *ctm.CTM, list *findings.List) {
 		{"branch", c.Envelope.Branch, "the branch intent was read from is not recorded"},
 		{"observed_at", c.Envelope.ObservedAt, "the instant intent was read is not recorded"},
 		{"schema_hash", c.Envelope.SchemaHash, "the schema intent was read against is not recorded"},
-		{"contract_version", c.Envelope.ContractVersion, "the contract version intent conforms to is not recorded"},
+		{"scope", c.Envelope.Scope, "the scope intent was read under is not recorded"},
+		{"mapping.reader", c.Envelope.Mapping.Reader, "the reader that mapped intent is not recorded"},
+		{"mapping.model", c.Envelope.Mapping.Model, "the model the reader read is not recorded"},
+		{"mapping.version", c.Envelope.Mapping.Version, "the version of the model the reader read is not recorded"},
 	} {
 		if f.value == "" {
 			list.Add(findings.Rejection, findings.RuleRequiredMissing, "envelope."+f.name, f.why)
@@ -78,17 +81,13 @@ func checkDevices(c *ctm.CTM, reg *psp.Registry, list *findings.List) {
 		}
 		seen[d.Name] = true
 
-		if d.Platform.NOS == "" {
-			list.Add(findings.Rejection, findings.RuleRequiredMissing, d.Name,
-				"device has no platform")
-			continue
-		}
-		p, ok := reg.Lookup(d.Platform.NOS)
+		p, ok := reg.LookupID(d.Platform.Package)
 		if !ok {
 			// Missing support is data that has not been written, not a code path
-			// (Constitution II). Say which platform, so the fix is obvious.
-			list.Add(findings.Rejection, findings.RulePlatformUnsupported, d.Name, fmt.Sprintf(
-				"no support package for platform %q; supported: %v", d.Platform.NOS, reg.Platforms()))
+			// (Constitution II). Say which package, so the fix is obvious. A reader
+			// writes the package a device's platform matched, so a CTM naming none, or
+			// one this build lacks, was written by hand or by another build.
+			list.Add(findings.Rejection, findings.RulePlatformUnsupported, d.Name, compiler.UnsupportedPackage(d.Platform.Package, reg))
 			continue
 		}
 		prof, err := psp.NewProfile(p)
@@ -103,10 +102,9 @@ func checkDevices(c *ctm.CTM, reg *psp.Registry, list *findings.List) {
 // checkInterfaces validates one device's interfaces.
 func checkInterfaces(d ctm.Device, prof *psp.Profile, pspID string, list *findings.List) {
 	// What the profile cannot map, decided by the one function the compiler also calls,
-	// so a CTM that reads clean compiles and each refusal is worded alike. An
-	// interface of an iftype no disposition exists for is the survey's Err, named below
-	// as interface.iftype.unimplemented. A refusal naming one interface is filed with
-	// that interface's other findings; any other is filed after them.
+	// so a CTM that reads clean compiles and each refusal is worded alike. A refusal
+	// naming one interface is filed with that interface's other findings; any other is
+	// filed after them.
 	refusals := map[string]findings.List{}
 	var unplaced findings.List
 	objects := map[string]bool{}
@@ -133,10 +131,6 @@ func checkInterfaces(d ctm.Device, prof *psp.Profile, pspID string, list *findin
 		}
 	}
 
-	names := map[string]bool{}
-	for _, in := range d.Interfaces {
-		names[in.Name] = true
-	}
 	for _, in := range d.Interfaces {
 		object := d.Name + ":" + in.Name
 		if in.Name == "" {
@@ -144,33 +138,6 @@ func checkInterfaces(d ctm.Device, prof *psp.Profile, pspID string, list *findin
 				"an interface has no name")
 			continue
 		}
-		switch {
-		case in.Iftype == "":
-			list.Add(findings.Rejection, findings.RuleRequiredMissing, object,
-				"interface has no iftype")
-		case !ctm.KnownIftypes[in.Iftype]:
-			list.Add(findings.Rejection, findings.RuleIftypeUnimplemented, object, fmt.Sprintf(
-				"iftype %q is not in the contract", in.Iftype))
-		case !ctm.ImplementedIftypes[in.Iftype]:
-			// The contract declares the vocabulary; the compiler implements a subset.
-			// An unimplemented kind rejects explicitly rather than falling through to
-			// physical, which would wire a twin nobody asked for (D-004).
-			list.Add(findings.Rejection, findings.RuleIftypeUnimplemented, object, fmt.Sprintf(
-				"iftype %q is reserved in the contract but not implemented at M1", in.Iftype))
-		}
-
-		// `mgmt_only` marks an out-of-band *port*. On anything that is not a port it
-		// says nothing meaningful, so it is a defect rather than a hint.
-		if in.MgmtOnly && in.Iftype != "" && in.Iftype != ctm.IftypePhysical {
-			list.Add(findings.Rejection, findings.RuleMgmtOnlyIftype, object, fmt.Sprintf(
-				"mgmt_only is set on an interface of iftype %q; only a physical port can be out-of-band", in.Iftype))
-		}
-
-		if in.Parent != "" && !names[in.Parent] {
-			list.Add(findings.Rejection, findings.RuleParentMissing, object, fmt.Sprintf(
-				"parent %q is not an interface on %s", in.Parent, d.Name))
-		}
-
 		*list = append(*list, refusals[object]...)
 		delete(refusals, object)
 	}
@@ -202,16 +169,9 @@ func checkLinks(c *ctm.CTM, list *findings.List) {
 					"endpoint names device %q, which is not in intent", e.Device))
 				continue
 			}
-			in := dev.Interface(e.Interface)
-			if in == nil {
+			if dev.Interface(e.Interface) == nil {
 				list.Add(findings.Rejection, findings.RuleRequiredMissing, l.ID, fmt.Sprintf(
 					"endpoint names interface %q, which is not on %s", e.Interface, e.Device))
-				continue
-			}
-			// Only a physical port can be cabled. A loopback has nothing to plug in.
-			if in.Iftype != ctm.IftypePhysical {
-				list.Add(findings.Rejection, findings.RuleLinkEndpointIftype, l.ID, fmt.Sprintf(
-					"endpoint %s has iftype %q; only a physical interface can be cabled", e.ID(), in.Iftype))
 			}
 		}
 	}

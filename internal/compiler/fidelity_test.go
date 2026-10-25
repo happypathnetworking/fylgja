@@ -5,6 +5,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -75,25 +76,26 @@ func twoPlatformCTM() *ctm.CTM {
 	return &ctm.CTM{
 		CTMVersion: ctm.Version,
 		Envelope: ctm.Envelope{
-			Branch:          "fylgja-fixture",
-			ObservedAt:      "2026-09-08T12:00:00.000000Z",
-			SchemaHash:      "fixture",
-			ContractVersion: ctm.ContractVersion,
+			Branch:     "fylgja-fixture",
+			ObservedAt: "2026-09-08T12:00:00.000000Z",
+			SchemaHash: "fixture",
+			Scope:      "tag:fylgja",
+			Mapping:    ctm.Mapping{Reader: ctm.ReaderInfrahubDCIM, Model: ctm.ModelSchemaLibrary, Version: ctm.ModelVersion},
 		},
 		Devices: []ctm.Device{
 			{
 				Name:     "n1",
-				Platform: ctm.Platform{Vendor: "nokia", NOS: "srlinux"},
+				Platform: ctm.Platform{Package: "nokia_srlinux"},
 				Interfaces: []ctm.Interface{
-					{Name: "ethernet-1/1", Iftype: ctm.IftypePhysical},
+					{Name: "ethernet-1/1"},
 				},
 				Artifact: testArtifact("n1"),
 			},
 			{
 				Name:     "n2",
-				Platform: ctm.Platform{Vendor: "acme", NOS: "acme_os"},
+				Platform: ctm.Platform{Package: "acme_os"},
 				Interfaces: []ctm.Interface{
-					{Name: "ethernet-1/1", Iftype: ctm.IftypePhysical},
+					{Name: "ethernet-1/1"},
 				},
 				Artifact: testArtifact("n2"),
 			},
@@ -160,5 +162,55 @@ func TestMatchingForwardingCompilesAcrossPlatforms(t *testing.T) {
 	}
 	if platforms != 2 {
 		t.Errorf("approximations name %d of 2 platforms: %v", platforms, m.Fidelity.Approximations)
+	}
+}
+
+// The reader's fidelity list reaches the manifest unchanged, and the compiler holds no
+// table of any source's rows (FR-029; R-07): it copies a row it has never seen, and no
+// file of the package names one of the Infrahub reader's reasons.
+func TestManifestCopiesTheFidelityList(t *testing.T) {
+	c := loadFixture(t, "testdata/ctm/three-node.json")
+	invented := ctm.FidelityRow{
+		Disposition: ctm.FidelityOmitted,
+		Object:      "cable zz-invented-17",
+		Source:      "SomeSourceKind",
+		Reason:      "an invented reason the compiler has never seen, of a source it does not know",
+	}
+	c.Envelope.Fidelity = append(c.Envelope.Fidelity, invented)
+	// The list in its canonical order, (disposition, object), as any CTM is compiled.
+	ctm.Normalize(c)
+	want := append([]ctm.FidelityRow{}, c.Envelope.Fidelity...)
+
+	files, list := Compile(c, embeddedRegistry(t))
+	if list.Rejected() {
+		t.Fatalf("refused: %v", list)
+	}
+	var m Manifest
+	if err := json.Unmarshal(files[ManifestFile], &m); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(m.Fidelity.Read, want) {
+		t.Errorf("fidelity.read = %+v, want the CTM's list verbatim %+v", m.Fidelity.Read, want)
+	}
+
+	// The three rows every read of the Infrahub reader carries (contracts/mapping.md §5),
+	// which the fixture holds: none is the compiler's to write.
+	entries, err := os.ReadDir(".")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, row := range c.Envelope.Fidelity {
+		for _, e := range entries {
+			if !strings.HasSuffix(e.Name(), ".go") || strings.HasSuffix(e.Name(), "_test.go") {
+				continue
+			}
+			b, err := os.ReadFile(e.Name())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if strings.Contains(string(b), row.Reason) {
+				t.Errorf("%s holds the reader's reason %q; the compiler copies the list and writes no row", e.Name(), row.Reason)
+			}
+		}
 	}
 }

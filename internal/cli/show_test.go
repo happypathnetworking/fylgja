@@ -46,7 +46,7 @@ func twinOf(t *testing.T, change func(*lab.RecordFields)) wire.TwinRecord {
 	for _, n := range []string{"n1", "n2", "n3"} {
 		f.Nodes = append(f.Nodes, wire.TwinNode{Name: n, Container: "clab-fylgja-" + n,
 			Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
-			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[n], Size: 861},
+			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[n], Size: 707},
 			PushedInS: 0.7})
 	}
 	if change != nil {
@@ -180,9 +180,9 @@ func lines(l ...string) string { return strings.Join(l, "\n") + "\n" }
 // and the artifact twin.json records for it, by name and checksum (M5
 // contracts/cli.md, twin show).
 const threeNodes = "twin: lab fylgja present (3 nodes); twin directory present\n" +
-	"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux  device-config 43e8fd0c2de5f4646f74a51d34742824\n" +
-	"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config ecb03029ea805a09c54d2cd6a0e59ac9\n" +
-	"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config ae0c3a87085839354cbb2ca10f71e487\n"
+	"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux  device-config 597f6263eb7e0b539679b3956270876f\n" +
+	"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config 5ac21560015ad6bb1e881358115d0b7a\n" +
+	"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config e93df96400ddbada7daa1a0777d9d3e3\n"
 
 // threeBareNodes is the twin line with no twin.json to name what the nodes were pushed.
 const threeBareNodes = "twin: lab fylgja present (3 nodes); twin directory present\n" +

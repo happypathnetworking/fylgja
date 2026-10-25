@@ -19,7 +19,9 @@ func TestRejectionLeavesNothingBehind(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+		// version-1.json is a CTM "1", a file this build does not read rather than intent
+		// it refuses (TestAnotherCTMVersionIsRefusedBeforeValidation).
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") || e.Name() == "version-1.json" {
 			continue
 		}
 		t.Run(e.Name(), func(t *testing.T) {
@@ -75,9 +77,9 @@ func TestFiveDefectsGiveFiveFindings(t *testing.T) {
 	sort.Strings(got)
 	want := []string{
 		"device.name.duplicate n1",
-		"interface.iftype.unimplemented n1:lo0",
-		"interface.mgmt_only.iftype n3:lo0",
+		"interface.rule.unmatched n1:Ethernet99",
 		"link.endpoints.count n1:ethernet-1/1|n2:ethernet-1/1",
+		"link.endpoints.same_device n3:ethernet-1/1|n3:ethernet-1/2",
 		"platform.unsupported n2",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {

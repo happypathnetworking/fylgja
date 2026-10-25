@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	"github.com/happypathnetworking/fylgja"
-	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/psp"
@@ -64,7 +63,7 @@ func TestStalePerDevice(t *testing.T) {
 		{name: "a platform edited after the checksum names each device on it", stamps: func() intent.Stamps {
 			s := edited("n1", "n3")
 			d := s.Devices["n2"]
-			d.Platform = ctm.Platform{Vendor: "arista", NOS: "eos", Version: "4.32.0.2F"}
+			d.NOS = "eos"
 			s.Devices["n2"] = d
 			return s
 		}(), stale: []string{"n1", "n3"}, validator: true},
@@ -76,15 +75,15 @@ func TestStalePerDevice(t *testing.T) {
 		}()},
 		{name: "no artifact, no finding", stamps: func() intent.Stamps {
 			s := edited("n1", "n2")
-			s.Devices["n1"] = intent.DeviceStamps{Platform: s.Devices["n1"].Platform, Intent: t1, Artifacts: map[string]string{}}
-			s.Devices["n2"] = intent.DeviceStamps{Platform: s.Devices["n2"].Platform, Intent: t1,
+			s.Devices["n1"] = intent.DeviceStamps{NOS: s.Devices["n1"].NOS, Intent: t1, Artifacts: map[string]string{}}
+			s.Devices["n2"] = intent.DeviceStamps{NOS: s.Devices["n2"].NOS, Intent: t1,
 				Artifacts: map[string]string{"other-config": t0}}
 			return s
 		}()},
 		{name: "a platform no package covers is the read's", stamps: func() intent.Stamps {
 			s := edited("n1")
 			d := s.Devices["n1"]
-			d.Platform.NOS = "nosuch"
+			d.NOS = "nosuch"
 			s.Devices["n1"] = d
 			return s
 		}()},
@@ -238,7 +237,7 @@ func TestStaleNamesTheArtifactByThePackage(t *testing.T) {
 	}
 
 	acme := func(intentAt string, artifacts map[string]string) intent.DeviceStamps {
-		return intent.DeviceStamps{Platform: ctm.Platform{Vendor: "acme", NOS: "acme_os"}, Intent: intentAt, Artifacts: artifacts}
+		return intent.DeviceStamps{NOS: "acme_os", Intent: intentAt, Artifacts: artifacts}
 	}
 	stamps := intent.Stamps{Latest: tm, Devices: map[string]intent.DeviceStamps{
 		// device-config is fresh and acme-config stale: a stale acme device.

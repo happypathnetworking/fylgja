@@ -26,34 +26,43 @@ import (
 // node lost. A reader of a "3" manifest takes every row as enabled, the
 // CTM's own default; the deploy refuses one, as it refused each earlier format.
 //
+// "5" at 017: the provenance names the scope the read was made under and the mapping
+// that produced the CTM in place of the generics contract's version, a mapping row loses
+// `iftype` because every interface is a port, and fidelity.read carries the reader's own
+// list of what it approximated and omitted, copied from the CTM (D-057). A "4" bundle
+// was read through the generics, so it is refused as each earlier version is.
+//
 // bundle.Verify accepts this version alone and refuses any other naming both.
-const BundleVersion = "4"
+const BundleVersion = "5"
 
 // FidelityAsserted is the only basis Fylgja can claim at M1.
 const FidelityAsserted = "asserted"
 
 // Provenance is the intent's address: which branch, pinned to what instant if the
-// operator pinned one, against which schema and contract.
+// operator pinned one, against which schema, under which scope, and read by which
+// mapping.
 //
-// It is the CTM envelope minus `observed_at`. When the read happened is a property of
-// the read, not of the intent, and putting it here would make every bundle of the same
-// intent a different bundle (Constitution VI; D-023). Nothing about the host, the
-// clock or the build appears either — a version stamp would change bundle_id on every
-// release.
+// It is the CTM envelope minus `observed_at` and its fidelity list, which the manifest
+// carries as fidelity.read. When the read happened is a property of the read, not of the
+// intent, and putting it here would make every bundle of the same intent a different
+// bundle (Constitution VI; D-023). Nothing about the host, the clock or the build appears
+// either — a version stamp would change bundle_id on every release.
 type Provenance struct {
-	Branch          string `json:"branch"`
-	At              string `json:"at,omitempty"`
-	SchemaHash      string `json:"schema_hash"`
-	ContractVersion string `json:"contract_version"`
+	Branch     string      `json:"branch"`
+	At         string      `json:"at,omitempty"`
+	SchemaHash string      `json:"schema_hash"`
+	Scope      string      `json:"scope"`
+	Mapping    ctm.Mapping `json:"mapping"`
 }
 
 // provenanceOf copies the addressing half of a CTM envelope into the manifest.
 func provenanceOf(e ctm.Envelope) Provenance {
 	return Provenance{
-		Branch:          e.Branch,
-		At:              e.At,
-		SchemaHash:      e.SchemaHash,
-		ContractVersion: e.ContractVersion,
+		Branch:     e.Branch,
+		At:         e.At,
+		SchemaHash: e.SchemaHash,
+		Scope:      e.Scope,
+		Mapping:    e.Mapping,
 	}
 }
 
@@ -137,6 +146,10 @@ type Fidelity struct {
 	// M5's and no golden or following twin moved for the upgrade; that exception was
 	// written to expire with the next bundle_version bump, and this is it (D-025).
 	Lossy []LossyMapping `json:"lossy"`
+	// Read is the reader's list of what its mapping approximated and omitted, the CTM
+	// envelope's fidelity copied verbatim from bundle "5": the compiler knows no row's
+	// meaning and holds no table of them (FR-029). [] only for a reader that wrote none.
+	Read []ctm.FidelityRow `json:"read"`
 }
 
 // LossyMapping is one interface a lossy rule mapped, or whose port another interface of
@@ -232,6 +245,9 @@ func marshalManifest(m *Manifest) ([]byte, error) {
 	}
 	if m.Fidelity.Lossy == nil {
 		m.Fidelity.Lossy = []LossyMapping{}
+	}
+	if m.Fidelity.Read == nil {
+		m.Fidelity.Read = []ctm.FidelityRow{}
 	}
 
 	b, err := json.MarshalIndent(m, "", "  ")

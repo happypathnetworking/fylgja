@@ -30,12 +30,8 @@ const (
 	RuleRequiredMissing      = "data.required.missing"
 	RuleDeviceNameDuplicate  = "device.name.duplicate"
 	RulePlatformUnsupported  = "platform.unsupported"
-	RuleIftypeUnimplemented  = "interface.iftype.unimplemented"
-	RuleMgmtOnlyIftype       = "interface.mgmt_only.iftype"
-	RuleParentMissing        = "interface.parent.missing"
 	RuleLinkEndpointsCount   = "link.endpoints.count"
 	RuleLinkEndpointsSameDev = "link.endpoints.same_device"
-	RuleLinkEndpointIftype   = "link.endpoint.iftype"
 	RuleUnmappableLinked     = "interface.unmappable.linked"
 	// RuleDevicesEmpty rejects a CTM with no devices: an empty read is almost always
 	// a wrong `at`, and a manifest for zero nodes has no value for

@@ -45,38 +45,38 @@ func eosArtifact(device string) *ctm.Artifact {
 }
 
 // eosOnlyCTM is two EOS devices and one link between them: e1 carries a name of each of
-// the profile's three data shapes plus its management interface, e2 the far end and a
-// loopback no rule matches. Built here rather than kept on disk, because nothing about
+// the profile's three data shapes plus its management interface, e2 the far end. Built
+// here rather than kept on disk, because nothing about
 // it is a fixture anyone else reads: it tests the EOS package on its own, and the mixed
 // twin, which does have a golden, tests two platforms in one twin.
 func eosOnlyCTM() *ctm.CTM {
 	return &ctm.CTM{
 		CTMVersion: ctm.Version,
 		Envelope: ctm.Envelope{
-			Branch:          "fylgja-fixture",
-			ObservedAt:      "2026-09-20T12:00:00.000000Z",
-			SchemaHash:      "fixture",
-			ContractVersion: ctm.ContractVersion,
+			Branch:     "fylgja-fixture",
+			ObservedAt: "2026-09-20T12:00:00.000000Z",
+			SchemaHash: "fixture",
+			Scope:      "tag:fylgja",
+			Mapping:    ctm.Mapping{Reader: ctm.ReaderInfrahubDCIM, Model: ctm.ModelSchemaLibrary, Version: ctm.ModelVersion},
 		},
 		Devices: []ctm.Device{
 			{
 				Name:     "e1",
-				Platform: ctm.Platform{Vendor: "arista", NOS: "eos", Version: "4.32"},
+				Platform: ctm.Platform{Package: "arista_eos"},
 				Interfaces: []ctm.Interface{
-					{Name: "Ethernet1", Iftype: ctm.IftypePhysical, Link: "e1-e2"},
-					{Name: "Ethernet2/1", Iftype: ctm.IftypePhysical},
-					{Name: "Ethernet3/1/1", Iftype: ctm.IftypePhysical},
-					{Name: "Management1", Iftype: ctm.IftypePhysical, MgmtOnly: true},
+					{Name: "Ethernet1", Link: "e1-e2"},
+					{Name: "Ethernet2/1"},
+					{Name: "Ethernet3/1/1"},
+					{Name: "Management1", MgmtOnly: true},
 				},
 				Artifact: eosArtifact("e1"),
 			},
 			{
 				Name:     "e2",
-				Platform: ctm.Platform{Vendor: "arista", NOS: "eos", Version: "4.32"},
+				Platform: ctm.Platform{Package: "arista_eos"},
 				Interfaces: []ctm.Interface{
-					{Name: "Ethernet1", Iftype: ctm.IftypePhysical, Link: "e1-e2"},
-					{Name: "Loopback0", Iftype: ctm.IftypeLoopback},
-					{Name: "Management1", Iftype: ctm.IftypePhysical, MgmtOnly: true},
+					{Name: "Ethernet1", Link: "e1-e2"},
+					{Name: "Management1", MgmtOnly: true},
 				},
 				Artifact: eosArtifact("e2"),
 			},

@@ -138,12 +138,43 @@ func pinnedCTM(t *testing.T, path string) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
+	bridged(c)
 	c.Envelope.ObservedAt = "2026-09-28T00:00:00.000000Z"
 	b, err := ctm.Marshal(c)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return b
+}
+
+// bridged makes a fixture what the harness's read returns of it until 017's T039 reads the
+// library's DCIM (T023's bridge): the fake serves the fixture in the generics' shapes, and
+// the bridged generics reader records their mapping and writes no fidelity row. T043
+// removes it with the generics' answers.
+func bridged(c *ctm.CTM) {
+	c.Envelope.Mapping = ctm.Mapping{Reader: "infrahub-generics", Model: "fylgja-generics", Version: ctm.ContractVersion}
+	c.Envelope.Fidelity = []ctm.FidelityRow{}
+}
+
+// bridgedFixtureBundleID is the bundle the harness's read of the three-node fixture
+// compiles to while the reader is bridged: the golden's intent under the generics'
+// mapping, with no fidelity row (bridged).
+func bridgedFixtureBundleID(t *testing.T) string {
+	t.Helper()
+	c, err := ctm.Load(repoPath("testdata", "ctm", "three-node.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bridged(c)
+	reg, err := psp.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, id, list := stage.Compile(c, reg)
+	if list.Rejected() {
+		t.Fatalf("the bridged fixture was refused: %v", list)
+	}
+	return id
 }
 
 // compiledCTM compiles the CTM at path on the stage pipeline twin compile and a run share
@@ -193,7 +224,7 @@ func TestReadFromAStageIsThePinnedRead(t *testing.T) {
 				t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
 			}
 			want := block.Line() + "\n" +
-				"wrote " + byStage + ": 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, " +
+				"wrote " + byStage + ": 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, " +
 				"0 shared ports (stage " + ref + ": branch fylgja-fixture, at " + c.at + ", schema fixture)\n"
 			if out != want {
 				t.Errorf("stdout:\n%s\nwant:\n%s", out, want)

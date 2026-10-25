@@ -107,7 +107,7 @@ func TestSeededDefectsAreAllReportedInOnePass(t *testing.T) {
 		}
 		if f.Severity != string(findings.Rejection) {
 			if f.Severity != string(findings.Warning) || f.Rule != findings.RuleArtifactInterfaceUnrepresented ||
-				f.Object != testsupport.SeededDefectObjects[findings.RuleMgmtOnlyIftype] {
+				f.Object != testsupport.SeededDefectObjects[testsupport.DefectMgmtOnlyIftype] {
 				t.Errorf("finding %s on %s is %s; the only finding here that is not a rejection is "+
 					"%s on the out-of-band loopback", f.Rule, f.Object, f.Severity, findings.RuleArtifactInterfaceUnrepresented)
 			}

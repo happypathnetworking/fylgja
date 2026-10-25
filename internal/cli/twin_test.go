@@ -6,83 +6,26 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 )
 
-// ctmWithContractVersion writes three-node.json with a different contract version and
-// nothing else changed, so the only thing the compiler can object to is the version.
-func ctmWithContractVersion(t *testing.T, version string) string {
-	t.Helper()
-	b, err := os.ReadFile(repoPath("testdata", "ctm", "three-node.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := strings.Replace(string(b),
-		`"contract_version": "`+ctm.ContractVersion+`"`,
-		`"contract_version": "`+version+`"`, 1)
-	if out == string(b) {
-		t.Fatalf("could not rewrite the contract version in the fixture")
-	}
-	path := filepath.Join(t.TempDir(), "other-contract.json")
-	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	return path
-}
-
-// A CTM conforming to a contract this build does not understand is rejected by that
-// rule alone, naming both versions. Reporting it beside other findings would dress up
-// noise as detail: every other rule would be judging a model Fylgja cannot interpret.
-func TestContractVersionMismatchIsReportedAlone(t *testing.T) {
-	path := ctmWithContractVersion(t, "9.9")
+// A CTM of another version is refused before any rule runs, naming both versions, and
+// nothing is written: every other finding would be about a format this build does not
+// read. A CTM "2" carries no contract version; its own version is the contract's
+// (D-057), so the generics contract's check has nothing left to check. Until 017's T042
+// files it as ctm.version.unsupported at the file, exit 1, the refusal is the read's
+// failure to decode the file.
+func TestAnotherCTMVersionIsRefusedBeforeValidation(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "b")
-
-	code, doc := runCompileTo(t, path, out)
-	if code != 1 {
-		t.Fatalf("exit %d, want 1 (a rejection)", code)
+	code, doc := runCompileTo(t, repoPath("testdata", "ctm", "defects", "version-1.json"), out)
+	if code != findings.ExitError {
+		t.Fatalf("exit %d, want %d", code, findings.ExitError)
 	}
-	if len(doc.Findings) != 1 {
-		t.Fatalf("got %d findings, want exactly 1:\n%+v", len(doc.Findings), doc.Findings)
-	}
-	f := doc.Findings[0]
-	if f.Rule != findings.RuleContractVersionMismatch {
-		t.Errorf("rule = %q, want %q", f.Rule, findings.RuleContractVersionMismatch)
-	}
-	if f.Severity != string(findings.Rejection) {
-		t.Errorf("severity = %q, want a rejection", f.Severity)
-	}
-	for _, want := range []string{"9.9", ctm.ContractVersion} {
-		if !strings.Contains(f.Message, want) {
-			t.Errorf("message %q does not name %q", f.Message, want)
-		}
+	if len(doc.Findings) != 1 || doc.Findings[0].Message != `unsupported ctm_version "1", expected "2"` {
+		t.Errorf("findings %+v, want the one refusal naming both versions", doc.Findings)
 	}
 	if _, err := os.Stat(out); !os.IsNotExist(err) {
-		t.Errorf("a rejected compile wrote something to %s", out)
-	}
-}
-
-// The check runs before validate.Validate, not inside it: a CTM that is both on the
-// wrong contract and full of other defects reports the version and nothing else.
-func TestContractVersionIsCheckedBeforeValidation(t *testing.T) {
-	b, err := os.ReadFile(repoPath("testdata", "ctm", "defects", "five.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	out := strings.Replace(string(b),
-		`"contract_version": "`+ctm.ContractVersion+`"`, `"contract_version": "9.9"`, 1)
-	path := filepath.Join(t.TempDir(), "five-other-contract.json")
-	if err := os.WriteFile(path, []byte(out), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	code, doc := runCompileTo(t, path, filepath.Join(t.TempDir(), "b"))
-	if code != 1 {
-		t.Fatalf("exit %d, want 1", code)
-	}
-	if len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleContractVersionMismatch {
-		t.Errorf("a CTM on the wrong contract reported %d findings; validation ran anyway:\n%+v",
-			len(doc.Findings), doc.Findings)
+		t.Errorf("a refused compile wrote something to %s", out)
 	}
 }
 

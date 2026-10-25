@@ -128,18 +128,13 @@ func dedupe(add, have findings.List) findings.List {
 // (internal/findings).
 const artifactRules = "artifact."
 
-// CheckContract rejects a CTM conforming to a contract this build does not understand,
-// naming object as the thing at fault. It is reported alone: every other finding would
-// be about a model this build cannot interpret.
-func CheckContract(c *ctm.CTM, object string) findings.List {
-	if c.Envelope.ContractVersion == ctm.ContractVersion {
-		return nil
-	}
-	var list findings.List
-	list.Add(findings.Rejection, findings.RuleContractVersionMismatch, object,
-		"CTM declares contract version "+c.Envelope.ContractVersion+
-			", this build understands "+ctm.ContractVersion)
-	return list
+// CheckContract rejected a CTM "1" declaring a generics contract this build did not
+// understand, naming object as the thing at fault. A CTM "2" declares no contract
+// version: its own version is the contract's, and ctm.Unmarshal refuses any other,
+// naming both (D-057). So it refuses nothing, and 017's T042 removes it with
+// contract.version.mismatch.
+func CheckContract(_ *ctm.CTM, _ string) findings.List {
+	return nil
 }
 
 // Compile turns a CTM into a bundle's files and identity. Validation runs first and its

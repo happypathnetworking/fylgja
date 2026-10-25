@@ -288,7 +288,7 @@ func stagedTarget(dir, target string) (*StagedTarget, error) {
 	if err != nil {
 		return nil, fmt.Errorf("the staged target bundle %s: %v", target, err)
 	}
-	t := &StagedTarget{BundleID: id, Provenance: wire.Provenance(m.Provenance),
+	t := &StagedTarget{BundleID: id, Provenance: recordProvenance(m.Provenance),
 		PSP: map[string]wire.PSPRef{}, Artifacts: map[string]*wire.TwinArtifact{}}
 	for _, n := range m.Nodes {
 		t.PSP[n.Name] = wire.PSPRef{ID: n.PSP.ID, Source: n.PSP.Source}

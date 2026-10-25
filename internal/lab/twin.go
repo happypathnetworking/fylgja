@@ -205,7 +205,7 @@ func (a *Activities) RecordTwin(_ context.Context, in wire.RecordInput) (wire.Re
 
 	rec, err := NewRecord(RecordFields{
 		BundleID:   in.BundleID,
-		Provenance: wire.Provenance(m.Provenance),
+		Provenance: recordProvenance(m.Provenance),
 		ObservedAt: in.ObservedAt,
 		Source:     in.Source,
 		RunID:      in.RunID,

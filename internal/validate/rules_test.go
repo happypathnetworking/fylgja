@@ -78,12 +78,10 @@ func TestDefectsAreNamed(t *testing.T) {
 		fixture string
 		rule    string
 	}{
-		{"defects/iftype-unimplemented.json", findings.RuleIftypeUnimplemented},
 		{"defects/platform-unsupported.json", findings.RulePlatformUnsupported},
 		{"defects/device-duplicate.json", findings.RuleDeviceNameDuplicate},
 		{"defects/link-one-endpoint.json", findings.RuleLinkEndpointsCount},
-		{"defects/mgmt-only-loopback.json", findings.RuleMgmtOnlyIftype},
-		{"defects/link-endpoint-loopback.json", findings.RuleLinkEndpointIftype},
+		{"defects/link-same-device.json", findings.RuleLinkEndpointsSameDev},
 	}
 	for _, tc := range cases {
 		t.Run(tc.fixture, func(t *testing.T) {
@@ -115,11 +113,11 @@ func TestAllDefectsReportedInOnePass(t *testing.T) {
 	list := Validate(c, reg)
 
 	want := map[string]string{
-		findings.RuleDeviceNameDuplicate: "n1",
-		findings.RuleIftypeUnimplemented: "n1:lo0",
-		findings.RuleMgmtOnlyIftype:      "n3:lo0",
-		findings.RuleLinkEndpointsCount:  "n1:ethernet-1/1|n2:ethernet-1/1",
-		findings.RulePlatformUnsupported: "n2",
+		findings.RuleDeviceNameDuplicate:    "n1",
+		findings.RuleInterfaceRuleUnmatched: "n1:Ethernet99",
+		findings.RuleLinkEndpointsSameDev:   "n3:ethernet-1/1|n3:ethernet-1/2",
+		findings.RuleLinkEndpointsCount:     "n1:ethernet-1/1|n2:ethernet-1/1",
+		findings.RulePlatformUnsupported:    "n2",
 	}
 	got := map[string]string{}
 	for _, f := range list {
@@ -158,7 +156,9 @@ func TestOmissionsDoNotReject(t *testing.T) {
 }
 
 // A required attribute left unpopulated must name both the object and what is missing,
-// so the fix is obvious from the report alone.
+// so the fix is obvious from the report alone. In a CTM "2" the fixture's is the
+// envelope's schema hash: a device's package left empty is platform.unsupported, since
+// it names no package of the registry.
 func TestRequiredAttributeMissingIsNamed(t *testing.T) {
 	c, reg := load(t, "defects/required-missing.json")
 	list := Validate(c, reg)
@@ -172,7 +172,7 @@ func TestRequiredAttributeMissingIsNamed(t *testing.T) {
 			if f.Object == "" {
 				t.Error("the finding names no object")
 			}
-			if !strings.Contains(f.Message, "platform") {
+			if !strings.Contains(f.Message, "schema") {
 				t.Errorf("message does not say what is missing: %q", f.Message)
 			}
 		}
@@ -190,7 +190,7 @@ func TestRequiredAttributeMissingIsNamed(t *testing.T) {
 func TestUnnamedInterfaceDrawsOneFinding(t *testing.T) {
 	c, reg := load(t, "three-node.json")
 	n1 := c.Device("n1")
-	n1.Interfaces = append(n1.Interfaces, ctm.Interface{Iftype: ctm.IftypePhysical})
+	n1.Interfaces = append(n1.Interfaces, ctm.Interface{})
 
 	list := Validate(c, reg)
 	want := findings.List{{Severity: findings.Rejection, Rule: findings.RuleRequiredMissing,
@@ -232,10 +232,11 @@ func TestUnflaggedManagementNameIsRefusedByTheRulesTried(t *testing.T) {
 // fields is rejected by the field name, so the report says which one.
 func TestEnvelopeRequiredFieldsAreNamed(t *testing.T) {
 	full := ctm.Envelope{
-		Branch:          "fylgja-fixture",
-		ObservedAt:      "2026-09-08T12:00:00.000000Z",
-		SchemaHash:      "fixture",
-		ContractVersion: "0.2",
+		Branch:     "fylgja-fixture",
+		ObservedAt: "2026-09-08T12:00:00.000000Z",
+		SchemaHash: "fixture",
+		Scope:      "tag:fylgja",
+		Mapping:    ctm.Mapping{Reader: ctm.ReaderInfrahubDCIM, Model: ctm.ModelSchemaLibrary, Version: ctm.ModelVersion},
 	}
 	for _, tc := range []struct {
 		field string
@@ -244,7 +245,10 @@ func TestEnvelopeRequiredFieldsAreNamed(t *testing.T) {
 		{"envelope.branch", func(e *ctm.Envelope) { e.Branch = "" }},
 		{"envelope.observed_at", func(e *ctm.Envelope) { e.ObservedAt = "" }},
 		{"envelope.schema_hash", func(e *ctm.Envelope) { e.SchemaHash = "" }},
-		{"envelope.contract_version", func(e *ctm.Envelope) { e.ContractVersion = "" }},
+		{"envelope.scope", func(e *ctm.Envelope) { e.Scope = "" }},
+		{"envelope.mapping.reader", func(e *ctm.Envelope) { e.Mapping.Reader = "" }},
+		{"envelope.mapping.model", func(e *ctm.Envelope) { e.Mapping.Model = "" }},
+		{"envelope.mapping.version", func(e *ctm.Envelope) { e.Mapping.Version = "" }},
 	} {
 		t.Run(tc.field, func(t *testing.T) {
 			env := full
@@ -291,11 +295,12 @@ func TestEmptyCTMIsRejectedNamingTheReference(t *testing.T) {
 	} {
 		t.Run(tc.label, func(t *testing.T) {
 			c := &ctm.CTM{Envelope: ctm.Envelope{
-				Branch:          "fylgja-fixture",
-				At:              tc.at,
-				ObservedAt:      "2026-09-08T12:00:00.000000Z",
-				SchemaHash:      "fixture",
-				ContractVersion: "0.2",
+				Branch:     "fylgja-fixture",
+				At:         tc.at,
+				ObservedAt: "2026-09-08T12:00:00.000000Z",
+				SchemaHash: "fixture",
+				Scope:      "tag:fylgja",
+				Mapping:    ctm.Mapping{Reader: ctm.ReaderInfrahubDCIM, Model: ctm.ModelSchemaLibrary, Version: ctm.ModelVersion},
 			}}
 			list := Validate(c, registry(t))
 			if !list.Rejected() {
@@ -390,22 +395,23 @@ func TestDisagreeingForwardingIsNoLongerRefused(t *testing.T) {
 	c := &ctm.CTM{
 		CTMVersion: ctm.Version,
 		Envelope: ctm.Envelope{
-			Branch:          "fylgja-fixture",
-			ObservedAt:      "2026-09-08T12:00:00.000000Z",
-			SchemaHash:      "fixture",
-			ContractVersion: ctm.ContractVersion,
+			Branch:     "fylgja-fixture",
+			ObservedAt: "2026-09-08T12:00:00.000000Z",
+			SchemaHash: "fixture",
+			Scope:      "tag:fylgja",
+			Mapping:    ctm.Mapping{Reader: ctm.ReaderInfrahubDCIM, Model: ctm.ModelSchemaLibrary, Version: ctm.ModelVersion},
 		},
 		Devices: []ctm.Device{
 			{
 				Name:       "n1",
-				Platform:   ctm.Platform{Vendor: "nokia", NOS: "srlinux"},
-				Interfaces: []ctm.Interface{{Name: "ethernet-1/1", Iftype: ctm.IftypePhysical}},
+				Platform:   ctm.Platform{Package: "nokia_srlinux"},
+				Interfaces: []ctm.Interface{{Name: "ethernet-1/1"}},
 				Artifact:   artifact("n1"),
 			},
 			{
 				Name:       "n2",
-				Platform:   ctm.Platform{Vendor: "acme", NOS: "acme_os"},
-				Interfaces: []ctm.Interface{{Name: "ethernet-1/1", Iftype: ctm.IftypePhysical}},
+				Platform:   ctm.Platform{Package: "acme_os"},
+				Interfaces: []ctm.Interface{{Name: "ethernet-1/1"}},
 				Artifact:   artifact("n2"),
 			},
 		},
@@ -426,5 +432,25 @@ func TestDisagreeingForwardingIsNoLongerRefused(t *testing.T) {
 	want := map[string]string{"acme_os": "software", "nokia_srlinux": "hardware"}
 	if !maps.Equal(m.Fidelity.ProductionForwarding, want) {
 		t.Errorf("production_forwarding = %v, want %v", m.Fidelity.ProductionForwarding, want)
+	}
+}
+
+// A CTM "2" names the package a device's platform matched (017). One the registry lacks,
+// or none at all, is platform.unsupported naming the package and the registry's ids, so
+// the fix is a package to write or a name to correct.
+func TestPlatformUnsupportedNamesThePackageAndTheRegistry(t *testing.T) {
+	for pkg, want := range map[string]string{
+		"acme_os": `no support package "acme_os"; supported: [arista_eos nokia_srlinux]`,
+		"":        "device names no support package; supported: [arista_eos nokia_srlinux]",
+	} {
+		c, reg := load(t, "three-node.json")
+		c.Device("n2").Platform.Package = pkg
+		var got []string
+		for _, f := range Validate(c, reg) {
+			got = append(got, f.Rule+" "+f.Object+": "+f.Message)
+		}
+		if w := findings.RulePlatformUnsupported + " n2: " + want; len(got) != 1 || got[0] != w {
+			t.Errorf("package %q: findings %q, want exactly %q", pkg, got, w)
+		}
 	}
 }

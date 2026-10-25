@@ -61,12 +61,13 @@ func TestWorkerUnreachableServiceExitsTwo(t *testing.T) {
 // it read and the one it understands, and exits 2 before dialling. A 0.3 package is what
 // an upgraded host still has in its override directory:
 // version-0-3-m5.yaml is M5's shipped package as it was, whose retired fields the strict
-// decoder refuses; version-0-5.yaml is this build's package with the version line alone
+// decoder refuses; version-0-6.yaml is this build's package with the version line alone
 // moved back; version-0-5-m10.yaml is M10's shipped package as it was, which decodes and
-// lacks fidelity.link_change. Each asserts the version it declares.
+// lacks fidelity.link_change; version-0-6-m11.yaml is M11's, which decodes and lacks
+// platform.matches. Each asserts the version it declares.
 func TestWorkerRefusesAPreviousFormatOverride(t *testing.T) {
 	for fixture, declared := range map[string]string{
-		"version-0-5.yaml": "0.5", "version-0-5-m10.yaml": "0.5", "version-0-3-m5.yaml": "0.3",
+		"version-0-6.yaml": "0.6", "version-0-6-m11.yaml": "0.6", "version-0-5-m10.yaml": "0.5", "version-0-3-m5.yaml": "0.3",
 	} {
 		t.Run(fixture, func(t *testing.T) {
 			src, err := os.ReadFile(repoPath("testdata", "psp", "defects", fixture))
@@ -100,6 +101,42 @@ func TestWorkerRefusesAPreviousFormatOverride(t *testing.T) {
 				t.Errorf("the worker dialled before refusing the package:\n%s", stderr)
 			}
 		})
+	}
+}
+
+// A worker whose override directory holds a package valid alone that names an embedded
+// package's manufacturer and platform pair under another NOS refuses to serve, naming
+// psp.matches.duplicate and the pair, and exits 2 before dialling: a device of that pair
+// would have two packages (format 0.7).
+func TestWorkerRefusesAPackageSharingAPair(t *testing.T) {
+	src, err := os.ReadFile(repoPath("testdata", "psp", "defects", "matches-shared.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "sharedos.yaml"), src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv(lab.EnvTemporalAddress, "localhost:1")
+	t.Setenv(lab.EnvStateRoot, t.TempDir())
+
+	var runErr error
+	stderr := captureStderr(t, func() { runErr = runWorker(context.Background(), &options{pspDir: dir}) })
+	var status exitStatus
+	if !errors.As(runErr, &status) || int(status) != findings.ExitError {
+		t.Errorf("runWorker returned %v, want exit status 2", runErr)
+	}
+	for _, want := range []string{
+		findings.RulePSPMatchesDuplicate,
+		`manufacturer "Nokia", platform "SR Linux" is matched by package nokia_srlinux (psp/nokia_srlinux.yaml) and by package sharedos`,
+		"refusing to serve with an invalid support package",
+	} {
+		if !strings.Contains(stderr, want) {
+			t.Errorf("stderr does not name %q:\n%s", want, stderr)
+		}
+	}
+	if strings.Contains(stderr, "unreachable") {
+		t.Errorf("the worker dialled before refusing the package:\n%s", stderr)
 	}
 }
 

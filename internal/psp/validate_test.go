@@ -94,6 +94,9 @@ func TestDefectsAreNamed(t *testing.T) {
 	cases := []struct {
 		fixture string
 		rule    string
+		// with are packages validated in one set before the fixture, for a rule of the set
+		// (psp.matches.duplicate); each must validate alone.
+		with []string
 		// messages, where given, are every finding the fixture raises, word for word:
 		// a fixture that passed validation before its rule existed must fail with that
 		// rule alone.
@@ -106,71 +109,71 @@ func TestDefectsAreNamed(t *testing.T) {
 	}{
 		// Format 0.4's mapping profile. Each fixture is the
 		// shipped package with one change.
-		{"rule-name-missing", findings.RulePSPRuleName, nil, false},
-		{"rule-name-duplicate", findings.RulePSPRuleName, nil, false},
-		{"placeholders-disagree", findings.RulePSPPatternsPlaceholders, nil, false},
-		{"node-name-placeholders", findings.RulePSPPatternsPlaceholders, nil, false},
-		{"lossy-undeclared", findings.RulePSPPatternsPlaceholders, nil, false},
-		{"lossy-overdeclared", findings.RulePSPPatternsPlaceholders, nil, false},
-		{"range-unknown-placeholder", findings.RulePSPPatternsPlaceholders, nil, false},
-		{"breakout-parent-placeholders", findings.RulePSPPatternsBreakout, nil, false},
-		{"breakout-parent-is-match", findings.RulePSPPatternsBreakout, nil, false},
-		{"management-rule-missing", findings.RulePSPManagementRule, nil, false},
-		{"management-rule-twice", findings.RulePSPManagementRule, nil, false},
-		{"management-rule-with-match", findings.RulePSPManagementRule, nil, false},
-		{"management-collides", findings.RulePSPManagementCollides, nil, false},
+		{"rule-name-missing", findings.RulePSPRuleName, nil, nil, false},
+		{"rule-name-duplicate", findings.RulePSPRuleName, nil, nil, false},
+		{"placeholders-disagree", findings.RulePSPPatternsPlaceholders, nil, nil, false},
+		{"node-name-placeholders", findings.RulePSPPatternsPlaceholders, nil, nil, false},
+		{"lossy-undeclared", findings.RulePSPPatternsPlaceholders, nil, nil, false},
+		{"lossy-overdeclared", findings.RulePSPPatternsPlaceholders, nil, nil, false},
+		{"range-unknown-placeholder", findings.RulePSPPatternsPlaceholders, nil, nil, false},
+		{"breakout-parent-placeholders", findings.RulePSPPatternsBreakout, nil, nil, false},
+		{"breakout-parent-is-match", findings.RulePSPPatternsBreakout, nil, nil, false},
+		{"management-rule-missing", findings.RulePSPManagementRule, nil, nil, false},
+		{"management-rule-twice", findings.RulePSPManagementRule, nil, nil, false},
+		{"management-rule-with-match", findings.RulePSPManagementRule, nil, nil, false},
+		{"management-collides", findings.RulePSPManagementCollides, nil, nil, false},
 		// A data rule that can render the management port or node name. Both fixtures
 		// passed validation before psp.management.collides existed. The second is chassisos,
 		// not the shipped package, and front and linecard both render its name.
-		{"management-port-reachable", findings.RulePSPManagementCollides, []string{
+		{"management-port-reachable", findings.RulePSPManagementCollides, nil, []string{
 			`management port "e1-1" is also rendered by rule "ethernet" (port "e{slot}-{port}", {slot} = 1, {port} = 1); one port would mean two things`,
 		}, false},
-		{"management-node-name-reachable", findings.RulePSPManagementCollides, []string{
+		{"management-node-name-reachable", findings.RulePSPManagementCollides, nil, []string{
 			`management node name "Ethernet1" is also rendered by rule "front" (node_name "Ethernet{port}", {port} = 1); one name would mean two things`,
 			`management node name "Ethernet1" is also rendered by rule "linecard" (node_name "Ethernet{port}", {port} = 1); one name would mean two things`,
 		}, false},
-		{"mappings-missing", findings.RulePSPMappingsInvalid, nil, false},
-		{"mappings-unknown-rule", findings.RulePSPMappingsInvalid, nil, false},
+		{"mappings-missing", findings.RulePSPMappingsInvalid, nil, nil, false},
+		{"mappings-unknown-rule", findings.RulePSPMappingsInvalid, nil, nil, false},
 		// The other two causes of psp.mappings.invalid. Both are refused by the schema
 		// as well, so the message is asserted among the rule's own findings.
-		{"mappings-port-and-unmappable", findings.RulePSPMappingsInvalid, []string{
+		{"mappings-port-and-unmappable", findings.RulePSPMappingsInvalid, nil, []string{
 			`mapping 6 ("Ethernet99") declares both a port and unmappable: no_rule; a declaration is one or the other`,
 		}, true},
-		{"mappings-mapped-incomplete", findings.RulePSPMappingsInvalid, []string{
+		{"mappings-mapped-incomplete", findings.RulePSPMappingsInvalid, nil, []string{
 			`mapping 1 ("ethernet-1/1") is a mapped declaration without rule, node_name; it needs rule, port and node_name`,
 		}, true},
 		// A management rule's port or node name is literal, because the rule captures
 		// nothing to substitute. The schema permits the value, so this rule is the
 		// only thing that refuses it.
-		{"management-port-placeholders", findings.RulePSPPatternsPlaceholders, []string{
+		{"management-port-placeholders", findings.RulePSPPatternsPlaceholders, nil, []string{
 			`rule "management": port "mgmt{slot}" uses {slot} but the management rule captures nothing; its port and node name are literal`,
 		}, false},
-		{"facet-missing", findings.RulePSPSchema, nil, false},
-		{"version-unknown", findings.RulePSPVersionUnknown, nil, false},
-		{"no-encoding", findings.RulePSPReadinessEncoding, nil, false},
+		{"facet-missing", findings.RulePSPSchema, nil, nil, false},
+		{"version-unknown", findings.RulePSPVersionUnknown, nil, nil, false},
+		{"no-encoding", findings.RulePSPReadinessEncoding, nil, nil, false},
 
 		// Format 0.3's config block. Each fixture is the shipped
 		// package with one field changed, so the rule under test is the only thing
 		// the validator can be reacting to.
-		{"config-artifact-name", findings.RulePSPConfigArtifactName, nil, false},
+		{"config-artifact-name", findings.RulePSPConfigArtifactName, nil, nil, false},
 		// The contract names the rule for both triggers: the collision and the
 		// pattern. The schema refuses the value too; the rule says what the name is for.
-		{"config-artifact-name-pattern", findings.RulePSPConfigArtifactName, nil, false},
-		{"config-content-type", findings.RulePSPConfigContentType, nil, false},
-		{"config-delivery", findings.RulePSPConfigDeliveryUnimplemented, nil, false},
-		{"config-push-missing", findings.RulePSPConfigPushMissing, nil, false},
+		{"config-artifact-name-pattern", findings.RulePSPConfigArtifactName, nil, nil, false},
+		{"config-content-type", findings.RulePSPConfigContentType, nil, nil, false},
+		{"config-delivery", findings.RulePSPConfigDeliveryUnimplemented, nil, nil, false},
+		{"config-push-missing", findings.RulePSPConfigPushMissing, nil, nil, false},
 		// Reworded by format 0.6: D-033's replace loads the baseline
 		// into a candidate, which an implicit commit has none of.
-		{"config-replace-implicit", findings.RulePSPConfigPushMissing, []string{
+		{"config-replace-implicit", findings.RulePSPConfigPushMissing, nil, []string{
 			"mode is replace with commit implicit; the reset loads the baseline into a candidate and commits it, which an implicit commit has none of, so no command list is defined for this pair",
 		}, false},
 		// mode is required with no default; the schema itself refuses its
 		// absence, and no consistency rule needs to.
-		{"config-mode-missing", findings.RulePSPSchema, nil, false},
-		{"version-0-5", findings.RulePSPVersionUnknown, nil, false},
+		{"config-mode-missing", findings.RulePSPSchema, nil, nil, false},
+		{"version-0-6", findings.RulePSPVersionUnknown, nil, nil, false},
 		// M5's shipped package as it was: 0.3's retired fields fail the strict decoder,
 		// and the version is still named.
-		{"version-0-3-m5", findings.RulePSPVersionUnknown, nil, false},
+		{"version-0-3-m5", findings.RulePSPVersionUnknown, nil, nil, false},
 
 		// Format 0.5's additive fields (contracts/cli.md). Each
 		// fixture is the shipped package with one change.
@@ -182,41 +185,71 @@ func TestDefectsAreNamed(t *testing.T) {
 		// pairing that cannot mean anything: a delivery with no configuration lines to
 		// send the bootstrap's through. The delivery rule fires beside it, so the
 		// comparison is limited to this rule's own findings.
-		{"bootstrap-via-no-lines", findings.RulePSPConfigBootstrapVia, []string{
+		{"bootstrap-via-no-lines", findings.RulePSPConfigBootstrapVia, nil, []string{
 			`bootstrap_via is push but delivery "netconf" carries no configuration lines; only json_rpc and eapi do`,
 		}, true},
 		// readiness.tls is a boolean and the schema is what refuses anything else; no
 		// consistency rule needs to, as with mode above.
-		{"tls-not-boolean", findings.RulePSPSchema, []string{
+		{"tls-not-boolean", findings.RulePSPSchema, nil, []string{
 			"at '/readiness/tls': got string, want boolean",
 		}, false},
 		// eapi is the second implemented mechanism, so it needs a push block as
 		// json_rpc does. The schema's conditional required refuses it too.
-		{"eapi-without-push", findings.RulePSPConfigPushMissing, []string{
+		{"eapi-without-push", findings.RulePSPConfigPushMissing, nil, []string{
 			"delivery is eapi but no push block says how to reach the node",
 		}, true},
 
 		// Format 0.6's one required field (contracts/cli.md). Each
 		// fixture is the shipped package with one change, and the schema is what refuses
 		// it, as with mode and tls above.
-		{"fidelity-link-change-missing", findings.RulePSPSchema, []string{
+		{"fidelity-link-change-missing", findings.RulePSPSchema, nil, []string{
 			"at '/fidelity': missing property 'link_change'",
 		}, false},
-		{"fidelity-link-change-value", findings.RulePSPSchema, []string{
+		{"fidelity-link-change-value", findings.RulePSPSchema, nil, []string{
 			"at '/fidelity/link_change': value must be one of 'restart', 'live'",
 		}, false},
 		// M10's shipped SR Linux package byte for byte (PSP 0.5, mode: merge, no link_change),
 		// what an upgraded host still has in its override directory: refused by version,
 		// beside the schema's finding for the field it lacks (M6's rule: a real old
 		// package, never a synthetic one; TestM10ShippedPackageIsVersionUnknown).
-		{"version-0-5-m10", findings.RulePSPVersionUnknown, []string{
-			`package declares format version "0.5", this build understands "0.6"`,
+		{"version-0-5-m10", findings.RulePSPVersionUnknown, nil, []string{
+			`package declares format version "0.5", this build understands "0.7"`,
 		}, true},
+
+		// Format 0.7's one required field, platform.matches (017; contracts/cli.md).
+		// M11's shipped SR Linux package byte for byte (PSP 0.6, no matches) is what an
+		// upgraded host still has in its override directory: refused by version, beside
+		// the schema's and psp.matches.missing's findings for the field it lacks
+		// (TestM11ShippedPackageIsVersionUnknown).
+		{"version-0-6-m11", findings.RulePSPVersionUnknown, nil, []string{
+			`package declares format version "0.6", this build understands "0.7"`,
+		}, true},
+		// The shipped package with matches: []. The schema refuses it too (minItems), so
+		// the message is asserted among the rule's own findings.
+		{"matches-missing", findings.RulePSPMatchesMissing, nil, []string{
+			"platform.matches names no manufacturer and platform pair; a reader picks a device's package by those two names, so this package would match no device",
+		}, true},
+		// A third package naming the shipped SR Linux package's pair: valid alone, refused
+		// beside it, and by this rule alone.
+		{"matches-shared", findings.RulePSPMatchesDuplicate, []string{repo("psp", "nokia_srlinux.yaml")}, []string{
+			`manufacturer "Nokia", platform "SR Linux" is matched by package nokia_srlinux (` + repo("psp", "nokia_srlinux.yaml") +
+				`) and by package sharedos (` + repo("testdata", "psp", "defects", "matches-shared.yaml") + `); a device of that pair would have two packages`,
+		}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.fixture, func(t *testing.T) {
 			path := repo("testdata", "psp", "defects", tc.fixture+".yaml")
-			list := Validate([]string{path})
+			for _, other := range tc.with {
+				if alone := Validate([]string{other}); len(alone) != 0 {
+					t.Fatalf("%s must validate alone: %v", other, alone)
+				}
+			}
+			if tc.with != nil {
+				if alone := Validate([]string{path}); alone.Rejected() {
+					t.Fatalf("%s must validate alone, its rule being the set's: %v", tc.fixture, alone)
+				}
+			}
+			list := Validate(append(slices.Clone(tc.with), path))
 			if !list.Rejected() {
 				t.Fatalf("expected a rejection, got %v", list)
 			}
@@ -300,14 +333,16 @@ func TestAllDefectsReportedInOnePass(t *testing.T) {
 }
 
 // Two packages claiming the same platform is a cross-file defect, which is why
-// validation accepts a set of files rather than one at a time.
+// validation accepts a set of files rather than one at a time. The copy is the shipped
+// package whole, so it names the shipped package's manufacturer and platform pair as well
+// (format 0.7), and both set rules name it: no other rule may.
 func TestDuplicateIdentityAcrossFiles(t *testing.T) {
 	list := Validate([]string{
 		repo("psp", "nokia_srlinux.yaml"),
 		repo("testdata", "psp", "defects", "duplicate-identity.yaml"),
 	})
-	if rulesIn(list)[findings.RulePSPIdentityDuplicate] == 0 {
-		t.Errorf("duplicate platform identity not reported: %v", list)
+	if rules := rulesIn(list); len(rules) != 2 || rules[findings.RulePSPIdentityDuplicate] != 1 || rules[findings.RulePSPMatchesDuplicate] != 1 {
+		t.Errorf("findings %v, want psp.identity.duplicate and psp.matches.duplicate once each", list)
 	}
 	// Each file on its own is fine; only the pair is a problem.
 	if Validate([]string{repo("testdata", "psp", "defects", "duplicate-identity.yaml")}).Rejected() {
@@ -331,17 +366,18 @@ func TestDuplicateIdentityAcrossFiles(t *testing.T) {
 }
 
 // A package that was valid at the previous format is not valid at this one, and the
-// message has to say so by version rather than as a missing field: "declares 0.5, this
-// build understands 0.6" is what an operator can act on.
+// message has to say so by version rather than as a missing field: "declares 0.6, this
+// build understands 0.7" is what an operator can act on.
 //
-// version-0-5.yaml is the shipped package with its version line alone moved back, so
+// version-0-6.yaml is the shipped package with its version line alone moved back, so
 // every other field is present and the only thing the validator can object to is the
 // version. That is what makes the "not as a missing field" assertion below mean
-// something. It was version-0-3.yaml until M7 moved the format to 0.5, and
-// version-0-4.yaml until M11 moved it to 0.6; the fixture is renamed with each bump,
-// and its previous-version value is always one behind this build.
+// something. It was version-0-3.yaml until M7 moved the format to 0.5,
+// version-0-4.yaml until M11 moved it to 0.6, and version-0-5.yaml until 017 moved it to
+// 0.7; the fixture is renamed with each bump, and its previous-version value is always one
+// behind this build.
 func TestPreviousFormatPackageIsVersionUnknown(t *testing.T) {
-	path := repo("testdata", "psp", "defects", "version-0-5.yaml")
+	path := repo("testdata", "psp", "defects", "version-0-6.yaml")
 	shipped, err := os.ReadFile(repo("psp", "nokia_srlinux.yaml"))
 	if err != nil {
 		t.Fatal(err)
@@ -350,9 +386,9 @@ func TestPreviousFormatPackageIsVersionUnknown(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := bytes.Replace(shipped, []byte(`psp_version: "`+FormatVersion+`"`), []byte(`psp_version: "0.5"`), 1)
+	want := bytes.Replace(shipped, []byte(`psp_version: "`+FormatVersion+`"`), []byte(`psp_version: "0.6"`), 1)
 	if !bytes.Equal(fixture, want) {
-		t.Error("version-0-5.yaml must be psp/nokia_srlinux.yaml with its version line alone changed; " +
+		t.Error("version-0-6.yaml must be psp/nokia_srlinux.yaml with its version line alone changed; " +
 			"otherwise this test reports a missing field as a version problem")
 	}
 
@@ -362,19 +398,19 @@ func TestPreviousFormatPackageIsVersionUnknown(t *testing.T) {
 	}
 	for _, f := range list {
 		if f.Rule == findings.RulePSPVersionUnknown &&
-			!bytes.Contains([]byte(f.Message), []byte(`declares format version "0.5", this build understands "0.6"`)) {
+			!bytes.Contains([]byte(f.Message), []byte(`declares format version "0.6", this build understands "0.7"`)) {
 			t.Errorf("the message must name both versions, got %q", f.Message)
 		}
 		// The schema may also refuse the version value; it must not report a missing field.
 		if f.Rule == findings.RulePSPSchema && f.Object != "/psp_version" {
-			t.Errorf("a 0.5 package reported a schema finding beyond its version: %s %s", f.Object, f.Message)
+			t.Errorf("a 0.6 package reported a schema finding beyond its version: %s %s", f.Object, f.Message)
 		}
 	}
 }
 
 // version-0-3-m5.yaml is M5's shipped SR Linux package byte for byte (PSP 0.3): what an
 // upgraded host still has in its override
-// directory. Unlike version-0-5.yaml it carries 0.3's retired interface fields, which the
+// directory. Unlike version-0-6.yaml it carries 0.3's retired interface fields, which the
 // strict decoder refuses, so the version must be named even when the package does not
 // decode. Before that was fixed it drew three psp.schema findings and no version. The
 // schema's findings about the fields stand beside it.
@@ -387,7 +423,7 @@ func TestPreviousFormatShippedPackageIsVersionUnknown(t *testing.T) {
 			got = append(got, f.Object+": "+f.Message)
 		}
 	}
-	want := []string{`nokia_srlinux: package declares format version "0.3", this build understands "0.6"`}
+	want := []string{`nokia_srlinux: package declares format version "0.3", this build understands "0.7"`}
 	if !slices.Equal(got, want) {
 		t.Errorf("%s findings:\n got  %q\n want %q\nall: %v", findings.RulePSPVersionUnknown, got, want, list)
 	}
@@ -395,28 +431,19 @@ func TestPreviousFormatShippedPackageIsVersionUnknown(t *testing.T) {
 
 // version-0-5-m10.yaml is M10's shipped SR Linux package byte for byte (PSP 0.5, mode:
 // merge, no link_change), which an upgraded host may still hold in its override
-// directory. It decodes, since format 0.6 retired no field, so what it lacks is said
-// twice: by version, and by the schema for the one field 0.6 requires. Neither is
-// allowed to hide the other.
+// directory. It decodes, since neither format 0.6 nor 0.7 retired a field, so what it
+// lacks is said by version, and by the schema for the fields 0.6 and 0.7 require, with
+// psp.matches.missing beside the second. None is allowed to hide another.
 func TestM10ShippedPackageIsVersionUnknown(t *testing.T) {
 	path := repo("testdata", "psp", "defects", "version-0-5-m10.yaml")
-	list := Validate([]string{path})
-	var version, schema []string
-	for _, f := range list {
-		switch f.Rule {
-		case findings.RulePSPVersionUnknown:
-			version = append(version, f.Object+": "+f.Message)
-		case findings.RulePSPSchema:
-			schema = append(schema, f.Message)
-		default:
-			t.Errorf("unexpected %s: %s", f.Rule, f.Message)
-		}
-	}
-	if want := []string{`nokia_srlinux: package declares format version "0.5", this build understands "0.6"`}; !slices.Equal(version, want) {
+	version, schema := oldShippedPackageFindings(t, path)
+	if want := []string{`nokia_srlinux: package declares format version "0.5", this build understands "0.7"`}; !slices.Equal(version, want) {
 		t.Errorf("%s findings:\n got  %q\n want %q", findings.RulePSPVersionUnknown, version, want)
 	}
-	if !slices.Contains(schema, "at '/fidelity': missing property 'link_change'") {
-		t.Errorf("%s findings %q do not name the missing fidelity.link_change", findings.RulePSPSchema, schema)
+	for _, want := range []string{"at '/fidelity': missing property 'link_change'", "at '/platform': missing property 'matches'"} {
+		if !slices.Contains(schema, want) {
+			t.Errorf("%s findings %q do not name %q", findings.RulePSPSchema, schema, want)
+		}
 	}
 	// The fixture is M10's package and not this build's: it is on merge, and has no
 	// link_change at all, so it cannot have been regenerated from psp/ by mistake.
@@ -428,6 +455,57 @@ func TestM10ShippedPackageIsVersionUnknown(t *testing.T) {
 		bytes.Contains(raw, []byte("link_change")) {
 		t.Error("version-0-5-m10.yaml must be M10's shipped SR Linux package byte for byte: PSP 0.5, mode: merge, no link_change")
 	}
+}
+
+// version-0-6-m11.yaml is M11's shipped SR Linux package byte for byte (PSP 0.6, no
+// matches), frozen before 017 moved the format to 0.7, which an upgraded host may still
+// hold in its override directory. It decodes, since 0.7 retired no field, so what it lacks
+// is said by version, by the schema for the one field 0.7 requires, and by
+// psp.matches.missing, which says what the field is for.
+func TestM11ShippedPackageIsVersionUnknown(t *testing.T) {
+	path := repo("testdata", "psp", "defects", "version-0-6-m11.yaml")
+	version, schema := oldShippedPackageFindings(t, path)
+	if want := []string{`nokia_srlinux: package declares format version "0.6", this build understands "0.7"`}; !slices.Equal(version, want) {
+		t.Errorf("%s findings:\n got  %q\n want %q", findings.RulePSPVersionUnknown, version, want)
+	}
+	if want := []string{"at '/platform': missing property 'matches'", "at '/psp_version': value must be '0.7'"}; !slices.Equal(schema, want) {
+		t.Errorf("%s findings:\n got  %q\n want %q", findings.RulePSPSchema, schema, want)
+	}
+	// The fixture is M11's package and not this build's: it declares 0.6, is on replace
+	// with link_change, and names no pair.
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Contains(raw, []byte(`psp_version: "0.6"`)) || !bytes.Contains(raw, []byte("  link_change: live ")) ||
+		bytes.Contains(raw, []byte("\n  matches:")) {
+		t.Error("version-0-6-m11.yaml must be M11's shipped SR Linux package byte for byte: PSP 0.6, link_change, no matches")
+	}
+}
+
+// oldShippedPackageFindings validates a shipped package of an earlier format and returns
+// its psp.version.unknown findings, as <object>: <message>, and its psp.schema messages. It
+// fails the test on any other rule but psp.matches.missing, which every package before 0.7
+// draws, once, for the field it lacks.
+func oldShippedPackageFindings(t *testing.T, path string) (version, schema []string) {
+	t.Helper()
+	var missing int
+	for _, f := range Validate([]string{path}) {
+		switch f.Rule {
+		case findings.RulePSPVersionUnknown:
+			version = append(version, f.Object+": "+f.Message)
+		case findings.RulePSPSchema:
+			schema = append(schema, f.Message)
+		case findings.RulePSPMatchesMissing:
+			missing++
+		default:
+			t.Errorf("unexpected %s: %s", f.Rule, f.Message)
+		}
+	}
+	if missing != 1 {
+		t.Errorf("%d %s findings, want one for the field a package before 0.7 lacks", missing, findings.RulePSPMatchesMissing)
+	}
+	return version, schema
 }
 
 // Format 0.5 refused bootstrap_via: push beside mode: replace, because replace was then
@@ -924,8 +1002,9 @@ func settled(list findings.List) findings.List {
 	return out
 }
 
-// Two packages that claim one platform are refused as a set, named by the paths given and
-// by nothing on disk: no file is at either path.
+// Two packages that claim one platform, and so name one manufacturer and platform pair, are
+// refused as a set, named by the paths given and by nothing on disk: no file is at either
+// path.
 func TestValidateFilesNamesThePathsGiven(t *testing.T) {
 	srl, err := os.ReadFile(repo("psp", "nokia_srlinux.yaml"))
 	if err != nil {
@@ -933,13 +1012,17 @@ func TestValidateFilesNamesThePathsGiven(t *testing.T) {
 	}
 	first, second := filepath.Join("site", "one.yaml"), filepath.Join("site", "two.yaml")
 	list := ValidateFiles([]File{{Path: first, Data: srl}, {Path: second, Data: srl}})
-	if len(list) != 1 {
-		t.Fatalf("want one finding, got %v", list)
+	if len(list) != 2 {
+		t.Fatalf("want two findings, got %v", list)
 	}
-	f := list[0]
-	if f.Rule != findings.RulePSPIdentityDuplicate || f.Location == nil || f.Location.File != second ||
-		f.Message != fmt.Sprintf("platform %q is already declared by %s", "nokia_srlinux", first) {
-		t.Errorf("want %s at %s naming %s, got %+v (location %+v)", findings.RulePSPIdentityDuplicate, second, first, f, f.Location)
+	for i, want := range []struct{ rule, message string }{
+		{findings.RulePSPIdentityDuplicate, fmt.Sprintf("platform %q is already declared by %s", "nokia_srlinux", first)},
+		{findings.RulePSPMatchesDuplicate, fmt.Sprintf(`manufacturer "Nokia", platform "SR Linux" is matched by package nokia_srlinux (%s) and by package nokia_srlinux (%s); a device of that pair would have two packages`, first, second)},
+	} {
+		f := list[i]
+		if f.Rule != want.rule || f.Location == nil || f.Location.File != second || f.Message != want.message {
+			t.Errorf("want %s at %s: %s\ngot %+v (location %+v)", want.rule, second, want.message, f, f.Location)
+		}
 	}
 	if list := ValidateFiles([]File{{Path: first, Data: srl}}); len(list) != 0 {
 		t.Errorf("one copy alone validates, got %v", list)

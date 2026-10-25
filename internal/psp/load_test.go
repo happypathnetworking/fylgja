@@ -34,6 +34,9 @@ func TestInvalidOverrideIsRefusedAtLoad(t *testing.T) {
 	for _, tc := range []struct{ fixture, rule string }{
 		{"version-unknown", findings.RulePSPVersionUnknown},
 		{"no-encoding", findings.RulePSPReadinessEncoding},
+		// Valid alone, and so past the override set's validation: refused by the
+		// registry's, since it names the embedded SR Linux package's pair under another NOS.
+		{"matches-shared", findings.RulePSPMatchesDuplicate},
 	} {
 		t.Run(tc.fixture, func(t *testing.T) {
 			dir, path := overrideWith(t, repo("testdata", "psp", "defects", tc.fixture+".yaml"))
@@ -105,6 +108,68 @@ func TestLookupByIDAndKind(t *testing.T) {
 		if !ok || p.Platform.ID != tc.wantID || p.Origin != tc.origin {
 			t.Errorf("%s = %+v, %v; want id %s from %s", tc.key, p, ok, tc.wantID, tc.origin)
 		}
+	}
+}
+
+// A source's manufacturer and platform names pick a package only when both are exactly a
+// pair the package declares: letter case, hyphens and a trailing space each miss, and a
+// pair crossed between two packages is no pair. Overrides are joined as embedded packages
+// are.
+func TestRegistryMatchesExactly(t *testing.T) {
+	reg, err := Load(repo("testdata", "psp", "heterogeneous"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		manufacturer, platform string
+		want                   string
+	}{
+		{"Nokia", "SR Linux", "nokia_srlinux"},
+		{"Arista", "EOS", "arista_eos"},
+		{"FastOS Inc", "FastOS", "fastos"},
+		{"nokia", "SR-Linux", ""},
+		{"nokia", "SR Linux", ""},
+		{"Nokia", "SR-Linux", ""},
+		{"Nokia", "SR Linux ", ""},
+		{" Nokia", "SR Linux", ""},
+		{"Arista", "SR Linux", ""},
+		{"Nokia", "", ""},
+		{"", "", ""},
+	} {
+		p, ok := reg.Match(tc.manufacturer, tc.platform)
+		switch {
+		case tc.want == "" && ok:
+			t.Errorf("Match(%q, %q) = %s; want no package", tc.manufacturer, tc.platform, p.Platform.ID)
+		case tc.want != "" && (!ok || p.Platform.ID != tc.want):
+			t.Errorf("Match(%q, %q) = %v, %v; want %s", tc.manufacturer, tc.platform, p, ok, tc.want)
+		}
+	}
+}
+
+// An override that shadows an embedded package by its NOS takes its pairs with it, so a
+// patched package naming the same pair loads; one beside it under another NOS is refused,
+// naming both packages, the pair and the override's file.
+func TestOverrideSharingAPairIsRefusedAtLoad(t *testing.T) {
+	dir, path := overrideWith(t, repo("testdata", "psp", "defects", "matches-shared.yaml"))
+	_, err := Load(dir)
+	var inv *InvalidError
+	if !errors.As(err, &inv) {
+		t.Fatalf("Load = %v; want *InvalidError", err)
+	}
+	want := `manufacturer "Nokia", platform "SR Linux" is matched by package nokia_srlinux (psp/nokia_srlinux.yaml) and by package sharedos (` +
+		path + `); a device of that pair would have two packages`
+	if len(inv.Findings) != 1 || inv.Findings[0].Rule != findings.RulePSPMatchesDuplicate || inv.Findings[0].Message != want ||
+		inv.Findings[0].Object != path || inv.Findings[0].Location == nil || inv.Findings[0].Location.File != path {
+		t.Errorf("findings %+v, want one %s at %s:\n  %s", inv.Findings, findings.RulePSPMatchesDuplicate, path, want)
+	}
+
+	shadow, _ := overrideWith(t, repo("psp", "nokia_srlinux.yaml"))
+	reg, err := Load(shadow)
+	if err != nil {
+		t.Fatalf("an override shadowing the embedded package by its NOS, with its pair, must load: %v", err)
+	}
+	if p, ok := reg.Match("Nokia", "SR Linux"); !ok || p.Origin != OriginOverride {
+		t.Errorf("Match(Nokia, SR Linux) = %+v, %v; want the override", p, ok)
 	}
 }
 

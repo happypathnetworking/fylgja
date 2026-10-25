@@ -219,6 +219,8 @@ func TestStaleNamesTheArtifactByThePackage(t *testing.T) {
 	for from, to := range map[string]string{
 		"id: nokia_srlinux":            "id: acme_os",
 		"nos: srlinux":                 "nos: acme_os",
+		"manufacturer: Nokia":          "manufacturer: Acme",
+		"platform: SR Linux":           "platform: AcmeOS",
 		"artifact_name: device-config": "artifact_name: acme-config",
 	} {
 		if !strings.Contains(derived, from) {

@@ -1,6 +1,6 @@
 # A defect fixture: the shipped package with bootstrap_via: push and a delivery that
 # carries no configuration lines. The bootstrap file would be written and never applied.
-psp_version: "0.6"
+psp_version: "0.7"
 
 platform:
   id: nokia_srlinux
@@ -8,6 +8,9 @@ platform:
   nos: srlinux
   versions: ["24.7"]                  # v24.7.1-330-g38f237abfe read from the booted image; 24.3 removed, no image here boots it
   device_class: router
+  matches:                            # the manufacturer and platform names a source of truth gives this platform, each compared exactly (format 0.7)
+    - manufacturer: Nokia
+      platform: SR Linux
 
 image:
   clab_kind: nokia_srlinux

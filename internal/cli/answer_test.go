@@ -514,7 +514,7 @@ func answerCases() []answerCase {
 				}}
 		}},
 		{"psp validate, refused (TestDefectFixturesAreNamedWithTheirLocation)", findings.OpPSPValidate, func(t *testing.T) answerWant {
-			paths := []string{defectPath("version-0-5.yaml")}
+			paths := []string{defectPath("version-0-6.yaml")}
 			files, err := readPackages(paths)
 			if err != nil {
 				t.Fatal(err)

@@ -1,5 +1,6 @@
-# Nokia SR Linux — the M0 platform.
-psp_version: "0.5"
+# A defect fixture: the shipped package with platform.matches empty. The schema refuses
+# it (minItems), and psp.matches.missing says why: a package with no pair matches no device.
+psp_version: "0.7"
 
 platform:
   id: nokia_srlinux
@@ -7,6 +8,7 @@ platform:
   nos: srlinux
   versions: ["24.7"]                  # v24.7.1-330-g38f237abfe read from the booted image; 24.3 removed, no image here boots it
   device_class: router
+  matches: []                         # no pair: psp.matches.missing
 
 image:
   clab_kind: nokia_srlinux

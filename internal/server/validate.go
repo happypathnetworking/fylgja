@@ -16,7 +16,9 @@ import (
 // runPSPValidate reports every defect in the whole set in one pass.
 //
 // The set is validated together, not file by file, because `psp.identity.duplicate`
-// is a property of the set: two packages each valid alone are a defect side by side.
+// and `psp.matches.duplicate` are properties of the set: two packages each valid alone
+// are a defect side by side when they claim one platform or name one manufacturer and
+// platform pair.
 //
 // The client read each file, under the path the operator gave, and refused one it could not
 // read; the server refuses one that is not one YAML document, then validates the set as the

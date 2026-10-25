@@ -41,6 +41,7 @@ func checkConsistency(p *PSP, path string, list *findings.List) {
 	}
 
 	checkVersion(p.PSPVersion, id, path, list)
+	checkMatches(p, path, list)
 
 	checkRules(p, path, list)
 	checkMappings(p, path, list)
@@ -80,6 +81,32 @@ func checkVersion(version, id, path string, list *findings.List) {
 	if version != "" && version != FormatVersion {
 		list.AddAt(findings.Rejection, findings.RulePSPVersionUnknown, id, fmt.Sprintf(
 			"package declares format version %q, this build understands %q", version, FormatVersion), path, 0)
+	}
+}
+
+// checkMatches holds the package to naming at least one manufacturer and platform pair,
+// each with both names. The schema's required and minItems refuse the same package as
+// psp.schema; this rule says what the field is for: a reader picks a device's package by
+// the two names, so a package with no pair, or a pair with an empty name, matches no
+// device and its platform could never be read.
+func checkMatches(p *PSP, path string, list *findings.List) {
+	reject := func(msg string) { list.AddAt(findings.Rejection, findings.RulePSPMatchesMissing, path, msg, path, 0) }
+	if len(p.Platform.Matches) == 0 {
+		reject("platform.matches names no manufacturer and platform pair; a reader picks a device's package by those two names, so this package would match no device")
+		return
+	}
+	for i, m := range p.Platform.Matches {
+		var empty []string
+		if m.Manufacturer == "" {
+			empty = append(empty, "manufacturer")
+		}
+		if m.Platform == "" {
+			empty = append(empty, "platform")
+		}
+		if len(empty) > 0 {
+			reject(fmt.Sprintf("match %d (%s) has no %s name; a reader compares both names exactly, so it would match no device",
+				i+1, m, strings.Join(empty, " and no ")))
+		}
 	}
 }
 
@@ -478,6 +505,33 @@ func checkDuplicateIdentity(pkgs []*PSP, list *findings.List) {
 	}
 }
 
+// checkDuplicateMatch refuses two packages of one set that name one manufacturer and
+// platform pair: a device of that pair would have two packages, and which one built its
+// node would be an accident of order. A pair named twice in one package is the same
+// package twice, not a defect. Each finding names the package that repeats the pair, at
+// its file, and the package that named it first.
+func checkDuplicateMatch(pkgs []*PSP, list *findings.List) {
+	first := map[Match]*PSP{}
+	for _, p := range pkgs {
+		for _, m := range p.Platform.Matches {
+			if m.Manufacturer == "" || m.Platform == "" {
+				continue
+			}
+			prior, dup := first[m]
+			if !dup {
+				first[m] = p
+				continue
+			}
+			if prior == p {
+				continue
+			}
+			list.AddAt(findings.Rejection, findings.RulePSPMatchesDuplicate, p.Path, fmt.Sprintf(
+				"%s is matched by package %s (%s) and by package %s (%s); a device of that pair would have two packages",
+				m, prior.Platform.ID, prior.Path, p.Platform.ID, p.Path), p.Path, 0)
+		}
+	}
+}
+
 // Validate checks one or more support package files.
 //
 // Entirely local: no Infrahub, no branch, no network. That is what makes it usable in
@@ -508,8 +562,8 @@ type File struct {
 // ValidateFiles checks one or more support packages as Validate checks the files they were
 // read from, every finding naming the path given and none read from disk: fylgja serve
 // validates the files a client sent under the paths the operator gave (M13). It is a set,
-// so psp.identity.duplicate still sees two
-// files that claim one platform.
+// so psp.identity.duplicate still sees two files that claim one platform, and
+// psp.matches.duplicate two that name one manufacturer and platform pair.
 func ValidateFiles(files []File) findings.List {
 	return validate(files, nil)
 }
@@ -543,6 +597,7 @@ func validate(files []File, unread []error) findings.List {
 		checkConsistency(p, path, &list)
 	}
 	checkDuplicateIdentity(parsed, &list)
+	checkDuplicateMatch(parsed, &list)
 	return list
 }
 

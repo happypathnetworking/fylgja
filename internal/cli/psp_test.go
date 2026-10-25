@@ -67,13 +67,15 @@ func TestDefectFixturesAreNamedWithTheirLocation(t *testing.T) {
 		{"mappings-unknown-rule.yaml", findings.RulePSPMappingsInvalid},
 		{"facet-missing.yaml", findings.RulePSPSchema},
 		{"version-unknown.yaml", findings.RulePSPVersionUnknown},
-		{"version-0-5.yaml", findings.RulePSPVersionUnknown},
+		{"version-0-6.yaml", findings.RulePSPVersionUnknown},
+		{"version-0-6-m11.yaml", findings.RulePSPVersionUnknown},
 		{"version-0-5-m10.yaml", findings.RulePSPVersionUnknown},
 		{"version-0-3-m5.yaml", findings.RulePSPVersionUnknown},
 		{"fidelity-link-change-missing.yaml", findings.RulePSPSchema},
 		{"bootstrap-via-no-lines.yaml", findings.RulePSPConfigBootstrapVia},
 		{"tls-not-boolean.yaml", findings.RulePSPSchema},
 		{"eapi-without-push.yaml", findings.RulePSPConfigPushMissing},
+		{"matches-missing.yaml", findings.RulePSPMatchesMissing},
 	} {
 		t.Run(tc.fixture, func(t *testing.T) {
 			path := defectPath(tc.fixture)
@@ -187,6 +189,30 @@ func TestDuplicateIdentityIsFoundAcrossTheSet(t *testing.T) {
 	// Each file alone is fine; only the pair is a problem.
 	if code, _ := runPSPDoc(t, copied); code != findings.ExitOK {
 		t.Errorf("the second copy was rejected on its own (exit %d)", code)
+	}
+}
+
+// Two packages that name one manufacturer and platform pair are a defect of the set (format
+// 0.7): psp validate names the second file, the pair and both packages, and each file alone
+// is valid.
+func TestSharedMatchIsFoundAcrossTheSet(t *testing.T) {
+	shipped := repoPath("psp", "nokia_srlinux.yaml")
+	shared := defectPath("matches-shared.yaml")
+
+	code, doc := runPSPDoc(t, shipped, shared)
+	if code != findings.ExitRejected {
+		t.Fatalf("exit %d, want 1: %+v", code, doc.Findings)
+	}
+	want := `manufacturer "Nokia", platform "SR Linux" is matched by package nokia_srlinux (` + shipped +
+		`) and by package sharedos (` + shared + `); a device of that pair would have two packages`
+	if len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RulePSPMatchesDuplicate || doc.Findings[0].Message != want ||
+		doc.Findings[0].Location == nil || doc.Findings[0].Location.File != shared {
+		t.Errorf("findings %+v, want one %s at %s:\n  %s", doc.Findings, findings.RulePSPMatchesDuplicate, shared, want)
+	}
+	for _, alone := range []string{shipped, shared} {
+		if code, doc := runPSPDoc(t, alone); code != findings.ExitOK {
+			t.Errorf("%s was rejected on its own (exit %d): %+v", alone, code, doc.Findings)
+		}
 	}
 }
 

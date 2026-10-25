@@ -1,7 +1,7 @@
 # Arista EOS — the second platform, as containerlab's `ceos` kind runs the imported
 # cEOS image. Every value below was measured or read from a booted node, and what was
 # measured is named beside it.
-psp_version: "0.6"
+psp_version: "0.7"
 
 platform:
   id: arista_eos
@@ -9,6 +9,9 @@ platform:
   nos: eos
   versions: ["4.32"]                  # gNMI and `show version` both read 4.32.0.2F-41889544.43202F (engineering build), which matches a listed 4.32
   device_class: switch                # modelName cEOSLab
+  matches:                            # the manufacturer and platform names a source of truth gives this platform, each compared exactly (format 0.7)
+    - manufacturer: Arista
+      platform: EOS
 
 image:
   clab_kind: ceos

@@ -33,6 +33,8 @@ func twoPlatformRegistry(t *testing.T, secondForwarding string) *psp.Registry {
 	for from, to := range map[string]string{
 		"id: nokia_srlinux":               "id: acme_os",
 		"nos: srlinux":                    "nos: acme_os",
+		"manufacturer: Nokia":             "manufacturer: Acme",
+		"platform: SR Linux":              "platform: AcmeOS",
 		"production_forwarding: hardware": "production_forwarding: " + secondForwarding,
 	} {
 		if !strings.Contains(second, from) {

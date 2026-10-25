@@ -12,13 +12,16 @@
 # The naming is illustrative, EOS-style, taken from public documentation and never
 # verified against a running image. It is never shipped or deployed. cEOS itself does not
 # name its ports this way: it carries production's names one to one (psp/arista_eos.yaml).
-psp_version: "0.6"
+psp_version: "0.7"
 
 platform:
   id: chassisos
   vendor: example
   nos: chassisos
   device_class: router
+  matches:
+    - manufacturer: ChassisOS Inc
+      platform: ChassisOS
 
 image:
   clab_kind: chassisos

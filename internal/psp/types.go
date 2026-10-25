@@ -6,10 +6,13 @@
 // may branch on a platform's identity.
 package psp
 
-// FormatVersion is the PSP format this build understands. 0.6 (M11) adds the required
-// fidelity.link_change and gives mode: replace D-033's meaning; nothing of it enters a
-// bundle.
-const FormatVersion = "0.6"
+import "fmt"
+
+// FormatVersion is the PSP format this build understands. 0.6 (M11) added the required
+// fidelity.link_change and gave mode: replace D-033's meaning; 0.7 (017) adds the required
+// platform.matches, the manufacturer and platform names a source of truth gives the
+// platform. Nothing of either enters a bundle.
+const FormatVersion = "0.7"
 
 // Acquisition says how an image is obtained, which determines what CI and lab hosts
 // must have provisioned.
@@ -99,6 +102,24 @@ type Identity struct {
 	NOS         string   `yaml:"nos" json:"nos"`
 	Versions    []string `yaml:"versions,omitempty" json:"versions,omitempty"`
 	DeviceClass string   `yaml:"device_class" json:"device_class"`
+	// Matches are the manufacturer and platform name pairs this package is, as a source
+	// of truth names them (format 0.7): required, at least one, and no two packages of a
+	// registry share one (psp.matches.missing, psp.matches.duplicate).
+	Matches []Match `yaml:"matches" json:"matches"`
+}
+
+// Match is one manufacturer and platform name pair a package is. A reader picks a
+// device's package by comparing its source's two names with each pair, both exactly,
+// letter case and spacing included (Registry.Match).
+type Match struct {
+	Manufacturer string `yaml:"manufacturer" json:"manufacturer"`
+	Platform     string `yaml:"platform" json:"platform"`
+}
+
+// String names the pair as the findings do: manufacturer "Acme", platform "AcmeOS",
+// quoted, so a trailing space or a letter's case is visible.
+func (m Match) String() string {
+	return fmt.Sprintf("manufacturer %q, platform %q", m.Manufacturer, m.Platform)
 }
 
 // Resources is the per-node budget used for scheduling. Per-platform, never global:

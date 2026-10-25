@@ -1,13 +1,16 @@
 # Synthetic platform for tier-1 tests of a heterogeneous bundle. It
 # describes no real NOS and never boots: its only job is to wait under budgets that
 # differ from fastos.yaml's, so a test can see each node waiting under its own.
-psp_version: "0.6"
+psp_version: "0.7"
 
 platform:
   id: slowos
   vendor: example
   nos: slowos
   device_class: router
+  matches:
+    - manufacturer: SlowOS Inc
+      platform: SlowOS
 
 image:
   clab_kind: slowos

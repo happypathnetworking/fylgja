@@ -15,11 +15,13 @@ import (
 )
 
 // Registry is the set of platforms this build supports, keyed by the NOS identifier
-// that devices carry (the join from Device.platform.nos).
+// that devices carry (the join from Device.platform.nos), which is also what an override
+// package shadows an embedded one by.
 type Registry struct {
-	byNOS  map[string]*PSP
-	byID   map[string]*PSP
-	byKind map[string]*PSP
+	byNOS   map[string]*PSP
+	byID    map[string]*PSP
+	byKind  map[string]*PSP
+	byMatch map[Match]*PSP
 }
 
 // Lookup returns the package for a NOS identifier, and whether one exists. A missing
@@ -44,26 +46,58 @@ func (r *Registry) LookupKind(kind string) (*PSP, bool) {
 	return p, ok
 }
 
-// index rebuilds the id and kind joins from the packages that survived shadowing. When
-// two packages share an id or a kind, the one whose NOS sorts first answers, so the
-// answer never depends on map order.
-func (r *Registry) index() {
+// Match returns the package that names the manufacturer and platform pair, and whether one
+// does: the join from a source of truth's two names (format 0.7). Both names are compared
+// exactly, letter case and spacing included, so "acme" / "Acme-OS" matches nothing that
+// names "Acme" / "AcmeOS". No two packages of a registry share a pair: Load refuses one
+// that would.
+func (r *Registry) Match(manufacturer, platform string) (*PSP, bool) {
+	p, ok := r.byMatch[Match{Manufacturer: manufacturer, Platform: platform}]
+	return p, ok
+}
+
+// index rebuilds the id, kind and match joins from the packages that survived shadowing.
+// When two packages share an id or a kind, the one whose NOS sorts first answers, so the
+// answer never depends on map order. Two that share a manufacturer and platform pair are
+// refused instead, under psp.matches.duplicate as psp validate names it, since a device of
+// that pair would have two packages: the registry is not built. The embedded packages are
+// held first, so the finding is at the override's file, the one an operator can change.
+func (r *Registry) index() error {
 	r.byID = map[string]*PSP{}
 	r.byKind = map[string]*PSP{}
+	r.byMatch = map[Match]*PSP{}
+	var embedded, override []*PSP
 	for _, nos := range r.Platforms() {
 		p := r.byNOS[nos]
+		if p.Origin == OriginEmbedded {
+			embedded = append(embedded, p)
+		} else {
+			override = append(override, p)
+		}
 		if _, taken := r.byID[p.Platform.ID]; !taken {
 			r.byID[p.Platform.ID] = p
 		}
 		if _, taken := r.byKind[p.Image.ClabKind]; !taken {
 			r.byKind[p.Image.ClabKind] = p
 		}
+		for _, m := range p.Platform.Matches {
+			if _, taken := r.byMatch[m]; !taken {
+				r.byMatch[m] = p
+			}
+		}
 	}
+	var list findings.List
+	checkDuplicateMatch(append(embedded, override...), &list)
+	if list.Rejected() {
+		return &InvalidError{Findings: list}
+	}
+	return nil
 }
 
 // InvalidError reports that an override directory holds a package `psp validate`
-// rejects. It carries the findings, so a command can report them under their own psp.*
-// identifiers as a rejection rather than as a failure to load.
+// rejects, or one that names the pair of an embedded package it does not shadow
+// (psp.matches.duplicate). It carries the findings, so a command can report them under
+// their own psp.* identifiers as a rejection rather than as a failure to load.
 type InvalidError struct {
 	Findings findings.List
 }
@@ -165,7 +199,11 @@ func FromDir(dir string) ([]*PSP, error) {
 // refuses one `psp validate` rejects, under the rule that names its defect, instead of
 // accepting it and failing later under the wrong identifier (Constitution II, X).
 // Embedded packages are not re-validated here: TestShippedPackagesAreValidAndEmbedded
-// guarantees them at build time.
+// guarantees them at build time. The packages that survive shadowing, embedded and
+// override together, are then held to sharing no manufacturer and platform pair: an
+// override valid alone that names an embedded package's pair under another NOS is an
+// *InvalidError carrying psp.matches.duplicate, so fylgja serve and fylgja worker run
+// refuse it at start.
 func Load(overrideDir string) (*Registry, error) {
 	r := &Registry{byNOS: map[string]*PSP{}}
 	embedded, err := Embedded()
@@ -176,7 +214,9 @@ func Load(overrideDir string) (*Registry, error) {
 		r.byNOS[p.Platform.NOS] = p
 	}
 	if overrideDir == "" {
-		r.index()
+		if err := r.index(); err != nil {
+			return nil, err
+		}
 		return r, nil
 	}
 	if _, err := os.Stat(overrideDir); err != nil {
@@ -197,7 +237,9 @@ func Load(overrideDir string) (*Registry, error) {
 	for _, p := range over {
 		r.byNOS[p.Platform.NOS] = p
 	}
-	r.index()
+	if err := r.index(); err != nil {
+		return nil, err
+	}
 	return r, nil
 }
 

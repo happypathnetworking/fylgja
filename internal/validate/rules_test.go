@@ -361,6 +361,8 @@ func TestDisagreeingForwardingIsNoLongerRefused(t *testing.T) {
 	for from, to := range map[string]string{
 		"id: nokia_srlinux":               "id: acme_os",
 		"nos: srlinux":                    "nos: acme_os",
+		"manufacturer: Nokia":             "manufacturer: Acme",
+		"platform: SR Linux":              "platform: AcmeOS",
 		"production_forwarding: hardware": "production_forwarding: software",
 	} {
 		if !strings.Contains(second, from) {

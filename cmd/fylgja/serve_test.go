@@ -127,7 +127,7 @@ func unresolvableStateRoot(t *testing.T) string {
 // the findings text psp validate gives for it, as the worker prints it.
 func invalidPackageDir(t *testing.T) (dir, text string) {
 	t.Helper()
-	src, err := os.ReadFile(repoPath("testdata", "psp", "defects", "version-0-5.yaml"))
+	src, err := os.ReadFile(repoPath("testdata", "psp", "defects", "version-0-6.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,6 +146,34 @@ func invalidPackageDir(t *testing.T) (dir, text string) {
 	}
 	if !strings.Contains(b.String(), findings.RulePSPVersionUnknown) {
 		t.Fatalf("the package's findings do not name %s:\n%s", findings.RulePSPVersionUnknown, b.String())
+	}
+	return dir, b.String()
+}
+
+// sharedPairDir is an override directory holding a package valid alone that names the
+// embedded SR Linux package's pair under another NOS, and the findings text the registry's
+// load gives for it, as the server prints it.
+func sharedPairDir(t *testing.T) (dir, text string) {
+	t.Helper()
+	src, err := os.ReadFile(repoPath("testdata", "psp", "defects", "matches-shared.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir = t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "sharedos.yaml"), src, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = psp.Load(dir)
+	var invalid *psp.InvalidError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("psp.Load(%s) = %v, want the package refused", dir, err)
+	}
+	var b bytes.Buffer
+	if err := findings.NewDocument(findings.OpPSPValidate, nil, invalid.Findings).WriteText(&b); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.String(), findings.RulePSPMatchesDuplicate) {
+		t.Fatalf("the package's findings do not name %s:\n%s", findings.RulePSPMatchesDuplicate, b.String())
 	}
 	return dir, b.String()
 }
@@ -216,6 +244,13 @@ func TestServeRefusesToStartInOrder(t *testing.T) {
 		{name: "an invalid override package from FYLGJA_PSP_DIR", free: true, setup: func(t *testing.T) (*serveOptions, *lockedBuffer, *lockedBuffer, string) {
 			t.Setenv(lab.EnvStateRoot, t.TempDir())
 			dir, text := invalidPackageDir(t)
+			o, out, errb := serveTestOptions("", "", map[string]string{api.EnvToken: serveToken, lab.EnvPSPDir: dir})
+			return o, out, errb, text + "fylgja serve: refusing to serve with an invalid support package\n"
+		}},
+		// Valid alone, refused by the registry's load beside the embedded packages (017).
+		{name: "an override package sharing a pair, from FYLGJA_PSP_DIR", free: true, setup: func(t *testing.T) (*serveOptions, *lockedBuffer, *lockedBuffer, string) {
+			t.Setenv(lab.EnvStateRoot, t.TempDir())
+			dir, text := sharedPairDir(t)
 			o, out, errb := serveTestOptions("", "", map[string]string{api.EnvToken: serveToken, lab.EnvPSPDir: dir})
 			return o, out, errb, text + "fylgja serve: refusing to serve with an invalid support package\n"
 		}},

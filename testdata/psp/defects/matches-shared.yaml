@@ -1,0 +1,81 @@
+# A defect fixture: a third package, testdata/psp/heterogeneous/fastos.yaml under
+# another id, NOS and kind, that names the shipped SR Linux package's pair, Nokia /
+# SR Linux. Valid alone; beside psp/nokia_srlinux.yaml, in psp validate or as an override
+# the registry loads beside the embedded packages, it is psp.matches.duplicate.
+psp_version: "0.7"
+
+platform:
+  id: sharedos
+  vendor: example
+  nos: sharedos
+  device_class: router
+  matches:
+    - manufacturer: Nokia
+      platform: SR Linux
+
+image:
+  clab_kind: sharedos
+  ref: example.invalid/sharedos:0
+  acquisition: public_registry
+  resources:
+    cpu: 1
+    memory_mb: 2048
+  deploy_timeout_s: 180
+  destroy_timeout_s: 60
+
+interfaces:
+  rules:
+    - name: ethernet
+      match: "ethernet-{slot}/{port}"
+      ranges: { slot: [1, 1], port: [1, 32] }
+      port: "e{slot}-{port}"
+      node_name: "ethernet-{slot}/{port}"
+      lossy: false
+    - name: management
+      management: true
+      port: mgmt0
+      node_name: mgmt0
+  mappings:
+    - { production: ethernet-1/1, rule: ethernet, port: e1-1, node_name: ethernet-1/1 }
+    - { production: ethernet-1/33, rule: ethernet, unmappable: out_of_range }
+    - { production: mgmt0, rule: management, port: mgmt0, node_name: mgmt0 }
+
+config:
+  startup_format: cli
+  delivery: json_rpc
+  commit: explicit
+  artifact_name: device-config
+  artifact_content_types: ["text/plain"]
+  mode: merge
+  push_timeout_s: 30
+  push:
+    scheme: https
+    port: 443
+    login:
+      username_env: FYLGJA_FASTOS_USERNAME
+      password_env: FYLGJA_FASTOS_PASSWORD
+  bootstrap:
+    - "set / system name host-name {node}"
+    - "set / interface {interface} admin-state enable"
+
+state:
+  transport: gnmi
+  openconfig_coverage: full
+
+readiness:
+  probe: gnmi_get
+  path: /system/information
+  encoding: json_ietf
+  port: 57400
+  timeout_s: 30
+  login:
+    username_env: FYLGJA_FASTOS_USERNAME
+    password_env: FYLGJA_FASTOS_PASSWORD
+
+capabilities: [bgp]
+
+fidelity:
+  production_forwarding: hardware
+  approximations:
+    - Synthetic test platform; nothing about it is measured
+  link_change: live

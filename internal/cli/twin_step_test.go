@@ -1398,10 +1398,11 @@ func overridePackage(t *testing.T, id, old, new string) string {
 	return dir
 }
 
-// --branch, --at, --interval and --no-follow are not flags of twin step: flag parsing
-// refuses each, exit 2, before anything is read.
+// --branch, --at, --interval and --no-follow are not flags of twin step, and neither is 017's
+// --scope, since a step reads under its record's: flag parsing refuses each, exit 2, before
+// anything is read.
 func TestStepTakesNoBranchFlags(t *testing.T) {
-	for _, flag := range []string{"--branch=x", "--at=x", "--interval=1m", "--no-follow"} {
+	for _, flag := range []string{"--branch=x", "--at=x", "--interval=1m", "--no-follow", "--scope=tag:fylgja"} {
 		t.Run(flag, func(t *testing.T) {
 			h := stepHost(t, "plan-link-added.json", nil)
 			h.clab.calls = nil

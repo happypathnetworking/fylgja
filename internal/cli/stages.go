@@ -26,6 +26,10 @@ type stageFlags struct {
 	// branchGiven is whether --branch was given at all, apart from its value: an explicit
 	// empty one is a branch refused, not one left out (M4's --interval= precedent).
 	branchGiven bool
+	// scope is --scope as given, sent only when scopeGiven: not given, the server's default
+	// stands, and an explicit empty one is the server's to refuse (017).
+	scope      string
+	scopeGiven bool
 }
 
 func newStageListCmd(opts *options) *cobra.Command {
@@ -45,10 +49,12 @@ func newStageListCmd(opts *options) *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			f.branchGiven = cmd.Flags().Changed("branch")
+			f.scopeGiven = cmd.Flags().Changed("scope")
 			return runStageList(cmd.Context(), opts, f)
 		},
 	}
 	cmd.Flags().StringVar(&f.branch, "branch", "", "list the open proposed change of this source branch alone")
+	cmd.Flags().StringVar(&f.scope, "scope", "", scopeUsage)
 	return cmd
 }
 
@@ -68,19 +74,23 @@ func newStagePlanCmd(opts *options) *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			f.branchGiven = cmd.Flags().Changed("branch")
+			f.scopeGiven = cmd.Flags().Changed("scope")
 			return runStagePlan(cmd.Context(), opts, f)
 		},
 	}
 	cmd.Flags().StringVar(&f.branch, "branch", "", "the source branch of the proposed change to plan (required)")
+	cmd.Flags().StringVar(&f.scope, "scope", "", scopeUsage)
 	return cmd
 }
 
-// stageArgs are --branch as given: present whenever the flag was, an empty one included.
+// stageArgs are --branch and --scope as given: each present whenever its flag was, an empty
+// one included.
 func stageArgs(f *stageFlags) given {
 	a := given{}
 	if f.branchGiven {
 		a["branch"] = f.branch
 	}
+	a.scope(f.scope, f.scopeGiven)
 	return a
 }
 

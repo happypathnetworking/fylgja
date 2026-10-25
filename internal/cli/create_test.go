@@ -1010,6 +1010,35 @@ func TestCreateFlagsConflict(t *testing.T) {
 	}
 }
 
+// The scope a create names is its run's and its document's, over the server's default; with
+// none, the default is (017).
+func TestCreateCarriesItsScope(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		flags createFlags
+		want  string
+	}{
+		{"given", createFlags{branch: "fylgja-fixture", noFollow: true, scope: "tag:lab-b", scopeGiven: true}, "tag:lab-b"},
+		{"the default", createFlags{branch: "fylgja-fixture", noFollow: true}, defaultScope},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			svc := &fakeService{runID: "run-1", result: readyResult()}
+			useService(t, svc)
+			useInterrupts(t)
+			var err error
+			captureStdout(t, func() { err = runCreate(context.Background(), &options{asJSON: true}, &c.flags) })
+			code, doc := exitOf(t, err)
+			if code != findings.ExitOK || len(svc.started) != 1 {
+				t.Fatalf("exit %d, started %+v; want 0 and one run", code, svc.started)
+			}
+			if svc.started[0].Scope != c.want || doc.Subject == nil || doc.Subject.Scope != c.want {
+				t.Errorf("the run's scope %q, the subject %+v; want %s in both", svc.started[0].Scope, doc.Subject, c.want)
+			}
+			validateM10Document(t, doc)
+		})
+	}
+}
+
 // A --no-follow create starts M3's run: its input is M3's for the same flags but for
 // stop_following, which every run the CLI starts carries, and nothing follows.
 func TestCreateNoFollow(t *testing.T) {

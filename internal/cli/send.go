@@ -45,6 +45,19 @@ func (g given) bool(name string, value bool) {
 	}
 }
 
+// scope names --scope whenever it was given, an empty one included, which the server
+// refuses as scope.invalid; not given, the request names none, and the server's default
+// stands (017).
+func (g given) scope(value string, wasGiven bool) {
+	if wasGiven {
+		g["scope"] = value
+	}
+}
+
+// scopeUsage is --scope's help on the five commands that read intent under one (017).
+const scopeUsage = "the devices to read, tag:<name>: every device carrying the tag of that name (default: the server's " +
+	"FYLGJA_DEFAULT_SCOPE)"
+
 // progress is how far an answer got, which a failure of the transport names.
 type progress struct {
 	// started is whether the server had begun to start a run: its start frame.

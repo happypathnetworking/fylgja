@@ -29,6 +29,10 @@ type readFlags struct {
 	// empty one is a reference refused, not one left out (M4's --interval= precedent).
 	stageGiven bool
 	out        string
+	// scope is --scope as given, sent only when scopeGiven: not given, the server's default
+	// stands, and an explicit empty one is the server's to refuse (017).
+	scope      string
+	scopeGiven bool
 }
 
 // fromStage is whether the read names a stage: --stage given, whatever its value, or a
@@ -49,6 +53,7 @@ func newIntentReadCmd(opts *options) *cobra.Command {
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			f.stageGiven = cmd.Flags().Changed("stage")
+			f.scopeGiven = cmd.Flags().Changed("scope")
 			return runRead(cmd.Context(), opts, f)
 		},
 	}
@@ -58,6 +63,7 @@ func newIntentReadCmd(opts *options) *cobra.Command {
 	cmd.Flags().StringVar(&f.stage, "stage", "",
 		"stage to read, <branch>/<label>: the pinned branch and at a proposed change's stage resolves to")
 	cmd.Flags().StringVar(&f.out, "out", "", "path of the CTM file to write (required)")
+	cmd.Flags().StringVar(&f.scope, "scope", "", scopeUsage)
 	return cmd
 }
 
@@ -73,6 +79,7 @@ func runRead(ctx context.Context, opts *options, f *readFlags) error {
 		a["stage"] = f.stage
 	}
 	a.string("out", f.out)
+	a.scope(f.scope, f.scopeGiven)
 	return send(ctx, opts, findings.OpIntentRead, a, nil, handlers{
 		files: func(files []api.File) error {
 			if len(files) != 1 {

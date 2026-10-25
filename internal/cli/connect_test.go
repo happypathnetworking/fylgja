@@ -83,7 +83,7 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 	refusal := func(rule, step, object, message string) findings.Finding {
 		return findings.Finding{Severity: findings.Rejection, Rule: rule, Step: step, Object: object, Message: message}
 	}
-	for _, c := range []struct {
+	type refusalCase struct {
 		name string
 		args []string
 		// step, when set, builds the stage twin for twin step's cases.
@@ -94,7 +94,10 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 		// Infrahub names. A non-dry step asks the workflow service first whether a rehearsal is
 		// running (T080), so such a step was dialled once, after its flags' guards.
 		asked bool
-	}{
+		// noDefault serves the request from a server with no default scope (017).
+		noDefault bool
+	}
+	cases := []refusalCase{
 		// twin create (M1, M4, 014).
 		{name: "create with neither --branch nor --stage", args: []string{"twin", "create"},
 			want: refusal(findings.RuleOperationFailed, "", findings.OpTwinCreate, "--branch or --stage is required")},
@@ -158,8 +161,35 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 				"--wait= is empty; give a duration such as --wait=2m, or --wait alone for the default 2m0s")},
 		{name: "verify with a negative --wait", args: []string{"twin", "verify", "--wait=-5s"},
 			want: refusal(findings.RuleVerifyWaitInvalid, findings.StepStart, "--wait", "--wait=-5s is not a duration: a budget cannot be negative")},
+	}
+	// The scope on the five commands that read under one (017): a value that is not
+	// tag:<name>, an empty one included, and none beside a server with no default.
+	const notAScope = ` is not a scope: the accepted form is tag:<name>, the literal tag: and one word, the tag every device of the twin carries`
+	const noScope = "no --scope was given and the server has no default: name one with --scope tag:<name>, or set FYLGJA_DEFAULT_SCOPE where fylgja serve starts"
+	for _, args := range [][]string{
+		{"twin", "create", "--branch", "fylgja-fixture"},
+		{"twin", "rehearse", "--branch", "change-1"},
+		{"intent", "read", "--branch", "fylgja-fixture", "--out", "x.json"},
+		{"stage", "plan", "--branch", "change-1"},
+		{"stage", "list"},
 	} {
+		command := strings.Join(args[:2], " ")
+		cases = append(cases,
+			refusalCase{name: command + " with --scope fylgja", args: append(append([]string{}, args...), "--scope", "fylgja"),
+				want: refusal(findings.RuleScopeInvalid, findings.StepStart, "fylgja", `--scope "fylgja"`+notAScope)},
+			refusalCase{name: command + " with --scope=", args: append(append([]string{}, args...), "--scope="),
+				want: refusal(findings.RuleScopeInvalid, findings.StepStart, "", `--scope ""`+notAScope)},
+			refusalCase{name: command + " with no scope and no default", args: args, noDefault: true,
+				want: refusal(findings.RuleScopeUnset, findings.StepStart, "FYLGJA_DEFAULT_SCOPE", noScope)},
+		)
+	}
+	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
+			if c.noDefault {
+				saved := defaultScope
+				t.Cleanup(func() { defaultScope = saved })
+				defaultScope = ""
+			}
 			var infra *fakeInfrahub
 			before := 0
 			if c.step {

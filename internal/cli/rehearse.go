@@ -14,6 +14,10 @@ import (
 type rehearseFlags struct {
 	branch      string
 	branchGiven bool
+	// scope is --scope as given, sent only when scopeGiven: not given, the server's default
+	// stands, and an explicit empty one is the server's to refuse (017).
+	scope      string
+	scopeGiven bool
 }
 
 func newTwinRehearseCmd(opts *options) *cobra.Command {
@@ -42,10 +46,12 @@ func newTwinRehearseCmd(opts *options) *cobra.Command {
 		},
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			f.branchGiven = cmd.Flags().Changed("branch")
+			f.scopeGiven = cmd.Flags().Changed("scope")
 			return runTwinRehearse(cmd.Context(), opts, f)
 		},
 	}
 	cmd.Flags().StringVar(&f.branch, "branch", "", "the source branch of the proposed change to rehearse (required)")
+	cmd.Flags().StringVar(&f.scope, "scope", "", scopeUsage)
 	cmd.Flags().BoolVar(&opts.markdown, "markdown", false,
 		"emit the report as markdown on stdout and nothing else there, the progress and the findings on stderr")
 	return cmd
@@ -60,5 +66,7 @@ func runTwinRehearse(ctx context.Context, opts *options, f *rehearseFlags) error
 	if !f.branchGiven && f.branch == "" {
 		return fail(findings.OpTwinRehearse, nil, "--branch is required")
 	}
-	return send(ctx, opts, findings.OpTwinRehearse, given{"branch": f.branch}, nil, handlers{})
+	a := given{"branch": f.branch}
+	a.scope(f.scope, f.scopeGiven)
+	return send(ctx, opts, findings.OpTwinRehearse, a, nil, handlers{})
 }

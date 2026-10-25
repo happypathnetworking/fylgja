@@ -32,6 +32,10 @@ type createFlags struct {
 	interval      string
 	intervalGiven bool
 	noFollow      bool
+	// scope is --scope as given, sent only when scopeGiven: not given, the server's default
+	// stands, and an explicit empty one is the server's to refuse (017).
+	scope      string
+	scopeGiven bool
 }
 
 func newTwinCreateCmd(opts *options) *cobra.Command {
@@ -51,6 +55,7 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 			// operator gave; the flag's default is shown in the help alone.
 			f.intervalGiven = cmd.Flags().Changed("interval")
 			f.stageGiven = cmd.Flags().Changed("stage")
+			f.scopeGiven = cmd.Flags().Changed("scope")
 			return runCreate(cmd.Context(), opts, f)
 		},
 	}
@@ -65,6 +70,7 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 		"build the twin from the branch head and never check it: a frozen twin")
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false,
 		"read, compile, file the bundle and check the host; start no run")
+	cmd.Flags().StringVar(&f.scope, "scope", "", scopeUsage)
 	return cmd
 }
 
@@ -89,5 +95,6 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	}
 	a.bool("no_follow", f.noFollow)
 	a.bool("dry_run", f.dryRun)
+	a.scope(f.scope, f.scopeGiven)
 	return send(ctx, opts, findings.OpTwinCreate, a, nil, handlers{})
 }

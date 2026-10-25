@@ -1,0 +1,29 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+#
+# 017-dcim-reader, the migration's second document (D-057; plan.md "Order of the work",
+# research.md §1.9): the one-time removal of the four Fylgja generics from a `main` that
+# carries them, loaded by hand on the development host once the first document has
+# removed their implementers:
+#
+#   .venv/bin/infrahubctl schema load --branch main specs/017-dcim-reader/migration/2-generics-absent.yaml
+#
+# Verified 2026-10-25 against Infrahub 1.11.2 on a throwaway branch, after the first
+# document: the load took 48.0 s, the four generics left `GET /api/schema` and GraphQL
+# (`Cannot query field 'FylgjaDevice' on type 'Query'`), `FylgjaStage` and the library's
+# kinds were untouched, and a second check printed `No diff`. A fresh install (CI's) never
+# had these kinds and never loads this file.
+version: "1.0"
+generics:
+  - name: Device
+    namespace: Fylgja
+    state: absent
+  - name: Interface
+    namespace: Fylgja
+    state: absent
+  - name: Link
+    namespace: Fylgja
+    state: absent
+  - name: Platform
+    namespace: Fylgja
+    state: absent

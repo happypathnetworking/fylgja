@@ -1,0 +1,37 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+#
+# 017-dcim-reader, the migration's first document (D-057; plan.md "Order of the work",
+# research.md §1.9): the one-time removal, from a `main` that carries them, of the
+# reference schema's four concrete kinds and the contract kind. Loaded by hand on the
+# development host, once, after the demo window is closed (`-clear-main`) and before the
+# second document:
+#
+#   .venv/bin/infrahubctl schema load --branch main specs/017-dcim-reader/migration/1-reference-kinds-absent.yaml
+#
+# Two documents, not one: a single document naming the generics and their implementers
+# together is refused by `schema check` and `schema load` alike (`NetworkDevice:
+# Relationship 'interfaces' is referring an invalid peer 'FylgjaInterface'`), since the
+# implementers are validated against a schema the generics have already left. Verified
+# 2026-10-25 against Infrahub 1.11.2 on a throwaway branch holding the baseline's objects
+# (3 devices, 12 interfaces, 3 links, 1 platform, 1 contract): the load took 50.6 s, the
+# five kinds left `GET /api/schema` and GraphQL, the devices' three artifacts stayed, the
+# stage kind and the library's kinds were untouched, and a second check printed `No diff`.
+# A fresh install (CI's) never had these kinds and never loads this file.
+version: "1.0"
+nodes:
+  - name: Contract
+    namespace: Fylgja
+    state: absent
+  - name: Device
+    namespace: Network
+    state: absent
+  - name: Interface
+    namespace: Network
+    state: absent
+  - name: Link
+    namespace: Network
+    state: absent
+  - name: Platform
+    namespace: Network
+    state: absent

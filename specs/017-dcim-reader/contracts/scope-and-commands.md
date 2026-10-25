@@ -1,0 +1,96 @@
+# The scope, the commands, the server setting and the identifiers
+
+What moves in [cli.md](../../../contracts/cli.md) and [api.md](../../../contracts/api.md)
+for 017, to land there as "017: the scope and the DCIM reader". Identifiers, exit
+statuses and the JSON documents are the contract; text is illustrative except where a
+sentence is quoted. Everything not named here is as 015 left it.
+
+## The scope
+
+`tag:<name>`: the literal `tag:` and one shell word (`^tag:\S+$`). It names the devices a
+twin is of: every `DcimDevice` on the branch carrying the `BuiltinTag` of that name,
+whatever its status; ports and cables follow their devices.
+
+```
+fylgja twin create   --branch <b> [--at <t>] [--scope tag:<name>] …
+fylgja twin create   --stage <b>/<label> [--scope tag:<name>] …
+fylgja twin rehearse --branch <b> [--scope tag:<name>]
+fylgja intent read   --branch <b> | --stage <b>/<label> [--scope tag:<name>] --out ctm.json
+fylgja stage plan    --branch <b> [--scope tag:<name>]
+fylgja stage list    [--branch <b>] [--scope tag:<name>]      # the plan's addition; analyze settles it against FR-017
+```
+
+- Given, the scope is the request's. Not given, the server's `FYLGJA_DEFAULT_SCOPE`.
+  Every stage a command resolves, reads or plans is read under that one scope.
+- `twin step` takes no `--scope` (cobra's `unknown flag: --scope`, exit 2, no request): it
+  reads under the scope its twin's record carries. A following twin's checks read under
+  the record's scope too.
+- `twin show` prints it; `twin compile` takes none (the CTM carries it); `twin provision`,
+  `twin verify`, `twin destroy`, `schema check` and `psp validate` take none.
+- The checks `fylgja-step` and `fylgja-twin` send no `scope`.
+
+## The server
+
+| | |
+|---|---|
+| Variable | `FYLGJA_DEFAULT_SCOPE`, read by the server at start and never by a client or the worker; documented in `.env.example` under the server's variables; scaffolded by `scripts/bring-up.sh` as `tag:fylgja` |
+| Report line | `fylgja serve: default scope: tag:fylgja`, after the state root line; or `fylgja serve: default scope: unset (a request that names no scope is refused)` |
+| Refusal to start | none: an unset or empty value is reported, not refused; a value that is not `tag:<name>` is `fylgja serve: FYLGJA_DEFAULT_SCOPE <value> is not tag:<name>`, exit 2, before it listens |
+
+## The API
+
+`scope` is a new optional string argument of `twin.create`, `twin.rehearse`,
+`intent.read`, `stage.plan` and `stage.list`. The API's version stays `1`: a client that
+never sends it is served under the default. `twin.step` takes none: a request carrying it
+is `400`, `the request is not one: twin.step takes no argument "scope"`. Present and empty
+(`"scope": ""`) is `--scope=`, refused `scope.invalid`.
+
+## The identifiers
+
+| Rule | Severity, exit, step | Object | When |
+|---|---|---|---|
+| `scope.invalid` | rejection, 2, `start` | the value given | `--scope` is not `tag:<name>`, an empty value included; before any connection, after `--branch`'s and `--stage`'s guards |
+| `scope.unset` | rejection, 2, `start` | `FYLGJA_DEFAULT_SCOPE` | no `--scope` and the server has no default; before any connection |
+| `scope.empty` | rejection, 1, `read` (none on `intent.read`; `resolve` for a stage's branch point, as `contract.node.missing` was) | the scope | the device query answered 0 on the branch at the `at`; the rehearsal and `fylgja-step` pass over a branch point refused by this rule alone, as they passed over `contract.node.missing` |
+| `schema.kind.missing` | rejection, 1, `read` / none on `schema.check` | the kind | the branch's schema lacks a kind the mapping reads |
+| `schema.field.missing` | rejection, 1, `read` | `<kind>.<field>` | the kind lacks a field the mapping reads |
+| `schema.field.mismatch` | rejection, 1, `read` | `<kind>.<field>` | the field's kind, cardinality, peer or optionality is not the table's; names both |
+| `schema.choice.missing` | rejection, 1, `read` | `<kind>.<field>` | the dropdown lacks `management` (role) or `disabled` (status) |
+| `schema.used_by.missing` | rejection, 1, `read` | the generic | the generic is not implemented by the kind the mapping expects |
+| `platform.missing` | rejection, 1, `read` | the device | no platform, or a platform with no manufacturer; names what the device carries |
+| `platform.unmatched` | rejection, 1, `read` | the device | no package matches the pair exactly; names the pair and every package's pairs |
+| `omit.cable.ends` | info, 0, `read` | the cable | other than two ends |
+| `omit.cable.endpoint` | info, 0, `read` | the cable | an end not on a physical port |
+| `omit.cable.outside_scope` | info, 0, `read` | the cable | an end outside the scope |
+| `ctm.version.unsupported` | rejection, 1, none | the CTM file | `twin compile` given a CTM of another version; names both |
+| `psp.matches.missing` | rejection, 1, `verify` | the package path | no match, or a pair with an empty name |
+| `psp.matches.duplicate` | rejection, 1, `verify` | the package path | two packages name one pair; names both packages and the pair; also refuses `serve` and `worker run` at start, and the registry's load |
+
+Removed: `contract.version.mismatch`, `contract.node.missing`,
+`schema.generic.unimplemented`, `schema.artifact_target.missing`,
+`interface.iftype.unimplemented`, `interface.mgmt_only.iftype`,
+`interface.parent.missing`, `link.endpoint.iftype`. No new status, step or exit.
+`platform.unsupported` stays for a CTM naming a package this build lacks (validation and
+`twin compile`).
+
+## The text
+
+- `intent read`: `wrote ctm.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3
+  artifacts, 0 lossy mappings, 0 shared ports (branch b, scope tag:fylgja, schema
+  908871c3…)`; with omissions, `…, 1 cable omitted (…)`; with a stage, `stage b/seeded:
+  …` first as today.
+- `twin create`'s and `twin show`'s record line: `record: branch b at …, bundle_id …,
+  schema …, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9`;
+  a `7` record: `…, scope unknown (record 7)`.
+- `schema check`: `conformant with opsmill/schema-library@26336e9: DcimDevice,
+  DcimPlatform, OrganizationManufacturer, InterfacePhysical, DcimCable`, then `stages:
+  …`; `--json`'s `verified` is `{model, version, kinds: [{kind, fields: [...]}], stages}`.
+- `stage plan` and `twin rehearse` headings end `, scope tag:fylgja`.
+- The document's `subject` carries `scope` whenever a read was made under one.
+
+## `twin step` and the following twin
+
+The record's `provenance.scope` is the scope of every read the step and the follow make:
+the target's resolution, its staleness and its read. A `7` record is refused
+`step.twin.unsteppable` naming its version (`the twin was created from a record version
+this build no longer reads (twin.json 7); fylgja twin destroy clears it`), as a `5` is.

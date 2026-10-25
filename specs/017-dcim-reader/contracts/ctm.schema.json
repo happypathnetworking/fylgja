@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/contracts/ctm/v2",
+  "title": "Fylgja CTM (Canonical Topology Model) file v2 — the contract (017)",
+  "description": "Written by `fylgja intent read`, read by `fylgja twin compile`, and used as a fixture. From 017 (D-057) the CTM is the contract between a source of truth and the compiler: a reader maps one source's model onto it by one documented mapping and names, in the envelope, which reader produced it and which model version it read. ctm_version is 2: the device loses `role` and `site`, the interface loses `iftype`, `parent` and `addresses` (every interface is a port, cabled unless `mgmt_only`), the platform becomes the support package it resolved to (`package`) with an optional `version`, and the envelope loses `contract_version` and gains `scope`, `mapping` and `fidelity`, the reader's list of approximations and omissions, which the compiler copies into the manifest unchanged. A v1 file is refused wherever a CTM is read (`unsupported ctm_version \"1\", expected \"2\"`; ctm.version.unsupported at twin compile), and nothing converts one. Envelope per D-012, D-023 and D-057; per-object provenance tag per D-010. M5's artifact is unchanged: fetched by the read in the same pass and at the same `at` as the intent, verified against Infrahub's checksum, content as UTF-8 text, so a CTM file holds configuration and lives only in the bundle store.",
+  "type": "object",
+  "required": [
+    "ctm_version",
+    "envelope",
+    "devices",
+    "links"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "ctm_version": {
+      "const": "2"
+    },
+    "envelope": {
+      "type": "object",
+      "description": "The intent reference and what was read against it. `at` is present iff the operator supplied it, verbatim. `observed_at` is recorded on every read and never reaches the bundle. `scope` and `mapping` reach the bundle's provenance; `fidelity` reaches its fidelity block.",
+      "required": [
+        "branch",
+        "observed_at",
+        "schema_hash",
+        "scope",
+        "mapping",
+        "fidelity"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "type": "string",
+          "minLength": 1
+        },
+        "at": {
+          "type": "string",
+          "description": "Exactly as supplied on --at, or as a stage resolved it. At most six fractional digits: Infrahub honours microseconds and truncates beyond, so a finer value is rejected before it is queried."
+        },
+        "observed_at": {
+          "type": "string",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}\\.[0-9]{6}Z$",
+          "description": "UTC, local clock, the instant the read began; six fractional digits so it can be passed back as --at. Informational when `at` is present."
+        },
+        "schema_hash": {
+          "type": "string",
+          "description": "`main` of GET /api/schema?branch= at read time: the branch's schema hash, per install."
+        },
+        "scope": {
+          "type": "string",
+          "pattern": "^tag:\\S+$",
+          "description": "017: the scope the read was made under, as the request named it or the server's default gave it: `tag:<name>`, every device carrying the tag. Ports and cables follow their devices."
+        },
+        "mapping": {
+          "type": "object",
+          "description": "017: which reader produced this CTM and which version of which model it read, so a CTM says what its mapping was. `reader` names the mapping (`infrahub-dcim` for the Infrahub reader of the schema library's DCIM); `model` and `version` name the source model and the version the reader was written against (the library's pinned commit).",
+          "required": [
+            "reader",
+            "model",
+            "version"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "reader": {
+              "type": "string",
+              "pattern": "^[a-z0-9][a-z0-9-]*$"
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1
+            },
+            "version": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "fidelity": {
+          "type": "array",
+          "description": "017 (Constitution X): one row per field the reader approximated and per object it omitted, written by the reader and copied into the manifest's fidelity.read unchanged by the compiler, which holds no table of any source's rows. Sorted by (disposition, object). Every CTM of the Infrahub reader carries three rows (interface.mgmt_only and interface.enabled approximated, platform.version omitted) and one omitted row per cable it could not place; [] only for a reader that approximates and omits nothing.",
+          "items": {
+            "type": "object",
+            "required": [
+              "disposition",
+              "object",
+              "source",
+              "reason"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "disposition": {
+                "enum": [
+                  "approximated",
+                  "omitted"
+                ]
+              },
+              "object": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The CTM field approximated (`interface.mgmt_only`, `interface.enabled`, `platform.version`) or the source object omitted (a cable, by its label or its id)."
+              },
+              "source": {
+                "type": "string",
+                "minLength": 1,
+                "description": "The source field or kind the row was read from: `InterfacePhysical.role`, `InterfacePhysical.status`, `DcimPlatform`, `DcimCable`."
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "devices": {
+      "type": "array",
+      "description": "Sorted by name; names unique. Every device read is in the scope, and every device in the CTM has a package: a device the reader could not match is refused at the read and never reaches a CTM.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "platform",
+          "interfaces"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1
+          },
+          "platform": {
+            "type": "object",
+            "description": "017: the support package the device's platform resolved to, by the package's declared matches (manufacturer and platform name, exactly), and the platform's version when the source carries one. The Infrahub reader never writes `version`: the library carries none, which its fidelity list records.",
+            "required": [
+              "package"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "package": {
+                "type": "string",
+                "pattern": "^[a-z0-9_]+$",
+                "description": "A package's platform.id (nokia_srlinux, arista_eos). A CTM naming a package this build lacks is refused platform.unsupported by validation and by twin compile."
+              },
+              "version": {
+                "type": "string"
+              }
+            }
+          },
+          "interfaces": {
+            "type": "array",
+            "description": "Sorted by name; names unique within the device. Every interface is a port: cabled when it terminates a link, the management port when mgmt_only, configured-not-cabled otherwise. A source's non-port interfaces (virtual, loopback, sub-interface) are never read.",
+            "items": {
+              "type": "object",
+              "required": [
+                "name"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "mgmt_only": {
+                  "type": "boolean",
+                  "default": false,
+                  "description": "The out-of-band management port; never cabled. The Infrahub reader approximates it from the port's role (management), and says so in the envelope's fidelity list."
+                },
+                "enabled": {
+                  "type": "boolean",
+                  "default": true,
+                  "description": "The port's intent admin state. The Infrahub reader approximates it from the port's status (disabled is false, every other value true), and says so."
+                },
+                "link": {
+                  "type": "string",
+                  "description": "Link id this interface terminates"
+                },
+                "provenance": {
+                  "$ref": "#/$defs/provenance"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "$ref": "#/$defs/provenance"
+          },
+          "artifact": {
+            "type": "object",
+            "description": "The device’s configuration artifact as Infrahub served it (D-028). Name is the definition’s artifact_name the device’s support package names; checksum is Infrahub’s own, verbatim (MD5 hex of the content); content is the bytes, unchanged, as text. No Infrahub identifier and no time of generation: a regeneration to identical bytes leaves the CTM and the bundle unchanged. Required of every device by validation (artifact.missing), not by the codec, so the refusal can name the device.",
+            "required": [
+              "name",
+              "content_type",
+              "checksum",
+              "content"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "content_type": {
+                "type": "string",
+                "pattern": "^text/"
+              },
+              "checksum": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{32}$"
+              },
+              "content": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "links": {
+      "type": "array",
+      "description": "Sorted by id. Each is a cable with exactly two ends, each a physical port of a device in the scope; the id is the two endpoints' identifiers sorted and joined with `|`. A cable with other ends is not here: it is an omitted row of the envelope's fidelity list.",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "endpoints"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "endpoints": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "object",
+              "required": [
+                "device",
+                "interface"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "device": {
+                  "type": "string"
+                },
+                "interface": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "provenance": {
+            "$ref": "#/$defs/provenance"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "provenance": {
+      "enum": [
+        "intent",
+        "observed",
+        "synthesized"
+      ],
+      "default": "intent",
+      "description": "Where this object came from (D-010). Omitted when `intent`, which is every object a reader writes."
+    }
+  }
+}

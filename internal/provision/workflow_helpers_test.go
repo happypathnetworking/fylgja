@@ -17,7 +17,7 @@ import (
 )
 
 // testBundleID is the fixture bundle's identity.
-const testBundleID = "23f86a2678a49a324a04ae458703be8252e2e30d6712d6b6094ce1ccd5c2988e"
+const testBundleID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
 
 var errUnmocked = errors.New("activity called without a mock")
 

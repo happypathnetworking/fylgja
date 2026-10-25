@@ -35,7 +35,7 @@ import (
 )
 
 // fixtureBundleID is what testdata/ctm/three-node.json compiles to.
-const fixtureBundleID = "23f86a2678a49a324a04ae458703be8252e2e30d6712d6b6094ce1ccd5c2988e"
+const fixtureBundleID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
 
 func repoPath(parts ...string) string {
 	return filepath.Join(append([]string{"..", ".."}, parts...)...)

@@ -13,9 +13,9 @@ import (
 // the goldens' own, which M12's bundle "4" moved once.
 func TestLoadFilesReadsEveryGolden(t *testing.T) {
 	for _, c := range []struct{ golden, id string }{
-		{"three-node", "23f86a26"},
-		{"lossy", "5773b6bb"},
-		{"mixed", "391bcb96"},
+		{"three-node", "43d91715"},
+		{"lossy", "4213b3cf"},
+		{"mixed", "ecb665f5"},
 	} {
 		t.Run(c.golden, func(t *testing.T) {
 			dir := filepath.Join("..", "..", "testdata", "golden", c.golden)

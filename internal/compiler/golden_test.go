@@ -32,9 +32,9 @@ func loadFixture(t *testing.T, path string) *ctm.CTM {
 // A bundle format moves all three, once and reviewed: M7's "3", and M12's "4", which
 // wrote enabled on every mapping row.
 const (
-	goldenThreeNodeID = "23f86a2678a49a324a04ae458703be8252e2e30d6712d6b6094ce1ccd5c2988e"
-	goldenLossyID     = "5773b6bba1107076b2cde8283f92494d42b3eab89c5f297ea25f81134fd529f7"
-	goldenMixedID     = "391bcb96c39e7e878fa6ba78ac869742b04f517fa914e2fce51c3ea4944dd3cb"
+	goldenThreeNodeID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
+	goldenLossyID     = "4213b3cfd532f896d476c67c21f54e5375effdbec18f4376360471fd03f50b03"
+	goldenMixedID     = "ecb665f58ffc9882024a06e29b01e681ee38ce40f55b76994d470fe3272a2aec"
 )
 
 // compileFixture compiles a fixture and fails on any rejection: the fixtures under

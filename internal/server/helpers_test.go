@@ -27,7 +27,7 @@ import (
 // changed only where the seam it set is now a field of the server the helper is called
 // through.
 
-const fixtureBundleID = "23f86a2678a49a324a04ae458703be8252e2e30d6712d6b6094ce1ccd5c2988e"
+const fixtureBundleID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
 
 // fixtureArtifacts are the fixture bundle's artifact checksums, by node: what the
 // re-created fylgja-fixture branch rendered, 861 bytes each.

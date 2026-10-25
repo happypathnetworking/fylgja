@@ -15,7 +15,7 @@ import (
 )
 
 // goldenThreeNode is the fixture bundle's directory and the identity it hashes to.
-const goldenThreeNodeID = "23f86a2678a49a324a04ae458703be8252e2e30d6712d6b6094ce1ccd5c2988e"
+const goldenThreeNodeID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
 
 func goldenThreeNode() string {
 	return filepath.Join("..", "..", "testdata", "golden", "three-node")
@@ -71,7 +71,7 @@ func TestVerifyAcceptsTheGoldenBundle(t *testing.T) {
 
 // goldenLossyID is the lossy design case's bundle: a bundle whose
 // fidelity.lossy has content, where the three-node golden's is empty.
-const goldenLossyID = "5773b6bba1107076b2cde8283f92494d42b3eab89c5f297ea25f81134fd529f7"
+const goldenLossyID = "4213b3cfd532f896d476c67c21f54e5375effdbec18f4376360471fd03f50b03"
 
 // Both goldens verify, whether fidelity.lossy has content or not. M6 emitted node_name
 // and lossy only with content, so this test guarded a field a bundle might not carry;

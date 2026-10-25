@@ -466,11 +466,14 @@ Rewritten whole at each release's close, never appended to.
     tier 1 covers, and CI's contract job runs on `main`'s push. No golden, no contract,
     API or findings version moved; the schemas' `$id` prefix did
     ([D-055](docs/decisions.md#d-055)).
-- **Next**: Release 0.3, not yet set with the operator ([roadmap](docs/roadmap.md#release-03)):
-  F-011 opens it, with F-022, F-014 (`016-probes`, its [brief](specs/016-probes/brief.md)
-  re-read first), F-012, and the follow of a rehearsal terminated outside Fylgja (015's
-  research §5.2). `infrahubctl schema format`'s order (014 research §8.2) is taken up with
-  contract 0.3.
+- **Next**: Release 0.3, set on 2026-10-25 as exploratory coding toward the production
+  refactor ([roadmap](docs/roadmap.md#release-03)), four specs in order: F-011
+  (`017-dcim-reader`, its [brief](specs/017-dcim-reader/brief.md)), F-024 snapshots, F-014
+  probes (`016-probes`, its [brief](specs/016-probes/brief.md) re-read against 017's
+  close), F-025 the NetBox reader; and the follow of a rehearsal terminated outside Fylgja
+  (015's research §5.2). What they explore toward is the roadmap's [production
+  shape](docs/roadmap.md#the-production-shape), a direction and not a decision. F-012 and F-022 left the release. `infrahubctl schema format`'s
+  order (014 research §8.2) is taken up with 017's schema changes.
 - **Open, the operator's**: file 014's upstream request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left

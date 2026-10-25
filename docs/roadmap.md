@@ -46,49 +46,115 @@ each, as [v0.1's](archive/v0.1-built.md) does M1 to M14.
 
 ## Release 0.3
 
-Not yet set with the operator. It opens with [F-011](#f-011), the schema library's DCIM
-implementing the generics under contract 0.3, then [F-022](#f-022), the sync into it,
-because a contract bump defines a release: 0.2 moves the twin record, the API and the CLI
-for stages while the contract stays 0.2, and 0.3 moves the contract once, with nothing
-added to the generics in between. It also takes two features moved from 0.2 on
-2026-10-21: [F-014](#f-014), probes, as `016-probes`, whose
-[brief](../specs/016-probes/brief.md) was written against 015 and is re-read against
-0.2's close before it is specified; and [F-012](#f-012), the skill
-`fylgja-rehearsing-changes`, as a chore. Their places in 0.3's order are set with the
-rest. What contract 0.3 changes is listed under [Decisions the
-order needs](#decisions-the-order-needs). The rest of the order below is untouched until
-0.3 is set. It also takes one defect from 015, with no spec: a client following a rehearsal
-that is terminated outside Fylgja answers only once its abandoned children close, which with
-no worker is never (`specs/015-proposed-change-rehearsal/research.md` §5.2), and a
-`fylgja-twin` check following one waits out its timeout.
+**Set with the operator on 2026-10-25: exploratory coding that informs the refactor of
+Fylgja into a production system.** The production shape, discussed and tabled the same
+day, is a core that builds, updates and destroys a twin from one input, under an
+orchestrator that owns stages, rehearsals and whatever reads a report, and may call other
+tools along the way. 0.3 does not build that split; it proves the seams the split will
+cut along, in four specs, in this order:
+
+1. **[F-011](#f-011)**, the Infrahub reader reading the schema library's DCIM directly,
+   the CTM becoming the contract in place of the generics, as `017-dcim-reader`
+   ([brief](../specs/017-dcim-reader/brief.md)): the reader seam against the model OpsMill
+   publishes.
+2. **[F-024](#f-024)**, snapshots: the CTM, each node's configuration and the probe
+   declarations as one content-addressed document, the core's one input, which the
+   Infrahub reader produces: the core and orchestrator seam itself.
+3. **[F-014](#f-014)**, probes, `ping` only, as `016-probes`
+   ([brief](../specs/016-probes/brief.md), re-read against 017's close): a node declared
+   outside intent, the explicit-instruction input to the core.
+4. **[F-025](#f-025)**, a reader of NetBox with its branching plugin, producing snapshots
+   and taking a stage as a snapshot: the reader seam against a second source of truth.
+
+A contract bump defines a release: 0.2 moved the twin record, the API and the CLI for
+stages while the contract stayed 0.2, and 0.3 retires the generics at F-011, after which
+the CTM is the contract and nothing moves it again in the release. What F-011 changes is
+under [Decisions the order needs](#decisions-the-order-needs). The release also takes one defect from 015, with
+no spec: a client following a rehearsal that is terminated outside Fylgja answers only once
+its abandoned children close, which with no worker is never
+(`specs/015-proposed-change-rehearsal/research.md` §5.2), and a `fylgja-twin` check
+following one waits out its timeout. Two features left the release on 2026-10-25:
+[F-012](#f-012), the skill, which bolts on later and touches no core, and
+[F-022](#f-022), the sync from NetBox, superseded by [F-025](#f-025).
+
+<a id="the-production-shape"></a>
+## The production shape
+
+**A direction, not a decision.** Discussed with the operator on 2026-10-25 and tabled while
+[Release 0.3](#release-03) proves the seams; nothing here binds a plan, and each part
+becomes a decision entry when a feature takes it up. It is recorded so that 0.3's specs
+know what they are exploring toward.
+
+- **Two components.** A **core** that builds, updates and destroys a twin from one input,
+  the snapshot ([F-024](#f-024)), and exposes it through the API: create from a snapshot,
+  step to one, destroy, show, verify, and an explicit mutation of a node or a link. Nothing
+  in the core knows a branch, a proposed change, a stage or a source of truth. An
+  **orchestrator** that owns everything else: the readers that turn a source of truth into
+  snapshots, stages and their resolution, the rehearsal, the follow, the checks and
+  journal entries posted back to the source, and whatever a customer adds to a flow, a
+  health check or a configuration tool among them. The orchestrator drives the core
+  through the API alone, never by starting its workflows, so either side can be replaced.
+- **Temporal stays in the core**, where mid-flight durability matters, and is not the
+  orchestrator's integration surface.
+- **Constitution I is kept for the core and freed for the orchestrator** by a decision
+  entry: a core service and an orchestrator are two deployables, and the orchestrator will
+  call tools written in anything.
+- **The orchestrator's platform.** Go is not a requirement there. The intended direction
+  is **Prefect**: the ecosystem's language (Infrahub's SDK, NetBox's client, Nornir,
+  NAPALM), the technology Infrahub's own checks and generators run on, flows as code for an
+  audience that writes transforms and playbooks, pause-for-input as a human gate,
+  automations fired by a webhook, runs of hours, Apache 2, no Kubernetes. Its run resumes
+  by rerun rather than mid-flight, which an idempotent core and a rehearsal that ends in a
+  destroy tolerate. Two options are kept beside it: **Temporal**, already in the stack and
+  the most durable, if the orchestrator turns out to be a product whose flows are Fylgja's
+  code and nobody else's; and **Kestra**, declarative YAML with HTTP, shell and Docker
+  tasks, if the orchestrator turns out to be a contract whose reference flows others
+  edit. To verify before choosing: the open-source Prefect server's current feature
+  boundary (events and automations) and whether Infrahub's embedded Prefect is a separate
+  server to run beside, as assumed. Argo Workflows is noted for the case where
+  [F-018](#f-018) lands on clabernetes and a cluster arrives anyway.
+- **The API's shape for long operations** changes whichever platform is chosen: start,
+  an operation id, then poll or a callback, beside the stream Fylgja's own clients hold
+  open today. It is the orchestrator's first demand of the core and is independent of the
+  platform.
+- **Open**: whether the orchestrator is a product Fylgja ships, with its own flows and
+  integrations, or a documented contract that a customer's own system drives, with Fylgja
+  shipping reference flows. The platform choice above leans to the first while keeping the
+  second possible, since every flow drives the core through the API anyone else would use.
+- **What 0.3 proves of it**: [F-011](#f-011), a reader as an adapter; [F-024](#f-024),
+  the snapshot as the core's input; [F-014](#f-014), a declaration outside intent as an
+  input; [F-025](#f-025), a second adapter, for a source that cannot replay time.
 
 ## Backlog
 
-The Infrahub-facing features come first, then observing, then object storage and remote
-hosts, a third platform, Ixia-c and a WebUI. [Release 0.2](#release-02) built
+[Release 0.3](#release-03) takes [F-011](#f-011), [F-024](#f-024), [F-014](#f-014) and
+[F-025](#f-025), in that order; then observing, then object storage and remote hosts, a
+third platform, Ixia-c and a WebUI. [Release 0.2](#release-02) built
 [F-023](archive/v0.2-built.md#f-023), [F-007](archive/v0.2-built.md#f-007) and
 [F-008](archive/v0.2-built.md#f-008) out of this order first ([the
-archive](archive/v0.2-built.md)), and [Release 0.3](#release-03) opens with [F-011](#f-011) and [F-022](#f-022) and takes
-[F-014](#f-014) and [F-012](#f-012); the rest keep it. Read-only production data stays
+archive](archive/v0.2-built.md)); the rest keep it. Read-only production data stays
 [parked](decisions.md#parked). The features keep the numbers the order was set with; the
-first six are built ([the archive](archive/v0.1-built.md)), F-009 is removed and
-[F-010](#f-010) is folded into [F-011](#f-011).
+first six are built ([the archive](archive/v0.1-built.md)), F-009 is removed,
+[F-010](#f-010) is folded into [F-011](#f-011), and [F-022](#f-022) is superseded by
+[F-025](#f-025). [F-024](#f-024) and [F-025](#f-025) were added on 2026-10-25 and take
+the next free numbers.
 
-None of the features below has a spec or a decision entry, and only
-[F-011](#f-011) has a probe behind its estimate. [F-011](#f-011),
-[F-013](#f-013), [F-014](#f-014), [F-015](#f-015), [F-017](#f-017) to [F-021](#f-021) and
-[F-022](#f-022) are each one spec, with one contract boundary and one new kind of
-infrastructure.
-[F-012](#f-012) and [F-016](#f-016) are chores or records, with no spec.
+Only [F-011](#f-011) has a brief and a probe behind its estimate, and none has a decision
+entry. [F-011](#f-011), [F-013](#f-013), [F-014](#f-014), [F-015](#f-015),
+[F-017](#f-017) to [F-021](#f-021), [F-024](#f-024) and [F-025](#f-025) are each one
+spec, with one contract boundary and one new kind of infrastructure. [F-012](#f-012) and
+[F-016](#f-016) are chores or records, with no spec.
 
 | # | Feature | What it bundles | Needs | Hours | Why here |
 |---|---|---|---|---|---|
 | F-010 | *Generic transform*, folded into [F-011](#f-011) | the shipped template already queries `FylgjaDevice`, so a DCIM device renders through it; what was left, the template documented as a reference transform, is a paragraph in [F-011](#f-011)'s README | — | — | Overtaken: Infrahub renders from the generics already. |
-| F-011 | **Second schema: the schema library's DCIM** | contract 0.3; OpsMill's DCIM schema implementing the generics; a DCIM-modelled twin; the template documented as a reference transform | nothing new | 4–6 | The strongest OpsMill signal, and the first test of Constitution III. Probed live on 2026-10-16. Opens 0.3. |
-| F-022 | **`infrahub-sync` into the DCIM** | a sync mapping from NetBox onto [F-011](#f-011)'s schema; a twin of a NetBox-sourced network | [F-011](#f-011), a NetBox instance | 3–5 | The source of truth stays where branching lives; the sync writes, not Fylgja. |
-| F-012 | **Agent surface** | `fylgja-rehearsing-changes`, a skill in OpsMill's format over the CLI's JSON, with a findings catalogue generated from the code; an MCP server deferred | verify, the API, the rehearsal | 2–5 | Cheap once there is something to ask, and the demo's second act. |
+| F-011 | **The Infrahub reader reads the schema library's DCIM** | the generics retired and the CTM the contract; the library vendored at a pinned commit and loaded on `main`; the reader's mapping documented and its approximations in the manifest; packages matching platforms by name; the fixtures re-seeded in the library's kinds | nothing new | 6–10 | The strongest OpsMill signal, and the first reader written as an adapter. Probed live on 2026-10-16; its [brief](../specs/017-dcim-reader/brief.md) written 2026-10-25. Opens 0.3. |
+| F-024 | **Snapshots** | the CTM, each node's configuration and the probe declarations as one content-addressed document; the core's one input; `twin create` from one | [F-011](#f-011) | 3–5 | The core and orchestrator seam, proved before anything is split. |
+| F-022 | *`infrahub-sync` into the DCIM*, superseded by [F-025](#f-025) | a sync mapping from NetBox onto [F-011](#f-011)'s schema | — | — | The operator wants NetBox read directly, not synced into Infrahub. |
+| F-025 | **The NetBox reader** | NetBox with its branching plugin on the development host; a reader producing snapshots from a branch, with `render-config` as the configuration; a stage taken as a snapshot; a twin of a NetBox branch | [F-024](#f-024), a NetBox instance | 8–12 | The reader seam against a second source of truth, and the first that cannot replay time. |
+| F-012 | **Agent surface** | `fylgja-rehearsing-changes`, a skill in OpsMill's format over the CLI's JSON, with a findings catalogue generated from the code; an MCP server deferred | verify, the API, the rehearsal | 2–5 | Cheap once there is something to ask. Left 0.3 on 2026-10-25: it bolts on later and touches no core. |
 | F-013 | **Observation** | markers with bundle id and stage; a `gnmic` targets export; a documented collector and Grafana dashboard; a per-capability definition of settled | stepping, the API | 4–6 | Convergence across a step becomes a graph. |
-| F-014 | **Probes** | a Fylgja-owned probe kind; synthesized ping and iperf3 hosts; loss across a step; a probe package format | stepping, verify | 5–7 | The headline demo: loss during a change on a running twin. |
+| F-014 | **Probes** | a probe declaration, in a file and in a Fylgja-owned kind; synthesized `ping` hosts and no other synthesized node; loss across a step; a probe package format | [F-024](#f-024), stepping, verify | 5–7 | The headline demo: loss during a change on a running twin. `ping` only, by the operator's choice on 2026-10-25. |
 | F-015 | **Operational state diff** | adjacencies and routes snapshotted at each stage's pause and diffed; posted on the proposed change | stepping, verify, the rehearsal | 4–6 | Builds on verify's readers and its observed facts. |
 | F-016 | **Upgrade rehearsal** | the same intent on another NOS version through the package override, then verified | verify, a second image version | 2–4 | Cheap and operationally compelling. |
 | F-017 | **Object storage and Temporal cluster** | as below | nothing new | 6–10 | Needed either way before [F-018](#f-018). |
@@ -99,10 +165,10 @@ infrastructure.
 
 | Phase | Features | Hours |
 |---|---|---|
-| Infrahub-facing | F-011, F-022, F-012 | 9–16 |
-| Observing | F-013–F-016 | 15–23 |
+| Release 0.3 | F-011, F-024, F-014, F-025 | 22–34 |
+| Observing | F-012, F-013, F-015, F-016 | 12–21 |
 | Scale and surface | F-017–F-021 | 37–66 |
-| **All** | | **61–105** |
+| **All** | | **71–121** |
 
 ### The features
 
@@ -118,52 +184,83 @@ DCIM user replaces with one reading the library's own fields, is a paragraph in 
 11's README. [D-009](decisions.md#d-009) holds: Infrahub renders.
 
 <a id="f-011"></a>
-**F-011. The second schema: the schema library's DCIM implements the generics, under
-contract 0.3.** Only the reference schema has ever implemented the contract, so
-Constitution III's "demand the least possible" is untested until a second one does. The
-second is OpsMill's own:
-[the schema library's](https://github.com/opsmill/schema-library) `base/dcim.yml`, with
-its IPAM, location and organization bases. Probed on 2026-10-16 against
-Infrahub 1.11.2 with validation-only schema checks ([Verified facts](verified-facts.md)):
-the four base files load beside Fylgja's generics untouched, and the DCIM kinds inherit
-them only after the DCIM side is adapted, because Infrahub's generics are nominal. A
-same-named attribute or relationship inherited from two generics must match in every
-normalized property, and the refusals came one at a time: `role` is Text in Fylgja and a
-Dropdown in DCIM; `platform` differs in peer, identifier and `min_count`; `interfaces` in
-`on_delete`. Two Parent relationships are refused even when identical, and `DcimInterface`
-and `FylgjaInterface` both make `device` one. The adaptation that passed copies Fylgja's
-`platform` and `interfaces` onto `DcimGenericDevice`, drops `DcimDevice`'s `role` and
-`DcimInterface`'s `device`, with the per-device interface id and uniqueness that referenced
-it, and adds a `DcimCable` inheriting `DcimConnector` and `FylgjaLink`. That is a fork of
-the library's generics with double bookkeeping, `vendor` beside `manufacturer`, `enabled`
-beside `status`, `endpoints` beside `connected_endpoints`, so the spec moves Fylgja's side
-instead: contract 0.3 drops `role` and `site`, unused inputs and the operationally loaded
-name Constitution III says not to claim; drops the interface's `device`, since the device
-read nests its interfaces and the link read can take membership from the `link` field it
-already selects; and makes `platform` optional, refused at compile time with a finding.
-The CTM carries neither `role` nor `site`, so no golden moves; the fixture id does, as it
-does per install. First research: whether Fylgja's relationships may ride the library's
-identifiers under Fylgja's own names, since Infrahub matches edges by identifier. If they
-may, the library stays as published; if not, the remaining adaptation is the library's
-peers and the Parent, and the spec says so. The schema README gains the paragraph feature
-10 left: the shipped template as a reference transform, and why a DCIM user writes their
-own against the library's fields. Exit: a DCIM-modelled twin, the conformance suite's pure
-half over the DCIM, a tier 3 case. Needs nothing new.
+**F-011. The Infrahub reader reads the schema library's DCIM; the CTM is the contract.**
+Rewritten on 2026-10-25 from its [brief](../specs/017-dcim-reader/brief.md), which holds
+the shape; this paragraph is the summary. The generics ([D-002](decisions.md#d-002)) were
+the contract while Infrahub was the only source of truth: any schema could implement
+Fylgja's four kinds and Infrahub resolved the query across them. Probed on 2026-10-16
+against OpsMill's [schema library](https://github.com/opsmill/schema-library)
+([Verified facts](verified-facts.md)), they could inherit into its DCIM only after
+adaptation on one side or the other, and with NetBox read directly as the second source
+([F-025](#f-025)) every reader is an adapter that maps a fixed, DCIM-shaped model onto the
+CTM. So the generics go, the CTM is the contract, and the Infrahub reader reads the
+library's own kinds at a pinned commit: a device is `DcimDevice`, a port is
+`InterfacePhysical` and `InterfaceVirtual` is never read, `mgmt_only` is the port's
+`role: management` and `enabled` its `status` not `disabled`, each recorded as
+approximated, a link is a `DcimCable` with exactly two physical ends and any other cable
+is omitted and recorded, the package is picked by a `matches` list the package itself
+declares, by manufacturer and platform name, so nothing is added to anyone's model, and
+the twin's scope is a tag on each device the request names, inside which an unmatched
+platform refuses the read and at whose boundary a cable is omitted and recorded. Layer
+1 only: nothing in the compiler, the bootstrap or verify ever consumed an address, a
+loopback, a role or a site, and the configuration Infrahub renders carries them.
+[D-002](decisions.md#d-002), [D-003](decisions.md#d-003) and [D-004](decisions.md#d-004)
+are superseded whole and Constitution III is rewritten: the CTM is the contract, a reader
+maps one source, documents the mapping, names the model version it reads and records every
+approximation. The library is vendored verbatim under `schema/dcim/`, Apache 2.0, loaded
+on `main` by `-prepare-main` where the generics were; the reference schema and
+`FylgjaContract` go; `FylgjaStage` stays. The one fixture branch is re-seeded in the
+library's kinds, the CTM thins and reshapes its platform, all three goldens move,
+re-baselined on their own commit, and the PSP format moves for `matches`. The schema
+README gains the paragraph feature 10 left: the shipped template as a reference transform
+that renders ports, and a user's own transform rendering their layer 2 and 3 from their
+own kinds. Needs nothing new.
+
+<a id="f-024"></a>
+**F-024. Snapshots: the core's one input.** Added on 2026-10-25, the second spec of
+[Release 0.3](#release-03). A snapshot is the CTM, one configuration document per node and
+the probe declarations, stored by content hash in the bundle store's directory beside the
+bundles, with a schema in `contracts/` and a version. The core consumes snapshots alone:
+`twin create`, `step` and `rehearse` take one, the compile is a pure function of one, and
+`twin compile` reads one in place of a bare CTM. How a snapshot comes to exist is the
+reader's business. For Infrahub a stage is still the operator's mark
+([D-045](decisions.md#d-045) unchanged), and resolving it reads the branch pinned at the
+stage's `at` and renders the snapshot on demand, so taking it twice gives the same hash and
+nothing need be kept. Constitution VI gains a sentence saying what addresses intent when
+the source of truth cannot replay time: the snapshot's hash. This is the core and
+orchestrator seam of the production shape, proved before anything is split, and the
+feature that lets [F-025](#f-025) exist. Small, since the pieces are all in the tree.
 
 <a id="f-022"></a>
-**F-022. `infrahub-sync` from NetBox into the DCIM.** [D-001](decisions.md#d-001) rejected
-NetBox and Nautobot as the source of truth because they lack branching. It did not reject
-them upstream. A one-way sync into Infrahub keeps the source of truth where branching
-lives, and the sync writes, not Fylgja, so no decision changes. OpsMill ships
-`infrahub-sync` with a config-driven mapping, so a sync inside Fylgja would duplicate
-their product and add a runtime (Constitution I); its NetBox mapping lands in roughly the
-library's shape, which is why [F-011](#f-011) targets it. The mapping looks tractable:
-NetBox's interface carries `mgmt_only`, its interface types sort into physical and
-loopback, and a cable with two terminations is a link. A multi-termination cable, a LAG
-and a platform without a vendor and NOS are the refusals to expect, each a finding the
-schema will word. Following works as it does now: the sync writes to a branch on a
-schedule, and the twin follows that branch, so the latency is the sync cadence plus the
-check interval. Needs a NetBox instance with demo data.
+**F-022. `infrahub-sync` from NetBox into the DCIM, superseded by [F-025](#f-025) on
+2026-10-25.** It was to keep the source of truth where branching lives and let OpsMill's
+sync write NetBox into Infrahub. The operator wants NetBox read directly, as an alternative
+source of truth that a NetBox-backed Fylgja need not make feature-identical to an
+Infrahub-backed one, which is F-025. What the paragraph observed of the mapping holds
+there: NetBox's interface carries `mgmt_only` and `enabled`, its interface types sort
+ports from the virtual, a cable with two terminations is a link, and a multi-termination
+cable, a LAG and a platform without a vendor and NOS are the refusals to expect.
+
+<a id="f-025"></a>
+**F-025. The NetBox reader.** Added on 2026-10-25, the fourth spec of
+[Release 0.3](#release-03). NetBox Labs' branching plugin is generally available,
+source-available and installable on the community edition, and an official change-request
+layer gates a merge on approvals, so [D-001](decisions.md#d-001)'s premise that NetBox
+lacks branching no longer holds; the entry is superseded in that part, and NetBox becomes
+a second source of truth read directly, through a reader producing [F-024](#f-024)'s
+snapshots. What NetBox cannot do: a pinned `at`, since it has no point-in-time read, so a
+stage is the snapshot Fylgja takes when the operator marks it, held by Fylgja and not by
+NetBox, and the branch point is current `main`, the merge target, at the first read;
+stored artifacts with checksums, since `render-config` renders on demand and stores
+nothing, so there is no staleness rule; and checks inside its pipeline, so a check becomes
+an event rule or custom script calling the API, its report a journal entry, and a merge
+block the change-request layer's. What it adds: event rules and webhooks, a push-based
+follow that [D-026](decisions.md#d-026) admits for this reader; planned and staged device
+status; the device-type library's real port inventories for the lossy mapping; cable
+paths computed through patch panels; config contexts; and a plugin as the natural UI.
+First research: whether `render-config` honours the branch header, and what the branching
+plugin's GraphQL answers under it. Needs NetBox with the branching plugin on the
+development host, about 2 GiB, and a decision entry before it is specified.
 
 <a id="f-012"></a>
 **F-012. The agent surface: `fylgja-rehearsing-changes`.** OpsMill ships Claude skills and
@@ -195,9 +292,10 @@ report means, so that is the skill's substance:
   Infrahub by its own means, which OpsMill's `infrahub-managing-objects` skill covers; the
   skill gives the regenerate-first rule and the object file's shape, no more.
 
-In a release's recording it is the demo's second act (0.3's, since it moved from 0.2 on
-2026-10-21): the check posts its report on the
-proposed change, and an agent explains the report in the thread. **Deferred**: the MCP
+In a release's recording it is the demo's second act: the check posts its report on the
+proposed change, and an agent explains the report in the thread. It moved from 0.2 to 0.3
+on 2026-10-21 and left 0.3 on 2026-10-25, since it bolts on later and touches no core; it
+waits for a release that has one to show. **Deferred**: the MCP
 server, a client of the API, until a consumer that cannot run a binary appears, since
 OpsMill's Infrahub MCP server already lets an agent holding both skills correlate
 Infrahub's data with the twin's state; and a second skill,
@@ -242,6 +340,17 @@ generator is not a platform, so a small probe package format is the
 Containers forward in software, so the loss measured is the container's, never the
 ASIC's, and the report says so. With stepping this is the headline demo: a graph of loss
 across a change applied to a running twin. The hours include the kind and the manifest.
+
+Re-shaped on 2026-10-25 for [Release 0.3](#release-03), the operator's choices: **`ping`
+only, and no other synthesized node type** in this feature; iperf3, Ixia-c
+([F-020](#f-020)) and an emulated boundary device are later formats of the same
+declaration. **The declaration is a file first**, one input to [F-024](#f-024)'s snapshot,
+and the Infrahub kind is one source of that file. **The declaration carries the host's
+address and its gateway**, since the CTM carries no addresses: Fylgja configures the
+host from the declaration alone, the device side stays intent's, and the brief's refusal
+of a host address outside the interface's prefix is lost. [016's
+brief](../specs/016-probes/brief.md) is re-read against these and 017's close before it is
+specified.
 
 <a id="f-015"></a>
 **F-015. Operational state diff.** With verify's readers, snapshot adjacencies and routes at
@@ -331,18 +440,26 @@ show beyond a status line. It is a second client of the same API.
   [D-042](decisions.md#d-042)'s loopback default for this deployment; `twin rehearse` as a
   fifth short workflow; and the check concluding from the report's status, Fylgja's
   verdicts staying advisory ([D-039](decisions.md#d-039)).
-- At 016: probes as an input to a compile beside intent, hashed into the bundle; and
-  [F-014](#f-014)'s own entries below.
-- At [F-011](#f-011), contract 0.3 ([Release 0.3](#release-03)): `role` and `site` dropped
-  from `FylgjaDevice`; `device` dropped from `FylgjaInterface`, with the link read taking
-  membership from the interface side; `platform` optional, a compile-time finding when
-  absent; and whether Fylgja's relationships ride the schema library's identifiers under
-  their own names, or the library adapts its peers and its Parent. The entry supersedes
-  the parts of [D-003](decisions.md#d-003) and [D-004](decisions.md#d-004) that named
-  those members, and says in one line why the schema library and not a NetBox-shaped
-  schema of Fylgja's own.
-- At [F-014](#f-014): a second Fylgja-owned kind on [D-032](decisions.md#d-032)'s pattern,
-  and what a probe package is beside a platform package.
+- At [F-011](#f-011) (017): the CTM as the contract in place of the generics, the
+  Infrahub reader an adapter for the schema library's DCIM at a pinned commit, with its
+  mapping (a port is `InterfacePhysical`; `mgmt_only` from `role`, `enabled` from `status`,
+  each approximated; a cable with other than two physical ends omitted and recorded; the
+  package matched by the names it declares; the scope a tag the request names, strict
+  inside it). The entry supersedes
+  [D-002](decisions.md#d-002), [D-003](decisions.md#d-003) and
+  [D-004](decisions.md#d-004) whole, rewrites Constitution III with a major version bump,
+  and says in one line why the library's kinds and not a NetBox-shaped schema of Fylgja's
+  own.
+- At [F-024](#f-024): the snapshot as the core's one input, content-addressed, with every
+  stage resolving to one; and Constitution VI's sentence on what addresses intent when the
+  source of truth cannot replay time.
+- At [F-014](#f-014) (016): the probe declaration as a file first and an Infrahub kind
+  second, on [D-045](decisions.md#d-045)'s pattern for the kind; what a probe package is
+  beside a platform package; and the declaration carrying its own gateway address.
+- Before [F-025](#f-025): [D-001](decisions.md#d-001) superseded in the part that says
+  NetBox lacks branching; a stage as a snapshot Fylgja holds where the source of truth
+  cannot replay time, beside D-045's mark where it can; and [D-026](decisions.md#d-026)
+  admitting a push-based follow for a reader whose source of truth offers one.
 - Before [F-018](#f-018): the remote hosts' runtime, the decision log's [open
   question](decisions.md#open-questions).
 - At [F-021](#f-021): whether the WebUI keeps Constitution I through server-rendered

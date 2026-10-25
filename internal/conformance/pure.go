@@ -32,7 +32,12 @@ const (
 	// to a node of its kind on a link change, one of the two values format 0.6 knows. The
 	// value is fidelity the package asserts and each step
 	// measures; the pure half checks only that it is stated.
-	CheckLinkChange       = "link_change"
+	CheckLinkChange = "link_change"
+	// CheckMatches holds the package to naming at least one manufacturer and platform pair
+	// with both names (format 0.7): a reader picks a device's package by those names, so a
+	// package with none could never be read. SharedMatches holds a set of packages, under
+	// the same check, to naming no pair twice.
+	CheckMatches          = "matches"
 	CheckDeclaredMapping  = "declared_mapping"
 	CheckRoundTrip        = "round_trip"
 	CheckBootstrapRenders = "bootstrap_renders"
@@ -40,7 +45,7 @@ const (
 
 // PureChecks lists the pure half's checks, so a test can run one subtest per check
 // whether or not it failed.
-var PureChecks = []string{CheckValidates, CheckLinkChange, CheckDeclaredMapping, CheckRoundTrip, CheckBootstrapRenders}
+var PureChecks = []string{CheckValidates, CheckLinkChange, CheckMatches, CheckDeclaredMapping, CheckRoundTrip, CheckBootstrapRenders}
 
 // What the boot half says of a package, in its report and its note.
 const (
@@ -115,8 +120,8 @@ func (r Report) Of(check string) []Failure {
 }
 
 // Pure runs the pure half on one package: it validates as `psp
-// validate` validates the file it was read from; each declared mapping gives what it
-// declares; each mapped declaration inverts from its port; and every bootstrap line
+// validate` validates the file it was read from; it states its link_change and names a
+// manufacturer and platform pair; each declared mapping gives what it declares; each mapped declaration inverts from its port; and every bootstrap line
 // renders with nothing left in braces. Every failure is collected; none stops the run.
 //
 // Nothing here knows which platform it holds: the expectations are the package's own
@@ -130,6 +135,7 @@ func Pure(p *psp.PSP) Report {
 
 	validates(p, fail)
 	linkChange(p, fail)
+	matches(p, fail)
 
 	rules := map[string]psp.Rule{}
 	for _, rule := range p.Interfaces.Rules {
@@ -209,6 +215,47 @@ func linkChange(p *psp.PSP, fail failFunc) {
 	}
 	fail(CheckLinkChange, "", declared,
 		fmt.Sprintf("not one of %s, %s", psp.LinkChangeRestart, psp.LinkChangeLive))
+}
+
+// matches holds the package to at least one manufacturer and platform pair whose two names
+// are both given; a pair with an empty name matches no device, so it counts as declared and
+// never as produced.
+func matches(p *psp.PSP, fail failFunc) {
+	for _, m := range p.Platform.Matches {
+		if m.Manufacturer != "" && m.Platform != "" {
+			return
+		}
+	}
+	n := len(p.Platform.Matches)
+	declared := fmt.Sprintf("%d pairs", n)
+	if n == 1 {
+		declared = "1 pair"
+	}
+	fail(CheckMatches, "", declared, "none")
+}
+
+// SharedMatches holds a set of packages to naming each manufacturer and platform pair once:
+// two packages naming one pair would leave a device of it with two packages. Each failure
+// names the package that repeats the pair, the pair, and the package that named it first;
+// a pair named twice in one package is that package's own, and no failure.
+func SharedMatches(pkgs []*psp.PSP) []Failure {
+	first := map[psp.Match]*psp.PSP{}
+	var out []Failure
+	for _, p := range pkgs {
+		for _, m := range p.Platform.Matches {
+			prior, dup := first[m]
+			if !dup {
+				first[m] = p
+				continue
+			}
+			if prior == p {
+				continue
+			}
+			out = append(out, Failure{Package: p.Platform.ID, Path: p.Path, Check: CheckMatches, Declared: m.String(),
+				Produced: fmt.Sprintf("the pair package %s (%s) declares", prior.Platform.ID, prior.Path)})
+		}
+	}
+	return out
 }
 
 // declaredMapping holds one declaration to what the profile makes of its production

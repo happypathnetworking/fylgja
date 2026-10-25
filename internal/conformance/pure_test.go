@@ -274,6 +274,105 @@ func TestPureHalfLinkChange(t *testing.T) {
 	}
 }
 
+// matches is at least one pair with both names. Both shipped packages pass, each with the
+// pair the DCIM fixtures name it by; the shipped package with matches: [] (the defect
+// fixture matches-missing.yaml) and a copy whose one pair lost its platform name each fail
+// naming the package, the check and both values. Validation refuses both as well, so the
+// assertion is on this check's failures alone.
+func TestPureHalfMatches(t *testing.T) {
+	for file, want := range map[string]psp.Match{
+		"nokia_srlinux.yaml": {Manufacturer: "Nokia", Platform: "SR Linux"},
+		"arista_eos.yaml":    {Manufacturer: "Arista", Platform: "EOS"},
+	} {
+		p, err := psp.ParseFile(repo("psp", file), psp.OriginEmbedded)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !slices.Equal(p.Platform.Matches, []psp.Match{want}) {
+			t.Errorf("%s matches %v, want %v", file, p.Platform.Matches, want)
+		}
+		if fails := Pure(p).Of(CheckMatches); len(fails) != 0 {
+			t.Errorf("%s fails matches: %v", file, fails)
+		}
+	}
+
+	missing, err := psp.ParseFile(repo("testdata", "psp", "defects", "matches-missing.yaml"), psp.OriginOverride)
+	if err != nil {
+		t.Fatal(err)
+	}
+	emptied := shippedCopy(t, "      platform: SR Linux\n", "      platform: \"\"\n")
+	for _, tc := range []struct {
+		name string
+		p    *psp.PSP
+		want string
+	}{
+		{"matches-missing.yaml", missing, "declared 0 pairs, produced none"},
+		{"a pair with no platform name", emptied, "declared 1 pair, produced none"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fails := Pure(tc.p).Of(CheckMatches)
+			want := "package nokia_srlinux (" + tc.p.Path + "): matches: " + tc.want
+			if len(fails) != 1 || fails[0].String() != want {
+				t.Errorf("matches failures %v, want exactly:\n  %s", fails, want)
+			}
+		})
+	}
+}
+
+// Every package meant to load, shipped and testdata/psp/'s, names pairs of its own: no two
+// share one, so a device's manufacturer and platform names pick one package or none
+// (format 0.7). matches-shared.yaml, a third package naming the shipped SR Linux package's
+// pair, passes the per-package check and fails this one by name beside them;
+// matches-missing.yaml, which names no pair at all, fails the per-package check by name
+// and shares nothing.
+func TestShippedPackagesShareNoMatch(t *testing.T) {
+	pkgs := packagesMeantToLoad(t)
+	if len(pkgs) < 5 {
+		t.Fatalf("found %d packages meant to load, want the two shipped, fastos, slowos and chassisos at least", len(pkgs))
+	}
+	for _, f := range SharedMatches(pkgs) {
+		t.Error(f.String())
+	}
+	for _, p := range pkgs {
+		if len(p.Platform.Matches) == 0 {
+			t.Errorf("package %s (%s) names no pair, so it shares none and this test proves nothing of it", p.Platform.ID, p.Path)
+		}
+	}
+
+	t.Run("matches-shared.yaml", func(t *testing.T) {
+		shared, err := psp.ParseFile(repo("testdata", "psp", "defects", "matches-shared.yaml"), psp.OriginOverride)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fails := Pure(shared).Of(CheckMatches); len(fails) != 0 {
+			t.Errorf("matches-shared.yaml fails the per-package check: %v", fails)
+		}
+		var got []string
+		for _, f := range SharedMatches(append(slices.Clone(pkgs), shared)) {
+			got = append(got, f.String())
+		}
+		want := []string{`package sharedos (` + shared.Path + `): matches: declared manufacturer "Nokia", platform "SR Linux", ` +
+			`produced the pair package nokia_srlinux (` + repo("psp", "nokia_srlinux.yaml") + `) declares`}
+		if !slices.Equal(got, want) {
+			t.Errorf("failures:\n got  %q\n want %q", got, want)
+		}
+	})
+
+	t.Run("matches-missing.yaml", func(t *testing.T) {
+		missing, err := psp.ParseFile(repo("testdata", "psp", "defects", "matches-missing.yaml"), psp.OriginOverride)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if fails := SharedMatches(append(slices.Clone(pkgs), missing)); len(fails) != 0 {
+			t.Errorf("a package with no pair shares one: %v", fails)
+		}
+		want := "package nokia_srlinux (" + missing.Path + "): matches: declared 0 pairs, produced none"
+		if fails := Pure(missing).Of(CheckMatches); len(fails) != 1 || fails[0].String() != want {
+			t.Errorf("matches failures %v, want exactly:\n  %s", fails, want)
+		}
+	})
+}
+
 // Information, never failures: a declared name a later rule would also match, a
 // placeholder without a range, and what the boot half can say of the package.
 func TestPureHalfNotes(t *testing.T) {

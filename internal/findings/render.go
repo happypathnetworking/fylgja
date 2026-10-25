@@ -97,6 +97,9 @@ type Subject struct {
 	// the reference supplied, on twin step the target once known. Branch and At then
 	// carry the reference it resolved to, once it resolved.
 	Stage string `json:"stage,omitempty"`
+	// Scope is the scope a read was made under, tag:<name> (017): the request's, or the
+	// server's default when the request named none. Absent when no read was made under one.
+	Scope string `json:"scope,omitempty"`
 }
 
 // Where a stage's at came from (stages.schema.json, $defs/at_source).

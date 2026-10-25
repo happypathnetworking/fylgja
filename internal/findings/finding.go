@@ -238,6 +238,29 @@ const (
 	RuleRehearsalDeadlineCut    = "rehearsal.deadline.cut"    // rejection, exit 2, the step reached: the <branch>/<label> of the stage in progress; the deadline passed, naming each finished stage's time and the deadline
 	RuleRehearsalStageMoved     = "rehearsal.stage.moved"     // warning, exit 0, resolve: the stage's <branch>/<label>; after the run, a rehearsed stage, the head included, no longer resolves to the (branch, at) it was rehearsed at, or is gone
 	RuleRehearsalChangeClosed   = "rehearsal.change.closed"   // warning, exit 0, resolve: the branch; after the run, the proposed change is no longer open
+
+	// 017, the DCIM reader and the scope a request names
+	// (specs/017-dcim-reader/contracts/scope-and-commands.md, "The identifiers"). Each
+	// comment gives the severity, the exit, the step, the object and when it fires. They
+	// stand beside the generics' rules until the tasks that remove those rules' last users;
+	// platform.unsupported stays for a CTM naming a package this build lacks. No status,
+	// step or exit is new.
+	RuleScopeInvalid          = "scope.invalid"            // rejection, exit 2, start: the value given; --scope is not tag:<name>, an empty value included; before any connection, after --branch's and --stage's guards
+	RuleScopeUnset            = "scope.unset"              // rejection, exit 2, start: FYLGJA_DEFAULT_SCOPE; no --scope and the server has no default; before any connection
+	RuleScopeEmpty            = "scope.empty"              // rejection, exit 1, read (none on intent.read; resolve for a stage's branch point): the scope; the device query answered 0 on the branch at the at, and the rehearsal and fylgja-step pass over a branch point refused by this rule alone
+	RuleSchemaKindMissing     = "schema.kind.missing"      // rejection, exit 1, read (none on schema.check): the kind; the branch's schema lacks a kind the mapping reads
+	RuleSchemaFieldMissing    = "schema.field.missing"     // rejection, exit 1, read: <kind>.<field>; the kind lacks a field the mapping reads
+	RuleSchemaFieldMismatch   = "schema.field.mismatch"    // rejection, exit 1, read: <kind>.<field>; the field's kind, cardinality, peer or optionality is not the table's, naming both
+	RuleSchemaChoiceMissing   = "schema.choice.missing"    // rejection, exit 1, read: <kind>.<field>; the dropdown lacks management (role) or disabled (status)
+	RuleSchemaUsedByMissing   = "schema.used_by.missing"   // rejection, exit 1, read: the generic; the generic is not implemented by the kind the mapping expects
+	RulePlatformMissing       = "platform.missing"         // rejection, exit 1, read: the device; no platform, or a platform with no manufacturer, naming what the device carries
+	RulePlatformUnmatched     = "platform.unmatched"       // rejection, exit 1, read: the device; no package matches the pair exactly, naming the pair and every package's pairs
+	RuleOmitCableEnds         = "omit.cable.ends"          // info, exit 0, read: the cable; it has other than two ends
+	RuleOmitCableEndpoint     = "omit.cable.endpoint"      // info, exit 0, read: the cable; an end is not on a physical port
+	RuleOmitCableOutsideScope = "omit.cable.outside_scope" // info, exit 0, read: the cable; an end is outside the scope
+	RuleCTMVersionUnsupported = "ctm.version.unsupported"  // rejection, exit 1, no step: the CTM file; twin compile was given a CTM of another version, naming both
+	RulePSPMatchesMissing     = "psp.matches.missing"      // rejection, exit 1, verify: the package path; no match, or a pair with an empty name
+	RulePSPMatchesDuplicate   = "psp.matches.duplicate"    // rejection, exit 1, verify: the package path; two packages name one pair, naming both packages and the pair; it also refuses the registry's load, and so serve and worker run at start
 )
 
 // Steps a finding can belong to, as contracts/findings.schema.json enumerates them. New

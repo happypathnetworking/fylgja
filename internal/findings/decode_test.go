@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/json"
 	"testing"
+
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
 
 // M13's client reads the document out of a frame and decodes it into Document, so every
@@ -21,7 +23,7 @@ func decodeDocuments() []labelledDocument {
 	for _, set := range [][]labelledDocument{
 		m1Documents(), m2Documents(), m4Documents(), m5Documents(), stageDocuments(), schemaCheckStageDocuments(),
 		listAndPlanDocuments(), stepDocuments(), showStepDocuments(), listStepDocuments(),
-		rehearsalDocuments(), rehearsalTwinDocuments(),
+		rehearsalDocuments(), rehearsalTwinDocuments(), scopedDocuments(),
 	} {
 		docs = append(docs, set...)
 	}
@@ -89,6 +91,45 @@ func m1Documents() []labelledDocument {
 		{"twin compile error", ErrorDocument(OpCompile, &Subject{Out: "/tmp/b"}, "--out is required")},
 		{"schema check ok", checked},
 		{"psp validate with location", NewDocument(OpPSPValidate, &Subject{Files: []string{"psp/x.yaml"}}, located)},
+	}
+}
+
+// scopedDocuments are 017's subjects: a read made under a scope, a stage's read under one,
+// and a refusal that names the scope it refused.
+func scopedDocuments() []labelledDocument {
+	var refused List
+	refused.AddStep(Rejection, StepStart, RuleScopeInvalid, "fylgja",
+		`--scope fylgja is not tag:<name>`)
+	refusedDoc := NewDocument(OpTwinCreate, &Subject{Branch: "b"}, refused)
+	refusedDoc.Status = StatusError
+	return []labelledDocument{
+		{"intent read under a scope", NewDocument(OpIntentRead,
+			&Subject{Branch: "fylgja-fixture", CTM: "ctm.json", Scope: "tag:fylgja"}, nil)},
+		{"intent read of a stage under a scope", NewDocument(OpIntentRead,
+			&Subject{Branch: "change-1", At: "2026-10-16T17:25:30.118244+00:00", Stage: "change-1/seeded", CTM: "ctm.json",
+				Scope: "tag:lab-a"}, nil)},
+		{"twin create refused, no scope read", refusedDoc},
+	}
+}
+
+// A subject's scope is the contract's tag:<name>, and nothing else the schema accepts.
+func TestSubjectScopeSatisfiesTheContract(t *testing.T) {
+	schema := compileCurrentFindingsSchema(t)
+	for _, c := range scopedDocuments() {
+		mustValidate(t, schema, c.doc, c.label)
+	}
+	for _, scope := range []string{"fylgja", "tag:", "tag:a b", "group:x", "Tag:fylgja"} {
+		b, err := json.Marshal(NewDocument(OpIntentRead, &Subject{Branch: "b", Scope: scope}, nil))
+		if err != nil {
+			t.Fatal(err)
+		}
+		v, err := jsonschema.UnmarshalJSON(bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := schema.Validate(v); err == nil {
+			t.Errorf("subject.scope %q satisfies findings.schema.json; only tag:<name> may", scope)
+		}
 	}
 }
 

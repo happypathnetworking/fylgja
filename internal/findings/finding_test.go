@@ -179,6 +179,25 @@ var dataModelRules = []string{
 	"rehearsal.deadline.cut",
 	"rehearsal.stage.moved",
 	"rehearsal.change.closed",
+
+	// 017's rules (research R-21). Appended; the eight the generics leave stay above until
+	// the tasks that remove their last users take them out of both lists.
+	"scope.invalid",
+	"scope.unset",
+	"scope.empty",
+	"schema.kind.missing",
+	"schema.field.missing",
+	"schema.field.mismatch",
+	"schema.choice.missing",
+	"schema.used_by.missing",
+	"platform.missing",
+	"platform.unmatched",
+	"omit.cable.ends",
+	"omit.cable.endpoint",
+	"omit.cable.outside_scope",
+	"ctm.version.unsupported",
+	"psp.matches.missing",
+	"psp.matches.duplicate",
 }
 
 // declaredRules reads the Rule* constants out of finding.go's syntax tree rather than

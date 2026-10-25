@@ -31,6 +31,10 @@ type readFlags struct {
 	// empty one is a reference refused, not one left out (M4's --interval= precedent).
 	stageGiven bool
 	out        string
+	// scope is --scope as given, read only when scopeGiven: not given, the server's default
+	// stands (017).
+	scope      string
+	scopeGiven bool
 }
 
 // fromStage is whether the read names a stage: --stage given, whatever its value, or a
@@ -68,6 +72,13 @@ func runRead(ctx context.Context, opts *options, f *readFlags) error {
 		return &result{doc: findings.RuleErrorDocument(
 			findings.OpIntentRead, subject, findings.RuleAtPrecision, f.at, msg)}
 	}
+	// The scope, after the reference's guards and before the packages load: every read below,
+	// a stage's resolution included, is made under it.
+	scope, err := scopeOf(opts, findings.OpIntentRead, subject, f.scope, f.scopeGiven)
+	if err != nil {
+		return err
+	}
+	subject.Scope = scope
 
 	// Support packages are loaded before anything is dialled: an override package that
 	// `psp validate` rejects is refused with its own findings, and no request is sent.
@@ -89,7 +100,7 @@ func runRead(ctx context.Context, opts *options, f *readFlags) error {
 	branch, at := f.branch, f.at
 	var resolved *resolvedStage
 	if f.fromStage() {
-		if resolved, err = resolveStage(ctx, findings.OpIntentRead, subject, "", ref, reg); err != nil {
+		if resolved, err = resolveStage(ctx, findings.OpIntentRead, subject, "", ref, scope, reg); err != nil {
 			return err
 		}
 		branch, at = resolved.block.Branch, resolved.block.At
@@ -99,15 +110,15 @@ func runRead(ctx context.Context, opts *options, f *readFlags) error {
 	if resolved != nil {
 		block = &resolved.block
 	}
-	return withStage(read(ctx, opts, subject, branch, at, f.out, reg, observedAt, block), resolved)
+	return withStage(read(ctx, opts, subject, branch, at, scope, f.out, reg, observedAt, block), resolved)
 }
 
-// read is intent read's read and write of one reference, pinned or not.
-func read(ctx context.Context, opts *options, subject *findings.Subject, branch, at, out string, reg *psp.Registry,
+// read is intent read's read and write of one reference, pinned or not, under scope.
+func read(ctx context.Context, opts *options, subject *findings.Subject, branch, at, scope, out string, reg *psp.Registry,
 	observedAt string, resolved *findings.StageBlock) error {
 	// Conformance, fetch and validation, reported together in one pass: the
 	// same pipeline a create runs inside its run (internal/stage).
-	snapshot, list, err := stage.Read(ctx, branch, at, reg, observedAt)
+	snapshot, list, err := stage.Read(ctx, branch, at, scope, reg, observedAt)
 	if err != nil {
 		return fail(findings.OpIntentRead, subject, "%v", err)
 	}

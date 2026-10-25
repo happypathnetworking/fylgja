@@ -62,21 +62,21 @@ type resolvedStage struct {
 
 // resolveStage resolves ref to the pinned reference it names, applying the reference
 // contract's nine steps through stages.Resolve with the server's intent clients as the
-// Stamper, and sets the subject's branch and at to it. The clock is read here, once, for
-// the future rule alone, which holds a given at only, and never sent. Nothing of a
-// branch's intent is read before it returns.
+// Stamper, under scope, and sets the subject's branch and at to it. The clock is read here,
+// once, for the future rule alone, which holds a given at only, and never sent. Nothing of
+// a branch's intent is read before it returns.
 //
 // A refusal is returned as the document the command ends with, each finding at step (none
 // for intent read, whose operations carry none): exit 1, except M1's intent.at.precision,
 // which keeps M1's exit 2. An Infrahub that cannot be reached or refuses the credential is
 // operation.failed with M1's wording, exit 2.
-func resolveStage(ctx context.Context, op string, subject *findings.Subject, step string, ref stages.Ref,
+func resolveStage(ctx context.Context, op string, subject *findings.Subject, step string, ref stages.Ref, scope string,
 	reg *psp.Registry) (*resolvedStage, error) {
 	reader, err := intent.StageReaderFromEnv()
 	if err != nil {
 		return nil, failAt(op, subject, step, op, "%v", err)
 	}
-	res, list, err := stages.Resolve(ctx, reader, intentStamper{}, reg, ref, time.Now().UTC())
+	res, list, err := stages.Resolve(ctx, reader, intentStamper{}, reg, ref, scope, time.Now().UTC())
 	if err != nil {
 		return nil, failAt(op, subject, step, op, "%v", err)
 	}

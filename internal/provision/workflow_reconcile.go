@@ -52,7 +52,7 @@ func Reconcile(ctx workflow.Context, in ReconcileInput) (ReconcileResult, error)
 	// 3. The branch at its head. No at: a following twin is never pinned. A branch that no
 	// longer exists is refused, not a read that could not run.
 	var read ReadIntentResult
-	if err := execute(ctx, ReadOptions(), wire.ActReadIntent, &read, ReadIntentInput{Branch: in.Branch}); err != nil {
+	if err := execute(ctx, ReadOptions(), wire.ActReadIntent, &read, ReadIntentInput{Branch: in.Branch, Scope: in.Scope}); err != nil {
 		if ctx.Err() == nil && isBranchNotFound(err) {
 			res.Findings = append(res.Findings, failureFinding(err, findings.StepRead, findings.RuleOperationFailed, findings.StepRead))
 			return checkEnded(res, CheckRejected, findings.StepRead), nil
@@ -159,6 +159,7 @@ func Reconcile(ctx workflow.Context, in ReconcileInput) (ReconcileResult, error)
 			BundleID:   compiled.BundleID,
 			ObservedAt: read.ObservedAt,
 			Version:    in.Version,
+			Scope:      in.Scope,
 		})
 	var provisionRun workflow.Execution
 	if err := provisionChild.GetChildWorkflowExecution().Get(ctx, &provisionRun); err != nil {

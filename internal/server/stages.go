@@ -20,6 +20,10 @@ type stageFlags struct {
 	// branchGiven is whether --branch was given at all, apart from its value: an explicit
 	// empty one is a branch refused, not one left out (M4's --interval= precedent).
 	branchGiven bool
+	// scope is --scope as given, read only when scopeGiven: not given, the server's default
+	// stands (017).
+	scope      string
+	scopeGiven bool
 }
 
 // branchGuard refuses a --branch that is not a branch as the reference syntax names one,
@@ -35,16 +39,17 @@ func branchGuard(op, branch string) error {
 	return &result{doc: doc}
 }
 
-// intentStamper is the stages' Stamper on the server: an intent client per (branch, at),
-// whose Stamps reads when the intent and the artifacts were written and never a value of
-// intent, with the at verbatim on every page, or none when it is empty.
+// intentStamper is the stages' Stamper on the server: an intent client per (branch, at,
+// scope), whose Stamps reads when the intent and the artifacts were written and never a
+// value of intent, with the at verbatim on every page, or none when it is empty.
 type intentStamper struct{}
 
-func (intentStamper) Stamps(ctx context.Context, branch, at string) (intent.Stamps, error) {
+func (intentStamper) Stamps(ctx context.Context, branch, at, scope string) (intent.Stamps, error) {
 	cfg, err := intent.FromEnv(branch, at)
 	if err != nil {
 		return intent.Stamps{}, err
 	}
+	cfg.Scope = intent.ScopeTag(scope)
 	return intent.New(cfg).Stamps(ctx)
 }
 
@@ -65,18 +70,25 @@ func runStageList(ctx context.Context, opts *options, f *stageFlags) error {
 			return refused
 		}
 	}
+	// The scope the heads' stamps are read under (017), after --branch's guard and before
+	// any connection.
+	scope, err := scopeOf(opts, op, nil, f.scope, f.scopeGiven)
+	if err != nil {
+		return err
+	}
+	subject := &findings.Subject{Scope: scope}
 	if ctx == nil {
 		ctx = context.Background()
 	}
 	reader, err := intent.StageReaderFromEnv()
 	if err != nil {
-		return failAt(op, nil, findings.StepResolve, op, "%v", err)
+		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
-	res, list, err := stages.List(ctx, reader, intentStamper{}, f.branch, stages.RecordViewOf(hostRecord(opts)))
+	res, list, err := stages.List(ctx, reader, intentStamper{}, f.branch, scope, stages.RecordViewOf(hostRecord(opts)))
 	if err != nil {
-		return failAt(op, nil, findings.StepResolve, op, "%v", err)
+		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
-	doc := findings.NewDocument(op, nil, list)
+	doc := findings.NewDocument(op, subject, list)
 	if carriesRule(list, findings.RuleStageKindAbsent) {
 		return &result{doc: doc}
 	}
@@ -191,10 +203,17 @@ func runStagePlan(ctx context.Context, opts *options, f *stageFlags) error {
 	if refused := branchGuard(op, f.branch); refused != nil {
 		return refused
 	}
+	// The scope every stage is resolved and read under (017), after --branch's guards and
+	// before the packages load.
+	scope, err := scopeOf(opts, op, nil, f.scope, f.scopeGiven)
+	if err != nil {
+		return err
+	}
+	subject := &findings.Subject{Scope: scope}
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	planned, err := planStages(ctx, opts, op, nil, f.branch,
+	planned, err := planStages(ctx, opts, op, subject, f.branch, scope,
 		func(pc stages.ProposedChange, n int) { opts.note("%s", heading(pc, true, n)) },
 		func(st stages.PlanStage) { printPlanned(opts, st) },
 		func(p step.Pair) { opts.note("%s", p.Text()) })
@@ -202,31 +221,32 @@ func runStagePlan(ctx context.Context, opts *options, f *stageFlags) error {
 		return err
 	}
 	res := planned.res
-	doc := findings.NewDocument(op, nil, res.Findings)
+	doc := findings.NewDocument(op, subject, res.Findings)
 	if doc.Plan, err = res.Block(); err != nil {
-		return fail(op, nil, "%v", err)
+		return fail(op, subject, "%v", err)
 	}
 	return &result{doc: doc}
 }
 
 // plannedStages is a proposed change's stages as stage plan plans them: the plan, the
 // packages it compiled with, the state root its bundles are filed under, the reader it read
-// through, and the server's clock when it began.
+// through, the scope it read under, and the server's clock when it began.
 type plannedStages struct {
 	res    *stages.PlanResult
 	reg    *psp.Registry
 	paths  lab.Paths
 	reader stages.Reader
+	scope  string
 	now    time.Time
 }
 
-// planStages is stage plan's plan of branch's open proposed change, which twin rehearse
-// plans with too (015), so a rehearsal's stages are the plan's by construction: the
+// planStages is stage plan's plan of branch's open proposed change under scope, which twin
+// rehearse plans with too (015), so a rehearsal's stages are the plan's by construction: the
 // packages, loaded before anything is dialled as a create loads them for its read; the state
 // root; the stage reader; then stages.Plan, each bundle and its CTM filed as the dry run
 // files them, with onChange, onStage and onStep as stages.Plan calls them. A failure is the
 // document the command ends with, subject its subject.
-func planStages(ctx context.Context, opts *options, op string, subject *findings.Subject, branch string,
+func planStages(ctx context.Context, opts *options, op string, subject *findings.Subject, branch, scope string,
 	onChange func(stages.ProposedChange, int), onStage func(stages.PlanStage), onStep func(step.Pair)) (plannedStages, error) {
 	reg, err := psp.Load(opts.pspDir)
 	if err != nil {
@@ -247,11 +267,11 @@ func planStages(ctx context.Context, opts *options, op string, subject *findings
 		return list, err
 	}
 	now := time.Now().UTC()
-	res, err := stages.Plan(ctx, reader, intentStamper{}, branch, reg, stages.NewPipeline(file), now, onChange, onStage, onStep)
+	res, err := stages.Plan(ctx, reader, intentStamper{}, branch, scope, reg, stages.NewPipeline(file), now, onChange, onStage, onStep)
 	if err != nil {
 		return plannedStages{}, failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
-	return plannedStages{res: res, reg: reg, paths: paths, reader: reader, now: now}, nil
+	return plannedStages{res: res, reg: reg, paths: paths, reader: reader, scope: scope, now: now}, nil
 }
 
 // printPlanned prints one planned stage: its resolution, bundle_id and what its read holds

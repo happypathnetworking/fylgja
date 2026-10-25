@@ -110,7 +110,7 @@ func followScheduleOptions(in StartFollowingInput) client.ScheduleOptions {
 		Action: &client.ScheduleWorkflowAction{
 			ID:        WorkflowReconcile,
 			Workflow:  reconcileWorkflowType,
-			Args:      []any{ReconcileInput{Branch: in.Branch, Version: in.Version}},
+			Args:      []any{ReconcileInput{Branch: in.Branch, Version: in.Version, Scope: in.Scope}},
 			TaskQueue: TaskQueue,
 		},
 		Overlap:       enumspb.SCHEDULE_OVERLAP_POLICY_SKIP,
@@ -183,7 +183,7 @@ func (c *ControlActivities) ReadIntent(ctx context.Context, in ReadIntentInput) 
 	// Captured before the first request, so observed_at is never later than anything the
 	// read could have seen.
 	observedAt := time.Now().UTC().Format(stage.ObservedAtFormat)
-	snapshot, list, err := stage.Read(ctx, in.Branch, in.At, reg, observedAt)
+	snapshot, list, err := stage.Read(ctx, in.Branch, in.At, in.Scope, reg, observedAt)
 	if errors.Is(err, intent.ErrBranchNotFound) {
 		return ReadIntentResult{}, branchNotFound("branch "+in.Branch, err)
 	}

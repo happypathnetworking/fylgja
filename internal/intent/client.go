@@ -36,6 +36,20 @@ type Config struct {
 	// sent at all: Fylgja never invents one (D-012). A local "now" is what `observed_at`
 	// records, and it is deliberately not sent to Infrahub (D-023).
 	At string
+	// Scope is the name of the tag the read selects devices by: the request's scope,
+	// tag:<name>, without its tag: (017; ScopeTag). The generics reader is given it and does
+	// not filter by it yet: every device of the branch is read until the read of the
+	// library's DCIM selects by it (017's T039).
+	Scope string
+}
+
+// ScopePrefix begins every scope, tag:<name> (017).
+const ScopePrefix = "tag:"
+
+// ScopeTag is the name of the tag a scope names: tag:<name> without its tag:. The server
+// has checked the scope's form before any read is made under it.
+func ScopeTag(scope string) string {
+	return strings.TrimPrefix(scope, ScopePrefix)
 }
 
 // FromEnv reads the address and credential from the process environment.

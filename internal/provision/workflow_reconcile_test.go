@@ -37,6 +37,9 @@ const (
 type reconcileHarness struct {
 	t   *testing.T
 	env *testsuite.TestWorkflowEnvironment
+	// scope is the following twin's, which run's input carries (017); "" is a check
+	// scheduled before 017.
+	scope string
 
 	// destroy and provision are the children's bodies; the defaults end clean and ready.
 	destroy   func(ctx workflow.Context) (DestroyResult, error)
@@ -163,7 +166,7 @@ func (h *reconcileHarness) mockCheck(twinID, compiledID string) {
 // every case, so a workflow error fails the test.
 func (h *reconcileHarness) run() ReconcileResult {
 	h.t.Helper()
-	h.env.ExecuteWorkflow(reconcileWorkflowType, ReconcileInput{Branch: checkBranch, Version: "0.1.0-test"})
+	h.env.ExecuteWorkflow(reconcileWorkflowType, ReconcileInput{Branch: checkBranch, Version: "0.1.0-test", Scope: h.scope})
 	if !h.env.IsWorkflowCompleted() {
 		h.t.Fatal("the check did not complete")
 	}
@@ -283,6 +286,31 @@ func TestReconcileRebuilt(t *testing.T) {
 	}
 	if res.Provision != nil && !slices.Equal(res.Provision.Findings, findings.List{unbudgeted, own}) {
 		t.Errorf("provision findings %+v, want the child's whole", res.Provision.Findings)
+	}
+}
+
+// A check reads the branch under its twin's scope, from the Schedule's input, and its
+// rebuild's provision records it (017).
+func TestReconcileReadsAndRebuildsUnderItsScope(t *testing.T) {
+	h := newReconcileHarness(t)
+	h.scope = "tag:fylgja"
+	var read ReadIntentInput
+	h.env.OnActivity(wire.ActReadIntent, mock.Anything, mock.Anything).Return(
+		func(_ context.Context, in ReadIntentInput) (ReadIntentResult, error) {
+			read = in
+			return ReadIntentResult{CTMPath: "/state/bundles/.reads/check.ctm.json", ObservedAt: checkObservedAt,
+				Findings: findings.List{}}, nil
+		})
+	h.mockCheck(twinBundleID, changedBundleID)
+
+	if res := h.run(); res.Outcome != CheckRebuilt {
+		t.Fatalf("outcome %q at %q, want rebuilt", res.Outcome, res.Step)
+	}
+	if want := (ReadIntentInput{Branch: checkBranch, Scope: "tag:fylgja"}); read != want {
+		t.Errorf("the check read %+v, want %+v", read, want)
+	}
+	if len(h.children) != 1 || h.children[0].Scope != "tag:fylgja" {
+		t.Errorf("provision children %+v, want one recording scope tag:fylgja", h.children)
 	}
 }
 

@@ -23,19 +23,19 @@ const (
 // not given; one that is present was given, whatever its value.
 var operationArgs = map[string]map[string]string{
 	findings.OpTwinCreate: {"branch": argString, "at": argString, "stage": argString, "interval": argString,
-		"no_follow": argBool, "dry_run": argBool},
+		"no_follow": argBool, "dry_run": argBool, "scope": argString},
 	findings.OpTwinProvision: {"bundle": argString, "dry_run": argBool},
 	findings.OpTwinStep:      {"stage": argString, "allow_restart": argBool, "dry_run": argBool, "wait": argString},
 	findings.OpTwinDestroy:   {},
 	findings.OpTwinShow:      {},
 	findings.OpTwinVerify:    {"wait": argString, "args": argStrings},
 	findings.OpCompile:       {"ctm": argString, "out": argString},
-	findings.OpStageList:     {"branch": argString},
-	findings.OpStagePlan:     {"branch": argString},
-	findings.OpIntentRead:    {"branch": argString, "at": argString, "stage": argString, "out": argString},
+	findings.OpStageList:     {"branch": argString, "scope": argString},
+	findings.OpStagePlan:     {"branch": argString, "scope": argString},
+	findings.OpIntentRead:    {"branch": argString, "at": argString, "stage": argString, "out": argString, "scope": argString},
 	findings.OpSchemaCheck:   {"branch": argString},
 	findings.OpPSPValidate:   {"files": argStrings},
-	findings.OpTwinRehearse:  {"branch": argString},
+	findings.OpTwinRehearse:  {"branch": argString, "scope": argString},
 }
 
 // args are one request's arguments, read strictly: checkArgs has refused a name the
@@ -124,6 +124,7 @@ var handlers = map[string]func(*call) error{
 			stage: a.string("stage"), stageGiven: a.given("stage"),
 			interval: a.string("interval"), intervalGiven: a.given("interval"),
 			noFollow: a.bool("no_follow"), dryRun: a.bool("dry_run"),
+			scope: a.string("scope"), scopeGiven: a.given("scope"),
 		})
 	},
 	findings.OpTwinProvision: func(c *call) error {
@@ -156,18 +157,20 @@ var handlers = map[string]func(*call) error{
 	},
 	findings.OpStageList: func(c *call) error {
 		a := args(c.req.Args)
-		return runStageList(c.ctx, c.options(), &stageFlags{branch: a.string("branch"), branchGiven: a.given("branch")})
+		return runStageList(c.ctx, c.options(), &stageFlags{branch: a.string("branch"), branchGiven: a.given("branch"),
+			scope: a.string("scope"), scopeGiven: a.given("scope")})
 	},
 	findings.OpStagePlan: func(c *call) error {
 		a := args(c.req.Args)
-		return runStagePlan(c.ctx, c.options(), &stageFlags{branch: a.string("branch"), branchGiven: a.given("branch")})
+		return runStagePlan(c.ctx, c.options(), &stageFlags{branch: a.string("branch"), branchGiven: a.given("branch"),
+			scope: a.string("scope"), scopeGiven: a.given("scope")})
 	},
 	findings.OpIntentRead: func(c *call) error {
 		a := args(c.req.Args)
 		return runRead(c.ctx, c.options(), &readFlags{
 			branch: a.string("branch"), at: a.string("at"),
 			stage: a.string("stage"), stageGiven: a.given("stage"),
-			out: a.string("out"),
+			out: a.string("out"), scope: a.string("scope"), scopeGiven: a.given("scope"),
 		})
 	},
 	findings.OpSchemaCheck: func(c *call) error {
@@ -180,7 +183,8 @@ var handlers = map[string]func(*call) error{
 	},
 	findings.OpTwinRehearse: func(c *call) error {
 		a := args(c.req.Args)
-		return runTwinRehearse(c.ctx, c.options(), &rehearseFlags{branch: a.string("branch"), branchGiven: a.given("branch")})
+		return runTwinRehearse(c.ctx, c.options(), &rehearseFlags{branch: a.string("branch"), branchGiven: a.given("branch"),
+			scope: a.string("scope"), scopeGiven: a.given("scope")})
 	},
 }
 

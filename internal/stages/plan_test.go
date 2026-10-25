@@ -21,9 +21,10 @@ import (
 // compile between them: each reference reads as the fixture CTM at the at asked for,
 // except those a case names, and every read and filing is recorded.
 type fakePipeline struct {
-	t     *testing.T
-	reads []string // branch@at, in order
-	filed []string // bundle ids, in order
+	t      *testing.T
+	reads  []string // branch@at, in order
+	scopes []string // the scope of each read, in order
+	filed  []string // bundle ids, in order
 	// Per branch: a read that could not run, a read refused, a read's warnings, a CTM of a
 	// platform no package covers. Per branch@at: a CTM with the last link removed.
 	readErr      map[string]error
@@ -37,8 +38,9 @@ type fakePipeline struct {
 
 func (f *fakePipeline) pipeline() Pipeline {
 	return Pipeline{
-		Read: func(_ context.Context, branch, at string, _ *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error) {
+		Read: func(_ context.Context, branch, at, scope string, _ *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error) {
 			f.reads = append(f.reads, branch+"@"+at)
+			f.scopes = append(f.scopes, scope)
 			if err := f.readErr[branch]; err != nil {
 				return nil, nil, err
 			}
@@ -78,7 +80,7 @@ var emptyMain = map[string]findings.List{"main": {{Severity: findings.Rejection,
 func planned(t *testing.T, r Reader, s Stamper, branch string, f *fakePipeline) (*PlanResult, []string) {
 	t.Helper()
 	var order []string
-	res, err := Plan(context.Background(), r, s, branch, registry(t), f.pipeline(), now,
+	res, err := Plan(context.Background(), r, s, branch, testScope, registry(t), f.pipeline(), now,
 		func(pc ProposedChange, n int) { order = append(order, fmt.Sprintf("%s (%d stages)", pc.ID, n)) },
 		func(st PlanStage) { order = append(order, st.Ref.String()) },
 		func(p step.Pair) { order = append(order, p.From+" → "+p.To) })
@@ -447,7 +449,7 @@ func TestPlanRefusedWhole(t *testing.T) {
 	unreachable := errors.New("Infrahub is unreachable")
 	r, s := story()
 	r.pcErr = unreachable
-	if _, err := Plan(context.Background(), r, s, "change-1", registry(t), (&fakePipeline{t: t}).pipeline(), now,
+	if _, err := Plan(context.Background(), r, s, "change-1", testScope, registry(t), (&fakePipeline{t: t}).pipeline(), now,
 		nil, nil, nil); !errors.Is(err, unreachable) {
 		t.Errorf("reader error: %v", err)
 	}
@@ -466,11 +468,11 @@ type failingAt struct {
 	at string
 }
 
-func (f *failingAt) Stamps(ctx context.Context, branch, at string) (intent.Stamps, error) {
+func (f *failingAt) Stamps(ctx context.Context, branch, at, scope string) (intent.Stamps, error) {
 	if at == f.at {
 		return intent.Stamps{}, errors.New("Infrahub at http://infrahub.invalid is unreachable")
 	}
-	return f.fakeStamper.Stamps(ctx, branch, at)
+	return f.fakeStamper.Stamps(ctx, branch, at, scope)
 }
 
 // Two compiled stages whose step does not read end the plan with an error naming the
@@ -489,7 +491,7 @@ func TestPlanStepThatDoesNotReadIsAnError(t *testing.T) {
 	}
 	var steps []string
 	r, s := story()
-	res, err := Plan(context.Background(), r, s, "change-1", registry(t), p, now,
+	res, err := Plan(context.Background(), r, s, "change-1", testScope, registry(t), p, now,
 		nil, nil, func(p step.Pair) { steps = append(steps, p.From+" → "+p.To) })
 	if err == nil {
 		t.Fatalf("no error; the plan reported %+v", res.Steps)
@@ -510,7 +512,7 @@ func TestBuildIsThePlans(t *testing.T) {
 	r, s := story()
 	s.byBranch["main"] = intent.Stamps{Latest: "2026-10-16T17:50:00.000000+00:00"}
 	res, _ := planned(t, r, s, "change-1", &fakePipeline{t: t})
-	ch, list, err := Find(t.Context(), r, s, "change-1")
+	ch, list, err := Find(t.Context(), r, s, "change-1", testScope)
 	if err != nil || list != nil {
 		t.Fatal(err, list)
 	}
@@ -533,4 +535,57 @@ func mustHoldTheStagesFindings(t *testing.T, res *PlanResult) {
 	if (len(all) != 0 || len(res.Findings) != 0) && !reflect.DeepEqual(all, res.Findings) {
 		t.Errorf("the document's findings %v are not the stages' %v", res.Findings, all)
 	}
+}
+
+// One scope is every read's (017): a plan, a listing, a resolution and twin step's build of
+// its target read each head's, each stage's and the destination's stamps, and each stage,
+// under the scope they were given and no other.
+func TestEveryReadIsUnderTheScopeGiven(t *testing.T) {
+	const scope = "tag:lab-b"
+	onlyScope := func(t *testing.T, what string, got []string) {
+		t.Helper()
+		if len(got) == 0 {
+			t.Fatalf("%s: nothing was read", what)
+		}
+		for i, s := range got {
+			if s != scope {
+				t.Errorf("%s: read %d of %d under %q, want %q", what, i+1, len(got), s, scope)
+			}
+		}
+	}
+
+	r, s := story()
+	f := &fakePipeline{t: t}
+	if _, err := Plan(t.Context(), r, s, "change-1", scope, registry(t), f.pipeline(), now, nil, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	onlyScope(t, "the plan's stamps", s.scopes)
+	onlyScope(t, "the plan's stage reads", f.scopes)
+
+	r, s = story()
+	if _, _, err := List(t.Context(), r, s, "", scope, nil); err != nil {
+		t.Fatal(err)
+	}
+	onlyScope(t, "the listing's stamps", s.scopes)
+
+	r, s = story()
+	if _, _, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "cabled"}, scope, now); err != nil {
+		t.Fatal(err)
+	}
+	onlyScope(t, "the resolution's stamps", s.scopes)
+
+	r, s = story()
+	ch, list, err := Find(t.Context(), r, s, "change-1", scope)
+	if err != nil || list != nil {
+		t.Fatal(err, list)
+	}
+	if ch.Scope != scope {
+		t.Errorf("the proposed change found carries scope %q, want %q", ch.Scope, scope)
+	}
+	f = &fakePipeline{t: t}
+	if built := Build(t.Context(), r, s, registry(t), ch, Ref{"change-1", "live"}, f.pipeline(), now); built.Status != PlanCompiled {
+		t.Fatalf("built %s: %+v", built.Status, built.Findings)
+	}
+	onlyScope(t, "the build's stamps", s.scopes)
+	onlyScope(t, "the build's read", f.scopes)
 }

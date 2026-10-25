@@ -127,7 +127,7 @@ func stopFollowingBeforeStage(ctx workflow.Context, res *ProvisionResult) (Provi
 func readAndCompile(ctx workflow.Context, in ProvisionInput, res *ProvisionResult, compiled *CompileResult) (ReadIntentResult, bool) {
 	var read ReadIntentResult
 	if err := execute(ctx, ReadOptions(), wire.ActReadIntent, &read,
-		ReadIntentInput{Branch: in.Branch, At: in.At}); err != nil {
+		ReadIntentInput{Branch: in.Branch, At: in.At, Scope: in.Scope}); err != nil {
 		*res = untouched(ctx, *res, findings.StepRead, err)
 		return read, false
 	}
@@ -234,7 +234,7 @@ func provisionHost(ctx workflow.Context, in ProvisionInput, res *ProvisionResult
 func startFollowing(ctx workflow.Context, in ProvisionInput, res *ProvisionResult) *stopped {
 	var following FollowingResult
 	err := execute(ctx, FollowOptions(), ActStartFollowing, &following,
-		StartFollowingInput{Branch: in.Branch, IntervalS: in.Follow.IntervalS, Version: in.Version})
+		StartFollowingInput{Branch: in.Branch, IntervalS: in.Follow.IntervalS, Version: in.Version, Scope: in.Scope})
 	switch {
 	case err == nil:
 		res.Following = &following

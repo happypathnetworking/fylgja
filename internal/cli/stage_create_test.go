@@ -344,7 +344,7 @@ func TestCreateFromAStage(t *testing.T) {
 				t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
 			}
 			want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture", At: c.block.At, Version: version,
-				StopFollowing: true, Stage: &provision.StageInput{
+				StopFollowing: true, Scope: defaultScope, Stage: &provision.StageInput{
 					ProposedChange: wire.StageChange{ID: demoChange, Branch: "fylgja-fixture"},
 					Label:          c.block.Label, Description: c.block.Description, AtSource: c.block.AtSource}}
 			if len(svc.started) != 1 || !reflect.DeepEqual(svc.started[0], want) {
@@ -353,7 +353,8 @@ func TestCreateFromAStage(t *testing.T) {
 			if doc.Stage == nil || *doc.Stage != c.block {
 				t.Errorf("stage block %+v, want %+v", doc.Stage, c.block)
 			}
-			wantSubject := findings.Subject{Branch: "fylgja-fixture", At: c.block.At, Stage: c.block.Ref, RunID: "run-1"}
+			wantSubject := findings.Subject{Branch: "fylgja-fixture", At: c.block.At, Stage: c.block.Ref, RunID: "run-1",
+				Scope: defaultScope}
 			if doc.Subject == nil || !reflect.DeepEqual(*doc.Subject, wantSubject) {
 				t.Errorf("subject %+v, want %+v", doc.Subject, wantSubject)
 			}
@@ -664,7 +665,7 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 			useInterrupts(t)
 			code, created := executeTwin(t, "twin", "create", "--stage", ref)
 			want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: c.branch, At: c.at, Version: version,
-				StopFollowing: true, Stage: &stage}
+				StopFollowing: true, Scope: defaultScope, Stage: &stage}
 			if code != findings.ExitOK || len(svc.started) != 1 || !reflect.DeepEqual(svc.started[0], want) {
 				t.Fatalf("exit %d, started %+v; want 0 and one run of %+v", code, svc.started, want)
 			}
@@ -888,7 +889,8 @@ func TestCreateAlongMainAfterAStageTwin(t *testing.T) {
 	svc = &fakeService{runID: "run-2", result: readyResult()}
 	useService(t, svc)
 	code, created := executeTwin(t, "twin", "create", "--branch", "main", "--at", mainAt)
-	want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: "main", At: mainAt, Version: version, StopFollowing: true}
+	want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: "main", At: mainAt, Version: version, StopFollowing: true,
+		Scope: defaultScope}
 	if code != findings.ExitOK || len(svc.started) != 1 || !reflect.DeepEqual(svc.started[0], want) ||
 		created.Stage != nil || created.Subject.Stage != "" {
 		t.Fatalf("exit %d, started %+v, stage %+v, subject %+v; want 0, one run of %+v and no stage",

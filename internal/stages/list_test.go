@@ -23,7 +23,7 @@ func rowRefs(rows []Row) []string {
 // refused or warned of.
 func TestListSortsAndFilters(t *testing.T) {
 	r, s := story(change2(), change1())
-	res, list, err := List(context.Background(), r, s, "", nil)
+	res, list, err := List(context.Background(), r, s, "", testScope, nil)
 	if err != nil || list != nil {
 		t.Fatalf("List: %v, %v", list, err)
 	}
@@ -43,7 +43,7 @@ func TestListSortsAndFilters(t *testing.T) {
 		t.Errorf("a listing with no filter, record or orphan: %+v", res)
 	}
 
-	res, _, err = List(context.Background(), r, s, "change-2", nil)
+	res, _, err = List(context.Background(), r, s, "change-2", testScope, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func TestListSortsAndFilters(t *testing.T) {
 
 	r, s = story()
 	r.pcs = nil
-	res, list, err = List(context.Background(), r, s, "change-1", nil)
+	res, list, err = List(context.Background(), r, s, "change-1", testScope, nil)
 	if err != nil || list != nil || len(res.Rows) != 0 {
 		t.Errorf("no open proposed change: rows %v, findings %v, error %v; want none", res.Rows, list, err)
 	}
@@ -70,7 +70,7 @@ func TestListRefusesNoAt(t *testing.T) {
 	stale := freshStamps(headLatest)
 	stale.Devices["n1"] = device("2026-10-16T17:29:00.000000+00:00", "2026-10-16T17:22:00.000000+00:00")
 	s.byBranch["change-1"] = stale
-	res, list, err := List(context.Background(), r, s, "", nil)
+	res, list, err := List(context.Background(), r, s, "", testScope, nil)
 	if err != nil || list != nil {
 		t.Fatalf("List refused: %v, %v", list, err)
 	}
@@ -93,7 +93,7 @@ func TestListRefusesNoAt(t *testing.T) {
 func TestListKindAbsentAndReaderErrors(t *testing.T) {
 	r, s := story()
 	r.checkErr = &intent.StageKindError{Missing: []string{"description"}}
-	_, list, err := List(context.Background(), r, s, "", nil)
+	_, list, err := List(context.Background(), r, s, "", testScope, nil)
 	if err != nil || len(list) != 1 {
 		t.Fatalf("kind absent: %v, %v", list, err)
 	}
@@ -111,7 +111,7 @@ func TestListKindAbsentAndReaderErrors(t *testing.T) {
 	} {
 		r, s := story()
 		edit(r, s)
-		if _, list, err := List(context.Background(), r, s, "", nil); !errors.Is(err, unreachable) || list != nil {
+		if _, list, err := List(context.Background(), r, s, "", testScope, nil); !errors.Is(err, unreachable) || list != nil {
 			t.Errorf("%s: %v, %v; want the error as it is", name, list, err)
 		}
 	}
@@ -130,7 +130,7 @@ func severities(list findings.List) []string {
 // listed, the derived stage of that name with it.
 func TestListReserved(t *testing.T) {
 	r, s := story(change1(append(change1().Stages, mark("st-head", "head", "2026-10-16T17:27:00.000000+00:00", nil, ""))...), change2())
-	res, list, err := List(context.Background(), r, s, "", nil)
+	res, list, err := List(context.Background(), r, s, "", testScope, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -153,7 +153,7 @@ func TestListReserved(t *testing.T) {
 func TestListUnresolved(t *testing.T) {
 	r, s := story(change1(mark("st-cabled", "cabled", "", nil, "after the link is cabled")), change2())
 	s.byBranch["change-2"] = intent.Stamps{}
-	res, list, err := List(context.Background(), r, s, "", nil)
+	res, list, err := List(context.Background(), r, s, "", testScope, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -188,7 +188,7 @@ func TestListUnresolved(t *testing.T) {
 func TestListBranchGone(t *testing.T) {
 	r, s := story()
 	delete(r.branches, "change-1")
-	res, list, err := List(context.Background(), r, s, "", nil)
+	res, list, err := List(context.Background(), r, s, "", testScope, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -225,7 +225,7 @@ func TestListOrphans(t *testing.T) {
 		mark("st-o1", "cabled", cabledAt, nil, ""),
 		mark("st-o2", "live", cabledAt, str(liveAt), ""),
 	}
-	res, list, err := List(context.Background(), r, s, "change-2", nil)
+	res, list, err := List(context.Background(), r, s, "change-2", testScope, nil)
 	if err != nil || list.Rejected() {
 		t.Fatal(err, list)
 	}
@@ -248,7 +248,7 @@ func TestListOrphans(t *testing.T) {
 func TestListMainMoved(t *testing.T) {
 	r, s := story()
 	s.byBranch["main"] = intent.Stamps{Latest: "2026-10-16T17:30:00.000000+00:00"} // after change-1's branch point, before change-2's
-	_, list, err := List(context.Background(), r, s, "", nil)
+	_, list, err := List(context.Background(), r, s, "", testScope, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -323,7 +323,7 @@ func TestListMarksTheRecord(t *testing.T) {
 				c.edit(r, s)
 			}
 			rec := c.record
-			res, list, err := List(context.Background(), r, s, c.branch, &rec)
+			res, list, err := List(context.Background(), r, s, c.branch, testScope, &rec)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -424,7 +424,7 @@ func TestListIsStable(t *testing.T) {
 		r, s := story(change2(), change1(append(change1().Stages, mark("st-head", "head", cabledAt, nil, ""))...))
 		r.orphans = []intent.Stage{mark("st-o", "o", cabledAt, nil, "")}
 		s.byBranch["main"] = intent.Stamps{Latest: "2026-10-16T17:50:00.000000+00:00"}
-		res, list, err := List(context.Background(), r, s, "", &rec)
+		res, list, err := List(context.Background(), r, s, "", testScope, &rec)
 		if err != nil {
 			t.Fatal(err)
 		}

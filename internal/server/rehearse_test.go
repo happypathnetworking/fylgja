@@ -266,7 +266,7 @@ func TestRehearseStagesAreTheStepChain(t *testing.T) {
 		}
 	}
 	path := func(id string) string { return filepath.Join(store, id) }
-	got, err := rehearseStages(rows, b, plan.Steps, nodes, reg, path, "0.2.0-test")
+	got, err := rehearseStages(rows, b, plan.Steps, nodes, reg, path, "tag:fylgja", "0.2.0-test")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,14 +285,15 @@ func TestRehearseStagesAreTheStepChain(t *testing.T) {
 	base := got[1]
 	want := &provision.ProvisionInput{Source: wire.SourceIntent, Branch: rehearseBranch, At: seeded.Resolved.At,
 		BundlePath: path(seeded.Bundle.ID), BundleID: seeded.Bundle.ID, ObservedAt: seeded.ObservedAt,
-		Stage: seeded.Resolved.StageRef(), Version: "0.2.0-test"}
+		Stage: seeded.Resolved.StageRef(), Version: "0.2.0-test", Scope: "tag:fylgja"}
 	if base.Role != rehearsal.RoleBaseline || base.Step != nil || base.Diff != nil || base.WaitS != waitS ||
 		base.BundlePath != path(seeded.Bundle.ID) || base.Description != "the seeded mark" {
 		t.Errorf("the baseline %+v", base)
 	}
 	if p := base.Provision; p == nil || p.Source != want.Source || p.Branch != want.Branch || p.At != want.At ||
 		p.BundlePath != want.BundlePath || p.BundleID != want.BundleID || p.ObservedAt != want.ObservedAt ||
-		*p.Stage != *want.Stage || p.Version != want.Version || p.Rehearsal != nil || p.StopFollowing || p.Follow != nil {
+		*p.Stage != *want.Stage || p.Version != want.Version || p.Scope != want.Scope || p.Rehearsal != nil || p.StopFollowing ||
+		p.Follow != nil {
 		t.Errorf("the baseline's provision %+v, want %+v", base.Provision, want)
 	}
 

@@ -98,7 +98,9 @@ type Subject struct {
 	// carry the reference it resolved to, once it resolved.
 	Stage string `json:"stage,omitempty"`
 	// Scope is the scope a read was made under, tag:<name> (017): the request's, or the
-	// server's default when the request named none. Absent when no read was made under one.
+	// server's default when the request named none, named from the moment it is resolved,
+	// before the packages load. Absent on an operation that reads under none, and on a
+	// request refused before its scope was resolved.
 	Scope string `json:"scope,omitempty"`
 }
 

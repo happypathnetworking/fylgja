@@ -84,7 +84,7 @@
         "scope": {
           "type": "string",
           "pattern": "^tag:\\S+$",
-          "description": "017: the scope a read was made under, tag:<name>: the request's, or the server's FYLGJA_DEFAULT_SCOPE when the request named none (twin.create, twin.rehearse, intent.read, stage.plan, stage.list); on twin.step, the record's. Absent when no read was made under one"
+          "description": "017: the scope a read was made under, tag:<name>: the request's, or the server's FYLGJA_DEFAULT_SCOPE when the request named none (twin.create, twin.rehearse, intent.read, stage.plan, stage.list); on twin.step, the record's. Named once the scope is resolved, before the packages load; absent on an operation that reads under none, and on a request refused before its scope was resolved"
         }
       }
     },

@@ -28,7 +28,7 @@ func targetChange(t *testing.T, pcs ...intent.ProposedChange) *Change {
 			mark("st-wired", "wired", "2026-10-16T17:30:05.000000+00:00", nil, ""))...), change2()}
 	}
 	r, s := story(pcs...)
-	ch, list, err := Find(t.Context(), r, s, "change-1")
+	ch, list, err := Find(t.Context(), r, s, "change-1", testScope)
 	if err != nil || list != nil {
 		t.Fatalf("%v %+v", err, list)
 	}

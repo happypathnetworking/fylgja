@@ -570,9 +570,12 @@ func validateM2Document(t *testing.T, doc *findings.Document) {
 	validateDocument(t, contractPath("002-provision-destroy", "findings.schema.json"), doc)
 }
 
-// validateDocument validates a document against the findings schema at schemaPath.
+// validateDocument validates a document against the findings schema at schemaPath, an
+// older contract than the current one: a subject's scope, which 017 added, is held to the
+// current contract and left out of what the older one reads (withoutScope).
 func validateDocument(t *testing.T, schemaPath string, doc *findings.Document) {
 	t.Helper()
+	doc = withoutScope(t, doc)
 	f, err := os.Open(schemaPath)
 	if err != nil {
 		t.Fatal(err)
@@ -601,6 +604,22 @@ func validateDocument(t *testing.T, schemaPath string, doc *findings.Document) {
 	if err := schema.Validate(v); err != nil {
 		t.Errorf("document does not satisfy %s:\n%v\n%s", schemaPath, err, b)
 	}
+}
+
+// withoutScope is doc for a contract older than 017's: a document whose subject names the
+// scope its reads were made under is validated whole against the current contract, and
+// returned as a copy with no scope, which is every older contract's subject (017).
+func withoutScope(t *testing.T, doc *findings.Document) *findings.Document {
+	t.Helper()
+	if doc.Subject == nil || doc.Subject.Scope == "" {
+		return doc
+	}
+	validateWithShow(t, currentContract, "017", doc)
+	subject := *doc.Subject
+	subject.Scope = ""
+	older := *doc
+	older.Subject = &subject
+	return &older
 }
 
 // validateM4Document validates a document against M4's findings contract, with the show
@@ -647,6 +666,9 @@ func validateM10Document(t *testing.T, doc *findings.Document) {
 // block's, from M12 the verify block's and from 015 the rehearsal block's under theirs.
 func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Document) {
 	t.Helper()
+	if feature != currentContract {
+		doc = withoutScope(t, doc)
+	}
 	b, err := json.Marshal(doc)
 	if err != nil {
 		t.Fatal(err)
@@ -1010,9 +1032,9 @@ func TestCreateNoFollow(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := `{"source":"intent","branch":"fylgja-fixture","at":"","bundle_path":"","bundle_id":"","version":"` + version +
-		`","stop_following":true}`
+		`","stop_following":true,"scope":"tag:fylgja"}`
 	if string(b) != want {
-		t.Errorf("input\n  %s\nwant M3's with stop_following\n  %s", b, want)
+		t.Errorf("input\n  %s\nwant M3's with stop_following, and 017's scope, the server's default\n  %s", b, want)
 	}
 	if want := "twin directory /abs/local/twin\nnot following\n"; !strings.HasSuffix(out, want) {
 		t.Errorf("stdout:\n%s\nwant it to end:\n%s", out, want)

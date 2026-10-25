@@ -111,7 +111,10 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
-	ch, list, err := stages.Find(ctx, reader, intentStamper{}, rec.Stage.ProposedChange.Branch)
+	// The scope is the record's (017): until twin.json 8 carries provenance.scope (T025) and
+	// the step reads it from there (T046), the step reads under none, which the generics
+	// reader does not filter by.
+	ch, list, err := stages.Find(ctx, reader, intentStamper{}, rec.Stage.ProposedChange.Branch, "")
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}

@@ -141,7 +141,7 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 		files []File
 	}{
 		{"twin.create", map[string]json.RawMessage{"branch": str("fylgja-fixture"), "at": str("2026-09-14T12:00:00Z"),
-			"stage": str("change-1/cabled"), "interval": str(""), "no_follow": yes, "dry_run": yes}, nil},
+			"stage": str("change-1/cabled"), "interval": str(""), "no_follow": yes, "dry_run": yes, "scope": str("tag:fylgja")}, nil},
 		{"twin.provision", map[string]json.RawMessage{"bundle": str("./b9d53ebc"), "dry_run": yes},
 			[]File{{Path: "manifest.json", Data: []byte("{}\n")}, {Path: "configs/n1.cli", Data: []byte("set / system name host-name n1\n")}}},
 		{"twin.step", map[string]json.RawMessage{"stage": str("change-1/head"), "allow_restart": yes, "dry_run": yes, "wait": str("20s")}, nil},
@@ -150,13 +150,14 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 		{"twin.verify", map[string]json.RawMessage{"wait": str("2m0s"), "args": mustJSON(t, []string{"30s"})}, nil},
 		{"twin.compile", map[string]json.RawMessage{"ctm": str("ctm.json"), "out": str("out")},
 			[]File{{Path: "ctm.json", Data: []byte(`{"ctm_version":"1"}`)}}},
-		{"stage.list", map[string]json.RawMessage{"branch": str("")}, nil},
-		{"stage.plan", map[string]json.RawMessage{"branch": str("change-1")}, nil},
-		{"intent.read", map[string]json.RawMessage{"branch": str("b"), "at": str("2026-09-14T12:00:00Z"), "stage": str("change-1/cabled"), "out": str("ctm.json")}, nil},
+		{"stage.list", map[string]json.RawMessage{"branch": str(""), "scope": str("tag:fylgja")}, nil},
+		{"stage.plan", map[string]json.RawMessage{"branch": str("change-1"), "scope": str("")}, nil},
+		{"intent.read", map[string]json.RawMessage{"branch": str("b"), "at": str("2026-09-14T12:00:00Z"), "stage": str("change-1/cabled"),
+			"out": str("ctm.json"), "scope": str("tag:fylgja")}, nil},
 		{"schema.check", map[string]json.RawMessage{"branch": str("fylgja-fixture")}, nil},
 		{"psp.validate", map[string]json.RawMessage{"files": mustJSON(t, []string{"a.yaml", "b.yaml"})},
 			[]File{{Path: "a.yaml", Data: []byte("psp_version: \"0.6\"\n")}, {Path: "b.yaml", Data: nil}}},
-		{"twin.rehearse", map[string]json.RawMessage{"branch": str("change-1")}, nil},
+		{"twin.rehearse", map[string]json.RawMessage{"branch": str("change-1"), "scope": str("tag:fylgja")}, nil},
 	} {
 		t.Run(c.op, func(t *testing.T) {
 			// 015: markdown is a rendering every operation is asked for and accepts.
@@ -205,6 +206,17 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 		invalid(t, apiSchema(t, "args/$defs/twin.rehearse"), arg, "twin.rehearse with "+arg)
 	}
 	valid(t, apiSchema(t, "args/$defs/twin.rehearse"), []byte(`{}`), "twin.rehearse with no argument")
+	// 017: scope is an argument of the five operations that read intent under one, and an
+	// earlier client that never sends it still sends their args; twin.step reads under its
+	// record's scope and takes none, and neither does an operation that reads no intent.
+	for _, op := range []string{"twin.create", "twin.rehearse", "intent.read", "stage.plan", "stage.list"} {
+		valid(t, apiSchema(t, "args/$defs/"+op), []byte(`{"branch":"change-1"}`), op+" with no scope")
+		invalid(t, apiSchema(t, "args/$defs/"+op), `{"scope":true}`, op+" with a scope that is not a string")
+	}
+	for _, op := range []string{"twin.step", "twin.destroy", "twin.show", "twin.verify", "twin.compile", "schema.check", "psp.validate"} {
+		invalid(t, apiSchema(t, "args/$defs/"+op), `{"scope":"tag:fylgja"}`, op+" with a scope")
+	}
+	invalid(t, apiSchema(t, "args/$defs/twin.provision"), `{"bundle":"./b","scope":"tag:fylgja"}`, "twin.provision with a scope")
 	valid(t, apiSchema(t, "args/$defs/twin.verify"), []byte(`{}`), "twin.verify with no argument")
 }
 

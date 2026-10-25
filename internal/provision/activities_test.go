@@ -610,7 +610,7 @@ func TestRunsInFlightActivity(t *testing.T) {
 }
 
 func TestStartFollowingActivity(t *testing.T) {
-	in := StartFollowingInput{Branch: "fylgja-fixture", IntervalS: 300, Version: "0.1.0-dev"}
+	in := StartFollowingInput{Branch: "fylgja-fixture", IntervalS: 300, Version: "0.1.0-dev", Scope: "tag:fylgja"}
 
 	t.Run("options, field by field", func(t *testing.T) {
 		s := newScheduleService()
@@ -646,7 +646,8 @@ func TestStartFollowingActivity(t *testing.T) {
 			t.Errorf("action {ID:%q Workflow:%v TaskQueue:%q Memo:%v}, want fylgja-reconcile, Reconcile, fylgja, none",
 				action.ID, action.Workflow, action.TaskQueue, action.Memo)
 		}
-		if want := []any{ReconcileInput{Branch: "fylgja-fixture", Version: "0.1.0-dev"}}; !slices.Equal(action.Args, want) {
+		// 017: every check reads under the twin's scope.
+		if want := []any{ReconcileInput{Branch: "fylgja-fixture", Version: "0.1.0-dev", Scope: "tag:fylgja"}}; !slices.Equal(action.Args, want) {
 			t.Errorf("args %+v, want %+v", action.Args, want)
 		}
 		noCredentialField(t, "the check's input", action.Args)

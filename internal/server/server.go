@@ -64,6 +64,10 @@ type Server struct {
 	// RehearsalCeiling is the longest deadline twin rehearse admits; zero is
 	// rehearsal.Ceiling. A test lowers it, and no flag sets it (015).
 	RehearsalCeiling time.Duration
+	// DefaultScope is the scope a request that names none is read under, tag:<name>, from
+	// FYLGJA_DEFAULT_SCOPE at start (017). Empty is none: such a request is refused
+	// scope.unset (scopeOf).
+	DefaultScope string
 	// Build is the server's --version, sent on every answer as Fylgja-Build.
 	Build string
 	// Log takes one line a request when it ends, and the dependencies' warnings of a

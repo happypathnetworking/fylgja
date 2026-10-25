@@ -76,16 +76,22 @@ func (f *fakeReader) IntentEvents(_ context.Context, branch, since, after string
 }
 
 // fakeStamper is the branches' stamps: exactly at a (branch, at) when a case gives one,
-// else the branch's at any at. It records every (branch, at) it is asked for.
+// else the branch's at any at. It records every (branch, at) it is asked for, and the scope
+// of each.
 type fakeStamper struct {
 	err      error
 	at       map[string]intent.Stamps // branch@at
 	byBranch map[string]intent.Stamps
 	calls    []string
+	scopes   []string
 }
 
-func (f *fakeStamper) Stamps(_ context.Context, branch, at string) (intent.Stamps, error) {
+// testScope is the scope the tests read under: the server's default on this host (017).
+const testScope = "tag:fylgja"
+
+func (f *fakeStamper) Stamps(_ context.Context, branch, at, scope string) (intent.Stamps, error) {
 	f.calls = append(f.calls, branch+"@"+at)
+	f.scopes = append(f.scopes, scope)
 	if f.err != nil {
 		return intent.Stamps{}, f.err
 	}
@@ -330,7 +336,7 @@ func TestResolveRefusals(t *testing.T) {
 			if tc.edit != nil {
 				tc.edit(r, s)
 			}
-			res, list, err := Resolve(t.Context(), r, s, registry(t), tc.ref, now)
+			res, list, err := Resolve(t.Context(), r, s, registry(t), tc.ref, testScope, now)
 			if err != nil {
 				t.Fatalf("a refusal returned as an error: %v", err)
 			}
@@ -379,7 +385,7 @@ func TestResolveResolves(t *testing.T) {
 	} {
 		t.Run(tc.ref.String(), func(t *testing.T) {
 			r, s := story()
-			got, list, err := Resolve(t.Context(), r, s, registry(t), tc.ref, now)
+			got, list, err := Resolve(t.Context(), r, s, registry(t), tc.ref, testScope, now)
 			if err != nil || len(list) != 0 {
 				t.Fatalf("%v %+v", err, list)
 			}
@@ -396,12 +402,12 @@ func TestResolveResolves(t *testing.T) {
 func TestResolveWrittenAtAfterTheClock(t *testing.T) {
 	const ahead = "2026-10-16T18:00:00.000001+00:00"
 	r, s := story(change1(mark("st-new", "new", ahead, nil, "")))
-	got, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "new"}, now)
+	got, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "new"}, testScope, now)
 	if err != nil || len(list) != 0 || got.At != ahead || got.AtSource != AtWritten {
 		t.Fatalf("a written at after the clock: %+v %v %+v", got, err, list)
 	}
 	r, s = story(change1(mark("st-new", "new", ahead, str(ahead), "")))
-	_, list, err = Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "new"}, now)
+	_, list, err = Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "new"}, testScope, now)
 	if err != nil || len(list) != 1 || list[0].Rule != findings.RuleStageAtUnresolved {
 		t.Errorf("the same instant given: %v %+v; want stage.at.unresolved", err, list)
 	}
@@ -421,7 +427,7 @@ func TestOrderEndsFixed(t *testing.T) {
 		mark("st-x", "unread", "", str("the day it went live"), ""),
 		mark("st-cabled", "cabled", cabledAt, nil, ""),
 	))
-	ch, list, err := Find(t.Context(), r, s, "change-1")
+	ch, list, err := Find(t.Context(), r, s, "change-1", testScope)
 	if err != nil || list != nil {
 		t.Fatalf("%v %+v", err, list)
 	}
@@ -486,7 +492,7 @@ func TestRebaseIsNamed(t *testing.T) {
 	r, s := story()
 	r.branches["change-1"].BranchedFrom = rebased
 	s.byBranch["change-1"] = freshStamps("2026-10-16T17:37:22.940060+00:00") // a rebase re-stamps the branch
-	ch, list, err := Find(t.Context(), r, s, "change-1")
+	ch, list, err := Find(t.Context(), r, s, "change-1", testScope)
 	if err != nil || list != nil {
 		t.Fatalf("%v %+v", err, list)
 	}
@@ -505,7 +511,7 @@ func TestRebaseIsNamed(t *testing.T) {
 	}
 
 	r, s = story(change1(mark("st-old", "old", "", str("2026-10-16T17:20:19.944511Z"), "")))
-	_, list, err = Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "old"}, now)
+	_, list, err = Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "old"}, testScope, now)
 	if err != nil || len(list) != 1 || list[0].Rule != findings.RuleStageAtBeforeBranchPoint ||
 		!strings.HasSuffix(list[0].Message, "and before the branch was created at "+createdAt+"; a stage names a moment on its source branch") {
 		t.Errorf("a mark at the branch's creation: %v %+v", err, list)
@@ -517,7 +523,7 @@ func TestRebaseIsNamed(t *testing.T) {
 func TestMainMovedWarns(t *testing.T) {
 	r, s := story()
 	s.byBranch["main"] = intent.Stamps{Latest: "2026-10-16T17:50:00.000000+00:00"}
-	got, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "cabled"}, now)
+	got, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "cabled"}, testScope, now)
 	if err != nil || got.At != cabledAt {
 		t.Fatalf("%+v %v", got, err)
 	}
@@ -534,7 +540,7 @@ func TestMainMovedWarns(t *testing.T) {
 	for name, latest := range map[string]string{"before": "2026-10-16T17:00:00.000000+00:00", "empty": ""} {
 		r, s := story()
 		s.byBranch["main"] = intent.Stamps{Latest: latest}
-		if _, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "cabled"}, now); err != nil || list != nil {
+		if _, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "cabled"}, testScope, now); err != nil || list != nil {
 			t.Errorf("main %s: %v %+v", name, err, list)
 		}
 	}
@@ -561,7 +567,7 @@ func TestFutureAsOfNeverSent(t *testing.T) {
 	for _, ref := range []Ref{{"change-1", "cabled"}, {"change-1", "live"}, {"change-1", "head"}, {"change-1", "branch-point"}, {"change-1", "future"}} {
 		r, s := story(change1(append(change1().Stages, mark("st-f", "future", cabledAt, str("2099-01-01T00:00:00Z"), ""))...))
 		s.byBranch["change-1"] = stale // every stage read reaches the validator
-		_, _, err := Resolve(t.Context(), r, s, registry(t), ref, now)
+		_, _, err := Resolve(t.Context(), r, s, registry(t), ref, testScope, now)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -594,14 +600,14 @@ func TestResolveReturnsTheReadersError(t *testing.T) {
 	} {
 		r, s := story()
 		edit(r, s)
-		_, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "cabled"}, now)
+		_, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "cabled"}, testScope, now)
 		if !errors.Is(err, down) || list != nil {
 			t.Errorf("%s failing: err %v, findings %+v; want the reader's error and no finding", name, err, list)
 		}
 	}
 	// Two open proposed changes on one branch, which Infrahub refuses: none is chosen.
 	r, s := story(change1(), change1())
-	if _, _, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "cabled"}, now); err == nil ||
+	if _, _, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "cabled"}, testScope, now); err == nil ||
 		!strings.Contains(err.Error(), "has 2 open proposed changes (ids pc-1, pc-1), which Infrahub refuses; none is chosen") {
 		t.Errorf("two open proposed changes: %v", err)
 	}

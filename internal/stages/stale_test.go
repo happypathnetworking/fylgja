@@ -104,7 +104,7 @@ func TestStalePerDevice(t *testing.T) {
 			r, s := story(change1(mark("st-m", "m", tm, nil, "")))
 			r.validations = map[string]string{"pc-1@" + tm: tc.validated}
 			s.at = map[string]intent.Stamps{"change-1@" + tm: tc.stamps}
-			ch, list, err := Find(t.Context(), r, s, "change-1")
+			ch, list, err := Find(t.Context(), r, s, "change-1", testScope)
 			if err != nil || list != nil {
 				t.Fatalf("%v %+v", err, list)
 			}
@@ -147,7 +147,7 @@ func TestStaleWording(t *testing.T) {
 	stamps := intent.Stamps{Latest: tm, Devices: map[string]intent.DeviceStamps{"n1": device(t1, t0)}}
 	s.at = map[string]intent.Stamps{"change-1@" + tm: stamps}
 	r.validations = map[string]string{"pc-1@" + tm: t2}
-	_, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "m"}, now)
+	_, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "m"}, testScope, now)
 	if err != nil || len(list) != 1 {
 		t.Fatalf("%v %+v", err, list)
 	}
@@ -167,7 +167,7 @@ func TestStaleWording(t *testing.T) {
 func TestStaleHead(t *testing.T) {
 	r, s := story()
 	s.byBranch["change-1"] = intent.Stamps{Latest: t1, Devices: map[string]intent.DeviceStamps{"n1": device(t1, t0)}}
-	_, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "head"}, now)
+	_, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "head"}, testScope, now)
 	if err != nil || len(list) != 1 || list[0].Rule != findings.RuleStageArtifactStale || list[0].Object != "n1" ||
 		!strings.HasSuffix(list[0].Message, "the head of change-1 is later than the artifacts' last regeneration; regenerate "+
 			"(fylgja-fixture -generate, POST /api/artifact/generate, or the proposed change's checks: a retry in Infrahub, "+
@@ -184,7 +184,7 @@ func TestStaleHead(t *testing.T) {
 	// The run-check after the edit, identical bytes: the head's at does not move, and the
 	// validator's completion clears it.
 	r.validations = map[string]string{"pc-1@": t3}
-	got, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "head"}, now)
+	got, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "head"}, testScope, now)
 	if err != nil || list.Rejected() || got.At != "2026-10-16T19:35:55.000001+00:00" {
 		t.Errorf("after the run-check: %+v %v %+v", got, err, list)
 	}
@@ -193,7 +193,7 @@ func TestStaleHead(t *testing.T) {
 // The branch point on a destination that holds no device is fresh, and reads no validator.
 func TestStaleBranchPointOnAnEmptyMain(t *testing.T) {
 	r, s := story()
-	got, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "branch-point"}, now)
+	got, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "branch-point"}, testScope, now)
 	if err != nil || list != nil || got.Branch != "main" || got.At != branchedFrom {
 		t.Fatalf("%+v %v %+v", got, err, list)
 	}
@@ -250,7 +250,7 @@ func TestStaleNamesTheArtifactByThePackage(t *testing.T) {
 	}}
 	r, s := story(change1(mark("st-m", "m", tm, nil, "")))
 	s.at = map[string]intent.Stamps{"change-1@" + tm: stamps}
-	_, list, err := Resolve(t.Context(), r, s, reg, Ref{"change-1", "m"}, now)
+	_, list, err := Resolve(t.Context(), r, s, reg, Ref{"change-1", "m"}, testScope, now)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +342,7 @@ func TestStaleByEvent(t *testing.T) {
 			r.events = map[string][]intent.Event{"change-1": tc.events}
 			r.validations = map[string]string{"pc-1@" + tc.mark: tc.validated}
 			s.at = map[string]intent.Stamps{"change-1@" + tc.mark: tc.stamps}
-			ch, list, err := Find(t.Context(), r, s, "change-1")
+			ch, list, err := Find(t.Context(), r, s, "change-1", testScope)
 			if err != nil || list != nil {
 				t.Fatalf("%v %+v", err, list)
 			}
@@ -378,7 +378,7 @@ func TestStaleByEventWording(t *testing.T) {
 	r.events = map[string][]intent.Event{"change-1": append([]intent.Event{
 		{Name: "infrahub.node.created", OccurredAt: created, Kind: "NetworkInterface", Nodes: []string{"if-n3-e1"}},
 	}, removal()...)}
-	_, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "m"}, now)
+	_, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "m"}, testScope, now)
 	if err != nil || len(list) != 3 {
 		t.Fatalf("%v %+v", err, list)
 	}
@@ -407,7 +407,7 @@ func TestHeadAfterARemoval(t *testing.T) {
 	r, s := story()
 	s.byBranch["change-1"] = removed(t0)
 	r.events = map[string][]intent.Event{"change-1": removal()}
-	got, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "head"}, now)
+	got, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "head"}, testScope, now)
 	if err != nil || !list.Rejected() {
 		t.Fatalf("%+v %v %+v", got, err, list)
 	}
@@ -420,7 +420,7 @@ func TestHeadAfterARemoval(t *testing.T) {
 	if want := []string{"n1", "n2"}; !reflect.DeepEqual(stale, want) {
 		t.Errorf("stale %v, want %v", stale, want)
 	}
-	ch, _, err := Find(t.Context(), r, s, "change-1")
+	ch, _, err := Find(t.Context(), r, s, "change-1", testScope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -434,7 +434,7 @@ func TestHeadAfterARemoval(t *testing.T) {
 	// The regenerate: the checksums move past every event, and so does the head.
 	regenerated := "2026-10-16T19:37:00.000000+00:00"
 	s.byBranch["change-1"] = removed(regenerated)
-	got, list, err = Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "head"}, now)
+	got, list, err = Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "head"}, testScope, now)
 	if err != nil || list.Rejected() || got.At != "2026-10-16T19:37:00.000001+00:00" {
 		t.Errorf("after the regenerate: %+v %v %+v", got, err, list)
 	}
@@ -446,7 +446,7 @@ func TestHeadEvents(t *testing.T) {
 	r, s := story()
 	s.byBranch["change-1"] = removed("2026-10-16T19:37:00.000000+00:00")
 	r.events = map[string][]intent.Event{"change-1": removal()}
-	ch, _, err := Find(t.Context(), r, s, "change-1")
+	ch, _, err := Find(t.Context(), r, s, "change-1", testScope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -455,7 +455,7 @@ func TestHeadEvents(t *testing.T) {
 	}
 
 	s.byBranch["change-1"] = intent.Stamps{}
-	ch, _, err = Find(t.Context(), r, s, "change-1")
+	ch, _, err = Find(t.Context(), r, s, "change-1", testScope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -488,7 +488,7 @@ func TestStaleEventsRead(t *testing.T) {
 	stamps := removed(t0)
 	stamps.Devices["n3"] = ided("n3", device("2026-10-16T19:35:00.000000+00:00", "2026-10-16T19:35:20.000000+00:00"))
 	s.at = map[string]intent.Stamps{"change-1@" + tm: stamps}
-	ch, _, err := Find(t.Context(), r, s, "change-1")
+	ch, _, err := Find(t.Context(), r, s, "change-1", testScope)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -519,7 +519,7 @@ func TestStaleEventsRead(t *testing.T) {
 
 	r, s = story()
 	s.byBranch["main"] = removed(t0)
-	if _, _, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "branch-point"}, now); err != nil {
+	if _, _, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "branch-point"}, testScope, now); err != nil {
 		t.Fatal(err)
 	}
 	if got := events(r); len(got) != 1 || !strings.HasSuffix(got[0], " after "+headLatest) {
@@ -534,14 +534,14 @@ func TestNoBranchPointNoEvents(t *testing.T) {
 	r.events = map[string][]intent.Event{"change-1": removal()}
 	r.branches["change-1"] = &intent.BranchInfo{Name: "change-1", CreatedAt: createdAt}
 	s.byBranch["change-1"] = removed(t0)
-	ch, list, err := Find(t.Context(), r, s, "change-1")
+	ch, list, err := Find(t.Context(), r, s, "change-1", testScope)
 	if err != nil || list != nil {
 		t.Fatalf("%v %+v", err, list)
 	}
 	if head, _ := ch.first(LabelHead); head.At != "2026-10-16T19:35:10.000001+00:00" {
 		t.Errorf("the head's at is %s; want the stamps' alone", head.At)
 	}
-	_, list, err = Resolve(t.Context(), r, s, registry(t), Ref{"change-1", LabelBranchPoint}, now)
+	_, list, err = Resolve(t.Context(), r, s, registry(t), Ref{"change-1", LabelBranchPoint}, testScope, now)
 	want := "stage change-1/branch-point has no at: Infrahub returned no branched_from for branch change-1, so it " +
 		"names no point in time"
 	if err != nil || len(list) != 1 || list[0].Rule != findings.RuleStageAtUnresolved || list[0].Severity != findings.Rejection ||

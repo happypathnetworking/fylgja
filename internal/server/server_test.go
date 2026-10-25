@@ -465,6 +465,12 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 		{findings.OpTwinRehearse, `{"args":{"branch":"change-1","dry_run":true}}`, `twin.rehearse takes no argument "dry_run"`},
 		{findings.OpTwinRehearse, `{"args":{"branch":["change-1"]}}`, `twin.rehearse's argument "branch" is not a string`},
 		{findings.OpTwinRehearse, `{"files":[{"path":"a","data":""}]}`, "twin.rehearse takes no files"},
+		// 017: twin.step reads under its record's scope and takes none, and an operation that
+		// reads no intent takes none either; where it is taken, it is a string.
+		{findings.OpTwinStep, `{"args":{"scope":"tag:fylgja"}}`, `twin.step takes no argument "scope"`},
+		{findings.OpSchemaCheck, `{"args":{"branch":"b","scope":"tag:fylgja"}}`, `schema.check takes no argument "scope"`},
+		{findings.OpIntentRead, `{"args":{"scope":true}}`, `intent.read's argument "scope" is not a string`},
+		{findings.OpStageList, `{"args":{"scope":null}}`, `stage.list's argument "scope" is not a string`},
 	} {
 		resp, body := post(t, nil, srv.URL+api.Path(c.op), testToken, c.body, nil)
 		var p api.Problem
@@ -487,6 +493,17 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 		resp, _ := post(t, nil, srv.URL+api.Path(op), testToken, body, nil)
 		if resp.StatusCode != http.StatusOK {
 			t.Errorf("%s with %s: status %d", op, body, resp.StatusCode)
+		}
+	}
+	// 017: the five operations that read intent under a scope take one, an empty one
+	// included, which is scope.invalid's to refuse and not the transport's; a client that
+	// sends none was served above.
+	for _, op := range []string{findings.OpTwinCreate, findings.OpTwinRehearse, findings.OpIntentRead,
+		findings.OpStagePlan, findings.OpStageList} {
+		for _, body := range []string{`{"args":{"scope":"tag:fylgja"}}`, `{"args":{"scope":""}}`} {
+			if resp, _ := post(t, nil, srv.URL+api.Path(op), testToken, body, nil); resp.StatusCode != http.StatusOK {
+				t.Errorf("%s with %s: status %d", op, body, resp.StatusCode)
+			}
 		}
 	}
 	for _, body := range []string{`{"args":{"wait":"","args":["x"]}}`, `{"args":{"wait":"2m0s"}}`} {

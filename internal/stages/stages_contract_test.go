@@ -143,11 +143,12 @@ func markStage(t *testing.T, c *testsupport.Client, id, label, at, description s
 // address and credential of the process environment.
 type liveStamper struct{}
 
-func (liveStamper) Stamps(ctx context.Context, branch, at string) (intent.Stamps, error) {
+func (liveStamper) Stamps(ctx context.Context, branch, at, scope string) (intent.Stamps, error) {
 	cfg, err := intent.FromEnv(branch, at)
 	if err != nil {
 		return intent.Stamps{}, err
 	}
+	cfg.Scope = intent.ScopeTag(scope)
 	return intent.New(cfg).Stamps(ctx)
 }
 
@@ -182,7 +183,7 @@ func filing(t *testing.T) (Pipeline, map[string]*ctm.CTM) {
 func planOf(t *testing.T, branch string, p Pipeline) *PlanResult {
 	t.Helper()
 	started := time.Now()
-	res, err := Plan(t.Context(), stageReader(t), liveStamper{}, branch, registry(t), p, time.Now().UTC(), nil, nil, nil)
+	res, err := Plan(t.Context(), stageReader(t), liveStamper{}, branch, testScope, registry(t), p, time.Now().UTC(), nil, nil, nil)
 	if err != nil {
 		t.Fatalf("planning %s: %v", branch, err)
 	}
@@ -432,7 +433,7 @@ func TestStagesListAndPlan(t *testing.T) {
 		}
 	}
 
-	listed, list, err := List(t.Context(), stageReader(t), liveStamper{}, name, nil)
+	listed, list, err := List(t.Context(), stageReader(t), liveStamper{}, name, testScope, nil)
 	if err != nil {
 		t.Fatalf("listing %s: %v", name, err)
 	}
@@ -523,7 +524,7 @@ func TestStagesListAndPlan(t *testing.T) {
 	if planned == nil {
 		t.Fatalf("%s's CTM was not filed", seeded.Ref)
 	}
-	byAt, list, err := stage.Read(t.Context(), name, seededAt, registry(t), time.Now().UTC().Format(stage.ObservedAtFormat))
+	byAt, list, err := stage.Read(t.Context(), name, seededAt, testScope, registry(t), time.Now().UTC().Format(stage.ObservedAtFormat))
 	if err != nil || list.Rejected() {
 		t.Fatalf("reading %s at %s: %v %v", name, seededAt, err, list)
 	}
@@ -554,7 +555,7 @@ func TestStagesListAndPlan(t *testing.T) {
 		if err := c.UpdateStage(first.ID, fields); err != nil {
 			t.Fatalf("%s: %v", what, err)
 		}
-		ch, list, err := Find(t.Context(), reader, liveStamper{}, name)
+		ch, list, err := Find(t.Context(), reader, liveStamper{}, name, testScope)
 		if err != nil || list != nil {
 			t.Fatalf("finding %s's proposed change after %s: %v %v", name, what, err, list)
 		}
@@ -591,7 +592,7 @@ func TestStagesListAndPlan(t *testing.T) {
 		t.Errorf("after a relabel %s is at %s (%s); want written, later than %s (%v)", relabelled.Ref, relabelled.At,
 			relabelled.AtSource, first.At, err)
 	}
-	if _, list, err := Resolve(t.Context(), reader, liveStamper{}, registry(t), first.Ref, time.Now().UTC()); err != nil {
+	if _, list, err := Resolve(t.Context(), reader, liveStamper{}, registry(t), first.Ref, testScope, time.Now().UTC()); err != nil {
 		t.Fatalf("resolving %s after a relabel: %v", first.Ref, err)
 	} else {
 		refused(t, "the old reference after a relabel", list, findings.RuleStageUnknown, first.Ref.String())
@@ -625,7 +626,7 @@ func TestStageRefusals(t *testing.T) {
 	devices := []string{"n1", "n2", "n3"}
 	resolve := func(ref Ref) (Resolved, findings.List) {
 		t.Helper()
-		res, list, err := Resolve(t.Context(), reader, liveStamper{}, registry(t), ref, time.Now().UTC())
+		res, list, err := Resolve(t.Context(), reader, liveStamper{}, registry(t), ref, testScope, time.Now().UTC())
 		if err != nil {
 			t.Fatalf("resolving %s: %v", ref, err)
 		}
@@ -813,7 +814,7 @@ func TestStagesSeeARemoval(t *testing.T) {
 	r := stageReader(t)
 	headOf := func(what string) string {
 		t.Helper()
-		ch, list, err := Find(t.Context(), r, liveStamper{}, name)
+		ch, list, err := Find(t.Context(), r, liveStamper{}, name, testScope)
 		if err != nil || list != nil {
 			t.Fatalf("%s: finding %s: %v %v", what, name, err, list)
 		}
@@ -822,7 +823,7 @@ func TestStagesSeeARemoval(t *testing.T) {
 	}
 	stamps := func() intent.Stamps {
 		t.Helper()
-		s, err := liveStamper{}.Stamps(t.Context(), name, "")
+		s, err := liveStamper{}.Stamps(t.Context(), name, "", testScope)
 		if err != nil {
 			t.Fatal(err)
 		}

@@ -36,7 +36,7 @@ func TestFollowingDetection(t *testing.T) {
 	}
 	check := func(what string, want intent.Counts) string {
 		t.Helper()
-		snapshot, list, err := Read(t.Context(), branch, "", reg, time.Now().UTC().Format(ObservedAtFormat))
+		snapshot, list, err := Read(t.Context(), branch, "", "tag:fylgja", reg, time.Now().UTC().Format(ObservedAtFormat))
 		if err != nil {
 			t.Fatalf("%s: reading %s: %v", what, branch, err)
 		}

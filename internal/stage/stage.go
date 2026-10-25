@@ -34,13 +34,15 @@ const ObservedAtFormat = "2006-01-02T15:04:05.000000Z"
 // Read reads a branch into a validated CTM: conformance, fetch, then the same rules
 // twin compile runs, all findings in one pass. A rejection returns a nil CTM
 // with the findings; an error means the read could not run at all (Infrahub unreachable,
-// its address or credential unset). observedAt is stamped by the caller before this is
-// called, so it is never later than anything the read could have seen.
-func Read(ctx context.Context, branch, at string, reg *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error) {
+// its address or credential unset). scope is the request's, tag:<name> (017), which the
+// intent client is given. observedAt is stamped by the caller before this is called, so it
+// is never later than anything the read could have seen.
+func Read(ctx context.Context, branch, at, scope string, reg *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error) {
 	cfg, err := intent.FromEnv(branch, at)
 	if err != nil {
 		return nil, nil, err
 	}
+	cfg.Scope = intent.ScopeTag(scope)
 	client := intent.New(cfg)
 
 	ctx, cancel := context.WithTimeout(ctx, ReadTimeout)

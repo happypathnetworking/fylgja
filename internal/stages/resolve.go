@@ -26,11 +26,12 @@ type Reader interface {
 	IntentEvents(ctx context.Context, branch, since, after string) ([]intent.Event, error)
 }
 
-// Stamper reads a branch's stamps at an `at`, unpinned when it is empty: the server
-// satisfies it with an intent client per (branch, at), whose Stamps reads when the intent
-// and the artifacts were written and never a value of intent. Faked in tier 1.
+// Stamper reads a branch's stamps at an `at`, unpinned when it is empty, under a scope,
+// tag:<name> (017): the server satisfies it with an intent client per (branch, at, scope),
+// whose Stamps reads when the intent and the artifacts were written and never a value of
+// intent. Faked in tier 1.
 type Stamper interface {
-	Stamps(ctx context.Context, branch, at string) (intent.Stamps, error)
+	Stamps(ctx context.Context, branch, at, scope string) (intent.Stamps, error)
 }
 
 // Where a stage's at came from (FR-007).
@@ -96,6 +97,10 @@ type Change struct {
 	BranchedFrom, CreatedAt string
 	// Stages are the branch point, every mark by at, and the head.
 	Stages []Stage
+	// Scope is the scope every stage of the proposed change is resolved, read and planned
+	// under, tag:<name> (017): the head's stamps, each stage's staleness and read, and the
+	// destination's stamps for stage.main.moved.
+	Scope string
 
 	head intent.Stamps  // the source branch's unpinned stamps
 	main *intent.Stamps // the destination's unpinned stamps, read once, for stage.main.moved
@@ -115,8 +120,9 @@ const kindRemedy = ": load " + intent.StageSchemaFile + " on it; only --stage, s
 // head's at. Each refusal is a rejection at step resolve, returned as findings with a nil
 // Change; a reader or a stamper that cannot reach Infrahub, or is refused its credential,
 // returns its error as it is, for the caller to report as operation.failed. Nothing of the
-// branch's intent is read: the head's at comes from a stamps read.
-func Find(ctx context.Context, r Reader, s Stamper, branch string) (*Change, findings.List, error) {
+// branch's intent is read: the head's at comes from a stamps read, under scope, which the
+// Change carries to every later read of its stages.
+func Find(ctx context.Context, r Reader, s Stamper, branch, scope string) (*Change, findings.List, error) {
 	if list, err := checkKind(ctx, r); list != nil || err != nil {
 		return nil, list, err
 	}
@@ -155,7 +161,7 @@ func Find(ctx context.Context, r Reader, s Stamper, branch string) (*Change, fin
 	if info == nil {
 		return nil, findings.List{refusal(findings.RuleStageUnknown, branch, gone(branch, pc.ID))}, nil
 	}
-	ch, err := newChange(ctx, r, s, pc, *info)
+	ch, err := newChange(ctx, r, s, pc, *info, scope)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -174,9 +180,10 @@ func gone(branch, id string) string {
 // branched_from, each mark at its as_of or its own write stamp, and the head one
 // microsecond after the later of the branch's latest stamp, read unpinned, and its latest
 // intent event, which is how a removal that moves no stamp moves the head (D-048). Only
-// the events after the latest stamp can move it, so only their pages are read.
-func newChange(ctx context.Context, r Reader, s Stamper, pc intent.ProposedChange, info intent.BranchInfo) (*Change, error) {
-	head, err := s.Stamps(ctx, pc.Branch, "")
+// the events after the latest stamp can move it, so only their pages are read. The stamps
+// are read under scope, which the Change carries.
+func newChange(ctx context.Context, r Reader, s Stamper, pc intent.ProposedChange, info intent.BranchInfo, scope string) (*Change, error) {
+	head, err := s.Stamps(ctx, pc.Branch, "", scope)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +197,7 @@ func newChange(ctx context.Context, r Reader, s Stamper, pc intent.ProposedChang
 		return nil, err
 	}
 	ch := changeOf(pc, info, head, events)
-	ch.events, ch.eventsAfter = events, &head.Latest
+	ch.Scope, ch.events, ch.eventsAfter = scope, events, &head.Latest
 	return ch, nil
 }
 
@@ -380,11 +387,11 @@ func (c *Change) first(label string) (Stage, bool) {
 //
 // now is the server's clock, read once by the command and passed in for the future rule
 // alone, which only a given as_of is held to: it is compared, never sent. reg names each
-// device's package for the staleness rule (Constitution II). A reader or stamper that
-// cannot reach Infrahub returns its error as it is, for the caller to report as
-// operation.failed.
-func Resolve(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ref Ref, now time.Time) (Resolved, findings.List, error) {
-	ch, list, err := Find(ctx, r, s, ref.Branch)
+// device's package for the staleness rule (Constitution II). Every read of the resolution
+// is under scope, tag:<name> (017). A reader or stamper that cannot reach Infrahub returns
+// its error as it is, for the caller to report as operation.failed.
+func Resolve(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ref Ref, scope string, now time.Time) (Resolved, findings.List, error) {
+	ch, list, err := Find(ctx, r, s, ref.Branch, scope)
 	if err != nil || list != nil {
 		return Resolved{}, list, err
 	}

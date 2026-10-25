@@ -90,7 +90,9 @@ type ListResult struct {
 // derived stages have none, until Infrahub cancels it; stage.main.moved per proposed
 // change; stage.orphaned per orphan; and stage.twin.moved when the record's stage no
 // longer resolves to what the record holds, or is gone.
-func List(ctx context.Context, r Reader, s Stamper, branch string, record *RecordView) (ListResult, findings.List, error) {
+//
+// Every stamps read is under scope, tag:<name> (017).
+func List(ctx context.Context, r Reader, s Stamper, branch, scope string, record *RecordView) (ListResult, findings.List, error) {
 	if list, err := checkKind(ctx, r); list != nil || err != nil {
 		return ListResult{}, list, err
 	}
@@ -124,9 +126,10 @@ func List(ctx context.Context, r Reader, s Stamper, branch string, record *Recor
 			// Its stages still list until Infrahub cancels it, the branch's warning saying
 			// why its two derived stages have no at.
 			ch = changeOf(pc, intent.BranchInfo{Name: pc.Branch}, intent.Stamps{}, nil)
+			ch.Scope = scope
 			list = append(list, warning(refusal(findings.RuleStageUnknown, pc.Branch, gone(pc.Branch, pc.ID)+
 				"; until then its branch point and head have no at")))
-		} else if ch, err = newChange(ctx, r, s, pc, *info); err != nil {
+		} else if ch, err = newChange(ctx, r, s, pc, *info, scope); err != nil {
 			return ListResult{}, nil, err
 		}
 		changes = append(changes, ch)

@@ -110,6 +110,10 @@ type ProvisionInput struct {
 	// writes into twin.json. The run branches on nothing of it. Nil in every input and
 	// recorded history of a run a rehearsal did not start, and omitted when nil.
 	Rehearsal *wire.RehearsalRef `json:"rehearsal,omitempty"`
+	// Scope is the scope the run's read is made under, tag:<name>, as the server resolved
+	// it (017), and the following's checks after it. The run branches on nothing of it.
+	// Empty in every recorded history before 017, and omitted when empty, so they replay.
+	Scope string `json:"scope,omitempty"`
 }
 
 // StageInput names a stage as the record does: its proposed change by id and source
@@ -154,6 +158,9 @@ type FollowingResult struct {
 type ReconcileInput struct {
 	Branch  string `json:"branch"`
 	Version string `json:"version"`
+	// Scope is the following twin's, from its run's ProvisionInput.Scope: every read the
+	// check makes, and the rebuild's record, are under it (017). Omitted when empty.
+	Scope string `json:"scope,omitempty"`
 }
 
 // ReconcileResult is how a check ended. One shape
@@ -182,6 +189,9 @@ type StartFollowingInput struct {
 	Branch    string `json:"branch"`
 	IntervalS int    `json:"interval_s"`
 	Version   string `json:"version"`
+	// Scope is the twin's, which the Schedule's ReconcileInput carries to every check (017).
+	// Omitted when empty.
+	Scope string `json:"scope,omitempty"`
 }
 
 // StopFollowingResult says whether a Schedule was deleted, and the branch it followed.
@@ -220,6 +230,8 @@ type DestroyRun struct {
 type ReadIntentInput struct {
 	Branch string `json:"branch"`
 	At     string `json:"at"`
+	// Scope is the read's, tag:<name> (017). Omitted when empty.
+	Scope string `json:"scope,omitempty"`
 }
 
 // ReadIntentResult is where the read's CTM was written, when the read began, and its

@@ -277,11 +277,12 @@ var builtStages = struct {
 // stepStamper reads a branch's stamps as the server's does.
 type stepStamper struct{}
 
-func (stepStamper) Stamps(ctx context.Context, branch, at string) (intent.Stamps, error) {
+func (stepStamper) Stamps(ctx context.Context, branch, at, scope string) (intent.Stamps, error) {
 	cfg, err := intent.FromEnv(branch, at)
 	if err != nil {
 		return intent.Stamps{}, err
 	}
+	cfg.Scope = intent.ScopeTag(scope)
 	return intent.New(cfg).Stamps(ctx)
 }
 
@@ -321,7 +322,7 @@ func compileStage(t *testing.T, paths lab.Paths, label string) compiledStage {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ch, list, err := stages.Find(ctx, reader, stepStamper{}, "change-1")
+	ch, list, err := stages.Find(ctx, reader, stepStamper{}, "change-1", "tag:fylgja")
 	if err != nil || ch == nil {
 		t.Fatalf("change-1's proposed change was not found: %v %+v", err, list)
 	}

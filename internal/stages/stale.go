@@ -46,7 +46,7 @@ func Stale(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 		validatedAt = ""
 	} else {
 		var err error
-		if stamps, err = s.Stamps(ctx, st.Branch, st.At); err != nil {
+		if stamps, err = s.Stamps(ctx, st.Branch, st.At, ch.Scope); err != nil {
 			return nil, err
 		}
 	}
@@ -205,7 +205,7 @@ func laterThan(a, b string) (bool, error) {
 // destination's stamps are read once per proposed change.
 func (c *Change) MainMoved(ctx context.Context, s Stamper) (findings.List, error) {
 	if c.main == nil {
-		stamps, err := s.Stamps(ctx, c.ProposedChange.Destination, "")
+		stamps, err := s.Stamps(ctx, c.ProposedChange.Destination, "", c.Scope)
 		if err != nil {
 			return nil, err
 		}

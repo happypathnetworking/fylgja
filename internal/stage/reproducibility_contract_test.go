@@ -89,7 +89,7 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	}
 	read := func(at string) (map[string][]byte, string, *ctm.CTM) {
 		t.Helper()
-		snapshot, list, err := Read(t.Context(), branch, at, reg, time.Now().UTC().Format(ObservedAtFormat))
+		snapshot, list, err := Read(t.Context(), branch, at, "tag:fylgja", reg, time.Now().UTC().Format(ObservedAtFormat))
 		if err != nil {
 			t.Fatalf("reading %s at %q: %v", branch, at, err)
 		}

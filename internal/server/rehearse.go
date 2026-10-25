@@ -24,6 +24,10 @@ import (
 type rehearseFlags struct {
 	branch      string
 	branchGiven bool
+	// scope is --scope as given, read only when scopeGiven: not given, the server's default
+	// stands (017).
+	scope      string
+	scopeGiven bool
 }
 
 // runTwinRehearse is twin rehearse (015; specs/015-proposed-change-rehearsal/contracts/
@@ -54,12 +58,19 @@ func runTwinRehearse(ctx context.Context, opts *options, f *rehearseFlags) error
 	if refused := branchGuard(op, f.branch); refused != nil {
 		return refused
 	}
+	subject := &findings.Subject{Branch: f.branch}
+	// The scope every stage is planned under and the baseline's run records (017), after the
+	// guards and before the packages load.
+	scope, err := scopeOf(opts, op, subject, f.scope, f.scopeGiven)
+	if err != nil {
+		return err
+	}
+	subject.Scope = scope
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	subject := &findings.Subject{Branch: f.branch}
 
-	planned, err := planStages(ctx, opts, op, subject, f.branch, nil, nil, nil)
+	planned, err := planStages(ctx, opts, op, subject, f.branch, scope, nil, nil, nil)
 	if err != nil {
 		return err
 	}
@@ -245,7 +256,7 @@ func (r *rehearsing) deadline() (time.Duration, map[string][]wire.NodePlan, erro
 func (r *rehearsing) input(baseline int, nodes map[string][]wire.NodePlan) (provision.RehearseInput, error) {
 	pc := r.planned.res.ProposedChange
 	stagesIn, err := rehearseStages(r.rows, baseline, r.planned.res.Steps, nodes, r.planned.reg,
-		bundle.NewDirStore(r.planned.paths.Bundles).Path, r.opts.version())
+		bundle.NewDirStore(r.planned.paths.Bundles).Path, r.planned.scope, r.opts.version())
 	if err != nil {
 		return provision.RehearseInput{}, err
 	}
@@ -271,7 +282,7 @@ func (r *rehearsing) resolvedAt() string { return r.planned.now.UTC().Format(tim
 // plan is known, every target node's declared link change, restarts allowed, the default
 // wait, and an empty plan, since the run reads containerlab's own at its step 3.
 func rehearseStages(rows []rehearsalRow, baseline int, pairs []step.Pair, nodes map[string][]wire.NodePlan,
-	reg *psp.Registry, bundlePath func(id string) string, version string) ([]provision.RehearseStage, error) {
+	reg *psp.Registry, bundlePath func(id string) string, scope, version string) ([]provision.RehearseStage, error) {
 	waitS := int(verify.DefaultBudget / time.Second)
 	out := make([]provision.RehearseStage, 0, len(rows))
 	var prev *stages.PlanStage
@@ -292,7 +303,7 @@ func rehearseStages(rows []rehearsalRow, baseline int, pairs []step.Pair, nodes 
 			r := st.Resolved
 			in.Provision = &provision.ProvisionInput{Source: wire.SourceIntent, Branch: r.Branch, At: r.At,
 				BundlePath: in.BundlePath, BundleID: in.BundleID, ObservedAt: st.ObservedAt, Stage: r.StageRef(),
-				Version: version}
+				Version: version, Scope: scope}
 		case prev != nil:
 			pair, ok := pairBetween(pairs, prev.Ref.String(), in.Ref)
 			if !ok {
@@ -679,7 +690,7 @@ func resultOf(runID string, res provision.RehearseResult) rehearsal.Result {
 // rehearsal.stage.moved naming the branch: whether one moved is unknown.
 func (r *rehearsing) after(ctx context.Context, block findings.RehearsalBlock) findings.List {
 	branch := r.planned.res.Branch
-	res, refused, err := stages.List(ctx, r.planned.reader, intentStamper{}, branch, nil)
+	res, refused, err := stages.List(ctx, r.planned.reader, intentStamper{}, branch, r.planned.scope, nil)
 	if err == nil && refused.Rejected() {
 		err = fmt.Errorf("%s", firstRejection(refused).Message)
 	}

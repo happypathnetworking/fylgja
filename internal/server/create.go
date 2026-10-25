@@ -28,6 +28,10 @@ type createFlags struct {
 	interval      string
 	intervalGiven bool
 	noFollow      bool
+	// scope is --scope as given, read only when scopeGiven: not given, the server's default
+	// stands (017).
+	scope      string
+	scopeGiven bool
 }
 
 // fromStage is whether the create names a stage: --stage given, whatever its value, or a
@@ -74,6 +78,13 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 		}
 		follow = createFollow(f, interval)
 	}
+	// The scope, after the reference's and the following's guards and before the packages
+	// load: the stage's resolution, the read and the run's are made under it.
+	scope, err := scopeOf(opts, op, subject, f.scope, f.scopeGiven)
+	if err != nil {
+		return err
+	}
+	subject.Scope = scope
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -89,14 +100,14 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	branch, at := f.branch, f.at
 	var resolved *resolvedStage
 	if f.fromStage() {
-		if resolved, err = resolveStage(ctx, op, subject, findings.StepResolve, ref, reg); err != nil {
+		if resolved, err = resolveStage(ctx, op, subject, findings.StepResolve, ref, scope, reg); err != nil {
 			return err
 		}
 		branch, at = resolved.block.Branch, resolved.block.At
 		opts.note("%s", resolved.block.Line())
 	}
 	if f.dryRun {
-		return withStage(runCreateDryRun(ctx, opts, op, subject, branch, at, reg, follow), resolved)
+		return withStage(runCreateDryRun(ctx, opts, op, subject, branch, at, scope, reg, follow), resolved)
 	}
 
 	in := provision.ProvisionInput{
@@ -104,6 +115,7 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 		Branch:  branch,
 		At:      at,
 		Version: opts.version(),
+		Scope:   scope,
 	}
 	// A twin built from the branch head follows it unless --no-follow; a pinned one never does.
 	if follow.Enabled {
@@ -180,7 +192,7 @@ func followInterval(op string, subject *findings.Subject, f *createFlags) (time.
 // `twin compile` would, under the same identifiers. The bundle, and the CTM beside
 // it, are filed as a run's compile step files them, so the report's bundle is there to
 // inspect.
-func runCreateDryRun(ctx context.Context, opts *options, op string, subject *findings.Subject, branch, at string, reg *psp.Registry,
+func runCreateDryRun(ctx context.Context, opts *options, op string, subject *findings.Subject, branch, at, scope string, reg *psp.Registry,
 	follow findings.DryRunFollow) error {
 	paths, err := opts.paths()
 	if err != nil {
@@ -193,7 +205,7 @@ func runCreateDryRun(ctx context.Context, opts *options, op string, subject *fin
 	// Captured before the first request, so observed_at is never later than anything the
 	// read could have seen.
 	observedAt := time.Now().UTC().Format(stage.ObservedAtFormat)
-	snapshot, list, err := stage.Read(ctx, branch, at, reg, observedAt)
+	snapshot, list, err := stage.Read(ctx, branch, at, scope, reg, observedAt)
 	if err != nil {
 		return failAt(op, subject, findings.StepRead, "branch "+branch, "%v", err)
 	}

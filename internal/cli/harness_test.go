@@ -60,7 +60,9 @@ var harness struct {
 // showServiceBudget ServiceBudget, and pspDir, which a test sets through usePSPDir where it
 // gave options{pspDir: …}, is PSPDir. rehearsalCeiling, which no flag sets, is
 // RehearsalCeiling: a test lowers it under a rehearsal's deadline (015), and zero is
-// rehearsal.Ceiling. notifyInterrupt stays the client's own (interrupt.go).
+// rehearsal.Ceiling. defaultScope is DefaultScope, the server's FYLGJA_DEFAULT_SCOPE: the
+// fixture's tag, which a test empties for a server with no default (017). notifyInterrupt
+// stays the client's own (interrupt.go).
 var (
 	dialService = func(ctx context.Context) (provision.Service, error) {
 		return provision.Dial(ctx, nil)
@@ -72,6 +74,7 @@ var (
 	showServiceBudget = provision.ShowServiceBudget
 	pspDir            string
 	rehearsalCeiling  time.Duration
+	defaultScope      = "tag:fylgja"
 )
 
 // version is the build of the harness's server and of its client: M12's unstamped version,
@@ -131,6 +134,7 @@ func handSeams() {
 	s.Sleep, s.Now = verifySleep, verifyNow
 	s.ServiceBudget = showServiceBudget
 	s.RehearsalCeiling = rehearsalCeiling
+	s.DefaultScope = defaultScope
 	s.PSPDir = pspDir
 	if s.PSPDir == "" {
 		s.PSPDir = os.Getenv(lab.EnvPSPDir)

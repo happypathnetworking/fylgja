@@ -120,7 +120,7 @@ func TestArtifactOnASeededBranch(t *testing.T) {
 // read runs stage.Read with a fresh observed_at, as every caller does.
 func read(t *testing.T, branch string, reg *psp.Registry) (*ctm.CTM, findings.List) {
 	t.Helper()
-	snapshot, list, err := Read(t.Context(), branch, "", reg, time.Now().UTC().Format(ObservedAtFormat))
+	snapshot, list, err := Read(t.Context(), branch, "", "tag:fylgja", reg, time.Now().UTC().Format(ObservedAtFormat))
 	if err != nil {
 		t.Fatalf("reading %s: %v", branch, err)
 	}
@@ -159,7 +159,7 @@ func contentOf(c *ctm.CTM) map[string]string {
 // configs/<n>.device-config, byte for byte, with the manifest's entry and the bundle
 // version this build writes (M5's "2", "3" from M7's format bump, "4" from M12's).
 func artifactReadAndBundle(t *testing.T, c *testsupport.Client, branch string, reg *psp.Registry) {
-	snapshot, list, err := Read(t.Context(), branch, "", reg, time.Now().UTC().Format(ObservedAtFormat))
+	snapshot, list, err := Read(t.Context(), branch, "", "tag:fylgja", reg, time.Now().UTC().Format(ObservedAtFormat))
 	if err != nil {
 		t.Fatalf("reading %s: %v", branch, err)
 	}

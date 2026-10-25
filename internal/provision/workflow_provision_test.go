@@ -193,6 +193,34 @@ func (h *harness) mockStartFollowing(got *StartFollowingInput) {
 		})
 }
 
+// A run reads under the scope its input carries, and a following twin's checks are
+// scheduled under it (017).
+func TestProvisionReadsAndFollowsUnderItsScope(t *testing.T) {
+	h := newHarness(t)
+	var read ReadIntentInput
+	h.env.OnActivity(wire.ActReadIntent, mock.Anything, mock.Anything).Return(
+		func(_ context.Context, in ReadIntentInput) (ReadIntentResult, error) {
+			read = in
+			return ReadIntentResult{CTMPath: "/state/bundles/.reads/run.ctm.json", ObservedAt: "2026-09-15T14:22:12.000000Z",
+				Findings: findings.List{}}, nil
+		})
+	var following StartFollowingInput
+	h.mockStartFollowing(&following)
+	h.mockHappyPath()
+
+	in := followInput()
+	in.At, in.Scope = "", "tag:fylgja"
+	if res := h.run(in); res.Outcome != OutcomeReady {
+		t.Fatalf("outcome %q at %q, want ready", res.Outcome, res.Step)
+	}
+	if want := (ReadIntentInput{Branch: "fylgja-fixture", Scope: "tag:fylgja"}); read != want {
+		t.Errorf("the run read %+v, want %+v", read, want)
+	}
+	if want := (StartFollowingInput{Branch: "fylgja-fixture", IntervalS: 300, Version: "0.1.0-test", Scope: "tag:fylgja"}); following != want {
+		t.Errorf("StartFollowing input %+v, want %+v", following, want)
+	}
+}
+
 // With Follow, following begins once the twin is recorded, and the result says so.
 func TestProvisionFollowBeginsAfterRecord(t *testing.T) {
 	h := newHarness(t)

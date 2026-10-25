@@ -20,7 +20,7 @@ import (
 // can fake what lies under them; the product's are stage.Read, stage.Compile and the dry
 // run's filing, one code path with `intent read`, `twin compile` and a create (D-011).
 type Pipeline struct {
-	Read    func(ctx context.Context, branch, at string, reg *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error)
+	Read    func(ctx context.Context, branch, at, scope string, reg *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error)
 	Compile func(c *ctm.CTM, reg *psp.Registry) (files map[string][]byte, id string, list findings.List)
 	// File files a compiled bundle and the CTM it was compiled from. A refusal is its
 	// findings (bundle.id.mismatch); an error is a filing that could not run.
@@ -119,10 +119,11 @@ type PlanResult struct {
 // onStage as each stage finishes; and onStep as each step is known, which is once its
 // later stage has finished and before onStage is called for it: the output reads each
 // step between the two stages it joins. A step whose side did not compile is not
-// computed, naming it. now is the server's clock, for the future rule alone.
-func Plan(ctx context.Context, r Reader, s Stamper, branch string, reg *psp.Registry, p Pipeline, now time.Time,
+// computed, naming it. now is the server's clock, for the future rule alone. Every stage
+// is resolved and read under scope, tag:<name> (017).
+func Plan(ctx context.Context, r Reader, s Stamper, branch, scope string, reg *psp.Registry, p Pipeline, now time.Time,
 	onChange func(pc ProposedChange, stages int), onStage func(PlanStage), onStep func(step.Pair)) (*PlanResult, error) {
-	ch, list, err := Find(ctx, r, s, branch)
+	ch, list, err := Find(ctx, r, s, branch, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +236,7 @@ func build(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 	// stage.ReadTimeout.
 	observedAt := time.Now().UTC().Format(stage.ObservedAtFormat)
 	ps.ObservedAt = observedAt
-	snapshot, list, err := p.Read(ctx, resolved.Branch, resolved.At, reg, observedAt)
+	snapshot, list, err := p.Read(ctx, resolved.Branch, resolved.At, ch.Scope, reg, observedAt)
 	if err != nil {
 		return failed(findings.StepRead, err)
 	}

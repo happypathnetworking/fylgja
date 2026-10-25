@@ -65,7 +65,7 @@ func TestBlocksValidate(t *testing.T) {
 	r, s := story()
 	r.orphans = []intent.Stage{mark("st-o1", "lost", cabledAt, nil, "")}
 	rec := record("cabled", cabledAt, AtWritten)
-	res, _, err := List(context.Background(), r, s, "", &rec)
+	res, _, err := List(context.Background(), r, s, "", testScope, &rec)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,7 +88,7 @@ func TestBlocksValidate(t *testing.T) {
 	}
 	// A row whose stage has no at carries none: a branch deleted under its proposed change.
 	delete(r.branches, "change-1")
-	res, _, err = List(context.Background(), r, s, "change-1", nil)
+	res, _, err = List(context.Background(), r, s, "change-1", testScope, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -118,7 +118,7 @@ func TestBlocksValidate(t *testing.T) {
 // view the listing and the step take: its state, and a diverged step's target by label.
 func TestRecordViewOf(t *testing.T) {
 	r, s := story()
-	res, _, err := List(context.Background(), r, s, "change-1", nil)
+	res, _, err := List(context.Background(), r, s, "change-1", testScope, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -30,7 +30,7 @@ func readFakeAt(t *testing.T, f *fakeInfrahub, at string) (*ctm.CTM, findings.Li
 	if err != nil {
 		t.Fatal(err)
 	}
-	return stage.Read(t.Context(), f.branch, at, reg, "2026-09-18T00:00:00.000000Z")
+	return stage.Read(t.Context(), f.branch, at, "tag:fylgja", reg, "2026-09-18T00:00:00.000000Z")
 }
 
 // sentinelContent is artifact bytes that name themselves on every line, so a message

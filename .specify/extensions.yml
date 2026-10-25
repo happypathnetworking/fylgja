@@ -1,9 +1,26 @@
-# Spec Kit extension hooks. Each speckit-* skill reads this file before and after
-# it runs and invokes the listed commands (dots become hyphens). optional: false
-# makes a hook automatic.
+# Spec Kit extension hooks. Each speckit-* skill reads this file before and after it
+# runs and invokes the listed commands (dots become hyphens). optional: false makes a
+# hook automatic.
 #
-# None are registered. Commands are logged by Claude Code hooks instead
+# One hook is registered: the git extension's feature-branch creation before specify,
+# installed per host by `specify extension add git` (docs/development.md, "Spec Kit
+# workflow"). That install rewrites this file with every hook the extension offers,
+# auto-commits among them; restore this copy after it (`git checkout --
+# .specify/extensions.yml`). Auto-commit hooks stay off: commits are the operator's and
+# the converge loop's. Commands are logged by Claude Code hooks instead
 # (.claude/settings.json -> .claude/hooks/command-log.py), which read the session
 # transcript and need nothing from the model.
 
-hooks: {}
+hooks:
+  before_specify:
+    - extension: git
+      command: speckit.git.feature
+      enabled: true
+      optional: false
+      priority: 10
+      description: Create the feature branch before specification; the prompt names it (GIT_BRANCH_NAME)
+      condition: null
+installed:
+  - git
+settings:
+  auto_execute_hooks: true

@@ -1037,8 +1037,13 @@ Each [roadmap](roadmap.md) feature (`F-NNN`) is one or more specs, each a direct
 `specs/NNN-<slug>/` whose number Spec Kit assigns and which is not the feature's. The
 sequence is `/speckit-specify` → `clarify` → `plan` → `tasks` →
 `analyze` → `implement` → `converge`, repeating `converge` until nothing is added.
-Auto-commit hooks stay off; commit with a conventional-commit message whose body says
-*why*.
+`specify` begins by creating the feature's branch, through the one extension hook
+registered in `.specify/extensions.yml` (the git extension's `speckit.git.feature`, from
+2026-10-25; 014 and 015 were built on `main`): the prompt names the branch with
+`GIT_BRANCH_NAME=<NNN-slug>`, the spec directory's own name, since left to itself the
+script would number the branch past the directory the brief already made. The hook fetches
+`origin` once, which is a read. Auto-commit hooks stay off; commit with a
+conventional-commit message whose body says *why*.
 
 **Spec Kit's own files are installed, not tracked.** The `speckit-*` skills under
 `.claude/skills/`, the scripts under `.specify/scripts/`, Spec Kit's templates and its
@@ -1046,7 +1051,11 @@ install metadata (`.specify/integrations/`, `.specify/workflows/`, `init-options
 `integration.json`) are GitHub's, under the MIT licence, and git-ignored here
 ([D-056](decisions.md#d-056)). A fresh clone installs them first: `uv tool install
 specify-cli` (Spec Kit's README), then `specify init --here --integration claude --script
-sh`, which writes the current release's files. The files this project was built with came
+sh`, which writes the current release's files, then `specify extension add git`, which
+installs the branch hook's extension under `.specify/extensions/` (git-ignored, with the
+`.specify/.gitignore` the CLI writes) and rewrites `.specify/extensions.yml` with every
+hook the extension offers, auto-commits among them: restore the tracked copy with `git
+checkout -- .specify/extensions.yml`, which registers the branch hook alone. The files this project was built with came
 from Spec Kit 0.14.4.dev0, installed 2026-09-12; the ten commands, `converge` included,
 are still upstream, and the prompt text a newer release writes differs in detail. What
 this repository keeps is its own: the constitution, `.specify/templates/plan-template.md`

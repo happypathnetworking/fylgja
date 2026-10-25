@@ -23,7 +23,9 @@ and is not cited here; a bare milestone marker (`M7`) is resolved by the table b
 - **Spec Kit**: `/speckit-specify` → `clarify` → `plan` → `tasks` → `analyze` →
   `implement` → `converge` (repeat until nothing is added). **Each command runs in a
   fresh context** (`/clear`, `/model` per the table in `docs/development.md`, then the
-  command), **except `clarify`, which runs in `specify`'s context**. Every command reads
+  command), **except `clarify`, which runs in `specify`'s context**. `specify` creates the
+  feature's branch first, by the git extension's hook, named by `GIT_BRANCH_NAME=<NNN-slug>`
+  in the prompt (`docs/development.md`, "Spec Kit workflow"). Every command reads
   its inputs from disk. A feature's `brief.md` carries its full reading list, so the
   specify prompt is one line. `.specify/feature.json` (git-ignored) names the current
   feature's directory.

@@ -45,3 +45,5 @@ specs/*/commands/
 .specify/init-options.json
 .specify/integration.json
 .specify/memory/.constitution-template.json
+.specify/extensions/
+.specify/.gitignore

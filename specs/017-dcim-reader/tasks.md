@@ -219,50 +219,104 @@ not compile between them.
 
   *Run 5's checkpoint, 22:06Z*: `make build` static; `make test` uncached 33.8 s wall (load average 2.8 before, 4.4 after); `make lint` 0 issues; `go vet -tags contract,fixture,e2e ./...` clean; no golden moved. T016 names no tier-2 test, so none was run. Infrahub was written to only on the throwaway branch, which is gone. `Branch` lists `main` and `fylgja-fixture` alone, and `main`'s hash is `e43a1cde…` with no `Dcim*` kind. No twin was booted. The worker and the server were not touched. Both started at 20:55:59Z, before Run 4's commits, and after this run's build both `/proc/<pid>/exe` read `(deleted)`; T059 restarts them.
 
-- [ ] T017 The CTM's contract files (R-06; [contracts/formats.md](contracts/formats.md) "The frozen copies"). Copy the current `contracts/ctm.schema.json` unchanged to `internal/ctm/testdata/contracts/017-dcim-reader/ctm.schema.json` (the frozen `1`). Then copy [contracts/ctm.schema.json](contracts/ctm.schema.json) (this feature's, `$id …/contracts/ctm/v2`) to `contracts/ctm.schema.json`. Copy the current `testdata/ctm/three-node.json` unchanged to `testdata/ctm/defects/version-1.json` (a `1` fixture, valid against the frozen copy).
+- [X] T017 The CTM's contract files (R-06; [contracts/formats.md](contracts/formats.md) "The frozen copies"). Copy the current `contracts/ctm.schema.json` unchanged to `internal/ctm/testdata/contracts/017-dcim-reader/ctm.schema.json` (the frozen `1`). Then copy [contracts/ctm.schema.json](contracts/ctm.schema.json) (this feature's, `$id …/contracts/ctm/v2`) to `contracts/ctm.schema.json`. Copy the current `testdata/ctm/three-node.json` unchanged to `testdata/ctm/defects/version-1.json` (a `1` fixture, valid against the frozen copy).
+  - *2026-10-25 22:40Z, at `f3699d0`, Run 6 of the converge loop:* done. `contracts/ctm.schema.json` is this feature's (`$id …/contracts/ctm/v2`). The `1` is frozen at `internal/ctm/testdata/contracts/017-dcim-reader/ctm.schema.json`, and `testdata/ctm/defects/version-1.json` is today's `three-node.json`, unchanged. `TestVersion1IsRefused` validates it against the frozen copy, and `ctm`'s `deliberatelyInvalidFixtures` lists it against the current one. `frozenContractCopies` stays 30 until T025; the glob now finds 32.
 
-- [ ] T018 CTM `2` in `internal/ctm/types.go` and `json.go` (data-model §2):
+- [X] T018 CTM `2` in `internal/ctm/types.go` and `json.go` (data-model §2):
   - **Changed**: `Envelope{Branch, At, ObservedAt, SchemaHash, Scope, Mapping, Fidelity}`, with `fidelity` sorted by (disposition, object) and written as `[]`, never `null`; `Mapping{Reader, Model, Version}`; `FidelityRow{Disposition, Object, Source, Reason}`; `Platform{Package, Version (omitempty)}`; `Interface{Name, MgmtOnly, Enabled, Link, Provenance}`; `Device` without `Role` and `Site`; `Version = "2"`.
   - **New constants**: `ReaderInfrahubDCIM = "infrahub-dcim"`, `ModelSchemaLibrary = "opsmill/schema-library"`, `ModelVersion = "26336e9"`.
   - **Gone**: the `Iftype*` constants, `KnownIftypes`, `ImplementedIftypes`, `Address`, `Envelope.ContractVersion`, `Normalize`'s `Family` and its address sort. `ContractVersion`, `ContractKind`, `RequiredGenerics`, `DeviceGeneric` and `ArtifactTargetGeneric` stay until their last users go (T036, T042, T048, T053): give each a plain comment naming 017's removal, not a `Deprecated:` marker, which lint would flag.
   - **`Unmarshal`** refuses another `ctm_version`, naming both (`unsupported ctm_version "1", expected "2"`).
   - **Tests in `internal/ctm/json_test.go`**: `TestVersion1IsRefused`, reading `testdata/ctm/defects/version-1.json` (valid against the frozen `1`) and refused naming both versions. `TestCTMFixturesSatisfyContract`, `TestMarshalledCTMSatisfiesContract` and `TestWellFormedDefectFixturesSatisfyContract` over T019's fixtures. The canonical-order and `Normalize` cases moved to the new fields. `TestDeviceFieldOrderFollowsTheContract` on the new device.
+  - *2026-10-25 22:40Z, at `f3699d0`, Run 6 of the converge loop:* done. The types are data-model §2's, with the three constants and the two dispositions `FidelityApproximated` and `FidelityOmitted`. `Normalize` fills `fidelity` with `[]` and sorts it by (disposition, object).
+    - **`Unmarshal` reads `ctm_version` first, on its own.** A `1` carries `contract_version` and `iftype`, so the strict decode would refuse it for an unknown field before the version was looked at. It is now refused as `unsupported ctm_version "1", expected "2"`.
+    - **Tests**: `TestVersion1IsRefused`, and the canonical-order, round-trip and `Normalize` cases on the new envelope, including the fidelity sort and `[]`. The `1`-only cases are gone: address families, the old envelope.
 
-- [ ] T019 The fixture CTMs under `testdata/ctm/` move to `2` (R-09): `three-node.json`, `mixed.json`, `lossy.json`, `mgmt-link.json`, `no-mgmt.json`, `observed-later.json`, `two-mgmt.json` and the three `*.shuffled.json`. Each loses `lo0` and every non-port interface, `role`, `site`, `iftype`, `parent` and `addresses`. Each `platform` becomes `{"package": "<platform.id>"}` (`nokia_srlinux`, `arista_eos`, the lossy package's id). The envelope drops `contract_version` and gains `scope: "tag:fylgja"`, `mapping: {reader: "infrahub-dcim", model: "opsmill/schema-library", version: "26336e9"}`, and `fidelity` holding exactly [contracts/mapping.md](contracts/mapping.md) §5's three rows, sorted:
+- [X] T019 The fixture CTMs under `testdata/ctm/` move to `2` (R-09): `three-node.json`, `mixed.json`, `lossy.json`, `mgmt-link.json`, `no-mgmt.json`, `observed-later.json`, `two-mgmt.json` and the three `*.shuffled.json`. Each loses `lo0` and every non-port interface, `role`, `site`, `iftype`, `parent` and `addresses`. Each `platform` becomes `{"package": "<platform.id>"}` (`nokia_srlinux`, `arista_eos`, the lossy package's id). The envelope drops `contract_version` and gains `scope: "tag:fylgja"`, `mapping: {reader: "infrahub-dcim", model: "opsmill/schema-library", version: "26336e9"}`, and `fidelity` holding exactly [contracts/mapping.md](contracts/mapping.md) §5's three rows, sorted:
   - `{approximated, interface.enabled, InterfacePhysical.status, "a port is enabled unless its status is disabled; the library's status is not an admin state"}`
   - `{approximated, interface.mgmt_only, InterfacePhysical.role, "the management port is the port whose role is management; the library has no management-only flag"}`
   - `{omitted, platform.version, DcimPlatform, "the library's platform carries no version"}`
 
   `three-node.json`'s and `mixed.json`'s artifacts (and their shuffled copies') are T016's predicted bytes, with their checksums recomputed as the fixture's own rule computes them. `observed-later.json` still differs from `three-node.json` in `observed_at` alone (`TestObservedLaterDiffersOnlyInObservedAt`). Under `testdata/ctm/defects/`: remove `iftype-subinterface.json`, `iftype-undeclared.json`, `iftype-unimplemented.json`, `link-endpoint-loopback.json`, `mgmt-only-loopback.json` and `parent-missing.json`, and move every other defect to `2`, each still failing by the rule it names alone.
+  - *2026-10-25 22:40Z, at `f3699d0`, Run 6 of the converge loop:* done. Converted by a script from each `1` fixture, then reviewed.
+    - **The artifacts**: `three-node.json`, `observed-later.json`, `mixed.json` and the shuffled copies carry research §5.1's six documents, their MD5s checked against the text.
+    - **The other fixtures keep their artifacts.** That includes lossy's illustrative ones, which still name `Loopback0`. A name the CTM holds no interface for draws no warning.
+    - **The shuffled copies** list the fidelity rows in reverse, so that `Normalize`'s sort is tested too.
+    - **Packages**: `cisco_iol` (`five.json`) and `acme_os` (`platform-unsupported.json`) stay unsupported.
+    - **Two defects changed what they carry, for review**:
+      - `five.json` lost its two iftype defects. In their place it carries an unlinked `n1:Ethernet99` (`interface.rule.unmatched`) and a link `n3:ethernet-1/1|n3:ethernet-1/2` (`link.endpoints.same_device`). It still holds five defects, five findings.
+      - `required-missing.json` blanks `envelope.schema_hash` where it blanked `n3`'s nos. An empty package is `platform.unsupported` by T020's text, and it is malformed against CTM `2`'s `^[a-z0-9_]+$`, while every other defect stays well-formed against the contract.
 
-- [ ] T020 `internal/validate` (data-model §2, "Validation"; R-09).
+- [X] T020 `internal/validate` (data-model §2, "Validation"; R-09).
   - **Removed**: the rules `interface.iftype.unimplemented`, `interface.mgmt_only.iftype`, `interface.parent.missing` and `link.endpoint.iftype`, their cases in `rules_test.go` and `defects_test.go`, and their four constants from `internal/findings/finding.go` and `finding_test.go`'s tables (their last users).
   - **Required in the envelope** (`data.required.missing`): `branch`, `observed_at`, `schema_hash`, `scope`, `mapping.reader`, `mapping.model` and `mapping.version`. `contract_version` is no longer required.
   - **The platform**: `platform.package` must be non-empty and in the registry by `psp.Registry.LookupID`; otherwise `platform.unsupported`, naming the package and the registry's ids.
   - **Unchanged**: names unique, links with two ends on distinct devices each naming an interface of a device in the CTM, and the artifact rules.
+  - *2026-10-25 22:40Z, at `f3699d0`, Run 6 of the converge loop:* done. The four rules, their constants, `finding_test.go`'s rows and their test cases are gone.
+    - **The envelope** requires `branch`, `observed_at`, `schema_hash`, `scope` and the three `mapping` fields, each named as `envelope.<field>`.
+    - **The package**: one the registry lacks, or none, is `platform.unsupported`, naming it and `psp.Registry.IDs()` (new: the sorted package ids). For example: `no support package "acme_os"; supported: [arista_eos nokia_srlinux]`, or `device names no support package; supported: […]`. `compiler.UnsupportedPackage` words it for both callers.
+    - **Tests**: `TestPlatformUnsupportedNamesThePackageAndTheRegistry`. The defect table loses six rows, and `version-1.json` is covered by `ctm`'s test.
 
-- [ ] T021 `internal/compiler` (R-07, R-09; data-model §3).
+- [X] T021 `internal/compiler` (R-07, R-09; data-model §3).
   - **Lookup**: the device's package by `reg.LookupID(platform.package)`, with `Lookup(nos)` gone from product code (grep `internal/` and `cmd/` outside tests).
   - **The survey**: `SurveyDevice` keeps two arms, the `mgmt_only` arm (a second one omitted as `omit.mgmt.extra`) and the data rules. The loopback arm, the `default` arm and `DeviceSurvey.Err` go.
   - **The manifest**: `MappingRow` loses `Iftype`. `Provenance{Branch, At, SchemaHash, Scope, Mapping}` is filled from the envelope. `Fidelity.Read []ctm.FidelityRow` is the envelope's list copied verbatim, `[]` never `null`. `BundleVersion = "5"`.
   - **Unchanged**: the breakout rule, sharing, collisions and `ArtifactNames`.
   - **Tests**: `TestEveryInterfaceIsAPort` (a CTM whose every non-management interface becomes a port, cabled when linked and configured-not-cabled otherwise); the survey tests without the loopback arm; `TestManifestCopiesTheFidelityList` (a CTM with an invented row, whose text appears nowhere in `internal/compiler`, reaches `fidelity.read` unchanged; grep the package's non-test files for each of [contracts/mapping.md](contracts/mapping.md) §5's reason texts and find none); `TestCompilerNamesNoPlatform` and `TestCompilerIsPure` hold; `refusal_parity_test.go` keeps validation's and the compiler's wording alike. Fix `mapping_test.go`, `eos_test.go`, `fidelity_test.go`, `artifact_names_test.go` and `refusal_parity_test.go` where they name the removed constants. Run the golden tests only after T024.
+  - *2026-10-25 22:40Z, at `f3699d0`, Run 6 of the converge loop:* done. The changes are as the task lists them.
+    - **The survey** keeps a two-arm `switch`: `mgmt_only`, and `default`, the data port.
+    - **The manifest**: `nodes[].platform` takes the package's `nos`, as R-08 says. `Fidelity.Read` is last in the block.
+    - **New tests**: `TestEveryInterfaceIsAPort` (`mapping_test.go`) and `TestManifestCopiesTheFidelityList` (`fidelity_test.go`), and a mapping case: `lo0` is a port, so `interface.rule.unmatched`.
+    - **`TestNothingLossyStillCarriesBothFields`** moved to `two-mgmt.json`. No three-node row is portless now, and a row with no port is what gives a `null` node name. It also holds `fidelity.read` required.
+    - **`Lookup(nos)` left `compiler`, `validate` and the worker's start-up report**, which now enumerates `IDs()`. It remains in two places, both bridges: the generics reader's projection (T023, until T039) and `stages/stale.go`, whose stamps carry the generics' nos (`DeviceStamps.NOS`, until T049).
 
-- [ ] T022 Manifest `5` ([contracts/formats.md](contracts/formats.md) "Bundle manifest 5"). Copy the current `contracts/manifest.schema.json` unchanged to `internal/bundle/testdata/contracts/017-dcim-reader/manifest.schema.json` (the frozen `4`). Then move `contracts/manifest.schema.json` to `$id …/contracts/manifest/v5` and `bundle_version` `"5"`:
+- [X] T022 Manifest `5` ([contracts/formats.md](contracts/formats.md) "Bundle manifest 5"). Copy the current `contracts/manifest.schema.json` unchanged to `internal/bundle/testdata/contracts/017-dcim-reader/manifest.schema.json` (the frozen `4`). Then move `contracts/manifest.schema.json` to `$id …/contracts/manifest/v5` and `bundle_version` `"5"`:
   - `provenance{branch, at?, schema_hash, scope, mapping{reader, model, version}}`, with `contract_version` gone;
   - `mapping[]` rows without `iftype`;
   - `fidelity.read`, the CTM's fidelity row shape, required.
 
   In `internal/bundle/verify.go`, accept `5` alone. A `4` is refused as `bundle.version.unsupported`, naming both. Test it in `verify_test.go` with a `4` manifest that is valid against the frozen copy. `internal/compiler/contract_test.go`'s manifest tests run against the new schema.
+  - *2026-10-25 22:40Z, at `f3699d0`, Run 6 of the converge loop:* done. The `4` is frozen at `internal/bundle/testdata/contracts/017-dcim-reader/manifest.schema.json`. `contracts/manifest.schema.json` is `5`: `provenance{branch, at?, schema_hash, scope, mapping}`, rows without `iftype`, and `fidelity.read` required, its items the CTM's row shape.
+    - **For review**: the `$id` keeps its path segment, `…/contracts/bundle-manifest/v5`, beside `v4`'s `bundle-manifest/v4`. The task wrote `manifest/v5`.
+    - **`bundle.Verify` accepts `5` alone.** `internal/bundle/testdata/three-node-4.manifest.json` is the three-node golden's last `4` manifest. The new subtest validates it against the frozen copy, then expects `bundle.version.unsupported` naming `"4"` and `"5"`. `4` joined the earlier-format loop, and the later format is now `6`.
 
-- [ ] T023 Bridge the old reader over CTM `2`, for two runs (this file's first ordering). Change the least code that keeps `internal/intent`, `internal/stage`, `internal/server` and `internal/cli` compiling, and their tier-1 tests green and truthful:
+- [X] T023 Bridge the old reader over CTM `2`, for two runs (this file's first ordering). Change the least code that keeps `internal/intent`, `internal/stage`, `internal/server` and `internal/cli` compiling, and their tier-1 tests green and truthful:
   - `internal/intent/project.go` stops writing the removed fields, and skips the interfaces the generics type as loopback or subinterface, since CTM `2` has none.
   - `platform.package` is the package the registry finds for the generics' platform `nos`.
   - The envelope's `scope` is `tag:` + `Config.Scope`, and its `mapping` is `{reader: "infrahub-generics", model: "fylgja-generics", version: "0.2"}`, which is what it reads. Its `fidelity` is `[]`.
   - `stage.CheckContract` stays (T042 removes it).
   - Mark the bridge with a comment naming T039. Tests that pin a read's CTM, manifest, record or bundle id move with T019's fixtures and T024's ids.
+  - *2026-10-25 22:40Z, at `f3699d0`, Run 6 of the converge loop:* done. The bridge, marked `017's T023` in each place.
+    - **The read**: `projectDevice` writes `platform.package`, the package `reg.Lookup(nos)` finds, else the nos verbatim, so that validation's `platform.unsupported` names what the branch declared. Such a CTM is refused and never written.
+    - **`projectInterface` skips every interface not typed `physical`.** That includes `svi`, which CTM `2` has no place for either, beside the loopback and the subinterface the task names.
+    - **The envelope**: `scope` is `tag:` + `Config.Scope`, `mapping` is `{infrahub-generics, fylgja-generics, <the contract version conformance checked>}`, and `fidelity` is `[]`.
+    - **The stamps** keep the generics' `nos` (`DeviceStamps.NOS`) for `stages/stale.go` until T049.
+    - **`stage.CheckContract` stays, returning nothing.** A CTM `2` declares no contract version, and `Unmarshal` refuses any other `ctm_version`.
+    - **Two more bridges the tree needed, for review**:
+      - `twin step` reads under the server's `DefaultScope`, where it read under none (`internal/server/step.go`, until T046). An empty scope would have written `tag:` into the envelope and moved the step's bundle off the plan's.
+      - The worker writes a `twin.json` `7` provenance without `contract_version`'s value (`lab.recordProvenance`, until T025), since `7` has no place for the scope and the mapping.
+    - **Tests**: both fake Infrahubs serve each CTM `2` fixture back in the generics' shapes, every interface `physical`, the package mapped back to vendor and nos.
+      - `internal/cli`'s `bridged()` and `bridgedFixtureBundleID` say what the harness's read of a fixture is during the bridge: the generics' mapping and no fidelity row. T043 removes both.
+      - `TestContractVersionMismatchIsReportedAlone` and `TestContractVersionIsCheckedBeforeValidation` became `TestAnotherCTMVersionIsRefusedBeforeValidation` (exit 2, `operation.failed`, until T042 files `ctm.version.unsupported`).
+      - Tier-2 files changed only to compile: `read_contract_test.go`, `artifact_contract_test.go`, `mixed_contract_test.go`, `defects_contract_test.go`. T044 rewrites them.
 
-- [ ] T024 Re-baseline the goldens (FR-032; R-07): after T017–T023, run `go test ./internal/compiler -update`. Review the diff: every manifest's provenance, mapping rows and `fidelity.read`; every bootstrap that lost `lo0`; every artifact. Update every test that pins one of the three old ids (`23f86a26…`, `5773b6bb…`, `391bcb96…`; grep `*.go` and `scripts/`) to the new ids. Commit T017–T023 first, then the goldens and the ids alone, in a commit of their own (`test(compiler): re-baseline the goldens for CTM 2 and manifest 5`), whose body names the three new ids. Write the three new ids in this task's note; `CLAUDE.md` takes them at T071. The loop stops here for the golden diff's review.
+- [X] T024 Re-baseline the goldens (FR-032; R-07): after T017–T023, run `go test ./internal/compiler -update`. Review the diff: every manifest's provenance, mapping rows and `fidelity.read`; every bootstrap that lost `lo0`; every artifact. Update every test that pins one of the three old ids (`23f86a26…`, `5773b6bb…`, `391bcb96…`; grep `*.go` and `scripts/`) to the new ids. Commit T017–T023 first, then the goldens and the ids alone, in a commit of their own (`test(compiler): re-baseline the goldens for CTM 2 and manifest 5`), whose body names the three new ids. Write the three new ids in this task's note; `CLAUDE.md` takes them at T071. The loop stops here for the golden diff's review.
+  - *2026-10-25 22:40Z, at `f3699d0`, Run 6 of the converge loop:* done. `go test ./internal/compiler -update`, then the old ids replaced in `*.go` (`scripts/` held none). The new ids:
+    - three-node **`43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386`**
+    - lossy **`4213b3cfd532f896d476c67c21f54e5375effdbec18f4376360471fd03f50b03`**
+    - mixed **`ecb665f58ffc9882024a06e29b01e681ee38ce40f55b76994d470fe3272a2aec`**
+
+    **The diff, reviewed**:
+    - Each manifest is `5`: the provenance's `scope` and `mapping` in place of `contract_version`, no `iftype`, and no loopback row (three per golden). `fidelity.read` holds mapping.md §5's three rows.
+    - The three-node and mixed artifacts are T016's predicted bytes, sizes and checksums. Each lost its loopback stanza, and its header's second line moved.
+    - Lossy's artifacts did not move.
+    - **No bootstrap and no topology moved**: a bootstrap renders cabled ports alone and never held `lo0`.
+
+    **Committed in three, for review**: T017–T023 first (`3cc4a45`), the goldens with the id pins alone second (`bf15328`, `test(compiler): re-baseline …`), and this file third. Golden-derived pins that are not ids moved with T019's fixtures in the first commit: the n1 checksum and n3 size in `bundle`'s tests, the fixture's artifact checksums and 707-byte sizes in `internal/cli`, and the interface counts in the read summaries (12 to 9, 19 to 16). The first commit's tier 1 fails wherever it compares with a golden or its id, which the second commit moves.
+
+    **Not moved, for T034**: `docs/diagrams/topologies.md` still names the three old ids. `make diagrams` regenerates it, and it needs Docker.
+
+  *Run 6's checkpoint, 22:45Z*: `make build` static; `make test` uncached 38.6 s wall (load average 1.8 before, 3.1 after; 41.8 s at 4.5 to 6.6 on an earlier pass); `make lint` 0 issues; `go vet -tags contract,fixture,e2e ./...` clean. T017–T024 name no tier-2 test, so none was run, and Infrahub was not touched. No twin was booted. The worker and the server were not touched, and both `/proc/<pid>/exe` still read `(deleted)`; T059 restarts them.
 
 - [ ] T025 `twin.json` `8` ([contracts/formats.md](contracts/formats.md) "`twin.json` 8").
   - **Freeze**: copy the current `contracts/twin.schema.json` unchanged to `internal/lab/testdata/contracts/015-proposed-change-rehearsal/twin.schema.json`, the frozen `7`.

@@ -121,8 +121,9 @@ const (
 // platform and a manufacturer. Of an update, one changing any attribute or any relationship
 // but Infrahub's churn: the query groups' memberships Infrahub rewrites on every node after
 // each generation, a device's artifacts, a profile. A tag's own write, an artifact's, a
-// group's, the stage kind's and an event with no primary node are not intent. Each names
-// its primary node and every peer.
+// group's, the stage kind's and an event with no primary node are not intent. A creation
+// or a deletion is, whatever it names: one naming no attribute and only a query group's
+// membership among them. Each names its primary node and every peer.
 func TestIntentEventsMapsKinds(t *testing.T) {
 	f := &fakeEvents{events: []map[string]any{
 		mutated("infrahub.node.updated", "2026-10-17T13:55:32.691250+00:00", "DcimDevice", "dev-n1", nil,
@@ -158,6 +159,13 @@ func TestIntentEventsMapsKinds(t *testing.T) {
 		mutated("infrahub.node.updated", "2026-10-17T13:54:22.418356+00:00", "DcimDevice", "dev-n1", nil,
 			rel{"artifacts", "a-1"}),
 		mutated("infrahub.node.updated", "2026-10-17T13:54:20.000000+00:00", "DcimDevice", "dev-n2", []string{"serial"}),
+		// A port created, then deleted, each event naming no attribute and only a query
+		// group's membership: a creation or a deletion is intent by its event alone, whatever
+		// it names (contracts/mapping.md §6).
+		mutated("infrahub.node.deleted", "2026-10-17T13:54:19.000000+00:00", "InterfacePhysical", "if-n3-e2", nil,
+			rel{"member_of_groups", "g-1"}),
+		mutated("infrahub.node.created", "2026-10-17T13:54:18.000000+00:00", "InterfacePhysical", "if-n3-e2", nil,
+			rel{"member_of_groups", "g-1"}),
 		mutated("infrahub.node.created", "2026-10-17T13:54:16.683012+00:00", "DcimCable", "cable-12",
 			[]string{"human_friendly_id", "display_label"}, rel{"connected_endpoints", "if-n1-e1"}, rel{"connected_endpoints", "if-n2-e1"}),
 		mutated("infrahub.node.created", "2026-10-17T13:54:15.360731+00:00", "InterfaceVirtual", "if-n1-lo0",
@@ -176,6 +184,8 @@ func TestIntentEventsMapsKinds(t *testing.T) {
 		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:54:30.000000+00:00", Kind: "OrganizationManufacturer", Nodes: []string{"mf-1"}},
 		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:54:29.000000+00:00", Kind: "DcimPlatform", Nodes: []string{"pf-1"}},
 		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:54:20.000000+00:00", Kind: "DcimDevice", Nodes: []string{"dev-n2"}},
+		{Name: "infrahub.node.deleted", OccurredAt: "2026-10-17T13:54:19.000000+00:00", Kind: "InterfacePhysical", Nodes: []string{"if-n3-e2", "g-1"}},
+		{Name: "infrahub.node.created", OccurredAt: "2026-10-17T13:54:18.000000+00:00", Kind: "InterfacePhysical", Nodes: []string{"if-n3-e2", "g-1"}},
 		{Name: "infrahub.node.created", OccurredAt: "2026-10-17T13:54:16.683012+00:00", Kind: "DcimCable", Nodes: []string{"cable-12", "if-n1-e1", "if-n2-e1"}},
 		{Name: "infrahub.node.created", OccurredAt: "2026-10-17T13:54:15.360731+00:00", Kind: "InterfaceVirtual", Nodes: []string{"if-n1-lo0", "dev-n1"}},
 	}

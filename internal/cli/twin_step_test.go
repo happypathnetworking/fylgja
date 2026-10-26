@@ -79,7 +79,8 @@ func stepInfrahub(t *testing.T) *fakeInfrahub {
 
 // withMixedLink is the mixed fixture read from branch change-1 with the link
 // e1:Ethernet3 — s1:ethernet-1/3 added and e1's and s1's artifacts re-rendered for it, each
-// carrying the marker in a comment line, as the seed's role line does.
+// carrying the marker as the template writes a device's description, in the header's
+// `platform <manufacturer> <platform>; <description>` line.
 func withMixedLink(t *testing.T) *ctm.CTM {
 	t.Helper()
 	c, err := ctm.Load(repoPath("testdata", "ctm", "mixed.json"))
@@ -96,17 +97,21 @@ func withMixedLink(t *testing.T) *ctm.CTM {
 		switch d.Name {
 		case "e1":
 			name = "Ethernet3"
-			extra = "interface Ethernet3\n   description to s1 ethernet-1/3\n   no shutdown\n! role leaf-" + marker + "\n"
+			extra = "interface Ethernet3\n   description to s1 ethernet-1/3\n   no shutdown\n"
 		case "s1":
 			name = "ethernet-1/3"
 			extra = "set / interface ethernet-1/3 description \"to e1 Ethernet3\"\n" +
-				"set / interface ethernet-1/3 admin-state enable\n# role leaf-" + marker + "\n"
+				"set / interface ethernet-1/3 admin-state enable\n"
 		default:
 			continue
 		}
 		enabled := true
 		d.Interfaces = append(d.Interfaces, ctm.Interface{Name: name, Enabled: &enabled, Link: link})
-		d.Artifact.Content += extra
+		const description = "; FYLGJA-MARKER-mixed-fixture\n"
+		if !strings.Contains(d.Artifact.Content, description) {
+			t.Fatalf("%s's artifact has no header line ending %q", d.Name, description)
+		}
+		d.Artifact.Content = strings.Replace(d.Artifact.Content, description, "; "+marker+"\n", 1) + extra
 		sum := md5.Sum([]byte(d.Artifact.Content))
 		d.Artifact.Checksum = hex.EncodeToString(sum[:])
 	}
@@ -592,7 +597,7 @@ func stepDryRunLines(fromID, toID string) []string {
 		"step change-1/sealed → change-1/linked (" + short(fromID) + " → " + short(toID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
 		"  links: +e1:eth3 — s1:e1-3",
-		"  artifacts: e1 device-config 6b31a6de… → d4c6f28c…; s1 device-config 5e2a65f4… → 2dcd7d9a…",
+		"  artifacts: e1 device-config 6b31a6de… → fb3cbaf9…; s1 device-config 5e2a65f4… → 22ada947…",
 		"reconcile: restart e1 (added link; arista_eos declares restart); live s1 (nokia_srlinux declares live)",
 		"push: e1 (artifact, restarted); s1 (artifact, bootstrap); e2 untouched",
 		// M12: the step's wait after its record, at the default budget.
@@ -1661,7 +1666,7 @@ func TestStepRuns(t *testing.T) {
 				Record: &wire.TwinRecord{State: wire.StateDiverged},
 				Findings: findings.List{
 					{Severity: findings.Rejection, Rule: findings.RulePushRefused, Object: "e1", Step: findings.StepPush,
-						Message: "node e1 refused artifact device-config (checksum d4c6f28c…) at line 7: Invalid input"},
+						Message: "node e1 refused artifact device-config (checksum fb3cbaf9…) at line 7: Invalid input"},
 					diverged(findings.StepPush)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
 			closing: func(fromID, toID string) string {
@@ -1685,7 +1690,7 @@ func TestStepRuns(t *testing.T) {
 				Wait:   &wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 2, AfterS: 1.9, Failing: []wire.StepFinding{}},
 				Findings: findings.List{
 					{Severity: findings.Rejection, Rule: findings.RulePushRefused, Object: "e1", Step: findings.StepPush,
-						Message: "node e1 refused artifact device-config (checksum d4c6f28c…) at line 7: Invalid input"},
+						Message: "node e1 refused artifact device-config (checksum fb3cbaf9…) at line 7: Invalid input"},
 					diverged(findings.StepPush)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
 			closing: func(fromID, toID string) string {
@@ -2368,7 +2373,7 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 		"step change-1/linked → change-1/sealed (" + short(linkedID) + " → " + short(sealedID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
 		"  links: -e1:eth3 — s1:e1-3",
-		"  artifacts: e1 device-config d4c6f28c… → 6b31a6de…; s1 device-config 2dcd7d9a… → 5e2a65f4…",
+		"  artifacts: e1 device-config fb3cbaf9… → 6b31a6de…; s1 device-config 22ada947… → 5e2a65f4…",
 		"reconcile: restart e1 (deleted endpoint; arista_eos declares restart); live s1 (nokia_srlinux declares live)",
 		"push: e1 (artifact, restarted); s1 (artifact, bootstrap); e2 untouched",
 	}

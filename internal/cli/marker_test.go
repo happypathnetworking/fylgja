@@ -197,7 +197,8 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 		t.Fatal(err)
 	}
 	if !bytes.Contains(raw, []byte(marker)) {
-		t.Fatalf("%s does not carry %s; the fixture carries it in each artifact's role line", fixture, marker)
+		t.Fatalf("%s does not carry %s; the fixture carries it in each artifact's header, the device's description "+
+			"in the template's platform line", fixture, marker)
 	}
 	snapshot, err := ctm.Load(fixture)
 	if err != nil {

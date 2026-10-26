@@ -7,6 +7,8 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/psp"
+	"github.com/happypathnetworking/fylgja/internal/stage"
 )
 
 // addPorts gives a fixture device more physical ports, uncabled.
@@ -201,11 +203,17 @@ func TestACableIsJudgedOnceByTheFirstReason(t *testing.T) {
 	}
 }
 
-// A cable between two management ports of devices in the scope is a link like any other:
-// it reaches the CTM, and the compiler omits it as it does today (US2 scenario 4; FR-007).
+// A cable between two devices in the scope with an end on a management port is a link like
+// any other: it reaches the CTM, and the compiler omits it, one omit.link.mgmt_only per link
+// (US2 scenario 4; FR-007). One cable has both ends on management ports, the other one end,
+// n3:mgmt0 to n2's uncabled ethernet-1/3; n3's rather than n1's, which the first cable
+// already holds, since a port is the end of one cable and two links ending on one interface
+// are refused (LinkTerminations).
 func TestManagementCableReachesTheCTM(t *testing.T) {
 	f := newFakeInfrahub(t)
+	f.addPorts("n2", "ethernet-1/3")
 	f.cable("cable-mgmt", "n1:mgmt0|n2:mgmt0", "n1:mgmt0", "n2:mgmt0")
+	f.cable("cable-half", "n2:ethernet-1/3|n3:mgmt0", "n3:mgmt0", "n2:ethernet-1/3")
 
 	c, list, err := readFake(t, f)
 
@@ -215,23 +223,47 @@ func TestManagementCableReachesTheCTM(t *testing.T) {
 	if list.Rejected() || c == nil {
 		t.Fatalf("findings %v; want a clean read", list)
 	}
-	const id = "n1:mgmt0|n2:mgmt0"
-	var link *ctm.Link
-	for i := range c.Links {
-		if c.Links[i].ID == id {
-			link = &c.Links[i]
+	const both, half = "n1:mgmt0|n2:mgmt0", "n2:ethernet-1/3|n3:mgmt0"
+	ids := map[string]bool{}
+	for _, l := range c.Links {
+		ids[l.ID] = true
+	}
+	if !ids[both] || !ids[half] || len(c.Links) != 5 {
+		t.Fatalf("links %+v; want the fixture's three, %s and %s", c.Links, both, half)
+	}
+	for _, end := range []struct{ device, port, link string }{
+		{"n1", "mgmt0", both}, {"n2", "mgmt0", both}, {"n3", "mgmt0", half},
+	} {
+		if mgmt := c.Device(end.device).Interface(end.port); !mgmt.MgmtOnly || mgmt.Link != end.link {
+			t.Errorf("%s:%s %+v; want the management port, linked to %s", end.device, end.port, mgmt, end.link)
 		}
 	}
-	if link == nil || len(c.Links) != 4 {
-		t.Fatalf("links %+v; want the fixture's three and %s", c.Links, id)
-	}
-	for _, d := range []string{"n1", "n2"} {
-		if mgmt := c.Device(d).Interface("mgmt0"); !mgmt.MgmtOnly || mgmt.Link != id {
-			t.Errorf("%s:mgmt0 %+v; want the management port, linked to %s", d, mgmt, id)
-		}
+	if data := c.Device("n2").Interface("ethernet-1/3"); data.MgmtOnly || data.Link != half {
+		t.Errorf("n2:ethernet-1/3 %+v; want a data port, linked to %s", data, half)
 	}
 	if n := intent.Summarize(c).CablesOmitted; n != 0 {
 		t.Errorf("CablesOmitted %d, want none", n)
+	}
+
+	reg, err := psp.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, id, compiled := stage.Compile(c, reg)
+	if files == nil || id == "" || compiled.Rejected() {
+		t.Fatalf("the compile refused: %v", compiled)
+	}
+	omitted := map[string]int{}
+	for _, f := range compiled {
+		if f.Rule == findings.RuleOmitLinkMgmtOnly {
+			omitted[f.Object]++
+			if f.Severity != findings.Info || f.Message != "out-of-band network not modelled" {
+				t.Errorf("omit.link.mgmt_only %+v; want an info, the out-of-band reason", f)
+			}
+		}
+	}
+	if !reflect.DeepEqual(omitted, map[string]int{both: 1, half: 1}) {
+		t.Errorf("omit.link.mgmt_only by link %v; want one for %s and one for %s", omitted, both, half)
 	}
 }
 

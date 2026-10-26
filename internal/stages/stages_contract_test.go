@@ -407,8 +407,12 @@ func TestStagesListAndPlan(t *testing.T) {
 		t.Fatalf("adding the third link: %v", err)
 	}
 	// A generate returns before an intent change's rewrite lands: the second mark is
-	// written only once n1's and n3's artifacts have moved, as tier 3 awaits them.
+	// written only once n1's and n3's artifacts have moved, as tier 3 awaits them, and once
+	// the template query's groups have taken in the new ports and cable, which restamps
+	// them past the checksums. Before D-058 the plan read the head fresh only when it won
+	// the race against that join (017 research §5.11); now it reads it after, every time.
 	awaitMoved(t, c, name, before, "n1", "n3")
+	awaitJoined(t, c, name)
 	thirdAt := markStage(t, c, id, "third-link", "", "third link")
 	latest, err := c.ArtifactsReadyAt(name)
 	if err != nil {
@@ -1175,6 +1179,50 @@ func checksums(t *testing.T, c *testsupport.Client, branch string) map[string]st
 		}
 	}
 	return out
+}
+
+// awaitJoined polls until the new port n1:ethernet-1/3 is stamped later than the branch's
+// latest checksum: Infrahub's task workers add what a generation read for the first time to
+// the template query's groups a few seconds after it, as their own account, which moves
+// the node's node_metadata past the generation (017 research §5.11, §5.12). D-058's rule
+// leaves that stamp out; this makes a test meet it rather than read before it. Its absence
+// after a minute is D-058's revisit: Infrahub no longer stamps the members.
+func awaitJoined(t *testing.T, c *testsupport.Client, branch string) {
+	t.Helper()
+	generated, err := c.ArtifactsReadyAt(branch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	const q = `{ InterfacePhysical(device__name__value: "n1", name__value: "ethernet-1/3") { edges { node_metadata { updated_at } } } }`
+	for deadline := time.Now().Add(time.Minute); ; time.Sleep(500 * time.Millisecond) {
+		raw, err := c.GraphQL(branch, q)
+		if err != nil {
+			t.Fatalf("asking Infrahub for n1:ethernet-1/3's stamp on %s: %v", branch, err)
+		}
+		var data struct {
+			InterfacePhysical struct {
+				Edges []struct {
+					Meta struct {
+						UpdatedAt string `json:"updated_at"`
+					} `json:"node_metadata"`
+				} `json:"edges"`
+			} `json:"InterfacePhysical"`
+		}
+		if err := json.Unmarshal(raw, &data); err != nil {
+			t.Fatal(err)
+		}
+		if edges := data.InterfacePhysical.Edges; len(edges) == 1 {
+			if at, err := time.Parse(time.RFC3339Nano, edges[0].Meta.UpdatedAt); err == nil && at.After(generated) {
+				t.Logf("the query groups took in n1:ethernet-1/3 at %s, %.1fs after the latest checksum %s",
+					edges[0].Meta.UpdatedAt, at.Sub(generated).Seconds(), generated.Format(time.RFC3339Nano))
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("n1:ethernet-1/3 on %s is not stamped after the latest checksum %s a minute on: "+
+				"Infrahub no longer restamps a generation's new members (D-058's revisit)", branch, generated.Format(time.RFC3339Nano))
+		}
+	}
 }
 
 // awaitMoved polls until each named device's artifact is Ready with a checksum other than

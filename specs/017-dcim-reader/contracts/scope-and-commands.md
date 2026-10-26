@@ -21,7 +21,12 @@ fylgja stage list    [--branch <b>] [--scope tag:<name>]      # the plan's addit
 ```
 
 - Given, the scope is the request's. Not given, the server's `FYLGJA_DEFAULT_SCOPE`.
-  Every stage a command resolves, reads or plans is read under that one scope.
+  Every stage a command resolves, reads or plans is read under that one scope, but the
+  twin's: `stage list` judges the twin's stage for `stage.twin.moved` under the scope its
+  twin's record carries, as `twin step` reads it (T102). The scope moves a head alone, so
+  a head record of another scope is resolved once more under it, for the warning alone;
+  the rows, the twin's mark and every other stage stay the listing's, and a `7` record, or
+  an `8` whose scope is not `tag:<name>`, is judged under the listing's.
 - `twin step` takes no `--scope` (cobra's `unknown flag: --scope`, exit 2, no request): it
   reads under the scope its twin's record carries. A following twin's checks read under
   the record's scope too.

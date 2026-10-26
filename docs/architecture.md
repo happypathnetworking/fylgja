@@ -1101,8 +1101,9 @@ bundle `5` manifest's provenance verbatim: the branch, the `at` when pinned, the
 hash, the scope the read was made under and the mapping that read it, `{reader, model,
 version}`, in place of the retired contract version. `twin show` ends its record line with
 both, and `twin create` prints the same line for the twin it made; `twin step` resolves,
-judges and reads its target under the record's scope, and a following twin's checks read
-under it too. A record of `7` or earlier reads with no scope and no mapping: `twin show`
+judges and reads its target under the record's scope, a following twin's checks read
+under it too, and `stage list` under another scope judges the twin's stage under it for
+`stage.twin.moved`, resolving a head record's head once more. A record of `7` or earlier reads with no scope and no mapping: `twin show`
 shows its scope unknown, `twin step` refuses it `step.twin.unsteppable`, `twin destroy`
 clears it, and `twin rehearse` reclaims it when its own dead run left it. An `8` whose scope
 is not `tag:<name>`, which no build writes, is read alike for `twin show` and `twin step`,

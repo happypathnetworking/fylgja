@@ -128,7 +128,7 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	if list.Rejected() {
 		return finish(op, subject, list)
 	}
-	view := *stages.RecordViewOf(rec)
+	view := *recordView(rec)
 	target, _, list := stages.Target(ch, view, given)
 	if list.Rejected() {
 		return finish(op, subject, list)

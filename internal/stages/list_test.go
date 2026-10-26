@@ -360,6 +360,106 @@ func TestListMarksTheRecord(t *testing.T) {
 	}
 }
 
+// The record's head is judged under the scope the record names, as twin step judges it
+// (017): listed under tag:fylgja, a head record of tag:edge, whose devices' latest stamp is
+// earlier, is not warned while its own head is unmoved, and is warned in the listing's
+// words once its own head moves, the stamper asked once under each scope for its source
+// branch and the rows the listing scope's. A removal after the edge's latest stamp moves
+// its head as the listing's events move the listing's. A record of the listing's scope, a
+// mark of another, a record naming no scope and a listing of another branch read nothing
+// more, the record naming no scope judged under the listing's.
+func TestListJudgesTheRecordsHeadUnderItsScope(t *testing.T) {
+	const (
+		edge       = "tag:edge"
+		edgeLatest = "2026-10-16T17:29:00.000000+00:00"
+		edgeHead   = "2026-10-16T17:29:00.000001+00:00"
+		movedHead  = "2026-10-16T17:29:30.000001+00:00"
+		removedAt  = "2026-10-16T17:29:40.000000+00:00"
+		suffix     = "; the twin is pinned to what it was built from"
+	)
+	scoped := func(label, at, source, scope string) RecordView {
+		rec := record(label, at, source)
+		rec.Scope = scope
+		return rec
+	}
+	built := func(rec RecordView) string {
+		return "the twin was built from stage " + rec.Ref().String() + " at branch " + rec.Branch + ", at " + rec.At +
+			" (" + rec.AtSource + "); "
+	}
+	for _, c := range []struct {
+		name   string
+		record RecordView
+		branch string
+		edge   string         // the edge's latest stamp on change-1
+		events []intent.Event // change-1's intent events
+		// scopes are the scopes change-1's stamps are read under, in order.
+		scopes  []string
+		message string // the one stage.twin.moved expected, or none
+	}{
+		{name: "its head unmoved", record: scoped("head", edgeHead, AtHead, edge), edge: edgeLatest,
+			scopes: []string{testScope, edge}},
+		{name: "its head moved", record: scoped("head", edgeHead, AtHead, edge), edge: "2026-10-16T17:29:30.000000+00:00",
+			scopes: []string{testScope, edge},
+			message: built(scoped("head", edgeHead, AtHead, edge)) +
+				"change-1/head now resolves to branch change-1, at " + movedHead + " (head)" + suffix},
+		{name: "a removal after its latest stamp", record: scoped("head", "2026-10-16T17:29:40.000001+00:00", AtHead, edge),
+			edge: edgeLatest, events: []intent.Event{{Name: "infrahub.node.deleted", OccurredAt: removedAt, Kind: "DcimDevice",
+				Nodes: []string{"n4"}}},
+			scopes: []string{testScope, edge}},
+		{name: "a record of the listing's scope", record: scoped("head", headAt, AtHead, testScope), edge: edgeLatest,
+			scopes: []string{testScope}},
+		{name: "a mark of another scope", record: scoped("cabled", cabledAt, AtWritten, edge), edge: edgeLatest,
+			scopes: []string{testScope}},
+		{name: "a record naming no scope", record: scoped("head", edgeHead, AtHead, ""), edge: edgeLatest,
+			scopes: []string{testScope},
+			message: built(scoped("head", edgeHead, AtHead, "")) +
+				"change-1/head now resolves to branch change-1, at " + headAt + " (head)" + suffix},
+		{name: "a listing of another branch", record: scoped("head", edgeHead, AtHead, edge), branch: "change-2",
+			edge: "2026-10-16T17:29:30.000000+00:00"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			r, s := story()
+			s.byScope = map[string]intent.Stamps{"change-1 " + edge: freshStamps(c.edge)}
+			if c.events != nil {
+				r.events = map[string][]intent.Event{"change-1": c.events}
+			}
+			rec := c.record
+			res, list, err := List(context.Background(), r, s, c.branch, testScope, &rec)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var moved findings.List
+			for _, f := range list {
+				if f.Rule == findings.RuleStageTwinMoved {
+					moved = append(moved, f)
+				}
+			}
+			var want findings.List
+			if c.message != "" {
+				want = findings.List{{Severity: findings.Warning, Rule: findings.RuleStageTwinMoved, Object: rec.Ref().String(),
+					Message: c.message}}
+			}
+			if !reflect.DeepEqual(moved, want) {
+				t.Errorf("findings:\n%+v\nwant\n%+v", moved, want)
+			}
+			var scopes []string
+			for i, call := range s.calls {
+				if call == "change-1@" {
+					scopes = append(scopes, s.scopes[i])
+				}
+			}
+			if !reflect.DeepEqual(scopes, c.scopes) {
+				t.Errorf("change-1's stamps were read under %v, want %v", scopes, c.scopes)
+			}
+			for _, row := range res.Rows {
+				if row.Ref.String() == "change-1/head" && (row.At != headAt || row.Twin != (rec.Label == LabelHead)) {
+					t.Errorf("the head's row %+v, twin %v; want the listing scope's at %s, marked for a head record", row.Resolved, row.Twin, headAt)
+				}
+			}
+		})
+	}
+}
+
 // Moved over the proposed change as Find reads it, as twin step files it beside its target's
 // findings: nothing for a record whose stage still resolves to the record's (branch, at),
 // and stage.twin.moved, in the listing's words and object, for a head written since, a

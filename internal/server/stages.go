@@ -127,7 +127,7 @@ func runStageList(ctx context.Context, opts *options, f *stageFlags) error {
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
-	res, list, err := stages.List(ctx, reader, newIntentStamper(), f.branch, scope, stages.RecordViewOf(hostRecord(opts)))
+	res, list, err := stages.List(ctx, reader, newIntentStamper(), f.branch, scope, recordView(hostRecord(opts)))
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
@@ -154,6 +154,18 @@ func hostRecord(opts *options) *wire.TwinRecord {
 		return nil
 	}
 	return &rec
+}
+
+// recordView is the record's stage as the listing and the step judge it, nil when there
+// is none, carrying the record's scope when it names one this build reads under
+// (scopeKnown): its head is judged under that scope, never the listing's (017). A record
+// naming none carries "", and is judged under the listing's.
+func recordView(rec *wire.TwinRecord) *stages.RecordView {
+	v := stages.RecordViewOf(rec)
+	if v != nil && scopeKnown(rec) {
+		v.Scope = rec.Provenance.Scope
+	}
+	return v
 }
 
 // heading names one proposed change as the list and the plan head its stages

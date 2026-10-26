@@ -1,6 +1,8 @@
 package cli
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"reflect"
 	"slices"
@@ -32,6 +34,26 @@ func listTwin(t *testing.T, paths lab.Paths, label, description, atSource, branc
 	})
 	writeTwin(t, paths, rec)
 	return rec
+}
+
+// editTwinJSON rewrites twin.json on the host as edit leaves its JSON.
+func editTwinJSON(t *testing.T, paths lab.Paths, edit func(map[string]any)) {
+	t.Helper()
+	raw, err := os.ReadFile(paths.TwinJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(raw, &m); err != nil {
+		t.Fatal(err)
+	}
+	edit(m)
+	if raw, err = json.Marshal(m); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.TwinJSON, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
 }
 
 // listedRows is the listing's rows as "<ref> <branch> <at> <source> <description>", with
@@ -538,6 +560,64 @@ func TestStageListTwinMoved(t *testing.T) {
 			}
 			if _, doc, raw := stageDoc(t, "list", "--branch", "change-2"); carriesRule(doc.Findings, findings.RuleStageTwinMoved) {
 				t.Errorf("a listing of another branch warns of the twin's stage:\n%s", raw)
+			}
+		})
+	}
+}
+
+// The twin's head is judged under the scope its record names, as twin step judges it, and
+// never the listing's (017): over a fake whose devices carry other alone, a twin recorded
+// at the head under tag:other is listed under the default tag:fylgja, whose head has no
+// at, with no stage.twin.moved, the head's row marked and listed unresolved; once its head
+// under tag:other is earlier than the record's at it is warned that the head now resolves
+// there. A twin recorded under tag:fylgja is judged under the listing's, as before 017, and
+// so is one whose record names a scope that is not tag:<name>, which no build writes.
+func TestStageListJudgesTheTwinUnderItsRecordsScope(t *testing.T) {
+	const oldHead = "2026-10-16T08:45:00.000001+00:00"
+	built := "the twin was built from stage change-1/head at branch change-1, at " + oldHead + " (head); "
+	const pinned = "; the twin is pinned to what it was built from"
+	for _, c := range []struct {
+		name, scope, at string
+		message         string // the stage.twin.moved expected, or none
+	}{
+		{"recorded under tag:other at its head", "tag:other", fakeHeadAt, ""},
+		{"recorded under tag:other before its head", "tag:other", oldHead,
+			built + "change-1/head now resolves to branch change-1, at " + fakeHeadAt + " (head)" + pinned},
+		{"recorded under tag:fylgja", "tag:fylgja", oldHead, built + "change-1/head now names no point in time" + pinned},
+		{"recorded under a scope that is not tag:<name>", "other", oldHead, built + "change-1/head now names no point in time" + pinned},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			paths := useStateRoot(t)
+			useService(t, nil)
+			f := planInfrahub(t, twoMarks()...)
+			f.tag = "other"
+			f.start()
+			writeTwin(t, paths, stepRecordOf(t, fixtureBundleID, func(r *lab.RecordFields) {
+				r.Provenance.Branch, r.Provenance.At = lessLink, c.at
+				r.Stage = stepStage("head", "", findings.AtSourceHead)
+			}))
+			// Written under tag:fylgja, then its scope edited by hand, since NewRecord refuses
+			// one that is not tag:<name>.
+			editTwinJSON(t, paths, func(m map[string]any) { m["provenance"].(map[string]any)["scope"] = c.scope })
+
+			code, doc, raw := stageDoc(t, "list")
+			var moved findings.List
+			for _, f := range doc.Findings {
+				if f.Rule == findings.RuleStageTwinMoved {
+					moved = append(moved, f)
+				}
+			}
+			var want findings.List
+			if c.message != "" {
+				want = findings.List{{Severity: findings.Warning, Rule: findings.RuleStageTwinMoved, Object: "change-1/head",
+					Message: c.message}}
+			}
+			if code != findings.ExitOK || doc.Subject == nil || doc.Subject.Scope != "tag:fylgja" || !reflect.DeepEqual(moved, want) {
+				t.Errorf("exit %d, subject %+v, stage.twin.moved %+v; want 0 under tag:fylgja with %+v\n%s", code, doc.Subject, moved, want, raw)
+			}
+			head := doc.Stages.Rows[len(doc.Stages.Rows)-1]
+			if head.Ref != "change-1/head" || head.At != "" || !head.Twin {
+				t.Errorf("the head's row %+v; want change-1/head marked, with no at under tag:fylgja\n%s", head, raw)
 			}
 		})
 	}

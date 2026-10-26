@@ -19,6 +19,10 @@ type RecordView struct {
 	// Branch and At are the record's provenance: the reference the twin was built from.
 	Branch, At string
 	AtSource   string
+	// Scope is the record's provenance's scope, tag:<name>, or "" for a record that names
+	// none this build reads under (a 7, or an 8 edited by hand), which is judged under the
+	// listing's scope (017).
+	Scope string
 	// State is the record's: ready or diverged.
 	State string
 	// Towards is the label of the stage a diverged step was going to; "" otherwise.
@@ -35,6 +39,14 @@ func (v RecordView) Ref() Ref { return Ref{Branch: v.ProposedChange.Branch, Labe
 
 // derived reports whether the record's stage is one of the two derived stages.
 func (v RecordView) derived() bool { return v.AtSource == AtBranchPoint || v.AtSource == AtHead }
+
+// headInOtherScope reports whether the record's stage is the head of proposed change id
+// and the record names a scope other than scope: the head is the one stage whose at a
+// scope moves, since its stamps are the scope's devices', so the listing resolves it again
+// under the record's scope for stage.twin.moved, as twin step resolves it (017).
+func (v *RecordView) headInOtherScope(id, scope string) bool {
+	return v != nil && v.ProposedChange.ID == id && v.AtSource == AtHead && v.Scope != "" && v.Scope != scope
+}
 
 // names reports whether a listed stage is the one the record names: of its proposed
 // change, of its label, and a mark or derived as it was.
@@ -94,7 +106,10 @@ type ListResult struct {
 // change; stage.orphaned per orphan; and stage.twin.moved when the record's stage no
 // longer resolves to what the record holds, or is gone.
 //
-// Every stamps read is under scope, tag:<name> (017).
+// Every stamps read is under scope, tag:<name> (017), but one: a record's head is judged
+// under the scope the record names, as twin step judges it, so a twin built under another
+// scope reads its proposed change's stamps once more under that scope, for
+// stage.twin.moved alone. A record naming no scope is judged under the listing's.
 func List(ctx context.Context, r Reader, s Stamper, branch, scope string, record *RecordView) (ListResult, findings.List, error) {
 	if list, err := checkKind(ctx, r); list != nil || err != nil {
 		return ListResult{}, list, err
@@ -115,6 +130,9 @@ func List(ctx context.Context, r Reader, s Stamper, branch, scope string, record
 	res := ListResult{Branch: branch, Record: record}
 	var list findings.List
 	var changes []*Change
+	// recorded is the record's proposed change resolved under the record's scope, when its
+	// stage is a head the listing's scope would resolve elsewhere; nil otherwise.
+	var recorded *Change
 	mains := map[string]*intent.Stamps{}
 	for _, pc := range pcs {
 		if branch != "" && pc.Branch != branch {
@@ -144,6 +162,12 @@ func List(ctx context.Context, r Reader, s Stamper, branch, scope string, record
 			ch.Scope = scope
 			list = append(list, schema...)
 			refused = true
+		} else if record.headInOtherScope(pc.ID, scope) {
+			// For stage.twin.moved alone: the row, the mark and every other stage stay the
+			// listing scope's.
+			if recorded, err = newChange(ctx, r, s, pc, *info, record.Scope); err != nil {
+				return ListResult{}, nil, err
+			}
 		}
 		changes = append(changes, ch)
 		for _, st := range ch.Stages {
@@ -193,6 +217,9 @@ func List(ctx context.Context, r Reader, s Stamper, branch, scope string, record
 			if c.ProposedChange.ID == record.ProposedChange.ID {
 				ch = c
 			}
+		}
+		if recorded != nil {
+			ch = recorded
 		}
 		list = append(list, Moved(ch, *record)...)
 	}

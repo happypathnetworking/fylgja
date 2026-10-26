@@ -81,6 +81,9 @@ type fakeStamper struct {
 	err      error
 	at       map[string]intent.Stamps // branch@at
 	byBranch map[string]intent.Stamps
+	// byScope answers a branch under one scope, keyed "<branch> <scope>", before at and
+	// byBranch: the scope's devices are another set, whose stamps are their own (017).
+	byScope map[string]intent.Stamps
 	// refuse names branches whose schema does not conform: each stamps read of one answers
 	// the conformance error the server's stamper does, the kind DcimDevice missing (017).
 	refuse map[string]bool
@@ -100,6 +103,9 @@ func (f *fakeStamper) Stamps(_ context.Context, branch, at, scope string) (inten
 	if f.refuse[branch] {
 		return intent.Stamps{}, &intent.ConformanceError{Branch: branch, Findings: findings.List{{Severity: findings.Rejection,
 			Rule: findings.RuleSchemaKindMissing, Object: "DcimDevice", Message: "the branch's schema has no kind DcimDevice"}}}
+	}
+	if s, ok := f.byScope[branch+" "+scope]; ok {
+		return s, nil
 	}
 	if s, ok := f.at[branch+"@"+at]; ok {
 		return s, nil

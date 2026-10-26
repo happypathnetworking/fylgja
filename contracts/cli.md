@@ -488,7 +488,7 @@ step `stage` and the rule `stage.failed` are the staging step's, as before. A re
 | `stage.artifact.stale` | rejection, 1, `resolve`, one per device | at the stage's `at`, the device's intent is later than its generation stamp, the later of its artifact's checksum stamp and the proposed change's artifact validator's completion ([D-046](../docs/decisions.md#d-046)), its intent written by its own stamps or by an intent event naming it or one of its interfaces ([D-048](../docs/decisions.md#d-048)); names both remedies | new |
 | `stage.orphaned` | warning, 0, none | a stage that names no proposed change | new |
 | `stage.main.moved` | warning, 0, `resolve` | `main` was written after the branch's `branched_from`; nothing is refused | new |
-| `stage.twin.moved` | warning, 0, none | the record's stage no longer resolves to the record's `(branch, at)`, or is gone; in `stage list` beside the record's row, and on `twin step` beside the target's findings | `waypoint.twin.moved` |
+| `stage.twin.moved` | warning, 0, none | the record's stage no longer resolves to the record's `(branch, at)`, or is gone; in `stage list` beside the record's row, and on `twin step` beside the target's findings; judged under the scope the record names (017), so `stage list` under another scope resolves a head record's head once more under the record's, and a record naming none is judged under the listing's | `waypoint.twin.moved` |
 | `step.stage.skipped` | warning, 0, `resolve` | marks between the record's stage and the target | `step.sequence.skipped` (M11) |
 
 `step.target.foreign`, `step.target.unknown`, `step.target.current` and
@@ -873,8 +873,10 @@ fylgja stage list    [--branch <b>] [--scope tag:<name>]
 ```
 
 - Given, the scope is the request's; not given, the server's `FYLGJA_DEFAULT_SCOPE`. Every
-  stage a command resolves, reads or plans is read under that one scope. The document's
-  `subject.scope` names it from the moment it is resolved.
+  stage a command resolves, reads or plans is read under that one scope, but the twin's:
+  `stage list` judges the twin's stage for `stage.twin.moved` under the scope its record
+  names, as `twin step` reads it. The document's `subject.scope` names the request's from
+  the moment it is resolved.
 - `twin step` takes no `--scope`: `rejection operation.failed twin.step: unknown flag:
   --scope`, exit 2, with no request. It reads under the scope its twin's record carries,
   and a following twin's checks read under the twin's.

@@ -715,7 +715,8 @@ func tagsSent(f *fakeInfrahub) (stamped, read []any) {
 // fake whose devices carry other alone, send every stamps read and every stage's Devices
 // read with the tag other, never the default's fylgja, and succeed on what they read. A
 // create reads no intent before its run, which reads under the scope the run is given; a
-// rehearsal's baseline is provisioned under it.
+// rehearsal's baseline is provisioned under it. stage list, which reads stamps alone, sends
+// every one with the tag other too, and its document's subject names the scope.
 func TestStageCommandsReadUnderTheScopeGiven(t *testing.T) {
 	const scope = "tag:other"
 	for _, c := range []struct {
@@ -765,6 +766,12 @@ func TestStageCommandsReadUnderTheScopeGiven(t *testing.T) {
 				}
 			}
 		}},
+		{"stage list", func(t *testing.T) (*fakeInfrahub, *fakeService) {
+			useService(t, nil)
+			return planInfrahub(t, twoMarks()...), nil
+		}, func(*testing.T) []string {
+			return []string{"stage", "list"}
+		}, false, nil},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			useStateRoot(t)

@@ -971,6 +971,22 @@ in `description`.
   - **Next**: T055, the operator's: `FYLGJA_DEFAULT_SCOPE="tag:fylgja"` in `local/.env`, and the go-ahead for `main`'s migration.
 
 - [ ] T055 [operator] [US6] Before the host moves: add `FYLGJA_DEFAULT_SCOPE="tag:fylgja"` to `local/.env` (the operator's file, which the bring-up script keeps byte for byte; values there are quoted), and give the go-ahead for `main`'s migration (T056), this feature's one lasting write to `main`. Say whether a live session runs it or the operator does. Precondition: T002 done, and no tier, loop or twin running against Infrahub.
+  - *2026-10-26 03:44Z, at `b10fce5`, Run 15 of the converge loop (live): left unchecked.* Both halves are the operator's, and no record on disk gives either. `local/.env` names no `FYLGJA_DEFAULT_SCOPE`, read by name, never a value. T005's acknowledgement (answer `3a`) covers being told that `main` is migrated, not the go-ahead or who runs it, and `spec.md`, `plan.md`, `research.md` and `docs/decisions.md` say neither. Nothing was written to `local/.env` or to Infrahub. What is ready:
+    - **The variable**: one line, `FYLGJA_DEFAULT_SCOPE='tag:fylgja'`. The file's other values are single-quoted (17 of them; one is empty), as the bring-up script writes them and as its `local/.env:` note gives this line; this task, `scripts/e2e.sh` and the remedies say double quotes, and either reads the same when the file is loaded. A process reads it only at start. Once it is added, the server is restarted from a shell that loaded the file, and its report reads `default scope: tag:fylgja` (T059 checks it). Until then the server reports `default scope: unset`: Infrahub's checks, which send no scope, are refused `scope.unset`, and tier 3 stops at its precondition. The worker reads no scope.
+    - **The precondition, read at 03:44Z**: T002 is done. `clab inspect --all` finds no container, there is no `local/twin`, and Temporal lists no Schedule and no running workflow. `Branch` lists `main` and `fylgja-fixture` alone.
+    - **`main`, read at 03:44Z**:
+      - The hash is `e43a1cde…`, with no `Dcim*` kind.
+      - The nine kinds the two documents remove (`FylgjaContract`, `FylgjaDevice`, `FylgjaInterface`, `FylgjaLink`, `FylgjaPlatform` and the four `Network*`) each count 0. So do `CoreArtifact`, `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator`, and `fylgja-devices` has no member.
+      - `fylgja` is the one registration: `ref main`, at `3c3e79a`, with its two checks.
+      - The documents were rehearsed on a branch at plan (research §1.9: 50.6 s and 48.0 s, the second check `No diff`).
+      - What the precondition's "no loop" means here is the operator's to say. The attended loop is running (this is its Run 15), and by the route T056 is its Run 16, a live session.
+    - **For T056**: its text expects `-prepare-main`'s refusal to name 21 kinds. Quickstart §2, T031's live check (research §5.2) and `LibraryKinds` over the six files all say 27.
+    - **The host**: the worker (pid 3309364) and the server (pid 3309386) read `(deleted)` after the loop's gates rebuilt the binary. They were restarted from this tree (`b10fce5`, unmodified) and verified:
+      - each `/proc/<pid>/exe` is the tree's `bin/fylgja`;
+      - the environment names carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT` and `FYLGJA_API_TOKEN`;
+      - the server reports both listeners, the bridge warning, `default scope: unset` and both packages with their logins set;
+      - from inside each task worker, `POST /v1/twin/show` answers `200 1 0.1.0-dev` with the token and `401` without it.
+      - 11.9 GiB is available. Infrahub's containers hold about 14 GiB, its server 7.1 GiB of that, against `CLAUDE.md`'s 5.2 GiB at idle. Read `free -m` again before T063.
 
 - [ ] T056 [live] [US6] Migrate `main` (quickstart §2 steps 1–2; research §1.9, R-13, R-14 steps 1–2), with `local/.env` loaded:
   - **The two documents**: `.venv/bin/infrahubctl schema check --branch main specs/017-dcim-reader/migration/1-reference-kinds-absent.yaml`, then `schema load` of the same; then `check` and `load` of `2-generics-absent.yaml`, about 50 s each. Expect `removed:` naming the five, then the four.

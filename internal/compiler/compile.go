@@ -92,6 +92,9 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 		list = append(list, ArtifactNames(d, survey)...)
 		pkgs[i], profs[i], surveys[i] = p, prof, survey
 	}
+	// The links and each interface's link held to one another: validation's refusal, by
+	// the one function both call, filed with the surveys' so both callers report one list.
+	list = append(list, LinkTerminations(c)...)
 	if list.Rejected() {
 		return nil, list
 	}

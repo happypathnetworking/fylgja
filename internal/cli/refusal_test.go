@@ -55,9 +55,10 @@ func TestRejectionLeavesNothingBehind(t *testing.T) {
 	}
 }
 
-// A refusal's machine-readable half: five defects, five findings, in one document, each
-// naming its object.
-func TestFiveDefectsGiveFiveFindings(t *testing.T) {
+// A refusal's machine-readable half: one finding per fault, in one document, each naming
+// its object. The fixture's five defects, and the two ports its same-device link would
+// cable a second time (LinkTerminations).
+func TestFiveDefectsGiveOneFindingPerFault(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "b")
 	code, doc := runCompileTo(t, repoPath("testdata", "ctm", "defects", "five.json"), out)
 	if code != 1 {
@@ -66,8 +67,8 @@ func TestFiveDefectsGiveFiveFindings(t *testing.T) {
 	if doc.Status != "rejected" {
 		t.Errorf("status = %q, want rejected", doc.Status)
 	}
-	if len(doc.Findings) != 5 {
-		t.Fatalf("got %d findings, want exactly 5:\n%+v", len(doc.Findings), doc.Findings)
+	if len(doc.Findings) != 7 {
+		t.Fatalf("got %d findings, want exactly 7:\n%+v", len(doc.Findings), doc.Findings)
 	}
 
 	var got []string
@@ -76,6 +77,8 @@ func TestFiveDefectsGiveFiveFindings(t *testing.T) {
 	}
 	sort.Strings(got)
 	want := []string{
+		"data.required.missing n3:ethernet-1/1",
+		"data.required.missing n3:ethernet-1/2",
 		"device.name.duplicate n1",
 		"interface.rule.unmatched n1:Ethernet99",
 		"link.endpoints.count n1:ethernet-1/1|n2:ethernet-1/1",
@@ -83,7 +86,7 @@ func TestFiveDefectsGiveFiveFindings(t *testing.T) {
 		"platform.unsupported n2",
 	}
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
-		t.Errorf("findings differ from the fixture's five defects:\n--- got\n%s\n--- want\n%s",
+		t.Errorf("findings differ from the fixture's faults:\n--- got\n%s\n--- want\n%s",
 			strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 	if _, err := os.Stat(out); !os.IsNotExist(err) {

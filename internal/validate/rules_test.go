@@ -5,6 +5,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -106,36 +107,97 @@ func TestDefectsAreNamed(t *testing.T) {
 // next attempt.
 //
 // The objects are asserted alongside the rules, because "reported in one pass" is only
-// useful if each report points at the thing to fix. These five pairs are the fixture's
-// five defects, each pointing at its object.
+// useful if each report points at the thing to fix. The fixture carries five defects,
+// each pointing at its object; its same-device link also ends on two interfaces another
+// link already ends on, so the port each names would be cabled twice, and each is named
+// under data.required.missing (LinkTerminations): seven findings, one per fault.
 func TestAllDefectsReportedInOnePass(t *testing.T) {
 	c, reg := load(t, "defects/five.json")
 	list := Validate(c, reg)
 
-	want := map[string]string{
-		findings.RuleDeviceNameDuplicate:    "n1",
-		findings.RuleInterfaceRuleUnmatched: "n1:Ethernet99",
-		findings.RuleLinkEndpointsSameDev:   "n3:ethernet-1/1|n3:ethernet-1/2",
-		findings.RuleLinkEndpointsCount:     "n1:ethernet-1/1|n2:ethernet-1/1",
-		findings.RulePlatformUnsupported:    "n2",
+	type named struct{ rule, object string }
+	want := []named{
+		{findings.RuleInterfaceRuleUnmatched, "n1:Ethernet99"},
+		{findings.RuleDeviceNameDuplicate, "n1"},
+		{findings.RulePlatformUnsupported, "n2"},
+		{findings.RuleLinkEndpointsCount, "n1:ethernet-1/1|n2:ethernet-1/1"},
+		{findings.RuleLinkEndpointsSameDev, "n3:ethernet-1/1|n3:ethernet-1/2"},
+		{findings.RuleRequiredMissing, "n3:ethernet-1/1"},
+		{findings.RuleRequiredMissing, "n3:ethernet-1/2"},
 	}
-	got := map[string]string{}
+	got := make([]named, 0, len(list))
 	for _, f := range list {
-		got[f.Rule] = f.Object
+		got = append(got, named{f.Rule, f.Object})
 	}
-	for rule, object := range want {
-		switch actual, ok := got[rule]; {
-		case !ok:
-			t.Errorf("rule %s missing from a single pass; got %v", rule, got)
-		case actual != object:
-			t.Errorf("rule %s names %q, want %q", rule, actual, object)
-		}
+	if !slices.Equal(got, want) {
+		t.Errorf("one pass, one finding per fault:\n got  %v\n want %v\n%v", got, want, list)
 	}
-	if len(got) != len(want) {
-		t.Errorf("got %d distinct rules, want %d: %v", len(got), len(want), got)
-	}
-	if len(list) != len(want) {
-		t.Errorf("got %d findings, want exactly %d, one per defect: %v", len(list), len(want), list)
+}
+
+// A link and the interfaces it ends on name one another (LinkTerminations). Each CTM
+// below passed validation before the rule and compiled to a bundle that misdescribes its
+// twin: a port cabled twice, a port the topology cables while its row says
+// configured-not-cabled, a row saying cabled with no veth. Each is refused under
+// data.required.missing, naming the link id and the device:interface, and nothing else in
+// the fixture is.
+func TestLinkFieldsAndLinksAgree(t *testing.T) {
+	const (
+		n1n2 = "n1:ethernet-1/1|n2:ethernet-1/1"
+		n2n3 = "n2:ethernet-1/2|n3:ethernet-1/1"
+		n1n3 = "n1:ethernet-1/1|n3:ethernet-1/3"
+		rule = "an interface names the one link it terminates"
+	)
+	for _, tc := range []struct {
+		name   string
+		edit   func(c *ctm.CTM)
+		object []string
+		want   []string
+	}{
+		{"an interface two links end on", func(c *ctm.CTM) {
+			n3 := c.Device("n3")
+			n3.Interfaces = append(n3.Interfaces, ctm.Interface{Name: "ethernet-1/3", Link: n1n3})
+			c.Links = append(c.Links, ctm.Link{ID: n1n3, Endpoints: []ctm.Endpoint{
+				{Device: "n1", Interface: "ethernet-1/1"}, {Device: "n3", Interface: "ethernet-1/3"}}})
+		}, []string{"n1:ethernet-1/1"}, []string{
+			"n1:ethernet-1/1 is an endpoint of 2 links (" + n1n2 + ", " + n1n3 + "); " + rule +
+				", and a bundle whose links cable one port twice is never produced"}},
+		{"a link ending on an interface carrying no link", func(c *ctm.CTM) {
+			c.Device("n2").Interface("ethernet-1/1").Link = ""
+		}, []string{n1n2}, []string{
+			"endpoint n2:ethernet-1/1 carries no link; " + rule +
+				", and a bundle that cables a port its mapping calls configured-not-cabled is never produced"}},
+		{"a link ending on an interface carrying another link", func(c *ctm.CTM) {
+			c.Device("n2").Interface("ethernet-1/1").Link = n2n3
+		}, []string{n1n2}, []string{
+			"endpoint n2:ethernet-1/1 carries link \"" + n2n3 + "\"; " + rule}},
+		{"an interface carrying a link not in intent", func(c *ctm.CTM) {
+			n3 := c.Device("n3")
+			n3.Interfaces = append(n3.Interfaces, ctm.Interface{Name: "ethernet-1/3", Link: n1n3})
+		}, []string{"n3:ethernet-1/3"}, []string{
+			"n3:ethernet-1/3 carries link \"" + n1n3 + "\", which is not in intent; " + rule +
+				", and a bundle that calls a port cabled with no cable on it is never produced"}},
+		{"an interface carrying a link that ends elsewhere", func(c *ctm.CTM) {
+			n3 := c.Device("n3")
+			n3.Interfaces = append(n3.Interfaces, ctm.Interface{Name: "ethernet-1/3", Link: n1n2})
+		}, []string{"n3:ethernet-1/3"}, []string{
+			"n3:ethernet-1/3 carries link \"" + n1n2 + "\", which does not end on it; " + rule +
+				", and a bundle that calls a port cabled with no cable on it is never produced"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			c, reg := load(t, "three-node.json")
+			tc.edit(c)
+			list := Validate(c, reg)
+			if len(list) != len(tc.want) {
+				t.Fatalf("got %d findings, want %d:\n%v", len(list), len(tc.want), list)
+			}
+			for i, f := range list {
+				if f.Severity != findings.Rejection || f.Rule != findings.RuleRequiredMissing ||
+					f.Object != tc.object[i] || f.Message != tc.want[i] {
+					t.Errorf("finding %d:\n got  %s %s %q %q\n want rejection %s %q %q",
+						i, f.Severity, f.Rule, f.Object, f.Message, findings.RuleRequiredMissing, tc.object[i], tc.want[i])
+				}
+			}
+		})
 	}
 }
 

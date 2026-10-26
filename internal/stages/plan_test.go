@@ -53,7 +53,17 @@ func (f *fakePipeline) pipeline() Pipeline {
 			}
 			c.Envelope.Branch, c.Envelope.At, c.Envelope.ObservedAt = branch, at, observedAt
 			if f.lessLink[branch+"@"+at] {
+				// The cable gone, as a reader writes it: from the links and from the two
+				// interfaces it ended on.
+				gone := c.Links[len(c.Links)-1].ID
 				c.Links = c.Links[:len(c.Links)-1]
+				for i := range c.Devices {
+					for j := range c.Devices[i].Interfaces {
+						if c.Devices[i].Interfaces[j].Link == gone {
+							c.Devices[i].Interfaces[j].Link = ""
+						}
+					}
+				}
 			}
 			if f.unsupported[branch] {
 				c.Devices[0].Platform.Package = "nosuch"

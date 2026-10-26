@@ -186,7 +186,8 @@ func checkInterfaces(d ctm.Device, prof *psp.Profile, pspID string, list *findin
 	*list = append(*list, compiler.ArtifactNames(d, survey)...)
 }
 
-// checkLinks validates every link's shape and endpoints.
+// checkLinks validates every link's shape and endpoints, then holds the links and each
+// interface's link to one another by the one function the compiler's guard also calls.
 func checkLinks(c *ctm.CTM, list *findings.List) {
 	for _, l := range c.Links {
 		if len(l.Endpoints) != 2 {
@@ -212,4 +213,5 @@ func checkLinks(c *ctm.CTM, list *findings.List) {
 			}
 		}
 	}
+	*list = append(*list, compiler.LinkTerminations(c)...)
 }

@@ -120,6 +120,42 @@ func TestMappingRefusalsAreWordedAlike(t *testing.T) {
 	}
 }
 
+// A link and the interfaces it ends on are held to one another by one function,
+// LinkTerminations, which validation calls and the compiler calls as its guard, so both
+// refuse a disagreement in the same words and the compiler builds nothing: here a port
+// two links end on, a link ending on an interface carrying no link, and an interface
+// carrying a link not in intent, at once.
+func TestLinkTerminationRefusalsAreWordedAlike(t *testing.T) {
+	const (
+		n1n2 = "n1:ethernet-1/1|n2:ethernet-1/1"
+		n1n3 = "n1:ethernet-1/1|n3:ethernet-1/3"
+		n2n3 = "n2:ethernet-1/2|n3:ethernet-1/1"
+		gone = "n3:ethernet-1/4|n9:ethernet-1/1"
+		rule = "an interface names the one link it terminates"
+	)
+	got := bothCallers(t, func() *ctm.CTM {
+		c := loadCTM(t, "testdata", "ctm", "three-node.json")
+		n3 := c.Device("n3")
+		n3.Interfaces = append(n3.Interfaces,
+			ctm.Interface{Name: "ethernet-1/3", Link: n1n3}, ctm.Interface{Name: "ethernet-1/4", Link: gone})
+		n3.Interface("ethernet-1/1").Link = ""
+		c.Links = append(c.Links, ctm.Link{ID: n1n3, Endpoints: []ctm.Endpoint{
+			{Device: "n1", Interface: "ethernet-1/1"}, {Device: "n3", Interface: "ethernet-1/3"}}})
+		return c
+	})
+	wantRefusals(t, got,
+		refusal{rule: findings.RuleRequiredMissing, object: "n1:ethernet-1/1",
+			message: "n1:ethernet-1/1 is an endpoint of 2 links (" + n1n2 + ", " + n1n3 + "); " + rule +
+				", and a bundle whose links cable one port twice is never produced"},
+		refusal{rule: findings.RuleRequiredMissing, object: n2n3,
+			message: "endpoint n3:ethernet-1/1 carries no link; " + rule +
+				", and a bundle that cables a port its mapping calls configured-not-cabled is never produced"},
+		refusal{rule: findings.RuleRequiredMissing, object: "n3:ethernet-1/4",
+			message: "n3:ethernet-1/4 carries link \"" + gone + "\", which is not in intent; " + rule +
+				", and a bundle that calls a port cabled with no cable on it is never produced"},
+	)
+}
+
 // Under a collapsing breakout rule a parent and its child render one port, so both cabled
 // is two defects at once: the port would be cabled twice, and the parent is cabled beside
 // its child. One pass names both, from both callers. This is why the

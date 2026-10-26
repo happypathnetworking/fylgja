@@ -172,7 +172,7 @@
                 },
                 "link": {
                   "type": "string",
-                  "description": "Link id this interface terminates"
+                  "description": "Link id this interface terminates: the id of the one link of `links` that ends on it, and absent when none does. Validation refuses a CTM whose interfaces and links disagree (data.required.missing)."
                 },
                 "provenance": {
                   "$ref": "#/$defs/provenance"
@@ -216,7 +216,7 @@
     },
     "links": {
       "type": "array",
-      "description": "Sorted by id. Each is a cable with exactly two ends, each a physical port of a device in the scope; the id is the two endpoints' identifiers sorted and joined with `|`. A cable with other ends is not here: it is an omitted row of the envelope's fidelity list.",
+      "description": "Sorted by id. Each is a cable with exactly two ends, each a physical port of a device in the scope; the id is the two endpoints' identifiers sorted and joined with `|`, and each endpoint's interface carries it as its `link`. A cable with other ends is not here: it is an omitted row of the envelope's fidelity list.",
       "items": {
         "type": "object",
         "required": [

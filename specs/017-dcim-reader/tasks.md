@@ -1046,6 +1046,7 @@ in `description`.
       - `make test-contract` then runs T044's and T051's tests against a render for the first time; on this host they wait for T058 and T060 and run at T062. `TestChecksInsideInfrahub` skips there, as it always has, since the runner's task workers reach no server.
       - A red job is a defect to fix in the phase that owns it, then merged and pushed again, as this task says.
     - **After the push**: `gh run list --branch main --limit 1` names the run, and `gh run watch <id>` follows it. On 015's and the release's pushes it took 12 to 16 minutes, without 017's tests. Record the job's result in this note, then tick the task. Run 18 (T058) then imports the pushed head on this host.
+  - *2026-10-26, the attended session, after the loop stopped at the operator's word:* **answered by the operator** (question 2 of the run started 2026-10-25T23:49Z, answer `1a`): the attended session stopped the loop, and the operator merges and pushes while it is stopped (`git fetch . 017-dcim-reader:main`, then `git push origin main`), reads CI's contract job, and gives its result to the attended session, which records it here, ticks this task and starts the loop again at Run 18 (T058).
 
   *Run 17's checkpoint, 12:41Z*:
   - **Gates**: the lint and unit predictions above are the run's gates, and were run again on the final tree.
@@ -1078,6 +1079,7 @@ in `description`.
   - **The render check**: compare `bin/fylgja intent read --branch fylgja-fixture`'s artifacts with T016's predicted bytes in `testdata/ctm/three-node.json`, and a `-mixed` throwaway branch's read with `mixed.json`.
     - If they differ, take the real bytes into both fixtures and their shuffled copies, re-run `go test ./internal/compiler -update`, and commit the goldens alone, naming the new ids; the loop stops for the review. The operator then merges and pushes `main` again, as T057, before T063, so that CI's `main` and the script agree on the ids.
     - Record in research §5.1 whether the prediction held.
+  - *2026-10-26, the attended session:* the operator **accepted a second push** (question 2 of the run started 2026-10-25T23:49Z, answer `2a`): if the render differs from the prediction and this task re-baselines the goldens in a commit of its own, the loop stops for a second merge and push of the whole branch, made as T057's was (the loop stopped, the operator pushes and reads CI), before T063.
 
 - [ ] T061 [live] [US1] [US2] [US3] [US5] The hand scenarios (quickstart §3–§6), each recorded in research §5.5 with its output. Delete every throwaway branch at the end.
   - **§3, the fixture read**: `schema check`'s line; `intent read`'s line and the `diff` against `three-node.json` reading `same`; the envelope; `twin compile`, with the manifest's provenance and `fidelity.read`. Record the bundle id as the fixture's compiled id.

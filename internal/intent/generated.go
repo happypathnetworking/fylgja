@@ -21,6 +21,7 @@ import (
 // device kind that does not inherit CoreArtifactTarget is refused before the query runs.
 //
 // ArtifactFields is implemented by the following types:
+// ArtifactFieldsDcimDevice
 // ArtifactFieldsNetworkDevice
 type ArtifactFields interface {
 	implementsGraphQLInterfaceArtifactFields()
@@ -28,6 +29,7 @@ type ArtifactFields interface {
 	GetArtifacts() ArtifactFieldsArtifactsNestedPaginatedCoreArtifact
 }
 
+func (v *ArtifactFieldsDcimDevice) implementsGraphQLInterfaceArtifactFields()    {}
 func (v *ArtifactFieldsNetworkDevice) implementsGraphQLInterfaceArtifactFields() {}
 
 func __unmarshalArtifactFields(b []byte, v *ArtifactFields) error {
@@ -44,6 +46,9 @@ func __unmarshalArtifactFields(b []byte, v *ArtifactFields) error {
 	}
 
 	switch tn.TypeName {
+	case "DcimDevice":
+		*v = new(ArtifactFieldsDcimDevice)
+		return json.Unmarshal(b, *v)
 	case "NetworkDevice":
 		*v = new(ArtifactFieldsNetworkDevice)
 		return json.Unmarshal(b, *v)
@@ -60,6 +65,14 @@ func __marshalArtifactFields(v *ArtifactFields) ([]byte, error) {
 
 	var typename string
 	switch v := (*v).(type) {
+	case *ArtifactFieldsDcimDevice:
+		typename = "DcimDevice"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*ArtifactFieldsDcimDevice
+		}{typename, v}
+		return json.Marshal(result)
 	case *ArtifactFieldsNetworkDevice:
 		typename = "NetworkDevice"
 
@@ -264,6 +277,24 @@ func (v *ArtifactFieldsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreA
 // Spreading an interface fragment into an interface selection is valid only where the
 // two can overlap, which is exactly the inheritance conformance demands: a
 // device kind that does not inherit CoreArtifactTarget is refused before the query runs.
+type ArtifactFieldsDcimDevice struct {
+	Artifacts ArtifactFieldsArtifactsNestedPaginatedCoreArtifact `json:"artifacts"`
+}
+
+// GetArtifacts returns ArtifactFieldsDcimDevice.Artifacts, and is useful for accessing the field via an interface.
+func (v *ArtifactFieldsDcimDevice) GetArtifacts() ArtifactFieldsArtifactsNestedPaginatedCoreArtifact {
+	return v.Artifacts
+}
+
+// M5 — the rendered configuration Infrahub holds for a device. The fragment names
+// Infrahub's own target interface, never a concrete kind (Constitution III), and it is
+// named rather than inline so genqlient derives a Go interface from it: a device node
+// carries artifacts through this fragment's type, so nothing in Fylgja has to assert on
+// a concrete device kind to read them.
+//
+// Spreading an interface fragment into an interface selection is valid only where the
+// two can overlap, which is exactly the inheritance conformance demands: a
+// device kind that does not inherit CoreArtifactTarget is refused before the query runs.
 type ArtifactFieldsNetworkDevice struct {
 	Artifacts ArtifactFieldsArtifactsNestedPaginatedCoreArtifact `json:"artifacts"`
 }
@@ -285,6 +316,7 @@ func (v *ArtifactFieldsNetworkDevice) GetArtifacts() ArtifactFieldsArtifactsNest
 // intent.Stamps is the aggregate's type.
 //
 // ArtifactStamps is implemented by the following types:
+// ArtifactStampsDcimDevice
 // ArtifactStampsNetworkDevice
 type ArtifactStamps interface {
 	implementsGraphQLInterfaceArtifactStamps()
@@ -292,6 +324,7 @@ type ArtifactStamps interface {
 	GetArtifacts() ArtifactStampsArtifactsNestedPaginatedCoreArtifact
 }
 
+func (v *ArtifactStampsDcimDevice) implementsGraphQLInterfaceArtifactStamps()    {}
 func (v *ArtifactStampsNetworkDevice) implementsGraphQLInterfaceArtifactStamps() {}
 
 func __unmarshalArtifactStamps(b []byte, v *ArtifactStamps) error {
@@ -308,6 +341,9 @@ func __unmarshalArtifactStamps(b []byte, v *ArtifactStamps) error {
 	}
 
 	switch tn.TypeName {
+	case "DcimDevice":
+		*v = new(ArtifactStampsDcimDevice)
+		return json.Unmarshal(b, *v)
 	case "NetworkDevice":
 		*v = new(ArtifactStampsNetworkDevice)
 		return json.Unmarshal(b, *v)
@@ -324,6 +360,14 @@ func __marshalArtifactStamps(v *ArtifactStamps) ([]byte, error) {
 
 	var typename string
 	switch v := (*v).(type) {
+	case *ArtifactStampsDcimDevice:
+		typename = "DcimDevice"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*ArtifactStampsDcimDevice
+		}{typename, v}
+		return json.Marshal(result)
 	case *ArtifactStampsNetworkDevice:
 		typename = "NetworkDevice"
 
@@ -418,6 +462,25 @@ type ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtif
 // GetValue returns ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactNameTextAttribute.Value, and is useful for accessing the field via an interface.
 func (v *ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactNameTextAttribute) GetValue() string {
 	return v.Value
+}
+
+// 014 — when each part of a branch's intent, and each artifact's checksum, was last
+// written: the head's `at` (one microsecond after the later of the latest stamp and the
+// branch's latest intent event, D-048) and the staleness rule's two sides, per device
+// (research R-06, R-07; D-046). Stamps only, never a value of
+// intent but the names that key them, the platform that picks the device's package
+// (Constitution II), and the device's and its interfaces' ids, by which an intent event
+// names the device (D-048). An unset relationship's properties.updated_at is null and skipped.
+// The artifacts are spread on CoreArtifactTarget, as the read's are: selected directly
+// on FylgjaDevice they are refused. Named IntentStamps, not Stamps, because
+// intent.Stamps is the aggregate's type.
+type ArtifactStampsDcimDevice struct {
+	Artifacts ArtifactStampsArtifactsNestedPaginatedCoreArtifact `json:"artifacts"`
+}
+
+// GetArtifacts returns ArtifactStampsDcimDevice.Artifacts, and is useful for accessing the field via an interface.
+func (v *ArtifactStampsDcimDevice) GetArtifacts() ArtifactStampsArtifactsNestedPaginatedCoreArtifact {
+	return v.Artifacts
 }
 
 // 014 — when each part of a branch's intent, and each artifact's checksum, was last
@@ -4248,6 +4311,7 @@ func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdged
 //
 // InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress is implemented by the following types:
 // InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable
+// InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress
 // The GraphQL type's documentation follows.
 //
 // IPv4 or IPv6 address
@@ -4263,6 +4327,8 @@ type InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuil
 }
 
 func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable) implementsGraphQLInterfaceInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress() {
+}
+func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress) implementsGraphQLInterfaceInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress() {
 }
 
 func __unmarshalInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress(b []byte, v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress) error {
@@ -4281,6 +4347,9 @@ func __unmarshalInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNest
 	switch tn.TypeName {
 	case "InternalIPRangeAvailable":
 		*v = new(InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable)
+		return json.Unmarshal(b, *v)
+	case "IpamIPAddress":
+		*v = new(InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress)
 		return json.Unmarshal(b, *v)
 	case "":
 		return fmt.Errorf(
@@ -4301,6 +4370,14 @@ func __marshalInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNested
 		result := struct {
 			TypeName string `json:"__typename"`
 			*InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable
+		}{typename, v}
+		return json.Marshal(result)
+	case *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress:
+		typename = "IpamIPAddress"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress
 		}{typename, v}
 		return json.Marshal(result)
 	case nil:
@@ -4341,6 +4418,26 @@ func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdged
 
 // GetAddress returns InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable.Address, and is useful for accessing the field via an interface.
 func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable) GetAddress() InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddressAddressIPHost {
+	return v.Address
+}
+
+// InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress includes the requested fields of the GraphQL type IpamIPAddress.
+// The GraphQL type's documentation follows.
+//
+// IP Address
+type InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress struct {
+	Typename string `json:"__typename"`
+	// The IP address with prefix length
+	Address InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddressAddressIPHost `json:"address"`
+}
+
+// GetTypename returns InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress.Typename, and is useful for accessing the field via an interface.
+func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress) GetTypename() string {
+	return v.Typename
+}
+
+// GetAddress returns InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress.Address, and is useful for accessing the field via an interface.
+func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress) GetAddress() InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddressAddressIPHost {
 	return v.Address
 }
 

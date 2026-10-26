@@ -12,9 +12,9 @@ import (
 // surface the two tests below have to cover.
 func operations() map[string]string {
 	return map[string]string{
-		"ContractVersion": ContractVersion_Operation,
-		"Devices":         Devices_Operation,
-		"Links":           Links_Operation,
+		// 017: the read, by the mapping (contracts/mapping.md §2).
+		"Devices": Devices_Operation,
+		"Ports":   Ports_Operation,
 		// 014: the stage reader's five, on the default branch, and the branch's stamps.
 		// FylgjaStage's root is Fylgja's; the other four are infrahubRoots below.
 		"ProposedChanges":     ProposedChanges_Operation,
@@ -85,10 +85,20 @@ func TestQueriesNameOnlyGenerics(t *testing.T) {
 	}
 }
 
-// Every root an operation selects is a Fylgja generic, or one of the four roots that
-// are Infrahub's own, named in infrahubRoots. The check above catches the reference
-// schema's kinds by name; this one catches any root that is not ours, including a
-// concrete kind from a model Fylgja has never seen.
+// mappingRoots are the read's two roots, the library's kinds the mapping reads devices and
+// ports from (D-057; mapping.md §2). The bridge (017's T039, until T052 holds every
+// operation to the mapping's roots and fragment targets): the stamps still select the
+// generics' roots until T047, so a root here is either the mapping's, a Fylgja one, or
+// Infrahub's own.
+var mappingRoots = map[string]string{
+	"DcimDevice":        "Devices",
+	"InterfacePhysical": "Ports",
+}
+
+// Every root an operation selects is one of the mapping's, a Fylgja one, or one of the
+// four roots that are Infrahub's own, named in infrahubRoots. The check above catches the
+// reference schema's kinds by name; this one catches any root that is not ours, including
+// a concrete kind from a model Fylgja has never seen.
 func TestQueryRootsAreFylgjaGenerics(t *testing.T) {
 	for name, doc := range operations() {
 		roots := queryRoots(doc)
@@ -96,8 +106,14 @@ func TestQueryRootsAreFylgjaGenerics(t *testing.T) {
 			t.Errorf("operation %s selects no root", name)
 		}
 		for _, r := range roots {
+			if op, ok := mappingRoots[r]; ok {
+				if op != name {
+					t.Errorf("operation %s selects the mapping's root %s, which only %s reads", name, r, op)
+				}
+				continue
+			}
 			if !strings.HasPrefix(r, "Fylgja") && !infrahubRoots[r] {
-				t.Errorf("operation %s selects the root %s, which is not a Fylgja generic", name, r)
+				t.Errorf("operation %s selects the root %s, which is neither the mapping's nor a Fylgja one", name, r)
 			}
 		}
 	}

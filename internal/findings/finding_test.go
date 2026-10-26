@@ -23,7 +23,6 @@ import (
 // so neither direction is a detail.
 var dataModelRules = []string{
 	// Conformance.
-	"contract.version.mismatch",
 	"contract.node.missing",
 	// Completeness and intent rules.
 	"data.required.missing",
@@ -177,7 +176,8 @@ var dataModelRules = []string{
 	// 017's rules (research R-21). Appended; the eight the generics leave stay above until
 	// the tasks that remove their last users take them out of both lists
 	// (schema.generic.unimplemented and schema.artifact_target.missing went with the
-	// generics' conformance, at T036).
+	// generics' conformance, at T036, and contract.version.mismatch with the CTM's
+	// contract check, at T042).
 	"scope.invalid",
 	"scope.unset",
 	"scope.empty",

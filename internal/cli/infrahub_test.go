@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
 // fakeInfrahub answers what a command given --stage, stage list or stage plan asks of
@@ -20,7 +22,10 @@ import (
 // its open proposed changes with their stages, the orphaned stages, a branch's point of
 // origin and a proposed change's artifact validators on the unnamed endpoints; and each
 // branch's read — its schema, GraphQL, its stamps and the object store — from a CTM, with
-// the fixture's schema hash. The fixture branch reads as testdata/ctm/three-node.json, so a
+// the fixture's schema hash. The read is answered in the schema library's kinds (017
+// research §1.6): each device of the CTM a DcimDevice tagged fylgja, on its package's
+// platform and manufacturer, each interface an InterfacePhysical, each link a DcimCable
+// labelled with its id. The stamps are still the generics' until 017's T047. The fixture branch reads as testdata/ctm/three-node.json, so a
 // read of it at the fixture's at is the fixture itself; main reads as the fixture too until
 // a test says otherwise; and any other branch a test gives it reads the same way from a CTM
 // of the test's. The branch half is internal/intent's fake (conformance_test.go) and the
@@ -62,9 +67,10 @@ type fakeInfrahub struct {
 	// of a versioned branch reads its last version (014: a step between two stages of one
 	// branch reads two intents).
 	versions map[string][]fakeVersion
-	// contractless names branches whose contract node is absent: the bridged read refuses
-	// them as contract.node.missing (017's T036, until T050).
-	contractless map[string]bool
+	// untagged names branches none of whose devices carries the scope's tag, main holding no
+	// network above all: the device query answers none, and the read refuses it
+	// scope.empty. Their stamps are their CTM's as before.
+	untagged map[string]bool
 	// stamps overrides a device's stamps on a branch, keyed "<branch>/<device>": an intent
 	// written after its artifact is a stale artifact (D-046).
 	stamps map[string]fakeDeviceStamps
@@ -247,19 +253,16 @@ func (f *fakeInfrahub) serve(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		switch seen.Operation {
-		case "ContractVersion":
-			edges := []any{map[string]any{"node": map[string]any{"version": fakeValue(ctm.ContractVersion)}}}
-			if f.contractless[name] {
-				edges = []any{}
-			}
-			writeFakeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"FylgjaContract": map[string]any{
-				"edges": edges,
-			}}})
 		case "Devices":
+			var devices *ctm.CTM
+			if tag, _ := seen.Variables["tag"].(string); tag == fakeTag && !f.untagged[name] {
+				devices = c
+			}
 			writeFakeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{
-				"FylgjaDevice": f.devicePage(name, at, c)}})
-		case "Links":
-			writeFakeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"FylgjaLink": linkPage(c)}})
+				"DcimDevice": f.devicePage(name, at, devices)}})
+		case "Ports":
+			ids, _ := seen.Variables["devices"].([]any)
+			writeFakeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"InterfacePhysical": f.portPage(c, ids)}})
 		case "IntentStamps":
 			writeFakeJSON(w, http.StatusOK, map[string]any{"data": f.stampPages(name, at, c)})
 		default:
@@ -281,11 +284,11 @@ func (f *fakeInfrahub) serve(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// defaultNodes is the default branch's schema: the contract node, the stage kind with its
-// attributes and its relationship to its proposed change, and CoreProposedChange with the
-// extension, each as far as the fake's switches leave it.
+// defaultNodes is the default branch's schema: the stage kind with its attributes and its
+// relationship to its proposed change, and CoreProposedChange with the extension, each as
+// far as the fake's switches leave it.
 func (f *fakeInfrahub) defaultNodes() []map[string]any {
-	nodes := []map[string]any{{"kind": ctm.ContractKind}}
+	nodes := []map[string]any{}
 	if f.kind != nil {
 		attrs := make([]map[string]any, 0, len(f.kind))
 		for _, a := range f.kind {
@@ -549,8 +552,8 @@ func (f *fakeInfrahub) stampPages(branch, at string, c *ctm.CTM) map[string]any 
 // branchSchema is a served branch's schema, encoded, with the fixture's schema hash: the
 // library's kinds as the pinned commit loads them (internal/intent/testdata's trimmed
 // document of 017's T033), so conformance passes, beside the generics' rows, each
-// implemented by its reference kind, which the bridged stamps and events still map an
-// event's kind through (017's T037, until T043 and T048). A branch named in
+// implemented by its reference kind, which the generics' stamps and events still map an
+// event's kind through (until 017's T047 and T048). A branch named in
 // schemaMutations is served changed by its function: a branch that does not conform.
 // The interim branch T033 read held both, the generics from main and the library.
 //
@@ -615,8 +618,8 @@ func fakeEdges[T any](nodes []T) map[string]any {
 }
 
 // fakeGenericsPlatform is the generics' vendor and nos of a CTM "2" package: the fake
-// serves every fixture's device as the generics model holds it, each interface a
-// physical one, for the bridged reader (017's T023) to read back.
+// serves every fixture's device stamps as the generics model holds them, until 017's T047
+// moves the stamps to the library's shapes.
 func fakeGenericsPlatform(pkg string) (vendor, nos string) {
 	switch pkg {
 	case "nokia_srlinux":
@@ -629,82 +632,134 @@ func fakeGenericsPlatform(pkg string) (vendor, nos string) {
 	return pkg, pkg
 }
 
-// devicePage is one page holding every device of c, read from branch at at, each as the
-// reference kind NetworkDevice with its artifact Ready in the object store under the
-// branch, the at and its name, so a step's two reads of one branch serve two artifacts.
+// fakeTag is the tag the harness's server's default scope names (tag:fylgja), which every
+// device the fake serves carries.
+const fakeTag = "fylgja"
+
+// fakePairs is each package's first manufacturer and platform pair, by its id: the
+// shipped packages and every one under testdata/psp/ meant to load, so a CTM's device is
+// served on the platform its package matches.
+var fakePairs = sync.OnceValues(func() (map[string]psp.Match, error) {
+	pkgs, err := psp.Embedded()
+	if err != nil {
+		return nil, err
+	}
+	for _, dir := range []string{"lossy", "heterogeneous"} {
+		more, err := psp.FromDir(repoPath("testdata", "psp", dir))
+		if err != nil {
+			return nil, err
+		}
+		pkgs = append(pkgs, more...)
+	}
+	out := map[string]psp.Match{}
+	for _, p := range pkgs {
+		out[p.Platform.ID] = p.Platform.Matches[0]
+	}
+	return out, nil
+})
+
+// fakePair is the platform and manufacturer a CTM's package is served as.
+func (f *fakeInfrahub) fakePair(pkg string) psp.Match {
+	pairs, err := fakePairs()
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	pair, ok := pairs[pkg]
+	if !ok {
+		f.t.Fatalf("the fake has no platform for package %s", pkg)
+	}
+	return pair
+}
+
+// devicePage is one page holding every device of c, read from branch at at, each a
+// DcimDevice on its package's platform with its artifact Ready in the object store under
+// the branch, the at and its name, so a step's two reads of one branch serve two
+// artifacts. A nil c is a scope that selects nothing.
 func (f *fakeInfrahub) devicePage(branch, at string, c *ctm.CTM) map[string]any {
-	nodes := make([]any, 0, len(c.Devices))
-	for _, d := range c.Devices {
-		ifaces := make([]any, 0, len(d.Interfaces))
-		for _, in := range d.Interfaces {
-			var link any
-			if in.Link != "" {
-				link = map[string]any{"__typename": "NetworkLink", "id": in.Link}
+	nodes := []any{}
+	if c != nil {
+		for _, d := range c.Devices {
+			a := d.Artifact
+			storageID := "storage-" + branch + "@" + at + "~" + d.Name
+			f.mu.Lock()
+			if f.storage == nil {
+				f.storage = map[string]string{}
 			}
-			ifaces = append(ifaces, map[string]any{
-				"__typename": "NetworkInterface",
-				"id":         d.Name + ":" + in.Name,
-				"name":       fakeValue(in.Name),
-				"iftype":     fakeValue("physical"),
-				"mgmt_only":  fakeValue(in.MgmtOnly),
-				"enabled":    fakeValue(in.Enabled == nil || *in.Enabled),
-				"parent":     map[string]any{"node": nil},
-				"addresses":  fakeEdges[any](nil),
-				"link":       map[string]any{"node": link},
+			f.storage[storageID] = a.Content
+			f.mu.Unlock()
+			pair := f.fakePair(d.Platform.Package)
+			nodes = append(nodes, map[string]any{
+				"id":   fakeDeviceID(d.Name),
+				"name": fakeValue(d.Name),
+				"platform": map[string]any{"node": map[string]any{
+					"name":         fakeValue(pair.Platform),
+					"manufacturer": map[string]any{"node": map[string]any{"name": fakeValue(pair.Manufacturer)}},
+				}},
+				"artifacts": fakeEdges([]any{map[string]any{
+					"name":         fakeValue(a.Name),
+					"status":       fakeValue(intent.StatusReady),
+					"content_type": fakeValue(a.ContentType),
+					"checksum":     fakeValue(a.Checksum),
+					"storage_id":   fakeValue(storageID),
+					"definition":   map[string]any{"node": map[string]any{"artifact_name": fakeValue(a.Name)}},
+				}}),
 			})
 		}
-		a := d.Artifact
-		storageID := "storage-" + branch + "@" + at + "~" + d.Name
-		f.mu.Lock()
-		if f.storage == nil {
-			f.storage = map[string]string{}
-		}
-		f.storage[storageID] = a.Content
-		f.mu.Unlock()
-		vendor, nos := fakeGenericsPlatform(d.Platform.Package)
-		nodes = append(nodes, map[string]any{
-			"__typename": "NetworkDevice",
-			"id":         "id-" + d.Name,
-			"name":       fakeValue(d.Name),
-			"role":       fakeValue(""),
-			"site":       fakeValue(""),
-			"platform": map[string]any{"node": map[string]any{
-				"__typename": "NetworkPlatform",
-				"vendor":     fakeValue(vendor),
-				"nos":        fakeValue(nos),
-				"version":    fakeValue(d.Platform.Version),
-				"model":      fakeValue(""),
-			}},
-			"interfaces": fakeEdges(ifaces),
-			"artifacts": fakeEdges([]any{map[string]any{
-				"name":         fakeValue(a.Name),
-				"status":       fakeValue(intent.StatusReady),
-				"content_type": fakeValue(a.ContentType),
-				"checksum":     fakeValue(a.Checksum),
-				"storage_id":   fakeValue(storageID),
-				"definition":   map[string]any{"node": map[string]any{"artifact_name": fakeValue(a.Name)}},
-			}}),
-		})
 	}
 	page := fakeEdges(nodes)
 	page["count"] = len(nodes)
 	return page
 }
 
-func linkPage(c *ctm.CTM) map[string]any {
-	nodes := make([]any, 0, len(c.Links))
+// fakeDeviceID is a served device's id.
+func fakeDeviceID(name string) string { return "id-" + name }
+
+// portPage is the Ports answer for c: every interface of the devices whose ids are given,
+// each an InterfacePhysical, the management port by its role and a disabled one by its
+// status, and each linked one's cable with both its ends.
+func (f *fakeInfrahub) portPage(c *ctm.CTM, ids []any) map[string]any {
+	links := map[string]ctm.Link{}
 	for _, l := range c.Links {
-		eps := make([]any, 0, len(l.Endpoints))
-		for _, e := range l.Endpoints {
-			eps = append(eps, map[string]any{
-				"__typename": "NetworkInterface",
-				"name":       fakeValue(e.Interface),
-				"device": map[string]any{"node": map[string]any{
-					"__typename": "NetworkDevice", "name": fakeValue(e.Device),
-				}},
+		links[l.ID] = l
+	}
+	nodes := []any{}
+	for _, d := range c.Devices {
+		if !slices.Contains(ids, any(fakeDeviceID(d.Name))) {
+			continue
+		}
+		for _, in := range d.Interfaces {
+			role, status := any(nil), any(nil)
+			if in.MgmtOnly {
+				role = "management"
+			}
+			if in.Enabled != nil && !*in.Enabled {
+				status = "disabled"
+			}
+			var connector any
+			if l, ok := links[in.Link]; ok {
+				ends := make([]any, 0, len(l.Endpoints))
+				for _, e := range l.Endpoints {
+					ends = append(ends, map[string]any{
+						"__typename": "InterfacePhysical",
+						"id":         e.ID(),
+						"name":       fakeValue(e.Interface),
+						"device":     map[string]any{"node": map[string]any{"__typename": "DcimDevice", "id": fakeDeviceID(e.Device)}},
+					})
+				}
+				endpoints := fakeEdges(ends)
+				endpoints["count"] = len(ends)
+				connector = map[string]any{"__typename": "DcimCable", "id": "cable-" + l.ID, "label": fakeValue(l.ID),
+					"connected_endpoints": endpoints}
+			}
+			nodes = append(nodes, map[string]any{
+				"id":        d.Name + ":" + in.Name,
+				"name":      fakeValue(in.Name),
+				"role":      fakeValue(role),
+				"status":    fakeValue(status),
+				"device":    map[string]any{"node": map[string]any{"__typename": "DcimDevice", "id": fakeDeviceID(d.Name)}},
+				"connector": map[string]any{"node": connector},
 			})
 		}
-		nodes = append(nodes, map[string]any{"__typename": "NetworkLink", "id": l.ID, "endpoints": fakeEdges(eps)})
 	}
 	page := fakeEdges(nodes)
 	page["count"] = len(nodes)

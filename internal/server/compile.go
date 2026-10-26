@@ -2,6 +2,8 @@ package server
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"sort"
 
 	"github.com/happypathnetworking/fylgja/internal/api"
@@ -45,17 +47,21 @@ func runCompile(opts *options, f *compileFlags, files []api.File) error {
 		return fail(findings.OpCompile, subject, "the request carries its CTM under another path than --ctm gives, where twin compile takes the CTM alone, under that path")
 	}
 	c, err := ctm.Unmarshal(files[0].Data)
+	// A CTM of another version is refused alone, before any package is loaded, naming the
+	// file the operator gave and both versions: every other finding would be about a format
+	// this build does not read, and nothing converts one (FR-028). With no step, as M1's
+	// operations carry none.
+	var other *ctm.VersionError
+	if errors.As(err, &other) {
+		var list findings.List
+		list.Add(findings.Rejection, findings.RuleCTMVersionUnsupported, f.ctmPath, fmt.Sprintf(
+			"the CTM declares ctm_version %q; this build reads %q, and nothing converts one", other.Got, ctm.Version))
+		return finish(findings.OpCompile, subject, list)
+	}
 	if err != nil {
 		return fail(findings.OpCompile, subject, "%v", err)
 	}
 	subject.Branch, subject.At = c.Envelope.Branch, c.Envelope.At
-
-	// A CTM conforming to a different contract is reported alone, before any package is
-	// loaded, naming the file the operator gave. Every other finding would be about a
-	// model this build cannot interpret.
-	if list := stage.CheckContract(c, f.ctmPath); list.Rejected() {
-		return finish(findings.OpCompile, subject, list)
-	}
 
 	reg, err := psp.Load(opts.pspDir)
 	if err != nil {

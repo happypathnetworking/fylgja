@@ -3,6 +3,7 @@ package ctm
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -311,6 +312,12 @@ func TestVersion1IsRefused(t *testing.T) {
 	}
 	if got, want := err.Error(), `unsupported ctm_version "1", expected "2"`; got != want {
 		t.Errorf("refusal = %q, want %q", got, want)
+	}
+	// Typed, so twin compile files it as ctm.version.unsupported and every other decoding
+	// failure as the operation's.
+	var other *VersionError
+	if !errors.As(err, &other) || other.Got != "1" {
+		t.Errorf("refusal %v is not a VersionError naming version 1", err)
 	}
 	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), `ctm_version "1"`) {
 		t.Errorf("Load of a CTM 1 = %v, want the version refusal", err)

@@ -22,8 +22,7 @@ const (
 // reports has a constant here, and every constant here is used.
 const (
 	// Conformance, against Infrahub schema metadata.
-	RuleContractVersionMismatch = "contract.version.mismatch"
-	RuleContractNodeMissing     = "contract.node.missing"
+	RuleContractNodeMissing = "contract.node.missing"
 
 	// CTM-side, run identically on fixtures and live intent.
 	RuleRequiredMissing      = "data.required.missing"

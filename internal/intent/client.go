@@ -2,12 +2,13 @@
 //
 // It is the Infrahub reader of the schema library's DCIM (D-057, Constitution III), and
 // mapping.go is the one place that knows the library's kinds: the conformance table
-// every read and `schema check` compare a branch's schema with. Until 017's T039 the
-// read itself is still the generics', bridged (project.go), so every data query still
-// names a Fylgja generic. Every request is a read: Fylgja never writes to Infrahub.
-// Queries are typed
-// and generated from Infrahub's own SDL, so a schema change that breaks a query fails
-// the build rather than the twin.
+// every read and `schema check` compare a branch's schema with. The read selects those
+// kinds as the mapping says (specs/017-dcim-reader/contracts/mapping.md): the devices of
+// the scope by their tag, their physical ports by the devices' ids, and each cable
+// through its port's connector (project.go, cable.go), refusing a scope it cannot build
+// whole (completeness.go). Every request is a read: Fylgja never writes to Infrahub.
+// Queries are typed and generated from Infrahub's own SDL, so a schema change that breaks
+// a query fails the build rather than the twin.
 package intent
 
 import (
@@ -41,9 +42,8 @@ type Config struct {
 	// records, and it is deliberately not sent to Infrahub (D-023).
 	At string
 	// Scope is the name of the tag the read selects devices by: the request's scope,
-	// tag:<name>, without its tag: (017; ScopeTag). The generics reader is given it and does
-	// not filter by it yet: every device of the branch is read until the read of the
-	// library's DCIM selects by it (017's T039).
+	// tag:<name>, without its tag: (017; ScopeTag). Every DcimDevice carrying it is read,
+	// whatever its status, and nothing outside it.
 	Scope string
 }
 

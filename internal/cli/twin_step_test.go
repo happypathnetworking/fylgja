@@ -1226,13 +1226,13 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			h.infra.changes[0].Stages = append(h.infra.changes[0].Stages, mark("st-future", "future", "2099-01-01T00:00:00Z", ""))
 		}), args: []string{"--stage", "change-1/future"}, code: findings.ExitRejected, asked: true, unread: true,
 			want: refusal(findings.RuleStageAtUnresolved, findings.StepResolve, "change-1/future", "")},
-		// The branch point reads main, whose contract node is absent here.
+		// The branch point reads main, none of whose devices is tagged here.
 		{name: "a refused read", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
-			h.infra.contractless = map[string]bool{"main": true}
+			h.infra.untagged = map[string]bool{"main": true}
 			return h
 		}, args: []string{"--stage", "change-1/branch-point"}, code: findings.ExitRejected, asked: true,
-			want: refusal(findings.RuleContractNodeMissing, findings.StepRead, "", "")},
+			want: refusal(findings.RuleScopeEmpty, findings.StepRead, "", "")},
 		{name: "a refused compile", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
 			toID := buildStage(t, h.paths, "linked")
@@ -2209,12 +2209,11 @@ func onlyInspected(t *testing.T, label string, c *stepClab) {
 }
 
 // intentReadAfter is every request for a branch's intent the fake answered after the
-// first n: its devices, links, contract node or an artifact's content.
+// first n: its devices, their ports or an artifact's content.
 func intentReadAfter(f *fakeInfrahub, n int) []fakeRequest {
 	var out []fakeRequest
 	for _, r := range f.requests()[n:] {
-		if strings.HasPrefix(r.Path, "/api/storage/") || r.Operation == "Devices" || r.Operation == "Links" ||
-			r.Operation == "ContractVersion" {
+		if strings.HasPrefix(r.Path, "/api/storage/") || r.Operation == "Devices" || r.Operation == "Ports" {
 			out = append(out, r)
 		}
 	}

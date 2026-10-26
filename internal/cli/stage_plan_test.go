@@ -56,10 +56,10 @@ func versioned(t *testing.T, f *fakeInfrahub) {
 	}}
 }
 
-// emptyMain makes main the development host's: no contract node and nothing else (R-04).
+// emptyMain makes main the development host's: no network on it (R-04), so no device
+// carries the scope's tag and the read refuses it scope.empty (017).
 func emptyMain(f *fakeInfrahub) {
 	f.branches["main"] = &ctm.CTM{}
-	f.contractless = map[string]bool{"main": true}
 }
 
 // twoMarks are scenario 2's marks, served out of order: live with an as_of (given) after
@@ -133,12 +133,12 @@ func rulesOf(list findings.List) []string {
 	return out
 }
 
-// readAt reports whether the fake was asked any of a branch's intent (its devices, links or
-// contract node) pinned at at: what only a stage's read asks.
+// readAt reports whether the fake was asked any of a branch's intent (its devices or their
+// ports) pinned at at: what only a stage's read asks.
 func readAt(f *fakeInfrahub, at string) bool {
 	for _, r := range f.requests() {
 		q, _ := url.ParseQuery(r.Query)
-		if q.Get("at") == at && (r.Operation == "Devices" || r.Operation == "Links" || r.Operation == "ContractVersion") {
+		if q.Get("at") == at && (r.Operation == "Devices" || r.Operation == "Ports") {
 			return true
 		}
 	}
@@ -149,7 +149,7 @@ func readAt(f *fakeInfrahub, at string) bool {
 // branched_from) and the head (the branch one microsecond after its latest stamp), and one
 // step. Where main carries the contract and the devices both compile and the step between
 // them is the link the branch removed, exit 0; on an empty main, as the development host's
-// is, the branch point is refused contract.node.missing at its read, the step is not
+// is, the branch point is refused scope.empty at its read, the step is not
 // computed, the head still compiles, and the plan exits 1 (R-04).
 func TestStagePlanNothingMarked(t *testing.T) {
 	t.Run("main carries the contract", func(t *testing.T) {
@@ -199,9 +199,9 @@ func TestStagePlanNothingMarked(t *testing.T) {
 			t.Fatalf("stages %v, compiled %v; want the head alone compiled\n%s", stageRefs(stages), compiledRefs(stages), raw)
 		}
 		bp := stages[0]
-		if len(bp.Findings) != 1 || bp.Findings[0].Rule != findings.RuleContractNodeMissing || bp.Findings[0].Object != "main" ||
+		if len(bp.Findings) != 1 || bp.Findings[0].Rule != findings.RuleScopeEmpty || bp.Findings[0].Object != "tag:fylgja" ||
 			bp.Findings[0].Step != findings.StepRead || bp.Branch != "main" || bp.At != fakeBranchedFrom || bp.Read != nil {
-			t.Errorf("the branch point %+v; want main at the branch point refused %s at its read", bp, findings.RuleContractNodeMissing)
+			t.Errorf("the branch point %+v; want main at the branch point refused %s at its read", bp, findings.RuleScopeEmpty)
 		}
 		if len(steps) != 1 || steps[0].Computed || steps[0].NotComputed != "change-1/branch-point was refused" ||
 			steps[0].FromBundleID != nil || steps[0].ToBundleID == nil || *steps[0].ToBundleID != *stages[1].BundleID {
@@ -604,10 +604,10 @@ func TestStagePlanText(t *testing.T) {
 		t.Fatalf("the plan %+v", doc.Plan)
 	}
 	cabled, live, head := *stages[1].BundleID, *stages[2].BundleID, *stages[3].BundleID
-	const missing = "rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it"
+	const missing = "rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at " + fakeBranchedFrom
 	want := strings.Join([]string{
 		`proposed change "change pc-1" (pc-1) on branch change-1 → main, draft (4 stages)`,
-		`change-1/branch-point: refused (contract.node.missing)`,
+		`change-1/branch-point: refused (scope.empty)`,
 		`  ` + missing,
 		`step change-1/branch-point → change-1/cabled (— → ` + cabled[:8] + `…): not computed (change-1/branch-point was refused)`,
 		`change-1/cabled: branch change-1 at ` + cabledAt + ` (written), "the leaf cabled"`,

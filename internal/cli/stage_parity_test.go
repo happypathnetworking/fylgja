@@ -49,7 +49,15 @@ func TestCreateReportsM1Findings(t *testing.T) {
 			c, loadErr := ctm.Load(path)
 			if loadErr != nil {
 				// Neither can read it: twin compile says operation.failed, and so does the run.
-				if !slices.Equal(want, []string{findings.RuleOperationFailed}) {
+				// A CTM of another version is twin compile's rejection, ctm.version.unsupported
+				// at the file (017); the run compiles only the CTM its own read wrote, so one it
+				// cannot read is its failure, operation.failed, as before.
+				wantCompile := findings.RuleOperationFailed
+				var other *ctm.VersionError
+				if errors.As(loadErr, &other) {
+					wantCompile = findings.RuleCTMVersionUnsupported
+				}
+				if !slices.Equal(want, []string{wantCompile}) {
 					t.Fatalf("ctm.Load failed (%v) but twin compile reported %v", loadErr, want)
 				}
 				_, err := control.Compile(context.Background(), provision.CompileInput{CTMPath: path})

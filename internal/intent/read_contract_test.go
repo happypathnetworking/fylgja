@@ -164,9 +164,9 @@ func TestUnpinnedReadRecordsObservedAtAndNoAt(t *testing.T) {
 	if e.SchemaHash == "" || e.SchemaHash != conf.SchemaHash {
 		t.Errorf("schema_hash = %q, conformance saw %q", e.SchemaHash, conf.SchemaHash)
 	}
-	// The bridge's mapping (017's T023, until T039): the generics, at the contract
-	// version conformance checked.
-	if want := (ctm.Mapping{Reader: bridgeReader, Model: bridgeModel, Version: ctm.ContractVersion}); e.Mapping != want {
+	// The library's mapping, which the fixture holds once T060 re-seeds it (T044 rewrites
+	// this file).
+	if want := (ctm.Mapping{Reader: ctm.ReaderInfrahubDCIM, Model: LibraryModel, Version: LibraryVersion}); e.Mapping != want {
 		t.Errorf("mapping = %+v, want %+v", e.Mapping, want)
 	}
 }

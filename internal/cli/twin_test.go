@@ -9,20 +9,23 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 )
 
-// A CTM of another version is refused before any rule runs, naming both versions, and
-// nothing is written: every other finding would be about a format this build does not
-// read. A CTM "2" carries no contract version; its own version is the contract's
-// (D-057), so the generics contract's check has nothing left to check. Until 017's T042
-// files it as ctm.version.unsupported at the file, exit 1, the refusal is the read's
-// failure to decode the file.
+// A CTM of another version is refused before any rule runs, ctm.version.unsupported at
+// the file the operator gave, naming both versions, with no step, and nothing is written:
+// every other finding would be about a format this build does not read, and nothing
+// converts one (017; FR-028). A CTM "2" carries no contract version; its own version is
+// the contract's (D-057). The file is a CTM "1" as the last build of that format wrote it.
 func TestAnotherCTMVersionIsRefusedBeforeValidation(t *testing.T) {
+	path := repoPath("testdata", "ctm", "defects", "version-1.json")
 	out := filepath.Join(t.TempDir(), "b")
-	code, doc := runCompileTo(t, repoPath("testdata", "ctm", "defects", "version-1.json"), out)
-	if code != findings.ExitError {
-		t.Fatalf("exit %d, want %d", code, findings.ExitError)
+	code, doc := runCompileTo(t, path, out)
+	if code != findings.ExitRejected || doc.Status != string(findings.StatusRejected) {
+		t.Fatalf("exit %d, status %s; want %d, rejected", code, doc.Status, findings.ExitRejected)
 	}
-	if len(doc.Findings) != 1 || doc.Findings[0].Message != `unsupported ctm_version "1", expected "2"` {
-		t.Errorf("findings %+v, want the one refusal naming both versions", doc.Findings)
+	const message = `the CTM declares ctm_version "1"; this build reads "2", and nothing converts one`
+	if len(doc.Findings) != 1 || doc.Findings[0].Severity != string(findings.Rejection) ||
+		doc.Findings[0].Rule != findings.RuleCTMVersionUnsupported || doc.Findings[0].Object != path ||
+		doc.Findings[0].Message != message || doc.Findings[0].Location != nil {
+		t.Errorf("findings %+v, want one %s at %s: %s", doc.Findings, findings.RuleCTMVersionUnsupported, path, message)
 	}
 	if _, err := os.Stat(out); !os.IsNotExist(err) {
 		t.Errorf("a refused compile wrote something to %s", out)

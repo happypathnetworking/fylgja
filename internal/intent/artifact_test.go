@@ -308,8 +308,11 @@ func TestReadRefusesEveryDeviceInOnePass(t *testing.T) {
 	delete(f.artifacts, "n1")
 	f.artifacts["n2"][0].Status = "Pending"
 	f.objects["storage-n3"] = fakeObject{Status: http.StatusOK, Body: sentinelContent("n1")}
-	// And a fault in the intent: a link with one endpoint.
-	f.links[0].Endpoints = f.links[0].Endpoints[:1]
+	// And a fault in the intent: a cable with both ends on one device, which reaches the
+	// CTM and which validation refuses (mapping.md §4).
+	n1 := f.device("n1")
+	n1.Ports = append(n1.Ports, &fakePort{ID: "n1:ethernet-1/3", Name: "ethernet-1/3"}, &fakePort{ID: "n1:ethernet-1/4", Name: "ethernet-1/4"})
+	f.cable("cable-loop", "n1:ethernet-1/3|n1:ethernet-1/4", "n1:ethernet-1/3", "n1:ethernet-1/4")
 
 	c, list, err := readFake(t, f)
 	if err != nil {
@@ -325,7 +328,7 @@ func TestReadRefusesEveryDeviceInOnePass(t *testing.T) {
 		case "n1", "n2", "n3":
 			byDevice[fd.Object] = append(byDevice[fd.Object], fd.Rule)
 		}
-		if fd.Rule == findings.RuleLinkEndpointsCount {
+		if fd.Rule == findings.RuleLinkEndpointsSameDev {
 			completeness++
 		}
 	}
@@ -339,7 +342,7 @@ func TestReadRefusesEveryDeviceInOnePass(t *testing.T) {
 		}
 	}
 	if completeness != 1 {
-		t.Errorf("%d %s findings beside the artifact refusals, want 1: %v", completeness, findings.RuleLinkEndpointsCount, list)
+		t.Errorf("%d %s findings beside the artifact refusals, want 1: %v", completeness, findings.RuleLinkEndpointsSameDev, list)
 	}
 	noContent(t, f, list)
 }

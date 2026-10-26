@@ -132,26 +132,14 @@ func dedupe(add, have findings.List) findings.List {
 // (internal/findings).
 const artifactRules = "artifact."
 
-// CheckContract rejected a CTM "1" declaring a generics contract this build did not
-// understand, naming object as the thing at fault. A CTM "2" declares no contract
-// version: its own version is the contract's, and ctm.Unmarshal refuses any other,
-// naming both (D-057). So it refuses nothing, and 017's T042 removes it with
-// contract.version.mismatch.
-func CheckContract(_ *ctm.CTM, _ string) findings.List {
-	return nil
-}
-
 // Compile turns a CTM into a bundle's files and identity. Validation runs first and its
 // rejections stop everything, so a bundle is never built from intent that could not be
 // built faithfully. On a rejection files is nil and id empty. The id is computed
 // from the bytes before anything is written, so it describes what was compiled.
 //
-// The contract check names the CTM's branch; `twin compile` runs CheckContract itself
-// first, naming the file it was given.
+// A CTM of another version never reaches it: ctm.Unmarshal refuses one, naming both
+// versions, and twin compile files that as ctm.version.unsupported at the file (017).
 func Compile(c *ctm.CTM, reg *psp.Registry) (files map[string][]byte, id string, list findings.List) {
-	if list := CheckContract(c, c.Envelope.Branch); list.Rejected() {
-		return nil, "", list
-	}
 	if list := validate.Validate(c, reg); list.Rejected() {
 		return nil, "", list
 	}

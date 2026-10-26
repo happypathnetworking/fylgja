@@ -16,9 +16,9 @@ import (
 // carries artifacts through this fragment's type, so nothing in Fylgja has to assert on
 // a concrete device kind to read them.
 //
-// Spreading an interface fragment into an interface selection is valid only where the
-// two can overlap, which is exactly the inheritance conformance demands: a
-// device kind that does not inherit CoreArtifactTarget is refused before the query runs.
+// Spreading an interface fragment into a kind's selection is valid only where the two can
+// overlap: the library's DcimDevice inherits CoreArtifactTarget, which conformance holds
+// it to (its artifacts relationship, mapping.md §3) before the query runs.
 //
 // ArtifactFields is implemented by the following types:
 // ArtifactFieldsDcimDevice
@@ -274,9 +274,9 @@ func (v *ArtifactFieldsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreA
 // carries artifacts through this fragment's type, so nothing in Fylgja has to assert on
 // a concrete device kind to read them.
 //
-// Spreading an interface fragment into an interface selection is valid only where the
-// two can overlap, which is exactly the inheritance conformance demands: a
-// device kind that does not inherit CoreArtifactTarget is refused before the query runs.
+// Spreading an interface fragment into a kind's selection is valid only where the two can
+// overlap: the library's DcimDevice inherits CoreArtifactTarget, which conformance holds
+// it to (its artifacts relationship, mapping.md §3) before the query runs.
 type ArtifactFieldsDcimDevice struct {
 	Artifacts ArtifactFieldsArtifactsNestedPaginatedCoreArtifact `json:"artifacts"`
 }
@@ -292,9 +292,9 @@ func (v *ArtifactFieldsDcimDevice) GetArtifacts() ArtifactFieldsArtifactsNestedP
 // carries artifacts through this fragment's type, so nothing in Fylgja has to assert on
 // a concrete device kind to read them.
 //
-// Spreading an interface fragment into an interface selection is valid only where the
-// two can overlap, which is exactly the inheritance conformance demands: a
-// device kind that does not inherit CoreArtifactTarget is refused before the query runs.
+// Spreading an interface fragment into a kind's selection is valid only where the two can
+// overlap: the library's DcimDevice inherits CoreArtifactTarget, which conformance holds
+// it to (its artifacts relationship, mapping.md §3) before the query runs.
 type ArtifactFieldsNetworkDevice struct {
 	Artifacts ArtifactFieldsArtifactsNestedPaginatedCoreArtifact `json:"artifacts"`
 }
@@ -639,855 +639,79 @@ type BranchPointResponse struct {
 // GetBranch returns BranchPointResponse.Branch, and is useful for accessing the field via an interface.
 func (v *BranchPointResponse) GetBranch() []BranchPointBranch { return v.Branch }
 
-// ContractVersionFylgjaContractPaginatedFylgjaContract includes the requested fields of the GraphQL type PaginatedFylgjaContract.
+// DevicesDcimDevicePaginatedDcimDevice includes the requested fields of the GraphQL type PaginatedDcimDevice.
 // The GraphQL type's documentation follows.
 //
-// Singleton: the Fylgja generics contract version this schema implements.
-type ContractVersionFylgjaContractPaginatedFylgjaContract struct {
-	Edges []ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContract `json:"edges"`
+// A configurable network device including routers, switches...
+type DevicesDcimDevicePaginatedDcimDevice struct {
+	Count int                                                        `json:"count"`
+	Edges []DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice `json:"edges"`
 }
 
-// GetEdges returns ContractVersionFylgjaContractPaginatedFylgjaContract.Edges, and is useful for accessing the field via an interface.
-func (v *ContractVersionFylgjaContractPaginatedFylgjaContract) GetEdges() []ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContract {
+// GetCount returns DevicesDcimDevicePaginatedDcimDevice.Count, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDevice) GetCount() int { return v.Count }
+
+// GetEdges returns DevicesDcimDevicePaginatedDcimDevice.Edges, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDevice) GetEdges() []DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice {
 	return v.Edges
 }
 
-// ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContract includes the requested fields of the GraphQL type EdgedFylgjaContract.
+// DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice includes the requested fields of the GraphQL type EdgedDcimDevice.
 // The GraphQL type's documentation follows.
 //
-// Singleton: the Fylgja generics contract version this schema implements.
-type ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContract struct {
-	Node ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContractNodeFylgjaContract `json:"node"`
+// A configurable network device including routers, switches...
+type DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice struct {
+	Node DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice `json:"node"`
 }
 
-// GetNode returns ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContract.Node, and is useful for accessing the field via an interface.
-func (v *ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContract) GetNode() ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContractNodeFylgjaContract {
+// GetNode returns DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice.Node, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice) GetNode() DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice {
 	return v.Node
 }
 
-// ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContractNodeFylgjaContract includes the requested fields of the GraphQL type FylgjaContract.
+// DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice includes the requested fields of the GraphQL type DcimDevice.
 // The GraphQL type's documentation follows.
 //
-// Singleton: the Fylgja generics contract version this schema implements.
-type ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContractNodeFylgjaContract struct {
-	// None (required)
-	Version ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContractNodeFylgjaContractVersionTextAttribute `json:"version"`
-}
-
-// GetVersion returns ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContractNodeFylgjaContract.Version, and is useful for accessing the field via an interface.
-func (v *ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContractNodeFylgjaContract) GetVersion() ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContractNodeFylgjaContractVersionTextAttribute {
-	return v.Version
-}
-
-// ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContractNodeFylgjaContractVersionTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContractNodeFylgjaContractVersionTextAttribute struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContractNodeFylgjaContractVersionTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *ContractVersionFylgjaContractPaginatedFylgjaContractEdgesEdgedFylgjaContractNodeFylgjaContractVersionTextAttribute) GetValue() string {
-	return v.Value
-}
-
-// ContractVersionResponse is returned by ContractVersion on success.
-type ContractVersionResponse struct {
-	FylgjaContract ContractVersionFylgjaContractPaginatedFylgjaContract `json:"FylgjaContract"`
-}
-
-// GetFylgjaContract returns ContractVersionResponse.FylgjaContract, and is useful for accessing the field via an interface.
-func (v *ContractVersionResponse) GetFylgjaContract() ContractVersionFylgjaContractPaginatedFylgjaContract {
-	return v.FylgjaContract
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDevice includes the requested fields of the GraphQL type PaginatedFylgjaDevice.
-// The GraphQL type's documentation follows.
-//
-// A network node. `name` becomes the containerlab node name.
-type DevicesFylgjaDevicePaginatedFylgjaDevice struct {
-	Count int                                                              `json:"count"`
-	Edges []DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice `json:"edges"`
-}
-
-// GetCount returns DevicesFylgjaDevicePaginatedFylgjaDevice.Count, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDevice) GetCount() int { return v.Count }
-
-// GetEdges returns DevicesFylgjaDevicePaginatedFylgjaDevice.Edges, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDevice) GetEdges() []DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice {
-	return v.Edges
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice includes the requested fields of the GraphQL type EdgedFylgjaDevice.
-// The GraphQL type's documentation follows.
-//
-// A network node. `name` becomes the containerlab node name.
-type DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice struct {
-	Node DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice `json:"-"`
-}
-
-// GetNode returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice.Node, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice) GetNode() DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice {
-	return v.Node
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice struct {
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice) __premarshalJSON() (*__premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice, error) {
-	var retval __premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice
-
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice includes the requested fields of the GraphQL interface FylgjaDevice.
-//
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice is implemented by the following types:
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice
-// The GraphQL type's documentation follows.
-//
-// A network node. `name` becomes the containerlab node name.
-type DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice interface {
-	implementsGraphQLInterfaceDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	// GetId returns the interface-field "id" from its implementation.
-	// The GraphQL interface field's documentation follows.
-	//
+// A configurable network device including routers, switches...
+type DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice struct {
 	// Unique identifier
-	GetId() string
-	// GetName returns the interface-field "name" from its implementation.
-	GetName() DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute
-	// GetRole returns the interface-field "role" from its implementation.
-	// The GraphQL interface field's documentation follows.
-	//
-	// leaf / spine / border … Input to scope selection later.
-	GetRole() DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute
-	// GetSite returns the interface-field "site" from its implementation.
-	GetSite() DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute
-	// GetPlatform returns the interface-field "platform" from its implementation.
-	GetPlatform() DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform
-	// GetInterfaces returns the interface-field "interfaces" from its implementation.
-	GetInterfaces() DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface
+	Id                       string                                                                                                `json:"id"`
+	Name                     DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute               `json:"name"`
+	Platform                 DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform `json:"platform"`
+	ArtifactFieldsDcimDevice `json:"-"`
 }
 
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) implementsGraphQLInterfaceDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice() {
-}
-
-func __unmarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice(b []byte, v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkDevice":
-		*v = new(DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaDevice.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice(v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice:
-		typename = "NetworkDevice"
-
-		premarshaled, err := v.__premarshalJSON()
-		if err != nil {
-			return nil, err
-		}
-		result := struct {
-			TypeName string `json:"__typename"`
-			*__premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice
-		}{typename, premarshaled}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice: "%T"`, v)
-	}
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface includes the requested fields of the GraphQL type NestedPaginatedFylgjaInterface.
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface struct {
-	Edges []DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface `json:"edges"`
-}
-
-// GetEdges returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface.Edges, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface) GetEdges() []DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface {
-	return v.Edges
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface includes the requested fields of the GraphQL type NestedEdgedFylgjaInterface.
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface struct {
-	Node DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface `json:"-"`
-}
-
-// GetNode returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Node, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) GetNode() DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface {
-	return v.Node
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface struct {
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) __premarshalJSON() (*__premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface, error) {
-	var retval __premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface
-
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface includes the requested fields of the GraphQL interface FylgjaInterface.
-//
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface is implemented by the following types:
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface interface {
-	implementsGraphQLInterfaceDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	InterfaceFields
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) implementsGraphQLInterfaceDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface() {
-}
-
-func __unmarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(b []byte, v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkInterface":
-		*v = new(DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaInterface.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface:
-		typename = "NetworkInterface"
-
-		premarshaled, err := v.__premarshalJSON()
-		if err != nil {
-			return nil, err
-		}
-		result := struct {
-			TypeName string `json:"__typename"`
-			*__premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface
-		}{typename, premarshaled}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface: "%T"`, v)
-	}
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface includes the requested fields of the GraphQL type NetworkInterface.
-type DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface struct {
-	Typename                        string `json:"__typename"`
-	InterfaceFieldsNetworkInterface `json:"-"`
-}
-
-// GetTypename returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Typename, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetTypename() string {
-	return v.Typename
-}
-
-// GetId returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Id, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetId() string {
-	return v.InterfaceFieldsNetworkInterface.Id
-}
-
-// GetName returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Name, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetName() InterfaceFieldsNameTextAttribute {
-	return v.InterfaceFieldsNetworkInterface.Name
-}
-
-// GetIftype returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Iftype, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetIftype() InterfaceFieldsIftypeDropdown {
-	return v.InterfaceFieldsNetworkInterface.Iftype
-}
-
-// GetMgmt_only returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Mgmt_only, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetMgmt_only() InterfaceFieldsMgmt_onlyCheckboxAttribute {
-	return v.InterfaceFieldsNetworkInterface.Mgmt_only
-}
-
-// GetEnabled returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Enabled, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetEnabled() InterfaceFieldsEnabledCheckboxAttribute {
-	return v.InterfaceFieldsNetworkInterface.Enabled
-}
-
-// GetParent returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Parent, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetParent() InterfaceFieldsParentNestedEdgedFylgjaInterface {
-	return v.InterfaceFieldsNetworkInterface.Parent
-}
-
-// GetAddresses returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Addresses, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetAddresses() InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddress {
-	return v.InterfaceFieldsNetworkInterface.Addresses
-}
-
-// GetLink returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Link, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetLink() InterfaceFieldsLinkNestedEdgedFylgjaLink {
-	return v.InterfaceFieldsNetworkInterface.Link
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(
-		b, &v.InterfaceFieldsNetworkInterface)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-type __premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface struct {
-	Typename string `json:"__typename"`
-
-	Id string `json:"id"`
-
-	Name InterfaceFieldsNameTextAttribute `json:"name"`
-
-	Iftype InterfaceFieldsIftypeDropdown `json:"iftype"`
-
-	Mgmt_only InterfaceFieldsMgmt_onlyCheckboxAttribute `json:"mgmt_only"`
-
-	Enabled InterfaceFieldsEnabledCheckboxAttribute `json:"enabled"`
-
-	Parent InterfaceFieldsParentNestedEdgedFylgjaInterface `json:"parent"`
-
-	Addresses InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddress `json:"addresses"`
-
-	Link InterfaceFieldsLinkNestedEdgedFylgjaLink `json:"link"`
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) __premarshalJSON() (*__premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface, error) {
-	var retval __premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface
-
-	retval.Typename = v.Typename
-	retval.Id = v.InterfaceFieldsNetworkInterface.Id
-	retval.Name = v.InterfaceFieldsNetworkInterface.Name
-	retval.Iftype = v.InterfaceFieldsNetworkInterface.Iftype
-	retval.Mgmt_only = v.InterfaceFieldsNetworkInterface.Mgmt_only
-	retval.Enabled = v.InterfaceFieldsNetworkInterface.Enabled
-	retval.Parent = v.InterfaceFieldsNetworkInterface.Parent
-	retval.Addresses = v.InterfaceFieldsNetworkInterface.Addresses
-	retval.Link = v.InterfaceFieldsNetworkInterface.Link
-	return &retval, nil
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute) GetValue() string {
-	return v.Value
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform includes the requested fields of the GraphQL type NestedEdgedFylgjaPlatform.
-// The GraphQL type's documentation follows.
-//
-// Vendor / NOS / version identity. Exists to be the join key to a Platform Support Package (psp/).
-type DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform struct {
-	Node DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform `json:"-"`
-}
-
-// GetNode returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform.Node, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform) GetNode() DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform {
-	return v.Node
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform struct {
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform) __premarshalJSON() (*__premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform, error) {
-	var retval __premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform
-
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform includes the requested fields of the GraphQL interface FylgjaPlatform.
-//
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform is implemented by the following types:
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform
-// The GraphQL type's documentation follows.
-//
-// Vendor / NOS / version identity. Exists to be the join key to a Platform Support Package (psp/).
-type DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform interface {
-	implementsGraphQLInterfaceDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	PlatformFields
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) implementsGraphQLInterfaceDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform() {
-}
-
-func __unmarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform(b []byte, v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkPlatform":
-		*v = new(DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaPlatform.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform(v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform:
-		typename = "NetworkPlatform"
-
-		premarshaled, err := v.__premarshalJSON()
-		if err != nil {
-			return nil, err
-		}
-		result := struct {
-			TypeName string `json:"__typename"`
-			*__premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform
-		}{typename, premarshaled}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform: "%T"`, v)
-	}
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform includes the requested fields of the GraphQL type NetworkPlatform.
-type DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform struct {
-	Typename                      string `json:"__typename"`
-	PlatformFieldsNetworkPlatform `json:"-"`
-}
-
-// GetTypename returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Typename, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetTypename() string {
-	return v.Typename
-}
-
-// GetVendor returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Vendor, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetVendor() PlatformFieldsVendorTextAttribute {
-	return v.PlatformFieldsNetworkPlatform.Vendor
-}
-
-// GetNos returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Nos, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetNos() PlatformFieldsNosTextAttribute {
-	return v.PlatformFieldsNetworkPlatform.Nos
-}
-
-// GetVersion returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Version, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetVersion() PlatformFieldsVersionTextAttribute {
-	return v.PlatformFieldsNetworkPlatform.Version
-}
-
-// GetModel returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Model, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetModel() PlatformFieldsModelTextAttribute {
-	return v.PlatformFieldsNetworkPlatform.Model
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(
-		b, &v.PlatformFieldsNetworkPlatform)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-type __premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform struct {
-	Typename string `json:"__typename"`
-
-	Vendor PlatformFieldsVendorTextAttribute `json:"vendor"`
-
-	Nos PlatformFieldsNosTextAttribute `json:"nos"`
-
-	Version PlatformFieldsVersionTextAttribute `json:"version"`
-
-	Model PlatformFieldsModelTextAttribute `json:"model"`
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) __premarshalJSON() (*__premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform, error) {
-	var retval __premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform
-
-	retval.Typename = v.Typename
-	retval.Vendor = v.PlatformFieldsNetworkPlatform.Vendor
-	retval.Nos = v.PlatformFieldsNetworkPlatform.Nos
-	retval.Version = v.PlatformFieldsNetworkPlatform.Version
-	retval.Model = v.PlatformFieldsNetworkPlatform.Model
-	return &retval, nil
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute) GetValue() string {
-	return v.Value
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute) GetValue() string {
-	return v.Value
-}
-
-// DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice includes the requested fields of the GraphQL type NetworkDevice.
-type DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice struct {
-	Typename string `json:"__typename"`
-	// Unique identifier
-	Id   string                                                                                          `json:"id"`
-	Name DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute `json:"name"`
-	// leaf / spine / border … Input to scope selection later.
-	Role                        DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute                        `json:"role"`
-	Site                        DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute                        `json:"site"`
-	Platform                    DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform        `json:"platform"`
-	Interfaces                  DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface `json:"interfaces"`
-	ArtifactFieldsNetworkDevice `json:"-"`
-}
-
-// GetTypename returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Typename, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetTypename() string {
-	return v.Typename
-}
-
-// GetId returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Id, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetId() string {
+// GetId returns DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice.Id, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) GetId() string {
 	return v.Id
 }
 
-// GetName returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Name, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetName() DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute {
+// GetName returns DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice.Name, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) GetName() DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute {
 	return v.Name
 }
 
-// GetRole returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Role, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetRole() DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute {
-	return v.Role
-}
-
-// GetSite returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Site, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetSite() DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute {
-	return v.Site
-}
-
-// GetPlatform returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Platform, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetPlatform() DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform {
+// GetPlatform returns DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice.Platform, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) GetPlatform() DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform {
 	return v.Platform
 }
 
-// GetInterfaces returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Interfaces, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetInterfaces() DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface {
-	return v.Interfaces
+// GetArtifacts returns DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice.Artifacts, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) GetArtifacts() ArtifactFieldsArtifactsNestedPaginatedCoreArtifact {
+	return v.ArtifactFieldsDcimDevice.Artifacts
 }
 
-// GetArtifacts returns DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Artifacts, and is useful for accessing the field via an interface.
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetArtifacts() ArtifactFieldsArtifactsNestedPaginatedCoreArtifact {
-	return v.ArtifactFieldsNetworkDevice.Artifacts
-}
-
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) UnmarshalJSON(b []byte) error {
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) UnmarshalJSON(b []byte) error {
 
 	if string(b) == "null" {
 		return nil
 	}
 
 	var firstPass struct {
-		*DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice
+		*DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice
 		graphql.NoUnmarshalJSON
 	}
-	firstPass.DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice = v
+	firstPass.DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice = v
 
 	err := json.Unmarshal(b, &firstPass)
 	if err != nil {
@@ -1495,32 +719,24 @@ func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetwo
 	}
 
 	err = json.Unmarshal(
-		b, &v.ArtifactFieldsNetworkDevice)
+		b, &v.ArtifactFieldsDcimDevice)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-type __premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice struct {
-	Typename string `json:"__typename"`
-
+type __premarshalDevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice struct {
 	Id string `json:"id"`
 
-	Name DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute `json:"name"`
+	Name DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute `json:"name"`
 
-	Role DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute `json:"role"`
-
-	Site DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute `json:"site"`
-
-	Platform DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform `json:"platform"`
-
-	Interfaces DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface `json:"interfaces"`
+	Platform DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform `json:"platform"`
 
 	Artifacts ArtifactFieldsArtifactsNestedPaginatedCoreArtifact `json:"artifacts"`
 }
 
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) MarshalJSON() ([]byte, error) {
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) MarshalJSON() ([]byte, error) {
 	premarshaled, err := v.__premarshalJSON()
 	if err != nil {
 		return nil, err
@@ -1528,29 +744,121 @@ func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetwo
 	return json.Marshal(premarshaled)
 }
 
-func (v *DevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) __premarshalJSON() (*__premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice, error) {
-	var retval __premarshalDevicesFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) __premarshalJSON() (*__premarshalDevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice, error) {
+	var retval __premarshalDevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice
 
-	retval.Typename = v.Typename
 	retval.Id = v.Id
 	retval.Name = v.Name
-	retval.Role = v.Role
-	retval.Site = v.Site
 	retval.Platform = v.Platform
-	retval.Interfaces = v.Interfaces
-	retval.Artifacts = v.ArtifactFieldsNetworkDevice.Artifacts
+	retval.Artifacts = v.ArtifactFieldsDcimDevice.Artifacts
 	return &retval, nil
+}
+
+// DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform includes the requested fields of the GraphQL type NestedEdgedDcimPlatform.
+// The GraphQL type's documentation follows.
+//
+// A Platform represent the type of software running on a device.
+type DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform struct {
+	Node *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform `json:"node"`
+}
+
+// GetNode returns DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform.Node, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform) GetNode() *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform {
+	return v.Node
+}
+
+// DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform includes the requested fields of the GraphQL type DcimPlatform.
+// The GraphQL type's documentation follows.
+//
+// A Platform represent the type of software running on a device.
+type DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform struct {
+	// None (required)
+	Name         DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute                               `json:"name"`
+	Manufacturer DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer `json:"manufacturer"`
+}
+
+// GetName returns DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform.Name, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform) GetName() DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute {
+	return v.Name
+}
+
+// GetManufacturer returns DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform.Manufacturer, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform) GetManufacturer() DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer {
+	return v.Manufacturer
+}
+
+// DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer includes the requested fields of the GraphQL type NestedEdgedOrganizationManufacturer.
+// The GraphQL type's documentation follows.
+//
+// Device Manufacturer
+type DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer struct {
+	Node *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer `json:"node"`
+}
+
+// GetNode returns DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer.Node, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer) GetNode() *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer {
+	return v.Node
+}
+
+// DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer includes the requested fields of the GraphQL type OrganizationManufacturer.
+// The GraphQL type's documentation follows.
+//
+// Device Manufacturer
+type DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer struct {
+	Name DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturerNameTextAttribute `json:"name"`
+}
+
+// GetName returns DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer.Name, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer) GetName() DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturerNameTextAttribute {
+	return v.Name
+}
+
+// DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturerNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturerNameTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturerNameTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturerNameTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *DevicesDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute) GetValue() string {
+	return v.Value
 }
 
 // DevicesResponse is returned by Devices on success.
 type DevicesResponse struct {
-	FylgjaDevice DevicesFylgjaDevicePaginatedFylgjaDevice `json:"FylgjaDevice"`
+	DcimDevice DevicesDcimDevicePaginatedDcimDevice `json:"DcimDevice"`
 }
 
-// GetFylgjaDevice returns DevicesResponse.FylgjaDevice, and is useful for accessing the field via an interface.
-func (v *DevicesResponse) GetFylgjaDevice() DevicesFylgjaDevicePaginatedFylgjaDevice {
-	return v.FylgjaDevice
-}
+// GetDcimDevice returns DevicesResponse.DcimDevice, and is useful for accessing the field via an interface.
+func (v *DevicesResponse) GetDcimDevice() DevicesDcimDevicePaginatedDcimDevice { return v.DcimDevice }
 
 // IntentEventsInfrahubEventEvents includes the requested fields of the GraphQL type Events.
 type IntentEventsInfrahubEventEvents struct {
@@ -4137,1284 +3445,6 @@ func (v *IntentStampsResponse) GetFylgjaLink() IntentStampsFylgjaLinkPaginatedFy
 	return v.FylgjaLink
 }
 
-// InterfaceFields includes the GraphQL fields of FylgjaInterface requested by the fragment InterfaceFields.
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-//
-// InterfaceFields is implemented by the following types:
-// InterfaceFieldsNetworkInterface
-type InterfaceFields interface {
-	implementsGraphQLInterfaceInterfaceFields()
-	// GetId returns the interface-field "id" from its implementation.
-	// The GraphQL interface field's documentation follows.
-	//
-	// Unique identifier
-	GetId() string
-	// GetName returns the interface-field "name" from its implementation.
-	GetName() InterfaceFieldsNameTextAttribute
-	// GetIftype returns the interface-field "iftype" from its implementation.
-	GetIftype() InterfaceFieldsIftypeDropdown
-	// GetMgmt_only returns the interface-field "mgmt_only" from its implementation.
-	// The GraphQL interface field's documentation follows.
-	//
-	// Out-of-band management port; never cabled. Not set on in-band loopbacks.
-	GetMgmt_only() InterfaceFieldsMgmt_onlyCheckboxAttribute
-	// GetEnabled returns the interface-field "enabled" from its implementation.
-	GetEnabled() InterfaceFieldsEnabledCheckboxAttribute
-	// GetParent returns the interface-field "parent" from its implementation.
-	GetParent() InterfaceFieldsParentNestedEdgedFylgjaInterface
-	// GetAddresses returns the interface-field "addresses" from its implementation.
-	GetAddresses() InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddress
-	// GetLink returns the interface-field "link" from its implementation.
-	GetLink() InterfaceFieldsLinkNestedEdgedFylgjaLink
-}
-
-func (v *InterfaceFieldsNetworkInterface) implementsGraphQLInterfaceInterfaceFields() {}
-
-func __unmarshalInterfaceFields(b []byte, v *InterfaceFields) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkInterface":
-		*v = new(InterfaceFieldsNetworkInterface)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaInterface.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for InterfaceFields: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalInterfaceFields(v *InterfaceFields) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *InterfaceFieldsNetworkInterface:
-		typename = "NetworkInterface"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*InterfaceFieldsNetworkInterface
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for InterfaceFields: "%T"`, v)
-	}
-}
-
-// InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddress includes the requested fields of the GraphQL type NestedPaginatedBuiltinIPAddress.
-// The GraphQL type's documentation follows.
-//
-// IPv4 or IPv6 address
-type InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddress struct {
-	Edges []InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress `json:"edges"`
-}
-
-// GetEdges returns InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddress.Edges, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddress) GetEdges() []InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress {
-	return v.Edges
-}
-
-// InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress includes the requested fields of the GraphQL type NestedEdgedBuiltinIPAddress.
-// The GraphQL type's documentation follows.
-//
-// IPv4 or IPv6 address
-type InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress struct {
-	Node InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress `json:"-"`
-}
-
-// GetNode returns InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress.Node, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress) GetNode() InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress {
-	return v.Node
-}
-
-func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress struct {
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress) __premarshalJSON() (*__premarshalInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress, error) {
-	var retval __premarshalInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress
-
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddress.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress includes the requested fields of the GraphQL interface BuiltinIPAddress.
-//
-// InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress is implemented by the following types:
-// InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable
-// InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress
-// The GraphQL type's documentation follows.
-//
-// IPv4 or IPv6 address
-type InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress interface {
-	implementsGraphQLInterfaceInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	// GetAddress returns the interface-field "address" from its implementation.
-	// The GraphQL interface field's documentation follows.
-	//
-	// The IP address with prefix length
-	GetAddress() InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddressAddressIPHost
-}
-
-func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable) implementsGraphQLInterfaceInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress() {
-}
-func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress) implementsGraphQLInterfaceInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress() {
-}
-
-func __unmarshalInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress(b []byte, v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "InternalIPRangeAvailable":
-		*v = new(InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable)
-		return json.Unmarshal(b, *v)
-	case "IpamIPAddress":
-		*v = new(InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing BuiltinIPAddress.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalInterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress(v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable:
-		typename = "InternalIPRangeAvailable"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable
-		}{typename, v}
-		return json.Marshal(result)
-	case *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress:
-		typename = "IpamIPAddress"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddress: "%T"`, v)
-	}
-}
-
-// InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddressAddressIPHost includes the requested fields of the GraphQL type IPHost.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type IPHost
-type InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddressAddressIPHost struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddressAddressIPHost.Value, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddressAddressIPHost) GetValue() string {
-	return v.Value
-}
-
-// InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable includes the requested fields of the GraphQL type InternalIPRangeAvailable.
-// The GraphQL type's documentation follows.
-//
-// Range of IPv4 or IPv6 addresses which has not been allocated yet
-type InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable struct {
-	Typename string `json:"__typename"`
-	// The IP address with prefix length
-	Address InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddressAddressIPHost `json:"address"`
-}
-
-// GetTypename returns InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable.Typename, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable) GetTypename() string {
-	return v.Typename
-}
-
-// GetAddress returns InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable.Address, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeInternalIPRangeAvailable) GetAddress() InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddressAddressIPHost {
-	return v.Address
-}
-
-// InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress includes the requested fields of the GraphQL type IpamIPAddress.
-// The GraphQL type's documentation follows.
-//
-// IP Address
-type InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress struct {
-	Typename string `json:"__typename"`
-	// The IP address with prefix length
-	Address InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddressAddressIPHost `json:"address"`
-}
-
-// GetTypename returns InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress.Typename, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress) GetTypename() string {
-	return v.Typename
-}
-
-// GetAddress returns InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress.Address, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeIpamIPAddress) GetAddress() InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddressEdgesNestedEdgedBuiltinIPAddressNodeBuiltinIPAddressAddressIPHost {
-	return v.Address
-}
-
-// InterfaceFieldsEnabledCheckboxAttribute includes the requested fields of the GraphQL type CheckboxAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Checkbox
-type InterfaceFieldsEnabledCheckboxAttribute struct {
-	Value bool `json:"value"`
-}
-
-// GetValue returns InterfaceFieldsEnabledCheckboxAttribute.Value, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsEnabledCheckboxAttribute) GetValue() bool { return v.Value }
-
-// InterfaceFieldsIftypeDropdown includes the requested fields of the GraphQL type Dropdown.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Dropdown
-type InterfaceFieldsIftypeDropdown struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns InterfaceFieldsIftypeDropdown.Value, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsIftypeDropdown) GetValue() string { return v.Value }
-
-// InterfaceFieldsLinkNestedEdgedFylgjaLink includes the requested fields of the GraphQL type NestedEdgedFylgjaLink.
-// The GraphQL type's documentation follows.
-//
-// A point-to-point connection between exactly two interfaces.
-type InterfaceFieldsLinkNestedEdgedFylgjaLink struct {
-	Node InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink `json:"-"`
-}
-
-// GetNode returns InterfaceFieldsLinkNestedEdgedFylgjaLink.Node, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsLinkNestedEdgedFylgjaLink) GetNode() InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink {
-	return v.Node
-}
-
-func (v *InterfaceFieldsLinkNestedEdgedFylgjaLink) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*InterfaceFieldsLinkNestedEdgedFylgjaLink
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.InterfaceFieldsLinkNestedEdgedFylgjaLink = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalInterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal InterfaceFieldsLinkNestedEdgedFylgjaLink.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalInterfaceFieldsLinkNestedEdgedFylgjaLink struct {
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *InterfaceFieldsLinkNestedEdgedFylgjaLink) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *InterfaceFieldsLinkNestedEdgedFylgjaLink) __premarshalJSON() (*__premarshalInterfaceFieldsLinkNestedEdgedFylgjaLink, error) {
-	var retval __premarshalInterfaceFieldsLinkNestedEdgedFylgjaLink
-
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalInterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal InterfaceFieldsLinkNestedEdgedFylgjaLink.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink includes the requested fields of the GraphQL interface FylgjaLink.
-//
-// InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink is implemented by the following types:
-// InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeNetworkLink
-// The GraphQL type's documentation follows.
-//
-// A point-to-point connection between exactly two interfaces.
-type InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink interface {
-	implementsGraphQLInterfaceInterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	// GetId returns the interface-field "id" from its implementation.
-	// The GraphQL interface field's documentation follows.
-	//
-	// Unique identifier
-	GetId() string
-}
-
-func (v *InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeNetworkLink) implementsGraphQLInterfaceInterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink() {
-}
-
-func __unmarshalInterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink(b []byte, v *InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkLink":
-		*v = new(InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeNetworkLink)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaLink.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalInterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink(v *InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeNetworkLink:
-		typename = "NetworkLink"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeNetworkLink
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeFylgjaLink: "%T"`, v)
-	}
-}
-
-// InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeNetworkLink includes the requested fields of the GraphQL type NetworkLink.
-type InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeNetworkLink struct {
-	Typename string `json:"__typename"`
-	// Unique identifier
-	Id string `json:"id"`
-}
-
-// GetTypename returns InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeNetworkLink.Typename, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeNetworkLink) GetTypename() string {
-	return v.Typename
-}
-
-// GetId returns InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeNetworkLink.Id, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsLinkNestedEdgedFylgjaLinkNodeNetworkLink) GetId() string { return v.Id }
-
-// InterfaceFieldsMgmt_onlyCheckboxAttribute includes the requested fields of the GraphQL type CheckboxAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Checkbox
-type InterfaceFieldsMgmt_onlyCheckboxAttribute struct {
-	Value bool `json:"value"`
-}
-
-// GetValue returns InterfaceFieldsMgmt_onlyCheckboxAttribute.Value, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsMgmt_onlyCheckboxAttribute) GetValue() bool { return v.Value }
-
-// InterfaceFieldsNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type InterfaceFieldsNameTextAttribute struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns InterfaceFieldsNameTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsNameTextAttribute) GetValue() string { return v.Value }
-
-// InterfaceFields includes the GraphQL fields of NetworkInterface requested by the fragment InterfaceFields.
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type InterfaceFieldsNetworkInterface struct {
-	// Unique identifier
-	Id     string                           `json:"id"`
-	Name   InterfaceFieldsNameTextAttribute `json:"name"`
-	Iftype InterfaceFieldsIftypeDropdown    `json:"iftype"`
-	// Out-of-band management port; never cabled. Not set on in-band loopbacks.
-	Mgmt_only InterfaceFieldsMgmt_onlyCheckboxAttribute               `json:"mgmt_only"`
-	Enabled   InterfaceFieldsEnabledCheckboxAttribute                 `json:"enabled"`
-	Parent    InterfaceFieldsParentNestedEdgedFylgjaInterface         `json:"parent"`
-	Addresses InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddress `json:"addresses"`
-	Link      InterfaceFieldsLinkNestedEdgedFylgjaLink                `json:"link"`
-}
-
-// GetId returns InterfaceFieldsNetworkInterface.Id, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsNetworkInterface) GetId() string { return v.Id }
-
-// GetName returns InterfaceFieldsNetworkInterface.Name, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsNetworkInterface) GetName() InterfaceFieldsNameTextAttribute { return v.Name }
-
-// GetIftype returns InterfaceFieldsNetworkInterface.Iftype, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsNetworkInterface) GetIftype() InterfaceFieldsIftypeDropdown { return v.Iftype }
-
-// GetMgmt_only returns InterfaceFieldsNetworkInterface.Mgmt_only, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsNetworkInterface) GetMgmt_only() InterfaceFieldsMgmt_onlyCheckboxAttribute {
-	return v.Mgmt_only
-}
-
-// GetEnabled returns InterfaceFieldsNetworkInterface.Enabled, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsNetworkInterface) GetEnabled() InterfaceFieldsEnabledCheckboxAttribute {
-	return v.Enabled
-}
-
-// GetParent returns InterfaceFieldsNetworkInterface.Parent, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsNetworkInterface) GetParent() InterfaceFieldsParentNestedEdgedFylgjaInterface {
-	return v.Parent
-}
-
-// GetAddresses returns InterfaceFieldsNetworkInterface.Addresses, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsNetworkInterface) GetAddresses() InterfaceFieldsAddressesNestedPaginatedBuiltinIPAddress {
-	return v.Addresses
-}
-
-// GetLink returns InterfaceFieldsNetworkInterface.Link, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsNetworkInterface) GetLink() InterfaceFieldsLinkNestedEdgedFylgjaLink {
-	return v.Link
-}
-
-// InterfaceFieldsParentNestedEdgedFylgjaInterface includes the requested fields of the GraphQL type NestedEdgedFylgjaInterface.
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type InterfaceFieldsParentNestedEdgedFylgjaInterface struct {
-	Node InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface `json:"-"`
-}
-
-// GetNode returns InterfaceFieldsParentNestedEdgedFylgjaInterface.Node, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsParentNestedEdgedFylgjaInterface) GetNode() InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface {
-	return v.Node
-}
-
-func (v *InterfaceFieldsParentNestedEdgedFylgjaInterface) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*InterfaceFieldsParentNestedEdgedFylgjaInterface
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.InterfaceFieldsParentNestedEdgedFylgjaInterface = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalInterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal InterfaceFieldsParentNestedEdgedFylgjaInterface.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalInterfaceFieldsParentNestedEdgedFylgjaInterface struct {
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *InterfaceFieldsParentNestedEdgedFylgjaInterface) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *InterfaceFieldsParentNestedEdgedFylgjaInterface) __premarshalJSON() (*__premarshalInterfaceFieldsParentNestedEdgedFylgjaInterface, error) {
-	var retval __premarshalInterfaceFieldsParentNestedEdgedFylgjaInterface
-
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalInterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal InterfaceFieldsParentNestedEdgedFylgjaInterface.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface includes the requested fields of the GraphQL interface FylgjaInterface.
-//
-// InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface is implemented by the following types:
-// InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeNetworkInterface
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface interface {
-	implementsGraphQLInterfaceInterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	// GetName returns the interface-field "name" from its implementation.
-	GetName() InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute
-}
-
-func (v *InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeNetworkInterface) implementsGraphQLInterfaceInterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface() {
-}
-
-func __unmarshalInterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface(b []byte, v *InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkInterface":
-		*v = new(InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeNetworkInterface)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaInterface.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalInterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface(v *InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeNetworkInterface:
-		typename = "NetworkInterface"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeNetworkInterface
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterface: "%T"`, v)
-	}
-}
-
-// InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute) GetValue() string {
-	return v.Value
-}
-
-// InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeNetworkInterface includes the requested fields of the GraphQL type NetworkInterface.
-type InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeNetworkInterface struct {
-	Typename string                                                                              `json:"__typename"`
-	Name     InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute `json:"name"`
-}
-
-// GetTypename returns InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeNetworkInterface.Typename, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetTypename() string {
-	return v.Typename
-}
-
-// GetName returns InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeNetworkInterface.Name, and is useful for accessing the field via an interface.
-func (v *InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetName() InterfaceFieldsParentNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute {
-	return v.Name
-}
-
-// LinksFylgjaLinkPaginatedFylgjaLink includes the requested fields of the GraphQL type PaginatedFylgjaLink.
-// The GraphQL type's documentation follows.
-//
-// A point-to-point connection between exactly two interfaces.
-type LinksFylgjaLinkPaginatedFylgjaLink struct {
-	Count int                                                      `json:"count"`
-	Edges []LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink `json:"edges"`
-}
-
-// GetCount returns LinksFylgjaLinkPaginatedFylgjaLink.Count, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLink) GetCount() int { return v.Count }
-
-// GetEdges returns LinksFylgjaLinkPaginatedFylgjaLink.Edges, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLink) GetEdges() []LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink {
-	return v.Edges
-}
-
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink includes the requested fields of the GraphQL type EdgedFylgjaLink.
-// The GraphQL type's documentation follows.
-//
-// A point-to-point connection between exactly two interfaces.
-type LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink struct {
-	Node LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink `json:"-"`
-}
-
-// GetNode returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink.Node, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink) GetNode() LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink {
-	return v.Node
-}
-
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink struct {
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink) __premarshalJSON() (*__premarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink, error) {
-	var retval __premarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink
-
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink includes the requested fields of the GraphQL interface FylgjaLink.
-//
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink is implemented by the following types:
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink
-// The GraphQL type's documentation follows.
-//
-// A point-to-point connection between exactly two interfaces.
-type LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink interface {
-	implementsGraphQLInterfaceLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	// GetId returns the interface-field "id" from its implementation.
-	// The GraphQL interface field's documentation follows.
-	//
-	// Unique identifier
-	GetId() string
-	// GetEndpoints returns the interface-field "endpoints" from its implementation.
-	GetEndpoints() LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface
-}
-
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink) implementsGraphQLInterfaceLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink() {
-}
-
-func __unmarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink(b []byte, v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkLink":
-		*v = new(LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaLink.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink(v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink:
-		typename = "NetworkLink"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink: "%T"`, v)
-	}
-}
-
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface includes the requested fields of the GraphQL type NestedPaginatedFylgjaInterface.
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface struct {
-	Edges []LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface `json:"edges"`
-}
-
-// GetEdges returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface.Edges, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface) GetEdges() []LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface {
-	return v.Edges
-}
-
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface includes the requested fields of the GraphQL type NestedEdgedFylgjaInterface.
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface struct {
-	Node LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface `json:"-"`
-}
-
-// GetNode returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Node, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) GetNode() LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface {
-	return v.Node
-}
-
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface struct {
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) __premarshalJSON() (*__premarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface, error) {
-	var retval __premarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface
-
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface includes the requested fields of the GraphQL interface FylgjaInterface.
-//
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface is implemented by the following types:
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface interface {
-	implementsGraphQLInterfaceLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	// GetName returns the interface-field "name" from its implementation.
-	GetName() LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute
-	// GetDevice returns the interface-field "device" from its implementation.
-	GetDevice() LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice
-}
-
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) implementsGraphQLInterfaceLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface() {
-}
-
-func __unmarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(b []byte, v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkInterface":
-		*v = new(LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaInterface.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface:
-		typename = "NetworkInterface"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface: "%T"`, v)
-	}
-}
-
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice includes the requested fields of the GraphQL type NestedEdgedFylgjaDevice.
-// The GraphQL type's documentation follows.
-//
-// A network node. `name` becomes the containerlab node name.
-type LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice struct {
-	Node LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice `json:"-"`
-}
-
-// GetNode returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice.Node, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice) GetNode() LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice {
-	return v.Node
-}
-
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice struct {
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice) __premarshalJSON() (*__premarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice, error) {
-	var retval __premarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice
-
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice includes the requested fields of the GraphQL interface FylgjaDevice.
-//
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice is implemented by the following types:
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice
-// The GraphQL type's documentation follows.
-//
-// A network node. `name` becomes the containerlab node name.
-type LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice interface {
-	implementsGraphQLInterfaceLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	// GetName returns the interface-field "name" from its implementation.
-	GetName() LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute
-}
-
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice) implementsGraphQLInterfaceLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice() {
-}
-
-func __unmarshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice(b []byte, v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkDevice":
-		*v = new(LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaDevice.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalLinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice(v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice:
-		typename = "NetworkDevice"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice: "%T"`, v)
-	}
-}
-
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute) GetValue() string {
-	return v.Value
-}
-
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice includes the requested fields of the GraphQL type NetworkDevice.
-type LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice struct {
-	Typename string                                                                                                                                                                                                                      `json:"__typename"`
-	Name     LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute `json:"name"`
-}
-
-// GetTypename returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice.Typename, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice) GetTypename() string {
-	return v.Typename
-}
-
-// GetName returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice.Name, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice) GetName() LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute {
-	return v.Name
-}
-
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute) GetValue() string {
-	return v.Value
-}
-
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface includes the requested fields of the GraphQL type NetworkInterface.
-type LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface struct {
-	Typename string                                                                                                                                                                                     `json:"__typename"`
-	Name     LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute             `json:"name"`
-	Device   LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice `json:"device"`
-}
-
-// GetTypename returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Typename, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetTypename() string {
-	return v.Typename
-}
-
-// GetName returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Name, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetName() LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute {
-	return v.Name
-}
-
-// GetDevice returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Device, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetDevice() LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice {
-	return v.Device
-}
-
-// LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink includes the requested fields of the GraphQL type NetworkLink.
-type LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink struct {
-	Typename string `json:"__typename"`
-	// Unique identifier
-	Id        string                                                                                                      `json:"id"`
-	Endpoints LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface `json:"endpoints"`
-}
-
-// GetTypename returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink.Typename, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink) GetTypename() string {
-	return v.Typename
-}
-
-// GetId returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink.Id, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink) GetId() string {
-	return v.Id
-}
-
-// GetEndpoints returns LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink.Endpoints, and is useful for accessing the field via an interface.
-func (v *LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink) GetEndpoints() LinksFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface {
-	return v.Endpoints
-}
-
-// LinksResponse is returned by Links on success.
-type LinksResponse struct {
-	FylgjaLink LinksFylgjaLinkPaginatedFylgjaLink `json:"FylgjaLink"`
-}
-
-// GetFylgjaLink returns LinksResponse.FylgjaLink, and is useful for accessing the field via an interface.
-func (v *LinksResponse) GetFylgjaLink() LinksFylgjaLinkPaginatedFylgjaLink { return v.FylgjaLink }
-
 // OrphanStagesFylgjaStagePaginatedFylgjaStage includes the requested fields of the GraphQL type PaginatedFylgjaStage.
 // The GraphQL type's documentation follows.
 //
@@ -5523,153 +3553,11 @@ func (v *OrphanStagesResponse) GetFylgjaStage() OrphanStagesFylgjaStagePaginated
 	return v.FylgjaStage
 }
 
-// PlatformFields includes the GraphQL fields of FylgjaPlatform requested by the fragment PlatformFields.
-// The GraphQL type's documentation follows.
-//
-// Vendor / NOS / version identity. Exists to be the join key to a Platform Support Package (psp/).
-//
-// PlatformFields is implemented by the following types:
-// PlatformFieldsNetworkPlatform
-type PlatformFields interface {
-	implementsGraphQLInterfacePlatformFields()
-	// GetVendor returns the interface-field "vendor" from its implementation.
-	GetVendor() PlatformFieldsVendorTextAttribute
-	// GetNos returns the interface-field "nos" from its implementation.
-	// The GraphQL interface field's documentation follows.
-	//
-	// srlinux | eos | iol | panos | ...
-	GetNos() PlatformFieldsNosTextAttribute
-	// GetVersion returns the interface-field "version" from its implementation.
-	GetVersion() PlatformFieldsVersionTextAttribute
-	// GetModel returns the interface-field "model" from its implementation.
-	GetModel() PlatformFieldsModelTextAttribute
-}
-
-func (v *PlatformFieldsNetworkPlatform) implementsGraphQLInterfacePlatformFields() {}
-
-func __unmarshalPlatformFields(b []byte, v *PlatformFields) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkPlatform":
-		*v = new(PlatformFieldsNetworkPlatform)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaPlatform.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for PlatformFields: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalPlatformFields(v *PlatformFields) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *PlatformFieldsNetworkPlatform:
-		typename = "NetworkPlatform"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*PlatformFieldsNetworkPlatform
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for PlatformFields: "%T"`, v)
-	}
-}
-
-// PlatformFieldsModelTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type PlatformFieldsModelTextAttribute struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns PlatformFieldsModelTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *PlatformFieldsModelTextAttribute) GetValue() string { return v.Value }
-
-// PlatformFields includes the GraphQL fields of NetworkPlatform requested by the fragment PlatformFields.
-// The GraphQL type's documentation follows.
-//
-// Vendor / NOS / version identity. Exists to be the join key to a Platform Support Package (psp/).
-type PlatformFieldsNetworkPlatform struct {
-	Vendor PlatformFieldsVendorTextAttribute `json:"vendor"`
-	// srlinux | eos | iol | panos | ...
-	Nos     PlatformFieldsNosTextAttribute     `json:"nos"`
-	Version PlatformFieldsVersionTextAttribute `json:"version"`
-	Model   PlatformFieldsModelTextAttribute   `json:"model"`
-}
-
-// GetVendor returns PlatformFieldsNetworkPlatform.Vendor, and is useful for accessing the field via an interface.
-func (v *PlatformFieldsNetworkPlatform) GetVendor() PlatformFieldsVendorTextAttribute {
-	return v.Vendor
-}
-
-// GetNos returns PlatformFieldsNetworkPlatform.Nos, and is useful for accessing the field via an interface.
-func (v *PlatformFieldsNetworkPlatform) GetNos() PlatformFieldsNosTextAttribute { return v.Nos }
-
-// GetVersion returns PlatformFieldsNetworkPlatform.Version, and is useful for accessing the field via an interface.
-func (v *PlatformFieldsNetworkPlatform) GetVersion() PlatformFieldsVersionTextAttribute {
-	return v.Version
-}
-
-// GetModel returns PlatformFieldsNetworkPlatform.Model, and is useful for accessing the field via an interface.
-func (v *PlatformFieldsNetworkPlatform) GetModel() PlatformFieldsModelTextAttribute { return v.Model }
-
-// PlatformFieldsNosTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type PlatformFieldsNosTextAttribute struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns PlatformFieldsNosTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *PlatformFieldsNosTextAttribute) GetValue() string { return v.Value }
-
-// PlatformFieldsVendorTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type PlatformFieldsVendorTextAttribute struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns PlatformFieldsVendorTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *PlatformFieldsVendorTextAttribute) GetValue() string { return v.Value }
-
-// PlatformFieldsVersionTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type PlatformFieldsVersionTextAttribute struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns PlatformFieldsVersionTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *PlatformFieldsVersionTextAttribute) GetValue() string { return v.Value }
-
 // The platform's values, which pick the device's package, and the stamps of those that reach
 // the artifact or the bundle: the template renders vendor, nos and version into every
 // device's artifact and branches on nos, and nos picks the package (R-07). model reaches
-// neither and is not stamped. A fragment of its own, not PlatformFields beside a second
-// spread: genqlient cannot merge two fragments' selections of one field.
+// neither and is not stamped. A fragment of its own, as the read's platform fields were
+// before 017: genqlient cannot merge two fragments' selections of one field.
 //
 // PlatformStamps is implemented by the following types:
 // PlatformStampsNetworkPlatform
@@ -5750,8 +3638,8 @@ func (v *PlatformStampsModelTextAttribute) GetValue() string { return v.Value }
 // The platform's values, which pick the device's package, and the stamps of those that reach
 // the artifact or the bundle: the template renders vendor, nos and version into every
 // device's artifact and branches on nos, and nos picks the package (R-07). model reaches
-// neither and is not stamped. A fragment of its own, not PlatformFields beside a second
-// spread: genqlient cannot merge two fragments' selections of one field.
+// neither and is not stamped. A fragment of its own, as the read's platform fields were
+// before 017: genqlient cannot merge two fragments' selections of one field.
 type PlatformStampsNetworkPlatform struct {
 	Vendor PlatformStampsVendorTextAttribute `json:"vendor"`
 	// srlinux | eos | iol | panos | ...
@@ -5823,6 +3711,308 @@ func (v *PlatformStampsVersionTextAttribute) GetValue() string { return v.Value 
 
 // GetUpdated_at returns PlatformStampsVersionTextAttribute.Updated_at, and is useful for accessing the field via an interface.
 func (v *PlatformStampsVersionTextAttribute) GetUpdated_at() string { return v.Updated_at }
+
+// PortsInterfacePhysicalPaginatedInterfacePhysical includes the requested fields of the GraphQL type PaginatedInterfacePhysical.
+// The GraphQL type's documentation follows.
+//
+// Physical network port on a device
+type PortsInterfacePhysicalPaginatedInterfacePhysical struct {
+	Count int                                                                           `json:"count"`
+	Edges []PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysical `json:"edges"`
+}
+
+// GetCount returns PortsInterfacePhysicalPaginatedInterfacePhysical.Count, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysical) GetCount() int { return v.Count }
+
+// GetEdges returns PortsInterfacePhysicalPaginatedInterfacePhysical.Edges, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysical) GetEdges() []PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysical {
+	return v.Edges
+}
+
+// PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysical includes the requested fields of the GraphQL type EdgedInterfacePhysical.
+// The GraphQL type's documentation follows.
+//
+// Physical network port on a device
+type PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysical struct {
+	Node PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical `json:"node"`
+}
+
+// GetNode returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysical.Node, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysical) GetNode() PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical {
+	return v.Node
+}
+
+// PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical includes the requested fields of the GraphQL type InterfacePhysical.
+// The GraphQL type's documentation follows.
+//
+// Physical network port on a device
+type PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical struct {
+	// Unique identifier
+	Id string `json:"id"`
+	// Name of the interface
+	Name PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalNameTextAttribute `json:"name"`
+	// The role of the interface in the network
+	Role PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalRoleDropdown `json:"role"`
+	// The status of the interface
+	Status    PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalStatusDropdown                     `json:"status"`
+	Device    PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice `json:"device"`
+	Connector PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector  `json:"connector"`
+}
+
+// GetId returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical.Id, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical) GetId() string {
+	return v.Id
+}
+
+// GetName returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical.Name, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical) GetName() PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalNameTextAttribute {
+	return v.Name
+}
+
+// GetRole returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical.Role, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical) GetRole() PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalRoleDropdown {
+	return v.Role
+}
+
+// GetStatus returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical.Status, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical) GetStatus() PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalStatusDropdown {
+	return v.Status
+}
+
+// GetDevice returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical.Device, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical) GetDevice() PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice {
+	return v.Device
+}
+
+// GetConnector returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical.Connector, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical) GetConnector() PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector {
+	return v.Connector
+}
+
+// PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector includes the requested fields of the GraphQL type NestedEdgedDcimConnector.
+// The GraphQL type's documentation follows.
+//
+// Generic Connector to link two endpoints together.
+type PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector struct {
+	Node connectorNode `json:"node"`
+}
+
+// GetNode returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector.Node, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector) GetNode() connectorNode {
+	return v.Node
+}
+
+// PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice includes the requested fields of the GraphQL type NestedEdgedDcimGenericDevice.
+// The GraphQL type's documentation follows.
+//
+// Generic Device object.
+type PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice struct {
+	Node PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice `json:"-"`
+}
+
+// GetNode returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice.Node, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice) GetNode() PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice {
+	return v.Node
+}
+
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice) UnmarshalJSON(b []byte) error {
+
+	if string(b) == "null" {
+		return nil
+	}
+
+	var firstPass struct {
+		*PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice
+		Node json.RawMessage `json:"node"`
+		graphql.NoUnmarshalJSON
+	}
+	firstPass.PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice = v
+
+	err := json.Unmarshal(b, &firstPass)
+	if err != nil {
+		return err
+	}
+
+	{
+		dst := &v.Node
+		src := firstPass.Node
+		if len(src) != 0 && string(src) != "null" {
+			err = __unmarshalPortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice(
+				src, dst)
+			if err != nil {
+				return fmt.Errorf(
+					"unable to unmarshal PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice.Node: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+type __premarshalPortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice struct {
+	Node json.RawMessage `json:"node"`
+}
+
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice) MarshalJSON() ([]byte, error) {
+	premarshaled, err := v.__premarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(premarshaled)
+}
+
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice) __premarshalJSON() (*__premarshalPortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice, error) {
+	var retval __premarshalPortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice
+
+	{
+
+		dst := &retval.Node
+		src := v.Node
+		var err error
+		*dst, err = __marshalPortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice(
+			&src)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"unable to marshal PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice.Node: %w", err)
+		}
+	}
+	return &retval, nil
+}
+
+// PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice includes the requested fields of the GraphQL type DcimDevice.
+// The GraphQL type's documentation follows.
+//
+// A configurable network device including routers, switches...
+type PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice struct {
+	Typename string `json:"__typename"`
+	// Unique identifier
+	Id string `json:"id"`
+}
+
+// GetTypename returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice.Typename, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice.Id, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice) GetId() string {
+	return v.Id
+}
+
+// PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice includes the requested fields of the GraphQL interface DcimGenericDevice.
+//
+// PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice is implemented by the following types:
+// PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice
+// The GraphQL type's documentation follows.
+//
+// Generic Device object.
+type PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice interface {
+	implementsGraphQLInterfacePortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice()
+	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
+	GetTypename() string
+	// GetId returns the interface-field "id" from its implementation.
+	// The GraphQL interface field's documentation follows.
+	//
+	// Unique identifier
+	GetId() string
+}
+
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice) implementsGraphQLInterfacePortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice() {
+}
+
+func __unmarshalPortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice(b []byte, v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice) error {
+	if string(b) == "null" {
+		return nil
+	}
+
+	var tn struct {
+		TypeName string `json:"__typename"`
+	}
+	err := json.Unmarshal(b, &tn)
+	if err != nil {
+		return err
+	}
+
+	switch tn.TypeName {
+	case "DcimDevice":
+		*v = new(PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice)
+		return json.Unmarshal(b, *v)
+	case "":
+		return fmt.Errorf(
+			"response was missing DcimGenericDevice.__typename")
+	default:
+		return fmt.Errorf(
+			`unexpected concrete type for PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice: "%v"`, tn.TypeName)
+	}
+}
+
+func __marshalPortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice(v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice) ([]byte, error) {
+
+	var typename string
+	switch v := (*v).(type) {
+	case *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice:
+		typename = "DcimDevice"
+
+		result := struct {
+			TypeName string `json:"__typename"`
+			*PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice
+		}{typename, v}
+		return json.Marshal(result)
+	case nil:
+		return []byte("null"), nil
+	default:
+		return nil, fmt.Errorf(
+			`unexpected concrete type for PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice: "%T"`, v)
+	}
+}
+
+// PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalNameTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalNameTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalNameTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalRoleDropdown includes the requested fields of the GraphQL type Dropdown.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Dropdown
+type PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalRoleDropdown struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalRoleDropdown.Value, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalRoleDropdown) GetValue() string {
+	return v.Value
+}
+
+// PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalStatusDropdown includes the requested fields of the GraphQL type Dropdown.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Dropdown
+type PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalStatusDropdown struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalStatusDropdown.Value, and is useful for accessing the field via an interface.
+func (v *PortsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalStatusDropdown) GetValue() string {
+	return v.Value
+}
+
+// PortsResponse is returned by Ports on success.
+type PortsResponse struct {
+	InterfacePhysical PortsInterfacePhysicalPaginatedInterfacePhysical `json:"InterfacePhysical"`
+}
+
+// GetInterfacePhysical returns PortsResponse.InterfacePhysical, and is useful for accessing the field via an interface.
+func (v *PortsResponse) GetInterfacePhysical() PortsInterfacePhysicalPaginatedInterfacePhysical {
+	return v.InterfacePhysical
+}
 
 // ProposedChangesCoreProposedChangePaginatedCoreProposedChange includes the requested fields of the GraphQL type PaginatedCoreProposedChange.
 // The GraphQL type's documentation follows.
@@ -6116,9 +4306,13 @@ func (v *__BranchPointInput) GetName() string { return v.Name }
 
 // __DevicesInput is used internally by genqlient
 type __DevicesInput struct {
-	Limit  int `json:"limit"`
-	Offset int `json:"offset"`
+	Tag    string `json:"tag"`
+	Limit  int    `json:"limit"`
+	Offset int    `json:"offset"`
 }
+
+// GetTag returns __DevicesInput.Tag, and is useful for accessing the field via an interface.
+func (v *__DevicesInput) GetTag() string { return v.Tag }
 
 // GetLimit returns __DevicesInput.Limit, and is useful for accessing the field via an interface.
 func (v *__DevicesInput) GetLimit() int { return v.Limit }
@@ -6158,18 +4352,6 @@ func (v *__IntentStampsInput) GetLimit() int { return v.Limit }
 // GetOffset returns __IntentStampsInput.Offset, and is useful for accessing the field via an interface.
 func (v *__IntentStampsInput) GetOffset() int { return v.Offset }
 
-// __LinksInput is used internally by genqlient
-type __LinksInput struct {
-	Limit  int `json:"limit"`
-	Offset int `json:"offset"`
-}
-
-// GetLimit returns __LinksInput.Limit, and is useful for accessing the field via an interface.
-func (v *__LinksInput) GetLimit() int { return v.Limit }
-
-// GetOffset returns __LinksInput.Offset, and is useful for accessing the field via an interface.
-func (v *__LinksInput) GetOffset() int { return v.Offset }
-
 // __OrphanStagesInput is used internally by genqlient
 type __OrphanStagesInput struct {
 	Limit  int `json:"limit"`
@@ -6181,6 +4363,22 @@ func (v *__OrphanStagesInput) GetLimit() int { return v.Limit }
 
 // GetOffset returns __OrphanStagesInput.Offset, and is useful for accessing the field via an interface.
 func (v *__OrphanStagesInput) GetOffset() int { return v.Offset }
+
+// __PortsInput is used internally by genqlient
+type __PortsInput struct {
+	Devices []string `json:"devices"`
+	Limit   int      `json:"limit"`
+	Offset  int      `json:"offset"`
+}
+
+// GetDevices returns __PortsInput.Devices, and is useful for accessing the field via an interface.
+func (v *__PortsInput) GetDevices() []string { return v.Devices }
+
+// GetLimit returns __PortsInput.Limit, and is useful for accessing the field via an interface.
+func (v *__PortsInput) GetLimit() int { return v.Limit }
+
+// GetOffset returns __PortsInput.Offset, and is useful for accessing the field via an interface.
+func (v *__PortsInput) GetOffset() int { return v.Offset }
 
 // __ProposedChangesInput is used internally by genqlient
 type __ProposedChangesInput struct {
@@ -6290,130 +4488,33 @@ func BranchPoint(
 	return data_, err_
 }
 
-// The query executed by ContractVersion.
-const ContractVersion_Operation = `
-query ContractVersion {
-	FylgjaContract {
-		edges {
-			node {
-				version {
-					value
-				}
-			}
-		}
-	}
-}
-`
-
-// contract version, queried first; any mismatch short-circuits.
-func ContractVersion(
-	ctx_ context.Context,
-	client_ graphql.Client,
-) (data_ *ContractVersionResponse, err_ error) {
-	req_ := &graphql.Request{
-		OpName: "ContractVersion",
-		Query:  ContractVersion_Operation,
-	}
-
-	data_ = &ContractVersionResponse{}
-	resp_ := &graphql.Response{Data: data_}
-
-	err_ = client_.MakeRequest(
-		ctx_,
-		req_,
-		resp_,
-	)
-
-	return data_, err_
-}
-
 // The query executed by Devices.
 const Devices_Operation = `
-query Devices ($limit: Int!, $offset: Int!) {
-	FylgjaDevice(limit: $limit, offset: $offset) {
+query Devices ($tag: String!, $limit: Int!, $offset: Int!) {
+	DcimDevice(tags__name__value: $tag, limit: $limit, offset: $offset) {
 		count
 		edges {
 			node {
-				__typename
 				id
 				name {
 					value
 				}
-				role {
-					value
-				}
-				site {
-					value
-				}
 				platform {
 					node {
-						__typename
-						... PlatformFields
-					}
-				}
-				interfaces {
-					edges {
-						node {
-							__typename
-							... InterfaceFields
+						name {
+							value
+						}
+						manufacturer {
+							node {
+								name {
+									value
+								}
+							}
 						}
 					}
 				}
 				... ArtifactFields
 			}
-		}
-	}
-}
-fragment PlatformFields on FylgjaPlatform {
-	vendor {
-		value
-	}
-	nos {
-		value
-	}
-	version {
-		value
-	}
-	model {
-		value
-	}
-}
-fragment InterfaceFields on FylgjaInterface {
-	id
-	name {
-		value
-	}
-	iftype {
-		value
-	}
-	mgmt_only {
-		value
-	}
-	enabled {
-		value
-	}
-	parent {
-		node {
-			__typename
-			name {
-				value
-			}
-		}
-	}
-	addresses {
-		edges {
-			node {
-				__typename
-				address {
-					value
-				}
-			}
-		}
-	}
-	link {
-		node {
-			__typename
-			id
 		}
 	}
 }
@@ -6449,9 +4550,18 @@ fragment ArtifactFields on CoreArtifactTarget {
 }
 `
 
+// 017 — the read, as the mapping gives it (specs/017-dcim-reader/contracts/mapping.md §2):
+// the devices carrying the scope's tag, whatever their status, then the physical ports of
+// those devices by their ids, each with the cable it is an end of. Two roots, because a
+// device's interfaces edge cannot be narrowed to a kind, so reading ports from the device
+// would read every virtual interface's name, which the mapping never reads; and the
+// physical root takes no filter by its device's tags, so the ids come from the first query
+// (research R-01). The tag itself is read by the filter alone. Both are paged by 100, every
+// page at the read's `at` when one was given.
 func Devices(
 	ctx_ context.Context,
 	client_ graphql.Client,
+	tag string,
 	limit int,
 	offset int,
 ) (data_ *DevicesResponse, err_ error) {
@@ -6459,6 +4569,7 @@ func Devices(
 		OpName: "Devices",
 		Query:  Devices_Operation,
 		Variables: &__DevicesInput{
+			Tag:    tag,
 			Limit:  limit,
 			Offset: offset,
 		},
@@ -6701,66 +4812,6 @@ func IntentStamps(
 	return data_, err_
 }
 
-// The query executed by Links.
-const Links_Operation = `
-query Links ($limit: Int!, $offset: Int!) {
-	FylgjaLink(limit: $limit, offset: $offset) {
-		count
-		edges {
-			node {
-				__typename
-				id
-				endpoints {
-					edges {
-						node {
-							__typename
-							name {
-								value
-							}
-							device {
-								node {
-									__typename
-									name {
-										value
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-}
-`
-
-func Links(
-	ctx_ context.Context,
-	client_ graphql.Client,
-	limit int,
-	offset int,
-) (data_ *LinksResponse, err_ error) {
-	req_ := &graphql.Request{
-		OpName: "Links",
-		Query:  Links_Operation,
-		Variables: &__LinksInput{
-			Limit:  limit,
-			Offset: offset,
-		},
-	}
-
-	data_ = &LinksResponse{}
-	resp_ := &graphql.Response{Data: data_}
-
-	err_ = client_.MakeRequest(
-		ctx_,
-		req_,
-		resp_,
-	)
-
-	return data_, err_
-}
-
 // The query executed by OrphanStages.
 const OrphanStages_Operation = `
 query OrphanStages ($limit: Int!, $offset: Int!) {
@@ -6801,6 +4852,106 @@ func OrphanStages(
 	}
 
 	data_ = &OrphanStagesResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The query executed by Ports.
+const Ports_Operation = `
+query Ports ($devices: [ID], $limit: Int!, $offset: Int!) {
+	InterfacePhysical(device__ids: $devices, limit: $limit, offset: $offset) {
+		count
+		edges {
+			node {
+				id
+				name {
+					value
+				}
+				role {
+					value
+				}
+				status {
+					value
+				}
+				device {
+					node {
+						__typename
+						id
+					}
+				}
+				connector {
+					node {
+						__typename
+						id
+						... on DcimCable {
+							label {
+								value
+							}
+						}
+						connected_endpoints {
+							count
+							edges {
+								node {
+									__typename
+									id
+									... on InterfacePhysical {
+										name {
+											value
+										}
+										device {
+											node {
+												__typename
+												id
+											}
+										}
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}
+`
+
+// A cable is reached through the port's connector, the generic DcimConnector, never from
+// a root of its own: an end that is not a physical port has no name and no device here,
+// which is exactly "an end not on a physical port", and an end's device outside the scope
+// is told by its id's absence from the devices read, with no query of it (R-05). An
+// uncabled port's connector node is null.
+//
+// The connector's node is decoded into cable.go's connectorNode, not a generated type:
+// genqlient's decoder refuses a __typename the SDL it was generated from does not name, so
+// an end on an endpoint kind of the operator's own, or a connector that is not a
+// DcimCable, would fail the whole read where the mapping omits the cable. The selection
+// is still checked against the SDL when the client is generated.
+func Ports(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	devices []string,
+	limit int,
+	offset int,
+) (data_ *PortsResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "Ports",
+		Query:  Ports_Operation,
+		Variables: &__PortsInput{
+			Devices: devices,
+			Limit:   limit,
+			Offset:  offset,
+		},
+	}
+
+	data_ = &PortsResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(

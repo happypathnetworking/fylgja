@@ -27,7 +27,7 @@ import (
 // from planLinked. seeded is marked with no as_of before the link (written), third-link with
 // an as_of after it (given), so the step into third-link adds the link and the step from it
 // to the head changes nothing; main holds no network, as the development host's does, so
-// the branch point is refused contract.node.missing and passed over.
+// the branch point is refused scope.empty and passed over.
 const (
 	rehearseRun = "r1"
 	seededRef   = lessLink + "/seeded"
@@ -239,7 +239,7 @@ func okRun() *fakeService {
 }
 
 // Scenario 1. On the development host's main, which holds no network, the branch point is
-// refused contract.node.missing and passed over, seeded is the baseline, and third-link and
+// refused scope.empty and passed over, seeded is the baseline, and third-link and
 // the head are stepped to with restarts allowed and the default wait: every one passes,
 // exit 0. On a main that carries the network, as the spec's scenario has it, the branch
 // point is the baseline and the three stages after it are rehearsed.
@@ -271,9 +271,9 @@ func TestRehearseEveryStagePasses(t *testing.T) {
 			t.Fatalf("the run's stages %v, want %v", roles, want)
 		}
 		point, seeded := in.Stages[0], in.Stages[1]
-		if point.Refused == nil || point.Refused.Rule != findings.RuleContractNodeMissing || point.Provision != nil || point.Step != nil ||
+		if point.Refused == nil || point.Refused.Rule != findings.RuleScopeEmpty || point.Provision != nil || point.Step != nil ||
 			point.BundleID != "" {
-			t.Errorf("the branch point %+v; want it passed over, refused %s, with no child", point, findings.RuleContractNodeMissing)
+			t.Errorf("the branch point %+v; want it passed over, refused %s, with no child", point, findings.RuleScopeEmpty)
 		}
 		// Already compiled, as a rebuild's child is: from intent, with the bundle set.
 		if p := seeded.Provision; p == nil || p.Source != wire.SourceIntent || p.Branch != lessLink || p.At != cabledAt ||
@@ -290,7 +290,7 @@ func TestRehearseEveryStagePasses(t *testing.T) {
 			}
 		}
 		for _, want := range []string{
-			"stage " + pointRef + ": refused (contract.node.missing)\n",
+			"stage " + pointRef + ": refused (scope.empty)\n",
 			"stage " + seededRef + ": created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline\n",
 			"stage " + thirdRef + ": stepped in 4.5s (push n1 2.5s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed\n",
 			"stage " + headRef + ": unchanged in 4.5s; settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed\n",
@@ -570,7 +570,7 @@ func TestRehearseRefusedBranchPointAndAStaleMark(t *testing.T) {
 
 	code, stdout, _ := rehearse(t, "--branch", lessLink)
 	for _, want := range []string{
-		pointRef + ": refused (contract.node.missing)\n",
+		pointRef + ": refused (scope.empty)\n",
 		lessLink + "/edited: refused (stage.artifact.stale)\n",
 	} {
 		if !strings.Contains(stdout, want) {
@@ -582,7 +582,7 @@ func TestRehearseRefusedBranchPointAndAStaleMark(t *testing.T) {
 	}
 
 	code, doc, _ := rehearseDoc(t, "--branch", lessLink)
-	if code != findings.ExitRejected || !carriesRule(doc.Findings, findings.RuleContractNodeMissing) ||
+	if code != findings.ExitRejected || !carriesRule(doc.Findings, findings.RuleScopeEmpty) ||
 		!carriesRule(doc.Findings, findings.RuleStageArtifactStale) || doc.Rehearsal.Stages[0].Verdict != string(rehearsal.VerdictRefused) {
 		t.Errorf("exit %d, findings %v, stages %v; want 1, the branch point's refusal and the stale mark's",
 			code, rulesOf(doc.Findings), rehearsalStages(doc))
@@ -938,10 +938,10 @@ func TestRehearseText(t *testing.T) {
 	useInterrupts(t)
 
 	code, stdout, stderr := rehearse(t, "--branch", lessLink)
-	missing := "rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it"
+	missing := "rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at " + fakeBranchedFrom
 	want := strings.Join([]string{
 		`rehearsal of proposed change "change pc-1" (pc-1) on branch change-1, draft: 4 stages; deadline 33m0s (ceiling 1h0m0s)`,
-		`change-1/branch-point: refused (contract.node.missing)`,
+		`change-1/branch-point: refused (scope.empty)`,
 		`  ` + missing,
 		`change-1/seeded: branch change-1 at 2026-10-16T08:30:00.000000+00:00 (written), "after the link is cabled"; baseline`,
 		`change-1/third-link: branch change-1 at 2026-10-16T08:50:00.000000+00:00 (given), "third link"`,
@@ -963,7 +963,7 @@ func TestRehearseText(t *testing.T) {
 		`step teardown: done in 5.2s`,
 		`removed lab fylgja (3 containers)`,
 		`removed twin directory /srv/twin`,
-		`stage change-1/branch-point: refused (contract.node.missing)`,
+		`stage change-1/branch-point: refused (scope.empty)`,
 		`stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline`,
 		`stage change-1/third-link: stepped in 4.5s (push n1 2.5s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed`,
 		`stage change-1/head: unchanged in 4.5s; settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed`,

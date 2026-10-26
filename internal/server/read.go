@@ -137,7 +137,7 @@ func read(ctx context.Context, opts *options, subject *findings.Subject, branch,
 		return err
 	}
 
-	named := readSubject(snapshot.Envelope)
+	named := scopedSubject(snapshot.Envelope)
 	if resolved != nil {
 		named = fmt.Sprintf("stage %s: %s", resolved.Ref, named)
 	}
@@ -147,27 +147,57 @@ func read(ctx context.Context, opts *options, subject *findings.Subject, branch,
 
 // readSummaryLine is intent read's success line: what the CTM holds, and what the
 // support packages' profiles make of it, counted by the survey the compiler runs, so the
-// numbers are the ones the bundle's fidelity.lossy will carry.
+// numbers are the ones the bundle's fidelity.lossy will carry; then, when the read left
+// any out, how many cables it could not place (017).
 func readSummaryLine(out string, c *ctm.CTM, reg *psp.Registry) string {
-	return summaryLine(out, c, reg, readSubject(c.Envelope))
+	return summaryLine(out, c, reg, scopedSubject(c.Envelope))
 }
 
 // summaryLine is readSummaryLine naming what was read as named says: the reference, or
 // from 014 the stage it was resolved from and then the reference.
 func summaryLine(out string, c *ctm.CTM, reg *psp.Registry, named string) string {
-	return fmt.Sprintf("wrote %s: %s (%s)", out,
-		readCounts(intent.Summarize(c), intent.DevicesByPackage(c, reg), compiler.Survey(c, reg)), named)
+	counts := intent.Summarize(c)
+	return fmt.Sprintf("wrote %s: %s%s (%s)", out,
+		readCounts(counts, intent.DevicesByPackage(c, reg), compiler.Survey(c, reg)), cablesOmitted(counts.CablesOmitted), named)
 }
 
-// readSubject describes the intent the CTM addresses, for the success line. `at` is
+// cablesOmitted is the summary's count of the cables the read could not place, said only
+// when there are any: `; 1 cable omitted`. Each is also a finding beside the read and a
+// row of the CTM's fidelity list, which name them.
+func cablesOmitted(n int) string {
+	switch n {
+	case 0:
+		return ""
+	case 1:
+		return "; 1 cable omitted"
+	}
+	return fmt.Sprintf("; %d cables omitted", n)
+}
+
+// readSubject describes the intent the CTM addresses, for a dry run's read line. `at` is
 // named only when the operator supplied one — the envelope is the authority on
 // whether the read was pinned.
 func readSubject(e ctm.Envelope) string {
+	return reference(e) + ", schema " + e.SchemaHash
+}
+
+// scopedSubject is readSubject naming the scope the read was made under, before the
+// schema: intent read's success line (017).
+func scopedSubject(e ctm.Envelope) string {
+	s := reference(e)
+	if e.Scope != "" {
+		s += ", scope " + e.Scope
+	}
+	return s + ", schema " + e.SchemaHash
+}
+
+// reference is the branch and, when the operator pinned one, the at a CTM was read at.
+func reference(e ctm.Envelope) string {
 	s := "branch " + e.Branch
 	if e.At != "" {
 		s += ", at " + e.At
 	}
-	return s + ", schema " + e.SchemaHash
+	return s
 }
 
 // ctmFile is the name intent read's CTM crosses under.

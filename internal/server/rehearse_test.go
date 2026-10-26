@@ -166,6 +166,15 @@ func TestRehearsalStagesTakeTheBaselineRule(t *testing.T) {
 		t.Errorf("rows' findings %+v", rows)
 	}
 
+	// The read of the library's DCIM refuses a main holding no tagged device scope.empty, at
+	// read until T050 files it at resolve: passed over alike (the bridge in passedOver).
+	emptyScope := rehearsePlan(t)
+	emptyScope.Stages[0] = branchPoint(rejectionAt(findings.StepRead, findings.RuleScopeEmpty, "tag:fylgja"))
+	if b, rows, refusal := rehearsalStages(emptyScope); b != 1 || refusal != nil || rows[0].refused == nil ||
+		rows[0].refused.Rule != findings.RuleScopeEmpty || !slices.Equal(roles(rows), []string{refused, baseline, rehearsed, rehearsed}) {
+		t.Errorf("a branch point refused scope.empty: baseline %d, roles %v, refusal %v", b, roles(rows), refusal)
+	}
+
 	compiledBP := rehearsePlan(t)
 	compiledBP.Stages[0] = compiledStage(stages.LabelBranchPoint, stages.AtBranchPoint, "2026-10-16T17:20:19.944651+00:00", "",
 		*compiledBP.Stages[1].Bundle)
@@ -186,7 +195,11 @@ func TestRehearsalStagesTakeTheBaselineRule(t *testing.T) {
 		}, findings.StatusRejected},
 		{"the branch point refused beside contract.node.missing", func(p *stages.PlanResult) {
 			p.Stages[0] = branchPoint(rejectionAt(findings.StepRead, findings.RuleContractNodeMissing, "main"),
-				rejectionAt(findings.StepRead, findings.RuleContractVersionMismatch, "main"))
+				rejectionAt(findings.StepRead, findings.RulePlatformMissing, "n1"))
+		}, findings.StatusRejected},
+		{"the branch point refused beside scope.empty", func(p *stages.PlanResult) {
+			p.Stages[0] = branchPoint(rejectionAt(findings.StepRead, findings.RuleScopeEmpty, "tag:fylgja"),
+				rejectionAt(findings.StepRead, findings.RulePlatformMissing, "n1"))
 		}, findings.StatusRejected},
 		{"the branch point refused contract.node.missing at compile", func(p *stages.PlanResult) {
 			p.Stages[0] = branchPoint(rejectionAt(findings.StepCompile, findings.RuleContractNodeMissing, "main"))

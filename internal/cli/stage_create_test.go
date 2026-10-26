@@ -74,13 +74,13 @@ func demoBlock(label, at, source, description string) findings.StageBlock {
 
 // readsNoIntent fails when a resolution read any branch's intent: the schema, the
 // proposed changes, the branch's point of origin and its stamps are the resolution's; the
-// devices, the links, the contract node and the artifacts' content are the read's.
+// devices, their ports and the artifacts' content are the read's.
 func readsNoIntent(t *testing.T, label string, f *fakeInfrahub) {
 	t.Helper()
 	for _, r := range f.requests() {
 		switch {
 		case strings.HasPrefix(r.Path, "/api/storage/"),
-			r.Operation == "Devices" || r.Operation == "Links" || r.Operation == "ContractVersion":
+			r.Operation == "Devices" || r.Operation == "Ports":
 			t.Errorf("%s: the resolution asked %+v; a branch's intent is the read's", label, r)
 		}
 	}

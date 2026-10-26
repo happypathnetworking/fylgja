@@ -276,11 +276,13 @@ func TestCompileRefusesAPortCollision(t *testing.T) {
 }
 
 // An unreadable or malformed CTM is exit 2 as well: the file could not be interpreted,
-// which is a different thing from intent that could be interpreted and was wrong.
+// which is a different thing from intent that could be interpreted and was wrong. A CTM
+// of another version is neither: it is refused ctm.version.unsupported, exit 1
+// (TestAnotherCTMVersionIsRefusedBeforeValidation).
 func TestUnreadableCTMIsAnOperationalFailure(t *testing.T) {
 	dir := t.TempDir()
 	bad := filepath.Join(dir, "bad.json")
-	if err := os.WriteFile(bad, []byte(`{"ctm_version":"1","typo":true}`), 0o644); err != nil {
+	if err := os.WriteFile(bad, []byte(`{"ctm_version":"2","typo":true}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	wrongVersion := filepath.Join(dir, "v2.json")

@@ -1,46 +1,24 @@
-# The generic queries genqlient generates typed Go from. Every selection names only
-# Fylgja generics (Constitution III) — never a concrete kind. A tier-1 test asserts that
-# every operation is a query and names only Fylgja* roots, but for the four roots that
-# are Infrahub's own units rather than the operator's model (014: CoreProposedChange,
-# CoreArtifactValidator, Branch, and InfrahubEvent, its record of a write, D-048), each
-# named there.
+# The queries genqlient generates typed Go from. The read selects the schema library's
+# kinds as the mapping names them (D-057, Constitution III: specs/017-dcim-reader/
+# contracts/mapping.md §2), and nothing beyond them; the stamps still select the generics
+# until 017's T047 moves them to the read's shapes. A tier-1 test asserts that every
+# operation is a query and names only the mapping's roots or Fylgja's, but for the four
+# roots that are Infrahub's own units rather than the operator's model (014:
+# CoreProposedChange, CoreArtifactValidator, Branch, and InfrahubEvent, its record of a
+# write, D-048), each named there.
 #
 # Verified 2026-09-08 against Infrahub 1.11.2: envelope (`value`, `node`, `edges`),
-# `limit`/`offset`, and generic resolution to concrete kinds. The generic queries take
-# their order from the schema's `order_by` and pass no `order` argument; the event log
-# is read newest first (`order: DESC`, IntentEvents below). `at` is a URL query parameter
-# on POST /graphql/{branch} (URL-encode `+`): sent on every query of a read iff the
-# operator supplied it, never otherwise. Re-verified 2026-09-14: Infrahub honours `at`
-# to the microsecond and truncates beyond; an `at`
-# before the default branch's creation is a 422; an unknown branch is a 404.
+# `limit`/`offset`, and generic resolution to concrete kinds. The queries take their order
+# from the schema's `order_by` and pass no `order` argument; the event log is read newest
+# first (`order: DESC`, IntentEvents below). `at` is a URL query parameter on POST
+# /graphql/{branch} (URL-encode `+`): sent on every query of a read iff the operator
+# supplied it, never otherwise. Re-verified 2026-09-14: Infrahub honours `at` to the
+# microsecond and truncates beyond; an `at` before the default branch's creation is a
+# 422; an unknown branch is a 404. The read's two shapes were verified on a branch holding
+# the library on 2026-10-25 (017 research §1.6).
 #
-# Conformance (which kinds implement each generic, the schema hash) is not a GraphQL
-# query: it is GET /api/schema?branch=.
-
-# contract version, queried first; any mismatch short-circuits.
-query ContractVersion {
-  FylgjaContract {
-    edges { node { version { value } } }
-  }
-}
-
-fragment PlatformFields on FylgjaPlatform {
-  vendor  { value }
-  nos     { value }
-  version { value }
-  model   { value }
-}
-
-fragment InterfaceFields on FylgjaInterface {
-  id
-  name      { value }
-  iftype    { value }
-  mgmt_only { value }
-  enabled   { value }
-  parent    { node { name { value } } }
-  addresses { edges { node { address { value } } } }
-  link      { node { id } }
-}
+# Conformance (the mapping's table, the schema hash) is not a GraphQL query: it is GET
+# /api/schema?branch=.
 
 # M5 — the rendered configuration Infrahub holds for a device. The fragment names
 # Infrahub's own target interface, never a concrete kind (Constitution III), and it is
@@ -48,9 +26,9 @@ fragment InterfaceFields on FylgjaInterface {
 # carries artifacts through this fragment's type, so nothing in Fylgja has to assert on
 # a concrete device kind to read them.
 #
-# Spreading an interface fragment into an interface selection is valid only where the
-# two can overlap, which is exactly the inheritance conformance demands: a
-# device kind that does not inherit CoreArtifactTarget is refused before the query runs.
+# Spreading an interface fragment into a kind's selection is valid only where the two can
+# overlap: the library's DcimDevice inherits CoreArtifactTarget, which conformance holds
+# it to (its artifacts relationship, mapping.md §3) before the query runs.
 fragment ArtifactFields on CoreArtifactTarget {
   artifacts {
     edges { node {
@@ -64,17 +42,37 @@ fragment ArtifactFields on CoreArtifactTarget {
   }
 }
 
-query Devices($limit: Int!, $offset: Int!) {
-  FylgjaDevice(limit: $limit, offset: $offset) {
+# 017 — the read, as the mapping gives it (specs/017-dcim-reader/contracts/mapping.md §2):
+# the devices carrying the scope's tag, whatever their status, then the physical ports of
+# those devices by their ids, each with the cable it is an end of. Two roots, because a
+# device's interfaces edge cannot be narrowed to a kind, so reading ports from the device
+# would read every virtual interface's name, which the mapping never reads; and the
+# physical root takes no filter by its device's tags, so the ids come from the first query
+# (research R-01). The tag itself is read by the filter alone. Both are paged by 100, every
+# page at the read's `at` when one was given.
+query Devices($tag: String!, $limit: Int!, $offset: Int!) {
+  DcimDevice(tags__name__value: $tag, limit: $limit, offset: $offset) {
     count
     edges {
       node {
         id
         name { value }
-        role { value }
-        site { value }
-        platform   { node { ...PlatformFields } }
-        interfaces { edges { node { ...InterfaceFields } } }
+        # The pair that picks the device's package (Constitution II): the platform's name
+        # and its manufacturer's, compared exactly with each package's matches. Each node is
+        # a pointer, so a device with no platform, or a platform with no manufacturer, is
+        # told from one whose names are empty.
+        platform {
+          # @genqlient(pointer: true)
+          node {
+            name { value }
+            manufacturer {
+              # @genqlient(pointer: true)
+              node {
+                name { value }
+              }
+            }
+          }
+        }
         # Configuration: the artifacts Infrahub rendered for this device, listed in the
         # same request and at the same `at` as the intent.
         ...ArtifactFields
@@ -83,17 +81,43 @@ query Devices($limit: Int!, $offset: Int!) {
   }
 }
 
-query Links($limit: Int!, $offset: Int!) {
-  FylgjaLink(limit: $limit, offset: $offset) {
+# A cable is reached through the port's connector, the generic DcimConnector, never from
+# a root of its own: an end that is not a physical port has no name and no device here,
+# which is exactly "an end not on a physical port", and an end's device outside the scope
+# is told by its id's absence from the devices read, with no query of it (R-05). An
+# uncabled port's connector node is null.
+#
+# The connector's node is decoded into cable.go's connectorNode, not a generated type:
+# genqlient's decoder refuses a __typename the SDL it was generated from does not name, so
+# an end on an endpoint kind of the operator's own, or a connector that is not a
+# DcimCable, would fail the whole read where the mapping omits the cable. The selection
+# is still checked against the SDL when the client is generated.
+query Ports($devices: [ID], $limit: Int!, $offset: Int!) {
+  InterfacePhysical(device__ids: $devices, limit: $limit, offset: $offset) {
     count
     edges {
       node {
         id
-        endpoints {
-          edges {
-            node {
-              name   { value }
-              device { node { name { value } } }
+        name   { value }
+        role   { value }
+        status { value }
+        device { node { id } }
+        connector {
+          # @genqlient(bind: "github.com/happypathnetworking/fylgja/internal/intent.connectorNode")
+          node {
+            __typename
+            id
+            ... on DcimCable { label { value } }
+            connected_endpoints {
+              count
+              edges { node {
+                __typename
+                id
+                ... on InterfacePhysical {
+                  name   { value }
+                  device { node { id } }
+                }
+              } }
             }
           }
         }
@@ -192,8 +216,8 @@ fragment ArtifactStamps on CoreArtifactTarget {
 # The platform's values, which pick the device's package, and the stamps of those that reach
 # the artifact or the bundle: the template renders vendor, nos and version into every
 # device's artifact and branches on nos, and nos picks the package (R-07). model reaches
-# neither and is not stamped. A fragment of its own, not PlatformFields beside a second
-# spread: genqlient cannot merge two fragments' selections of one field.
+# neither and is not stamped. A fragment of its own, as the read's platform fields were
+# before 017: genqlient cannot merge two fragments' selections of one field.
 fragment PlatformStamps on FylgjaPlatform {
   vendor  { value updated_at }
   nos     { value updated_at }

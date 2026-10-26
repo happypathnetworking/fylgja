@@ -107,7 +107,7 @@ func Unmarshal(data []byte) (*CTM, error) {
 		return nil, fmt.Errorf("decoding CTM: %w", err)
 	}
 	if head.CTMVersion != "" && head.CTMVersion != Version {
-		return nil, fmt.Errorf("unsupported ctm_version %q, expected %q", head.CTMVersion, Version)
+		return nil, &VersionError{Got: head.CTMVersion}
 	}
 	dec := json.NewDecoder(strings.NewReader(string(data)))
 	dec.DisallowUnknownFields()
@@ -117,6 +117,18 @@ func Unmarshal(data []byte) (*CTM, error) {
 	}
 	Normalize(&c)
 	return &c, nil
+}
+
+// VersionError is Unmarshal's refusal of a CTM of another version: Got is the version the
+// file declares, and Version the one this build reads. twin compile files it as
+// ctm.version.unsupported at the file, where any other decoding failure is the
+// operation's (017).
+type VersionError struct {
+	Got string
+}
+
+func (e *VersionError) Error() string {
+	return fmt.Sprintf("unsupported ctm_version %q, expected %q", e.Got, Version)
 }
 
 // Load reads a serialized CTM from a file.

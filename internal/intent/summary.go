@@ -21,6 +21,10 @@ type Counts struct {
 	// count of devices, on a clean read, and saying so is the only positive evidence
 	// that the twin will run what production runs rather than bootstrap alone.
 	Artifacts int
+	// CablesOmitted is how many cables the read reached and could not place (017; R-05):
+	// each is a row of the envelope's fidelity list, so a read that left cables out says so
+	// on its success line and not only in its findings.
+	CablesOmitted int
 }
 
 // Summarize counts what a read produced.
@@ -33,6 +37,11 @@ func Summarize(c *ctm.CTM) Counts {
 		n.Interfaces += len(d.Interfaces)
 		if d.Artifact != nil {
 			n.Artifacts++
+		}
+	}
+	for _, r := range c.Envelope.Fidelity {
+		if r.Disposition == ctm.FidelityOmitted && r.Source == cableSource {
+			n.CablesOmitted++
 		}
 	}
 	return n
@@ -48,13 +57,13 @@ type PackageCount struct {
 //
 // A twin of one platform is the same sentence with one entry, so the reader never has to
 // know whether this read was mixed to know what the line means. It is kept apart from
-// Counts because Counts is a comparable struct that tier 2 holds whole reads to, and
-// because Counts is a comparable struct. A device's package is the one its platform
-// resolved to, which CTM 2 states (platform.package).
+// Counts because Counts is a comparable struct that tier 2 holds whole reads to. A
+// device's package is the one its platform matched, which CTM 2 states
+// (platform.package).
 //
-// A device no package covers is counted under what its CTM names. A read like that is
-// refused as platform.unsupported and prints no summary at all, so this is what the line
-// would say rather than what it says.
+// The read refuses a device no package matches (platform.unmatched), so no read's line
+// counts one. A hand-written CTM can still name a package this build lacks; it is counted
+// under the name it gives, and validation refuses it as platform.unsupported.
 func DevicesByPackage(c *ctm.CTM, reg *psp.Registry) []PackageCount {
 	if c == nil {
 		return nil

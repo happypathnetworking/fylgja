@@ -307,7 +307,7 @@ func TestOnlyAMissingBranchIsMarkedNotFound(t *testing.T) {
 			c := New(Config{Address: srv.URL, Token: "t", Branch: "gone"})
 			var err error
 			if tc.graphql {
-				_, _, err = c.ContractVersion(t.Context())
+				_, err = c.devices(t.Context())
 			} else {
 				_, err = c.SchemaInfo(t.Context())
 			}

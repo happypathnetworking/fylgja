@@ -198,8 +198,9 @@ type CTM struct {
 // generics contract's version (D-057). Nothing converts a "1".
 const Version = "2"
 
-// ContractVersion is the generics contract the generics reader understands. 017
-// removes it with the generics reader's contract check, its last user.
+// ContractVersion is the generics contract the generics reader understood. Its reader and
+// that reader's contract check left at 017's T039; test support's defect seed declares it
+// until T053 removes it.
 const ContractVersion = "0.2"
 
 // RequiredGenerics are the generics the generics reader's conformance demanded. That
@@ -212,8 +213,9 @@ var RequiredGenerics = []string{
 	"FylgjaPlatform",
 }
 
-// ContractKind is the singleton node kind carrying the generics contract's version. 017
-// removes it with the generics reader's contract check.
+// ContractKind is the singleton node kind carrying the generics contract's version. The
+// contract check left at 017's T039; a tier-2 test names it until T044 rewrites that test
+// and T053 removes it.
 const ContractKind = "FylgjaContract"
 
 // DeviceGeneric is the generic a device kind implements under the generics contract.

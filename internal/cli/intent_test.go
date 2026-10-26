@@ -138,43 +138,12 @@ func pinnedCTM(t *testing.T, path string) []byte {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bridged(c)
 	c.Envelope.ObservedAt = "2026-09-28T00:00:00.000000Z"
 	b, err := ctm.Marshal(c)
 	if err != nil {
 		t.Fatal(err)
 	}
 	return b
-}
-
-// bridged makes a fixture what the harness's read returns of it until 017's T039 reads the
-// library's DCIM (T023's bridge): the fake serves the fixture in the generics' shapes, and
-// the bridged generics reader records their mapping and writes no fidelity row. T043
-// removes it with the generics' answers.
-func bridged(c *ctm.CTM) {
-	c.Envelope.Mapping = ctm.Mapping{Reader: "infrahub-generics", Model: "fylgja-generics", Version: ctm.ContractVersion}
-	c.Envelope.Fidelity = []ctm.FidelityRow{}
-}
-
-// bridgedFixtureBundleID is the bundle the harness's read of the three-node fixture
-// compiles to while the reader is bridged: the golden's intent under the generics'
-// mapping, with no fidelity row (bridged).
-func bridgedFixtureBundleID(t *testing.T) string {
-	t.Helper()
-	c, err := ctm.Load(repoPath("testdata", "ctm", "three-node.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	bridged(c)
-	reg, err := psp.Load("")
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, id, list := stage.Compile(c, reg)
-	if list.Rejected() {
-		t.Fatalf("the bridged fixture was refused: %v", list)
-	}
-	return id
 }
 
 // compiledCTM compiles the CTM at path on the stage pipeline twin compile and a run share
@@ -225,7 +194,7 @@ func TestReadFromAStageIsThePinnedRead(t *testing.T) {
 			}
 			want := block.Line() + "\n" +
 				"wrote " + byStage + ": 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, " +
-				"0 shared ports (stage " + ref + ": branch fylgja-fixture, at " + c.at + ", schema fixture)\n"
+				"0 shared ports (stage " + ref + ": branch fylgja-fixture, at " + c.at + ", scope tag:fylgja, schema fixture)\n"
 			if out != want {
 				t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
 			}
@@ -542,11 +511,11 @@ func TestReadEmptyStageIsRefused(t *testing.T) {
 
 // A read the resolved reference refuses keeps M1's wording, word for word what --branch and
 // --at would say, and the document names the stage that resolved to it: a stage of a branch
-// whose contract node was deleted resolves, and its read is refused as the branch's is.
+// whose devices' tags were removed resolves, and its read is refused as the branch's is.
 func TestReadFromAStageKeepsTheReadsRefusal(t *testing.T) {
 	f := demoInfrahub(t)
-	f.change("pc-bare", "bare", mark("st-bare", "bare", "", "its contract node deleted"))
-	f.contractless = map[string]bool{"bare": true}
+	f.change("pc-bare", "bare", mark("st-bare", "bare", "", "its devices untagged"))
+	f.untagged = map[string]bool{"bare": true}
 	f.start()
 	dir := t.TempDir()
 
@@ -554,12 +523,12 @@ func TestReadFromAStageKeepsTheReadsRefusal(t *testing.T) {
 	_, ref := exitOf(t, runRead(t.Context(), &options{asJSON: true},
 		&readFlags{branch: "bare", at: fakeMarkedAt, out: filepath.Join(dir, "b.json")}))
 	if code != findings.ExitRejected || len(doc.Findings) != 1 || len(ref.Findings) != 1 || doc.Findings[0] != ref.Findings[0] ||
-		doc.Findings[0].Rule != findings.RuleContractNodeMissing {
+		doc.Findings[0].Rule != findings.RuleScopeEmpty {
 		t.Errorf("exit %d, findings %+v; want 1 with the --branch --at read's %+v", code, doc.Findings, ref.Findings)
 	}
 	want := findings.StageBlock{Ref: "bare/bare", Branch: "bare", Label: "bare",
 		ProposedChange: findings.StageChange{ID: "pc-bare", Name: "change pc-bare", Branch: "bare"},
-		At:             fakeMarkedAt, AtSource: findings.AtSourceWritten, Description: "its contract node deleted"}
+		At:             fakeMarkedAt, AtSource: findings.AtSourceWritten, Description: "its devices untagged"}
 	if doc.Stage == nil || *doc.Stage != want {
 		t.Errorf("stage block %+v, want %+v", doc.Stage, want)
 	}

@@ -118,7 +118,7 @@ func TestIntentReadCutInsideTheCTMWritesNothing(t *testing.T) {
 func TestIntentReadRefusedWritesNothing(t *testing.T) {
 	f := newFakeInfrahub(t)
 	f.branches = map[string]*ctm.CTM{"refused": &f.fixture}
-	f.contractless = map[string]bool{"refused": true}
+	f.untagged = map[string]bool{"refused": true}
 	f.start()
 	out := filepath.Join(t.TempDir(), "ctm.json")
 	m := markServed()
@@ -126,8 +126,8 @@ func TestIntentReadRefusedWritesNothing(t *testing.T) {
 	run := oneMode(t, true, func(opts *options) error {
 		return runRead(context.Background(), opts, &readFlags{branch: "refused", out: out})
 	})
-	if run.code != findings.ExitRejected || !carriesRule(run.doc.Findings, findings.RuleContractNodeMissing) {
-		t.Fatalf("exit %d, findings %+v; want 1 with %s", run.code, run.doc.Findings, findings.RuleContractNodeMissing)
+	if run.code != findings.ExitRejected || !carriesRule(run.doc.Findings, findings.RuleScopeEmpty) {
+		t.Fatalf("exit %d, findings %+v; want 1 with %s", run.code, run.doc.Findings, findings.RuleScopeEmpty)
 	}
 	if frames := filesFramesSince(t, m); len(frames) != 0 {
 		t.Errorf("the server sent %d files frames for a refused read", len(frames))

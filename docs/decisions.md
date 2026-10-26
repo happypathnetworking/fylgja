@@ -86,6 +86,7 @@ next one.
 | [D-057](#d-057) | The CTM is the contract; a reader maps one source's model onto it; the Infrahub reader reads the schema library's DCIM at a pinned commit | Contract |
 | [D-058](#d-058) | A stamp Infrahub's own account wrote is not intent's | Intent |
 | [D-059](#d-059) | Infrahub's own account is the one that writes the template query's groups, read from Infrahub | Intent |
+| [D-060](#d-060) | Infrahub's own account is the one that created the template query's groups | Intent |
 
 ---
 
@@ -3631,7 +3632,8 @@ out, and the stamps did not.
 **Status:** Accepted 2026-10-26, by the operator, at `017-dcim-reader`'s converge loop
 (Run 19's second question, T062). Refines [D-058](#d-058), which left how to identify the
 account to be verified, and stopped the build when only a name could. To be built by
-`017-dcim-reader`.
+`017-dcim-reader`. Superseded by [D-060](#d-060) on 2026-10-26 in the field it reads
+(`created_by` in place of `updated_by`), before it was built.
 
 ### Context
 
@@ -3669,6 +3671,54 @@ the account marks it as Infrahub's own: only its name does, and an install may c
   tier-1 test over both an `agent`-named and a renamed account.
 - Revisit if Infrahub writes the groups as `__system__`, or marks its workers' account in
   the account itself.
+
+---
+
+<a id="d-060"></a>
+## D-060 — Infrahub's own account is the one that created the template query's groups
+
+**Status:** Accepted 2026-10-26, by the operator, at `017-dcim-reader`'s converge loop
+(Run 19's third question, T062). Supersedes [D-059](#d-059) in the field it reads: its
+groups, its pinned read, its no-group case and Constitution III's read (2.1.0) stand.
+Beside [D-058](#d-058), which stands. To be built by `017-dcim-reader`.
+
+### Context
+
+[D-059](#d-059) read Infrahub's own account as the `updated_by` of the template query's
+internal groups, on the premise that only Infrahub's flow writes them. Verified on 1.11.2
+on 2026-10-26 (`specs/017-dcim-reader/research.md` §5.13), before anything was built, that
+premise does not hold: deleting a cable as `Admin` moved its two groups' `updated_by` to
+`Admin`, and `main`'s three groups have read `Admin` since a platform's delete on
+2026-10-25. Under D-059 the operator's own account would then count as Infrahub's, and
+D-058's rule would hide the operator's writes: `TestStagesSeeARemoval` would fail, and at
+the branch point, which reads no events, a device edited after its render would read
+fresh. Each group's `created_by`, and each remaining member's `created_by`, stayed `Agent`
+through the delete.
+
+### Options considered
+
+- **Each member link's `created_by`.** Only the flow adds a member, so it stays exact
+  across a change of the workers' token. Rejected: it reads every member of every group,
+  one group per rendered device.
+- **The groups' `created_by`.** Chosen: the flow creates each group and a delete does not
+  move it, in the same query with one field changed.
+
+### Decision
+
+- Infrahub's own account, in [D-058](#d-058)'s sense, is the `created_by` of the internal
+  query groups (`CoreGraphQLQueryGroup`, `group_type: internal`) of the query the device's
+  artifact definition renders through, read on the branch pinned at the stage's `at`.
+  Everything else D-059 decides stands.
+- If an install moves its task workers to another account after the groups were created,
+  the new account's joins count as intent: a device reads stale when it is not, never
+  fresh when it is stale.
+
+### Consequences
+
+- The build reads `created_by` in place of `updated_by`; its tier-1 test also covers a
+  group whose `updated_by` is the operator's account.
+- Revisit if Infrahub re-creates the groups on a change of the workers' token, or if a
+  stale reading from such a change is met in practice.
 
 ---
 

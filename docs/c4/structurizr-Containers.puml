@@ -25,7 +25,7 @@ AddRelTag("Relationship", $textColor="#444444", $lineColor="#444444", $lineStyle
 AddBoundaryTag("Software System", $bgColor="#ffffff", $borderColor="#0b4884", $fontColor="#0b4884", $shadowing="", $borderStyle="solid")
 
 Person(Operator, "Operator", $descr="Owns the lab host and Infrahub; drives the twin through the CLI.", $tags="Person", $link="")
-System(Infrahub, "Infrahub", $descr="The network source of truth. Holds intent on branches, versioned in time, and renders each device's configuration artifact.", $tags="Software System,External", $link="")
+System(Infrahub, "Infrahub", $descr="The network source of truth. Holds intent on branches, versioned in time, in OpsMill's schema library's DCIM, which this repository vendors at 26336e9 (schema/dcim/), beside Fylgja's one kind, the stage (schema/fylgja-stage.yaml); renders each device's configuration artifact.", $tags="Software System,External", $link="")
 
 System_Boundary("Walkingtwin_boundary", "Walking twin", $tags="Software System") {
   Container(Walkingtwin.NOSnode, "NOS node", $techn="Container", $descr="One device of the twin, clab-fylgja-<node>: SR Linux or EOS, probed and read over gNMI and pushed its artifact.", $tags="Container", $link="")

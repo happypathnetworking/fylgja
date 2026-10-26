@@ -6,11 +6,11 @@ workspace "Fylgja" "A walking twin of network intent." {
     model {
         operator = person "Operator" "Owns the lab host and Infrahub; drives the twin through the CLI."
 
-        infrahub = softwareSystem "Infrahub" "The network source of truth. Holds intent on branches, versioned in time, and renders each device's configuration artifact." "External" {
-            iserver = container "Infrahub server" "Infrahub's API at :8000: intent and artifacts on branches, proposed changes, stages and their comments." "Python; Infrahub 1.11.2; GraphQL, REST" "External"
+        infrahub = softwareSystem "Infrahub" "The network source of truth. Holds intent on branches, versioned in time, in OpsMill's schema library's DCIM, which this repository vendors at 26336e9 (schema/dcim/), beside Fylgja's one kind, the stage (schema/fylgja-stage.yaml); renders each device's configuration artifact." "External" {
+            iserver = container "Infrahub server" "Infrahub's API at :8000: intent in the schema library's DCIM and artifacts on branches, proposed changes, stages and their comments." "Python; Infrahub 1.11.2; GraphQL, REST" "External"
             taskWorker = container "Task worker" "Infrahub's own, two replicas: renders the artifacts, and runs this repository's checks on a proposed change, fylgja-step and fylgja-twin, clients of Fylgja's API; fylgja-twin posts the rehearsal's report as one comment in a new thread on the proposed change, which its overview shows." "Python; Infrahub 1.11.2" "External"
         }
-        artifacts = softwareSystem "Artifacts repository" "This repository, registered in Infrahub read-only: the artifacts template (.infrahub.yml, infrahub/templates/) that renders each device's configuration from the Fylgja generics, and beside it the two checks (infrahub/checks/) that ask Fylgja for a proposed change's plan and its rehearsal." "External"
+        artifacts = softwareSystem "Artifacts repository" "This repository, registered in Infrahub read-only: the artifacts template (.infrahub.yml, infrahub/templates/) that renders each device's configuration from the schema library's kinds (the DcimDevice by name, its DcimPlatform and manufacturer, its InterfacePhysical ports and their DcimCables), and beside it the two checks (infrahub/checks/) that ask Fylgja for a proposed change's plan and its rehearsal." "External"
 
         twin = softwareSystem "Walking twin" "Lab fylgja: a running containerlab topology of real network operating system images, built from one branch at one time." {
             node = container "NOS node" "One device of the twin, clab-fylgja-<node>: SR Linux or EOS, probed and read over gNMI and pushed its artifact." "Container"

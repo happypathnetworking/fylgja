@@ -64,7 +64,9 @@ checked again, and each prints one line, `present`, `installed` or `skipped` wit
 Before any part, when there is no `local/.env`, it writes one, readable by you alone:
 Infrahub's address and an admin token it makes, each platform's node login (the image's
 default), the API's token (`FYLGJA_API_TOKEN`), which the server and every command share,
-and Infrahub's Compose values. A `local/.env` already there is kept as it is. Fylgja reads
+the server's default scope (`FYLGJA_DEFAULT_SCOPE`, `tag:fylgja`), the tag a command that
+names no `--scope` reads its devices under, and Infrahub's Compose values. A `local/.env`
+already there is kept as it is. Fylgja reads
 the process environment only, and neither it nor the script prints, logs or stores a
 credential anywhere else ([.env.example](.env.example) names every value).
 
@@ -100,12 +102,12 @@ the API's server beside it, which every command below talks to. The two roles sh
 state root, here `/var/tmp/fylgja`; any absolute directory both can write will do:
 
 ```sh
-set -a; . local/.env; set +a     # Infrahub, the node logins and FYLGJA_API_TOKEN
+set -a; . local/.env; set +a     # Infrahub, the node logins, FYLGJA_API_TOKEN and FYLGJA_DEFAULT_SCOPE
 make build                       # once: both roles below run this binary
 make temporal-dev &              # the workflow service
 mkdir -p /var/tmp/fylgja         # the state root: the bundle store and the twin directory
 FYLGJA_STATE_ROOT=/var/tmp/fylgja bin/fylgja worker run &   # the lab host worker: prints what it will run, and what's on the host
-FYLGJA_STATE_ROOT=/var/tmp/fylgja bin/fylgja serve &        # the API's server on 127.0.0.1:7650: prints where it listens, its state root and packages
+FYLGJA_STATE_ROOT=/var/tmp/fylgja bin/fylgja serve &        # the API's server on 127.0.0.1:7650: prints where it listens, its state root, its default scope and packages
 ```
 
 `make worker` and `make serve` each build first, and use `local/` in the repository as
@@ -131,7 +133,12 @@ three-node fixture seeded on fylgja-test-readme, with every artifact rendered an
 ```
 
 **Create the twin.** Fylgja reads the branch, compiles it, checks the host, deploys, waits
-for every node to answer, pushes each artifact, and records what it built:
+for every node to answer, pushes each artifact, and records what it built. It reads the
+devices tagged by its scope, `--scope tag:<name>`, or, given none as here, the server's
+default, `FYLGJA_DEFAULT_SCOPE` from `local/.env` (`tag:fylgja`, the tag the fixture puts
+on every device), which the record line names; a server started with no default refuses a
+command that names no scope `scope.unset`, as one started from a `local/.env` written
+before 017 does, since the script keeps the file it finds: add the line to it.
 
 ```console
 $ bin/fylgja twin create --branch fylgja-test-readme --interval 15s

@@ -39,7 +39,7 @@ type rehearseFlags struct {
 //  2. the plan: the open proposed change on the branch found and every stage resolved,
 //     read, compiled and filed as stage plan plans them, then the baseline rule (research
 //     R-03), a stage refused refusing the rehearsal but the branch point refused
-//     contract.node.missing alone, which is passed over;
+//     scope.empty alone (017's FR-015), which is passed over;
 //  3. the deadline, the compiled stages' budgets summed from their node plans, refused
 //     rehearsal.deadline.unfit over the ceiling;
 //  4. the runs in flight, through the workflow service: a rehearsal, a provisioning, step or
@@ -135,7 +135,7 @@ type rehearsalRow struct {
 }
 
 // rehearsalStages is the baseline rule (research R-03) over the plan's stages, in order. The
-// branch point refused with exactly one rejection, contract.node.missing at read, is kept
+// branch point refused with exactly one rejection, scope.empty at read, is kept
 // as a refused row and passed over. Any other stage refused or failed refuses the
 // rehearsal: its findings are then the plan's, every stage's in order. The first compiled
 // stage is the baseline, and each compiled stage after it is rehearsed; one compiled stage
@@ -175,12 +175,9 @@ func rehearsalStages(plan *stages.PlanResult) (baseline int, rows []rehearsalRow
 
 // passedOver is whether a planned stage is the branch point refused at read for a default
 // branch that holds no network, and for nothing else: the one refusal a rehearsal passes
-// over (FR-003; 017's FR-015).
-//
-// The bridge (017's T039, until T050): the read of the library's DCIM refuses a scope that
-// selects no device scope.empty, at read as the plan files every read's finding, where the
-// generics' read refused contract.node.missing. Both are passed over until T050 files
-// scope.empty at resolve for a branch point and removes contract.node.missing.
+// over (FR-003). Over the library's DCIM that is scope.empty, the scope selecting no device
+// on the default branch at the branch point, where 0.2's generics read refused a default
+// branch holding no contract instance (017's FR-015, R-20).
 func passedOver(st stages.PlanStage) bool {
 	if st.Status != stages.PlanRefused || st.AtSource != stages.AtBranchPoint {
 		return false
@@ -190,15 +187,12 @@ func passedOver(st stages.PlanStage) bool {
 		if f.Severity != findings.Rejection {
 			continue
 		}
-		if n++; !noNetwork[f.Rule] || f.Step != findings.StepRead {
+		if n++; f.Rule != findings.RuleScopeEmpty || f.Step != findings.StepRead {
 			return false
 		}
 	}
 	return n == 1
 }
-
-// noNetwork are the rules a read of a default branch holding no network is refused by.
-var noNetwork = map[string]bool{findings.RuleScopeEmpty: true, findings.RuleContractNodeMissing: true}
 
 // firstRejection is the first rejection of a list that holds one.
 func firstRejection(list findings.List) findings.Finding {

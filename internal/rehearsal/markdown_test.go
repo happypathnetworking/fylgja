@@ -46,7 +46,7 @@ func TestMarkdown(t *testing.T) {
 		"",
 		"| stage | at | bundle | step | wait | verify | new verification failures | verdict |",
 		"|---|---|---|---|---|---|---|---|",
-		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (contract.node.missing) |",
+		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (scope.empty) |",
 		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | baseline |",
 		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | stepped 4.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | none | passed |",
 		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |",
@@ -87,7 +87,7 @@ func TestMarkdown(t *testing.T) {
 		"",
 		"| stage | at | bundle | step | wait | verify | new verification failures | verdict |",
 		"|---|---|---|---|---|---|---|---|",
-		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (contract.node.missing) |",
+		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (scope.empty) |",
 		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | created | expired after 120.0s | 14 held, 1 failed, 0 skipped | — | baseline |",
 		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | stepped 4.5s; push n1, n3 | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | passed |",
 		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | diverged at push 29.8s; restarted n3 61.2s; push n3; not landed n1 (push.refused) | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | failed |",
@@ -110,9 +110,9 @@ func TestMarkdown(t *testing.T) {
 		"",
 		"**Findings**:",
 		"",
-		"- `contract.node.missing` main: branch defines FylgjaContract but holds no instance of it",
 		"- `push.refused` n1: n1 refused artifact device-config (checksum 9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3) at line 12: invalid port ethernet-1/99",
 		"- `rehearsal.stage.failed` change-1/bad-port: diverged at phase push: landed n3; not landed n1 (push.refused)",
+		"- `scope.empty` tag:fylgja: scope tag:fylgja selects no device on branch main",
 		"",
 		"**Stages** (Infrahub's view does not show them):",
 		"",
@@ -167,8 +167,8 @@ func TestMarkdownOfABaselineNotVerified(t *testing.T) {
 	md := Markdown(unverifiedRun().document(), pairs())
 	for _, want := range []string{
 		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | created | incomplete after 0.0s | | — | error |",
-		"**Findings**:\n\n- `contract.node.missing` main: branch defines FylgjaContract but holds no instance of it\n" +
-			"- `rehearsal.stage.error` change-1/seeded: its wait ended incomplete after 0.0s\n\n",
+		"**Findings**:\n\n- `rehearsal.stage.error` change-1/seeded: its wait ended incomplete after 0.0s\n" +
+			"- `scope.empty` tag:fylgja: scope tag:fylgja selects no device on branch main\n\n",
 		"**Warnings**:\n\n- `operation.failed` change-1/seeded: " + rehearseRun + ": activity verify\\_twin failed: the workflow service did not answer (stage seeded)\n\n",
 		"**Baseline findings** (reported, failing nothing): none\n\n",
 	} {
@@ -313,7 +313,7 @@ func TestMarkdownFitsAComment(t *testing.T) {
 	for _, want := range []string{
 		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | diverged at push | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | failed |",
 		`  s3["change-1/bad-port<br/>failed"]`,
-		"**Findings**:\n\n- `contract.node.missing` main\n- `push.refused` n1 (×2)\n- `rehearsal.stage.failed` change-1/bad-port\n- `step.diverged` " + stepRun + "2\n\n",
+		"**Findings**:\n\n- `push.refused` n1 (×2)\n- `rehearsal.stage.failed` change-1/bad-port\n- `scope.empty` tag:fylgja\n- `step.diverged` " + stepRun + "2\n\n",
 		"**Stages** (Infrahub's view does not show them):",
 		"**Warnings**:\n\n- `artifact.interface.unrepresented` n1:ethernet-1/99 (stages bad-port, head)\n\n",
 		"**Baseline findings** (reported, failing nothing):\n\n- `verify.neighbor` n1:ethernet-1/2\n\n",
@@ -628,8 +628,8 @@ func TestMarkdownOfARefusal(t *testing.T) {
 		"Run `fylgja-rehearse " + rehearseRun + "` touched nothing, since a run already holds the id of its baseline's provision, " +
 			"and no destroy was needed; stages resolved at 2026-10-17T14:02:11Z. Status **rejected**. Deadline 1980s (ceiling 3600s).",
 		`  s1["change-1/seeded<br/>not reached"]`,
-		"**Findings**:\n\n- `contract.node.missing` main: branch defines FylgjaContract but holds no instance of it\n" +
-			"- `run.in_flight` fylgja-provision: the rehearsal's fylgja-provision could not start: a run is already in flight under its id",
+		"**Findings**:\n\n- `run.in_flight` fylgja-provision: the rehearsal's fylgja-provision could not start: a run is already in flight under its id\n" +
+			"- `scope.empty` tag:fylgja: scope tag:fylgja selects no device on branch main",
 	} {
 		if !strings.Contains(md, want) {
 			t.Errorf("the held rehearsal's markdown does not hold %q:\n%s", want, md)
@@ -647,7 +647,7 @@ func TestMarkdownOfARefusal(t *testing.T) {
 		"",
 		"| stage | at | bundle | step | wait | verify | new verification failures | verdict |",
 		"|---|---|---|---|---|---|---|---|",
-		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (contract.node.missing) |",
+		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (scope.empty) |",
 		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | | | | | not read |",
 		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | | | | | not read |",
 		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | | | | | not read |",
@@ -665,8 +665,8 @@ func TestMarkdownOfARefusal(t *testing.T) {
 		"",
 		"**Findings**:",
 		"",
-		"- `contract.node.missing` main: branch defines FylgjaContract but holds no instance of it",
 		"- `operation.failed` provision: " + lostWhy,
+		"- `scope.empty` tag:fylgja: scope tag:fylgja selects no device on branch main",
 		"",
 		"**Stages** (Infrahub's view does not show them):",
 		"",
@@ -773,10 +773,10 @@ func TestMarkdownOfACutAFailedBaselineAndAnUncleanDestroy(t *testing.T) {
 			"| stage | at | bundle | step | wait | verify | new verification failures | verdict |\n|---|---|---|---|---|---|---|---|\n"
 	}
 	const (
-		bp     = "| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (contract.node.missing) |\n"
+		bp     = "| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (scope.empty) |\n"
 		base   = "| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | baseline |\n"
 		link   = `  s1 -- "+link n1:e1-3 — n3:e1-3; ~n1, ~n3 (bootstrap, mapping); artifacts n1, n3" --> s2` + "\n"
-		missed = "- `contract.node.missing` main: branch defines FylgjaContract but holds no instance of it\n"
+		missed = "- `scope.empty` tag:fylgja: scope tag:fylgja selects no device on branch main\n"
 		tail   = "**Warnings**: none\n\n**Baseline findings** (reported, failing nothing): none\n\n" + Caveat + "\n"
 	)
 	unclean := uncleanRun()
@@ -802,8 +802,9 @@ func TestMarkdownOfACutAFailedBaselineAndAnUncleanDestroy(t *testing.T) {
 			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | | | | | not reached |\n\n" +
 			"```mermaid\nflowchart TD\n" + `  s0["change-1/branch-point<br/>refused"]` + "\n" + `  s1["change-1/seeded<br/>error"]` + "\n" +
 			`  s2["change-1/third-link<br/>not reached"]` + "\n" + `  s0 -. "not computed" .-> s1` + "\n" + link + failedClass("s1") + "```\n\n**Findings**:\n\n" +
-			missed + "- `readiness.timeout` n2: n2 did not answer its probe within 60s\n" +
-			"- `rehearsal.baseline.failed` change-1/seeded: the baseline change-1/seeded could not be built: its provision ended failed at readiness\n\n"},
+			"- `readiness.timeout` n2: n2 did not answer its probe within 60s\n" +
+			"- `rehearsal.baseline.failed` change-1/seeded: the baseline change-1/seeded could not be built: its provision ended failed at readiness\n" +
+			missed + "\n"},
 		{"unclean", uncleanDoc, head("unclean", "118.4s") + bp + base +
 			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | stepped 4.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | none | passed |\n" +
 			"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |\n\n" +

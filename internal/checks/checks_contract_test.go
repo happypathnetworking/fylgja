@@ -58,7 +58,7 @@ var unreached = []string{"cannot be reached", "is not set in this task worker's 
 // proposed change. fylgja-twin skips the draft at its creation and at each re-run, asks
 // nothing and posts no comment, and no twin is booted. fylgja-step, with two marks, concludes
 // success, its message the plan's text with its four stages, three steps and the branch
-// point's contract.node.missing; with a mark made stale it concludes failure naming
+// point's scope.empty; with a mark made stale it concludes failure naming
 // stage.artifact.stale and the device. Marked ready with that mark standing, fylgja-twin asks
 // for the rehearsal, which Fylgja refuses before any boot, concludes failure naming
 // stage.artifact.stale, and posts the report as a comment in a thread the proposed change's
@@ -160,8 +160,8 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	if n := len(regexp.MustCompile(`(?m)^step `).FindAllString(step.Message, -1)); n != 3 {
 		t.Errorf("%s's message has %d step lines, want 3:\n%s", TestStepCheck, n, step.Message)
 	}
-	if !strings.Contains(step.Message, findings.RuleContractNodeMissing) {
-		t.Errorf("%s's message does not carry the branch point's %s:\n%s", TestStepCheck, findings.RuleContractNodeMissing, step.Message)
+	if !strings.Contains(step.Message, findings.RuleScopeEmpty) {
+		t.Errorf("%s's message does not carry the branch point's %s:\n%s", TestStepCheck, findings.RuleScopeEmpty, step.Message)
 	}
 
 	// 6. A mark made stale: an intent change with no generate, then a mark.

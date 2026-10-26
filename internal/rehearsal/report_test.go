@@ -17,7 +17,7 @@ import (
 )
 
 // The example proposed change of contracts/rehearse-command.md: change-1, its branch point
-// refused contract.node.missing on a main that holds no network, the mark seeded, the marks
+// refused scope.empty on a main that holds no network, the mark seeded, the marks
 // third-link and bad-port, and the head, every stage read under the scope tag:fylgja (017).
 const (
 	change       = "change-1"
@@ -37,8 +37,8 @@ var (
 
 func branchPoint() Stage {
 	var l findings.List
-	l.AddStep(findings.Rejection, findings.StepRead, findings.RuleContractNodeMissing, "main",
-		"branch defines FylgjaContract but holds no instance of it")
+	l.AddStep(findings.Rejection, findings.StepRead, findings.RuleScopeEmpty, "tag:fylgja",
+		"scope tag:fylgja selects no device on branch main")
 	return Stage{Ref: change + "/branch-point", Label: "branch-point", AtSource: findings.AtSourceBranchPoint,
 		Branch: "main", At: "2026-10-16T17:20:19.944651+00:00", Role: RoleRefused, Findings: l}
 }
@@ -772,13 +772,13 @@ func TestStageLinesAndClosing(t *testing.T) {
 		closing string
 	}{
 		{passedRun(), []string{
-			"stage change-1/branch-point: refused (contract.node.missing)",
+			"stage change-1/branch-point: refused (scope.empty)",
 			"stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline",
 			"stage change-1/third-link: stepped in 4.5s (push n1 2.5s, n3 2.6s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed",
 			"stage change-1/head: unchanged in 0.9s; settled after 1.0s (1 read); 19 held, 0 failed, 0 skipped; passed",
 		}, "rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1980s deadline"},
 		{failedRun(), []string{
-			"stage change-1/branch-point: refused (contract.node.missing)",
+			"stage change-1/branch-point: refused (scope.empty)",
 			"stage change-1/seeded: created; expired after 120.0s (58 reads); 14 held, 1 failed, 0 skipped; baseline",
 			"stage change-1/third-link: stepped in 4.5s (push n1 2.5s, n3 2.6s); expired after 120.0s (60 reads); 18 held, 1 failed, 0 skipped; passed",
 			"stage change-1/bad-port: diverged at phase push: restarted n3 61.2s; landed n3; not landed n1 (push.refused); expired after 120.0s (58 reads); 18 held, 1 failed, 0 skipped; failed",
@@ -804,12 +804,12 @@ func TestStageLinesAndClosing(t *testing.T) {
 			"stage change-1/head: not reached",
 		}, "rehearsal error: the deadline of 1980s passed at stage change-1/third-link; the twin is destroyed"},
 		{notBuiltRun(), []string{
-			"stage change-1/branch-point: refused (contract.node.missing)",
+			"stage change-1/branch-point: refused (scope.empty)",
 			"stage change-1/seeded: not built: its provision ended failed at readiness",
 			"stage change-1/third-link: not reached",
 		}, "rehearsal failed: the baseline change-1/seeded could not be built: its provision ended failed at readiness; the twin is destroyed"},
 		{notBuiltErrorRun(), []string{
-			"stage change-1/branch-point: refused (contract.node.missing)",
+			"stage change-1/branch-point: refused (scope.empty)",
 			"stage change-1/seeded: not built: its provision ended error at deploy; error",
 			"stage change-1/third-link: not reached",
 		}, "rehearsal error: stage change-1/seeded could not be rehearsed: its provision ended error at deploy; the twin is destroyed"},
@@ -823,7 +823,7 @@ func TestStageLinesAndClosing(t *testing.T) {
 			"stage change-1/bad-port: not reached", "stage change-1/head: not reached",
 		}, "rehearsal rejected: nothing was started"},
 		{heldRun(), []string{
-			"stage change-1/branch-point: refused (contract.node.missing)",
+			"stage change-1/branch-point: refused (scope.empty)",
 			"stage change-1/seeded: not reached", "stage change-1/third-link: not reached",
 		}, "rehearsal rejected: the run touched nothing, since a run already holds the id of its baseline's provision; no destroy was needed"},
 		{lostRun(), nil, "rehearsal error: run fylgja-rehearse " + rehearseRun + " was started and its end was not read (" + lostWhy +
@@ -937,7 +937,7 @@ func TestFindingsAreTheStagesInOrder(t *testing.T) {
 		n += len(s.Findings)
 	}
 	l := Findings(b)
-	if len(l) != n || l[0].Rule != findings.RuleContractNodeMissing {
+	if len(l) != n || l[0].Rule != findings.RuleScopeEmpty {
 		t.Errorf("Findings = %v", l)
 	}
 	raw, err := json.Marshal(b)

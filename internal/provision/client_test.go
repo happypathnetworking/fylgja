@@ -1622,7 +1622,7 @@ func rehearseInput() RehearseInput {
 		CeilingS:       3600,
 		Stages: []RehearseStage{
 			{Ref: "change-1/branch-point", Label: "branch-point", AtSource: "branch_point", Role: "refused",
-				Refused: &RehearseRefusal{Rule: findings.RuleContractNodeMissing, Message: "branch defines FylgjaContract but holds no instance of it"}},
+				Refused: &RehearseRefusal{Rule: findings.RuleScopeEmpty, Message: "scope tag:fylgja selects no device on branch main"}},
 			{Ref: "change-1/cabled", Label: "cabled", AtSource: "written", Branch: "change-1", At: stepFromAt, BundleID: stepFrom,
 				BundlePath: provisionIn.BundlePath, Role: "baseline", Provision: &provisionIn, WaitS: 120},
 			{Ref: "change-1/live", Label: "live", AtSource: "given", Branch: "change-1", At: stepToAt, BundleID: stepTo,

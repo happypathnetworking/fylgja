@@ -99,8 +99,8 @@ func rehearsalDocuments() []labelledDocument {
 	nonconforming.AddStep(Warning, StepDestroy, RuleRehearsalTwinReclaimed, reclaimedRunID,
 		"the twin of rehearsal run "+reclaimedRunID+", which is no longer running, was destroyed: lab fylgja (3 containers), twin directory /srv/fylgja/local/twin")
 	var refusedBranchPoint List
-	refusedBranchPoint.AddStep(Rejection, StepRead, RuleContractNodeMissing, "main",
-		"branch defines FylgjaContract but holds no instance of it")
+	refusedBranchPoint.AddStep(Rejection, StepRead, RuleScopeEmpty, "tag:fylgja",
+		"scope tag:fylgja selects no device on branch main")
 	nonconforming = append(nonconforming, refusedBranchPoint...)
 	var seededFindings List
 	seededFindings.AddStep(Warning, StepObserve, RuleVerifyNeighbor, "change-1/seeded: n1:ethernet-1/2", baselineFinding.Message)

@@ -76,7 +76,7 @@ class FylgjaStep(InfrahubCheck):
 
 def refuses(document: dict[str, Any]) -> bool:
     """Whether the plan fails the change: stage.plan's status mapped, ok passing and every other
-    failing, but for a plan rejected by the branch point's lone contract.node.missing alone."""
+    failing, but for a plan rejected by the branch point's lone scope.empty alone."""
     status = document.get("status")
     if status == "ok":
         return False

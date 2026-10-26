@@ -22,8 +22,6 @@ import (
 // named. Rule identifiers are stable API,
 // so neither direction is a detail.
 var dataModelRules = []string{
-	// Conformance.
-	"contract.node.missing",
 	// Completeness and intent rules.
 	"data.required.missing",
 	"device.name.duplicate",

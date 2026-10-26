@@ -73,8 +73,8 @@ func (f *fakePipeline) pipeline() Pipeline {
 
 // emptyMain is the development host's main: the schema and no FylgjaContract object, so
 // every branch point is refused before a device is counted (research §6.1, R-04).
-var emptyMain = map[string]findings.List{"main": {{Severity: findings.Rejection, Rule: findings.RuleContractNodeMissing,
-	Object: "main", Message: "branch defines FylgjaContract but holds no instance of it"}}}
+var emptyMain = map[string]findings.List{"main": {{Severity: findings.Rejection, Rule: findings.RuleScopeEmpty,
+	Object: "tag:fylgja", Message: "scope tag:fylgja selects no device on branch main"}}}
 
 // planned runs Plan and records the order of its callbacks.
 func planned(t *testing.T, r Reader, s Stamper, branch string, f *fakePipeline) (*PlanResult, []string) {
@@ -100,7 +100,7 @@ func labelsOf(res *PlanResult) []string {
 }
 
 // Two marks give four stages in order and three steps: the branch point on the empty
-// main refused contract.node.missing and its step not computed; cabled, live and head
+// main refused scope.empty and its step not computed; cabled, live and head
 // compiled, each read at its own reference verbatim, filed and diffed; the step from
 // cabled adding the link, and the step from live to the head unchanged, the two ids
 // differing by provenance alone. Each step comes between the stages it joins.
@@ -124,7 +124,7 @@ func TestPlanStages(t *testing.T) {
 		t.Fatalf("stages %v, want %v", got, want)
 	}
 	bp := res.Stages[0]
-	if bp.Rule != findings.RuleContractNodeMissing || bp.Resolved == nil || bp.Resolved.Branch != "main" ||
+	if bp.Rule != findings.RuleScopeEmpty || bp.Resolved == nil || bp.Resolved.Branch != "main" ||
 		bp.AtSource != AtBranchPoint || bp.Bundle != nil || len(bp.Findings) != 1 || bp.Findings[0].Step != findings.StepRead {
 		t.Errorf("branch-point: %+v", bp)
 	}

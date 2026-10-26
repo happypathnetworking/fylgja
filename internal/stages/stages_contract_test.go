@@ -387,7 +387,7 @@ func TestStageKindLoads(t *testing.T) {
 // A proposed change with two marks lists and plans as four stages in order: the branch
 // point, each mark at its own write stamp verbatim, and the head one microsecond after the
 // branch's latest stamp. On this install's main, which holds no contract, the branch point
-// is refused contract.node.missing and its step is not computed (research R-04); the marks
+// is refused scope.empty and its step is not computed (research R-04); the marks
 // and the head compile to three ids, the step between the marks is the link added with n1
 // and n3 changed, and the step to the head is unchanged. The mark's CTM is the read of
 // --branch at its at, but for observed_at, and compiles to the same id (SC-002). Then the
@@ -458,7 +458,7 @@ func TestStagesListAndPlan(t *testing.T) {
 	p, filed := filing(t)
 	res := planOf(t, name, p)
 	if got, wantOutcomes := outcomes(res), []outcome{
-		{LabelBranchPoint, PlanRefused, findings.RuleContractNodeMissing},
+		{LabelBranchPoint, PlanRefused, findings.RuleScopeEmpty},
 		{"seeded", PlanCompiled, ""},
 		{"third-link", PlanCompiled, ""},
 		{LabelHead, PlanCompiled, ""},
@@ -703,7 +703,7 @@ func TestStageRefusals(t *testing.T) {
 	p, _ := filing(t)
 	res := planOf(t, name, p)
 	if got, want := outcomes(res), []outcome{
-		{LabelBranchPoint, PlanRefused, findings.RuleContractNodeMissing},
+		{LabelBranchPoint, PlanRefused, findings.RuleScopeEmpty},
 		{"role-stale", PlanRefused, findings.RuleStageArtifactStale},
 		{"role-fresh", PlanCompiled, ""},
 		{"site-stale", PlanRefused, findings.RuleStageArtifactStale},
@@ -733,7 +733,7 @@ func TestStageRefusals(t *testing.T) {
 		t.Errorf("the rebase moved created_at %s → %s", createdBefore, createdAt)
 	}
 	res = planOf(t, name, p)
-	want := []outcome{{LabelBranchPoint, PlanRefused, findings.RuleContractNodeMissing}}
+	want := []outcome{{LabelBranchPoint, PlanRefused, findings.RuleScopeEmpty}}
 	for _, m := range marks {
 		want = append(want, outcome{m, PlanRefused, findings.RuleStageAtBeforeBranchPoint})
 	}
@@ -884,7 +884,7 @@ func TestStagesSeeARemoval(t *testing.T) {
 	p, _ := filing(t)
 	res := planOf(t, name, p)
 	if got, want := outcomes(res), []outcome{
-		{LabelBranchPoint, PlanRefused, findings.RuleContractNodeMissing},
+		{LabelBranchPoint, PlanRefused, findings.RuleScopeEmpty},
 		{"seeded", PlanCompiled, ""},
 		{"removed", PlanRefused, findings.RuleStageArtifactStale},
 		{LabelHead, PlanRefused, findings.RuleStageArtifactStale},
@@ -914,7 +914,7 @@ func TestStagesSeeARemoval(t *testing.T) {
 	}
 	res = planOf(t, name, p)
 	if got, want := outcomes(res), []outcome{
-		{LabelBranchPoint, PlanRefused, findings.RuleContractNodeMissing},
+		{LabelBranchPoint, PlanRefused, findings.RuleScopeEmpty},
 		{"seeded", PlanCompiled, ""},
 		{"removed", PlanRefused, findings.RuleStageArtifactStale},
 		{LabelHead, PlanCompiled, ""},

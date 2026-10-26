@@ -293,7 +293,7 @@ const shellSafe = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ012345678
 // StageLines are the text's one line per stage after the run (contracts/rehearse-command.md,
 // "The text"): what the run did at the stage, its wait and its counts, then its verdict.
 //
-//	stage change-1/branch-point: refused (contract.node.missing)
+//	stage change-1/branch-point: refused (scope.empty)
 //	stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline
 //	stage change-1/third-link: stepped in 4.5s (push n1 2.5s, n3 2.6s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; passed
 //	stage change-1/bad-port: diverged at phase push: restarted n3 61.2s; landed n3; not landed n1 (push.refused); …; failed

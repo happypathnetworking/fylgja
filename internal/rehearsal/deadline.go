@@ -14,7 +14,7 @@ const Ceiling = 3600 * time.Second
 // The roles a stage takes in a rehearsal (rehearsal.schema.json, $defs/stage).
 const (
 	// RoleRefused is a stage the plan refused: the branch point refused
-	// contract.node.missing, passed over, or a stage whose refusal refused the rehearsal.
+	// scope.empty, passed over, or a stage whose refusal refused the rehearsal.
 	RoleRefused = "refused"
 	// RoleBaseline is the first compiled stage, created and verified.
 	RoleBaseline = "baseline"

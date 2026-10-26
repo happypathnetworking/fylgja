@@ -400,7 +400,7 @@ type RehearseStage struct {
 }
 
 // RehearseRefusal is why the plan refused a stage the rehearsal passes over: the branch
-// point's one rejection, contract.node.missing at read (research R-03).
+// point's one rejection, scope.empty at read (research R-03; 017's FR-015).
 type RehearseRefusal struct {
 	Rule    string `json:"rule"`
 	Message string `json:"message"`

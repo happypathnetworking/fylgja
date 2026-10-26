@@ -471,8 +471,8 @@ func listAndPlanDocuments() []labelledDocument {
 		}}
 
 	var noContract List
-	noContract.AddStep(Rejection, StepRead, RuleContractNodeMissing, "main",
-		"branch defines FylgjaContract but holds no instance of it")
+	noContract.AddStep(Rejection, StepRead, RuleScopeEmpty, "tag:fylgja",
+		"scope tag:fylgja selects no device on branch main")
 	bare := NewDocument(OpStagePlan, nil, noContract)
 	bp := branchPointBlock()
 	bare.Plan = &PlanBlock{Branch: "change-1", ProposedChange: stageChange(),

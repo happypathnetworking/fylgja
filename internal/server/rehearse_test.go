@@ -107,13 +107,13 @@ func rejectionAt(step, rule, object string) findings.Finding {
 }
 
 // rehearsePlan is the development host's case (research R-04): the branch point refused
-// contract.node.missing alone, two marks and the head compiled, the head's bundle the second
+// scope.empty alone, two marks and the head compiled, the head's bundle the second
 // mark's, and the plan's steps between them.
 func rehearsePlan(t *testing.T) *stages.PlanResult {
 	t.Helper()
 	seeded, third := goldenBundle(t, "three-node"), goldenBundle(t, "mixed")
 	plan := &stages.PlanResult{Branch: rehearseBranch, ProposedChange: &rehearseChange, Stages: []stages.PlanStage{
-		branchPoint(rejectionAt(findings.StepRead, findings.RuleContractNodeMissing, "main")),
+		branchPoint(rejectionAt(findings.StepRead, findings.RuleScopeEmpty, "tag:fylgja")),
 		compiledStage("seeded", stages.AtWritten, "2026-10-16T17:25:30.118244+00:00", "2026-10-19T10:00:01.000000Z", seeded),
 		compiledStage("third-link", stages.AtGiven, "2026-10-16T17:30:00.000000+00:00", "2026-10-19T10:00:02.000000Z", third),
 		compiledStage(stages.LabelHead, stages.AtHead, "2026-10-16T17:30:11.884302+00:00", "2026-10-19T10:00:03.000000Z", third),
@@ -136,12 +136,12 @@ func rehearsePlan(t *testing.T) *stages.PlanResult {
 	return plan
 }
 
-// The baseline rule (research R-03): the branch point refused contract.node.missing at read
+// The baseline rule (research R-03): the branch point refused scope.empty at read
 // alone is a refused row passed over, carrying its one rejection; the first compiled stage
 // is the baseline and each after it is rehearsed. A branch point that compiled is the
 // baseline. Any other refusal refuses the rehearsal with the plan's findings, every stage
 // still a row, the refused ones refused: a stale mark, a branch point refused beside
-// contract.node.missing or for it at another step, and a mark refused contract.node.missing,
+// scope.empty or for it at another step, and a mark refused scope.empty,
 // which only the branch point is passed over for. One compiled stage alone is the baseline,
 // with rehearsal.steps.none.
 func TestRehearsalStagesTakeTheBaselineRule(t *testing.T) {
@@ -159,7 +159,7 @@ func TestRehearsalStagesTakeTheBaselineRule(t *testing.T) {
 	if b != 1 || refusal != nil || !slices.Equal(roles(rows), []string{refused, baseline, rehearsed, rehearsed}) {
 		t.Fatalf("baseline %d, roles %v, refusal %v", b, roles(rows), refusal)
 	}
-	if r := rows[0].refused; r == nil || r.Rule != findings.RuleContractNodeMissing || r.Message != "contract.node.missing on main" {
+	if r := rows[0].refused; r == nil || r.Rule != findings.RuleScopeEmpty || r.Message != "scope.empty on tag:fylgja" {
 		t.Errorf("the branch point passed over carries %+v", r)
 	}
 	if !slices.Equal(rows[0].findings, plan.Stages[0].Findings) || carriesRule(findings.List(rows[1].findings), findings.RuleRehearsalStepsNone) {
@@ -193,21 +193,21 @@ func TestRehearsalStagesTakeTheBaselineRule(t *testing.T) {
 				Findings: findings.List{rejectionAt(findings.StepResolve, findings.RuleStageArtifactStale, "n1")},
 				Status:   stages.PlanRefused, Rule: findings.RuleStageArtifactStale}
 		}, findings.StatusRejected},
-		{"the branch point refused beside contract.node.missing", func(p *stages.PlanResult) {
-			p.Stages[0] = branchPoint(rejectionAt(findings.StepRead, findings.RuleContractNodeMissing, "main"),
+		{"the branch point refused beside scope.empty", func(p *stages.PlanResult) {
+			p.Stages[0] = branchPoint(rejectionAt(findings.StepRead, findings.RuleScopeEmpty, "tag:fylgja"),
 				rejectionAt(findings.StepRead, findings.RulePlatformMissing, "n1"))
 		}, findings.StatusRejected},
 		{"the branch point refused beside scope.empty", func(p *stages.PlanResult) {
 			p.Stages[0] = branchPoint(rejectionAt(findings.StepRead, findings.RuleScopeEmpty, "tag:fylgja"),
 				rejectionAt(findings.StepRead, findings.RulePlatformMissing, "n1"))
 		}, findings.StatusRejected},
-		{"the branch point refused contract.node.missing at compile", func(p *stages.PlanResult) {
-			p.Stages[0] = branchPoint(rejectionAt(findings.StepCompile, findings.RuleContractNodeMissing, "main"))
+		{"the branch point refused scope.empty at compile", func(p *stages.PlanResult) {
+			p.Stages[0] = branchPoint(rejectionAt(findings.StepCompile, findings.RuleScopeEmpty, "tag:fylgja"))
 		}, findings.StatusRejected},
-		{"a mark refused contract.node.missing", func(p *stages.PlanResult) {
+		{"a mark refused scope.empty", func(p *stages.PlanResult) {
 			st := p.Stages[1]
-			st.Bundle, st.Status, st.Rule = nil, stages.PlanRefused, findings.RuleContractNodeMissing
-			st.Findings = findings.List{rejectionAt(findings.StepRead, findings.RuleContractNodeMissing, rehearseBranch)}
+			st.Bundle, st.Status, st.Rule = nil, stages.PlanRefused, findings.RuleScopeEmpty
+			st.Findings = findings.List{rejectionAt(findings.StepRead, findings.RuleScopeEmpty, rehearseBranch)}
 			p.Stages[1] = st
 		}, findings.StatusRejected},
 		{"a stage that could not be read", func(p *stages.PlanResult) {
@@ -701,11 +701,11 @@ func TestRehearsalReportedOnceTheRunCloses(t *testing.T) {
 			rejections = append(rejections, f.Rule)
 		}
 	}
-	if !carriesRule(doc.Findings, findings.RuleRehearsalStageMoved) || !slices.Equal(rejections, []string{findings.RuleContractNodeMissing}) {
+	if !carriesRule(doc.Findings, findings.RuleRehearsalStageMoved) || !slices.Equal(rejections, []string{findings.RuleScopeEmpty}) {
 		t.Errorf("ok: findings %+v", doc.Findings)
 	}
 	for _, want := range []string{
-		"stage change-1/branch-point: refused (contract.node.missing)\n",
+		"stage change-1/branch-point: refused (scope.empty)\n",
 		"stage change-1/seeded: created; settled after 3.2s (2 reads); baseline\n",
 		"stage change-1/third-link: stepped in 4.5s (push n1 2.5s); settled after 6.1s (4 reads); passed\n",
 		"stage change-1/head: unchanged in 4.5s; settled after 6.1s (4 reads); passed\n",

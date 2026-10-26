@@ -23,7 +23,7 @@ import (
 )
 
 // The rehearsal's fixture: proposed change pc-1 on branch change-1, whose branch point the
-// plan refused contract.node.missing, as on the development host, and whose marks and head
+// plan refused scope.empty, as on the development host, and whose marks and head
 // compiled; the baseline's record time.
 const (
 	rehearsalBranch     = "change-1"
@@ -163,11 +163,11 @@ func stageRef(label string) *wire.StageRef {
 	return &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: rehearsalBranch}, Label: label, AtSource: "written"}
 }
 
-// branchPoint is the branch point the plan refused contract.node.missing, passed over.
+// branchPoint is the branch point the plan refused scope.empty, passed over.
 func branchPoint() RehearseStage {
 	return RehearseStage{Ref: rehearsalBranch + "/branch-point", Label: "branch-point", AtSource: "branch_point",
-		Role: rehearsal.RoleRefused, Refused: &RehearseRefusal{Rule: findings.RuleContractNodeMissing,
-			Message: "branch defines FylgjaContract but holds no instance of it"}}
+		Role: rehearsal.RoleRefused, Refused: &RehearseRefusal{Rule: findings.RuleScopeEmpty,
+			Message: "scope tag:fylgja selects no device on branch main"}}
 }
 
 // baselineStage is the first compiled stage, the baseline, with its provision already

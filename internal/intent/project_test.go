@@ -330,8 +330,9 @@ func TestReadProjectsEachPort(t *testing.T) {
 // A tagged device whose platform no package can be chosen for refuses the read, each one
 // in one pass and in name order, with no CTM (US2 scenario 5; FR-014): no platform, a
 // platform with no manufacturer, and a pair no package names exactly, its letter case and
-// spacing included. None of them is also refused for its artifact, and the read is not
-// otherwise cut short: a fourth device's artifact is still checked in the same pass.
+// spacing included, and a manufacturer whose name is empty among them, told from none
+// (T115). None of them is also refused for its artifact, and the read is not otherwise cut
+// short: a fourth device's artifact is still checked in the same pass.
 func TestReadRefusesEveryDeviceWithoutAPackage(t *testing.T) {
 	f := newFakeInfrahub(t)
 	n1, n2, n3 := f.device("n1"), f.device("n2"), f.device("n3")
@@ -339,6 +340,7 @@ func TestReadRefusesEveryDeviceWithoutAPackage(t *testing.T) {
 	n2.Manufacturer, n2.Platform = "", ""
 	n3.Manufacturer, n3.Platform = "", "Orphan OS"
 	f.addDevice("n4", "Nokia", "SR Linux", []string{fixtureTag})
+	f.addDevice("n5", "", "SR Linux", []string{fixtureTag}).EmptyManufacturer = true
 
 	c, list, err := readFake(t, f)
 
@@ -355,13 +357,15 @@ func TestReadRefusesEveryDeviceWithoutAPackage(t *testing.T) {
 			Message: "device n2 carries no platform; its support package is the one whose matches name its platform and manufacturer"},
 		{Severity: findings.Rejection, Rule: findings.RulePlatformMissing, Object: "n3",
 			Message: `device n3 carries platform "Orphan OS" with no manufacturer; its support package is the one whose matches name both`},
+		{Severity: findings.Rejection, Rule: findings.RulePlatformUnmatched, Object: "n5",
+			Message: `device n5: manufacturer "", platform "SR Linux"; the packages match: arista_eos [Arista / EOS], nokia_srlinux [Nokia / SR Linux]`},
 		{Severity: findings.Rejection, Rule: findings.RuleArtifactMissing, Object: "n4",
 			Message: "device n4 has no artifact named device-config on branch fylgja-fixture"},
 	}
 	if !reflect.DeepEqual(list, want) {
 		t.Errorf("findings\n%v\nwant\n%v", list, want)
 	}
-	for _, d := range []string{"n1", "n2", "n3"} {
+	for _, d := range []string{"n1", "n2", "n3", "n5"} {
 		if n := f.count("/api/storage/object/storage-" + d); n != 0 {
 			t.Errorf("device %s, refused for its platform, had its artifact fetched", d)
 		}

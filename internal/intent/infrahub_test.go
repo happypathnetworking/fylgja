@@ -58,12 +58,14 @@ type fakeInfrahub struct {
 }
 
 // fakeDevice is one DcimDevice: its tags, its platform's name and its manufacturer's (""
-// for none), its physical ports, and the names of its InterfaceVirtuals, which no query
-// of the read can reach.
+// for none, unless EmptyManufacturer serves a manufacturer whose name is empty), its
+// physical ports, and the names of its InterfaceVirtuals, which no query of the read can
+// reach.
 type fakeDevice struct {
 	ID, Name, Status       string
 	Tags                   []string
 	Platform, Manufacturer string
+	EmptyManufacturer      bool
 	Ports                  []*fakePort
 	Virtual                []string
 }
@@ -449,7 +451,7 @@ func (f *fakeInfrahub) devicePage(tag string, limit, offset int) map[string]any 
 		var platform any
 		if d.Platform != "" {
 			var manufacturer any
-			if d.Manufacturer != "" {
+			if d.Manufacturer != "" || d.EmptyManufacturer {
 				manufacturer = map[string]any{"name": value(d.Manufacturer)}
 			}
 			platform = map[string]any{"name": value(d.Platform), "manufacturer": map[string]any{"node": manufacturer}}

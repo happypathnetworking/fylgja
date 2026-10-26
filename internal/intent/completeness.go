@@ -13,11 +13,13 @@ import (
 // types: its name, and its platform's pair as far as the device carries one.
 type readDevice struct {
 	id, name string
-	// hasPlatform is whether the device has a platform at all; platform and manufacturer
-	// are its names, manufacturer empty when the platform has none.
-	hasPlatform            bool
-	platform, manufacturer string
-	node                   deviceNode
+	// hasPlatform is whether the device has a platform at all, and hasManufacturer whether
+	// that platform has a manufacturer; platform and manufacturer are their names, either
+	// of which can be empty on a node that exists (queries.graphql reads each as a pointer
+	// to tell the two apart).
+	hasPlatform, hasManufacturer bool
+	platform, manufacturer       string
+	node                         deviceNode
 }
 
 // match is the device's pair, for the registry.
@@ -40,7 +42,8 @@ func ScopeEmpty(scope, branch, at string) findings.Finding {
 // completeness refuses every device in the scope that no package can be chosen for, all
 // in one pass and before any artifact is fetched (R-03; FR-014): one with no platform, or
 // a platform with no manufacturer, is incomplete (platform.missing), and one whose pair no
-// package names exactly is unmatched (platform.unmatched). The packages are found here, by
+// package names exactly is unmatched (platform.unmatched), a manufacturer or platform whose
+// name is empty among them, since no package names an empty one (psp.matches.missing). The packages are found here, by
 // the pair, so a CTM never carries a device without one. Devices are reported in name
 // order, the order the CTM lists them in.
 func completeness(devices []readDevice, reg *psp.Registry) (map[string]*psp.PSP, findings.List) {
@@ -54,7 +57,7 @@ func completeness(devices []readDevice, reg *psp.Registry) (map[string]*psp.PSP,
 		case !d.hasPlatform:
 			list.Add(findings.Rejection, findings.RulePlatformMissing, d.name, fmt.Sprintf(
 				"device %s carries no platform; its support package is the one whose matches name its platform and manufacturer", d.name))
-		case d.manufacturer == "":
+		case !d.hasManufacturer:
 			list.Add(findings.Rejection, findings.RulePlatformMissing, d.name, fmt.Sprintf(
 				"device %s carries platform %q with no manufacturer; its support package is the one whose matches name both", d.name, d.platform))
 		default:

@@ -188,6 +188,7 @@ func projectDevice(n deviceNode) readDevice {
 	d.platform = pname.GetValue()
 	manufacturer := p.GetManufacturer()
 	if m := manufacturer.GetNode(); m != nil {
+		d.hasManufacturer = true
 		mname := m.GetName()
 		d.manufacturer = mname.GetValue()
 	}

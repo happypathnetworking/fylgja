@@ -66,6 +66,17 @@ is `400`, `the request is not one: twin.step takes no argument "scope"`. Present
 | `psp.matches.missing` | rejection, 1, `verify` | the package path | no match, or a pair with an empty name |
 | `psp.matches.duplicate` | rejection, 1, `verify` | the package path | two packages name one pair; names both packages and the pair; also refuses `serve` and `worker run` at start, and the registry's load |
 
+The five `schema.*` rules are also filed at `resolve` by every stage command (`stage plan`,
+`stage list`, `twin create --stage`, `intent read --stage`, `twin step`, `twin rehearse`)
+when a branch whose stamps it reads, the source branch or the destination, does not
+conform: each branch's conformance is checked once per command, before its first stamps
+read, and its findings are the read's, every one in one pass, each message prefixed
+`branch <b>: ` (T075). The proposed change is refused whole when its source branch does not
+conform; a destination that does not conform refuses the branch point in a plan, and the
+resolution of any other stage at its `stage.main.moved` step; `stage list` lists the rows
+beside the rejections, a source branch's head with no `at`. Until 017's T075 such a branch
+ended the command `operation.failed`, exit 2, on its stamps query.
+
 Removed: `contract.version.mismatch`, `contract.node.missing`,
 `schema.generic.unimplemented`, `schema.artifact_target.missing`,
 `interface.iftype.unimplemented`, `interface.mgmt_only.iftype`,

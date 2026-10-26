@@ -135,7 +135,7 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 		{"step, the target's read cannot run", findings.StepRead, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
 				h := stepHost(t, "plan-link-added.json", nil)
-				h.infra.schemaStatus = map[string]int{"change-1": 500}
+				h.infra.readStatus = map[string]int{"change-1": 500}
 				return "change-1/linked", runTwinStep(ctx, jsonOut, &stepFlags{})
 			}},
 		{"step, containerlab's plan cannot be read", findings.StepCompare, findings.RuleOperationFailed,

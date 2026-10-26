@@ -274,7 +274,8 @@ var builtStages = struct {
 	byLabel map[string]compiledStage
 }{byLabel: map[string]compiledStage{}}
 
-// stepStamper reads a branch's stamps as the server's does.
+// stepStamper reads a branch's stamps as the server's does, but for the conformance check
+// before a branch's first, which every branch stepInfrahub serves passes.
 type stepStamper struct{}
 
 func (stepStamper) Stamps(ctx context.Context, branch, at, scope string) (intent.Stamps, error) {
@@ -1385,7 +1386,7 @@ func TestStepTargetErrorsExitTwo(t *testing.T) {
 		unread bool
 	}{
 		{name: "the target's read cannot run",
-			host: func(h *stepHostFixture) { h.infra.schemaStatus = map[string]int{"change-1": 500} },
+			host: func(h *stepHostFixture) { h.infra.readStatus = map[string]int{"change-1": 500} },
 			want: findings.Finding{Severity: findings.Rejection, Rule: findings.RuleOperationFailed, Step: findings.StepRead, Object: "change-1/linked"}},
 		{name: "the target's at carries nine fractional digits", args: []string{"--stage", "change-1/nine"},
 			host: func(h *stepHostFixture) {

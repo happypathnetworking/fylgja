@@ -223,7 +223,9 @@ func build(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 		if err != nil {
 			return failed(findings.StepResolve, err)
 		}
-		list = append(list, warning...)
+		// A plan's branch point reads the destination's stamps twice, for its staleness
+		// and here: a destination whose schema does not conform is refused once.
+		list = append(list, unfiled(warning, list)...)
 	}
 	if list.Rejected() {
 		return stop(list)

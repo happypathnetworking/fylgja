@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -118,10 +119,12 @@ const kindRemedy = ": load " + intent.StageSchemaFile + " on it; only --stage, s
 // Find is steps 1–3 for one source branch, and step 6: the kind on the default branch,
 // the open proposed change whose source the branch is, the branch's origin, and the
 // head's at. Each refusal is a rejection at step resolve, returned as findings with a nil
-// Change; a reader or a stamper that cannot reach Infrahub, or is refused its credential,
-// returns its error as it is, for the caller to report as operation.failed. Nothing of the
-// branch's intent is read: the head's at comes from a stamps read, under scope, which the
-// Change carries to every later read of its stages.
+// Change, a branch whose schema does not conform among them, refused with its schema.*
+// findings before its stamps are read (017); a reader or a stamper that cannot reach
+// Infrahub, or is refused its credential, returns its error as it is, for the caller to
+// report as operation.failed. Nothing of the branch's intent is read: the head's at comes
+// from a stamps read, under scope, which the Change carries to every later read of its
+// stages.
 func Find(ctx context.Context, r Reader, s Stamper, branch, scope string) (*Change, findings.List, error) {
 	if list, err := checkKind(ctx, r); list != nil || err != nil {
 		return nil, list, err
@@ -162,6 +165,9 @@ func Find(ctx context.Context, r Reader, s Stamper, branch, scope string) (*Chan
 		return nil, findings.List{refusal(findings.RuleStageUnknown, branch, gone(branch, pc.ID))}, nil
 	}
 	ch, err := newChange(ctx, r, s, pc, *info, scope)
+	if refused, ok := conformanceRefusal(err); ok {
+		return nil, refused, nil
+	}
 	if err != nil {
 		return nil, nil, err
 	}
@@ -409,7 +415,10 @@ func ResolveFrom(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch
 	if err != nil {
 		return Resolved{}, nil, err
 	}
-	return res, append(list, moved...), nil
+	if list = append(list, moved...); list.Rejected() {
+		return Resolved{}, list, nil
+	}
+	return res, list, nil
 }
 
 // resolve is steps 4, 5, 7 and 8: the stage named, its at, the branch point, the
@@ -555,6 +564,40 @@ func checkKind(ctx context.Context, r Reader) (findings.List, error) {
 		return nil, err
 	}
 	return findings.List{refusal(findings.RuleStageKindAbsent, intent.StageKind, kindErr.Error()+kindRemedy)}, nil
+}
+
+// conformanceRefusal is a stamps read refused for its branch's schema (017): the
+// stamper's *intent.ConformanceError filed as its schema.* findings, every one in one
+// pass, each a rejection at step resolve whose message names the branch first, since the
+// branch refused may be the destination rather than the one the command names. ok is false
+// for any other error, which the caller returns as it is.
+func conformanceRefusal(err error) (findings.List, bool) {
+	var refused *intent.ConformanceError
+	if !errors.As(err, &refused) {
+		return nil, false
+	}
+	list := make(findings.List, 0, len(refused.Findings))
+	for _, f := range refused.Findings {
+		f.Step = findings.StepResolve
+		f.Message = "branch " + refused.Branch + ": " + f.Message
+		list = append(list, f)
+	}
+	return list, true
+}
+
+// unfiled is the findings of add that have does not hold already: a destination whose
+// schema does not conform is refused once, however many of a command's reads of it found
+// it (017).
+func unfiled(add, have findings.List) findings.List {
+	var out findings.List
+	for _, f := range add {
+		if !slices.ContainsFunc(have, func(h findings.Finding) bool {
+			return h.Severity == f.Severity && h.Rule == f.Rule && h.Object == f.Object && h.Message == f.Message
+		}) {
+			out = append(out, f)
+		}
+	}
+	return out
 }
 
 // noOpenChange refuses a branch no open proposed change has as its source, naming the

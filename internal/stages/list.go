@@ -84,8 +84,11 @@ type ListResult struct {
 // error as it is, for the caller to report as operation.failed. Every stage of every
 // proposed change listed has its row. Beside the rows: stage.label.reserved, a rejection,
 // for each mark labelled like a derived stage (the listing's status rejected, every row
-// still listed); and warnings, which refuse nothing: stage.at.unresolved for a stage
-// nothing names an at for, whose row has none; stage.unknown for a source branch deleted
+// still listed); the schema.* findings of a branch whose schema does not conform, the
+// source's or the destination's, rejections filed once per branch before its stamps are
+// read, the source's head listed with no at (017); and warnings, which refuse nothing:
+// stage.at.unresolved for a stage nothing names an at for, whose row has none;
+// stage.unknown for a source branch deleted
 // under its open proposed change, whose marks are listed at their own ats and whose two
 // derived stages have none, until Infrahub cancels it; stage.main.moved per proposed
 // change; stage.orphaned per orphan; and stage.twin.moved when the record's stage no
@@ -122,6 +125,9 @@ func List(ctx context.Context, r Reader, s Stamper, branch, scope string, record
 			return ListResult{}, nil, err
 		}
 		var ch *Change
+		// refused is whether the source branch's schema refused its stamps: its head has
+		// no at, and the refusal says why.
+		refused := false
 		if info == nil {
 			// Its stages still list until Infrahub cancels it, the branch's warning saying
 			// why its two derived stages have no at.
@@ -130,7 +136,14 @@ func List(ctx context.Context, r Reader, s Stamper, branch, scope string, record
 			list = append(list, warning(refusal(findings.RuleStageUnknown, pc.Branch, gone(pc.Branch, pc.ID)+
 				"; until then its branch point and head have no at")))
 		} else if ch, err = newChange(ctx, r, s, pc, *info, scope); err != nil {
-			return ListResult{}, nil, err
+			schema, ok := conformanceRefusal(err)
+			if !ok {
+				return ListResult{}, nil, err
+			}
+			ch = changeOf(pc, *info, intent.Stamps{}, nil)
+			ch.Scope = scope
+			list = append(list, schema...)
+			refused = true
 		}
 		changes = append(changes, ch)
 		for _, st := range ch.Stages {
@@ -138,7 +151,7 @@ func List(ctx context.Context, r Reader, s Stamper, branch, scope string, record
 			if st.Mark != nil && reserved(st.Label) {
 				list = append(list, ch.reservedRefusal(st.Ref))
 			}
-			if st.At == "" && info != nil {
+			if st.At == "" && info != nil && !refused {
 				// The one rule of step 5 a listing applies, which reads no clock, and
 				// refuses nothing.
 				for _, f := range ch.check(st, time.Time{}) {
@@ -155,7 +168,7 @@ func List(ctx context.Context, r Reader, s Stamper, branch, scope string, record
 			return ListResult{}, nil, err
 		}
 		mains[ch.ProposedChange.Destination] = ch.main
-		list = append(list, mainMoved...)
+		list = append(list, unfiled(mainMoved, list)...)
 	}
 
 	orphans, err := r.Orphans(ctx)

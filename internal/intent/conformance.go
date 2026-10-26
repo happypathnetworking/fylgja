@@ -49,6 +49,25 @@ func (c *Client) CheckConformance(ctx context.Context) (*Conformance, findings.L
 	return conf, conformanceFindings(info), nil
 }
 
+// ConformanceError says a branch's schema does not hold what the mapping reads, found
+// before a stamps read of the branch: the stamps' queries select the library's kinds, and
+// on such a branch they fail as a GraphQL error naming nothing of the mapping's table
+// (017). Findings are CheckConformance's, every one in one pass; the stages file them as
+// the command's refusal, exit 1, as they file StageKindError stage.kind.absent.
+type ConformanceError struct {
+	Branch   string
+	Findings findings.List
+}
+
+// Error names the branch, the commit and each finding's rule and object.
+func (e *ConformanceError) Error() string {
+	what := make([]string, len(e.Findings))
+	for i, f := range e.Findings {
+		what[i] = f.Rule + " " + f.Object
+	}
+	return fmt.Sprintf("branch %s does not conform to %s@%s: %s", e.Branch, LibraryModel, LibraryVersion, strings.Join(what, ", "))
+}
+
 // readsIt ends every conformance finding but used_by's, which says what the mapping reads
 // through the generic: the commit is what an operator compares their own schema with.
 const (

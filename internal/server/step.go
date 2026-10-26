@@ -119,7 +119,9 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
-	ch, list, err := stages.Find(ctx, reader, intentStamper{}, rec.Stage.ProposedChange.Branch, scope)
+	// One stamper for the whole step, so each branch's conformance is checked once.
+	stamper := newIntentStamper()
+	ch, list, err := stages.Find(ctx, reader, stamper, rec.Stage.ProposedChange.Branch, scope)
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
@@ -141,7 +143,7 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 		_, filed, err := fileCompiled(ctx, paths.Bundles, files, id, snapshot)
 		return filed, err
 	}
-	built := stages.Build(ctx, reader, intentStamper{}, reg, ch, target, stages.NewPipeline(file), time.Now().UTC())
+	built := stages.Build(ctx, reader, stamper, reg, ch, target, stages.NewPipeline(file), time.Now().UTC())
 	list = append(list, built.Findings...)
 	var resolved *resolvedStage
 	if r := built.Resolved; r != nil {

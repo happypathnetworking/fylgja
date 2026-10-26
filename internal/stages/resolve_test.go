@@ -81,8 +81,11 @@ type fakeStamper struct {
 	err      error
 	at       map[string]intent.Stamps // branch@at
 	byBranch map[string]intent.Stamps
-	calls    []string
-	scopes   []string
+	// refuse names branches whose schema does not conform: each stamps read of one answers
+	// the conformance error the server's stamper does, the kind DcimDevice missing (017).
+	refuse map[string]bool
+	calls  []string
+	scopes []string
 }
 
 // testScope is the scope the tests read under: the server's default on this host (017).
@@ -93,6 +96,10 @@ func (f *fakeStamper) Stamps(_ context.Context, branch, at, scope string) (inten
 	f.scopes = append(f.scopes, scope)
 	if f.err != nil {
 		return intent.Stamps{}, f.err
+	}
+	if f.refuse[branch] {
+		return intent.Stamps{}, &intent.ConformanceError{Branch: branch, Findings: findings.List{{Severity: findings.Rejection,
+			Rule: findings.RuleSchemaKindMissing, Object: "DcimDevice", Message: "the branch's schema has no kind DcimDevice"}}}
 	}
 	if s, ok := f.at[branch+"@"+at]; ok {
 		return s, nil
@@ -643,5 +650,71 @@ func TestParseAt(t *testing.T) {
 		if _, ok := ParseAt(s); ok {
 			t.Errorf("ParseAt(%q) claimed an instant", s)
 		}
+	}
+}
+
+// kindMissing is the fake stamper's conformance refusal of branch, as the stages file it:
+// at resolve, naming the branch (017).
+func kindMissing(branch string) findings.Finding {
+	return findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSchemaKindMissing, Object: "DcimDevice",
+		Step: findings.StepResolve, Message: "branch " + branch + ": the branch's schema has no kind DcimDevice"}
+}
+
+// A branch whose schema does not conform refuses its stamps read with its schema.*
+// findings, which the resolution files as its refusal at resolve, never as an error
+// (017): the source branch's refuses the proposed change before anything else is read, and
+// the destination's a mark's resolution at step 9, where stage.main.moved reads it.
+func TestResolveRefusesANonConformantBranch(t *testing.T) {
+	r, s := story()
+	s.refuse = map[string]bool{"change-1": true}
+	ch, list, err := Find(context.Background(), r, s, "change-1", testScope)
+	if err != nil || ch != nil || !reflect.DeepEqual(list, findings.List{kindMissing("change-1")}) {
+		t.Errorf("Find: change %v, findings %+v, error %v; want the conformance refusal alone", ch, list, err)
+	}
+	for _, call := range r.calls {
+		if strings.HasPrefix(call, "IntentEvents") {
+			t.Errorf("the reader was asked %s after the stamps were refused", call)
+		}
+	}
+
+	r, s = story()
+	s.refuse = map[string]bool{"main": true}
+	res, list, err := Resolve(context.Background(), r, s, registry(t), Ref{"change-1", "live"}, testScope, time.Now())
+	if err != nil || res != (Resolved{}) || !reflect.DeepEqual(list, findings.List{kindMissing("main")}) {
+		t.Errorf("Resolve: %+v, findings %+v, error %v; want the destination's refusal alone", res, list, err)
+	}
+}
+
+// Listed, a source branch whose schema does not conform keeps its rows, its head with no
+// at and no warning of its own, and the refusal is filed beside them; a destination that
+// does not conform is refused once however many proposed changes merge into it. The
+// listing exits 1 (017).
+func TestListNonConformantBranches(t *testing.T) {
+	r, s := story(change1(), change2())
+	s.refuse = map[string]bool{"change-2": true}
+	res, list, err := List(context.Background(), r, s, "", testScope, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := rowRefs(res.Rows); len(got) != 6 || got[4] != "change-2/branch-point branch_point" || got[5] != "change-2/head head" {
+		t.Fatalf("rows %v; want change-1's four and change-2's two", got)
+	}
+	if head := res.Rows[5]; head.At != "" || res.Rows[4].At == "" {
+		t.Errorf("change-2's head at %q, branch point at %q; want none, and the branch point at its branched_from", head.At, res.Rows[4].At)
+	}
+	if !reflect.DeepEqual(list, findings.List{kindMissing("change-2")}) {
+		t.Errorf("findings %+v; want change-2's refusal alone", list)
+	}
+	if st := findings.NewDocument(findings.OpStageList, nil, list).Status; st.ExitCode() != findings.ExitRejected {
+		t.Errorf("status %s; want rejected, exit 1", st)
+	}
+
+	r, s = story(change1(), change2())
+	s.refuse = map[string]bool{"main": true}
+	if _, list, err = List(context.Background(), r, s, "", testScope, nil); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(list, findings.List{kindMissing("main")}) {
+		t.Errorf("findings %+v; want main's refusal once", list)
 	}
 }

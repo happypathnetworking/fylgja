@@ -76,7 +76,7 @@ func resolveStage(ctx context.Context, op string, subject *findings.Subject, ste
 	if err != nil {
 		return nil, failAt(op, subject, step, op, "%v", err)
 	}
-	res, list, err := stages.Resolve(ctx, reader, intentStamper{}, reg, ref, scope, time.Now().UTC())
+	res, list, err := stages.Resolve(ctx, reader, newIntentStamper(), reg, ref, scope, time.Now().UTC())
 	if err != nil {
 		return nil, failAt(op, subject, step, op, "%v", err)
 	}

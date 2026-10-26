@@ -238,7 +238,7 @@ const (
 	RuleScopeInvalid          = "scope.invalid"            // rejection, exit 2, start: the value given; --scope is not tag:<name>, an empty value included; before any connection, after --branch's and --stage's guards
 	RuleScopeUnset            = "scope.unset"              // rejection, exit 2, start: FYLGJA_DEFAULT_SCOPE; no --scope and the server has no default; before any connection
 	RuleScopeEmpty            = "scope.empty"              // rejection, exit 1, read (none on intent.read; a stage's read, the branch point's where 0.2 refused a main holding no network): the scope; the device query answered 0 on the branch at the at, and the rehearsal and fylgja-step pass over a branch point refused by this rule alone
-	RuleSchemaKindMissing     = "schema.kind.missing"      // rejection, exit 1, read (none on schema.check): the kind; the branch's schema lacks a kind the mapping reads
+	RuleSchemaKindMissing     = "schema.kind.missing"      // rejection, exit 1, read (none on schema.check; resolve in a stage command, for a branch whose stamps it reads, as each schema.* rule is): the kind; the branch's schema lacks a kind the mapping reads
 	RuleSchemaFieldMissing    = "schema.field.missing"     // rejection, exit 1, read: <kind>.<field>; the kind lacks a field the mapping reads
 	RuleSchemaFieldMismatch   = "schema.field.mismatch"    // rejection, exit 1, read: <kind>.<field>; the field's kind, cardinality, peer or optionality is not the table's, naming both
 	RuleSchemaChoiceMissing   = "schema.choice.missing"    // rejection, exit 1, read: <kind>.<field>; the dropdown lacks management (role) or disabled (status)

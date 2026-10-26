@@ -39,7 +39,9 @@ const remedy = "regenerate (fylgja-fixture -generate, POST /api/artifact/generat
 //
 // A device whose pair no package matches, or which carries no artifact of its package's
 // name, is the read's to refuse (platform.missing, platform.unmatched, artifact.missing),
-// not stale; so is one whose artifact says nothing of when it was generated.
+// not stale; so is one whose artifact says nothing of when it was generated. A stage's
+// branch whose schema does not conform refuses it with its schema.* findings, before its
+// stamps are read (017).
 func Stale(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Change, st Resolved) (findings.List, error) {
 	stamps, validatedAt := ch.head, st.At
 	if st.AtSource == AtHead {
@@ -47,6 +49,9 @@ func Stale(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 	} else {
 		var err error
 		if stamps, err = s.Stamps(ctx, st.Branch, st.At, ch.Scope); err != nil {
+			if refused, ok := conformanceRefusal(err); ok {
+				return refused, nil
+			}
 			return nil, err
 		}
 	}
@@ -202,10 +207,15 @@ func laterThan(a, b string) (bool, error) {
 // MainMoved is step 9: the warning stage.main.moved when the destination's latest stamp,
 // read unpinned as the head's is, is later than the branch's branched_from (FR-012). It
 // refuses nothing: the branch point still reads the destination as it was then. The
-// destination's stamps are read once per proposed change.
+// destination's stamps are read once per proposed change. A destination whose schema
+// does not conform is refused with its schema.* findings instead, before its stamps are
+// read (017), as each stamps read of it is.
 func (c *Change) MainMoved(ctx context.Context, s Stamper) (findings.List, error) {
 	if c.main == nil {
 		stamps, err := s.Stamps(ctx, c.ProposedChange.Destination, "", c.Scope)
+		if refused, ok := conformanceRefusal(err); ok {
+			return refused, nil
+		}
 		if err != nil {
 			return nil, err
 		}

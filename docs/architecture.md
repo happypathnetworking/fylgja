@@ -333,9 +333,12 @@ Infrahub returned, or the first instant after one (Constitution VI).
 is the pinned read above, unchanged, with that `at` verbatim on every query. A refused
 resolution reads stamps and never a value of intent: the kind or its extension absent
 (`stage.kind.absent`); no open proposed change on the branch, or no such stage of it
-(`stage.unknown`); a mark carrying a reserved label (`stage.label.reserved`); a stage with
-no `at` at all (a mark with neither `as_of` nor its label's stamp, a head of a branch with
-neither a stamp nor an intent event, a branch point with no `branched_from`), or a given one later than now
+(`stage.unknown`); a branch whose schema does not conform, the source branch or the
+destination, with the read's own findings (`schema.*`), each branch checked once per command
+before its stamps are first read, since they select the library's kinds; a mark carrying a
+reserved label (`stage.label.reserved`); a stage with no `at` at all (a mark with neither
+`as_of` nor its label's stamp, a head of a branch with neither a stamp nor an intent event,
+a branch point with no `branched_from`), or a given one later than now
 (`stage.at.unresolved`); more than six fractional digits (`intent.at.precision`); an `at`
 before the branch point (`stage.at.before_branch_point`), which names the rebase when
 `branched_from` has moved past the mark while `created_at` has not, since a rebase

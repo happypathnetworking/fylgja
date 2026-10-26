@@ -948,7 +948,7 @@ Sixteen added and eight removed. No status, step or exit is new.
 | `scope.invalid` | rejection, 2, `start` | the value given | `--scope` is not `tag:<name>`, an empty value included; before any connection, after `--branch`'s and `--stage`'s guards |
 | `scope.unset` | rejection, 2, `start` | `FYLGJA_DEFAULT_SCOPE` | no `--scope` and the server has no default; before any connection |
 | `scope.empty` | rejection, 1, `read` (none on `intent read`; a stage's at its read, the branch point's included, where `contract.node.missing` was) | the scope | the device query answered 0 on the branch at the `at`; the rehearsal and `fylgja-step` pass over a branch point refused by this rule alone, as they passed over `contract.node.missing` |
-| `schema.kind.missing` | rejection, 1, `read`; none on `schema check` | the kind | the branch's schema lacks a kind the mapping reads |
+| `schema.kind.missing` | rejection, 1, `read`; `resolve` in a stage command (below); none on `schema check` | the kind | the branch's schema lacks a kind the mapping reads |
 | `schema.field.missing` | rejection, 1, `read` | `<kind>.<field>` | the kind lacks a field the mapping reads |
 | `schema.field.mismatch` | rejection, 1, `read` | `<kind>.<field>` | the field's kind, cardinality, peer or optionality is not the mapping's; names both |
 | `schema.choice.missing` | rejection, 1, `read` | `<kind>.<field>` | the dropdown lacks `management` (role) or `disabled` (status) |
@@ -961,6 +961,15 @@ Sixteen added and eight removed. No status, step or exit is new.
 | `ctm.version.unsupported` | rejection, 1, none | the CTM file | `twin compile` given a CTM of another version; names both |
 | `psp.matches.missing` | rejection, 1, `verify` | the package path | no match, or a pair with an empty name |
 | `psp.matches.duplicate` | rejection, 1, `verify` | the package path | two packages name one pair; names both packages and the pair; also refuses `serve` and `worker run` at start, and the registry's load |
+
+A stage command (`stage plan`, `stage list`, `twin create --stage`, `intent read --stage`,
+`twin step`, `twin rehearse`) checks the conformance of each branch whose stamps it reads,
+the source branch and the destination, once, before its first stamps read, and files a
+branch that does not conform under the read's `schema.*` findings at `resolve`, every one
+in one pass, each message prefixed `branch <b>: `, exit 1: the source branch's refuses the
+proposed change whole; the destination's refuses a plan's branch point, and any other
+stage's resolution at `stage.main.moved`; `stage list` lists its rows beside them, the
+source branch's head with no `at`.
 
 Removed: `contract.version.mismatch`, `contract.node.missing`,
 `schema.generic.unimplemented`, `schema.artifact_target.missing`,

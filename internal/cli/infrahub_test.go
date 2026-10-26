@@ -43,9 +43,11 @@ type fakeInfrahub struct {
 	// defaultStatus, when set, is how the default branch's schema answers instead: an
 	// Infrahub that stopped answering there.
 	defaultStatus int
-	// schemaStatus, for a branch it names, is how that branch's schema answers instead,
-	// while its GraphQL still does: a read that cannot run past a resolution that did.
-	schemaStatus map[string]int
+	// readStatus, for a branch it names, is how that branch's Devices query answers
+	// instead, while its schema and its stamps still do: a read that cannot run past a
+	// resolution that did, since no resolution reads a branch's devices. The schema cannot
+	// stand in: a resolution reads it before the branch's stamps (017).
+	readStatus map[string]int
 	// schemaMutations, for a branch it names, changes that branch's schema document
 	// before it is served: a branch whose DCIM is not the library's (017).
 	schemaMutations map[string]func(doc map[string]any)
@@ -235,8 +237,6 @@ func (f *fakeInfrahub) serve(w http.ResponseWriter, r *http.Request) {
 			writeFakeJSON(w, f.defaultStatus, map[string]any{"errors": []map[string]string{{"message": "the default branch is unwell"}}})
 		case q == "":
 			writeFakeJSON(w, http.StatusOK, map[string]any{"main": "fe9eca98", "nodes": f.defaultNodes()})
-		case f.schemaStatus[q] != 0:
-			writeFakeJSON(w, f.schemaStatus[q], map[string]any{"errors": []map[string]string{{"message": "the branch's schema is unwell"}}})
 		case known:
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write(f.branchSchema(q))
@@ -255,6 +255,10 @@ func (f *fakeInfrahub) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		switch seen.Operation {
 		case "Devices":
+			if status := f.readStatus[name]; status != 0 {
+				writeFakeJSON(w, status, map[string]any{"errors": []map[string]string{{"message": "the branch's devices are unwell"}}})
+				return
+			}
 			var devices *ctm.CTM
 			if tag, _ := seen.Variables["tag"].(string); tag == fakeTag && !f.untagged[name] {
 				devices = c

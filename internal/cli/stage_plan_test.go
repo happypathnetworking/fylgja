@@ -549,7 +549,7 @@ func TestStagePlanStageFailed(t *testing.T) {
 	useService(t, nil)
 	f := planInfrahub(t, twoMarks()...)
 	versioned(t, f)
-	f.schemaStatus = map[string]int{"main": 500}
+	f.readStatus = map[string]int{"main": 500}
 	f.start()
 
 	code, doc, raw := stageDoc(t, "plan", "--branch", lessLink)

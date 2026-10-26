@@ -694,7 +694,7 @@ func resultOf(runID string, res provision.RehearseResult) rehearsal.Result {
 // rehearsal.stage.moved naming the branch: whether one moved is unknown.
 func (r *rehearsing) after(ctx context.Context, block findings.RehearsalBlock) findings.List {
 	branch := r.planned.res.Branch
-	res, refused, err := stages.List(ctx, r.planned.reader, intentStamper{}, branch, r.planned.scope, nil)
+	res, refused, err := stages.List(ctx, r.planned.reader, newIntentStamper(), branch, r.planned.scope, nil)
 	if err == nil && refused.Rejected() {
 		err = fmt.Errorf("%s", firstRejection(refused).Message)
 	}

@@ -3,6 +3,7 @@ package server
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
@@ -42,15 +43,57 @@ func branchGuard(op, branch string) error {
 // intentStamper is the stages' Stamper on the server: an intent client per (branch, at,
 // scope), whose Stamps reads when the intent and the artifacts were written and never a
 // value of intent, with the at verbatim on every page, or none when it is empty.
-type intentStamper struct{}
+//
+// Before a branch's first stamps read it checks the branch's conformance, once per branch
+// for the command it serves, so a plan does not fetch the schema per stage (017): the
+// stamps select the library's kinds, and on a branch whose schema lacks one they would
+// fail naming nothing of the mapping's table. A branch that does not conform answers every
+// stamps read with an *intent.ConformanceError, which the stages file as its schema.*
+// findings. The schema endpoint has no time axis, so the check is unpinned whatever the at.
+// One per command: newIntentStamper.
+type intentStamper struct {
+	mu sync.Mutex
+	// conformed is each branch checked so far: nil when it conforms, its
+	// *intent.ConformanceError when it does not. A check that could not run is not kept.
+	conformed map[string]error
+}
 
-func (intentStamper) Stamps(ctx context.Context, branch, at, scope string) (intent.Stamps, error) {
+// newIntentStamper is a command's stamper, which has checked no branch yet.
+func newIntentStamper() *intentStamper {
+	return &intentStamper{conformed: map[string]error{}}
+}
+
+func (s *intentStamper) Stamps(ctx context.Context, branch, at, scope string) (intent.Stamps, error) {
 	cfg, err := intent.FromEnv(branch, at)
 	if err != nil {
 		return intent.Stamps{}, err
 	}
 	cfg.Scope = intent.ScopeTag(scope)
-	return intent.New(cfg).Stamps(ctx)
+	client := intent.New(cfg)
+	if err := s.conform(ctx, branch, client); err != nil {
+		return intent.Stamps{}, err
+	}
+	return client.Stamps(ctx)
+}
+
+// conform is branch's conformance, checked through client the first time the branch is
+// asked for and remembered after.
+func (s *intentStamper) conform(ctx context.Context, branch string, client *intent.Client) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err, ok := s.conformed[branch]; ok {
+		return err
+	}
+	_, list, err := client.CheckConformance(ctx)
+	if err != nil {
+		return err
+	}
+	var refused error
+	if list.Rejected() {
+		refused = &intent.ConformanceError{Branch: branch, Findings: list}
+	}
+	s.conformed[branch] = refused
+	return refused
 }
 
 // The noun stage (014, D-045): a proposed change's stages, the operator's marks between
@@ -84,7 +127,7 @@ func runStageList(ctx context.Context, opts *options, f *stageFlags) error {
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
-	res, list, err := stages.List(ctx, reader, intentStamper{}, f.branch, scope, stages.RecordViewOf(hostRecord(opts)))
+	res, list, err := stages.List(ctx, reader, newIntentStamper(), f.branch, scope, stages.RecordViewOf(hostRecord(opts)))
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
@@ -272,7 +315,7 @@ func planStages(ctx context.Context, opts *options, op string, subject *findings
 		return list, err
 	}
 	now := time.Now().UTC()
-	res, err := stages.Plan(ctx, reader, intentStamper{}, branch, scope, reg, stages.NewPipeline(file), now, onChange, onStage, onStep)
+	res, err := stages.Plan(ctx, reader, newIntentStamper(), branch, scope, reg, stages.NewPipeline(file), now, onChange, onStage, onStep)
 	if err != nil {
 		return plannedStages{}, failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}

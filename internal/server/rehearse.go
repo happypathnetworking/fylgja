@@ -406,11 +406,13 @@ func (r *rehearsing) printPlan(deadline time.Duration) {
 }
 
 // report is the report's input: the proposed change, when its stages were resolved, the
-// deadline and the ceiling, the reclaim, and every stage with its role and its findings.
+// scope they were read under, which the commands that reproduce a failure name, the deadline
+// and the ceiling, the reclaim, and every stage with its role and its findings.
 func (r *rehearsing) report() rehearsal.Input {
 	pc := r.planned.res.ProposedChange
 	in := rehearsal.Input{ProposedChange: findings.StageChange{ID: pc.ID, Name: pc.Name, Branch: pc.Branch, Draft: pc.Draft},
-		ResolvedAt: r.resolvedAt(), DeadlineS: r.deadlineS, CeilingS: int(r.ceiling / time.Second), Reclaimed: r.reclaimed}
+		ResolvedAt: r.resolvedAt(), Scope: r.planned.scope, DeadlineS: r.deadlineS, CeilingS: int(r.ceiling / time.Second),
+		Reclaimed: r.reclaimed}
 	for _, row := range r.rows {
 		st := rehearsal.Stage{Ref: row.stage.Ref.String(), Label: row.stage.Label, Description: row.stage.Description,
 			AtSource: row.stage.AtSource, BundleID: row.stage.BundleID(), Role: row.role, Findings: row.findings}

@@ -68,7 +68,8 @@ func head(role string) Stage {
 
 func input(deadlineS int, stages ...Stage) Input {
 	return Input{ProposedChange: findings.StageChange{ID: "18df5c2e-0000-4000-8000-000000000001", Name: "third link",
-		Branch: change, Draft: true}, ResolvedAt: resolvedAt, DeadlineS: deadlineS, CeilingS: 3600, Stages: stages}
+		Branch: change, Draft: true}, ResolvedAt: resolvedAt, Scope: exampleScope, DeadlineS: deadlineS, CeilingS: 3600,
+		Stages: stages}
 }
 
 func zero() *int { return new(int) }
@@ -645,11 +646,24 @@ func TestReproduce(t *testing.T) {
 	// The failure at the first rehearsed stage.
 	first := newFindingRun()
 	if got, want := Build(first.in, first.res).Reproduce, []string{
-		"fylgja twin create --stage change-1/seeded",
+		"fylgja twin create --stage change-1/seeded --scope tag:fylgja",
 		"fylgja twin step --stage change-1/third-link --allow-restart",
 		"fylgja twin verify", "fylgja twin destroy",
 	}; !reflect.DeepEqual(got, want) {
 		t.Errorf("failed at the first rehearsed stage: %q, want %q", got, want)
+	}
+
+	// The create names the scope every stage was read under, always, since the server that
+	// reproduces it may hold another default (017); each step reads its record's and takes
+	// none.
+	edge := newFindingRun()
+	edge.in.Scope = "tag:edge"
+	if got, want := Build(edge.in, edge.res).Reproduce, []string{
+		"fylgja twin create --stage change-1/seeded --scope tag:edge",
+		"fylgja twin step --stage change-1/third-link --allow-restart",
+		"fylgja twin verify", "fylgja twin destroy",
+	}; !reflect.DeepEqual(got, want) {
+		t.Errorf("read under tag:edge: %q, want %q", got, want)
 	}
 
 	// The failure at the third rehearsed stage, after the refused branch point, which no
@@ -662,7 +676,7 @@ func TestReproduce(t *testing.T) {
 	live.Ref = change + "/live"
 	third.res.Stages = append(third.res.Stages[:2], append([]StageResult{live}, third.res.Stages[2:]...)...)
 	if got, want := Build(third.in, third.res).Reproduce, []string{
-		"fylgja twin create --stage change-1/seeded",
+		"fylgja twin create --stage change-1/seeded --scope tag:fylgja",
 		"fylgja twin step --stage change-1/third-link --allow-restart",
 		"fylgja twin step --stage change-1/live --allow-restart",
 		"fylgja twin step --stage change-1/bad-port --allow-restart",
@@ -714,23 +728,23 @@ func TestReproduce(t *testing.T) {
 		want []string
 	}{
 		{"a mark at the baseline's at", sharing, []string{
-			"fylgja twin create --stage change-1/seeded",
+			"fylgja twin create --stage change-1/seeded --scope tag:fylgja",
 			"fylgja twin step --stage change-1/third-link --allow-restart",
 			"fylgja twin verify", "fylgja twin destroy",
 		}},
 		{"two marks sharing an at before the failed stage", pairOf, []string{
-			"fylgja twin create --stage change-1/seeded",
+			"fylgja twin create --stage change-1/seeded --scope tag:fylgja",
 			"fylgja twin step --stage change-1/third-link --allow-restart",
 			"fylgja twin step --stage change-1/bad-port --allow-restart",
 			"fylgja twin verify", "fylgja twin destroy",
 		}},
 		{"a failed stage at the at of the stage before it", failedCopy, []string{
-			"fylgja twin create --stage change-1/seeded",
+			"fylgja twin create --stage change-1/seeded --scope tag:fylgja",
 			"fylgja twin step --stage change-1/third-link --allow-restart",
 			"fylgja twin verify", "fylgja twin destroy",
 		}},
 		{"a failed stage at the baseline's at", failedAtBaseline, []string{
-			"fylgja twin create --stage change-1/seeded",
+			"fylgja twin create --stage change-1/seeded --scope tag:fylgja",
 			"fylgja twin verify --wait", "fylgja twin destroy",
 		}},
 	} {
@@ -784,7 +798,7 @@ func TestStageLinesAndClosing(t *testing.T) {
 			"stage change-1/bad-port: diverged at phase push: restarted n3 61.2s; landed n3; not landed n1 (push.refused); expired after 120.0s (58 reads); 18 held, 1 failed, 0 skipped; failed",
 			"stage change-1/head: not reached",
 		}, "rehearsal nonconforming: stage change-1/bad-port failed at phase push; the twin is destroyed; reproduce it by hand:\n" +
-			"  fylgja twin create --stage change-1/seeded\n" +
+			"  fylgja twin create --stage change-1/seeded --scope tag:fylgja\n" +
 			"  fylgja twin step --stage change-1/third-link --allow-restart\n" +
 			"  fylgja twin step --stage change-1/bad-port --allow-restart\n" +
 			"  fylgja twin verify\n" +
@@ -794,7 +808,7 @@ func TestStageLinesAndClosing(t *testing.T) {
 			"stage change-1/third-link: stepped in 4.5s (push n1 2.5s, n3 2.6s); expired after 120.0s (61 reads); 18 held, 1 failed, 0 skipped; failed: verify.neighbor n1:ethernet-1/3",
 			"stage change-1/head: not reached",
 		}, "rehearsal nonconforming: stage change-1/third-link failed: verify.neighbor n1:ethernet-1/3; the twin is destroyed; reproduce it by hand:\n" +
-			"  fylgja twin create --stage change-1/seeded\n" +
+			"  fylgja twin create --stage change-1/seeded --scope tag:fylgja\n" +
 			"  fylgja twin step --stage change-1/third-link --allow-restart\n" +
 			"  fylgja twin verify\n" +
 			"  fylgja twin destroy"},

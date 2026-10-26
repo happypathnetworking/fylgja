@@ -1367,7 +1367,7 @@ rehearsal's run in place of the provision ([§4.4](#44-provisioner--temporal)). 
 the plan's stage lines with the baseline named, then the run as every run prints it, each
 stage's child's lines under a `stage <ref>:` line and the destroy's under `destroying the
 twin`, then what the destroy removed, one line per stage with its verdict and a closing
-line; on a failure, the commands that reproduce it by hand, from `twin create --stage <baseline>` through each `twin step --stage <ref>
+line; on a failure, the commands that reproduce it by hand, from `twin create --stage <baseline> --scope <scope>`, the scope every stage was read under, through each `twin step --stage <ref>
 --allow-restart` to the failed stage, then `twin verify` and `twin destroy`. Its document
 carries a `rehearsal` block: the proposed change, when its stages were resolved, the
 deadline and the time used, the reclaim, the run, the baseline findings, each stage's

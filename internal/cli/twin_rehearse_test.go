@@ -376,7 +376,7 @@ func TestRehearseStopsAtADivergedStage(t *testing.T) {
 			"19 held, 0 failed, 0 skipped; failed\n",
 		"stage " + headRef + ": not reached\n",
 		"rehearsal nonconforming: stage " + thirdRef + " failed at phase push; the twin is destroyed; reproduce it by hand:\n" +
-			"  fylgja twin create --stage " + seededRef + "\n" +
+			"  fylgja twin create --stage " + seededRef + " --scope " + defaultScope + "\n" +
 			"  fylgja twin step --stage " + thirdRef + " --allow-restart\n" +
 			"  fylgja twin verify\n" +
 			"  fylgja twin destroy\n",
@@ -400,11 +400,46 @@ func TestRehearseStopsAtADivergedStage(t *testing.T) {
 		headRef + " not_reached not_reached"}; !slices.Equal(rehearsalStages(doc), want) {
 		t.Errorf("the report's stages %v, want %v", rehearsalStages(doc), want)
 	}
-	if want := []string{"fylgja twin create --stage " + seededRef, "fylgja twin step --stage " + thirdRef + " --allow-restart",
+	// Given no --scope, the create names the server's default, which the stages were read
+	// under, since the server that reproduces it may hold another (017).
+	if want := []string{"fylgja twin create --stage " + seededRef + " --scope " + defaultScope,
+		"fylgja twin step --stage " + thirdRef + " --allow-restart",
 		"fylgja twin verify", "fylgja twin destroy"}; !slices.Equal(doc.Rehearsal.Reproduce, want) {
 		t.Errorf("reproduce %v, want %v", doc.Rehearsal.Reproduce, want)
 	}
 	mustQuoteNoContent(t, f, stdout, stderr, raw)
+}
+
+// US5/AC5 under a scope given (017; FR-017): a rehearsal read under --scope tag:other,
+// over devices tagged other alone, that fails a stage reproduces it from a create naming
+// tag:other, never the server's default, so the commands read the devices the rehearsal
+// read; the steps after it take the record's scope and name none.
+func TestRehearseReproducesUnderTheScopeItReadUnder(t *testing.T) {
+	const scope = "tag:other"
+	rehearseHost(t)
+	f := planInfrahub(t, rehearseMarks()...)
+	versioned(t, f)
+	emptyMain(f)
+	f.tag = "other"
+	f.start()
+	diverged := stepped(thirdRef, "s1", provision.StepDiverged, settledAfter(6.1, 4), rehearsal.VerdictFailed)
+	diverged.Step.Phase = findings.StepPush
+	diverged.Step.PushPlan = []wire.StepPush{{Node: "n1", Reasons: []string{"artifact"}, Outcome: wire.PushRefused, Rule: findings.RulePushRefused}}
+	useService(t, &fakeService{rehearseRun: rehearseRun, rehearseEvents: rehearseEvents(thirdRef),
+		rehearseResult: rehearsedRun(rehearsal.OutcomeStageFailed, nil, diverged,
+			provision.RehearsedStage{Ref: headRef, Verdict: rehearsal.VerdictNotReached})})
+	useInterrupts(t)
+
+	code, doc, raw := rehearseDoc(t, "--branch", lessLink, "--scope", scope)
+	if code != findings.ExitNonconforming || doc.Subject == nil || doc.Subject.Scope != scope {
+		t.Fatalf("exit %d, subject %+v, findings %v; want 5 under %s\n%s", code, doc.Subject, rulesOf(doc.Findings), scope, raw)
+	}
+	if want := []string{"fylgja twin create --stage " + seededRef + " --scope " + scope,
+		"fylgja twin step --stage " + thirdRef + " --allow-restart",
+		"fylgja twin verify", "fylgja twin destroy"}; !slices.Equal(doc.Rehearsal.Reproduce, want) {
+		t.Errorf("reproduce %v, want %v", doc.Rehearsal.Reproduce, want)
+	}
+	mustQuoteNoContent(t, f, raw)
 }
 
 // Scenario 3: the step into third-link lands, and its wait holds a finding the baseline's
@@ -1027,7 +1062,8 @@ func TestRehearseMarkdown(t *testing.T) {
 			provision.RehearsedStage{Ref: headRef, Verdict: rehearsal.VerdictNotReached})})
 	code, stdout, _ = rehearse(t, "--branch", lessLink, "--markdown")
 	if code != findings.ExitNonconforming || !strings.Contains(stdout, "**Reproduce by hand**") ||
-		!strings.Contains(stdout, "fylgja twin create --stage "+seededRef+"\nfylgja twin step --stage "+thirdRef+" --allow-restart\n") {
+		!strings.Contains(stdout, "fylgja twin create --stage "+seededRef+" --scope "+defaultScope+"\nfylgja twin step --stage "+thirdRef+
+			" --allow-restart\n") {
 		t.Errorf("exit %d, stdout:\n%s\nwant 5 and the commands that reproduce the failure", code, stdout)
 	}
 }

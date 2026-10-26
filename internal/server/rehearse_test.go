@@ -643,8 +643,8 @@ func reportedOf(t *testing.T, res provision.RehearseResult) (*findings.Document,
 	plan := rehearsePlan(t)
 	_, rows, _ := rehearsalStages(plan)
 	r := &rehearsing{opts: testOptions(t, false), op: findings.OpTwinRehearse, subject: &findings.Subject{Branch: rehearseBranch,
-		RunID: "r1"}, planned: plannedStages{res: plan, reader: unreadStages{}, now: time.Date(2026, 10, 19, 10, 0, 0, 0, time.UTC)},
-		rows: rows, ceiling: rehearsal.Ceiling, deadlineS: 1980}
+		Scope: "tag:fylgja", RunID: "r1"}, planned: plannedStages{res: plan, reader: unreadStages{}, scope: "tag:fylgja",
+		now: time.Date(2026, 10, 19, 10, 0, 0, 0, time.UTC)}, rows: rows, ceiling: rehearsal.Ceiling, deadlineS: 1980}
 	var err error
 	out := captureStdout(t, func() { err = r.reported(context.Background(), "r1", res, findings.StepPush) })
 	_, doc := exitOf(t, err)
@@ -727,7 +727,7 @@ func TestRehearsalReportedOnceTheRunCloses(t *testing.T) {
 		t.Errorf("failed: %s %+v %v", doc.Status, doc.Findings, doc.Rehearsal.Reproduce)
 	}
 	if !strings.Contains(out, "rehearsal nonconforming: stage change-1/third-link failed at phase push; the twin is destroyed; "+
-		"reproduce it by hand:\n  fylgja twin create --stage change-1/seeded\n") || !strings.Contains(out, "stage change-1/head: not reached\n") {
+		"reproduce it by hand:\n  fylgja twin create --stage change-1/seeded --scope tag:fylgja\n") || !strings.Contains(out, "stage change-1/head: not reached\n") {
 		t.Errorf("failed: the text:\n%s", out)
 	}
 

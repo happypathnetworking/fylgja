@@ -2069,12 +2069,13 @@ stage_lines 9b "^stage $FR/branch-point: refused \\(scope\\.empty\\)\$" "^stage 
   "^stage $FR/third-link: .*; passed\$" "^stage $FR/bad-port: diverged at phase push: .*; failed\$" "^stage $FR/head: not reached\$"
 comments_of 9b "$PC9" 2> "$OUT/comments-9b.err" || fail "case 9: reading $PC9's comments failed; see $OUT/comments-9b.err"
 # The failure's comment: its table, its drawing, the five commands that reproduce it in order
-# (FR-015), and the caveat last.
+# (FR-015), the create naming the scope every stage was read under, the server's default
+# (017's T104), and the caveat last.
 # shellcheck disable=SC2016 # the backticks are the markdown's fences, read literally by jq
 expect "$OUT/comments-9b.json" 'length == 2 and any(.[]; .id == env.COMMENT9A) and (map(.thread) | unique | length == 2)
   and (map(select(.id != env.COMMENT9A)) | length == 1 and (.[0].text | contains("Status **nonconforming**")
     and contains("```mermaid") and contains("**Reproduce by hand**:\n\n```\n"
-      + "fylgja twin create --stage " + env.FR + "/seeded\n"
+      + "fylgja twin create --stage " + env.FR + "/seeded --scope tag:fylgja\n"
       + "fylgja twin step --stage " + env.FR + "/third-link --allow-restart\n"
       + "fylgja twin step --stage " + env.FR + "/bad-port --allow-restart\n"
       + "fylgja twin verify\nfylgja twin destroy\n```\n")

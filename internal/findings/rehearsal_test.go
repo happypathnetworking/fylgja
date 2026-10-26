@@ -147,7 +147,7 @@ func rehearsalDocuments() []labelledDocument {
 		Baseline:  &RehearsalBaseline{Ref: "change-1/seeded", Findings: []StepWaitFailing{baselineFinding}},
 		Stages:    []RehearsalStage{branchPoint, seeded, live, badPort, headStage("not_reached", "not_reached")},
 		Destroy:   destroyed,
-		Reproduce: []string{"fylgja twin create --stage change-1/seeded",
+		Reproduce: []string{"fylgja twin create --stage change-1/seeded --scope tag:fylgja",
 			"fylgja twin step --stage change-1/live --allow-restart",
 			"fylgja twin step --stage change-1/bad-port --allow-restart",
 			"fylgja twin verify", "fylgja twin destroy"},

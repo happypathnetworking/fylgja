@@ -24,13 +24,15 @@ const (
 const provisionReady = "ready"
 
 // Input is what the server decided before the run (data-model §1, §7): the proposed
-// change, when its stages were resolved, the deadline and the ceiling in seconds, the dead
+// change, when its stages were resolved, the scope every stage was read under (the
+// request's, or the server's default), the deadline and the ceiling in seconds, the dead
 // rehearsal whose twin was reclaimed first, and every stage of the plan in order with the
 // role the rehearsal gives it. The server fills it from the run's input, so this package
 // imports no workflow code.
 type Input struct {
 	ProposedChange findings.StageChange
 	ResolvedAt     string
+	Scope          string
 	DeadlineS      int
 	CeilingS       int
 	Reclaimed      *findings.RehearsalReclaim
@@ -156,7 +158,7 @@ func Build(in Input, res Result) findings.RehearsalBlock {
 		}
 		b.Stages = append(b.Stages, st)
 	}
-	b.Reproduce = Reproduce(b)
+	b.Reproduce = Reproduce(b, in.Scope)
 	return b
 }
 
@@ -236,8 +238,11 @@ func Findings(b findings.RehearsalBlock) findings.List {
 }
 
 // Reproduce is the commands that reproduce a failed stage by hand on the same stages, in
-// order (FR-015): the create from the baseline, a step with --allow-restart to each
-// rehearsed stage up to and including the failed one, the verify and the destroy. A
+// order (FR-015): the create from the baseline under scope, the one every stage was read
+// under, a step with --allow-restart to each rehearsed stage up to and including the failed
+// one, the verify and the destroy. The create names the scope always (017), since the
+// server that reproduces it may hold another default; a step reads its record's scope and
+// takes none. A
 // rehearsed stage at the branch and at of the last stage a command named, the baseline
 // included, is left out: twin step refuses it step.target.current, since the record still
 // names that stage, and the next step starts from the same bundle the rehearsal's did. A
@@ -245,7 +250,7 @@ func Findings(b findings.RehearsalBlock) findings.List {
 // waits when no step precedes it, as the rehearsal's wait did (FR-002): twin create waits
 // for no settle, and a step's own wait has run before a verify that follows one. None when
 // no stage failed: a stage the run could not rehearse taught nothing to reproduce.
-func Reproduce(b findings.RehearsalBlock) []string {
+func Reproduce(b findings.RehearsalBlock, scope string) []string {
 	failed := -1
 	for i, s := range b.Stages {
 		if s.Verdict == string(VerdictFailed) {
@@ -262,7 +267,7 @@ func Reproduce(b findings.RehearsalBlock) []string {
 	for _, s := range b.Stages[:failed+1] {
 		switch s.Role {
 		case RoleBaseline:
-			out = append(out, "fylgja twin create --stage "+shellWord(s.Ref))
+			out = append(out, "fylgja twin create --stage "+shellWord(s.Ref)+" --scope "+shellWord(scope))
 		case RoleRehearsed:
 			if s.At != "" && s.Branch == branch && s.At == at {
 				continue
@@ -277,9 +282,9 @@ func Reproduce(b findings.RehearsalBlock) []string {
 	return append(out, verify, "fylgja twin destroy")
 }
 
-// shellWord is a reference as a shell reads it: as it is when every character is one no
-// shell interprets, and single-quoted otherwise, since a label is any characters but a
-// slash and white space.
+// shellWord is a reference or a scope as a shell reads it: as it is when every character is
+// one no shell interprets, and single-quoted otherwise, since a label is any characters but
+// a slash and white space.
 func shellWord(s string) string {
 	if s != "" && strings.Trim(s, shellSafe) == "" {
 		return s
@@ -330,7 +335,7 @@ func StageLines(b findings.RehearsalBlock) []string {
 //
 //	rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 118.4s of the 1980s deadline
 //	rehearsal nonconforming: stage change-1/bad-port failed at phase push; the twin is destroyed; reproduce it by hand:
-//	  fylgja twin create --stage change-1/seeded
+//	  fylgja twin create --stage change-1/seeded --scope tag:fylgja
 //	rehearsal error: run fylgja-rehearse 01a1… was started and its end was not read (waiting for run 01a1…: …); it goes on to its destroy, and fylgja twin show says where it is
 func Closing(doc *findings.Document) string {
 	status := doc.Status

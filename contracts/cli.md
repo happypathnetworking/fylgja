@@ -620,9 +620,12 @@ A failed stage's line says why (`diverged at phase push: restarted n3 61.2s; lan
 landed n1 (push.refused)`, or a finding the baseline did not have, by rule and object), the stages
 after it read `not reached`, and the closing line is `rehearsal nonconforming: stage
 change-1/bad-port failed at phase push; the twin is destroyed; reproduce it by hand:`, then
-the commands, one per line, indented: `fylgja twin create --stage` the baseline, `fylgja twin
-step --stage <ref> --allow-restart` for each rehearsed stage up to the failed one, `fylgja
-twin verify` and `fylgja twin destroy`. A rehearsed stage at the branch and `at` of the last
+the commands, one per line, indented: `fylgja twin create --stage` the baseline `--scope`
+the scope every stage was read under, `fylgja twin step --stage <ref> --allow-restart` for
+each rehearsed stage up to the failed one, `fylgja twin verify` and `fylgja twin destroy`.
+Since 017 the create names the scope always, the request's or the server's default, since
+the server that reproduces it may hold another default; each step reads its record's scope
+and takes none. A rehearsed stage at the branch and `at` of the last
 stage a command named, the baseline's or a step's, has no step of its own, since `twin step`
 would refuse it `step.target.current` and the twin is already there: run in order, the
 commands make the rehearsal's steps and its verify, and a failed stage so left out is

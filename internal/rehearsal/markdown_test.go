@@ -131,7 +131,7 @@ func TestMarkdown(t *testing.T) {
 		"**Reproduce by hand**:",
 		"",
 		"```",
-		"fylgja twin create --stage change-1/seeded",
+		"fylgja twin create --stage change-1/seeded --scope tag:fylgja",
 		"fylgja twin step --stage change-1/third-link --allow-restart",
 		"fylgja twin step --stage change-1/bad-port --allow-restart",
 		"fylgja twin verify",
@@ -317,7 +317,7 @@ func TestMarkdownFitsAComment(t *testing.T) {
 		"**Stages** (Infrahub's view does not show them):",
 		"**Warnings**:\n\n- `artifact.interface.unrepresented` n1:ethernet-1/99 (stages bad-port, head)\n\n",
 		"**Baseline findings** (reported, failing nothing):\n\n- `verify.neighbor` n1:ethernet-1/2\n\n",
-		"**Reproduce by hand**:\n\n```\nfylgja twin create --stage change-1/seeded\n",
+		"**Reproduce by hand**:\n\n```\nfylgja twin create --stage change-1/seeded --scope tag:fylgja\n",
 		"\n\n" + fitNote(nil, tableShrunk{}) + "\n\n" + Caveat + "\n",
 	} {
 		if !strings.Contains(md, want) {

@@ -106,6 +106,12 @@ Removed: `contract.version.mismatch`, `contract.node.missing`,
   (the generic among the table's rows, [mapping.md](mapping.md) §3), then `stages:
   …`; `--json`'s `verified` is `{model, version, kinds: [{kind, fields: [...]}], stages}`.
 - `stage plan` and `twin rehearse` headings end `, scope tag:fylgja`.
+- `twin rehearse`'s commands that reproduce a failed stage name the scope every stage was
+  read under on the create alone, always, the request's or the server's default: `fylgja
+  twin create --stage change-1/seeded --scope tag:fylgja`, shell-quoted as the reference
+  is, since the server that reproduces it may hold another default; each `twin step` after
+  it reads its record's scope and takes none (T104). The JSON's `rehearsal.reproduce`, the
+  closing line and the markdown's block carry the same commands.
 - The document's `subject` carries `scope` whenever a read was made under one.
 
 ## `twin step` and the following twin

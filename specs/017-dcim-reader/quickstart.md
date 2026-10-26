@@ -135,7 +135,8 @@ the bundle id as the fixture's compiled id.
 ## 4. The scope by hand (US1 scenarios 2 and 7; FR-017, FR-018)
 
 ```sh
-bin/fylgja intent read --branch fylgja-fixture --scope tag:fylgja --out /dev/null     # the same read
+bin/fylgja intent read --branch fylgja-fixture --scope tag:fylgja --out local/scope.ctm.json  # the same read
+                                                    # (not /dev/null: the client writes through a temporary file beside it)
 bin/fylgja intent read --branch fylgja-fixture --scope tag:nothing --out /dev/null    # scope.empty, exit 1
 bin/fylgja intent read --branch fylgja-fixture --scope fylgja --out /dev/null         # scope.invalid, exit 2
 bin/fylgja intent read --branch fylgja-fixture --scope= --out /dev/null               # scope.invalid, exit 2

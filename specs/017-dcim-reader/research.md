@@ -1116,6 +1116,28 @@ How far the prediction was checked before the import:
 What this does not prove, and T060 does: the render by Infrahub's pipeline in its task
 workers, from the imported commit.
 
+**Checked at T060 (2026-10-26, 13:22Z–13:24Z, Run 18 of the converge loop): the prediction
+held, and the goldens did not move a second time.** After `c006bf9`'s import (§5.4), the
+pipeline rendered each device in its task workers from the imported template.
+
+- **The three-node fixture**, re-seeded on `fylgja-fixture` by `make infrahub-seed`: `bin/fylgja
+  intent read --branch fylgja-fixture` read `n1`, `n2` and `n3` at 707 bytes each. Their
+  checksums were `597f6263…`, `5ac21560…` and `e93df964…`, the MD5s above and
+  `testdata/ctm/three-node.json`'s, and the MD5 of the content read equals the checksum.
+  The read without its envelope equals that file's (§5.5).
+- **The mixed fixture**, seeded by `fylgja-fixture -branch fylgja-test-017-mixed -mixed` (30.3
+  s), carried the marker `FYLGJA-MARKER-test-017-mixed`. It read `s1` at 712 bytes, `e1` at
+  320 and `e2` at 324, each one byte longer than above. With that marker replaced by
+  `mixed.json`'s `FYLGJA-MARKER-mixed-fixture`, each device's bytes have the MD5 above
+  (`5e2a65f4…`, `6b31a6de…`, `e6a46383…`) and equal `mixed.json`'s. The header's second line
+  is the only one that differs, as predicted. The read gave the two warnings
+  `artifact.interface.unrepresented e1:Management1` and `e2:Management1`, which
+  `internal/compiler/mixed_test.go` pins. It compiled to `4fe3e26e…`, an id this branch's
+  marker and provenance make its own. The branch was deleted (7.8 s).
+
+So `testdata/ctm/three-node.json`'s and `mixed.json`'s artifacts are Infrahub's bytes, and
+T024's goldens (three-node `43d91715…`, lossy `4213b3cf…`, mixed `ecb665f5…`) stand.
+
 <a id="5-2"></a>
 ### 5.2 The interim SDL and client, the schema document, the query's dry run and `-prepare-main`'s gate (T031, T033; 2026-10-26, 00:50Z–00:53Z)
 
@@ -1208,6 +1230,194 @@ written to `main`, and no token was printed.
   stages, 0 proposed changes, branch fylgja-test-017-conf`). Afterwards `Branch` lists `main`
   and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage` count 0, and `main`'s
   hash is `e43a1cde…`.
+
+<a id="5-4"></a>
+### 5.4 The rewritten query imported on a `main` that holds the library (T058; 2026-10-26, 13:19Z–13:20Z)
+
+Run 18 of the converge loop, from `d038c5a`, after the operator's push of `origin`'s `main` to
+`c006bf9` (T057). The registration `fylgja` (`18dc77bb-…`) read `commit 3c3e79a`, `in-sync`,
+`online`. Nothing but the import was written, and no token was printed.
+
+- **No sync stuck, before and after.** The task manager's Prefect API, read inside its
+  container (`POST /api/flow_runs/filter`), held no flow run `PENDING` or `RUNNING` and none
+  `SCHEDULED` with its start in the past, at 13:19:08Z and again at 13:20:31Z.
+  `git_repositories_sync` completed each minute. `InfrahubTask(state: [PENDING, RUNNING,
+  SCHEDULED])` counted 0 as well.
+- **The import.** `InfrahubReadOnlyRepositoryImportLastCommit(data: {id})` on `main` at
+  13:19:17.3Z answered `ok: true` with a task. That task, `Import last commit from read only
+  git repository`, ran until 13:19:45.7Z (28.4 s). Its end moved `commit` to
+  **`c006bf9`**, `in-sync`, `active` / `online`.
+- **The task workers.** Each holds the commit's tree under `/opt/infrahub/git/<repository
+  id>/commits/c006bf9…`: `task-worker-1`, which ran the import, from 13:19:21Z, and
+  `task-worker-2` from 13:19:50Z, 4.6 s after the flow ended. That is less than the 15 s
+  `CLAUDE.md` allows. `refresh-git-fetch` ran twice at 13:20:01Z–13:20:02Z.
+- **What `main` holds, read at 13:20:05Z.**
+  - `CoreGraphQLQuery device_config`: its text is byte-identical to `c006bf9`'s
+    `infrahub/queries/device_config.gql` (1,445 bytes). Its `models` read `DcimCable`,
+    `DcimConnector`, `DcimDevice`, `DcimEndpoint`, `DcimGenericDevice`, `DcimInterface`,
+    `DcimPlatform`, `InterfacePhysical`, `InterfaceVirtual` and `OrganizationManufacturer`,
+    in place of the eight removed kinds §5.10 found. So **the rewritten query imports on a
+    `main` that holds the library**, with no error, and Infrahub derives its models from
+    the library's kinds. `fylgja_branch`'s `models` stay empty.
+  - The transform `srlinux_device_config` (`infrahub/templates/device_config.j2`, query
+    `device_config`) and the definition `srlinux_device_config` → `device-config`,
+    `text/plain`, targeting `fylgja-devices`, are unchanged.
+  - The two check definitions are still registered: `fylgja-step`
+    (`infrahub/checks/fylgja_step.py`, `FylgjaStep`, timeout 300) and `fylgja-twin`
+    (`fylgja_twin.py`, `FylgjaTwin`, timeout 4260). 4260 is the class's `timeout` at
+    `3c3e79a` as at `c006bf9`; `CLAUDE.md` says 4200 (T071).
+
+<a id="5-5"></a>
+### 5.5 The hand scenarios (T061; quickstart §3–§6; 2026-10-26, 13:27Z–13:37Z)
+
+Run 18, through the server from this tree (pid 292664, rebuilt at `5abdbd3` after the SDL's
+commit, `default scope: tag:fylgja`), after the fixture's re-seed (T060). Three throwaway
+branches, each deleted by the fixture tool at its end. Nothing was written to `main`, and no
+token was printed.
+
+**§3, the fixture read.**
+
+- `bin/fylgja schema check --branch fylgja-fixture`, exit 0:
+
+  ```
+  conformant with opsmill/schema-library@26336e9: DcimDevice, DcimPlatform, OrganizationManufacturer, InterfacePhysical, DcimCable
+  stages: FylgjaStage present on the default branch, with its extension
+  ```
+
+- `bin/fylgja intent read --branch fylgja-fixture --out local/fixture.ctm.json` took 2.1 s,
+  exit 0. It wrote `local/fixture.ctm.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3
+  links, 3 artifacts, 0 lossy mappings, 0 shared ports (branch fylgja-fixture, scope
+  tag:fylgja, schema 7c413536d67ef86321c629c076a0d3a4)`.
+- **The read without its envelope equals `testdata/ctm/three-node.json`'s**: the `diff` said
+  `same`.
+- **The envelope**: branch `fylgja-fixture`, `observed_at`, `schema_hash` `7c413536…`, scope
+  `tag:fylgja`, mapping `infrahub-dcim` / `opsmill/schema-library` / `26336e9`. Its fidelity
+  rows are `approximated interface.enabled`, `approximated interface.mgmt_only` and
+  `omitted platform.version`. The fixture branch's schema hash is now `main`'s, since the
+  seed made it from the migrated `main`; it was `0aba31a5…`.
+- `bin/fylgja twin compile` wrote three nodes and three links. **The fixture's compiled id is
+  `f764e1fabdcd70b39a91cc2269ef0a3443c7ae6752af62bdf0936c4eda034147`** on this install
+  (`47b2c449…` before the migration). The manifest's provenance is `{branch, schema_hash
+  7c413536…, scope tag:fylgja, mapping}`, and `fidelity.read` holds the envelope's three rows,
+  each with its source and reason. No test or script pins the fixture's id.
+
+**§4, the scope.**
+
+| Command | Answer | Exit |
+|---|---|---|
+| `intent read --branch fylgja-fixture --scope tag:fylgja` | the same read; the file equals the default's but `observed_at` | 0 |
+| `… --scope tag:nothing` | `rejection scope.empty tag:nothing: scope tag:nothing selects no device on branch fylgja-fixture` | 1 |
+| `… --scope fylgja` | `rejection scope.invalid [step start] fylgja: --scope "fylgja" is not a scope: the accepted form is tag:<name>, …` | 2 |
+| `… --scope=` | `rejection scope.invalid [step start] : --scope "" is not a scope: …` | 2 |
+| `twin step --scope tag:fylgja` | `rejection operation.failed twin.step: unknown flag: --scope`; the server logged no request | 2 |
+
+- **Quickstart §4's `--out /dev/null` cannot be written.** The client writes through a
+  temporary file beside its target: `rejection operation.failed intent.read: writing CTM: open
+  /dev/.fylgja-ctm-749857017: permission denied`, exit 2, after the server's read had
+  answered `ok`. The `tag:fylgja` read was run again to `local/scope.ctm.json`, and the
+  quickstart's line now names that file. The refusals write nothing, so their `/dev/null`
+  stands.
+- The server logs each `scope.invalid` as `outcome=error duration=0s`: no read was made.
+- **The scratch server**: `env -u FYLGJA_DEFAULT_SCOPE FYLGJA_STATE_ROOT=<scratch> bin/fylgja
+  serve --listen 127.0.0.1:7659`, with no `FYLGJA_DEFAULT_SCOPE` in its environment.
+  - It reported `default scope: unset (a request that names no scope is refused)`.
+  - `FYLGJA_API_ADDRESS=127.0.0.1:7659 bin/fylgja intent read --branch fylgja-fixture` was
+    refused, exit 2, with no file written: `rejection scope.unset [step start]
+    FYLGJA_DEFAULT_SCOPE: no --scope was given and the server has no default: name one with
+    --scope tag:<name>, or set FYLGJA_DEFAULT_SCOPE where fylgja serve starts`.
+  - Its log holds one request line, `operation=intent.read outcome=error duration=6ms`, and
+    no read.
+  - It was stopped.
+
+**§5, omissions and refusals**, on `fylgja-test-017-hand`, seeded by the fixture tool in 31.4 s.
+
+- **The writes**, by GraphQL on the branch, took 2.5 s at 13:28:49Z:
+  - `cs1`, with no tag and no platform, and its port `port1`;
+  - the ports `n1:ethernet-1/3`, `n1:ethernet-1/4`, `n2:ethernet-1/3` and `n3:ethernet-1/3`;
+  - the cable `c-out`, between `n1:ethernet-1/3` and `cs1:port1`;
+  - the cable `c-three`, joining `n2:ethernet-1/3`, `n3:ethernet-1/3` and `n1:ethernet-1/4`.
+- **The read**, exit 0: `3 devices (nokia_srlinux 3), 13 interfaces, 3 links, 3 artifacts, 0
+  lossy mappings, 0 shared ports; 2 cables omitted (branch fylgja-test-017-hand, …)`, with
+  two `info` findings:
+
+  ```
+  info omit.cable.ends c-three: cable c-three is omitted: other than two ends (3); its ends are n1:ethernet-1/4, n2:ethernet-1/3, n3:ethernet-1/3
+  info omit.cable.outside_scope c-out: cable c-out is omitted: an end outside the scope (18e21766-2e61-eb2e-33b9-c513813241f7:port1); its ends are 18e21766-2e61-eb2e-33b9-c513813241f7:port1, n1:ethernet-1/3
+  ```
+
+  The end outside the scope is `cs1:port1`, named by `cs1`'s id, since the read never reads
+  `cs1` (§5.6). The CTM holds `n1`, `n2` and `n3` and the fixture's three links, and no
+  `cs1`. `.envelope.fidelity` holds five rows, sorted: the two `approximated`, then
+  `omitted` `c-out`, `c-three` and `platform.version`.
+- **The platforms.** The branch gained `OrganizationManufacturer nokia` and `DcimPlatform
+  SR-Linux` under it. `n1` was moved onto that platform, and `n2`'s platform set to `null`.
+  The read then exited 1 and wrote no file: `local/hand.ctm.json` kept its bytes and its
+  time. It gave both rejections in one pass, beside the two omissions:
+
+  ```
+  rejection platform.missing n2: device n2 carries no platform; its support package is the one whose matches name its platform and manufacturer
+  rejection platform.unmatched n1: device n1: manufacturer "nokia", platform "SR-Linux"; the packages match: arista_eos [Arista / EOS], nokia_srlinux [Nokia / SR Linux]
+  ```
+
+- `-branch fylgja-test-017-hand -delete`: `deleted 0 stages, 0 proposed changes, branch
+  fylgja-test-017-hand` (6.3 s).
+
+**§6, stages**, on `fylgja-test-017-stages`.
+
+- **The setup.**
+  - The branch was seeded in 23.0 s.
+  - `cs1` was written before the proposed change, as `TestStagesSeeEveryWriteOfADevice`
+    writes it, since its creation on the platform moves the platform's stamp (§5.8). It is
+    untagged, on `Nokia` / `SR Linux`, with `mgmt0` (role `management`) and `ethernet-1/1`.
+  - `-propose` printed `proposed change 18e21779-… opened on fylgja-test-017-stages, draft; 5
+    validators concluded in 83s`. All five completed `success`: Data Integrity, Schema
+    Integrity, the artifact validator, `fylgja-twin` and `fylgja-step`.
+    - `fylgja-twin`'s message: `skipped: proposed change … is a draft; …`.
+    - `fylgja-step`'s message is the plan, with `fylgja-test-017-stages/branch-point:
+      refused (scope.empty)`.
+- **The order.** The edits were made in the tier-2 test's order rather than the quickstart's.
+  Each was marked after it and judged by `bin/fylgja stage plan --branch fylgja-test-017-stages`.
+  After every edit but the last, `-run-check` regenerated the artifacts (31.8 s, 23.6 s,
+  23.7 s), and a second mark was taken and read fresh, so that each mark is stale by its own
+  edit alone. The virtual interface goes last, since the first generation to read a new node
+  moves its stamp (§5.8).
+- **What each mark read** (every plan exits 1, by the branch point's rejection):
+
+  | Mark | Edit (UTC) | Verdict | Written at |
+  |---|---|---|---|
+  | `seeded` | none | fresh, bundle `ad1716a8…` | |
+  | `untagged` | `cs1`'s `description`, 13:32:07.8 | fresh; the head moved to 13:32:07.988 | |
+  | `platform` | `SR Linux`'s `description`, 13:32:24.7 | `stage.artifact.stale` `n1`, `n2`, `n3` | the platform's stamp, 13:32:24.850 |
+  | `manufacturer` | `Nokia`'s `description`, 13:33:38.6 | stale `n1`, `n2`, `n3` | `infrahub.node.updated of a OrganizationManufacturer`, 13:33:38.712 |
+  | `cable` | the cable on `n1:ethernet-1/1` re-ended to that port alone, 13:34:55.4 | stale `n1`, `n2`; not `n3` | `infrahub.node.updated of a InterfacePhysical`, 13:34:55.501 |
+  | `virtual` | `InterfaceVirtual lo0` on `n1`, 13:36:12.2 | stale `n1` alone | `n1`'s stamp, 13:36:12.296 |
+
+  - After each stale mark, the head was refused stale for the same devices.
+  - The head had passed the re-ending at the first plan after it, 11.2 s on (the plan's own
+    time included).
+  - `platform-checked`, `manufacturer-checked` and `cable-checked` each read fresh.
+  - `cable-checked` read two links and `info omit.cable.ends
+    n1:ethernet-1/1|n2:ethernet-1/1 … other than two ends (1)`.
+  - The `platform` mark was planned again a minute later. It then named the event, `written
+    at 13:32:24.963472 (Infrahub's event log: infrahub.node.updated of a DcimPlatform; its
+    latest stamp 13:32:24.850161)`, which had landed in the log since the first plan.
+- **The branch point**: every plan read `fylgja-test-017-stages/branch-point: refused
+  (scope.empty)`, `scope tag:fylgja selects no device on branch main at
+  2026-10-26T13:29:45.838959Z`. The step from it read `not computed (… branch-point was
+  refused)`, and the plan went on to every mark and the head.
+  - `fylgja-step` passed over it at the proposed change's creation, as above.
+  - The rehearsal's passing over it boots a twin, so it is §7's checks test (T062), not a
+    hand step.
+- **What §5.8 left owed**, partly seen here: in a proposed change's pipeline, a mark after a
+  run-check was fresh each time. So the artifact validator's completion covered the query
+  group's writes that follow a generation, for these edits. A new node's first generation
+  (`lo0`) and a hand `-generate` were not exercised.
+- `-branch fylgja-test-017-stages -delete`: `deleted 9 stages, 1 proposed change, branch
+  fylgja-test-017-stages` (11.1 s).
+
+**Afterwards**: `Branch` lists `main` and `fylgja-fixture` alone. `CoreProposedChange`,
+`FylgjaStage`, `CoreChangeThread`, `CoreUserValidator`, `DcimDevice` and `BuiltinTag` count
+0 on `main`, and `main`'s hash is `7c413536…`.
 
 <a id="5-6"></a>
 ### 5.6 The read against the running Infrahub (T039–T041; 2026-10-26, 01:57Z–01:59Z)

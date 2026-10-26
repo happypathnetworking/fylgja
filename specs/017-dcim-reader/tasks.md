@@ -1061,32 +1061,88 @@ in `description`.
     - 12.1 GiB of memory is available.
   - **Next**: T057, the operator's: once the loop stops, fast-forward `main` to the branch, push `origin`'s `main`, and read CI's contract job.
 
-- [ ] T058 [live] [US6] Import the pushed commit (quickstart §2 step 3). Look up `CoreReadOnlyRepository` `fylgja`'s id, then run `InfrahubReadOnlyRepositoryImportLastCommit(data: {id})` on `main`. Wait for the import's flow, and about 15 s more for both task workers to fetch it. Check that no `git_repositories_sync` run is stuck `PENDING`. Verify:
+- [X] T058 [live] [US6] Import the pushed commit (quickstart §2 step 3). Look up `CoreReadOnlyRepository` `fylgja`'s id, then run `InfrahubReadOnlyRepositoryImportLastCommit(data: {id})` on `main`. Wait for the import's flow, and about 15 s more for both task workers to fetch it. Check that no `git_repositories_sync` run is stuck `PENDING`. Verify:
   - the registration's `commit` is the pushed head;
   - `CoreGraphQLQuery device_config`'s query names `DcimDevice`;
   - the two check definitions `fylgja-step` and `fylgja-twin` are still registered.
 
   Record in research §5.4 the owed fact: the rewritten query imports on a `main` that holds the library.
+  - *2026-10-26 13:20Z, at `d038c5a`, Run 18 of the converge loop (live):* done. The record is research §5.4.
+    - **No sync stuck**: the task manager's Prefect API, read inside its container, held no flow run `PENDING` or `RUNNING` and none overdue, before the import (13:19:08Z) and after it (13:20:31Z). `git_repositories_sync` completed each minute.
+    - **The import**: called at 13:19:17Z on `main`; its task ran 28.4 s. The registration's `commit` is **`c006bf9`**, the head of `origin`'s `main` as the operator pushed it (T057), `in-sync` and `active` / `online`. Both task workers hold the commit's tree, `task-worker-2` from 4.6 s after the flow ended.
+    - **The query**: `device_config`'s text is `c006bf9`'s file byte for byte, and names `DcimDevice`. Its `models` are ten of the library's kinds, in place of the eight removed ones. The transform and the definition are unchanged.
+    - **The checks**: `fylgja-step` (timeout 300) and `fylgja-twin` (timeout 4260) are still registered. `CLAUDE.md` says 4200 (for T071).
 
-- [ ] T059 [live] [US6] Rebuild (`make build`), then restart the worker and the server from this tree with `CLAUDE.md`'s two start lines, and verify both as `CLAUDE.md` says:
+- [X] T059 [live] [US6] Rebuild (`make build`), then restart the worker and the server from this tree with `CLAUDE.md`'s two start lines, and verify both as `CLAUDE.md` says:
   - `/proc/<pid>/exe` not `(deleted)`;
   - the environment names, `FYLGJA_DEFAULT_SCOPE` among the server's;
   - the server's report naming both listeners, the bridge warning, both packages with their logins set, and `default scope: tag:fylgja`;
   - from inside each task worker, `POST /v1/twin/show` answers `200` with the token and `401` without it.
+  - *2026-10-26 13:21Z, at `d038c5a`, Run 18 of the converge loop (live):* done.
+    - **The build**: `make build` gave a static `bin/fylgja`. The worker and the server, which read `(deleted)`, were stopped and started with `CLAUDE.md`'s two lines at 13:20:54Z: the worker is pid 277419 and the server pid 277486.
+    - **Verified**:
+      - each `/proc/<pid>/exe` is the tree's `bin/fylgja`;
+      - each environment's names carry `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`;
+      - the server's report names `127.0.0.1:7650` and `172.17.0.1:7650` (API version 1, build `0.1.0-dev`), the bridge's unencrypted line, `default scope: tag:fylgja`, and both packages with their logins set;
+      - the worker's names both packages and `lab fylgja absent; twin directory absent`;
+      - from inside `task-worker-1` and `-2`, `POST /v1/twin/show` answered `200 1 0.1.0-dev` with the container's token and `401` without it, and from the host without one, `401`.
+    - **Again**: T060's commit relinked the client into the binary. Both were rebuilt and restarted at 13:26:49Z (worker 292560, server 292664) and verified the same way before T061. The final processes are in this run's checkpoint.
 
-- [ ] T060 [live] [US6] Re-seed and regenerate (R-14 steps 4–5; FR-037, FR-039).
+- [X] T060 [live] [US6] Re-seed and regenerate (R-14 steps 4–5; FR-037, FR-039).
   - **The fixture**: `make infrahub-clean && make infrahub-seed` prints `three-node fixture seeded on fylgja-fixture, with every artifact rendered and Ready`.
   - **The client**: `make sdl && make generate`, after which `schema/infrahub.graphql` and `internal/intent/generated.go` hold no generic. Commit them (`chore(intent): the SDL and the typed client from the migrated main`), then confirm `go generate ./... && git diff --exit-code`, `make test`, `make lint` and `go vet -tags contract,fixture,e2e ./...`.
   - **The render check**: compare `bin/fylgja intent read --branch fylgja-fixture`'s artifacts with T016's predicted bytes in `testdata/ctm/three-node.json`, and a `-mixed` throwaway branch's read with `mixed.json`.
     - If they differ, take the real bytes into both fixtures and their shuffled copies, re-run `go test ./internal/compiler -update`, and commit the goldens alone, naming the new ids; the loop stops for the review. The operator then merges and pushes `main` again, as T057, before T063, so that CI's `main` and the script agree on the ids.
     - Record in research §5.1 whether the prediction held.
   - *2026-10-26, the attended session:* the operator **accepted a second push** (question 2 of the run started 2026-10-25T23:49Z, answer `2a`): if the render differs from the prediction and this task re-baselines the goldens in a commit of its own, the loop stops for a second merge and push of the whole branch, made as T057's was (the loop stopped, the operator pushes and reads CI), before T063.
+  - *2026-10-26 13:25Z, at `d038c5a`, Run 18 of the converge loop (live):* done; **the prediction held**, so no golden moved and no golden commit was made.
+    - **The fixture**: `make infrahub-clean` printed `deleted branch fylgja-fixture` (9.5 s). `make infrahub-seed` printed `schema loaded on fylgja-fixture`, then `three-node fixture seeded on fylgja-fixture, with every artifact rendered and Ready` (65.0 s). The fixture's schema hash is now `main`'s, `7c413536…`.
+    - **The client**:
+      - `make sdl` wrote 2,062,600 bytes from `main`. The default branch's header (v0.2.0's) was restored by hand, as the previous refetch (`129073e`) did.
+      - Compared structurally, 196 types left, each of them one of the nine removed kinds' types, and none was added.
+      - `make generate` dropped the `NetworkDevice` implementers of `ArtifactFields` and `ArtifactStamps` and changed no operation. Neither file names a generic.
+      - Committed as `5abdbd3` (`chore(intent): the SDL and the typed client from the migrated main`).
+      - Then `go generate ./... && git diff --exit-code` was stable, `make test` uncached took 42.9 s at a load average of 3.9 to 4.0, `make lint` gave 0 issues, and `go vet -tags contract,fixture,e2e ./...` was clean.
+    - **The render check** (research §5.1):
+      - `intent read --branch fylgja-fixture`'s artifacts are T016's bytes: `n1`–`n3`, 707 bytes each, MD5 `597f6263…`, `5ac21560…`, `e93df964…`.
+      - The mixed fixture on `fylgja-test-017-mixed` read `s1`, `e1` and `e2`. With its marker replaced by `mixed-fixture`, they equal `mixed.json`'s bytes and MD5s; the header's marker line is the only one that differs. The branch was deleted.
+      - So the goldens stay T024's (`43d91715…`, `4213b3cf…`, `ecb665f5…`). The second push this task allowed for a golden commit is not needed for it; the one T057's note asks for after T062's fixes stands.
 
-- [ ] T061 [live] [US1] [US2] [US3] [US5] The hand scenarios (quickstart §3–§6), each recorded in research §5.5 with its output. Delete every throwaway branch at the end.
+- [X] T061 [live] [US1] [US2] [US3] [US5] The hand scenarios (quickstart §3–§6), each recorded in research §5.5 with its output. Delete every throwaway branch at the end.
   - **§3, the fixture read**: `schema check`'s line; `intent read`'s line and the `diff` against `three-node.json` reading `same`; the envelope; `twin compile`, with the manifest's provenance and `fidelity.read`. Record the bundle id as the fixture's compiled id.
   - **§4, the scope**: `tag:fylgja`, `tag:nothing`, `fylgja`, `--scope=` and `twin step --scope`. Then a scratch server with no default, on a scratch port and state root, refusing `scope.unset` with no read in its log.
   - **§5, omissions and refusals**: on `fylgja-test-017-hand`, two `info` findings and five rows; then `platform.unmatched n1` and `platform.missing n2` in one pass, with no file written.
   - **§6, stages**: the four stale edits, the untagged edit, and the branch point `refused (scope.empty)`.
+  - *2026-10-26 13:37Z, at `5abdbd3`, Run 18 of the converge loop (live):* done, through the server from this tree. Each scenario's output is in research §5.5.
+    - **§3**: `schema check` gave its two lines. `intent read` gave the line quickstart §3 expects, with `schema 7c413536…`. The `diff` said `same`, and the envelope carried `tag:fylgja`, the mapping and the three rows. **The fixture's compiled id is `f764e1fa…`** on this install (`47b2c449…` before), with the provenance and `fidelity.read` as the envelope's. No test or script pins it (for T071).
+    - **§4**: each answer and exit is as expected. `twin step --scope` was refused by the client, and the server logged no request. The scratch server (`127.0.0.1:7659`, a scratchpad state root, no `FYLGJA_DEFAULT_SCOPE`) reported `default scope: unset (…)` and refused `scope.unset` naming the variable, exit 2, in 6 ms with no read; it was stopped. **One fix to the quickstart**: `--out /dev/null` cannot be written, since the client writes through a temporary file beside its target (`open /dev/.fylgja-ctm-…: permission denied`), so §4's `tag:fylgja` line now names `local/scope.ctm.json`.
+    - **§5**:
+      - The writes were made by GraphQL on `fylgja-test-017-hand`. The read exited 0 with `info omit.cable.ends c-three` (three ends) and `info omit.cable.outside_scope c-out`, whose outside end is `cs1:port1` named by `cs1`'s id, as §5.6 found. The CTM holds three devices and three links, with no `cs1`, and five fidelity rows.
+      - Then, with `n1` on `nokia` / `SR-Linux` and `n2` with no platform, the read exited 1 with `platform.unmatched n1` and `platform.missing n2` in one pass. The file was untouched.
+    - **§6**:
+      - On `fylgja-test-017-stages`, the untagged `cs1` was written before `-propose`, whose five validators concluded `success`. `fylgja-step`'s plan named the branch point `refused (scope.empty)`, and `fylgja-twin` skipped the draft.
+      - The edits were made in `TestStagesSeeEveryWriteOfADevice`'s order, with a run-check between them, so that each mark is stale by its own edit.
+      - `cs1`'s description left its mark fresh. The platform's and the manufacturer's descriptions each made `n1`, `n2` and `n3` stale; the quickstart's "`n1`" is the least of it. The cable re-ended made `n1` and `n2` stale, not `n3`, and `lo0` on `n1` made `n1` alone stale. Each mark after a run-check was fresh.
+      - Every plan read the branch point `refused (scope.empty)` and went on. The rehearsal's passing over it boots a twin, which is T062's checks test.
+    - **Deleted**: `fylgja-test-017-mixed` (T060), `fylgja-test-017-hand` and `fylgja-test-017-stages` (`deleted 9 stages, 1 proposed change, …`). `Branch` lists `main` and `fylgja-fixture` alone, and `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` count 0.
+
+  *Run 18's checkpoint, 13:42Z*:
+  - **Gates**, on the final tree:
+    - `make build`: static.
+    - `make test` uncached: 33.8 s wall at a load average of 1.5 before and 3.0 after, `internal/cli` 29.7 s of it.
+    - `make lint`: 0 issues.
+    - Clean: `go vet -tags contract,fixture,e2e ./...` and `make linkcheck` (74 files, 0 broken).
+    - `go generate ./...` is stable on the new SDL. No golden moved.
+  - **Not run, and why**: T058–T061 name no tier-2 package and no tier 3. Tier 2 is T062's, with the three fixes CI's contract job asks for (T057's note); tier 3 is T063's, after it. Of quickstart §6, the rehearsal's passing over the branch point boots a twin, so it is left to T062's checks test.
+  - **The host**:
+    - The worker and the server were restarted from this tree after the final build: the worker is pid 324187 and the server pid 324290.
+    - Both `/proc/<pid>/exe` read the tree's `bin/fylgja`. Their environment names carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`.
+    - The server reports both listeners, the bridge warning, `default scope: tag:fylgja` and both packages with their logins set. From inside each task worker, `POST /v1/twin/show` answers `200 1 0.1.0-dev` with the token and `401` without it.
+    - `clab inspect --all` is `{}`. There is no `local/twin`, and Temporal lists no Schedule and no running workflow.
+    - In Infrahub, `Branch` lists `main` and `fylgja-fixture` alone. `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` count 0, and `main`'s hash is `7c413536…`. The registration `fylgja` is at `c006bf9`. `fylgja-fixture` holds the library's three devices, each with its `device-config` artifact `Ready`.
+    - 11.8 GiB of memory is available.
+  - **For T071**, new values for `CLAUDE.md`: the fixture branch's hash is `main`'s, `7c413536…`, and it compiles to `f764e1fa…`. The registration is at `c006bf9`, and `fylgja-twin`'s timeout is 4260.
+  - **Next**: T062, live. Fix CI's three tier-2 failures where they belong (T057's and T062's notes), then run tier 2 whole. The operator's second push (T057) follows on a green contract job.
 
 - [ ] T062 [live] [US1] [US2] [US3] [US5] [US6] Tier 2 whole (quickstart §7; SC-001, SC-003–SC-006, SC-009), on a host with no twin, the server on the bridge from this tree (T059): `set -a; . local/.env; set +a; make test-contract 2>&1 | tee local/017-contract.out`.
   - Green: every new test of T044 and T051, and every 014 and 015 test.

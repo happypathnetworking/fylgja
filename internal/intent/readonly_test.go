@@ -1,10 +1,13 @@
 package intent
 
 import (
+	"os"
 	"regexp"
 	"slices"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 // operations is every GraphQL document this package can send. The generated client is
@@ -26,6 +29,129 @@ func operations() map[string]string {
 		"PortStamps":          PortStamps_Operation,
 		// 017: the stamps' account, an owned root (D-060).
 		"QueryGroups": QueryGroups_Operation,
+	}
+}
+
+// definition is one top-level definition of a GraphQL document: its type (query,
+// mutation, subscription or fragment; "" for the anonymous query shorthand) and its name.
+type definition struct{ kind, name string }
+
+// definitionHeader is a definition's text before its selection set: its type and name.
+var definitionHeader = regexp.MustCompile(`^(query|mutation|subscription|fragment)\s+([_A-Za-z][_0-9A-Za-z]*)`)
+
+// definitions lists every top-level definition of doc, comments removed: each selection
+// set opened outside every other closes one header, and variable definitions are skipped,
+// so a field or a variable named query is never taken for one.
+func definitions(t *testing.T, doc string) []definition {
+	t.Helper()
+	doc = regexp.MustCompile(`#[^\n]*`).ReplaceAllString(doc, "")
+	var out []definition
+	var header strings.Builder
+	depth, parens := 0, 0
+	for _, r := range doc {
+		switch {
+		case depth == 0 && r == '(':
+			parens++
+		case depth == 0 && r == ')':
+			parens--
+		case parens > 0:
+		case r == '{':
+			if depth == 0 {
+				out = append(out, definitionOf(t, strings.TrimSpace(header.String())))
+				header.Reset()
+			}
+			depth++
+		case r == '}':
+			depth--
+		case depth == 0:
+			header.WriteRune(r)
+		}
+	}
+	return out
+}
+
+// definitionOf reads a definition's header; an empty one is the anonymous query shorthand.
+func definitionOf(t *testing.T, header string) definition {
+	t.Helper()
+	if header == "" {
+		return definition{}
+	}
+	m := definitionHeader.FindStringSubmatch(header)
+	if m == nil {
+		t.Fatalf("a definition begins %q, which is no query, mutation, subscription or fragment", header)
+	}
+	return definition{m[1], m[2]}
+}
+
+// unheld names every operation doc declares that listed does not hold, and every one
+// listed holds that doc does not declare: what the read-only tests below, which loop over
+// operations() alone, would pass over unseen or claim to cover without cause.
+func unheld(t *testing.T, doc string, listed map[string]string) []string {
+	t.Helper()
+	var out []string
+	declared := map[string]bool{}
+	for _, d := range definitions(t, doc) {
+		switch {
+		case d.kind == "fragment":
+		case d.name == "":
+			out = append(out, "an anonymous query, which operations() cannot name")
+		default:
+			declared[d.name] = true
+			if _, ok := listed[d.name]; !ok {
+				out = append(out, d.kind+" "+d.name+" is declared and not in operations()")
+			}
+		}
+	}
+	for name := range listed {
+		if !declared[name] {
+			out = append(out, name+" is in operations() and not declared")
+		}
+	}
+	slices.Sort(out)
+	return out
+}
+
+// The tests below hold the operations operations() lists, so it must list every one the
+// generated client is generated from (SC-002, FR-001): an operation added to a document
+// genqlient.yaml names, and not to operations(), would generate its *_Operation and be
+// sent unchecked, whatever its root or its type.
+func TestOperationsListsEveryOperationDeclared(t *testing.T) {
+	raw, err := os.ReadFile("genqlient.yaml")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		Operations []string `yaml:"operations"`
+	}
+	if err := yaml.Unmarshal(raw, &cfg); err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Operations) == 0 {
+		t.Fatal("genqlient.yaml names no operations document; the check proved nothing")
+	}
+	var docs strings.Builder
+	for _, name := range cfg.Operations {
+		b, err := os.ReadFile(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		docs.Write(b)
+		docs.WriteString("\n")
+	}
+	if got := unheld(t, docs.String(), operations()); len(got) != 0 {
+		t.Errorf("the operations documents and operations() differ:\n%s", strings.Join(got, "\n"))
+	}
+
+	// The check catches what it is for: a query of another root, a mutation and the
+	// anonymous shorthand, each added to the documents and not to operations().
+	for added, want := range map[string]string{
+		"query Sites { LocationSite { count } }":                                           "query Sites is declared and not in operations()",
+		"mutation Tag($n: String!) { BuiltinTagCreate(data: {name: {value: $n}}) { ok } }": "mutation Tag is declared and not in operations()",
+		"{ DcimDevice { count } }":                                                         "an anonymous query, which operations() cannot name",
+	} {
+		if got := unheld(t, docs.String()+"\n"+added+"\n", operations()); !slices.Equal(got, []string{want}) {
+			t.Errorf("with %q added: %v, want %q alone", added, got, want)
+		}
 	}
 }
 

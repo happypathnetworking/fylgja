@@ -389,7 +389,8 @@ port. The envelope carries `(branch, at?, observed_at, schema_hash, scope, mappi
 the reader's fidelity list, every approximation and omission the mapping made, which the
 compiler copies into the manifest unchanged. `twin compile` refuses a CTM of another
 version, or declaring none (`ctm.version.unsupported`, naming both), and nothing converts a
-`1`; a file leaving out its fidelity list is refused naming it, never read as `[]`. Two jobs
+`1`; a file leaving out its fidelity list, its links or a device's interfaces is refused
+naming it, never read as `[]`. Two jobs
 justify it ([D-010](decisions.md#d-010)): **synthesized nodes** — boundary stubs, service
 mocks, later traffic generators are not in any source and cannot live in types generated
 from one — and **insulation** of the compiler from each source's model. Every

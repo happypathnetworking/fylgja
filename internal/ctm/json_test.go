@@ -401,8 +401,49 @@ func TestUnmarshalRefusesAMissingFidelityList(t *testing.T) {
 	}
 }
 
+// A CTM file that leaves out its links, or a device's interfaces, or writes either null,
+// is refused naming the field, the device by its place in the file: [] says the topology
+// has no cable, or the device no port, which an array left out cannot say, and Normalize
+// would fill one before validation could see it was missing (017, T095). [] is accepted
+// and kept.
+func TestUnmarshalRefusesMissingLinksAndInterfaces(t *testing.T) {
+	const head = `{"ctm_version":"2","envelope":{"branch":"b","observed_at":"x","schema_hash":"h","scope":"tag:fylgja",` +
+		`"mapping":{"reader":"r","model":"m","version":"v"},"fidelity":[]}`
+	const n1 = `{"name":"n1","platform":{"package":"nokia_srlinux"},"interfaces":[]}`
+	for _, c := range []struct{ name, doc, field, device string }{
+		{"links absent", head + `,"devices":[` + n1 + `]}`, "links", ""},
+		{"links null", head + `,"devices":[` + n1 + `],"links":null}`, "links", ""},
+		{"interfaces absent", head + `,"devices":[` + n1 + `,{"name":"n0","platform":{"package":"nokia_srlinux"}}],"links":[]}`,
+			"devices[1].interfaces", "n0"},
+		{"interfaces null", head + `,"devices":[{"name":"n2","platform":{"package":"nokia_srlinux"},"interfaces":null},` + n1 + `],"links":[]}`,
+			"devices[0].interfaces", "n2"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Unmarshal([]byte(c.doc))
+			var missing *MissingError
+			if !errors.As(err, &missing) || missing.Field != c.field {
+				t.Fatalf("refusal %v, want a MissingError naming %s", err, c.field)
+			}
+			if !strings.HasPrefix(err.Error(), c.field+", ") {
+				t.Errorf("refusal %q does not name the field first", err)
+			}
+			if c.device != "" && !strings.Contains(err.Error(), `device "`+c.device+`"`) {
+				t.Errorf("refusal %q does not name the device", err)
+			}
+		})
+	}
+	got, err := Unmarshal([]byte(head + `,"devices":[` + n1 + `],"links":[]}`))
+	if err != nil {
+		t.Fatalf("a CTM with an empty link list and a device with no port was refused: %v", err)
+	}
+	if got.Links == nil || len(got.Links) != 0 || got.Devices[0].Interfaces == nil || len(got.Devices[0].Interfaces) != 0 {
+		t.Errorf("links %#v, interfaces %#v, want [] each", got.Links, got.Devices[0].Interfaces)
+	}
+}
+
 // Every fixture under testdata/ctm/, the defects included, decodes: each declares its
-// version and records its fidelity list, as the contract requires of a file. version-1.json
+// version and records its fidelity list, its links and each device's interfaces, as the
+// contract requires of a file. version-1.json
 // alone is refused, for its version (TestVersion1IsRefused).
 func TestEveryFixtureDecodes(t *testing.T) {
 	root := filepath.Join("..", "..", "testdata", "ctm")
@@ -513,6 +554,13 @@ func TestMarshalledCTMSatisfiesContract(t *testing.T) {
 			c.Devices[0].Provenance = ProvenanceSynthesized
 			return c
 		}()},
+		// A tagged device with no physical port, as the reader builds it (spec Edge Cases):
+		// its interfaces are written [], never null, which the contract refuses.
+		{"device with no port", func() *CTM {
+			c := sample()
+			c.Devices = append(c.Devices, Device{Name: "n4", Platform: Platform{Package: "nokia_srlinux"}})
+			return c
+		}()},
 	} {
 		t.Run(c.label, func(t *testing.T) {
 			b, err := Marshal(c.ctm)
@@ -522,7 +570,16 @@ func TestMarshalledCTMSatisfiesContract(t *testing.T) {
 			if err := schema.Validate(asAny(t, b)); err != nil {
 				t.Errorf("marshalled CTM (%s) does not satisfy ctm.schema.json:\n%v", c.label, err)
 			}
+			if bytes.Contains(b, []byte(`null`)) {
+				t.Errorf("marshalled CTM (%s) writes a null:\n%s", c.label, b)
+			}
 		})
+	}
+	c := sample()
+	c.Devices = append(c.Devices, Device{Name: "n4", Platform: Platform{Package: "nokia_srlinux"}})
+	Normalize(c)
+	if in := c.Device("n4").Interfaces; in == nil || len(in) != 0 {
+		t.Errorf("a device with no port has interfaces %#v, want []", in)
 	}
 }
 

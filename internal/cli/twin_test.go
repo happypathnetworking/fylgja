@@ -38,7 +38,9 @@ func TestAnotherCTMVersionIsRefusedBeforeValidation(t *testing.T) {
 // bundle_id (017, T090): no ctm_version is ctm.version.unsupported at the file, naming
 // "2", as a "1" is; no envelope.fidelity, or a null one, is data.required.missing at the
 // field, as an empty envelope field is, since [] would say the reader approximated and
-// omitted nothing.
+// omitted nothing. No links, or a device's interfaces left out, is refused alike, the
+// device named by its place in the file (T095): filled with [], either would compile as a
+// twin with no cable or a node with no port.
 func TestCompileRefusesACTMLeavingOutARequiredField(t *testing.T) {
 	for _, c := range []struct {
 		name, rule, object, message string
@@ -51,6 +53,12 @@ func TestCompileRefusesACTMLeavingOutARequiredField(t *testing.T) {
 			func(m map[string]any) { delete(m["envelope"].(map[string]any), "fidelity") }},
 		{"a null envelope.fidelity", findings.RuleRequiredMissing, "envelope.fidelity", "",
 			func(m map[string]any) { m["envelope"].(map[string]any)["fidelity"] = nil }},
+		{"no links", findings.RuleRequiredMissing, "links", "",
+			func(m map[string]any) { delete(m, "links") }},
+		{"a null links", findings.RuleRequiredMissing, "links", "",
+			func(m map[string]any) { m["links"] = nil }},
+		{"a device's interfaces left out", findings.RuleRequiredMissing, "devices[1].interfaces", "",
+			func(m map[string]any) { delete(m["devices"].([]any)[1].(map[string]any), "interfaces") }},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			b, err := os.ReadFile(repoPath("testdata", "ctm", "three-node.json"))
@@ -84,8 +92,8 @@ func TestCompileRefusesACTMLeavingOutARequiredField(t *testing.T) {
 			if c.message != "" && doc.Findings[0].Message != c.message {
 				t.Errorf("message %q, want %q", doc.Findings[0].Message, c.message)
 			}
-			if c.rule == findings.RuleRequiredMissing && !strings.HasPrefix(doc.Findings[0].Message, "envelope.fidelity, ") {
-				t.Errorf("message %q does not name envelope.fidelity", doc.Findings[0].Message)
+			if c.rule == findings.RuleRequiredMissing && !strings.HasPrefix(doc.Findings[0].Message, c.object+", ") {
+				t.Errorf("message %q does not name %s", doc.Findings[0].Message, c.object)
 			}
 			if _, err := os.Stat(out); !os.IsNotExist(err) {
 				t.Errorf("something was written to %s", out)

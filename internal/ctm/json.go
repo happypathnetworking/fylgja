@@ -30,6 +30,8 @@ func Normalize(c *CTM) {
 	}
 	// devices and links are required arrays in the contract: an empty topology is
 	// [] and never null, so a reader never has to tell "none" from "not recorded".
+	// Filled here for a CTM built in memory; Unmarshal refuses a file that leaves out its
+	// links, and validation one with no device (devices.empty).
 	if c.Devices == nil {
 		c.Devices = []Device{}
 	}
@@ -63,6 +65,12 @@ func Normalize(c *CTM) {
 		d := &c.Devices[i]
 		if d.Provenance == "" {
 			d.Provenance = ProvenanceIntent
+		}
+		// A device's interfaces are a required array too: a tagged device with no physical
+		// port is written [], never null, which the contract refuses. Unmarshal refuses a
+		// file that leaves one out.
+		if d.Interfaces == nil {
+			d.Interfaces = []Interface{}
 		}
 		for j := range d.Interfaces {
 			in := &d.Interfaces[j]
@@ -116,7 +124,10 @@ func Marshal(c *CTM) ([]byte, error) {
 // CTM built in memory, as the reader's is, and [] says the reader approximated and
 // omitted nothing, which a file leaving the list out never said (Constitution X). So a
 // file's list is held here, before Normalize fills it and before validation could see
-// it was missing.
+// it was missing. The links and each device's interfaces are held alike: [] says the
+// topology has no cable, or the device no port, which a file leaving the array out never
+// said, and filled it would compile as a twin with no links or a node with no port. Each
+// device is named by its place in the file, before Normalize sorts the devices.
 func Unmarshal(data []byte) (*CTM, error) {
 	var head struct {
 		CTMVersion string `json:"ctm_version"`
@@ -137,6 +148,17 @@ func Unmarshal(data []byte) (*CTM, error) {
 	if c.Envelope.Fidelity == nil {
 		return nil, &MissingError{Field: "envelope.fidelity", Message: "envelope.fidelity, the reader's fidelity list, is not recorded: " +
 			"[] says the reader approximated and omitted nothing, which a list left out cannot say"}
+	}
+	if c.Links == nil {
+		return nil, &MissingError{Field: "links", Message: "links, the CTM's list of cables, is not recorded: " +
+			"[] says the topology has no cable, which a list left out cannot say"}
+	}
+	for i, d := range c.Devices {
+		if d.Interfaces == nil {
+			field := fmt.Sprintf("devices[%d].interfaces", i)
+			return nil, &MissingError{Field: field, Message: fmt.Sprintf("%s, device %q's list of ports, is not recorded: "+
+				"[] says the device has no port, which a list left out cannot say", field, d.Name)}
+		}
 	}
 	Normalize(&c)
 	return &c, nil

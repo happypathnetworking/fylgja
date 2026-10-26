@@ -228,14 +228,21 @@ func TestCompileActivity(t *testing.T) {
 		}
 	})
 
-	// The activity compiles only the CTM its own read wrote, which carries both, but its
-	// ctm.Load holds a file to the contract as twin compile does: one leaving out its
-	// version or its fidelity list fails the step naming the field, and nothing is filed
-	// (017, T090).
-	t.Run("a CTM leaving out its version or its fidelity list is refused", func(t *testing.T) {
-		for _, c := range []struct{ name, field, says string }{
-			{"no ctm_version", "ctm_version", `no ctm_version, expected "2"`},
-			{"no envelope.fidelity", "fidelity", "envelope.fidelity, "},
+	// The activity compiles only the CTM its own read wrote, which carries them all, but
+	// its ctm.Load holds a file to the contract as twin compile does: one leaving out its
+	// version, its fidelity list, its links or a device's interfaces fails the step naming
+	// the field, and nothing is filed (017, T090, T095).
+	t.Run("a CTM leaving out a required field is refused", func(t *testing.T) {
+		for _, c := range []struct {
+			name, says string
+			change     func(map[string]any)
+		}{
+			{"no ctm_version", `no ctm_version, expected "2"`, func(m map[string]any) { delete(m, "ctm_version") }},
+			{"no envelope.fidelity", "envelope.fidelity, ", func(m map[string]any) { delete(m["envelope"].(map[string]any), "fidelity") }},
+			{"no links", "links, ", func(m map[string]any) { delete(m, "links") }},
+			{"a device's interfaces left out", "devices[0].interfaces, ", func(m map[string]any) {
+				delete(m["devices"].([]any)[0].(map[string]any), "interfaces")
+			}},
 		} {
 			t.Run(c.name, func(t *testing.T) {
 				b, err := os.ReadFile(fixture)
@@ -246,11 +253,7 @@ func TestCompileActivity(t *testing.T) {
 				if err := json.Unmarshal(b, &m); err != nil {
 					t.Fatal(err)
 				}
-				if c.field == "ctm_version" {
-					delete(m, c.field)
-				} else {
-					delete(m["envelope"].(map[string]any), c.field)
-				}
+				c.change(m)
 				if b, err = json.Marshal(m); err != nil {
 					t.Fatal(err)
 				}

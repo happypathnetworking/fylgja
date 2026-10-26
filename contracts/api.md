@@ -382,8 +382,8 @@ transport, the token, the frames, the statuses and the files are as 015 left the
   [cli.md](cli.md)'s.
 - **The files**: `intent.read`'s `ctm.json` is CTM `2` ([ctm.schema.json](ctm.schema.json)),
   and `twin.compile` takes a CTM `2` alone, refusing another, or one declaring none,
-  `ctm.version.unsupported`, and one leaving out `envelope.fidelity`
-  `data.required.missing`, and answers with a bundle `5`
+  `ctm.version.unsupported`, and one leaving out `envelope.fidelity`, `links` or a
+  device's `interfaces` `data.required.missing`, and answers with a bundle `5`
   ([manifest.schema.json](manifest.schema.json)); `twin.provision`
   refuses a bundle `4` `bundle.version.unsupported`. A package sent to `psp.validate` is
   format `0.7` ([psp.schema.json](psp.schema.json)), with `platform.matches`. The twin's

@@ -1001,7 +1001,12 @@ otherwise. `platform.unsupported` stays, for a CTM naming a package this build l
   version alike (`the CTM declares no ctm_version; this build reads "2", …`), never reading
   it as a `2`; a CTM leaving out `envelope.fidelity`, or writing it null, is a rejection
   `data.required.missing` naming `envelope.fidelity`, exit 1, nothing written, since `[]`
-  would say the reader approximated and omitted nothing; `twin provision` refuses a
+  would say the reader approximated and omitted nothing, and one leaving out `links` or a
+  device's `interfaces`, or writing either null, alike, naming `links` or
+  `devices[<i>].interfaces` (`<i>` the device's place in the file), since `[]` would say
+  there is no cable or no port; `intent read` writes a tagged device with no physical
+  port `"interfaces": []`; the compile activity refuses each `operation.failed` at
+  `compile`, as it refuses any CTM it cannot load; `twin provision` refuses a
   bundle `4` `bundle.version.unsupported`, naming both, as it refused a `3`; a package
   declaring `0.6` or earlier is `psp.version.unknown`, `package declares format version
   "0.6", this build understands "0.7"`.

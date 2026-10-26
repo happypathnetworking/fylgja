@@ -865,27 +865,63 @@ makes no tagged device stale.
   - **Tier 2**: none of T047–T050 names a committed tier-2 test, and T051's are next. The new operations were verified by an uncommitted probe (research §5.8) on two throwaway branches, each deleted by its cleanup. Afterwards `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage` count 0, and `main`'s hash is `e43a1cde…`. Nothing was written to `main`.
   - **The host**: no twin was booted. The worker (pid 2314364) and the server (pid 2314366) were not touched; both `/proc/<pid>/exe` read `(deleted)`.
 
-- [ ] T051 [US5] The tier-2 tests of stages and the checks (quickstart §6, §7; SC-006, SC-009), over the library's kinds. They are run at T062; here they must compile.
+- [X] T051 [US5] The tier-2 tests of stages and the checks (quickstart §6, §7; SC-006, SC-009), over the library's kinds. They are run at T062; here they must compile.
   - `internal/stages/stages_contract_test.go`:
     - `TestStagesSeeEveryWriteOfADevice`, new. After a mark on a throwaway branch's draft proposed change: an `InterfaceVirtual` added to `n1`, `n1`'s platform's `description`, the manufacturer's `description`, and the cable on `n1:ethernet-1/1` re-ended. Each makes `stage.artifact.stale n1` (and `n2` for the cable). An edit of an untagged `cs1` makes no mark stale.
     - `TestStagesListAndPlan`'s branch point is refused with `scope.empty` on a `main` holding no tagged device.
     - `TestStageRefusals`'s identical-bytes case uses `SetDeviceSerial` in place of the site edit.
     - `TestStagesSeeARemoval` runs over a cable's delete.
   - `internal/server/rehearse_contract_test.go` and `internal/checks/checks_contract_test.go` keep their assertions, but for the renamed identifier.
+  - *2026-10-26 03:36Z, Run 14 of the converge loop:* done; `go vet -tags contract` compiles all three packages, and none of it was run (T062's).
+    - **`TestStagesSeeEveryWriteOfADevice`** is new.
+      - The setup: a seeded throwaway branch, with `cs1` added before the draft is opened. `cs1` is untagged, on `Nokia` / `SR Linux`, with `mgmt0` and `ethernet-1/1`. Its creation moves the platform's stamp (§5.8), so the draft's pipeline must come after it.
+      - The marks: `seeded` is fresh. After `cs1`'s description edit, `untagged` is fresh.
+      - Each write, then a mark: the platform's description, then the manufacturer's, then the cable on `n1:ethernet-1/1` re-ended to `n1`'s port alone, then `InterfaceVirtual lo0` on `n1`. After each but the last, a run-check, and a `-checked` mark that must be fresh, so that each stale set is its own write's.
+      - The cable's mark is written once the head has passed the re-ending, by its events alone (no stamp moves, §5.8). `n2`'s message must name the event log.
+      - The virtual interface goes last: the template's query reads every interface, so the first generation to read `lo0` would stamp it (§5.8, T049's open question 2).
+    - **A departure, for review**: the task says "each makes `stage.artifact.stale n1` (and `n2` for the cable)". The test asserts each write's exact set, as §5.8 measured them: the platform and the manufacturer give `n1`, `n2`, `n3` (all three stand on them), the cable gives `n1`, `n2`, and `lo0` gives `n1`.
+    - **Test support** (`internal/testsupport/seed.go`) gains four writers, each refusing the fixture and any branch outside the test prefix: `AddVirtualInterface`, `SetPlatformDescription`, `SetManufacturerDescription` and `ReEndCable`. An uncommitted probe verified them live (research §5.9).
+    - **The other stage tests**:
+      - `TestStagesListAndPlan` already planned the branch point as `scope.empty` (Run 13); its comment now says `main` holds no tagged device.
+      - `TestStageRefusals` already used `SetDeviceSerial` (T044). Its labels became `description-*` and `serial-*`, from `role-*` and `site-*`.
+      - `TestStagesSeeARemoval` already ran over a cable's delete (`DeleteLink` is `DcimCableDelete`); its comment names it.
+      - `checksums` reads `DcimDevice`.
+      - `TestStageKindLoads`' empty-diff premise now needs the library on `main` too (T056). Owed at T062.
+    - **The server's and the checks' tests**:
+      - `deviceChecksums` reads `DcimDevice`, and `role-stale` became `description-stale`.
+      - `TestRehearseComposedByTheFixtureTool` expects `-add-interface`'s line as the tool prints it (`physical, active, no cable`). It reads the port back as `InterfacePhysical`: `status active`, no role, no connector, where it read `NetworkInterface`'s `iftype`, `enabled`, `mgmt_only` and `link`.
 
-- [ ] T052 [US5] The read-only test (`internal/intent/readonly_test.go`; FR-001, SC-002). Replace `TestQueriesNameOnlyGenerics`, `TestQueryRootsAreFylgjaGenerics` and `TestQueryRootExceptionsAreNamed` with:
+- [X] T052 [US5] The read-only test (`internal/intent/readonly_test.go`; FR-001, SC-002). Replace `TestQueriesNameOnlyGenerics`, `TestQueryRootsAreFylgjaGenerics` and `TestQueryRootExceptionsAreNamed` with:
   - `TestQueryRootsAreTheMappings`: every operation's roots are among `DcimDevice` and `InterfacePhysical`, the mapping's kinds, plus `FylgjaStage`, `CoreProposedChange`, `CoreArtifactValidator`, `Branch` and `InfrahubEvent`, the Infrahub-owned or Fylgja's, each with its reason.
   - `TestFragmentTargetsAreTheMappings`: every `fragment … on` and `... on` target is among `DcimDevice`, `DcimPlatform`, `InterfacePhysical`, `DcimCable`, `CoreArtifactTarget` and `NodeMutatedEvent`.
   - A named entry for `BuiltinTag`, read by the `tags__name__value` filter alone, as the Infrahub-owned read FR-001 names.
 
   Adding a fifth kind of the operator's model to any operation fails a test. `TestEveryOperationIsAQuery` stays.
+  - *2026-10-26 03:36Z, Run 14 of the converge loop:* done.
+    - **`TestQueryRootsAreTheMappings`**: `mappingRoots` maps `DcimDevice` to `Devices` and `IntentStamps`, and `InterfacePhysical` to `Ports` and `PortStamps`. `ownedRoots` maps each of the five owned roots to the operation that selects it, with its reason. The test holds both ways: every root an operation selects is listed, and every listed root is selected where it is named.
+    - **`TestFragmentTargetsAreTheMappings`**: every `fragment … on T` and `... on T` is one of the six targets, each with its reason. Each of Infrahub's two must also be used, which proves the pattern matches.
+    - **`TestTheTagIsReadByItsFilterAlone`** (the `BuiltinTag` entry, `filterReads`): no operation names `BuiltinTag`; every `tags…` token in any operation is `tags__name__value`; and only `Devices` and `IntentStamps` pass it.
+    - **Mutation-checked**: an operation with a `LocationSite` root, a fragment on it, a `tags` selection, a `BuiltinTag` root and the filter outside the two operations failed all three tests, each naming the fault; then reverted.
+    - `queries.graphql`'s header names the test's lists. `make generate` left `generated.go` unchanged.
 
-- [ ] T053 [US5] Retire what the generics left (FR-016).
+- [X] T053 [US5] Retire what the generics left (FR-016).
   - **Constants**: remove `ctm.ContractVersion`, `ContractKind`, `RequiredGenerics`, `DeviceGeneric` and `ArtifactTargetGeneric`, and every user still left (`internal/cli`, `internal/provision/activities_test.go`, `internal/server/schema.go`).
   - **Operations**: `queries.graphql` names no `Fylgja*` kind but `FylgjaStage`, and no `Network*` kind.
   - **Identifiers**: confirm all eight of R-21's retired ones are gone from `internal/findings` and every test.
   - **Grep**: `/usr/bin/grep -rn 'FylgjaDevice\|FylgjaInterface\|FylgjaPlatform\|FylgjaLink\|FylgjaContract\|NetworkDevice\|iftype\|ContractVersion\|contract_version' --include='*.go' .` finds only `internal/intent/generated.go` (the interim SDL's types, gone at T060) and the frozen copies under `testdata/`.
   - **Gates**: `make test` uncached, under 45 s, its time noted; `make lint`; `go vet -tags contract,fixture,e2e ./...`.
+  - *2026-10-26 03:36Z, Run 14 of the converge loop:* done.
+    - **Constants**: the five are gone from `internal/ctm/types.go`. None had a user left.
+    - **Operations**: `queries.graphql` names `FylgjaStage` alone of the `Fylgja*` kinds, and no `Network*` kind.
+    - **Identifiers**: none of R-21's eight is declared, in the rule table or used in any `*.go`, `*.py` or `*.sh`. The new `TestTheGenericsRulesAreRetired` (`internal/findings`) pins that.
+    - **Grep, cleaned**: three stale comments (`intent/artifact.go`, `intent/stages.go`, `stages/plan_test.go`), and two fakes that named `NetworkDevice` as an arbitrary kind (`intent/stages_test.go`, `testsupport/library_test.go`; now `DcimDevice` and `BuiltinTag`).
+    - **Grep, kept, for review**: the matches left beside `generated.go` and `testdata/` describe or test the old formats' refusal. Each is a `contract_version` or `iftype` of a CTM `1`, a manifest `4` or a twin record of `7` or earlier:
+      - tests that such a document is refused, or read with its field ignored: `internal/cli` (`show_test.go`, `compile_test.go`, `create_test.go`), `internal/ctm/json_test.go`, `internal/findings` (`verified_test.go`, `finding_test.go`, `decode_test.go`, `stages_test.go`) and `internal/lab/twin_test.go`;
+      - `internal/compiler/golden_test.go`'s assertion that the manifest carries none;
+      - comments on the format boundary (`bundle/verify.go`, `bundle/verify_test.go`, `compiler/manifest.go`, `ctm/json.go`, `lab/wire/types.go`).
+
+      Removing them would drop FR-028's and the frozen formats' tests, so they stay, like the frozen copies the grep already excepts.
+    - **Gates**: `make test` uncached took 42.8 s wall at a load average of 2.4. A first run took 45.1 s at a load average of 4.0. `internal/cli` is about 29.5 s of it. `make lint` and `go vet -tags contract,fixture,e2e ./...` are clean.
 
 **Checkpoint**: the code of the feature is complete in tier 1. Every tagged test compiles.
 
@@ -902,11 +938,37 @@ kind and none of the generics; `-prepare-main` run again refuses naming the kind
 the fixture reads to its CTM; tier 2 is green; the nine tier-3 cases pass with the marker
 in `description`.
 
-- [ ] T054 [US6] `scripts/e2e.sh` (R-18 tier 3; FR-038).
+- [X] T054 [US6] `scripts/e2e.sh` (R-18 tier 3; FR-038).
   - The marker is the device's `description`, so the comments around `MARKER='FYLGJA-MARKER'` (the "role comment" lines) say the header. Every `-set-role` and `-set-site` becomes `-set-description`.
   - Every assertion that names the generics' kinds or `contract.node.missing` moves to the library's kinds and `scope.empty`.
   - Case 1 asserts `twin show`'s `scope tag:fylgja` and `read by infrahub-dcim from opsmill/schema-library@26336e9`. Case 5 passes `--scope tag:fylgja`.
   - `shellcheck scripts/e2e.sh` is clean. Check the changed greps offline against the recorded `local/e2e-*.outputs`, as the memory note on tier 3's outputs describes.
+  - *2026-10-26 03:36Z, Run 14 of the converge loop:* done; tier 3 itself is T063's, after the migration.
+    - **The marker**: the header comment, the `MARKER` lines and case 5's branch comment say the description, not the role. The script calls neither `-set-role` nor `-set-site`, so there was nothing to replace.
+    - **The kinds and the identifier**: `artifacts_of` reads `DcimDevice`. Each `contract.node.missing` in cases 7, 8 and 9 is now `scope.empty`: the plans' rejections, `stage_lines`' branch-point lines and `comment_stages`' cells. The header now says `twin.json 8` and gives the branch point's reason as no tagged device on `main`.
+    - **Case 1**: `twin.json`'s provenance names `scope tag:fylgja` and the mapping `infrahub-dcim` / `opsmill/schema-library` / `26336e9`. `twin show`'s text holds `scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9`.
+    - **Case 5**: the create passes `--scope tag:fylgja`, and `twin.json`'s provenance names it.
+    - **Two preconditions, new, for review**:
+      - The script's server must report `default scope: tag:fylgja`; otherwise the run stops with T055's remedy.
+      - For case 9, the bridge server's environment must carry `FYLGJA_DEFAULT_SCOPE=tag:fylgja`, read from `/proc/<pid>/environ` when it is readable. The checks send no scope (FR-021), so without it every check is refused `scope.unset`.
+    - **Checked**:
+      - `shellcheck scripts/e2e.sh scripts/bring-up.sh` is clean.
+      - Offline, under `env -i bash`: the plan-7 and plan-8 filters, and case 9's `stage_lines` and `comment_stages`, pass against `local/e2e-015-full-4.outputs` with `contract.node.missing` replaced by `scope.empty`, and fail against the originals.
+      - On synthesized inputs: `artifacts_of`'s filter on a `DcimDevice` answer; both `twin.json` filters; `twin show`'s clause; and both new preconditions, each in its passing and its failing case.
+
+  *Run 14's checkpoint, 03:36Z*:
+  - **Gates**:
+    - `make build`: static.
+    - `make test` uncached: 42.8 s at a load average of 2.4 (45.1 s at 4.0 on the first try).
+    - `make lint`: 0 issues.
+    - Clean: `go vet -tags contract,fixture,e2e ./...`, `make linkcheck` and `shellcheck`.
+    - `go generate ./...` is stable. No golden moved.
+  - **Not run, and why**: T051's tier-2 tests and T054's tier 3 cannot pass before the migration. `fylgja-fixture` still holds the generics, and Infrahub renders with the generics' template until T058's import. The one live write was research §5.9's probe, on a throwaway branch it deleted; nothing was written to `main`.
+  - **The host**:
+    - The worker (pid 3290001) and the server (pid 3290023) were restarted from this tree after the build. Both `/proc/<pid>/exe` read the tree's `bin/fylgja`, and the environment names carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT` and `FYLGJA_API_TOKEN`.
+    - The server reports both listeners, the bridge warning, both packages with their logins set, and `default scope: unset`, since T055 is the operator's. From inside each task worker, `POST /v1/twin/show` answered `200` (API 1, build `0.1.0-dev`) with the token and `401` without it.
+    - `clab inspect --all` is `{}`, there is no `local/twin`, Temporal lists no Schedule, `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage` count 0, and `main`'s hash is `e43a1cde…`.
+  - **Next**: T055, the operator's: `FYLGJA_DEFAULT_SCOPE="tag:fylgja"` in `local/.env`, and the go-ahead for `main`'s migration.
 
 - [ ] T055 [operator] [US6] Before the host moves: add `FYLGJA_DEFAULT_SCOPE="tag:fylgja"` to `local/.env` (the operator's file, which the bring-up script keeps byte for byte; values there are quoted), and give the go-ahead for `main`'s migration (T056), this feature's one lasting write to `main`. Say whether a live session runs it or the operator does. Precondition: T002 done, and no tier, loop or twin running against Infrahub.
 

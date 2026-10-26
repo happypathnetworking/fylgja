@@ -1344,3 +1344,26 @@ printed.
     T062.
 - **Afterwards** `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and
   `FylgjaStage` count 0, and `main`'s hash is `e43a1cde…`.
+
+### 5.9 Test support's writers for the stages' tier-2 test (T051; 2026-10-26, 03:27Z–03:29Z)
+
+An uncommitted probe (`TestRun14Probe`, in `internal/testsupport`) on a throwaway branch
+`fylgja-test-017-run14-<unix>` made from `main`, the library and the stage kind loaded
+(39.2 s), two tagged devices `n1` and `n2` on `Nokia` / `SR Linux` and the cable between
+their `ethernet-1/1`, with no group join and no render; then the branch deleted by its
+cleanup (64.6 s in all). Nothing was written to `main`, and no token was printed.
+
+- `AddVirtualInterface(n1, lo0)` wrote one `InterfaceVirtual` on `n1`, found by
+  `DcimInterface(device__name__value, name__value)` on the generic; a second of the name was
+  refused before any write.
+- `SetPlatformDescription` and `SetManufacturerDescription` each updated the one node of the
+  name; an absent name was refused before any write.
+- `ReEndCable(n1, ethernet-1/1, n1:ethernet-1/1)`: `DcimCableUpdate` with one peer in
+  `connected_endpoints` replaced the set. The cable read one end, `n1:ethernet-1/1`, and
+  `n2:ethernet-1/1`'s connector read `{"node": null}`.
+- **Afterwards** `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and
+  `FylgjaStage` count 0, and `main`'s hash is `e43a1cde…`.
+
+What these writes do to the stamps and the events is §5.8's. Whether a run-check clears each
+write before the next, as `TestStagesSeeEveryWriteOfADevice` asserts, needs the template's
+import (T058). It is owed at T062.

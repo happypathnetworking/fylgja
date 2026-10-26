@@ -12,7 +12,9 @@ Read in this order, then the current feature under `specs/`:
 `docs/archive/`) · `docs/development.md` (conventions).
 Terms are in `docs/glossary.md`. What has been verified about a dependency is in
 `docs/verified-facts.md`, read when a task touches that dependency. The constitution at
-`.specify/memory/constitution.md` (1.3.0) binds every plan's Constitution Check.
+`.specify/memory/constitution.md` (2.1.0) binds every plan's Constitution Check. The schema
+Fylgja reads is the OpsMill schema library's DCIM at a pinned commit, by one documented
+mapping ([D-057](docs/decisions.md#d-057)); `schema/README.md` says which kinds and fields.
 
 This repository began with one commit, M14's cut ([D-043](docs/decisions.md#d-043)). The
 record of how M1–M13 were built (their specs, research logs and command logs) is private
@@ -69,11 +71,14 @@ and is not cited here; a bare milestone marker (`M7`) is resolved by the table b
   - **`infrahubctl` is `.venv/bin/infrahubctl`.** Skip the hook's `uv run` / `poetry run`
     detection; neither tool is used here, and nothing is `uv add`ed or `poetry add`ed.
     The venv's `infrahub-sdk` is pinned (Environment, Python).
-  - **Fylgja's schema loads on `main`** ([D-028](docs/decisions.md#d-028)), against
-    `workflow-branch-first`. That includes the branch-agnostic kinds beside the contract,
-    `FylgjaStage` and any added after it.
-  - **Some writes go to `main` on purpose**, against `workflow-branch-for-crud`: the group
-    `fylgja-devices` and the repository registration (`fylgja-fixture -prepare-main`);
+  - **The schema Fylgja reads loads on `main`** ([D-028](docs/decisions.md#d-028)),
+    against `workflow-branch-first`: the schema library's DCIM, vendored under
+    `schema/dcim/` ([D-057](docs/decisions.md#d-057)), and beside it the branch-agnostic
+    kinds, `FylgjaStage` and any added after it.
+  - **Some writes go to `main` on purpose**, against `workflow-branch-for-crud`: the
+    library and the stage kind, the group `fylgja-devices` and the repository registration
+    (`fylgja-fixture -prepare-main`, which loads the library only on a `main` holding none
+    of its kinds);
     stages and other branch-agnostic objects, which land in no branch's diff; and what
     a check posts on a proposed change; and a demo's three-node baseline, for a window
     `-seed-main` opens and `-clear-main` closes ([D-054](docs/decisions.md#d-054)), with no
@@ -95,7 +100,9 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   probe and push login `FYLGJA_SRLINUX_USERNAME`/`_PASSWORD` and the EOS one
   `FYLGJA_EOS_USERNAME`/`_PASSWORD`, each the image's default, as `scripts/e2e.sh` sets
   them — and `FYLGJA_API_TOKEN`, the API's token, which the server and every client's
-  command share and the worker never reads ([D-042](docs/decisions.md#d-042)). It also
+  command share and the worker never reads ([D-042](docs/decisions.md#d-042)), and
+  `FYLGJA_DEFAULT_SCOPE`, `tag:fylgja`, the scope a request that names none is read under,
+  which the server alone reads. It also
   holds Infrahub's Compose values, which Compose reads and Fylgja never does:
   `COMPOSE_PROJECT_NAME`, `INFRAHUB_INITIAL_ADMIN_TOKEN` (equal to `INFRAHUB_API_TOKEN`),
   `INFRAHUB_INITIAL_ADMIN_PASSWORD`, `INFRAHUB_INITIAL_AGENT_TOKEN` and
@@ -119,31 +126,36 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   Compose from the repository root as the script does: `docker compose -p fylgja-infrahub
   --env-file local/.env -f local/infrahub/docker-compose.yml -f
   local/infrahub/docker-compose.override.yml <command>`. Volumes persist across `down`.
-- **Infrahub's `main`** carries the Fylgja schema (`NetworkDevice` inherits
-  `CoreArtifactTarget`; and the stage kind `FylgjaStage`, branch-agnostic (`label`,
-  `as_of`, `description`, a required `proposed_change`), with its `fylgja_stages`
-  extension of `CoreProposedChange`, loaded from `schema/fylgja-stage.yaml` by
-  `-prepare-main` on 2026-10-16; M10's kind was removed from it on 2026-10-17 by
-  `specs/014-proposed-change-stages/migration/`'s `state: absent` document), hash
-  **`e43a1cde…`** on this install (`a8045729…` before that removal, `e7386419…` with
+- **Infrahub's `main`** carries the schema Fylgja reads: the schema library's DCIM, the six
+  files of `opsmill/schema-library@26336e9` vendored under `schema/dcim/`, loaded by
+  `-prepare-main` on 2026-10-26 once `specs/017-dcim-reader/migration/`'s two `state:
+  absent` documents had removed the reference kinds, then the four generics and their
+  contract node; and the stage kind `FylgjaStage`, branch-agnostic (`label`, `as_of`,
+  `description`, a required `proposed_change`), with its `fylgja_stages` extension of
+  `CoreProposedChange`, loaded from `schema/fylgja-stage.yaml` on 2026-10-16 (M10's kind
+  was removed on 2026-10-17 by `specs/014-proposed-change-stages/migration/`). It holds no
+  device. Hash **`7c413536…`** on this install (`e43a1cde…` before the library,
+  `a8045729…` before M10's kind's removal, `e7386419…` with
   [D-045](docs/decisions.md#d-045)'s candidate kind, `0aba31a5…` before any stage kind; a
-  branch's hash is its own, so each install and each branch has one, and the fixture
-  branch keeps `0aba31a5…`; the 24.04 install's was `4d5b37aa…`);
-  the empty group
+  branch's hash is its own, so each install and each branch has one; the 24.04 install's
+  was `4d5b37aa…`); the empty group
   `fylgja-devices`; and the registration `fylgja`, a `CoreReadOnlyRepository` at
   `https://github.com/happypathnetworking/fylgja.git`, `ref main`, with no credential
-  ([D-044](docs/decisions.md#d-044)), whose import made the query `device_config`, the
-  transform `srlinux_device_config` and the definition `srlinux_device_config` → artifact
-  `device-config`, `text/plain`, and, imported at `d70ad24` on 2026-10-20, the query
-  `fylgja_branch` and the two checks beside the template in `.infrahub.yml`:
+  ([D-044](docs/decisions.md#d-044)), imported at `c006bf9` on 2026-10-26, whose import
+  made the query `device_config` (over the library's kinds), the transform
+  `srlinux_device_config` and the definition `srlinux_device_config` → artifact
+  `device-config`, `text/plain`, and the query `fylgja_branch` and the two checks beside
+  the template in `.infrahub.yml`:
   `fylgja-step` (`infrahub/checks/fylgja_step.py`, timeout 300) and `fylgja-twin`
-  (`fylgja_twin.py`, timeout 4200), global, which Infrahub's task workers run on every
+  (`fylgja_twin.py`, timeout 4260), global, which Infrahub's task workers run on every
   proposed change, draft or not, at its creation and on a re-run of its user checks, as
   clients of the API reaching the server on the bridge. `fylgja-twin` skips a draft,
   rehearses a ready one on a twin and posts the report as a thread on it
   ([D-049](docs/decisions.md#d-049)–[D-053](docs/decisions.md#d-053)).
-  `fylgja-fixture -prepare-main` loaded the schema, made
-  the group and registered the repository, each only when absent. No credential is
+  `fylgja-fixture -prepare-main` loaded the library and the stage kind, made the group and
+  registered the repository, each only when absent; on a `main` holding any of the
+  library's kinds it loads nothing and refuses, exit 1, which the bring-up script reads as
+  the library present. No credential is
   registered. **One template renders both platforms**: it branches on the device's
   platform. **A template or check change reaches Infrahub
   only when asked**: once it is on `origin`'s `main`, which the operator pushes,
@@ -155,17 +167,16 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   fetches the SDL from `main`. Prefect's `git_repositories_sync` runs every minute with
   one concurrency slot, so a run stuck `PENDING` blocks every import until it is
   cancelled.
-- **The fixture branch `fylgja-fixture`**: the four Fylgja generics plus the reference
-  schema, 3 devices, 12 interfaces, 3 links, contract `0.2`; the devices are in group
-  `fylgja-devices`, each with one `device-config` artifact, `Ready`. Its schema hash is
-  `0aba31a5…`, `main`'s before the stage kind: a branch sees `main`'s schema as it was at
-  the branch's creation, so it cannot query `FylgjaStage`, still carries M10's removed
-  kind, which nothing reads, and reads `schema_differs_from_default_branch: true`; it is
-  never rebased. It has no proposed change. It compiles to
-  **`47b2c449…`** on this install, before and after the stage kind; its CTM equals
-  `testdata/ctm/three-node.json` in everything but the envelope, and with the 24.04
-  install's hash `4d5b37aa…` in place of this one's it compiles to `b9d53ebc…`, the id the
-  cut recorded. It is written by its seed (`make infrahub-seed`, which the bring-up
+- **The fixture branch `fylgja-fixture`**: three devices in the library's kinds, re-seeded
+  on 2026-10-26: the tag `fylgja` on each, the manufacturer `Nokia`, the platform `SR
+  Linux`, four locations, 9 physical ports (`ethernet-1/1`, `ethernet-1/2` and `mgmt0`,
+  role `management`, on each) and 3 cables; the devices are in group `fylgja-devices`,
+  each with one `device-config` artifact, `Ready`, and each `description` is the marker.
+  Its schema hash is `main`'s, `7c413536…`, since a branch sees `main`'s schema as it was
+  at the branch's creation; it is never rebased, only deleted and re-seeded. It has no
+  proposed change. It compiles to **`f764e1fa…`** on this install (`47b2c449…` in the
+  generics' kinds before 017); its CTM equals `testdata/ctm/three-node.json` in
+  everything but the envelope. It is written by its seed (`make infrahub-seed`, which the bring-up
   script runs when the branch is absent) and by no test. Contract tests make their own
   throwaway `fylgja-test-*` branches, with their draft proposed changes and stages, and
   the test that wrote them deletes the stages, then the proposed changes, then the
@@ -265,11 +276,12 @@ set -a; . local/.env; set +a; setsid nohup env FYLGJA_STATE_ROOT="$PWD/local" bi
 ```
 
 Then verify it: `/proc/<pid>/exe` is not `(deleted)`; its environment carries
-`INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT` and `FYLGJA_API_TOKEN`; and its report
-(`local/server.log`) says `listening on 127.0.0.1:7650 (API version 1, build …)`, then
-`listening on 172.17.0.1:7650 (…)` (the bridge's address) followed straight away by
-`172.17.0.1:7650 is not a loopback address: the API's token is sent unencrypted on it`,
-and names both packages with their logins set. From inside each Infrahub task worker, a
+`INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and
+`FYLGJA_DEFAULT_SCOPE`; and its report (`local/server.log`) says `listening on
+127.0.0.1:7650 (API version 1, build …)`, then `listening on 172.17.0.1:7650 (…)` (the
+bridge's address) followed straight away by `172.17.0.1:7650 is not a loopback address:
+the API's token is sent unencrypted on it`, says `default scope: tag:fylgja` after the
+state root, and names both packages with their logins set. From inside each Infrahub task worker, a
 `POST` to `http://$FYLGJA_API_ADDRESS/v1/twin/show` with the container's token answers
 `200` with this build, and `401` without it
 (`specs/015-proposed-change-rehearsal/quickstart.md` §2). **Find both with `pgrep -x fylgja`**
@@ -285,12 +297,13 @@ token alone, or with `local/.env` loaded, which it ignores but for the token. A 
 another machine comes through `ssh -N -L 7650:127.0.0.1:7650 <lab host>`, with a binary
 built from this tree.
 
-**Formats**: bundle `4` (a bundle of another format is refused), CTM `1`, PSP `0.6`
-(both shipped packages on `mode: replace`), `twin.json` `7`, contract `0.2`, findings `1`,
-the API `1` (`contracts/api.md`, the version in every path). The three goldens are
-three-node **`23f86a26…`**, lossy **`5773b6bb…`** and mixed **`391bcb96…`**, and the live
-fixture compiles to `47b2c449…` on this install (`b9d53ebc…` under the 24.04 install's
-schema hash). The current contracts are in `contracts/`; a test of an
+**Formats**: bundle `5` (a bundle of another format is refused), CTM `2` (its version is
+the contract's: contract `0.2` is retired, [D-057](docs/decisions.md#d-057)), PSP `0.7`
+(each package's `platform.matches`, matched exactly; both shipped packages on `mode:
+replace`), `twin.json` `8`, findings `1`, the API `1` (`contracts/api.md`, the version in
+every path; `scope` an optional argument). The three goldens are three-node
+**`43d91715…`**, lossy **`4213b3cf…`** and mixed **`ecb665f5…`**, and the live fixture
+compiles to `f764e1fa…` on this install. The current contracts are in `contracts/`; a test of an
 older format reads a frozen copy under its package's `testdata/contracts/`.
 
 ## Verified facts a session acts on (trust these over recollection)
@@ -308,10 +321,17 @@ Re-verify on any upgrade.
 - **The schema.** `POST /api/schema/load` rebuilds the branch schema asynchronously: poll
   before seeding. Check candidates with `POST /api/schema/check`. Attribute names `class`
   and `type` are rejected, a name is 3–64 characters of `[a-z0-9_]`, a description ≤128
-  characters; strict mode is on. On a branch without the Fylgja schema the generics are
-  not GraphQL types: read `GET /api/schema` first (`used_by` is the conformance check).
+  characters; strict mode is on. A kind a branch's schema lacks is no GraphQL type there:
+  read `GET /api/schema` first, as conformance does, kind by kind and field by field.
   The SDL is at `GET /schema.graphql?branch=`, and its field order is not stable between
   two fetches: compare SDLs structurally.
+- **A node's stamp is its `Edged*` wrapper's `node_metadata.updated_at`**; the node type
+  has none. A generation's query-group joins move it: about 2–7 s after a generation's
+  checksums, each node the template query read for the first time joins that query's
+  internal `CoreGraphQLQueryGroup`, written by the task workers' account, which then reads
+  as the node's `updated_by`. Such a stamp is read as the node's `created_at`
+  ([D-058](docs/decisions.md#d-058), [D-060](docs/decisions.md#d-060)). A `DcimCable`'s
+  delete stamps its two end ports.
 - **Infrahub regenerates no artifact on its own**: not on a data change, a group join or
   a commit import. Generate with `POST /api/artifact/generate/<definition id>?branch=`,
   then wait for the checksum to move; a regeneration to identical bytes writes nothing.
@@ -385,9 +405,9 @@ runs golangci-lint and `shellcheck scripts/bring-up.sh scripts/e2e.sh`) · `make
 test-contract` (tier 2, real
 Infrahub, never cached; needs `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN`; CI's contract
 job on every push to `main`, against an Infrahub the script brings up on the runner, with
-no secret; about twenty minutes (1,220.1 s on 2026-10-20, beside the imported checks),
-`internal/stages` the longest package at 960.4 s, under the `-timeout 30m` it sets, then
-`internal/checks` alone in a second `go test` (252.8 s), whose `TestChecksInsideInfrahub`
+no secret; about 29 minutes (1,714.7 s on 2026-10-26, beside the imported checks),
+`internal/stages` the longest package at 1,422.1 s, under the `-timeout 30m` it sets, then
+`internal/checks` alone in a second `go test` (278.8 s), whose `TestChecksInsideInfrahub`
 runs the tree's checks inside Infrahub's pipeline under a registration of its own, needs
 the server on the bridge from this tree here, and skips, saying why, where the task workers
 reach none, as in CI) · `make lint` (runs with build
@@ -410,10 +430,10 @@ proposed change rehearsed twice by `fylgja-twin` inside Infrahub, through the op
 server on the bridge; needs the dev
 server and a worker running from the repository root, Docker, containerlab, **both**
 images and Infrahub, and for case 9 the server on the bridge from this tree and both
-checks imported on `main`, each checked before any case; about 26 minutes (1,536.9 s on
-2026-10-20); `WORKER_LOG=<file>`
+checks imported on `main`, each checked before any case; about 29.5 minutes (1,769.0 s on
+2026-10-26); `WORKER_LOG=<file>`
 adds the worker's log to its credential greps; `PLATFORMS=nokia_srlinux` narrows it to
-the seven cases SR Linux alone runs, about 17 minutes, ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
+the seven cases SR Linux alone runs, about 19 minutes, ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
 never `E2E-OK`; never in CI). A command that runs longer than one tool call (tier 3)
 starts detached with its exit status in a file, and is waited on in foreground calls of
 under ten minutes.
@@ -468,15 +488,26 @@ Rewritten whole at each release's close, never appended to.
     tier 1 covers, and CI's contract job runs on `main`'s push. No golden, no contract,
     API or findings version moved; the schemas' `$id` prefix did
     ([D-055](docs/decisions.md#d-055)).
-- **Next**: Release 0.3, set on 2026-10-25 as exploratory coding toward the production
-  refactor ([roadmap](docs/roadmap.md#release-03)), four specs in order: F-011
-  (`017-dcim-reader`, its [brief](specs/017-dcim-reader/brief.md)), F-024 snapshots, F-014
-  probes (`016-probes`, its [brief](specs/016-probes/brief.md) re-read against 017's
-  close), F-025 the NetBox reader; and the follow of a rehearsal terminated outside Fylgja
-  (015's research §5.2). What they explore toward is the roadmap's [production
-  shape](docs/roadmap.md#the-production-shape), a direction and not a decision. F-012 and F-022 left the release. `infrahubctl schema format`'s
-  order (014 research §8.2) is taken up with 017's schema changes.
-- **Open, the operator's**: file 014's upstream request for named points in time
+- **Release 0.3**, set on 2026-10-25 as exploratory coding toward the production
+  refactor ([roadmap](docs/roadmap.md#release-03)), four specs in order: F-011, F-024
+  snapshots, F-014 probes (`016-probes`, its [brief](specs/016-probes/brief.md) re-read
+  against 017's close), F-025 the NetBox reader; and the follow of a rehearsal terminated
+  outside Fylgja (015's research §5.2). What they explore toward is the roadmap's
+  [production shape](docs/roadmap.md#the-production-shape), a direction and not a
+  decision. F-012 and F-022 left the release.
+  - **017** (`017-dcim-reader`, F-011, 2026-10-26): the Infrahub reader reads the schema
+    library's DCIM at `26336e9` by one documented mapping, in place of the generics and
+    the reference schema ([D-057](docs/decisions.md#d-057); Constitution 2.0.0, then
+    2.1.0 with [D-060](docs/decisions.md#d-060)); a request's scope, `tag:<name>`, and the
+    server's `FYLGJA_DEFAULT_SCOPE`; `platform.matches` in PSP `0.7`; CTM `2`, bundle `5`,
+    `twin.json` `8`; the contract version retired; a stamp Infrahub's own account wrote
+    read as its node's creation ([D-058](docs/decisions.md#d-058)); `main` migrated
+    (`7c413536…`) and both fixtures re-seeded. Tiers 2 and 3 green on 2026-10-26 (above).
+    `infrahubctl schema format` is never run on the vendored files (017 research R-22).
+- **Next**: F-024 snapshots, Release 0.3's second spec.
+- **Open, the operator's**: 017's second push of `origin`'s `main` once the branch is
+  merged, its contract job read green (its T057); 017's review, commits and command log
+  (its T074); file 014's upstream request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left
   padding) and a zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read

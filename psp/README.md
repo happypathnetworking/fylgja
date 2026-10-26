@@ -1,7 +1,8 @@
 # Platform Support Packages
 
-A PSP is everything Fylgja needs to know about one NOS, as data. Adding a platform is a
-data change, never a code change; a platform is *supported* when its PSP passes the
+A PSP is everything Fylgja needs to know about one NOS, as data, including which platforms
+it is: the manufacturer and platform names a source of truth gives them
+([`platform.matches`](#format-07)). Adding a platform is a data change, never a code change; a platform is *supported* when its PSP passes the
 conformance suite. See architecture
 [§4.7](../docs/architecture.md#47-platform-support-packages).
 
@@ -46,8 +47,9 @@ A shipped package without a row is not supported. `chassisos`
 packages: they pass the pure half only, declare no boot half, and are never shipped or
 deployed. Nothing at run time consults this table.
 
-Both rows hold on format 0.6. The pure half also checks `link_change` (below), on every
-`make test`. Tier 3 creates every twin by the replace push and reads each create back,
+Both rows hold on format 0.7: 017's whole tier-3 run (2026-10-26, `E2E-OK`) read both boot
+halves again, case 1's in 10.6s and case 6's in 7.4s. The pure half also checks
+`link_change` and `matches` (below), on every `make test`. Tier 3 creates every twin by the replace push and reads each create back,
 case 1's and case 6's boot halves included; case 8 steps the mixed twin, and containerlab
 restarts `e1` in place and re-cables `s1` live, as each package declares.
 
@@ -57,13 +59,65 @@ intent it was built from, where the suite holds a package to what it declares, a
 reads the other's verdict ([D-037](../docs/decisions.md#d-037)). Tier 3 verifies case 1's
 and case 6's twins and requires them `ok`, each node read over its own package's transport.
 
+## Format 0.7
+
+`psp_version` is `"0.7"`. A package of another version is refused as `psp.version.unknown`
+(`package declares format version "0.6", this build understands "0.7"`), beside
+`psp.schema` and `psp.matches.missing` for the field it lacks;
+`testdata/psp/defects/version-0-6-m11.yaml`, M11's SR Linux package at format 0.6 byte for
+byte, is kept to prove it, as `version-0-5-m10.yaml` and `version-0-3-m5.yaml` are. The
+change is one required field ([D-057](../docs/decisions.md#d-057)), and **nothing of it
+enters a bundle**, so no `bundle_id` moves for it.
+
+```yaml
+platform:
+  id: nokia_srlinux
+  vendor: nokia
+  nos: srlinux
+  versions: ["24.7"]
+  device_class: router
+  matches:
+    - manufacturer: Nokia
+      platform: SR Linux
+```
+
+| Field | Required | Meaning |
+|---|---|---|
+| `platform.matches` | **yes**, at least one pair | The manufacturer and platform name pairs this package is, as a source of truth names them, each `{manufacturer, platform}` with both names non-empty. A reader picks a device's package by comparing the source's manufacturer name and platform name with each pair, **both exactly**, letter case and spacing included: `nokia` / `SR-Linux` matches nothing. The Infrahub reader compares `OrganizationManufacturer.name` and `DcimPlatform.name` ([schema/README.md](../schema/README.md#a-match-is-exact)). Nothing is added to any source's model to key a package |
+
+The shipped pairs: `nokia_srlinux` matches `Nokia` / `SR Linux`, and `arista_eos` matches
+`Arista` / `EOS`. The test packages carry their own (`FastOS Inc` / `FastOS`, `SlowOS Inc`
+/ `SlowOS`, `ChassisOS Inc` / `ChassisOS`). A package may list several pairs (a renamed
+manufacturer, a second spelling); two packages may not share one. `vendor` and `nos` stay:
+`nos` keys the registry's shadowing of an embedded package by an override and the
+manifest's `nodes[].platform`, and both name the package in reports. A device in the scope
+whose pair no package names is refused at the read as `platform.unmatched`, naming its pair
+beside every package's.
+
+Two rules are new:
+
+- **`psp.matches.missing`**: no pair, or a pair with an empty name (`platform.matches names
+  no manufacturer and platform pair; a reader picks a device's package by those two names,
+  so this package would match no device`). The schema refuses the same package as
+  `psp.schema`; this rule says what the field is for.
+- **`psp.matches.duplicate`**: two packages name one pair (`manufacturer "Nokia", platform
+  "SR Linux" is matched by package nokia_srlinux (…) and by package sharedos (…); a device
+  of that pair would have two packages`). `psp validate` checks it across the files given,
+  and the registry's load across the embedded and override packages after shadowing, so an
+  override that replaces a shipped package may keep its pairs, and one that shares another
+  package's pair refuses `fylgja serve` and `fylgja worker run` at start, as any invalid
+  override does.
+
+The conformance suite's pure half gains one check, `matches`: the package names at least
+one pair with both names (`package <id> (<path>): matches: declared 0 pairs, produced
+none`); and `TestShippedPackagesShareNoMatch` holds every package meant to load, shipped and
+test, to pairwise distinct pairs. `testdata/psp/defects/matches-missing.yaml` (the SR
+Linux package with `matches: []`) and `matches-shared.yaml` (a third package naming `Nokia`
+/ `SR Linux`) prove each. The boot half is unchanged.
+
 ## Format 0.6
 
-`psp_version` is `"0.6"`. An earlier package is refused as `psp.version.unknown`
-("declares format version "0.5", this build understands "0.6""), beside `psp.schema` for
-the missing field; `testdata/psp/defects/version-0-5-m10.yaml`, the SR Linux package at
-format 0.5, is kept to prove it. The change is one required field, one run-time meaning
-and two reworded rules. **Nothing of it enters a bundle**: `mode` and `link_change`
+Format 0.6 made one field required, gave one a run-time meaning and reworded two rules. **Nothing of it enters a bundle**: `mode` and `link_change`
 travel on the wire, so neither moves a `bundle_id`, a golden or a recorded history
 ([D-033](../docs/decisions.md#d-033)).
 

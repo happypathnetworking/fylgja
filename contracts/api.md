@@ -1,10 +1,10 @@
-# API contract: M13, version 1; 014's stage surface; 015's rehearsal
+# API contract: M13, version 1; 014's stage surface; 015's rehearsal; 017's scope
 
 What crosses between a client and `fylgja serve`. The shapes are
 [api.schema.json](api.schema.json); the documents are M12's
 ([findings.schema.json](findings.schema.json) and the blocks beside it), as 014 moved them
 ("014: the stage surface", at the end) and 015 added to them ("015: the rehearsal", after
-it). The addresses,
+it), and 017 moved them again ("017: the scope and the DCIM reader", last). The addresses,
 the statuses, the frame kinds and the document are the contract; a sentence is contract
 only where it is quoted.
 
@@ -49,17 +49,17 @@ frames. A dry run is its operation with `dry_run` set.
 
 | Operation | Path | `args` | Files in | Files out | Takes an interrupt |
 |---|---|---|---|---|---|
-| `twin.create` | `/v1/twin/create` | `branch`, `at`, `stage`, `interval`, `no_follow`, `dry_run` | | | from `start` |
+| `twin.create` | `/v1/twin/create` | `branch`, `at`, `stage`, `interval`, `no_follow`, `dry_run`, `scope` | | | from `start` |
 | `twin.provision` | `/v1/twin/provision` | `bundle`, `dry_run` | the bundle's regular files | | from `start` |
 | `twin.step` | `/v1/twin/step` | `stage`, `allow_restart`, `dry_run`, `wait` | | | from `start` |
 | `twin.destroy` | `/v1/twin/destroy` | | | | no |
 | `twin.show` | `/v1/twin/show` | | | | no |
 | `twin.verify` | `/v1/twin/verify` | `wait`, `args` | | | no |
-| `twin.rehearse` | `/v1/twin/rehearse` | `branch` | | | from `start` |
+| `twin.rehearse` | `/v1/twin/rehearse` | `branch`, `scope` | | | from `start` |
 | `twin.compile` | `/v1/twin/compile` | `ctm`, `out` | the CTM | the bundle | no |
-| `stage.list` | `/v1/stage/list` | `branch` | | | no |
-| `stage.plan` | `/v1/stage/plan` | `branch` | | | no |
-| `intent.read` | `/v1/intent/read` | `branch`, `at`, `stage`, `out` | | the CTM | no |
+| `stage.list` | `/v1/stage/list` | `branch`, `scope` | | | no |
+| `stage.plan` | `/v1/stage/plan` | `branch`, `scope` | | | no |
+| `intent.read` | `/v1/intent/read` | `branch`, `at`, `stage`, `out`, `scope` | | the CTM | no |
 | `schema.check` | `/v1/schema/check` | `branch` | | | no |
 | `psp.validate` | `/v1/psp/validate` | `files` | each package | | no |
 
@@ -67,7 +67,8 @@ There is no other operation. In particular there is none to re-attach to a run, 
 runs or to fetch a filed bundle. Moved at 014: `waypoint.list` and `waypoint.plan`
 (`/v1/waypoint/list`, `/v1/waypoint/plan`, argument `series`) became `stage.list` and
 `stage.plan`, and `twin.create`, `twin.step` and `intent.read` take `stage` where they took
-`waypoint`. Added at 015: `twin.rehearse`.
+`waypoint`. Added at 015: `twin.rehearse`. Added at 017: the argument `scope` on
+`twin.create`, `twin.rehearse`, `intent.read`, `stage.list` and `stage.plan`.
 
 **Arguments are as given.** An absent key is a flag that was not given; a present key is
 one that was, whatever its value (`"interval": ""` is `--interval=`). Every guard is the
@@ -353,3 +354,40 @@ curl -sS -N -X POST -H "Authorization: Bearer $FYLGJA_API_TOKEN" \
      -d '{"render":"markdown","args":{"branch":"change-1"}}' \
      http://127.0.0.1:7650/v1/twin/rehearse | jq -r 'select(.document) | .markdown'
 ```
+
+## 017: the scope and the DCIM reader
+
+The Infrahub reader reads the schema library's DCIM at `opsmill/schema-library@26336e9`,
+and a twin is of a scope ([D-057](../docs/decisions.md#d-057); [cli.md](cli.md), "017: the
+scope and the DCIM reader", says what each command does). The API's version stays `1`: a
+client that never sends `scope` is served under the server's default. Every operation, the
+transport, the token, the frames, the statuses and the files are as 015 left them.
+
+| | Operation | `args` |
+|---|---|---|
+| argument added | `twin.create`, `twin.rehearse`, `intent.read`, `stage.plan`, `stage.list` | `scope` |
+
+- **`scope`** is `--scope` as given, `tag:<name>`: the devices every read of the request
+  selects. Absent is the server's `FYLGJA_DEFAULT_SCOPE`. Present and empty (`"scope": ""`)
+  is `--scope=`, and a value that is not `tag:<name>` is refused `scope.invalid` at `start`,
+  exit 2; absent beside a server with no default is `scope.unset` at `start`, exit 2. Each
+  is refused before the server connects to Infrahub, after the `branch` and `stage` guards.
+- **`twin.step`** takes none: a request carrying it is `400`, `the request is not one:
+  twin.step takes no argument "scope"`. The step reads under the scope its twin's record
+  carries. No operation that reads no intent takes it.
+- **The documents** stay `findings_version` `1`: `subject.scope` names the scope once it is
+  resolved; `schema.check`'s `verified` is `{model, version, kinds: [{kind, fields}],
+  stages}`, without `contract_version` and `generics`; `twin.show`'s `show.record` carries
+  the record's `scope` and `mapping` and no `contract_version`. The sixteen identifiers are
+  [cli.md](cli.md)'s.
+- **The files**: `intent.read`'s `ctm.json` is CTM `2` ([ctm.schema.json](ctm.schema.json)),
+  and `twin.compile` takes a CTM `2` alone, refusing another `ctm.version.unsupported`, and
+  answers with a bundle `5` ([manifest.schema.json](manifest.schema.json)); `twin.provision`
+  refuses a bundle `4` `bundle.version.unsupported`. A package sent to `psp.validate` is
+  format `0.7` ([psp.schema.json](psp.schema.json)), with `platform.matches`. The twin's
+  record is `twin.json` `8` ([twin.schema.json](twin.schema.json)). The contract version is
+  retired: the CTM's version is the contract's.
+- **The checks** `fylgja-step` and `fylgja-twin` send no `scope`: they are served under the
+  default of the server they reach, and a server with none refuses each `scope.unset`. They
+  pass over a branch point refused `scope.empty` alone, where they passed over
+  `contract.node.missing`.

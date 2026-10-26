@@ -1,21 +1,26 @@
-# CLI contract: M13 — API; 014 — the stage surface; 015 — the rehearsal
+# CLI contract: M13 — API; 014 — the stage surface; 015 — the rehearsal; 017 — the scope and the DCIM reader
 
 Extends the CLI as M2–M12 built it, and 014 moves it once more: the section "014: the
 stage surface" at the end says what moved. 015 adds to it, and the section "015: the
-rehearsal" after that says what was added. **Everything not named here is as M12 left it**:
+rehearsal" after that says what was added. 017 moves it again, and the section "017: the
+scope and the DCIM reader", last, says what moved. **Everything not named here is as M12
+left it**:
 every command's text on stdout and stderr, its `--json` document, each identifier, step,
 object and message, and each exit status. Identifiers, exit statuses and the JSON
 documents are the contract; text is illustrative except where a sentence is quoted. The
 wire is [api.md](api.md). At M13 the nine schemas beside `api.schema.json` were M12's byte
 for byte: bundle `4`, CTM `1`, PSP `0.6`, `twin.json` `5`, findings `1`; 014 moved the
 findings blocks, `twin.json` to `6` and the schemas that carry the record's stage, and 015
-moved `twin.json` to `7` and added the rehearsal's block.
+moved `twin.json` to `7` and added the rehearsal's block; 017 moved the CTM to `2`, the
+bundle manifest to `5`, `twin.json` to `8` and PSP to `0.7`, and retired the contract
+version.
 
 ## `fylgja serve [--listen <host:port>]... [--psp-dir <dir>]`
 
 `--listen` is repeatable since 015 ("015: the rehearsal", below): the server listens on
-every address given, and on `127.0.0.1:7650` when none is. What follows is M13's, for each
-address.
+every address given, and on `127.0.0.1:7650` when none is. It reads `FYLGJA_DEFAULT_SCOPE`
+since 017 ("017: the scope and the DCIM reader", below), which adds one refusal to start
+and one line of the report. What follows is M13's, for each address.
 
 The API's server: a role of the binary, run on the lab host beside `fylgja worker run`,
 as a process of its own. It serves until interrupted, prints its start-up report on
@@ -91,7 +96,8 @@ request to the API and prints what comes back.
   state of the host, Infrahub and the workflow service.
 - **Every refusal with a rule identifier is the server's**, those M2–M12 made "before
   any connection" included: a missing `--branch`, a flag conflict, an empty
-  `--interval=`, `--wait=` or `--waypoint=` (moved at 014: `--stage=`). "Before any connection" now means before the
+  `--interval=`, `--wait=` or `--waypoint=` (moved at 014: `--stage=`), and since 017 an
+  empty `--scope=`. "Before any connection" now means before the
   server connects to Infrahub or the workflow service.
 - **The client's own errors are its argument parser's**: an unknown flag, a wrong
   argument count. Exit 2, as cobra words them at M12, with no request sent.
@@ -246,13 +252,14 @@ exit status changes. `serve`'s refusals to start and the build line have no iden
 |---|---|---|
 | the API | `1` | new: [api.md](api.md), [api.schema.json](api.schema.json) |
 | findings | `1` | none; the four identifiers match its `rule` pattern |
-| bundle manifest, `twin.json`, PSP, CTM, contract | `4`, `5`, `0.6`, `1`, `0.2` | none (`twin.json` `6` since 014, `7` since 015) |
+| bundle manifest, `twin.json`, PSP, CTM, contract | `4`, `5`, `0.6`, `1`, `0.2` | none (`twin.json` `6` since 014, `7` since 015; since 017 the bundle manifest `5`, `twin.json` `8`, PSP `0.7` and CTM `2`, and the contract version retired) |
 
 ## Workflows and activities
 
 None is added, removed or changed. `fylgja-provision`, `fylgja-destroy`, `fylgja-step`,
 `Reconcile`, the Schedule, all twenty activities and every wire type are M12's, and the
-nine recorded histories replay. 015 adds one workflow, `fylgja-rehearse`, below. The server starts, follows and cancels runs through
+nine recorded histories replay. 015 adds one workflow, `fylgja-rehearse`, below; 017 adds
+none, its scope riding the runs' inputs. The server starts, follows and cancels runs through
 `provision.Service`, as the CLI did. `worker run` is M12's, with `--psp-dir` now its own
 flag.
 
@@ -270,6 +277,7 @@ Who reads each variable from M13:
 | `FYLGJA_HOST_MEMORY_MB` | no | yes | yes |
 | each package's login names | no | yes | yes |
 | `FYLGJA_PSP_DIR` | no | yes | yes |
+| `FYLGJA_DEFAULT_SCOPE` (017) | no | yes | no |
 
 The server needs `containerlab` and `docker` on its `PATH`. A client needs neither. The
 two checks of 015, inside Infrahub's task workers, are clients too, and read
@@ -278,7 +286,8 @@ two checks of 015, inside Infrahub's task workers, are clients too, and read
 ## Tier 3 (`scripts/e2e.sh`)
 
 Eight cases, M12's, unchanged in what they assert (cases 7 and 8 moved to stages at 014,
-and case 9 added at 015, below). The script starts a server of its own
+and case 9 added at 015, and every case moved to the library's kinds at 017, below). The
+script starts a server of its own
 from the tree, with a token it makes for the run, and stops it in its trap. Every
 `fylgja` command runs with `PATH`, `HOME`, `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN`
 and nothing else. The script's own reads (`gnmic`, Docker, containerlab, `twin.json`,
@@ -371,7 +380,8 @@ Each step is the pure step between the two bundles, as M10's plan printed it, an
 `unchanged` when they differ in provenance alone, as the step from a mark written after the
 last regenerate to the head always does. A refused stage prints its findings beneath it,
 and a step touching it is not computed; the branch point of a `main` that holds no contract
-is refused `contract.node.missing` at its read. Exit 0 when every stage compiled, whatever
+is refused `contract.node.missing` at its read (moved at 017: `scope.empty`, for a `main`
+holding no device in the scope). Exit 0 when every stage compiled, whatever
 the warnings; 1 when any was refused; 2 when the listing failed. A stage whose resolution,
 read, compile or filing could not run is `failed` (`operation.failed` at its step) and the
 plan goes on, the steps touching it not computed; that exits 1 as well, since the plan ran
@@ -417,7 +427,7 @@ of them, `run.in_flight` naming it (015):
 
 | Rule | When | Wording (shape) |
 |---|---|---|
-| `step.twin.unsteppable` | no twin; an orphan; an unreadable record; a record of `5` or earlier, or one naming no stage | `…; only a twin built from a stage steps (fylgja twin create --stage)`; for a `5` record, `the twin was created from a waypoint of a record version this build no longer reads (twin.json 5); only a twin built from a stage steps; fylgja twin destroy clears it` |
+| `step.twin.unsteppable` | no twin; an orphan; an unreadable record; a record of `5` or earlier, or one naming no stage; since 017, a record of `7` or earlier, which names no scope (below) | `…; only a twin built from a stage steps (fylgja twin create --stage)`; for a `5` record, `the twin was created from a waypoint of a record version this build no longer reads (twin.json 5); only a twin built from a stage steps; fylgja twin destroy clears it` |
 | `step.target.foreign` | `--stage` names another branch, or another proposed change on the same branch | `stage other/x is not of proposed change <id> on branch change-1, the twin's; a step stays inside the proposed change the twin was built from, whose stages are: …` |
 | `step.target.unknown` | no stage after the record's; the record's label gone; `--stage` names no stage of the proposed change | `proposed change <id> on change-1 has no stage after change-1/head; its stages are: …`, or `…; the head has moved since the twin was built (now at …): --stage change-1/head steps to it` |
 | `step.target.current` | the target resolves to the record's own `(branch, at)` | `the twin is already at stage change-1/live (branch change-1, at …); the proposed change's stages are: …` |
@@ -543,7 +553,7 @@ need, both images where its stages name them included. **It needs a server.**
 nothing started: plans every stage of the open proposed change whose source branch is `b`,
 as `stage plan` does, a refused stage refusing the rehearsal (status `rejected`, exit 1; `2`
 for `operation.failed` and `intent.at.precision`) but for a branch point whose one rejection
-is `contract.node.missing`, kept as a row and passed over; takes the first stage that
+is `contract.node.missing` (moved at 017: `scope.empty`), kept as a row and passed over; takes the first stage that
 compiled as the **baseline**, filing `rehearsal.steps.none` when it is the only one; sums the
 stages' budgets into the **deadline** and refuses one over the ceiling, 3,600 s
 (`rehearsal.deadline.unfit`); refuses beside any run in flight (`run.in_flight`, naming
@@ -737,7 +747,7 @@ import never running them.
 
 | Check | `timeout` | Asks | Concludes |
 |---|---|---|---|
-| `fylgja-step` | 300 | `stage.plan`, `render: "text"`, on every open proposed change, draft or not | failure when no open proposed change has the source branch (`no open proposed change has source branch <b>: nothing was asked of Fylgja`); when the document holds a rejection, but for a branch point (`at_source: branch_point`) whose one rejection is `contract.node.missing`; when the plan's status is `error`; when the plan has not answered by the check's own deadline, its `timeout` less 120 s (`the stage plan did not answer by this check's own deadline, 180 s after it began (…): nothing was started, and a re-run of the checks asks again`); and when Fylgja cannot be reached. Success otherwise, warnings included. Its message is the plan's text and the findings' |
+| `fylgja-step` | 300 | `stage.plan`, `render: "text"`, on every open proposed change, draft or not | failure when no open proposed change has the source branch (`no open proposed change has source branch <b>: nothing was asked of Fylgja`); when the document holds a rejection, but for a branch point (`at_source: branch_point`) whose one rejection is `contract.node.missing` (moved at 017: `scope.empty`); when the plan's status is `error`; when the plan has not answered by the check's own deadline, its `timeout` less 120 s (`the stage plan did not answer by this check's own deadline, 180 s after it began (…): nothing was started, and a re-run of the checks asks again`); and when Fylgja cannot be reached. Success otherwise, warnings included. Its message is the plan's text and the findings' |
 | `fylgja-twin` | 4260 | nothing on a draft, `twin.rehearse`, `render: "markdown"`, with a `Fylgja-Stream`, otherwise | failure when no open proposed change has the source branch (`no open proposed change has source branch <b>: nothing was asked of Fylgja`), before its draft test; on a draft, success, its message `skipped: proposed change <id> is a draft; mark it ready for review and re-run the checks to rehearse it`. Otherwise by the document's status alone: `ok` success, every other status failure, which blocks the merge. Its message is the report's text; it posts the answer's markdown as one new comment on the proposed change, as the proposed change's view writes and shows one: a `CoreChangeThread` labelled `Conversation` holding one `CoreThreadComment` (a `CoreChangeComment` would be counted and never shown). A comment it cannot post is logged and fails nothing, and the thread it made for it is deleted |
 
 - **What each needs**: `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN` in the task workers'
@@ -747,7 +757,8 @@ import never running them.
   nothing sent; Fylgja unreachable, refusing the token or the version, or its answer cut,
   is a failure naming the address. Nothing else of Fylgja's, Infrahub's or a node's.
 - **The host held**: when the rehearsal is refused by `run.in_flight`, `host.lab.present`
-  or `host.twin.present` alone, the branch point's lone `contract.node.missing` passed over
+  or `host.twin.present` alone, the branch point's lone `contract.node.missing` (moved at
+  017: `scope.empty`) passed over
   as `fylgja-step` passes it over, whether the server found the holder before `start` or
   after it (a start refused by a run begun since the host was read or by the rehearsal's
   fixed id, or a run refused at its baseline's start, each touching nothing), and no run was
@@ -835,3 +846,163 @@ which Infrahub holds nothing of it, its comments and validators gone with the pr
 change. The comments and the checks' messages are written to `$OUT`, where the credential
 and marker greps read them, and the trap's destroy cancels a rehearsal in flight and waits
 for its destroy.
+
+## 017: the scope and the DCIM reader
+
+The Infrahub reader reads the OpsMill schema library's DCIM at a pinned commit,
+`opsmill/schema-library@26336e9`, vendored under `schema/dcim/`, by one documented mapping
+([mapping.md](../specs/017-dcim-reader/contracts/mapping.md)), reader `infrahub-dcim`, in
+place of Fylgja's generics and the contract node ([D-057](../docs/decisions.md#d-057)); what
+a twin is of is a **scope**. **Everything not named here is as 015 left it.** Identifiers,
+exit statuses and the JSON documents are the contract; text is illustrative except where a
+sentence is quoted. The wire is [api.md](api.md), "017: the scope and the DCIM reader".
+
+### The scope
+
+`tag:<name>`: the literal `tag:` and one shell word (`^tag:\S+$`). It names the devices a
+twin is of: every `DcimDevice` on the branch carrying the `BuiltinTag` of that name,
+whatever its status; ports and cables follow their devices.
+
+```
+fylgja twin create   --branch <b> [--at <t>] [--scope tag:<name>] …
+fylgja twin create   --stage <b>/<label> [--scope tag:<name>] …
+fylgja twin rehearse --branch <b> [--scope tag:<name>]
+fylgja intent read   --branch <b> | --stage <b>/<label> [--scope tag:<name>] --out ctm.json
+fylgja stage plan    --branch <b> [--scope tag:<name>]
+fylgja stage list    [--branch <b>] [--scope tag:<name>]
+```
+
+- Given, the scope is the request's; not given, the server's `FYLGJA_DEFAULT_SCOPE`. Every
+  stage a command resolves, reads or plans is read under that one scope. The document's
+  `subject.scope` names it from the moment it is resolved.
+- `twin step` takes no `--scope`: `rejection operation.failed twin.step: unknown flag:
+  --scope`, exit 2, with no request. It reads under the scope its twin's record carries,
+  and a following twin's checks read under the twin's.
+- `twin show` prints it; `twin compile` takes none, since the CTM carries it; `twin
+  provision`, `twin verify`, `twin destroy`, `schema check` and `psp validate` take none.
+- The checks `fylgja-step` and `fylgja-twin` send no `scope`: theirs is the server's
+  default. A server with none refuses each check's request `scope.unset`, which the check
+  concludes as failure, as it concludes any refusal it does not pass over.
+
+### `fylgja serve` and `FYLGJA_DEFAULT_SCOPE`
+
+| | |
+|---|---|
+| The variable | `FYLGJA_DEFAULT_SCOPE`, read by the server at start and never by a client or the worker; documented in `.env.example`; scaffolded by `scripts/bring-up.sh` as `tag:fylgja` |
+| The report's line | straight after the state root line: `fylgja serve: default scope: tag:fylgja`, or `fylgja serve: default scope: unset (a request that names no scope is refused)` |
+| The refusal to start | an unset or empty value is reported, not refused; a value that is not `tag:<name>` is `fylgja serve: FYLGJA_DEFAULT_SCOPE <value> is not tag:<name>`, exit 2, after `--listen`'s check and before the state root is resolved |
+
+Two packages naming one manufacturer and platform pair, among the embedded and the override
+packages once shadowed, refuse the start as an override package `psp validate` rejects does:
+the `psp.matches.duplicate` finding as text, then `fylgja serve: refusing to serve with an
+invalid support package`. `worker run` refuses to start on the same registry.
+
+### The text
+
+- `intent read`'s summary line names the scope before the schema: `wrote ctm.json: 3
+  devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared
+  ports (branch fylgja-fixture, scope tag:fylgja, schema 7c413536…)`; with cables omitted,
+  `…, 0 shared ports; 2 cables omitted (branch …)` (`; 1 cable omitted` for one); with a
+  stage, as 014 has it.
+- `twin show`'s record line ends with the record's provenance: `record: branch
+  fylgja-fixture, bundle_id f764e1fa…, schema 7c413536…, scope tag:fylgja, read by
+  infrahub-dcim from opsmill/schema-library@26336e9`; for a record of `7` or earlier, `…,
+  scope unknown (record 7)`.
+- `schema check`'s first line is `conformant with opsmill/schema-library@26336e9:
+  DcimDevice, DcimPlatform, OrganizationManufacturer, InterfacePhysical, DcimCable`, then
+  014's `stages: …` line.
+- `stage plan`'s heading and `twin rehearse`'s end `, scope tag:fylgja`, and the report's
+  markdown heading names the scope; `stage list`'s headings do not.
+- The branch point of a `main` holding no device in the scope, in `stage plan` and `twin
+  rehearse`:
+
+  ```
+  change-1/branch-point: refused (scope.empty)
+    rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at 2026-10-26T13:29:45.838959Z
+  ```
+
+- The refusals of the scope and of the platforms, as they print:
+
+  ```
+  rejection scope.invalid [step start] fylgja: --scope "fylgja" is not a scope: the accepted form is tag:<name>, the literal tag: and one word, the tag every device of the twin carries
+  rejection scope.unset [step start] FYLGJA_DEFAULT_SCOPE: no --scope was given and the server has no default: name one with --scope tag:<name>, or set FYLGJA_DEFAULT_SCOPE where fylgja serve starts
+  rejection scope.empty tag:nothing: scope tag:nothing selects no device on branch fylgja-fixture
+  rejection platform.missing n2: device n2 carries no platform; its support package is the one whose matches name its platform and manufacturer
+  rejection platform.unmatched n1: device n1: manufacturer "nokia", platform "SR-Linux"; the packages match: arista_eos [Arista / EOS], nokia_srlinux [Nokia / SR Linux]
+  info omit.cable.ends c-three: cable c-three is omitted: other than two ends (3); its ends are n1:ethernet-1/4, n2:ethernet-1/3, n3:ethernet-1/3
+  ```
+
+- `twin step` on a record of `7` or earlier is refused at `resolve`, exit 1:
+  `step.twin.unsteppable`, `the twin was created from a record version this build no
+  longer reads (twin.json 7); fylgja twin destroy clears it`, as a `5` is.
+
+### Identifiers
+
+Sixteen added and eight removed. No status, step or exit is new.
+
+| Rule | Severity, exit, step | Object | When |
+|---|---|---|---|
+| `scope.invalid` | rejection, 2, `start` | the value given | `--scope` is not `tag:<name>`, an empty value included; before any connection, after `--branch`'s and `--stage`'s guards |
+| `scope.unset` | rejection, 2, `start` | `FYLGJA_DEFAULT_SCOPE` | no `--scope` and the server has no default; before any connection |
+| `scope.empty` | rejection, 1, `read` (none on `intent read`; a stage's at its read, the branch point's included, where `contract.node.missing` was) | the scope | the device query answered 0 on the branch at the `at`; the rehearsal and `fylgja-step` pass over a branch point refused by this rule alone, as they passed over `contract.node.missing` |
+| `schema.kind.missing` | rejection, 1, `read`; none on `schema check` | the kind | the branch's schema lacks a kind the mapping reads |
+| `schema.field.missing` | rejection, 1, `read` | `<kind>.<field>` | the kind lacks a field the mapping reads |
+| `schema.field.mismatch` | rejection, 1, `read` | `<kind>.<field>` | the field's kind, cardinality, peer or optionality is not the mapping's; names both |
+| `schema.choice.missing` | rejection, 1, `read` | `<kind>.<field>` | the dropdown lacks `management` (role) or `disabled` (status) |
+| `schema.used_by.missing` | rejection, 1, `read` | the generic | the generic is not implemented by the kind the mapping expects |
+| `platform.missing` | rejection, 1, `read` | the device | no platform, or a platform with no manufacturer; names what the device carries |
+| `platform.unmatched` | rejection, 1, `read` | the device | no package matches the pair exactly; names the pair and every package's pairs |
+| `omit.cable.ends` | info, 0, `read` | the cable | other than two ends |
+| `omit.cable.endpoint` | info, 0, `read` | the cable | an end not on a physical port |
+| `omit.cable.outside_scope` | info, 0, `read` | the cable | an end outside the scope |
+| `ctm.version.unsupported` | rejection, 1, none | the CTM file | `twin compile` given a CTM of another version; names both |
+| `psp.matches.missing` | rejection, 1, `verify` | the package path | no match, or a pair with an empty name |
+| `psp.matches.duplicate` | rejection, 1, `verify` | the package path | two packages name one pair; names both packages and the pair; also refuses `serve` and `worker run` at start, and the registry's load |
+
+Removed: `contract.version.mismatch`, `contract.node.missing`,
+`schema.generic.unimplemented`, `schema.artifact_target.missing`,
+`interface.iftype.unimplemented`, `interface.mgmt_only.iftype`,
+`interface.parent.missing` and `link.endpoint.iftype`: every interface is a port, and a
+cable is a link only with exactly two physical ends inside the scope, an *omission*
+otherwise. `platform.unsupported` stays, for a CTM naming a package this build lacks.
+
+### Formats and versions
+
+| Format | Version | Change |
+|---|---|---|
+| the API | `1` | `scope`, an optional argument of `twin.create`, `twin.rehearse`, `intent.read`, `stage.plan` and `stage.list` ([api.md](api.md)) |
+| findings | `1` | `subject.scope`; `verified` is `{model, version, kinds: [{kind, fields}], stages}`, without `contract_version` and `generics`; `show.record` carries `scope` and `mapping` and no `contract_version`; the sixteen identifiers |
+| CTM | `2` | [ctm.schema.json](ctm.schema.json): the platform is a package, every interface a port, the envelope carries `scope`, `mapping` and `fidelity` and no `contract_version` |
+| bundle manifest | `5` | [manifest.schema.json](manifest.schema.json): `provenance` is `{branch, at?, schema_hash, scope, mapping{reader, model, version}}`; a `mapping[]` row has no `iftype`; `fidelity.read` is the CTM's fidelity list, copied |
+| `twin.json` | `8` | [twin.schema.json](twin.schema.json): `provenance` as the manifest's |
+| PSP | `0.7` | [psp.schema.json](psp.schema.json): `platform.matches`, the manufacturer and platform name pairs a package is, matched exactly |
+| contract | retired | the CTM's version is the contract's |
+
+- `twin compile` refuses a CTM `1` `ctm.version.unsupported`; `twin provision` refuses a
+  bundle `4` `bundle.version.unsupported`, naming both, as it refused a `3`; a package
+  declaring `0.6` or earlier is `psp.version.unknown`, `package declares format version
+  "0.6", this build understands "0.7"`.
+- A `7` record reads with no scope: `twin show` shows it, `twin step` refuses it, `twin
+  destroy` clears it, and `twin rehearse` reclaims it when it names a dead rehearsal.
+- The versions of the findings document and of the API did not move: a `1` reader ignores
+  `subject.scope`, and the removals from `verified` and `show.record` are read by this
+  build's `twin show` and `schema check` alone, by no check and by no recorded history.
+
+### Workflows and activities
+
+None is added, removed or changed: no workflow decision, activity, budget or version
+marker. `ProvisionInput`, `StartFollowingInput`, `ReconcileInput` and `ReadIntentInput`
+carry `scope`, omitted when empty, so the nine recorded histories replay; the runs branch
+on nothing of it.
+
+### Tier 3 (`scripts/e2e.sh`)
+
+The nine cases, unchanged in what they assert but the reader's: every fixture is in the
+library's kinds, tagged `fylgja`, and the marker is a device's `description`. Case 1's
+record names the scope and the mapping, and `twin show`'s text holds `scope tag:fylgja, read
+by infrahub-dcim from opsmill/schema-library@26336e9`; case 5's create passes `--scope
+tag:fylgja`; cases 7, 8 and 9 read the branch point refused `scope.empty`, for want of a
+tagged device on `main`. Before any case, the script's own server must report `default
+scope: tag:fylgja`, read from `local/.env`, and for case 9 the operator's server on the
+bridge must carry `FYLGJA_DEFAULT_SCOPE=tag:fylgja` in its environment, since the checks
+send no scope.

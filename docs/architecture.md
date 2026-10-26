@@ -71,8 +71,10 @@ vendors states each vendor's answer ([D-025](decisions.md#d-025)).
 ## 2. The pipeline
 
 **Who touches what.** The operator edits intent in Infrahub, opens proposed changes and
-marks their stages there, and runs Fylgja's commands. Fylgja reads intent and the rendered
-artifacts from Infrahub over GraphQL and REST, then boots the walking twin, probes it,
+marks their stages there, tags the devices a twin is of, and runs Fylgja's commands. Fylgja
+reads intent, the tagged devices of the schema library's DCIM by one documented mapping
+([§4.1](#41-intent-reader)), and the rendered artifacts from Infrahub over GraphQL and REST,
+then boots the walking twin, probes it,
 pushes each node its artifact and reads it back. Infrahub renders each artifact from the
 artifacts template, which it clones from the artifacts repository: this repository,
 registered there read-only ([§4.1](#41-intent-reader), [D-044](decisions.md#d-044)). From
@@ -86,7 +88,7 @@ posts the rehearsal's report on the proposed change ([§4.6](#46-operator-surfac
 *The system context, derived from [`c4/workspace.dsl`](c4/workspace.dsl) by `make diagrams`.*
 
 **The pipeline's stages and their formats.** Every command enters through the API. A
-twin's reference is read into a CTM, the CTM is compiled into a bundle, the bundle is
+twin's reference is read under its scope, by the reader's mapping, into a CTM, the CTM is compiled into a bundle, the bundle is
 provisioned into a twin and recorded in `twin.json`, and `twin verify` reads the twin
 against it. Every command's answer ends in the findings document. Each format carries its
 version; a step takes a twin built from a stage to another stage of its proposed change by
@@ -95,13 +97,13 @@ the same read and compile, then reconciles and pushes instead of rebuilding.
 ```mermaid
 flowchart LR
     api{{"API 1<br/>POST /v1/noun/verb"}}
-    ref(["intent reference<br/>(branch, at?) or a stage"])
-    read["read<br/>Infrahub, contract 0.2"]
-    ctm[("CTM 1")]
-    compile["compile<br/>PSPs 0.6, pure"]
-    bundle[("bundle 4<br/>content-addressed")]
+    ref(["intent reference<br/>(branch, at?) or a stage,<br/>under a scope"])
+    read["read<br/>Infrahub's DCIM, by the mapping"]
+    ctm[("CTM 2")]
+    compile["compile<br/>PSPs 0.7, pure"]
+    bundle[("bundle 5<br/>content-addressed")]
     provision["stage · deploy · readiness · push<br/>containerlab, the nodes"]
-    twin[("twin.json 7")]
+    twin[("twin.json 8")]
     verify["verify"]
     doc[("findings 1")]
     api --> ref --> read --> ctm --> compile --> bundle --> provision --> twin --> verify --> doc
@@ -110,7 +112,7 @@ flowchart LR
 
 | Stage | Input | Output | Pure? |
 |---|---|---|---|
-| Read | intent reference | CTM, with provenance and each device's configuration artifact; or findings and no CTM | no — reads Infrahub |
+| Read | intent reference and scope | CTM, with provenance, the reader's fidelity list and each device's configuration artifact; or findings and no CTM | no — reads Infrahub |
 | Compile | CTM + PSPs | bundle: deployable topology, bootstrap and configuration artifact per node, manifest | **yes** |
 | Provision | bundle | a ready twin on the lab host, each node running its artifact | no — drives containerlab, pushes to the nodes |
 | Operate | the twin | show, destroy; reconcile from M4; step from M11, to another stage's bundle without a rebuild; verify from M12, which reads the twin against intent and changes nothing; rehearse from 015, a proposed change's stages built, stepped and verified in turn on one twin, which is then destroyed | no |
@@ -125,22 +127,30 @@ the API's server, on the same code path as its tests.
 ```
  intent reference ──read──▶ CTM ──compile──▶ bundle ──provision──▶ walking twin
    (branch, at?)             (envelope:       (manifest:            (lab "fylgja" +
-                              branch, at?,     branch, at?,          twin directory:
+   under a scope              branch, at?,     branch, at?,          twin directory:
                               observed_at,     schema_hash,          twin.json adds
-                              schema_hash,     contract_v;           observed_at)
-                              contract_v)      bundle_id = hash)
+                              schema_hash,     scope, mapping;       observed_at)
+                              scope, mapping,  bundle_id = hash)
+                              fidelity)
 ```
 
 | Object | Identity | Reproducible from | Lives in |
 |---|---|---|---|
 | Intent reference | `(branch, at?)` as given, or as a stage resolves it | — | CTM and manifest; a stage's name only in `twin.json` |
-| CTM | its envelope: `(branch, at?, observed_at, schema_hash, contract_version)` | Infrahub, when pinned | bundle store (as JSON) |
+| Scope | `tag:<name>`, the request's or the server's default | — | CTM, manifest and `twin.json`, beside the reference |
+| CTM | its envelope: `(branch, at?, observed_at, schema_hash, scope, mapping)` and the reader's fidelity list | Infrahub, when pinned | bundle store (as JSON) |
 | Bundle | `bundle_id`, hash of canonical bytes | its CTM and PSPs, always | bundle store, `bundles/<bundle_id>/` |
 | Walking twin | there is one; `fylgja twin show` describes it | never — it is live | containerlab (lab `fylgja`) + the twin directory |
 | Lab host | the machine running the worker | — | — |
 
 Rules that follow:
 
+- **A twin is of a scope** ([D-057](decisions.md#d-057)): `tag:<name>`, every device on the
+  branch carrying the tag of that name, whatever its status; its ports and cables follow it, and no
+  device outside the scope is read. The request names it (`--scope`), or the server's `FYLGJA_DEFAULT_SCOPE`
+  does when it names none; every stage a command resolves, reads or plans is read under
+  that one scope, and `twin step` and a following twin read under the scope their record
+  carries.
 - **A bundle is deployable as emitted.** It carries the fixed lab name and relies on
   containerlab's default management network; nothing host- or twin-specific is added
   after compilation ([D-011](decisions.md#d-011)).
@@ -160,70 +170,72 @@ Rules that follow:
 
 Typed Go generated by `genqlient` from Infrahub's GraphQL SDL
 (`GET /schema.graphql?branch=`, fetched from the default branch, because that
-branch carries the stage kind and its extension). Queries go to `POST /graphql/<branch>`,
+branch carries the schema library's DCIM, the stage kind and its extension). Queries go to `POST /graphql/<branch>`,
 with `at` appended as a query-string parameter only when the operator supplied one,
 directly or through a stage.
 
-**Schema contract — Fylgja generics** ([D-002](decisions.md#d-002)). Infrahub's
-schema is user-defined, so Fylgja assumes no node kind exists. Fylgja ships a small
-set of generics; the organisation's concrete kinds declare they implement them;
-Fylgja queries the generic and Infrahub resolves it across every implementing kind.
-Three rules: **demand the least possible** (every required attribute is a constraint
-on someone else's model); **graduate, don't gate** (optional generics unlock features;
-absence produces a recorded skip); **never reach past the generic** (a query against a
-concrete kind means the contract is under-specified).
+**The mapping** ([D-057](decisions.md#d-057)). The CTM is the contract between a source
+of truth and the compiler ([§4.2](#42-canonical-topology-model-ctm)), and a reader maps
+one source's model onto it by one documented mapping: which kinds and fields it reads,
+what each becomes, with what fidelity, what it refuses and what it omits. It reads nothing
+the mapping does not name, and names the reader and the model version in every CTM's
+envelope. The Infrahub reader, `infrahub-dcim`, reads OpsMill's
+[schema library](https://github.com/opsmill/schema-library)'s DCIM at commit `26336e9`,
+vendored byte for byte under `schema/dcim/` with its licence
+([`schema/README.md`](../schema/README.md)), by the mapping in
+[`specs/017-dcim-reader/contracts/mapping.md`](../specs/017-dcim-reader/contracts/mapping.md).
+Nothing is added to anyone's model to key a package or a scope: a DCIM user loads nothing
+of Fylgja's but the stage kind. The mapping, in short:
 
-Contract v0.2, shape only (YAML in `schema/`). The generics are v0.1's; v0.2 adds one
-demand beside them, that a kind implementing `FylgjaDevice` also inherits Infrahub's
-`CoreArtifactTarget`, so its devices can carry a configuration artifact
-([D-028](decisions.md#d-028)):
+| CTM | Read from | Fidelity |
+|---|---|---|
+| the scope | every `DcimDevice` carrying the `BuiltinTag` the scope names, whatever its `status` | — |
+| a device's name | `DcimDevice.name` | exact |
+| its package | the platform's `DcimPlatform.name` and its manufacturer's `OrganizationManufacturer.name`, matched exactly against each package's `platform.matches` ([§4.7](#47-platform-support-packages)) | exact |
+| its platform's version | nothing: the library's platform carries none | omitted |
+| its artifact | its artifacts, through `CoreArtifactTarget` (below) | exact |
+| its ports | every `InterfacePhysical` of the device, by name; an `InterfaceVirtual` is never read | exact |
+| a port's `mgmt_only` | its `role` is `management` | approximated |
+| a port's `enabled` | its `status` is not `disabled` | approximated |
+| a link | a `DcimCable` with exactly two ends, each an `InterfacePhysical` of a device in the scope | exact |
 
-```
-FylgjaPlatform                                  # the PSP join key
-  vendor     str  required
-  nos        str  required
-  version    str  optional
-  model      str  optional
+Two queries read the scope, paged by 100: `Devices`, the `DcimDevice`s by the tag's name,
+with their platform, its manufacturer and their artifacts; then `Ports`, the
+`InterfacePhysical`s by those devices' ids, each with its `role`, its `status` and its
+cable through its `connector`, whose `connected_endpoints` give the far ends. The tag is
+read by that filter alone, never selected. A cable reached from a port in the scope is
+judged once, by its id, and is a link only with exactly two ends, each a physical port of a
+device in the scope; any other cable is omitted, never refusing the read, with the first
+reason that applies: other than two ends (`omit.cable.ends`), an end not on a physical
+port (`omit.cable.endpoint`), an end outside the scope (`omit.cable.outside_scope`). Each
+is an `info` finding naming the ends it knows, and a row of the envelope's **fidelity
+list**, beside three rows every read writes: the two approximations above and the
+platform's absent version. The compiler copies the list into the manifest unchanged and
+holds no table of any source's rows (Constitution III). What survives of
+[D-003](decisions.md#d-003) and [D-004](decisions.md#d-004), which D-057 superseded with
+[D-002](decisions.md#d-002)'s generics contract: wiring is derived by the compiler from
+what the reader mapped, never declared in a schema ([§4.3](#43-compiler)), and a reader
+never claims a meaning the source does not carry, and says so where it approximates.
 
-FylgjaDevice
-  name       str  required unique               # becomes the node name
-  platform   rel  -> FylgjaPlatform  [1] required
-  interfaces rel  -> FylgjaInterface [n]
-  role       str  optional
-  site       str  optional
-
-FylgjaInterface
-  name       str  required                      # production name: ethernet-1/1
-  device     rel  -> FylgjaDevice    [1] required
-  iftype     str  physical | loopback | svi | subinterface     # kind only
-  mgmt_only  bool default false                 # the OOB port; never cabled
-  parent     rel  -> FylgjaInterface [1] optional
-  enabled    bool default true
-  addresses  rel  -> BuiltinIPAddress [n] optional
-  link       rel  -> FylgjaLink      [1] optional
-
-FylgjaLink
-  endpoints  rel  -> FylgjaInterface [n] exactly 2
-```
-
-Naming rule: never claim a name that carries established operational meaning unless
-the same meaning is intended. `role` is unclaimed on Interface. The kind discriminator
-is `iftype` — IANA's term, and the one Infrahub accepts; it refused `class` and
-`type`. `mgmt_only` marks the OOB port and nothing else. Wiring is **derived** from
-those two by the compiler, never declared in the schema, and an unimplemented `iftype`
-value is an explicit compile-time rejection ([D-003](decisions.md#d-003)).
-Structure is reserved only where confidently known: `parent` stays, a VLAN generic
-does not ([D-004](decisions.md#d-004)).
-
-**Read validates two things before projecting.** Schema conformance (do concrete
-kinds implement the generics on this branch, and inherit `CoreArtifactTarget`? —
-`GET /api/schema` and its `used_by`) and data completeness (are required attributes
-populated?). Both are checked, all findings are reported in one pass, and a failing
-read produces no CTM. `fylgja schema check` runs the conformance half alone.
+**Read validates two things before projecting.** Schema conformance: `GET /api/schema`
+holds every kind and field the mapping reads as the pinned commit loads them, per kind and
+per field (an attribute's kind and optionality, a relationship's peer, kind, cardinality
+and optionality, the dropdown choices `management` and `disabled`, and the generics'
+`used_by`), each difference a rejection naming the commit (`schema.kind.missing`,
+`schema.field.missing`, `schema.field.mismatch`, `schema.choice.missing`,
+`schema.used_by.missing`), and nothing beyond the table reported, so a branch may carry
+kinds and fields of its own. Then data completeness, strict inside the scope: a scope that
+selects no device (`scope.empty`), a device with no platform or a platform with no
+manufacturer (`platform.missing`), and one whose pair no package names
+(`platform.unmatched`). Every finding comes in one pass, and a failing read produces no
+CTM. `fylgja schema check` runs the conformance half alone and, on success, says
+`conformant with opsmill/schema-library@26336e9: DcimDevice, DcimPlatform,
+OrganizationManufacturer, InterfacePhysical, DcimCable`.
 
 **The read fetches each device's configuration artifact** ([D-028](decisions.md#d-028)).
-The `Devices` query lists the device's artifacts through the `CoreArtifactTarget`
-interface, never a concrete kind. The device's support package names the one artifact
+The `Devices` query lists the device's artifacts through a fragment on the
+`CoreArtifactTarget` interface, which conformance holds the device kind to inherit. The
+device's support package names the one artifact
 that is its configuration and the content types it accepts. The read takes the one
 artifact of that name, requires it `Ready`, fetches its bytes from
 `GET /api/storage/object/<storage_id>`, and verifies them against Infrahub's own
@@ -247,12 +259,14 @@ governs nothing when `at` is supplied; on an unpinned read it is the only record
 when the intent was seen, and reproducing that reference via `--at <observed_at>` is
 best-effort, which `fylgja twin show` says. The bundle manifest's provenance block records branch,
 `at` if supplied, the schema hash Infrahub reports for the branch
-(`GET /api/schema/summary`, field `main`), and the Fylgja contract version.
+(`GET /api/schema/summary`, field `main`), the scope, and the mapping
+(`{reader, model, version}`), which is what the retired contract version became
+([D-057](decisions.md#d-057)).
 
 **Stages** ([D-045](decisions.md#d-045), [D-046](decisions.md#d-046)). A stage is a
 moment of a proposed change, the one unit of change in Infrahub 1.11.2 that a user kind
 may relate to. `FylgjaStage` (`schema/fylgja-stage.yaml`) is a Fylgja-owned kind beside
-the contract, not in it, loaded on `main`: branch-agnostic, so a mark lands in no branch's
+the library, not read by the mapping, loaded on `main`: branch-agnostic, so a mark lands in no branch's
 diff; related to its `CoreProposedChange`, required; with a `label` unique within it,
 holding no `/` and no whitespace, an optional `as_of` and an optional description. An
 extension gives `CoreProposedChange` its `fylgja_stages`. A stage has no branch of its
@@ -266,26 +280,45 @@ The stage reader uses the default branch's unnamed endpoints, and every method o
 names no branch but `IntentEvents`, which reads the source branch's event log
 (`InfrahubEvent(branches:)`) and that branch's schema (`GET /api/schema?branch=`), to map
 each event's kind: `GET /api/schema` first, to check the kind, its attributes and the extension, then
-`POST /graphql`. Beside Fylgja's own kinds it reads four roots that are Infrahub's and
-nobody's model, each by a query: `CoreProposedChange` (the open ones, with their stages),
-`Branch` (`branched_from` and `created_at`), `CoreArtifactValidator` (the proposed
-change's artifact validation, pinned at a mark's or the branch point's `at` and unpinned
-for the head), as Constitution III allows from 1.2.1, and
+`POST /graphql`. Beside Fylgja's own kind and the mapping's, the stages read five roots
+that are Infrahub's and nobody's model, each by a query: `CoreProposedChange` (the open
+ones, with their stages), `Branch` (`branched_from` and `created_at`),
+`CoreArtifactValidator` (the proposed change's artifact validation, pinned at a mark's or
+the branch point's `at` and unpinned for the head), as Constitution III allows from 1.2.1,
 `InfrahubEvent` (the source branch's event log since `branched_from`, pinned to nothing),
-as it allows from 1.3.0 ([D-048](decisions.md#d-048)); every operation is still a query.
-An event is intent's when it is a node's own write of a kind that implements a Fylgja
-generic, mapped through the branch schema's `used_by` and never queried, and it creates or
-deletes the node or changes a field the stamps fold into a device's intent; an update of a
-node's memberships or artifacts alone, which Infrahub writes after every generation, is
-its own churn and never intent. A branch whose schema lacks the kind cannot query
+as it allows from 1.3.0 ([D-048](decisions.md#d-048)), and `CoreGraphQLQueryGroup` (the
+template query's internal groups, read on the source branch with the stamps, for the
+account that created them), as it allows from 2.1.0 ([D-060](decisions.md#d-060)); the
+read-only test names each with its reason, and every operation is still a query.
+An event is intent's when its primary node's kind is one the stamps read (`DcimDevice`,
+an implementer of `DcimInterface` or of `DcimConnector`, mapped through the branch
+schema's `used_by` and never queried, `DcimPlatform` or `OrganizationManufacturer`), and
+it creates or deletes the node or changes any attribute, or any relationship but
+Infrahub's own (`member_of_groups`, `subscriber_of_groups`, `artifacts`, `profiles`,
+`object_template`), which it writes after every generation, its own churn and never
+intent; an event with no primary node is skipped.
+
+**The stamps** ([D-058](decisions.md#d-058), [D-060](decisions.md#d-060)). A device's
+**intent stamp** is the latest node stamp among the device, every one of its interfaces,
+virtual ones included, its platform, its platform's manufacturer and every cable one of
+its physical ports is an end of, read under the scope by two queries shaped like the
+read's, which select stamps and ids and no value of intent but the names that pick the
+package. A node's stamp is its `node_metadata.updated_at`, the latest write among its
+current attributes and edges, or its `created_at` when the account that wrote it last is
+Infrahub's own: the account that created the internal `CoreGraphQLQueryGroup`s of the
+queries the scope's artifacts render through, read by a third query at the stamps'
+branch and `at`, and with no such group nothing is left out. A generation adds every node
+it reads for the first time to its query's group as that account, seconds after the
+checksum moves, and that join is never intent. An intent write by any account, Infrahub's
+own included, is still seen by the events. A branch whose schema lacks the kind cannot query
 it at all, so the stages are read from `main` and every other read stays on its branch.
 
 A proposed change's stages, in order: the **branch point**, `main` read pinned at the
 source branch's `branched_from`, verbatim; the **marks**, each at its `as_of` as written
 (`given`) or, when none is written, its label's `updated_at` as Infrahub returned it
 (`written`), ordered by `at`; and the **head**, the branch pinned one microsecond after
-the later of the latest `updated_at` across its intent (attributes and relationship edges)
-and its artifacts' checksums, and the `occurred_at` of its latest intent event, in
+the later of the latest of every device's intent stamp and every artifact's
+`checksum.updated_at`, and the `occurred_at` of its latest intent event, in
 Infrahub's own layout, since a read pinned at exactly a stamp sees the node and not the
 value. A removal (a link or an interface deleted, a relationship unset) moves no stamp, and
 its event is how the head moves past it ([D-048](decisions.md#d-048)). An event lands in
@@ -311,34 +344,48 @@ mark at once. The server's
 clock is read once per resolution and compared with a given `as_of` alone, never with a
 stamp Infrahub returned, and never sent.
 
-**A stale stage is refused** ([D-046](decisions.md#d-046), [D-048](decisions.md#d-048)),
-per device: a device is stale at a stage when its intent was written later than its
-generation stamp. Its intent was written at the later of the latest stamp of its own
-intent, pinned at the stage's `at`, and the latest intent event no later than the `at` that
-names it (by its id or one of its interfaces' ids as read at the stage, as the event's node
-or a peer of its relationships). Its generation stamp is the later of its artifact's
+**A stale stage is refused** ([D-046](decisions.md#d-046), [D-048](decisions.md#d-048),
+[D-058](decisions.md#d-058)), per device: a device is stale at a stage when its intent was
+written later than its generation stamp. Its intent was written at the later of its intent
+stamp (above), pinned at the stage's `at`, and the latest intent event no later than the
+`at` that names it (by the id of the device, one of its interfaces, its platform, its
+manufacturer or one of its cables as read at the stage, as the event's node or a peer of
+its relationships). Its generation stamp is the later of its artifact's
 `checksum.updated_at` (the artifact its package's `config.artifact_name` names) and the
 proposed change's artifact validator's `completed_at` value. `stage.artifact.stale` names each such device and both remedies, a
 generate or the proposed change's checks, and says to mark again. The validator counts
 because a regeneration to identical bytes moves no checksum, while a run-check completes
 the validator either way. Two warnings refuse nothing: `stage.main.moved`, when `main`'s
 latest stamp is later than `branched_from`, read as the head is; and `stage.orphaned`, a
-stage that names no proposed change. On a `main` that holds the schema and no network, as
-the development host's does, the branch point is refused at conformance like any empty
-read (`contract.node.missing`), and a plan goes on. A stage's name enters neither the CTM
+stage that names no proposed change. On a `main` that holds the library and no device
+carrying the scope's tag, as the development host's does, the branch point is refused
+`scope.empty`, like any read whose scope selects no device, and a plan goes on. A stage's name enters neither the CTM
 nor the bundle. Without the kind, only the stage surfaces refuse, and `schema check`
 reports whether the default branch has the kind and its extension.
 
-**Reference schema.** On a greenfield Infrahub the generics alone give nothing to
-populate, so Fylgja ships a concrete reference schema implementing them.
+**What an install loads.** On a greenfield Infrahub, the fixture tool's `-prepare-main`
+loads the vendored library on a `main` that holds none of its kinds, then the stage kind;
+a `main` that already holds any of the library's kinds is its operator's, and is refused,
+loading nothing. `fylgja schema check` says whether a branch's DCIM is the one the reader
+reads. The library calls itself experimental, so the commit is pinned, and moving it is a
+change to the mapping's table, verified against the running Infrahub; a DCIM that has
+diverged from the commit needs a reader of its own ([D-057](decisions.md#d-057)).
 
 ### 4.2 Canonical Topology Model (CTM)
 
-The compiler's input: a thin, branch-addressed projection of intent, kept a near-copy
-of the generated GraphQL types. Two jobs justify it
-([D-010](decisions.md#d-010)): **synthesized nodes** — boundary stubs, service
-mocks, later traffic generators are not in Infrahub and cannot live in types generated
-from Infrahub — and **insulation** of the compiler from a user-editable schema. Every
+The compiler's input and, from 017, **the contract** between a source of truth and the
+compiler ([D-057](decisions.md#d-057)): a thin, branch-addressed projection of intent,
+versioned by `ctm_version`, `2` from 017, which a reader fills by its mapping
+([§4.1](#41-intent-reader)). A device is its name, its platform as a package (the
+package's `platform.id`, and a version the Infrahub reader never writes), its ports (name,
+`mgmt_only`, `enabled`, `link`) and its artifact; a link is two ends, each a device and a
+port. The envelope carries `(branch, at?, observed_at, schema_hash, scope, mapping)` and
+the reader's fidelity list, every approximation and omission the mapping made, which the
+compiler copies into the manifest unchanged. `twin compile` refuses a CTM of another
+version (`ctm.version.unsupported`, naming both), and nothing converts a `1`. Two jobs
+justify it ([D-010](decisions.md#d-010)): **synthesized nodes** — boundary stubs, service
+mocks, later traffic generators are not in any source and cannot live in types generated
+from one — and **insulation** of the compiler from each source's model. Every
 object carries **provenance**: `intent`, `observed`, or `synthesized`. Everything is
 `intent` today. `fylgja intent read` writes the CTM as JSON. From M5 each device carries
 its configuration artifact: name, content type, Infrahub's checksum and the content,
@@ -358,7 +405,7 @@ A bundle is one directory:
 | `topology.clab.yml` | lab name `fylgja`; every node with platform and image; every cabled link between node ports; containerlab's default management network |
 | `configs/<node>.<startup_format>` | bootstrap per node from the PSP: hostname, cabled ports enabled, link-layer discovery on, under the package's comment marker. No addresses, no production configuration. From M7 the package says how it reaches the node — containerlab applies it at deploy, or the push sends its lines ahead of the artifact's ([§4.4](#44-provisioner--temporal)) |
 | `configs/<node>.<artifact_name>` | from M5, the node's configuration artifact as Infrahub rendered it, bytes unchanged (`configs/n1.device-config`). Pushed after boot; never rendered or reordered by Fylgja |
-| `manifest.json` | bundle format version (`4` from M12, `3` from M7); the provenance block `(branch, at?, schema_hash, contract_version)` — never `observed_at`; platform per node, its `artifact` entry (name, content type, checksum, size, file) and its `bootstrap` entry (the file, and whether it is applied at deploy or pushed); the interface mapping table (production name → node port, the node's own name for the port as `node_name` on every row and `null` on a row with no port, `iftype`, from M12 intent's `enabled`, disposition: cabled / management / configured-not-cabled / omitted); the fidelity manifest, which states that fidelity is asserted, not measured, and carries `production_forwarding` as one entry per platform in the bundle; everything omitted and why; `fidelity.lossy`, every lossy mapping and every shared port with the rule that decided it and the interfaces it shares with |
+| `manifest.json` | bundle format version (`5` from 017, `4` from M12, `3` from M7); the provenance block `(branch, at?, schema_hash, scope, mapping)` — never `observed_at`; platform per node, its `artifact` entry (name, content type, checksum, size, file) and its `bootstrap` entry (the file, and whether it is applied at deploy or pushed); the interface mapping table (production name → node port, the node's own name for the port as `node_name` on every row and `null` on a row with no port, `mgmt_only`, from M12 intent's `enabled`, disposition: cabled / management / configured-not-cabled / omitted); the fidelity manifest, which states that fidelity is asserted, not measured, and carries `production_forwarding` as one entry per platform in the bundle; everything omitted and why; `fidelity.lossy`, every lossy mapping and every shared port with the rule that decided it and the interfaces it shares with; from 017 `fidelity.read`, the reader's fidelity list copied from the CTM unchanged |
 
 The bundle is **deterministic** (same CTM and PSPs → byte-identical files, stable
 ordering everywhere), **self-describing** (provisioning needs nothing outside the
@@ -366,11 +413,12 @@ directory), **deployable as emitted** (no binding step), and therefore
 **content-addressed**: `bundle_id` is the hash of its canonical bytes, and a changed
 `bundle_id` is the drift signal for reconcile. The artifacts are among those bytes, so a
 configuration change moves `bundle_id` as a topology change does. `twin provision`
-refuses a bundle of any other format than `4` (`bundle.version.unsupported`, naming both):
+refuses a bundle of any other format than `5` (`bundle.version.unsupported`, naming both):
 a `1` carries no artifacts, a `2` asserts one forwarding value for every node in it and
-names no bootstrap entry, and a `3` carries no `enabled`, so `twin verify` would assert a
-port intent disables. Every mapping row carries `node_name`, `fidelity.lossy` is always
-present, and an empty list is written `[]`; `fidelity.production_forwarding` has one entry
+names no bootstrap entry, a `3` carries no `enabled`, so `twin verify` would assert a
+port intent disables, and a `4` names the retired contract version where a `5` names the
+scope and the mapping. Every mapping row carries `node_name`, `fidelity.lossy` and
+`fidelity.read` are always present, and an empty list is written `[]`; `fidelity.production_forwarding` has one entry
 per platform ([D-025](decisions.md#d-025)), and each node a `bootstrap` entry naming its
 bootstrap file and how that file reaches the node.
 
@@ -405,12 +453,17 @@ Sub-problems, in the order they kill projects like this:
   - Every interface a lossy rule decided and every shared port is recorded in
     `fidelity.lossy`. Bootstrap's `{interface}` renders the node's own name for the
     port. Unmappable interfaces are reported, never dropped.
-- **Wiring derivation.** `physical` cables unless `mgmt_only`, in which case it maps
-  onto the PSP's management interface name; `loopback`, `svi`, `subinterface` are
-  configured, never cabled. A link with a `mgmt_only` endpoint is omitted and
-  recorded. `physical` and `loopback` are implemented; the rest are rejected.
-- **Image selection.** Platform + version → image reference with a fidelity rating
-  (*exact*, *near*, *approximated*, *stub*) from the PSP. A locally imported image is
+- **Wiring derivation** ([D-057](decisions.md#d-057)). Every interface is a port, since
+  the reader reads physical ports alone: cabled when it terminates a link,
+  configured-not-cabled otherwise, and the `mgmt_only` one maps onto the PSP's management
+  interface name, a second omitted (`omit.mgmt.extra`). A link with a `mgmt_only`
+  endpoint is omitted and recorded (`omit.link.mgmt_only`). No interface kind reaches the
+  CTM, so nothing is rejected for one: the `iftype` discriminator, its loopback, SVI and
+  subinterface values and their rejections were retired at 017 with
+  [D-003](decisions.md#d-003).
+- **Image selection.** The device's package → image reference with a fidelity rating
+  (*exact*, *near*, *approximated*, *stub*) from the PSP; the platform's version, which the
+  Infrahub reader leaves out, selects nothing. A locally imported image is
   supplied through the PSP override directory, not through a bundle parameter.
 - **Synthesized nodes.** Added to the CTM before compilation; never looked up by the
   compiler; always in the fidelity manifest.

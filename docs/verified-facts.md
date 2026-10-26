@@ -45,12 +45,21 @@ development host up again there, or on a fresh 26.04 VM before it.
   properties { updated_at } } }`. `NetworkLink` has no `name`: `id`, `hfid`,
   `display_label`, `endpoints` and the groups. Infrahub returns no instant of its own:
   `InfrahubInfo` is `version` and `deployment_id`, and HTTP's `Date` is whole seconds.
-  *(10-16)*
+  *(10-16)* `NetworkLink` was the generics' link kind, removed at 017
+  ([D-057](decisions.md#d-057)). The library's `DcimCable` has no `name` either: its
+  `label` (optional, unique) is its `human_friendly_id`, and a tag added to a device
+  carries the write's stamp on its edge as the edges above do. *(10-25;
+  `specs/017-dcim-reader/research.md` §1.3, §1.7)*
 - **A branch read pinned at its own `branched_from` is `main` as it then stood**, so on an
   install whose `main` holds the schema and no intent it finds no contract object, no
   device and no link: `fylgja-fixture` pinned at its `branched_from` reads `FylgjaDevice 0,
   FylgjaLink 0, FylgjaContract 0`, and Fylgja's read refuses it `contract.node.missing`, as
-  it refuses `main` itself. *(10-16)*
+  it refuses `main` itself. *(10-16)* That was on the generics' kinds and their contract
+  node, retired at 017 ([D-057](decisions.md#d-057)). On the library's kinds the branch
+  point of a branch made from a `main` holding no network reads no device carrying the
+  scope's tag, and the read refuses it `scope.empty` (`scope tag:fylgja selects no device
+  on branch main at <branched_from>`). *(10-26; `specs/017-dcim-reader/research.md` §5.5,
+  §5.15)*
 - `Branch(name:)` answers `[Branch!]!`, `[]` for a name that does not exist. Its
   `branched_from` and `created_at` are strings in the `Z` layout
   (`2026-10-08T05:47:52.538186Z`), where an attribute's stamp reads `+00:00`; a fresh
@@ -89,6 +98,38 @@ development host up again there, or on a fresh 26.04 VM before it.
 - This Infrahub reads anonymously: no token is 200 on GraphQL, the schema and storage,
   and a wrong token is 401, so no token exists that reads intent and cannot read content.
   *(09-18)*
+- **The library's roots filter one level deep.** On OpsMill's schema library at
+  `26336e9`, `DcimDevice` takes `tags__name__value`, `tags__ids` and `tags__isnull`, beside
+  `ids`, `name__value`, `platform__name__value`, `platform__ids`, `status__value` and
+  `node_metadata__updated_at__after`. `InterfacePhysical` takes `device__ids`,
+  `device__name__value`, `device__isnull`, `connector__ids`, `connector__isnull`,
+  `role__value` and `status__value`, and no `device__tags__*`: `Unknown argument
+  'device__tags__name__value' on field 'Query.InterfacePhysical'`. `DcimCable` takes
+  `connected_endpoints__ids` and `connected_endpoints__isnull`. A nested `interfaces` takes
+  attribute filters and `ids` alone, nothing that narrows it to a kind, and its edges carry
+  both `InterfacePhysical` and `InterfaceVirtual`. *(10-25;
+  `specs/017-dcim-reader/research.md` §1.4)*
+- **Devices by tag, then their ports by device.** `DcimDevice(tags__name__value: "fylgja")`
+  answers exactly the devices carrying the tag, and a tag no device carries answers 0.
+  `InterfacePhysical(device__ids: […])` answers every physical port of those devices and no
+  `InterfaceVirtual`. A port's `connector` reaches its cable through the generic
+  `DcimConnector` (`... on DcimCable`), with every end in `connected_endpoints` and each
+  end's device; an uncabled port's `connector.node` is `null`. `DcimCable(connected_endpoints__ids:
+  […])` answers every cable with an end among the ports. A device read by name with its
+  `interfaces` answers each physical port with its far end's device and port, and a
+  loopback as `InterfaceVirtual` with no `connector`. *(10-25;
+  `specs/017-dcim-reader/research.md` §1.6)*
+- **Selecting an uncabled port's `connector { node_metadata }` refuses the whole page.**
+  The SDL declares `NestedEdgedDcimConnector.node_metadata` non-null, and an uncabled
+  port's is null, so the answer is `Cannot return null for non-nullable field
+  NestedEdgedDcimConnector.node_metadata`, once per uncabled port.
+  `InterfacePhysical(device__ids: …, connector__isnull: false)` reads the cabled ports
+  alone and is accepted. *(10-26; `specs/017-dcim-reader/research.md` §5.8)*
+- **A pinned read filters by the tag as it stood at `at`**: a device tagged after `at` is
+  absent from a read pinned at `at` and present in the unpinned one. *(10-26;
+  `specs/017-dcim-reader/research.md` §5.7, §5.11, §5.14)*
+- `BuiltinTag` is branch-aware: tags made on a branch read there and not on `main`, before
+  and after the branch's deletion. *(10-25; `specs/017-dcim-reader/research.md` §1.5)*
 
 **The schema**
 
@@ -104,7 +145,47 @@ development host up again there, or on a fresh 26.04 VM before it.
   [attribute.mdx](https://github.com/opsmill/infrahub/blob/infrahub-v1.11.2/docs/docs/reference/schema/attribute.mdx)
   at 1.11.2). *(10-08)*
 - On a branch without the Fylgja schema the generics are not GraphQL types at all: read
-  `GET /api/schema` first, whose `used_by` is the conformance check. *(09-14)*
+  `GET /api/schema` first, whose `used_by` is the conformance check. *(09-14)* The
+  generics were retired at 017 ([D-057](decisions.md#d-057)); a kind a branch lacks is no
+  GraphQL type there either, and the library's conformance reads the same endpoint
+  (below).
+- **OpsMill's schema library at `26336e9` loads beside the stage kind.** Its six files
+  (`base/dcim.yml`, `base/ipam.yml`, `base/location.yml`, `base/organization.yml`,
+  `extensions/cable/cable.yml`, `extensions/location_minimal/location_minimal.yml`;
+  Apache 2.0, its README calling it examples "in an experimental phase") define 27 kinds.
+  `schema check` passes them, every kind `added`, and `infrahubctl schema load` sends every
+  file it is given in one request: 27.5 s and 24.1 s on a branch, `DcimDevice` on `GET
+  /api/schema` a second later. They add 14 nodes and 21 generics, on a `main` that held
+  the generics and on one that did not. *(10-25, 10-26;
+  `specs/017-dcim-reader/research.md` §1.2, §5.1, §5.2, §5.10)*
+- **`GET /api/schema?branch=` reports a node with its inherited attributes and
+  relationships merged in**, each marked `inherited`, and each generic with its `used_by`.
+  An attribute with a `default_value` is reported `optional: true`, whatever its file says:
+  `DcimDevice.status`, written `optional: false` with a default, reads `optional: true`. So
+  a conformance table is what the endpoint answers, not the YAML. What it answered for the
+  five kinds the reader reads is the table in `specs/017-dcim-reader/research.md` §1.3:
+  among them, `DcimDevice` inherits `CoreArtifactTarget` with `artifacts` merged in,
+  `InterfacePhysical.device` is a required `Parent` on `DcimGenericDevice`, and
+  `DcimCable.connected_endpoints` has `min_count 0, max_count 0`. `used_by` reads
+  `DcimGenericDevice` [`DcimDevice`], `DcimInterface` [`InterfacePhysical`,
+  `InterfaceVirtual`], `DcimEndpoint` [`InterfacePhysical`] and `DcimConnector`
+  [`DcimCable`], the same on a whole branch's untrimmed document (76 nodes, 56 generics).
+  *(10-25, 10-26; `specs/017-dcim-reader/research.md` §1.3, §5.2, §5.3)*
+- **What the library demands of a write** (raw GraphQL on a branch). A `LocationSite`
+  needs its whole parent chain (`parent is mandatory for LocationSite at parent`): a
+  region, a country, a metro and the site, in four creates. A `DcimDevice` needs its
+  `location` (`location is mandatory for DcimDevice at location`), and loads with no
+  platform, or with a platform that has no manufacturer. An `IpamIPAddress` loads with
+  `address` and `interface` alone. A `DcimCable` takes zero, one, two or three ends; an end
+  on an `InterfaceVirtual` is refused (`… cannot be added to relationship, must be of type:
+  ['InterfacePhysical'] at connected_endpoints`), and a port already cabled refuses a
+  second cable (`Node <id> has 2 peers for connector__endpoint, maximum of 1 allowed`).
+  `DcimCableUpdate` with one peer in `connected_endpoints` replaces the set, and the former
+  end's `connector` reads `{"node": null}`. *(10-25, 10-26;
+  `specs/017-dcim-reader/research.md` §1.5, §5.9)*
+- `POST /api/schema/load` answers `diff`, `hash`, `previous_hash`, `schema_updated` and
+  `warnings`, `hash` equal to `previous_hash` for a load that changed nothing. *(10-26;
+  `specs/017-dcim-reader/research.md` §5.2)*
 - The IPAM core generic is `BuiltinIPAddress`; `IpamIPAddress` is a demo-schema name.
   *(09-14)*
 - The SDL is at `GET /schema.graphql?branch=`, and its field order is not stable between
@@ -121,8 +202,13 @@ development host up again there, or on a fresh 26.04 VM before it.
   `schema_differs_from_default_branch: true` and compiling to `47b2c449…` as before.
   *(10-16)* The final stage kind, a migration of the candidate, moved `main` to
   `a8045729…`, and the removal of M10's kind to `e43a1cde…`; the fixture branch kept
-  `0aba31a5…` through both, and still carries the removed kind, which nothing reads.
-  *(10-16, 10-17)*
+  `0aba31a5…` through both, and the removed kind with it, until 017. *(10-16, 10-17)* At
+  017 the removal of the reference kinds moved `main` to `6a17b5b8…`, the generics' to
+  `66edc133…`, and the library's load to **`7c413536…`** (71 nodes, 52 generics). The
+  fixture branch, re-seeded from that `main`, carries its `7c413536…` and compiles to
+  `f764e1fa…`. Each throwaway branch that loaded the library had a hash of its own
+  (`908871c3…`, `4161a1ab…`, `18e5f023…`, `5dbe3902…`). *(10-25, 10-26;
+  `specs/017-dcim-reader/research.md` §1.2, §5.1–§5.3, §5.5, §5.10)*
 - A branch sees `main` as it was when the branch was created, so a branch made before the
   schema, the group or the template existed on `main` cannot render. *(09-18)* Nor can it
   query a kind loaded on `main` after it; a branch created after the load carries
@@ -136,12 +222,25 @@ development host up again there, or on a fresh 26.04 VM before it.
   not the base's. `wait_until_completion: true` returned after 67 s for a three-node
   branch. *(10-16)* With nothing on `main` to take, a rebase still moves `branched_from`
   to its own moment, and returned after 17–22 s on a seeded branch with an open draft
-  proposed change and five stages. *(10-16, 10-17)*
+  proposed change and five stages. *(10-16, 10-17)* Over the library's kinds a rebase
+  moves `branched_from` and leaves `created_at`, as before. *(10-26;
+  `specs/017-dcim-reader/research.md` §5.11, §5.14)*
 - **A kind is removed by a document naming it with `state: absent`.** `schema check`
   prints `removed: <kind>`; the load takes about 40 s (38 s on a branch, 40.8 s on
   `main`); the kind then leaves `GET /api/schema` and GraphQL (`Cannot query field '<kind>'
   on type 'Query'`); and a second check prints `No diff` and a second load is already up to
   date in 1.8 s, so the document is idempotent. *(10-16, 10-17)*
+- **Implementers and their generics go in two documents.** One naming the four `Network*`
+  kinds, `FylgjaContract` and the four generics `state: absent` is refused by `schema
+  check` and `schema load` alike (`NetworkDevice: Relationship 'interfaces' is referring
+  an invalid peer 'FylgjaInterface'`): the implementers are validated against a schema the
+  generics have already left. The implementers' document, then the generics', each loads:
+  47.2–50.6 s and 42.2–48.0 s, on a branch and on `main`, and each checks `No diff` after.
+  Then `CoreArtifactTarget`'s `used_by` is empty, the removed devices' `CoreArtifact`s
+  stay, and a branch-agnostic kind beside them and its extension are untouched. A removal
+  that leaves a generic with no implementer (`DcimCable`, `DcimConnector`'s one) loads too,
+  in 1 m 48.8 s while a second branch loaded the library. *(10-25, 10-26;
+  `specs/017-dcim-reader/research.md` §1.9, §5.7, §5.10)*
 - A change of an attribute's `parameters.regex` shows in `schema check`'s diff as
   `parameters.regex, regex`: `regex` is Infrahub's mirror of it, read equal on `main`
   after the load, not a second change. *(10-16)*
@@ -166,7 +265,12 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
 - At creation every attribute carries one `updated_at` (six fractional digits, `+00:00`),
   and only a real change of its value moves it: a description edit leaves another
   attribute's stamp where it was, and a change of that attribute's value moves it. No
-  node-level `_updated_at` is queryable on a Fylgja kind. *(09-28)*
+  node-level `_updated_at` is queryable on a Fylgja kind. *(09-28)* The node type has no
+  stamp of its own on the library's kinds either (`Cannot query field 'node_metadata' on
+  type 'DcimDevice'`). The `Edged*` wrapper around it does: `node_metadata { created_at
+  updated_at created_by updated_by }`, on a root's edges and on every nested relationship's
+  (**Artifacts and repositories**, below). *(10-25; `specs/017-dcim-reader/research.md`
+  §1.4)*
 - A DateTime attribute keeps a written value character for character and refuses only
   nonsense; GraphQL types it as text, so an unwritten one reads `""`. A Number attribute's
   value is a `BigInt`, which genqlient binds to `int`. *(09-28)*
@@ -230,7 +334,9 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
     which waits for one whenever the group has members, times out after 6 minutes there.
   - Deleting a device on `main` deletes its artifacts with it (3 of 3) and leaves the
     group empty. A branch made after `-clear-main` has its branch point refused
-    `contract.node.missing` again. *(10-21)*
+    `contract.node.missing` again. *(10-21)* That was on the generics' kinds; on the
+    library's, a branch point with no tagged device is refused `scope.empty` (**Reading
+    intent**, above).
 - **`CoreProposedChangeDelete` is refused while a `FylgjaStage` names the proposed change**,
   with the kind on `main`: `Cannot delete CoreProposedChange '<id>'. It is linked to
   mandatory relationship proposed_change on node FylgjaStage '<id>'`
@@ -354,6 +460,9 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   (kind `Group`) and `profiles` (kind `Profile`) on each Fylgja generic. So an event's kind
   does not tell intent from churn; the names of the fields an update changed
   (`attributes { name }`, `relationships { name }` on `NodeMutatedEvent`) do. *(10-17)*
+  Those were the generics' kinds; on the library's the group join is the same churn,
+  `CoreStandardGroup updated, members → …` at level 0 and one `member_of_groups →
+  <group>` update a device at level 1. *(10-25; `specs/017-dcim-reader/research.md` §1.8)*
 - **The log lags its writes, by a varying few seconds.** It is ordered strictly by
   `occurred_at`. A deleted link's own `node.deleted` is stamped just before the mutation
   returns, and its child events (each endpoint interface's `link` REMOVED, the query
@@ -361,6 +470,18 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   the return held one child event and not the other; under the contract tier's load reads
   1.5 s after held none; on an idle host the first read to hold one was 6.6 s after the
   return. So a head read in that window does not see a removal yet. *(10-17)*
+- **What the log names on the library's kinds.** Since a branch point it lists
+  `infrahub.node.created`, `infrahub.node.updated`, `infrahub.group.member_added`,
+  `infrahub.group.member_removed` and `infrahub.schema.updated`, whose `primary_node` is
+  `null`. `NodeMutatedEvent` carries `primary_node { id kind }`, `related_nodes` (`{id,
+  kind}`), `attributes { name }`, `relationships { name peer { id kind } }` and `level`. A
+  creation names every attribute, `human_friendly_id` and `display_label` among them, and
+  every relationship set; an attribute edit names the attribute; a tag added or removed is
+  the device's `relationships: [tags → <tag>]`. A cable re-ended names its former port
+  twice, 1.4–3 ms apart: the cable's event (level 0, `connected_endpoints → <port>`) and the
+  port's (level 1, `connector → <cable>`), read 2 s after the write. A device created on a
+  platform is `DcimPlatform updated` naming the device. *(10-25, 10-26;
+  `specs/017-dcim-reader/research.md` §1.4, §1.8, §5.8)*
 
 **Checks, and the proposed change's view (015)**
 
@@ -413,7 +534,16 @@ registration `fylgja`.
   then fetches the commit in a flow of its own (`Fetch git repository <name> on <worker>`),
   both done 13–17 s after the import's own flow; a run-check 6 s after an import failed on
   the worker that had not fetched (`SHA … could not be resolved`) and started no
-  validator. *(10-17, 10-19, 10-20)*
+  validator. *(10-17, 10-19, 10-20)* On 10-26 the import's task ran 28.4 s, `commit`
+  moving at its end, and the second task worker held the commit 4.6 s after the flow
+  ended. *(10-26; `specs/017-dcim-reader/research.md` §5.4)*
+- **A query's `models` are derived at its import**, from every kind it reaches, generics
+  through fragments included: `device_config` over the library reads `DcimCable`,
+  `DcimConnector`, `DcimDevice`, `DcimEndpoint`, `DcimGenericDevice`, `DcimInterface`,
+  `DcimPlatform`, `InterfacePhysical`, `InterfaceVirtual` and `OrganizationManufacturer`,
+  and `fylgja_branch`, which reads no kind, has none. It imported with no error on a
+  `main` holding the library. A kind's removal leaves a stored query's `models` naming it
+  until the next import. *(10-26; `specs/017-dcim-reader/research.md` §5.4, §5.10)*
 - **`CoreGraphQLQuery` and `CoreCheckDefinition` names are unique on `main`**: a second
   registration declaring a query name the first holds goes `error-import` (`Violates
   uniqueness constraint 'name'`, 422) and imports nothing at all, its checks included.
@@ -479,7 +609,30 @@ registration `fylgja`.
   `FylgjaPlatform`, carry `updated_at` too: the fixture's `vendor`, `nos`, `version` and
   unset `model` all read `05:47:56.812998`, the platform's creation, unpinned and pinned at
   the head, before every device's stamp, and pinned at exactly a device's stamp the edge
-  and the node are `null`. *(10-17)*
+  and the node are `null`. *(10-17)* Those were the generics, retired at 017
+  ([D-057](decisions.md#d-057)); on the library's kinds a node's stamp is its wrapper's
+  (next).
+- **A node's stamp is its `Edged*` wrapper's `node_metadata.updated_at`**, the latest
+  stamp among the node's current attributes and relationship edges, on the library's
+  kinds. An attribute's `updated_at` moves on a change of its own value alone, and a second
+  write of the same value moves nothing. The wrapper follows: a description edit moved it,
+  a tag added moved it again, and the tag's removal moved it **back** to the edit's stamp,
+  since a removal leaves no stamp; a no-op write moved nothing. An interface's edit moved
+  the interface's and not its device's, a cable's the cable's, a manufacturer's the
+  manufacturer's and not its platform's. A device created on a platform moves the
+  platform's, by its reverse `devices` edge, and an edit of that device then moves nothing
+  of the platform's. A node's first join of a group moves its stamp; an upsert of a member
+  already there moves nothing (`RelationshipManager.update` keeps the peer). A port's
+  `connector { node_metadata { updated_at } }` reads its cable's own stamp, which the
+  cable's edit moves while the edge's `properties.updated_at` stays at the cable's
+  creation. A cable re-ended to one end moves nothing stamped: the former port reads
+  `connector { node: null, properties { updated_at: null } }`. The root filter
+  `node_metadata__updated_at__after` answers by the same stamp. Pinned at exactly a
+  write's stamp the wrapper reads the previous latest while the attribute reads its new
+  value with its old stamp; one microsecond later both read the write. Pinned at exactly a
+  node's creation its edge is absent, and one microsecond later present with `updated_at`
+  equal to `created_at`. *(10-25, 10-26; `specs/017-dcim-reader/research.md` §1.4, §1.7,
+  §5.8)*
 - **A generation stamps each device's artifact apart.** The fixture's three checksums read
   `…38.543597`, `…38.544382` and `…38.544482`, each after its own device's intent, so the
   latest stamp of a branch is one device's checksum. A regeneration that changes bytes
@@ -489,6 +642,20 @@ registration `fylgja`.
 - `CoreArtifact.checksum` is the MD5 hex of the bytes `GET /api/storage/object/<storage_id>`
   serves. A listing pinned to `at` gives the storage id as of `at`, and the older object
   is still served. *(09-18)*
+- **The pipeline renders as `infrahubctl render` does.** `.venv/bin/infrahubctl render
+  <transform> device=<d> --branch <b>` (SDK 1.23.2, read-only) gave bytes whose MD5 is each
+  device's live `CoreArtifact.checksum`; and the renders of 017's template predicted from
+  it held byte for byte once Infrahub's task workers rendered the imported commit. The
+  SDK's file-based environment has `trim_blocks`, `lstrip_blocks` and the default
+  `Undefined`, so an attribute read on a null node fails the render. Its filter allowlist
+  (`infrahub_sdk/template/filters.py`) admits `sort` in the worker's and the local context,
+  not the core's, and artifacts render in the worker. *(10-25, 10-26;
+  `specs/017-dcim-reader/research.md` §5.1)*
+- A render for a device the query does not find stops in the template (`list object has no
+  element 0` at `data.DcimDevice.edges[0]`), the query answering `edges: []` with no
+  error; the pipeline renders the target group's members alone. A member that the imported
+  template's query cannot read (a template reading `FylgjaDevice` over a `DcimDevice`)
+  has its artifact end `Error`. *(10-26; `specs/017-dcim-reader/research.md` §5.2, §5.7)*
 - A branch created with `sync_with_git: false`, as every test branch is, keeps the
   repository commit it forked with: a template commit reaches it only by `BranchRebase`,
   then a generate. *(09-18)*
@@ -546,7 +713,8 @@ registration `fylgja`.
   (`base/dcim.yml` with its ipam, location and organization bases, read on 10-16) against
   `main`'s Fylgja generics: the four files load beside them unchanged, and the DCIM kinds
   inherit the generics only once `DcimGenericDevice`'s `platform` and `interfaces` are
-  exact copies of `FylgjaDevice`'s and `DcimDevice` drops its `role`. *(10-16)*
+  exact copies of `FylgjaDevice`'s and `DcimDevice` drops its `role`. *(10-16)* 017
+  removed the generics instead ([D-057](decisions.md#d-057)).
 - **Two Parent relationships are refused, even when identical.** A node inheriting
   `device` as `kind: Parent` from two generics fails `schema/check` with `Only one
   relationship of type parent is allowed, but all the following are of type parent:
@@ -830,7 +998,9 @@ re-verified here.
   needs and killed an end-to-end run; capped at heap 1g/2g and page cache 1g, it does not.
   *(09-21)* On 26.04: 5.2 GiB idle across its eight containers, Neo4j 2.12 GiB under the
   cap and the server 1.56 GiB, leaving 24.5 GiB available with the three processes
-  running. *(26.04, 10-08)*
+  running. *(26.04, 10-08)* After 017's contract tier, before tier 3: Infrahub's
+  containers held about 14 GiB, its server 7.5 GiB of that, with 12.1 GiB available, and
+  tier 3 passed whole. *(10-26; `specs/017-dcim-reader/research.md` §5.15)*
 - On a host with little memory to spare, a twin booted beside the contract tier starves
   the worker: it misses heartbeats, its deploys are cut short, and Infrahub times out the
   tier. Read `free -m` before booting a twin. *(09-15)* Not re-verified on 26.04, on

@@ -22,15 +22,13 @@ import (
 //
 // ArtifactFields is implemented by the following types:
 // ArtifactFieldsDcimDevice
-// ArtifactFieldsNetworkDevice
 type ArtifactFields interface {
 	implementsGraphQLInterfaceArtifactFields()
 	// GetArtifacts returns the interface-field "artifacts" from its implementation.
 	GetArtifacts() ArtifactFieldsArtifactsNestedPaginatedCoreArtifact
 }
 
-func (v *ArtifactFieldsDcimDevice) implementsGraphQLInterfaceArtifactFields()    {}
-func (v *ArtifactFieldsNetworkDevice) implementsGraphQLInterfaceArtifactFields() {}
+func (v *ArtifactFieldsDcimDevice) implementsGraphQLInterfaceArtifactFields() {}
 
 func __unmarshalArtifactFields(b []byte, v *ArtifactFields) error {
 	if string(b) == "null" {
@@ -48,9 +46,6 @@ func __unmarshalArtifactFields(b []byte, v *ArtifactFields) error {
 	switch tn.TypeName {
 	case "DcimDevice":
 		*v = new(ArtifactFieldsDcimDevice)
-		return json.Unmarshal(b, *v)
-	case "NetworkDevice":
-		*v = new(ArtifactFieldsNetworkDevice)
 		return json.Unmarshal(b, *v)
 	case "":
 		return fmt.Errorf(
@@ -71,14 +66,6 @@ func __marshalArtifactFields(v *ArtifactFields) ([]byte, error) {
 		result := struct {
 			TypeName string `json:"__typename"`
 			*ArtifactFieldsDcimDevice
-		}{typename, v}
-		return json.Marshal(result)
-	case *ArtifactFieldsNetworkDevice:
-		typename = "NetworkDevice"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*ArtifactFieldsNetworkDevice
 		}{typename, v}
 		return json.Marshal(result)
 	case nil:
@@ -286,24 +273,6 @@ func (v *ArtifactFieldsDcimDevice) GetArtifacts() ArtifactFieldsArtifactsNestedP
 	return v.Artifacts
 }
 
-// M5 — the rendered configuration Infrahub holds for a device. The fragment names
-// Infrahub's own target interface, never a concrete kind (Constitution III), and it is
-// named rather than inline so genqlient derives a Go interface from it: a device node
-// carries artifacts through this fragment's type, so nothing in Fylgja has to assert on
-// a concrete device kind to read them.
-//
-// Spreading an interface fragment into a kind's selection is valid only where the two can
-// overlap: the library's DcimDevice inherits CoreArtifactTarget, which conformance holds
-// it to (its artifacts relationship, mapping.md §3) before the query runs.
-type ArtifactFieldsNetworkDevice struct {
-	Artifacts ArtifactFieldsArtifactsNestedPaginatedCoreArtifact `json:"artifacts"`
-}
-
-// GetArtifacts returns ArtifactFieldsNetworkDevice.Artifacts, and is useful for accessing the field via an interface.
-func (v *ArtifactFieldsNetworkDevice) GetArtifacts() ArtifactFieldsArtifactsNestedPaginatedCoreArtifact {
-	return v.Artifacts
-}
-
 // 014, 017 — when each part of a scope's intent, and each artifact's checksum, was last
 // written: the head's `at` (one microsecond after the later of the latest stamp and the
 // branch's latest intent event, D-048) and the staleness rule's two sides, per device (D-046;
@@ -320,15 +289,13 @@ func (v *ArtifactFieldsNetworkDevice) GetArtifacts() ArtifactFieldsArtifactsNest
 //
 // ArtifactStamps is implemented by the following types:
 // ArtifactStampsDcimDevice
-// ArtifactStampsNetworkDevice
 type ArtifactStamps interface {
 	implementsGraphQLInterfaceArtifactStamps()
 	// GetArtifacts returns the interface-field "artifacts" from its implementation.
 	GetArtifacts() ArtifactStampsArtifactsNestedPaginatedCoreArtifact
 }
 
-func (v *ArtifactStampsDcimDevice) implementsGraphQLInterfaceArtifactStamps()    {}
-func (v *ArtifactStampsNetworkDevice) implementsGraphQLInterfaceArtifactStamps() {}
+func (v *ArtifactStampsDcimDevice) implementsGraphQLInterfaceArtifactStamps() {}
 
 func __unmarshalArtifactStamps(b []byte, v *ArtifactStamps) error {
 	if string(b) == "null" {
@@ -346,9 +313,6 @@ func __unmarshalArtifactStamps(b []byte, v *ArtifactStamps) error {
 	switch tn.TypeName {
 	case "DcimDevice":
 		*v = new(ArtifactStampsDcimDevice)
-		return json.Unmarshal(b, *v)
-	case "NetworkDevice":
-		*v = new(ArtifactStampsNetworkDevice)
 		return json.Unmarshal(b, *v)
 	case "":
 		return fmt.Errorf(
@@ -369,14 +333,6 @@ func __marshalArtifactStamps(v *ArtifactStamps) ([]byte, error) {
 		result := struct {
 			TypeName string `json:"__typename"`
 			*ArtifactStampsDcimDevice
-		}{typename, v}
-		return json.Marshal(result)
-	case *ArtifactStampsNetworkDevice:
-		typename = "NetworkDevice"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*ArtifactStampsNetworkDevice
 		}{typename, v}
 		return json.Marshal(result)
 	case nil:
@@ -486,28 +442,6 @@ type ArtifactStampsDcimDevice struct {
 
 // GetArtifacts returns ArtifactStampsDcimDevice.Artifacts, and is useful for accessing the field via an interface.
 func (v *ArtifactStampsDcimDevice) GetArtifacts() ArtifactStampsArtifactsNestedPaginatedCoreArtifact {
-	return v.Artifacts
-}
-
-// 014, 017 — when each part of a scope's intent, and each artifact's checksum, was last
-// written: the head's `at` (one microsecond after the later of the latest stamp and the
-// branch's latest intent event, D-048) and the staleness rule's two sides, per device (D-046;
-// 017 research R-10). Shaped like the read (Devices, Ports): the devices carrying the
-// scope's tag, then the physical ports of those devices by their ids. Stamps only, never a
-// value of intent but the names that key them: the platform's and its manufacturer's names,
-// which pick the device's package (Constitution II), and the ids of the device, its
-// interfaces, its platform, its manufacturer and its cables, by which an intent event names
-// the device (D-048). Each stamp is an edge wrapper's node_metadata.updated_at, the latest
-// write among the node's current attributes and relationship edges (017 research §1.7):
-// one field per node covers every field its kind has, an operator's own included. A null
-// stamp is skipped. The artifacts are spread on CoreArtifactTarget, as the read's are.
-// Named IntentStamps, not Stamps, because intent.Stamps is the aggregate's type.
-type ArtifactStampsNetworkDevice struct {
-	Artifacts ArtifactStampsArtifactsNestedPaginatedCoreArtifact `json:"artifacts"`
-}
-
-// GetArtifacts returns ArtifactStampsNetworkDevice.Artifacts, and is useful for accessing the field via an interface.
-func (v *ArtifactStampsNetworkDevice) GetArtifacts() ArtifactStampsArtifactsNestedPaginatedCoreArtifact {
 	return v.Artifacts
 }
 

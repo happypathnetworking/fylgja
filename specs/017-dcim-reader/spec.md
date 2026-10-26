@@ -339,7 +339,11 @@ in `description`.
   before any read, naming the setting (FR-018); a check run against such a server
   concludes failure with that finding.
 - **A pinned `at` before the library was loaded on the branch**: the branch's schema at
-  that time lacks the kinds; the read is refused with the conformance findings.
+  that time lacks the kinds. Conformance reads the branch's schema as it is now, since
+  Infrahub's schema endpoint has no time axis, so a branch that conforms now passes it.
+  The pinned read selects no device, and the read is refused with the
+  scope-selects-nothing finding, naming the scope, the branch and the `at` (research
+  §5.16).
 - **The fixture branch made before the migration**: it carries the old schema and is
   never rebased; the migration deletes and re-seeds it.
 - **A CTM file of the previous shape given to `twin compile`**: refused, naming CTM

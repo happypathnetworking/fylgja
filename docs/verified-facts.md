@@ -128,6 +128,15 @@ development host up again there, or on a fresh 26.04 VM before it.
 - **A pinned read filters by the tag as it stood at `at`**: a device tagged after `at` is
   absent from a read pinned at `at` and present in the unpinned one. *(10-26;
   `specs/017-dcim-reader/research.md` §5.7, §5.11, §5.14)*
+- **A read pinned before a kind's load answers as if the kind had no node then.** A query
+  pinned at an `at` is checked against the branch's current GraphQL schema.
+  - On `main`, pinned at `2026-10-26T12:00:00Z`, before the schema library's load at
+    12:29:43Z: `DcimDevice(tags__name__value: "fylgja") { count }` answers `count 0`,
+    HTTP 200, no error.
+  - That took about 10 s, against 0.1 s pinned after the load.
+  - So Fylgja's read of `main` pinned then passes conformance, which reads the schema
+    unpinned, and is refused `scope.empty`, naming the `at`.
+  *(10-26; `specs/017-dcim-reader/research.md` §5.16)*
 - `BuiltinTag` is branch-aware: tags made on a branch read there and not on `main`, before
   and after the branch's deletion. *(10-25; `specs/017-dcim-reader/research.md` §1.5)*
 

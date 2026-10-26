@@ -2150,3 +2150,59 @@ minutes" become about 29.5 and 19.
 - `fylgja` is the only registration, at `c006bf9`, with its two checks.
   `fylgja-fixture`'s three artifacts are `Ready`.
 - 11.8 GiB is available.
+
+<a id="5-16"></a>
+### 5.16 A read of `main` pinned before the library's load (T079; 2026-10-26, 19:33Z–19:36Z)
+
+Run 25 of the converge loop, at `fa338d0`: convergence pass 1's T079, answered by the
+operator before pass 2. It was read-only, and no token was printed.
+
+**What was read.** The spec's edge case says a read pinned before the library's load is
+refused with the conformance findings. Conformance reads `GET /api/schema?branch=` unpinned,
+since the schema endpoint has no time axis, so the pinned `Devices` query decides.
+
+**The server.** A throwaway `fylgja serve --listen 127.0.0.1:0` from this tree's `make
+build` (`0.1.0-dev`), stopped by SIGTERM afterwards.
+
+- It ran with a token made for it, a state root under the session's scratch directory,
+  `FYLGJA_DEFAULT_SCOPE=tag:fylgja` and Infrahub's two variables.
+- The operator's server on the bridge and the worker read `(deleted)`, on Run 24's build,
+  and were left alone.
+
+**The reads.** Each `fylgja intent read --branch main --scope tag:fylgja --out
+local/t079-main-before-library.json`, at the `at` below:
+
+| `--at` | Answer | Exit | Server's time |
+|---|---|---|---|
+| `2026-10-26T12:00:00Z` | `rejection scope.empty tag:fylgja: scope tag:fylgja selects no device on branch main at 2026-10-26T12:00:00Z` | 1 | 16.4 s, and 10.6 s with `--json` |
+| `2026-10-20T00:00:00Z` | the same finding, naming that `at` | 1 | 11.3 s |
+| none | `scope tag:fylgja selects no device on branch main` | 1 | 0.55 s |
+
+- The first instant is before the migration's first document (12:26Z) and before
+  `-prepare-main` loaded the library (12:29:43Z, §5.10). `main` then held the generics and
+  no `Dcim*` kind.
+- The second instant is during 015, under the generics and the stage kind.
+- No file was written. `--json`'s document read `status: rejected`, the subject `{branch:
+  main, at: 2026-10-26T12:00:00Z, out: …, scope: tag:fylgja}`, and one finding: `scope.empty`
+  on `tag:fylgja`.
+- No `schema.*` finding came back. Conformance read the migrated `main`'s schema as it is
+  now, and that schema conforms (§5.10).
+
+**Infrahub's own answer.** `POST /graphql/main?at=<at>` with `query { DcimDevice(tags__name__value: "fylgja") { count } }`:
+
+| `at` | Answer | Time |
+|---|---|---|
+| `2026-10-26T12:00:00Z` | HTTP 200, `{"data":{"DcimDevice":{"count":0}}}`, no error | 10.3 s, then 10.9 s |
+| `2026-10-26T19:00:00Z`, after the load | the same | 0.11 s |
+| none | the same | 0.05 s |
+
+- A pinned query is checked against the branch's current GraphQL schema. A kind loaded
+  after `at` answers as one that had no node then.
+- Infrahub took about 10 s to answer a query pinned before the kind's load, against 0.1 s
+  pinned after it. The cause was not looked for.
+
+**The edge case.** The answer is a refusal, `scope.empty`, not the conformance findings,
+so T079's route (a) amends the spec's edge case to it. No code changes.
+
+**Afterwards.** The throwaway server had exited, the operator's two processes were
+unchanged, and nothing had been written to Infrahub.

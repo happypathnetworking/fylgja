@@ -1102,7 +1102,9 @@ both, and `twin create` prints the same line for the twin it made; `twin step` r
 judges and reads its target under the record's scope, and a following twin's checks read
 under it too. A record of `7` or earlier reads with no scope and no mapping: `twin show`
 shows its scope unknown, `twin step` refuses it `step.twin.unsteppable`, `twin destroy`
-clears it, and `twin rehearse` reclaims it when its own dead run left it. A following twin
+clears it, and `twin rehearse` reclaims it when its own dead run left it. An `8` whose scope
+is not `tag:<name>`, which no build writes, is read alike for `twin show` and `twin step`,
+naming the value. A following twin
 created before 017 keeps a Schedule whose input names no scope: each of its checks' reads is
 refused before any connection, `operation.failed` naming `fylgja twin destroy`, since the
 read holds every scope to `tag:<name>`.

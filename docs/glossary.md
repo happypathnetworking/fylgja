@@ -296,7 +296,8 @@ envelope carries the branch, the `at`, `observed_at`, the schema hash, the *scop
 package's id), its ports (each with its name, `mgmt_only`, `enabled` and link) and its
 *artifact*; no role, site, interface type, parent or address. `twin compile` refuses a CTM
 of another version, or declaring none, naming both (`ctm.version.unsupported`), and nothing
-converts a `1`
+converts a `1`; a file leaving out its fidelity list, its links or a device's interfaces is
+refused naming the field, never read as `[]`
 ([§4.2](architecture.md#42-canonical-topology-model-ctm), [D-010](decisions.md#d-010)).
 
 **Cut** — M14's first half: this repository's first commit, of cleaned code and documents
@@ -1170,7 +1171,8 @@ step's `wait`, `null` until `VerifyTwin` writes it), or `null`; and on each node
 the bundle whose content it runs. A step rewrites it whole, on every path after its stage.
 Older versions are read where a twin may still carry one: a `7` or earlier names no scope,
 so `twin show` says `scope unknown (record 7)` and `twin step` refuses it
-(`step.twin.unsteppable`), though `twin destroy` clears it, and a rehearsal reclaims it when it names a dead one; a
+(`step.twin.unsteppable`), though `twin destroy` clears it, and a rehearsal reclaims it when it names a dead one, and an
+`8` whose scope is not `tag:<name>`, which no build writes, is shown and refused alike; a
 `6` names no rehearsal; and a record of `5` or earlier names M10's *waypoint*, which reads
 as no stage, so its twin shows as pinned and cannot step.
 

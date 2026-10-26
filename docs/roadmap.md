@@ -148,7 +148,7 @@ spec, with one contract boundary and one new kind of infrastructure. [F-012](#f-
 
 | # | Feature | What it bundles | Needs | Hours | Why here |
 |---|---|---|---|---|---|
-| F-010 | *Generic transform*, folded into [F-011](#f-011) | the shipped template queried `FylgjaDevice`, so a DCIM device rendered through it; what was left, the template documented as a reference transform, is a paragraph in [F-011](#f-011)'s README | — | — | Overtaken: Infrahub renders from the generics already. |
+| F-010 | *Generic transform*, folded into [F-011](#f-011) | the shipped template queried `FylgjaDevice`, so a DCIM device rendered through it; what was left, the template documented as a reference transform, is a paragraph in [F-011](#f-011)'s README | — | — | Overtaken: Infrahub rendered from the generics already, and renders from the library's kinds since [F-011](#f-011). |
 | F-011 | **The Infrahub reader reads the schema library's DCIM** | the generics retired and the CTM the contract; the library vendored at a pinned commit and loaded on `main`; the reader's mapping documented and its approximations in the manifest; packages matching platforms by name; the fixtures re-seeded in the library's kinds | nothing new | 6–10 | The strongest OpsMill signal, and the first reader written as an adapter. Probed live on 2026-10-16; its [brief](../specs/017-dcim-reader/brief.md) written 2026-10-25. Opens 0.3. Built as `017-dcim-reader` on 2026-10-26. |
 | F-024 | **Snapshots** | the CTM, each node's configuration and the probe declarations as one content-addressed document; the core's one input; `twin create` from one | [F-011](#f-011) | 3–5 | The core and orchestrator seam, proved before anything is split. |
 | F-022 | *`infrahub-sync` into the DCIM*, superseded by [F-025](#f-025) | a sync mapping from NetBox onto [F-011](#f-011)'s schema | — | — | The operator wants NetBox read directly, not synced into Infrahub. |
@@ -176,13 +176,14 @@ spec, with one contract boundary and one new kind of infrastructure. [F-012](#f-
 <a id="f-010"></a>
 **F-010. The generic transform, folded into [F-011](#f-011).** It was to be a transform
 written against the generics rather than the reference schema's kinds, so that any
-implementing schema renders a baseline artifact. The shipped query `device_config` already
-names `FylgjaDevice`, never a reference kind, so a DCIM-modelled device renders through
-the shipped template today, and a baseline for a platform the template has no branch for
-would serve nobody, since Fylgja refuses a platform without a support package before any
-artifact is read. What was left, the template documented as a reference transform that a
-DCIM user replaces with one reading the library's own fields, is a paragraph in feature
-11's README. [D-009](decisions.md#d-009) holds: Infrahub renders.
+implementing schema renders a baseline artifact. When it was folded, the shipped query
+`device_config` already named `FylgjaDevice`, never a reference kind, so a DCIM-modelled
+device rendered through the shipped template, and a baseline for a platform the template
+has no branch for would serve nobody, since Fylgja refuses a platform without a support
+package before any artifact is read. What was left, the template documented as a reference
+transform that a DCIM user replaces with one reading the library's own fields, is a
+paragraph in feature 11's README; 017 rewrote the query and the template over the
+library's kinds. [D-009](decisions.md#d-009) holds: Infrahub renders.
 
 <a id="f-011"></a>
 **F-011. The Infrahub reader reads the schema library's DCIM; the CTM is the contract.**

@@ -1,8 +1,8 @@
 ---
 # yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
 #
-# Fylgja stage kind (014, D-045): a moment of a proposed change. Beside the generics
-# contract, not in it (the contract stays 0.2); loaded on the default branch (D-028), where
+# Fylgja stage kind (014, D-045): a moment of a proposed change. Beside the schema
+# library's DCIM, not part of it (D-057); loaded on the default branch (D-028), where
 # Fylgja reads it; needed only by --stage, stage list and stage plan.
 #
 #   - A stage belongs to a proposed change and has no branch of its own: its branch is the

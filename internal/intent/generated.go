@@ -281,11 +281,15 @@ func (v *ArtifactFieldsDcimDevice) GetArtifacts() ArtifactFieldsArtifactsNestedP
 // value of intent but the names that key them: the platform's and its manufacturer's names,
 // which pick the device's package (Constitution II), and the ids of the device, its
 // interfaces, its platform, its manufacturer and its cables, by which an intent event names
-// the device (D-048). Each stamp is an edge wrapper's node_metadata.updated_at, the latest
-// write among the node's current attributes and relationship edges (017 research §1.7):
-// one field per node covers every field its kind has, an operator's own included. A null
-// stamp is skipped. The artifacts are spread on CoreArtifactTarget, as the read's are.
-// Named IntentStamps, not Stamps, because intent.Stamps is the aggregate's type.
+// the device (D-048). Each stamp is an edge wrapper's node_metadata, the latest write among
+// the node's current attributes and relationship edges (017 research §1.7): one field per
+// node covers every field its kind has, an operator's own included. Beside its updated_at,
+// the account that wrote it and the node's created_at, which the node contributes instead
+// when that account is Infrahub's own (D-058), bound as intent.stampMeta. A null stamp is
+// skipped. The artifacts are spread on CoreArtifactTarget, as the read's are, each with the
+// id of the query its definition renders through, whose internal groups name Infrahub's own
+// account (D-060; QueryGroups). Named IntentStamps, not Stamps, because intent.Stamps is the
+// aggregate's type.
 //
 // ArtifactStamps is implemented by the following types:
 // ArtifactStampsDcimDevice
@@ -377,7 +381,8 @@ type ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtif
 	// None (required)
 	Name ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactNameTextAttribute `json:"name"`
 	// Hash checksum of the artifact content for integrity verification
-	Checksum ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactChecksumTextAttribute `json:"checksum"`
+	Checksum   ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactChecksumTextAttribute                       `json:"checksum"`
+	Definition ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinition `json:"definition"`
 }
 
 // GetName returns ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifact.Name, and is useful for accessing the field via an interface.
@@ -388,6 +393,11 @@ func (v *ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreA
 // GetChecksum returns ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifact.Checksum, and is useful for accessing the field via an interface.
 func (v *ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifact) GetChecksum() ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactChecksumTextAttribute {
 	return v.Checksum
+}
+
+// GetDefinition returns ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifact.Definition, and is useful for accessing the field via an interface.
+func (v *ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifact) GetDefinition() ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinition {
+	return v.Definition
 }
 
 // ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactChecksumTextAttribute includes the requested fields of the GraphQL type TextAttribute.
@@ -408,6 +418,45 @@ func (v *ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreA
 // GetUpdated_at returns ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactChecksumTextAttribute.Updated_at, and is useful for accessing the field via an interface.
 func (v *ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactChecksumTextAttribute) GetUpdated_at() string {
 	return v.Updated_at
+}
+
+// ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinition includes the requested fields of the GraphQL type NestedEdgedCoreArtifactDefinition.
+// The GraphQL type's documentation follows.
+//
+// Defines how artifacts are generated from a transformation for a group of targets
+type ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinition struct {
+	Node ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinitionNodeCoreArtifactDefinition `json:"node"`
+}
+
+// GetNode returns ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinition.Node, and is useful for accessing the field via an interface.
+func (v *ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinition) GetNode() ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinitionNodeCoreArtifactDefinition {
+	return v.Node
+}
+
+// ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinitionNodeCoreArtifactDefinition includes the requested fields of the GraphQL type CoreArtifactDefinition.
+// The GraphQL type's documentation follows.
+//
+// Defines how artifacts are generated from a transformation for a group of targets
+type ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinitionNodeCoreArtifactDefinition struct {
+	Transformation ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinitionNodeCoreArtifactDefinitionTransformationNestedEdgedCoreTransformation `json:"transformation"`
+}
+
+// GetTransformation returns ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinitionNodeCoreArtifactDefinition.Transformation, and is useful for accessing the field via an interface.
+func (v *ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinitionNodeCoreArtifactDefinition) GetTransformation() ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinitionNodeCoreArtifactDefinitionTransformationNestedEdgedCoreTransformation {
+	return v.Transformation
+}
+
+// ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinitionNodeCoreArtifactDefinitionTransformationNestedEdgedCoreTransformation includes the requested fields of the GraphQL type NestedEdgedCoreTransformation.
+// The GraphQL type's documentation follows.
+//
+// Generic Transformation Object.
+type ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinitionNodeCoreArtifactDefinitionTransformationNestedEdgedCoreTransformation struct {
+	Node stampTransformation `json:"node"`
+}
+
+// GetNode returns ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinitionNodeCoreArtifactDefinitionTransformationNestedEdgedCoreTransformation.Node, and is useful for accessing the field via an interface.
+func (v *ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactDefinitionNestedEdgedCoreArtifactDefinitionNodeCoreArtifactDefinitionTransformationNestedEdgedCoreTransformation) GetNode() stampTransformation {
+	return v.Node
 }
 
 // ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreArtifactNodeCoreArtifactNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
@@ -431,11 +480,15 @@ func (v *ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreA
 // value of intent but the names that key them: the platform's and its manufacturer's names,
 // which pick the device's package (Constitution II), and the ids of the device, its
 // interfaces, its platform, its manufacturer and its cables, by which an intent event names
-// the device (D-048). Each stamp is an edge wrapper's node_metadata.updated_at, the latest
-// write among the node's current attributes and relationship edges (017 research §1.7):
-// one field per node covers every field its kind has, an operator's own included. A null
-// stamp is skipped. The artifacts are spread on CoreArtifactTarget, as the read's are.
-// Named IntentStamps, not Stamps, because intent.Stamps is the aggregate's type.
+// the device (D-048). Each stamp is an edge wrapper's node_metadata, the latest write among
+// the node's current attributes and relationship edges (017 research §1.7): one field per
+// node covers every field its kind has, an operator's own included. Beside its updated_at,
+// the account that wrote it and the node's created_at, which the node contributes instead
+// when that account is Infrahub's own (D-058), bound as intent.stampMeta. A null stamp is
+// skipped. The artifacts are spread on CoreArtifactTarget, as the read's are, each with the
+// id of the query its definition renders through, whose internal groups name Infrahub's own
+// account (D-060; QueryGroups). Named IntentStamps, not Stamps, because intent.Stamps is the
+// aggregate's type.
 type ArtifactStampsDcimDevice struct {
 	Artifacts ArtifactStampsArtifactsNestedPaginatedCoreArtifact `json:"artifacts"`
 }
@@ -1904,12 +1957,12 @@ func (v *IntentStampsDcimDevicePaginatedDcimDevice) GetEdges() []IntentStampsDci
 //
 // A configurable network device including routers, switches...
 type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice struct {
-	Node_metadata IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNode_metadataInfrahubNodeMetadata `json:"node_metadata"`
-	Node          IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice                    `json:"node"`
+	Node_metadata stampMeta                                                                   `json:"node_metadata"`
+	Node          IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice `json:"node"`
 }
 
 // GetNode_metadata returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice.Node_metadata, and is useful for accessing the field via an interface.
-func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice) GetNode_metadata() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNode_metadataInfrahubNodeMetadata {
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice) GetNode_metadata() stampMeta {
 	return v.Node_metadata
 }
 
@@ -2030,31 +2083,18 @@ func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDe
 //
 // Generic Network Interface
 type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface struct {
-	Node_metadata IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterfaceNode_metadataInfrahubNodeMetadata `json:"node_metadata"`
-	Node          stampNode                                                                                                                                                                       `json:"node"`
+	Node_metadata stampMeta `json:"node_metadata"`
+	Node          stampNode `json:"node"`
 }
 
 // GetNode_metadata returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface.Node_metadata, and is useful for accessing the field via an interface.
-func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface) GetNode_metadata() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterfaceNode_metadataInfrahubNodeMetadata {
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface) GetNode_metadata() stampMeta {
 	return v.Node_metadata
 }
 
 // GetNode returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface.Node, and is useful for accessing the field via an interface.
 func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface) GetNode() stampNode {
 	return v.Node
-}
-
-// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterfaceNode_metadataInfrahubNodeMetadata includes the requested fields of the GraphQL type InfrahubNodeMetadata.
-// The GraphQL type's documentation follows.
-//
-// Defines node metadata information
-type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterfaceNode_metadataInfrahubNodeMetadata struct {
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterfaceNode_metadataInfrahubNodeMetadata.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterfaceNode_metadataInfrahubNodeMetadata) GetUpdated_at() string {
-	return v.Updated_at
 }
 
 // IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
@@ -2075,12 +2115,12 @@ func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDe
 //
 // A Platform represent the type of software running on a device.
 type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform struct {
-	Node_metadata IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNode_metadataInfrahubNodeMetadata `json:"node_metadata"`
-	Node          *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform                 `json:"node"`
+	Node_metadata stampMeta                                                                                                                   `json:"node_metadata"`
+	Node          *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform `json:"node"`
 }
 
 // GetNode_metadata returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform.Node_metadata, and is useful for accessing the field via an interface.
-func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform) GetNode_metadata() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNode_metadataInfrahubNodeMetadata {
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform) GetNode_metadata() stampMeta {
 	return v.Node_metadata
 }
 
@@ -2121,12 +2161,12 @@ func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDe
 //
 // Device Manufacturer
 type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer struct {
-	Node_metadata IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNode_metadataInfrahubNodeMetadata `json:"node_metadata"`
-	Node          *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer     `json:"node"`
+	Node_metadata stampMeta                                                                                                                                                                                              `json:"node_metadata"`
+	Node          *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer `json:"node"`
 }
 
 // GetNode_metadata returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer.Node_metadata, and is useful for accessing the field via an interface.
-func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer) GetNode_metadata() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNode_metadataInfrahubNodeMetadata {
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer) GetNode_metadata() stampMeta {
 	return v.Node_metadata
 }
 
@@ -2168,19 +2208,6 @@ func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDe
 	return v.Value
 }
 
-// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNode_metadataInfrahubNodeMetadata includes the requested fields of the GraphQL type InfrahubNodeMetadata.
-// The GraphQL type's documentation follows.
-//
-// Defines node metadata information
-type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNode_metadataInfrahubNodeMetadata struct {
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNode_metadataInfrahubNodeMetadata.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNode_metadataInfrahubNodeMetadata) GetUpdated_at() string {
-	return v.Updated_at
-}
-
 // IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
 // The GraphQL type's documentation follows.
 //
@@ -2192,32 +2219,6 @@ type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice
 // GetValue returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute.Value, and is useful for accessing the field via an interface.
 func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute) GetValue() string {
 	return v.Value
-}
-
-// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNode_metadataInfrahubNodeMetadata includes the requested fields of the GraphQL type InfrahubNodeMetadata.
-// The GraphQL type's documentation follows.
-//
-// Defines node metadata information
-type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNode_metadataInfrahubNodeMetadata struct {
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNode_metadataInfrahubNodeMetadata.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNode_metadataInfrahubNodeMetadata) GetUpdated_at() string {
-	return v.Updated_at
-}
-
-// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNode_metadataInfrahubNodeMetadata includes the requested fields of the GraphQL type InfrahubNodeMetadata.
-// The GraphQL type's documentation follows.
-//
-// Defines node metadata information
-type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNode_metadataInfrahubNodeMetadata struct {
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNode_metadataInfrahubNodeMetadata.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNode_metadataInfrahubNodeMetadata) GetUpdated_at() string {
-	return v.Updated_at
 }
 
 // IntentStampsResponse is returned by IntentStamps on success.
@@ -2392,31 +2393,18 @@ func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfac
 //
 // Generic Connector to link two endpoints together.
 type PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector struct {
-	Node_metadata PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnectorNode_metadataInfrahubNodeMetadata `json:"node_metadata"`
-	Node          stampNode                                                                                                                                                               `json:"node"`
+	Node_metadata stampMeta `json:"node_metadata"`
+	Node          stampNode `json:"node"`
 }
 
 // GetNode_metadata returns PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector.Node_metadata, and is useful for accessing the field via an interface.
-func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector) GetNode_metadata() PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnectorNode_metadataInfrahubNodeMetadata {
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector) GetNode_metadata() stampMeta {
 	return v.Node_metadata
 }
 
 // GetNode returns PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector.Node, and is useful for accessing the field via an interface.
 func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector) GetNode() stampNode {
 	return v.Node
-}
-
-// PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnectorNode_metadataInfrahubNodeMetadata includes the requested fields of the GraphQL type InfrahubNodeMetadata.
-// The GraphQL type's documentation follows.
-//
-// Defines node metadata information
-type PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnectorNode_metadataInfrahubNodeMetadata struct {
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnectorNode_metadataInfrahubNodeMetadata.Updated_at, and is useful for accessing the field via an interface.
-func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnectorNode_metadataInfrahubNodeMetadata) GetUpdated_at() string {
-	return v.Updated_at
 }
 
 // PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice includes the requested fields of the GraphQL type NestedEdgedDcimGenericDevice.
@@ -3168,6 +3156,61 @@ func (v *ProposedChangesResponse) GetCoreProposedChange() ProposedChangesCorePro
 	return v.CoreProposedChange
 }
 
+// QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroup includes the requested fields of the GraphQL type PaginatedCoreGraphQLQueryGroup.
+// The GraphQL type's documentation follows.
+//
+// Group of nodes associated with a given GraphQLQuery.
+type QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroup struct {
+	Count int                                                                                             `json:"count"`
+	Edges []QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroupEdgesEdgedCoreGraphQLQueryGroup `json:"edges"`
+}
+
+// GetCount returns QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroup.Count, and is useful for accessing the field via an interface.
+func (v *QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroup) GetCount() int {
+	return v.Count
+}
+
+// GetEdges returns QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroup.Edges, and is useful for accessing the field via an interface.
+func (v *QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroup) GetEdges() []QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroupEdgesEdgedCoreGraphQLQueryGroup {
+	return v.Edges
+}
+
+// QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroupEdgesEdgedCoreGraphQLQueryGroup includes the requested fields of the GraphQL type EdgedCoreGraphQLQueryGroup.
+// The GraphQL type's documentation follows.
+//
+// Group of nodes associated with a given GraphQLQuery.
+type QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroupEdgesEdgedCoreGraphQLQueryGroup struct {
+	Node_metadata QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroupEdgesEdgedCoreGraphQLQueryGroupNode_metadataInfrahubNodeMetadata `json:"node_metadata"`
+}
+
+// GetNode_metadata returns QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroupEdgesEdgedCoreGraphQLQueryGroup.Node_metadata, and is useful for accessing the field via an interface.
+func (v *QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroupEdgesEdgedCoreGraphQLQueryGroup) GetNode_metadata() QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroupEdgesEdgedCoreGraphQLQueryGroupNode_metadataInfrahubNodeMetadata {
+	return v.Node_metadata
+}
+
+// QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroupEdgesEdgedCoreGraphQLQueryGroupNode_metadataInfrahubNodeMetadata includes the requested fields of the GraphQL type InfrahubNodeMetadata.
+// The GraphQL type's documentation follows.
+//
+// Defines node metadata information
+type QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroupEdgesEdgedCoreGraphQLQueryGroupNode_metadataInfrahubNodeMetadata struct {
+	Created_by stampNode `json:"created_by"`
+}
+
+// GetCreated_by returns QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroupEdgesEdgedCoreGraphQLQueryGroupNode_metadataInfrahubNodeMetadata.Created_by, and is useful for accessing the field via an interface.
+func (v *QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroupEdgesEdgedCoreGraphQLQueryGroupNode_metadataInfrahubNodeMetadata) GetCreated_by() stampNode {
+	return v.Created_by
+}
+
+// QueryGroupsResponse is returned by QueryGroups on success.
+type QueryGroupsResponse struct {
+	CoreGraphQLQueryGroup QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroup `json:"CoreGraphQLQueryGroup"`
+}
+
+// GetCoreGraphQLQueryGroup returns QueryGroupsResponse.CoreGraphQLQueryGroup, and is useful for accessing the field via an interface.
+func (v *QueryGroupsResponse) GetCoreGraphQLQueryGroup() QueryGroupsCoreGraphQLQueryGroupPaginatedCoreGraphQLQueryGroup {
+	return v.CoreGraphQLQueryGroup
+}
+
 // __ArtifactValidationsInput is used internally by genqlient
 type __ArtifactValidationsInput struct {
 	Id string `json:"id"`
@@ -3295,6 +3338,22 @@ func (v *__ProposedChangesInput) GetLimit() int { return v.Limit }
 
 // GetOffset returns __ProposedChangesInput.Offset, and is useful for accessing the field via an interface.
 func (v *__ProposedChangesInput) GetOffset() int { return v.Offset }
+
+// __QueryGroupsInput is used internally by genqlient
+type __QueryGroupsInput struct {
+	Queries []string `json:"queries"`
+	Limit   int      `json:"limit"`
+	Offset  int      `json:"offset"`
+}
+
+// GetQueries returns __QueryGroupsInput.Queries, and is useful for accessing the field via an interface.
+func (v *__QueryGroupsInput) GetQueries() []string { return v.Queries }
+
+// GetLimit returns __QueryGroupsInput.Limit, and is useful for accessing the field via an interface.
+func (v *__QueryGroupsInput) GetLimit() int { return v.Limit }
+
+// GetOffset returns __QueryGroupsInput.Offset, and is useful for accessing the field via an interface.
+func (v *__QueryGroupsInput) GetOffset() int { return v.Offset }
 
 // The query executed by ArtifactValidations.
 const ArtifactValidations_Operation = `
@@ -3567,6 +3626,11 @@ query IntentStamps ($tag: String!, $limit: Int!, $offset: Int!) {
 		edges {
 			node_metadata {
 				updated_at
+				updated_by {
+					__typename
+					id
+				}
+				created_at
 			}
 			node {
 				id
@@ -3576,6 +3640,11 @@ query IntentStamps ($tag: String!, $limit: Int!, $offset: Int!) {
 				platform {
 					node_metadata {
 						updated_at
+						updated_by {
+							__typename
+							id
+						}
+						created_at
 					}
 					node {
 						id
@@ -3585,6 +3654,11 @@ query IntentStamps ($tag: String!, $limit: Int!, $offset: Int!) {
 						manufacturer {
 							node_metadata {
 								updated_at
+								updated_by {
+									__typename
+									id
+								}
+								created_at
 							}
 							node {
 								id
@@ -3599,6 +3673,11 @@ query IntentStamps ($tag: String!, $limit: Int!, $offset: Int!) {
 					edges {
 						node_metadata {
 							updated_at
+							updated_by {
+								__typename
+								id
+							}
+							created_at
 						}
 						node {
 							__typename
@@ -3621,6 +3700,20 @@ fragment ArtifactStamps on CoreArtifactTarget {
 				checksum {
 					value
 					updated_at
+				}
+				definition {
+					node {
+						transformation {
+							node {
+								__typename
+								query {
+									node {
+										id
+									}
+								}
+							}
+						}
+					}
 				}
 			}
 		}
@@ -3724,6 +3817,11 @@ query PortStamps ($devices: [ID], $limit: Int!, $offset: Int!) {
 				connector {
 					node_metadata {
 						updated_at
+						updated_by {
+							__typename
+							id
+						}
+						created_at
 					}
 					node {
 						__typename
@@ -3941,6 +4039,60 @@ func ProposedChanges(
 	}
 
 	data_ = &ProposedChangesResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The query executed by QueryGroups.
+const QueryGroups_Operation = `
+query QueryGroups ($queries: [ID], $limit: Int!, $offset: Int!) {
+	CoreGraphQLQueryGroup(group_type__value: "internal", query__ids: $queries, limit: $limit, offset: $offset) {
+		count
+		edges {
+			node_metadata {
+				created_by {
+					__typename
+					id
+				}
+			}
+		}
+	}
+}
+`
+
+// 017 — Infrahub's own account, in D-058's sense: the account that created the internal
+// query groups of the queries the scope's artifacts render through (D-059, D-060). A
+// generation adds what it reads to its query's group, as the account the task workers run
+// as, and that write moves each member's node_metadata past the generation (017 research
+// §5.11, §5.12). The group's creator, never its last writer: deleting a member restamps
+// the group as the deleting account (§5.13). Read on the stamps' branch at their `at`; no
+// group, no account, and no stamp is left out. CoreGraphQLQueryGroup is Infrahub's own, a
+// named exception, and only its creator's id is read.
+func QueryGroups(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	queries []string,
+	limit int,
+	offset int,
+) (data_ *QueryGroupsResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "QueryGroups",
+		Query:  QueryGroups_Operation,
+		Variables: &__QueryGroupsInput{
+			Queries: queries,
+			Limit:   limit,
+			Offset:  offset,
+		},
+	}
+
+	data_ = &QueryGroupsResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(

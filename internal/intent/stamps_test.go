@@ -15,20 +15,30 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
-// fakeStamps is a branch's IntentStamps and PortStamps as Infrahub's GraphQL answers
-// them, paged, and what it was asked. Each device is an edge of the device root, its
-// node_metadata beside its node, and each port a node of the physical root; the devices
-// are served to the scope's tag alone, the ports to the device ids asked for.
+// fakeStamps is a branch's IntentStamps, PortStamps and QueryGroups as Infrahub's GraphQL
+// answers them, paged, and what it was asked. Each device is an edge of the device root,
+// its node_metadata beside its node, and each port a node of the physical root; the
+// devices are served to the scope's tag alone, the ports to the device ids asked for, and
+// the internal query groups to the query ids asked for.
 type fakeStamps struct {
 	branch  string
 	tag     string
 	devices []map[string]any
 	ports   []map[string]any
+	groups  []fakeGroup
 
-	mu      sync.Mutex
-	queries []string // each request's operation and raw query string
-	offsets []int    // each IntentStamps page's offset
-	asked   [][]any  // each PortStamps request's device ids
+	mu         sync.Mutex
+	queries    []string // each request's operation and raw query string
+	offsets    []int    // each IntentStamps page's offset
+	asked      [][]any  // each PortStamps request's device ids
+	askedQuery [][]any  // each QueryGroups request's query ids
+}
+
+// fakeGroup is one of Infrahub's query groups: its query's id, its group_type, and its
+// node_metadata as Infrahub keeps it, every field of it, whichever the query selects.
+type fakeGroup struct {
+	query, groupType string
+	meta             map[string]any
 }
 
 func (f *fakeStamps) serve(w http.ResponseWriter, r *http.Request) {
@@ -42,6 +52,7 @@ func (f *fakeStamps) serve(w http.ResponseWriter, r *http.Request) {
 		Variables     struct {
 			Tag           string
 			Devices       []any
+			Queries       []any
 			Limit, Offset int
 		} `json:"variables"`
 	}
@@ -80,6 +91,19 @@ func (f *fakeStamps) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
 			"InterfacePhysical": edgePage(ports, req.Variables.Limit, req.Variables.Offset)}})
+	case "QueryGroups":
+		f.mu.Lock()
+		f.askedQuery = append(f.askedQuery, req.Variables.Queries)
+		f.mu.Unlock()
+		internal := strings.Contains(req.Query, `group_type__value: "internal"`)
+		var groups []map[string]any
+		for _, g := range f.groups {
+			if slices.Contains(req.Variables.Queries, any(g.query)) && (!internal || g.groupType == "internal") {
+				groups = append(groups, map[string]any{"node_metadata": g.meta})
+			}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+			"CoreGraphQLQueryGroup": edgePage(groups, req.Variables.Limit, req.Variables.Offset)}})
 	default:
 		http.Error(w, "unknown operation "+req.OperationName, http.StatusTeapot)
 	}
@@ -100,12 +124,41 @@ func edgePage(edges []map[string]any, limit, offset int) map[string]any {
 	return map[string]any{"count": len(edges), "edges": page}
 }
 
-// meta is an edge wrapper's node_metadata; "" is Infrahub's null.
+// meta is an edge wrapper's node_metadata, written by the operator's account; "" is
+// Infrahub's null.
 func meta(s string) map[string]any {
 	if s == "" {
 		return map[string]any{"updated_at": nil}
 	}
-	return map[string]any{"updated_at": s}
+	return metaBy(s, accountAdmin, stampPlatform)
+}
+
+// metaBy is an edge wrapper's node_metadata: its node last written at updated by the
+// account of that id, and created at created.
+func metaBy(updated, by, created string) map[string]any {
+	return map[string]any{"updated_at": updated, "created_at": created,
+		"updated_by": map[string]any{"__typename": "CoreAccount", "id": by}}
+}
+
+// The accounts' ids, as Infrahub's GraphQL answers an account: the operator's, the account
+// Infrahub's task workers run as, under its default name agent, and another an install may
+// give them, or rename agent to.
+const (
+	accountAdmin   = "18dc77a5-3850-admin"
+	accountAgent   = "18dc77a5-c3c3-agent"
+	accountWorkers = "18dc77a5-0000-renamed"
+)
+
+// The template query's id, which every artifact's definition renders through.
+const queryDeviceConfig = "18dc77c3-196f-device-config"
+
+// internalGroup is one internal group of the template query, created by the account
+// given and last updated by another.
+func internalGroup(createdBy, updatedBy string) fakeGroup {
+	account := func(id string) map[string]any { return map[string]any{"__typename": "CoreAccount", "id": id} }
+	return fakeGroup{query: queryDeviceConfig, groupType: "internal", meta: map[string]any{
+		"created_at": stampArtifacts, "created_by": account(createdBy),
+		"updated_at": stampArtifacts, "updated_by": account(updatedBy)}}
 }
 
 func valueOf(v any) map[string]any { return map[string]any{"value": v} }
@@ -166,6 +219,8 @@ func stampedArtifact(name, checksumStamp string) map[string]any {
 	return map[string]any{
 		"name":     valueOf(name),
 		"checksum": map[string]any{"value": "43e8fd0c2de5f4646f74a51d34742824", "updated_at": at},
+		"definition": map[string]any{"node": map[string]any{"transformation": map[string]any{"node": map[string]any{
+			"__typename": "CoreTransformJinja2", "query": map[string]any{"node": map[string]any{"id": queryDeviceConfig}}}}}},
 	}
 }
 
@@ -496,5 +551,143 @@ func TestStampsRefuseAStampThatIsNotATime(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "sentinel-token") {
 		t.Errorf("the credential reached the error: %v", err)
+	}
+}
+
+// D-058 and D-060: a node Infrahub's own account wrote last contributes its creation, and
+// that account is the creator of the template query's internal groups, whatever it is
+// named. After a hand generate, the task workers' account adds the new port and the new
+// cable to the query's groups, past the checksum (017 research §5.11, §5.12): neither moves
+// n1's intent, nor the branch's latest, while the operator's own writes do. An account
+// named as Infrahub names it, and one renamed or given to the workers in its place, are
+// told apart the same way: by the groups, never by a name.
+func TestStampsLeaveOutInfrahubsOwnAccount(t *testing.T) {
+	const (
+		created   = "2026-10-26T14:53:17.107000+00:00" // the operator writes the port
+		cabled    = "2026-10-26T14:53:17.716000+00:00" // and the cable, then generates
+		generated = "2026-10-26T14:53:24.591000+00:00" // n1's checksum
+		joined    = "2026-10-26T14:53:28.761000+00:00" // the workers' account adds both to the groups
+	)
+	for _, tc := range []struct{ name, workers, other string }{
+		{"the account named agent", accountAgent, accountWorkers},
+		{"a renamed account", accountWorkers, accountAgent},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			n1 := stampedDevice("n1", stampDevices, []map[string]any{
+				stampedInterface("InterfacePhysical", "if-n1-e1", stampInterfaces),
+				{"node_metadata": metaBy(joined, tc.workers, created), "node": map[string]any{"id": "if-n1-e3"}},
+			}, stampedArtifact("device-config", generated))
+			// n2's interface was last written by an account that created no group: intent.
+			n2 := stampedDevice("n2", stampDevices, []map[string]any{
+				{"node_metadata": metaBy(joined, tc.other, created), "node": map[string]any{"id": "if-n2-e1"}},
+			}, stampedArtifact("device-config", generated))
+			port := stampedPort("n1", "cable-13", "")
+			port["connector"].(map[string]any)["node_metadata"] = metaBy(joined, tc.workers, cabled)
+			f := &fakeStamps{branch: "change-1", tag: "fylgja", devices: []map[string]any{n1, n2},
+				ports:  []map[string]any{port},
+				groups: []fakeGroup{internalGroup(tc.workers, tc.workers), internalGroup(tc.workers, tc.workers)}}
+			got, err := f.read(t, "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.Devices["n1"].Intent != cabled {
+				t.Errorf("n1's intent = %q, want the cable's creation %q: the groups' join is not intent", got.Devices["n1"].Intent, cabled)
+			}
+			if got.Devices["n2"].Intent != joined {
+				t.Errorf("n2's intent = %q, want %q: an account that created no group writes intent", got.Devices["n2"].Intent, joined)
+			}
+			if got.Latest != joined {
+				t.Errorf("Latest = %q, want n2's %q", got.Latest, joined)
+			}
+			if len(f.askedQuery) != 1 || !slices.Equal(f.askedQuery[0], []any{queryDeviceConfig}) {
+				t.Errorf("groups asked for by %v, want the template query's id once, from both artifacts", f.askedQuery)
+			}
+		})
+	}
+}
+
+// D-060: a member's delete restamps its groups as the deleting account (017 research
+// §5.13), so a group's last writer may be the operator. Its creator is still the workers'
+// account, and the operator's stamps, the delete's on the cable's end ports among them,
+// stay intent; so does every stamp when the only groups are another kind's.
+func TestStampsReadTheGroupsCreator(t *testing.T) {
+	const (
+		generated = "2026-10-26T15:24:03.380000+00:00"
+		deleted   = "2026-10-26T15:24:23.227218+00:00" // the operator's cable delete stamps n1's port
+		joined    = "2026-10-26T15:24:05.100000+00:00" // the workers' account joined n2's port
+	)
+	devices := func() []map[string]any {
+		return []map[string]any{
+			stampedDevice("n1", stampDevices, []map[string]any{
+				{"node_metadata": metaBy(deleted, accountAdmin, stampInterfaces), "node": map[string]any{"id": "if-n1-e1"}},
+			}, stampedArtifact("device-config", generated)),
+			stampedDevice("n2", stampDevices, []map[string]any{
+				{"node_metadata": metaBy(joined, accountAgent, stampInterfaces), "node": map[string]any{"id": "if-n2-e1"}},
+			}, stampedArtifact("device-config", generated)),
+		}
+	}
+	t.Run("a group the operator updated", func(t *testing.T) {
+		f := &fakeStamps{branch: "change-1", tag: "fylgja", devices: devices(),
+			groups: []fakeGroup{internalGroup(accountAgent, accountAdmin), internalGroup(accountAgent, accountAgent)}}
+		got, err := f.read(t, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Devices["n1"].Intent != deleted {
+			t.Errorf("n1's intent = %q, want the operator's delete %q: a group's last writer is not Infrahub's own", got.Devices["n1"].Intent, deleted)
+		}
+		if got.Devices["n2"].Intent != stampInterfaces {
+			t.Errorf("n2's intent = %q, want its port's creation %q", got.Devices["n2"].Intent, stampInterfaces)
+		}
+	})
+	t.Run("no internal group", func(t *testing.T) {
+		standard := internalGroup(accountAgent, accountAgent)
+		standard.groupType = "default"
+		f := &fakeStamps{branch: "change-1", tag: "fylgja", devices: devices(), groups: []fakeGroup{standard}}
+		got, err := f.read(t, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got.Devices["n2"].Intent != joined {
+			t.Errorf("n2's intent = %q, want %q: with no internal group no stamp is left out", got.Devices["n2"].Intent, joined)
+		}
+	})
+}
+
+// With no artifact there is no query, so no group is asked for and nothing is left out;
+// a pinned read sends its `at` on the groups' request too, read where the stamps are.
+func TestStampsAskForGroupsWhereTheStampsAre(t *testing.T) {
+	const joined = "2026-10-26T15:24:05.100000+00:00"
+	bare := stampedDevice("n1", joined, nil)
+	bare["node_metadata"] = metaBy(joined, accountAgent, stampDevices)
+	f := &fakeStamps{branch: "change-1", tag: "fylgja", devices: []map[string]any{bare},
+		groups: []fakeGroup{internalGroup(accountAgent, accountAgent)}}
+	got, err := f.read(t, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(f.askedQuery) != 0 {
+		t.Errorf("groups asked for by %v with no artifact read", f.askedQuery)
+	}
+	if got.Devices["n1"].Intent != joined {
+		t.Errorf("n1's intent = %q, want %q", got.Devices["n1"].Intent, joined)
+	}
+
+	const at = "2026-10-26T15:30:00.000001+00:00"
+	f = &fakeStamps{branch: "change-1", tag: "fylgja",
+		devices: []map[string]any{stampedDevice("n1", stampDevices, nil, stampedArtifact("device-config", stampArtifacts))}}
+	if _, err := f.read(t, at); err != nil {
+		t.Fatal(err)
+	}
+	var ops []string
+	for _, q := range f.queries {
+		op, raw, _ := strings.Cut(q, " ")
+		ops = append(ops, op)
+		if raw != "at="+url.QueryEscape(at) {
+			t.Errorf("%s sent %q, want the stamps' at", op, raw)
+		}
+	}
+	if want := []string{"IntentStamps", "PortStamps", "QueryGroups"}; !slices.Equal(ops, want) {
+		t.Errorf("requests %v, want %v", ops, want)
 	}
 }

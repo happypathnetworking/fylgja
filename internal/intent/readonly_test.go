@@ -24,6 +24,8 @@ func operations() map[string]string {
 		"IntentEvents":        IntentEvents_Operation,
 		"IntentStamps":        IntentStamps_Operation,
 		"PortStamps":          PortStamps_Operation,
+		// 017: the stamps' account, an owned root (D-060).
+		"QueryGroups": QueryGroups_Operation,
 	}
 }
 
@@ -61,9 +63,9 @@ var mappingRoots = map[string][]string{
 // selects it, and why reading it reserves no structure of theirs.
 type ownedRoot struct{ operation, reason string }
 
-// ownedRoots are the five roots an operation may select beside the mapping's: Fylgja's own
-// stage kind, and four of Infrahub's own units, which nobody implements (Constitution III,
-// 2.0.0). Each is named; anything else is refused.
+// ownedRoots are the six roots an operation may select beside the mapping's: Fylgja's own
+// stage kind, and five of Infrahub's own units, which nobody implements (Constitution III,
+// 2.1.0). Each is named; anything else is refused.
 var ownedRoots = map[string]ownedRoot{
 	"FylgjaStage": {"OrphanStages",
 		"Fylgja's own kind, a moment of a proposed change, the one kind Fylgja loads (D-045); " +
@@ -77,10 +79,14 @@ var ownedRoots = map[string]ownedRoot{
 	"InfrahubEvent": {"IntentEvents",
 		"Infrahub's record of a write, not the operator's model: a removal moves no stamp, and its event is when " +
 			"intent last changed (D-048); an event's kind is read only to be mapped through the schema's used_by, never queried"},
+	"CoreGraphQLQueryGroup": {"QueryGroups",
+		"Infrahub's own bookkeeping of what a query read, not the operator's model: the creator of the template query's " +
+			"internal groups is the account a generation's joins are written as, whose stamps are not intent (D-058, D-060); " +
+			"only that account's id is read"},
 }
 
 // Every root an operation selects is one of the mapping's, selected by an operation that
-// reads it, or one of the five owned roots, selected by its own operation; and each of them is
+// reads it, or one of the six owned roots, selected by its own operation; and each of them is
 // selected where it is named. A kind of the operator's model beyond the mapping's, or any
 // other root, fails here (FR-001, SC-002): widening either list is a change to the mapping
 // and to Constitution III, not to this file.

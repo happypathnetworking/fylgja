@@ -49,8 +49,8 @@ Two operations, paged by 100, every page at the read's `at` when one was given:
   } } } } } }`, once per page of devices.
 
 The read-only test holds every operation's roots to `DcimDevice`, `InterfacePhysical`,
-`FylgjaStage`, `CoreProposedChange`, `CoreArtifactValidator`, `Branch` and
-`InfrahubEvent`, and every fragment target (`fragment … on`, `... on`) to `DcimDevice`,
+`FylgjaStage`, `CoreProposedChange`, `CoreArtifactValidator`, `Branch`,
+`InfrahubEvent` and `CoreGraphQLQueryGroup` (D-060), and every fragment target (`fragment … on`, `... on`) to `DcimDevice`,
 `DcimPlatform`, `InterfacePhysical`, `DcimCable`, `CoreArtifactTarget` and
 `NodeMutatedEvent`. The scope's tag, `BuiltinTag`, is read by the filter alone and is
 the Infrahub-owned read FR-001 names.
@@ -122,12 +122,18 @@ platform.version, DcimPlatform, "the library's platform carries no version"}`; t
 
 ## 6. The stamps and the events, for stages
 
-A device's intent stamp (FR-023) is the latest `node_metadata.updated_at` among the
-device, every one of its interfaces (virtual included), its platform, its platform's
-manufacturer and every cable one of its physical ports is an end of, read as the two
-queries read them with stamps and ids alone; the head's `at` is one microsecond after the
-latest of every device's and every artifact's `checksum.updated_at`, or after the latest
-intent event when later (D-045, D-048, unchanged). An intent event is one whose primary
+A device's intent stamp (FR-023) is the latest node stamp among the device, every one of
+its interfaces (virtual included), its platform, its platform's manufacturer and every
+cable one of its physical ports is an end of, read as the two queries read them with
+stamps and ids alone. A node's stamp is its `node_metadata.updated_at`, or its
+`created_at` when its `updated_by` is Infrahub's own account (D-058): the `created_by` of
+the internal `CoreGraphQLQueryGroup`s of the queries the scope's artifacts' definitions
+render through, read by a third query (`QueryGroups`) at the stamps' branch and `at`, no
+group leaving no stamp out (D-060). A generation adds what it reads for the first time to
+its query's group as that account, seconds after the checksum, and that join is never
+intent. The head's `at` is one microsecond after the latest of every device's intent stamp
+and every artifact's `checksum.updated_at`, or after the latest intent event when later
+(D-045, D-048, unchanged). An intent event is one whose primary
 node's kind is `DcimDevice`, an implementer of `DcimInterface` or of `DcimConnector` on the
 branch, `DcimPlatform` or `OrganizationManufacturer`, and that created or deleted the node
 or changed any attribute, or any relationship but `member_of_groups`,

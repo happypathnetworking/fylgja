@@ -13,13 +13,16 @@ import (
 // client's (branch, at) returned them, under the client's scope (014; D-046; 017 research
 // R-10). It reads stamps and never a value of intent but the names that key them: the
 // platform's and its manufacturer's names, which pick each device's package, and the ids an
-// intent event names a device by (D-048). Every stamp is kept as the string Infrahub
-// returned; each comparison parses it.
+// intent event names a device by (D-048). A node's stamp is its updated_at, or its
+// created_at when Infrahub's own account wrote it last (D-058): the account that created
+// the internal groups of the queries the scope's artifacts render through, read at the same
+// (branch, at) (D-060). Every stamp is kept as the string Infrahub returned; each comparison
+// parses it.
 type Stamps struct {
 	// Latest is the latest stamp the read returned: every device's, its interfaces', its
-	// platform's, its manufacturer's and its cables', and every artifact's checksum's. The
-	// head's `at` is one microsecond after the later of it and the branch's latest intent
-	// event (D-048). "" when the scope holds nothing stamped.
+	// platform's, its manufacturer's and its cables', each as D-058 counts it, and every
+	// artifact's checksum's. The head's `at` is one microsecond after the later of it and the
+	// branch's latest intent event (D-048). "" when the scope holds nothing stamped.
 	Latest string
 	// Devices holds each device's own stamps by its name.
 	Devices map[string]DeviceStamps
@@ -39,7 +42,9 @@ type DeviceStamps struct {
 	// Intent is the latest stamp of the device's own intent (FR-023): the node_metadata of
 	// the device, of its platform and its manufacturer, of each of its interfaces, of both
 	// kinds, and of each cable one of its physical ports is an end of. Each is the latest
-	// write among that node's current attributes and relationship edges (017 research §1.7).
+	// write among that node's current attributes and relationship edges (017 research §1.7),
+	// or the node's creation when that write was Infrahub's own account's (D-058): a
+	// generation's join of its query's group, which is never intent.
 	Intent string
 	// Artifacts maps each of the device's artifacts by name to its checksum.updated_at,
 	// which moves only when Infrahub stores bytes that differ; "" when Infrahub returned
@@ -56,6 +61,38 @@ type stampNode struct {
 	ID string `json:"id"`
 }
 
+// stampTransformation is an artifact definition's transformation, of whichever of
+// Infrahub's kinds, as far as the query it renders through. Bound in queries.graphql, as
+// stampNode is, so that a transformation kind the SDL does not name decodes; a null
+// decodes to the zero value, whose query's ID is empty.
+type stampTransformation struct {
+	Query struct {
+		Node stampNode `json:"node"`
+	} `json:"query"`
+}
+
+// stampMeta is a node's node_metadata as the stamps read it: when the node was last
+// written, by which account, and when it was created (D-058). It is bound in
+// queries.graphql rather than generated, one type for every node the stamps read. A null
+// decodes to the zero value, "" where Infrahub returned none.
+type stampMeta struct {
+	UpdatedAt string    `json:"updated_at"`
+	UpdatedBy stampNode `json:"updated_by"`
+	CreatedAt string    `json:"created_at"`
+}
+
+// stamp is the node's stamp as D-058 counts it: its updated_at, or its created_at when the
+// account that last wrote it is one of own, Infrahub's own (D-060). That account writes a
+// node only to add it to a query's group after a generation has read it, so the node's
+// creation is no later than that generation. An intent write by that account, a
+// generator's, is still seen by the events (D-048).
+func (m stampMeta) stamp(own map[string]bool) string {
+	if m.UpdatedBy.ID != "" && own[m.UpdatedBy.ID] {
+		return m.CreatedAt
+	}
+	return m.UpdatedAt
+}
+
 // The generated edge types, named for the walk below as project.go names the read's.
 type (
 	stampDeviceEdge = IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice
@@ -65,7 +102,9 @@ type (
 // Stamps reads the stamps of the scope's devices at the client's `at`, which is sent on
 // every page iff it is set, as the read sends it, and aggregates them per device: the
 // DcimDevices carrying the scope's tag, then their cabled physical ports by the devices'
-// ids, each with its cable, as the read reads them (R-10). Each request is paged by 100.
+// ids, each with its cable, as the read reads them (R-10), then the internal groups of the
+// queries their artifacts render through, whose creator is Infrahub's own account (D-060).
+// Only then is each stamp folded, as D-058 counts it. Each request is paged by 100.
 func (c *Client) Stamps(ctx context.Context) (Stamps, error) {
 	r := stampReader{devices: map[string]*deviceFold{}, byID: map[string]*deviceFold{}}
 	var ids []string
@@ -99,6 +138,11 @@ func (c *Client) Stamps(ctx context.Context) (Stamps, error) {
 			}
 		}
 	}
+	own, err := c.ownAccounts(ctx, r.queries)
+	if err != nil {
+		return Stamps{}, err
+	}
+	r.fold(own)
 	if r.err != nil {
 		return Stamps{}, fmt.Errorf("reading stamps %s: %w", c.cfg.describe(), r.err)
 	}
@@ -112,6 +156,35 @@ func (c *Client) Stamps(ctx context.Context) (Stamps, error) {
 		out.Devices[name] = DeviceStamps{Match: d.match, IDs: d.ids, Intent: d.intent.stamp, Artifacts: artifacts}
 	}
 	return out, nil
+}
+
+// ownAccounts is Infrahub's own account in D-058's sense, read at the client's (branch, at):
+// the creator of each internal group of the queries given, by its id (D-059, D-060). No
+// query, or no group, is no account: nothing has been generated through the query there,
+// so no stamp is a generation's. A scope's artifacts render through a query or two, so the
+// ids go in one request, paged.
+func (c *Client) ownAccounts(ctx context.Context, queries []string) (map[string]bool, error) {
+	own := map[string]bool{}
+	if len(queries) == 0 {
+		return own, nil
+	}
+	for offset := 0; ; offset += pageSize {
+		resp, err := QueryGroups(ctx, c.gql, queries, pageSize, offset)
+		if err != nil {
+			return nil, c.wrap(err, "reading stamps")
+		}
+		page := resp.GetCoreGraphQLQueryGroup()
+		for _, edge := range page.GetEdges() {
+			meta := edge.GetNode_metadata()
+			if by := meta.GetCreated_by(); by.ID != "" {
+				own[by.ID] = true
+			}
+		}
+		if offset+pageSize >= page.GetCount() {
+			break
+		}
+	}
+	return own, nil
 }
 
 // stampFold keeps the latest of the stamps it is shown, as the string Infrahub returned.
@@ -136,14 +209,39 @@ type deviceFold struct {
 }
 
 // stampReader folds one read's stamps: each into the branch's latest and into the folds
-// it belongs to. The first stamp that does not parse is kept and returned after the
-// read, so the walk below stays a walk.
+// it belongs to. The walk keeps each node's metadata with its folds, in the order read,
+// and folds them once Infrahub's own account is known (fold). The first stamp that does
+// not parse is kept and returned after the read, so the walk below stays a walk.
 type stampReader struct {
 	all     stampFold
 	devices map[string]*deviceFold
 	// byID finds a device's fold by its id, by which a port names its device.
 	byID map[string]*deviceFold
-	err  error
+	// pending is each stamp read, with the folds it belongs to, until fold.
+	pending []pendingStamp
+	// queries are the ids of the queries the artifacts' definitions render through, once
+	// each, in the order read.
+	queries []string
+	err     error
+}
+
+// pendingStamp is one node's metadata, or one checksum's stamp, and the folds it belongs to.
+type pendingStamp struct {
+	meta stampMeta
+	into []*stampFold
+}
+
+// node keeps one node's metadata for its folds.
+func (r *stampReader) node(meta stampMeta, into ...*stampFold) {
+	r.pending = append(r.pending, pendingStamp{meta: meta, into: into})
+}
+
+// fold folds every stamp kept, in the order read, each as D-058 counts it under own.
+func (r *stampReader) fold(own map[string]bool) {
+	for _, p := range r.pending {
+		r.see(p.meta.stamp(own), p.into...)
+	}
+	r.pending = nil
 }
 
 // see folds one stamp. "" is a null, a node not set, and is skipped.
@@ -179,21 +277,18 @@ func (r *stampReader) device(edge stampDeviceEdge) string {
 	id := n.GetId()
 	r.byID[id] = d
 	d.ids = append(d.ids, id)
-	meta := edge.GetNode_metadata()
-	r.see(meta.GetUpdated_at(), &d.intent)
+	r.node(edge.GetNode_metadata(), &d.intent)
 
 	// The platform and its manufacturer reach every device on them: their names pick the
 	// device's package, and the template renders them into its artifact (R-11).
 	platform := n.GetPlatform()
-	platformMeta := platform.GetNode_metadata()
-	r.see(platformMeta.GetUpdated_at(), &d.intent)
+	r.node(platform.GetNode_metadata(), &d.intent)
 	if p := platform.GetNode(); p != nil {
 		pname := p.GetName()
 		d.match.Platform = pname.GetValue()
 		d.ids = append(d.ids, p.GetId())
 		manufacturer := p.GetManufacturer()
-		manufacturerMeta := manufacturer.GetNode_metadata()
-		r.see(manufacturerMeta.GetUpdated_at(), &d.intent)
+		r.node(manufacturer.GetNode_metadata(), &d.intent)
 		if m := manufacturer.GetNode(); m != nil {
 			mname := m.GetName()
 			d.match.Manufacturer = mname.GetValue()
@@ -203,15 +298,15 @@ func (r *stampReader) device(edge stampDeviceEdge) string {
 
 	interfaces := n.GetInterfaces()
 	for _, e := range interfaces.GetEdges() {
-		ifMeta := e.GetNode_metadata()
-		r.see(ifMeta.GetUpdated_at(), &d.intent)
+		r.node(e.GetNode_metadata(), &d.intent)
 		if in := e.GetNode(); in.ID != "" {
 			d.ids = append(d.ids, in.ID)
 		}
 	}
 
 	// The artifacts come through the fragment's own interface, as the read's do. A
-	// checksum's stamp is the branch's latest and the artifact's, never the device's intent.
+	// checksum's stamp is the branch's latest and the artifact's, never the device's intent,
+	// and names no account. Its definition's query is where Infrahub's own account is read.
 	if target, ok := any(&n).(ArtifactStamps); ok {
 		artifacts := target.GetArtifacts()
 		for _, e := range artifacts.GetEdges() {
@@ -222,7 +317,13 @@ func (r *stampReader) device(edge stampDeviceEdge) string {
 				fold = &stampFold{}
 				d.artifacts[artifactName.GetValue()] = fold
 			}
-			r.see(checksum.GetUpdated_at(), fold)
+			r.node(stampMeta{UpdatedAt: checksum.GetUpdated_at()}, fold)
+			definition := a.GetDefinition()
+			def := definition.GetNode()
+			transformation := def.GetTransformation()
+			if q := transformation.GetNode().Query.Node.ID; q != "" && !slices.Contains(r.queries, q) {
+				r.queries = append(r.queries, q)
+			}
 		}
 	}
 	return id
@@ -247,8 +348,7 @@ func (r *stampReader) port(p stampPortNode) {
 	if cable.ID == "" {
 		return // uncabled: the query asks for none, and a null node is skipped anyway
 	}
-	meta := connector.GetNode_metadata()
-	r.see(meta.GetUpdated_at(), &d.intent)
+	r.node(connector.GetNode_metadata(), &d.intent)
 	if !slices.Contains(d.ids, cable.ID) {
 		d.ids = append(d.ids, cable.ID)
 	}

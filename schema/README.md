@@ -125,8 +125,8 @@ as it does when a generation adds the node to its query's group
 ([D-058](../docs/decisions.md#d-058), [D-060](../docs/decisions.md#d-060)). An intent event
 is a creation, a deletion or a change of any attribute or relationship but Infrahub's own
 (`member_of_groups`, `subscriber_of_groups`, `artifacts`, `profiles`, `object_template`)
-on a `DcimDevice`, an implementer of `DcimInterface` or `DcimConnector`, a `DcimPlatform`
-or an `OrganizationManufacturer`; it counts for a device when its node or a peer is one of
+on an implementer of `DcimGenericDevice` (on the pinned library, `DcimDevice` alone), of
+`DcimInterface` or of `DcimConnector`, a `DcimPlatform` or an `OrganizationManufacturer`; it counts for a device when its node or a peer is one of
 those the device's stamp reads.
 
 ### A match is exact

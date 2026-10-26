@@ -998,7 +998,7 @@ otherwise. `platform.unsupported` stays, for a CTM naming a package this build l
 | Format | Version | Change |
 |---|---|---|
 | the API | `1` | `scope`, an optional argument of `twin.create`, `twin.rehearse`, `intent.read`, `stage.plan` and `stage.list` ([api.md](api.md)) |
-| findings | `1` | `subject.scope`; `verified` is `{model, version, kinds: [{kind, fields}], stages}`, without `contract_version` and `generics`; `show.record` carries `scope` and `mapping` and no `contract_version`; the sixteen identifiers |
+| findings | `1` | `subject.scope`; `verified` is `{model, version, kinds: [{kind, fields}], stages}`, without `contract_version` and `generics`; `show.record` carries `scope` and `mapping` and no `contract_version`; the seventeen identifiers |
 | CTM | `2` | [ctm.schema.json](ctm.schema.json): the platform is a package, every interface a port, the envelope carries `scope`, `mapping` and `fidelity` and no `contract_version` |
 | bundle manifest | `5` | [manifest.schema.json](manifest.schema.json): `provenance` is `{branch, at?, schema_hash, scope, mapping{reader, model, version}}`; a `mapping[]` row has no `iftype`; `fidelity.read` is the CTM's fidelity list, copied |
 | `twin.json` | `8` | [twin.schema.json](twin.schema.json): `provenance` as the manifest's |

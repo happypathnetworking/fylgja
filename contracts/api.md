@@ -378,8 +378,8 @@ transport, the token, the frames, the statuses and the files are as 015 left the
 - **The documents** stay `findings_version` `1`: `subject.scope` names the scope once it is
   resolved; `schema.check`'s `verified` is `{model, version, kinds: [{kind, fields}],
   stages}`, without `contract_version` and `generics`; `twin.show`'s `show.record` carries
-  the record's `scope` and `mapping` and no `contract_version`. The sixteen identifiers are
-  [cli.md](cli.md)'s.
+  the record's `scope` and `mapping` and no `contract_version`. The seventeen identifiers
+  are [cli.md](cli.md)'s.
 - **The files**: `intent.read`'s `ctm.json` is CTM `2` ([ctm.schema.json](ctm.schema.json)),
   and `twin.compile` takes a CTM `2` alone, refusing another, or one declaring none,
   `ctm.version.unsupported`, and one leaving out `envelope.fidelity`, `links` or a

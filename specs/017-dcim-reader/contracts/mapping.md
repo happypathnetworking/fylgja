@@ -158,8 +158,9 @@ its query's group as that account, seconds after the checksum, and that join is 
 intent. The head's `at` is one microsecond after the latest of every device's intent stamp
 and every artifact's `checksum.updated_at`, or after the latest intent event when later
 (D-045, D-048, unchanged). An intent event is one whose primary
-node's kind is `DcimDevice`, an implementer of `DcimInterface` or of `DcimConnector` on the
-branch, `DcimPlatform` or `OrganizationManufacturer`, and that created or deleted the node
+node's kind is an implementer of `DcimGenericDevice`, of `DcimInterface` or of
+`DcimConnector` on the branch (on the pinned library `DcimGenericDevice`'s is `DcimDevice`
+alone), `DcimPlatform` or `OrganizationManufacturer`, and that created or deleted the node
 or changed any attribute, or any relationship but `member_of_groups`,
 `subscriber_of_groups`, `artifacts`, `profiles` and `object_template`; it counts for a
 device when its primary node or a peer is the device, one of its interfaces, its platform,

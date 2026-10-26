@@ -119,19 +119,28 @@ check and `TestShippedPackagesShareNoMatch`. `Lookup(nos)` leaves product code
 ```go
 type KindTable struct {
     Kind          string
+    Generic       bool               // a generic read through its GraphQL interface (T091)
     Attributes    []AttributeWant    // {Name, Kind, Required bool, Choices []string}
     Relationships []RelationshipWant // {Name, Peer, Kind, Cardinality, Required bool}
 }
 type UsedByWant struct{ Generic, Implementer string }
-var LibraryTables = []KindTable{...}   // the five kinds of contracts/mapping.md §3
+var LibraryTables = []KindTable{...}   // the five kinds of contracts/mapping.md §3, then the generic DcimConnector
 var LibraryUsedBy = []UsedByWant{...}  // the four implementer expectations
 const LibraryModel, LibraryVersion = "opsmill/schema-library", "26336e9"
 ```
 
-`SchemaInfo` gains the nodes' attributes and relationships as the endpoint reports them
-(`Nodes map[string]NodeSchema`, each with `Attributes map[string]AttributeSchema{Kind,
-Optional, Choices}` and `Relationships map[string]RelationshipSchema{Peer, Kind,
-Cardinality, Optional}`), and keeps `Hash` and `UsedBy`. `CheckConformance` walks the
+`LibraryTables` holds `DcimDevice`, `DcimPlatform`, `OrganizationManufacturer`,
+`InterfacePhysical` and `DcimCable`, then `DcimConnector` with `Generic` set, whose
+`connected_endpoints` the `Ports` query reads through its interface, so the field must be
+the generic's and not only an implementer's; `schema check` names them in that order. A
+generic absent is named by its `used_by` (`LibraryUsedBy`), never by its row.
+
+`SchemaInfo` gains the nodes' and the generics' attributes and relationships as the
+endpoint reports them (`Nodes map[string]NodeSchema` and `Generics map[string]NodeSchema`,
+each with `Attributes map[string]AttributeSchema{Kind, Optional, Choices}` and
+`Relationships map[string]RelationshipSchema{Peer, Kind, Cardinality, Optional}`), and
+keeps `Hash` and `UsedBy`. `conformance.go` reads a `Generic` row from `Generics` and every
+other from `Nodes`. `CheckConformance` walks the
 tables and files `schema.kind.missing`, `schema.field.missing`, `schema.field.mismatch`,
 `schema.choice.missing` and `schema.used_by.missing`, each naming the commit; `Conformance`
 becomes `{SchemaHash, Model, Version, Kinds []findings.KindFields}`; `Verified` becomes

@@ -147,7 +147,7 @@ func fakeClient(t *testing.T, f *fakeSchemaInfrahub) *Client {
 }
 
 func TestKindsHeldReadsTheBranchsSchema(t *testing.T) {
-	f := &fakeSchemaInfrahub{nodes: []string{"DcimDevice", "NetworkDevice"}, generics: []string{"DcimInterface", "CoreNode"}}
+	f := &fakeSchemaInfrahub{nodes: []string{"DcimDevice", "BuiltinTag"}, generics: []string{"DcimInterface", "CoreNode"}}
 	c := fakeClient(t, f)
 	held, err := c.KindsHeld("fylgja-test-x", []string{"DcimInterface", "DcimCable", "DcimDevice"})
 	if err != nil {

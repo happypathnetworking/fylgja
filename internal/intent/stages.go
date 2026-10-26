@@ -15,9 +15,8 @@ import (
 	"github.com/Khan/genqlient/graphql"
 )
 
-// The stage kind as this build reads it (014, D-045). A Fylgja-owned concrete kind beside
-// the contract, as FylgjaContract is: nobody implements it, and only --stage, stage list
-// and stage plan read it. A stage belongs to a proposed change, which is Infrahub's own
+// The stage kind as this build reads it (014, D-045). The one Fylgja-owned kind (D-057),
+// concrete: nobody implements it, and only --stage, stage list and stage plan read it. A stage belongs to a proposed change, which is Infrahub's own
 // kind, extended by the same file with the stages it holds.
 const (
 	// StageKind is the kind the reader checks for and lists.

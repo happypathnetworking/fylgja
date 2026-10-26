@@ -49,7 +49,7 @@ func (f *fakeStages) serve(w http.ResponseWriter, r *http.Request) {
 	switch {
 	case r.Method == http.MethodGet && r.URL.Path == "/api/schema":
 		f.record(seen)
-		nodes := []map[string]any{{"kind": "NetworkDevice", "attributes": []map[string]any{{"name": "name"}}}}
+		nodes := []map[string]any{{"kind": "DcimDevice", "attributes": []map[string]any{{"name": "name"}}}}
 		pcRels := []map[string]any{{"name": "validations", "peer": "CoreValidator"}}
 		if !f.noExtension {
 			pcRels = append(pcRels, map[string]any{"name": StageExtension, "peer": StageKind})

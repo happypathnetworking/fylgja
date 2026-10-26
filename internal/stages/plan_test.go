@@ -71,8 +71,8 @@ func (f *fakePipeline) pipeline() Pipeline {
 	}
 }
 
-// emptyMain is the development host's main: the schema and no FylgjaContract object, so
-// every branch point is refused before a device is counted (research §6.1, R-04).
+// emptyMain is the development host's main: the schema and no tagged device, so every
+// branch point's read is refused scope.empty (017 R-20).
 var emptyMain = map[string]findings.List{"main": {{Severity: findings.Rejection, Rule: findings.RuleScopeEmpty,
 	Object: "tag:fylgja", Message: "scope tag:fylgja selects no device on branch main"}}}
 

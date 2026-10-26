@@ -69,8 +69,7 @@ func listArtifacts(n deviceNode) []listedArtifact {
 			StorageID:   storage.GetValue(),
 		}
 		// CoreArtifactDefinition is a concrete node kind rather than a generic, so
-		// genqlient generates a struct here: there is no nil node to guard against, as
-		// with FylgjaContract's.
+		// genqlient generates a struct here: there is no nil node to guard against.
 		definition := node.GetDefinition()
 		d := definition.GetNode()
 		artifactName := d.GetArtifact_name()

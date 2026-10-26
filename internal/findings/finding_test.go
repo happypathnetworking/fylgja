@@ -8,6 +8,7 @@ import (
 	"go/token"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -171,11 +172,8 @@ var dataModelRules = []string{
 	"rehearsal.stage.moved",
 	"rehearsal.change.closed",
 
-	// 017's rules (research R-21). Appended; the eight the generics leave stay above until
-	// the tasks that remove their last users take them out of both lists
-	// (schema.generic.unimplemented and schema.artifact_target.missing went with the
-	// generics' conformance, at T036, and contract.version.mismatch with the CTM's
-	// contract check, at T042).
+	// 017's rules (research R-21). Appended; the eight the generics left are gone from
+	// both lists (FR-016; retiredWithTheGenerics below).
 	"scope.invalid",
 	"scope.unset",
 	"scope.empty",
@@ -235,6 +233,33 @@ func declaredRules(t *testing.T) map[string]string {
 		}
 	}
 	return out
+}
+
+// retiredWithTheGenerics are the eight identifiers that existed only for the generics
+// contract, removed with it at 017 (FR-016; research R-21).
+var retiredWithTheGenerics = []string{
+	"contract.version.mismatch",
+	"contract.node.missing",
+	"schema.generic.unimplemented",
+	"schema.artifact_target.missing",
+	"interface.iftype.unimplemented",
+	"interface.mgmt_only.iftype",
+	"interface.parent.missing",
+	"link.endpoint.iftype",
+}
+
+// None of the eight is declared or in the rule table: a reader or a test that still files
+// one cannot compile, and a document carrying one is a rule nobody makes.
+func TestTheGenericsRulesAreRetired(t *testing.T) {
+	declared := declaredRules(t)
+	for _, rule := range retiredWithTheGenerics {
+		if name, ok := declared[rule]; ok {
+			t.Errorf("%s = %q is declared; 017 retired it with the generics", name, rule)
+		}
+		if slices.Contains(dataModelRules, rule) {
+			t.Errorf("the rule table still names %q; 017 retired it with the generics", rule)
+		}
+	}
 }
 
 func TestEveryDataModelRuleHasAConstant(t *testing.T) {

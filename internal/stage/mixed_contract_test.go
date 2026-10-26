@@ -3,12 +3,16 @@
 package stage
 
 import (
+	"crypto/md5"
+	"encoding/hex"
 	"encoding/json"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/compiler"
+	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/testsupport"
 )
@@ -22,11 +26,13 @@ import (
 // claims testdata/golden/mixed asserts in tier 1, here against a real Infrahub and a real
 // rendering.
 //
-// The rendering is the operator's: Infrahub's template branches on the device's
-// platform,
-// and until that change is pushed and imported an EOS
-// device renders SR Linux text. That is not a defect in anything this test covers, so it
-// skips and names the step rather than failing.
+// The read is testdata/ctm/mixed.json below the envelope (SC-001), as T060 compared them
+// by hand: Infrahub's template writes each device's description, the branch's marker, into
+// its artifact's header, so the throwaway's marker is replaced by the fixture's in each
+// artifact and its checksum recomputed by the fixture's own rule, the MD5 of the bytes, as
+// CoreArtifact.checksum is. Of the envelope, what the read is must match too: the scope it
+// was read under, the mapping it read by and the fidelity list's three fixed rows, since
+// the mixed fixture's cables are all placed.
 func TestMixedSeedReads(t *testing.T) {
 	c, branch := throwaway(t, "mixed")
 	if err := c.LoadSchema(branch, filepath.Join("..", "..", "schema")); err != nil {
@@ -64,17 +70,10 @@ func TestMixedSeedReads(t *testing.T) {
 
 	// The template branches on the platform: an EOS device's configuration opens with
 	// `!`, since `#` is not a comment on that platform and its node refuses it.
-	e1 := snapshot.Device("e1").Artifact.Content
-	if !strings.HasPrefix(e1, "! e1:") {
-		t.Skipf("e1's artifact is not EOS text, so the artifacts repository's template change "+
-			"that renders EOS text for an eos device is not imported yet; e1 rendered:\n%s", e1)
+	if e1 := snapshot.Device("e1").Artifact.Content; !strings.HasPrefix(e1, "! e1:") {
+		t.Errorf("e1's artifact is not EOS text; e1 rendered:\n%s", e1)
 	}
-	// The rendering itself is evidence: testdata/ctm/mixed.json carries these shapes by
-	// hand, and the log below lets the two be compared.
-	for _, d := range snapshot.Devices {
-		t.Logf("%s's rendered artifact (%d bytes, checksum %s):\n%s",
-			d.Name, len(d.Artifact.Content), d.Artifact.Checksum, d.Artifact.Content)
-	}
+	mustReadAsTheMixedCTM(t, snapshot, branch)
 
 	files, id, list := Compile(snapshot, reg)
 	if list.Rejected() {
@@ -119,5 +118,62 @@ func TestSeedMixedRefusesTheFixtureBranch(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), testsupport.FixtureBranch) {
 		t.Errorf("refusal %q does not name the branch", err)
+	}
+}
+
+// mustReadAsTheMixedCTM fails unless got, read from the mixed seed on branch, is
+// testdata/ctm/mixed.json but for the envelope's when and where, with branch's marker in
+// each artifact replaced by the fixture's and each checksum recomputed from the bytes. got
+// is not changed: the caller compiles it as read.
+func mustReadAsTheMixedCTM(t *testing.T, got *ctm.CTM, branch string) {
+	t.Helper()
+	want, err := ctm.Load(filepath.Join("..", "..", "testdata", "ctm", "mixed.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	e := got.Envelope
+	if e.Scope != "tag:"+testsupport.FixtureTag || e.Scope != want.Envelope.Scope {
+		t.Errorf("scope %q, want %q", e.Scope, want.Envelope.Scope)
+	}
+	if e.Mapping != want.Envelope.Mapping {
+		t.Errorf("mapping %+v, want %+v", e.Mapping, want.Envelope.Mapping)
+	}
+	if len(e.Fidelity) != 3 || !reflect.DeepEqual(e.Fidelity, want.Envelope.Fidelity) {
+		t.Errorf("fidelity %+v, want the three fixed rows %+v", e.Fidelity, want.Envelope.Fidelity)
+	}
+
+	b, err := ctm.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var read ctm.CTM
+	if err := json.Unmarshal(b, &read); err != nil {
+		t.Fatal(err)
+	}
+	read.Envelope = want.Envelope
+	marker, fixture := testsupport.MarkerDescription(branch), testsupport.MarkerDescription(want.Envelope.Branch)
+	for i := range read.Devices {
+		a := read.Devices[i].Artifact
+		if a == nil {
+			continue
+		}
+		if !strings.Contains(a.Content, marker) {
+			t.Errorf("device %s's artifact does not carry the branch's marker %s", read.Devices[i].Name, marker)
+		}
+		a.Content = strings.ReplaceAll(a.Content, marker, fixture)
+		sum := md5.Sum([]byte(a.Content))
+		a.Checksum = hex.EncodeToString(sum[:])
+	}
+
+	gotJSON, err := ctm.Marshal(&read)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantJSON, err := ctm.Marshal(want)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(gotJSON) != string(wantJSON) {
+		t.Errorf("the read and the committed fixture disagree:\n--- read\n%s\n--- fixture\n%s", gotJSON, wantJSON)
 	}
 }

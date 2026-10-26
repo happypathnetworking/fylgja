@@ -1335,11 +1335,49 @@ in `description`.
     - 11.7 GiB of memory is available.
   - **Next**: T063, tier 3, live, on a rested host. Separately, the operator's second push for T057, once the loop has stopped.
 
-- [ ] T063 [live] [US6] Tier 3 on a quiet host (quickstart §8; SC-006), after T062 and never beside it. Read `free -m`; check both images, the worker and the server from this tree, and the checks and the template imported (T058).
+- [X] T063 [live] [US6] Tier 3 on a quiet host (quickstart §8; SC-006), after T062 and never beside it. Read `free -m`; check both images, the worker and the server from this tree, and the checks and the template imported (T058).
   - Start `make test-e2e 2>&1 | tee local/017-e2e.out` detached, with its exit status in a file, and wait in foreground calls of under ten minutes.
   - Expected: `E2E-OK`, nine cases, the marker found in no output, record, document, history or log, and case 1's `twin show` naming `scope tag:fylgja`.
   - Then `PLATFORMS=nokia_srlinux make test-e2e` once: `E2E-PARTIAL`.
   - Record both times in research §5.6, and rest the host between the runs.
+  - *2026-10-26 17:49Z, at `a0fbdba`, Run 20 of the converge loop (live):* **done.** Both runs passed. The record is research §5.15, since §5.6 holds T039–T041's read.
+    - **The precondition**, at 16:53Z:
+      - 12.1 GiB was available, at a load average of 1.5.
+      - Both images were present.
+      - The worker and the server read `(deleted)`, so they were restarted from this tree and verified.
+      - `fylgja` was the only registration, at `c006bf9`, with both checks. Nothing under `infrahub/` has changed since that commit.
+      - The host and Infrahub were as T062 left them.
+    - **Whole**: `make test-e2e`, **1,769.0 s**, exit 0, **`E2E-OK`**, nine cases (`local/017-e2e.out`).
+      - Case 1's `twin show` names `scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9`.
+      - Case 7's head compiled with no finding, and its last step was `unchanged`. T062's first note said that case would fail without D-058.
+      - Case 9 rehearsed through the server on the bridge: passed, then failed at `bad-port`'s push on `n1`, one comment each.
+      - The script found no credential and no marker in its outputs, the bundle store or the bridge server's log. The worker's log was searched by hand since this worker started: no marker, and none of `local/.env`'s secrets.
+    - **Rested** five minutes, until the load average fell under 2.
+    - **Narrowed**: `PLATFORMS=nokia_srlinux make test-e2e`, **1,156.3 s**, exit 0, **`E2E-PARTIAL`**: cases 1 2 3 4 5 7 9 ran, and 6 and 8 were skipped (`local/017-e2e-srlinux.out`). The same scope line, the same greps.
+    - **For T071**: tier 3 takes about 29.5 minutes whole (1,769.0 s), not `CLAUDE.md`'s 26, and about 19 narrowed (1,156.3 s), not 17.
+
+  *Run 20's checkpoint, 17:55Z*:
+  - **Gates**, on the final tree:
+    - `make build`: static.
+    - `make test`: passed. Uncached (`go test -count=1 ./...`) it took 37.4 s wall, at a load average of 3.3 before and 6.0 after.
+    - `make lint`: 0 issues.
+    - `go vet -tags contract,fixture,e2e ./...`: clean.
+    - No golden moved, and no Go file changed.
+  - **Not run, and why**: no hand scenario is named by T063. Tier 2 is T062's, done in Run 19.
+  - **The host**:
+    - The worker is pid 751228 and the server pid 751230. Neither the tier's builds nor the final one replaced the binary, so neither reads `(deleted)`.
+    - Both `/proc/<pid>/exe` read the tree's `bin/fylgja`. Their environment names carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`.
+    - The server reports both listeners, the bridge warning, `default scope: tag:fylgja` and both packages with their logins set. The worker reports both packages and `lab fylgja absent; twin directory absent`.
+    - From inside each task worker, `POST /v1/twin/show` answers `200` with the token and `401` without it, read at 16:53Z and again at 17:51Z.
+    - `clab inspect --all` is `{}`. There is no `local/twin`, and Temporal lists no Schedule and no running workflow.
+    - In Infrahub:
+      - `Branch` lists `main` and `fylgja-fixture` alone.
+      - `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` count 0.
+      - `main` holds no device, and its hash is `7c413536…`.
+      - `fylgja` is the only registration, at `c006bf9`, with its two checks.
+    - 11.8 GiB of memory is available.
+    - `make linkcheck` finds nothing broken.
+  - **Next**: Phase 12, from T064. Separately, the operator's second push for T057, once the loop has stopped.
 
 **Checkpoint**: every tier green over the library's kinds; the host left as the contract
 tier leaves it.

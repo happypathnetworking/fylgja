@@ -2059,3 +2059,94 @@ revisit.
 - `fylgja-fixture`'s three devices each hold a `Ready` artifact.
 - `clab inspect --all` is `{}`. There is no `local/twin`, and Temporal lists no Schedule
   and no running workflow.
+
+<a id="5-15"></a>
+### 5.15 Tier 3 whole and narrowed (T063; 2026-10-26, 16:53Z–17:48Z)
+
+Run 20 of the converge loop, at `a0fbdba`, after T062. T063 asks for the times in §5.6,
+but §5.6 holds T039–T041's read, so they are here, as §5.14 did for T062. Every branch the
+tier made was a throwaway, deleted by its case. Nothing was written to `main`, and no token
+or login was printed.
+
+**The precondition**, read at 16:52Z–16:53Z:
+
+- No container, no `local/twin`, no Schedule and no running workflow.
+- In Infrahub, `Branch` listed `main` and `fylgja-fixture` alone. `CoreProposedChange`,
+  `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` counted 0, and so did
+  `DcimPhysicalDevice` on `main`. `main`'s hash was `7c413536…`.
+- `fylgja` was the only registration, at `c006bf9`, with `fylgja-step` (timeout 300) and
+  `fylgja-twin` (4260). Nothing under `infrahub/` or `.infrahub.yml` has changed since
+  `c006bf9`, so the template and the checks Infrahub runs are this tree's.
+  `fylgja-fixture`'s three artifacts were `Ready`.
+- Both images were present: `ghcr.io/nokia/srlinux:24.7.1` and `ceos:4.32.0.2F`.
+- 12.1 GiB was available, at a load average of 1.5. Infrahub's containers held about
+  14 GiB, its server 7.5 GiB of that. Three booted nodes take about 4.7 GiB (1.57 GiB
+  each).
+- The worker and the server read `(deleted)` and were restarted from this tree, worker
+  pid 751228 and server pid 751230, and verified as `CLAUDE.md` says. The server reported
+  both listeners, the bridge warning, `default scope: tag:fylgja` and both packages with
+  their logins set. From inside each task worker, `POST /v1/twin/show` answered `200` with
+  the token and `401` without it. The tier's own `make build` did not replace the binary.
+
+**Whole**: `make test-e2e`, from 16:53:48Z to 17:23:23Z, **1,769.0 s** wall, **exit 0**,
+**`E2E-OK`**, nine cases. The output is `local/017-e2e.out`.
+
+- Case 1's `twin show` record line names `scope tag:fylgja, read by infrahub-dcim from
+  opsmill/schema-library@26336e9`, and the fixture's bundle is `f764e1fa…`, as T061
+  recorded. Its boot half took 10.6 s and `twin verify` 4.3 s, 15 held.
+- **Case 7 passed, where T062's first note said it would fail without D-058.** After
+  `-add-link` and the `third-link` mark, `stage plan` named four stages. The branch point
+  was refused `scope.empty`, since `main` holds no tagged device. `seeded`, `third-link`
+  and the head each compiled, with no finding, so no `stage.artifact.stale`. The step from
+  `third-link` to the head was `unchanged`. The head's `at` was 17:07:03.052706Z, before
+  `third-link`'s at 17:07:03.935441Z. `twin create --stage seeded` and the two steps
+  passed (16.0 s and 11.8 s).
+- Case 8, the mixed step, refused without `--allow-restart`, then took it with `e1`
+  restarted in place. The waits settled after 4.488 s and 3.785 s.
+- Case 9: `fylgja-twin` rehearsed the ready proposed change and passed, 71.5 s of the
+  1,980 s deadline, with one comment. After `bad-port` it failed at `bad-port`'s push on
+  `n1`, 81.4 s of the 2,610 s deadline, with a second comment. Its requests went to the
+  operator's server on the bridge.
+- **The greps**: no credential and no marker in the run's outputs, the bundle store and
+  the bridge server's log (`local/server.log`). The tier ran without `WORKER_LOG`, so the
+  worker's log was searched by hand afterwards: its 798 lines since this worker started
+  hold the marker 0 times and each of the six secrets `local/.env` sets 0 times, and no
+  `password` is followed by the EOS default.
+
+| Case | Times |
+|---|---|
+| 1 | create 55.2 s, verify 4.3 s, boot half 10.6 s |
+| 2, 4 | create 48.9 s and 47.1 s, the same bundle `62f28c7f…` |
+| 5 | seed 28.6 s, create 53.9 s, artifact-only rebuild 95.3 s, topology rebuild 61.3 s |
+| 6 | seed 33.4 s, create 95.6 s, verify 2.4 s, boot half 7.4 s |
+| 7 | proposed change 72.7 s, plan 10.1 s, create 56.6 s, steps 16.0 s and 11.8 s |
+| 8 | proposed change 62.1 s, create 97.6 s, steps 83.9 s and 73.6 s |
+| 9 | seed 34.7 s, proposed change 53.3 s, checks with the rehearsals 114.9 s and 130.0 s |
+
+**Rested** five minutes, until the load average fell under 2.
+
+**Narrowed**: `PLATFORMS=nokia_srlinux make test-e2e`, from 17:29:19Z to 17:48:45Z,
+**1,156.3 s** wall, **exit 0**, **`E2E-PARTIAL: platforms nokia_srlinux; ran 1 2 3 4 5 7
+9; skipped 6 (needs arista_eos: not in PLATFORMS) 8 (needs arista_eos: not in
+PLATFORMS)`**. The output is `local/017-e2e-srlinux.out`.
+
+- Case 1's record line names the same scope and mapping. Case 7's last step was
+  `unchanged` again.
+- Case 9 passed with one comment (82.7 s of 1,980 s), then failed at `bad-port`'s push on
+  `n1` (73.0 s of 2,610 s) with a second.
+- The same greps, the same result.
+
+**Against Release 0.2**: the whole tier took 1,650.6 s at 0.2's close and 1,536.9 s on
+10-20, and the narrowed one 1,113.5 s. `CLAUDE.md`'s "about 26 minutes" and "about 17
+minutes" become about 29.5 and 19.
+
+**Afterwards**, read at 17:49Z:
+
+- `clab inspect --all` is `{}`. There is no `local/twin`, and Temporal lists no Schedule
+  and no running workflow.
+- `Branch` lists `main` and `fylgja-fixture` alone. `CoreProposedChange`, `FylgjaStage`,
+  `CoreChangeThread` and `CoreUserValidator` count 0. `main` holds no device, and its
+  hash is `7c413536…`.
+- `fylgja` is the only registration, at `c006bf9`, with its two checks.
+  `fylgja-fixture`'s three artifacts are `Ready`.
+- 11.8 GiB is available.

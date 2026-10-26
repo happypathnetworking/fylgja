@@ -71,15 +71,16 @@ func DevicesByPackage(c *ctm.CTM, reg *psp.Registry) []PackageCount {
 	return out
 }
 
-// Verified describes what a clean conformance check actually verified: the contract
-// version, and each required generic with the kinds implementing it by name. It is
-// the success detail of `schema check`.
+// Verified describes what a clean conformance check actually verified: the library and
+// its commit, and each kind the mapping reads with its fields by name. It is the success
+// detail of `schema check`.
 func (conf *Conformance) Verified() *findings.Verified {
 	if conf == nil {
 		return nil
 	}
 	return &findings.Verified{
-		ContractVersion: conf.Version,
-		Generics:        conf.Generics,
+		Model:   conf.Model,
+		Version: conf.Version,
+		Kinds:   conf.Kinds,
 	}
 }

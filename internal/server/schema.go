@@ -50,10 +50,10 @@ func runCheck(ctx context.Context, opts *options, f *checkFlags) error {
 	}
 
 	// Said only on success, and said in detail: "no findings" reads the same whether
-	// every check ran or none did, so the answer names the contract version and which
-	// of the operator's own kinds satisfies each generic.
+	// every check ran or none did, so the answer names the library's commit the branch
+	// conforms with and every kind the mapping reads (--json adds each kind's fields).
 	doc.Verified = conf.Verified()
-	opts.note("contract %s ✓  %s", doc.Verified.ContractVersion, describeGenerics(doc.Verified.Generics))
+	opts.note("%s", conformantLine(doc.Verified))
 
 	// The stage kind and its extension, from the default branch whatever branch was
 	// checked: one line beside the answer, never a finding, the status and exit the
@@ -102,12 +102,13 @@ func stagesVerified(ctx context.Context) (*findings.StagesVerified, string, erro
 	return v, line + remedy, nil
 }
 
-// describeGenerics renders the verified generics for the text success line, in the
-// order ctm.RequiredGenerics declares them: `FylgjaDevice ← NetworkDevice; …`.
-func describeGenerics(gens []findings.GenericKinds) string {
-	parts := make([]string, 0, len(gens))
-	for _, g := range gens {
-		parts = append(parts, g.Generic+" ← "+strings.Join(g.Kinds, ", "))
+// conformantLine is the text success line, naming the commit and the kinds in the
+// mapping's table's order: `conformant with opsmill/schema-library@26336e9: DcimDevice,
+// DcimPlatform, …`.
+func conformantLine(v *findings.Verified) string {
+	kinds := make([]string, 0, len(v.Kinds))
+	for _, k := range v.Kinds {
+		kinds = append(kinds, k.Kind)
 	}
-	return strings.Join(parts, "; ")
+	return "conformant with " + v.Model + "@" + v.Version + ": " + strings.Join(kinds, ", ")
 }

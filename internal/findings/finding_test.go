@@ -25,7 +25,6 @@ var dataModelRules = []string{
 	// Conformance.
 	"contract.version.mismatch",
 	"contract.node.missing",
-	"schema.generic.unimplemented",
 	// Completeness and intent rules.
 	"data.required.missing",
 	"device.name.duplicate",
@@ -85,7 +84,6 @@ var dataModelRules = []string{
 	"show.service.unreachable",
 
 	// M5's rules. Appended, as M2's and M4's were.
-	"schema.artifact_target.missing",
 	"artifact.missing",
 	"artifact.ambiguous",
 	"artifact.not_ready",
@@ -177,7 +175,9 @@ var dataModelRules = []string{
 	"rehearsal.change.closed",
 
 	// 017's rules (research R-21). Appended; the eight the generics leave stay above until
-	// the tasks that remove their last users take them out of both lists.
+	// the tasks that remove their last users take them out of both lists
+	// (schema.generic.unimplemented and schema.artifact_target.missing went with the
+	// generics' conformance, at T036).
 	"scope.invalid",
 	"scope.unset",
 	"scope.empty",
@@ -380,15 +380,6 @@ func TestEveryOperationRendersAValidDocument(t *testing.T) {
 	compileOK := NewDocument(OpCompile, &Subject{CTM: "ctm.json", Out: "/tmp/bundle"}, nil)
 	compileOK.BundleID = strings.Repeat("ab", 32)
 
-	checkOK := NewDocument(OpSchemaCheck, &Subject{Branch: "fylgja-fixture"}, nil)
-	checkOK.Verified = &Verified{
-		ContractVersion: "0.2",
-		Generics: []GenericKinds{
-			{Generic: "FylgjaDevice", Kinds: []string{"NetworkDevice"}},
-			{Generic: "FylgjaInterface", Kinds: []string{"NetworkInterface"}},
-		},
-	}
-
 	cases := []struct {
 		label string
 		doc   *Document
@@ -402,7 +393,13 @@ func TestEveryOperationRendersAValidDocument(t *testing.T) {
 		{"twin compile ok", compileOK},
 		{"twin compile rejected", NewDocument(OpCompile, &Subject{CTM: "ctm.json", Out: "/tmp/b"}, rejected)},
 		{"twin compile error", ErrorDocument(OpCompile, &Subject{Out: "/tmp/b"}, "--out is required")},
-		{"schema check ok", checkOK},
+		// A schema check's success is not M1's from 017: verified names the library's
+		// table in place of the generics contract, a removal formats.md accepts, and is
+		// held to the current contract (TestVerifiedIsTheMappingsTable).
+		{"schema check rejected", NewDocument(OpSchemaCheck, &Subject{Branch: "fylgja-fixture"}, List{{
+			Severity: Rejection, Rule: RuleSchemaKindMissing, Object: "DcimCable",
+			Message: "the branch's schema has no kind DcimCable; the mapping reads it as opsmill/schema-library@26336e9 has it",
+		}})},
 		{"psp validate with location", NewDocument(OpPSPValidate, &Subject{Files: []string{"psp/x.yaml"}}, withLocation)},
 	}
 	for _, c := range cases {

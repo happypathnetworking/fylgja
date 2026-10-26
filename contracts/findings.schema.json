@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/contracts/findings/v1",
   "title": "Fylgja findings document v1 (--json) — M12 extension",
-  "description": "Additive to M1's findings format: every M1 document still validates. Added: operations twin.create, twin.provision, twin.destroy; statuses failed (exit 3) and unclean (exit 4); subject.bundle and subject.run_id; blocks twin (success of create/provision), cleanup (failure of create/provision, and destroy), dry_run. findings_version stays \"1\". M4: operation twin.show; the `show` block (show.schema.json); the `following` block on twin.create and twin.destroy; `dry_run.follow`. findings_version stays \"1\": every M1–M3 document still validates. M5: the step enum gains push; dry_run.nodes[] gains artifact (what would be pushed, by name, content type, checksum and size); twin.nodes[] may carry artifact {name, checksum} and pushed_in_s. findings_version stays 1: additive. No artifact content anywhere. M6: dry_run gains lossy_mappings and shared_ports; nothing else changes. M7: the step enum and every block are unchanged; twin show’s host.nodes[] gains psp (show.schema.json); the summary counts and the dry run’s read line are text. New warning artifact.interface.unrepresented and rejection host.image.absent are ordinary findings. M10: operations waypoint.list and waypoint.plan; subject.waypoint (the reference as supplied on --waypoint); the step enum gains resolve, the CLI-side step between the flag guards and the run, as verify is twin.provision's; dry_run.follow.reason gains waypoint; the `waypoint` block (the resolved reference, on twin.create, twin.create --dry-run and intent.read with --waypoint), the `waypoints` block (waypoint.list) and the `plan` block (waypoint.plan), each defined in waypoints.schema.json under its $id; verified.waypoints on schema.check. findings_version stays 1: additive. No artifact or bootstrap content anywhere. M11: operation twin.step; status diverged (exit 4: a step that failed or was cancelled after the host was touched; the twin is up and twin destroy clears it); the step enum gains reconcile; the `step` block (step.schema.json under its $id) on twin.step and its dry run: the two sides, M10's step, containerlab's plan with the packages' declarations, the push plan, and once a run closed its outcome, phase, pushes and timings; dry_run on twin.step --dry-run carries no follow. findings_version stays 1: additive. No device diff, artifact or bootstrap content anywhere. M12: operation twin.verify; status nonconforming (exit 5: every node was read and an assertion or a record claim failed; nothing acts on it); the step enum gains observe, the step at which verify reads the twin and at which the step run's wait reports; the `verify` block (verify.schema.json under its $id) on twin.verify; the `step` block gains wait on twin.step. findings_version stays 1: additive. No configuration line, device diff, artifact or bootstrap content, token or login anywhere. 014: operations stage.list and stage.plan replace waypoint.list and waypoint.plan; subject.stage (the reference as supplied on --stage, <branch>/<label>) replaces subject.waypoint; the `stage` block (the resolved stage, on twin.create, its dry run, intent.read with --stage and twin.step once its target resolved), the `stages` block (stage.list) and the `plan` block (stage.plan), each defined in stages.schema.json under its $id, replace the waypoint blocks; verified.stages replaces verified.waypoints; dry_run.follow.reason has stage for waypoint. findings_version stays 1 (FR-022): the shape of every other operation's document is unchanged. 015: operation twin.rehearse; the `rehearsal` block (rehearsal.schema.json under its $id) on twin.rehearse: the proposed change rehearsed, the deadline and the time used, the reclaim, the run, the baseline's findings, one entry per stage with its role and verdict, the destroy and the commands that reproduce a failure; show.record.rehearsal and verify.twin.rehearsal name the rehearsal a twin.json 7 names. findings_version stays 1: additive, and no status, step or exit is new. 017: subject.scope, the scope a read was made under (tag:<name>, the request's or the server's default); the identifiers 017 adds (scope.*, schema.kind.missing and the other schema.* conformance rules, platform.missing, platform.unmatched, omit.cable.*, ctm.version.unsupported, psp.matches.*) are ordinary findings under the rule pattern. findings_version stays 1: additive, and no status, step or exit is new. No configuration line, device diff, artifact or bootstrap content, token or login anywhere.",
+  "description": "Additive to M1's findings format: every M1 document still validates. Added: operations twin.create, twin.provision, twin.destroy; statuses failed (exit 3) and unclean (exit 4); subject.bundle and subject.run_id; blocks twin (success of create/provision), cleanup (failure of create/provision, and destroy), dry_run. findings_version stays \"1\". M4: operation twin.show; the `show` block (show.schema.json); the `following` block on twin.create and twin.destroy; `dry_run.follow`. findings_version stays \"1\": every M1–M3 document still validates. M5: the step enum gains push; dry_run.nodes[] gains artifact (what would be pushed, by name, content type, checksum and size); twin.nodes[] may carry artifact {name, checksum} and pushed_in_s. findings_version stays 1: additive. No artifact content anywhere. M6: dry_run gains lossy_mappings and shared_ports; nothing else changes. M7: the step enum and every block are unchanged; twin show’s host.nodes[] gains psp (show.schema.json); the summary counts and the dry run’s read line are text. New warning artifact.interface.unrepresented and rejection host.image.absent are ordinary findings. M10: operations waypoint.list and waypoint.plan; subject.waypoint (the reference as supplied on --waypoint); the step enum gains resolve, the CLI-side step between the flag guards and the run, as verify is twin.provision's; dry_run.follow.reason gains waypoint; the `waypoint` block (the resolved reference, on twin.create, twin.create --dry-run and intent.read with --waypoint), the `waypoints` block (waypoint.list) and the `plan` block (waypoint.plan), each defined in waypoints.schema.json under its $id; verified.waypoints on schema.check. findings_version stays 1: additive. No artifact or bootstrap content anywhere. M11: operation twin.step; status diverged (exit 4: a step that failed or was cancelled after the host was touched; the twin is up and twin destroy clears it); the step enum gains reconcile; the `step` block (step.schema.json under its $id) on twin.step and its dry run: the two sides, M10's step, containerlab's plan with the packages' declarations, the push plan, and once a run closed its outcome, phase, pushes and timings; dry_run on twin.step --dry-run carries no follow. findings_version stays 1: additive. No device diff, artifact or bootstrap content anywhere. M12: operation twin.verify; status nonconforming (exit 5: every node was read and an assertion or a record claim failed; nothing acts on it); the step enum gains observe, the step at which verify reads the twin and at which the step run's wait reports; the `verify` block (verify.schema.json under its $id) on twin.verify; the `step` block gains wait on twin.step. findings_version stays 1: additive. No configuration line, device diff, artifact or bootstrap content, token or login anywhere. 014: operations stage.list and stage.plan replace waypoint.list and waypoint.plan; subject.stage (the reference as supplied on --stage, <branch>/<label>) replaces subject.waypoint; the `stage` block (the resolved stage, on twin.create, its dry run, intent.read with --stage and twin.step once its target resolved), the `stages` block (stage.list) and the `plan` block (stage.plan), each defined in stages.schema.json under its $id, replace the waypoint blocks; verified.stages replaces verified.waypoints; dry_run.follow.reason has stage for waypoint. findings_version stays 1 (FR-022): the shape of every other operation's document is unchanged. 015: operation twin.rehearse; the `rehearsal` block (rehearsal.schema.json under its $id) on twin.rehearse: the proposed change rehearsed, the deadline and the time used, the reclaim, the run, the baseline's findings, one entry per stage with its role and verdict, the destroy and the commands that reproduce a failure; show.record.rehearsal and verify.twin.rehearsal name the rehearsal a twin.json 7 names. findings_version stays 1: additive, and no status, step or exit is new. 017: subject.scope, the scope a read was made under (tag:<name>, the request's or the server's default); verified is {model, version, kinds: [{kind, fields}], stages}, contract_version and generics gone (removals: both blocks are read by this build's schema check and twin show alone); the identifiers 017 adds (scope.*, schema.kind.missing and the other schema.* conformance rules, platform.missing, platform.unmatched, omit.cable.*, ctm.version.unsupported, psp.matches.*) are ordinary findings under the rule pattern. findings_version stays 1: subject.scope is additive, the two removals are accepted for that reason (specs/017-dcim-reader/contracts/formats.md), and no status, step or exit is new. No configuration line, device diff, artifact or bootstrap content, token or login anywhere.",
   "type": "object",
   "required": [
     "findings_version",
@@ -95,28 +95,45 @@
     },
     "verified": {
       "type": "object",
+      "description": "schema.check (status ok): what conformance verified. 017: the model and the commit the mapping's table was written against, and each kind the mapping reads with the fields of it the branch holds as that commit has them, in the table's order; contract_version and generics are gone with the generics contract",
+      "required": [
+        "model",
+        "version",
+        "kinds"
+      ],
       "additionalProperties": false,
       "properties": {
-        "contract_version": {
-          "type": "string"
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "the model the mapping reads: opsmill/schema-library for the Infrahub reader"
         },
-        "generics": {
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "the model's version the mapping's table was written against: for the schema library, the commit (26336e9)"
+        },
+        "kinds": {
           "type": "array",
+          "minItems": 1,
           "items": {
             "type": "object",
             "required": [
-              "generic",
-              "kinds"
+              "kind",
+              "fields"
             ],
             "additionalProperties": false,
             "properties": {
-              "generic": {
-                "type": "string"
+              "kind": {
+                "type": "string",
+                "minLength": 1
               },
-              "kinds": {
+              "fields": {
                 "type": "array",
+                "minItems": 1,
                 "items": {
-                  "type": "string"
+                  "type": "string",
+                  "minLength": 1
                 }
               }
             }

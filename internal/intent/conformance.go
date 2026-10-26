@@ -3,102 +3,146 @@ package intent
 import (
 	"context"
 	"fmt"
+	"slices"
+	"strings"
 
-	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 )
 
-// Conformance reports whether a branch implements the contract Fylgja was built
-// against, and describes what was verified when it does.
+// Conformance describes what a conformance check verified: the branch's schema hash, the
+// model and commit the mapping's table was written against, and every kind and field of
+// the table, which a clean check found the branch to hold as the commit has them.
 type Conformance struct {
-	// Version is the contract version the branch declares.
-	Version string
 	// SchemaHash identifies the branch's schema state.
 	SchemaHash string
-	// Generics lists each required generic with the kinds implementing it, by name,
-	// then ctm.ArtifactTargetGeneric's row, so the device kinds' artifact targets show
-	// beside them (M5).
-	// Not a count: `schema check` has to show an operator which of their own kinds
-	// satisfies the contract, and a number cannot.
-	Generics []findings.GenericKinds
+	// Model and Version name the schema library and its commit (LibraryModel,
+	// LibraryVersion).
+	Model, Version string
+	// Kinds are the table's kinds with their fields, in its order. Not a count:
+	// `schema check` has to show an operator which of their kinds and fields the reader
+	// reads, and a number cannot.
+	Kinds []findings.KindFields
 }
 
-// CheckConformance verifies the branch before any intent is read.
+// CheckConformance compares the branch's schema with the mapping's table (mapping.go)
+// before any intent is read (Constitution III; FR-011–FR-013).
 //
-// Schema metadata is read first, over REST. That ordering is not incidental: on a
-// branch with no Fylgja schema the generics do not exist as GraphQL types at all, so
-// querying them yields "cannot query field FylgjaContract" — a transport error naming
-// nothing an operator can act on. The schema endpoint answers the same question and
-// can name the missing generic, which is what the contract requires.
+// Schema metadata is read over REST, not inferred from a failed query: on a branch
+// without the library a query of its kinds fails as "cannot query field", a transport
+// error naming nothing an operator can act on, while the schema endpoint answers which
+// kind, which field and which property differs.
 //
-// Only a version mismatch short-circuits: against a contract Fylgja does not
-// understand, a list of findings would mislead rather than help. A branch
-// that has no FylgjaContract at all is a different case — there is no rival contract
-// to misread, so the missing node and every unimplemented generic are reported
-// together, which is what an operator setting a branch up needs to see.
+// Every finding is a rejection naming the commit, and all of them come in one pass, so
+// one run shows an operator setting a branch up everything that differs (SC-004). A kind
+// absent is named once: its fields, and the generics it should implement, are not named
+// again beside it, since each would be a second account of the one fault. Nothing beyond
+// the table is reported.
 func (c *Client) CheckConformance(ctx context.Context) (*Conformance, findings.List, error) {
-	var list findings.List
-
 	info, err := c.SchemaInfo(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	conf := &Conformance{SchemaHash: info.Hash}
+	conf := &Conformance{SchemaHash: info.Hash, Model: LibraryModel, Version: LibraryVersion}
+	for _, k := range LibraryTables {
+		conf.Kinds = append(conf.Kinds, findings.KindFields{Kind: k.Kind, Fields: k.Fields()})
+	}
+	return conf, conformanceFindings(info), nil
+}
 
-	switch {
-	case !info.Kinds[ctm.ContractKind]:
-		list.Add(findings.Rejection, findings.RuleContractNodeMissing, c.cfg.Branch, fmt.Sprintf(
-			"branch declares no %s; it does not implement Fylgja's generics contract", ctm.ContractKind))
-	default:
-		version, present, err := c.ContractVersion(ctx)
-		if err != nil {
-			return nil, nil, err
-		}
-		switch {
-		case !present:
-			list.Add(findings.Rejection, findings.RuleContractNodeMissing, c.cfg.Branch, fmt.Sprintf(
-				"branch defines %s but holds no instance of it", ctm.ContractKind))
-		case version != ctm.ContractVersion:
-			// Reported alone: every other finding would be about a model this build
-			// cannot interpret, so listing them beside this one would be noise
-			// dressed as detail.
-			var only findings.List
-			only.Add(findings.Rejection, findings.RuleContractVersionMismatch, c.cfg.Branch, fmt.Sprintf(
-				"branch declares contract version %q, this build understands %q", version, ctm.ContractVersion))
-			return conf, only, nil
-		default:
-			conf.Version = version
-		}
-	}
+// readsIt ends every conformance finding but used_by's, which says what the mapping reads
+// through the generic: the commit is what an operator compares their own schema with.
+const (
+	asTheLibrary = "as " + LibraryModel + "@" + LibraryVersion + " has it"
+	readsIt      = "; the mapping reads it " + asTheLibrary
+)
 
-	for _, generic := range ctm.RequiredGenerics {
-		kinds := info.Implementers(generic)
-		conf.Generics = append(conf.Generics, findings.GenericKinds{Generic: generic, Kinds: kinds})
-		if len(kinds) == 0 {
-			// Naming the generic is the whole point of reading the schema endpoint
-			// rather than letting a query fail: a transport error cannot say this.
-			list.Add(findings.Rejection, findings.RuleGenericUnimplemented, generic,
-				"no concrete kind implements this generic on the branch")
+// conformanceFindings walks the table against one branch's schema.
+func conformanceFindings(info *SchemaInfo) findings.List {
+	var list findings.List
+	reject := func(rule, object, message string) {
+		list.Add(findings.Rejection, rule, object, message)
+	}
+	absent := map[string]bool{}
+	for _, k := range LibraryTables {
+		node, ok := info.Nodes[k.Kind]
+		if !ok {
+			absent[k.Kind] = true
+			reject(findings.RuleSchemaKindMissing, k.Kind, "the branch's schema has no kind "+k.Kind+readsIt)
+			continue
+		}
+		for _, want := range k.Attributes {
+			field := k.Kind + "." + want.Name
+			got, ok := node.Attributes[want.Name]
+			if !ok {
+				reject(findings.RuleSchemaFieldMissing, field, k.Kind+" has no attribute "+want.Name+readsIt)
+				continue
+			}
+			if differs := attributeDiffers(want, got); differs != "" {
+				reject(findings.RuleSchemaFieldMismatch, field, differs+readsIt)
+				continue
+			}
+			for _, choice := range want.Choices {
+				if !slices.Contains(got.Choices, choice) {
+					reject(findings.RuleSchemaChoiceMissing, field, "the dropdown has no choice "+choice+readsIt)
+				}
+			}
+		}
+		for _, want := range k.Relationships {
+			field := k.Kind + "." + want.Name
+			got, ok := node.Relationships[want.Name]
+			if !ok {
+				reject(findings.RuleSchemaFieldMissing, field, k.Kind+" has no relationship "+want.Name+readsIt)
+				continue
+			}
+			if differs := relationshipDiffers(want, got); differs != "" {
+				reject(findings.RuleSchemaFieldMismatch, field, differs+readsIt)
+			}
 		}
 	}
+	for _, want := range LibraryUsedBy {
+		if absent[want.Implementer] || slices.Contains(info.UsedBy[want.Generic], want.Implementer) {
+			continue
+		}
+		through := "; the mapping reads " + want.Implementer + " through it " + asTheLibrary
+		if _, defined := info.UsedBy[want.Generic]; !defined {
+			reject(findings.RuleSchemaUsedByMissing, want.Generic, "the branch's schema has no generic "+want.Generic+through)
+			continue
+		}
+		reject(findings.RuleSchemaUsedByMissing, want.Generic, want.Implementer+" does not implement "+want.Generic+through)
+	}
+	return list
+}
 
-	// Contract 0.2: a device kind that is not an artifact target can have no
-	// configuration rendered for it, so every one of its devices would be refused
-	// artifact.missing — one finding per device, none naming the cause. Naming the kind
-	// here, before any data is read, says the one thing to fix. The row beside the
-	// generics shows `schema check`'s reader which of their kinds carry artifacts.
-	targets := info.Implementers(ctm.ArtifactTargetGeneric)
-	conf.Generics = append(conf.Generics, findings.GenericKinds{Generic: ctm.ArtifactTargetGeneric, Kinds: targets})
-	isTarget := map[string]bool{}
-	for _, k := range targets {
-		isTarget[k] = true
+// attributeDiffers names each property of an attribute that is not the table's, expected
+// first: `kind Text, found Number`, joined by "; " when more than one differs. A required attribute must read optional false; one
+// the table leaves optional may read either.
+func attributeDiffers(want AttributeWant, got AttributeSchema) string {
+	var d differences
+	d.compare("kind", want.Kind, got.Kind)
+	if want.Required && got.Optional {
+		d.compare("optional", "false", "true")
 	}
-	for _, kind := range info.Implementers(ctm.DeviceGeneric) {
-		if !isTarget[kind] {
-			list.Add(findings.Rejection, findings.RuleSchemaArtifactTargetMissing, kind, fmt.Sprintf(
-				"kind %s implements %s but does not inherit %s, so its devices can carry no configuration artifact",
-				kind, ctm.DeviceGeneric, ctm.ArtifactTargetGeneric))
-		}
+	return strings.Join(d, "; ")
+}
+
+// relationshipDiffers names each property of a relationship that is not the table's.
+func relationshipDiffers(want RelationshipWant, got RelationshipSchema) string {
+	var d differences
+	d.compare("peer", want.Peer, got.Peer)
+	d.compare("kind", want.Kind, got.Kind)
+	d.compare("cardinality", want.Cardinality, got.Cardinality)
+	if want.Required && got.Optional {
+		d.compare("optional", "false", "true")
 	}
-	return conf, list, nil
+	return strings.Join(d, "; ")
+}
+
+// differences collects a field's differing properties, so one field is one finding
+// however many of its properties differ.
+type differences []string
+
+func (d *differences) compare(property, want, got string) {
+	if want != got {
+		*d = append(*d, fmt.Sprintf("%s %s, found %s", property, want, got))
+	}
 }

@@ -13,18 +13,12 @@ import (
 // them: schema/ holds the schema library and the stage kind alone, and every seed writes the
 // library's kinds. A branch made from main still holds the generics, since main does until
 // its migration (017's T056), so these keep working there. They are kept only so that their
-// tier-2 callers, the generics' conformance and defect tests, compile until 017's T044
-// rewrites or removes those tests and this file with them.
+// tier-2 caller, the generics' defect test, compiles until 017's T044 rewrites or removes
+// it and this file with it. The contract singleton's seed went at T036 with the
+// generics' conformance tests, its last callers.
 
 // ContractVersion is the generics contract version SeedDefects declares.
 const ContractVersion = ctm.ContractVersion
-
-// SeedContractVersion creates the generics' contract singleton with a chosen version.
-// Used by tests that need a branch declaring a contract Fylgja does not understand.
-func (c *Client) SeedContractVersion(branch, version string) error {
-	_, err := c.create(branch, "FylgjaContract", fmt.Sprintf(`{version: {value: %q}}`, version))
-	return err
-}
 
 // Defect names the five defects SeedDefects plants, by the rule each one trips. They
 // are exactly the defects Infrahub's own schema will let a branch hold: every other

@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"slices"
 	"strings"
@@ -33,8 +34,10 @@ type fakeInfrahub struct {
 	branch string
 
 	mu sync.Mutex
-	// schema is the /api/schema document.
-	schema schemaDoc
+	// schema is the /api/schema document: the library's at the pinned commit as Infrahub
+	// 1.11.2 loads it (testdata/schema-26336e9.json), which a test may mutate, beside the
+	// generics' GraphQL answers the bridged read still asks (017's T037, until T043).
+	schema map[string]any
 	// devices and links are served over GraphQL; the device list order is Infrahub's.
 	devices []ctm.Device
 	links   []ctm.Link
@@ -48,6 +51,9 @@ type fakeInfrahub struct {
 	// served lists every request in order, with the `at` it carried, so a pinned read
 	// can be shown to have asked for nothing but the branch as of at.
 	served []fakeRequest
+	// contractless answers the generics' contract query with no instance, a branch with
+	// no network on it, which the bridged read refuses (017's T036, until T050).
+	contractless bool
 }
 
 // fakeRequest is one request as the fake saw it: the path, the GraphQL operation when it
@@ -55,21 +61,6 @@ type fakeInfrahub struct {
 type fakeRequest struct {
 	Path, Operation, At string
 	HasAt               bool
-}
-
-type schemaDoc struct {
-	Main     string          `json:"main"`
-	Generics []schemaGeneric `json:"generics"`
-	Nodes    []schemaNode    `json:"nodes"`
-}
-
-type schemaGeneric struct {
-	Kind   string   `json:"kind"`
-	UsedBy []string `json:"used_by"`
-}
-
-type schemaNode struct {
-	Kind string `json:"kind"`
 }
 
 // fakeArtifact is one CoreArtifact as the device query lists it.
@@ -83,32 +74,20 @@ type fakeObject struct {
 	Body   []byte
 }
 
-// conformingSchema is the reference schema's answer as it stands on main since M5: each
-// generic implemented by its reference kind, the device kind an artifact target, and the
-// contract node defined.
-func conformingSchema() schemaDoc {
-	return schemaDoc{
-		Main: "fake-schema-hash",
-		Generics: []schemaGeneric{
-			{Kind: ctm.DeviceGeneric, UsedBy: []string{"NetworkDevice"}},
-			{Kind: "FylgjaInterface", UsedBy: []string{"NetworkInterface"}},
-			{Kind: "FylgjaLink", UsedBy: []string{"NetworkLink"}},
-			{Kind: "FylgjaPlatform", UsedBy: []string{"NetworkPlatform"}},
-			{Kind: ctm.ArtifactTargetGeneric, UsedBy: []string{"NetworkDevice"}},
-		},
-		Nodes: []schemaNode{{Kind: ctm.ContractKind}, {Kind: "NetworkDevice"}},
+// librarySchema is the schema endpoint's answer for a branch holding the library at the
+// pinned commit, trimmed to the kinds the mapping reads (T033; research §5.2), decoded
+// afresh so that a test's mutation is its own.
+func librarySchema(t *testing.T) map[string]any {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(repoRoot(t), "internal", "intent", "testdata", "schema-26336e9.json"))
+	if err != nil {
+		t.Fatal(err)
 	}
-}
-
-// generic returns the named generic's row, adding an empty one if absent.
-func (s *schemaDoc) generic(kind string) *schemaGeneric {
-	for i := range s.Generics {
-		if s.Generics[i].Kind == kind {
-			return &s.Generics[i]
-		}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
 	}
-	s.Generics = append(s.Generics, schemaGeneric{Kind: kind})
-	return &s.Generics[len(s.Generics)-1]
+	return doc
 }
 
 // repoRoot finds the module root from this file's location.
@@ -134,7 +113,7 @@ func newFakeInfrahub(t *testing.T) *fakeInfrahub {
 	f := &fakeInfrahub{
 		t:         t,
 		branch:    fixture.Envelope.Branch,
-		schema:    conformingSchema(),
+		schema:    librarySchema(t),
 		links:     fixture.Links,
 		artifacts: map[string][]fakeArtifact{},
 		objects:   map[string]fakeObject{},
@@ -218,8 +197,12 @@ func (f *fakeInfrahub) serve(w http.ResponseWriter, r *http.Request) {
 		f.served[len(f.served)-1].Operation = req.OperationName
 		switch req.OperationName {
 		case "ContractVersion":
+			instances := []any{map[string]any{"node": map[string]any{"version": value(ctm.ContractVersion)}}}
+			if f.contractless {
+				instances = []any{}
+			}
 			writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"FylgjaContract": map[string]any{
-				"edges": []any{map[string]any{"node": map[string]any{"version": value(ctm.ContractVersion)}}},
+				"edges": instances,
 			}}})
 		case "Devices":
 			writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"FylgjaDevice": f.devicePage()}})
@@ -367,124 +350,303 @@ func checkConformance(t *testing.T, f *fakeInfrahub) (*intent.Conformance, findi
 	return conf, list
 }
 
-func ruleCounts(list findings.List) map[string]int {
-	out := map[string]int{}
-	for _, f := range list {
-		out[f.Rule]++
+// The schema document's mutations, each one a branch's schema could have: a kind, a
+// field, a choice or an implementer gone, or a field's property changed.
+
+// schemaList is one of the document's lists: its nodes, its generics, or a node's
+// attributes or relationships.
+func schemaList(t *testing.T, m map[string]any, key string) []any {
+	t.Helper()
+	l, ok := m[key].([]any)
+	if !ok {
+		t.Fatalf("the schema document has no list %s", key)
+	}
+	return l
+}
+
+// entry is the list's member whose key holds name.
+func entry(t *testing.T, l []any, key, name string) map[string]any {
+	t.Helper()
+	for _, e := range l {
+		if m := e.(map[string]any); m[key] == name {
+			return m
+		}
+	}
+	t.Fatalf("the schema document has no %s %s", key, name)
+	return nil
+}
+
+// without is l less the member whose key holds name.
+func without(l []any, key, name string) []any {
+	out := make([]any, 0, len(l))
+	for _, e := range l {
+		if e.(map[string]any)[key] != name {
+			out = append(out, e)
+		}
 	}
 	return out
 }
 
-// What TestBranchWithoutTheSchemaNamesEveryGeneric proved against a bare branch, which no
-// live branch can be since the schema went on main: the generics defined
-// with nothing implementing them and no contract kind give contract.node.missing once,
-// naming the branch, and every required generic named unimplemented — all in one pass,
-// because there is no rival contract to misread.
-func TestConformanceBareBranchNamesEveryGeneric(t *testing.T) {
-	f := newFakeInfrahub(t)
-	f.schema = schemaDoc{Main: "bare"}
-	for _, g := range ctm.RequiredGenerics {
-		f.schema.generic(g)
-	}
+// member is a node's attribute or relationship.
+func member(t *testing.T, doc map[string]any, kind, section, name string) map[string]any {
+	t.Helper()
+	return entry(t, schemaList(t, entry(t, schemaList(t, doc, "nodes"), "kind", kind), section), "name", name)
+}
 
-	_, list := checkConformance(t, f)
+func dropNode(t *testing.T, doc map[string]any, kind string) {
+	doc["nodes"] = without(schemaList(t, doc, "nodes"), "kind", kind)
+}
 
-	n := ruleCounts(list)
-	if n[findings.RuleContractNodeMissing] != 1 {
-		t.Errorf("%d %s findings, want exactly one: %v", n[findings.RuleContractNodeMissing], findings.RuleContractNodeMissing, list)
-	}
-	named := map[string]bool{}
-	for _, fd := range list {
-		switch fd.Rule {
-		case findings.RuleContractNodeMissing:
-			if fd.Object != f.branch {
-				t.Errorf("%s names %q, want the branch %q", fd.Rule, fd.Object, f.branch)
-			}
-		case findings.RuleGenericUnimplemented:
-			named[fd.Object] = true
-		default:
-			t.Errorf("unexpected finding %s: %s", fd.Rule, fd.Message)
+func dropMember(t *testing.T, doc map[string]any, kind, section, name string) {
+	node := entry(t, schemaList(t, doc, "nodes"), "kind", kind)
+	node[section] = without(schemaList(t, node, section), "name", name)
+}
+
+func dropChoice(t *testing.T, doc map[string]any, kind, attribute, choice string) {
+	attr := member(t, doc, kind, "attributes", attribute)
+	attr["choices"] = without(schemaList(t, attr, "choices"), "name", choice)
+}
+
+func dropImplementer(t *testing.T, doc map[string]any, generic, kind string) {
+	g := entry(t, schemaList(t, doc, "generics"), "kind", generic)
+	var kept []any
+	for _, k := range schemaList(t, g, "used_by") {
+		if k != kind {
+			kept = append(kept, k)
 		}
 	}
-	for _, g := range ctm.RequiredGenerics {
-		if !named[g] {
-			t.Errorf("generic %s was not named unimplemented; named %v", g, named)
-		}
-	}
-	if len(named) != len(ctm.RequiredGenerics) || n[findings.RuleGenericUnimplemented] != len(ctm.RequiredGenerics) {
-		t.Errorf("%d generics named, want %d: %v", n[findings.RuleGenericUnimplemented], len(ctm.RequiredGenerics), list)
-	}
-	if f.count("/graphql/"+f.branch) != 0 {
-		t.Error("the check queried GraphQL on a branch that declares no contract kind")
-	}
+	g["used_by"] = kept
 }
 
-// What TestUnimplementedGenericsAreNamed proved: with the contract in place, a generic
-// nothing implements is named, and only that one.
-func TestConformanceNamesTheUnimplementedGeneric(t *testing.T) {
-	f := newFakeInfrahub(t)
-	f.schema.generic("FylgjaLink").UsedBy = nil
-
-	_, list := checkConformance(t, f)
-
-	if len(list) != 1 || list[0].Rule != findings.RuleGenericUnimplemented || list[0].Object != "FylgjaLink" {
-		t.Fatalf("findings %v, want one %s naming FylgjaLink", list, findings.RuleGenericUnimplemented)
+// The mutations each case below is made of. DcimCable gone takes it out of
+// DcimConnector's used_by too, as Infrahub's endpoint would.
+var (
+	cableGone = func(t *testing.T, doc map[string]any) {
+		dropNode(t, doc, "DcimCable")
+		dropImplementer(t, doc, "DcimConnector", "DcimCable")
 	}
-	if list[0].Severity != findings.Rejection {
-		t.Errorf("severity %s, want rejection", list[0].Severity)
+	roleGone           = func(t *testing.T, doc map[string]any) { dropMember(t, doc, "InterfacePhysical", "attributes", "role") }
+	platformNameNumber = func(t *testing.T, doc map[string]any) {
+		member(t, doc, "DcimPlatform", "attributes", "name")["kind"] = "Number"
 	}
-}
+	platformManyNet = func(t *testing.T, doc map[string]any) {
+		rel := member(t, doc, "DcimDevice", "relationships", "platform")
+		rel["cardinality"], rel["peer"] = "many", "NetPlatform"
+	}
+	deviceNameOptional = func(t *testing.T, doc map[string]any) {
+		member(t, doc, "DcimDevice", "attributes", "name")["optional"] = true
+	}
+	managementGone = func(t *testing.T, doc map[string]any) { dropChoice(t, doc, "InterfacePhysical", "role", "management") }
+	disabledGone   = func(t *testing.T, doc map[string]any) { dropChoice(t, doc, "InterfacePhysical", "status", "disabled") }
+	endpointGone   = func(t *testing.T, doc map[string]any) { dropImplementer(t, doc, "DcimEndpoint", "InterfacePhysical") }
+)
 
-// Contract 0.2: a kind implementing FylgjaDevice that does not inherit
-// CoreArtifactTarget is named, before any data is read, as the one thing to fix — and a
-// kind that does is not. CoreArtifactTarget's own other implementers are no concern.
-func TestConformanceNamesADeviceKindThatIsNoArtifactTarget(t *testing.T) {
-	f := newFakeInfrahub(t)
-	f.schema.generic(ctm.DeviceGeneric).UsedBy = []string{"NetworkDeviceBare", "NetworkDevice"}
-	f.schema.generic(ctm.ArtifactTargetGeneric).UsedBy = []string{"NetworkDevice", "SomeoneElsesKind"}
+// readsIt is the end of every conformance finding but used_by's: the commit the table was
+// written against.
+const readsIt = "; the mapping reads it as opsmill/schema-library@26336e9 has it"
 
-	conf, list := checkConformance(t, f)
-
-	want := findings.Finding{
-		Severity: findings.Rejection,
-		Rule:     findings.RuleSchemaArtifactTargetMissing,
-		Object:   "NetworkDeviceBare",
-		Message: "kind NetworkDeviceBare implements FylgjaDevice but does not inherit CoreArtifactTarget, " +
-			"so its devices can carry no configuration artifact",
-	}
-	if len(list) != 1 || list[0] != want {
-		t.Fatalf("findings %+v, want exactly %+v", list, want)
-	}
-	if f.count("/graphql/"+f.branch) != 1 {
-		t.Errorf("GraphQL was asked %d times; want the contract version alone, before any data is read", f.count("/graphql/"+f.branch))
-	}
-	last := conf.Generics[len(conf.Generics)-1]
-	if last.Generic != ctm.ArtifactTargetGeneric || !slices.Equal(last.Kinds, []string{"NetworkDevice", "SomeoneElsesKind"}) {
-		t.Errorf("last row %+v, want %s with its implementers sorted", last, ctm.ArtifactTargetGeneric)
-	}
-}
-
-// A conforming schema with the target produces neither finding, and the verified block
-// lists each required generic in order, then CoreArtifactTarget (contracts/cli.md).
-func TestConformanceConformingSchema(t *testing.T) {
+// The library at the pinned commit conforms, and the check says what it verified: the
+// model and the commit, and each kind with its fields in the table's order. It asks the
+// schema endpoint alone, before any data is read.
+func TestConformanceOfTheLibrary(t *testing.T) {
 	f := newFakeInfrahub(t)
 
 	conf, list := checkConformance(t, f)
 
 	if len(list) != 0 {
-		t.Fatalf("a conforming schema gave findings: %v", list)
+		t.Fatalf("the library's schema gave findings: %v", list)
 	}
-	if conf.Version != ctm.ContractVersion || conf.SchemaHash != "fake-schema-hash" {
-		t.Errorf("version %q hash %q, want %q and the schema's hash", conf.Version, conf.SchemaHash, ctm.ContractVersion)
+	if conf.Model != "opsmill/schema-library" || conf.Version != "26336e9" || conf.SchemaHash != "18e5f023994de4261ad266e61aac2615" {
+		t.Errorf("model %q version %q hash %q, want the library, its commit and the document's hash", conf.Model, conf.Version, conf.SchemaHash)
 	}
-	var rows []string
-	for _, g := range conf.Generics {
-		rows = append(rows, g.Generic)
-		if len(g.Kinds) == 0 {
-			t.Errorf("row %s names no kind", g.Generic)
+	want := []findings.KindFields{
+		{Kind: "DcimDevice", Fields: []string{"name", "tags", "platform", "interfaces", "artifacts"}},
+		{Kind: "DcimPlatform", Fields: []string{"name", "manufacturer"}},
+		{Kind: "OrganizationManufacturer", Fields: []string{"name"}},
+		{Kind: "InterfacePhysical", Fields: []string{"name", "role", "status", "device", "connector"}},
+		{Kind: "DcimCable", Fields: []string{"connected_endpoints"}},
+	}
+	if !reflect.DeepEqual(conf.Kinds, want) {
+		t.Errorf("kinds %+v, want %+v", conf.Kinds, want)
+	}
+	if v := conf.Verified(); v.Model != conf.Model || v.Version != conf.Version || !reflect.DeepEqual(v.Kinds, want) {
+		t.Errorf("verified %+v, want the conformance's model, version and kinds", v)
+	}
+	if n := f.count("/graphql/" + f.branch); n != 0 {
+		t.Errorf("conformance asked GraphQL %d times; it reads the schema endpoint alone", n)
+	}
+}
+
+// Each kind, field, property, choice or implementer the table names, gone or changed, is
+// one rejection naming it and the commit (FR-012; US3 scenario 2). A kind gone is named
+// once: neither its fields nor the generic it implemented are named beside it.
+func TestConformanceNamesWhatDiffers(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		mutate func(*testing.T, map[string]any)
+		want   findings.Finding
+	}{
+		{"DcimCable gone", cableGone, findings.Finding{Rule: findings.RuleSchemaKindMissing, Object: "DcimCable",
+			Message: "the branch's schema has no kind DcimCable" + readsIt}},
+		{"InterfacePhysical.role gone", roleGone, findings.Finding{Rule: findings.RuleSchemaFieldMissing, Object: "InterfacePhysical.role",
+			Message: "InterfacePhysical has no attribute role" + readsIt}},
+		{"InterfacePhysical.connector gone", func(t *testing.T, doc map[string]any) {
+			dropMember(t, doc, "InterfacePhysical", "relationships", "connector")
+		}, findings.Finding{Rule: findings.RuleSchemaFieldMissing, Object: "InterfacePhysical.connector",
+			Message: "InterfacePhysical has no relationship connector" + readsIt}},
+		{"DcimPlatform.name a Number", platformNameNumber, findings.Finding{Rule: findings.RuleSchemaFieldMismatch, Object: "DcimPlatform.name",
+			Message: "kind Text, found Number" + readsIt}},
+		{"DcimDevice.platform many, to NetPlatform", platformManyNet, findings.Finding{Rule: findings.RuleSchemaFieldMismatch,
+			Object: "DcimDevice.platform", Message: "peer DcimPlatform, found NetPlatform; cardinality one, found many" + readsIt}},
+		{"DcimDevice.name optional", deviceNameOptional, findings.Finding{Rule: findings.RuleSchemaFieldMismatch, Object: "DcimDevice.name",
+			Message: "optional false, found true" + readsIt}},
+		{"InterfacePhysical.device optional", func(t *testing.T, doc map[string]any) {
+			member(t, doc, "InterfacePhysical", "relationships", "device")["optional"] = true
+		}, findings.Finding{Rule: findings.RuleSchemaFieldMismatch, Object: "InterfacePhysical.device",
+			Message: "optional false, found true" + readsIt}},
+		{"management gone from role", managementGone, findings.Finding{Rule: findings.RuleSchemaChoiceMissing, Object: "InterfacePhysical.role",
+			Message: "the dropdown has no choice management" + readsIt}},
+		{"disabled gone from status", disabledGone, findings.Finding{Rule: findings.RuleSchemaChoiceMissing, Object: "InterfacePhysical.status",
+			Message: "the dropdown has no choice disabled" + readsIt}},
+		{"InterfacePhysical gone from DcimEndpoint's used_by", endpointGone, findings.Finding{Rule: findings.RuleSchemaUsedByMissing,
+			Object: "DcimEndpoint", Message: "InterfacePhysical does not implement DcimEndpoint; the mapping reads InterfacePhysical " +
+				"through it as opsmill/schema-library@26336e9 has it"}},
+		{"DcimEndpoint gone", func(t *testing.T, doc map[string]any) {
+			doc["generics"] = without(schemaList(t, doc, "generics"), "kind", "DcimEndpoint")
+		}, findings.Finding{Rule: findings.RuleSchemaUsedByMissing, Object: "DcimEndpoint",
+			Message: "the branch's schema has no generic DcimEndpoint; the mapping reads InterfacePhysical " +
+				"through it as opsmill/schema-library@26336e9 has it"}},
+		{"InterfacePhysical gone", func(t *testing.T, doc map[string]any) {
+			dropNode(t, doc, "InterfacePhysical")
+			dropImplementer(t, doc, "DcimInterface", "InterfacePhysical")
+			dropImplementer(t, doc, "DcimEndpoint", "InterfacePhysical")
+		}, findings.Finding{Rule: findings.RuleSchemaKindMissing, Object: "InterfacePhysical",
+			Message: "the branch's schema has no kind InterfacePhysical" + readsIt}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFakeInfrahub(t)
+			c.mutate(t, f.schema)
+
+			_, list := checkConformance(t, f)
+
+			c.want.Severity = findings.Rejection
+			if len(list) != 1 || list[0] != c.want {
+				t.Fatalf("findings %+v, want exactly %+v", list, c.want)
+			}
+		})
+	}
+}
+
+// Every difference comes in one pass (SC-004), in the table's order and then the
+// generics': an operator setting a branch up needs no second run to see the next one.
+func TestConformanceNamesEveryDifferenceInOnePass(t *testing.T) {
+	f := newFakeInfrahub(t)
+	for _, mutate := range []func(*testing.T, map[string]any){
+		cableGone, roleGone, platformNameNumber, platformManyNet, deviceNameOptional, disabledGone, endpointGone,
+	} {
+		mutate(t, f.schema)
+	}
+
+	_, list := checkConformance(t, f)
+
+	type got struct{ rule, object string }
+	var rules []got
+	for _, fd := range list {
+		rules = append(rules, got{fd.Rule, fd.Object})
+		if fd.Severity != findings.Rejection || !strings.Contains(fd.Message, "opsmill/schema-library@26336e9") {
+			t.Errorf("%s %s: %s %q; every finding is a rejection naming the commit", fd.Rule, fd.Object, fd.Severity, fd.Message)
 		}
 	}
-	if want := append(slices.Clone(ctm.RequiredGenerics), ctm.ArtifactTargetGeneric); !slices.Equal(rows, want) {
-		t.Errorf("rows %v, want %v", rows, want)
+	want := []got{
+		{findings.RuleSchemaFieldMismatch, "DcimDevice.name"},
+		{findings.RuleSchemaFieldMismatch, "DcimDevice.platform"},
+		{findings.RuleSchemaFieldMismatch, "DcimPlatform.name"},
+		{findings.RuleSchemaFieldMissing, "InterfacePhysical.role"},
+		{findings.RuleSchemaChoiceMissing, "InterfacePhysical.status"},
+		{findings.RuleSchemaKindMissing, "DcimCable"},
+		{findings.RuleSchemaUsedByMissing, "DcimEndpoint"},
+	}
+	if !slices.Equal(rules, want) {
+		t.Errorf("findings %v, want %v", rules, want)
+	}
+}
+
+// What the table does not name is never reported (FR-012; US3 scenario 3): a kind of the
+// operator's own, a field they added to a kind the mapping reads, a choice beyond the
+// mapping's, an implementer beside the expected one, and an optional field the table
+// leaves optional read as required.
+func TestConformanceIgnoresWhatTheTableDoesNotName(t *testing.T) {
+	f := newFakeInfrahub(t)
+	f.schema["nodes"] = append(schemaList(t, f.schema, "nodes"), map[string]any{
+		"kind": "AcmeWidget", "attributes": []any{map[string]any{"name": "name", "kind": "Number", "optional": true}},
+		"relationships": []any{},
+	})
+	device := entry(t, schemaList(t, f.schema, "nodes"), "kind", "DcimDevice")
+	device["attributes"] = append(schemaList(t, device, "attributes"),
+		map[string]any{"name": "acme_asset_tag", "kind": "Text", "optional": false})
+	device["relationships"] = append(schemaList(t, device, "relationships"),
+		map[string]any{"name": "acme_owner", "peer": "AcmeWidget", "kind": "Attribute", "cardinality": "one", "optional": false})
+	role := member(t, f.schema, "InterfacePhysical", "attributes", "role")
+	role["choices"] = append(schemaList(t, role, "choices"), map[string]any{"name": "acme_backplane"})
+	role["optional"] = false
+	member(t, f.schema, "DcimDevice", "relationships", "platform")["optional"] = false
+	// Fields the mapping does not read, changed: the reader never reads them (FR-010).
+	member(t, f.schema, "DcimDevice", "attributes", "description")["kind"] = "Number"
+	dropMember(t, f.schema, "DcimDevice", "attributes", "status")
+	g := entry(t, schemaList(t, f.schema, "generics"), "kind", "DcimEndpoint")
+	g["used_by"] = append(schemaList(t, g, "used_by"), "AcmeWidget")
+
+	if _, list := checkConformance(t, f); len(list) != 0 {
+		t.Errorf("findings %+v, want none: nothing the table names differs", list)
+	}
+}
+
+// A branch that does not conform refuses the read with the same findings schema check
+// gives, before any data is read, and no CTM (US3 scenario 4; FR-011).
+func TestReadIsRefusedByConformance(t *testing.T) {
+	f := newFakeInfrahub(t)
+	cableGone(t, f.schema)
+	roleGone(t, f.schema)
+
+	snapshot, list, err := readFake(t, f)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snapshot != nil {
+		t.Error("a read refused by conformance produced a CTM")
+	}
+	if len(list) != 2 || list[0].Object != "InterfacePhysical.role" || list[1].Object != "DcimCable" || !list.Rejected() {
+		t.Errorf("findings %+v, want InterfacePhysical.role's and DcimCable's alone", list)
+	}
+	if n := f.count("/graphql/" + f.branch); n != 0 {
+		t.Errorf("a refused read asked GraphQL %d times", n)
+	}
+}
+
+// The bridge (017's T036, until T050): the read is still the generics', so a conforming
+// branch holding no contract instance, main with no network on it above all, is still
+// refused contract.node.missing as conformance refused it before, naming the branch, and
+// reads nothing more.
+func TestBridgedReadRefusesABranchWithNoContract(t *testing.T) {
+	f := newFakeInfrahub(t)
+	f.contractless = true
+
+	snapshot, list, err := readFake(t, f)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleContractNodeMissing, Object: f.branch,
+		Message: "branch defines FylgjaContract but holds no instance of it"}
+	if snapshot != nil || len(list) != 1 || list[0] != want {
+		t.Fatalf("CTM %v, findings %+v; want none and exactly %+v", snapshot != nil, list, want)
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, r := range f.served {
+		if r.Operation == "Devices" || r.Operation == "Links" {
+			t.Errorf("a refused read asked %s", r.Operation)
+		}
 	}
 }

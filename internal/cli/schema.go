@@ -28,11 +28,12 @@ func newSchemaCheckCmd(opts *options) *cobra.Command {
 	f := &checkFlags{}
 	cmd := &cobra.Command{
 		Use:   "check",
-		Short: "Check a branch's schema against Fylgja's contract",
-		Long: "Run the conformance half of `intent read` alone: the branch declares the\n" +
-			"expected contract version, and every Fylgja generic is implemented by at least\n" +
-			"one concrete kind. No intent is read and nothing is written, so this is the\n" +
-			"cheap question to ask while setting a branch up.",
+		Short: "Check a branch's schema against the schema library the reader reads",
+		Long: "Run the conformance half of `intent read` alone: the branch's schema holds every\n" +
+			"kind and field the mapping reads, with the kind, cardinality, peer and choices\n" +
+			"the pinned commit of opsmill/schema-library gives them. Every difference is named\n" +
+			"in one report, each naming the commit. No intent is read and nothing is written,\n" +
+			"so this is the cheap question to ask while setting a branch up.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			return runCheck(cmd.Context(), opts, f)

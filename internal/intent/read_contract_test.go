@@ -286,7 +286,7 @@ func TestSchemaInfoReportsImplementers(t *testing.T) {
 			t.Errorf("no concrete kind implements %s", generic)
 		}
 	}
-	if !info.Kinds[ctm.ContractKind] {
+	if _, ok := info.Nodes[ctm.ContractKind]; !ok {
 		t.Errorf("%s node kind is absent", ctm.ContractKind)
 	}
 	if info.Hash == "" {

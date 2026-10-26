@@ -4,17 +4,21 @@ import (
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/intent"
 )
 
-// The success detail names the operator's own kinds, not a count: its point is to show
-// which kind satisfies each generic, and a number cannot say that.
-func TestVerifiedGenericsRenderAsNames(t *testing.T) {
-	got := describeGenerics([]findings.GenericKinds{
-		{Generic: "FylgjaDevice", Kinds: []string{"NetworkDevice"}},
-		{Generic: "FylgjaInterface", Kinds: []string{"NetworkInterface", "LoopbackInterface"}},
-	})
-	want := "FylgjaDevice ← NetworkDevice; FylgjaInterface ← NetworkInterface, LoopbackInterface"
+// The success line names the library's commit and every kind the mapping reads, in the
+// table's order (contracts/scope-and-commands.md): an operator sees which model their
+// branch was checked against, and which of its kinds the reader reads, not a count.
+func TestConformantLineNamesTheCommitAndTheKinds(t *testing.T) {
+	v := &findings.Verified{Model: intent.LibraryModel, Version: intent.LibraryVersion}
+	for _, k := range intent.LibraryTables {
+		v.Kinds = append(v.Kinds, findings.KindFields{Kind: k.Kind, Fields: k.Fields()})
+	}
+	got := conformantLine(v)
+	want := "conformant with opsmill/schema-library@26336e9: DcimDevice, DcimPlatform, OrganizationManufacturer, " +
+		"InterfacePhysical, DcimCable"
 	if got != want {
-		t.Errorf("describeGenerics() = %q, want %q", got, want)
+		t.Errorf("conformantLine() = %q, want %q", got, want)
 	}
 }

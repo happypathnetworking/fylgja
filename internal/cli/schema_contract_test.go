@@ -3,7 +3,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,8 +14,8 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/testsupport"
 )
 
@@ -109,8 +108,9 @@ func checkBranch(t *testing.T, branch string) (int, *findingsDoc, *recorder) {
 	return code, doc, rec
 }
 
-// The fixture branch conforms, and the answer says what was verified: the contract
-// version and each generic with the kinds implementing it by name.
+// The fixture branch conforms, and the answer says what was verified: the library's
+// commit, and each kind the mapping reads with its fields by name (017). It holds the
+// library once T060 re-seeds it; T044 extends this to the mixed fixture.
 func TestSchemaCheckOnTheFixtureBranch(t *testing.T) {
 	code, doc, _ := checkBranch(t, testsupport.FixtureBranch)
 	if code != findings.ExitOK {
@@ -122,61 +122,22 @@ func TestSchemaCheckOnTheFixtureBranch(t *testing.T) {
 	if doc.Verified == nil {
 		t.Fatal("a clean check reported nothing as verified")
 	}
-	if doc.Verified.ContractVersion != ctm.ContractVersion {
-		t.Errorf("contract_version = %q, want %q", doc.Verified.ContractVersion, ctm.ContractVersion)
+	if doc.Verified.Model != intent.LibraryModel || doc.Verified.Version != intent.LibraryVersion {
+		t.Errorf("verified %s@%s, want %s@%s", doc.Verified.Model, doc.Verified.Version, intent.LibraryModel, intent.LibraryVersion)
 	}
-	// Each required generic, then the artifact target's row (M5, contracts/cli.md).
-	if len(doc.Verified.Generics) != len(ctm.RequiredGenerics)+1 {
-		t.Fatalf("verified %d generics, want %d: %+v",
-			len(doc.Verified.Generics), len(ctm.RequiredGenerics)+1, doc.Verified.Generics)
-	}
-	if last := doc.Verified.Generics[len(doc.Verified.Generics)-1]; last.Generic != ctm.ArtifactTargetGeneric ||
-		!slices.Contains(last.Kinds, "NetworkDevice") {
-		t.Errorf("last verified row %+v, want %s naming NetworkDevice", last, ctm.ArtifactTargetGeneric)
-	}
-	for _, g := range doc.Verified.Generics {
-		if len(g.Kinds) == 0 {
-			t.Errorf("generic %s names no implementing kind", g.Generic)
-		}
-		for _, k := range g.Kinds {
-			if k == "" {
-				t.Errorf("generic %s names an unnamed kind", g.Generic)
-			}
+	var kinds []string
+	for _, k := range doc.Verified.Kinds {
+		kinds = append(kinds, k.Kind)
+		if len(k.Fields) == 0 {
+			t.Errorf("kind %s names no field", k.Kind)
 		}
 	}
-}
-
-// A branch that implements the generics but holds no contract node is rejected by rule,
-// not by a transport error, and the rule names the branch. Since M5 put Fylgja's schema on
-// main no branch is without it, so main is that branch: its kinds implement
-// every generic and it holds no FylgjaContract, and no generic is named unimplemented. What
-// the M1 test proved of a bare branch is tier 1's since M5 (intent's conformance_test.go,
-// against a faked schema).
-func TestSchemaCheckOnABranchWithoutAContractNode(t *testing.T) {
-	code, doc, _ := checkBranch(t, "main")
-	if code != findings.ExitRejected {
-		t.Fatalf("exit %d, want 1: %+v", code, doc.Findings)
+	var want []string
+	for _, k := range intent.LibraryTables {
+		want = append(want, k.Kind)
 	}
-	byRule := map[string]int{}
-	for _, f := range doc.Findings {
-		byRule[f.Rule]++
-		if f.Object == "" {
-			t.Errorf("finding %s names no object", f.Rule)
-		}
-		if f.Rule == findings.RuleContractNodeMissing && f.Object != "main" {
-			t.Errorf("finding %+v, want the branch main named", f)
-		}
-	}
-	if byRule[findings.RuleContractNodeMissing] != 1 {
-		t.Errorf("%d %s findings, want 1: %+v", byRule[findings.RuleContractNodeMissing],
-			findings.RuleContractNodeMissing, doc.Findings)
-	}
-	if byRule[findings.RuleGenericUnimplemented] != 0 {
-		t.Errorf("%d %s findings on main, whose schema implements every generic: %+v", byRule[findings.RuleGenericUnimplemented],
-			findings.RuleGenericUnimplemented, doc.Findings)
-	}
-	if doc.Verified != nil {
-		t.Error("a rejected check reported something as verified")
+	if !slices.Equal(kinds, want) {
+		t.Errorf("verified kinds %v, want %v", kinds, want)
 	}
 }
 
@@ -206,29 +167,18 @@ func TestSchemaCheckOnAMissingBranch(t *testing.T) {
 	}
 }
 
-// The schema check reads no intent. The proxy sees the schema endpoint and the
-// contract-version query, and nothing that asks for a device, an interface or a link.
+// The schema check reads no intent. The proxy sees the schema endpoint and no GraphQL at
+// all: conformance is the mapping's table against the schema endpoint alone (017).
 func TestSchemaCheckIssuesNoObjectQuery(t *testing.T) {
 	_, _, rec := checkBranch(t, testsupport.FixtureBranch)
 
-	queries := rec.queries()
-	if len(queries) == 0 {
-		t.Fatal("no GraphQL request was recorded; the proxy is not in the path")
+	rec.mu.Lock()
+	paths := append([]string(nil), rec.paths...)
+	rec.mu.Unlock()
+	if !slices.Contains(paths, "/api/schema") {
+		t.Fatalf("the schema endpoint was not recorded (%v); the proxy is not in the path", paths)
 	}
-	for _, body := range queries {
-		var req struct {
-			Query string `json:"query"`
-		}
-		if err := json.Unmarshal([]byte(body), &req); err != nil {
-			t.Fatalf("unreadable GraphQL request: %v", err)
-		}
-		if !strings.Contains(req.Query, ctm.ContractKind) {
-			t.Errorf("schema check issued a query that is not the contract version: %s", req.Query)
-		}
-		for _, generic := range ctm.RequiredGenerics {
-			if strings.Contains(req.Query, generic) {
-				t.Errorf("schema check queried %s: it must read no intent\n%s", generic, req.Query)
-			}
-		}
+	for _, body := range rec.queries() {
+		t.Errorf("schema check issued a GraphQL request; it must read no intent\n%s", body)
 	}
 }

@@ -83,9 +83,7 @@ func m1Documents() []labelledDocument {
 	compiled := NewDocument(OpCompile, &Subject{CTM: "ctm.json", Out: "/tmp/bundle"}, nil)
 	compiled.BundleID = stepToID
 	checked := NewDocument(OpSchemaCheck, &Subject{Branch: "fylgja-fixture"}, nil)
-	checked.Verified = &Verified{ContractVersion: "0.2",
-		Generics: []GenericKinds{{Generic: "FylgjaDevice", Kinds: []string{"NetworkDevice"}}},
-		Stages:   &StagesVerified{Kind: "FylgjaStage", Present: true, Extension: true, File: "schema/fylgja-stage.yaml"}}
+	checked.Verified = libraryVerified(&StagesVerified{Kind: "FylgjaStage", Present: true, Extension: true, File: "schema/fylgja-stage.yaml"})
 	return []labelledDocument{
 		{"intent read ok", NewDocument(OpIntentRead, &Subject{Branch: "fylgja-fixture", CTM: "ctm.json"}, nil)},
 		{"twin compile ok", compiled},

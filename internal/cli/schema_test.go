@@ -135,8 +135,8 @@ func TestCheckNamesTheStageKind(t *testing.T) {
 				t.Fatalf("runCheck returned %v, want a findings result", err)
 			}
 			lines := strings.Split(strings.TrimSuffix(out, "\n"), "\n")
-			if len(lines) != 2 || !strings.HasPrefix(lines[0], "contract 0.2 ✓  FylgjaDevice ← NetworkDevice") || lines[1] != c.line {
-				t.Errorf("stdout\n%s\nwant the contract line, then\n%s", out, c.line)
+			if len(lines) != 2 || lines[0] != conformantLine || lines[1] != c.line {
+				t.Errorf("stdout\n%s\nwant\n%s\n%s", out, conformantLine, c.line)
 			}
 			doc := res.doc
 			if doc.Status != findings.StatusOK || len(doc.Findings) != 0 || doc.Verified == nil || doc.Verified.Stages == nil {
@@ -175,6 +175,102 @@ func TestCheckNamesTheStageKind(t *testing.T) {
 		t.Errorf("a branch Infrahub does not know: exit %d, verified %+v", code, doc.Verified)
 	}
 	for _, r := range f.requests() {
+		if r.Path == "/api/schema" && r.Query == "" {
+			t.Errorf("a refused check asked the default branch's schema: %+v", r)
+		}
+	}
+}
+
+// conformantLine is schema check's success line on a branch holding the library at the
+// pinned commit (contracts/scope-and-commands.md).
+const conformantLine = "conformant with opsmill/schema-library@26336e9: DcimDevice, DcimPlatform, " +
+	"OrganizationManufacturer, InterfacePhysical, DcimCable"
+
+// A conformant branch's answer names the commit and the kinds, and --json's verified
+// block names each kind's fields, valid against the current contract (FR-013; US3
+// scenario 1). A branch whose DCIM differs is refused with every difference in one
+// document, each naming the commit, and nothing verified; nothing is asked of the default
+// branch for it (US3 scenario 2).
+func TestCheckReportsTheMappingsTable(t *testing.T) {
+	f := newFakeInfrahub(t)
+	f.change("pc-1", "diverged")
+	f.schemaMutations = map[string]func(map[string]any){"diverged": func(doc map[string]any) {
+		var nodes []any
+		for _, n := range doc["nodes"].([]any) {
+			node := n.(map[string]any)
+			switch node["kind"] {
+			case "DcimCable":
+				continue
+			case "DcimPlatform":
+				for _, a := range node["attributes"].([]any) {
+					if attr := a.(map[string]any); attr["name"] == "name" {
+						attr["kind"] = "Number"
+					}
+				}
+			}
+			nodes = append(nodes, node)
+		}
+		doc["nodes"] = nodes
+	}}
+	f.start()
+
+	var err error
+	out := captureStdout(t, func() { err = runCheck(t.Context(), &options{}, &checkFlags{branch: "fylgja-fixture"}) })
+	if !strings.HasPrefix(out, conformantLine+"\n") {
+		t.Errorf("stdout\n%s\nwant it to begin\n%s", out, conformantLine)
+	}
+	var res *result
+	if !errors.As(err, &res) {
+		t.Fatalf("runCheck returned %v, want a findings result", err)
+	}
+
+	code, doc := runCheckDoc(t, &checkFlags{branch: "fylgja-fixture"})
+	if code != findings.ExitOK || len(doc.Findings) != 0 || doc.Verified == nil {
+		t.Fatalf("exit %d, findings %+v, verified %+v; want 0, none and the block", code, doc.Findings, doc.Verified)
+	}
+	want := []findings.KindFields{
+		{Kind: "DcimDevice", Fields: []string{"name", "tags", "platform", "interfaces", "artifacts"}},
+		{Kind: "DcimPlatform", Fields: []string{"name", "manufacturer"}},
+		{Kind: "OrganizationManufacturer", Fields: []string{"name"}},
+		{Kind: "InterfacePhysical", Fields: []string{"name", "role", "status", "device", "connector"}},
+		{Kind: "DcimCable", Fields: []string{"connected_endpoints"}},
+	}
+	if v := doc.Verified; v.Model != "opsmill/schema-library" || v.Version != "26336e9" || !reflect.DeepEqual(v.Kinds, want) {
+		t.Errorf("verified %+v, want the library at 26336e9 with %+v", v, want)
+	}
+	if err := runCheck(t.Context(), &options{asJSON: true}, &checkFlags{branch: "fylgja-fixture"}); !asResult(err, &res) {
+		t.Fatalf("runCheck returned %v, want a findings result", err)
+	}
+	validateM10Document(t, res.doc)
+
+	before := len(f.requests())
+	code, doc = runCheckDoc(t, &checkFlags{branch: "diverged"})
+	if code != findings.ExitRejected || doc.Verified != nil {
+		t.Errorf("a diverged branch: exit %d, verified %+v; want %d and nothing verified", code, doc.Verified, findings.ExitRejected)
+	}
+	type got struct{ rule, object string }
+	var rules []got
+	for _, fd := range doc.Findings {
+		rules = append(rules, got{fd.Rule, fd.Object})
+		if !strings.HasSuffix(fd.Message, "opsmill/schema-library@26336e9 has it") {
+			t.Errorf("%s %s does not name the commit: %s", fd.Rule, fd.Object, fd.Message)
+		}
+	}
+	if w := []got{{findings.RuleSchemaFieldMismatch, "DcimPlatform.name"}, {findings.RuleSchemaKindMissing, "DcimCable"}}; !reflect.DeepEqual(rules, w) {
+		t.Errorf("findings %v, want %v in one document", rules, w)
+	}
+	if err := runCheck(t.Context(), &options{asJSON: true}, &checkFlags{branch: "diverged"}); !asResult(err, &res) {
+		t.Fatalf("runCheck returned %v, want a findings result", err)
+	}
+	validateM10Document(t, res.doc)
+	// No step on schema.check: the conformance rules are a read's step read alone
+	// (contracts/scope-and-commands.md).
+	for _, fd := range res.doc.Findings {
+		if fd.Step != "" {
+			t.Errorf("%s %s carries step %s on schema check", fd.Rule, fd.Object, fd.Step)
+		}
+	}
+	for _, r := range f.requests()[before:] {
 		if r.Path == "/api/schema" && r.Query == "" {
 			t.Errorf("a refused check asked the default branch's schema: %+v", r)
 		}

@@ -338,9 +338,7 @@ func schemaCheckStageDocuments() []labelledDocument {
 	check := func(v StagesVerified) *Document {
 		doc := NewDocument(OpSchemaCheck, &Subject{Branch: "fylgja-fixture"}, nil)
 		v.Kind, v.File = "FylgjaStage", "schema/fylgja-stage.yaml"
-		doc.Verified = &Verified{ContractVersion: "0.2",
-			Generics: []GenericKinds{{Generic: "FylgjaDevice", Kinds: []string{"NetworkDevice"}}},
-			Stages:   &v}
+		doc.Verified = libraryVerified(&v)
 		return doc
 	}
 	return []labelledDocument{
@@ -376,7 +374,7 @@ func TestVerifiedStagesSatisfiesSchema(t *testing.T) {
 		}
 	}
 	none := NewDocument(OpSchemaCheck, &Subject{Branch: "fylgja-fixture"}, nil)
-	none.Verified = &Verified{ContractVersion: "0.2"}
+	none.Verified = libraryVerified(nil)
 	if b := string(mustMarshal(t, none)); strings.Contains(b, `"stages"`) {
 		t.Errorf("a schema check with no stage kind read carries the key: %s", b)
 	}

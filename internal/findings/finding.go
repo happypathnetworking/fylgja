@@ -24,7 +24,6 @@ const (
 	// Conformance, against Infrahub schema metadata.
 	RuleContractVersionMismatch = "contract.version.mismatch"
 	RuleContractNodeMissing     = "contract.node.missing"
-	RuleGenericUnimplemented    = "schema.generic.unimplemented"
 
 	// CTM-side, run identically on fixtures and live intent.
 	RuleRequiredMissing      = "data.required.missing"
@@ -114,7 +113,6 @@ const (
 
 	// Conformance and the read's artifact selection. Every device is decided before any
 	// content is fetched, so one read reports every device's refusal (Constitution III).
-	RuleSchemaArtifactTargetMissing    = "schema.artifact_target.missing"    // read, and schema check: the kind; a kind implementing FylgjaDevice does not inherit CoreArtifactTarget
 	RuleArtifactMissing                = "artifact.missing"                  // read, and compile from validation: the device; no artifact of the package's name on it (at `at` when pinned; names `at`), or a CTM device without one
 	RuleArtifactAmbiguous              = "artifact.ambiguous"                // read: the device; more than one artifact of that name; names the count and each checksum
 	RuleArtifactNotReady               = "artifact.not_ready"                // read: the device; status is not Ready, or there is no storage object yet; names the state and that Fylgja never regenerates

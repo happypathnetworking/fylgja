@@ -48,9 +48,9 @@ func Read(ctx context.Context, branch, at, scope string, reg *psp.Registry, obse
 	ctx, cancel := context.WithTimeout(ctx, ReadTimeout)
 	defer cancel()
 
-	// Conformance first, over the schema endpoint: on a branch without Fylgja's schema
-	// the generics are not GraphQL types at all, so a query would fail naming nothing an
-	// operator can act on.
+	// Conformance first, over the schema endpoint: on a branch without the library's kinds
+	// a query of them would fail naming nothing an operator can act on, where the
+	// mapping's table names each kind and field that differs.
 	conf, list, err := client.CheckConformance(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -64,6 +64,10 @@ func Read(ctx context.Context, branch, at, scope string, reg *psp.Registry, obse
 		return nil, nil, err
 	}
 	list = append(list, artifactFindings...)
+	// A read that refused before it projected anything wrote no CTM to validate.
+	if snapshot == nil {
+		return nil, list, nil
+	}
 
 	// The same rules twin compile runs, on the same shape: a CTM that reads clean compiles.
 	list = append(list, dedupe(validate.Validate(snapshot, reg), list)...)

@@ -53,11 +53,9 @@ type findingsDoc struct {
 	Status    string `json:"status"`
 	BundleID  string `json:"bundle_id"`
 	Verified  *struct {
-		ContractVersion string `json:"contract_version"`
-		Generics        []struct {
-			Generic string   `json:"generic"`
-			Kinds   []string `json:"kinds"`
-		} `json:"generics"`
+		Model   string                `json:"model"`
+		Version string                `json:"version"`
+		Kinds   []findings.KindFields `json:"kinds"`
 	} `json:"verified"`
 	Findings []struct {
 		Severity string `json:"severity"`

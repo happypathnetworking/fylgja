@@ -26,7 +26,6 @@ import (
 	"go.temporal.io/sdk/testsuite"
 
 	"github.com/happypathnetworking/fylgja/internal/bundle"
-	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
@@ -457,23 +456,25 @@ func TestReadIntentActivity(t *testing.T) {
 			t.Errorf("observed_at %s is later than the first request was answered (%s); it is stamped before the first request", observed, clock.UTC())
 		}
 		if n := requests.Load(); n != 1 {
-			t.Errorf("Infrahub received %d request(s); want the schema read alone, as no contract node was declared", n)
+			t.Errorf("Infrahub received %d request(s); want the schema read alone, as the branch holds none of the library's kinds", n)
 		}
 
-		want := []string{findings.RuleContractNodeMissing}
-		for range ctm.RequiredGenerics {
-			want = append(want, findings.RuleGenericUnimplemented)
+		// A branch holding none of the library's kinds: each kind the mapping reads is
+		// named once, in the table's order, and nothing else.
+		var want, objects []string
+		for _, k := range intent.LibraryTables {
+			want = append(want, findings.RuleSchemaKindMissing)
+			objects = append(objects, k.Kind)
 		}
 		if !res.Findings.Rejected() || !slices.Equal(rules(res.Findings), want) {
 			t.Errorf("findings %+v, want rules %v", res.Findings, want)
 		}
-		for i, f := range res.Findings {
-			switch {
-			case i == 0 && f.Object != branch:
-				t.Errorf("%s names %q, want the branch %q", f.Rule, f.Object, branch)
-			case i > 0 && i-1 < len(ctm.RequiredGenerics) && f.Object != ctm.RequiredGenerics[i-1]:
-				t.Errorf("%s names %q, want the generic %q", f.Rule, f.Object, ctm.RequiredGenerics[i-1])
-			}
+		var named []string
+		for _, f := range res.Findings {
+			named = append(named, f.Object)
+		}
+		if !slices.Equal(named, objects) {
+			t.Errorf("findings name %v, want the kinds %v", named, objects)
 		}
 		atStep(t, res.Findings, findings.StepRead)
 		nothingRead(t, c)

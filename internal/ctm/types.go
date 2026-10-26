@@ -202,8 +202,9 @@ const Version = "2"
 // removes it with the generics reader's contract check, its last user.
 const ContractVersion = "0.2"
 
-// RequiredGenerics are the generics the generics reader's conformance demands. 017
-// removes them with that conformance, their last user.
+// RequiredGenerics are the generics the generics reader's conformance demanded. That
+// conformance left at 017's T036; the bridged events reader maps an event's kind through
+// them until T048, and T053 removes them.
 var RequiredGenerics = []string{
 	DeviceGeneric,
 	"FylgjaInterface",
@@ -220,8 +221,8 @@ const ContractKind = "FylgjaContract"
 const DeviceGeneric = "FylgjaDevice"
 
 // ArtifactTargetGeneric is Infrahub's own generic for a node an artifact can be rendered
-// for, which the generics contract demands of every device kind. 017 removes it with the
-// generics reader's conformance.
+// for, which the generics contract demanded of every device kind. Its product user, the
+// generics reader's conformance, left at 017's T036; T053 removes it.
 const ArtifactTargetGeneric = "CoreArtifactTarget"
 
 // Device returns the named device, or nil.

@@ -23,9 +23,10 @@ type (
 
 // ContractVersion reads the generics contract version this branch declares.
 //
-// It is queried before anything else: if the branch implements a contract Fylgja does
-// not understand, every other finding would be noise. The second return
-// reports whether the singleton exists at all.
+// The bridge (017's T036, until T039): conformance is the library's table now, but the
+// read is still the generics', so Fetch asks this before anything else, and a branch
+// holding no contract instance is refused as it was. The second return reports whether
+// the singleton exists at all.
 func (c *Client) ContractVersion(ctx context.Context) (string, bool, error) {
 	resp, err := ContractVersion(ctx, c.gql)
 	if err != nil {
@@ -42,6 +43,27 @@ func (c *Client) ContractVersion(ctx context.Context) (string, bool, error) {
 	node := edge.GetNode()
 	version := node.GetVersion()
 	return version.GetValue(), true, nil
+}
+
+// bridgeContract is the generics contract's check, as conformance made it before 017's
+// T036: a branch holding no contract instance is refused contract.node.missing, and one
+// declaring another version contract.version.mismatch alone, every other finding being
+// about a model this build cannot interpret. It returns nil when the read may go on.
+func (c *Client) bridgeContract(ctx context.Context) (findings.List, error) {
+	version, present, err := c.ContractVersion(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var list findings.List
+	switch {
+	case !present:
+		list.Add(findings.Rejection, findings.RuleContractNodeMissing, c.cfg.Branch, fmt.Sprintf(
+			"branch defines %s but holds no instance of it", ctm.ContractKind))
+	case version != ctm.ContractVersion:
+		list.Add(findings.Rejection, findings.RuleContractVersionMismatch, c.cfg.Branch, fmt.Sprintf(
+			"branch declares contract version %q, this build understands %q", version, ctm.ContractVersion))
+	}
+	return list, nil
 }
 
 // Fetch reads a branch into the CTM and seals it with an envelope.
@@ -63,8 +85,8 @@ func (c *Client) ContractVersion(ctx context.Context) (string, bool, error) {
 // read here.
 //
 // The envelope is assembled here from what the caller already established — the
-// conformance pass read the schema hash and the contract version, so Fetch does not
-// re-read them — plus the `observed_at` the caller captured before the first request.
+// conformance pass read the schema hash, so Fetch does not re-read it — plus the
+// `observed_at` the caller captured before the first request.
 // `at` is whatever the operator supplied, verbatim, and absent when they
 // supplied none: Fylgja never invents one.
 func (c *Client) Fetch(ctx context.Context, conf *Conformance, observedAt string, reg *psp.Registry) (*ctm.CTM, findings.List, error) {
@@ -85,8 +107,17 @@ func (c *Client) Fetch(ctx context.Context, conf *Conformance, observedAt string
 	}
 	if conf != nil {
 		out.Envelope.SchemaHash = conf.SchemaHash
-		out.Envelope.Mapping.Version = conf.Version
 	}
+
+	// The bridge (017's T036, until T039 reads the library and T050 files scope.empty for
+	// a branch point): the generics' contract checks left conformance with the library's
+	// table, and stay here with the read they guard. A branch with no network on it, a
+	// stage's branch point on main above all, is still refused contract.node.missing, and
+	// no CTM is written.
+	if refused, err := c.bridgeContract(ctx); err != nil || refused != nil {
+		return nil, refused, err
+	}
+	out.Envelope.Mapping.Version = ctm.ContractVersion
 
 	// The device nodes are kept beside the devices they projected into, so the artifact
 	// pass can read what the same request listed: one query yields a device and its
@@ -147,7 +178,7 @@ func (c *Client) Fetch(ctx context.Context, conf *Conformance, observedAt string
 
 // The generics reader's mapping, as the bridge records it (017's T023): the reader and
 // the model it reads. The version is the contract version the branch declares, which
-// conformance has checked.
+// bridgeContract has checked.
 const (
 	bridgeReader = "infrahub-generics"
 	bridgeModel  = "fylgja-generics"

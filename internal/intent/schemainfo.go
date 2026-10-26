@@ -11,18 +11,44 @@ import (
 )
 
 // SchemaInfo is what Infrahub's schema endpoint says about a branch: the schema's own
-// hash, and which concrete kinds implement each generic.
+// hash, which concrete kinds implement each generic, and each node kind's attributes and
+// relationships.
 //
 // Conformance is read from here rather than inferred from a failed query. A failed
-// query yields a transport error; the contract requires naming the generic that has no
-// implementation, and only the schema endpoint knows that.
+// query yields a transport error; the mapping's table names the kind and the field a
+// branch lacks, and only the schema endpoint knows that.
 type SchemaInfo struct {
 	// Hash identifies the schema state; recorded as the envelope's schema_hash.
 	Hash string
 	// UsedBy maps a generic's kind name to the concrete kinds implementing it.
 	UsedBy map[string][]string
-	// Kinds is every node kind defined on the branch.
-	Kinds map[string]bool
+	// Nodes is every node kind defined on the branch, by kind.
+	Nodes map[string]NodeSchema
+}
+
+// NodeSchema is one node kind as the endpoint reports it, its inherited attributes and
+// relationships merged in (the endpoint marks them inherited; nothing here needs to
+// know which).
+type NodeSchema struct {
+	Attributes    map[string]AttributeSchema
+	Relationships map[string]RelationshipSchema
+}
+
+// AttributeSchema is one attribute as the endpoint reports it: Optional is the
+// endpoint's, which is true for any attribute with a default whatever its file says;
+// Choices are a dropdown's choice names.
+type AttributeSchema struct {
+	Kind     string
+	Optional bool
+	Choices  []string
+}
+
+// RelationshipSchema is one relationship as the endpoint reports it.
+type RelationshipSchema struct {
+	Peer        string
+	Kind        string
+	Cardinality string
+	Optional    bool
 }
 
 // Implementers returns the concrete kinds implementing a generic, sorted.
@@ -70,7 +96,22 @@ func (c *Client) SchemaInfo(ctx context.Context) (*SchemaInfo, error) {
 			UsedBy []string `json:"used_by"`
 		} `json:"generics"`
 		Nodes []struct {
-			Kind string `json:"kind"`
+			Kind       string `json:"kind"`
+			Attributes []struct {
+				Name     string `json:"name"`
+				Kind     string `json:"kind"`
+				Optional bool   `json:"optional"`
+				Choices  []struct {
+					Name string `json:"name"`
+				} `json:"choices"`
+			} `json:"attributes"`
+			Relationships []struct {
+				Name        string `json:"name"`
+				Peer        string `json:"peer"`
+				Kind        string `json:"kind"`
+				Cardinality string `json:"cardinality"`
+				Optional    bool   `json:"optional"`
+			} `json:"relationships"`
 		} `json:"nodes"`
 	}
 	if err := json.Unmarshal(body, &doc); err != nil {
@@ -79,12 +120,23 @@ func (c *Client) SchemaInfo(ctx context.Context) (*SchemaInfo, error) {
 	if doc.Main == "" {
 		return nil, fmt.Errorf("reading the schema %s: no schema hash reported", c.cfg.describe())
 	}
-	info := &SchemaInfo{Hash: doc.Main, UsedBy: map[string][]string{}, Kinds: map[string]bool{}}
+	info := &SchemaInfo{Hash: doc.Main, UsedBy: map[string][]string{}, Nodes: map[string]NodeSchema{}}
 	for _, g := range doc.Generics {
 		info.UsedBy[g.Kind] = g.UsedBy
 	}
 	for _, n := range doc.Nodes {
-		info.Kinds[n.Kind] = true
+		node := NodeSchema{Attributes: map[string]AttributeSchema{}, Relationships: map[string]RelationshipSchema{}}
+		for _, a := range n.Attributes {
+			attr := AttributeSchema{Kind: a.Kind, Optional: a.Optional}
+			for _, ch := range a.Choices {
+				attr.Choices = append(attr.Choices, ch.Name)
+			}
+			node.Attributes[a.Name] = attr
+		}
+		for _, r := range n.Relationships {
+			node.Relationships[r.Name] = RelationshipSchema{Peer: r.Peer, Kind: r.Kind, Cardinality: r.Cardinality, Optional: r.Optional}
+		}
+		info.Nodes[n.Kind] = node
 	}
 	return info, nil
 }

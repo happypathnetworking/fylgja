@@ -41,6 +41,9 @@ type fakeInfrahub struct {
 	// schemaStatus, for a branch it names, is how that branch's schema answers instead,
 	// while its GraphQL still does: a read that cannot run past a resolution that did.
 	schemaStatus map[string]int
+	// schemaMutations, for a branch it names, changes that branch's schema document
+	// before it is served: a branch whose DCIM is not the library's (017).
+	schemaMutations map[string]func(doc map[string]any)
 	// changes are the proposed changes served on the unnamed GraphQL endpoint, open or
 	// not, each with its marks, its branch's point of origin and its validators.
 	changes []*fakeChange
@@ -59,8 +62,8 @@ type fakeInfrahub struct {
 	// of a versioned branch reads its last version (014: a step between two stages of one
 	// branch reads two intents).
 	versions map[string][]fakeVersion
-	// contractless names branches whose contract node is absent: the read refuses them
-	// as contract.node.missing.
+	// contractless names branches whose contract node is absent: the bridged read refuses
+	// them as contract.node.missing (017's T036, until T050).
 	contractless map[string]bool
 	// stamps overrides a device's stamps on a branch, keyed "<branch>/<device>": an intent
 	// written after its artifact is a stale artifact (D-046).
@@ -228,7 +231,8 @@ func (f *fakeInfrahub) serve(w http.ResponseWriter, r *http.Request) {
 		case f.schemaStatus[q] != 0:
 			writeFakeJSON(w, f.schemaStatus[q], map[string]any{"errors": []map[string]string{{"message": "the branch's schema is unwell"}}})
 		case known:
-			writeFakeJSON(w, http.StatusOK, f.branchSchema())
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write(f.branchSchema(q))
 		default:
 			writeFakeJSON(w, http.StatusBadRequest, map[string]any{"errors": []map[string]string{{"message": "Branch: " + q + " not found."}}})
 		}
@@ -542,25 +546,57 @@ func (f *fakeInfrahub) stampPages(branch, at string, c *ctm.CTM) map[string]any 
 	return map[string]any{"FylgjaDevice": devicePage, "FylgjaLink": linkPage}
 }
 
-// branchSchema is the reference schema as it stands on main since M5, with the fixture's
-// schema hash: each generic implemented by its reference kind, the device kind an
-// artifact target, and the contract node defined.
-func (f *fakeInfrahub) branchSchema() map[string]any {
+// branchSchema is a served branch's schema, encoded, with the fixture's schema hash: the
+// library's kinds as the pinned commit loads them (internal/intent/testdata's trimmed
+// document of 017's T033), so conformance passes, beside the generics' rows, each
+// implemented by its reference kind, which the bridged stamps and events still map an
+// event's kind through (017's T037, until T043 and T048). A branch named in
+// schemaMutations is served changed by its function: a branch that does not conform.
+// The interim branch T033 read held both, the generics from main and the library.
+//
+// An unchanged document is encoded once per schema hash: every read the harness serves
+// asks for it, and decoding and encoding its 110 kB each time cost the package seconds.
+func (f *fakeInfrahub) branchSchema(branch string) []byte {
+	hash := f.fixture.Envelope.SchemaHash
+	mutate := f.schemaMutations[branch]
+	if mutate == nil {
+		if b, ok := encodedSchemas.Load(hash); ok {
+			return b.([]byte)
+		}
+	}
+	raw, err := os.ReadFile(repoPath("internal", "intent", "testdata", "schema-26336e9.json"))
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		f.t.Fatal(err)
+	}
+	doc["main"] = hash
 	generic := func(kind, usedBy string) map[string]any {
 		return map[string]any{"kind": kind, "used_by": []string{usedBy}}
 	}
-	return map[string]any{
-		"main": f.fixture.Envelope.SchemaHash,
-		"generics": []any{
-			generic(ctm.DeviceGeneric, "NetworkDevice"),
-			generic("FylgjaInterface", "NetworkInterface"),
-			generic("FylgjaLink", "NetworkLink"),
-			generic("FylgjaPlatform", "NetworkPlatform"),
-			generic(ctm.ArtifactTargetGeneric, "NetworkDevice"),
-		},
-		"nodes": []any{map[string]any{"kind": ctm.ContractKind}, map[string]any{"kind": "NetworkDevice"}},
+	doc["generics"] = append(doc["generics"].([]any),
+		generic(ctm.DeviceGeneric, "NetworkDevice"),
+		generic("FylgjaInterface", "NetworkInterface"),
+		generic("FylgjaLink", "NetworkLink"),
+		generic("FylgjaPlatform", "NetworkPlatform"),
+	)
+	if mutate != nil {
+		mutate(doc)
 	}
+	b, err := json.Marshal(doc)
+	if err != nil {
+		f.t.Fatal(err)
+	}
+	if mutate == nil {
+		encodedSchemas.Store(hash, b)
+	}
+	return b
 }
+
+// encodedSchemas holds branchSchema's unchanged documents, by schema hash.
+var encodedSchemas sync.Map
 
 func writeFakeJSON(w http.ResponseWriter, status int, v any) {
 	w.Header().Set("Content-Type", "application/json")

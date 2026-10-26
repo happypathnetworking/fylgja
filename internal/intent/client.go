@@ -1,7 +1,11 @@
 // Package intent reads intent from Infrahub and projects it into the CTM.
 //
-// Every query names a Fylgja generic, never a concrete kind (Constitution III), and
-// every request is a read: Fylgja never writes to Infrahub. Queries are typed
+// It is the Infrahub reader of the schema library's DCIM (D-057, Constitution III), and
+// mapping.go is the one place that knows the library's kinds: the conformance table
+// every read and `schema check` compare a branch's schema with. Until 017's T039 the
+// read itself is still the generics', bridged (project.go), so every data query still
+// names a Fylgja generic. Every request is a read: Fylgja never writes to Infrahub.
+// Queries are typed
 // and generated from Infrahub's own SDL, so a schema change that breaks a query fails
 // the build rather than the twin.
 package intent

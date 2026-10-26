@@ -322,18 +322,20 @@ type ReadCounts struct {
 	SharedPorts   int `json:"shared_ports"`
 }
 
-// GenericKinds names the concrete kinds implementing one generic. The first
-// iteration reported only a count; naming them is what lets `schema check` show an
-// operator which of their kinds satisfies the contract.
-type GenericKinds struct {
-	Generic string   `json:"generic"`
-	Kinds   []string `json:"kinds"`
+// KindFields is one kind the mapping reads, with the fields of it a schema check
+// verified, attributes first, in the mapping's table's order (017).
+type KindFields struct {
+	Kind   string   `json:"kind"`
+	Fields []string `json:"fields"`
 }
 
-// Verified is the success detail of a schema check: what was verified.
+// Verified is the success detail of a schema check: what was verified. Model and Version
+// name the schema library and the commit the mapping's table was written against, and
+// Kinds every kind and field of it the branch was found to hold (017).
 type Verified struct {
-	ContractVersion string         `json:"contract_version,omitempty"`
-	Generics        []GenericKinds `json:"generics,omitempty"`
+	Model   string       `json:"model"`
+	Version string       `json:"version"`
+	Kinds   []KindFields `json:"kinds"`
 	// Stages is whether the default branch carries the stage kind and its extension,
 	// whatever branch was checked (014): information beside the conformance answer, never
 	// a finding.

@@ -798,7 +798,7 @@ interface's, platform's, manufacturer's and cable's; a `member_of_groups` update
 for nothing; a re-ended cable's event reaches its former port; an untagged device's write
 makes no tagged device stale.
 
-- [ ] T047 [US5] The stamps (R-10; data-model §7). In `internal/intent/queries.graphql`, replace `IntentStamps` and the fragment `PlatformStamps` with two operations shaped like T038's, selecting stamps and ids alone:
+- [X] T047 [US5] The stamps (R-10; data-model §7). In `internal/intent/queries.graphql`, replace `IntentStamps` and the fragment `PlatformStamps` with two operations shaped like T038's, selecting stamps and ids alone:
   - per device: the device edge's `node_metadata { updated_at }`; `platform { node_metadata { updated_at } node { id name { value } manufacturer { node_metadata { updated_at } node { id name { value } } } } }`; `interfaces { edges { node_metadata { updated_at } node { id } } }` (both kinds); and `...ArtifactStamps`;
   - per physical port: `connector { node_metadata { updated_at } node { id } }`.
 
@@ -808,22 +808,62 @@ makes no tagged device stale.
   - `Stamps.Latest` folds every device's and every artifact's stamp, as today.
 
   Tests in `stamps_test.go`, over faked `node_metadata` answers: each of the five sources moving the device's stamp alone; a cable shared by two devices moving both; a null stamp skipped.
+  - *2026-10-26 03:10Z, Run 13 of the converge loop:* done.
+    - **The operations** (`internal/intent/queries.graphql`): `IntentStamps` reads `DcimDevice(tags__name__value: $tag)` with each edge's `node_metadata`, the platform's and the manufacturer's with their ids and names, every interface edge's of both kinds, and `...ArtifactStamps`. `PortStamps` reads the ports' `device` and `connector { node_metadata node { id } }`. `PlatformStamps` is gone. The interface and connector nodes are bound to `stampNode` (an id alone), as the read's connector is, so that a kind the SDL does not name decodes.
+    - **One departure, for review**: `PortStamps` asks for cabled ports alone (`connector__isnull: false`). Live, an uncabled port's `connector.node_metadata` is null in a field the SDL declares non-null, and Infrahub refused the whole page (research §5.8).
+    - **`Stamps(ctx)`** reads under the client's `Config.Scope`, as `Fetch` does, rather than taking the scope as an argument. The server's stamper already sets it.
+    - **`DeviceStamps`** is `{Match psp.Match, IDs, Intent, Artifacts}`. `IDs` holds the device, its platform, its manufacturer, every interface, then each cable once.
+    - **Tests** (`stamps_test.go`): each of the five sources (the device, a physical and a virtual interface, the platform, the manufacturer, the cable) moves its device alone; a cable moves both its devices and no third; a null stamp is skipped; the pair and the ids; checksums; the read under the scope's tag; paging by 100 for both operations; `at` on every page of both; a stamp that is not a time. The fake refuses a `PortStamps` without the filter, as Infrahub would.
+    - **The read-only test's bridge**: `mappingRoots` maps each root to the read's and the stamps' operations, and `PortStamps` is among the operations. T052 rewrites the test.
+    - **Live** (research §5.8, an uncommitted probe on two throwaway branches): both operations were accepted and decoded, and each write moved the devices R-10 says it should. The exception is in T049's note.
 
-- [ ] T048 [US5] The events (R-10; research §1.8), in `internal/intent/events.go`.
+- [X] T048 [US5] The events (R-10; research §1.8), in `internal/intent/events.go`.
   - `intentKinds` maps the branch schema's `used_by` of `DcimGenericDevice`, `DcimInterface` and `DcimConnector`, plus `DcimPlatform` and `OrganizationManufacturer`, to "intent's". `ctm.DeviceGeneric` and its kin leave this file.
   - `changesIntent` is true for a creation or a deletion, any attribute, or any relationship not in `churnRelationships = {member_of_groups, subscriber_of_groups, artifacts, profiles, object_template}`.
   - An event with no primary node is skipped. `Event.Names` is unchanged.
   - Tests in `events_test.go`: a `member_of_groups` update is ignored; a cable's `connected_endpoints` update names its former port and counts for that port's device; a port's `connector` update counts; an `infrahub.schema.updated` event with no primary node is skipped; a tag added and removed counts.
+  - *2026-10-26 03:10Z, Run 13 of the converge loop:* done. `intentGenerics` (`DcimGenericDevice`, `DcimInterface`, `DcimConnector`, each by the branch schema's `used_by`) and `intentNodes` (`DcimPlatform`, `OrganizationManufacturer`) give the kinds. `changesIntent` takes a creation, a deletion, any attribute, or any relationship outside `churnRelationships`. An event with no primary node is skipped before the schema is read. `ctm` left the file. Tests (`events_test.go`), over the library's kinds:
+    - churn ignored: `member_of_groups`, `subscriber_of_groups`, `artifacts`, `profiles` and `object_template` updates;
+    - a re-ended cable's `connected_endpoints` update and the port's `connector` update each name `n2`'s port;
+    - `infrahub.schema.updated` with no primary node skipped, as a standard event and as a mutated one;
+    - a tag added and removed counts; a `BuiltinTag`'s own write, the stage kind's and an artifact's do not;
+    - new: an implementer of the operator's own (`InterfaceLag` under `DcimInterface`) counts.
+    - Live (§5.8): 49 intent events of the six kinds alone, the group join's update not among them, and the re-ending's two events naming `n2`'s former port 2 s after the write.
 
-- [ ] T049 [US5] The staleness rule (`internal/stages/stale.go`) resolves `DeviceStamps.Match` to the package through `reg.Match`; a device whose pair no package matches is reported as the read would report it. Tests in `internal/stages/stale_test.go`: a device's cable, platform and manufacturer stamps each make its mark stale, and an untagged device's write makes none stale (US5 scenarios 1 and 2). Move the harness's stage tests (`internal/cli/stage_test.go`, `stage_plan_test.go`, `stage_create_test.go`, `twin_step_test.go`) and the fake's stamps answers to the library's shapes.
+- [X] T049 [US5] The staleness rule (`internal/stages/stale.go`) resolves `DeviceStamps.Match` to the package through `reg.Match`; a device whose pair no package matches is reported as the read would report it. Tests in `internal/stages/stale_test.go`: a device's cable, platform and manufacturer stamps each make its mark stale, and an untagged device's write makes none stale (US5 scenarios 1 and 2). Move the harness's stage tests (`internal/cli/stage_test.go`, `stage_plan_test.go`, `stage_create_test.go`, `twin_step_test.go`) and the fake's stamps answers to the library's shapes.
+  - *2026-10-26 03:10Z, Run 13 of the converge loop:* done in tier 1, with two questions for the operator below.
+    - **The rule**: `Stale` finds the package by `reg.Match(d.Match.Manufacturer, d.Match.Platform)`. A pair no package names, and a device with no platform, are the read's to refuse (`platform.unmatched`, `platform.missing`), never stale.
+    - **Tests** (`stale_test.go`): the story moves to the library's pairs and kinds; the removal is a `DcimCable`'s delete. New cases: an event on the platform or on the manufacturer stales every device on it; one on a cable stales both its devices; one on an untagged device's ids, or on a cable between two untagged devices, stales none; a pair matched exactly.
+    - **The harness**: the fake serves `IntentStamps` by tag and `PortStamps` for cabled ports, with one id per node shared with the read (`id-<device>`, `<device>:<port>`, `cable-<link>`). The generics' rows left its schema, and `fakeGenericsPlatform` is gone. `TestStagePlanRemoval` runs over a cable's delete. The dry-run test skips the unpinned `PortStamps` as it skips `IntentStamps`.
+    - **A behaviour change, for review**: the stamps now read under the scope. So under a scope that selects nothing, the head has no at and is refused `stage.at.unresolved` at resolve, 0.2's rule for a branch with nothing stamped, before any read. The branch point and the marks are still refused `scope.empty` at read. `TestStagePlanReadsUnderTheScopeGiven` moved. The head's message still says "device, interface, link or artifact" and does not name the scope: 014's `stage-reference.md` row 5 and `contracts/cli.md` pin it.
+    - **Open, the operator's** (research §5.8). These are decisions R-10, US5 and the documents do not settle:
+      1. US5 scenario 2 says a write to an untagged device stales no tagged device's mark. But an untagged device created on, moved onto, or moved off a platform that tagged devices share does stale them, by the platform's `node_metadata` (its reverse `devices` edge) and by its event alike. Editing such a device does not. The options: accept the over-report, as US5's own rationale prefers ("over-reporting staleness costs a regenerate"), and read scenario 2 as excluding it; or read the platform's and the manufacturer's attributes' stamps instead of their wrappers', against R-10's rejected alternative. T051's `TestStagesSeeEveryWriteOfADevice` edits `cs1`, which passes either way.
+      2. A node's first join of a group moves its stamp (§5.8). Infrahub writes the template query's group about three seconds after a generation's checksums. So whatever a generation reads for the first time is stamped after its checksum: a new device, interface or cable. A proposed change's artifact validator may complete after that and clear it; a hand generate cannot. This can be seen only after the template's import (T058), at T061 and T062.
 
-- [ ] T050 [US5] `scope.empty` at the branch point (R-20; FR-015; US5 scenario 3).
+- [X] T050 [US5] `scope.empty` at the branch point (R-20; FR-015; US5 scenario 3).
   - The stage resolution (`internal/stages/resolve.go`, or wherever `contract.node.missing` was filed for a branch point) files `scope.empty` at step `resolve`.
   - `passedOver` in `internal/server/rehearse.go` excuses `scope.empty` where it excused `contract.node.missing`.
   - In `infrahub/checks/fylgja_api.py`, `RULE_NODE_MISSING` becomes `RULE_SCOPE_EMPTY = "scope.empty"`, and `branch_point_refusal` and the docstrings follow. The comments in `fylgja_step.py` and `fylgja_twin.py` move too. Run `.venv/bin/python -I -m py_compile infrahub/checks/*.py`.
   - Confirm with `/usr/bin/grep -n scope infrahub/checks/*.py` that no check sends a `scope` (FR-021). A server with no default refuses the check's request `scope.unset`, which the check concludes as failure, as it concludes any refusal it does not excuse.
   - Remove `contract.node.missing`'s constant and every use (`/usr/bin/grep -rn 'contract.node.missing\|RuleContractNodeMissing'` over `*.go`, `*.py` and `*.sh`, but `scripts/e2e.sh`, which is T054's).
   - Move `internal/server/rehearse_test.go`, `internal/provision/workflow_rehearse_test.go`, `internal/rehearsal/*_test.go`, `internal/findings/stages_test.go` and `rehearsal_test.go`, and `internal/cli/twin_rehearse_test.go`.
+  - *2026-10-26 03:10Z, Run 13 of the converge loop:* done.
+    - **The step, decided from the spec**: `scope.empty` stays at step `read`, not `resolve`. FR-015 and FR-024 keep 0.2's behaviour, and spec.md's US5 Independent Test (line 566) keeps the stage and check tests "unchanged in what they assert but the branch point's identifier". 0.2 filed `contract.node.missing` at the branch point's read (`contracts/cli.md`: `rejection contract.node.missing [step read] main`), and `passedOver` held it there. So nothing in `internal/stages/resolve.go` changed. The plan files the read's `scope.empty` at read, as it filed the generics read's refusal. `contracts/scope-and-commands.md`'s table said "`resolve` for a stage's branch point, as `contract.node.missing` was", which is self-contradictory. It now reads as the code does. **For review.**
+    - **The server**: `passedOver` excuses `scope.empty` at read alone, and the bridge's `noNetwork` map is gone.
+    - **The checks**: `RULE_SCOPE_EMPTY = "scope.empty"`, with `branch_point_refusal`, `rejections_past_branch_point` and the docstrings of `fylgja_step.py` and `fylgja_twin.py` following. `py_compile` is clean. `/usr/bin/grep -n scope infrahub/checks/*.py` finds the rule's name alone, so no check sends a `scope` (FR-021).
+    - **The constant**: `RuleContractNodeMissing` and its registry row are gone. `/usr/bin/grep -rn 'contract.node.missing\|RuleContractNodeMissing'` over `*.go`, `*.py` and `*.sh` finds `scripts/e2e.sh` alone (T054's).
+    - **Tests moved** to `scope.empty`, its object the scope `tag:fylgja` and its message `scope tag:fylgja selects no device on branch main`: `internal/server/rehearse_test.go`, `internal/provision/client_test.go` and `workflow_rehearse_test.go`, `internal/rehearsal/report_test.go` and `markdown_test.go`, `internal/findings/stages_test.go` and `rehearsal_test.go`, `internal/stages/plan_test.go`, and the tagged `stages_contract_test.go` and `checks_contract_test.go` by their identifier alone. The markdown lists findings sorted by rule, so `scope.empty` now follows `operation.*`, `push.*`, `readiness.*`, `rehearsal.*` and `run.*` where `contract.node.missing` led. The nine histories replay. `internal/cli/twin_rehearse_test.go` needed no change.
+    - **Left for the records**: `README.md`, `contracts/cli.md`, `contracts/rehearsal.schema.json`'s `refused` description and `docs/` (architecture, glossary, development, verified-facts, decisions) still name `contract.node.missing` (T064–T070).
+
+  *Run 13's checkpoint, 03:10Z*:
+  - **Gates**:
+    - `make build`: static.
+    - `make test` uncached: 44.3 s wall, under 45 s but close (load average 3.5 before, 7.1 after).
+    - `make lint`: 0 issues.
+    - Clean: `go vet -tags contract,fixture,e2e ./...`, `make linkcheck`, and `.venv/bin/python -I -m py_compile infrahub/checks/*.py`.
+    - `go generate ./...` is stable. No golden moved.
+  - **Tier 2**: none of T047–T050 names a committed tier-2 test, and T051's are next. The new operations were verified by an uncommitted probe (research §5.8) on two throwaway branches, each deleted by its cleanup. Afterwards `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage` count 0, and `main`'s hash is `e43a1cde…`. Nothing was written to `main`.
+  - **The host**: no twin was booted. The worker (pid 2314364) and the server (pid 2314366) were not touched; both `/proc/<pid>/exe` read `(deleted)`.
 
 - [ ] T051 [US5] The tier-2 tests of stages and the checks (quickstart §6, §7; SC-006, SC-009), over the library's kinds. They are run at T062; here they must compile.
   - `internal/stages/stages_contract_test.go`:

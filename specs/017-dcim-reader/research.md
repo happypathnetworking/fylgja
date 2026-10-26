@@ -1290,3 +1290,57 @@ written to `main`, and no token was printed.
     fylgja-test-017-run12-1792981731-5632`.
 - **Afterwards** `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and
   `FylgjaStage` count 0, and `main`'s hash is `e43a1cde…`.
+
+<a id="5-8"></a>
+### 5.8 The stamps and the events against the running Infrahub (T047–T048; 2026-10-26, 03:02Z–03:05Z)
+
+Two runs of a probe that was not committed (`TestRun13Probe`, in `internal/testsupport`
+for its unexported writer), each on a throwaway branch `fylgja-test-017-run13-<unix>` made
+from `main`, the library and the stage kind loaded (34.1 s, 46.8 s), the three-node topology
+written with no group join and no render (2.5–3.5 s), and the branch deleted by its
+cleanup. Then this tree's `Stamps` under `tag:fylgja` after each write below, and
+`IntentEvents` since the branch point. Nothing was written to `main`, and no token was
+printed.
+
+- **An uncabled port refuses the whole page.** The first run's `PortStamps` selected every
+  physical port: `Cannot return null for non-nullable field
+  NestedEdgedDcimConnector.node_metadata`, once per uncabled port (`input:14:
+  InterfacePhysical.edges[2].node.connector.node_metadata`). The SDL declares the wrapper's
+  `node_metadata` non-null, and an uncabled port's is null. The query now asks for cabled
+  ports alone, `InterfacePhysical(device__ids: …, connector__isnull: false)`, which the
+  second run's every read accepted.
+- **What moved which device** (the second run; a device "moved" when its `Intent` changed):
+  - `InterfaceVirtual lo0` created on `n1`, then its `description` edited: `n1` alone, each
+    time; `lo0`'s id joined `n1`'s `IDs`.
+  - The platform's `description`: `n1`, `n2`, `n3`. The manufacturer's `description`: all
+    three.
+  - The cable `n1` — `n2`'s `status`: `n1` and `n2`, not `n3`.
+  - **An untagged `cs1` created on the same platform (`Nokia` / `SR Linux`) with a port:
+    `n1`, `n2`, `n3`**, every tagged device on it, at `cs1`'s creation stamp. The platform's
+    `node_metadata` counts its reverse `devices` edge, as §1.7's rule says of every edge;
+    and the log holds `DcimPlatform updated` naming `cs1`, whose primary node, the platform,
+    is in every tagged device's `IDs`. Then `cs1`'s `description` edited: none.
+  - `n1` joined to a `CoreStandardGroup`: `n1`. The same group upserted to the same member:
+    none. This is Infrahub's `RelationshipManager.update`, which keeps a peer already
+    there (`/source/backend/infrahub/core/relationship/model.py`, read in the image).
+  - The cable `n1` — `n2` re-ended to `n1`'s port alone: no stamp moved, as §1.7 found. The
+    log then held `DcimCable updated` naming the cable and `n2`'s former port, and
+    `InterfacePhysical updated` naming that port and the cable, 1.4 ms apart, read 2 s after
+    the write. Both name `n2` by its port's id.
+- **The events' rule**: 49 intent events since the branch point, of `DcimDevice`,
+  `InterfacePhysical`, `InterfaceVirtual`, `DcimCable`, `DcimPlatform` and
+  `OrganizationManufacturer` alone. No `CoreStandardGroup`, `BuiltinTag` or location kind
+  was kept, and the group join's `member_of_groups` update on `n1` was not.
+- **Owed, for the operator** (T049's note):
+  - US5 scenario 2 says a write to an untagged device makes no tagged device's mark stale.
+    An untagged device created on, moved onto or moved off a platform that tagged devices
+    share does, by the platform's stamp and its event alike. Editing one does not.
+  - A node's first join of a group moves its stamp. Infrahub writes the query group of the
+    template's query about three seconds after each generation's checksums
+    (`docs/verified-facts.md`, 10-17), so a device, interface, cable, platform or manufacturer first read by a
+    generation is stamped after its checksum. In a proposed change's pipeline the artifact
+    validator's completion may come later and cover it; after a hand generate nothing does.
+    Neither can be seen on this host until the template's import (T058). Owed at T061 and
+    T062.
+- **Afterwards** `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and
+  `FylgjaStage` count 0, and `main`'s hash is `e43a1cde…`.

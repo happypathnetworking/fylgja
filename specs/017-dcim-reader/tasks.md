@@ -534,7 +534,7 @@ passes; with a kind, a field, a choice or an implementer removed or changed, it 
 with one finding each, every one naming `26336e9`, in one pass; extra kinds and fields
 are never reported.
 
-- [ ] T035 [US3] After T003 and T004. Create `internal/intent/mapping.go` (data-model §5): `KindTable{Kind, Attributes []AttributeWant{Name, Kind, Required bool, Choices []string}, Relationships []RelationshipWant{Name, Peer, Kind, Cardinality, Required bool}}`, `UsedByWant{Generic, Implementer}`, `LibraryTables` and `LibraryUsedBy`, holding exactly [contracts/mapping.md](contracts/mapping.md) §3's table:
+- [X] T035 [US3] After T003 and T004. Create `internal/intent/mapping.go` (data-model §5): `KindTable{Kind, Attributes []AttributeWant{Name, Kind, Required bool, Choices []string}, Relationships []RelationshipWant{Name, Peer, Kind, Cardinality, Required bool}}`, `UsedByWant{Generic, Implementer}`, `LibraryTables` and `LibraryUsedBy`, holding exactly [contracts/mapping.md](contracts/mapping.md) §3's table:
   - `DcimDevice`: `name` Text, required; `tags` → `BuiltinTag`, Attribute, many, optional; `platform` → `DcimPlatform`, Attribute, one, optional; `interfaces` → `DcimInterface`, Component, many, optional; `artifacts` → `CoreArtifact`, Generic, many, optional.
   - `DcimPlatform`: `name` Text, required; `manufacturer` → `OrganizationManufacturer`, Attribute, one, optional.
   - `OrganizationManufacturer`: `name` Text, required.
@@ -543,20 +543,57 @@ are never reported.
   - `used_by`: `DcimGenericDevice` ⊇ {`DcimDevice`}, `DcimInterface` ⊇ {`InterfacePhysical`}, `DcimEndpoint` ⊇ {`InterfacePhysical`}, `DcimConnector` ⊇ {`DcimCable`}.
 
   Also add `LibraryModel = ctm.ModelSchemaLibrary` and `LibraryVersion = ctm.ModelVersion`. The package doc comment says this file is the one place that knows the library's kinds.
+  - *2026-10-26 01:27Z, Run 10 of the converge loop:* done, as written. `KindTable.Fields()` names a kind's fields, attributes first, in the table's order: the `verified` block's `fields` and the success line's kinds come from it. The package doc comment (`client.go`) names `mapping.go`, and says the read is still the generics' until T039.
 
-- [ ] T036 [US3] Conformance (R-02; data-model §5).
+- [X] T036 [US3] Conformance (R-02; data-model §5).
   - **`SchemaInfo`** (`internal/intent/schemainfo.go`) gains `Nodes map[string]NodeSchema`, each with `Attributes map[string]AttributeSchema{Kind, Optional, Choices}` and `Relationships map[string]RelationshipSchema{Peer, Kind, Cardinality, Optional}` as the endpoint reports them (inherited members merged in), and keeps `Hash` and `UsedBy`.
   - **`CheckConformance`** (`conformance.go`) walks `LibraryTables` and `LibraryUsedBy` and files `schema.kind.missing` (object the kind), `schema.field.missing` (`<kind>.<field>`), `schema.field.mismatch` (`<kind>.<field>`; the property that differs, expected and found, such as `kind Text, found Number`, `cardinality one, found many`, `peer DcimPlatform, found NetPlatform`, or `optional false, found true`), `schema.choice.missing` (`<kind>.<field>`, the choice) and `schema.used_by.missing` (the generic, the implementer). Every message ends `as opsmill/schema-library@26336e9 has it`; every finding comes in one pass; nothing beyond the table is reported.
   - **`optional`** is compared as the endpoint reports it: a required member must read `optional: false`, and an optional one may read either.
   - **The results**: `Conformance{SchemaHash, Model, Version, Kinds []findings.KindFields}`; `findings.Verified{Model, Version, Kinds, Stages}` and `KindFields{Kind string; Fields []string}` in `internal/findings/render.go`, with `Verified()` in `summary.go`.
   - **Removed**: `schema.generic.unimplemented` and `schema.artifact_target.missing`, with their constants (their last users), and the generics-only code in `conformance.go`. The old `Fetch` keeps working off the new `Conformance`'s `SchemaHash` until T039.
   - **Tests** in `internal/intent/conformance_test.go`, over `httptest` serving `testdata/schema-26336e9.json` and mutations of it: a pass; `DcimCable` removed; `InterfacePhysical.role` removed; `DcimPlatform.name` as Number; `DcimDevice.platform` many and peered to `NetPlatform`; `DcimDevice.name` optional; `management` removed from `role`'s choices; `InterfacePhysical` removed from `DcimEndpoint.used_by`; all at once, giving every finding in one pass. Plus an extra kind and an extra field on `DcimDevice`, never reported. Each finding names `26336e9`.
+  - *2026-10-26 01:27Z, Run 10 of the converge loop:* done.
+    - **`SchemaInfo`** gains `Nodes`, each attribute's choices by name. `Kinds` went: `Nodes`' keys are the kinds, and its two users moved (`read_contract_test.go` reads `Nodes`).
+    - **The messages**, each ending in the commit:
+      - `the branch's schema has no kind DcimCable; the mapping reads it as opsmill/schema-library@26336e9 has it`;
+      - `InterfacePhysical has no attribute role; …` (or `no relationship`);
+      - `kind Text, found Number; …`;
+      - `the dropdown has no choice management; …`;
+      - `InterfacePhysical does not implement DcimEndpoint; the mapping reads InterfacePhysical through it as … has it`, and `the branch's schema has no generic DcimEndpoint; …` when the generic is absent.
+    - **For review, three choices the text left open**:
+      - One field is one finding: every property that differs is named in it, joined by `; ` (`peer DcimPlatform, found NetPlatform; cardinality one, found many`). The spec says one finding per kind or field.
+      - A kind absent is named once. Neither its fields nor the generics it should implement are named beside it. So `DcimCable` removed is one finding even when, as Infrahub's endpoint would, it also leaves `DcimConnector`'s `used_by`.
+      - "All at once" removes `disabled` from `status`, since `role` is removed in the same document. That gives seven findings, in the table's order and then the generics'.
+    - **The bridge moved**: the generics' contract check left `conformance.go` for `project.go`'s `bridgeContract`, which the bridged `Fetch` runs before its first query.
+      - A branch holding no `FylgjaContract` instance is still refused `contract.node.missing` with the same message, and one declaring another version `contract.version.mismatch`, with no CTM. A stage's branch point on a `main` with no network keeps its rule until T050.
+      - The envelope's mapping version is `ctm.ContractVersion`, which is what the bridge reads. `stage.Read` returns before validation when `Fetch` refuses with no CTM; T040's completeness pass needs the same.
+      - Unlike conformance before it, the bridge cannot see a branch with no `FylgjaContract` kind at all, whose query fails as a transport error. No such branch is read before T039.
+    - **Removed**: `schema.generic.unimplemented`, `schema.artifact_target.missing`, `findings.GenericKinds`, the generics' conformance tests, and test support's `SeedContractVersion` (its last callers were two tier-2 tests: `TestContractVersionMismatchIsReportedAlone` and `TestDeviceKindWithoutTheArtifactTargetIsNamed`).
+    - **Tests**: `TestConformanceOfTheLibrary`, `TestConformanceNamesWhatDiffers` (twelve cases: the task's eight, plus `connector` gone, `device` optional, `disabled` gone, `DcimEndpoint` gone and `InterfacePhysical` gone), `TestConformanceNamesEveryDifferenceInOnePass` and `TestConformanceIgnoresWhatTheTableDoesNotName`.
+      - The last adds a choice and an implementer beyond the table, two optional fields read as required, and two fields the mapping does not read changed or removed.
+      - `TestReadIsRefusedByConformance` (US3 scenario 4) and `TestBridgedReadRefusesABranchWithNoContract` cover the read.
+      - `internal/provision`'s activity test now expects five `schema.kind.missing` on a schema holding nothing.
+    - **Live** (research §5.3): on a throwaway branch holding the library, the untrimmed document (76 nodes) gave 0 findings. `fylgja-fixture` and `main` gave the five `schema.kind.missing` alone. The branch is deleted. **For the host**: a server built from this tree refuses every read of today's fixture and `main` until T056–T060. That is conformance working, and nothing live runs before Phase 11.
 
-- [ ] T037 [US3] `fylgja schema check` (FR-013; R-02, R-17).
+- [X] T037 [US3] `fylgja schema check` (FR-013; R-02, R-17).
   - **Success**: in `internal/server/schema.go`, the line is `conformant with opsmill/schema-library@26336e9: DcimDevice, DcimPlatform, OrganizationManufacturer, InterfacePhysical, DcimCable`, then the stages line as today.
   - **`--json`**: `verified` is `{model, version, kinds: [{kind, fields: [...]}], stages}`, and `contracts/findings.schema.json`'s `verified` definition moves to it (`contract_version` and `generics` go).
   - **The harness's fake Infrahub** (`internal/cli/infrahub_test.go`) serves the trimmed schema document of T033 at `GET /api/schema`, beside its generics GraphQL answers, until T043.
   - **Tests**: `internal/server/schema_test.go` and `internal/cli/schema_test.go`: the success line and block valid against the schema, and a failing branch's findings, all in one document.
+  - *2026-10-26 01:27Z, Run 10 of the converge loop:* done.
+    - **The line**: `conformantLine` in `internal/server/schema.go`, from the `verified` block. The command's help text says what is checked against the pinned commit.
+    - **The contract**: `contracts/findings.schema.json`'s `verified` requires `model`, `version` and `kinds` (at least one kind, each with at least one field). It refuses `contract_version` and `generics`, and its description names the two removals that formats.md accepts.
+    - **For review**: `model` and `version` are non-empty strings, not the library's constants, so another reader's model fits the same block.
+    - **Frozen schema**: M1's frozen findings schema still carries the old block, so `TestEveryOperationRendersAValidDocument`'s `schema check ok` case became a rejected check of the library's. The success is held to the current contract by `internal/findings/verified_test.go`'s `TestVerifiedIsTheMappingsTable`, which refuses seven malformed blocks.
+    - **The harness**: its fake serves the trimmed document, with the fixture's hash, beside the generics' four rows. The bridged events reader still maps an event's kind through those rows (until T048), and T033's interim branch held both. `schemaMutations` serves a branch's document changed.
+    - **Speed**: an unchanged document is encoded once per schema hash. Decoding and re-encoding it on every request had cost `internal/cli` about 5.5 s (36.1–36.7 s against 31.0 s at `74ed9b4`). Cached, the package took 31.3 s inside `make test`.
+    - **Tests**: `TestConformantLineNamesTheCommitAndTheKinds` (server) and `TestCheckReportsTheMappingsTable` (cli). The cli test covers the exact line, the block's kinds and fields, both documents valid against the current contract, a diverged branch's two findings in one document with no step and nothing verified, and nothing asked of the default branch for it. `TestCheckNamesTheStageKind` now expects the new line.
+    - **Tier 2, compile only (T044 rewrites them; they run at T062)**: `internal/cli/schema_contract_test.go` asserts the library's block on the fixture, and that a schema check issues no GraphQL at all. Its `TestSchemaCheckOnABranchWithoutAContractNode` went: a schema check no longer reads the contract node. `internal/intent/conformance_contract_test.go`'s fixture test asserts the library's model, version and kinds. Each passes once the fixture is re-seeded (T060).
+
+  *Run 10's checkpoint, 01:30Z*:
+  - **Gates**: `make build` static. `make test` uncached took 40.5 s wall (load average 2.8 before, 3.7 after; `internal/cli` 31.3 s), under 45 s. The run's first uncached pass took 48.9 s with the package at 36.6 s, before the harness cached its schema document (T037's note). `make lint` 0 issues; `go vet -tags contract,fixture,e2e ./...` and `make linkcheck` clean; `go generate ./...` changes nothing. No golden moved.
+  - **Tier 2**: no task of this run names a tier-2 test. Conformance was proved live on `fylgja-test-017-conf`, which is deleted (research §5.3). `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage` count 0, and `main`'s hash is `e43a1cde…`. Nothing was written to `main`.
+  - **The host**: no twin was booted. The worker (pid 2314364) and the server (pid 2314366) were not touched; both `/proc/<pid>/exe` read `(deleted)`.
 
 **Checkpoint**: `make test`, `make lint`.
 

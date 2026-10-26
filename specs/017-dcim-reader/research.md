@@ -1174,3 +1174,37 @@ Nothing was written to `main`, and no token was printed.
   stages, 0 proposed changes, branch fylgja-test-017-sdl`). Afterwards `Branch` lists `main`
   and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage` count 0, and `main`'s
   hash is `e43a1cde…`.
+
+<a id="5-3"></a>
+### 5.3 Conformance against the running Infrahub (T036; 2026-10-26, 01:25Z–01:27Z)
+
+On one throwaway branch, `fylgja-test-017-conf`. `fylgja-fixture -branch fylgja-test-017-conf
+-schema-only` made it from `main` at 01:25:34Z and loaded the library and the stage kind
+in 37.9 s wall. A probe test that was not committed (`TestRun10Probe`, 2.5 s) then ran
+`SchemaInfo` and `CheckConformance` from this tree against three branches. Nothing was
+written to `main`, and no token was printed.
+
+- **The library's branch conforms, read whole.** `GET /api/schema?branch=fylgja-test-017-conf`
+  answered the untrimmed document: hash `5dbe3902…`, 76 nodes, 56 generics. The table gave
+  0 findings in 1.3 s, schema read included.
+  - `DcimDevice.artifacts` read `CoreArtifact`, Generic, many, optional: inherited from
+    `CoreArtifactTarget` and merged into the node, as §1.3 found.
+  - `InterfacePhysical.device` read `DcimGenericDevice`, Parent, one, `optional: false`.
+  - `role`'s choices read `upstream peering management customer core access`.
+  - `used_by`: `DcimEndpoint` [`InterfacePhysical`], `DcimConnector` [`DcimCable`],
+    `DcimGenericDevice` [`DcimDevice`], `DcimInterface` [`InterfacePhysical`,
+    `InterfaceVirtual`].
+  - The `verified` block named `opsmill/schema-library@26336e9` and the five kinds with their
+    fields in the table's order. So the trimmed document under `internal/intent/testdata/`
+    answers as the whole one does.
+- **`schema.kind.missing` on real branches.** `fylgja-fixture` (hash `0aba31a5…`, 62
+  nodes, 35 generics) and `main` (`e43a1cde…`, the same counts) hold the generics, not the
+  library. Each gave exactly five `schema.kind.missing`, one per kind in the table's order,
+  each ending `as opsmill/schema-library@26336e9 has it`. Neither gave a field, choice or
+  `used_by` finding, nor any naming a kind beyond the table. Until `main` migrates (T056)
+  and the fixture is re-seeded (T060), `schema check` and every read refuse both, as
+  conformance should.
+- **The branch was deleted** by `-branch fylgja-test-017-conf -delete` at 01:26:44Z (`deleted 0
+  stages, 0 proposed changes, branch fylgja-test-017-conf`). Afterwards `Branch` lists `main`
+  and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage` count 0, and `main`'s
+  hash is `e43a1cde…`.

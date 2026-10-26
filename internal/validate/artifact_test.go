@@ -154,6 +154,12 @@ func TestCompilerAndValidationWordTheArtifactRulesIdentically(t *testing.T) {
 			func(t *testing.T) (*ctm.CTM, *psp.Registry) {
 				return fixtureRenamed(t, "n1", "cli")
 			}},
+		{"a content type the package does not accept", findings.RuleArtifactContentTypeUnsupported,
+			func(t *testing.T) (*ctm.CTM, *psp.Registry) {
+				c, reg := load(t, "three-node.json")
+				c.Devices[0].Artifact.ContentType = "application/json"
+				return c, reg
+			}},
 		{"content that is not what its checksum says", findings.RuleArtifactChecksumMismatch,
 			func(t *testing.T) (*ctm.CTM, *psp.Registry) {
 				c, reg := load(t, "three-node.json")

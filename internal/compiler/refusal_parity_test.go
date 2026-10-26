@@ -156,6 +156,22 @@ func TestLinkTerminationRefusalsAreWordedAlike(t *testing.T) {
 	)
 }
 
+// An artifact of a content type its package does not accept is refused by validation
+// and by the compiler's artifact guard in the read's words, and nothing is built: the
+// manifest would copy the type, which its contract holds to text/*.
+func TestArtifactContentTypeRefusalIsWordedAlike(t *testing.T) {
+	var checksum string
+	got := bothCallers(t, func() *ctm.CTM {
+		c := loadCTM(t, "testdata", "ctm", "three-node.json")
+		a := c.Device("n1").Artifact
+		a.ContentType, checksum = "application/json", a.Checksum
+		return c
+	})
+	wantRefusals(t, got, refusal{rule: findings.RuleArtifactContentTypeUnsupported, object: "n1",
+		message: "device n1: artifact device-config (checksum " + checksum +
+			") is application/json; the nokia_srlinux package accepts text/plain"})
+}
+
 // Under a collapsing breakout rule a parent and its child render one port, so both cabled
 // is two defects at once: the port would be cabled twice, and the parent is cabled beside
 // its child. One pass names both, from both callers. This is why the

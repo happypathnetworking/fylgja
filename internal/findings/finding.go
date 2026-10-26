@@ -112,7 +112,7 @@ const (
 	RuleArtifactMissing                = "artifact.missing"                  // read, and compile from validation: the device; no artifact of the package's name on it (at `at` when pinned; names `at`), or a CTM device without one
 	RuleArtifactAmbiguous              = "artifact.ambiguous"                // read: the device; more than one artifact of that name; names the count and each checksum
 	RuleArtifactNotReady               = "artifact.not_ready"                // read: the device; status is not Ready, or there is no storage object yet; names the state and that Fylgja never regenerates
-	RuleArtifactContentTypeUnsupported = "artifact.content_type.unsupported" // read: the device; the content type is not one the package accepts, or the bytes are not text
+	RuleArtifactContentTypeUnsupported = "artifact.content_type.unsupported" // read, and compile from validation: the device; the content type is not one the package accepts, or the bytes are not text
 	RuleArtifactContentUnavailable     = "artifact.content.unavailable"      // read: the device; the storage object of the listed id is not served (404 or another non-auth status); names `at` when pinned
 	RuleArtifactChecksumMismatch       = "artifact.checksum.mismatch"        // read, and compile from validation: the device; MD5 of the bytes is not Infrahub's checksum; names both
 

@@ -2,6 +2,8 @@ package validate
 
 import (
 	"fmt"
+	"slices"
+	"strings"
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
@@ -15,9 +17,9 @@ import (
 // here. What can live here is what survives into the CTM, and must therefore hold of
 // any CTM whatever wrote it: every device carries an artifact of the name its package
 // gives its configuration, and every artifact's content is the content its checksum
-// describes.
+// describes, of a content type its package accepts.
 //
-// Both are mirrored by the compiler's own guards, word for word, for the reason
+// All three are mirrored by the compiler's own guards, word for word, for the reason
 // `ctm.devices.empty` is: a rule only the compiler knows
 // would let `intent read` write a CTM that `twin compile` then refuses, and "a branch
 // that reads clean will compile" is what makes the two commands one pipeline rather
@@ -65,6 +67,17 @@ func checkArtifacts(c *ctm.CTM, reg *psp.Registry, list *findings.List) {
 				artifactMisnamedMessage(d.Name, d.Artifact.Name, p.Platform.ID, p.Config.ArtifactName))
 			continue
 		}
+		if !slices.Contains(p.Config.ArtifactContentTypes, d.Artifact.ContentType) {
+			// The manifest copies the type, and its contract holds it to text/*: a CTM
+			// naming application/json would compile to a manifest the contract refuses.
+			// The package's list is what the read holds a served artifact to, so a
+			// CTM is held to it alike, in the read's words. Nothing is built from it, so
+			// its checksum is not worth checking, as the read never fetches it.
+			list.Add(findings.Rejection, findings.RuleArtifactContentTypeUnsupported, d.Name,
+				contentTypeUnsupportedMessage(d.Name, d.Artifact.Name, d.Artifact.Checksum, d.Artifact.ContentType,
+					p.Platform.ID, p.Config.ArtifactContentTypes))
+			continue
+		}
 		if sum := ctm.ChecksumOf(d.Artifact.Content); sum != d.Artifact.Checksum {
 			list.Add(findings.Rejection, findings.RuleArtifactChecksumMismatch, d.Name,
 				checksumMismatchMessage(d.Name, d.Artifact.Name, sum, d.Artifact.Checksum))
@@ -72,7 +85,8 @@ func checkArtifacts(c *ctm.CTM, reg *psp.Registry, list *findings.List) {
 	}
 }
 
-// artifactMissingMessage, artifactMisnamedMessage and checksumMismatchMessage are
+// artifactMissingMessage, artifactMisnamedMessage, contentTypeUnsupportedMessage and
+// checksumMismatchMessage are
 // worded exactly as the compiler's guards word them, and are deliberately a second copy
 // rather than a shared helper: internal/validate imports internal/compiler, so the
 // compiler cannot import back, and M1 settled this for ctm.devices.empty the same way
@@ -92,6 +106,15 @@ func artifactMisnamedMessage(device, carried, pspID, expected string) string {
 	return fmt.Sprintf(
 		"device %q carries no configuration artifact named %q, as the %s package names it; the artifact it carries is named %q",
 		device, expected, pspID, carried)
+}
+
+// contentTypeUnsupportedMessage names the artifact's type and the types its package
+// accepts, worded as the read words artifact.content_type.unsupported for an artifact
+// Infrahub serves (internal/intent), so an operator reads one sentence for one fault
+// whichever command found it.
+func contentTypeUnsupportedMessage(device, artifact, checksum, contentType, pspID string, accepted []string) string {
+	return fmt.Sprintf("device %s: artifact %s (checksum %s) is %s; the %s package accepts %s",
+		device, artifact, checksum, contentType, pspID, strings.Join(accepted, ", "))
 }
 
 // checksumMismatchMessage names both values: the one the content hashes to and the one

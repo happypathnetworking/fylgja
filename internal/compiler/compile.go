@@ -11,7 +11,9 @@ package compiler
 import (
 	"fmt"
 	"path"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
@@ -168,6 +170,13 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 			list.Add(findings.Rejection, findings.RuleArtifactMissing, d.Name, fmt.Sprintf(
 				"device %q carries no configuration artifact named %q, as the %s package names it; the artifact it carries is named %q",
 				d.Name, p.Config.ArtifactName, p.Platform.ID, d.Artifact.Name))
+			return nil, list
+		}
+		if !slices.Contains(p.Config.ArtifactContentTypes, d.Artifact.ContentType) {
+			list.Add(findings.Rejection, findings.RuleArtifactContentTypeUnsupported, d.Name, fmt.Sprintf(
+				"device %s: artifact %s (checksum %s) is %s; the %s package accepts %s",
+				d.Name, d.Artifact.Name, d.Artifact.Checksum, d.Artifact.ContentType, p.Platform.ID,
+				strings.Join(p.Config.ArtifactContentTypes, ", ")))
 			return nil, list
 		}
 		content := []byte(d.Artifact.Content)

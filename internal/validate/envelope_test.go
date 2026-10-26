@@ -2,6 +2,7 @@ package validate
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -143,6 +144,42 @@ func TestValidationAcceptsWhatTheManifestContractAccepts(t *testing.T) {
 				t.Error("validation refuses it, and its manifest satisfies the contract")
 			}
 		})
+	}
+}
+
+// An artifact's content type reaches the manifest unchanged, and the manifest contract
+// holds it to text/*: validation refuses a type its package does not accept, in the read's
+// words, so no CTM it accepts compiles to a manifest naming application/json (T084). The
+// compiler's guard refuses it too, so the manifest the contract would refuse is the
+// clean fixture's with the one field changed.
+func TestValidationRefusesAnArtifactTypeTheManifestContractRefuses(t *testing.T) {
+	snapshot, reg := load(t, "three-node.json")
+	n1 := snapshot.Device("n1")
+	n1.Artifact.ContentType = "application/json"
+	list := Validate(snapshot, reg)
+	want := "device n1: artifact device-config (checksum " + n1.Artifact.Checksum +
+		") is application/json; the nokia_srlinux package accepts text/plain"
+	if len(list) != 1 || list[0].Severity != findings.Rejection || list[0].Rule != findings.RuleArtifactContentTypeUnsupported ||
+		list[0].Object != "n1" || list[0].Message != want {
+		t.Errorf("findings %v\nwant one rejection %s on n1: %q", list, findings.RuleArtifactContentTypeUnsupported, want)
+	}
+
+	clean, reg := load(t, "three-node.json")
+	files, compiled := compiler.Compile(clean, reg)
+	if compiled.Rejected() {
+		t.Fatalf("the compiler refused the clean fixture: %v", compiled)
+	}
+	var manifest map[string]any
+	if err := json.Unmarshal(files[compiler.ManifestFile], &manifest); err != nil {
+		t.Fatal(err)
+	}
+	for _, node := range manifest["nodes"].([]any) {
+		if node := node.(map[string]any); node["name"] == "n1" {
+			node["artifact"].(map[string]any)["content_type"] = "application/json"
+		}
+	}
+	if err := manifestSchema(t).Validate(manifest); err == nil {
+		t.Error("validation refuses it, and a manifest naming it satisfies the contract")
 	}
 }
 

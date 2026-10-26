@@ -39,6 +39,43 @@ func checkEnvelope(c *ctm.CTM, list *findings.List) {
 			list.Add(findings.Rejection, findings.RuleRequiredMissing, "envelope."+f.name, f.why)
 		}
 	}
+	checkEnvelopeForms(c, list)
+}
+
+// checkEnvelopeForms holds the envelope's recorded values to the forms the contracts give
+// them, which reach the manifest's provenance and fidelity.read and the twin record
+// unchanged (017): a CTM written by hand naming scope fylgja, a reader Infrahub DCIM or a
+// row of disposition bogus would otherwise compile to a manifest its contract refuses. A
+// value left empty is named once, by checkEnvelope, as not recorded. Rows are named by
+// their place in the list as Normalize sorts it, the order the manifest copies.
+func checkEnvelopeForms(c *ctm.CTM, list *findings.List) {
+	e := c.Envelope
+	if e.Scope != "" && !ctm.ValidScope(e.Scope) {
+		list.Add(findings.Rejection, findings.RuleRequiredMissing, "envelope.scope", fmt.Sprintf(
+			"the scope intent was read under is %q, which is not a scope: the accepted form is tag:<name>, the literal tag: and one word",
+			e.Scope))
+	}
+	if r := e.Mapping.Reader; r != "" && !ctm.ValidReader(r) {
+		list.Add(findings.Rejection, findings.RuleRequiredMissing, "envelope.mapping.reader", fmt.Sprintf(
+			"the reader that mapped intent is named %q, which is not a reader's name: "+
+				"lowercase letters, digits and hyphens, beginning with a letter or a digit", r))
+	}
+	for i, r := range e.Fidelity {
+		object := fmt.Sprintf("envelope.fidelity[%d]", i)
+		what := fmt.Sprintf("fidelity row %d", i)
+		if r.Object != "" {
+			what += " (" + r.Object + ")"
+		}
+		if r.Disposition != ctm.FidelityApproximated && r.Disposition != ctm.FidelityOmitted {
+			list.Add(findings.Rejection, findings.RuleRequiredMissing, object+".disposition", fmt.Sprintf(
+				"%s has disposition %q: a row is %s or %s", what, r.Disposition, ctm.FidelityApproximated, ctm.FidelityOmitted))
+		}
+		for _, f := range []struct{ name, value string }{{"object", r.Object}, {"source", r.Source}, {"reason", r.Reason}} {
+			if f.value == "" {
+				list.Add(findings.Rejection, findings.RuleRequiredMissing, object+"."+f.name, what+" records no "+f.name)
+			}
+		}
+	}
 }
 
 // checkDevicesPresent rejects a CTM that holds no devices.

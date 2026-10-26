@@ -72,7 +72,11 @@ constants: `ReaderInfrahubDCIM = "infrahub-dcim"`, `ModelSchemaLibrary =
 
 **Validation** (`internal/validate`): the envelope's `branch`, `observed_at`,
 `schema_hash`, `scope`, `mapping.reader`, `mapping.model`, `mapping.version` required
-(`data.required.missing`); `devices` non-empty; names unique; `platform.package` non-empty
+(`data.required.missing`), and held to the contract's forms under the same rule: `scope`
+`^tag:\S+$` and `mapping.reader` `^[a-z0-9][a-z0-9-]*$` (`ctm.ValidScope`,
+`ctm.ValidReader`, which the server, the read and the record share), each fidelity row's
+`disposition` `approximated` or `omitted` and its `object`, `source` and `reason`
+non-empty (T084); `devices` non-empty; names unique; `platform.package` non-empty
 and in the registry (`platform.unsupported`, naming the package and the registry's);
 interfaces named; links with two ends on distinct devices, each naming an interface of a
 device in the CTM. The iftype, parent and endpoint-kind rules go. The artifact rules are

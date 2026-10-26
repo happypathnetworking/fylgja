@@ -997,6 +997,17 @@ otherwise. `platform.unsupported` stays, for a CTM naming a package this build l
   bundle `4` `bundle.version.unsupported`, naming both, as it refused a `3`; a package
   declaring `0.6` or earlier is `psp.version.unknown`, `package declares format version
   "0.6", this build understands "0.7"`.
+- Validation holds a CTM's envelope to its contract's forms, wherever a CTM is validated,
+  `twin compile` included, each a rejection `data.required.missing`, exit 1, naming the
+  field, as an empty one is: `envelope.scope` not `tag:<name>` (`the scope intent was read
+  under is "fylgja", which is not a scope: the accepted form is tag:<name>, …`),
+  `envelope.mapping.reader` not `^[a-z0-9][a-z0-9-]*$`, and a fidelity row of a
+  disposition other than `approximated` and `omitted`
+  (`envelope.fidelity[<i>].disposition`) or with its `object`, `source` or `reason` empty
+  (`envelope.fidelity[<i>].reason`, …), `<i>` its place in the list sorted by
+  (disposition, object). So a CTM validation accepts compiles to a manifest
+  `manifest.schema.json` accepts, and a record refuses a provenance naming a scope or a
+  reader of another form, as `twin.schema.json` does.
 - A `7` record reads with no scope: `twin show` shows it, `twin step` refuses it, `twin
   destroy` clears it, and `twin rehearse` reclaims it when it names a dead rehearsal.
 - The versions of the findings document and of the API did not move: a `1` reader ignores

@@ -680,11 +680,31 @@ func TestRecord8(t *testing.T) {
 			"no scope":   func(p *wire.Provenance) { p.Scope = "" },
 			"no mapping": func(p *wire.Provenance) { p.Mapping = wire.Mapping{} },
 			"no version": func(p *wire.Provenance) { p.Mapping.Version = "" },
+			// The contract's forms, as validation holds a CTM's envelope to them (T084).
+			"a scope not tag:<name>":   func(p *wire.Provenance) { p.Scope = "fylgja" },
+			"a scope naming no tag":    func(p *wire.Provenance) { p.Scope = "tag:" },
+			"a scope of two words":     func(p *wire.Provenance) { p.Scope = "tag:a b" },
+			"a reader not of its form": func(p *wire.Provenance) { p.Mapping.Reader = "Infrahub DCIM" },
 		} {
 			f := fields(wire.SourceIntent, &observed)
 			change(&f.Provenance)
-			if _, err := NewRecord(f); err == nil || !strings.Contains(err.Error(), "names the scope its read was made under and the mapping that read it") {
+			if _, err := NewRecord(f); err == nil || !strings.Contains(err.Error(), "names the scope its read was made under") {
 				t.Errorf("%s: err = %v, want a refusal naming the scope and the mapping", label, err)
+			}
+			// What NewRecord refuses, the contract refuses: the record is never written
+			// to be refused by its reader.
+			accepted := fields(wire.SourceIntent, &observed)
+			rec, err := NewRecord(accepted)
+			if err != nil {
+				t.Fatal(err)
+			}
+			change(&rec.Provenance)
+			v, err := jsonschema.UnmarshalJSON(strings.NewReader(mustJSON(t, rec)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := s.Validate(v); err == nil {
+				t.Errorf("%s: NewRecord refuses it, and twin.schema.json 8 accepts it", label)
 			}
 		}
 	})

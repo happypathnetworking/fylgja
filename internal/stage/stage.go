@@ -45,7 +45,7 @@ const ObservedAtFormat = "2006-01-02T15:04:05.000000Z"
 // device query would filter by an empty tag and the envelope would record tag:, which the
 // contracts refuse; like a step from a record of 7, the twin can only be destroyed.
 func Read(ctx context.Context, branch, at, scope string, reg *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error) {
-	if !intent.ValidScope(scope) {
+	if !ctm.ValidScope(scope) {
 		return nil, nil, fmt.Errorf("the read names scope %q, which is not tag:<name>: a twin created before 017 follows "+
 			"its branch under no scope, and this build reads only under one; fylgja twin destroy clears it", scope)
 	}

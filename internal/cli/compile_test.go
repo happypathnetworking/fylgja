@@ -399,3 +399,53 @@ func treeOf(t *testing.T, root string) map[string]treeEntry {
 	}
 	return entries
 }
+
+// A CTM whose envelope is not of its contract's forms is refused by twin compile before
+// anything is written, exit 1, naming the field (017, T084): a scope that is not
+// tag:<name>, a reader's name of another form, and a fidelity row of an unknown
+// disposition or with a field left empty would each compile to a manifest
+// contracts/manifest.schema.json refuses, and twin provision of it to a record
+// twin.schema.json refuses.
+func TestCompileRefusesAnEnvelopeOfAnotherForm(t *testing.T) {
+	for _, c := range []struct {
+		name, object string
+		change       func(*ctm.Envelope)
+	}{
+		{"scope fylgja", "envelope.scope", func(e *ctm.Envelope) { e.Scope = "fylgja" }},
+		{"scope tag:", "envelope.scope", func(e *ctm.Envelope) { e.Scope = "tag:" }},
+		{"scope tag:a b", "envelope.scope", func(e *ctm.Envelope) { e.Scope = "tag:a b" }},
+		{"reader Infrahub DCIM", "envelope.mapping.reader", func(e *ctm.Envelope) { e.Mapping.Reader = "Infrahub DCIM" }},
+		{"a row of disposition bogus", "envelope.fidelity[2].disposition", func(e *ctm.Envelope) {
+			e.Fidelity = append(e.Fidelity, ctm.FidelityRow{Disposition: "bogus", Object: "c-9", Source: "DcimCable", Reason: "other than two ends (3)"})
+		}},
+		{"a row with no reason", "envelope.fidelity[2].reason", func(e *ctm.Envelope) {
+			e.Fidelity = append(e.Fidelity, ctm.FidelityRow{Disposition: ctm.FidelityOmitted, Object: "c-9", Source: "DcimCable"})
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			snapshot, err := ctm.Load(repoPath("testdata", "ctm", "three-node.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			c.change(&snapshot.Envelope)
+			dir := t.TempDir()
+			in := filepath.Join(dir, "edited.ctm.json")
+			if err := ctm.Save(snapshot, in); err != nil {
+				t.Fatal(err)
+			}
+			out := filepath.Join(dir, "b")
+
+			code, doc := runCompileTo(t, in, out)
+			if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleRequiredMissing ||
+				doc.Findings[0].Object != c.object || doc.Findings[0].Severity != string(findings.Rejection) {
+				t.Errorf("exit %d, findings %+v; want 1 with %s naming %s alone", code, doc.Findings, findings.RuleRequiredMissing, c.object)
+			}
+			if _, err := os.Stat(out); !os.IsNotExist(err) {
+				t.Errorf("something was written to %s", out)
+			}
+			if doc.BundleID != "" {
+				t.Errorf("the document names bundle %s", doc.BundleID)
+			}
+		})
+	}
+}

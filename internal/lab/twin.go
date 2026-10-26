@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/bundle"
+	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 )
@@ -416,10 +417,12 @@ func NewStepRecord(prev wire.TwinRecord, f StepFields) (wire.TwinRecord, error) 
 }
 
 // provenanceNamesItsRead refuses a provenance twin.json 8 cannot hold (017): one naming no
-// scope, or a mapping with a field left empty.
+// scope or a scope not tag:<name>, or a mapping with a field left empty or a reader's name
+// not of its form, as validation refuses such an envelope (ctm.ValidScope,
+// ctm.ValidReader).
 func provenanceNamesItsRead(p wire.Provenance) error {
-	if m := p.Mapping; p.Scope == "" || m.Reader == "" || m.Model == "" || m.Version == "" {
-		return fmt.Errorf("a twin record names the scope its read was made under and the mapping that read it, "+
+	if m := p.Mapping; !ctm.ValidScope(p.Scope) || !ctm.ValidReader(m.Reader) || m.Model == "" || m.Version == "" {
+		return fmt.Errorf("a twin record names the scope its read was made under, tag:<name>, and the mapping that read it, "+
 			"not scope %q and mapping %q, %q, %q", p.Scope, m.Reader, m.Model, m.Version)
 	}
 	return nil

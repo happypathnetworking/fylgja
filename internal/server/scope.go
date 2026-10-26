@@ -3,8 +3,8 @@ package server
 import (
 	"fmt"
 
+	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 )
 
 // EnvDefaultScope names the scope a request that names none is read under (017): read by
@@ -14,10 +14,10 @@ const EnvDefaultScope = "FYLGJA_DEFAULT_SCOPE"
 
 // ValidScope is whether value is a scope, tag:<name>: the literal tag: and one shell word,
 // the name of the BuiltinTag on every device the twin is of (research R-04); the empty
-// value is not. The form is the reader's (intent.ValidScope), which stage.Read holds every
-// read to.
+// value is not. The form is the CTM's (ctm.ValidScope), which stage.Read holds every read
+// to and validation every envelope.
 func ValidScope(value string) bool {
-	return intent.ValidScope(value)
+	return ctm.ValidScope(value)
 }
 
 // scopeOf is the scope a request's read is made under: the request's --scope when it was

@@ -1244,3 +1244,49 @@ Nothing was written to `main`, and no token was printed.
   (`deleted 0 stages, 0 proposed changes, branch fylgja-test-017-read`). Afterwards
   `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage`
   count 0, and `main`'s hash is `e43a1cde…`.
+
+<a id="5-7"></a>
+### 5.7 The read's tier-2 cases before the render (T044; 2026-10-26, 02:28Z–02:34Z)
+
+On two throwaway branches, each made from `main` by its test and deleted by its cleanup,
+run side by side. Nothing renders the library's kinds on this host until the template's
+import (T058), so a test that seeds cannot pass yet; these two need no render. Nothing was
+written to `main`, and no token was printed.
+
+- **`TestSchemaCheckNamesAMissingKind`, committed, passed** (258.6 s) on
+  `fylgja-test-nocable-1792981732-6049`. It loaded the library and the stage kind, then
+  `internal/intent/testdata/dcim-cable-absent.yaml`. `DcimCable` was gone in 1 m 48.8 s,
+  counted until `DcimCableCreate` left the branch's GraphQL schema. That is more than R-18's
+  "about 40 s", with a second branch loading the library at the same time. Conformance then
+  gave one finding, `schema.kind.missing DcimCable`, naming `opsmill/schema-library@26336e9`.
+  It named nothing beside it, though Infrahub's `DcimConnector` was left with no implementer.
+  The read refused the branch with the same finding and no CTM.
+- **A probe that was not committed** (`TestRun12Probe`, 287.5 s) ran on
+  `fylgja-test-017-run12-1792981731-5632`, using test support's new writers.
+  - **The seed**: the library loaded in 1 m 24.4 s. `SeedThreeNode` wrote the topology, and
+    its render ended `Error` ×3 after its 90 s, as T029's note found.
+  - **The writers**: `AddDevice` wrote `cs1` (no tag, no platform, `port1`) and `cs2`
+    (`Nokia` / `SR Linux`, `mgmt0` its management port, no tag), and refused a second
+    `cs1`. `AddInterface` wrote four ports. `AddCable` wrote `c-out` (two ends) and `c-three`
+    (three ends), and refused a cable to a port that does not exist.
+  - **The read under `tag:fylgja`**: `n1`–`n3`, 13 interfaces and 3 links. `c-out` was
+    omitted `omit.cable.outside_scope`, its outside end named by `cs1`'s id
+    (`18e1f394-…:port1`), and `c-three` `omit.cable.ends`, `other than two ends (3)`. The
+    fidelity list held five rows, sorted. Each device was refused `artifact.not_ready`, its
+    artifact `Error`, which is expected before T058.
+  - **The tag after T**: T was taken 1.1 s after the writes, and `cs2` was tagged `fylgja`
+    1.1 s after T. The read pinned at T read `n1`–`n3` alone. The unpinned read read `cs2`
+    too, and refused it `artifact.missing`, since nothing was ever rendered for it. **So a
+    pinned read filters by the tag as it stood at T** (§4's owed fact).
+    `TestPinnedReadReproducesItsBundle` asserts it with a device rendered before T, at T062.
+  - **The platforms**: `DcimDeviceUpdate` with `platform: null` took `n2`'s platform away,
+    read back as a null node. `n1` moved onto `nokia` / `SR-Linux`, written with its
+    manufacturer. The read then refused `platform.unmatched n1` (`device n1: manufacturer
+    "nokia", platform "SR-Linux"; the packages match: arista_eos [Arista / EOS],
+    nokia_srlinux [Nokia / SR Linux]`) and `platform.missing n2` (`device n2 carries no
+    platform; …`) in one pass, with no CTM. The omissions and the other devices' artifact
+    findings came beside them.
+  - **`tag:nothing`**: one `scope.empty`, `scope tag:nothing selects no device on branch
+    fylgja-test-017-run12-1792981731-5632`.
+- **Afterwards** `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and
+  `FylgjaStage` count 0, and `main`'s hash is `e43a1cde…`.

@@ -822,10 +822,16 @@ bridge_address() {
     fail fylgja server "this host has no Docker network bridge with a gateway address (docker network inspect bridge): Infrahub's task workers reach the API's server there"
 }
 
+# scope_named: local/.env names FYLGJA_DEFAULT_SCOPE, read by name alone, never its value,
+# so the server's report must name a default scope.
+scope_named() { grep -q '^FYLGJA_DEFAULT_SCOPE=' "$ROOT/local/.env" 2> /dev/null; }
+
 # report_wants ROLE: what the role's start-up report must name, for the run's lines.
 report_wants() {
   if [ "$1" = serve ]; then
-    echo "127.0.0.1:7650 and $BRIDGE_ADDR:7650, and ${PLATFORMS[*]} with their logins set"
+    local scope=""
+    scope_named && scope=", the default scope local/.env names (tag:<name>),"
+    echo "127.0.0.1:7650 and $BRIDGE_ADDR:7650$scope and ${PLATFORMS[*]} with their logins set"
   else
     echo "${PLATFORMS[*]} with their logins set"
   fi
@@ -849,7 +855,10 @@ fylgja_pid() {
 
 # report_ok ROLE LOG FROM: the role's start-up report in LOG, from byte FROM, names every
 # package the host can run with its login set, and the server's names both its listen
-# addresses and the bridge's unencrypted line, so a server on loopback alone is restarted.
+# addresses and the bridge's unencrypted line, so a server on loopback alone is restarted,
+# and, when local/.env names FYLGJA_DEFAULT_SCOPE, a default scope tag:<name>, so a server
+# started before the file named one, its report saying "default scope: unset", is
+# restarted rather than left to refuse tier 2's scopeless checks scope.unset.
 # A log can hold NUL bytes (local/worker.log has a run of them), which bash cannot keep in a
 # variable: they are dropped before it reads the text.
 report_ok() {
@@ -860,6 +869,9 @@ report_ok() {
     grep -q "^fylgja serve: listening on 127\.0\.0\.1:7650 (API version 1, build " <<< "$text" || return 1
     grep -q "^fylgja serve: listening on $bridge_re:7650 (API version 1, build " <<< "$text" || return 1
     grep -q "^fylgja serve: $bridge_re:7650 is not a loopback address: the API's token is sent unencrypted on it$" <<< "$text" || return 1
+    if scope_named; then
+      grep -q "^fylgja serve: default scope: tag:" <<< "$text" || return 1
+    fi
   else
     grep -q "^fylgja worker: serving task queue " <<< "$text" || return 1
   fi

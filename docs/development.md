@@ -87,7 +87,10 @@ run takes about 7, most of it tier 2. Its contract is
   listening on less is restarted, saying why. Each report is read: the dev server
   `SERVING`, and the worker's and the server's naming every package the host can run with
   its login set, the server's naming loopback and the bridge as well, so a server on
-  loopback alone is restarted.
+  loopback alone is restarted, and, when `local/.env` names `FYLGJA_DEFAULT_SCOPE` (read by
+  name, never by value), its `default scope: tag:…` line, so a server started before the
+  file named one, whose report says `default scope: unset`, is restarted rather than left
+  to refuse tier 2's scopeless checks `scope.unset`.
   The last report gives each part's counts, the tar and the platforms again, both tiers'
   times, how to run tier 3, the three processes with their pids and logs, the server's
   two addresses and that the token crosses the bridge in the clear, how to stop them

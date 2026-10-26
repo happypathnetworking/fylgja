@@ -112,8 +112,9 @@ type fakeStage struct {
 
 // fakeEvent is one node's write in a branch's log: Name and At as Infrahub names and
 // stamps it, its primary node's Kind and ID, the Attrs it changed, and the Peers of the
-// one relationship Rel it changed. A stamped device's id is "dev-<device>", and its
-// interface's "if-<device>-<interface>".
+// one relationship Rel it changed. A node's id is the one the read and the stamps serve:
+// a device's "id-<device>" (fakeDeviceID), its port's "<device>:<interface>", a link's
+// cable's "cable-<link>".
 type fakeEvent struct {
 	Name, At, Kind, ID, Rel string
 	Attrs, Peers            []string
@@ -126,11 +127,11 @@ type fakeVersion struct {
 }
 
 // fakeDeviceStamps is one device's stamps in place of its branch's: Intent every stamp of
-// its own intent (its attributes, its platform edge and its platform's vendor, nos and
-// version, its interfaces), Artifact its artifacts' checksum.updated_at ("" a null one),
-// and Link the stamp of each endpoints edge joining one of its interfaces to a link (""
-// the branch's): an edit of the device alone leaves its links as they were, and a
-// re-cabling moves the intent of every device on the link (R-07).
+// its own intent (the node_metadata of the device, its platform, its manufacturer and its
+// interfaces), Artifact its artifacts' checksum.updated_at ("" a null one), and Link the
+// node_metadata of each cable one of its ports is an end of ("" the branch's): an edit of
+// the device alone leaves its cables as they were, and a re-cabling moves the intent of
+// every device on the cable (017 research R-10).
 type fakeDeviceStamps struct {
 	Intent, Artifact, Link string
 }
@@ -247,7 +248,7 @@ func (f *fakeInfrahub) serve(w http.ResponseWriter, r *http.Request) {
 	case r.Method == http.MethodPost && strings.HasPrefix(r.URL.Path, "/graphql/"):
 		name := strings.TrimPrefix(r.URL.Path, "/graphql/")
 		c, known := f.branch(name, at)
-		if !known && (name != "main" || seen.Operation != "IntentStamps") {
+		if !known && (name != "main" || seen.Operation != "IntentStamps" && seen.Operation != "PortStamps") {
 			f.t.Errorf("a command sent %s %s, which the fake does not serve", r.Method, r.URL.Path)
 			http.Error(w, "unexpected", http.StatusTeapot)
 			return
@@ -264,7 +265,16 @@ func (f *fakeInfrahub) serve(w http.ResponseWriter, r *http.Request) {
 			ids, _ := seen.Variables["devices"].([]any)
 			writeFakeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"InterfacePhysical": f.portPage(c, ids)}})
 		case "IntentStamps":
-			writeFakeJSON(w, http.StatusOK, map[string]any{"data": f.stampPages(name, at, c)})
+			var devices *ctm.CTM
+			if tag, _ := seen.Variables["tag"].(string); tag == fakeTag && !f.untagged[name] {
+				devices = c
+			}
+			writeFakeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{
+				"DcimDevice": f.stampPage(name, at, devices)}})
+		case "PortStamps":
+			ids, _ := seen.Variables["devices"].([]any)
+			writeFakeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{
+				"InterfacePhysical": f.portStampPage(name, at, c, ids)}})
 		default:
 			f.t.Errorf("the read sent GraphQL operation %q on %s, which the fake does not know", seen.Operation, r.URL.Path)
 			http.Error(w, "unknown operation", http.StatusTeapot)
@@ -474,12 +484,13 @@ func (f *fakeInfrahub) stampOf(name, at string) string {
 	return fakeWritten
 }
 
-// stampPages is the IntentStamps answer for c read from branch at at: every device's,
-// interface's and link's stamp the branch's, but where stamps says otherwise for a device.
-// A nil c is a branch holding nothing.
-func (f *fakeInfrahub) stampPages(branch, at string, c *ctm.CTM) map[string]any {
+// stampPage is the IntentStamps answer for c read from branch at at: every device's edge,
+// its platform's, its manufacturer's and its interfaces' node_metadata the branch's stamp,
+// but where stamps says otherwise for a device, each on its package's pair. A nil c is a
+// scope that selects nothing.
+func (f *fakeInfrahub) stampPage(branch, at string, c *ctm.CTM) map[string]any {
 	stamp := f.stampOf(branch, at)
-	devices, links := []any{}, []any{}
+	edges := []any{}
 	if c != nil {
 		for _, d := range c.Devices {
 			own, ok := f.stamps[branch+"/"+d.Name]
@@ -494,68 +505,86 @@ func (f *fakeInfrahub) stampPages(branch, at string, c *ctm.CTM) map[string]any 
 			written := map[string]any{"updated_at": intentAt}
 			ifaces := make([]any, 0, len(d.Interfaces))
 			for _, in := range d.Interfaces {
-				ifaces = append(ifaces, map[string]any{
-					"properties": written,
-					"node": map[string]any{
-						"__typename": "NetworkInterface",
-						"id":         "if-" + d.Name + "-" + in.Name,
-						"name":       map[string]any{"value": in.Name, "updated_at": intentAt},
-						"iftype":     written, "mgmt_only": written, "enabled": written,
-						"link":   map[string]any{"properties": map[string]any{"updated_at": nil}},
-						"parent": map[string]any{"properties": map[string]any{"updated_at": nil}},
-					},
-				})
+				ifaces = append(ifaces, map[string]any{"node_metadata": written,
+					"node": map[string]any{"__typename": "InterfacePhysical", "id": d.Name + ":" + in.Name}})
 			}
-			vendor, nos := fakeGenericsPlatform(d.Platform.Package)
-			devices = append(devices, map[string]any{
-				"__typename": "NetworkDevice",
-				"id":         "dev-" + d.Name,
-				"name":       map[string]any{"value": d.Name, "updated_at": intentAt},
-				"role":       written,
-				"site":       written,
-				"platform": map[string]any{"properties": written, "node": map[string]any{
-					"__typename": "NetworkPlatform",
-					"vendor":     map[string]any{"value": vendor, "updated_at": intentAt},
-					"nos":        map[string]any{"value": nos, "updated_at": intentAt},
-					"version":    map[string]any{"value": d.Platform.Version, "updated_at": intentAt},
-					"model":      fakeValue(""),
-				}},
-				"interfaces": map[string]any{"edges": ifaces},
-				"artifacts": fakeEdges([]any{map[string]any{
-					"name":     fakeValue(d.Artifact.Name),
-					"checksum": map[string]any{"value": d.Artifact.Checksum, "updated_at": checksumAt},
-				}}),
+			pair := f.fakePair(d.Platform.Package)
+			edges = append(edges, map[string]any{
+				"node_metadata": written,
+				"node": map[string]any{
+					"id":   fakeDeviceID(d.Name),
+					"name": fakeValue(d.Name),
+					"platform": map[string]any{"node_metadata": written, "node": map[string]any{
+						"id":   "platform-" + d.Platform.Package,
+						"name": fakeValue(pair.Platform),
+						"manufacturer": map[string]any{"node_metadata": written, "node": map[string]any{
+							"id": "manufacturer-" + d.Platform.Package, "name": fakeValue(pair.Manufacturer)}},
+					}},
+					"interfaces": map[string]any{"edges": ifaces},
+					"artifacts": fakeEdges([]any{map[string]any{
+						"name":     fakeValue(d.Artifact.Name),
+						"checksum": map[string]any{"value": d.Artifact.Checksum, "updated_at": checksumAt},
+					}}),
+				},
 			})
 		}
+	}
+	return map[string]any{"count": len(edges), "edges": edges}
+}
+
+// portStampPage is the PortStamps answer for c read from branch at at: every linked
+// interface of the devices whose ids are given, as the query's filter asks, each with its
+// cable stamped the branch's, or the Link of the device of either of its ends where stamps
+// gives one.
+func (f *fakeInfrahub) portStampPage(branch, at string, c *ctm.CTM, ids []any) map[string]any {
+	stamp := f.stampOf(branch, at)
+	links := map[string]ctm.Link{}
+	if c != nil {
 		for _, l := range c.Links {
-			eps := make([]any, 0, len(l.Endpoints))
-			for _, e := range l.Endpoints {
-				intentAt := stamp
-				if own, ok := f.stamps[branch+"/"+e.Device]; ok && own.Link != "" {
-					intentAt = own.Link
-				}
-				eps = append(eps, map[string]any{
-					"properties": map[string]any{"updated_at": intentAt},
-					"node": map[string]any{"__typename": "NetworkInterface", "device": map[string]any{"node": map[string]any{
-						"__typename": "NetworkDevice", "name": fakeValue(e.Device),
-					}}},
-				})
-			}
-			links = append(links, map[string]any{"__typename": "NetworkLink", "endpoints": map[string]any{"edges": eps}})
+			links[l.ID] = l
 		}
 	}
-	devicePage, linkPage := fakeEdges(devices), fakeEdges(links)
-	devicePage["count"], linkPage["count"] = len(devices), len(links)
-	return map[string]any{"FylgjaDevice": devicePage, "FylgjaLink": linkPage}
+	nodes := []any{}
+	for _, d := range ctmDevices(c) {
+		if !slices.Contains(ids, any(fakeDeviceID(d.Name))) {
+			continue
+		}
+		for _, in := range d.Interfaces {
+			l, ok := links[in.Link]
+			if !ok {
+				continue
+			}
+			cabledAt := stamp
+			for _, e := range l.Endpoints {
+				if own, ok := f.stamps[branch+"/"+e.Device]; ok && own.Link != "" {
+					cabledAt = own.Link
+				}
+			}
+			nodes = append(nodes, map[string]any{
+				"device": map[string]any{"node": map[string]any{"__typename": "DcimDevice", "id": fakeDeviceID(d.Name)}},
+				"connector": map[string]any{"node_metadata": map[string]any{"updated_at": cabledAt},
+					"node": map[string]any{"__typename": "DcimCable", "id": "cable-" + l.ID}},
+			})
+		}
+	}
+	page := fakeEdges(nodes)
+	page["count"] = len(nodes)
+	return page
+}
+
+// ctmDevices is c's devices, none for a nil c.
+func ctmDevices(c *ctm.CTM) []ctm.Device {
+	if c == nil {
+		return nil
+	}
+	return c.Devices
 }
 
 // branchSchema is a served branch's schema, encoded, with the fixture's schema hash: the
 // library's kinds as the pinned commit loads them (internal/intent/testdata's trimmed
-// document of 017's T033), so conformance passes, beside the generics' rows, each
-// implemented by its reference kind, which the generics' stamps and events still map an
-// event's kind through (until 017's T047 and T048). A branch named in
-// schemaMutations is served changed by its function: a branch that does not conform.
-// The interim branch T033 read held both, the generics from main and the library.
+// document of 017's T033), so conformance passes, and the events map an event's kind
+// through its used_by. A branch named in schemaMutations is served changed by its
+// function: a branch that does not conform.
 //
 // An unchanged document is encoded once per schema hash: every read the harness serves
 // asks for it, and decoding and encoding its 110 kB each time cost the package seconds.
@@ -576,15 +605,6 @@ func (f *fakeInfrahub) branchSchema(branch string) []byte {
 		f.t.Fatal(err)
 	}
 	doc["main"] = hash
-	generic := func(kind, usedBy string) map[string]any {
-		return map[string]any{"kind": kind, "used_by": []string{usedBy}}
-	}
-	doc["generics"] = append(doc["generics"].([]any),
-		generic(ctm.DeviceGeneric, "NetworkDevice"),
-		generic("FylgjaInterface", "NetworkInterface"),
-		generic("FylgjaLink", "NetworkLink"),
-		generic("FylgjaPlatform", "NetworkPlatform"),
-	)
 	if mutate != nil {
 		mutate(doc)
 	}
@@ -615,21 +635,6 @@ func fakeEdges[T any](nodes []T) map[string]any {
 		out = append(out, map[string]any{"node": n})
 	}
 	return map[string]any{"edges": out}
-}
-
-// fakeGenericsPlatform is the generics' vendor and nos of a CTM "2" package: the fake
-// serves every fixture's device stamps as the generics model holds them, until 017's T047
-// moves the stamps to the library's shapes.
-func fakeGenericsPlatform(pkg string) (vendor, nos string) {
-	switch pkg {
-	case "nokia_srlinux":
-		return "nokia", "srlinux"
-	case "arista_eos":
-		return "arista", "eos"
-	case "chassisos":
-		return "example", "chassisos"
-	}
-	return pkg, pkg
 }
 
 // fakeTag is the tag the harness's server's default scope names (tag:fylgja), which every

@@ -13,10 +13,11 @@ import (
 )
 
 // fakeEvents is Infrahub's event log for one branch, newest first, and the branch's
-// schema, the reference kinds implementing Fylgja's generics; it records what it was
-// asked.
+// schema, the library's kinds implementing its generics; it records what it was asked.
 type fakeEvents struct {
 	events []map[string]any
+	// extra are implementers of the operator's own beside the library's, kind to generic.
+	extra map[string]string
 
 	mu      sync.Mutex
 	schemas []string         // the branch of each schema read
@@ -29,14 +30,24 @@ func (f *fakeEvents) serve(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		f.schemas = append(f.schemas, r.URL.Query().Get("branch"))
 		f.mu.Unlock()
-		generic := func(kind, usedBy string) map[string]any {
-			return map[string]any{"kind": kind, "used_by": []string{usedBy}}
+		generic := func(kind string, usedBy ...string) map[string]any {
+			for k, g := range f.extra {
+				if g == kind {
+					usedBy = append(usedBy, k)
+				}
+			}
+			return map[string]any{"kind": kind, "used_by": usedBy}
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"main": "e43a1cde", "generics": []any{
-			generic("FylgjaDevice", "NetworkDevice"), generic("FylgjaInterface", "NetworkInterface"),
-			generic("FylgjaLink", "NetworkLink"), generic("FylgjaPlatform", "NetworkPlatform"),
-			generic("CoreGroup", "CoreGraphQLQueryGroup"), generic("CoreArtifactTarget", "NetworkDevice"),
-		}, "nodes": []any{map[string]any{"kind": "NetworkDevice"}, map[string]any{"kind": StageKind}}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"main": "908871c3", "generics": []any{
+			generic("DcimGenericDevice", "DcimDevice"),
+			generic("DcimInterface", "InterfacePhysical", "InterfaceVirtual"),
+			generic("DcimEndpoint", "InterfacePhysical"), generic("DcimConnector", "DcimCable"),
+			generic("CoreGroup", "CoreGraphQLQueryGroup"), generic("CoreArtifactTarget", "DcimDevice"),
+		}, "nodes": []any{
+			map[string]any{"kind": "DcimDevice"}, map[string]any{"kind": "DcimPlatform"},
+			map[string]any{"kind": "OrganizationManufacturer"}, map[string]any{"kind": "BuiltinTag"},
+			map[string]any{"kind": StageKind},
+		}})
 	case r.Method == http.MethodPost && r.URL.Path == "/graphql":
 		var req struct {
 			OperationName string         `json:"operationName"`
@@ -103,43 +114,54 @@ const (
 	eventDeleted  = "2026-10-17T13:55:09.031152+00:00"
 )
 
-// The log of research §8.18's branch, newest first: the regenerate's churn, the link's
-// deletion with its child events, the generation's churn, the seed. Only a node's own
-// write of a kind implementing Fylgja's generics is intent, at any level, and of an update
-// only one changing a field the stamps fold into a device's intent: the query groups'
-// memberships Infrahub rewrites on every device after each generation, a device's
-// artifacts, an interface's addresses, a platform's model and the stage kind are not.
-// Each names its primary node and every peer.
+// The log of a branch over the library's kinds, newest first (research §1.8, §8.18): the
+// regenerate's churn, a cable re-ended with its child event on the former port, a tag added
+// and removed, the generation's churn, the seed. Only a node's own write of a kind the
+// stamps read is intent, at any level: the device, an interface of either kind, a cable, a
+// platform and a manufacturer. Of an update, one changing any attribute or any relationship
+// but Infrahub's churn: the query groups' memberships Infrahub rewrites on every node after
+// each generation, a device's artifacts, a profile. A tag's own write, an artifact's, a
+// group's, the stage kind's and an event with no primary node are not intent. Each names
+// its primary node and every peer.
 func TestIntentEventsMapsKinds(t *testing.T) {
 	f := &fakeEvents{events: []map[string]any{
-		mutated("infrahub.node.updated", "2026-10-17T13:55:32.691250+00:00", "NetworkDevice", "dev-n1", nil,
+		mutated("infrahub.node.updated", "2026-10-17T13:55:32.691250+00:00", "DcimDevice", "dev-n1", nil,
 			rel{"member_of_groups", "g-1"}),
+		mutated("infrahub.node.updated", "2026-10-17T13:55:32.500000+00:00", "InterfaceVirtual", "if-n1-lo0", nil,
+			rel{"member_of_groups", "g-1"}, rel{"subscriber_of_groups", "g-2"}),
 		other("ArtifactEvent", "infrahub.artifact.updated", "2026-10-17T13:55:29.770104+00:00", "CoreArtifact", "a-1"),
 		mutated("infrahub.node.updated", "2026-10-17T13:55:29.617911+00:00", "CoreArtifact", "a-1", []string{"storage_id", "checksum"}),
-		mutated("infrahub.node.updated", "2026-10-17T13:55:20.000000+00:00", "NetworkInterface", "if-n3", nil,
-			rel{"addresses", "ip-1"}),
-		mutated("infrahub.node.updated", "2026-10-17T13:55:19.000000+00:00", "NetworkPlatform", "p-1", []string{"model"}),
+		mutated("infrahub.node.updated", "2026-10-17T13:55:21.000000+00:00", "DcimDevice", "dev-n2", nil,
+			rel{"profiles", "prof-1"}, rel{"object_template", "tpl-1"}),
 		mutated("infrahub.node.updated", "2026-10-17T13:55:18.000000+00:00", StageKind, "st-1", []string{"label"}),
+		mutated("infrahub.node.updated", "2026-10-17T13:55:17.000000+00:00", "BuiltinTag", "tag-1", []string{"description"}),
+		// infrahub.schema.updated names no primary node, as a standard event and as a
+		// mutated one alike.
+		other("StandardEvent", "infrahub.schema.updated", "2026-10-17T13:55:16.000000+00:00", "", ""),
+		{"__typename": "NodeMutatedEvent", "event": "infrahub.schema.updated", "occurred_at": "2026-10-17T13:55:15.000000+00:00",
+			"primary_node": nil, "attributes": []any{}, "relationships": []any{map[string]any{"name": "nodes", "peer": map[string]any{"id": "x"}}}},
+		// A tag removed, then added: the device's tags edge, both ways.
+		mutated("infrahub.node.updated", "2026-10-17T13:55:12.000000+00:00", "DcimDevice", "dev-n3", nil, rel{"tags", "tag-1"}),
+		mutated("infrahub.node.updated", "2026-10-17T13:55:11.000000+00:00", "DcimDevice", "dev-n3", nil, rel{"tags", "tag-1"}),
 		other("GroupEvent", "infrahub.group.member_removed", "2026-10-17T13:55:09.051000+00:00", "CoreGraphQLQueryGroup", "g-1"),
 		mutated("infrahub.node.updated", "2026-10-17T13:55:09.049000+00:00", "CoreGraphQLQueryGroup", "g-1", nil,
-			rel{"members", "link-1"}),
-		mutated("infrahub.node.updated", "2026-10-17T13:55:09.044135+00:00", "NetworkInterface", "if-n2", nil,
-			rel{"link", "link-1"}),
-		mutated("infrahub.node.updated", "2026-10-17T13:55:09.042677+00:00", "NetworkInterface", "if-n1", nil,
-			rel{"link", "link-1"}),
-		mutated("infrahub.node.deleted", eventDeleted, "NetworkLink", "link-1", nil,
-			rel{"endpoints", "if-n1"}, rel{"endpoints", "if-n2"}, rel{"member_of_groups", "g-1"}),
-		mutated("infrahub.node.updated", "2026-10-17T13:54:27.731070+00:00", "NetworkDevice", "dev-n1", nil,
+			rel{"members", "cable-12"}),
+		// The cable re-ended to n1's end alone, and the former port's own event.
+		mutated("infrahub.node.updated", "2026-10-17T13:55:09.034000+00:00", "InterfacePhysical", "if-n2-e1", nil,
+			rel{"connector", "cable-12"}),
+		mutated("infrahub.node.updated", "2026-10-17T13:55:09.031152+00:00", "DcimCable", "cable-12", nil,
+			rel{"connected_endpoints", "if-n2-e1"}),
+		mutated("infrahub.node.updated", "2026-10-17T13:54:30.000000+00:00", "OrganizationManufacturer", "mf-1", []string{"description"}),
+		mutated("infrahub.node.updated", "2026-10-17T13:54:29.000000+00:00", "DcimPlatform", "pf-1", []string{"description"}),
+		mutated("infrahub.node.updated", "2026-10-17T13:54:27.731070+00:00", "DcimDevice", "dev-n1", nil,
 			rel{"member_of_groups", "g-1"}),
-		mutated("infrahub.node.updated", "2026-10-17T13:54:22.418356+00:00", "NetworkDevice", "dev-n1", nil,
+		mutated("infrahub.node.updated", "2026-10-17T13:54:22.418356+00:00", "DcimDevice", "dev-n1", nil,
 			rel{"artifacts", "a-1"}),
-		mutated("infrahub.node.updated", "2026-10-17T13:54:20.000000+00:00", "NetworkDevice", "dev-n2", []string{"role"}),
-		mutated("infrahub.node.updated", "2026-10-17T13:54:16.685919+00:00", "NetworkInterface", "if-n1", nil,
-			rel{"link", "link-1"}),
-		mutated("infrahub.node.created", "2026-10-17T13:54:16.683012+00:00", "NetworkLink", "link-1",
-			[]string{"human_friendly_id", "display_label"}, rel{"endpoints", "if-n1"}, rel{"endpoints", "if-n2"}),
-		mutated("infrahub.node.updated", "2026-10-17T13:54:15.360731+00:00", "NetworkDevice", "dev-n1", nil,
-			rel{"interfaces", "if-n1"}),
+		mutated("infrahub.node.updated", "2026-10-17T13:54:20.000000+00:00", "DcimDevice", "dev-n2", []string{"serial"}),
+		mutated("infrahub.node.created", "2026-10-17T13:54:16.683012+00:00", "DcimCable", "cable-12",
+			[]string{"human_friendly_id", "display_label"}, rel{"connected_endpoints", "if-n1-e1"}, rel{"connected_endpoints", "if-n2-e1"}),
+		mutated("infrahub.node.created", "2026-10-17T13:54:15.360731+00:00", "InterfaceVirtual", "if-n1-lo0",
+			[]string{"name"}, rel{"device", "dev-n1"}),
 		other("BranchCreatedEvent", "infrahub.branch.created", "2026-10-17T13:54:10.452400+00:00", "", ""),
 	}}
 	got, err := f.reader(t).IntentEvents(t.Context(), "change-1", eventBranched, "")
@@ -147,19 +169,24 @@ func TestIntentEventsMapsKinds(t *testing.T) {
 		t.Fatal(err)
 	}
 	want := []Event{
-		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:55:09.044135+00:00", Kind: "NetworkInterface", Nodes: []string{"if-n2", "link-1"}},
-		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:55:09.042677+00:00", Kind: "NetworkInterface", Nodes: []string{"if-n1", "link-1"}},
-		{Name: "infrahub.node.deleted", OccurredAt: eventDeleted, Kind: "NetworkLink", Nodes: []string{"link-1", "if-n1", "if-n2", "g-1"}},
-		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:54:20.000000+00:00", Kind: "NetworkDevice", Nodes: []string{"dev-n2"}},
-		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:54:16.685919+00:00", Kind: "NetworkInterface", Nodes: []string{"if-n1", "link-1"}},
-		{Name: "infrahub.node.created", OccurredAt: "2026-10-17T13:54:16.683012+00:00", Kind: "NetworkLink", Nodes: []string{"link-1", "if-n1", "if-n2"}},
-		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:54:15.360731+00:00", Kind: "NetworkDevice", Nodes: []string{"dev-n1", "if-n1"}},
+		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:55:12.000000+00:00", Kind: "DcimDevice", Nodes: []string{"dev-n3", "tag-1"}},
+		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:55:11.000000+00:00", Kind: "DcimDevice", Nodes: []string{"dev-n3", "tag-1"}},
+		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:55:09.034000+00:00", Kind: "InterfacePhysical", Nodes: []string{"if-n2-e1", "cable-12"}},
+		{Name: "infrahub.node.updated", OccurredAt: eventDeleted, Kind: "DcimCable", Nodes: []string{"cable-12", "if-n2-e1"}},
+		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:54:30.000000+00:00", Kind: "OrganizationManufacturer", Nodes: []string{"mf-1"}},
+		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:54:29.000000+00:00", Kind: "DcimPlatform", Nodes: []string{"pf-1"}},
+		{Name: "infrahub.node.updated", OccurredAt: "2026-10-17T13:54:20.000000+00:00", Kind: "DcimDevice", Nodes: []string{"dev-n2"}},
+		{Name: "infrahub.node.created", OccurredAt: "2026-10-17T13:54:16.683012+00:00", Kind: "DcimCable", Nodes: []string{"cable-12", "if-n1-e1", "if-n2-e1"}},
+		{Name: "infrahub.node.created", OccurredAt: "2026-10-17T13:54:15.360731+00:00", Kind: "InterfaceVirtual", Nodes: []string{"if-n1-lo0", "dev-n1"}},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("events\n  %+v\nwant\n  %+v", got, want)
 	}
-	if !got[2].Names([]string{"dev-n1", "if-n1"}) || got[2].Names([]string{"dev-n3", "if-n3"}) {
-		t.Errorf("the delete names %v", got[2].Nodes)
+	// The re-ended cable's event names its former port, and so counts for that port's
+	// device, n2, and the port's own event does too; neither names n3.
+	n2 := []string{"dev-n2", "if-n2-e1"}
+	if !got[3].Names(n2) || !got[2].Names(n2) || got[3].Names([]string{"dev-n3", "if-n3-e1"}) {
+		t.Errorf("the re-ending names %v and %v", got[3].Nodes, got[2].Nodes)
 	}
 	if !reflect.DeepEqual(f.schemas, []string{"change-1"}) {
 		t.Errorf("schema reads %v; want the branch's, once", f.schemas)
@@ -170,6 +197,23 @@ func TestIntentEventsMapsKinds(t *testing.T) {
 	}
 }
 
+// An implementer of the operator's own, found through the branch schema's used_by, is
+// intent's as the library's are; a kind that implements none is not.
+func TestIntentEventsMapAnImplementerOfTheOperatorsOwn(t *testing.T) {
+	f := &fakeEvents{events: []map[string]any{
+		mutated("infrahub.node.updated", "2026-10-17T13:55:02.000000+00:00", "AcmeWidget", "w-1", []string{"name"}),
+		mutated("infrahub.node.updated", "2026-10-17T13:55:01.000000+00:00", "InterfaceLag", "lag-1", []string{"name"}),
+	}}
+	f.extra = map[string]string{"InterfaceLag": "DcimInterface"}
+	got, err := f.reader(t).IntentEvents(t.Context(), "change-1", eventBranched, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].Kind != "InterfaceLag" {
+		t.Errorf("events %+v; want InterfaceLag's alone", got)
+	}
+}
+
 // The pages stop at the first event no later than after, which none of the events
 // returned is; an empty after reads every page, fifty at a time.
 func TestIntentEventsPagesToTheBound(t *testing.T) {
@@ -177,7 +221,7 @@ func TestIntentEventsPagesToTheBound(t *testing.T) {
 	for i := range 120 {
 		// Newest first: 13:55:59.000119 down to 13:55:59.000000.
 		events = append(events, mutated("infrahub.node.updated", fmt.Sprintf("2026-10-17T13:55:59.%06d+00:00", 119-i),
-			"NetworkInterface", fmt.Sprintf("if-%d", 119-i), []string{"enabled"}))
+			"InterfacePhysical", fmt.Sprintf("if-%d", 119-i), []string{"status"}))
 	}
 	f := &fakeEvents{events: events}
 	r := f.reader(t)
@@ -203,7 +247,7 @@ func TestIntentEventsPagesToTheBound(t *testing.T) {
 // time is refused, and nothing the reader returns carries the credential.
 func TestIntentEventsQuietAndRefused(t *testing.T) {
 	f := &fakeEvents{events: []map[string]any{
-		mutated("infrahub.node.updated", "2026-10-17T13:54:00.000000+00:00", "NetworkInterface", "if-1", []string{"enabled"}),
+		mutated("infrahub.node.updated", "2026-10-17T13:54:00.000000+00:00", "InterfacePhysical", "if-1", []string{"status"}),
 	}}
 	got, err := f.reader(t).IntentEvents(t.Context(), "change-1", eventBranched, eventDeleted)
 	if err != nil || got != nil || len(f.pages) != 1 || f.schemas != nil {
@@ -212,7 +256,7 @@ func TestIntentEventsQuietAndRefused(t *testing.T) {
 	if _, err := f.reader(t).IntentEvents(t.Context(), "change-1", eventBranched, "not a time"); err == nil {
 		t.Error("a bound that is not a time was accepted")
 	}
-	f = &fakeEvents{events: []map[string]any{mutated("infrahub.node.updated", "yesterday", "NetworkInterface", "if-1", []string{"enabled"})}}
+	f = &fakeEvents{events: []map[string]any{mutated("infrahub.node.updated", "yesterday", "InterfacePhysical", "if-1", []string{"status"})}}
 	_, err = f.reader(t).IntentEvents(t.Context(), "change-1", eventBranched, "")
 	if err == nil || !strings.Contains(err.Error(), `"yesterday"`) || strings.Contains(err.Error(), "secret-token") {
 		t.Errorf("a stamp that is not a time: %v", err)

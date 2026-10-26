@@ -283,11 +283,11 @@ func TestStagePlanTwoMarks(t *testing.T) {
 	mustQuoteNoContent(t, f, stdout, stderr, raw)
 }
 
-// D-048: the link n1:ethernet-1/1 — n2:ethernet-1/1 deleted at 09:30, after the artifacts
-// were generated at 09:00, moves no stamp; the event log records it, then each endpoint
-// interface's link removed. The head is listed one microsecond after the last of those
-// events; a stage marked after the delete, and the head, are refused stale for n1 and n2,
-// whose interfaces the events name, and never for n3; a mark before it is fresh.
+// D-048: the cable n1:ethernet-1/1 — n2:ethernet-1/1 deleted at 09:30, after the artifacts
+// were generated at 09:00, moves no stamp; the event log records it, then each end's port's
+// connector removed. The head is listed one microsecond after the last of those events; a
+// stage marked after the delete, and the head, are refused stale for n1 and n2, whose ports
+// the events name, and never for n3; a mark before it is fresh.
 func TestStagePlanRemoval(t *testing.T) {
 	const (
 		beforeAt  = "2026-10-16T09:20:00.000000+00:00"
@@ -303,16 +303,16 @@ func TestStagePlanRemoval(t *testing.T) {
 		mark("st-before", "before", beforeAt, "before the delete"))
 	f.events = map[string][]fakeEvent{lessLink: {
 		// The query groups' churn names n3, and is never intent.
-		{Name: "infrahub.node.updated", At: "2026-10-16T09:30:03.000000+00:00", Kind: "NetworkDevice", ID: "dev-n3",
+		{Name: "infrahub.node.updated", At: "2026-10-16T09:30:03.000000+00:00", Kind: "DcimDevice", ID: fakeDeviceID("n3"),
 			Rel: "member_of_groups", Peers: []string{"group-1"}},
-		{Name: "infrahub.node.updated", At: n2At, Kind: "NetworkInterface", ID: "if-n2-ethernet-1/1", Rel: "link",
-			Peers: []string{"link-1"}},
-		{Name: "infrahub.node.updated", At: n1At, Kind: "NetworkInterface", ID: "if-n1-ethernet-1/1", Rel: "link",
-			Peers: []string{"link-1"}},
+		{Name: "infrahub.node.updated", At: n2At, Kind: "InterfacePhysical", ID: "n2:ethernet-1/1", Rel: "connector",
+			Peers: []string{"cable-removed"}},
+		{Name: "infrahub.node.updated", At: n1At, Kind: "InterfacePhysical", ID: "n1:ethernet-1/1", Rel: "connector",
+			Peers: []string{"cable-removed"}},
 		{Name: "infrahub.node.updated", At: n1At, Kind: "CoreGraphQLQueryGroup", ID: "group-1", Rel: "members",
-			Peers: []string{"dev-n3"}},
-		{Name: "infrahub.node.deleted", At: deletedAt, Kind: "NetworkLink", ID: "link-1", Rel: "endpoints",
-			Peers: []string{"if-n1-ethernet-1/1", "if-n2-ethernet-1/1"}},
+			Peers: []string{fakeDeviceID("n3")}},
+		{Name: "infrahub.node.deleted", At: deletedAt, Kind: "DcimCable", ID: "cable-removed", Rel: "connected_endpoints",
+			Peers: []string{"n1:ethernet-1/1", "n2:ethernet-1/1"}},
 	}}
 	f.start()
 
@@ -340,7 +340,7 @@ func TestStagePlanRemoval(t *testing.T) {
 	for i, at := range []string{n1At, n2At} {
 		fd := stages[2].Findings[i]
 		if has := "its intent on change-1 was written at " + at + " (Infrahub's event log: infrahub.node.updated of a " +
-			"NetworkInterface; its latest stamp " + fakeWritten + "), later than its artifact device-config was generated " +
+			"InterfacePhysical; its latest stamp " + fakeWritten + "), later than its artifact device-config was generated " +
 			"(checksum stamped " + fakeWritten; !strings.Contains(fd.Message, has) {
 			t.Errorf("%s's finding lacks %q: %s", fd.Object, has, fd.Message)
 		}
@@ -635,9 +635,11 @@ func TestStagePlanText(t *testing.T) {
 }
 
 // stage plan --scope reads every stage under the scope given, whatever the server's
-// default (017; US5 scenario 5): each stage's read sends the tag x, which no device of the
-// fake carries, so each is refused scope.empty naming tag:x, and the heading and the
-// document name the scope.
+// default (017; US5 scenario 5): each stage's read and stamps send the tag x, which no
+// device of the fake carries, so the branch point and each mark are refused scope.empty
+// naming tag:x at their read, and the head, whose at is computed from the branch's stamps
+// under the scope, has none and is refused stage.at.unresolved before any read, as a branch
+// holding nothing stamped is (R-10). The heading and the document name the scope.
 func TestStagePlanReadsUnderTheScopeGiven(t *testing.T) {
 	useStateRoot(t)
 	useService(t, nil)
@@ -658,26 +660,39 @@ func TestStagePlanReadsUnderTheScopeGiven(t *testing.T) {
 	if want := []string{"change-1/branch-point", "change-1/cabled", "change-1/live", "change-1/head"}; !slices.Equal(stageRefs(stages), want) {
 		t.Fatalf("stages %v; want %v", stageRefs(stages), want)
 	}
-	for _, st := range stages {
-		if len(st.Findings) != 1 || st.Findings[0].Rule != findings.RuleScopeEmpty || st.Findings[0].Object != "tag:x" {
-			t.Errorf("stage %s's findings %+v; want scope.empty naming tag:x alone", st.Ref, st.Findings)
+	for _, st := range stages[:3] {
+		if len(st.Findings) != 1 || st.Findings[0].Rule != findings.RuleScopeEmpty || st.Findings[0].Object != "tag:x" ||
+			st.Findings[0].Step != findings.StepRead {
+			t.Errorf("stage %s's findings %+v; want scope.empty naming tag:x alone, at read", st.Ref, st.Findings)
 		}
 	}
-	reads := map[string][]any{}
+	head := stages[3]
+	if len(head.Findings) != 1 || head.Findings[0].Rule != findings.RuleStageAtUnresolved || head.Findings[0].Step != findings.StepResolve ||
+		head.Findings[0].Message != "stage change-1/head has no at: branch change-1 holds no stamped device, interface, link or "+
+			"artifact, so it names no point in time" {
+		t.Errorf("the head's findings %+v; want stage.at.unresolved alone, at resolve", head.Findings)
+	}
+	reads, stamped := map[string][]any{}, []any{}
 	for _, r := range f.requests() {
-		if r.Operation == "Devices" {
+		switch r.Operation {
+		case "Devices":
 			reads[r.Path+"?"+r.Query] = append(reads[r.Path+"?"+r.Query], r.Variables["tag"])
+		case "IntentStamps":
+			stamped = append(stamped, r.Variables["tag"])
 		}
 	}
-	// One read per stage, each at its own at, and each sent twice: once for the text and
-	// once for --json.
-	if len(reads) != len(stages) {
-		t.Errorf("devices were read at %d places, want one per stage's read (%d): %v", len(reads), len(stages), reads)
+	// One read per stage but the head, each at its own at, and each sent twice: once for
+	// the text and once for --json.
+	if len(reads) != len(stages)-1 {
+		t.Errorf("devices were read at %d places, want one per stage's read but the head's (%d): %v", len(reads), len(stages)-1, reads)
 	}
 	for where, tags := range reads {
 		if slices.ContainsFunc(tags, func(tag any) bool { return tag != "x" }) {
 			t.Errorf("the devices read at %s sent the tags %v; want x on every one", where, tags)
 		}
+	}
+	if len(stamped) == 0 || slices.ContainsFunc(stamped, func(tag any) bool { return tag != "x" }) {
+		t.Errorf("the stamps were read under the tags %v; want x on every one", stamped)
 	}
 }
 

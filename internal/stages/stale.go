@@ -21,7 +21,7 @@ const remedy = "regenerate (fylgja-fixture -generate, POST /api/artifact/generat
 // stamp of its own intent and the latest intent event that names it, no later than the
 // stage's at: a removal moves no stamp, and its event is how it is seen. The artifact is
 // the one named by the device's package's config.artifact_name, the package found in the
-// registry by the device's platform (Constitution II). One stage.artifact.stale per stale
+// registry by the device's manufacturer and platform pair, exactly (Constitution II). One stage.artifact.stale per stale
 // device, sorted by name, each a rejection at step resolve naming the device.
 //
 // The stamps are read on the stage's branch pinned at its at (the default branch for the
@@ -37,9 +37,9 @@ const remedy = "regenerate (fylgja-fixture -generate, POST /api/artifact/generat
 // the head a run-check that regenerated identical bytes would never count, and the head
 // would stay stale with no remedy, the hole D-046 closes.
 //
-// A device whose package this build lacks, or which carries no artifact of its package's
-// name, is the read's to refuse (platform.unsupported, artifact.missing), not stale; so is
-// one whose artifact says nothing of when it was generated.
+// A device whose pair no package matches, or which carries no artifact of its package's
+// name, is the read's to refuse (platform.missing, platform.unmatched, artifact.missing),
+// not stale; so is one whose artifact says nothing of when it was generated.
 func Stale(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Change, st Resolved) (findings.List, error) {
 	stamps, validatedAt := ch.head, st.At
 	if st.AtSource == AtHead {
@@ -58,7 +58,7 @@ func Stale(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 	var devices []judged
 	floor, unstamped := "", false
 	for name, d := range stamps.Devices {
-		pkg, ok := reg.Lookup(d.NOS)
+		pkg, ok := reg.Match(d.Match.Manufacturer, d.Match.Platform)
 		if !ok {
 			continue
 		}

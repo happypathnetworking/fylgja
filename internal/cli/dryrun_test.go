@@ -525,7 +525,7 @@ func TestCreateDryRunFromAStage(t *testing.T) {
 	// resolution's own reads of a branch's latest stamps, the head's and main's, are unpinned
 	// and are not the read's.
 	for _, r := range f.requests() {
-		if r.Operation == "IntentStamps" && r.Query == "" {
+		if (r.Operation == "IntentStamps" || r.Operation == "PortStamps") && r.Query == "" {
 			continue
 		}
 		if strings.HasPrefix(r.Path, "/graphql/") || strings.HasPrefix(r.Path, "/api/storage/") {

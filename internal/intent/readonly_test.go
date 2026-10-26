@@ -23,6 +23,7 @@ func operations() map[string]string {
 		"ArtifactValidations": ArtifactValidations_Operation,
 		"IntentEvents":        IntentEvents_Operation,
 		"IntentStamps":        IntentStamps_Operation,
+		"PortStamps":          PortStamps_Operation,
 	}
 }
 
@@ -86,13 +87,13 @@ func TestQueriesNameOnlyGenerics(t *testing.T) {
 }
 
 // mappingRoots are the read's two roots, the library's kinds the mapping reads devices and
-// ports from (D-057; mapping.md §2). The bridge (017's T039, until T052 holds every
-// operation to the mapping's roots and fragment targets): the stamps still select the
-// generics' roots until T047, so a root here is either the mapping's, a Fylgja one, or
-// Infrahub's own.
-var mappingRoots = map[string]string{
-	"DcimDevice":        "Devices",
-	"InterfacePhysical": "Ports",
+// ports from (D-057; mapping.md §2), each with the operations that select it: the read's
+// and the stamps', which are shaped like it (017 research R-10). The bridge (until T052
+// holds every operation to the mapping's roots and fragment targets): a root here is
+// either the mapping's, a Fylgja one, or Infrahub's own.
+var mappingRoots = map[string][]string{
+	"DcimDevice":        {"Devices", "IntentStamps"},
+	"InterfacePhysical": {"Ports", "PortStamps"},
 }
 
 // Every root an operation selects is one of the mapping's, a Fylgja one, or one of the
@@ -106,9 +107,9 @@ func TestQueryRootsAreFylgjaGenerics(t *testing.T) {
 			t.Errorf("operation %s selects no root", name)
 		}
 		for _, r := range roots {
-			if op, ok := mappingRoots[r]; ok {
-				if op != name {
-					t.Errorf("operation %s selects the mapping's root %s, which only %s reads", name, r, op)
+			if ops, ok := mappingRoots[r]; ok {
+				if !slices.Contains(ops, name) {
+					t.Errorf("operation %s selects the mapping's root %s, which only %v read", name, r, ops)
 				}
 				continue
 			}

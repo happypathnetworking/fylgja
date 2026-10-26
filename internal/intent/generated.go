@@ -304,16 +304,19 @@ func (v *ArtifactFieldsNetworkDevice) GetArtifacts() ArtifactFieldsArtifactsNest
 	return v.Artifacts
 }
 
-// 014 — when each part of a branch's intent, and each artifact's checksum, was last
+// 014, 017 — when each part of a scope's intent, and each artifact's checksum, was last
 // written: the head's `at` (one microsecond after the later of the latest stamp and the
-// branch's latest intent event, D-048) and the staleness rule's two sides, per device
-// (research R-06, R-07; D-046). Stamps only, never a value of
-// intent but the names that key them, the platform that picks the device's package
-// (Constitution II), and the device's and its interfaces' ids, by which an intent event
-// names the device (D-048). An unset relationship's properties.updated_at is null and skipped.
-// The artifacts are spread on CoreArtifactTarget, as the read's are: selected directly
-// on FylgjaDevice they are refused. Named IntentStamps, not Stamps, because
-// intent.Stamps is the aggregate's type.
+// branch's latest intent event, D-048) and the staleness rule's two sides, per device (D-046;
+// 017 research R-10). Shaped like the read (Devices, Ports): the devices carrying the
+// scope's tag, then the physical ports of those devices by their ids. Stamps only, never a
+// value of intent but the names that key them: the platform's and its manufacturer's names,
+// which pick the device's package (Constitution II), and the ids of the device, its
+// interfaces, its platform, its manufacturer and its cables, by which an intent event names
+// the device (D-048). Each stamp is an edge wrapper's node_metadata.updated_at, the latest
+// write among the node's current attributes and relationship edges (017 research §1.7):
+// one field per node covers every field its kind has, an operator's own included. A null
+// stamp is skipped. The artifacts are spread on CoreArtifactTarget, as the read's are.
+// Named IntentStamps, not Stamps, because intent.Stamps is the aggregate's type.
 //
 // ArtifactStamps is implemented by the following types:
 // ArtifactStampsDcimDevice
@@ -464,16 +467,19 @@ func (v *ArtifactStampsArtifactsNestedPaginatedCoreArtifactEdgesNestedEdgedCoreA
 	return v.Value
 }
 
-// 014 — when each part of a branch's intent, and each artifact's checksum, was last
+// 014, 017 — when each part of a scope's intent, and each artifact's checksum, was last
 // written: the head's `at` (one microsecond after the later of the latest stamp and the
-// branch's latest intent event, D-048) and the staleness rule's two sides, per device
-// (research R-06, R-07; D-046). Stamps only, never a value of
-// intent but the names that key them, the platform that picks the device's package
-// (Constitution II), and the device's and its interfaces' ids, by which an intent event
-// names the device (D-048). An unset relationship's properties.updated_at is null and skipped.
-// The artifacts are spread on CoreArtifactTarget, as the read's are: selected directly
-// on FylgjaDevice they are refused. Named IntentStamps, not Stamps, because
-// intent.Stamps is the aggregate's type.
+// branch's latest intent event, D-048) and the staleness rule's two sides, per device (D-046;
+// 017 research R-10). Shaped like the read (Devices, Ports): the devices carrying the
+// scope's tag, then the physical ports of those devices by their ids. Stamps only, never a
+// value of intent but the names that key them: the platform's and its manufacturer's names,
+// which pick the device's package (Constitution II), and the ids of the device, its
+// interfaces, its platform, its manufacturer and its cables, by which an intent event names
+// the device (D-048). Each stamp is an edge wrapper's node_metadata.updated_at, the latest
+// write among the node's current attributes and relationship edges (017 research §1.7):
+// one field per node covers every field its kind has, an operator's own included. A null
+// stamp is skipped. The artifacts are spread on CoreArtifactTarget, as the read's are.
+// Named IntentStamps, not Stamps, because intent.Stamps is the aggregate's type.
 type ArtifactStampsDcimDevice struct {
 	Artifacts ArtifactStampsArtifactsNestedPaginatedCoreArtifact `json:"artifacts"`
 }
@@ -483,16 +489,19 @@ func (v *ArtifactStampsDcimDevice) GetArtifacts() ArtifactStampsArtifactsNestedP
 	return v.Artifacts
 }
 
-// 014 — when each part of a branch's intent, and each artifact's checksum, was last
+// 014, 017 — when each part of a scope's intent, and each artifact's checksum, was last
 // written: the head's `at` (one microsecond after the later of the latest stamp and the
-// branch's latest intent event, D-048) and the staleness rule's two sides, per device
-// (research R-06, R-07; D-046). Stamps only, never a value of
-// intent but the names that key them, the platform that picks the device's package
-// (Constitution II), and the device's and its interfaces' ids, by which an intent event
-// names the device (D-048). An unset relationship's properties.updated_at is null and skipped.
-// The artifacts are spread on CoreArtifactTarget, as the read's are: selected directly
-// on FylgjaDevice they are refused. Named IntentStamps, not Stamps, because
-// intent.Stamps is the aggregate's type.
+// branch's latest intent event, D-048) and the staleness rule's two sides, per device (D-046;
+// 017 research R-10). Shaped like the read (Devices, Ports): the devices carrying the
+// scope's tag, then the physical ports of those devices by their ids. Stamps only, never a
+// value of intent but the names that key them: the platform's and its manufacturer's names,
+// which pick the device's package (Constitution II), and the ids of the device, its
+// interfaces, its platform, its manufacturer and its cables, by which an intent event names
+// the device (D-048). Each stamp is an edge wrapper's node_metadata.updated_at, the latest
+// write among the node's current attributes and relationship edges (017 research §1.7):
+// one field per node covers every field its kind has, an operator's own included. A null
+// stamp is skipped. The artifacts are spread on CoreArtifactTarget, as the read's are.
+// Named IntentStamps, not Stamps, because intent.Stamps is the aggregate's type.
 type ArtifactStampsNetworkDevice struct {
 	Artifacts ArtifactStampsArtifactsNestedPaginatedCoreArtifact `json:"artifacts"`
 }
@@ -1939,909 +1948,91 @@ func (v *IntentEventsResponse) GetInfrahubEvent() IntentEventsInfrahubEventEvent
 	return v.InfrahubEvent
 }
 
-// IntentStampsFylgjaDevicePaginatedFylgjaDevice includes the requested fields of the GraphQL type PaginatedFylgjaDevice.
+// IntentStampsDcimDevicePaginatedDcimDevice includes the requested fields of the GraphQL type PaginatedDcimDevice.
 // The GraphQL type's documentation follows.
 //
-// A network node. `name` becomes the containerlab node name.
-type IntentStampsFylgjaDevicePaginatedFylgjaDevice struct {
-	Count int                                                                   `json:"count"`
-	Edges []IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice `json:"edges"`
+// A configurable network device including routers, switches...
+type IntentStampsDcimDevicePaginatedDcimDevice struct {
+	Count int                                                             `json:"count"`
+	Edges []IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice `json:"edges"`
 }
 
-// GetCount returns IntentStampsFylgjaDevicePaginatedFylgjaDevice.Count, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDevice) GetCount() int { return v.Count }
+// GetCount returns IntentStampsDcimDevicePaginatedDcimDevice.Count, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDevice) GetCount() int { return v.Count }
 
-// GetEdges returns IntentStampsFylgjaDevicePaginatedFylgjaDevice.Edges, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDevice) GetEdges() []IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice {
+// GetEdges returns IntentStampsDcimDevicePaginatedDcimDevice.Edges, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDevice) GetEdges() []IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice {
 	return v.Edges
 }
 
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice includes the requested fields of the GraphQL type EdgedFylgjaDevice.
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice includes the requested fields of the GraphQL type EdgedDcimDevice.
 // The GraphQL type's documentation follows.
 //
-// A network node. `name` becomes the containerlab node name.
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice struct {
-	Node IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice `json:"-"`
+// A configurable network device including routers, switches...
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice struct {
+	Node_metadata IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNode_metadataInfrahubNodeMetadata `json:"node_metadata"`
+	Node          IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice                    `json:"node"`
 }
 
-// GetNode returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice.Node, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice) GetNode() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice {
+// GetNode_metadata returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice.Node_metadata, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice) GetNode_metadata() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNode_metadataInfrahubNodeMetadata {
+	return v.Node_metadata
+}
+
+// GetNode returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice.Node, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDevice) GetNode() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice {
 	return v.Node
 }
 
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice struct {
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice) __premarshalJSON() (*__premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice, error) {
-	var retval __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice
-
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDevice.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice includes the requested fields of the GraphQL interface FylgjaDevice.
-//
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice is implemented by the following types:
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice includes the requested fields of the GraphQL type DcimDevice.
 // The GraphQL type's documentation follows.
 //
-// A network node. `name` becomes the containerlab node name.
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice interface {
-	implementsGraphQLInterfaceIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	// GetId returns the interface-field "id" from its implementation.
-	// The GraphQL interface field's documentation follows.
-	//
+// A configurable network device including routers, switches...
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice struct {
 	// Unique identifier
-	GetId() string
-	// GetName returns the interface-field "name" from its implementation.
-	GetName() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute
-	// GetRole returns the interface-field "role" from its implementation.
-	// The GraphQL interface field's documentation follows.
-	//
-	// leaf / spine / border … Input to scope selection later.
-	GetRole() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute
-	// GetSite returns the interface-field "site" from its implementation.
-	GetSite() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute
-	// GetPlatform returns the interface-field "platform" from its implementation.
-	GetPlatform() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform
-	// GetInterfaces returns the interface-field "interfaces" from its implementation.
-	GetInterfaces() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface
+	Id                       string                                                                                                            `json:"id"`
+	Name                     IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute                      `json:"name"`
+	Platform                 IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform        `json:"platform"`
+	Interfaces               IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterface `json:"interfaces"`
+	ArtifactStampsDcimDevice `json:"-"`
 }
 
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) implementsGraphQLInterfaceIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice() {
-}
-
-func __unmarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice(b []byte, v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkDevice":
-		*v = new(IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaDevice.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice(v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice:
-		typename = "NetworkDevice"
-
-		premarshaled, err := v.__premarshalJSON()
-		if err != nil {
-			return nil, err
-		}
-		result := struct {
-			TypeName string `json:"__typename"`
-			*__premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice
-		}{typename, premarshaled}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevice: "%T"`, v)
-	}
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface includes the requested fields of the GraphQL type NestedPaginatedFylgjaInterface.
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface struct {
-	Edges []IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface `json:"edges"`
-}
-
-// GetEdges returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface.Edges, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface) GetEdges() []IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface {
-	return v.Edges
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface includes the requested fields of the GraphQL type NestedEdgedFylgjaInterface.
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface struct {
-	Properties IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty `json:"properties"`
-	Node       IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface            `json:"-"`
-}
-
-// GetProperties returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Properties, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) GetProperties() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty {
-	return v.Properties
-}
-
-// GetNode returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Node, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) GetNode() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface {
-	return v.Node
-}
-
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface struct {
-	Properties IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty `json:"properties"`
-
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) __premarshalJSON() (*__premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface, error) {
-	var retval __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface
-
-	retval.Properties = v.Properties
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface includes the requested fields of the GraphQL interface FylgjaInterface.
-//
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface is implemented by the following types:
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface interface {
-	implementsGraphQLInterfaceIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	// GetId returns the interface-field "id" from its implementation.
-	// The GraphQL interface field's documentation follows.
-	//
-	// Unique identifier
-	GetId() string
-	// GetName returns the interface-field "name" from its implementation.
-	GetName() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute
-	// GetIftype returns the interface-field "iftype" from its implementation.
-	GetIftype() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceIftypeDropdown
-	// GetMgmt_only returns the interface-field "mgmt_only" from its implementation.
-	// The GraphQL interface field's documentation follows.
-	//
-	// Out-of-band management port; never cabled. Not set on in-band loopbacks.
-	GetMgmt_only() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceMgmt_onlyCheckboxAttribute
-	// GetEnabled returns the interface-field "enabled" from its implementation.
-	GetEnabled() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceEnabledCheckboxAttribute
-	// GetLink returns the interface-field "link" from its implementation.
-	GetLink() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceLinkNestedEdgedFylgjaLink
-	// GetParent returns the interface-field "parent" from its implementation.
-	GetParent() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceParentNestedEdgedFylgjaInterface
-}
-
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) implementsGraphQLInterfaceIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface() {
-}
-
-func __unmarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(b []byte, v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkInterface":
-		*v = new(IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaInterface.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface:
-		typename = "NetworkInterface"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface: "%T"`, v)
-	}
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceEnabledCheckboxAttribute includes the requested fields of the GraphQL type CheckboxAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Checkbox
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceEnabledCheckboxAttribute struct {
-	// Date/Time when the attribute was last modified by a user or a system task
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceEnabledCheckboxAttribute.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceEnabledCheckboxAttribute) GetUpdated_at() string {
-	return v.Updated_at
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceIftypeDropdown includes the requested fields of the GraphQL type Dropdown.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Dropdown
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceIftypeDropdown struct {
-	// Date/Time when the attribute was last modified by a user or a system task
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceIftypeDropdown.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceIftypeDropdown) GetUpdated_at() string {
-	return v.Updated_at
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceLinkNestedEdgedFylgjaLink includes the requested fields of the GraphQL type NestedEdgedFylgjaLink.
-// The GraphQL type's documentation follows.
-//
-// A point-to-point connection between exactly two interfaces.
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceLinkNestedEdgedFylgjaLink struct {
-	Properties IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceLinkNestedEdgedFylgjaLinkPropertiesRelationshipProperty `json:"properties"`
-}
-
-// GetProperties returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceLinkNestedEdgedFylgjaLink.Properties, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceLinkNestedEdgedFylgjaLink) GetProperties() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceLinkNestedEdgedFylgjaLinkPropertiesRelationshipProperty {
-	return v.Properties
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceLinkNestedEdgedFylgjaLinkPropertiesRelationshipProperty includes the requested fields of the GraphQL type RelationshipProperty.
-// The GraphQL type's documentation follows.
-//
-// Defines properties for relationships
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceLinkNestedEdgedFylgjaLinkPropertiesRelationshipProperty struct {
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceLinkNestedEdgedFylgjaLinkPropertiesRelationshipProperty.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceLinkNestedEdgedFylgjaLinkPropertiesRelationshipProperty) GetUpdated_at() string {
-	return v.Updated_at
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceMgmt_onlyCheckboxAttribute includes the requested fields of the GraphQL type CheckboxAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Checkbox
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceMgmt_onlyCheckboxAttribute struct {
-	// Date/Time when the attribute was last modified by a user or a system task
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceMgmt_onlyCheckboxAttribute.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceMgmt_onlyCheckboxAttribute) GetUpdated_at() string {
-	return v.Updated_at
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute struct {
-	Value string `json:"value"`
-	// Date/Time when the attribute was last modified by a user or a system task
-	Updated_at string `json:"updated_at"`
-}
-
-// GetValue returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute) GetValue() string {
-	return v.Value
-}
-
-// GetUpdated_at returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute) GetUpdated_at() string {
-	return v.Updated_at
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceParentNestedEdgedFylgjaInterface includes the requested fields of the GraphQL type NestedEdgedFylgjaInterface.
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceParentNestedEdgedFylgjaInterface struct {
-	Properties IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceParentNestedEdgedFylgjaInterfacePropertiesRelationshipProperty `json:"properties"`
-}
-
-// GetProperties returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceParentNestedEdgedFylgjaInterface.Properties, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceParentNestedEdgedFylgjaInterface) GetProperties() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceParentNestedEdgedFylgjaInterfacePropertiesRelationshipProperty {
-	return v.Properties
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceParentNestedEdgedFylgjaInterfacePropertiesRelationshipProperty includes the requested fields of the GraphQL type RelationshipProperty.
-// The GraphQL type's documentation follows.
-//
-// Defines properties for relationships
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceParentNestedEdgedFylgjaInterfacePropertiesRelationshipProperty struct {
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceParentNestedEdgedFylgjaInterfacePropertiesRelationshipProperty.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceParentNestedEdgedFylgjaInterfacePropertiesRelationshipProperty) GetUpdated_at() string {
-	return v.Updated_at
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface includes the requested fields of the GraphQL type NetworkInterface.
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface struct {
-	Typename string `json:"__typename"`
-	// Unique identifier
-	Id     string                                                                                                                                                                                         `json:"id"`
-	Name   IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute `json:"name"`
-	Iftype IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceIftypeDropdown    `json:"iftype"`
-	// Out-of-band management port; never cabled. Not set on in-band loopbacks.
-	Mgmt_only IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceMgmt_onlyCheckboxAttribute       `json:"mgmt_only"`
-	Enabled   IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceEnabledCheckboxAttribute         `json:"enabled"`
-	Link      IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceLinkNestedEdgedFylgjaLink        `json:"link"`
-	Parent    IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceParentNestedEdgedFylgjaInterface `json:"parent"`
-}
-
-// GetTypename returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Typename, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetTypename() string {
-	return v.Typename
-}
-
-// GetId returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Id, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetId() string {
+// GetId returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice.Id, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) GetId() string {
 	return v.Id
 }
 
-// GetName returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Name, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetName() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceNameTextAttribute {
+// GetName returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice.Name, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) GetName() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute {
 	return v.Name
 }
 
-// GetIftype returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Iftype, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetIftype() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceIftypeDropdown {
-	return v.Iftype
-}
-
-// GetMgmt_only returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Mgmt_only, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetMgmt_only() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceMgmt_onlyCheckboxAttribute {
-	return v.Mgmt_only
-}
-
-// GetEnabled returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Enabled, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetEnabled() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceEnabledCheckboxAttribute {
-	return v.Enabled
-}
-
-// GetLink returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Link, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetLink() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceLinkNestedEdgedFylgjaLink {
-	return v.Link
-}
-
-// GetParent returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Parent, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetParent() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceParentNestedEdgedFylgjaInterface {
-	return v.Parent
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty includes the requested fields of the GraphQL type RelationshipProperty.
-// The GraphQL type's documentation follows.
-//
-// Defines properties for relationships
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty struct {
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty) GetUpdated_at() string {
-	return v.Updated_at
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute struct {
-	Value string `json:"value"`
-	// Date/Time when the attribute was last modified by a user or a system task
-	Updated_at string `json:"updated_at"`
-}
-
-// GetValue returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute) GetValue() string {
-	return v.Value
-}
-
-// GetUpdated_at returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute) GetUpdated_at() string {
-	return v.Updated_at
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform includes the requested fields of the GraphQL type NestedEdgedFylgjaPlatform.
-// The GraphQL type's documentation follows.
-//
-// Vendor / NOS / version identity. Exists to be the join key to a Platform Support Package (psp/).
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform struct {
-	Properties IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformPropertiesRelationshipProperty `json:"properties"`
-	Node       IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform             `json:"-"`
-}
-
-// GetProperties returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform.Properties, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform) GetProperties() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformPropertiesRelationshipProperty {
-	return v.Properties
-}
-
-// GetNode returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform.Node, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform) GetNode() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform {
-	return v.Node
-}
-
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform struct {
-	Properties IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformPropertiesRelationshipProperty `json:"properties"`
-
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform) __premarshalJSON() (*__premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform, error) {
-	var retval __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform
-
-	retval.Properties = v.Properties
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform includes the requested fields of the GraphQL interface FylgjaPlatform.
-//
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform is implemented by the following types:
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform
-// The GraphQL type's documentation follows.
-//
-// Vendor / NOS / version identity. Exists to be the join key to a Platform Support Package (psp/).
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform interface {
-	implementsGraphQLInterfaceIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	PlatformStamps
-}
-
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) implementsGraphQLInterfaceIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform() {
-}
-
-func __unmarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform(b []byte, v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkPlatform":
-		*v = new(IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaPlatform.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform(v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform:
-		typename = "NetworkPlatform"
-
-		premarshaled, err := v.__premarshalJSON()
-		if err != nil {
-			return nil, err
-		}
-		result := struct {
-			TypeName string `json:"__typename"`
-			*__premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform
-		}{typename, premarshaled}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeFylgjaPlatform: "%T"`, v)
-	}
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform includes the requested fields of the GraphQL type NetworkPlatform.
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform struct {
-	Typename                      string `json:"__typename"`
-	PlatformStampsNetworkPlatform `json:"-"`
-}
-
-// GetTypename returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Typename, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetTypename() string {
-	return v.Typename
-}
-
-// GetVendor returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Vendor, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetVendor() PlatformStampsVendorTextAttribute {
-	return v.PlatformStampsNetworkPlatform.Vendor
-}
-
-// GetNos returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Nos, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetNos() PlatformStampsNosTextAttribute {
-	return v.PlatformStampsNetworkPlatform.Nos
-}
-
-// GetVersion returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Version, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetVersion() PlatformStampsVersionTextAttribute {
-	return v.PlatformStampsNetworkPlatform.Version
-}
-
-// GetModel returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform.Model, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) GetModel() PlatformStampsModelTextAttribute {
-	return v.PlatformStampsNetworkPlatform.Model
-}
-
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	err = json.Unmarshal(
-		b, &v.PlatformStampsNetworkPlatform)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-type __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform struct {
-	Typename string `json:"__typename"`
-
-	Vendor PlatformStampsVendorTextAttribute `json:"vendor"`
-
-	Nos PlatformStampsNosTextAttribute `json:"nos"`
-
-	Version PlatformStampsVersionTextAttribute `json:"version"`
-
-	Model PlatformStampsModelTextAttribute `json:"model"`
-}
-
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform) __premarshalJSON() (*__premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform, error) {
-	var retval __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformNodeNetworkPlatform
-
-	retval.Typename = v.Typename
-	retval.Vendor = v.PlatformStampsNetworkPlatform.Vendor
-	retval.Nos = v.PlatformStampsNetworkPlatform.Nos
-	retval.Version = v.PlatformStampsNetworkPlatform.Version
-	retval.Model = v.PlatformStampsNetworkPlatform.Model
-	return &retval, nil
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformPropertiesRelationshipProperty includes the requested fields of the GraphQL type RelationshipProperty.
-// The GraphQL type's documentation follows.
-//
-// Defines properties for relationships
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformPropertiesRelationshipProperty struct {
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformPropertiesRelationshipProperty.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatformPropertiesRelationshipProperty) GetUpdated_at() string {
-	return v.Updated_at
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute struct {
-	// Date/Time when the attribute was last modified by a user or a system task
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute) GetUpdated_at() string {
-	return v.Updated_at
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute struct {
-	// Date/Time when the attribute was last modified by a user or a system task
-	Updated_at string `json:"updated_at"`
-}
-
-// GetUpdated_at returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute) GetUpdated_at() string {
-	return v.Updated_at
-}
-
-// IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice includes the requested fields of the GraphQL type NetworkDevice.
-type IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice struct {
-	Typename string `json:"__typename"`
-	// Unique identifier
-	Id   string                                                                                               `json:"id"`
-	Name IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute `json:"name"`
-	// leaf / spine / border … Input to scope selection later.
-	Role                        IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute                        `json:"role"`
-	Site                        IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute                        `json:"site"`
-	Platform                    IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform        `json:"platform"`
-	Interfaces                  IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface `json:"interfaces"`
-	ArtifactStampsNetworkDevice `json:"-"`
-}
-
-// GetTypename returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Typename, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetTypename() string {
-	return v.Typename
-}
-
-// GetId returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Id, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetId() string {
-	return v.Id
-}
-
-// GetName returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Name, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetName() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute {
-	return v.Name
-}
-
-// GetRole returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Role, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetRole() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute {
-	return v.Role
-}
-
-// GetSite returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Site, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetSite() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute {
-	return v.Site
-}
-
-// GetPlatform returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Platform, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetPlatform() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform {
+// GetPlatform returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice.Platform, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) GetPlatform() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform {
 	return v.Platform
 }
 
-// GetInterfaces returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Interfaces, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetInterfaces() IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface {
+// GetInterfaces returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice.Interfaces, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) GetInterfaces() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterface {
 	return v.Interfaces
 }
 
-// GetArtifacts returns IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice.Artifacts, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) GetArtifacts() ArtifactStampsArtifactsNestedPaginatedCoreArtifact {
-	return v.ArtifactStampsNetworkDevice.Artifacts
+// GetArtifacts returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice.Artifacts, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) GetArtifacts() ArtifactStampsArtifactsNestedPaginatedCoreArtifact {
+	return v.ArtifactStampsDcimDevice.Artifacts
 }
 
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) UnmarshalJSON(b []byte) error {
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) UnmarshalJSON(b []byte) error {
 
 	if string(b) == "null" {
 		return nil
 	}
 
 	var firstPass struct {
-		*IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice
+		*IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice
 		graphql.NoUnmarshalJSON
 	}
-	firstPass.IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice = v
+	firstPass.IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice = v
 
 	err := json.Unmarshal(b, &firstPass)
 	if err != nil {
@@ -2849,32 +2040,26 @@ func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNode
 	}
 
 	err = json.Unmarshal(
-		b, &v.ArtifactStampsNetworkDevice)
+		b, &v.ArtifactStampsDcimDevice)
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-type __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice struct {
-	Typename string `json:"__typename"`
-
+type __premarshalIntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice struct {
 	Id string `json:"id"`
 
-	Name IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute `json:"name"`
+	Name IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute `json:"name"`
 
-	Role IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceRoleTextAttribute `json:"role"`
+	Platform IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform `json:"platform"`
 
-	Site IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceSiteTextAttribute `json:"site"`
-
-	Platform IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDevicePlatformNestedEdgedFylgjaPlatform `json:"platform"`
-
-	Interfaces IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeFylgjaDeviceInterfacesNestedPaginatedFylgjaInterface `json:"interfaces"`
+	Interfaces IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterface `json:"interfaces"`
 
 	Artifacts ArtifactStampsArtifactsNestedPaginatedCoreArtifact `json:"artifacts"`
 }
 
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) MarshalJSON() ([]byte, error) {
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) MarshalJSON() ([]byte, error) {
 	premarshaled, err := v.__premarshalJSON()
 	if err != nil {
 		return nil, err
@@ -2882,567 +2067,233 @@ func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNode
 	return json.Marshal(premarshaled)
 }
 
-func (v *IntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice) __premarshalJSON() (*__premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice, error) {
-	var retval __premarshalIntentStampsFylgjaDevicePaginatedFylgjaDeviceEdgesEdgedFylgjaDeviceNodeNetworkDevice
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice) __premarshalJSON() (*__premarshalIntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice, error) {
+	var retval __premarshalIntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevice
 
-	retval.Typename = v.Typename
 	retval.Id = v.Id
 	retval.Name = v.Name
-	retval.Role = v.Role
-	retval.Site = v.Site
 	retval.Platform = v.Platform
 	retval.Interfaces = v.Interfaces
-	retval.Artifacts = v.ArtifactStampsNetworkDevice.Artifacts
+	retval.Artifacts = v.ArtifactStampsDcimDevice.Artifacts
 	return &retval, nil
 }
 
-// IntentStampsFylgjaLinkPaginatedFylgjaLink includes the requested fields of the GraphQL type PaginatedFylgjaLink.
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterface includes the requested fields of the GraphQL type NestedPaginatedDcimInterface.
 // The GraphQL type's documentation follows.
 //
-// A point-to-point connection between exactly two interfaces.
-type IntentStampsFylgjaLinkPaginatedFylgjaLink struct {
-	Count int                                                             `json:"count"`
-	Edges []IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink `json:"edges"`
+// Generic Network Interface
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterface struct {
+	Edges []IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface `json:"edges"`
 }
 
-// GetCount returns IntentStampsFylgjaLinkPaginatedFylgjaLink.Count, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLink) GetCount() int { return v.Count }
-
-// GetEdges returns IntentStampsFylgjaLinkPaginatedFylgjaLink.Edges, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLink) GetEdges() []IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink {
+// GetEdges returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterface.Edges, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterface) GetEdges() []IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface {
 	return v.Edges
 }
 
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink includes the requested fields of the GraphQL type EdgedFylgjaLink.
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface includes the requested fields of the GraphQL type NestedEdgedDcimInterface.
 // The GraphQL type's documentation follows.
 //
-// A point-to-point connection between exactly two interfaces.
-type IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink struct {
-	Node IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink `json:"-"`
+// Generic Network Interface
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface struct {
+	Node_metadata IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterfaceNode_metadataInfrahubNodeMetadata `json:"node_metadata"`
+	Node          stampNode                                                                                                                                                                       `json:"node"`
 }
 
-// GetNode returns IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink.Node, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink) GetNode() IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink {
+// GetNode_metadata returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface.Node_metadata, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface) GetNode_metadata() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterfaceNode_metadataInfrahubNodeMetadata {
+	return v.Node_metadata
+}
+
+// GetNode returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface.Node, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterface) GetNode() stampNode {
 	return v.Node
 }
 
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink struct {
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink) __premarshalJSON() (*__premarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink, error) {
-	var retval __premarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink
-
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLink.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink includes the requested fields of the GraphQL interface FylgjaLink.
-//
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink is implemented by the following types:
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterfaceNode_metadataInfrahubNodeMetadata includes the requested fields of the GraphQL type InfrahubNodeMetadata.
 // The GraphQL type's documentation follows.
 //
-// A point-to-point connection between exactly two interfaces.
-type IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink interface {
-	implementsGraphQLInterfaceIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	// GetEndpoints returns the interface-field "endpoints" from its implementation.
-	GetEndpoints() IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface
-}
-
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink) implementsGraphQLInterfaceIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink() {
-}
-
-func __unmarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink(b []byte, v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkLink":
-		*v = new(IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaLink.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink(v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink:
-		typename = "NetworkLink"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLink: "%T"`, v)
-	}
-}
-
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface includes the requested fields of the GraphQL type NestedPaginatedFylgjaInterface.
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface struct {
-	Edges []IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface `json:"edges"`
-}
-
-// GetEdges returns IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface.Edges, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface) GetEdges() []IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface {
-	return v.Edges
-}
-
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface includes the requested fields of the GraphQL type NestedEdgedFylgjaInterface.
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface struct {
-	Properties IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty `json:"properties"`
-	Node       IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface            `json:"-"`
-}
-
-// GetProperties returns IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Properties, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) GetProperties() IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty {
-	return v.Properties
-}
-
-// GetNode returns IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Node, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) GetNode() IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface {
-	return v.Node
-}
-
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface struct {
-	Properties IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty `json:"properties"`
-
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface) __premarshalJSON() (*__premarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface, error) {
-	var retval __premarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface
-
-	retval.Properties = v.Properties
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterface.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface includes the requested fields of the GraphQL interface FylgjaInterface.
-//
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface is implemented by the following types:
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface
-// The GraphQL type's documentation follows.
-//
-// Interface in production naming (ethernet-1/1). iftype = kind; mgmt_only = OOB port.
-type IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface interface {
-	implementsGraphQLInterfaceIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	// GetDevice returns the interface-field "device" from its implementation.
-	GetDevice() IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice
-}
-
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) implementsGraphQLInterfaceIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface() {
-}
-
-func __unmarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(b []byte, v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkInterface":
-		*v = new(IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaInterface.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface(v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface:
-		typename = "NetworkInterface"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterface: "%T"`, v)
-	}
-}
-
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice includes the requested fields of the GraphQL type NestedEdgedFylgjaDevice.
-// The GraphQL type's documentation follows.
-//
-// A network node. `name` becomes the containerlab node name.
-type IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice struct {
-	Node IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice `json:"-"`
-}
-
-// GetNode returns IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice.Node, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice) GetNode() IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice {
-	return v.Node
-}
-
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice) UnmarshalJSON(b []byte) error {
-
-	if string(b) == "null" {
-		return nil
-	}
-
-	var firstPass struct {
-		*IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice
-		Node json.RawMessage `json:"node"`
-		graphql.NoUnmarshalJSON
-	}
-	firstPass.IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice = v
-
-	err := json.Unmarshal(b, &firstPass)
-	if err != nil {
-		return err
-	}
-
-	{
-		dst := &v.Node
-		src := firstPass.Node
-		if len(src) != 0 && string(src) != "null" {
-			err = __unmarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice(
-				src, dst)
-			if err != nil {
-				return fmt.Errorf(
-					"unable to unmarshal IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice.Node: %w", err)
-			}
-		}
-	}
-	return nil
-}
-
-type __premarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice struct {
-	Node json.RawMessage `json:"node"`
-}
-
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice) MarshalJSON() ([]byte, error) {
-	premarshaled, err := v.__premarshalJSON()
-	if err != nil {
-		return nil, err
-	}
-	return json.Marshal(premarshaled)
-}
-
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice) __premarshalJSON() (*__premarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice, error) {
-	var retval __premarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice
-
-	{
-
-		dst := &retval.Node
-		src := v.Node
-		var err error
-		*dst, err = __marshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice(
-			&src)
-		if err != nil {
-			return nil, fmt.Errorf(
-				"unable to marshal IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice.Node: %w", err)
-		}
-	}
-	return &retval, nil
-}
-
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice includes the requested fields of the GraphQL interface FylgjaDevice.
-//
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice is implemented by the following types:
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice
-// The GraphQL type's documentation follows.
-//
-// A network node. `name` becomes the containerlab node name.
-type IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice interface {
-	implementsGraphQLInterfaceIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice()
-	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
-	GetTypename() string
-	// GetName returns the interface-field "name" from its implementation.
-	GetName() IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute
-}
-
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice) implementsGraphQLInterfaceIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice() {
-}
-
-func __unmarshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice(b []byte, v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice) error {
-	if string(b) == "null" {
-		return nil
-	}
-
-	var tn struct {
-		TypeName string `json:"__typename"`
-	}
-	err := json.Unmarshal(b, &tn)
-	if err != nil {
-		return err
-	}
-
-	switch tn.TypeName {
-	case "NetworkDevice":
-		*v = new(IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice)
-		return json.Unmarshal(b, *v)
-	case "":
-		return fmt.Errorf(
-			"response was missing FylgjaDevice.__typename")
-	default:
-		return fmt.Errorf(
-			`unexpected concrete type for IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice: "%v"`, tn.TypeName)
-	}
-}
-
-func __marshalIntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice(v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice) ([]byte, error) {
-
-	var typename string
-	switch v := (*v).(type) {
-	case *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice:
-		typename = "NetworkDevice"
-
-		result := struct {
-			TypeName string `json:"__typename"`
-			*IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice
-		}{typename, v}
-		return json.Marshal(result)
-	case nil:
-		return []byte("null"), nil
-	default:
-		return nil, fmt.Errorf(
-			`unexpected concrete type for IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDevice: "%T"`, v)
-	}
-}
-
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute struct {
-	Value string `json:"value"`
-}
-
-// GetValue returns IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute) GetValue() string {
-	return v.Value
-}
-
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice includes the requested fields of the GraphQL type NetworkDevice.
-type IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice struct {
-	Typename string                                                                                                                                                                                                                             `json:"__typename"`
-	Name     IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute `json:"name"`
-}
-
-// GetTypename returns IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice.Typename, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice) GetTypename() string {
-	return v.Typename
-}
-
-// GetName returns IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice.Name, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeNetworkDevice) GetName() IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDeviceNodeFylgjaDeviceNameTextAttribute {
-	return v.Name
-}
-
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface includes the requested fields of the GraphQL type NetworkInterface.
-type IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface struct {
-	Typename string                                                                                                                                                                                            `json:"__typename"`
-	Device   IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice `json:"device"`
-}
-
-// GetTypename returns IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Typename, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetTypename() string {
-	return v.Typename
-}
-
-// GetDevice returns IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface.Device, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeNetworkInterface) GetDevice() IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfaceNodeFylgjaInterfaceDeviceNestedEdgedFylgjaDevice {
-	return v.Device
-}
-
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty includes the requested fields of the GraphQL type RelationshipProperty.
-// The GraphQL type's documentation follows.
-//
-// Defines properties for relationships
-type IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty struct {
+// Defines node metadata information
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterfaceNode_metadataInfrahubNodeMetadata struct {
 	Updated_at string `json:"updated_at"`
 }
 
-// GetUpdated_at returns IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty.Updated_at, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterfaceEdgesNestedEdgedFylgjaInterfacePropertiesRelationshipProperty) GetUpdated_at() string {
+// GetUpdated_at returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterfaceNode_metadataInfrahubNodeMetadata.Updated_at, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceInterfacesNestedPaginatedDcimInterfaceEdgesNestedEdgedDcimInterfaceNode_metadataInfrahubNodeMetadata) GetUpdated_at() string {
 	return v.Updated_at
 }
 
-// IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink includes the requested fields of the GraphQL type NetworkLink.
-type IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink struct {
-	Typename  string                                                                                                             `json:"__typename"`
-	Endpoints IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface `json:"endpoints"`
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute struct {
+	Value string `json:"value"`
 }
 
-// GetTypename returns IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink.Typename, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink) GetTypename() string {
-	return v.Typename
+// GetValue returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDeviceNameTextAttribute) GetValue() string {
+	return v.Value
 }
 
-// GetEndpoints returns IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink.Endpoints, and is useful for accessing the field via an interface.
-func (v *IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeNetworkLink) GetEndpoints() IntentStampsFylgjaLinkPaginatedFylgjaLinkEdgesEdgedFylgjaLinkNodeFylgjaLinkEndpointsNestedPaginatedFylgjaInterface {
-	return v.Endpoints
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform includes the requested fields of the GraphQL type NestedEdgedDcimPlatform.
+// The GraphQL type's documentation follows.
+//
+// A Platform represent the type of software running on a device.
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform struct {
+	Node_metadata IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNode_metadataInfrahubNodeMetadata `json:"node_metadata"`
+	Node          *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform                 `json:"node"`
+}
+
+// GetNode_metadata returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform.Node_metadata, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform) GetNode_metadata() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNode_metadataInfrahubNodeMetadata {
+	return v.Node_metadata
+}
+
+// GetNode returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform.Node, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatform) GetNode() *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform {
+	return v.Node
+}
+
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform includes the requested fields of the GraphQL type DcimPlatform.
+// The GraphQL type's documentation follows.
+//
+// A Platform represent the type of software running on a device.
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform struct {
+	// Unique identifier
+	Id string `json:"id"`
+	// None (required)
+	Name         IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute                               `json:"name"`
+	Manufacturer IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer `json:"manufacturer"`
+}
+
+// GetId returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform.Id, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform) GetId() string {
+	return v.Id
+}
+
+// GetName returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform.Name, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform) GetName() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute {
+	return v.Name
+}
+
+// GetManufacturer returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform.Manufacturer, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatform) GetManufacturer() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer {
+	return v.Manufacturer
+}
+
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer includes the requested fields of the GraphQL type NestedEdgedOrganizationManufacturer.
+// The GraphQL type's documentation follows.
+//
+// Device Manufacturer
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer struct {
+	Node_metadata IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNode_metadataInfrahubNodeMetadata `json:"node_metadata"`
+	Node          *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer     `json:"node"`
+}
+
+// GetNode_metadata returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer.Node_metadata, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer) GetNode_metadata() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNode_metadataInfrahubNodeMetadata {
+	return v.Node_metadata
+}
+
+// GetNode returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer.Node, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturer) GetNode() *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer {
+	return v.Node
+}
+
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer includes the requested fields of the GraphQL type OrganizationManufacturer.
+// The GraphQL type's documentation follows.
+//
+// Device Manufacturer
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer struct {
+	// Unique identifier
+	Id   string                                                                                                                                                                                                                 `json:"id"`
+	Name IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturerNameTextAttribute `json:"name"`
+}
+
+// GetId returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer.Id, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer) GetId() string {
+	return v.Id
+}
+
+// GetName returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer.Name, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturer) GetName() IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturerNameTextAttribute {
+	return v.Name
+}
+
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturerNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturerNameTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturerNameTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNodeOrganizationManufacturerNameTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNode_metadataInfrahubNodeMetadata includes the requested fields of the GraphQL type InfrahubNodeMetadata.
+// The GraphQL type's documentation follows.
+//
+// Defines node metadata information
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNode_metadataInfrahubNodeMetadata struct {
+	Updated_at string `json:"updated_at"`
+}
+
+// GetUpdated_at returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNode_metadataInfrahubNodeMetadata.Updated_at, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformManufacturerNestedEdgedOrganizationManufacturerNode_metadataInfrahubNodeMetadata) GetUpdated_at() string {
+	return v.Updated_at
+}
+
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNodeDcimPlatformNameTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNode_metadataInfrahubNodeMetadata includes the requested fields of the GraphQL type InfrahubNodeMetadata.
+// The GraphQL type's documentation follows.
+//
+// Defines node metadata information
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNode_metadataInfrahubNodeMetadata struct {
+	Updated_at string `json:"updated_at"`
+}
+
+// GetUpdated_at returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNode_metadataInfrahubNodeMetadata.Updated_at, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNodeDcimDevicePlatformNestedEdgedDcimPlatformNode_metadataInfrahubNodeMetadata) GetUpdated_at() string {
+	return v.Updated_at
+}
+
+// IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNode_metadataInfrahubNodeMetadata includes the requested fields of the GraphQL type InfrahubNodeMetadata.
+// The GraphQL type's documentation follows.
+//
+// Defines node metadata information
+type IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNode_metadataInfrahubNodeMetadata struct {
+	Updated_at string `json:"updated_at"`
+}
+
+// GetUpdated_at returns IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNode_metadataInfrahubNodeMetadata.Updated_at, and is useful for accessing the field via an interface.
+func (v *IntentStampsDcimDevicePaginatedDcimDeviceEdgesEdgedDcimDeviceNode_metadataInfrahubNodeMetadata) GetUpdated_at() string {
+	return v.Updated_at
 }
 
 // IntentStampsResponse is returned by IntentStamps on success.
 type IntentStampsResponse struct {
-	FylgjaDevice IntentStampsFylgjaDevicePaginatedFylgjaDevice `json:"FylgjaDevice"`
-	FylgjaLink   IntentStampsFylgjaLinkPaginatedFylgjaLink     `json:"FylgjaLink"`
+	DcimDevice IntentStampsDcimDevicePaginatedDcimDevice `json:"DcimDevice"`
 }
 
-// GetFylgjaDevice returns IntentStampsResponse.FylgjaDevice, and is useful for accessing the field via an interface.
-func (v *IntentStampsResponse) GetFylgjaDevice() IntentStampsFylgjaDevicePaginatedFylgjaDevice {
-	return v.FylgjaDevice
-}
-
-// GetFylgjaLink returns IntentStampsResponse.FylgjaLink, and is useful for accessing the field via an interface.
-func (v *IntentStampsResponse) GetFylgjaLink() IntentStampsFylgjaLinkPaginatedFylgjaLink {
-	return v.FylgjaLink
+// GetDcimDevice returns IntentStampsResponse.DcimDevice, and is useful for accessing the field via an interface.
+func (v *IntentStampsResponse) GetDcimDevice() IntentStampsDcimDevicePaginatedDcimDevice {
+	return v.DcimDevice
 }
 
 // OrphanStagesFylgjaStagePaginatedFylgjaStage includes the requested fields of the GraphQL type PaginatedFylgjaStage.
@@ -3553,32 +2404,205 @@ func (v *OrphanStagesResponse) GetFylgjaStage() OrphanStagesFylgjaStagePaginated
 	return v.FylgjaStage
 }
 
-// The platform's values, which pick the device's package, and the stamps of those that reach
-// the artifact or the bundle: the template renders vendor, nos and version into every
-// device's artifact and branches on nos, and nos picks the package (R-07). model reaches
-// neither and is not stamped. A fragment of its own, as the read's platform fields were
-// before 017: genqlient cannot merge two fragments' selections of one field.
+// PortStampsInterfacePhysicalPaginatedInterfacePhysical includes the requested fields of the GraphQL type PaginatedInterfacePhysical.
+// The GraphQL type's documentation follows.
 //
-// PlatformStamps is implemented by the following types:
-// PlatformStampsNetworkPlatform
-type PlatformStamps interface {
-	implementsGraphQLInterfacePlatformStamps()
-	// GetVendor returns the interface-field "vendor" from its implementation.
-	GetVendor() PlatformStampsVendorTextAttribute
-	// GetNos returns the interface-field "nos" from its implementation.
-	// The GraphQL interface field's documentation follows.
-	//
-	// srlinux | eos | iol | panos | ...
-	GetNos() PlatformStampsNosTextAttribute
-	// GetVersion returns the interface-field "version" from its implementation.
-	GetVersion() PlatformStampsVersionTextAttribute
-	// GetModel returns the interface-field "model" from its implementation.
-	GetModel() PlatformStampsModelTextAttribute
+// Physical network port on a device
+type PortStampsInterfacePhysicalPaginatedInterfacePhysical struct {
+	Count int                                                                                `json:"count"`
+	Edges []PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysical `json:"edges"`
 }
 
-func (v *PlatformStampsNetworkPlatform) implementsGraphQLInterfacePlatformStamps() {}
+// GetCount returns PortStampsInterfacePhysicalPaginatedInterfacePhysical.Count, and is useful for accessing the field via an interface.
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysical) GetCount() int { return v.Count }
 
-func __unmarshalPlatformStamps(b []byte, v *PlatformStamps) error {
+// GetEdges returns PortStampsInterfacePhysicalPaginatedInterfacePhysical.Edges, and is useful for accessing the field via an interface.
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysical) GetEdges() []PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysical {
+	return v.Edges
+}
+
+// PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysical includes the requested fields of the GraphQL type EdgedInterfacePhysical.
+// The GraphQL type's documentation follows.
+//
+// Physical network port on a device
+type PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysical struct {
+	Node PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical `json:"node"`
+}
+
+// GetNode returns PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysical.Node, and is useful for accessing the field via an interface.
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysical) GetNode() PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical {
+	return v.Node
+}
+
+// PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical includes the requested fields of the GraphQL type InterfacePhysical.
+// The GraphQL type's documentation follows.
+//
+// Physical network port on a device
+type PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical struct {
+	Device    PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice `json:"device"`
+	Connector PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector  `json:"connector"`
+}
+
+// GetDevice returns PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical.Device, and is useful for accessing the field via an interface.
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical) GetDevice() PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice {
+	return v.Device
+}
+
+// GetConnector returns PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical.Connector, and is useful for accessing the field via an interface.
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysical) GetConnector() PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector {
+	return v.Connector
+}
+
+// PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector includes the requested fields of the GraphQL type NestedEdgedDcimConnector.
+// The GraphQL type's documentation follows.
+//
+// Generic Connector to link two endpoints together.
+type PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector struct {
+	Node_metadata PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnectorNode_metadataInfrahubNodeMetadata `json:"node_metadata"`
+	Node          stampNode                                                                                                                                                               `json:"node"`
+}
+
+// GetNode_metadata returns PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector.Node_metadata, and is useful for accessing the field via an interface.
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector) GetNode_metadata() PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnectorNode_metadataInfrahubNodeMetadata {
+	return v.Node_metadata
+}
+
+// GetNode returns PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector.Node, and is useful for accessing the field via an interface.
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnector) GetNode() stampNode {
+	return v.Node
+}
+
+// PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnectorNode_metadataInfrahubNodeMetadata includes the requested fields of the GraphQL type InfrahubNodeMetadata.
+// The GraphQL type's documentation follows.
+//
+// Defines node metadata information
+type PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnectorNode_metadataInfrahubNodeMetadata struct {
+	Updated_at string `json:"updated_at"`
+}
+
+// GetUpdated_at returns PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnectorNode_metadataInfrahubNodeMetadata.Updated_at, and is useful for accessing the field via an interface.
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalConnectorNestedEdgedDcimConnectorNode_metadataInfrahubNodeMetadata) GetUpdated_at() string {
+	return v.Updated_at
+}
+
+// PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice includes the requested fields of the GraphQL type NestedEdgedDcimGenericDevice.
+// The GraphQL type's documentation follows.
+//
+// Generic Device object.
+type PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice struct {
+	Node PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice `json:"-"`
+}
+
+// GetNode returns PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice.Node, and is useful for accessing the field via an interface.
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice) GetNode() PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice {
+	return v.Node
+}
+
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice) UnmarshalJSON(b []byte) error {
+
+	if string(b) == "null" {
+		return nil
+	}
+
+	var firstPass struct {
+		*PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice
+		Node json.RawMessage `json:"node"`
+		graphql.NoUnmarshalJSON
+	}
+	firstPass.PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice = v
+
+	err := json.Unmarshal(b, &firstPass)
+	if err != nil {
+		return err
+	}
+
+	{
+		dst := &v.Node
+		src := firstPass.Node
+		if len(src) != 0 && string(src) != "null" {
+			err = __unmarshalPortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice(
+				src, dst)
+			if err != nil {
+				return fmt.Errorf(
+					"unable to unmarshal PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice.Node: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+type __premarshalPortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice struct {
+	Node json.RawMessage `json:"node"`
+}
+
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice) MarshalJSON() ([]byte, error) {
+	premarshaled, err := v.__premarshalJSON()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(premarshaled)
+}
+
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice) __premarshalJSON() (*__premarshalPortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice, error) {
+	var retval __premarshalPortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice
+
+	{
+
+		dst := &retval.Node
+		src := v.Node
+		var err error
+		*dst, err = __marshalPortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice(
+			&src)
+		if err != nil {
+			return nil, fmt.Errorf(
+				"unable to marshal PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDevice.Node: %w", err)
+		}
+	}
+	return &retval, nil
+}
+
+// PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice includes the requested fields of the GraphQL type DcimDevice.
+// The GraphQL type's documentation follows.
+//
+// A configurable network device including routers, switches...
+type PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice struct {
+	Typename string `json:"__typename"`
+	// Unique identifier
+	Id string `json:"id"`
+}
+
+// GetTypename returns PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice.Typename, and is useful for accessing the field via an interface.
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice) GetTypename() string {
+	return v.Typename
+}
+
+// GetId returns PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice.Id, and is useful for accessing the field via an interface.
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice) GetId() string {
+	return v.Id
+}
+
+// PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice includes the requested fields of the GraphQL interface DcimGenericDevice.
+//
+// PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice is implemented by the following types:
+// PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice
+// The GraphQL type's documentation follows.
+//
+// Generic Device object.
+type PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice interface {
+	implementsGraphQLInterfacePortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice()
+	// GetTypename returns the receiver's concrete GraphQL type-name (see interface doc for possible values).
+	GetTypename() string
+	// GetId returns the interface-field "id" from its implementation.
+	// The GraphQL interface field's documentation follows.
+	//
+	// Unique identifier
+	GetId() string
+}
+
+func (v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice) implementsGraphQLInterfacePortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice() {
+}
+
+func __unmarshalPortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice(b []byte, v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice) error {
 	if string(b) == "null" {
 		return nil
 	}
@@ -3592,125 +2616,47 @@ func __unmarshalPlatformStamps(b []byte, v *PlatformStamps) error {
 	}
 
 	switch tn.TypeName {
-	case "NetworkPlatform":
-		*v = new(PlatformStampsNetworkPlatform)
+	case "DcimDevice":
+		*v = new(PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice)
 		return json.Unmarshal(b, *v)
 	case "":
 		return fmt.Errorf(
-			"response was missing FylgjaPlatform.__typename")
+			"response was missing DcimGenericDevice.__typename")
 	default:
 		return fmt.Errorf(
-			`unexpected concrete type for PlatformStamps: "%v"`, tn.TypeName)
+			`unexpected concrete type for PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice: "%v"`, tn.TypeName)
 	}
 }
 
-func __marshalPlatformStamps(v *PlatformStamps) ([]byte, error) {
+func __marshalPortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice(v *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice) ([]byte, error) {
 
 	var typename string
 	switch v := (*v).(type) {
-	case *PlatformStampsNetworkPlatform:
-		typename = "NetworkPlatform"
+	case *PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice:
+		typename = "DcimDevice"
 
 		result := struct {
 			TypeName string `json:"__typename"`
-			*PlatformStampsNetworkPlatform
+			*PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimDevice
 		}{typename, v}
 		return json.Marshal(result)
 	case nil:
 		return []byte("null"), nil
 	default:
 		return nil, fmt.Errorf(
-			`unexpected concrete type for PlatformStamps: "%T"`, v)
+			`unexpected concrete type for PortStampsInterfacePhysicalPaginatedInterfacePhysicalEdgesEdgedInterfacePhysicalNodeInterfacePhysicalDeviceNestedEdgedDcimGenericDeviceNodeDcimGenericDevice: "%T"`, v)
 	}
 }
 
-// PlatformStampsModelTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type PlatformStampsModelTextAttribute struct {
-	Value string `json:"value"`
+// PortStampsResponse is returned by PortStamps on success.
+type PortStampsResponse struct {
+	InterfacePhysical PortStampsInterfacePhysicalPaginatedInterfacePhysical `json:"InterfacePhysical"`
 }
 
-// GetValue returns PlatformStampsModelTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *PlatformStampsModelTextAttribute) GetValue() string { return v.Value }
-
-// The platform's values, which pick the device's package, and the stamps of those that reach
-// the artifact or the bundle: the template renders vendor, nos and version into every
-// device's artifact and branches on nos, and nos picks the package (R-07). model reaches
-// neither and is not stamped. A fragment of its own, as the read's platform fields were
-// before 017: genqlient cannot merge two fragments' selections of one field.
-type PlatformStampsNetworkPlatform struct {
-	Vendor PlatformStampsVendorTextAttribute `json:"vendor"`
-	// srlinux | eos | iol | panos | ...
-	Nos     PlatformStampsNosTextAttribute     `json:"nos"`
-	Version PlatformStampsVersionTextAttribute `json:"version"`
-	Model   PlatformStampsModelTextAttribute   `json:"model"`
+// GetInterfacePhysical returns PortStampsResponse.InterfacePhysical, and is useful for accessing the field via an interface.
+func (v *PortStampsResponse) GetInterfacePhysical() PortStampsInterfacePhysicalPaginatedInterfacePhysical {
+	return v.InterfacePhysical
 }
-
-// GetVendor returns PlatformStampsNetworkPlatform.Vendor, and is useful for accessing the field via an interface.
-func (v *PlatformStampsNetworkPlatform) GetVendor() PlatformStampsVendorTextAttribute {
-	return v.Vendor
-}
-
-// GetNos returns PlatformStampsNetworkPlatform.Nos, and is useful for accessing the field via an interface.
-func (v *PlatformStampsNetworkPlatform) GetNos() PlatformStampsNosTextAttribute { return v.Nos }
-
-// GetVersion returns PlatformStampsNetworkPlatform.Version, and is useful for accessing the field via an interface.
-func (v *PlatformStampsNetworkPlatform) GetVersion() PlatformStampsVersionTextAttribute {
-	return v.Version
-}
-
-// GetModel returns PlatformStampsNetworkPlatform.Model, and is useful for accessing the field via an interface.
-func (v *PlatformStampsNetworkPlatform) GetModel() PlatformStampsModelTextAttribute { return v.Model }
-
-// PlatformStampsNosTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type PlatformStampsNosTextAttribute struct {
-	Value string `json:"value"`
-	// Date/Time when the attribute was last modified by a user or a system task
-	Updated_at string `json:"updated_at"`
-}
-
-// GetValue returns PlatformStampsNosTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *PlatformStampsNosTextAttribute) GetValue() string { return v.Value }
-
-// GetUpdated_at returns PlatformStampsNosTextAttribute.Updated_at, and is useful for accessing the field via an interface.
-func (v *PlatformStampsNosTextAttribute) GetUpdated_at() string { return v.Updated_at }
-
-// PlatformStampsVendorTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type PlatformStampsVendorTextAttribute struct {
-	Value string `json:"value"`
-	// Date/Time when the attribute was last modified by a user or a system task
-	Updated_at string `json:"updated_at"`
-}
-
-// GetValue returns PlatformStampsVendorTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *PlatformStampsVendorTextAttribute) GetValue() string { return v.Value }
-
-// GetUpdated_at returns PlatformStampsVendorTextAttribute.Updated_at, and is useful for accessing the field via an interface.
-func (v *PlatformStampsVendorTextAttribute) GetUpdated_at() string { return v.Updated_at }
-
-// PlatformStampsVersionTextAttribute includes the requested fields of the GraphQL type TextAttribute.
-// The GraphQL type's documentation follows.
-//
-// Attribute of type Text
-type PlatformStampsVersionTextAttribute struct {
-	Value string `json:"value"`
-	// Date/Time when the attribute was last modified by a user or a system task
-	Updated_at string `json:"updated_at"`
-}
-
-// GetValue returns PlatformStampsVersionTextAttribute.Value, and is useful for accessing the field via an interface.
-func (v *PlatformStampsVersionTextAttribute) GetValue() string { return v.Value }
-
-// GetUpdated_at returns PlatformStampsVersionTextAttribute.Updated_at, and is useful for accessing the field via an interface.
-func (v *PlatformStampsVersionTextAttribute) GetUpdated_at() string { return v.Updated_at }
 
 // PortsInterfacePhysicalPaginatedInterfacePhysical includes the requested fields of the GraphQL type PaginatedInterfacePhysical.
 // The GraphQL type's documentation follows.
@@ -4342,9 +3288,13 @@ func (v *__IntentEventsInput) GetOffset() int { return v.Offset }
 
 // __IntentStampsInput is used internally by genqlient
 type __IntentStampsInput struct {
-	Limit  int `json:"limit"`
-	Offset int `json:"offset"`
+	Tag    string `json:"tag"`
+	Limit  int    `json:"limit"`
+	Offset int    `json:"offset"`
 }
+
+// GetTag returns __IntentStampsInput.Tag, and is useful for accessing the field via an interface.
+func (v *__IntentStampsInput) GetTag() string { return v.Tag }
 
 // GetLimit returns __IntentStampsInput.Limit, and is useful for accessing the field via an interface.
 func (v *__IntentStampsInput) GetLimit() int { return v.Limit }
@@ -4363,6 +3313,22 @@ func (v *__OrphanStagesInput) GetLimit() int { return v.Limit }
 
 // GetOffset returns __OrphanStagesInput.Offset, and is useful for accessing the field via an interface.
 func (v *__OrphanStagesInput) GetOffset() int { return v.Offset }
+
+// __PortStampsInput is used internally by genqlient
+type __PortStampsInput struct {
+	Devices []string `json:"devices"`
+	Limit   int      `json:"limit"`
+	Offset  int      `json:"offset"`
+}
+
+// GetDevices returns __PortStampsInput.Devices, and is useful for accessing the field via an interface.
+func (v *__PortStampsInput) GetDevices() []string { return v.Devices }
+
+// GetLimit returns __PortStampsInput.Limit, and is useful for accessing the field via an interface.
+func (v *__PortStampsInput) GetLimit() int { return v.Limit }
+
+// GetOffset returns __PortStampsInput.Offset, and is useful for accessing the field via an interface.
+func (v *__PortStampsInput) GetOffset() int { return v.Offset }
 
 // __PortsInput is used internally by genqlient
 type __PortsInput struct {
@@ -4622,11 +3588,12 @@ query IntentEvents ($branch: String!, $since: DateTime!, $limit: Int!, $offset: 
 // changed, removals included, which no stamp records (D-048). InfrahubEvent is Infrahub's
 // own record of a write, a named exception, read on the default branch's endpoint (it
 // answers alike on a branch's) and pinned to nothing. A primary node's kind is the
-// concrete one, read only to be mapped to a Fylgja generic through the branch schema's
-// used_by, and never queried. The names of the attributes and relationships an update
-// changed tell intent from Infrahub's own churn on the same node (a query group's
-// membership, an artifact): only the fields the stamps fold into a device's intent count
-// (R-07). A limit above 50 is refused (research §8.18).
+// concrete one, read only to be mapped to a kind the stamps read (the library's generics'
+// implementers through the branch schema's used_by, the platform and the manufacturer), and
+// never queried. The names of the relationships an update changed tell intent from
+// Infrahub's own churn on the same node (a query group's membership, an artifact): every
+// attribute and every other relationship counts (017 research R-10). A limit above 50 is
+// refused (research §8.18).
 func IntentEvents(
 	ctx_ context.Context,
 	client_ graphql.Client,
@@ -4660,112 +3627,54 @@ func IntentEvents(
 
 // The query executed by IntentStamps.
 const IntentStamps_Operation = `
-query IntentStamps ($limit: Int!, $offset: Int!) {
-	FylgjaDevice(limit: $limit, offset: $offset) {
+query IntentStamps ($tag: String!, $limit: Int!, $offset: Int!) {
+	DcimDevice(tags__name__value: $tag, limit: $limit, offset: $offset) {
 		count
 		edges {
+			node_metadata {
+				updated_at
+			}
 			node {
-				__typename
 				id
 				name {
 					value
-					updated_at
-				}
-				role {
-					updated_at
-				}
-				site {
-					updated_at
 				}
 				platform {
-					properties {
+					node_metadata {
 						updated_at
 					}
 					node {
-						__typename
-						... PlatformStamps
+						id
+						name {
+							value
+						}
+						manufacturer {
+							node_metadata {
+								updated_at
+							}
+							node {
+								id
+								name {
+									value
+								}
+							}
+						}
 					}
 				}
 				interfaces {
 					edges {
-						properties {
+						node_metadata {
 							updated_at
 						}
 						node {
 							__typename
 							id
-							name {
-								value
-								updated_at
-							}
-							iftype {
-								updated_at
-							}
-							mgmt_only {
-								updated_at
-							}
-							enabled {
-								updated_at
-							}
-							link {
-								properties {
-									updated_at
-								}
-							}
-							parent {
-								properties {
-									updated_at
-								}
-							}
 						}
 					}
 				}
 				... ArtifactStamps
 			}
 		}
-	}
-	FylgjaLink(limit: $limit, offset: $offset) {
-		count
-		edges {
-			node {
-				__typename
-				endpoints {
-					edges {
-						properties {
-							updated_at
-						}
-						node {
-							__typename
-							device {
-								node {
-									__typename
-									name {
-										value
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-}
-fragment PlatformStamps on FylgjaPlatform {
-	vendor {
-		value
-		updated_at
-	}
-	nos {
-		value
-		updated_at
-	}
-	version {
-		value
-		updated_at
-	}
-	model {
-		value
 	}
 }
 fragment ArtifactStamps on CoreArtifactTarget {
@@ -4788,6 +3697,7 @@ fragment ArtifactStamps on CoreArtifactTarget {
 func IntentStamps(
 	ctx_ context.Context,
 	client_ graphql.Client,
+	tag string,
 	limit int,
 	offset int,
 ) (data_ *IntentStampsResponse, err_ error) {
@@ -4795,6 +3705,7 @@ func IntentStamps(
 		OpName: "IntentStamps",
 		Query:  IntentStamps_Operation,
 		Variables: &__IntentStampsInput{
+			Tag:    tag,
 			Limit:  limit,
 			Offset: offset,
 		},
@@ -4852,6 +3763,68 @@ func OrphanStages(
 	}
 
 	data_ = &OrphanStagesResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The query executed by PortStamps.
+const PortStamps_Operation = `
+query PortStamps ($devices: [ID], $limit: Int!, $offset: Int!) {
+	InterfacePhysical(device__ids: $devices, connector__isnull: false, limit: $limit, offset: $offset) {
+		count
+		edges {
+			node {
+				device {
+					node {
+						__typename
+						id
+					}
+				}
+				connector {
+					node_metadata {
+						updated_at
+					}
+					node {
+						__typename
+						id
+					}
+				}
+			}
+		}
+	}
+}
+`
+
+// The cable a physical port is an end of, through its connector, the generic DcimConnector,
+// as the read reaches it: its stamp is both its ends' devices' intent. Cabled ports alone:
+// an uncabled port's connector has no node_metadata, which the SDL declares non-null, so
+// Infrahub refuses the whole page for one (verified 2026-10-26, 017 research §5.8). Bound,
+// as the read's connector is, so that a connector of any kind decodes.
+func PortStamps(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	devices []string,
+	limit int,
+	offset int,
+) (data_ *PortStampsResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "PortStamps",
+		Query:  PortStamps_Operation,
+		Variables: &__PortStampsInput{
+			Devices: devices,
+			Limit:   limit,
+			Offset:  offset,
+		},
+	}
+
+	data_ = &PortStampsResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(

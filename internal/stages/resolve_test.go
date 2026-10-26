@@ -136,9 +136,15 @@ func change2() intent.ProposedChange {
 	return intent.ProposedChange{ID: "pc-2", Name: "fourth link", Branch: "change-2", Destination: "main", State: "open"}
 }
 
+// The shipped packages' pairs, as the library names a device's platform and manufacturer.
+var (
+	srLinux = psp.Match{Manufacturer: "Nokia", Platform: "SR Linux"}
+	eos     = psp.Match{Manufacturer: "Arista", Platform: "EOS"}
+)
+
 // device is one SR Linux device's stamps: its intent and its artifact's checksum stamp.
 func device(intentAt, checksum string) intent.DeviceStamps {
-	return intent.DeviceStamps{NOS: "srlinux", Intent: intentAt,
+	return intent.DeviceStamps{Match: srLinux, Intent: intentAt,
 		Artifacts: map[string]string{"device-config": checksum}}
 }
 

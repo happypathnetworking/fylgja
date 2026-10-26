@@ -57,13 +57,13 @@ func TestStalePerDevice(t *testing.T) {
 		// -add-link's hand generate: n2's own stamps did not move, so n2 is fresh whatever
 		// its neighbours did.
 		{name: "a neighbour's change names no n2", stamps: edited("n1", "n3"), stale: []string{"n1", "n3"}, validator: true},
-		// A platform's version edited after the checksums: intent folds the platform's
-		// stamps into each device on it (TestStampsPlatform), so n1 and n3 on SR Linux are
+		// A platform edited after the checksums: intent folds the platform's stamp into each
+		// device on it (TestStampsEachSourceMovesTheDevice), so n1 and n3 on SR Linux are
 		// stale and n2, on EOS, whose package names the same artifact, is not.
 		{name: "a platform edited after the checksum names each device on it", stamps: func() intent.Stamps {
 			s := edited("n1", "n3")
 			d := s.Devices["n2"]
-			d.NOS = "eos"
+			d.Match = eos
 			s.Devices["n2"] = d
 			return s
 		}(), stale: []string{"n1", "n3"}, validator: true},
@@ -75,16 +75,22 @@ func TestStalePerDevice(t *testing.T) {
 		}()},
 		{name: "no artifact, no finding", stamps: func() intent.Stamps {
 			s := edited("n1", "n2")
-			s.Devices["n1"] = intent.DeviceStamps{NOS: s.Devices["n1"].NOS, Intent: t1, Artifacts: map[string]string{}}
-			s.Devices["n2"] = intent.DeviceStamps{NOS: s.Devices["n2"].NOS, Intent: t1,
+			s.Devices["n1"] = intent.DeviceStamps{Match: s.Devices["n1"].Match, Intent: t1, Artifacts: map[string]string{}}
+			s.Devices["n2"] = intent.DeviceStamps{Match: s.Devices["n2"].Match, Intent: t1,
 				Artifacts: map[string]string{"other-config": t0}}
 			return s
 		}()},
-		{name: "a platform no package covers is the read's", stamps: func() intent.Stamps {
-			s := edited("n1")
+		// The pair is matched exactly, as the read matches it: a pair no package names, and
+		// a device with no platform, are the read's to refuse (platform.unmatched,
+		// platform.missing), never stale.
+		{name: "a pair no package matches is the read's", stamps: func() intent.Stamps {
+			s := edited("n1", "n2")
 			d := s.Devices["n1"]
-			d.NOS = "nosuch"
+			d.Match = psp.Match{Manufacturer: "nokia", Platform: "SR-Linux"}
 			s.Devices["n1"] = d
+			d = s.Devices["n2"]
+			d.Match = psp.Match{}
+			s.Devices["n2"] = d
 			return s
 		}()},
 		{name: "an unstamped checksum is judged by the validator", stamps: func() intent.Stamps {
@@ -237,7 +243,7 @@ func TestStaleNamesTheArtifactByThePackage(t *testing.T) {
 	}
 
 	acme := func(intentAt string, artifacts map[string]string) intent.DeviceStamps {
-		return intent.DeviceStamps{NOS: "acme_os", Intent: intentAt, Artifacts: artifacts}
+		return intent.DeviceStamps{Match: psp.Match{Manufacturer: "Acme", Platform: "AcmeOS"}, Intent: intentAt, Artifacts: artifacts}
 	}
 	stamps := intent.Stamps{Latest: tm, Devices: map[string]intent.DeviceStamps{
 		// device-config is fresh and acme-config stale: a stale acme device.
@@ -265,29 +271,30 @@ func TestStaleNamesTheArtifactByThePackage(t *testing.T) {
 	}
 }
 
-// The removal of research §8.17 at one mark (D-048): the seed's checksums at t0, the link
-// n1:ethernet-1/1 — n2:ethernet-1/1 deleted at te, which moves no stamp, and the mark tm
-// after it. The delete and its child events on each endpoint interface name n1 and n2,
-// and nothing names n3.
+// The removal of research §8.17 at one mark (D-048), over the library's kinds: the seed's
+// checksums at t0, the cable on n1:ethernet-1/1 — n2:ethernet-1/1 deleted at te, which
+// moves no stamp, and the mark tm after it. The delete and its child events on each end's
+// port name n1 and n2, and nothing names n3.
 const (
-	te  = "2026-10-16T19:36:30.031152+00:00" // infrahub.node.deleted of the NetworkLink
-	te1 = "2026-10-16T19:36:30.040000+00:00" // node.updated of n1's interface, link REMOVED
-	te2 = "2026-10-16T19:36:30.041000+00:00" // node.updated of n2's interface, link REMOVED
+	te  = "2026-10-16T19:36:30.031152+00:00" // infrahub.node.deleted of the DcimCable
+	te1 = "2026-10-16T19:36:30.040000+00:00" // node.updated of n1's port, connector REMOVED
+	te2 = "2026-10-16T19:36:30.041000+00:00" // node.updated of n2's port, connector REMOVED
 )
 
 // removal is the delete's three events, newest first, as the reader returns them.
 func removal() []intent.Event {
 	return []intent.Event{
-		{Name: "infrahub.node.updated", OccurredAt: te2, Kind: "NetworkInterface", Nodes: []string{"if-n2-e1"}},
-		{Name: "infrahub.node.updated", OccurredAt: te1, Kind: "NetworkInterface", Nodes: []string{"if-n1-e1"}},
-		{Name: "infrahub.node.deleted", OccurredAt: te, Kind: "NetworkLink", Nodes: []string{"link-1", "if-n1-e1", "if-n2-e1"}},
+		{Name: "infrahub.node.updated", OccurredAt: te2, Kind: "InterfacePhysical", Nodes: []string{"if-n2-e1", "cable-12"}},
+		{Name: "infrahub.node.updated", OccurredAt: te1, Kind: "InterfacePhysical", Nodes: []string{"if-n1-e1", "cable-12"}},
+		{Name: "infrahub.node.deleted", OccurredAt: te, Kind: "DcimCable", Nodes: []string{"cable-12", "if-n1-e1", "if-n2-e1"}},
 	}
 }
 
-// ided is a device's stamps with the ids an event names it by: its own, then its
-// interface's.
-func ided(name string, d intent.DeviceStamps) intent.DeviceStamps {
-	d.IDs = []string{"dev-" + name, "if-" + name + "-e1"}
+// ided is a device's stamps with the ids an event names it by, as the stamps read them: its
+// own, its platform's and its manufacturer's, which every device of the story shares, then
+// its port's, then each cable's given.
+func ided(name string, d intent.DeviceStamps, cables ...string) intent.DeviceStamps {
+	d.IDs = append([]string{"dev-" + name, "platform-srlinux", "manufacturer-nokia", "if-" + name + "-e1"}, cables...)
 	return d
 }
 
@@ -298,6 +305,14 @@ func removed(checksum string) intent.Stamps {
 	for _, n := range []string{"n1", "n2", "n3"} {
 		s.Devices[n] = ided(n, device("2026-10-16T19:35:00.000000+00:00", checksum))
 	}
+	return s
+}
+
+// cabled is removed's three devices with n2 and n3 cabled by cable-23.
+func cabled(checksum string) intent.Stamps {
+	s := removed(checksum)
+	s.Devices["n2"] = ided("n2", device("2026-10-16T19:35:00.000000+00:00", checksum), "cable-23")
+	s.Devices["n3"] = ided("n3", device("2026-10-16T19:35:00.000000+00:00", checksum), "cable-23")
 	return s
 }
 
@@ -331,10 +346,28 @@ func TestStaleByEvent(t *testing.T) {
 			stale: []string{"n1", "n2"}},
 		// An edit of n3 itself, by its own id.
 		{name: "an event on the device names it", mark: tm, stamps: removed(t0), events: []intent.Event{
-			{Name: "infrahub.node.updated", OccurredAt: te, Kind: "NetworkDevice", Nodes: []string{"dev-n3"}}},
+			{Name: "infrahub.node.updated", OccurredAt: te, Kind: "DcimDevice", Nodes: []string{"dev-n3"}}},
 			stale: []string{"n3"}},
+		// US5 scenario 1: a write to the device's platform, its manufacturer, or a cable on
+		// one of its ports names it, by the ids the stamps read.
+		{name: "an event on the platform names every device on it", mark: tm, stamps: removed(t0), events: []intent.Event{
+			{Name: "infrahub.node.updated", OccurredAt: te, Kind: "DcimPlatform", Nodes: []string{"platform-srlinux"}}},
+			stale: []string{"n1", "n2", "n3"}},
+		{name: "an event on the manufacturer names every device of it", mark: tm, stamps: removed(t0), events: []intent.Event{
+			{Name: "infrahub.node.updated", OccurredAt: te, Kind: "OrganizationManufacturer", Nodes: []string{"manufacturer-nokia"}}},
+			stale: []string{"n1", "n2", "n3"}},
+		{name: "an event on a cable names both its devices", mark: tm, stamps: cabled(t0), events: []intent.Event{
+			{Name: "infrahub.node.updated", OccurredAt: te, Kind: "DcimCable", Nodes: []string{"cable-23"}}},
+			stale: []string{"n2", "n3"}},
+		// US5 scenario 2: a write to an untagged device, or to a cable between two untagged
+		// devices, names no device of the scope.
+		{name: "an event on an untagged device stales none", mark: tm, stamps: removed(t0), events: []intent.Event{
+			{Name: "infrahub.node.updated", OccurredAt: te, Kind: "DcimDevice", Nodes: []string{"dev-cs1"}},
+			{Name: "infrahub.node.updated", OccurredAt: te, Kind: "InterfacePhysical", Nodes: []string{"if-cs1-port1"}}}},
+		{name: "an event on a cable between untagged devices stales none", mark: tm, stamps: cabled(t0), events: []intent.Event{
+			{Name: "infrahub.node.updated", OccurredAt: te, Kind: "DcimCable", Nodes: []string{"cable-cs", "if-cs1-port1", "if-cs2-port1"}}}},
 		{name: "an event naming no device of the branch stales none", mark: tm, stamps: removed(t0), events: []intent.Event{
-			{Name: "infrahub.node.updated", OccurredAt: te, Kind: "NetworkPlatform", Nodes: []string{"platform-1"}}}},
+			{Name: "infrahub.node.updated", OccurredAt: te, Kind: "DcimPlatform", Nodes: []string{"platform-eos"}}}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			r, s := story(change1(mark("st-m", "m", tc.mark, nil, "")))
@@ -375,7 +408,7 @@ func TestStaleByEventWording(t *testing.T) {
 	stamps.Devices["n3"] = ided("n3", device("", t0))                                 // nothing of its own stamped
 	s.at = map[string]intent.Stamps{"change-1@" + tm: stamps}
 	r.events = map[string][]intent.Event{"change-1": append([]intent.Event{
-		{Name: "infrahub.node.created", OccurredAt: created, Kind: "NetworkInterface", Nodes: []string{"if-n3-e1"}},
+		{Name: "infrahub.node.created", OccurredAt: created, Kind: "InterfaceVirtual", Nodes: []string{"if-n3-e1"}},
 	}, removal()...)}
 	_, list, err := Resolve(t.Context(), r, s, registry(t), Ref{"change-1", "m"}, testScope, now)
 	if err != nil || len(list) != 3 {
@@ -387,10 +420,10 @@ func TestStaleByEventWording(t *testing.T) {
 		"CoreProposedChangeRunCheck) and mark again"
 	for i, want := range []string{
 		"device n1: its intent on change-1 was written at " + te1 + " (Infrahub's event log: infrahub.node.updated of a " +
-			"NetworkInterface; its latest stamp 2026-10-16T19:35:00.000000+00:00)" + tail,
+			"InterfacePhysical; its latest stamp 2026-10-16T19:35:00.000000+00:00)" + tail,
 		"device n2: its intent on change-1 was written at 2026-10-16T19:39:00.000000+00:00" + tail,
 		"device n3: its intent on change-1 was written at " + created + " (Infrahub's event log: infrahub.node.created " +
-			"of a NetworkInterface; no stamp of its own)" + tail,
+			"of a InterfaceVirtual; no stamp of its own)" + tail,
 	} {
 		if list[i].Message != want {
 			t.Errorf("message %d\n  %s\nwant\n  %s", i, list[i].Message, want)

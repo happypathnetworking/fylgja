@@ -92,7 +92,9 @@ Removed: `contract.version.mismatch`, `contract.node.missing`,
   …` first as today.
 - `twin create`'s and `twin show`'s record line: `record: branch b at …, bundle_id …,
   schema …, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9`;
-  a `7` record: `…, scope unknown (record 7)`.
+  a `7` record: `…, scope unknown (record 7)`; an `8` whose scope is not `tag:<name>`
+  (edited by hand: no build writes one): `…, scope unknown (record 8 names scope "fylgja",
+  not tag:<name>)`, its JSON record carrying neither `scope` nor `mapping` (T097).
 - `schema check`: `conformant with opsmill/schema-library@26336e9: DcimDevice,
   DcimPlatform, OrganizationManufacturer, InterfacePhysical, DcimCable, DcimConnector`
   (the generic among the table's rows, [mapping.md](mapping.md) §3), then `stages:
@@ -105,7 +107,10 @@ Removed: `contract.version.mismatch`, `contract.node.missing`,
 The record's `provenance.scope` is the scope of every read the step and the follow make:
 the target's resolution, its staleness and its read. A `7` record is refused
 `step.twin.unsteppable` naming its version (`the twin was created from a record version
-this build no longer reads (twin.json 7); fylgja twin destroy clears it`), as a `5` is.
+this build no longer reads (twin.json 7); fylgja twin destroy clears it`), as a `5` is,
+and an `8` whose scope is not `tag:<name>` alike, naming the value, before any connection
+(`the twin's record names scope "fylgja", which is not tag:<name>, and every read a step
+makes is under the record's scope; fylgja twin destroy clears it`; T097).
 
 A following twin created before 017 keeps a Schedule whose `ReconcileInput` names no
 scope (`omitempty`), so its checks ask for a read under `""`. `stage.Read` refuses a scope

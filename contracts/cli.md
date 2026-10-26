@@ -427,7 +427,7 @@ of them, `run.in_flight` naming it (015):
 
 | Rule | When | Wording (shape) |
 |---|---|---|
-| `step.twin.unsteppable` | no twin; an orphan; an unreadable record; a record of `5` or earlier, or one naming no stage; since 017, a record of `7` or earlier, which names no scope (below) | `…; only a twin built from a stage steps (fylgja twin create --stage)`; for a `5` record, `the twin was created from a waypoint of a record version this build no longer reads (twin.json 5); only a twin built from a stage steps; fylgja twin destroy clears it` |
+| `step.twin.unsteppable` | no twin; an orphan; an unreadable record; a record of `5` or earlier, or one naming no stage; since 017, a record of `7` or earlier, which names no scope, or an `8` naming a scope that is not `tag:<name>` (below) | `…; only a twin built from a stage steps (fylgja twin create --stage)`; for a `5` record, `the twin was created from a waypoint of a record version this build no longer reads (twin.json 5); only a twin built from a stage steps; fylgja twin destroy clears it` |
 | `step.target.foreign` | `--stage` names another branch, or another proposed change on the same branch | `stage other/x is not of proposed change <id> on branch change-1, the twin's; a step stays inside the proposed change the twin was built from, whose stages are: …` |
 | `step.target.unknown` | no stage after the record's; the record's label gone; `--stage` names no stage of the proposed change | `proposed change <id> on change-1 has no stage after change-1/head; its stages are: …`, or `…; the head has moved since the twin was built (now at …): --stage change-1/head steps to it` |
 | `step.target.current` | the target resolves to the record's own `(branch, at)` | `the twin is already at stage change-1/live (branch change-1, at …); the proposed change's stages are: …` |
@@ -909,10 +909,12 @@ start on the same registry.
 - `twin show`'s record line ends with the record's provenance: `record: branch
   fylgja-fixture, bundle_id f764e1fa…, schema 7c413536…, scope tag:fylgja, read by
   infrahub-dcim from opsmill/schema-library@26336e9`; for a record of `7` or earlier, `…,
-  scope unknown (record 7)`. `twin create` prints the same line for the twin it made, from
-  the record its run wrote, after the nodes and before `twin directory …`, as `twin show`
-  prints it after the nodes; `twin provision` does too, its record naming what its bundle's
-  provenance names.
+  scope unknown (record 7)`; for an `8` whose scope is not `tag:<name>`, which no build
+  writes, `…, scope unknown (record 8 names scope "fylgja", not tag:<name>)`, its JSON
+  record carrying neither `scope` nor `mapping`, as a `7`'s. `twin create` prints the same
+  line for the twin it made, from the record its run wrote, after the nodes and before `twin
+  directory …`, as `twin show` prints it after the nodes; `twin provision` does too, its
+  record naming what its bundle's provenance names.
 - `schema check`'s first line is `conformant with opsmill/schema-library@26336e9:
   DcimDevice, DcimPlatform, OrganizationManufacturer, InterfacePhysical, DcimCable,
   DcimConnector`, the mapping's table in its order, the generic `DcimConnector` among it
@@ -941,7 +943,10 @@ start on the same registry.
 
 - `twin step` on a record of `7` or earlier is refused at `resolve`, exit 1:
   `step.twin.unsteppable`, `the twin was created from a record version this build no
-  longer reads (twin.json 7); fylgja twin destroy clears it`, as a `5` is.
+  longer reads (twin.json 7); fylgja twin destroy clears it`, as a `5` is; on an `8` whose
+  scope is not `tag:<name>` alike, before any connection: `the twin's record names scope
+  "fylgja", which is not tag:<name>, and every read a step makes is under the record's
+  scope; fylgja twin destroy clears it`.
 
 ### Identifiers
 

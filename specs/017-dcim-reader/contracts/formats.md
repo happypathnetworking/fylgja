@@ -38,7 +38,9 @@ row per interface, as it was in `4`. The glossary's *mapping* entry says the sam
 - `twin_version`: `"8"`; `provenance` as the manifest's. Nothing else is new.
 - A `7` record reads with no scope: `twin show` shows it (`scope unknown (record 7)`),
   `twin step` refuses it `step.twin.unsteppable` naming the version, `twin destroy` clears
-  it, `twin rehearse` reclaims it when it names a dead rehearsal.
+  it, `twin rehearse` reclaims it when it names a dead rehearsal. An `8` whose scope is not
+  `tag:<name>`, which no build writes, is read as naming none: `twin show` shows its scope
+  unknown and `twin step` refuses it, naming the value (T097).
 
 ## The findings blocks (`contracts/findings.schema.json`, `show`, `verify`, `step`)
 

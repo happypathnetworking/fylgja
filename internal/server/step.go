@@ -166,18 +166,29 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 }
 
 // stepScopeUnknown is the refusal of a stage twin whose record is of twin.json 7 or earlier,
-// or nil for one of 8 or later (017): its provenance names no scope, and every read a step
-// makes is under the record's, so it cannot step, as a record of 5 or earlier naming M10's
-// waypoint cannot (provision.Ineligible). It is the command's refusal alone, before any
-// run: the run's second lock reads records of 4 and 5 in its recorded histories, which
-// must replay unchanged, and a worker of this build writes 8.
+// or of 8 or later naming a scope that is not tag:<name>, or nil for one naming a scope
+// (017): every read a step makes is under the record's scope, so a record naming none
+// cannot step, as a record of 5 or earlier naming M10's waypoint cannot
+// (provision.Ineligible). No build of this tree writes an 8 with another scope (NewRecord
+// and NewStepRecord refuse one), so such a record was edited by hand; read under it, the
+// stage's resolution and read would filter by a tag no scope names and fail at read. It is
+// the command's refusal alone, before any connection and any run: the run's second lock
+// reads records of 4 and 5 in its recorded histories, which must replay unchanged, and a
+// worker of this build writes 8.
 func stepScopeUnknown(rec *wire.TwinRecord) *findings.Finding {
-	if scopeRecorded(rec) {
-		return nil
+	refuse := func(message string) *findings.Finding {
+		return &findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: rec.BundleID,
+			Step: findings.StepResolve, Message: message}
 	}
-	return &findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: rec.BundleID,
-		Step: findings.StepResolve, Message: "the twin was created from a record version this build no longer reads " +
-			"(twin.json " + rec.TwinVersion + "); fylgja twin destroy clears it"}
+	if !scopeRecorded(rec) {
+		return refuse("the twin was created from a record version this build no longer reads " +
+			"(twin.json " + rec.TwinVersion + "); fylgja twin destroy clears it")
+	}
+	if !scopeKnown(rec) {
+		return refuse(fmt.Sprintf("the twin's record names scope %q, which is not tag:<name>, and every read a step makes "+
+			"is under the record's scope; fylgja twin destroy clears it", rec.Provenance.Scope))
+	}
+	return nil
 }
 
 // stepTo is the step once the target is compiled and filed: the from bundle, the step, the

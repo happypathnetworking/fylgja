@@ -457,6 +457,53 @@ func TestShowRecordNamesItsScope(t *testing.T) {
 	}
 }
 
+// An 8 record whose scope is not tag:<name>, edited by hand since no build of this tree
+// writes one, names no scope a read can be made under: twin show prints its scope unknown,
+// naming the value, as it prints a 7's, and its JSON record carries neither scope nor
+// mapping, so the document stays the show contract's (T097).
+func TestShowTreatsAnUnreadableScopeAsUnknown(t *testing.T) {
+	rec := twinOf(t, func(f *lab.RecordFields) {
+		f.Provenance.At = stepFromAt
+		f.Stage = showStage("seeded")
+	})
+	head := "record: branch fylgja-fixture at " + stepFromAt + " (stage fylgja-fixture/seeded, at given), bundle_id " +
+		showBundleID + ", schema 41349c3a9c582e5dd44e55d6771f79c2, "
+	for _, scope := range []string{"", "fylgja", "tag:"} {
+		t.Run(fmt.Sprintf("scope %q", scope), func(t *testing.T) {
+			paths := useStateRoot(t)
+			writeTwin(t, paths, rec)
+			raw, err := os.ReadFile(paths.TwinJSON)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var generic map[string]any
+			if err := json.Unmarshal(raw, &generic); err != nil {
+				t.Fatal(err)
+			}
+			generic["provenance"].(map[string]any)["scope"] = scope
+			if raw, err = json.Marshal(generic); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(paths.TwinJSON, raw, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			out := showWith(t, paths, "inspect-three.json", &fakeService{})
+			line := head + `scope unknown (record 8 names scope "` + scope + `", not tag:<name>)`
+			if !strings.Contains(out.stdout, "\n"+line+"\n") {
+				t.Errorf("stdout:\n%s\nwant the record line %q", out.stdout, line)
+			}
+			r := out.doc.Show.Record
+			if r == nil {
+				t.Fatal("the document carries no record")
+			}
+			if r.Scope != "" || r.Mapping != nil {
+				t.Errorf("record scope %q, mapping %+v; want neither", r.Scope, r.Mapping)
+			}
+			validateM10Document(t, out.doc)
+		})
+	}
+}
+
 // A twin of two platforms: each node line names the package that node was provisioned
 // with, and the JSON node carries the id the record already holds. That line
 // is how an operator tells the nodes of a mixed twin apart, and twin.json gains no key

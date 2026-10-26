@@ -403,6 +403,27 @@ func supersededHost(t *testing.T, waypoint map[string]any, diverged bool) *stepH
 // scope and the mapping (017), and for a 6 no rehearsal key.
 func unscopedHost(t *testing.T, version string) *stepHostFixture {
 	t.Helper()
+	return editedRecordHost(t, func(m map[string]any) {
+		m["twin_version"] = version
+		contractProvenance(m)
+		if version == "6" {
+			delete(m, "rehearsal")
+		}
+	})
+}
+
+// misscopedHost is stepHost's twin with its record an 8 whose provenance's scope is
+// scope, as no build of this tree writes one (NewRecord refuses it): edited by hand.
+func misscopedHost(t *testing.T, scope string) *stepHostFixture {
+	t.Helper()
+	return editedRecordHost(t, func(m map[string]any) {
+		m["provenance"].(map[string]any)["scope"] = scope
+	})
+}
+
+// editedRecordHost is stepHost's twin with its twin.json edited as JSON by edit.
+func editedRecordHost(t *testing.T, edit func(map[string]any)) *stepHostFixture {
+	t.Helper()
 	h := stepHost(t, "plan-link-added.json", nil)
 	b, err := os.ReadFile(h.paths.TwinJSON)
 	if err != nil {
@@ -412,11 +433,7 @@ func unscopedHost(t *testing.T, version string) *stepHostFixture {
 	if err := json.Unmarshal(b, &m); err != nil {
 		t.Fatal(err)
 	}
-	m["twin_version"] = version
-	contractProvenance(m)
-	if version == "6" {
-		delete(m, "rehearsal")
-	}
+	edit(m)
 	if b, err = json.Marshal(m); err != nil {
 		t.Fatal(err)
 	}
@@ -1032,6 +1049,11 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 	refusal := func(rule, step, object, message string) findings.Finding {
 		return findings.Finding{Severity: findings.Rejection, Rule: rule, Step: step, Object: object, Message: message}
 	}
+	// misscoped is step.twin.unsteppable's message for an 8 whose scope is not tag:<name>.
+	misscoped := func(scope string) string {
+		return `the twin's record names scope "` + scope + `", which is not tag:<name>, and every read a step makes is ` +
+			"under the record's scope; fylgja twin destroy clears it"
+	}
 	// refusedTarget is the stage twin's host with the record's bundle gone from the store
 	// and too little memory for the step, edited: a target refused there is refused
 	// before the from bundle is read and the host checked, either of which would refuse
@@ -1162,6 +1184,17 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 		{name: "a record of twin.json 6", host: func(t *testing.T) *stepHostFixture { return unscopedHost(t, "6") },
 			code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
 				"the twin was created from a record version this build no longer reads (twin.json 6); fylgja twin destroy clears it"),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		// An 8 whose scope is not tag:<name>, edited by hand, names no scope a read can be
+		// made under: refused naming the value, as a 7 is, before Infrahub is asked (T097).
+		{name: "a record of twin.json 8 naming scope \"\"", host: func(t *testing.T) *stepHostFixture { return misscopedHost(t, "") },
+			code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "", misscoped("")),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		{name: "a record of twin.json 8 naming scope fylgja", host: func(t *testing.T) *stepHostFixture { return misscopedHost(t, "fylgja") },
+			code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "", misscoped("fylgja")),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		{name: "a record of twin.json 8 naming scope tag:", host: func(t *testing.T) *stepHostFixture { return misscopedHost(t, "tag:") },
+			code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "", misscoped("tag:")),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		{name: "another branch", args: []string{"--stage", "other/x"}, code: findings.ExitRejected, asked: true, unread: true,
 			want: refusal(findings.RuleStepTargetForeign, findings.StepResolve, "other/x",

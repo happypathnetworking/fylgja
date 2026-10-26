@@ -165,12 +165,23 @@ func TestACreateAndAStepBesideARehearsalNameIt(t *testing.T) {
 
 // A stage twin whose record is of twin.json 7 or earlier names no scope, so twin step refuses
 // it naming the version, step.twin.unsteppable at resolve, its object the record's bundle
-// (017); a record of 8 or later passes on to the step's other checks.
+// (017); a record of 8 or later naming a scope passes on to the step's other checks, and one
+// naming a scope that is not tag:<name> is refused naming the value (T097).
 func TestStepRefusesARecordThatNamesNoScope(t *testing.T) {
 	const bundleID = "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777"
 	for _, version := range []string{"8", "9"} {
-		if f := stepScopeUnknown(&wire.TwinRecord{TwinVersion: version, BundleID: bundleID}); f != nil {
+		rec := &wire.TwinRecord{TwinVersion: version, BundleID: bundleID, Provenance: wire.Provenance{Scope: "tag:fylgja"}}
+		if f := stepScopeUnknown(rec); f != nil {
 			t.Errorf("twin.json %s: refused %+v, want it to pass", version, f)
+		}
+	}
+	for _, scope := range []string{"", "fylgja", "tag:", "tag:two words"} {
+		f := stepScopeUnknown(&wire.TwinRecord{TwinVersion: "8", BundleID: bundleID, Provenance: wire.Provenance{Scope: scope}})
+		want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: bundleID,
+			Step: findings.StepResolve, Message: `the twin's record names scope "` + scope + `", which is not tag:<name>, ` +
+				"and every read a step makes is under the record's scope; fylgja twin destroy clears it"}
+		if f == nil || *f != want {
+			t.Errorf("scope %q: refused %+v, want %+v", scope, f, want)
 		}
 	}
 	for _, version := range []string{"7", "6", "2", ""} {

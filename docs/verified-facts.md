@@ -322,6 +322,17 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   stay the task workers' account. So the groups' `updated_by` is not that account alone.
   Seen on `main` after the 10-25 platform delete, and on a throwaway branch after a
   `DcimCableDelete`. *(10-26; `specs/017-dcim-reader/research.md` §5.13)*
+- **The groups' creator is read beside the stamps, and a joined node keeps its
+  creation.** In one stamps query, each artifact reaches its query by
+  `definition.node.transformation.node.query.node.id`. The transformation's `__typename`
+  is `CoreTransformJinja2` for the template. `CoreGraphQLQueryGroup(group_type__value:
+  "internal", query__ids: [<id>])` then answers each group's `node_metadata.created_by {
+  id }`, a `CoreAccount`. A node the join restamped keeps a `created_at` no later than the
+  generation that first read it. So a stamp read as the node's `created_at`, whenever its
+  `updated_by` is the groups' creator ([D-058](decisions.md#d-058),
+  [D-060](decisions.md#d-060)), reads a branch fresh after a hand generate. The contract
+  tier is green with it, including `TestChecksInsideInfrahub`, and `TestStagesListAndPlan`
+  marked after the join. *(10-26; `specs/017-dcim-reader/research.md` §5.14)*
 - **The event log records a removal, read-only.** `InfrahubEvent(branches: [<branch>],
   since: <branched_from>, order:, limit: ≤50)` (above 50 is refused) lists
   `infrahub.node.deleted` for a deleted link, primary node the concrete kind

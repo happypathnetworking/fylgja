@@ -1145,7 +1145,7 @@ in `description`.
   - **For T071**, new values for `CLAUDE.md`: the fixture branch's hash is `main`'s, `7c413536…`, and it compiles to `f764e1fa…`. The registration is at `c006bf9`, and `fylgja-twin`'s timeout is 4260.
   - **Next**: T062, live. Fix CI's three tier-2 failures where they belong (T057's and T062's notes), then run tier 2 whole. The operator's second push (T057) follows on a green contract job.
 
-- [ ] T062 [live] [US1] [US2] [US3] [US5] [US6] Tier 2 whole (quickstart §7; SC-001, SC-003–SC-006, SC-009), on a host with no twin, the server on the bridge from this tree (T059): `set -a; . local/.env; set +a; make test-contract 2>&1 | tee local/017-contract.out`.
+- [X] T062 [live] [US1] [US2] [US3] [US5] [US6] Tier 2 whole (quickstart §7; SC-001, SC-003–SC-006, SC-009), on a host with no twin, the server on the bridge from this tree (T059): `set -a; . local/.env; set +a; make test-contract 2>&1 | tee local/017-contract.out`.
   - Green: every new test of T044 and T051, and every 014 and 015 test.
   - After it: `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` count 0; `Branch` lists `main` and `fylgja-fixture` alone; `main` holds no tagged device.
   - Record each package's time and the tier's in research §5.6, with the owed facts: `schema.kind.missing`'s wording on a real branch; the pinned read filtering by tag; `BranchRebase` over the library's kinds (`TestStageRefusals`' rebase case).
@@ -1283,6 +1283,57 @@ in `description`.
       - `fylgja` is the only registration, at `c006bf9`.
     - 11.8 GiB of memory is available.
   - **Next**: the operator's answer on the field (above), as a decision entry. Then T062 again: the read, the rule and its tier-1 tests, then tier 2 whole. Separately, the operator's second push for T057.
+  - *2026-10-26 16:46Z, at `118bdbd`, Run 19 a fourth time, of the converge loop (live):* **done.** D-058's rule is built with D-060's account, and tier 2 is green whole. The record is research §5.14 and `docs/verified-facts.md` (10-26).
+    - **The read and the rule**, in `internal/intent` (T047's and T049's code):
+      - The stamps' two queries read each wrapper's `updated_by` and `created_at` beside `updated_at`, still one wrapper per node. The artifacts' fragment also reads each definition's query id.
+      - A third query, `QueryGroups`, reads the `created_by` of the internal `CoreGraphQLQueryGroup`s of those queries, on the stamps' branch at their `at`.
+      - A node whose `updated_by` is one of those creators contributes its `created_at` instead. That holds for the device's intent and for the branch's latest. So after a hand generate the head is one microsecond after the latest checksum, as `TestStagesListAndPlan` asserts.
+      - No artifact means no groups request is made, and no group leaves nothing out.
+      - The read-only test names `CoreGraphQLQueryGroup` as the sixth owned root, with its reason. `contracts/mapping.md` §2 and §6 say the same.
+    - **Tier 1** covers:
+      - the rule over an account named `agent` and over a renamed one;
+      - a group the operator's account last updated, whose delete stamp stays intent;
+      - no internal group;
+      - no artifact, and the groups' request pinned.
+
+      With the rule switched off, the first two fail.
+    - **Tried live first**, read-only, on `fylgja-fixture`:
+      - Infrahub accepted both queries.
+      - Every node there reads `updated_by` `Agent`, written after the checksums, and each node's `created_at` is before them.
+      - The three groups' creator is `Agent`.
+    - **`TestStagesListAndPlan`** now waits for the join before marking `third-link` (`awaitJoined`: `n1:ethernet-1/3` stamped after the latest checksum). It plans after the join every time, rather than winning the race.
+    - **Tier 2**: `make test-contract`, 16:17:29Z–16:46:04Z, **1,714.7 s** wall, **exit 0**, every package `ok`.
+      - The longest: `internal/stages` 1,422.1 s, `internal/stage` 829.2 s, `internal/server` 768.3 s, `internal/intent` 653.4 s and `internal/cli` 207.7 s, then `internal/checks` alone after them, 278.8 s.
+      - `TestChecksInsideInfrahub` passed inside Infrahub, through this tree's server on the bridge, which its checks' requests reached between 16:43:30Z and 16:45:48Z.
+      - That is every new test of T044 and T051, and every 014 and 015 test.
+      - The owed facts held by their tests, as in §5.11.
+    - **After it**, as this task asks (the checkpoint below): `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` count 0, `Branch` lists `main` and `fylgja-fixture` alone, and `main` holds no tagged device.
+    - **For T057**: T062 is green, so the operator's second push can be made once the loop has stopped. CI's contract job skips `TestChecksInsideInfrahub`, and `TestStagesListAndPlan` no longer races.
+    - **For T064**: `docs/architecture.md` line 269's "four roots that are Infrahub's" gains `CoreGraphQLQueryGroup` (D-060), beside the D-058 lines that T064's note names.
+    - **For T071**: tier 2 takes about 29 minutes (1,714.7 s), not `CLAUDE.md`'s twenty. `internal/stages` took 1,422.1 s against the `-timeout 30m`.
+
+  *Run 19's fourth checkpoint, 16:50Z*:
+  - **Gates**, on the final tree:
+    - `make build`: static.
+    - `make test`: passed. Uncached (`go test -count=1 ./...`) it took 34.4 s wall, at a load average of 2.4 before and 4.1 after.
+    - `make lint`: 0 issues.
+    - `go vet -tags contract,fixture,e2e ./...`: clean.
+    - `go generate ./...` is stable, and `make linkcheck` finds nothing broken.
+    - No golden moved.
+  - **Not run, and why**: tier 3 is T063's, after T062 and never beside it, and this run is T062 alone. No hand scenario is named.
+  - **The host**:
+    - The worker and the server were restarted from this tree before the tier: the worker is pid 668144 and the server pid 668165. The final build did not replace the binary, so neither reads `(deleted)`.
+    - Both `/proc/<pid>/exe` read the tree's `bin/fylgja`. Their environment names carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`.
+    - The server reports both listeners, the bridge warning, `default scope: tag:fylgja` and both packages with their logins set. The worker reports both packages and `lab fylgja absent; twin directory absent`.
+    - From inside each task worker, `POST /v1/twin/show` answers `200` with the token and `401` without it, read at 16:17Z and again at 16:50Z.
+    - `clab inspect --all` is `{}`. There is no `local/twin`, and Temporal lists no Schedule and no running workflow.
+    - In Infrahub:
+      - `Branch` lists `main` and `fylgja-fixture` alone.
+      - `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` count 0.
+      - `main` holds no device, and its hash is `7c413536…`.
+      - `fylgja` is the only registration, at `c006bf9`, with its two checks.
+    - 11.7 GiB of memory is available.
+  - **Next**: T063, tier 3, live, on a rested host. Separately, the operator's second push for T057, once the loop has stopped.
 
 - [ ] T063 [live] [US6] Tier 3 on a quiet host (quickstart §8; SC-006), after T062 and never beside it. Read `free -m`; check both images, the worker and the server from this tree, and the checks and the template imported (T058).
   - Start `make test-e2e 2>&1 | tee local/017-e2e.out` detached, with its exit status in a file, and wait in foreground calls of under ten minutes.

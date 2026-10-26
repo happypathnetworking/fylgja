@@ -1956,3 +1956,106 @@ stays open for the operator.
   and a delete removes the edge rather than restamping it. This is exact after a token
   change too. It is heavier: it reads every group's member edges, one group per rendered
   device.
+
+<a id="5-14"></a>
+### 5.14 D-058's rule under D-060's account, and tier 2 whole (T062; 2026-10-26, 16:05Z–16:46Z)
+
+Run 19 a fourth time, at `118bdbd`, after [D-060](../../docs/decisions.md#d-060). The rule
+was built in R-10's stamps (T047's and T049's code), its read tried live before the tier,
+and the tier run whole. Every branch the tier made was a throwaway, deleted by its test.
+Nothing was written to `main`, and no token was printed.
+
+**What was built** (`internal/intent`):
+
+- `IntentStamps` and `PortStamps` read each wrapper's `node_metadata { updated_at
+  updated_by { id } created_at }`, bound as `stampMeta`. It is still one wrapper per node.
+- The `ArtifactStamps` fragment also reads each artifact's `definition → transformation →
+  query` id. The transformation's node is bound, so a transform of any kind decodes.
+- A third query, `QueryGroups`, reads `CoreGraphQLQueryGroup(group_type__value:
+  "internal", query__ids: …)` and selects only each group's `node_metadata.created_by {
+  id }`. It runs on the stamps' branch, at their `at`, once the devices and ports are
+  read. The read-only test names `CoreGraphQLQueryGroup` as the sixth owned root, with its
+  reason.
+- **The rule**: a node contributes its `updated_at`, or its `created_at` when its
+  `updated_by` is one of the groups' creators. Nothing is folded until the groups are
+  read.
+  - No artifact means no query, so no groups request is made. No group leaves nothing
+    out.
+  - The rule applies wherever a node's stamp is folded: the device's intent, and the
+    branch's latest, which sets the head's `at`. Checksums are folded as before.
+  - So after a hand generate the head is one microsecond after the latest checksum, not
+    after the join. `TestStagesListAndPlan` already asserted exactly that, and it held
+    only when the test read before the join.
+- **Tier 1**:
+  - `TestStampsLeaveOutInfrahubsOwnAccount` runs over an account named as Infrahub names
+    it and over a renamed one. In each, the joined port and cable count as their creation,
+    and a stamp by an account that created no group is intent.
+  - `TestStampsReadTheGroupsCreator` covers a group whose last writer is the operator's
+    account: the operator's delete stamp stays intent. It also covers a scope with no
+    internal group.
+  - `TestStampsAskForGroupsWhereTheStampsAre`: with no artifact, no groups request is
+    made, and a pinned read sends its `at` on the groups' request too.
+  - With the rule switched off, the first two fail.
+- **The mapping contract**: §2's roots and §6's stamp now say the same.
+
+**Tried live first**, read-only, before the tier. The generated `IntentStamps` and
+`QueryGroups` were sent as the client sends them to `fylgja-fixture`, and both were
+accepted:
+
+- Every device and interface read `updated_by` `Agent` at 13:22:46.04–.05. That is the
+  seed's render's join, after the checksums at 13:22:44.63. Their `created_at` read
+  13:22:14–18.
+- Each artifact's transformation was a `CoreTransformJinja2` naming the query
+  `18dc77c3-196f-…` (`device_config`).
+- The three internal groups' `created_by` was `Agent`, a `CoreAccount`.
+
+So under the rule the fixture's devices read their creation, before their checksums.
+
+**`TestStagesListAndPlan` now meets the join instead of racing it.** After `SeedThirdLink`'s
+artifacts move, `awaitJoined` polls `n1:ethernet-1/3`'s `node_metadata.updated_at` until
+it is later than the branch's latest checksum, for at most a minute. Only then is
+`third-link` marked. The list and the plan therefore always read after the join, which the
+test used to read before. If the join is ever missing, the test fails naming D-058's
+revisit.
+
+**The tier**: `make test-contract 2>&1 | tee local/017-contract.out`, run from 16:17:29Z to
+16:46:04Z, **1,714.7 s** wall, **exit 0**. Every package passed:
+
+| Package | Time |
+|---|---|
+| `internal/stages` | 1,422.1 s |
+| `internal/stage` | 829.2 s |
+| `internal/server` | 768.3 s |
+| `internal/intent` | 653.4 s |
+| `internal/cli` | 207.7 s |
+| `internal/lab` | 10.8 s |
+| `internal/provision` | 8.1 s |
+| each of the other 16 | under 3.9 s |
+| `internal/checks`, alone after them | 278.8 s |
+
+- **`TestChecksInsideInfrahub` passed** inside Infrahub's pipeline, through the server on
+  the bridge from this tree (worker pid 668144, server pid 668165). Its checks' requests
+  reached that server between 16:43:30Z and 16:45:48Z: `stage.plan`, the refused
+  `twin.rehearse` and `twin.show`. So after `SeedThirdLink`'s hand generate and the
+  `third-link` mark, `fylgja-test-step` concluded `success`, which §5.11's run did not.
+- **That is every new test of T044 and T051, and every 014 and 015 test**, the three CI
+  fixes of T057's first note among them.
+- **The owed facts held**, each by its test's assertions as in §5.11. The tier runs
+  without `-v`, so no test's log was kept:
+  - `schema.kind.missing`'s wording on a real branch (`TestSchemaCheckNamesAMissingKind`);
+  - the pinned read filtering by the tag as it stood at T
+    (`TestPinnedReadReproducesItsBundle`);
+  - `BranchRebase` over the library's kinds (`TestStageRefusals`).
+- `TestStagesSeeARemoval` passed under the rule: the delete's port stamps are written by
+  the operator's account, so they stay intent.
+
+**Afterwards**:
+
+- `Branch` lists `main` and `fylgja-fixture` alone.
+- `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` count
+  0.
+- `main` holds no device, tagged or not, and its hash is `7c413536…`.
+- `fylgja` is the only registration, at `c006bf9`, with `fylgja-step` and `fylgja-twin`.
+- `fylgja-fixture`'s three devices each hold a `Ready` artifact.
+- `clab inspect --all` is `{}`. There is no `local/twin`, and Temporal lists no Schedule
+  and no running workflow.

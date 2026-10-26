@@ -31,7 +31,9 @@ var platformRow = ctm.FidelityRow{Disposition: "omitted", Object: "platform.vers
 
 // A cable the mapping cannot place is omitted and never refuses the read (US2 scenarios 2
 // and 3; FR-006): three ends, one end, an end on a device outside the scope, and an end
-// that is not a physical port. Each is an info finding naming the cable, its reason and
+// that is not a physical port, a console port or a virtual interface carrying a cable (the
+// spec's edge case: the interface is not read, and its cable is omitted naming its kind).
+// Each is an info finding naming the cable, its reason and
 // every end it can name, and a fidelity row with the same reason; its ports stay in the
 // CTM, cabled to nothing. A cable with no label is named by its id. The three fixture
 // cables, each reached from both its ends, are three links.
@@ -39,12 +41,13 @@ func TestCablesTheReadCannotPlace(t *testing.T) {
 	f := newFakeInfrahub(t)
 	f.addPorts("n1", "ethernet-1/3", "ethernet-1/4", "ethernet-1/5")
 	f.addPorts("n2", "ethernet-1/3", "ethernet-1/4")
-	f.addPorts("n3", "ethernet-1/3")
+	f.addPorts("n3", "ethernet-1/3", "ethernet-1/4")
 	f.addDevice("cs1", "Opengear", "Console OS", nil, "port1")
 	f.cable("cable-three", "c-three", "n1:ethernet-1/3", "n2:ethernet-1/3", "n3:ethernet-1/3")
 	f.cable("cable-one", "c-one", "n1:ethernet-1/4")
 	f.cable("cable-out", "c-out", "n1:ethernet-1/5", "cs1:port1")
 	f.cable("cable-console", "", "n2:ethernet-1/4", "DcimConsolePort#cp-7")
+	f.cable("cable-virtual", "c-virtual", "n3:ethernet-1/4", "InterfaceVirtual#vi-lo0")
 
 	c, list, err := readFake(t, f)
 
@@ -61,6 +64,8 @@ func TestCablesTheReadCannotPlace(t *testing.T) {
 			Message: "cable c-out is omitted: an end outside the scope (id-cs1:port1); its ends are id-cs1:port1, n1:ethernet-1/5"},
 		{Severity: findings.Info, Rule: findings.RuleOmitCableEnds, Object: "c-three",
 			Message: "cable c-three is omitted: other than two ends (3); its ends are n1:ethernet-1/3, n2:ethernet-1/3, n3:ethernet-1/3"},
+		{Severity: findings.Info, Rule: findings.RuleOmitCableEndpoint, Object: "c-virtual",
+			Message: "cable c-virtual is omitted: an end not on a physical port (InterfaceVirtual); its ends are n3:ethernet-1/4"},
 		{Severity: findings.Info, Rule: findings.RuleOmitCableEndpoint, Object: "cable-console",
 			Message: "cable cable-console is omitted: an end not on a physical port (DcimConsolePort); its ends are n2:ethernet-1/4"},
 	}
@@ -71,6 +76,7 @@ func TestCablesTheReadCannotPlace(t *testing.T) {
 		ctm.FidelityRow{Disposition: "omitted", Object: "c-one", Source: "DcimCable", Reason: "other than two ends (1)"},
 		ctm.FidelityRow{Disposition: "omitted", Object: "c-out", Source: "DcimCable", Reason: "an end outside the scope (id-cs1:port1)"},
 		ctm.FidelityRow{Disposition: "omitted", Object: "c-three", Source: "DcimCable", Reason: "other than two ends (3)"},
+		ctm.FidelityRow{Disposition: "omitted", Object: "c-virtual", Source: "DcimCable", Reason: "an end not on a physical port (InterfaceVirtual)"},
 		ctm.FidelityRow{Disposition: "omitted", Object: "cable-console", Source: "DcimCable", Reason: "an end not on a physical port (DcimConsolePort)"},
 		platformRow,
 	)
@@ -80,7 +86,7 @@ func TestCablesTheReadCannotPlace(t *testing.T) {
 	if len(c.Links) != 3 {
 		t.Errorf("links %+v; want the fixture's three alone", c.Links)
 	}
-	for _, port := range []struct{ device, name string }{{"n1", "ethernet-1/3"}, {"n1", "ethernet-1/5"}, {"n2", "ethernet-1/4"}, {"n3", "ethernet-1/3"}} {
+	for _, port := range []struct{ device, name string }{{"n1", "ethernet-1/3"}, {"n1", "ethernet-1/5"}, {"n2", "ethernet-1/4"}, {"n3", "ethernet-1/3"}, {"n3", "ethernet-1/4"}} {
 		if in := c.Device(port.device).Interface(port.name); in == nil || in.Link != "" {
 			t.Errorf("%s:%s is %+v; want it read, linked to nothing", port.device, port.name, in)
 		}
@@ -88,8 +94,13 @@ func TestCablesTheReadCannotPlace(t *testing.T) {
 	if c.Device("cs1") != nil {
 		t.Error("the device outside the scope was read")
 	}
-	if n := intent.Summarize(c).CablesOmitted; n != 4 {
-		t.Errorf("CablesOmitted %d, want 4", n)
+	if n := intent.Summarize(c).CablesOmitted; n != 5 {
+		t.Errorf("CablesOmitted %d, want 5", n)
+	}
+	for _, d := range c.Devices {
+		if d.Interface("lo0") != nil {
+			t.Errorf("%s reads the virtual interface lo0", d.Name)
+		}
 	}
 }
 

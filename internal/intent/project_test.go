@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -128,6 +129,165 @@ func TestReadAsksForNothingOutsideItsScope(t *testing.T) {
 				t.Errorf("operation %s asks for %q, which the mapping never reads", r.Operation, never)
 			}
 		}
+	}
+}
+
+// The device's own role, status and device type are never read (FR-010): the Devices
+// operation selects none of them on the DcimDevice node, which the never-list above cannot
+// say, since the Ports operation reads a port's role and status and an artifact's status
+// is selected inside the device's artifacts. The device's own fields are the top level of
+// DcimDevice.edges.node's selection, ArtifactFields' spread expanded to its top level.
+func TestDevicesReadsNotTheDevicesRoleStatusOrType(t *testing.T) {
+	f := newFakeInfrahub(t)
+	if _, list, err := readFake(t, f); err != nil || list.Rejected() {
+		t.Fatalf("findings %v, %v; want a clean read", list, err)
+	}
+	devices := f.graphql("Devices")
+	if len(devices) == 0 {
+		t.Fatal("no Devices operation was sent")
+	}
+	for _, r := range devices {
+		fields := deviceFields(t, r.Query)
+		for _, want := range []string{"id", "name", "platform", "artifacts"} {
+			if !slices.Contains(fields, want) {
+				t.Fatalf("the device's fields %v lack %q; the walk is reading the wrong selection", fields, want)
+			}
+		}
+		for _, never := range []string{"role", "status", "device_type"} {
+			if slices.Contains(fields, never) {
+				t.Errorf("the Devices operation selects the device's %q (fields %v), which the mapping never reads", never, fields)
+			}
+		}
+	}
+}
+
+// deviceFields is the names a Devices query selects on the DcimDevice node itself: the top
+// level of DcimDevice.edges.node's selection set, each fragment spread's and inline
+// fragment's own top level included, every argument list and deeper selection skipped.
+func deviceFields(t *testing.T, query string) []string {
+	t.Helper()
+	tokens := regexp.MustCompile(`\.\.\.|[A-Za-z_][A-Za-z0-9_]*|[{}()]`).FindAllString(query, -1)
+	closeOf := func(i int) int {
+		depth := 0
+		for j := i; j < len(tokens); j++ {
+			switch tokens[j] {
+			case "{", "(":
+				depth++
+			case "}", ")":
+				if depth--; depth == 0 {
+					return j
+				}
+			}
+		}
+		t.Fatalf("unbalanced query:\n%s", query)
+		return 0
+	}
+	// setOf is the index of the "{" opening the selection of the field at i, past its
+	// arguments.
+	setOf := func(i int) int {
+		j := i + 1
+		if tokens[j] == "(" {
+			j = closeOf(j) + 1
+		}
+		if tokens[j] != "{" {
+			t.Fatalf("%s selects nothing in:\n%s", tokens[i], query)
+		}
+		return j
+	}
+	fragment := func(name string) int {
+		for k := 0; k+4 < len(tokens); k++ {
+			if tokens[k] == "fragment" && tokens[k+1] == name {
+				return k + 4
+			}
+		}
+		t.Fatalf("no fragment %s in:\n%s", name, query)
+		return 0
+	}
+	var top func(open int) []string
+	top = func(open int) []string {
+		var out []string
+		end := closeOf(open)
+		for j := open + 1; j < end; j++ {
+			switch tok := tokens[j]; {
+			case tok == "(" || tok == "{":
+				j = closeOf(j)
+			case tok == "..." && tokens[j+1] == "on":
+				out = append(out, top(j+3)...)
+				j = closeOf(j + 3)
+			case tok == "...":
+				out = append(out, top(fragment(tokens[j+1]))...)
+				j++
+			default:
+				out = append(out, tok)
+			}
+		}
+		return out
+	}
+	// child is the "{" opening the selection of the field name at the top level of open's.
+	child := func(open int, name string) int {
+		depth := 0
+		for j := open + 1; j < closeOf(open); j++ {
+			switch tokens[j] {
+			case "{", "(":
+				depth++
+			case "}", ")":
+				depth--
+			default:
+				if depth == 0 && tokens[j] == name {
+					return setOf(j)
+				}
+			}
+		}
+		t.Fatalf("no %s in:\n%s", name, query)
+		return 0
+	}
+	root := slices.Index(tokens, "DcimDevice")
+	if root < 0 {
+		t.Fatalf("no DcimDevice in:\n%s", query)
+	}
+	return top(child(child(setOf(root), "edges"), "node"))
+}
+
+// A device with two management ports (spec Edge Cases): the read marks both mgmt_only, each
+// port's role being management, and the compile keeps the first by name and omits the
+// second by name, omit.mgmt.extra, as the compiler's
+// TestSecondManagementPortIsOmittedAndRecorded holds for a hand-built CTM (FR-004).
+func TestReadOfTwoManagementPortsCompilesOne(t *testing.T) {
+	f := newFakeInfrahub(t)
+	n1 := f.device("n1")
+	n1.Ports = append(n1.Ports, &fakePort{ID: "n1:mgmt1", Name: "mgmt1", Role: "management"})
+
+	c, list, err := readFake(t, f)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list.Rejected() || c == nil {
+		t.Fatalf("findings %v; want a clean read", list)
+	}
+	for _, name := range []string{"mgmt0", "mgmt1"} {
+		if in := c.Device("n1").Interface(name); in == nil || !in.MgmtOnly {
+			t.Errorf("n1's %s %+v; want it read mgmt_only", name, in)
+		}
+	}
+	reg, err := psp.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, id, list := stage.Compile(c, reg)
+	if files == nil || id == "" || list.Rejected() {
+		t.Fatalf("the compile refused: %v", list)
+	}
+	var extra []findings.Finding
+	for _, f := range list {
+		if f.Rule == findings.RuleOmitMgmtExtra {
+			extra = append(extra, f)
+		}
+	}
+	want := findings.Finding{Severity: findings.Info, Rule: findings.RuleOmitMgmtExtra, Object: "n1:mgmt1",
+		Message: "one management connection per node"}
+	if len(extra) != 1 || extra[0].Severity != want.Severity || extra[0].Object != want.Object || extra[0].Message != want.Message {
+		t.Errorf("omit.mgmt.extra findings %+v; want one, %+v", extra, want)
 	}
 }
 

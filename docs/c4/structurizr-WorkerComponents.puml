@@ -33,6 +33,7 @@ System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
 
 }
 
+Rel(Fylgja.fylgjaworkerrun.lab, Fylgja.fylgjaworkerrun.labwire, "Takes and returns the payloads", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun.lab, Fylgja.fylgjaworkerrun.verify, "VerifyTwin waits", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun.verify, Fylgja.fylgjaworkerrun.labwire, "Reads the record's types", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun.rehearsal, Fylgja.fylgjaworkerrun.labwire, "Compares the waits' findings; sums the node plans' budgets", $techn="", $tags="Relationship", $link="")
@@ -41,7 +42,6 @@ Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.lab, "Registers the
 Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.stage, "ReadIntent, Compile", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.rehearsal, "Classifies each stage", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaworkerrun.provision, Fylgja.fylgjaworkerrun.verify, "Takes the wait's default budget for the deadline", $techn="", $tags="Relationship", $link="")
-Rel(Fylgja.fylgjaworkerrun.lab, Fylgja.fylgjaworkerrun.labwire, "Takes and returns the payloads", $techn="", $tags="Relationship", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

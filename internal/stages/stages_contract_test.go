@@ -927,13 +927,17 @@ func TestStagesSeeEveryWriteOfADevice(t *testing.T) {
 }
 
 // D-048 against the real Infrahub: the cable n1:ethernet-1/1 — n2:ethernet-1/1 deleted, by
-// DcimCableDelete, as the branch's latest write moves no stamp the stamps read selects
-// (014 research §8.17; 017 §1.7), and
-// the head moves past the delete all the same, by the branch's intent events. A stage
-// marked after the delete, and the head, are refused stale for n1 and n2, whose interfaces
-// the events name, and for no other; a mark before it, after the query groups' churn that
-// follows every generation, is fresh. A regenerate then clears the head, which reads two
-// links, and leaves the mark after the delete stale: its artifacts are the ones it read.
+// DcimCableDelete, as the branch's latest write. Unlike NetworkLink's delete (014 research
+// §8.17) and unlike a cable's re-ending (017 §5.8), it stamps its two end ports at its own
+// write (017 §5.11), so n1's and n2's intent stamps and the branch's latest move to it and
+// n3's does not. This test asserted D-048's premise, that the delete moves no stamp, until
+// CI's contract job on c006bf9 found the ports stamped (017 T057); the premise check went,
+// and the event read stays, since a re-ending is still stamped nowhere. The delete's events
+// land after its stamp, so the head moves past the stamps' head by them. A stage marked
+// after the delete, and the head, are refused stale for n1 and n2, naming the events, and
+// for no other; a mark before it, after the query groups' churn that follows every
+// generation, is fresh. A regenerate then clears the head, which reads two links, and
+// leaves the mark after the delete stale: its artifacts are the ones it read.
 func TestStagesSeeARemoval(t *testing.T) {
 	c := harness(t)
 	name := throwaway(t, c, true)
@@ -967,24 +971,34 @@ func TestStagesSeeARemoval(t *testing.T) {
 	t.Logf("seeded marked at %s; the delete sent at %s and returned at %s", seededAt,
 		sent.Format(time.RFC3339Nano), returned.Format(time.RFC3339Nano))
 	after := stamps()
-	if after.Latest != before.Latest {
-		// The premise of D-048: were a removal stamped, the event read could go (its Revisit).
-		t.Errorf("the delete moved the branch's latest stamp from %s to %s; D-048's premise no longer holds", before.Latest, after.Latest)
+	// The delete's own stamp, on its two end ports (017 §5.11): the branch's latest, and
+	// n1's and n2's intent, move to it; n3 reaches neither port.
+	latestBefore, errBefore := time.Parse(time.RFC3339Nano, before.Latest)
+	latestAfter, errAfter := time.Parse(time.RFC3339Nano, after.Latest)
+	if errBefore != nil || errAfter != nil || !latestAfter.After(latestBefore) {
+		t.Errorf("the delete left the branch's latest stamp at %s (before it %s); want it moved to the delete's", after.Latest, before.Latest)
 	}
-	for _, d := range []string{"n1", "n2", "n3"} {
-		if after.Devices[d].Intent != before.Devices[d].Intent {
-			t.Errorf("the delete moved %s's intent stamp from %s to %s", d, before.Devices[d].Intent, after.Devices[d].Intent)
+	for _, d := range []string{"n1", "n2"} {
+		if got := after.Devices[d].Intent; got != after.Latest {
+			t.Errorf("after the delete %s's intent stamp is %s (before it %s); want the delete's, the branch's latest %s",
+				d, got, before.Devices[d].Intent, after.Latest)
 		}
 	}
-	// The delete's events are stamped about when it returns, and land in the log after it,
-	// in under half a second on an idle host and over a second under the tier's load
-	// (research §8.19): until they land the head is the stamps', before the delete. Wait for
-	// the head to pass the delete and settle, two reads a second apart agreeing.
+	if after.Devices["n3"].Intent != before.Devices["n3"].Intent {
+		t.Errorf("the delete moved n3's intent stamp from %s to %s", before.Devices["n3"].Intent, after.Devices["n3"].Intent)
+	}
+	t.Logf("the delete stamped n1's and n2's ports at %s; the branch's latest was %s", after.Latest, before.Latest)
+	// The delete's events are stamped about when it returns, later than its own stamp, and
+	// land in the log after it, in under half a second on an idle host and over a second
+	// under the tier's load (014 research §8.19): until they land the head is the stamps',
+	// at the delete's stamp. Wait for the head to pass the stamps' head by the events and
+	// settle, two reads a second apart agreeing.
 	stampsHead, _ := HeadAt(after.Latest)
+	stampsAt, _ := ParseAt(stampsHead)
 	headAfter, deadline := headOf("after the delete"), time.Now().Add(30*time.Second)
 	var passed time.Time
 	for {
-		if at, ok := ParseAt(headAfter); ok && at.After(sent) {
+		if at, ok := ParseAt(headAfter); ok && at.After(sent) && at.After(stampsAt) {
 			if passed.IsZero() {
 				passed = time.Now()
 				t.Logf("the head passed the delete at %s, %.1fs after it returned", headAfter, passed.Sub(returned).Seconds())

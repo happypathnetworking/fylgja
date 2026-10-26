@@ -25,8 +25,8 @@ func embeddedRegistry(t *testing.T) *psp.Registry {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := reg.Lookup("eos"); !ok {
-		t.Fatalf("no shipped package answers for nos eos; platforms: %v", reg.Platforms())
+	if _, ok := reg.LookupID("arista_eos"); !ok {
+		t.Fatalf("no shipped package has id arista_eos; platforms: %v", reg.Platforms())
 	}
 	return reg
 }

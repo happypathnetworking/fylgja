@@ -75,7 +75,7 @@ func TestOverrideWithOnlyANoteLoads(t *testing.T) {
 	if err != nil {
 		t.Fatalf("a package with only a note must load: %v", err)
 	}
-	if p, ok := reg.Lookup("srlinux"); !ok || p.Image.Acquisition != AcquisitionVrnetlabVM {
+	if p, ok := reg.LookupID("nokia_srlinux"); !ok || p.Image.Acquisition != AcquisitionVrnetlabVM {
 		t.Errorf("the override did not load: %+v", p)
 	}
 }
@@ -245,9 +245,9 @@ func TestEmbeddedLoads(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, ok := r.Lookup("srlinux")
+	p, ok := r.LookupID("nokia_srlinux")
 	if !ok {
-		t.Fatalf("srlinux not registered; have %v", r.Platforms())
+		t.Fatalf("nokia_srlinux not registered; have %v", r.Platforms())
 	}
 	if p.Config.StartupFormat != "cli" || len(p.Config.Bootstrap) == 0 {
 		t.Errorf("bootstrap not loaded: %+v", p.Config)
@@ -269,7 +269,7 @@ func TestOverrideDirectoryShadowsEmbedded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	base, _ := embedded.Lookup("srlinux")
+	base, _ := embedded.LookupID("nokia_srlinux")
 
 	dir := t.TempDir()
 	src, err := os.ReadFile(filepath.Join("..", "..", "psp", "nokia_srlinux.yaml"))
@@ -289,9 +289,9 @@ func TestOverrideDirectoryShadowsEmbedded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got, ok := reg.Lookup("srlinux")
+	got, ok := reg.LookupID("nokia_srlinux")
 	if !ok {
-		t.Fatal("srlinux disappeared when an override directory was supplied")
+		t.Fatal("nokia_srlinux disappeared when an override directory was supplied")
 	}
 	if got.Image.Ref != "example.invalid/srlinux:override" {
 		t.Errorf("image ref = %q, want the override's", got.Image.Ref)

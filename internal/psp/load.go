@@ -26,17 +26,12 @@ type Registry struct {
 	byMatch map[Match]*PSP
 }
 
-// Lookup returns the package for a NOS identifier, and whether one exists. A missing
-// package is data that has not been written, never a code path (Constitution II).
-func (r *Registry) Lookup(nos string) (*PSP, bool) {
-	p, ok := r.byNOS[nos]
-	return p, ok
-}
-
-// LookupID returns the package with a platform id: the join from a bundle manifest's
-// nodes[].psp.id, which is how provisioning finds a stored bundle's budgets and probe, and
-// from a CTM device's platform.package. No two packages of a registry share an id: Load
-// refuses one that would, so the package a device's pair matched is the one its id finds.
+// LookupID returns the package with a platform id, and whether one exists: the join from a
+// bundle manifest's nodes[].psp.id, which is how provisioning finds a stored bundle's
+// budgets and probe, and from a CTM device's platform.package. No two packages of a
+// registry share an id: Load refuses one that would, so the package a device's pair matched
+// is the one its id finds. A missing package is data that has not been written, never a
+// code path (Constitution II).
 func (r *Registry) LookupID(id string) (*PSP, bool) {
 	p, ok := r.byID[id]
 	return p, ok

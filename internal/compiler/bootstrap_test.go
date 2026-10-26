@@ -164,13 +164,13 @@ func TestShippedPackagesRenderTheirOwnHeader(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, tc := range []struct{ nos, want string }{
-		{"srlinux", "#"},
-		{"eos", "!"},
+	for _, tc := range []struct{ id, want string }{
+		{"nokia_srlinux", "#"},
+		{"arista_eos", "!"},
 	} {
-		p, ok := reg.Lookup(tc.nos)
+		p, ok := reg.LookupID(tc.id)
 		if !ok {
-			t.Fatalf("no shipped package for nos %s", tc.nos)
+			t.Fatalf("no shipped package has id %s", tc.id)
 		}
 		header, _, _ := strings.Cut(string(renderBootstrap(p, "n1", nil)), "\n")
 		if marker, _, _ := strings.Cut(header, " "); marker != tc.want {

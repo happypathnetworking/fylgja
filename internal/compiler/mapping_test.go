@@ -19,7 +19,7 @@ func srlinux(t *testing.T) *psp.PSP {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p, ok := r.Lookup("srlinux")
+	p, ok := r.LookupID("nokia_srlinux")
 	if !ok {
 		t.Fatal("srlinux support package not registered")
 	}

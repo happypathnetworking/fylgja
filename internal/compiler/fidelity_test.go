@@ -51,7 +51,7 @@ func twoPlatformRegistry(t *testing.T, secondForwarding string) *psp.Registry {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, ok := reg.Lookup("acme_os"); !ok {
+	if _, ok := reg.LookupID("acme_os"); !ok {
 		t.Fatalf("the derived package did not load; platforms: %v", reg.Platforms())
 	}
 	return reg

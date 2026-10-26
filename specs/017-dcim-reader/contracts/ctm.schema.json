@@ -76,7 +76,7 @@
         },
         "fidelity": {
           "type": "array",
-          "description": "017 (Constitution X): one row per field the reader approximated and per object it omitted, written by the reader and copied into the manifest's fidelity.read unchanged by the compiler, which holds no table of any source's rows. Sorted by (disposition, object). Every CTM of the Infrahub reader carries three rows (interface.mgmt_only and interface.enabled approximated, platform.version omitted) and one omitted row per cable it could not place; [] only for a reader that approximates and omits nothing.",
+          "description": "017 (Constitution X): one row per field the reader approximated and per object it omitted, written by the reader and copied into the manifest's fidelity.read unchanged by the compiler, which holds no table of any source's rows. Sorted by the whole row, (disposition, object), then source and reason, so two rows tying on disposition and object do not leave the manifest to the order they arrived in. Every CTM of the Infrahub reader carries three rows (interface.mgmt_only and interface.enabled approximated, platform.version omitted) and one omitted row per cable it could not place; [] only for a reader that approximates and omits nothing.",
           "items": {
             "type": "object",
             "required": [

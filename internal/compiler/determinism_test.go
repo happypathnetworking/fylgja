@@ -2,10 +2,14 @@ package compiler
 
 import (
 	"bytes"
+	"encoding/json"
+	"reflect"
 	"testing"
 	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/bundle"
+	"github.com/happypathnetworking/fylgja/internal/ctm"
+	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
 // sameBundle compares two compiles file by file, in both directions: a file that
@@ -82,6 +86,51 @@ func TestMixedCompileIgnoresInputOrder(t *testing.T) {
 	}
 	if id := bundle.ID(shuffled); id != goldenMixedID {
 		t.Errorf("the shuffled mixed fixture compiled to %s, want the golden's %s", id, goldenMixedID)
+	}
+}
+
+// Two fidelity rows that tie on (disposition, object), as two omissions of one cable for
+// different reasons would, are ordered by source, then reason: either order of arrival
+// gives one manifest and one bundle_id (Constitution V; T092). The Infrahub reader cannot
+// write such a tie, DcimCable.label being unique; a hand-written CTM or a later reader can.
+func TestTiedFidelityRowsIgnoreInputOrder(t *testing.T) {
+	reg, err := psp.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ends := ctm.FidelityRow{Disposition: ctm.FidelityOmitted, Object: "c-9", Source: "DcimCable", Reason: "other than two ends (3)"}
+	port := ctm.FidelityRow{Disposition: ctm.FidelityOmitted, Object: "c-9", Source: "DcimCable", Reason: "an end not on a physical port (DcimConsolePort)"}
+	other := ctm.FidelityRow{Disposition: ctm.FidelityOmitted, Object: "c-9", Source: "AcmeCable", Reason: "other than two ends (3)"}
+	compileWith := func(rows ...ctm.FidelityRow) map[string][]byte {
+		t.Helper()
+		c := loadFixture(t, "testdata/ctm/three-node.json")
+		c.Envelope.Fidelity = append(c.Envelope.Fidelity, rows...)
+		files, list := Compile(c, reg)
+		if list.Rejected() {
+			t.Fatalf("refused: %v", list)
+		}
+		return files
+	}
+
+	first := compileWith(ends, port, other)
+	second := compileWith(other, port, ends)
+	sameBundle(t, "the tied rows' order", first, second)
+	if bundle.ID(first) != bundle.ID(second) {
+		t.Errorf("the tied rows' order changed the bundle id: %s vs %s", bundle.ID(first), bundle.ID(second))
+	}
+
+	var m Manifest
+	if err := json.Unmarshal(first[ManifestFile], &m); err != nil {
+		t.Fatal(err)
+	}
+	var tied []ctm.FidelityRow
+	for _, r := range m.Fidelity.Read {
+		if r.Object == "c-9" {
+			tied = append(tied, r)
+		}
+	}
+	if want := []ctm.FidelityRow{other, port, ends}; !reflect.DeepEqual(tied, want) {
+		t.Errorf("the tied rows read %+v, want them by source, then reason: %+v", tied, want)
 	}
 }
 

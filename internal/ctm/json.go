@@ -43,12 +43,21 @@ func Normalize(c *CTM) {
 	if c.Envelope.Fidelity == nil {
 		c.Envelope.Fidelity = []FidelityRow{}
 	}
+	// By the whole row: two rows that tie on (disposition, object), as two omissions of one
+	// object for different reasons would, are ordered by source, then reason, so the
+	// manifest that copies the list does not depend on the order its rows arrived in.
 	sort.SliceStable(c.Envelope.Fidelity, func(x, y int) bool {
 		a, b := c.Envelope.Fidelity[x], c.Envelope.Fidelity[y]
 		if a.Disposition != b.Disposition {
 			return a.Disposition < b.Disposition
 		}
-		return a.Object < b.Object
+		if a.Object != b.Object {
+			return a.Object < b.Object
+		}
+		if a.Source != b.Source {
+			return a.Source < b.Source
+		}
+		return a.Reason < b.Reason
 	})
 	for i := range c.Devices {
 		d := &c.Devices[i]

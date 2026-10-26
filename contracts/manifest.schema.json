@@ -394,7 +394,7 @@
         },
         "read": {
           "type": "array",
-          "description": "017 (Constitution X; FR-029): the CTM envelope’s fidelity list, copied unchanged: one row per field the reader approximated and per source object it omitted, sorted by (disposition, object). Beside the packages’ `approximations` and the compiler’s `omitted` and `lossy`; [] only for a reader that wrote none.",
+          "description": "017 (Constitution X; FR-029): the CTM envelope’s fidelity list, copied unchanged: one row per field the reader approximated and per source object it omitted, sorted by the whole row, (disposition, object), then source and reason, as the CTM sorts it, so the bundle does not depend on the order its rows arrived in. Beside the packages’ `approximations` and the compiler’s `omitted` and `lossy`; [] only for a reader that wrote none.",
           "items": {
             "type": "object",
             "required": [

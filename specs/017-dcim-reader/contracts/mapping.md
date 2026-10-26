@@ -134,8 +134,11 @@ port is the port whose role is management; the library has no management-only fl
 `{approximated, interface.enabled, InterfacePhysical.status, "a port is enabled unless
 its status is disabled; the library's status is not an admin state"}`, `{omitted,
 platform.version, DcimPlatform, "the library's platform carries no version"}`; then one
-`{omitted, <cable>, DcimCable, <the finding's reason>}` per cable of §4. Sorted by
-(disposition, object). The compiler copies the list into the manifest's `fidelity.read`.
+`{omitted, <cable>, DcimCable, <the finding's reason>}` per cable of §4. Sorted by the
+whole row, (disposition, object), then source and reason: this reader writes no two rows
+tying on disposition and object, `DcimCable.label` being unique, but a hand-written CTM or
+another reader can, and the bundle must not depend on the order they arrived in (T092).
+The compiler copies the list into the manifest's `fidelity.read`.
 
 ## 6. The stamps and the events, for stages
 

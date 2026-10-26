@@ -177,7 +177,8 @@ func TestManifestCopiesTheFidelityList(t *testing.T) {
 		Reason:      "an invented reason the compiler has never seen, of a source it does not know",
 	}
 	c.Envelope.Fidelity = append(c.Envelope.Fidelity, invented)
-	// The list in its canonical order, (disposition, object), as any CTM is compiled.
+	// The list in its canonical order, (disposition, object, source, reason), as any CTM
+	// is compiled.
 	ctm.Normalize(c)
 	want := append([]ctm.FidelityRow{}, c.Envelope.Fidelity...)
 

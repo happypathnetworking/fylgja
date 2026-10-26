@@ -55,7 +55,8 @@ type Envelope struct {
 	// Mapping names the reader that produced this CTM and the model version it read.
 	Mapping Mapping `json:"mapping"`
 	// Fidelity is the reader's list of what it approximated and what it omitted, sorted
-	// by (disposition, object) and written [] rather than null. The compiler copies it
+	// by the whole row, (disposition, object, source, reason), and written [] rather than
+	// null. The compiler copies it
 	// into the manifest unchanged and holds no table of any source's rows (FR-029).
 	Fidelity []FidelityRow `json:"fidelity"`
 }

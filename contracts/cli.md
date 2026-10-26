@@ -1010,8 +1010,8 @@ otherwise. `platform.unsupported` stays, for a CTM naming a package this build l
   `envelope.mapping.reader` not `^[a-z0-9][a-z0-9-]*$`, and a fidelity row of a
   disposition other than `approximated` and `omitted`
   (`envelope.fidelity[<i>].disposition`) or with its `object`, `source` or `reason` empty
-  (`envelope.fidelity[<i>].reason`, …), `<i>` its place in the list sorted by
-  (disposition, object). So a CTM validation accepts compiles to a manifest
+  (`envelope.fidelity[<i>].reason`, …), `<i>` its place in the list sorted by the whole
+  row, (disposition, object, source, reason). So a CTM validation accepts compiles to a manifest
   `manifest.schema.json` accepts, and a record refuses a provenance naming a scope or a
   reader of another form, as `twin.schema.json` does.
 - A `7` record reads with no scope: `twin show` shows it, `twin step` refuses it, `twin

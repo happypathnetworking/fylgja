@@ -111,7 +111,8 @@ management; the library has no management-only flag"}`, `{approximated,
 interface.enabled, InterfacePhysical.status, "a port is enabled unless its status is
 disabled; the library's status is not an admin state"}` and `{omitted, platform.version,
 DcimPlatform, "the library's platform carries no version"}`, then one `{omitted, <cable>,
-DcimCable, <reason>}` per omitted cable, sorted by disposition and object. The compiler
+DcimCable, <reason>}` per omitted cable, sorted by the whole row: disposition, object,
+source, then reason. The compiler
 copies the list into the manifest's `fidelity.read` unchanged and holds no table of its own.
 
 **Stamps, for stages.** A device's intent stamp is the latest node stamp among the device,

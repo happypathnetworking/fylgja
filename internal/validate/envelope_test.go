@@ -29,11 +29,11 @@ func row(disposition, object, source, reason string) ctm.FidelityRow {
 // envelopeCases are the envelope's forms, each as the contracts give it
 // (contracts/ctm.schema.json, manifest.schema.json): the scope tag:<name>, the reader's
 // name, and each fidelity row's disposition and fields. Rows are named by their place in
-// the list as Normalize sorts it, by (disposition, object), the order the manifest copies:
-// the three-node fixture's rows are interface.enabled, interface.mgmt_only (approximated)
-// and platform.version (omitted), so a row appended for cable c-9 is the third, index 2,
-// whether it is omitted or of disposition bogus, and an approximated row with no object
-// the first.
+// the list as Normalize sorts it, by (disposition, object, source, reason), the order the
+// manifest copies: the three-node fixture's rows are interface.enabled,
+// interface.mgmt_only (approximated) and platform.version (omitted), so a row appended for
+// cable c-9 is the third, index 2, whether it is omitted or of disposition bogus, and an
+// approximated row with no object the first.
 var envelopeCases = []envelopeCase{
 	{"scope fylgja", func(e *ctm.Envelope) { e.Scope = "fylgja" }, "envelope.scope",
 		`the scope intent was read under is "fylgja", which is not a scope: the accepted form is tag:<name>, the literal tag: and one word`},

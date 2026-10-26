@@ -23,7 +23,7 @@ func sample() *CTM {
 			SchemaHash: "fixture",
 			Scope:      "tag:fylgja",
 			Mapping:    Mapping{Reader: ReaderInfrahubDCIM, Model: ModelSchemaLibrary, Version: ModelVersion},
-			// Out of order on purpose: Normalize sorts by (disposition, object).
+			// Out of order on purpose: Normalize sorts by (disposition, object, source, reason).
 			Fidelity: []FidelityRow{
 				{Disposition: FidelityOmitted, Object: "platform.version", Source: "DcimPlatform",
 					Reason: "the library's platform carries no version"},

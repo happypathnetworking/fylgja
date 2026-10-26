@@ -34,7 +34,7 @@ type Envelope struct {
     SchemaHash string        `json:"schema_hash"`
     Scope      string        `json:"scope"`
     Mapping    Mapping       `json:"mapping"`
-    Fidelity   []FidelityRow `json:"fidelity"`   // sorted by (disposition, object); [] never null
+    Fidelity   []FidelityRow `json:"fidelity"`   // sorted by (disposition, object, source, reason); [] never null
 }
 type Mapping struct {        // which reader, which model, which version of it
     Reader  string `json:"reader"`   // "infrahub-dcim"

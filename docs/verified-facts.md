@@ -491,6 +491,12 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   port's (level 1, `connector → <cable>`), read 2 s after the write. A device created on a
   platform is `DcimPlatform updated` naming the device. *(10-25, 10-26;
   `specs/017-dcim-reader/research.md` §1.4, §1.8, §5.8)*
+  - **The order of a device's creation.** The device's own `created` comes first, naming
+    its platform and site as peers. About 1.6 ms later comes `DcimPlatform updated`
+    (`devices → <device>`), then `LocationSite updated` 2.4 ms after that.
+  - So the platform's event is the latest one naming the platform, about 70 ms after the
+    platform's stamp moved.
+  *(10-26; `specs/017-dcim-reader/research.md` §5.17)*
 
 **Checks, and the proposed change's view (015)**
 

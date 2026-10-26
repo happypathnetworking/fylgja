@@ -1625,7 +1625,12 @@ To be stated in the product surface, not buried here.
   of its interfaces, its platform, its manufacturer or one of its cables, as the event's
   node or a peer ([D-048](decisions.md#d-048)): a cable removed between them names both ends, an edit of the neighbour's own attributes does
   not. The proposed change's checks cover it, since a run-check re-stamps the validator
-  for every device.
+  for every device. The rule also over-reports, on purpose: a platform or a manufacturer
+  is a node every device on it reaches, and its stamp counts its reverse edges. So an
+  untagged device created on, or moved onto or off, the tagged devices' platform, or a
+  platform created under, or moved onto or off, their manufacturer, moves that shared
+  node's stamp and names it in an event, and every tagged device's mark on it reads stale
+  until a regenerate.
 - **A lossy mapping loses interfaces.** Where a container has fewer ports than the
   production device has interfaces, an interface that shares a port with a cabled one is
   omitted, and the manifest names it (`fidelity.lossy`, `omit.interface.shared`). An

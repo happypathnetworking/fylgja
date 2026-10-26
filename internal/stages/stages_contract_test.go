@@ -810,21 +810,16 @@ func TestStageRefusals(t *testing.T) {
 // that reaches it, and on no other. The platform's description and the manufacturer's reach
 // the three devices on them; the cable on n1:ethernet-1/1 re-ended to n1's port alone reaches
 // n1 and n2, by the cable's event and its former port's, since no stamp moves; a virtual
-// interface added to n1 reaches n1 alone. A write of cs1's own, an untagged device on the
-// same platform, makes no mark stale. Only the re-ending renders differently, so the
-// proposed change's checks clear each write before the next (D-046), and a mark after them
-// is fresh. The virtual interface goes last: the template's query reads every interface, and
-// the first generation to read a node moves its stamp (§5.8).
+// interface added to n1 reaches n1 alone. cs1, an untagged device, created on the platform
+// the three stand on reaches all three, by the platform's reverse devices edge and its update
+// event, an over-report US5 scenario 2 accepts (T077); a write of cs1's own makes no mark
+// stale. Only the re-ending renders differently, so the proposed change's checks clear each
+// write before the next (D-046), and a mark after them is fresh. The virtual interface goes
+// last: the template's query reads every interface, and the first generation to read a node
+// moves its stamp (§5.8).
 func TestStagesSeeEveryWriteOfADevice(t *testing.T) {
 	c := harness(t)
 	name := throwaway(t, c, true)
-	// cs1 is outside the scope. Its creation on the platform moves the platform's stamp, and
-	// so every tagged device's (§5.8): it is written before the proposed change, whose
-	// pipeline's artifact validator completes after it.
-	if _, err := c.AddDevice(name, testsupport.Device{Name: "cs1", Manufacturer: "Nokia", Platform: "SR Linux",
-		Ports: []string{"mgmt0", "ethernet-1/1"}, Management: "mgmt0"}); err != nil {
-		t.Fatal(err)
-	}
 	id := propose(t, c, name)
 	reader := stageReader(t)
 	resolve := func(label string) findings.List {
@@ -851,29 +846,67 @@ func TestStagesSeeEveryWriteOfADevice(t *testing.T) {
 		}
 		return messages
 	}
-	// mark writes a mark after a write and judges it; then, when the write is not the last,
-	// the proposed change's checks complete its artifact validator anew and a second mark
-	// after them is fresh, so that the next write's mark is stale by that write alone.
+	// checked has the proposed change's checks complete its artifact validator anew after a
+	// write, and a second mark after them is fresh, so that the next write's mark is stale by
+	// that write alone.
+	checked := func(label, what string) {
+		t.Helper()
+		started := time.Now()
+		completed, err := c.RunCheck(id, 180*time.Second)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Logf("after %s, the run-check's artifact validator completed at %s, %.0fs after the call", what, completed,
+			time.Since(started).Seconds())
+		markStage(t, c, id, label+"-checked", "", what+", checked")
+		fresh(label + "-checked")
+	}
+	// mark writes a mark after a write and judges it, then clears the write when it is not
+	// the last.
 	mark := func(label, what string, last bool, devices ...string) []string {
 		t.Helper()
 		markStage(t, c, id, label, "", what)
 		messages := stale(label, devices...)
 		if !last {
-			started := time.Now()
-			completed, err := c.RunCheck(id, 180*time.Second)
-			if err != nil {
-				t.Fatal(err)
-			}
-			t.Logf("after %s, the run-check's artifact validator completed at %s, %.0fs after the call", what, completed,
-				time.Since(started).Seconds())
-			markStage(t, c, id, label+"-checked", "", what+", checked")
-			fresh(label + "-checked")
+			checked(label, what)
 		}
 		return messages
 	}
 
 	markStage(t, c, id, "seeded", "", "seeded")
 	fresh("seeded")
+
+	// cs1 is outside the scope, and created on the platform every tagged device stands on:
+	// the platform's node_metadata counts its reverse devices edge, so its stamp moves, and
+	// so every tagged device's, and its update event names the platform (§5.8). The events
+	// land a few seconds after the write, so the mark is judged again until every finding
+	// names one; then a regenerate clears it.
+	if _, err := c.AddDevice(name, testsupport.Device{Name: "cs1", Manufacturer: "Nokia", Platform: "SR Linux",
+		Ports: []string{"mgmt0", "ethernet-1/1"}, Management: "mgmt0"}); err != nil {
+		t.Fatal(err)
+	}
+	markStage(t, c, id, "untagged-created", "", "cs1 created on the platform")
+	const event = "(Infrahub's event log: "
+	namesEvents := func(list findings.List) bool {
+		for _, f := range list {
+			if !strings.Contains(f.Message, event) {
+				return false
+			}
+		}
+		return len(list) != 0
+	}
+	list := resolve("untagged-created")
+	for deadline := time.Now().Add(30 * time.Second); !namesEvents(list) && time.Now().Before(deadline); {
+		time.Sleep(time.Second)
+		list = resolve("untagged-created")
+	}
+	for _, m := range refused(t, name+"/untagged-created", list, findings.RuleStageArtifactStale, "n1", "n2", "n3") {
+		t.Logf("%s/untagged-created: %s", name, m)
+		if !strings.Contains(m, remedy) || !strings.Contains(m, event+"infrahub.node.updated of a DcimPlatform; ") {
+			t.Errorf("%s/untagged-created: %q; want both remedies and the platform's update event named", name, m)
+		}
+	}
+	checked("untagged-created", "cs1 created on the platform")
 
 	// cs1's own write: its node is no tagged device's, nor in any one's ids.
 	if err := c.SetDeviceDescription(name, "cs1", "untagged-description"); err != nil {

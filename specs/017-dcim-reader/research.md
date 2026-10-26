@@ -2206,3 +2206,48 @@ so T079's route (a) amends the spec's edge case to it. No code changes.
 
 **Afterwards.** The throwaway server had exited, the operator's two processes were
 unchanged, and nothing had been written to Infrahub.
+
+<a id="5-17"></a>
+### 5.17 An untagged device created on the tagged devices' platform, pinned (T077; 2026-10-26, 19:36Z–19:42Z)
+
+Run 25 of the converge loop: convergence pass 1's T077, answered (a) by the operator. US5
+scenario 2 now excepts this write as an over-report, and this run pins it in tier 2.
+Nothing was written to `main`, and no token was printed.
+
+**The test.** `TestStagesSeeEveryWriteOfADevice` (`internal/stages`) no longer writes
+`cs1` before the proposed change. After the fresh `seeded` mark it creates `cs1`, untagged,
+on `Nokia` / `SR Linux` with two ports, and marks `untagged-created`.
+
+- That mark is refused `stage.artifact.stale` for `n1`, `n2` and `n3`, each naming both
+  remedies and `infrahub.node.updated of a DcimPlatform`. The mark is judged again, up to
+  30 s, until every finding names an event.
+- The proposed change's checks then clear it, and a mark after them is fresh. The rest of
+  the test is unchanged.
+
+**The run.** `go test -count=1 -tags contract -run '^TestStagesSeeEveryWriteOfADevice$'
+./internal/stages` passed in **264.3 s** on `fylgja-test-st-1793043361-7935`. The
+proposed change's pipeline concluded after 52 s. Four run-checks took 30 s, 21 s, 23 s and
+25 s, the first of them clearing `cs1`'s creation. The test's cleanup deleted 11 stages,
+the proposed change and the branch.
+
+- **Each tagged device's finding** read `written at 2026-10-26T19:37:38.857610+00:00
+  (Infrahub's event log: infrahub.node.updated of a DcimPlatform; its latest stamp
+  2026-10-26T19:37:38.788762+00:00)`.
+  - That is later than its checksum (19:36:37Z) and than the creation pipeline's artifact
+    validator (19:37:28.568322Z).
+  - The platform's stamp moved to `cs1`'s creation, and its update event came 69 ms later.
+- **The log**, read afterwards from `main` with `InfrahubEvent(branches: [<the deleted
+  branch>])`, held these events of the creation's mutation:
+  - `infrahub.node.created` of the `DcimDevice` at .856016, naming the platform and the
+    site as peers;
+  - `infrahub.node.updated` of the `DcimPlatform` at .857610, its `devices` naming `cs1`;
+  - `infrahub.node.updated` of the `LocationSite` at .859965;
+  - then each port's `created` and `cs1`'s `interfaces` update, from .928780.
+- **Why the platform's event is named.** Both the device's creation and the platform's
+  update name the platform, and the stale rule names the latest event naming the device.
+  The platform's update follows the device's creation in the same mutation, so it is the
+  one named. The site is no kind the events keep.
+
+**Afterwards**, `Branch` lists `main` and `fylgja-fixture` alone, and
+`CoreProposedChange`, `FylgjaStage`, `CoreChangeThread`, `CoreUserValidator` and
+`DcimDevice` on `main` count 0. `main`'s hash is `7c413536…`.

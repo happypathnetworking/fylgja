@@ -989,12 +989,40 @@ in `description`.
       - 11.9 GiB is available. Infrahub's containers hold about 14 GiB, its server 7.1 GiB of that, against `CLAUDE.md`'s 5.2 GiB at idle. Read `free -m` again before T063.
   - *2026-10-26, the attended session, under the loop's pause at `f8aaa9c`:* **answered by the operator** (question 1 of the run started 2026-10-25T23:49Z, answers `1a 2a`). (1) The variable: `local/.env` holds `FYLGJA_DEFAULT_SCOPE='tag:fylgja'` (line 7, single-quoted like the file's other values, written by hand at 12:20Z before the answer landed; it loads as `tag:fylgja`), so nothing was appended. The server reads it only at start: the next live session restarts it from a shell that loaded the file, and its report reads `default scope: tag:fylgja`. (2) The go-ahead for `main`'s migration is given, and **a live session runs it**: T056 is the loop's Run 16, and the loop runs no other session against Infrahub while it does, which is what the precondition's "no loop" means here. Run 15's read at 03:44Z found the precondition holding.
 
-- [ ] T056 [live] [US6] Migrate `main` (quickstart §2 steps 1–2; research §1.9, R-13, R-14 steps 1–2), with `local/.env` loaded:
+- [X] T056 [live] [US6] Migrate `main` (quickstart §2 steps 1–2; research §1.9, R-13, R-14 steps 1–2), with `local/.env` loaded:
   - **The two documents**: `.venv/bin/infrahubctl schema check --branch main specs/017-dcim-reader/migration/1-reference-kinds-absent.yaml`, then `schema load` of the same; then `check` and `load` of `2-generics-absent.yaml`, about 50 s each. Expect `removed:` naming the five, then the four.
   - **Verify**: `GET /api/schema?branch=main` lists `FylgjaStage` alone of the `Fylgja*` and `Network*` kinds, and a new hash. `FylgjaStage` and its `CoreProposedChange` extension are untouched.
   - **The library**: `go run -tags fixture ./cmd/fylgja-fixture -prepare-main` prints `schema library loaded on main (6 files, opsmill/schema-library@26336e9)`, `stage kind present`, `group fylgja-devices present` and `repository fylgja present`. Run it again: it refuses, exit 1, naming the kinds it found (the number found, 21 expected), and writes nothing.
   - **Record** in research §5.3: each output, `main`'s new hash from `/api/schema/summary`, and the timings.
   - *2026-10-26, the attended session, under the loop's pause at `f8aaa9c`:* the operator gave the go-ahead at T055 (answer `2a`): this live session runs the migration. Run 15's report found this task's count wrong: `-prepare-main`'s refusal names **27** kinds, not 21, as quickstart §2, T031's live check (research §5.2) and `LibraryKinds` over the six files all say. Expect 27.
+  - *2026-10-26 12:31Z, at `97856b3`, Run 16 of the converge loop (live):* done. The record is research §5.10, not §5.3: T036's conformance record (Run 10) already holds §5.3.
+    - **The precondition held at 12:24Z**, as Run 15 read it at 03:44Z. `main` was `e43a1cde…`. The nine kinds, the artifacts, proposed changes, stages, threads and validators each counted 0, and the group had no member. `Branch` listed `main` and `fylgja-fixture` alone. There was no container, `local/twin`, Schedule or running workflow.
+    - **The first document**: its check named the five kinds under `removed:`. Its load took 47.2 s, against the rehearsal's 50.6 s, and moved the hash to `6a17b5b8…`.
+    - **The second document**: its check named the four generics under `removed:`. Its load took 42.2 s, against 48.0 s, and moved the hash to `66edc133…`.
+    - **Verified after the documents**: `GET /api/schema?branch=main` lists `FylgjaStage` alone of the `Fylgja*` and `Network*` kinds. GraphQL refuses `FylgjaDevice`, `FylgjaContract` and `NetworkDevice`. `FylgjaStage` and `CoreProposedChange.fylgja_stages` are unchanged, and checked again, each document printed `No diff`.
+    - **The library**: `-prepare-main` printed the five lines the task expects, exit 0, in 43.5 s with `go run`'s build. The fifth was `import complete after 2s`, since `3c3e79a`'s import was already on `main`.
+    - **`main`'s new hash**, from `/api/schema/summary`: **`7c413536…`**, with 71 nodes and 52 generics. `CoreArtifactTarget` is used by `DcimDevice` alone.
+    - **The refusal**: run again, the tool exited 1 in 1.4 s and wrote nothing (the hash unchanged). Its sentence names **27** kinds, `DcimCable` to `OrganizationProvider`. The bring-up script's `library_held` reads the saved output as present.
+    - **Beyond the task, read-only**: `fylgja schema check --branch main`, through the server from this tree, reads `conformant with opsmill/schema-library@26336e9: …` and `stages: FylgjaStage present on the default branch, with its extension`. `fylgja-fixture` still gives its five `schema.kind.missing` until T060.
+    - **For T058**: the query `device_config` that `3c3e79a` imported still lists the eight removed kinds in `models`. Nothing renders through it, since the group has no member, and its import replaces it.
+    - **For T071**: `CLAUDE.md`'s `e43a1cde…` is now `main`'s previous hash.
+
+  *Run 16's checkpoint, 12:35Z*:
+  - **Gates**:
+    - `make build`: static.
+    - `make test` uncached: 42.8 s wall at a load average of 2.0 before and 4.4 after, `internal/cli` 30.0 s of it.
+    - `make lint`: 0 issues.
+    - Clean: `go vet -tags contract,fixture,e2e ./...` and `make linkcheck`.
+    - `go generate ./...` is stable. No golden moved.
+  - **Not run, and why**: T056 names no tier-2 test, no hand scenario and no tier 3. Tier 3 could not pass yet anyway: the fixture still holds the generics, and Infrahub renders through `3c3e79a`'s template until T058's import.
+  - **The host**:
+    - The worker and the server were restarted from this tree before the migration, and again after the final build replaced the binary. The worker is pid 176209 and the server pid 176291.
+    - Both `/proc/<pid>/exe` read the tree's `bin/fylgja`. Their environment names carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`.
+    - The server reports both listeners, the bridge warning, `default scope: tag:fylgja` and both packages with their logins set. From inside each task worker, `POST /v1/twin/show` answers `200 1 0.1.0-dev` with the token and `401` without it.
+    - `clab inspect --all` is `{}`. There is no `local/twin`, and Temporal lists no Schedule.
+    - In Infrahub, `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage` count 0, and `main`'s hash is `7c413536…`.
+    - 11.9 GiB of memory is available.
+  - **Next**: T057, the operator's: merge `017-dcim-reader` into `main`, push `origin`'s `main`, and read CI's contract job.
 
 - [ ] T057 [operator] [US6] Merge `017-dcim-reader` into `main` and push `origin`'s `main` (R-14 step 3; FR-040). It is the whole branch, not the template commit alone: the registration follows `ref main`, and CI's contract job on that push brings its own Infrahub up with this tree's fixture tool, seeds the library's kinds and renders through the merged template, so a cherry-pick of the template would go red. `main` then carries code tiers 2 and 3 have not yet proved on this host (T062, T063), and T060 may add a second golden commit that needs a second merge and push; the operator accepts that here or stops. After T054. Read the job's result and record it in this task's note; a failure there is a defect to fix in the phase that owns it, then merged and pushed again.
 

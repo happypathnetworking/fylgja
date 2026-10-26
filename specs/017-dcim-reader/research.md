@@ -1367,3 +1367,92 @@ cleanup (64.6 s in all). Nothing was written to `main`, and no token was printed
 What these writes do to the stamps and the events is §5.8's. Whether a run-check clears each
 write before the next, as `TestStagesSeeEveryWriteOfADevice` asserts, needs the template's
 import (T058). It is owed at T062.
+
+<a id="5-10"></a>
+### 5.10 `main` migrated (T056; 2026-10-26, 12:26Z–12:31Z)
+
+The migration of [R-14](#r-14)'s steps 1 and 2, run on `main` by Run 16 of the converge loop
+from `97856b3`, with `local/.env` loaded and the worker and the server restarted from this
+tree. It was recorded here because §5.3 already holds T036's conformance. This is the
+feature's one lasting write to `main`. No token was printed.
+
+- **The precondition, read at 12:24Z.**
+  - `main`'s hash was `e43a1cde…`: 62 nodes and 35 generics, no `Dcim*` kind.
+  - `Branch` listed `main` and `fylgja-fixture` alone.
+  - The nine kinds the documents remove each counted 0. So did `CoreArtifact`,
+    `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator`, and
+    `fylgja-devices` had no member.
+  - `fylgja` was the one registration, `ref main`, at `3c3e79a`, with its two checks.
+  - There was no container, no `local/twin`, no Schedule and no running workflow.
+- **The first document**, [`migration/1-reference-kinds-absent.yaml`](migration/1-reference-kinds-absent.yaml).
+  - `schema check --branch main` (10.7 s): `Valid!`, with `removed:` naming `FylgjaContract`,
+    `NetworkDevice`, `NetworkInterface`, `NetworkLink` and `NetworkPlatform`.
+  - `schema load --branch main`: `1 schema processed in 47.162 seconds` (49.0 s wall),
+    against the rehearsal's 50.6 s (§1.9).
+  - Afterwards the hash read `6a17b5b8…`, with 57 nodes and 35 generics. `NetworkDevice`
+    answered `Cannot query field 'NetworkDevice' on type 'Query'.`, and `FylgjaDevice` still
+    counted 0.
+- **The second document**, [`migration/2-generics-absent.yaml`](migration/2-generics-absent.yaml).
+  - `schema check --branch main` (11.3 s): `Valid!`, with `removed:` naming `FylgjaDevice`,
+    `FylgjaInterface`, `FylgjaLink` and `FylgjaPlatform`.
+  - `schema load --branch main`: `1 schema processed in 42.228 seconds` (44.3 s wall),
+    against the rehearsal's 48.0 s.
+  - Afterwards the hash read `66edc133…`, with 57 nodes and 31 generics.
+    - `GET /api/schema?branch=main` listed `FylgjaStage` alone of the `Fylgja*` and
+      `Network*` kinds.
+    - `FylgjaDevice` and `FylgjaContract` each answered `Cannot query field '<kind>' on
+      type 'Query'. Did you mean 'FylgjaStage'?`.
+    - `CoreArtifactTarget`'s `used_by` was empty.
+  - `FylgjaStage` was untouched: branch-agnostic, with `label`, `as_of`, `description` and
+    a required `proposed_change`. So was its extension, `CoreProposedChange.fylgja_stages`
+    (many, peer `FylgjaStage`, identifier `proposed_change__fylgja_stages`).
+  - Checked again after both loads, each document printed `is Valid! No diff`.
+- **The library**: `go run -tags fixture ./cmd/fylgja-fixture -prepare-main` at 12:29:43Z,
+  43.5 s wall with `go run`'s build, exit 0. It printed:
+
+  ```
+  schema library loaded on main (6 files, opsmill/schema-library@26336e9)
+  stage kind present
+  group fylgja-devices present
+  repository fylgja present (location https://github.com/happypathnetworking/fylgja.git, ref main)
+  import complete after 2s: query, transform and definition on main
+  ```
+
+  The import's wait returned at once, because `3c3e79a`'s import was already on `main` and
+  the registration read `active` / `online`.
+  - **`main`'s new hash**, from `/api/schema/summary`: **`7c413536…`**. The schema has 71
+    nodes and 52 generics, nine of them `Dcim*`.
+  - `CoreArtifactTarget`'s `used_by` names `DcimDevice` alone, as §5.2 expected of the
+    migrated `main`.
+  - The library added the same 14 nodes and 21 generics that it added on the rehearsal's
+    branch, which held 76 and 56 (§5.3). That branch was made from a `main` that still
+    held the five reference kinds and the four generics.
+  - `DcimDevice` and `CoreArtifact` count 0, and `fylgja-devices` has no member.
+  - The registration is unchanged: `commit 3c3e79a`, `active` / `online`, two checks.
+- **The refusal.** Run again at 12:30:45Z, the tool exited 1 in 1.4 s and printed one
+  line. It wrote nothing: the hash still read `7c413536…`. The line:
+
+  ```
+  fylgja-fixture: main holds 27 of the schema library's kinds (DcimCable, DcimConnector, DcimDevice, DcimDeviceType, DcimEndpoint, DcimGenericDevice, DcimInterface, DcimPhysicalDevice, DcimPlatform, InterfaceHasSubInterface, InterfaceLayer2, InterfaceLayer3, InterfacePhysical, InterfaceVirtual, IpamIPAddress, IpamPrefix, IpamPrefixScope, IpamVLANGroupScope, LocationCountry, LocationGeneric, LocationHosting, LocationMetro, LocationRegion, LocationSite, OrganizationGeneric, OrganizationManufacturer, OrganizationProvider): -prepare-main is the development host's and CI's tool, which loads the library on an empty main alone; a main that already holds the library is yours, and fylgja schema check says whether it is the one the reader reads
+  ```
+
+  The bring-up script's `library_held` reads this saved output as the library present, and
+  does not read a load's output that way. It was run alone, outside the script.
+- **Conformance on the migrated `main`**, read-only through the server from this tree:
+  `fylgja schema check --branch main` answered the two lines below, exit 0.
+
+  ```
+  conformant with opsmill/schema-library@26336e9: DcimDevice, DcimPlatform, OrganizationManufacturer, InterfacePhysical, DcimCable
+  stages: FylgjaStage present on the default branch, with its extension
+  ```
+
+  `fylgja-fixture` is untouched and still gives the five `schema.kind.missing` until T060
+  re-seeds it.
+- **What `3c3e79a`'s import leaves on `main` until T058.** The stored query
+  `device_config`'s `models` still names the eight removed kinds (`FylgjaDevice`,
+  `FylgjaInterface`, `FylgjaLink`, `FylgjaPlatform` and the four `Network*`).
+  `fylgja_branch` names none. The transform `srlinux_device_config` and the definition,
+  targeting `fylgja-devices`, are unchanged. The group has no member, so nothing renders
+  through them. T058's import replaces the query.
+- **Afterwards** `Branch` lists `main` and `fylgja-fixture` alone. `CoreProposedChange` and
+  `FylgjaStage` count 0, and nothing else was written.

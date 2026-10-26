@@ -916,7 +916,12 @@ start on the same registry.
   infrahub-dcim from opsmill/schema-library@26336e9`; for a record of `7` or earlier, `…,
   scope unknown (record 7)`; for an `8` whose scope is not `tag:<name>`, which no build
   writes, `…, scope unknown (record 8 names scope "fylgja", not tag:<name>)`, its JSON
-  record carrying neither `scope` nor `mapping`, as a `7`'s. `twin create` prints the same
+  record carrying neither `scope` nor `mapping`, as a `7`'s; for an `8` whose mapping
+  `twin.json` 8 cannot hold, a reader's name not of its form or a model or version left
+  empty, which no build writes either, `…, scope tag:fylgja, read by an unknown reader
+  (record 8 names mapping reader "Infrahub DCIM")`, each field it fails named (`model ""`,
+  `version ""`), its JSON record carrying neither, since the show contract has the scope
+  only beside the mapping, while `twin step` reads its scope alone. `twin create` prints the same
   line for the twin it made, from the record its run wrote, after the nodes and before `twin
   directory …`, as `twin show` prints it after the nodes; `twin provision` does too, its
   record naming what its bundle's provenance names.

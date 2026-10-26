@@ -100,7 +100,11 @@ Removed: `contract.version.mismatch`, `contract.node.missing`,
   schema …, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9`;
   a `7` record: `…, scope unknown (record 7)`; an `8` whose scope is not `tag:<name>`
   (edited by hand: no build writes one): `…, scope unknown (record 8 names scope "fylgja",
-  not tag:<name>)`, its JSON record carrying neither `scope` nor `mapping` (T097).
+  not tag:<name>)`, its JSON record carrying neither `scope` nor `mapping` (T097); an `8`
+  whose mapping `twin.json` 8 cannot hold (edited by hand alike): `…, scope tag:fylgja,
+  read by an unknown reader (record 8 names mapping reader "Infrahub DCIM")`, each field it
+  fails named (`model ""`, `version ""`), its JSON record carrying neither, since the show
+  contract has the scope only beside the mapping (T106).
 - `schema check`: `conformant with opsmill/schema-library@26336e9: DcimDevice,
   DcimPlatform, OrganizationManufacturer, InterfacePhysical, DcimCable, DcimConnector`
   (the generic among the table's rows, [mapping.md](mapping.md) §3), then `stages:

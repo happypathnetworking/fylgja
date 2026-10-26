@@ -460,7 +460,10 @@ func TestShowRecordNamesItsScope(t *testing.T) {
 // An 8 record whose scope is not tag:<name>, edited by hand since no build of this tree
 // writes one, names no scope a read can be made under: twin show prints its scope unknown,
 // naming the value, as it prints a 7's, and its JSON record carries neither scope nor
-// mapping, so the document stays the show contract's (T097).
+// mapping, so the document stays the show contract's (T097). One whose mapping twin.json 8
+// cannot hold, a reader's name not of its form or a model or version left empty, prints its
+// reader unknown, naming each field it fails, and its JSON record carries neither too, since
+// the contract shows the scope only beside the mapping (T106).
 func TestShowTreatsAnUnreadableScopeAsUnknown(t *testing.T) {
 	rec := twinOf(t, func(f *lab.RecordFields) {
 		f.Provenance.At = stepFromAt
@@ -468,8 +471,30 @@ func TestShowTreatsAnUnreadableScopeAsUnknown(t *testing.T) {
 	})
 	head := "record: branch fylgja-fixture at " + stepFromAt + " (stage fylgja-fixture/seeded, at given), bundle_id " +
 		showBundleID + ", schema 41349c3a9c582e5dd44e55d6771f79c2, "
+	// An edit sets the provenance's scope, or a field of its mapping, to value.
+	type edit struct{ field, value string }
+	type unreadable struct {
+		name  string
+		edits []edit
+		want  string
+	}
+	var cases []unreadable
 	for _, scope := range []string{"", "fylgja", "tag:"} {
-		t.Run(fmt.Sprintf("scope %q", scope), func(t *testing.T) {
+		cases = append(cases, unreadable{fmt.Sprintf("scope %q", scope), []edit{{"scope", scope}},
+			`scope unknown (record 8 names scope "` + scope + `", not tag:<name>)`})
+	}
+	cases = append(cases, []unreadable{
+		{"mapping reader \"Infrahub DCIM\"", []edit{{"reader", "Infrahub DCIM"}},
+			`scope tag:fylgja, read by an unknown reader (record 8 names mapping reader "Infrahub DCIM")`},
+		{"an empty mapping model", []edit{{"model", ""}},
+			`scope tag:fylgja, read by an unknown reader (record 8 names mapping model "")`},
+		{"an empty mapping version", []edit{{"version", ""}},
+			`scope tag:fylgja, read by an unknown reader (record 8 names mapping version "")`},
+		{"a reader and a model", []edit{{"reader", "-dcim"}, {"model", ""}},
+			`scope tag:fylgja, read by an unknown reader (record 8 names mapping reader "-dcim", model "")`},
+	}...)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
 			paths := useStateRoot(t)
 			writeTwin(t, paths, rec)
 			raw, err := os.ReadFile(paths.TwinJSON)
@@ -480,7 +505,14 @@ func TestShowTreatsAnUnreadableScopeAsUnknown(t *testing.T) {
 			if err := json.Unmarshal(raw, &generic); err != nil {
 				t.Fatal(err)
 			}
-			generic["provenance"].(map[string]any)["scope"] = scope
+			provenance := generic["provenance"].(map[string]any)
+			for _, e := range c.edits {
+				if e.field == "scope" {
+					provenance["scope"] = e.value
+				} else {
+					provenance["mapping"].(map[string]any)[e.field] = e.value
+				}
+			}
 			if raw, err = json.Marshal(generic); err != nil {
 				t.Fatal(err)
 			}
@@ -488,7 +520,7 @@ func TestShowTreatsAnUnreadableScopeAsUnknown(t *testing.T) {
 				t.Fatal(err)
 			}
 			out := showWith(t, paths, "inspect-three.json", &fakeService{})
-			line := head + `scope unknown (record 8 names scope "` + scope + `", not tag:<name>)`
+			line := head + c.want
 			if !strings.Contains(out.stdout, "\n"+line+"\n") {
 				t.Errorf("stdout:\n%s\nwant the record line %q", out.stdout, line)
 			}

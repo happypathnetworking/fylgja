@@ -195,8 +195,9 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 		}
 		// A version 8 record names the scope its read was made under and the mapping that
 		// read it (017); an earlier one names neither, and shows neither, nor does an 8
-		// whose scope is not tag:<name>, which show.schema.json would refuse.
-		if scopeKnown(rec) {
+		// whose scope is not tag:<name> or whose mapping twin.json 8 cannot hold, either of
+		// which show.schema.json would refuse: it shows the scope only beside the mapping.
+		if scopeKnown(rec) && mappingKnown(rec.Provenance.Mapping) {
 			m := rec.Provenance.Mapping
 			block.Record.Scope = rec.Provenance.Scope
 			block.Record.Mapping = &findings.ShowMapping{Reader: m.Reader, Model: m.Model, Version: m.Version}
@@ -422,6 +423,14 @@ func scopeKnown(rec *wire.TwinRecord) bool {
 	return scopeRecorded(rec) && ctm.ValidScope(rec.Provenance.Scope)
 }
 
+// mappingKnown says whether a record's mapping is one twin.json 8 holds: a reader's name of
+// its form (ctm.ValidReader), a model and a version. No build of this tree writes another
+// (NewRecord and NewStepRecord refuse one), so a record that does not was edited by hand:
+// twin show names its reader unknown and shows no mapping. twin step reads the scope alone.
+func mappingKnown(m wire.Mapping) bool {
+	return ctm.ValidReader(m.Reader) && m.Model != "" && m.Version != ""
+}
+
 // recordLine is the record line twin show and twin create print (contracts/cli.md, 017):
 // the reference the record was read from, its bundle, its schema and its provenance, "record:
 // branch b at …, bundle_id …, schema …, scope tag:fylgja, read by infrahub-dcim from
@@ -440,8 +449,10 @@ func recordLine(rec *wire.TwinRecord) string {
 
 // provenanceClause is the record line's last clause (contracts/cli.md): "scope tag:fylgja,
 // read by infrahub-dcim from opsmill/schema-library@26336e9"; for a record of 7 or
-// earlier, "scope unknown (record 7)"; and for an 8 naming a scope that is not
-// tag:<name>, `scope unknown (record 8 names scope "fylgja", not tag:<name>)`.
+// earlier, "scope unknown (record 7)"; for an 8 naming a scope that is not tag:<name>,
+// `scope unknown (record 8 names scope "fylgja", not tag:<name>)`; and for an 8 whose
+// mapping twin.json 8 cannot hold, each field it fails named, `scope tag:fylgja, read by an
+// unknown reader (record 8 names mapping reader "Infrahub DCIM")`.
 func provenanceClause(rec *wire.TwinRecord) string {
 	if !scopeRecorded(rec) {
 		return fmt.Sprintf("scope unknown (record %s)", rec.TwinVersion)
@@ -450,6 +461,20 @@ func provenanceClause(rec *wire.TwinRecord) string {
 		return fmt.Sprintf("scope unknown (record %s names scope %q, not tag:<name>)", rec.TwinVersion, rec.Provenance.Scope)
 	}
 	m := rec.Provenance.Mapping
+	if !mappingKnown(m) {
+		var named []string
+		if !ctm.ValidReader(m.Reader) {
+			named = append(named, fmt.Sprintf("reader %q", m.Reader))
+		}
+		if m.Model == "" {
+			named = append(named, `model ""`)
+		}
+		if m.Version == "" {
+			named = append(named, `version ""`)
+		}
+		return fmt.Sprintf("scope %s, read by an unknown reader (record %s names mapping %s)", rec.Provenance.Scope,
+			rec.TwinVersion, strings.Join(named, ", "))
+	}
 	return fmt.Sprintf("scope %s, read by %s from %s@%s", rec.Provenance.Scope, m.Reader, m.Model, m.Version)
 }
 

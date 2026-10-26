@@ -106,7 +106,7 @@ After conformance, before any CTM, every finding in one pass, no CTM on any:
 
 | Rule | Object | When | Message names |
 |---|---|---|---|
-| `scope.empty` | the scope | the device query answers 0 (the tag absent from the branch, or on no `DcimDevice`) | the scope and the branch |
+| `scope.empty` | the scope | the device query answers 0 (the tag absent from the branch, or on no `DcimDevice`) | the scope, the branch, and the `at` when the read is pinned ([research §5.16](../research.md#5-16)) |
 | `platform.missing` | the device | no `platform`, or a platform with no `manufacturer` | what the device carries |
 | `platform.unmatched` | the device | no package's `matches` names the manufacturer's `name` and the platform's `name`, both exactly (letter case and spacing included) | the device's pair, and every package with its pairs |
 | the artifact rules | the device | as today (FR-008); a device refused for its platform is not also refused for its artifact | as today |

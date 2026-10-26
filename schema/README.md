@@ -83,7 +83,7 @@ every device it cannot carry, all in one pass, with no CTM on any finding:
 
 | Rule | Object | When |
 |---|---|---|
-| `scope.empty` | the scope | the device query answers 0: the tag absent from the branch, or on no `DcimDevice` (`scope tag:fylgja selects no device on branch b`) |
+| `scope.empty` | the scope | the device query answers 0: the tag absent from the branch, or on no `DcimDevice`; the message names the scope, the branch, and the `at` when the read is pinned ([research §5.16](../specs/017-dcim-reader/research.md#5-16)): `scope tag:fylgja selects no device on branch b`, `… on branch main at 2026-10-20T00:00:00Z` |
 | `platform.missing` | the device | no `platform`, or a platform with no `manufacturer`; the message names what the device carries |
 | `platform.unmatched` | the device | no package's `matches` names the manufacturer's and the platform's `name`, both exactly; the message names the device's pair beside every package's |
 | `artifact.missing` and the other artifact rules | the device | no `Ready` artifact of the package's name, or one Fylgja cannot verify; a device refused for its platform is not also refused for its artifact |

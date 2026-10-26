@@ -395,6 +395,36 @@ func TestScopeSelectingNothingIsRefused(t *testing.T) {
 	}
 }
 
+// A pinned read whose scope selects no device names the instant beside the scope and the
+// branch, as the spec's amended edge case has it (T079, research §5.16): the one device
+// query carries the at, and no port is asked for.
+func TestScopeSelectingNothingAtAnInstantNamesIt(t *testing.T) {
+	const at = "2026-10-20T00:00:00Z"
+	f := newFakeInfrahub(t)
+	f.start(token)
+	reg, err := psp.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c, list, err := stage.Read(t.Context(), f.branch, at, "tag:nothing", reg, "2026-10-26T00:00:00.000000Z")
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleScopeEmpty, Object: "tag:nothing",
+		Message: "scope tag:nothing selects no device on branch fylgja-fixture at " + at}
+	if c != nil || len(list) != 1 || list[0] != want {
+		t.Fatalf("CTM %v, findings %+v; want none and exactly %+v", c != nil, list, want)
+	}
+	if devices := f.graphql("Devices"); len(devices) != 1 || !devices[0].HasAt || devices[0].At != at {
+		t.Errorf("the device query %+v; want one, at %s", devices, at)
+	}
+	if n := len(f.graphql("Ports")); n != 0 {
+		t.Errorf("a scope selecting nothing asked for ports %d times", n)
+	}
+}
+
 // Devices and ports are paged by a hundred, and ports are asked for a hundred devices'
 // ids at a time: a scope of 150 devices with two ports each reads every device and every
 // port, the first hundred devices' 200 ports in two pages.

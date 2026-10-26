@@ -17,19 +17,22 @@
 # over the gNMI its own package declares, the description its staged artifact sets (bootstrap
 # sets none), n1's ethernet-1/2 admin-state is what the artifact says, and twin.json's
 # checksums are Infrahub's. Every node is ready inside its own package's readiness budget,
-# which differs per platform. Every artifact carries a marker in its role comment; it is found
-# in no output, record, document, history or worker log.
+# which differs per platform. Every artifact carries a marker in its header, where the
+# template writes the device's description (017); it is found in no output, record,
+# document, history or worker log.
 #
 #   1. create from fylgja-fixture; the conformance suite's boot half reads that twin (M6:
 #      host name, every cabled port enabled, discovering and seeing the far end the bundle's
 #      link names, the version listed, readiness under budget); twin verify finds it
-#      conforming (M12); a second create, refused naming that twin; destroy
+#      conforming (M12); twin show names the scope tag:fylgja and the mapping that read it
+#      (017); a second create, refused naming that twin; destroy
 #   2. create --at T, T fixed at the start: another reference, another bundle_id; destroy
 #   3. a one-node lab fylgja deployed by hand outside the state root: a short-lived worker
 #      of the script's own names it an orphan at start, a dry-run create is refused naming
 #      it, and destroy clears it
 #   4. create --at T again: case 2's bundle_id; destroy
-#   5. a throwaway branch seeded; create following it every 15s; a check leaves the twin
+#   5. a throwaway branch seeded; create following it every 15s, under --scope tag:fylgja
+#      named (017); a check leaves the twin
 #      untouched; an artifact-only change (n1:ethernet-1/2 disabled, then generated) rebuilds
 #      the twin with no command and the node reads disable, and twin verify skips that port
 #      and its link (M12); the branch's topology changed; the twin rebuilt again; twin show
@@ -40,9 +43,10 @@
 #      transport (M12); twin show names each node's package; destroy; the branch deleted
 #   7. a throwaway branch seeded and a draft proposed change opened on it (014): stage
 #      seeded marked, a third link added, stage third-link marked; stage plan names four
-#      stages, the branch point refused (main holds no contract), three ids and three steps,
-#      the last unchanged; stage list names them; create --stage seeded deploys the id the
-#      plan printed and records the stage in twin.json 7, and twin show and stage list name
+#      stages, the branch point refused scope.empty (main holds no tagged device), three ids
+#      and three steps, the last unchanged; stage list names them; create --stage seeded
+#      deploys the id the plan printed and records the stage in twin.json 8, and twin show
+#      and stage list name
 #      it; a step with no target to third-link, the link re-cabled live, and a second to the
 #      head, unchanged, the record moving; destroy; the stages, the proposed change and the
 #      branch deleted, after which stage list lists none and stage plan refuses the branch
@@ -51,7 +55,7 @@
 #      mixed-link; create --stage seeded, pushed by replace; the step with no target to
 #      mixed-link refused without --allow-restart, dry run and run, naming e1; taken with it:
 #      e1 restarted in place, s1 re-cabled live and e2 untouched (their containers say so),
-#      both pushed, the new link seen from both ends over gNMI, twin.json 7 naming the step
+#      both pushed, the new link seen from both ends over gNMI, twin.json 8 naming the step
 #      and its wait settled (M12); the step back with --stage seeded, settled too; destroy;
 #      the stages, the proposed change and the branch deleted
 #   9. a throwaway branch seeded and a draft proposed change opened on it (015): at the
@@ -70,7 +74,9 @@
 # run on it), Docker, containerlab, the SR Linux image, the imported cEOS image (never
 # pulled; docs/development.md says how to import it), go (cases 1 and 6 run the boot half as
 # go test; cases 5 to 9 seed their branches with cmd/fylgja-fixture), and Infrahub with
-# fylgja-fixture seeded (local/.env). Every command goes to the script's own server, whose
+# fylgja-fixture seeded (local/.env, which must set FYLGJA_DEFAULT_SCOPE="tag:fylgja", the
+# scope every case's fixtures are tagged into, for the script's server to read under; 017).
+# Every command goes to the script's own server, whose
 # port is one the system chooses. Case 9 needs two things more, checked before anything
 # starts: the operator's server from this tree, listening on the Docker bridge with
 # local/.env's token as CLAUDE.md's start line has it (make serve listens on loopback alone),
@@ -313,14 +319,14 @@ infrahub_holds_none() {
   expect "$OUT/infrahub-after-$1.json" '(.Branch | length) == 0 and .CoreProposedChange.count == 0'
 }
 
-# artifacts_of BRANCH FILE: each device's device-config artifact on the branch, read through
-# the generic as the read does, as {device: {status, checksum}}. Only the
-# identity is asked for: the content carries the marker.
+# artifacts_of BRANCH FILE: each device's device-config artifact on the branch, read from
+# the schema library's DcimDevice as the read does, as {device: {status, checksum}}. Only
+# the identity is asked for: the content carries the marker.
 artifacts_of() {
-  gql "$1" '{ FylgjaDevice { edges { node { name { value }
+  gql "$1" '{ DcimDevice { edges { node { name { value }
     ... on CoreArtifactTarget { artifacts { edges { node { status { value } checksum { value }
       definition { node { ... on CoreArtifactDefinition { artifact_name { value } } } } } } } } } } } }' |
-    jq '[.FylgjaDevice.edges[].node | {key: .name.value, value: ([.artifacts.edges[].node
+    jq '[.DcimDevice.edges[].node | {key: .name.value, value: ([.artifacts.edges[].node
       | select(.definition.node.artifact_name.value=="device-config")
       | {status: .status.value, checksum: .checksum.value}] | first)}] | from_entries' > "$2"
 }
@@ -679,8 +685,9 @@ cleanup() {
   exit "$status"
 }
 
-# Every artifact carries this in its role comment (testsupport.MarkerPrefix); it may sit
-# in the staged bundle, the store and a read's CTM, and nowhere else.
+# Every artifact carries this in its header, where the template writes the device's
+# description (testsupport.MarkerPrefix; 017 research R-15); it may sit in the staged
+# bundle, the store and a read's CTM, and nowhere else.
 MARKER='FYLGJA-MARKER'
 
 RUN_START=$(now_ns)
@@ -782,6 +789,10 @@ if bridge_exe=$(readlink "/proc/$bridge_pid/exe" 2> /dev/null); then
   [ "/proc/$bridge_pid/exe" -ef "$FYLGJA" ] ||
     fail "case 9 needs the server on $BRIDGE:7650 to run this tree's $FYLGJA, and pid $bridge_pid runs $bridge_exe; $SERVE_REMEDY"
   bridge_binary="this tree's $FYLGJA (pid $bridge_pid)"
+  # The checks send no scope (017, FR-021): the server reads theirs under its default, which
+  # the fixtures' devices are tagged into. Each variable is one NUL-ended line.
+  grep -qxzF 'FYLGJA_DEFAULT_SCOPE=tag:fylgja' "/proc/$bridge_pid/environ" 2> /dev/null ||
+    fail "case 9 needs the server on $BRIDGE:7650 to read under the default scope tag:fylgja, and pid $bridge_pid's environment sets no FYLGJA_DEFAULT_SCOPE=tag:fylgja: add FYLGJA_DEFAULT_SCOPE=\"tag:fylgja\" to local/.env; $SERVE_REMEDY"
 else
   echo "e2e: note: the server on $BRIDGE:7650 is pid $bridge_pid, whose /proc/$bridge_pid/exe this shell cannot read, as for a server started under sg docker: its binary is not compared with $FYLGJA, only its build"
 fi
@@ -807,6 +818,11 @@ while :; do
   sleep 0.1
 done
 echo "e2e: the API's server listens on $API_ADDRESS, after $(since "$start")s"
+# Every case reads under the server's default scope, which the fixtures' devices are tagged
+# into (017), but case 5's create, which names it. A server with none refuses each such
+# request scope.unset; say so once, here, with the remedy.
+grep -qx 'fylgja serve: default scope: tag:fylgja' "$OUT/server.log" ||
+  fail "the API's server reads under no default scope tag:fylgja (see $OUT/server.log): add FYLGJA_DEFAULT_SCOPE=\"tag:fylgja\" to local/.env"
 
 # The dry run touches nothing but the bundle store. Refused means the host
 # already holds a twin this script did not make: say so rather than destroy it.
@@ -844,7 +860,16 @@ if case_runs 1; then
 create_twin 1 --no-follow
 BID1=$BID RUN1=$RUN_ID
 export BID1 RUN1
-expect "$TWIN/twin.json" '.provenance.branch==env.BRANCH and (.provenance | has("at") | not)'
+expect "$TWIN/twin.json" '.provenance.branch==env.BRANCH and (.provenance | has("at") | not)
+  and .provenance.scope=="tag:fylgja"
+  and .provenance.mapping=={reader: "infrahub-dcim", model: "opsmill/schema-library", version: "26336e9"}'
+
+# twin show names the scope the twin's read was made under, the server's default, and the
+# mapping that read it (017; contracts/cli.md, twin show's record line).
+fylgja twin show > "$OUT/show-1.out" 2> "$OUT/show-1.err" ||
+  fail "case 1: twin show exited non-zero; see $OUT/show-1.err"
+grep -qF 'scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9' "$OUT/show-1.out" ||
+  fail "case 1: twin show names no scope tag:fylgja read by infrahub-dcim from opsmill/schema-library@26336e9; see $OUT/show-1.out"
 
 compiled_id 1
 [ "$BID1" = "$COMPILED_ID" ] || fail "case 1: the run deployed $BID1, but intent read | twin compile gives $COMPILED_ID"
@@ -1005,8 +1030,8 @@ if case_runs 5; then
 
 # A throwaway branch: fylgja-fixture is never changed. Set before seeding, so the
 # trap deletes a branch the seed left half made.
-# The pid and a random number: the seed's marker role carries the branch name, so no two
-# runs share one.
+# The pid and a random number: the seed's marker description carries the branch name, so
+# no two runs share one.
 FB="fylgja-test-e2e-$$-$RANDOM"
 export FB
 start=$(now_ns)
@@ -1022,11 +1047,13 @@ echo "e2e: case 5: seeding $FB took ${SEED_TOOK}s (exit $seed_status)"
 [ "${SEED_TOOK%.*}" -lt 150 ] || fail "case 5: seeding $FB took ${SEED_TOOK}s, over 150s"
 
 BRANCH=$FB
-create_twin 5 --interval "${FOLLOW_INTERVAL_S}s"
+# The scope named, the server's default: the follow's checks read under the record's.
+create_twin 5 --interval "${FOLLOW_INTERVAL_S}s" --scope tag:fylgja
 BID5=$BID RUN5=$RUN_ID
 export BID5 RUN5
 expect "$OUT/create-5.json" '.following.branch==env.FB and .following.interval_s==(env.FOLLOW_INTERVAL_S|tonumber)
   and .following.schedule_id=="fylgja-follow" and .following.state=="started"'
+expect "$TWIN/twin.json" '.provenance.branch==env.FB and .provenance.scope=="tag:fylgja"'
 
 fylgja twin show --json > "$OUT/show-5-created.json" 2> "$OUT/show-5-created.err" ||
   fail "case 5: twin show exited non-zero after the create; see $OUT/show-5-created.err"
@@ -1295,8 +1322,8 @@ fixture -branch "$FP" -stage third-link -description "third link" > "$OUT/stage-
   fail "case 7: marking stage $FP/third-link failed; see $OUT/stage-7-third-link.err"
 
 # The plan: no lab, no worker, no workflow service. Four stages in order. The branch point
-# is main at the branch's creation, which holds no contract on this install, so it is
-# refused at its read (research R-04) and the plan exits 1. The two marks and the head
+# is main at the branch's creation, which holds no tagged device on this install, so its
+# read is refused scope.empty (017 R-20) and the plan exits 1. The two marks and the head
 # compile to three ids, the head's at being its own. Three steps: the first not computed;
 # the second the third link, with n1 and n3 re-rendered and re-bootstrapped for it (mapping
 # may stand beside bootstrap, since the link gives both ends the interface ethernet-1/3);
@@ -1313,9 +1340,9 @@ expect "$OUT/plan-7.json" '.status=="rejected" and .operation=="stage.plan" and 
   and [.plan.stages[] | {ref, at_source}]
     == [{ref: (env.FP + "/branch-point"), at_source: "branch_point"}, {ref: (env.FP + "/seeded"), at_source: "written"},
         {ref: (env.FP + "/third-link"), at_source: "written"}, {ref: (env.FP + "/head"), at_source: "head"}]
-  and [.findings[] | select(.severity=="rejection") | .rule] == ["contract.node.missing"]
+  and [.findings[] | select(.severity=="rejection") | .rule] == ["scope.empty"]
   and (.plan.stages[0] | .branch=="main" and .bundle_id==null
-    and [.findings[] | select(.severity=="rejection") | .rule] == ["contract.node.missing"])
+    and [.findings[] | select(.severity=="rejection") | .rule] == ["scope.empty"])
   and all(.plan.stages[1:][]; .branch==env.FP and (.bundle_id | type)=="string" and (.findings | length)==0)
   and [.plan.stages[1:][].description] == ["seeded", "third link", ""]
   and ([.plan.stages[1:][].bundle_id] | unique | length) == 3
@@ -1357,7 +1384,7 @@ expect "$OUT/list-7-before.json" '.status=="ok" and .stages.branch==env.FP and .
   and all(.stages.rows[]; .proposed_change.id==env.PC7)'
 
 # The twin from the first mark: the plan's id, pinned at its at, never following, and the
-# record naming the stage and its proposed change, and no rehearsal (twin.json 7). It is
+# record naming the stage and its proposed change, and no rehearsal (twin.json 8). It is
 # read back against what Infrahub held when the mark was made, since -add-link has moved
 # n1's and n3's artifacts since.
 BRANCH=$FP
@@ -1621,7 +1648,7 @@ fylgja stage plan --branch "$FS" --json > "$OUT/plan-8.json" 2> "$OUT/plan-8.err
 expect "$OUT/plan-8.json" '.status=="rejected" and .operation=="stage.plan" and .plan.branch==env.FS
   and [.plan.stages[].ref]
     == [env.FS + "/branch-point", env.FS + "/seeded", env.FS + "/mixed-link", env.FS + "/head"]
-  and [.findings[] | select(.severity=="rejection") | .rule] == ["contract.node.missing"]
+  and [.findings[] | select(.severity=="rejection") | .rule] == ["scope.empty"]
   and .plan.stages[0].bundle_id == null
   and all(.plan.stages[1:][]; .branch==env.FS and (.bundle_id | type)=="string"
     and all(.findings[]; .severity != "rejection"))
@@ -1946,7 +1973,8 @@ echo "e2e: case 9: seeding $FR took ${SEED9_TOOK}s (exit $seed_status)"
 # The draft. Its creation runs both checks after the rest of the pipeline, which -propose
 # waits for, so they are awaited here, bounded as tier 2's test bounds them: fylgja-twin
 # skips a draft, asking nothing of Fylgja, and fylgja-step plans the branch point and the
-# head, the branch point's refusal for want of a contract on main excepted. No comment is
+# head, the branch point's scope.empty, for want of a tagged device on main, excepted. No
+# comment is
 # posted on a draft.
 start=$(now_ns)
 fixture -branch "$FR" -propose > "$OUT/propose-9.out" 2> "$OUT/propose-9.err" ||
@@ -2001,14 +2029,14 @@ user_checks 9a "$PC9" 2> "$OUT/checks-9a.err" || fail "case 9: reading $PC9's ch
 expect "$OUT/checks-9a.json" '(map(select(.name == "fylgja-twin")) | length == 1 and (.[0] | .conclusion == "success"
     and .validator_state == "completed" and ((.message // "") | contains("rehearsal ok"))))
   and (map(select(.name == "fylgja-step")) | length == 1 and .[0].conclusion == "success")'
-stage_lines 9a "^stage $FR/branch-point: refused \\(contract\\.node\\.missing\\)\$" "^stage $FR/seeded: created; .*; baseline\$" \
+stage_lines 9a "^stage $FR/branch-point: refused \\(scope\\.empty\\)\$" "^stage $FR/seeded: created; .*; baseline\$" \
   "^stage $FR/third-link: .*; passed\$" "^stage $FR/head: .*; passed\$"
 comments_of 9a "$PC9" 2> "$OUT/comments-9a.err" || fail "case 9: reading $PC9's comments failed; see $OUT/comments-9a.err"
 expect "$OUT/comments-9a.json" 'length == 1 and (.[0].text | contains("Status **ok**")
   and contains("| stage | at | bundle | step | wait | verify | new verification failures | verdict |")
   and contains("```mermaid") and contains("**Stages**") and endswith("\n\n" + env.CAVEAT + "\n"))'
 jq -r '.[0].text' "$OUT/comments-9a.json" > "$OUT/comment-9a.md"
-comment_stages 9a "branch-point=refused (contract.node.missing)" seeded=baseline third-link=passed head=passed
+comment_stages 9a "branch-point=refused (scope.empty)" seeded=baseline third-link=passed head=passed
 COMMENT9A=$(jq -r '.[0].id' "$OUT/comments-9a.json")
 export COMMENT9A
 rehearsal_run 9a "$OUT/comment-9a.md"
@@ -2037,7 +2065,7 @@ expect "$OUT/checks-9b.json" '(map(select(.name == "fylgja-twin")) | length == 1
     and .validator_state == "completed" and ((.message // "")
       | contains("stage " + env.FR + "/bad-port failed at phase push") and contains("not landed n1 (push.refused)"))))
   and (map(select(.name == "fylgja-step")) | length == 1 and .[0].conclusion == "success")'
-stage_lines 9b "^stage $FR/branch-point: refused \\(contract\\.node\\.missing\\)\$" "^stage $FR/seeded: created; .*; baseline\$" \
+stage_lines 9b "^stage $FR/branch-point: refused \\(scope\\.empty\\)\$" "^stage $FR/seeded: created; .*; baseline\$" \
   "^stage $FR/third-link: .*; passed\$" "^stage $FR/bad-port: diverged at phase push: .*; failed\$" "^stage $FR/head: not reached\$"
 comments_of 9b "$PC9" 2> "$OUT/comments-9b.err" || fail "case 9: reading $PC9's comments failed; see $OUT/comments-9b.err"
 # The failure's comment: its table, its drawing, the five commands that reproduce it in order
@@ -2054,7 +2082,7 @@ expect "$OUT/comments-9b.json" 'length == 2 and any(.[]; .id == env.COMMENT9A) a
 jq -r '.[] | select(.id != env.COMMENT9A) | .text' "$OUT/comments-9b.json" > "$OUT/comment-9b.md"
 COMMENT9B=$(jq -r '.[] | select(.id != env.COMMENT9A) | .id' "$OUT/comments-9b.json")
 THREADS9=$(jq -c 'map(.thread)' "$OUT/comments-9b.json")
-comment_stages 9b "branch-point=refused (contract.node.missing)" seeded=baseline third-link=passed bad-port=failed \
+comment_stages 9b "branch-point=refused (scope.empty)" seeded=baseline third-link=passed bad-port=failed \
   "head=not reached"
 # Both threads are listed in the proposed change's overview, the reason D-053 made each
 # comment a thread (SC-007), once Infrahub's event log has them: it lags its writes by a few

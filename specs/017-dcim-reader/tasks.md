@@ -1025,6 +1025,39 @@ in `description`.
   - **Next**: T057, the operator's: merge `017-dcim-reader` into `main`, push `origin`'s `main`, and read CI's contract job.
 
 - [ ] T057 [operator] [US6] Merge `017-dcim-reader` into `main` and push `origin`'s `main` (R-14 step 3; FR-040). It is the whole branch, not the template commit alone: the registration follows `ref main`, and CI's contract job on that push brings its own Infrahub up with this tree's fixture tool, seeds the library's kinds and renders through the merged template, so a cherry-pick of the template would go red. `main` then carries code tiers 2 and 3 have not yet proved on this host (T062, T063), and T060 may add a second golden commit that needs a second merge and push; the operator accepts that here or stops. After T054. Read the job's result and record it in this task's note; a failure there is a defect to fix in the phase that owns it, then merged and pushed again.
+  - *2026-10-26 12:41Z, at `5186076`, Run 17 of the converge loop (live): left unchecked.* The merge and the push are the operator's: a session never pushes, and the loop stops at `contract` if a session leaves the branch or a remote-tracking ref moves. Nothing was merged, pushed or fetched. What is ready:
+    - **The refs, read at 12:37Z** with `git ls-remote origin`, which moves no remote-tracking ref:
+      - `origin`'s `main` is `450c380`, v0.2.0's commit. CI's last run on `main` is on it: run `39793171746`, 2026-10-22, a success in 15m45s.
+      - Local `main` is `fe497a2`, three unpushed commits ahead of it (`6d4aab3`, `45b5890`, `fe497a2`), and an ancestor of `017-dcim-reader`, which is 45 commits ahead of `main` at `5186076`.
+      - So the merge is a fast-forward, which is how 014 and 015 reached `main`: `origin`'s `main` has no merge commit.
+    - **When**: after the loop has stopped, not during a pause. The loop reads the remote-tracking refs once, when it starts. A push from this clone moves `refs/remotes/origin/main`, so the next session's check would stop the loop at `contract`. Merge the branch's head as it stands then.
+    - **How, keeping `HEAD` on the branch**: `git fetch . 017-dcim-reader:main`, which only fast-forwards, then `git push origin main`.
+    - **What the operator accepts here**, as this task asks:
+      - `main` will carry code that tiers 2 and 3 have not proved on this host (T062, T063). T005's acknowledgement (answer `3a`) already covers this.
+      - T060 may add a golden commit that needs a second merge and push before T063. No record on disk answers this yet.
+    - **CI's lint and unit jobs, predicted on `5186076`**:
+      - `make build`: static.
+      - `make test` uncached: 42.6 s wall, at a load average of 1.6 before and 3.9 after.
+      - `make lint`: 0 issues.
+      - Clean: `shellcheck scripts/bring-up.sh scripts/e2e.sh`, the contract job's `go generate ./... && git diff --exit-code`, and `go vet -tags contract,fixture,e2e ./...`.
+    - **What the contract job will do**, read from `ci.yml` and `scripts/bring-up.sh`. It was not run here: it needs sudo and a fresh Infrahub.
+      - `--part infrahub` starts a fresh Infrahub. `-prepare-main` loads the library onto its empty `main`, with the stage kind, the group and the registration at `ref main`, and waits for the pushed head's import. So the runner renders through the merged template.
+      - `make infrahub-seed` seeds `fylgja-fixture` in the library's kinds. The part then waits for three `device-config` artifacts `Ready` on `DcimDevice`. A failure there, before `make test-contract`, most likely points at the template or the query (T016).
+      - `make test-contract` then runs T044's and T051's tests against a render for the first time; on this host they wait for T058 and T060 and run at T062. `TestChecksInsideInfrahub` skips there, as it always has, since the runner's task workers reach no server.
+      - A red job is a defect to fix in the phase that owns it, then merged and pushed again, as this task says.
+    - **After the push**: `gh run list --branch main --limit 1` names the run, and `gh run watch <id>` follows it. On 015's and the release's pushes it took 12 to 16 minutes, without 017's tests. Record the job's result in this note, then tick the task. Run 18 (T058) then imports the pushed head on this host.
+
+  *Run 17's checkpoint, 12:41Z*:
+  - **Gates**: the lint and unit predictions above are the run's gates, and were run again on the final tree.
+  - **Not run, and why**: T057 names no tier-2 test, no hand scenario and no tier 3. Infrahub was read and not written to.
+  - **The host**:
+    - Both processes read `(deleted)` at the start, after the loop's gates rebuilt the binary. They were restarted from this tree after the final build: the worker is pid 194030 and the server pid 194050.
+    - Both `/proc/<pid>/exe` read the tree's `bin/fylgja`. Their environment names carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`.
+    - The server reports both listeners, the bridge warning, `default scope: tag:fylgja` and both packages with their logins set. From inside each task worker, `POST /v1/twin/show` answers `200 1 0.1.0-dev` with the token and `401` without it.
+    - `clab inspect --all` is `{}`. There is no `local/twin`, and Temporal lists no Schedule.
+    - In Infrahub, `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage` count 0, and `main`'s hash is `7c413536…`. The registration `fylgja` is still at `3c3e79a`.
+    - 12.1 GiB of memory is available.
+  - **Next**: T057, the operator's: once the loop stops, fast-forward `main` to the branch, push `origin`'s `main`, and read CI's contract job.
 
 - [ ] T058 [live] [US6] Import the pushed commit (quickstart §2 step 3). Look up `CoreReadOnlyRepository` `fylgja`'s id, then run `InfrahubReadOnlyRepositoryImportLastCommit(data: {id})` on `main`. Wait for the import's flow, and about 15 s more for both task workers to fetch it. Check that no `git_repositories_sync` run is stuck `PENDING`. Verify:
   - the registration's `commit` is the pushed head;

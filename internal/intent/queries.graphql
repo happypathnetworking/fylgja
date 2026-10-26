@@ -86,16 +86,17 @@ query Devices($tag: String!, $limit: Int!, $offset: Int!) {
 }
 
 # A cable is reached through the port's connector, the generic DcimConnector, never from
-# a root of its own: an end that is not a physical port has no name and no device here,
-# which is exactly "an end not on a physical port", and an end's device outside the scope
-# is told by its id's absence from the devices read, with no query of it (R-05). An
+# a root of its own: a connector whose __typename is not DcimCable is "a connector that is
+# not a DcimCable" (T096), an end that is not a physical port has no name and no device
+# here, which is exactly "an end not on a physical port", and an end's device outside the
+# scope is told by its id's absence from the devices read, with no query of it (R-05). An
 # uncabled port's connector node is null.
 #
 # The connector's node is decoded into cable.go's connectorNode, not a generated type:
 # genqlient's decoder refuses a __typename the SDL it was generated from does not name, so
 # an end on an endpoint kind of the operator's own, or a connector that is not a
-# DcimCable, would fail the whole read where the mapping omits the cable. The selection
-# is still checked against the SDL when the client is generated.
+# DcimCable, would fail the whole read where the mapping omits the cable or the connector.
+# The selection is still checked against the SDL when the client is generated.
 query Ports($devices: [ID], $limit: Int!, $offset: Int!) {
   InterfacePhysical(device__ids: $devices, limit: $limit, offset: $offset) {
     count

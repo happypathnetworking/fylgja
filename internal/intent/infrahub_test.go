@@ -75,10 +75,11 @@ type fakePort struct {
 }
 
 // fakeCable is one DcimCable: its label ("" none) and its ends, each the id of a port, or
-// an endpoint of another kind.
+// an endpoint of another kind. Kind, when set, makes it a connector of that kind in place
+// of a DcimCable, whose label the Ports query does not select.
 type fakeCable struct {
-	ID, Label string
-	Ends      []fakeEnd
+	ID, Label, Kind string
+	Ends            []fakeEnd
 }
 
 // fakeEnd is one end of a cable: a physical port by its id, or, when Kind is set, an
@@ -485,8 +486,8 @@ func (f *fakeInfrahub) portPage(ids []any, limit, offset int) map[string]any {
 	return page(nodes, limit, offset)
 }
 
-// connector is a port's connector node: null for an uncabled port, else the cable with
-// every end it joins.
+// connector is a port's connector node: null for an uncabled port, else the cable, or the
+// connector of another kind, with every end it joins.
 func (f *fakeInfrahub) connector(id string) any {
 	c, ok := f.cables[id]
 	if !ok {
@@ -510,6 +511,9 @@ func (f *fakeInfrahub) connector(id string) any {
 	endpoints["count"] = len(ends)
 	if n, ok := f.short[c.ID]; ok {
 		endpoints["count"] = n
+	}
+	if c.Kind != "" {
+		return map[string]any{"__typename": c.Kind, "id": c.ID, "connected_endpoints": endpoints}
 	}
 	return map[string]any{
 		"__typename":          "DcimCable",

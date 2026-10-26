@@ -414,12 +414,12 @@
               "object": {
                 "type": "string",
                 "minLength": 1,
-                "description": "The CTM field approximated (`interface.mgmt_only`, `interface.enabled`, `platform.version`) or the source object omitted (a cable, by its label or its id)."
+                "description": "The CTM field approximated (`interface.mgmt_only`, `interface.enabled`, `platform.version`) or the source object omitted (a cable, by its label or its id; a connector that is not a `DcimCable`, by its id)."
               },
               "source": {
                 "type": "string",
                 "minLength": 1,
-                "description": "The source field or kind the row was read from: `InterfacePhysical.role`, `InterfacePhysical.status`, `DcimPlatform`, `DcimCable`."
+                "description": "The source field or kind the row was read from: `InterfacePhysical.role`, `InterfacePhysical.status`, `DcimPlatform`, `DcimCable`, or the kind of an omitted connector that is not a `DcimCable`."
               },
               "reason": {
                 "type": "string",

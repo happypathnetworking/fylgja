@@ -21,9 +21,10 @@ type Counts struct {
 	// count of devices, on a clean read, and saying so is the only positive evidence
 	// that the twin will run what production runs rather than bootstrap alone.
 	Artifacts int
-	// CablesOmitted is how many cables the read reached and could not place (017; R-05):
-	// each is a row of the envelope's fidelity list, so a read that left cables out says so
-	// on its success line and not only in its findings.
+	// CablesOmitted is how many cables the read reached and could not place (017; R-05),
+	// connectors of another kind than DcimCable among them (T096): each is a row of the
+	// envelope's fidelity list, so a read that left cables out says so on its success line
+	// and not only in its findings.
 	CablesOmitted int
 }
 
@@ -39,8 +40,14 @@ func Summarize(c *ctm.CTM) Counts {
 			n.Artifacts++
 		}
 	}
+	// Every omitted row but the ones each read writes is a connector judgeCables omitted,
+	// whose source is its kind, DcimCable or another.
+	fixed := map[ctm.FidelityRow]bool{}
+	for _, r := range readFidelity() {
+		fixed[r] = true
+	}
 	for _, r := range c.Envelope.Fidelity {
-		if r.Disposition == ctm.FidelityOmitted && r.Source == cableSource {
+		if r.Disposition == ctm.FidelityOmitted && !fixed[r] {
 			n.CablesOmitted++
 		}
 	}

@@ -385,13 +385,14 @@ package is skipped by the artifact pass.
   record's `stage` block (it is provenance of the read, not of the stage).
 
 <a id="r-05"></a>
-### R-05 A cable reached from a port in the scope is a link only with exactly two physical ends inside it; otherwise an omission with one of three reasons
+### R-05 A cable reached from a port in the scope is a link only with exactly two physical ends inside it; otherwise an omission with one of four reasons
 
 For each port in the scope with a connector, the cable's ends are judged once per cable
 (a cable reached from both its ends is one cable, keyed by its id):
 
 | Reason | Rule | When |
 |---|---|---|
+| a connector that is not a DcimCable | `omit.cable.kind` | the connector's `__typename` is not `DcimCable`: a kind of the operator's own inheriting `DcimConnector`, which conformance allows (FR-012); added by T096, the operator's answer of 2026-10-26, first in the order |
 | other than two ends | `omit.cable.ends` | `connected_endpoints.count != 2` (one, none, three) |
 | an end not on a physical port | `omit.cable.endpoint` | an end whose `__typename` is not `InterfacePhysical` (impossible with the pinned six files, §1.5, possible with a user's endpoint kind) |
 | an end outside the scope | `omit.cable.outside_scope` | an end whose device id is not among the devices read |
@@ -772,7 +773,8 @@ Removed with the generics (FR-016): `contract.version.mismatch`, `contract.node.
 `schema.field.mismatch`, `schema.choice.missing`, `schema.used_by.missing`,
 `ctm.version.unsupported`, `scope.invalid`, `scope.unset`, `scope.empty`,
 `platform.missing`, `platform.unmatched`, `omit.cable.outside_scope`, `omit.cable.ends`,
-`omit.cable.endpoint`, `psp.matches.missing`, `psp.matches.duplicate`. Kept with their
+`omit.cable.endpoint`, `psp.matches.missing`, `psp.matches.duplicate`; and, by T096,
+`omit.cable.kind`. Kept with their
 meaning: `platform.unsupported` (CTM-side), `data.required.missing`, `device.name.duplicate`,
 `link.endpoints.count`, `link.endpoints.same_device`, every artifact, mapping, stage, step,
 verify, rehearsal and API rule. Severities, exits and steps are in

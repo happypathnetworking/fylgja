@@ -187,6 +187,7 @@ var dataModelRules = []string{
 	"omit.cable.ends",
 	"omit.cable.endpoint",
 	"omit.cable.outside_scope",
+	"omit.cable.kind",
 	"ctm.version.unsupported",
 	"psp.matches.missing",
 	"psp.matches.duplicate",

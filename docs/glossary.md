@@ -726,9 +726,10 @@ the envelope's fidelity list and so of the manifest's `fidelity.read`. It never 
 the read. The Infrahub reader omits the platform's version on every read, since the
 library's platform carries none, and every cable reached from a port in the scope that is
 not a link, each also an `info` finding beside the read, with the first reason that
-applies: other than two ends (`omit.cable.ends`), an end not on a physical port
-(`omit.cable.endpoint`) or an end outside the scope (`omit.cable.outside_scope`). A cable
-is judged once, however many of its ends are in the scope. Not the compiler's omissions
+applies: a connector that is not a `DcimCable` (`omit.cable.kind`), other than two ends
+(`omit.cable.ends`), an end not on a physical port (`omit.cable.endpoint`) or an end
+outside the scope (`omit.cable.outside_scope`). A cable is judged once, however many of
+its ends are in the scope. Not the compiler's omissions
 (`omit.interface.shared`, `omit.link.mgmt_only` and the others), which the manifest records
 in `omissions` and `fidelity.omitted`.
 

@@ -44,7 +44,7 @@ type Mapping struct {        // which reader, which model, which version of it
 type FidelityRow struct {
     Disposition string `json:"disposition"` // "approximated" | "omitted"
     Object      string `json:"object"`      // interface.mgmt_only | interface.enabled | platform.version | a cable's label or id
-    Source      string `json:"source"`      // InterfacePhysical.role | InterfacePhysical.status | DcimPlatform | DcimCable
+    Source      string `json:"source"`      // InterfacePhysical.role | InterfacePhysical.status | DcimPlatform | DcimCable | an omitted connector's kind
     Reason      string `json:"reason"`
 }
 type Platform struct {

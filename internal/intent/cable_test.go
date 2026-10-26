@@ -104,20 +104,71 @@ func TestCablesTheReadCannotPlace(t *testing.T) {
 	}
 }
 
-// The first reason that applies is the one given, in R-05's order: ends, then the kind of
-// an end, then the scope. A cable reached from several ports in the scope is judged once.
-// A cable none of whose ends is in the scope is reached from no port read, and is not read.
+// A connector that is not a DcimCable, a kind of the operator's own inheriting
+// DcimConnector, which conformance allows (FR-012), is never a link, even between two
+// physical ports in the scope: it is omitted under its own reason, an info finding naming
+// it by its id, since the read selects a label on a DcimCable alone, with its kind and its
+// ends, and a fidelity row whose source is its kind (FR-006; T096). Its ports stay in the
+// CTM, cabled to nothing, and the read's success line counts it among the cables omitted.
+func TestAConnectorThatIsNotACableIsOmitted(t *testing.T) {
+	f := newFakeInfrahub(t)
+	f.addPorts("n1", "ethernet-1/3")
+	f.addPorts("n2", "ethernet-1/3")
+	f.cable("jumper-1", "j-1", "n1:ethernet-1/3", "n2:ethernet-1/3").Kind = "AcmeJumper"
+
+	c, list, err := readFake(t, f)
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list.Rejected() || c == nil {
+		t.Fatalf("findings %v; the connector refused the read", list)
+	}
+	want := findings.List{{Severity: findings.Info, Rule: findings.RuleOmitCableKind, Object: "jumper-1",
+		Message: "connector jumper-1 is omitted: a connector that is not a DcimCable (AcmeJumper); its ends are n1:ethernet-1/3, n2:ethernet-1/3"}}
+	if !reflect.DeepEqual(list, want) {
+		t.Errorf("findings\n%v\nwant\n%v", list, want)
+	}
+	rows := append(append([]ctm.FidelityRow{}, fixedRows...),
+		ctm.FidelityRow{Disposition: "omitted", Object: "jumper-1", Source: "AcmeJumper", Reason: "a connector that is not a DcimCable (AcmeJumper)"},
+		platformRow,
+	)
+	if !reflect.DeepEqual(c.Envelope.Fidelity, rows) {
+		t.Errorf("fidelity\n%+v\nwant\n%+v", c.Envelope.Fidelity, rows)
+	}
+	if len(c.Links) != 3 {
+		t.Errorf("links %+v; want the fixture's three alone", c.Links)
+	}
+	for _, d := range []string{"n1", "n2"} {
+		if in := c.Device(d).Interface("ethernet-1/3"); in == nil || in.Link != "" {
+			t.Errorf("%s:ethernet-1/3 is %+v; want it read, linked to nothing", d, in)
+		}
+	}
+	if n := intent.Summarize(c).CablesOmitted; n != 1 {
+		t.Errorf("CablesOmitted %d, want 1", n)
+	}
+}
+
+// The first reason that applies is the one given, in R-05's order: the connector's kind
+// (T096), then its ends, then the kind of an end, then the scope. A cable reached from
+// several ports in the scope is judged once. A cable none of whose ends is in the scope is
+// reached from no port read, and is not read.
 func TestACableIsJudgedOnceByTheFirstReason(t *testing.T) {
 	cases := []struct {
 		name string
+		// kind is the connector's, "" a DcimCable.
+		kind string
 		ends []string
 		rule string
 	}{
-		{"three ends, one outside", []string{"n1:ethernet-1/3", "n2:ethernet-1/3", "cs1:port1"}, findings.RuleOmitCableEnds},
-		{"three ends, one a console port", []string{"n1:ethernet-1/3", "n2:ethernet-1/3", "DcimConsolePort#cp-7"}, findings.RuleOmitCableEnds},
-		{"an end a console port, reached from the other", []string{"n1:ethernet-1/3", "DcimConsolePort#cp-7"}, findings.RuleOmitCableEndpoint},
-		{"an end outside, reached from the other", []string{"n1:ethernet-1/3", "cs1:port1"}, findings.RuleOmitCableOutsideScope},
-		{"no end", nil, findings.RuleOmitCableEnds},
+		{"three ends, one outside", "", []string{"n1:ethernet-1/3", "n2:ethernet-1/3", "cs1:port1"}, findings.RuleOmitCableEnds},
+		{"three ends, one a console port", "", []string{"n1:ethernet-1/3", "n2:ethernet-1/3", "DcimConsolePort#cp-7"}, findings.RuleOmitCableEnds},
+		{"an end a console port, reached from the other", "", []string{"n1:ethernet-1/3", "DcimConsolePort#cp-7"}, findings.RuleOmitCableEndpoint},
+		{"an end outside, reached from the other", "", []string{"n1:ethernet-1/3", "cs1:port1"}, findings.RuleOmitCableOutsideScope},
+		{"no end", "", nil, findings.RuleOmitCableEnds},
+		{"another kind, three ends, one a console port, one outside", "AcmeJumper",
+			[]string{"n1:ethernet-1/3", "DcimConsolePort#cp-7", "cs1:port1"}, findings.RuleOmitCableKind},
+		{"another kind, two physical ends in the scope", "AcmeJumper", []string{"n1:ethernet-1/3", "n2:ethernet-1/3"}, findings.RuleOmitCableKind},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -125,7 +176,7 @@ func TestACableIsJudgedOnceByTheFirstReason(t *testing.T) {
 			f.addPorts("n1", "ethernet-1/3")
 			f.addPorts("n2", "ethernet-1/3")
 			f.addDevice("cs1", "Opengear", "Console OS", nil, "port1")
-			f.cable("cable-x", "c-x", tc.ends...)
+			f.cable("cable-x", "c-x", tc.ends...).Kind = tc.kind
 			if tc.ends == nil {
 				// A cable with no end is reached from no port; it is the port's connector
 				// all the same when Infrahub still names it there.
@@ -138,8 +189,13 @@ func TestACableIsJudgedOnceByTheFirstReason(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if c == nil || len(list) != 1 || list[0].Rule != tc.rule || list[0].Object != "c-x" {
-				t.Errorf("findings %v; want one, %s of c-x", list, tc.rule)
+			// A connector of another kind has no label the read selects: its id names it.
+			object := "c-x"
+			if tc.kind != "" {
+				object = "cable-x"
+			}
+			if c == nil || len(list) != 1 || list[0].Rule != tc.rule || list[0].Object != object {
+				t.Errorf("findings %v; want one, %s of %s", list, tc.rule, object)
 			}
 		})
 	}

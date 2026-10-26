@@ -248,6 +248,7 @@ const (
 	RuleOmitCableEnds         = "omit.cable.ends"          // info, exit 0, read: the cable; it has other than two ends
 	RuleOmitCableEndpoint     = "omit.cable.endpoint"      // info, exit 0, read: the cable; an end is not on a physical port
 	RuleOmitCableOutsideScope = "omit.cable.outside_scope" // info, exit 0, read: the cable; an end is outside the scope
+	RuleOmitCableKind         = "omit.cable.kind"          // info, exit 0, read: the connector; it is not a DcimCable, naming its kind (T096)
 	RuleCTMVersionUnsupported = "ctm.version.unsupported"  // rejection, exit 1, no step: the CTM file; twin compile was given a CTM of another version, naming both
 	RulePSPMatchesMissing     = "psp.matches.missing"      // rejection, exit 1, verify: the package path; no match, or a pair with an empty name
 	RulePSPMatchesDuplicate   = "psp.matches.duplicate"    // rejection, exit 1, verify: the package path; two packages name one pair, naming both packages and the pair; it also refuses the registry's load, and so serve and worker run at start

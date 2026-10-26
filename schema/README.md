@@ -56,7 +56,7 @@ manifest's and the twin record's provenance carry the same block. It was drafted
 | `interfaces[].mgmt_only` | `InterfacePhysical.role` | `management` is the management port; a second such port on one device is omitted by the compiler (`omit.mgmt.extra`) | **approximated**, one row per read |
 | `interfaces[].enabled` | `InterfacePhysical.status` | `disabled` is `false`; every other value, `null` included, is `true` | **approximated**, one row per read |
 | `links[]` | the port's `connector`, a `DcimConnector` (the `DcimCable`), with its `connected_endpoints` | a link when the cable has exactly two ends and each is an `InterfacePhysical` of a device in the scope; its id is the two ends' `<device>:<port>` sorted and joined with `\|`, each port's `link` set to it | exact |
-| nothing | any other cable reached from a port in the scope | omitted, never refusing the read, with one of three reasons (below) | **omitted**, one row per cable |
+| nothing | any other cable, or connector that is not a `DcimCable`, reached from a port in the scope | omitted, never refusing the read, with one of four reasons (below) | **omitted**, one row per cable or connector |
 
 **Not read**, since the mapping names everything read: the device's `description`,
 `status`, `role`, `location`, `primary_address`, `serial_number` and `device_type`; the
@@ -88,15 +88,17 @@ every device it cannot carry, all in one pass, with no CTM on any finding:
 | `platform.unmatched` | the device | no package's `matches` names the manufacturer's and the platform's `name`, both exactly; the message names the device's pair beside every package's |
 | `artifact.missing` and the other artifact rules | the device | no `Ready` artifact of the package's name, or one Fylgja cannot verify; a device refused for its platform is not also refused for its artifact |
 
-**Omissions.** A cable never refuses the read. One reached from a port in the scope that
-is not a link is omitted for the first reason that applies, judged once by its id however
-many of its ends are in the scope; each omission is an `info` finding beside the read,
+**Omissions.** A cable never refuses the read, nor does a connector of the operator's own
+kind inheriting `DcimConnector`, which is never a link. One reached from a port in the
+scope that is not a link is omitted for the first reason that applies, judged once by its
+id however many of its ends are in the scope; each omission is an `info` finding beside the read,
 naming every end on a physical port as `<device>:<port>`, and a row of the CTM's fidelity
 list. A device outside the scope is named by its id wherever an end names it: the read
 never reads such a device, so it has only the id the port's `device` answers.
 
 | Rule | Object | When | Reason |
 |---|---|---|---|
+| `omit.cable.kind` | the connector's id, since the read selects a `label` on a `DcimCable` alone | a connector whose kind is not `DcimCable` | `a connector that is not a DcimCable (<kind>)` |
 | `omit.cable.ends` | the cable's `label`, or its id when it has none | `connected_endpoints` counts other than two, or counts two and lists fewer | `other than two ends (<n>)`, the count; `other than two ends (<listed> listed of <n>)` when Infrahub lists fewer ends than it counts |
 | `omit.cable.endpoint` | the cable | an end whose kind is not `InterfacePhysical` | `an end not on a physical port (<kind>)` |
 | `omit.cable.outside_scope` | the cable | an end whose device is not among the devices read | `an end outside the scope (<device id>:<port>)` |
@@ -111,7 +113,7 @@ management; the library has no management-only flag"}`, `{approximated,
 interface.enabled, InterfacePhysical.status, "a port is enabled unless its status is
 disabled; the library's status is not an admin state"}` and `{omitted, platform.version,
 DcimPlatform, "the library's platform carries no version"}`, then one `{omitted, <cable>,
-DcimCable, <reason>}` per omitted cable, sorted by the whole row: disposition, object,
+<kind>, <reason>}` per omitted cable, `<kind>` `DcimCable` or the omitted connector's own, sorted by the whole row: disposition, object,
 source, then reason. The compiler
 copies the list into the manifest's `fidelity.read` unchanged and holds no table of its own.
 

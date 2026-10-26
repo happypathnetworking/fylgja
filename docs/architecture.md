@@ -205,14 +205,16 @@ with their platform, its manufacturer and their artifacts; then `Ports`, the
 cable through its `connector`, whose `connected_endpoints` give the far ends. The tag is
 read by that filter alone, never selected. A cable reached from a port in the scope is
 judged once, by its id, and is a link only with exactly two ends, each a physical port of a
-device in the scope; any other cable is omitted, never refusing the read, with the first
-reason that applies: other than two ends (`omit.cable.ends`), an end not on a physical
-port (`omit.cable.endpoint`), an end outside the scope (`omit.cable.outside_scope`). Each
-is an `info` finding naming the ends it knows, and a row of the envelope's **fidelity
-list**, beside three rows every read writes: the two approximations above and the
-platform's absent version. The compiler copies the list into the manifest unchanged and
-holds no table of any source's rows (Constitution III). What survives of
-[D-003](decisions.md#d-003) and [D-004](decisions.md#d-004), which D-057 superseded with
+device in the scope; any other cable, and any connector that is not a `DcimCable`, is
+omitted, never refusing the read, with the first reason that applies: a connector that is
+not a `DcimCable` (`omit.cable.kind`), other than two ends (`omit.cable.ends`), an end not
+on a physical port (`omit.cable.endpoint`), an end outside the scope
+(`omit.cable.outside_scope`). Each is an `info` finding naming the ends it knows, and a
+row of the envelope's **fidelity list**, beside three rows every read writes: the two
+approximations above and the platform's absent version. The compiler copies the list into
+the manifest unchanged and holds no table of any source's rows (Constitution III). What
+survives of [D-003](decisions.md#d-003) and [D-004](decisions.md#d-004), which D-057
+superseded with
 [D-002](decisions.md#d-002)'s generics contract: wiring is derived by the compiler from
 what the reader mapped, never declared in a schema ([§4.3](#43-compiler)), and a reader
 never claims a meaning the source does not carry, and says so where it approximates.

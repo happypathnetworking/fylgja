@@ -950,7 +950,7 @@ start on the same registry.
 
 ### Identifiers
 
-Sixteen added and eight removed. No status, step or exit is new.
+Seventeen added and eight removed. No status, step or exit is new.
 
 | Rule | Severity, exit, step | Object | When |
 |---|---|---|---|
@@ -967,6 +967,7 @@ Sixteen added and eight removed. No status, step or exit is new.
 | `omit.cable.ends` | info, 0, `read` | the cable | other than two ends |
 | `omit.cable.endpoint` | info, 0, `read` | the cable | an end not on a physical port |
 | `omit.cable.outside_scope` | info, 0, `read` | the cable | an end outside the scope |
+| `omit.cable.kind` | info, 0, `read` | the connector | a connector that is not a DcimCable (`<kind>`) |
 | `ctm.version.unsupported` | rejection, 1, none | the CTM file | `twin compile` given a CTM of another version, or declaring none; names both, or the one it reads |
 | `psp.matches.missing` | rejection, 1, `verify` | the package path | no match, or a pair with an empty name |
 | `psp.matches.duplicate` | rejection, 1, `verify` | the package path | two packages name one pair; names both packages and the pair; also refuses `serve` and `worker run` at start, and the registry's load |

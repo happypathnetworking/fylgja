@@ -24,7 +24,7 @@ the schema README's mapping section; until then it is the plan's.
 | `interfaces[].mgmt_only` | `InterfacePhysical.role` | `management` is the management port; a second such port on a device is omitted by the compiler as today (`omit.mgmt.extra`) | **approximated**, one row per read |
 | `interfaces[].enabled` | `InterfacePhysical.status` | `disabled` is `false`; every other value, `null` included, is `true` | **approximated**, one row per read |
 | `links[]` | the port's `connector`, a `DcimConnector` (the `DcimCable`), with its `connected_endpoints` | a link when the cable has exactly two ends and each is an `InterfacePhysical` of a device in the scope; the id is the two endpoints' `<device>:<port>` sorted and joined with `\|`, each port's `link` set to it | exact |
-| nothing | any other cable reached from a port in the scope | omitted, never refusing the read, with one of three reasons (§4) | **omitted**, one row per cable |
+| nothing | any other cable, or connector that is not a `DcimCable`, reached from a port in the scope | omitted, never refusing the read, with one of four reasons (§4) | **omitted**, one row per cable or connector |
 
 Not read, by the rule that the mapping names everything read: the device's `description`,
 `status`, `role`, `location`, `primary_address`, `serial_number`, `device_type`; the
@@ -111,10 +111,11 @@ After conformance, before any CTM, every finding in one pass, no CTM on any:
 | `platform.unmatched` | the device | no package's `matches` names the manufacturer's `name` and the platform's `name`, both exactly (letter case and spacing included) | the device's pair, and every package with its pairs |
 | the artifact rules | the device | as today (FR-008); a device refused for its platform is not also refused for its artifact | as today |
 
-A cable never refuses the read:
+A cable never refuses the read, nor does a connector of another kind:
 
 | Rule | Object | When (the first that applies) | Reason text |
 |---|---|---|---|
+| `omit.cable.kind` | the connector (its id: the read selects a `label` on a `DcimCable` alone) | the connector's `__typename` is not `DcimCable`: a kind of the operator's own inheriting `DcimConnector`, which conformance allows (FR-012) | `a connector that is not a DcimCable (<kind>)` (T096) |
 | `omit.cable.ends` | the cable (`label`, or id when it has none) | `connected_endpoints.count` is not 2, or it is 2 and Infrahub lists fewer ends | `other than two ends (<n>)`, `<n>` the count; `other than two ends (<listed> listed of <n>)` when it lists fewer than it counts |
 | `omit.cable.endpoint` | the cable | an end whose `__typename` is not `InterfacePhysical` | `an end not on a physical port (<kind>)` |
 | `omit.cable.outside_scope` | the cable | an end whose device is not among the devices read | `an end outside the scope (<device id>:<port>)`: the device outside the scope is never read (§1, FR-002), so its id, as the port's `device` answers it, stands where its name would |
@@ -122,7 +123,10 @@ A cable never refuses the read:
 Each is an `info` finding beside the read, naming every end on a physical port as
 `<device>:<port>`, a device outside the scope by its id as above (`cable c-out is omitted:
 an end outside the scope (<id>:port1); its ends are <id>:port1, n1:ethernet-1/5`), and a
-row of the envelope's fidelity list. A cable is judged once, by its id, however many
+row of the envelope's fidelity list. A connector of another kind is called one
+(`connector <id> is omitted: a connector that is not a DcimCable (AcmeJumper); its ends are
+n1:ethernet-1/3, n2:ethernet-1/3`), and the success line counts it among the cables
+omitted. A cable is judged once, by its id, however many
 of its ends are in the scope. A cable between two management-role ports, or with both ends
 on one device, reaches the CTM: the compiler omits the first (`omit.link.mgmt_only`) and
 validation refuses the second (`link.endpoints.same_device`), as today.
@@ -134,7 +138,7 @@ port is the port whose role is management; the library has no management-only fl
 `{approximated, interface.enabled, InterfacePhysical.status, "a port is enabled unless
 its status is disabled; the library's status is not an admin state"}`, `{omitted,
 platform.version, DcimPlatform, "the library's platform carries no version"}`; then one
-`{omitted, <cable>, DcimCable, <the finding's reason>}` per cable of §4. Sorted by the
+`{omitted, <cable>, <kind>, <the finding's reason>}` per cable of §4, `<kind>` the connector's: `DcimCable`, or the kind of a connector that is not one. Sorted by the
 whole row, (disposition, object), then source and reason: this reader writes no two rows
 tying on disposition and object, `DcimCable.label` being unique, but a hand-written CTM or
 another reader can, and the bundle must not depend on the order they arrived in (T092).

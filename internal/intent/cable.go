@@ -49,14 +49,18 @@ type textValue struct {
 // physicalPort is the one endpoint kind a link may end on (mapping.md §4).
 const physicalPort = "InterfacePhysical"
 
-// cableSource is the source of an omitted cable's fidelity row, by which Summarize counts
-// them.
-const cableSource = "DcimCable"
+// cableKind is the one connector kind a link may be (FR-006). A kind of the operator's own
+// may implement DcimConnector beside it, which conformance allows (FR-012), and is
+// omitted (T096).
+const cableKind = "DcimCable"
 
 // cableJudgement is one cable reached from a port in the scope, with every end it joins,
-// judged once by its id however many of its ends were read (R-05).
+// judged once by its id however many of its ends were read (R-05). A connector of another
+// kind is judged as one, so that it is omitted under its own reason.
 type cableJudgement struct {
-	id, label string
+	// kind is the connector's __typename, and the source of its fidelity row when it is
+	// omitted.
+	id, label, kind string
 	// count is connected_endpoints.count as Infrahub answered it, which the ends rule
 	// reads, rather than the ends listed.
 	count int
@@ -73,7 +77,7 @@ type cableEnd struct {
 // devices read are by id, so an end's device is named when it is in the scope and only
 // then: a device outside the scope is never read (FR-002).
 func judgeOf(n connectorNode, devices map[string]string) cableJudgement {
-	j := cableJudgement{id: n.ID, label: n.Label.Value, count: n.ConnectedEndpoints.Count}
+	j := cableJudgement{id: n.ID, label: n.Label.Value, kind: n.Typename, count: n.ConnectedEndpoints.Count}
 	for _, edge := range n.ConnectedEndpoints.Edges {
 		if edge.Node == nil {
 			continue
@@ -92,7 +96,8 @@ func judgeOf(n connectorNode, devices map[string]string) cableJudgement {
 }
 
 // object names the cable as its findings and its fidelity row do: its label, or its id
-// when it has none.
+// when it has none, as a connector of another kind always has, since the read selects a
+// label on a DcimCable alone.
 func (j cableJudgement) object() string {
 	if j.label != "" {
 		return j.label
@@ -100,12 +105,23 @@ func (j cableJudgement) object() string {
 	return j.id
 }
 
+// noun is what a finding calls the connector: a cable, or a connector of another kind.
+func (j cableJudgement) noun() string {
+	if j.kind == cableKind {
+		return "cable"
+	}
+	return "connector"
+}
+
 // omission is why the mapping cannot place a cable: its rule and its reason, the first of
-// R-05's three that applies, in their order; ok is false for a cable that is a link.
+// R-05's four that applies, in their order, the connector's own kind first (T096); ok is
+// false for a cable that is a link.
 func (j cableJudgement) omission() (rule, reason string, ok bool) {
+	switch {
+	case j.kind != cableKind:
+		return findings.RuleOmitCableKind, fmt.Sprintf("a connector that is not a DcimCable (%s)", j.kind), true
 	// The count Infrahub answered is the rule's; a cable that counts two and lists fewer,
 	// an end Infrahub would not give, is not two ends either, and says how many it listed.
-	switch {
 	case j.count != 2:
 		return findings.RuleOmitCableEnds, fmt.Sprintf("other than two ends (%d)", j.count), true
 	case len(j.ends) != 2:
@@ -155,8 +171,9 @@ func (j cableJudgement) endpoints() (ctm.Endpoint, ctm.Endpoint) {
 
 // judgeCables places every cable reached from a port in the scope (R-05). A cable with
 // exactly two ends, each a physical port of a device read, is a link with the canonical
-// id, both ports linked. Any other is omitted, never refusing the read: an info finding
-// beside the read and a fidelity row, each naming the cable and its reason. Cables are
+// id, both ports linked. Any other, and any connector that is not a DcimCable, is
+// omitted, never refusing the read: an info finding beside the read and a fidelity row
+// whose source is the connector's kind, each naming it and its reason. Cables are
 // judged in object order, so two reads of one branch report them alike, whatever order
 // Infrahub paged the ports in.
 func judgeCables(c *ctm.CTM, cables map[string]cableJudgement, list *findings.List) {
@@ -181,13 +198,13 @@ func judgeCables(c *ctm.CTM, cables map[string]cableJudgement, list *findings.Li
 	for _, j := range judged {
 		rule, reason, omitted := j.omission()
 		if omitted {
-			msg := fmt.Sprintf("cable %s is omitted: %s", j.object(), reason)
+			msg := fmt.Sprintf("%s %s is omitted: %s", j.noun(), j.object(), reason)
 			if ends := j.knownEnds(); len(ends) > 0 {
 				msg += "; its ends are " + strings.Join(ends, ", ")
 			}
 			list.Add(findings.Info, rule, j.object(), msg)
 			c.Envelope.Fidelity = append(c.Envelope.Fidelity, ctm.FidelityRow{
-				Disposition: ctm.FidelityOmitted, Object: j.object(), Source: cableSource, Reason: reason,
+				Disposition: ctm.FidelityOmitted, Object: j.object(), Source: j.kind, Reason: reason,
 			})
 			continue
 		}
@@ -205,7 +222,8 @@ func judgeCables(c *ctm.CTM, cables map[string]cableJudgement, list *findings.Li
 // readFidelity is what this reader approximates on every read (mapping.md §5): the
 // management port and the admin state, each read from a field whose meaning is close to
 // Fylgja's and not the same, and the platform's version, which the library does not
-// carry. Each omitted cable adds a row of its own (judgeCables).
+// carry. Each omitted cable, or connector of another kind, adds a row of its own
+// (judgeCables).
 func readFidelity() []ctm.FidelityRow {
 	return []ctm.FidelityRow{
 		{Disposition: ctm.FidelityApproximated, Object: "interface.mgmt_only", Source: "InterfacePhysical.role",

@@ -1487,6 +1487,7 @@ tier leaves it.
     - **Commits by hand**: none are owed. Each run committed its own work, and the tree was clean at `1b1e296` before this note. A finding from the review becomes a commit of its own, or the input to `converge`.
     - **The command log**: `local/command-log/pending.jsonl` is empty. The loop publishes each session's entry when the session exits: 31 are in `specs/017-dcim-reader/commands/runs.jsonl` through Run 22, and this session's follows when it exits. `make command-log`, run after the attended session closes, publishes whatever that session kept.
     - **With it, T057**: the next push of `origin`'s `main`, now that T062 and T063 are green. It is a fast-forward to the branch's head, made after the loop stops: `git fetch . 017-dcim-reader:main`, then `git push origin main`. Read CI's contract job on it, then tick T057 on a green job.
+  - *2026-10-26, the attended session, under the loop's pause at `94b625d`: the operator's answer to Run 23's question (`a`).* **Skipped for now, left for the operator**: the review comes once the loop's convergence passes have run and the loop has stopped, so that it covers whatever converge adds, in one read and one push (T057, also skipped). Its start is the note above, to be read again then against the branch head.
 
   *Run 23's checkpoint, 2026-10-26 18:34Z*:
   - **Gates**, on the final tree:

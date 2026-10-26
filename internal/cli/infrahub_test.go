@@ -25,13 +25,14 @@ import (
 // the fixture's schema hash. The read is answered in the schema library's kinds (017
 // research §1.6): each device of the CTM a DcimDevice tagged fylgja, on its package's
 // platform and manufacturer, each interface an InterfacePhysical, each link a DcimCable
-// labelled with its id. The stamps are still the generics' until 017's T047. The fixture branch reads as testdata/ctm/three-node.json, so a
-// read of it at the fixture's at is the fixture itself; main reads as the fixture too until
-// a test says otherwise; and any other branch a test gives it reads the same way from a CTM
-// of the test's. The branch half is internal/intent's fake (conformance_test.go) and the
-// stage half its stages_test.go's, which this package cannot import; like them it speaks
-// Infrahub's wire format, so a change to how a command asks is caught as a request it
-// cannot answer.
+// labelled with its id; its stamps are the IntentStamps and PortStamps answers in the
+// library's shape (stampPage, portStampPage). The fixture branch reads as
+// testdata/ctm/three-node.json, so a read of it at the fixture's at is the fixture itself;
+// main reads as the fixture too until a test says otherwise; and any other branch a test
+// gives it reads the same way from a CTM of the test's. The branch half is internal/intent's
+// fake (conformance_test.go) and the stage half its stages_test.go's, which this package
+// cannot import; like them it speaks Infrahub's wire format, so a change to how a command
+// asks is caught as a request it cannot answer.
 type fakeInfrahub struct {
 	t       *testing.T
 	fixture ctm.CTM

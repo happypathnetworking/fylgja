@@ -36,7 +36,7 @@ make build && make test && make lint
 ```
 
 Expected: green, under 45 s wall uncached. Among the tests that must exist and pass:
-`internal/ctm`'s `TestFixturesSatisfyTheSchema` over the moved `testdata/ctm/*.json` against
+`internal/ctm`'s `TestCTMFixturesSatisfyContract` over the moved `testdata/ctm/*.json` against
 [contracts/ctm.schema.json](contracts/ctm.schema.json), `TestVersion1IsRefused`; `internal/compiler`'s three
 goldens, `TestEveryInterfaceIsAPort`, the survey without a loopback arm, `TestManifestCopiesTheFidelityList`
 (the compiler holds no row's text: a CTM with an invented row reaches the manifest

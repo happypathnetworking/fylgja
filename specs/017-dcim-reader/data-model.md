@@ -151,13 +151,19 @@ becomes `{SchemaHash, Model, Version, Kinds []findings.KindFields}`; `Verified` 
 type DeviceStamps struct {
     Match     psp.Match          // the manufacturer and platform pair, for reg.Match in Stale
     IDs       []string           // the device, every interface, the platform, the manufacturer, every cable
-    Intent    string             // the latest node_metadata.updated_at among them
+    Intent    string             // the latest node stamp among them, as D-058 counts it
     Artifacts map[string]string  // as today
 }
 ```
 
-`IntentStamps` and `PortStamps` select edge `node_metadata { updated_at }` and ids
-(research R-10); `Stamps.Latest` folds every device's and every artifact's. `intentKinds`
+`IntentStamps` and `PortStamps` select edge `node_metadata { updated_at updated_by { id }
+created_at }` and ids (research R-10), and each artifact's definition's query id. A node's
+stamp is its `updated_at`, or its `created_at` when its `updated_by` is Infrahub's own
+account ([D-058](../../docs/decisions.md#d-058)): the `created_by` of the internal
+`CoreGraphQLQueryGroup`s of those queries, read by `QueryGroups` at the stamps' branch and
+`at`, no group leaving no stamp out ([D-060](../../docs/decisions.md#d-060);
+[contracts/mapping.md](contracts/mapping.md) §6). `Stamps.Latest` folds every device's and
+every artifact's. `intentKinds`
 maps the branch schema's `used_by` of `DcimGenericDevice`, `DcimInterface` and
 `DcimConnector` plus `DcimPlatform` and `OrganizationManufacturer` to "intent's";
 `changesIntent` is true for a creation or deletion, any attribute, or any relationship not

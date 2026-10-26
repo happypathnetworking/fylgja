@@ -84,6 +84,7 @@ next one.
 | [D-055](#d-055) | The contracts' `$id` namespace is this repository's GitHub URL | Contract |
 | [D-056](#d-056) | Spec Kit's files are installed on each host, not carried in the tree | Repository |
 | [D-057](#d-057) | The CTM is the contract; a reader maps one source's model onto it; the Infrahub reader reads the schema library's DCIM at a pinned commit | Contract |
+| [D-058](#d-058) | A stamp Infrahub's own account wrote is not intent's | Intent |
 
 ---
 
@@ -2932,7 +2933,8 @@ reference would split every command.
 ## D-046 — A stage's generation stamp is the later of its artifact's checksum stamp and the proposed change's artifact validation; staleness is judged per device
 
 **Status:** Accepted 2026-10-16. Refines [D-045](#d-045). Built by
-`014-proposed-change-stages`.
+`014-proposed-change-stages`; superseded by [D-058](#d-058) on 2026-10-26 in what a device's
+intent stamp is.
 
 ### Context
 
@@ -3562,6 +3564,63 @@ carries them.
 - Revisit when the library publishes a release, when NetBox's reader (F-025) shows the CTM
   wants a field this one cannot fill, or when the library's `DcimEndpoint` gains a second
   implementer.
+
+---
+
+<a id="d-058"></a>
+## D-058 — A stamp Infrahub's own account wrote is not intent's
+
+**Status:** Accepted 2026-10-26, by the operator, at `017-dcim-reader`'s converge loop
+(Run 19's question, T062). Supersedes [D-046](#d-046) in what a device's intent stamp is;
+its generation stamp, its per-device comparison and its remedies stand. Beside
+[D-048](#d-048), which stands. To be built by `017-dcim-reader`.
+
+### Context
+
+[D-046](#d-046) reads a device's intent stamp as the latest stamp of its own intent, and
+017 reads that stamp as each node's `node_metadata.updated_at` (R-10). Verified on 1.11.2
+on 2026-10-26 (`specs/017-dcim-reader/research.md` §5.11): about 3–7 s after a generation
+first reads a port or a cable, Infrahub adds it to the template query's groups, and that
+membership moves the node's `updated_at`, past the generation. `updated_by` reads `agent`,
+Infrahub's own account, on those writes, and `admin` on the operator's. So a new device,
+interface or cable reads stale after its hand generate, and no further generate clears it:
+`TestChecksInsideInfrahub` fails, tier 3's cases 7 and 9 would, and `TestStagesListAndPlan`
+passes only by reading before the join. 0.2 left the head fresh on the same route, and
+FR-024 keeps 0.2's behaviour. [D-048](#d-048) already holds that Infrahub's own churn
+(query groups, artifacts, memberships) is never intent; its event rule leaves those writes
+out, and the stamps did not.
+
+### Options considered
+
+- **Read stamps from the intent fields alone**, leaving out `member_of_groups` as the
+  event rule does. Rejected, as R-10 rejected it: the query names every field of the
+  library's kinds and no longer covers a user's extra ones.
+- **Accept the over-report**, the remedy naming the proposed change's artifact check.
+  Rejected: it amends FR-024 and US5 for Infrahub's bookkeeping.
+- **Leave out a stamp Infrahub's own account wrote.** Chosen.
+
+### Decision
+
+- A node's `node_metadata.updated_at` counts toward a device's intent stamp only when its
+  `updated_by` is not Infrahub's own account. When it is, the node contributes its
+  `created_at` instead: a membership is written only after a generation has read the node,
+  so its creation is no later than that generation.
+- Infrahub's own account is identified as Infrahub itself identifies it, verified against
+  the running 1.11.2 before this is built. If it can be identified only by a name an
+  install may change, the build stops and asks.
+- An intent write by any account, Infrahub's own included (a generator's), is still seen
+  by [D-048](#d-048)'s event read, which counts creations and updates by any account and
+  leaves out only Infrahub's own relationships. The head and the staleness rule read both,
+  as before.
+
+### Consequences
+
+- The stamps' queries read `updated_by` and `created_at` beside `updated_at` (R-10's one
+  wrapper per node stays); the rule is pinned by a tier-1 test.
+- `TestChecksInsideInfrahub` and `TestStagesListAndPlan` read the head fresh after a hand
+  generate, without a race; tier 3's cases 7 and 9 are unchanged.
+- Revisit if Infrahub records a membership on the group alone, writes it under the
+  operator's account, or stamps nodes on a later generation that reads them.
 
 ---
 

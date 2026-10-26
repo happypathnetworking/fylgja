@@ -284,8 +284,9 @@ func (c *Client) KindsHeld(branch string, kinds []string) ([]string, error) {
 }
 
 // LibraryHeldError is -prepare-main's refusal (R-13): the branch already holds some of the
-// schema library's kinds, so nothing was loaded. Its sentence is the one the bring-up
-// script reads as present.
+// schema library's kinds, so nothing was loaded. Its sentence's opening, up to "an empty
+// main alone", is the one the bring-up script reads as present; the rest says the tool is
+// not an install path (US6 scenario 2).
 type LibraryHeldError struct {
 	Branch string
 	Held   []string
@@ -293,8 +294,8 @@ type LibraryHeldError struct {
 
 func (e *LibraryHeldError) Error() string {
 	return fmt.Sprintf("%s holds %d of the schema library's kinds (%s): -prepare-main is the development host's and CI's "+
-		"tool, which loads the library on an empty main alone; a main that already holds the library is yours, "+
-		"and fylgja schema check says whether it is the one the reader reads",
+		"tool, which loads the library on an empty main alone; it is not an install path: a main that already holds "+
+		"the library is yours, and fylgja schema check says whether it is the one the reader reads",
 		e.Branch, len(e.Held), strings.Join(e.Held, ", "))
 }
 

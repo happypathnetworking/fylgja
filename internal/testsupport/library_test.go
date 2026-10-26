@@ -189,8 +189,9 @@ func TestLoadLibraryRefusesAMainHoldingAnyOfItsKinds(t *testing.T) {
 		t.Errorf("files: %d, want 0", files)
 	}
 	const want = "main holds 2 of the schema library's kinds (DcimConnector, DcimDevice): -prepare-main is the " +
-		"development host's and CI's tool, which loads the library on an empty main alone; a main that already " +
-		"holds the library is yours, and fylgja schema check says whether it is the one the reader reads"
+		"development host's and CI's tool, which loads the library on an empty main alone; it is not an install " +
+		"path: a main that already holds the library is yours, and fylgja schema check says whether it is the one " +
+		"the reader reads"
 	if err.Error() != want {
 		t.Errorf("the refusal:\n got %s\nwant %s", err, want)
 	}

@@ -593,8 +593,10 @@ kinds (every node and generic the six files define) `main` holds. None: it loads
 files (one request, about 30 s, §1.2), then the stage kind as today. Any: it refuses with
 `main holds <n> of the schema library's kinds (DcimDevice, DcimPlatform, …): -prepare-main
 is the development host's and CI's tool, which loads the library on an empty main alone;
-a main that already holds the library is yours, and fylgja schema check says whether it is
-the one the reader reads`, exit 1, before the group and the registration. The first run
+it is not an install path: a main that already holds the library is yours, and fylgja
+schema check says whether it is the one the reader reads`, exit 1, before the group and the
+registration (the clause `it is not an install path` added by T098, as US6 scenario 2
+asks; the bring-up script reads the sentence up to `an empty main alone`). The first run
 after the migration (R-14) finds none and loads; a second run finds all and refuses, so
 the bring-up script's part must take that refusal as `present`: it reads the tool's exit
 and the sentence, and reports `main present (the library, the stage kind, the group, the

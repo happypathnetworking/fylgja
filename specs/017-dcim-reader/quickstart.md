@@ -86,8 +86,9 @@ Expected after step 1: `removed:` naming the five, then the four; `fylgja:
 ["FylgjaStage"]` and a new hash. After step 2: `schema library loaded on main (6 files,
 opsmill/schema-library@26336e9)`, `stage kind present`, `group fylgja-devices present`,
 `repository fylgja present`; the second run `main holds 27 of the schema library's kinds
-(DcimCable, DcimConnector, DcimDevice, …): -prepare-main is the development host's and CI's tool, …`,
-exit 1, nothing written. Record the hash.
+(DcimCable, DcimConnector, DcimDevice, …): -prepare-main is the development host's and CI's tool,
+which loads the library on an empty main alone; it is not an install path: …`, exit 1,
+nothing written. Record the hash.
 
 ```sh
 # 3. the operator's gate: the template commit on origin's main, imported

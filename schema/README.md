@@ -30,9 +30,9 @@ calls itself experimental, so the commit is pinned.
 files in one request on `main`, then the stage kind, and only onto a `main` holding none of
 the library's kinds. A `main` holding any is refused, with nothing loaded: `main holds <n>
 of the schema library's kinds (…): -prepare-main is the development host's and CI's tool,
-which loads the library on an empty main alone; a main that already holds the library is
-yours, and fylgja schema check says whether it is the one the reader reads`. It is not an
-install path. A DCIM user who already runs the library loads nothing of Fylgja's but
+which loads the library on an empty main alone; it is not an install path: a main that
+already holds the library is yours, and fylgja schema check says whether it is the one the
+reader reads`. A DCIM user who already runs the library loads nothing of Fylgja's but
 `fylgja-stage.yaml` ([below](#the-kind-on-the-default-branch)), and only for the stage
 surface; `fylgja schema check` says whether their DCIM is the one the reader reads.
 

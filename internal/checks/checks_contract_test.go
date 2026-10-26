@@ -143,7 +143,7 @@ func TestChecksInsideInfrahub(t *testing.T) {
 		t.Fatalf("marking third-link: %v", err)
 	}
 
-	// 5. The plan passes: the branch point's refusal for want of a network on main excepted.
+	// 5. The plan passes: the branch point's scope.empty, for want of a tagged device on main, excepted.
 	step := rerun(t, c, id)
 	reached(t, step)
 	if step.Conclusion != "success" {
@@ -168,8 +168,8 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	if err := c.SetDeviceDescription(branch, "n1", "stale-description"); err != nil {
 		t.Fatalf("changing n1's description: %v", err)
 	}
-	if _, _, err := c.MarkStage(id, "role-stale", "", "n1's role, not rendered"); err != nil {
-		t.Fatalf("marking role-stale: %v", err)
+	if _, _, err := c.MarkStage(id, "description-stale", "", "n1's description, not rendered"); err != nil {
+		t.Fatalf("marking description-stale: %v", err)
 	}
 	step = rerun(t, c, id)
 	reached(t, step)
@@ -723,7 +723,7 @@ func bridgeServer(listen string) string {
 // now: a device whose artifact is not Ready is not listed.
 func deviceChecksums(t *testing.T, c *testsupport.Client, branch string) map[string]string {
 	t.Helper()
-	raw, err := c.GraphQL(branch, `{ FylgjaDevice { edges { node { name { value }
+	raw, err := c.GraphQL(branch, `{ DcimDevice { edges { node { name { value }
 		... on CoreArtifactTarget { artifacts { edges { node { status { value } checksum { value }
 			definition { node { ... on CoreArtifactDefinition { artifact_name { value } } } } } } } } } } } }`)
 	if err != nil {
@@ -752,7 +752,7 @@ func deviceChecksums(t *testing.T, c *testsupport.Client, branch string) map[str
 					} `json:"artifacts"`
 				} `json:"node"`
 			} `json:"edges"`
-		} `json:"FylgjaDevice"`
+		} `json:"DcimDevice"`
 	}
 	if err := json.Unmarshal(raw, &r); err != nil {
 		t.Fatal(err)

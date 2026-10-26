@@ -784,6 +784,122 @@ func (c *Client) SetDevicePlatform(branch, device, manufacturer, platform string
 	return okOf(raw, "DcimDeviceUpdate", fmt.Sprintf("setting the platform of %s/%s", branch, device))
 }
 
+// AddVirtualInterface writes one InterfaceVirtual on a test branch's device, with no parent
+// and no role. The read never reads it (FR-003), but it is the device's intent: its stamp is
+// among the device's, since a transform may render it (FR-023; 017 research R-10). It renders
+// nothing. The fixture is refused, as every change is, and so is a second interface of the
+// name on the device.
+func (c *Client) AddVirtualInterface(branch, device, name string) error {
+	if branch == FixtureBranch {
+		return fmt.Errorf("branch %s: the fixture is never changed", branch)
+	}
+	if err := testBranch(branch); err != nil {
+		return err
+	}
+	dev, err := c.deviceID(branch, device)
+	if err != nil {
+		return err
+	}
+	present, err := c.ids(branch, "DcimInterface", fmt.Sprintf(`(device__name__value: %q, name__value: %q)`, device, name))
+	if err != nil {
+		return err
+	}
+	if len(present) != 0 {
+		return fmt.Errorf("branch %s already holds %s:%s", branch, device, name)
+	}
+	id, err := c.create(branch, "InterfaceVirtual", fmt.Sprintf(`{name: {value: %q}, device: {id: %q}}`, name, dev))
+	if err != nil {
+		return err
+	}
+	if id == "" {
+		return fmt.Errorf("adding %s:%s on %s: Infrahub returned no id", device, name, branch)
+	}
+	return nil
+}
+
+// SetPlatformDescription changes the description of the one platform of a name on a test
+// branch: a write on a node every device on the platform reaches, which the template does
+// not render (017 research R-10, §5.8). The fixture is refused, as every change is.
+func (c *Client) SetPlatformDescription(branch, platform, description string) error {
+	return c.setNamedDescription(branch, "DcimPlatform", platform, description)
+}
+
+// SetManufacturerDescription changes the description of the one manufacturer of a name on
+// a test branch: a write every device reaches through its platform, which the template does
+// not render (017 research R-10, §5.8). The fixture is refused, as every change is.
+func (c *Client) SetManufacturerDescription(branch, manufacturer, description string) error {
+	return c.setNamedDescription(branch, "OrganizationManufacturer", manufacturer, description)
+}
+
+// setNamedDescription updates the description of the one object of a kind with a name on a
+// test branch.
+func (c *Client) setNamedDescription(branch, kind, name, description string) error {
+	if branch == FixtureBranch {
+		return fmt.Errorf("branch %s: the fixture is never changed", branch)
+	}
+	if err := testBranch(branch); err != nil {
+		return err
+	}
+	found, err := c.ids(branch, kind, fmt.Sprintf(`(name__value: %q)`, name))
+	if err != nil {
+		return err
+	}
+	if len(found) != 1 {
+		return fmt.Errorf("branch %s holds %d %s named %q, want one", branch, len(found), kind, name)
+	}
+	what := fmt.Sprintf("setting the description of %s %q on %s", kind, name, branch)
+	raw, err := c.GraphQL(branch, fmt.Sprintf(
+		`mutation { %sUpdate(data: {id: %q, description: {value: %q}}) { ok } }`, kind, found[0], description))
+	if err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	return okOf(raw, kind+"Update", what)
+}
+
+// ReEndCable gives the one cable that ends at device's port on a test branch the ends
+// named as device:port, in place of the ones it had: a port dropped from it reads no
+// connector after. It moves no stamp, and the cable's and the dropped port's events are how
+// it is seen (017 research §5.8). It renders nothing. The fixture is refused, as every change
+// is.
+func (c *Client) ReEndCable(branch, device, iface string, ends ...string) error {
+	if branch == FixtureBranch {
+		return fmt.Errorf("branch %s: the fixture is never changed", branch)
+	}
+	if err := testBranch(branch); err != nil {
+		return err
+	}
+	port, err := c.portID(branch, device, iface)
+	if err != nil {
+		return err
+	}
+	cables, err := c.ids(branch, "DcimCable", fmt.Sprintf(`(connected_endpoints__ids: [%q])`, port))
+	if err != nil {
+		return err
+	}
+	if len(cables) != 1 {
+		return fmt.Errorf("branch %s holds %d cables ending at %s:%s, want one", branch, len(cables), device, iface)
+	}
+	peers := make([]string, 0, len(ends))
+	for _, e := range ends {
+		d, p, ok := strings.Cut(e, ":")
+		if !ok {
+			return fmt.Errorf("re-ending the cable at %s:%s: end %q is not device:port", device, iface, e)
+		}
+		id, err := c.portID(branch, d, p)
+		if err != nil {
+			return err
+		}
+		peers = append(peers, fmt.Sprintf(`{id: %q}`, id))
+	}
+	what := fmt.Sprintf("re-ending the cable at %s/%s:%s to %v", branch, device, iface, ends)
+	raw, err := c.GraphQL(branch, fmt.Sprintf(`mutation { DcimCableUpdate(data: {id: %q, connected_endpoints: [%s]}) { ok } }`,
+		cables[0], strings.Join(peers, ", ")))
+	if err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	return okOf(raw, "DcimCableUpdate", what)
+}
+
 // deviceID returns the one device of a name on a branch.
 func (c *Client) deviceID(branch, name string) (string, error) {
 	found, err := c.ids(branch, "DcimDevice", fmt.Sprintf(`(name__value: %q)`, name))

@@ -226,7 +226,7 @@ func refused(t *testing.T, what string, list findings.List, rule string, objects
 
 // The kind is on the default branch with its three attributes, its relationship and the
 // extension, the waypoint kind it replaced is not (D-045), and the product's reader
-// accepts it. With the kind there, the seed's schema
+// accepts it. With the kind and the schema library there (017 R-14), the seed's schema
 // load on a throwaway branch is an empty diff. A stage the harness marks through the
 // default branch's GraphQL is read by the product's reader with its proposed change; a
 // second of its label on the same proposed change, written through the throwaway branch's
@@ -307,14 +307,15 @@ func TestStageKindLoads(t *testing.T) {
 			intent.ProposedChangeKind, intent.StageExtension, extensionFound)
 	}
 
-	// The schema load on a branch made from main moves nothing: the kind is main's.
+	// The schema load on a branch made from main moves nothing: the library and the kind are
+	// main's.
 	name := testBranch(t, c)
 	before := schemaHash(t, c, name)
 	if err := c.LoadSchema(name, filepath.Join("..", "..", "schema")); err != nil {
 		t.Fatalf("loading schema: %v", err)
 	}
 	if after := schemaHash(t, c, name); after != before {
-		t.Errorf("loading schema/*.yaml on %s moved its schema hash %s → %s; with the kind on the default branch the load is an empty diff",
+		t.Errorf("loading schema/ on %s moved its schema hash %s → %s; with the library and the kind on the default branch the load is an empty diff",
 			name, before, after)
 	}
 	t.Logf("branch %s, schema hash %s (the default branch's %s)", name, before, schemaHash(t, c, ""))
@@ -386,8 +387,8 @@ func TestStageKindLoads(t *testing.T) {
 
 // A proposed change with two marks lists and plans as four stages in order: the branch
 // point, each mark at its own write stamp verbatim, and the head one microsecond after the
-// branch's latest stamp. On this install's main, which holds no contract, the branch point
-// is refused scope.empty and its step is not computed (research R-04); the marks
+// branch's latest stamp. On this install's main, which holds no tagged device, the branch
+// point is refused scope.empty and its step is not computed (017 R-20); the marks
 // and the head compile to three ids, the step between the marks is the link added with n1
 // and n3 changed, and the step to the head is unchanged. The mark's CTM is the read of
 // --branch at its at, but for observed_at, and compiles to the same id (SC-002). Then the
@@ -612,8 +613,8 @@ func TestStagesListAndPlan(t *testing.T) {
 // The refusals tier 2 can make, on one proposed change in the order its story makes them.
 // An intent change with no regenerate makes the mark after it stale on every device it
 // moved, and a generate then a fresh mark plans; an edit the template does not render (the
-// site) leaves the mark stale through a generate that moves no checksum, and the proposed
-// change's checks clear it (D-046). A rebase moves the branch point past every mark, each
+// serial number, 017 R-15) leaves the mark stale through a generate that moves no checksum,
+// and the proposed change's checks clear it (D-046). A rebase moves the branch point past every mark, each
 // refused naming the rebase while the derived stages are still planned. A mark labelled
 // head is refused as reserved, a given as_of in the future as unresolved; once the
 // proposed change is closed its branch names no stage, nor does a branch that does not
@@ -656,15 +657,15 @@ func TestStageRefusals(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	markStage(t, c, id, "role-stale", "", "the role, not rendered")
-	stale("role-stale")
+	markStage(t, c, id, "description-stale", "", "the description, not rendered")
+	stale("description-stale")
 	before := checksums(t, c, name)
 	if err := c.GenerateArtifacts(name); err != nil {
 		t.Fatal(err)
 	}
 	awaitMoved(t, c, name, before, devices...)
-	markStage(t, c, id, "role-fresh", "", "the role, rendered")
-	fresh("role-fresh")
+	markStage(t, c, id, "description-fresh", "", "the description, rendered")
+	fresh("description-fresh")
 
 	// The serial number, which the template does not print: a generate rewrites nothing,
 	// so the checksums stay older than the edit, and only the proposed change's checks
@@ -674,17 +675,17 @@ func TestStageRefusals(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	markStage(t, c, id, "site-stale", "", "")
-	stale("site-stale")
+	markStage(t, c, id, "serial-stale", "", "")
+	stale("serial-stale")
 	before = checksums(t, c, name)
 	if err := c.GenerateArtifacts(name); err != nil {
 		t.Fatal(err)
 	}
 	if after := checksums(t, c, name); !maps.Equal(after, before) {
-		t.Errorf("a generate after the site edit moved the checksums %v → %v; the site renders nothing", before, after)
+		t.Errorf("a generate after the serial number's edit moved the checksums %v → %v; the serial number renders nothing", before, after)
 	}
-	markStage(t, c, id, "site-generated", "", "")
-	stale("site-generated")
+	markStage(t, c, id, "serial-generated", "", "")
+	stale("serial-generated")
 	started := time.Now()
 	completed, err := c.RunCheck(id, 180*time.Second)
 	if err != nil {
@@ -694,8 +695,8 @@ func TestStageRefusals(t *testing.T) {
 	if after := checksums(t, c, name); !maps.Equal(after, before) {
 		t.Errorf("the run-check moved the checksums %v → %v; the bytes are identical", before, after)
 	}
-	markStage(t, c, id, "site-checked", "", "")
-	checked := fresh("site-checked")
+	markStage(t, c, id, "serial-checked", "", "")
+	checked := fresh("serial-checked")
 	if got, err := reader.Validations(t.Context(), id, checked.At); err != nil || got != completed {
 		t.Errorf("the product reads the validation pinned at %s as %q (%v); want the run-check's %s", checked.At, got, err, completed)
 	}
@@ -704,11 +705,11 @@ func TestStageRefusals(t *testing.T) {
 	res := planOf(t, name, p)
 	if got, want := outcomes(res), []outcome{
 		{LabelBranchPoint, PlanRefused, findings.RuleScopeEmpty},
-		{"role-stale", PlanRefused, findings.RuleStageArtifactStale},
-		{"role-fresh", PlanCompiled, ""},
-		{"site-stale", PlanRefused, findings.RuleStageArtifactStale},
-		{"site-generated", PlanRefused, findings.RuleStageArtifactStale},
-		{"site-checked", PlanCompiled, ""},
+		{"description-stale", PlanRefused, findings.RuleStageArtifactStale},
+		{"description-fresh", PlanCompiled, ""},
+		{"serial-stale", PlanRefused, findings.RuleStageArtifactStale},
+		{"serial-generated", PlanRefused, findings.RuleStageArtifactStale},
+		{"serial-checked", PlanCompiled, ""},
 		{LabelHead, PlanCompiled, ""},
 	}; !slices.Equal(got, want) {
 		t.Errorf("stage plan %s before the rebase: %v, want %v", name, got, want)
@@ -721,7 +722,7 @@ func TestStageRefusals(t *testing.T) {
 
 	// A rebase moves branched_from to its own moment and leaves created_at: every mark
 	// falls before the branch point, and the refusal says a rebase did it.
-	marks := []string{"role-stale", "role-fresh", "site-stale", "site-generated", "site-checked"}
+	marks := []string{"description-stale", "description-fresh", "serial-stale", "serial-generated", "serial-checked"}
 	_, createdBefore := branchOrigin(t, c, name)
 	started = time.Now()
 	if err := c.Rebase(name); err != nil {
@@ -783,7 +784,7 @@ func TestStageRefusals(t *testing.T) {
 	if err := c.CloseProposedChange(id); err != nil {
 		t.Fatal(err)
 	}
-	_, list = resolve(Ref{Branch: name, Label: "site-checked"})
+	_, list = resolve(Ref{Branch: name, Label: "serial-checked"})
 	for _, m := range refused(t, "after the close", list, findings.RuleStageUnknown, name) {
 		if !strings.Contains(m, "no open proposed change has source branch "+name) {
 			t.Errorf("after the close: %q", m)
@@ -800,8 +801,134 @@ func TestStageRefusals(t *testing.T) {
 	refused(t, "an unknown branch", list, findings.RuleStageUnknown, absent)
 }
 
-// D-048 against the real Infrahub: the link n1:ethernet-1/1 — n2:ethernet-1/1 deleted as
-// the branch's latest write moves no stamp the stamps read selects (research §8.17), and
+// SC-009 against the real Infrahub (017 research R-10, §5.8): after a fresh mark, each write
+// on what a tagged device owns or reaches makes the next mark stale on every tagged device
+// that reaches it, and on no other. The platform's description and the manufacturer's reach
+// the three devices on them; the cable on n1:ethernet-1/1 re-ended to n1's port alone reaches
+// n1 and n2, by the cable's event and its former port's, since no stamp moves; a virtual
+// interface added to n1 reaches n1 alone. A write of cs1's own, an untagged device on the
+// same platform, makes no mark stale. Only the re-ending renders differently, so the
+// proposed change's checks clear each write before the next (D-046), and a mark after them
+// is fresh. The virtual interface goes last: the template's query reads every interface, and
+// the first generation to read a node moves its stamp (§5.8).
+func TestStagesSeeEveryWriteOfADevice(t *testing.T) {
+	c := harness(t)
+	name := throwaway(t, c, true)
+	// cs1 is outside the scope. Its creation on the platform moves the platform's stamp, and
+	// so every tagged device's (§5.8): it is written before the proposed change, whose
+	// pipeline's artifact validator completes after it.
+	if _, err := c.AddDevice(name, testsupport.Device{Name: "cs1", Manufacturer: "Nokia", Platform: "SR Linux",
+		Ports: []string{"mgmt0", "ethernet-1/1"}, Management: "mgmt0"}); err != nil {
+		t.Fatal(err)
+	}
+	id := propose(t, c, name)
+	reader := stageReader(t)
+	resolve := func(label string) findings.List {
+		t.Helper()
+		_, list, err := Resolve(t.Context(), reader, liveStamper{}, registry(t), Ref{Branch: name, Label: label}, testScope, time.Now().UTC())
+		if err != nil {
+			t.Fatalf("resolving %s/%s: %v", name, label, err)
+		}
+		return list
+	}
+	fresh := func(label string) {
+		t.Helper()
+		if list := resolve(label); len(list) != 0 {
+			t.Errorf("%s/%s: %v; want it fresh, with no finding", name, label, list)
+		}
+	}
+	stale := func(label string, devices ...string) []string {
+		t.Helper()
+		messages := refused(t, name+"/"+label, resolve(label), findings.RuleStageArtifactStale, devices...)
+		for _, m := range messages {
+			if !strings.Contains(m, remedy) {
+				t.Errorf("%s/%s: %q names not both remedies", name, label, m)
+			}
+		}
+		return messages
+	}
+	// mark writes a mark after a write and judges it; then, when the write is not the last,
+	// the proposed change's checks complete its artifact validator anew and a second mark
+	// after them is fresh, so that the next write's mark is stale by that write alone.
+	mark := func(label, what string, last bool, devices ...string) []string {
+		t.Helper()
+		markStage(t, c, id, label, "", what)
+		messages := stale(label, devices...)
+		if !last {
+			started := time.Now()
+			completed, err := c.RunCheck(id, 180*time.Second)
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Logf("after %s, the run-check's artifact validator completed at %s, %.0fs after the call", what, completed,
+				time.Since(started).Seconds())
+			markStage(t, c, id, label+"-checked", "", what+", checked")
+			fresh(label + "-checked")
+		}
+		return messages
+	}
+
+	markStage(t, c, id, "seeded", "", "seeded")
+	fresh("seeded")
+
+	// cs1's own write: its node is no tagged device's, nor in any one's ids.
+	if err := c.SetDeviceDescription(name, "cs1", "untagged-description"); err != nil {
+		t.Fatal(err)
+	}
+	markStage(t, c, id, "untagged", "", "cs1 described")
+	fresh("untagged")
+
+	// The seed's platform and its manufacturer, which every device stands on.
+	if err := c.SetPlatformDescription(name, "SR Linux", "described"); err != nil {
+		t.Fatal(err)
+	}
+	mark("platform", "the platform described", false, "n1", "n2", "n3")
+	if err := c.SetManufacturerDescription(name, "Nokia", "described"); err != nil {
+		t.Fatal(err)
+	}
+	mark("manufacturer", "the manufacturer described", false, "n1", "n2", "n3")
+
+	// The re-ending moves no stamp: the cable's event, and its former port's, land in the log
+	// a few seconds after the write (§5.8), and the head passes the write by them alone. The
+	// mark is written once it has, so that its at is after them.
+	headOf := func() string {
+		t.Helper()
+		ch, list, err := Find(t.Context(), reader, liveStamper{}, name, testScope)
+		if err != nil || list != nil {
+			t.Fatalf("finding %s: %v %v", name, err, list)
+		}
+		head, _ := ch.first(LabelHead)
+		return head.At
+	}
+	sent := time.Now().UTC()
+	if err := c.ReEndCable(name, "n1", "ethernet-1/1", "n1:ethernet-1/1"); err != nil {
+		t.Fatal(err)
+	}
+	for deadline := time.Now().Add(30 * time.Second); ; time.Sleep(250 * time.Millisecond) {
+		if at, ok := ParseAt(headOf()); ok && at.After(sent) {
+			t.Logf("the head passed the re-ending %.1fs after it was sent", time.Since(sent).Seconds())
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("the head has not passed the re-ending sent at %s 30 s after it; want it moved by the re-ending's events",
+				sent.Format(time.RFC3339Nano))
+		}
+	}
+	messages := mark("cable", "the cable re-ended", false, "n1", "n2")
+	// n2 reaches the cable no more: its former port's id, which the events name, is how.
+	if len(messages) == 2 && !strings.Contains(messages[1], "(Infrahub's event log: infrahub.node.") {
+		t.Errorf("%s/cable: n2 is stale by %q; want the re-ending's event named", name, messages[1])
+	}
+
+	if err := c.AddVirtualInterface(name, "n1", "lo0"); err != nil {
+		t.Fatal(err)
+	}
+	mark("virtual", "a virtual interface added to n1", true, "n1")
+}
+
+// D-048 against the real Infrahub: the cable n1:ethernet-1/1 — n2:ethernet-1/1 deleted, by
+// DcimCableDelete, as the branch's latest write moves no stamp the stamps read selects
+// (014 research §8.17; 017 §1.7), and
 // the head moves past the delete all the same, by the branch's intent events. A stage
 // marked after the delete, and the head, are refused stale for n1 and n2, whose interfaces
 // the events name, and for no other; a mark before it, after the query groups' churn that
@@ -991,7 +1118,7 @@ func getJSON(t *testing.T, c *testsupport.Client, path string, v any) {
 // checksums is each device's device-config checksum on branch, as Infrahub lists it now.
 func checksums(t *testing.T, c *testsupport.Client, branch string) map[string]string {
 	t.Helper()
-	raw, err := c.GraphQL(branch, `{ FylgjaDevice { edges { node { name { value }
+	raw, err := c.GraphQL(branch, `{ DcimDevice { edges { node { name { value }
 		... on CoreArtifactTarget { artifacts { edges { node { status { value } checksum { value }
 			definition { node { ... on CoreArtifactDefinition { artifact_name { value } } } } } } } } } } } }`)
 	if err != nil {
@@ -1001,7 +1128,7 @@ func checksums(t *testing.T, c *testsupport.Client, branch string) map[string]st
 		Value string `json:"value"`
 	}
 	var data struct {
-		FylgjaDevice struct {
+		DcimDevice struct {
 			Edges []struct {
 				Node struct {
 					Name      value `json:"name"`
@@ -1020,13 +1147,13 @@ func checksums(t *testing.T, c *testsupport.Client, branch string) map[string]st
 					} `json:"artifacts"`
 				} `json:"node"`
 			} `json:"edges"`
-		} `json:"FylgjaDevice"`
+		} `json:"DcimDevice"`
 	}
 	if err := json.Unmarshal(raw, &data); err != nil {
 		t.Fatal(err)
 	}
 	out := map[string]string{}
-	for _, d := range data.FylgjaDevice.Edges {
+	for _, d := range data.DcimDevice.Edges {
 		for _, a := range d.Node.Artifacts.Edges {
 			if a.Node.Definition.Node.ArtifactName.Value == testsupport.ArtifactName && a.Node.Status.Value == intent.StatusReady {
 				out[d.Node.Name.Value] = a.Node.Checksum.Value

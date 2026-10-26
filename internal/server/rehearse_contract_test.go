@@ -171,8 +171,8 @@ func TestRehearseRefusesBeforeAnyRun(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if _, _, err := c.MarkStage(id, "role-stale", "", "the role, not rendered"); err != nil {
-		t.Fatalf("marking role-stale: %v", err)
+	if _, _, err := c.MarkStage(id, "description-stale", "", "the description, not rendered"); err != nil {
+		t.Fatalf("marking description-stale: %v", err)
 	}
 
 	srv := handlerServer(t)
@@ -198,17 +198,17 @@ func TestRehearseRefusesBeforeAnyRun(t *testing.T) {
 	var labels []string
 	for _, st := range block.Stages {
 		labels = append(labels, st.Label)
-		if st.Label != "role-stale" {
+		if st.Label != "description-stale" {
 			continue
 		}
 		if st.Role != rehearsal.RoleRefused || !slices.Equal(rejectionsOf(st.Findings, findings.RuleStageArtifactStale), rehearseDevices) {
-			t.Errorf("role-stale is %s with %+v; want refused, stage.artifact.stale on %v", st.Role, st.Findings, rehearseDevices)
+			t.Errorf("description-stale is %s with %+v; want refused, stage.artifact.stale on %v", st.Role, st.Findings, rehearseDevices)
 		}
 	}
-	if want := []string{stages.LabelBranchPoint, "seeded", "role-stale", stages.LabelHead}; !slices.Equal(labels, want) {
+	if want := []string{stages.LabelBranchPoint, "seeded", "description-stale", stages.LabelHead}; !slices.Equal(labels, want) {
 		t.Errorf("the block's stages are %v, want %v", labels, want)
 	}
-	if want := fmt.Sprintf("%s/role-stale: refused (%s)", branch, findings.RuleStageArtifactStale); !strings.Contains(out, want) {
+	if want := fmt.Sprintf("%s/description-stale: refused (%s)", branch, findings.RuleStageArtifactStale); !strings.Contains(out, want) {
 		t.Errorf("the text does not say %q:\n%s", want, out)
 	}
 	if _, err := os.Stat(paths.Twin); !errors.Is(err, os.ErrNotExist) {
@@ -237,7 +237,7 @@ func fixtureTool(t *testing.T) string {
 // now: a device whose artifact is not Ready is not listed.
 func deviceChecksums(t *testing.T, c *testsupport.Client, branch string) map[string]string {
 	t.Helper()
-	raw, err := c.GraphQL(branch, `{ FylgjaDevice { edges { node { name { value }
+	raw, err := c.GraphQL(branch, `{ DcimDevice { edges { node { name { value }
 		... on CoreArtifactTarget { artifacts { edges { node { status { value } checksum { value }
 			definition { node { ... on CoreArtifactDefinition { artifact_name { value } } } } } } } } } } } }`)
 	if err != nil {
@@ -266,7 +266,7 @@ func deviceChecksums(t *testing.T, c *testsupport.Client, branch string) map[str
 					} `json:"artifacts"`
 				} `json:"node"`
 			} `json:"edges"`
-		} `json:"FylgjaDevice"`
+		} `json:"DcimDevice"`
 	}
 	if err := json.Unmarshal(raw, &r); err != nil {
 		t.Fatal(err)
@@ -284,7 +284,7 @@ func deviceChecksums(t *testing.T, c *testsupport.Client, branch string) map[str
 
 // T039's flags as a rehearsal's composition runs them (contracts/fixture-tool.md), each
 // printing its line exactly: -propose opens a draft, -ready makes it ready, -add-interface
-// writes one uncabled physical port, enabled, which -generate renders on n1 alone, where the
+// writes one uncabled physical port, active, which -generate renders on n1 alone, where the
 // read warns artifact.interface.unrepresented for the port the compile omits
 // omit.interface.unmappable (research R-14), -run-checks user returns at once with no user
 // check on a branch that sees no definition, and -delete takes the proposed change with the
@@ -339,17 +339,17 @@ func TestRehearseComposedByTheFixtureTool(t *testing.T) {
 	const port = "ethernet-1/99"
 	before := deviceChecksums(t, c, branch)
 	if out, want := fixture("-add-interface", "n1:"+port),
-		fmt.Sprintf("interface %s added on n1 on %s: physical, enabled, no link; -generate renders it\n", port, branch); out != want {
+		fmt.Sprintf("interface %s added on n1 on %s: physical, active, no cable; -generate renders it\n", port, branch); out != want {
 		t.Errorf("-add-interface printed %q, want %q", out, want)
 	}
-	raw, err := c.GraphQL(branch, fmt.Sprintf(`{ NetworkInterface(device__name__value: "n1", name__value: %q) { edges { node {
-		iftype { value } enabled { value } mgmt_only { value } link { node { id } } } } } }`, port))
+	raw, err := c.GraphQL(branch, fmt.Sprintf(`{ InterfacePhysical(device__name__value: "n1", name__value: %q) { edges { node {
+		status { value } role { value } connector { node { id } } } } } }`, port))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := string(raw); !strings.Contains(got, `"iftype":{"value":"physical"}`) || !strings.Contains(got, `"enabled":{"value":true}`) ||
-		!strings.Contains(got, `"mgmt_only":{"value":false}`) || !strings.Contains(got, `"link":{"node":null}`) || strings.Count(got, `"iftype"`) != 1 {
-		t.Errorf("n1:%s reads %s; want one physical interface, enabled, not management, with no link", port, got)
+	if got := string(raw); !strings.Contains(got, `"status":{"value":"active"}`) || !strings.Contains(got, `"role":{"value":null}`) ||
+		!strings.Contains(got, `"connector":{"node":null}`) || strings.Count(got, `"status"`) != 1 {
+		t.Errorf("n1:%s reads %s; want one physical port, active, not management, with no cable", port, got)
 	}
 	if after := deviceChecksums(t, c, branch); after["n1"] != before["n1"] {
 		t.Errorf("-add-interface moved n1's checksum %s → %s; it renders nothing", before["n1"], after["n1"])

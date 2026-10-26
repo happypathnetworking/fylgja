@@ -1666,3 +1666,142 @@ feature's one lasting write to `main`. No token was printed.
   through them. T058's import replaces the query.
 - **Afterwards** `Branch` lists `main` and `fylgja-fixture` alone. `CoreProposedChange` and
   `FylgjaStage` count 0, and nothing else was written.
+
+<a id="5-11"></a>
+### 5.11 Tier 2 whole, and what a generation stamps (T062; 2026-10-26, 13:45Z–14:34Z)
+
+Run 19 of the converge loop, at `1914556`, with `local/.env` loaded, the worker (pid
+335153) and the server (pid 335155) rebuilt and restarted from this tree, and no twin.
+T062 names §5.6 for this record, which T039–T041 already hold. Every branch below was a
+throwaway, deleted by its test. Nothing was written to `main`, and no token was printed.
+
+**A `DcimCable`'s delete stamps its two end ports.** This is what CI's contract job on
+`c006bf9` found (run `40325771758`; T057), verified here three ways:
+
+- `TestStagesSeeARemoval`, unchanged, at 13:47Z. The delete was sent at 13:47:33.880 and
+  returned at 13:47:35.117. It moved the branch's latest stamp, and `n1`'s and `n2`'s
+  intent stamps, from 13:46:27.669 to 13:47:34.064. It did not move `n3`'s. The test failed
+  on its D-048 premise check alone, as on CI. The plan still refused `removed` and the head
+  `stage.artifact.stale` for `n1` and `n2`, each naming the event, `infrahub.node.updated of
+  a InterfacePhysical` at 13:47:35.12, later than the stamp.
+- An uncommitted probe (`TestRun19Probe`) on a branch with three tagged devices and two
+  cables, written with no render. The delete was sent at 13:49:27.543 and returned at
+  13:49:27.822.
+  - Each end port's `node_metadata.updated_at` moved to 13:49:27.754, read both as the
+    device's `interfaces` edge and as the `InterfacePhysical` node.
+  - Nothing else moved: neither device's own stamp, the platform's edge, `n3`, nor the
+    other cable and its ports.
+- `TestStagesSeeARemoval` rewritten to assert it (below), passed alone (209.2 s) and in the
+  tier.
+
+`NetworkLink`'s delete stamped nothing (014 research §8.17; `docs/verified-facts.md`,
+10-17), and neither does a cable's re-ending (§5.8). D-048's event read stays, for the
+re-ending, as the operator chose.
+
+**Three fixes, each in its test (T057's note):**
+
+- `internal/server`'s `TestRehearseRefusesBeforeAnyRun` and
+  `TestRehearseComposedByTheFixtureTool` send `scope: tag:fylgja` (`fixtureScope`, from
+  `testsupport.FixtureTag`) on `twin.rehearse` and `intent.read`. `handlerServer` has no
+  default scope, as a server started without `FYLGJA_DEFAULT_SCOPE` has none, and the
+  server's `scope.unset` is right. Both passed alone (317.2 s, side by side with the next)
+  and in the tier.
+- `TestStagesSeeARemoval` now asserts what Infrahub does, which the stage reader already
+  handled:
+  - the branch's latest stamp moves on the delete;
+  - `n1`'s and `n2`'s intent stamps are that latest, and `n3`'s does not move;
+  - the head passes the stamps' head by the delete's events, which land after its stamp.
+
+  Its comment says why the premise check went. The plan's outcomes, the events named in the
+  messages, and the regenerate's clearing of the head are as before.
+
+**The tier**: `make test-contract 2>&1 | tee local/017-contract.out`, 13:56:42Z–14:25:15Z,
+**1,712.5 s** wall, exit 2. `internal/checks` failed. Every other package passed:
+
+| Package | Time |
+|---|---|
+| `internal/stages` | 1,426.6 s |
+| `internal/stage` | 839.6 s |
+| `internal/server` | 838.2 s |
+| `internal/intent` | 652.3 s |
+| `internal/cli` | 148.2 s |
+| `internal/lab` | 11.5 s |
+| `internal/provision` | 9.1 s |
+| each of the other 15 | under 3.3 s |
+| `internal/checks`, alone after them | 276.3 s, **FAIL** |
+
+The owed facts held, each by its test's assertions; the tier runs without `-v`, so no
+test's log was kept:
+
+- **`schema.kind.missing` on a real branch**: `TestSchemaCheckNamesAMissingKind` (in
+  `internal/intent`). One rejection on `DcimCable`, its message ending `as
+  opsmill/schema-library@26336e9 has it`, and nothing else named.
+- **A pinned read filters by the tag as it stood at T**: `TestPinnedReadReproducesItsBundle`
+  (in `internal/stage`). `cs1`, rendered before T and tagged after it, is read by the
+  unpinned read alone.
+- **A rebase over the library's kinds**: `TestStageRefusals` (in `internal/stages`). Every
+  mark is refused, naming the rebase at the new `branched_from` and the branch's
+  `created_at`, which the rebase did not move.
+
+**`TestChecksInsideInfrahub` failed: a new node's first generation stamps it after the
+generation.** This is §5.8's owed fact (T049's open question 2), now seen live. The test
+seeded its branch, opened a draft and marked `seeded`. It then added the third link with
+`SeedThirdLink`, whose generate is a hand one (`POST /api/artifact/generate`), waited for
+`n1`'s and `n3`'s checksums to move, and marked `third-link` at 14:23:05.456.
+
+- The re-run's plan refused the head `stage.artifact.stale` for `n1` and `n3`. Their intent
+  was written at 14:23:09.920, after their checksums (14:23:02.472, 14:23:04.294) and after
+  the validator's last completion (14:22:31.181). No event was named.
+- `fylgja-test-step` concluded `failure`, against the test's `success`. The test's other
+  assertions held: the stale mark's failure, the ready proposed change's refused rehearsal
+  and its two comments, and no twin.
+
+An uncommitted probe (`TestRun19GroupJoinProbe`, run twice, 14:27Z–14:34Z) followed the
+test's route, then tried both ways of regenerating:
+
+- **The hand generate**: the third link was written at 14:32:15.53. The checksums moved to
+  14:32:24.937 (`n1`) and 14:32:25.580 (`n3`). `n1`'s and `n3`'s intent stamps then moved to
+  14:32:28.709, 3.1–3.8 s after the checksums.
+  - The stamp is the new port's and the new cable's (`n1:ethernet-1/3`, `n3:ethernet-1/3`,
+    the cable). It is their `member_of_groups` edges to the template query's groups
+    (`device_config__<hash>`, one per artifact), written at 14:32:28.706 and 28.709.
+  - `updated_by` on those nodes reads `agent`, Infrahub's own account. The devices'
+    own stamps read `admin`.
+  - A port is a member of its own device's group and of its peer's, since the template
+    reads the far end.
+- **The plan** then refused both `third-link`, marked after the stamp, and the head
+  `stage.artifact.stale` for `n1` and `n3`.
+- **A second hand generate** rendered identical bytes and wrote nothing. Every checksum and
+  stamp stayed, and the plan was unchanged.
+- **The proposed change's artifact check** (`CoreProposedChangeRunCheck`, `ARTIFACT`)
+  completed its validator at 14:33:39.870, 25 s on. The head then compiled. `third-link`
+  stayed stale, since the validator completed after its `at`.
+- **The seed does it too.** After the seed's own render, every port's and cable's stamp is
+  its group join, by `agent`, and `n2`'s intent stamp (14:31:07.130) is later than its
+  checksum (14:31:06.375). The proposed change's creation covers it: its pipeline's
+  validator completes later (14:31:58.353). So `seeded` and the head read fresh before the
+  third link.
+
+So with R-10's stamps, whatever a generation reads for the first time reads stale after a
+hand generate, and no further hand generate clears it. That covers a new device, interface
+or cable. Only the proposed change's artifact check clears it, and only for a stage marked
+after that check. In 0.2 the same route left the head fresh, and FR-024 and US5's
+Independent Test keep 0.2's behaviour.
+
+`TestStagesListAndPlan` takes the same route and passed. Its list and plan most likely
+read the head inside the 3–7 s before the groups' join; the tier keeps no test's log, so
+this was not seen. It is a race the test can lose. The other tier-2 tests that add a node
+judge no staleness after it. Tier 3's cases 7 and 9
+take the same route (`-add-link`, then `third-link` and a plan expecting the head to
+compile), so T063 would meet it too.
+
+How to stop counting the query groups' joins is the operator's decision (T062's note). D-048
+and R-10's event rule already call this churn and never intent.
+
+**Afterwards**:
+
+- `Branch` lists `main` and `fylgja-fixture` alone.
+- `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` count 0.
+- `main` holds no device, and its hash is `7c413536…`.
+- The registration `fylgja` is the only one, at `c006bf9`.
+- `clab inspect --all` is `{}`, there is no `local/twin`, and Temporal lists no Schedule.

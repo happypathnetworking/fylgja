@@ -1150,6 +1150,53 @@ in `description`.
   - Record each package's time and the tier's in research §5.6, with the owed facts: `schema.kind.missing`'s wording on a real branch; the pinned read filtering by tag; `BranchRebase` over the library's kinds (`TestStageRefusals`' rebase case).
   - A failure is fixed in the phase that owns the behaviour, with a tier-1 test pinning it where one can.
   - *2026-10-26, the attended session, the operator's answers to T057's red CI (`1a 2a`):* CI's contract job on `c006bf9` (run `40325771758`; T057's note) failed three tests this run must fix, each in the phase that owns it. (1) `internal/server`'s `TestRehearseRefusesBeforeAnyRun` and `TestRehearseComposedByTheFixtureTool` were refused `scope.unset`: the contract tests' server (`handlerServer`) has no `DefaultScope` and the requests name no scope. Carry them to T013's scope (the fixture's `tag:fylgja`), in the test code; the server's behaviour is right. (2) `internal/stages`' `TestStagesSeeARemoval`: a `DcimCable`'s delete moves its two endpoint ports' stamps, unlike `NetworkLink`'s and unlike a cable's re-ending (research §5.8). The operator chose that the test asserts what Infrahub does, verified on this host first: the delete stamps `n1`'s and `n2`'s ports, and `stage plan` names them stale. Record it in research §5.6 and, once it holds, in `docs/verified-facts.md`. D-048 and its event-log read stay; the test's comment says why the premise check went. Then the operator pushes again (T057).
+  - *2026-10-26 14:40Z, at `1914556`, Run 19 of the converge loop (live): left unchecked.* CI's three failures are fixed and green, here and in the tier. One 015 test fails on this host alone, and fixing it needs the operator's decision. The record is research §5.11, since §5.6 already holds T039–T041's read.
+    - **The removal, verified first**:
+      - `TestStagesSeeARemoval`, run unchanged, failed as on CI. The delete moved the branch's latest stamp and `n1`'s and `n2`'s intent stamps to an instant between its send and its return, and left `n3`'s.
+      - An uncommitted probe showed the stamp is the two end ports' `node_metadata`. Nothing else moves.
+      - The test now asserts that, and its comment says why the premise check went. D-048's event read stays.
+      - Recorded in `docs/verified-facts.md` (10-26), beside the 10-17 fact, which was `NetworkLink`'s.
+    - **The scope**: both `internal/server` tests send `scope: tag:fylgja` (`fixtureScope`).
+    - **Green**: the three tests passed alone (removal 209.2 s; the two rehearse tests 317.2 s side by side), then in the tier.
+    - **The tier**:
+      - `make test-contract` took 1,712.5 s wall and exited 2.
+      - Every package but `internal/checks` passed. `internal/stages` took 1,426.6 s, `internal/stage` 839.6 s, `internal/server` 838.2 s and `internal/intent` 652.3 s. That is every new test of T044 and T051, and every other 014 and 015 test.
+      - The owed facts held, each by its test: `schema.kind.missing`'s wording, the pinned read's tag, and the rebase.
+    - **`TestChecksInsideInfrahub` failed** (276.3 s). CI's contract job skips it, since its task workers reach no server.
+      - After `SeedThirdLink` (a hand generate) and the `third-link` mark, `fylgja-test-step` concluded `failure`: the head was `stage.artifact.stale` for `n1` and `n3`.
+      - This is T049's open question 2, seen live. The new port and the new cable join the template query's groups (`device_config__<hash>`, as `agent`) 3–7 s after the checksums. That moves their `node_metadata` past the generation.
+      - An uncommitted probe, run twice, found:
+        - a second hand generate writes nothing and clears nothing;
+        - the proposed change's artifact check clears the head, but not a mark made before it;
+        - the seed's own first generation does the same, and the creation's validator covers it.
+      - In 0.2 this route left the head fresh. FR-024 and US5's Independent Test keep that.
+      - `TestStagesListAndPlan` takes the same route and passed, most likely by reading before the join, a race it can lose, on CI too.
+      - Tier 3's cases 7 and 9 take it too (`-add-link`, then a plan expecting the head to compile), so T063 would fail on it.
+    - **What it needs, the operator's**: how a generation's own group joins stop counting as intent. D-048 and R-10's event rule already call them churn and never intent, but no record says how the stamps leave them out. Three routes:
+      1. *(recommended)* Leave a node's stamp out when Infrahub's own account wrote it. The probe read `updated_by` `agent` on each join and `admin` on the operator's writes. This needs no new read, but it changes D-046's rule, and the account must first be verified to be the same on every install.
+      2. Read each node's stamp from its intent fields, without `member_of_groups`, as the event rule already does. This is the alternative R-10 rejected.
+      3. Accept the over-report. That means amending FR-024 and US5, having the remedy name the proposed change's artifact check (a hand generate cannot clear it), and moving the four routes above to `-run-check` before the mark.
+
+      Any of them is a decision entry and a change to Phase 10 (T047, T049). A fourth, counting the query groups' writes as the generation, needs a new Infrahub-owned read (FR-022, Constitution III). It is also not exact, because a port joins its peer's group as well as its own.
+    - **For T057**: the three fixes are committed here, and CI's contract job skips the failing test. So the operator's second push can be made now, and T057 ticked on a green job. `TestStagesListAndPlan`'s race may still turn it red.
+
+  *Run 19's checkpoint, 14:40Z*:
+  - **Gates**, on the final tree:
+    - `make build`: static.
+    - `make test` uncached: 43.4 s wall, at a load average of 2.3 before and 4.4 after.
+    - `make lint`: 0 issues.
+    - `go vet -tags contract,fixture,e2e ./...`: clean.
+    - No golden moved.
+  - **Not run, and why**: tier 3 is T063's, after T062. This run's task names no hand scenario. Re-running `internal/checks` would only repeat what the probe showed twice.
+  - **The host**:
+    - The worker and the server were restarted from this tree after the final build: the worker is pid 456031 and the server pid 456033.
+    - Both `/proc/<pid>/exe` read the tree's `bin/fylgja`. Their environment names carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`.
+    - The server reports both listeners, the bridge warning, `default scope: tag:fylgja` and both packages with their logins set. From inside each task worker, `POST /v1/twin/show` answers `200` with the token and `401` without it.
+    - `clab inspect --all` is `{}`. There is no `local/twin`, and Temporal lists no Schedule.
+    - In Infrahub, `Branch` lists `main` and `fylgja-fixture` alone. `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` count 0. `main` holds no device, and its hash is `7c413536…`. `fylgja` is the only registration, at `c006bf9`.
+    - 11.4 GiB of memory is available.
+  - **For T071**: tier 2 now takes about 29 minutes (1,712.5 s), not CLAUDE.md's twenty. `internal/stages` took 1,426.6 s against the `-timeout 30m`, which leaves about six minutes of margin.
+  - **Next**: the operator's answer on the group joins. Then T062 again, which re-runs at least `internal/checks` and `internal/stages`, then T063. Separately, the operator's second push for T057.
 
 - [ ] T063 [live] [US6] Tier 3 on a quiet host (quickstart §8; SC-006), after T062 and never beside it. Read `free -m`; check both images, the worker and the server from this tree, and the checks and the template imported (T058).
   - Start `make test-e2e 2>&1 | tee local/017-e2e.out` detached, with its exit status in a file, and wait in foreground calls of under ten minutes.

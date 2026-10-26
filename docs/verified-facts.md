@@ -284,7 +284,18 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   the delete and reads the link, while an unpinned read does not; a mark after the delete
   reads it gone, with artifacts that still render it. A generate after it moves the
   checksums of the devices whose rendering named the link, and only then the head.
-  *(10-17)*
+  *(10-17)* That was `NetworkLink`'s, since removed; a `DcimCable`'s delete is stamped
+  (below).
+- **A `DcimCable`'s delete stamps its two end ports.** On the schema library's kinds,
+  `DcimCableDelete` moves each end port's `node_metadata.updated_at` to one instant
+  between the mutation's send and its return. The stamp reads alike through the device's
+  `interfaces` edge and the `InterfacePhysical` node. Nothing else moves: not either
+  device's own stamp, not the platform's, not a third device's, not another cable or its
+  ports. So a stamps read sees the delete on both end devices. A cable's re-ending to one
+  end (`DcimCableUpdate`) is still stamped nowhere, and the event log names it
+  ([D-048](decisions.md#d-048)). The delete's own `node.updated` events on the two ports
+  are stamped 0.1–1.1 s later than the ports, so the head passes the ports' stamp by
+  them. *(10-26; `specs/017-dcim-reader/research.md` §5.11)*
 - **The event log records a removal, read-only.** `InfrahubEvent(branches: [<branch>],
   since: <branched_from>, order:, limit: ≤50)` (above 50 is refused) lists
   `infrahub.node.deleted` for a deleted link, primary node the concrete kind

@@ -318,21 +318,54 @@ not compile between them.
 
   *Run 6's checkpoint, 22:45Z*: `make build` static; `make test` uncached 38.6 s wall (load average 1.8 before, 3.1 after; 41.8 s at 4.5 to 6.6 on an earlier pass); `make lint` 0 issues; `go vet -tags contract,fixture,e2e ./...` clean. T017–T024 name no tier-2 test, so none was run, and Infrahub was not touched. No twin was booted. The worker and the server were not touched, and both `/proc/<pid>/exe` still read `(deleted)`; T059 restarts them.
 
-- [ ] T025 `twin.json` `8` ([contracts/formats.md](contracts/formats.md) "`twin.json` 8").
+- [X] T025 `twin.json` `8` ([contracts/formats.md](contracts/formats.md) "`twin.json` 8").
   - **Freeze**: copy the current `contracts/twin.schema.json` unchanged to `internal/lab/testdata/contracts/015-proposed-change-rehearsal/twin.schema.json`, the frozen `7`.
   - **The schema**: `contracts/twin.schema.json` moves to `$id …/contracts/twin/v8`, with `twin_version` `"8"` and `provenance` shaped as the manifest's.
   - **The types**: `internal/lab/wire/types.go`'s `Provenance` mirrors `compiler.Provenance` (`Scope`, `Mapping`; no `ContractVersion`), and `internal/lab/twin.go`'s `TwinVersion` becomes `"8"`. A `7` record decodes with no scope.
   - **Tests in `internal/lab/twin_test.go`**: `TestRecord8` (a create's record names its scope and mapping, valid against the contract) and `TestRecord7ReadsWithNoScope` (against the frozen copy). Rename the `…Version7…` tests to `…Version8…`, and make the tests that rewrite a record as an older worker wrote it drop `scope` and `mapping`.
   - **The script**: set `scripts/e2e.sh`'s expected record version to `8`, so that `TestE2EScriptExpectsTheRecordsVersion` passes. The rest of the script is T054's.
   - **The count**: set `frozenContractCopies` in `internal/findings/frozen_contracts_test.go` to the number its glob finds after T017, T022 and this task each add one (30 → 33).
+  - *2026-10-26 00:10Z, at `5d8112e`, Run 7 of the converge loop:* done.
+    - **The contract**: the `7` is frozen byte for byte. `contracts/twin.schema.json` is `…/contracts/twin/v8`, with a 017 sentence in its title and description. Its `provenance` is the manifest's block copied whole: `scope` matching `^tag:\S+$`, and `mapping{reader, model, version}`, all required.
+    - **The types**: `wire.Provenance{Branch, At, SchemaHash, Scope, Mapping}`, with `wire.Mapping{Reader, Model, Version}` as its own mirror, since `wire` imports neither `compiler` nor `ctm`. `lab.recordProvenance` copies the manifest's block whole, so the bridge's empty provenance (T023) is gone. A `7` record decodes leniently, as every earlier one did: `contract_version` is ignored, and `Scope` and `Mapping` read empty.
+    - **Two refusals the task does not name, for review**:
+      - `NewRecord` refuses a provenance naming no scope, or a mapping with an empty field, as it refuses what the contract would not accept.
+      - `NewStepRecord` refuses a diverged step from a record of `7` or earlier. Such a step keeps the previous record's provenance, which has no scope, and `8` cannot hold that. A stepped step from one takes the target's provenance and is an `8`.
+    - **Tests**: `TestRecord8` (a create's, a stepped and a diverged step's provenance; the contract refusing each half left out or malformed, `contract_version` and `twin_version 7`; `NewRecord`'s refusal). `TestRecord7ReadsWithNoScope` (a rehearsal's baseline and a step, as a 015 worker wrote them, against the frozen `7`, read with no scope or mapping and the rehearsal kept; the frozen `7` refuses an `8`). `TestCreateWritesVersion8`, `TestVersion8RecordCarriesEachWait` and `TestVersion8RecordRoundTrips` are renamed. **For review**: `TestRecord7` is renamed `TestRecordNamesItsRehearsal`, since its subject is the rehearsal key, which `8` keeps, and beside `TestRecord7ReadsWithNoScope` its old name would mislead.
+    - **The rewrites**: every test that rewrites a record as an older worker wrote it drops `scope` and `mapping` and puts `contract_version` back (`contractProvenance`, in `lab` and `cli`), since the frozen `2`–`7` contracts require it. `TestNewStepRecordFromAVersion3Record`: stepped writes an `8` with the target's provenance; diverged is refused.
+    - **The rest**: test fixtures name `tag:fylgja` and the DCIM mapping (`dcimMapping`, one per test package) in place of `ContractVersion`. `scripts/e2e.sh`'s four `.twin_version` expectations read `8`. `frozenContractCopies` is 33, and the glob finds 33.
 
-- [ ] T026 The record's provenance in the documents ([contracts/formats.md](contracts/formats.md) "The findings blocks"; R-07).
+- [X] T026 The record's provenance in the documents ([contracts/formats.md](contracts/formats.md) "The findings blocks"; R-07).
   - **Types**: `findings.ShowRecord` carries `Scope` and `Mapping` in place of `ContractVersion` (`internal/findings/render.go`), the one document type that carries it. The verify document's `twin` block and the step's two sides name the bundle and the stage, never the record's provenance, and are unchanged; the scope of a step's or a verify's read is the document's `subject.scope`.
   - **Schemas**: `contracts/show.schema.json` moves with it; `verify.schema.json` and `step.schema.json` hold no `contract_version` and do not move.
   - **`twin show`**: the record line reads `record: branch b at …, bundle_id …, schema …, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9`, and for a `7` record `…, scope unknown (record 7)` (built in `internal/server/show.go` and wherever the text line is rendered).
   - **`twin step`** refuses a `7` record as `step.twin.unsteppable`, naming the version (`the twin was created from a record version this build no longer reads (twin.json 7); fylgja twin destroy clears it`), as it refuses a `5` (`internal/server/step.go`).
   - **Other commands on a `7` record**: `twin destroy` clears it, and `twin rehearse` still reclaims one that names a dead rehearsal.
   - **Tests**: `internal/cli/show_test.go` (both lines); `internal/server/step_test.go` (the `7` refusal); the frozen M-era contracts still accept a document without `scope`.
+  - *2026-10-26 00:10Z, at `5d8112e`, Run 7 of the converge loop:* done.
+    - **The document**: `findings.ShowRecord` carries `Scope` (`omitempty`) and `Mapping *ShowMapping` (`omitempty`) in place of `ContractVersion`. Both are present for an `8` record and absent for a `7` or earlier one, which the server tells by the record's version. `contracts/show.schema.json`'s `record` loses `contract_version` from `required` and `properties`, and gains `scope` (`^tag:\S+$`) and `mapping` as the manifest gives them. Each requires the other (`dependentRequired`), and the description has a 017 sentence. `verify.schema.json` and `step.schema.json` did not move.
+    - **`twin show`**: the record line ends `…, schema <hash>, scope tag:fylgja, read by <reader> from <model>@<version>` (`provenanceClause`, `internal/server/show.go`, the one place it is built). Any record before `8` reads `…, scope unknown (record <version>)`, `2` to `7` alike. During the bridge a fresh record's line truthfully says `read by infrahub-generics from fylgja-generics@0.2`. formats.md also names `twin create`'s record line, but this build's `twin create` prints none, so only `twin show`'s moved.
+    - **`twin step`**: `stepScopeUnknown` refuses a stage twin whose record is `7` or earlier as `step.twin.unsteppable`, at `resolve`, object the record's bundle: `the twin was created from a record version this build no longer reads (twin.json 7); fylgja twin destroy clears it`. A `6` is refused the same way, naming `6`, since it names no scope either.
+    - **One departure, for review**: the refusal is in `internal/server/step.go`, after `provision.Ineligible` and before the proposed change is asked for, not in `Ineligible` itself. The run's second lock calls `Ineligible` on the records in `step-cancelled`, `step-diverged` and `step-wait-cancelled`'s recorded histories, which are `4` and `5` records carrying stages. There it would refuse them, and those histories must replay unchanged.
+      - What this ordering means: a diverged `7` is still refused as diverged, and a branch or bundle twin of `7` as not from a stage, as a `5`'s are.
+      - Its comment says a worker of this build writes `8`, so only a record changed under the run reaches the lock. `NewStepRecord`'s refusal (T025) covers that case.
+    - **Destroy and rehearse on a `7` record**: `twin destroy` reads neither the record's version nor its provenance, since teardown is planned from the staged manifest or from inspect. `TestRehearseReclaimsADeadRehearsalsTwin` now runs over an `8` and a `7` record of a dead rehearsal, and both are reclaimed.
+    - **Tests**:
+      - `TestShowRecordNamesItsScope` (`cli`): both lines; the JSON scope and mapping present for an `8` and absent for a `7`; the current contract; the rehearsal kept.
+      - `TestStepRefusesARecordThatNamesNoScope` (`server`).
+      - Rows `a record of twin.json 7` and `… 6` in `TestStepRefusedBeforeAnyConnection`: refused through the harness with nothing asked of Infrahub and the service never dialled.
+      - `TestShowRecordCarriesTheRecordsProvenance` (`findings`): the contract accepts both shapes and refuses either half alone, a scope that is not a tag, a mapping missing a field, and `contract_version`.
+      - Every record-line pin in `show_test.go` moved, and the pins of records before `8` read `scope unknown (record N)`.
+    - **The frozen M-era contracts**: each still accepts this build's documents once a document is put back as its milestone wrote it.
+      - In `findings`, `asEarlier` always applies `drop017ShowProvenance` (the record's `scope` and `mapping` out, `contract_version` back), since every schema it serves predates 017. `TestAnM7DocumentIsUnchanged` holds M7 to that projection and the current contract to the document as built.
+      - In `cli`, `asEarlierContract` replaces T014's `withoutScope`. It validates whole against the current contract whatever 017 added, then drops the subject's scope and puts the record's provenance back the same way.
+    - **Not done here**: `twin step` still reads under the server's default (T046), and its comment now says so.
+
+  *Run 7's checkpoint, 00:10Z*:
+  - **Gates**: `make build` static. `make test` uncached took 43.4 s wall with the changed packages compiled cold (load average 1.9 before, 3.6 after), then 34.0 s warm (3.4, 3.3), under 45 s. `make lint` 0 issues; `go vet -tags contract,fixture,e2e ./...` and `shellcheck scripts/bring-up.sh scripts/e2e.sh` clean. No golden moved in this run.
+  - **Tier 2**: T025 and T026 name no tier-2 test, so none was run, and Infrahub was not touched.
+  - **The host**: no twin was booted. The worker (pid 2314364) and the server (pid 2314366), restarted since Run 6, were not touched; after this run's build both `/proc/<pid>/exe` read `(deleted)`.
+  - **The C4 model** needs no redraw: no package gained an import.
 
 **Checkpoint**: `make test`, `make lint`, `go vet -tags contract,fixture,e2e ./...`; the
 goldens' commit reviewed.

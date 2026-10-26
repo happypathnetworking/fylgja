@@ -102,12 +102,14 @@ A cable never refuses the read:
 
 | Rule | Object | When (the first that applies) | Reason text |
 |---|---|---|---|
-| `omit.cable.ends` | the cable (`label`, or id when it has none) | `connected_endpoints.count` is not 2 | `other than two ends (<n>)` |
+| `omit.cable.ends` | the cable (`label`, or id when it has none) | `connected_endpoints.count` is not 2, or it is 2 and Infrahub lists fewer ends | `other than two ends (<n>)`, `<n>` the count; `other than two ends (<listed> listed of <n>)` when it lists fewer than it counts |
 | `omit.cable.endpoint` | the cable | an end whose `__typename` is not `InterfacePhysical` | `an end not on a physical port (<kind>)` |
-| `omit.cable.outside_scope` | the cable | an end whose device is not among the devices read | `an end outside the scope (<device>:<port>)` |
+| `omit.cable.outside_scope` | the cable | an end whose device is not among the devices read | `an end outside the scope (<device id>:<port>)`: the device outside the scope is never read (§1, FR-002), so its id, as the port's `device` answers it, stands where its name would |
 
-Each is an `info` finding beside the read, naming every end known as `<device>:<port>`,
-and a row of the envelope's fidelity list. A cable is judged once, by its id, however many
+Each is an `info` finding beside the read, naming every end on a physical port as
+`<device>:<port>`, a device outside the scope by its id as above (`cable c-out is omitted:
+an end outside the scope (<id>:port1); its ends are <id>:port1, n1:ethernet-1/5`), and a
+row of the envelope's fidelity list. A cable is judged once, by its id, however many
 of its ends are in the scope. A cable between two management-role ports, or with both ends
 on one device, reaches the CTM: the compiler omits the first (`omit.link.mgmt_only`) and
 validation refuses the second (`link.endpoints.same_device`), as today.

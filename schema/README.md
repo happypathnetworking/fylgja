@@ -91,13 +91,15 @@ every device it cannot carry, all in one pass, with no CTM on any finding:
 **Omissions.** A cable never refuses the read. One reached from a port in the scope that
 is not a link is omitted for the first reason that applies, judged once by its id however
 many of its ends are in the scope; each omission is an `info` finding beside the read,
-naming every end known as `<device>:<port>`, and a row of the CTM's fidelity list:
+naming every end on a physical port as `<device>:<port>`, and a row of the CTM's fidelity
+list. A device outside the scope is named by its id wherever an end names it: the read
+never reads such a device, so it has only the id the port's `device` answers.
 
 | Rule | Object | When | Reason |
 |---|---|---|---|
-| `omit.cable.ends` | the cable's `label`, or its id when it has none | `connected_endpoints` is not two | `other than two ends (<n>)` |
+| `omit.cable.ends` | the cable's `label`, or its id when it has none | `connected_endpoints` counts other than two, or counts two and lists fewer | `other than two ends (<n>)`, the count; `other than two ends (<listed> listed of <n>)` when Infrahub lists fewer ends than it counts |
 | `omit.cable.endpoint` | the cable | an end whose kind is not `InterfacePhysical` | `an end not on a physical port (<kind>)` |
-| `omit.cable.outside_scope` | the cable | an end whose device is not among the devices read | `an end outside the scope (<device>:<port>)` |
+| `omit.cable.outside_scope` | the cable | an end whose device is not among the devices read | `an end outside the scope (<device id>:<port>)` |
 
 A cable between two management-role ports, or with both ends on one device, is a link in
 the CTM: the compiler omits the first (`omit.link.mgmt_only`) and validation refuses the

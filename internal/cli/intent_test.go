@@ -310,7 +310,8 @@ func TestReadFromAStageRefusals(t *testing.T) {
 // devices whose intent moved, in the words stage plan gives the same stage; an at before
 // the branch point, by a rebase or not; a mark taking a reserved label; two marks sharing
 // one; a given as_of later than now and a mark with no at. Each is exit 1 with no step,
-// and the fake is asked no device, link or contract node on any branch, pinned or not.
+// and the fake is asked no Devices or Ports and no artifact's content (/api/storage/) on
+// any branch, pinned or not (readsNoIntent).
 func TestReadFromAStageRefusedAtResolution(t *testing.T) {
 	const (
 		rebasedAt = "2026-09-10T00:00:00.000000+00:00"

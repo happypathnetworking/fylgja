@@ -217,4 +217,14 @@ test-e2e` once, `E2E-PARTIAL`.
 
 ## 9. The records and the greps
 
-`make linkcheck` clean; `/usr/bin/grep -rn 'FylgjaDevice\|FylgjaContract\|iftype\|contract_version\|set-role' --include='*.md' --include='*.go' --include='*.json' --include='*.yaml' --include='*.sh' .` finds the retired names only in the decision log, the archives, 014's and 015's records and this feature's; the credential greps of 015's quickstart over the tree and the outputs find nothing; `make diagrams` changes nothing on a second run.
+`make linkcheck` clean; `/usr/bin/grep -rn 'FylgjaDevice\|FylgjaContract\|iftype\|contract_version\|set-role' --include='*.md' --include='*.go' --include='*.json' --include='*.yaml' --include='*.sh' .` finds the retired names only where each hit is a past-tense record or frozen test data:
+the decision log; the contracts' version histories (each format's description,
+`contracts/api.md`'s and `contracts/cli.md`'s accounts of what 017 removed, and `cli.md`'s
+014 and 015 layers); the retired entries of `docs/architecture.md`, `docs/glossary.md`, `docs/roadmap.md` and the
+dated facts of `docs/verified-facts.md`; Go comments in the past tense
+(`internal/bundle/verify.go`, `internal/compiler/manifest.go`, `internal/ctm/json.go`,
+`internal/lab/wire/types.go`); the frozen copies under the packages' `testdata/contracts/`,
+`testdata/ctm/defects/version-1.json` and `internal/bundle/testdata/three-node-4.manifest.json`,
+and the tests that build an older format or hold a retired name absent; and 013's, 014's
+and 015's records and this feature's (on a working host the git-ignored `local/` adds the
+command logs' and the loop's copies); the credential greps of 015's quickstart over the tree and the outputs find nothing; `make diagrams` changes nothing on a second run.

@@ -18,7 +18,7 @@ import (
 // t0; an intent edit at t1; the proposed change's validators at t2 and t3.
 const (
 	t0 = "2026-10-16T19:35:10.000000+00:00" // the seed's checksums
-	t1 = "2026-10-16T19:35:55.000000+00:00" // -set-site, or a role edit, after the creation's validator
+	t1 = "2026-10-16T19:35:55.000000+00:00" // -set-description, or a port's role edit, after the creation's validator
 	t2 = "2026-10-16T19:35:52.068456Z"      // the creation's validator, before the edit reached it
 	t3 = "2026-10-16T19:36:12.298111Z"      // the run-check's, after it
 	tm = "2026-10-16T19:40:00.000000+00:00" // the mark

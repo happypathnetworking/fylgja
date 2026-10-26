@@ -336,7 +336,7 @@ justifies the CTM partly by synthesized nodes and names later traffic generators
 provenance `synthesized` is already in the model, and Constitution X demands every
 synthesized node in the fidelity manifest. So the slot is reserved, and the questions are
 where the declaration lives and which generator. Traffic is not network intent, so it does
-not belong in the generics. The pattern that fits is [D-032](decisions.md#d-032)'s: a
+not belong in the operator's model the reader maps. The pattern that fits is [D-032](decisions.md#d-032)'s: a
 Fylgja-owned, branch-agnostic kind in Infrahub, operator-written, naming two device ports
 and a flow, which the compiler turns into synthesized host nodes and links, each consuming
 a port on its device and recorded in the manifest. A lossy package cares, since a port a

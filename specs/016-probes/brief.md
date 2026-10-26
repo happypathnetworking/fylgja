@@ -138,5 +138,5 @@ SPECIFY_FEATURE_DIRECTORY=specs/016-probes. 0.3: probes, as docs/roadmap.md's F-
 | [015's brief](../015-proposed-change-rehearsal/brief.md), and its spec once written | the report and gate this feature extends |
 | [docs/decisions.md](../../docs/decisions.md): D-010, D-022–D-024, D-028, D-031, D-032, D-037, D-038 | synthesized nodes, the bundle's hashing, the mechanism pattern, the assertions |
 | [docs/architecture.md](../../docs/architecture.md) §4.2, §6 | the CTM's synthesized nodes and the known limitations |
-| [schema/fylgja-generics.yaml](../../schema/fylgja-generics.yaml) (`addresses`), [014's stage kind](../014-proposed-change-stages/research-probe/fylgja-stage.yaml), [infrahub/](../../infrahub/) | the interface's addresses, the kind's pattern, the template to extend |
+| `schema/fylgja-generics.yaml` (`addresses`; removed at 017, whose CTM `2` carries no address), [014's stage kind](../014-proposed-change-stages/research-probe/fylgja-stage.yaml), [infrahub/](../../infrahub/) | the interface's addresses, the kind's pattern, the template to extend |
 | [psp/README.md](../../psp/README.md), [contracts/](../../contracts/) | the package format's pattern and the documents that move |

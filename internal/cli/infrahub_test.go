@@ -73,6 +73,10 @@ type fakeInfrahub struct {
 	// network above all: the device query answers none, and the read refuses it
 	// scope.empty. Their stamps are their CTM's as before.
 	untagged map[string]bool
+	// tag is the tag every device the fake serves carries, fakeTag when empty: a test reading
+	// under another scope gives it, so that a request sending the default's tag selects
+	// nothing.
+	tag string
 	// stamps overrides a device's stamps on a branch, keyed "<branch>/<device>": an intent
 	// written after its artifact is a stale artifact (D-046).
 	stamps map[string]fakeDeviceStamps
@@ -260,7 +264,7 @@ func (f *fakeInfrahub) serve(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			var devices *ctm.CTM
-			if tag, _ := seen.Variables["tag"].(string); tag == fakeTag && !f.untagged[name] {
+			if f.carries(seen) && !f.untagged[name] {
 				devices = c
 			}
 			writeFakeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{
@@ -270,7 +274,7 @@ func (f *fakeInfrahub) serve(w http.ResponseWriter, r *http.Request) {
 			writeFakeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"InterfacePhysical": f.portPage(c, ids)}})
 		case "IntentStamps":
 			var devices *ctm.CTM
-			if tag, _ := seen.Variables["tag"].(string); tag == fakeTag && !f.untagged[name] {
+			if f.carries(seen) && !f.untagged[name] {
 				devices = c
 			}
 			writeFakeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{
@@ -642,8 +646,18 @@ func fakeEdges[T any](nodes []T) map[string]any {
 }
 
 // fakeTag is the tag the harness's server's default scope names (tag:fylgja), which every
-// device the fake serves carries.
+// device the fake serves carries unless a test gives it another.
 const fakeTag = "fylgja"
+
+// carries is whether the request's tag is the one the fake's devices carry.
+func (f *fakeInfrahub) carries(r fakeRequest) bool {
+	want := f.tag
+	if want == "" {
+		want = fakeTag
+	}
+	tag, _ := r.Variables["tag"].(string)
+	return tag == want
+}
 
 // fakePairs is each package's first manufacturer and platform pair, by its id: the
 // shipped packages and every one under testdata/psp/ meant to load, so a CTM's device is

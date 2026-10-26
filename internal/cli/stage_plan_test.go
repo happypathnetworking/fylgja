@@ -696,6 +696,103 @@ func TestStagePlanReadsUnderTheScopeGiven(t *testing.T) {
 	}
 }
 
+// tagsSent are the tags each stamps read and each Devices read sent, by operation: the two
+// operations that select devices by the scope's tag (017).
+func tagsSent(f *fakeInfrahub) (stamped, read []any) {
+	for _, r := range f.requests() {
+		switch r.Operation {
+		case "IntentStamps":
+			stamped = append(stamped, r.Variables["tag"])
+		case "Devices":
+			read = append(read, r.Variables["tag"])
+		}
+	}
+	return stamped, read
+}
+
+// US5 scenario 5 for the three commands it names beside stage plan (017; FR-017): intent
+// read --stage, twin create --stage and twin rehearse, each given --scope tag:other over a
+// fake whose devices carry other alone, send every stamps read and every stage's Devices
+// read with the tag other, never the default's fylgja, and succeed on what they read. A
+// create reads no intent before its run, which reads under the scope the run is given; a
+// rehearsal's baseline is provisioned under it.
+func TestStageCommandsReadUnderTheScopeGiven(t *testing.T) {
+	const scope = "tag:other"
+	for _, c := range []struct {
+		name  string
+		setup func(t *testing.T) (*fakeInfrahub, *fakeService)
+		args  func(t *testing.T) []string
+		// reads is whether the command reads a stage's devices itself, on the server.
+		reads bool
+		check func(t *testing.T, svc *fakeService)
+	}{
+		{"intent read --stage", func(t *testing.T) (*fakeInfrahub, *fakeService) {
+			useService(t, nil)
+			return demoInfrahub(t), nil
+		}, func(t *testing.T) []string {
+			return []string{"intent", "read", "--stage", "fylgja-fixture/sealed", "--out", filepath.Join(t.TempDir(), "ctm.json")}
+		}, true, nil},
+		{"twin create --stage", func(t *testing.T) (*fakeInfrahub, *fakeService) {
+			useInterrupts(t)
+			svc := &fakeService{runID: "run-1", result: readyResult()}
+			useService(t, svc)
+			return demoInfrahub(t), svc
+		}, func(*testing.T) []string {
+			return []string{"twin", "create", "--stage", "fylgja-fixture/sealed"}
+		}, false, func(t *testing.T, svc *fakeService) {
+			if len(svc.started) != 1 || svc.started[0].Scope != scope {
+				t.Errorf("started %+v; want one run under %s", svc.started, scope)
+			}
+		}},
+		{"twin rehearse", func(t *testing.T) (*fakeInfrahub, *fakeService) {
+			rehearseHost(t)
+			useInterrupts(t)
+			svc := okRun()
+			useService(t, svc)
+			f := planInfrahub(t, rehearseMarks()...)
+			versioned(t, f)
+			emptyMain(f)
+			return f, svc
+		}, func(*testing.T) []string {
+			return []string{"twin", "rehearse", "--branch", lessLink}
+		}, true, func(t *testing.T, svc *fakeService) {
+			if len(svc.rehearsed) != 1 {
+				t.Fatalf("%d rehearsals started, want one", len(svc.rehearsed))
+			}
+			for _, st := range svc.rehearsed[0].Stages {
+				if p := st.Provision; p != nil && p.Scope != scope {
+					t.Errorf("the baseline %s is provisioned under %q, want %s", st.Ref, p.Scope, scope)
+				}
+			}
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			useStateRoot(t)
+			f, svc := c.setup(t)
+			f.tag = "other"
+			f.start()
+
+			code, doc := executeStage(t, append(c.args(t), "--scope", scope)...)
+			if code != findings.ExitOK {
+				t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
+			}
+			if doc.Subject == nil || doc.Subject.Scope != scope {
+				t.Errorf("subject %+v; want the scope %s", doc.Subject, scope)
+			}
+			stamped, read := tagsSent(f)
+			if len(stamped) == 0 || slices.ContainsFunc(stamped, func(tag any) bool { return tag != "other" }) {
+				t.Errorf("the stamps were read under the tags %v; want other on every one", stamped)
+			}
+			if c.reads && len(read) == 0 || slices.ContainsFunc(read, func(tag any) bool { return tag != "other" }) {
+				t.Errorf("the devices were read under the tags %v; want other on every one", read)
+			}
+			if c.check != nil {
+				c.check(t, svc)
+			}
+		})
+	}
+}
+
 // --json prints the document alone, the plan block and every stage's findings in order,
 // valid against findings.schema.json with stages.schema.json; nothing goes to stderr.
 func TestStagePlanJSON(t *testing.T) {

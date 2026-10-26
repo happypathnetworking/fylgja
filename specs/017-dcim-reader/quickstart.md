@@ -85,8 +85,8 @@ go run -tags fixture ./cmd/fylgja-fixture -prepare-main   # refuses, naming the 
 Expected after step 1: `removed:` naming the five, then the four; `fylgja:
 ["FylgjaStage"]` and a new hash. After step 2: `schema library loaded on main (6 files,
 opsmill/schema-library@26336e9)`, `stage kind present`, `group fylgja-devices present`,
-`repository fylgja present`; the second run `main holds 21 of the schema library's kinds
-(DcimCable, DcimDevice, …): -prepare-main is the development host's and CI's tool, …`,
+`repository fylgja present`; the second run `main holds 27 of the schema library's kinds
+(DcimCable, DcimConnector, DcimDevice, …): -prepare-main is the development host's and CI's tool, …`,
 exit 1, nothing written. Record the hash.
 
 ```sh

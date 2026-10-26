@@ -1115,3 +1115,62 @@ How far the prediction was checked before the import:
 
 What this does not prove, and T060 does: the render by Infrahub's pipeline in its task
 workers, from the imported commit.
+
+<a id="5-2"></a>
+### 5.2 The interim SDL and client, the schema document, the query's dry run and `-prepare-main`'s gate (T031, T033; 2026-10-26, 00:50Z–00:53Z)
+
+All on one throwaway branch, `fylgja-test-017-sdl`, which `fylgja-fixture -branch
+fylgja-test-017-sdl -schema-only` created from `main` at 00:50:27Z. In one run of 39.5 s
+wall, `go run`'s build included, it loaded `schema/dcim/`'s six files in one request and the
+stage kind in a second. The branch's hash read `18e5f023…`; `main`'s stayed `e43a1cde…`.
+Nothing was written to `main`, and no token was printed.
+
+- **The gate, live.** A probe test that was not committed (`TestRun9Probe`, 4.6 s) ran
+  test support's gate against the running Infrahub.
+  - `LibraryKinds` computes 27 kinds from the six files, every node and generic they define
+    (13 in `dcim.yml`, 4 in `ipam.yml`, 2 in `location.yml`, 3 in `organization.yml`, 1 in
+    `cable.yml`, 4 in `location_minimal.yml`). quickstart §2's "21" was an estimate; the
+    refusal on a migrated `main` names 27.
+  - `KindsHeld` read `main` holding none of them.
+  - `LoadLibrary` on the branch refused before any write, naming the 27 kinds in R-13's
+    sentence with the branch's name in place of `main`.
+  - `LoadOwnSchema` loaded the stage kind on the branch a second time and reported it
+    present: the schema hash did not move. A raw `POST /api/schema/load` of the stage kind
+    showed the answer's keys: `diff`, `hash`, `previous_hash`, `schema_updated` and
+    `warnings`, with `hash` equal to `previous_hash` for an unchanged load. Test support
+    compares the two hashes, as `infrahubctl` does.
+- **The SDL.** `-sdl schema/infrahub.graphql` wrote 2,255,885 bytes, against `main`'s
+  1,385,164. It holds `interface FylgjaDevice`, `type NetworkDevice`, `type FylgjaStage` and
+  `type DcimDevice` together, so the old operations and the new can both generate. The
+  file's header was written by hand to say it is the interim's.
+- **The schema document.** `GET /api/schema?branch=fylgja-test-017-sdl` was trimmed with
+  `jq` to the nodes `DcimDevice`, `DcimPlatform`, `OrganizationManufacturer`,
+  `InterfacePhysical`, `InterfaceVirtual` and `DcimCable`, the generics `DcimGenericDevice`,
+  `DcimInterface`, `DcimEndpoint`, `DcimConnector` and `CoreArtifactTarget`, and `main` (the
+  branch's hash). It is `internal/intent/testdata/schema-26336e9.json`, 110,497 bytes. The
+  generics' `used_by` read:
+  - `DcimGenericDevice` [`DcimDevice`];
+  - `DcimInterface` [`InterfacePhysical`, `InterfaceVirtual`];
+  - `DcimEndpoint` [`InterfacePhysical`];
+  - `DcimConnector` [`DcimCable`];
+  - `CoreArtifactTarget` [`DcimDevice`, `NetworkDevice`]. The reference kind is there
+    because the branch was made from a `main` that still holds it. On the migrated `main`
+    it names `DcimDevice` alone. The document holds the token nowhere (`grep -F` of it, 0),
+    nor any key named for a password, a secret or a token.
+- **The query's dry run** (the skill's `deployment-gql-dry-run`).
+  - `POST /graphql/fylgja-test-017-sdl` with `infrahub/queries/device_config.gql` and
+    `{"device": "none"}` answered no `errors` and `{"DcimDevice": {"edges": []}}`.
+  - The skill's own command, `.venv/bin/infrahubctl render srlinux_device_config
+    device=none --branch fylgja-test-017-sdl`, ran the query and stopped in the template at
+    line 8, `data.DcimDevice.edges[0]`, with `list object has no element 0`. That is a device
+    the query does not find, which the pipeline never asks for, since it renders the
+    group's members alone.
+- **The client.** `make generate` (9.9 s) added 97 lines to `internal/intent/generated.go`
+  and changed no operation. They are the library's implementers of the interfaces the old
+  operations select: `ArtifactFieldsDcimDevice` and `ArtifactStampsDcimDevice` beside the
+  `NetworkDevice` ones, and `IpamIPAddress` beside `InternalIPRangeAvailable` as a
+  `BuiltinIPAddress`.
+- **The branch was deleted** by `-branch fylgja-test-017-sdl -delete` at 00:52:58Z (`deleted 0
+  stages, 0 proposed changes, branch fylgja-test-017-sdl`). Afterwards `Branch` lists `main`
+  and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage` count 0, and `main`'s
+  hash is `e43a1cde…`.

@@ -77,7 +77,7 @@ Removed: `contract.version.mismatch`, `contract.node.missing`,
 
 - `intent read`: `wrote ctm.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3
   artifacts, 0 lossy mappings, 0 shared ports (branch b, scope tag:fylgja, schema
-  908871c3…)`; with omissions, `…, 1 cable omitted (…)`; with a stage, `stage b/seeded:
+  908871c3…)`; with omissions, `…; 1 cable omitted (…)`; with a stage, `stage b/seeded:
   …` first as today.
 - `twin create`'s and `twin show`'s record line: `record: branch b at …, bundle_id …,
   schema …, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9`;

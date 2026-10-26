@@ -1470,6 +1470,39 @@ tier leaves it.
   - **Next**: Run 23 (T074), the operator's; and T057's second push of `origin`'s `main`, the operator's.
 
 - [ ] T074 [operator] The operator reads the feature's diff and its records, commits by hand (conventional messages, bodies saying why), and runs `make command-log` once the session is closed.
+  - *2026-10-26 18:34Z, at `1b1e296`, Run 23 of the converge loop (live): left unchecked.* The review is the operator's, and a session cannot run the command log for a session that is still open. Nothing was merged, pushed or fetched. What is ready:
+    - **The feature's diff**: `git diff fe497a2 1b1e296`, from `main` as it stood before 017's specify. It is 71 commits (19 `feat`, 8 `test`, 1 `refactor`, 2 `chore`, 41 `docs`) over 348 files, +61,360 and −30,279 lines. Two generated files carry most of those lines: the SDL captured from the migrated `main`, `schema/infrahub.graphql` (51,815 lines changed), and its client, `internal/intent/generated.go` (6,703).
+    - **Since the operator's second push**: `origin`'s `main` is `3af5d41`, read with `git ls-remote` at 18:32Z, which moves no remote-tracking ref; `3af5d41` is an ancestor of the branch. Since then, 14 commits over 31 files (+2,507 −596). Three of them are code, which no CI run has seen:
+      - `4973a33`: D-058's rule with D-060's account (`internal/intent/stamps.go`, `queries.graphql` and its regenerated client, `stamps_test.go`, the read-only test's `CoreGraphQLQueryGroup` entry, `contracts/mapping.md`).
+      - `269dd1e`: `TestStagesListAndPlan` marks only after the query groups' join.
+      - `7c99778`: `twin create` and `twin provision` print the record line, through `recordLine` in `internal/server/show.go`.
+      - The other eleven are records.
+    - **To read on their own**:
+      - The golden re-baseline `bf15328` (T024). Its three ids, `43d91715…`, `4213b3cf…` and `ecb665f5…`, have not moved since.
+      - The decision entries: D-057 with Constitution 2.0.0 (`b650932`), D-058 (`78351aa`), D-059 with Constitution 2.1.0 (`2610a74`), and D-060 (`6ddf40e`).
+    - **What the records leave to a judgement**, settled by no record:
+      - The glossary's *head*, "it moves whenever the branch is written", and *release*, "a contract bump opens a release" (T065).
+      - Two readings in `docs/verified-facts.md` left side by side: §1.7's edge absent at exactly a node's creation, and 10-16's "count 1, every attribute null". Also §1.10's import against a `main` without the library, never verified (T067).
+      - `CLAUDE.md`'s open item for a session: the fixture tool's `-propose` waits 6 minutes in D-054's window.
+    - **Commits by hand**: none are owed. Each run committed its own work, and the tree was clean at `1b1e296` before this note. A finding from the review becomes a commit of its own, or the input to `converge`.
+    - **The command log**: `local/command-log/pending.jsonl` is empty. The loop publishes each session's entry when the session exits: 31 are in `specs/017-dcim-reader/commands/runs.jsonl` through Run 22, and this session's follows when it exits. `make command-log`, run after the attended session closes, publishes whatever that session kept.
+    - **With it, T057**: the next push of `origin`'s `main`, now that T062 and T063 are green. It is a fast-forward to the branch's head, made after the loop stops: `git fetch . 017-dcim-reader:main`, then `git push origin main`. Read CI's contract job on it, then tick T057 on a green job.
+
+  *Run 23's checkpoint, 2026-10-26 18:34Z*:
+  - **Gates**, on the final tree:
+    - `make build` statically linked.
+    - `make test` uncached (`GOFLAGS=-count=1`) passed in 32.5 s wall, the load average 2.31 before and 3.74 after (`internal/cli` 28.5 s).
+    - `make lint` 0 issues.
+    - One record changed: this note. No Go file and no golden.
+  - **Not run, and why**: T074 names no tier-2 test, no hand scenario and no tier 3, so no twin was booted. Infrahub was read and not written to.
+  - **The host**:
+    - **The processes.** The worker (pid 751228) and the server (pid 751230) read `(deleted)` at the start. They were restarted from this tree after `make build`, then again after the final gates, whose build replaced the binary: the worker is pid 1414959 and the server pid 1414980. Both `/proc/<pid>/exe` read the tree's `bin/fylgja`.
+    - **Their environments and reports.** Both environments carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`. The server reports both listeners, the bridge warning and `default scope: tag:fylgja`. Both processes name both packages with their logins set.
+    - **The bridge.** From inside each task worker, `POST /v1/twin/show` answers `200 1 0.1.0-dev` with the token and `401` without it, and the host without the token gets `401`.
+    - **Clean.** `clab inspect --all` finds no containers, there is no `local/twin`, and Temporal lists no Schedule.
+    - **Infrahub.** `Branch` lists `main` and `fylgja-fixture` alone, and `CoreProposedChange`, `FylgjaStage` and `CoreChangeThread` count 0. `main`'s hash is `7c413536…`, and the registration `fylgja` is at `c006bf9`, `in-sync`.
+    - **Memory.** 11,938 MiB available.
+  - **Next**: T074 and T057, the operator's. `converge` follows Run 23.
 
 ---
 

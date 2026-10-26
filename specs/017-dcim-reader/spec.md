@@ -378,10 +378,10 @@ in `description`.
 - **FR-005**: A port MUST be enabled unless its `status` is `disabled`. This MUST be
   recorded in the manifest as approximated.
 - **FR-006**: A link MUST be a `DcimCable` with exactly two ends, each a physical port of
-  a device in the scope. Any other cable reached from a port in the scope MUST be omitted,
-  never refusing the read, and MUST be recorded as a finding beside the read and a manifest
-  row, each naming the cable and one of these reasons: an end outside the scope, other
-  than two ends, an end not on a physical port.
+  a device in the scope. Any other cable or connector reached from a port in the scope MUST
+  be omitted, never refusing the read, and MUST be recorded as a finding beside the read and
+  a manifest row, each naming the cable and one of these reasons: an end outside the scope,
+  other than two ends, an end not on a physical port, a connector that is not a `DcimCable`.
 - **FR-007**: A cable on a management port between two devices in the scope MUST reach
   the CTM; the compiler MUST omit and record it as it does today.
 - **FR-008**: A device's artifact MUST be read as today: the one its package names,

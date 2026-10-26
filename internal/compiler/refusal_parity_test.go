@@ -246,8 +246,9 @@ func warning(object, message string) refusal {
 // twin is built either way: the artifact is pushed as production wrote it, and what the
 // node makes of a line naming a port it has under another name is the node's business.
 //
-// Both artifacts also name Loopback0, whose row has no port: the node calls it nothing at
-// all, its disposition says so, and it draws no warning. Nothing here is omitted, so no
+// Both artifacts also name Loopback0, which the CTM does not carry: a CTM "2" holds no
+// loopback, so it has no row, and an interface with no row draws no warning
+// (ArtifactNames). Nothing here is omitted, so no
 // omitted warning is possible on the fixture as it stands — that case is built below.
 func TestArtifactRenamedWarningsAreWordedAlike(t *testing.T) {
 	got := bothCallersClean(t, func() *ctm.CTM { return loadCTM(t, "testdata", "ctm", "lossy.json") })

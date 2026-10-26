@@ -28,15 +28,16 @@ func newTwinRehearseCmd(opts *options) *cobra.Command {
 		Long: "Rehearse the open proposed change whose source branch --branch names on a twin of its\n" +
 			"own. The API's server resolves, reads, compiles and files every stage first, as stage\n" +
 			"plan does, so a stage that cannot be built refuses the rehearsal before anything is\n" +
-			"booted; a branch point refused because the default branch holds no network is passed\n" +
-			"over. Then one run with the fixed identity fylgja-rehearse creates the twin from the\n" +
-			"first stage that compiled (the baseline) and verifies it, steps it to each later stage\n" +
-			"in order, restarting what the step needs, waits for it to settle and verifies it, stops\n" +
-			"at the first stage that diverges or whose verify finds something the baseline's did not,\n" +
-			"and destroys the twin whatever happened, within a deadline the stages' budgets give.\n" +
-			"The report has one line per stage and, on a failure, the commands that reproduce it by\n" +
-			"hand. Interrupt once to cancel the run and wait for its destroy; a second time to stop\n" +
-			"waiting. --markdown prints the report as the comment a check posts.",
+			"booted; a branch point refused scope.empty, the scope selecting no device on the\n" +
+			"default branch, which may hold untagged devices, is passed over. Then one run with the\n" +
+			"fixed identity fylgja-rehearse creates the twin from the first stage that compiled (the\n" +
+			"baseline) and verifies it, steps it to each later stage in order, restarting what the\n" +
+			"step needs, waits for it to settle and verifies it, stops at the first stage that\n" +
+			"diverges or whose verify finds something the baseline's did not, and destroys the twin\n" +
+			"whatever happened, within a deadline the stages' budgets give. The report has one line\n" +
+			"per stage and, on a failure, the commands that reproduce it by hand. Interrupt once to\n" +
+			"cancel the run and wait for its destroy; a second time to stop waiting. --markdown\n" +
+			"prints the report as the comment a check posts.",
 		Args: cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, _ []string) error {
 			// --json is the root's own flag, which this command reaches only once it hangs

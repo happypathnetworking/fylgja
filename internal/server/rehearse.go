@@ -173,11 +173,11 @@ func rehearsalStages(plan *stages.PlanResult) (baseline int, rows []rehearsalRow
 	return baseline, rows, nil
 }
 
-// passedOver is whether a planned stage is the branch point refused at read for a default
-// branch that holds no network, and for nothing else: the one refusal a rehearsal passes
-// over (FR-003). Over the library's DCIM that is scope.empty, the scope selecting no device
-// on the default branch at the branch point, where 0.2's generics read refused a default
-// branch holding no contract instance (017's FR-015, R-20).
+// passedOver is whether a planned stage is the branch point refused at read scope.empty,
+// the scope selecting no device on the default branch at the branch point, which may hold
+// untagged devices, and for nothing else: the one refusal a rehearsal passes over (FR-003;
+// 017's FR-015, US5 scenario 3). 0.2's generics read refused a default branch holding no
+// contract instance there (R-20).
 func passedOver(st stages.PlanStage) bool {
 	if st.Status != stages.PlanRefused || st.AtSource != stages.AtBranchPoint {
 		return false

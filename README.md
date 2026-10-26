@@ -447,7 +447,8 @@ checks are run again:
 
 - **`fylgja-step`** asks Fylgja for the plan, as `stage plan` prints it, in seconds, draft or
   not. Its message is the plan. It fails when a stage is refused, but for a branch point
-  refused because `main` holds no network.
+  refused `scope.empty`, the scope selecting no device on `main`, which may hold untagged
+  devices.
 - **`fylgja-twin`** skips a draft. Otherwise it asks Fylgja to rehearse the proposed change,
   posts the report as a comment in a new thread on it, and concludes `success` when the
   rehearsal's status is `ok` and `failure` otherwise, which blocks the merge. Its message
@@ -684,8 +685,8 @@ written on your disk:
 ```console
 $ bin/fylgja twin compile --ctm testdata/ctm/mixed.json --out /tmp/mixed
 wrote bundle to /tmp/mixed (3 nodes, 3 links)
-bundle_id 391bcb96c39e7e878fa6ba78ac869742b04f517fa914e2fce51c3ea4944dd3cb
-warning artifact.interface.unrepresented e1:Management1: artifact device-config names interface Management1 at line 12, which the node calls Management0; the line is pushed as production wrote it
+bundle_id ecb665f58ffc9882024a06e29b01e681ee38ce40f55b76994d470fe3272a2aec
+warning artifact.interface.unrepresented e1:Management1: artifact device-config names interface Management1 at line 10, which the node calls Management0; the line is pushed as production wrote it
 …
 $ sed -n '/links:/,$p' /tmp/mixed/topology.clab.yml
   links:
@@ -762,7 +763,7 @@ the dev server and a worker running from the repository root (the script leaves 
 Docker, containerlab, Infrahub and both images, and for case 9 the two checks imported and
 the API's server from the same tree on the Docker bridge, as [A proposed change,
 rehearsed](#a-proposed-change-rehearsed) starts it; it refuses before any case without
-them. It takes about 26 minutes. Without the cEOS image it refuses before any case too;
+them. It takes about 29.5 minutes. Without the cEOS image it refuses before any case too;
 `PLATFORMS` narrows it to the packages you name, and on an SR Linux-only host it ends on a
 partial pass, exit 0:
 
@@ -772,7 +773,7 @@ $ PLATFORMS=nokia_srlinux make test-e2e
 E2E-PARTIAL: platforms nokia_srlinux; ran 1 2 3 4 5 7 9; skipped 6 (needs arista_eos: not in PLATFORMS; image ceos:4.32.0.2F absent) 8 (needs arista_eos: not in PLATFORMS; image ceos:4.32.0.2F absent)
 ```
 
-Cases 6 and 8 build mixed twins, and each skip says why. A narrowed run takes about 17
+Cases 6 and 8 build mixed twins, and each skip says why. A narrowed run takes about 19
 minutes, leaves the host as clean as a full one, and never prints `E2E-OK` when it skipped
 a case.
 
@@ -785,7 +786,7 @@ a case.
 - [docs/development.md](docs/development.md): environment, layout, conventions, test tiers
 - [docs/verified-facts.md](docs/verified-facts.md): how Infrahub, containerlab, the network operating systems and Temporal were found to behave, with versions and dates
 - [psp/README.md](psp/README.md): the platform support package format, and which packages are supported
-- [schema/README.md](schema/README.md): the schema contract, and how to mark a stage
+- [schema/README.md](schema/README.md): the mapping the reader reads Infrahub by, `schema check`, and how to mark a stage
 - [contracts/](contracts/): the CLI, the API and every format, as the tests hold them
 
 ## Contributing

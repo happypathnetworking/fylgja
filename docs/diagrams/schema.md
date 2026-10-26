@@ -68,7 +68,7 @@ erDiagram
         Dropdown status "optional; disabled is a disabled port"
     }
     DcimCable {
-        Text label UK "optional; never read; the fixtures write the link's id"
+        Text label UK "optional; names an omitted cable; the fixtures write the link's id"
     }
     FylgjaStage {
         Text label UK "required; no '/' and no whitespace; unique within its proposed change"

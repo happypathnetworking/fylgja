@@ -26,8 +26,9 @@ const remedy = "regenerate (fylgja-fixture -generate, POST /api/artifact/generat
 //
 // The stamps are read on the stage's branch pinned at its at (the default branch for the
 // branch point); the head's are the branch's unpinned stamps its at was computed from
-// (research R-06). An event names a device when the device's id, or one of its
-// interfaces' ids as those stamps read them, is its primary node or a peer. The events
+// (research R-06). An event names a device when one of the ids its stamps read is its
+// primary node or a peer: the device's own, its interfaces', its platform's, its
+// manufacturer's or one of its cables' (017's FR-023). The events
 // are the source branch's, read after the earliest checksum among the devices judged
 // (every one since the branch point when one is unstamped), since only an event after a
 // device's generation can make it stale; the branch point reads main before any of them

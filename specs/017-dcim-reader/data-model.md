@@ -182,7 +182,8 @@ Added, removed and kept identifiers: [contracts/scope-and-commands.md](contracts
 
 ## 9. The server, the API and the client
 
-- `server.Server.DefaultScope string`; `scopeOf(opts, given, givenAt bool) (string, error)`
+- `server.Server.DefaultScope string`; `scopeOf(opts, op, subject, given, givenSet) (string,
+  error)`, the document's operation and subject beside the value given (T011's departure)
   resolves a request's scope or refuses (`scope.invalid`, `scope.unset`) at `start`
   before the packages load; every handler that reads intent calls it: create, rehearse,
   read, stage plan, stage list; `twin step` and the follow use the record's.

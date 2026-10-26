@@ -46,9 +46,10 @@ func newIntentReadCmd(opts *options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "read",
 		Short: "Read a branch into a validated intent snapshot",
-		Long: "Read an Infrahub branch through Fylgja's generics and write a canonical CTM\n" +
-			"file. Conformance, data completeness and the compiler's intent rules are checked\n" +
-			"in one pass and reported together; any rejection means no file is written.\n" +
+		Long: "Read the devices an Infrahub branch's scope selects, by the mapping of the schema\n" +
+			"library's DCIM at 26336e9, and write a canonical CTM file. Conformance, data\n" +
+			"completeness and the compiler's intent rules are checked in one pass and reported\n" +
+			"together; any rejection means no file is written.\n" +
 			"Reads only — Fylgja never writes to Infrahub.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

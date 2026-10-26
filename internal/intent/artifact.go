@@ -133,9 +133,10 @@ func (c *Client) fetchArtifacts(ctx context.Context, devices []ctm.Device, nodes
 	for _, p := range work {
 		pkg, ok := reg.LookupID(p.pkg)
 		if !ok {
-			// Validation names this device `platform.unsupported`; a second finding
-			// about the same device would bury the one worth fixing, and there is no
-			// package to say which artifact to look for.
+			// Completeness has refused this device platform.missing or
+			// platform.unmatched, and no CTM reaches validation; a second finding about
+			// the same device would bury the one worth fixing, and there is no package to
+			// say which artifact to look for.
 			continue
 		}
 		a, ok := selectArtifact(p, pkg, c.cfg.Branch, c.cfg.At, &list)

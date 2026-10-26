@@ -232,9 +232,9 @@ const (
 	// 017, the DCIM reader and the scope a request names
 	// (specs/017-dcim-reader/contracts/scope-and-commands.md, "The identifiers"). Each
 	// comment gives the severity, the exit, the step, the object and when it fires. They
-	// stand beside the generics' rules until the tasks that remove those rules' last users;
-	// platform.unsupported stays for a CTM naming a package this build lacks. No status,
-	// step or exit is new.
+	// replace the generics' rules, retired with their last users
+	// (TestTheGenericsRulesAreRetired); platform.unsupported stays for a CTM naming a
+	// package this build lacks. No status, step or exit is new.
 	RuleScopeInvalid          = "scope.invalid"            // rejection, exit 2, start: the value given; --scope is not tag:<name>, an empty value included; before any connection, after --branch's and --stage's guards
 	RuleScopeUnset            = "scope.unset"              // rejection, exit 2, start: FYLGJA_DEFAULT_SCOPE; no --scope and the server has no default; before any connection
 	RuleScopeEmpty            = "scope.empty"              // rejection, exit 1, read (none on intent.read; a stage's read, the branch point's where 0.2 refused a main holding no network), or resolve for a stage's head: the scope; the device query answered 0 on the branch at the at, or the head's stamps selected no device and no intent event names its at; the rehearsal and fylgja-step pass over a branch point refused by this rule at read alone

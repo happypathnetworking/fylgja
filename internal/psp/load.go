@@ -14,9 +14,11 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 )
 
-// Registry is the set of platforms this build supports, keyed by the NOS identifier
-// that devices carry (the join from Device.platform.nos), which is also what an override
-// package shadows an embedded one by.
+// Registry is the set of platforms this build supports, keyed by the NOS identifier, by
+// which an override package shadows an embedded one and which a manifest's
+// nodes[].platform carries. A CTM "2" device names its package by platform.package
+// (LookupID), and a source's manufacturer and platform pair finds it by Match
+// (specs/017-dcim-reader/contracts/package-matches.md); no device carries a NOS.
 type Registry struct {
 	byNOS   map[string]*PSP
 	byID    map[string]*PSP

@@ -92,7 +92,7 @@
           },
           "platform": {
             "type": "string",
-            "description": "platform.nos"
+            "description": "The `platform.nos` of the support package the node was built with (017 R-08): a CTM `2` device names its package, not a NOS, and `nos` keys the registry's shadowing of an embedded package by an override."
           },
           "psp": {
             "type": "object",
@@ -208,7 +208,7 @@
               "string",
               "null"
             ],
-            "description": "Node port; null when omitted or configured-not-cabled without a port"
+            "description": "Node port; null on an omitted row, and only there: every interface of a CTM `2` is a port, so every cabled, management and configured-not-cabled row has one (017, FR-030)."
           },
           "node_name": {
             "type": [

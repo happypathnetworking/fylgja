@@ -78,7 +78,7 @@ config:
   commit: explicit                    # `configure session <name>` then `commit`, which is atomic: a refused line leaves the session pending and the running configuration untouched, where `configure` alone leaves every line before the refused one applied
   # The rendered configuration this platform takes, and how it is pushed to a booted
   # node. Not the bootstrap below: that is platform data, this is intent.
-  artifact_name: device-config        # one artifact definition renders EOS text for a device whose nos is eos, under the same name SR Linux's artifact has
+  artifact_name: device-config        # one artifact definition renders EOS text for a device whose platform is EOS, under the same name SR Linux's artifact has
   artifact_content_types: ["text/plain"]  # the definition's content type; EOS CLI text
   mode: replace                       # rollback clean-config and copy startup-config session-config (the baseline containerlab left), bootstrap, artifact, show session-config diffs, commit: one session, one atomic commit, sent with format text (M11 D-033)
   push_timeout_s: 30                  # 0.63s measured for a fourteen-command request; x47, for a node stalled under memory pressure

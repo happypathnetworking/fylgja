@@ -2251,3 +2251,79 @@ the proposed change and the branch.
 **Afterwards**, `Branch` lists `main` and `fylgja-fixture` alone, and
 `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread`, `CoreUserValidator` and
 `DcimDevice` on `main` count 0. `main`'s hash is `7c413536…`.
+
+<a id="5-18"></a>
+### 5.18 A device type under the tagged devices' manufacturer, and an untagged device deleted from their platform (T089; 2026-10-26, 20:25Z–20:32Z)
+
+Run 27 of the converge loop: convergence pass 2's T089, answered (`a`) by the operator.
+US5 scenario 2's exception list names what this probe sees make every tagged mark stale
+through a shared node's stamp or its event. The probe was not committed, as §5.8's was
+(`TestT089Probe`, in `internal/stages` for the package's `Resolve`). Nothing was written
+to `main`, and no token was printed.
+
+**The probe.** It ran on a throwaway branch `fylgja-test-st-1793046342-2487`, the library
+and the stage kind loaded and the three-node fixture seeded. Before the proposed change it
+wrote:
+
+- `cs1`, untagged, on `Nokia` / `SR Linux`, with `mgmt0` and `ethernet-1/1`;
+- a second manufacturer, `Probe Other`, which no device reaches.
+
+Then it opened a draft proposed change, whose pipeline concluded after 70 s, and marked
+`seeded`, which was fresh. Each write below was followed by a mark, judged every 2 s for
+30 s, with each change logged. Then the log was read from `main` with `InfrahubEvent
+(branches: [<branch>])`, and `IntentEvents` gave the events the stale rule keeps. A
+run-check cleared each write, and a mark after it was fresh, before the next write. The
+run-checks took 17 s, 19 s, 25 s and 21 s.
+
+`go test -count=1 -tags contract -run '^TestT089Probe$' ./internal/stages` passed in
+**391.6 s**. The cleanup deleted 9 stages, the proposed change and the branch.
+
+**What each write made of the next mark.** Each was refused `stage.artifact.stale` on
+`n1`, `n2` and `n3`, naming both remedies. None was stale for any reason but a shared
+node's stamp or its event.
+
+| The write | The shared node's stamp | Its event, which the rule keeps | The finding, once the log held it |
+|---|---|---|---|
+| `DcimDeviceType` `probe-type` created under `Nokia` | moved to the write (20:27:52.747573Z), by the reverse `device_types` edge | `OrganizationManufacturer updated` (`device_types` ADDED) | the event, 0.97 s after the stamp, held at the first judgement (+3.5 s) |
+| `probe-type` moved off `Nokia` onto `Probe Other` | **moved back** to its stamp before the creation (20:26:07.834924Z, the generation's group join, by the account D-060 reads as Infrahub's own, so counted as the node's creation, D-058): a removed edge leaves no stamp | `OrganizationManufacturer updated` on `Nokia` (`device_types` REMOVED) | the event alone, at the first judgement (+4.8 s), over each device's own latest stamp |
+| `probe-type` moved back onto `Nokia` | moved to the write (20:29:50.886093Z) | `OrganizationManufacturer updated` (`device_types` ADDED) | the stamp alone at +3.8 s, then the event, 33 ms after it, at +10.9 s |
+| `cs1` deleted (`DcimDeviceDelete`) | the platform's moved to the delete (20:31:00.331011Z); `Nokia`'s did not | `DcimDevice deleted`, naming the platform; then `DcimPlatform updated` (`devices` REMOVED) 12.7 ms later | the platform's stamp alone at +3.8 s, then `infrahub.node.updated of a DcimPlatform` at +10.4 s, the latest event naming the platform |
+
+**The log**, as it held each write, with every event whatever its kind:
+
+- **The creation.** `infrahub.node.created` of the `DcimDeviceType` at 20:27:53.714454
+  (every attribute ADDED or UNCHANGED, `manufacturer` ADDED `Nokia`). Then
+  `infrahub.node.updated` of `Nokia` at .717381 (`device_types` ADDED `probe-type`). The
+  rule keeps the second alone: `DcimDeviceType` is no kind the stamps read.
+- **The move off.** `DcimDeviceType updated` at 20:28:54.026703 (`manufacturer` ADDED
+  `Probe Other`, REMOVED `Nokia`). Then `Probe Other updated` at .028930 (`device_types`
+  ADDED), then `Nokia updated` at .032926 (`device_types` REMOVED). The rule keeps both
+  manufacturers' events, and only `Nokia`'s names the tagged devices.
+- **The move onto.** The same three, the manufacturers the other way round: `Nokia
+  updated` at 20:29:50.919360 (ADDED), `Probe Other updated` at .923386 (REMOVED).
+- **The delete.** `DcimDevice deleted` at 20:31:01.288104, its relationships `interfaces`
+  (two ports), `platform` and `location`, each REMOVED. Each port's `deleted` (.290815,
+  .295074), since `interfaces` is a `Component` edge. Then `DcimPlatform updated` at
+  .300792 (`devices` REMOVED `cs1`) and `LocationSite updated` at .302241. The rule keeps
+  the device's, the ports' and the platform's. The device's and the platform's name the
+  platform, so the platform's update is the event named, as at a creation (§5.17).
+- `NodeMutatedEvent`'s `attributes` and `relationships` carry an `action` (`ADDED`,
+  `REMOVED`, `UNCHANGED`) beside the name, which the stale rule does not read. The events
+  were stamped 33 ms to 0.97 s after the write's stamp.
+
+**What it settles.**
+
+- A device type under the tagged devices' manufacturer is the platform's case over again.
+  Created under it or moved onto it, it moves the manufacturer's stamp and names it in an
+  event. Moved off it, it moves the stamp back and names it in an event alone.
+- An untagged device deleted from their platform stamps the platform at the delete, as a
+  cable's delete stamps its ends (§5.11), and names it in two events.
+- So US5 scenario 2's exception list, and `docs/architecture.md` §6, take both, and the
+  clause they share says the write moves the shared node's stamp **or** names it in an
+  event: the move off does the second alone. A device moved off a platform takes the
+  platform's `devices` edge away in the same way, so it is most likely the same, but this
+  probe did not write it.
+
+**Afterwards**, `Branch` lists `main` and `fylgja-fixture` alone, and
+`CoreProposedChange`, `FylgjaStage`, `CoreChangeThread`, `CoreUserValidator`, `DcimDevice`
+and `DcimDeviceType` on `main` count 0. `main`'s hash is `7c413536…`.

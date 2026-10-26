@@ -1627,10 +1627,12 @@ To be stated in the product surface, not buried here.
   not. The proposed change's checks cover it, since a run-check re-stamps the validator
   for every device. The rule also over-reports, on purpose: a platform or a manufacturer
   is a node every device on it reaches, and its stamp counts its reverse edges. So an
-  untagged device created on, or moved onto or off, the tagged devices' platform, or a
-  platform created under, or moved onto or off, their manufacturer, moves that shared
-  node's stamp and names it in an event, and every tagged device's mark on it reads stale
-  until a regenerate.
+  untagged device created on, moved onto or off, or deleted from, the tagged devices'
+  platform, or a platform or a device type created under, or moved onto or off, their
+  manufacturer, moves that shared node's stamp or names it in an event, and every tagged
+  device's mark on it reads stale until a regenerate. A write that adds an edge, or a
+  delete, does both. A move off takes the edge away and leaves no stamp, so the event
+  alone shows it.
 - **A lossy mapping loses interfaces.** Where a container has fewer ports than the
   production device has interfaces, an interface that shares a port with a cabled one is
   omitted, and the manifest names it (`fidelity.lossy`, `omit.interface.shared`). An

@@ -497,6 +497,21 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   - So the platform's event is the latest one naming the platform, about 70 ms after the
     platform's stamp moved.
   *(10-26; `specs/017-dcim-reader/research.md` §5.17)*
+  - **A device type's writes, and a device's delete.**
+    - **A device type created.** `DcimDeviceType created` names its manufacturer, and
+      `OrganizationManufacturer updated` (`device_types` ADDED) follows about 3 ms later.
+    - **A device type moved.** The type's own `updated` names both manufacturers, and each
+      manufacturer's `updated` follows, `device_types` ADDED on the new one and REMOVED on
+      the old.
+    - **A device deleted.** `DcimDevice deleted` names its ports, platform and site, each
+      REMOVED, and each port's own `deleted` follows, since `interfaces` is a `Component`
+      edge. Then `DcimPlatform updated` (`devices` REMOVED) comes about 13 ms after the
+      device's, and `LocationSite updated` after that.
+    - So the manufacturer's or the platform's update is the latest event naming it.
+    - Each relationship and attribute carries an `action` beside its name (`ADDED`,
+      `REMOVED`, `UNCHANGED`).
+    - The events were stamped 33 ms to 0.97 s after the write's stamp.
+  *(10-26; `specs/017-dcim-reader/research.md` §5.18)*
 
 **Checks, and the proposed change's view (015)**
 
@@ -648,6 +663,15 @@ registration `fylgja`.
   node's creation its edge is absent, and one microsecond later present with `updated_at`
   equal to `created_at`. *(10-25, 10-26; `specs/017-dcim-reader/research.md` §1.4, §1.7,
   §5.8)*
+  - **A device type and a device's delete.**
+    - A `DcimDeviceType` created under a manufacturer, or moved onto it, moves the
+      manufacturer's stamp to the write, through the reverse `device_types` edge.
+    - Moved off it, the type moves the former manufacturer's stamp **back**, as a removal
+      does.
+    - A device deleted (`DcimDeviceDelete`) moves its platform's stamp to the delete, as a
+      cable's delete stamps its ends. Its manufacturer's stamp does not move: the device
+      reaches it only through the platform.
+  *(10-26; `specs/017-dcim-reader/research.md` §5.18)*
 - **A generation stamps each device's artifact apart.** The fixture's three checksums read
   `…38.543597`, `…38.544382` and `…38.544482`, each after its own device's intent, so the
   latest stamp of a branch is one device's checksum. A regeneration that changes bytes

@@ -250,10 +250,11 @@ platform's manufacturer.
    written, **Then** the mark reads stale for that device, naming it.
 2. **Given** a write to an untagged device or to a cable between two untagged devices,
    **When** stages are resolved, **Then** no tagged device's mark is made stale by it,
-   **except** an untagged device created on, or moved onto or off, a platform the tagged
-   devices share, or a platform created under, or moved onto or off, their manufacturer:
-   that write moves the shared node's stamp and names it in an event, and the tagged
-   devices' marks read stale, an over-report this story accepts.
+   **except** an untagged device created on, moved onto or off, or deleted from, a
+   platform the tagged devices share, or a platform or a device type created under, or
+   moved onto or off, their manufacturer: that write moves the shared node's stamp or
+   names it in an event, and the tagged devices' marks read stale, an over-report this
+   story accepts.
 3. **Given** `main` holds the library's kinds and no tagged device, **When** `stage plan`
    or a rehearsal resolves the branch point, **Then** it is refused with the
    scope-selects-nothing finding, and the rehearsal and `fylgja-step` treat it as they

@@ -126,9 +126,14 @@ the target's resolution, its staleness and its read. A `7` record is refused
 this build no longer reads (twin.json 7); fylgja twin destroy clears it`), as a `5` is,
 and an `8` whose scope is not `tag:<name>` alike, naming the value (`the twin's record
 names scope "fylgja", which is not tag:<name>, and every read a step makes is under the
-record's scope; fylgja twin destroy clears it`; T097), each before any Infrahub read,
-after the check for a rehearsal in flight: with the workflow service down, a step that is
-not a dry run ends `operation.failed` at `start` before the record is read (T109).
+record's scope; fylgja twin destroy clears it`; T097), and an `8` of a known scope whose
+mapping `twin.json` 8 cannot hold, naming each field it fails in `twin show`'s order, since a
+step that diverges keeps the record's mapping in the record it writes (`the twin's record
+names mapping reader "Infrahub DCIM", which twin.json 8 cannot hold, and a step that
+diverges keeps the record's mapping in the record it writes; fylgja twin destroy clears
+it`; T113), each before any Infrahub read, after the check for a rehearsal in flight: with
+the workflow service down, a step that is not a dry run ends `operation.failed` at `start`
+before the record is read (T109).
 
 A following twin created before 017 keeps a Schedule whose `ReconcileInput` names no
 scope (`omitempty`), so its checks ask for a read under `""`. `stage.Read` refuses a scope

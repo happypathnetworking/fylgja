@@ -426,9 +426,27 @@ func scopeKnown(rec *wire.TwinRecord) bool {
 // mappingKnown says whether a record's mapping is one twin.json 8 holds: a reader's name of
 // its form (ctm.ValidReader), a model and a version. No build of this tree writes another
 // (NewRecord and NewStepRecord refuse one), so a record that does not was edited by hand:
-// twin show names its reader unknown and shows no mapping. twin step reads the scope alone.
+// twin show names its reader unknown and shows no mapping, and twin step refuses it
+// (stepScopeUnknown), since a step that diverges writes it into its own record.
 func mappingKnown(m wire.Mapping) bool {
-	return ctm.ValidReader(m.Reader) && m.Model != "" && m.Version != ""
+	return len(mappingUnheld(m)) == 0
+}
+
+// mappingUnheld names each field of a mapping twin.json 8 cannot hold, in the order reader,
+// model, version: `reader "Infrahub DCIM"`, `model ""`, `version ""`. Empty when it holds them
+// all.
+func mappingUnheld(m wire.Mapping) []string {
+	var named []string
+	if !ctm.ValidReader(m.Reader) {
+		named = append(named, fmt.Sprintf("reader %q", m.Reader))
+	}
+	if m.Model == "" {
+		named = append(named, `model ""`)
+	}
+	if m.Version == "" {
+		named = append(named, `version ""`)
+	}
+	return named
 }
 
 // recordLine is the record line twin show and twin create print (contracts/cli.md, 017):
@@ -461,17 +479,7 @@ func provenanceClause(rec *wire.TwinRecord) string {
 		return fmt.Sprintf("scope unknown (record %s names scope %q, not tag:<name>)", rec.TwinVersion, rec.Provenance.Scope)
 	}
 	m := rec.Provenance.Mapping
-	if !mappingKnown(m) {
-		var named []string
-		if !ctm.ValidReader(m.Reader) {
-			named = append(named, fmt.Sprintf("reader %q", m.Reader))
-		}
-		if m.Model == "" {
-			named = append(named, `model ""`)
-		}
-		if m.Version == "" {
-			named = append(named, `version ""`)
-		}
+	if named := mappingUnheld(m); len(named) > 0 {
 		return fmt.Sprintf("scope %s, read by an unknown reader (record %s names mapping %s)", rec.Provenance.Scope,
 			rec.TwinVersion, strings.Join(named, ", "))
 	}

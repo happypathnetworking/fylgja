@@ -426,6 +426,19 @@ func misscopedHost(t *testing.T, scope string) *stepHostFixture {
 	})
 }
 
+// mismappedHost is stepHost's twin with its record's mapping edited by hand, each field
+// given replacing the record's: a twin.json 8 naming scope tag:fylgja and a mapping 8 cannot
+// hold, which no build of this tree writes (T113).
+func mismappedHost(t *testing.T, fields map[string]string) *stepHostFixture {
+	t.Helper()
+	return editedRecordHost(t, func(m map[string]any) {
+		mapping := m["provenance"].(map[string]any)["mapping"].(map[string]any)
+		for k, v := range fields {
+			mapping[k] = v
+		}
+	})
+}
+
 // editedRecordHost is stepHost's twin with its twin.json edited as JSON by edit.
 func editedRecordHost(t *testing.T, edit func(map[string]any)) *stepHostFixture {
 	t.Helper()
@@ -1059,6 +1072,12 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 		return `the twin's record names scope "` + scope + `", which is not tag:<name>, and every read a step makes is ` +
 			"under the record's scope; fylgja twin destroy clears it"
 	}
+	// mismapped is its message for an 8 whose mapping twin.json 8 cannot hold, each failing
+	// field named in twin show's order.
+	mismapped := func(named string) string {
+		return "the twin's record names mapping " + named + ", which twin.json 8 cannot hold, and a step that diverges " +
+			"keeps the record's mapping in the record it writes; fylgja twin destroy clears it"
+	}
 	// refusedTarget is the stage twin's host with the record's bundle gone from the store
 	// and too little memory for the step, edited: a target refused there is refused
 	// before the from bundle is read and the host checked, either of which would refuse
@@ -1200,6 +1219,25 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		{name: "a record of twin.json 8 naming scope tag:", host: func(t *testing.T) *stepHostFixture { return misscopedHost(t, "tag:") },
 			code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "", misscoped("tag:")),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		// An 8 of scope tag:fylgja whose mapping 8 cannot hold, edited by hand: a step that
+		// diverged would keep it in the record it writes, which NewStepRecord refuses, failing
+		// the record activity with the nodes changed. Refused before Infrahub is asked, each
+		// failing field named (T113).
+		{name: "a record of twin.json 8 naming mapping reader Infrahub DCIM", host: func(t *testing.T) *stepHostFixture {
+			return mismappedHost(t, map[string]string{"reader": "Infrahub DCIM"})
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
+			mismapped(`reader "Infrahub DCIM"`)),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		{name: "a record of twin.json 8 naming an empty mapping model and version", host: func(t *testing.T) *stepHostFixture {
+			return mismappedHost(t, map[string]string{"model": "", "version": ""})
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
+			mismapped(`model "", version ""`)),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		{name: "a record of twin.json 8 naming mapping reader -dcim and an empty model", host: func(t *testing.T) *stepHostFixture {
+			return mismappedHost(t, map[string]string{"reader": "-dcim", "model": ""})
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
+			mismapped(`reader "-dcim", model ""`)),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		{name: "another branch", args: []string{"--stage", "other/x"}, code: findings.ExitRejected, asked: true, unread: true,
 			want: refusal(findings.RuleStepTargetForeign, findings.StepResolve, "other/x",

@@ -166,15 +166,19 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 }
 
 // stepScopeUnknown is the refusal of a stage twin whose record is of twin.json 7 or earlier,
-// or of 8 or later naming a scope that is not tag:<name>, or nil for one naming a scope
-// (017): every read a step makes is under the record's scope, so a record naming none
-// cannot step, as a record of 5 or earlier naming M10's waypoint cannot
-// (provision.Ineligible). No build of this tree writes an 8 with another scope (NewRecord
-// and NewStepRecord refuse one), so such a record was edited by hand; read under it, the
-// stage's resolution and read would filter by a tag no scope names and fail at read. It is
-// the command's refusal alone, before any connection and any run: the run's second lock
-// reads records of 4 and 5 in its recorded histories, which must replay unchanged, and a
-// worker of this build writes 8.
+// or of 8 or later naming a scope that is not tag:<name> or a mapping twin.json 8 cannot
+// hold, or nil for one naming a scope and a mapping (017): every read a step makes is under
+// the record's scope, so a record naming none cannot step, as a record of 5 or earlier
+// naming M10's waypoint cannot (provision.Ineligible). No build of this tree writes an 8
+// with another scope or such a mapping (NewRecord and NewStepRecord refuse one), so such a
+// record was edited by hand; read under it, the stage's resolution and read would filter by
+// a tag no scope names and fail at read, and a step that diverges keeps the record's
+// provenance in the record it writes, which NewStepRecord refuses, failing the record
+// activity with the nodes changed and twin.json still ready at the from stage. Each field
+// of the mapping it fails is named, in twin show's order (mappingUnheld). It is the
+// command's refusal alone, before any Infrahub read and any run: the run's second lock reads
+// records of 4 and 5 in its recorded histories, which must replay unchanged, and a worker of
+// this build writes 8.
 func stepScopeUnknown(rec *wire.TwinRecord) *findings.Finding {
 	refuse := func(message string) *findings.Finding {
 		return &findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: rec.BundleID,
@@ -187,6 +191,10 @@ func stepScopeUnknown(rec *wire.TwinRecord) *findings.Finding {
 	if !scopeKnown(rec) {
 		return refuse(fmt.Sprintf("the twin's record names scope %q, which is not tag:<name>, and every read a step makes "+
 			"is under the record's scope; fylgja twin destroy clears it", rec.Provenance.Scope))
+	}
+	if named := mappingUnheld(rec.Provenance.Mapping); len(named) > 0 {
+		return refuse(fmt.Sprintf("the twin's record names mapping %s, which twin.json 8 cannot hold, and a step that "+
+			"diverges keeps the record's mapping in the record it writes; fylgja twin destroy clears it", strings.Join(named, ", ")))
 	}
 	return nil
 }

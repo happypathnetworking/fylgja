@@ -43,8 +43,10 @@ row per interface, as it was in `4`. The glossary's *mapping* entry says the sam
   unknown and `twin step` refuses it, naming the value (T097). An `8` whose mapping is not
   one `twin.json` 8 holds (a reader's name not of its form, or a model or version left
   empty), which no build writes either, is shown naming its reader unknown and each field
-  it fails, its JSON record carrying neither `scope` nor `mapping`; `twin step` reads its
-  scope alone and steps it (T106).
+  it fails, its JSON record carrying neither `scope` nor `mapping` (T106); `twin step`
+  refuses it `step.twin.unsteppable`, naming each field it fails, since a step that diverges
+  keeps the record's mapping in the record it writes, which `twin.json` 8 cannot hold
+  (T113).
 
 ## The findings blocks (`contracts/findings.schema.json`, `show`, `verify`, `step`)
 

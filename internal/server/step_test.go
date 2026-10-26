@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
@@ -165,14 +166,36 @@ func TestACreateAndAStepBesideARehearsalNameIt(t *testing.T) {
 
 // A stage twin whose record is of twin.json 7 or earlier names no scope, so twin step refuses
 // it naming the version, step.twin.unsteppable at resolve, its object the record's bundle
-// (017); a record of 8 or later naming a scope passes on to the step's other checks, and one
-// naming a scope that is not tag:<name> is refused naming the value (T097).
+// (017); a record of 8 or later naming a scope and a mapping passes on to the step's other
+// checks, one naming a scope that is not tag:<name> is refused naming the value (T097), and
+// one naming a mapping twin.json 8 cannot hold is refused naming each field it fails, in
+// twin show's order (T113).
 func TestStepRefusesARecordThatNamesNoScope(t *testing.T) {
 	const bundleID = "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777"
+	mapping := wire.Mapping{Reader: ctm.ReaderInfrahubDCIM, Model: ctm.ModelSchemaLibrary, Version: ctm.ModelVersion}
 	for _, version := range []string{"8", "9"} {
-		rec := &wire.TwinRecord{TwinVersion: version, BundleID: bundleID, Provenance: wire.Provenance{Scope: "tag:fylgja"}}
+		rec := &wire.TwinRecord{TwinVersion: version, BundleID: bundleID, Provenance: wire.Provenance{Scope: "tag:fylgja", Mapping: mapping}}
 		if f := stepScopeUnknown(rec); f != nil {
 			t.Errorf("twin.json %s: refused %+v, want it to pass", version, f)
+		}
+	}
+	for _, c := range []struct {
+		edit  func(*wire.Mapping)
+		named string
+	}{
+		{func(m *wire.Mapping) { m.Reader = "Infrahub DCIM" }, `reader "Infrahub DCIM"`},
+		{func(m *wire.Mapping) { m.Model, m.Version = "", "" }, `model "", version ""`},
+		{func(m *wire.Mapping) { m.Reader, m.Model = "-dcim", "" }, `reader "-dcim", model ""`},
+		{func(m *wire.Mapping) { *m = wire.Mapping{} }, `reader "", model "", version ""`},
+	} {
+		m := mapping
+		c.edit(&m)
+		f := stepScopeUnknown(&wire.TwinRecord{TwinVersion: "8", BundleID: bundleID, Provenance: wire.Provenance{Scope: "tag:fylgja", Mapping: m}})
+		want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: bundleID,
+			Step: findings.StepResolve, Message: "the twin's record names mapping " + c.named + ", which twin.json 8 cannot hold, " +
+				"and a step that diverges keeps the record's mapping in the record it writes; fylgja twin destroy clears it"}
+		if f == nil || *f != want {
+			t.Errorf("mapping %+v: refused %+v, want %+v", m, f, want)
 		}
 	}
 	for _, scope := range []string{"", "fylgja", "tag:", "tag:two words"} {

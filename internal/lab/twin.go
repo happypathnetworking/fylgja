@@ -405,9 +405,11 @@ func NewStepRecord(prev wire.TwinRecord, f StepFields) (wire.TwinRecord, error) 
 		rec.Stage = f.To.Stage
 		rec.State = wire.StateReady
 	}
-	// A diverged step keeps the previous record's provenance, which a record of 7 or earlier
-	// wrote with no scope and no mapping: twin.json 8 cannot hold it (017). twin step refuses
-	// such a twin before any run, so only a record that changed under the run reaches here.
+	// A diverged step keeps the previous record's provenance, which twin.json 8 cannot hold
+	// when the previous record is a 7 or earlier, written with no scope and no mapping, or
+	// an 8 edited by hand to name a scope that is not tag:<name> or a mapping 8 cannot hold
+	// (017). twin step refuses each before any run, so only a record that changed under the
+	// run reaches here.
 	if err := provenanceNamesItsRead(rec.Provenance); err != nil {
 		return wire.TwinRecord{}, fmt.Errorf("the step's record keeps the provenance of twin.json %s: %w", prev.TwinVersion, err)
 	}

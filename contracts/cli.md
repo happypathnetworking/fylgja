@@ -427,7 +427,7 @@ of them, `run.in_flight` naming it (015):
 
 | Rule | When | Wording (shape) |
 |---|---|---|
-| `step.twin.unsteppable` | no twin; an orphan; an unreadable record; a record of `5` or earlier, or one naming no stage; since 017, a record of `7` or earlier, which names no scope, or an `8` naming a scope that is not `tag:<name>` (below) | `…; only a twin built from a stage steps (fylgja twin create --stage)`; for a `5` record, `the twin was created from a waypoint of a record version this build no longer reads (twin.json 5); only a twin built from a stage steps; fylgja twin destroy clears it` |
+| `step.twin.unsteppable` | no twin; an orphan; an unreadable record; a record of `5` or earlier, or one naming no stage; since 017, a record of `7` or earlier, which names no scope, or an `8` naming a scope that is not `tag:<name>` or a mapping `twin.json` 8 cannot hold (below) | `…; only a twin built from a stage steps (fylgja twin create --stage)`; for a `5` record, `the twin was created from a waypoint of a record version this build no longer reads (twin.json 5); only a twin built from a stage steps; fylgja twin destroy clears it` |
 | `step.target.foreign` | `--stage` names another branch, or another proposed change on the same branch | `stage other/x is not of proposed change <id> on branch change-1, the twin's; a step stays inside the proposed change the twin was built from, whose stages are: …` |
 | `step.target.unknown` | no stage after the record's; the record's label gone; `--stage` names no stage of the proposed change | `proposed change <id> on change-1 has no stage after change-1/head; its stages are: …`, or `…; the head has moved since the twin was built (now at …): --stage change-1/head steps to it` |
 | `step.target.current` | the target resolves to the record's own `(branch, at)` | `the twin is already at stage change-1/live (branch change-1, at …); the proposed change's stages are: …` |
@@ -921,7 +921,7 @@ start on the same registry.
   empty, which no build writes either, `…, scope tag:fylgja, read by an unknown reader
   (record 8 names mapping reader "Infrahub DCIM")`, each field it fails named (`model ""`,
   `version ""`), its JSON record carrying neither, since the show contract has the scope
-  only beside the mapping, while `twin step` reads its scope alone. `twin create` prints the same
+  only beside the mapping, and `twin step` refuses it (below; T113). `twin create` prints the same
   line for the twin it made, from the record its run wrote, after the nodes and before `twin
   directory …`, as `twin show` prints it after the nodes; `twin provision` does too, its
   record naming what its bundle's provenance names.
@@ -956,7 +956,12 @@ start on the same registry.
   longer reads (twin.json 7); fylgja twin destroy clears it`, as a `5` is; on an `8` whose
   scope is not `tag:<name>` alike: `the twin's record names scope "fylgja", which is not
   tag:<name>, and every read a step makes is under the record's scope; fylgja twin destroy
-  clears it`. Each is refused before any Infrahub read, after the check for a rehearsal in
+  clears it`; and on an `8` of a known scope whose mapping `twin.json` 8 cannot hold, each
+  field it fails named in `twin show`'s order (`reader "Infrahub DCIM"`, `model ""`,
+  `version ""`), since a step that diverges writes the record's mapping into its own record,
+  which no build writes: `the twin's record names mapping reader "Infrahub DCIM", which
+  twin.json 8 cannot hold, and a step that diverges keeps the record's mapping in the record
+  it writes; fylgja twin destroy clears it` (T113). Each is refused before any Infrahub read, after the check for a rehearsal in
   flight, which comes before every other refusal: with the workflow service down, a step
   that is not a dry run ends `operation.failed` at `start` first.
 

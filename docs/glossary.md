@@ -1173,7 +1173,7 @@ the bundle whose content it runs. A step rewrites it whole, on every path after 
 Older versions are read where a twin may still carry one: a `7` or earlier names no scope,
 so `twin show` says `scope unknown (record 7)` and `twin step` refuses it
 (`step.twin.unsteppable`), though `twin destroy` clears it, and a rehearsal reclaims it when it names a dead one, and an
-`8` whose scope is not `tag:<name>`, which no build writes, is shown and refused alike; a
+`8` whose scope is not `tag:<name>`, or whose mapping `twin.json` 8 cannot hold, which no build writes, is shown and refused alike; a
 `6` names no rehearsal; and a record of `5` or earlier names M10's *waypoint*, which reads
 as no stage, so its twin shows as pinned and cannot step.
 

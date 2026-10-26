@@ -1109,7 +1109,8 @@ clears it, and `twin rehearse` reclaims it when its own dead run left it. An `8`
 is not `tag:<name>`, which no build writes, is read alike for `twin show` and `twin step`,
 naming the value; one whose mapping `twin.json` 8 cannot hold, which no build writes
 either, `twin show` shows read by an unknown reader, naming each field it fails, and `twin
-step`, which reads the scope alone, steps. A following twin
+step` refuses alike, since a step that diverges keeps the record's mapping in the record it
+writes. A following twin
 created before 017 keeps a Schedule whose input names no scope: each of its checks' reads is
 refused before any connection, `operation.failed` naming `fylgja twin destroy`, since the
 read holds every scope to `tag:<name>`.

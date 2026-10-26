@@ -1,11 +1,13 @@
 # The queries genqlient generates typed Go from. The read selects the schema library's
 # kinds as the mapping names them (D-057, Constitution III: specs/017-dcim-reader/
 # contracts/mapping.md §2), and nothing beyond them, and the stamps select them in the
-# read's two shapes (017 research R-10). A tier-1 test asserts that every
-# operation is a query and names only the mapping's roots or Fylgja's, but for the four
-# roots that are Infrahub's own units rather than the operator's model (014:
+# read's two shapes (017 research R-10). The read-only test (readonly_test.go) asserts that
+# every operation is a query; that its roots are the mapping's two, Fylgja's stage kind, or
+# one of the four that are Infrahub's own units rather than the operator's model (014:
 # CoreProposedChange, CoreArtifactValidator, Branch, and InfrahubEvent, its record of a
-# write, D-048), each named there.
+# write, D-048); that its fragments are on the mapping's four kinds or two of Infrahub's
+# (CoreArtifactTarget, NodeMutatedEvent); and that the scope's tag, Infrahub's BuiltinTag,
+# is read by the tags__name__value filter alone. Each is named there with its reason.
 #
 # Verified 2026-09-08 against Infrahub 1.11.2: envelope (`value`, `node`, `edges`),
 # `limit`/`offset`, and generic resolution to concrete kinds. The queries take their order

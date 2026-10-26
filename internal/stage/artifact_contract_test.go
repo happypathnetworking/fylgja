@@ -6,7 +6,6 @@ import (
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"maps"
 	"path/filepath"
 	"slices"
@@ -25,11 +24,11 @@ import (
 // listedArtifact is what Infrahub lists for one device's artifact of one name.
 type listedArtifact struct{ Checksum, StorageID string }
 
-// artifactsOf asks Infrahub, through the generic and Infrahub's target interface as the
-// read does, for each device's artifact named name.
+// artifactsOf asks Infrahub, through the library's device and Infrahub's target interface
+// as the read does, for each device's artifact named name.
 func artifactsOf(t *testing.T, c *testsupport.Client, branch, name string) map[string]listedArtifact {
 	t.Helper()
-	raw, err := c.GraphQL(branch, `{ FylgjaDevice { edges { node { name { value }
+	raw, err := c.GraphQL(branch, `{ DcimDevice { edges { node { name { value }
 		... on CoreArtifactTarget { artifacts { edges { node { checksum { value } storage_id { value }
 			definition { node { ... on CoreArtifactDefinition { artifact_name { value } } } } } } } } } } } }`)
 	if err != nil {
@@ -39,7 +38,7 @@ func artifactsOf(t *testing.T, c *testsupport.Client, branch, name string) map[s
 		Value string `json:"value"`
 	}
 	var data struct {
-		FylgjaDevice struct {
+		DcimDevice struct {
 			Edges []struct {
 				Node struct {
 					Name      value `json:"name"`
@@ -58,13 +57,13 @@ func artifactsOf(t *testing.T, c *testsupport.Client, branch, name string) map[s
 					} `json:"artifacts"`
 				} `json:"node"`
 			} `json:"edges"`
-		} `json:"FylgjaDevice"`
+		} `json:"DcimDevice"`
 	}
 	if err := json.Unmarshal(raw, &data); err != nil {
 		t.Fatal(err)
 	}
 	out := map[string]listedArtifact{}
-	for _, d := range data.FylgjaDevice.Edges {
+	for _, d := range data.DcimDevice.Edges {
 		for _, a := range d.Node.Artifacts.Edges {
 			if a.Node.Definition.Node.ArtifactName.Value == name {
 				out[d.Node.Name.Value] = listedArtifact{Checksum: a.Node.Checksum.Value, StorageID: a.Node.StorageID.Value}
@@ -157,7 +156,8 @@ func contentOf(c *ctm.CTM) map[string]string {
 // group and generates — stage.Read returns three devices each with an artifact whose
 // checksum is Infrahub's and whose bytes hash to it, and stage.Compile's files carry
 // configs/<n>.device-config, byte for byte, with the manifest's entry and the bundle
-// version this build writes (M5's "2", "3" from M7's format bump, "4" from M12's).
+// version this build writes (M5's "2", "3" from M7's format bump, "4" from M12's, "5" from
+// 017's).
 func artifactReadAndBundle(t *testing.T, c *testsupport.Client, branch string, reg *psp.Registry) {
 	snapshot, list, err := Read(t.Context(), branch, "", "tag:fylgja", reg, time.Now().UTC().Format(ObservedAtFormat))
 	if err != nil {
@@ -193,8 +193,8 @@ func artifactReadAndBundle(t *testing.T, c *testsupport.Client, branch string, r
 	if err := json.Unmarshal(files[compiler.ManifestFile], &m); err != nil {
 		t.Fatal(err)
 	}
-	if m.BundleVersion != "4" {
-		t.Errorf("bundle_version %q, want 4", m.BundleVersion)
+	if m.BundleVersion != compiler.BundleVersion {
+		t.Errorf("bundle_version %q, want %s", m.BundleVersion, compiler.BundleVersion)
 	}
 	content := map[string]string{}
 	for _, d := range snapshot.Devices {
@@ -217,11 +217,12 @@ func artifactReadAndBundle(t *testing.T, c *testsupport.Client, branch string, r
 
 // A configuration change is detected by the read-and-compare M4 follows with, and nothing
 // else is (D-026). Two reads of an unchanged branch compile to one
-// bundle_id. A role change, regenerated, moves it: the template prints role in a comment
-// and the compiler emits it nowhere, so only the artifact moved it. A site
-// change, regenerated, leaves it exactly where it was: the template queries site and
-// prints nothing from it, and Infrahub writes nothing for a regeneration whose output
-// matches — not the checksum, and not the storage id either.
+// bundle_id. A description change, regenerated, moves it: the template prints the
+// description in the artifact's header and the compiler emits it nowhere, so only the
+// artifact moved it. A serial number change, regenerated, leaves it exactly where it was:
+// neither the template nor the read reads the serial number, and Infrahub writes nothing
+// for a regeneration whose output matches — not the checksum, and not the storage id
+// either (R-15).
 func artifactDetection(t *testing.T, c *testsupport.Client, branch string, reg *psp.Registry) {
 	first, id := compileClean(t, branch, reg)
 	_, again := compileClean(t, branch, reg)
@@ -240,24 +241,24 @@ func artifactDetection(t *testing.T, c *testsupport.Client, branch string, reg *
 	}
 	for deadline := time.Now().Add(90 * time.Second); artifactsOf(t, c, branch, "device-config")["n1"].Checksum == before["n1"].Checksum; {
 		if time.Now().After(deadline) {
-			t.Fatalf("n1's artifact checksum stayed %s for 90s after a role change was generated", before["n1"].Checksum)
+			t.Fatalf("n1's artifact checksum stayed %s for 90s after a description change was generated", before["n1"].Checksum)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
 	moved, movedID := compileClean(t, branch, reg)
 	if movedID == id {
-		t.Errorf("a role change, regenerated, left bundle_id at %s", id)
+		t.Errorf("a description change, regenerated, left bundle_id at %s", id)
 	}
 	was, now := contentOf(first), contentOf(moved)
 	if was["n1"] == now["n1"] {
-		t.Error("n1's artifact bytes did not change with its role")
+		t.Error("n1's artifact bytes did not change with its description")
 	}
 	for _, d := range []string{"n2", "n3"} {
 		if was[d] != now[d] {
-			t.Errorf("%s's artifact bytes changed with n1's role", d)
+			t.Errorf("%s's artifact bytes changed with n1's description", d)
 		}
 	}
-	t.Logf("role change: bundle_id %s -> %s", id, movedID)
+	t.Logf("description change: bundle_id %s -> %s", id, movedID)
 
 	// The serial number change. A regeneration that writes nothing gives nothing to wait
 	// for, so the listing is watched for 20 seconds, well past the 7.6s a regeneration that
@@ -271,65 +272,33 @@ func artifactDetection(t *testing.T, c *testsupport.Client, branch string, reg *
 	}
 	for end := time.Now().Add(20 * time.Second); time.Now().Before(end); time.Sleep(time.Second) {
 		if got := artifactsOf(t, c, branch, "device-config"); !maps.Equal(got, listed) {
-			t.Fatalf("a site change, regenerated, moved Infrahub's listing: %v -> %v", listed, got)
+			t.Fatalf("a serial number change, regenerated, moved Infrahub's listing: %v -> %v", listed, got)
 		}
 	}
 	unmoved, unmovedID := compileClean(t, branch, reg)
 	if unmovedID != movedID {
-		t.Errorf("a site change, regenerated, moved bundle_id %s -> %s", movedID, unmovedID)
+		t.Errorf("a serial number change, regenerated, moved bundle_id %s -> %s", movedID, unmovedID)
 	}
 	if !maps.Equal(contentOf(unmoved), now) {
-		t.Error("a site change, regenerated, changed an artifact's bytes")
+		t.Error("a serial number change, regenerated, changed an artifact's bytes")
 	}
 }
 
-// A device with no current artifact is refused by name, and the read writes no CTM.
-// Two ways a device is left without one, both in one read: n4 is not
-// in the group the definition renders for, so nothing is ever rendered for it; n5 is in
+// A device with no current artifact is refused by name, and the read writes no CTM (US2
+// scenario 7). Two ways a device in the scope is left without one, both in one read: n4 is
+// not in the group the definition renders for, so nothing is ever rendered for it; n5 is in
 // the group but nothing has been generated since it joined, and Infrahub renders nothing
-// on its own. The token case has no live oracle — this Infrahub reads
-// anonymously — and is tier 1's alone (internal/intent/artifact_test.go).
+// on its own. Each carries the tag and the platform the fixture's devices do, so its
+// package is found and its artifact looked for. The token case has no live oracle — this
+// Infrahub reads anonymously — and is tier 1's alone (internal/intent/artifact_test.go).
 func artifactRefusals(t *testing.T, c *testsupport.Client, branch string, reg *psp.Registry) {
-	raw, err := c.GraphQL(branch, `{ NetworkPlatform { edges { node { id } } } }`)
-	if err != nil {
-		t.Fatal(err)
-	}
-	var platforms struct {
-		P struct {
-			Edges []struct {
-				Node struct {
-					ID string `json:"id"`
-				} `json:"node"`
-			} `json:"edges"`
-		} `json:"NetworkPlatform"`
-	}
-	if err := json.Unmarshal(raw, &platforms); err != nil || len(platforms.P.Edges) != 1 {
-		t.Fatalf("want the fixture's one platform on %s: %s (%v)", branch, raw, err)
-	}
-	platform := platforms.P.Edges[0].Node.ID
-
-	create := func(kind, data string) string {
-		t.Helper()
-		raw, err := c.GraphQL(branch, fmt.Sprintf(`mutation { %sCreate(data: %s) { ok object { id } } }`, kind, data))
-		if err != nil {
-			t.Fatalf("creating %s on %s: %v", kind, branch, err)
-		}
-		var r map[string]struct {
-			Object struct {
-				ID string `json:"id"`
-			} `json:"object"`
-		}
-		if err := json.Unmarshal(raw, &r); err != nil || r[kind+"Create"].Object.ID == "" {
-			t.Fatalf("creating %s on %s: %s (%v)", kind, branch, raw, err)
-		}
-		return r[kind+"Create"].Object.ID
-	}
 	device := func(name string) string {
-		id := create("NetworkDevice", fmt.Sprintf(`{name: {value: %q}, platform: {id: %q}, role: {value: %q}}`,
-			name, platform, testsupport.MarkerDescription(branch)))
-		create("NetworkInterface", fmt.Sprintf(
-			`{name: {value: "mgmt0"}, iftype: {value: "physical"}, mgmt_only: {value: true}, device: {id: %q}}`, id))
-		create("NetworkInterface", fmt.Sprintf(`{name: {value: "lo0"}, iftype: {value: "loopback"}, device: {id: %q}}`, id))
+		t.Helper()
+		id, err := c.AddDevice(branch, testsupport.Device{Name: name, Manufacturer: "Nokia", Platform: "SR Linux",
+			Tag: testsupport.FixtureTag, Ports: []string{"mgmt0"}, Management: "mgmt0"})
+		if err != nil {
+			t.Fatal(err)
+		}
 		return id
 	}
 	device("n4")

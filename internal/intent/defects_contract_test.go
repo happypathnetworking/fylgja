@@ -3,15 +3,13 @@
 package intent
 
 import (
-	"context"
 	"encoding/json"
-	"path/filepath"
+	"maps"
+	"slices"
 	"testing"
-	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/psp"
-	"github.com/happypathnetworking/fylgja/internal/testsupport"
 	"github.com/happypathnetworking/fylgja/internal/validate"
 )
 
@@ -19,59 +17,55 @@ import (
 // Every such defect is reported in one pass, by name, against the object at fault, and
 // no CTM is written.
 //
-// The five seeded here are exactly the five the reference schema will accept: the
-// others — a missing required attribute, a duplicate device name, a one-endpoint link,
-// a dangling parent — Infrahub refuses on create, so they are covered by the CTM
-// fixtures under testdata/ctm/defects instead.
+// The three seeded here are the library's (017): a seeded branch, in the schema library's
+// kinds, with a cable joining two ports of n1, a cable from n2's ethernet-1/99, which the
+// SR Linux package's rule matches out of its range, and an uncabled port of n3 that no rule
+// of the package matches. Infrahub accepts each, and validation refuses each, as it would a
+// CTM fixture holding them. The read's own refusals, a device's platform and the scope,
+// are read_contract_test.go's, and come before validation: no CTM reaches it beside them.
+// The others Infrahub refuses on create (a duplicate device name, a dangling port) or the
+// read cannot produce (a missing required attribute, a one-ended link, which is an omitted
+// cable), so they are covered by the CTM fixtures under testdata/ctm/defects instead.
 func TestSeededDefectsAreAllReportedInOnePass(t *testing.T) {
-	c, branch := throwaway(t, "defects")
-	if err := c.LoadSchema(branch, filepath.Join(repoRoot(), "schema")); err != nil {
-		t.Fatalf("loading schema: %v", err)
+	c, branch := seeded(t, "defects")
+	for _, p := range []struct{ device, port string }{
+		{"n1", "ethernet-1/5"}, {"n1", "ethernet-1/6"}, {"n2", "ethernet-1/99"}, {"n3", "ethernet-1/3"}, {"n3", "console"},
+	} {
+		if err := c.AddInterface(branch, p.device, p.port); err != nil {
+			t.Fatal(err)
+		}
 	}
-	if err := c.SeedDefects(branch); err != nil {
-		t.Fatalf("seeding defects: %v", err)
+	if err := c.AddCable(branch, "c-loop", "n1:ethernet-1/5", "n1:ethernet-1/6"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.AddCable(branch, "c-far", "n2:ethernet-1/99", "n3:ethernet-1/3"); err != nil {
+		t.Fatal(err)
 	}
 
-	cfg, err := FromEnv(branch, "")
+	snapshot, list, _, err := readUnder(t, branch, "", fixtureScope)
 	if err != nil {
-		t.Skipf("contract tests need a running Infrahub: %v", err)
+		t.Fatalf("reading %s: %v", branch, err)
 	}
-	client := New(cfg)
-	ctx, cancel := context.WithTimeout(t.Context(), 2*time.Minute)
-	defer cancel()
-
-	observedAt := time.Now().UTC().Format("2006-01-02T15:04:05.000000Z")
-	conf, list, err := client.CheckConformance(ctx)
-	if err != nil {
-		t.Fatalf("checking conformance: %v", err)
-	}
-	if list.Rejected() {
-		t.Fatalf("the seeded branch must conform; the defects are in intent, not the schema: %v", list)
+	if list.Rejected() || snapshot == nil {
+		t.Fatalf("the read itself refused the branch, before validation: %v", list)
 	}
 	reg, err := psp.Load("")
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot, artifactFindings, err := client.Fetch(ctx, conf, observedAt, reg)
-	if err != nil {
-		t.Fatalf("reading %s: %v", branch, err)
-	}
-	list = append(list, artifactFindings...)
 	list = append(list, validate.Validate(snapshot, reg)...)
 
-	// The --json document is the contract, so the assertions are made against
-	// the serialized shape rather than the in-memory list. This is the document
-	// `intent read` emits: the command builds it the same way, and writes no CTM
-	// precisely when its status is "rejected" (cmd/fylgja/intent.go).
+	// The --json document is the contract, so the assertions are made against the
+	// serialized shape rather than the in-memory list. This is the document `intent read`
+	// emits, which writes no CTM precisely when its status is "rejected".
 	raw, err := json.Marshal(findings.NewDocument(findings.OpIntentRead,
-		&findings.Subject{Branch: branch, Out: "would-be.json"}, list))
+		&findings.Subject{Branch: branch, Scope: fixtureScope, Out: "would-be.json"}, list))
 	if err != nil {
 		t.Fatal(err)
 	}
 	var doc struct {
-		Operation string `json:"operation"`
-		Status    string `json:"status"`
-		Findings  []struct {
+		Status   string `json:"status"`
+		Findings []struct {
 			Severity string `json:"severity"`
 			Rule     string `json:"rule"`
 			Object   string `json:"object"`
@@ -81,59 +75,30 @@ func TestSeededDefectsAreAllReportedInOnePass(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatal(err)
 	}
-
-	if doc.Operation != findings.OpIntentRead {
-		t.Errorf("operation = %q, want %q", doc.Operation, findings.OpIntentRead)
-	}
-	// Rejected is what makes the read write nothing: a CTM is written only when no
-	// finding is a rejection.
 	if doc.Status != string(findings.StatusRejected) {
 		t.Fatalf("status = %q, want rejected: %+v", doc.Status, doc.Findings)
 	}
 
-	// One of the seeded defects draws a warning beside its rejection from M7 on, and it
-	// is named here rather than tolerated in general: d1:lo0 is a loopback marked
-	// out-of-band, so the profile's management rule renders it to the management port and
-	// the node's name for it is not lo0 — which is what artifact.interface.unrepresented
-	// says of an artifact that names it. The warning changes
-	// nothing about the read: the document is still rejected and no CTM is written.
-	byRule := map[string][]string{}
+	// All three, in one pass: an operator fixing intent wants every problem at once, not
+	// one problem per attempt. Nothing else is a rejection.
+	got := map[string]string{}
 	for _, f := range doc.Findings {
-		if f.Object == "" {
-			t.Errorf("finding %s names no object", f.Rule)
-		}
 		if f.Message == "" {
-			t.Errorf("finding %s carries no message", f.Rule)
+			t.Errorf("finding %s on %s carries no message", f.Rule, f.Object)
 		}
-		if f.Severity != string(findings.Rejection) {
-			if f.Severity != string(findings.Warning) || f.Rule != findings.RuleArtifactInterfaceUnrepresented ||
-				f.Object != testsupport.SeededDefectObjects[testsupport.DefectMgmtOnlyIftype] {
-				t.Errorf("finding %s on %s is %s; the only finding here that is not a rejection is "+
-					"%s on the out-of-band loopback", f.Rule, f.Object, f.Severity, findings.RuleArtifactInterfaceUnrepresented)
+		if f.Severity == string(findings.Rejection) {
+			if _, twice := got[f.Rule]; twice {
+				t.Errorf("%s reported twice: %s and %s", f.Rule, got[f.Rule], f.Object)
 			}
-			continue
-		}
-		byRule[f.Rule] = append(byRule[f.Rule], f.Object)
-	}
-
-	// All five, in one pass: an operator fixing intent wants every problem at once,
-	// not one problem per attempt.
-	for _, rule := range testsupport.SeededDefects {
-		objects, ok := byRule[rule]
-		if !ok {
-			t.Errorf("%s was not reported; reported: %v", rule, byRule)
-			continue
-		}
-		if len(objects) != 1 {
-			t.Errorf("%s reported %d times, want once: %v", rule, len(objects), objects)
-		}
-		want := testsupport.SeededDefectObjects[rule]
-		if len(objects) > 0 && objects[0] != want {
-			t.Errorf("%s names %q, want %q", rule, objects[0], want)
+			got[f.Rule] = f.Object
 		}
 	}
-	if len(byRule) != len(testsupport.SeededDefects) {
-		t.Errorf("%d rules rejected, want exactly the %d seeded defects: %v",
-			len(byRule), len(testsupport.SeededDefects), byRule)
+	want := map[string]string{
+		findings.RuleLinkEndpointsSameDev:   "n1:ethernet-1/5|n1:ethernet-1/6",
+		findings.RuleUnmappableLinked:       "n2:ethernet-1/99",
+		findings.RuleInterfaceRuleUnmatched: "n3:console",
+	}
+	if !maps.Equal(got, want) {
+		t.Errorf("rejections by rule %v (%v)\nwant exactly %v", got, slices.Sorted(maps.Keys(got)), want)
 	}
 }

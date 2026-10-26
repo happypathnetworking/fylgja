@@ -16,9 +16,11 @@ import (
 //	set -a; . local/.env; set +a; go test -tags contract ./internal/stage -run TestMixedSeedReads -v
 
 // A branch of two platforms reads and compiles through the product's own pipelines.
-// Three devices, two platforms, three artifacts under one name, and one bundle
-// carrying both packages' answers: the same claims testdata/golden/mixed asserts in tier
-// 1, here against a real Infrahub and a real rendering.
+// Three devices, two platforms, each device's package found by its manufacturer and
+// platform as the mixed seed writes them in the schema library's kinds (017), three
+// artifacts under one name, and one bundle carrying both packages' answers: the same
+// claims testdata/golden/mixed asserts in tier 1, here against a real Infrahub and a real
+// rendering.
 //
 // The rendering is the operator's: Infrahub's template branches on the device's
 // platform,

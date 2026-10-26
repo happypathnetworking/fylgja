@@ -343,6 +343,39 @@ func (c *Client) LoadOwnSchema(branch, schemaDir string) (loaded bool, err error
 	return loaded, c.waitForKinds(branch, mutations...)
 }
 
+// LoadSchemaFile loads one schema file onto a branch, as a test changes a branch's schema,
+// then waits until the branch's GraphQL schema exposes the Create mutation of every node the
+// file defines and no longer exposes that of every node it removes (state: absent): a
+// removal is rebuilt asynchronously too, and a read made before the rebuild still sees the
+// kind. It never runs on main.
+func (c *Client) LoadSchemaFile(branch, path string) error {
+	if branch == DefaultBranch {
+		return fmt.Errorf("LoadSchemaFile refuses %s: a test changes a throwaway branch's schema, never the default branch's", branch)
+	}
+	created, _, err := c.loadSchemaFiles(branch, []string{path})
+	if err != nil {
+		return err
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var defined definedKinds
+	if err := yaml.Unmarshal(raw, &defined); err != nil {
+		return fmt.Errorf("%s: %w", path, err)
+	}
+	var removed []string
+	for _, n := range defined.Nodes {
+		if n.State == "absent" {
+			removed = append(removed, n.kind()+"Create")
+		}
+	}
+	if err := c.waitForKinds(branch, created...); err != nil {
+		return err
+	}
+	return c.waitForKindsGone(branch, removed...)
+}
+
 // loadSchemaFiles loads files onto a branch in one request and returns the Create
 // mutation of each node they define and do not remove, and whether the branch's schema
 // hash moved, as infrahubctl tells an updated schema from one already in place.
@@ -421,6 +454,46 @@ func (c *Client) waitForKinds(branch string, mutations ...string) error {
 		time.Sleep(time.Second)
 	}
 	return fmt.Errorf("branch %s: GraphQL schema did not expose %v within 90s", branch, missing)
+}
+
+// waitForKindsGone polls until none of the named mutations is on the branch's GraphQL
+// schema.
+func (c *Client) waitForKindsGone(branch string, mutations ...string) error {
+	if len(mutations) == 0 {
+		return nil
+	}
+	const q = `{ __type(name: "Mutation") { fields { name } } }`
+	deadline := time.Now().Add(90 * time.Second)
+	still := mutations
+	for time.Now().Before(deadline) {
+		data, err := c.GraphQL(branch, q)
+		if err == nil {
+			var r struct {
+				Type struct {
+					Fields []struct {
+						Name string `json:"name"`
+					} `json:"fields"`
+				} `json:"__type"`
+			}
+			if json.Unmarshal(data, &r) == nil {
+				have := map[string]bool{}
+				for _, f := range r.Type.Fields {
+					have[f.Name] = true
+				}
+				still = nil
+				for _, m := range mutations {
+					if have[m] {
+						still = append(still, m)
+					}
+				}
+				if len(still) == 0 {
+					return nil
+				}
+			}
+		}
+		time.Sleep(time.Second)
+	}
+	return fmt.Errorf("branch %s: GraphQL schema still exposed %v after 90s", branch, still)
 }
 
 // create runs a Create mutation and returns the new object's id.

@@ -653,6 +653,137 @@ func (c *Client) DeleteLink(branch, device, iface string) (time.Time, error) {
 	return returned, okOf(raw, "DcimCableDelete", fmt.Sprintf("deleting the cable at %s/%s:%s", branch, device, iface))
 }
 
+// Device is one device a test adds to a branch (AddDevice): its name; the pair of its
+// platform, which a package matches exactly, none when Platform is empty and no
+// manufacturer when Manufacturer is; the tag it carries, none when empty; its physical ports
+// by name, uncabled; and which of them is its management port, none when empty.
+type Device struct {
+	Name                   string
+	Manufacturer, Platform string
+	Tag                    string
+	Ports                  []string
+	Management             string
+}
+
+// AddDevice writes one device on a test branch: status active, at the lab site, its
+// description the branch's marker, with its platform, its tag and its ports as d gives them.
+// It joins no group and renders nothing. It returns the device's id, which is how the read
+// names an end on a device it never reads (017; R-05). The fixture is refused, as every
+// change is, and so is a device of a name the branch holds.
+func (c *Client) AddDevice(branch string, d Device) (string, error) {
+	if branch == FixtureBranch {
+		return "", fmt.Errorf("branch %s: the fixture is never changed", branch)
+	}
+	if err := testBranch(branch); err != nil {
+		return "", err
+	}
+	present, err := c.ids(branch, "DcimDevice", fmt.Sprintf(`(name__value: %q)`, d.Name))
+	if err != nil {
+		return "", err
+	}
+	if len(present) != 0 {
+		return "", fmt.Errorf("branch %s already holds device %s", branch, d.Name)
+	}
+	site, err := c.EnsureSite(branch)
+	if err != nil {
+		return "", err
+	}
+	platform, tag := "", ""
+	if d.Platform != "" {
+		if platform, err = c.EnsurePlatform(branch, d.Manufacturer, d.Platform); err != nil {
+			return "", err
+		}
+	}
+	if d.Tag != "" {
+		if tag, err = c.EnsureTag(branch, d.Tag); err != nil {
+			return "", err
+		}
+	}
+	id, err := c.createDevice(branch, d.Name, platform, site, tag)
+	if err != nil {
+		return "", err
+	}
+	if id == "" {
+		return "", fmt.Errorf("adding device %s on %s: Infrahub returned no id", d.Name, branch)
+	}
+	for _, p := range d.Ports {
+		role := ""
+		if p == d.Management {
+			role = RoleManagement
+		}
+		if _, err := c.createPort(branch, id, p, role); err != nil {
+			return "", err
+		}
+	}
+	return id, nil
+}
+
+// AddCable writes one cable on a test branch, labelled label, joining the physical ports
+// named as device:port, any number of them: the cables the read cannot place, of other than
+// two ends, beside the two-ended one that reaches outside the scope (017; R-05). It renders
+// nothing. The fixture is refused, as every change is.
+func (c *Client) AddCable(branch, label string, ends ...string) error {
+	if branch == FixtureBranch {
+		return fmt.Errorf("branch %s: the fixture is never changed", branch)
+	}
+	if err := testBranch(branch); err != nil {
+		return err
+	}
+	peers := make([]string, 0, len(ends))
+	for _, e := range ends {
+		device, port, ok := strings.Cut(e, ":")
+		if !ok {
+			return fmt.Errorf("cable %s: end %q is not device:port", label, e)
+		}
+		id, err := c.portID(branch, device, port)
+		if err != nil {
+			return err
+		}
+		peers = append(peers, fmt.Sprintf(`{id: %q}`, id))
+	}
+	id, err := c.create(branch, "DcimCable", fmt.Sprintf(`{label: {value: %q}, connected_endpoints: [%s]}`,
+		label, strings.Join(peers, ", ")))
+	if err != nil {
+		return err
+	}
+	if id == "" {
+		return fmt.Errorf("adding cable %s on %s: Infrahub returned no id", label, branch)
+	}
+	return nil
+}
+
+// SetDevicePlatform moves one device of a test branch onto the platform of a pair, written
+// with its manufacturer when the branch holds neither, or, with an empty platform, takes
+// the device's platform away: the writes the read refuses as platform.unmatched and
+// platform.missing (017; FR-014). It renders nothing. The fixture is refused, as every
+// change is.
+func (c *Client) SetDevicePlatform(branch, device, manufacturer, platform string) error {
+	if branch == FixtureBranch {
+		return fmt.Errorf("branch %s: the fixture is never changed", branch)
+	}
+	if err := testBranch(branch); err != nil {
+		return err
+	}
+	id, err := c.deviceID(branch, device)
+	if err != nil {
+		return err
+	}
+	// A cardinality-one relationship is taken away by sending it null.
+	peer := "null"
+	if platform != "" {
+		p, err := c.EnsurePlatform(branch, manufacturer, platform)
+		if err != nil {
+			return err
+		}
+		peer = fmt.Sprintf(`{id: %q}`, p)
+	}
+	raw, err := c.GraphQL(branch, fmt.Sprintf(`mutation { DcimDeviceUpdate(data: {id: %q, platform: %s}) { ok } }`, id, peer))
+	if err != nil {
+		return fmt.Errorf("setting the platform of %s/%s: %w", branch, device, err)
+	}
+	return okOf(raw, "DcimDeviceUpdate", fmt.Sprintf("setting the platform of %s/%s", branch, device))
+}
+
 // deviceID returns the one device of a name on a branch.
 func (c *Client) deviceID(branch, name string) (string, error) {
 	found, err := c.ids(branch, "DcimDevice", fmt.Sprintf(`(name__value: %q)`, name))

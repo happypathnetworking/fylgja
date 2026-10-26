@@ -3,16 +3,20 @@
 package cli
 
 import (
+	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"net/http/httptest"
 	"net/http/httputil"
 	"net/url"
 	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
@@ -23,8 +27,9 @@ import (
 //
 //	set -a; . local/.env; set +a; go test -tags contract ./cmd/fylgja
 //
-// Both branches this file reads — fylgja-fixture and main — are only ever read, so a
-// failing test here cannot damage either.
+// The branches this file reads but does not make — fylgja-fixture and main — are only ever
+// read, so a failing test here cannot damage either; the one it makes, a throwaway holding
+// the mixed fixture, is deleted when its test ends.
 
 // live skips unless an Infrahub is configured, and returns its address.
 func live(t *testing.T) string {
@@ -108,36 +113,73 @@ func checkBranch(t *testing.T, branch string) (int, *findingsDoc, *recorder) {
 	return code, doc, rec
 }
 
-// The fixture branch conforms, and the answer says what was verified: the library's
-// commit, and each kind the mapping reads with its fields by name (017). It holds the
-// library once T060 re-seeds it; T044 extends this to the mixed fixture.
-func TestSchemaCheckOnTheFixtureBranch(t *testing.T) {
-	code, doc, _ := checkBranch(t, testsupport.FixtureBranch)
-	if code != findings.ExitOK {
-		t.Fatalf("exit %d, want 0: %+v", code, doc.Findings)
+// Both fixtures conform, and schema check says what it verified on each rather than merely
+// that nothing was wrong (FR-013; SC-004): the line naming the library's commit and the
+// kinds the mapping reads, and --json's block naming each kind's fields. The fixture branch
+// is only read; the mixed fixture is seeded on a throwaway branch, deleted when the test
+// ends.
+func TestSchemaCheckPassesOnBothFixtures(t *testing.T) {
+	live(t)
+	c, err := testsupport.NewClient()
+	if err != nil {
+		t.Skipf("contract tests need a running Infrahub: %v", err)
 	}
-	if doc.Status != string(findings.StatusOK) {
-		t.Errorf("status = %q, want ok", doc.Status)
+	mixed := fmt.Sprintf("fylgja-test-mixed-%d-%d", time.Now().Unix(), rand.Intn(9999))
+	if err := c.CreateBranch(mixed); err != nil {
+		t.Fatalf("creating branch: %v", err)
 	}
-	if doc.Verified == nil {
-		t.Fatal("a clean check reported nothing as verified")
-	}
-	if doc.Verified.Model != intent.LibraryModel || doc.Verified.Version != intent.LibraryVersion {
-		t.Errorf("verified %s@%s, want %s@%s", doc.Verified.Model, doc.Verified.Version, intent.LibraryModel, intent.LibraryVersion)
-	}
-	var kinds []string
-	for _, k := range doc.Verified.Kinds {
-		kinds = append(kinds, k.Kind)
-		if len(k.Fields) == 0 {
-			t.Errorf("kind %s names no field", k.Kind)
+	t.Cleanup(func() {
+		if err := c.DeleteBranch(mixed); err != nil {
+			t.Logf("could not delete branch %s: %v", mixed, err)
 		}
+	})
+	if err := c.LoadSchema(mixed, filepath.Join("..", "..", "schema")); err != nil {
+		t.Fatalf("loading schema: %v", err)
 	}
-	var want []string
-	for _, k := range intent.LibraryTables {
-		want = append(want, k.Kind)
+	if err := c.SeedMixed(mixed); err != nil {
+		t.Fatalf("seeding: %v", err)
 	}
-	if !slices.Equal(kinds, want) {
-		t.Errorf("verified kinds %v, want %v", kinds, want)
+
+	for _, branch := range []string{testsupport.FixtureBranch, mixed} {
+		t.Run(branch, func(t *testing.T) {
+			var err error
+			out := captureStdout(t, func() { err = runCheck(t.Context(), &options{}, &checkFlags{branch: branch}) })
+			if !strings.HasPrefix(out, conformantLine+"\n") {
+				t.Errorf("stdout\n%s\nwant it to begin\n%s", out, conformantLine)
+			}
+			var res *result
+			if !asResult(err, &res) {
+				t.Fatalf("runCheck returned %v, want a findings result", err)
+			}
+
+			code, doc, _ := checkBranch(t, branch)
+			if code != findings.ExitOK {
+				t.Fatalf("exit %d, want 0: %+v", code, doc.Findings)
+			}
+			if doc.Status != string(findings.StatusOK) {
+				t.Errorf("status = %q, want ok", doc.Status)
+			}
+			if doc.Verified == nil {
+				t.Fatal("a clean check reported nothing as verified")
+			}
+			if doc.Verified.Model != intent.LibraryModel || doc.Verified.Version != intent.LibraryVersion {
+				t.Errorf("verified %s@%s, want %s@%s", doc.Verified.Model, doc.Verified.Version, intent.LibraryModel, intent.LibraryVersion)
+			}
+			var kinds []string
+			for _, k := range doc.Verified.Kinds {
+				kinds = append(kinds, k.Kind)
+				if len(k.Fields) == 0 {
+					t.Errorf("kind %s names no field", k.Kind)
+				}
+			}
+			var want []string
+			for _, k := range intent.LibraryTables {
+				want = append(want, k.Kind)
+			}
+			if !slices.Equal(kinds, want) {
+				t.Errorf("verified kinds %v, want %v", kinds, want)
+			}
+		})
 	}
 }
 

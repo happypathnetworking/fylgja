@@ -4,6 +4,9 @@ package intent
 
 import (
 	"context"
+	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -29,13 +32,7 @@ func conformance(t *testing.T, branch string) (*Conformance, findings.List) {
 
 // The fixture branch conforms, and the check says what it verified rather than merely
 // that nothing was wrong: the library's commit, and each kind the mapping reads with its
-// fields. It holds the library once T060 re-seeds it.
-//
-// Three tests left at 017's T036, with the generics' conformance:
-// TestContractVersionMismatchIsReportedAlone (the contract version is the bridged read's
-// to check until T039, and its rule goes at T042) and
-// TestDeviceKindWithoutTheArtifactTargetIsNamed (schema.artifact_target.missing went with
-// the generics). The library's refusals are tier 1's (conformance_test.go), and T044's
+// fields. The library's refusals, field by field, are tier 1's (conformance_test.go);
 // TestSchemaCheckNamesAMissingKind proves one live.
 func TestConformanceOnTheFixtureBranch(t *testing.T) {
 	harness(t)
@@ -75,5 +72,40 @@ func TestConformanceSendsNoAt(t *testing.T) {
 	if info.Hash != unpinned.SchemaHash {
 		t.Errorf("a pinned read saw schema hash %q, an unpinned read %q; the schema endpoint has no time axis",
 			info.Hash, unpinned.SchemaHash)
+	}
+}
+
+// A branch whose DCIM lacks a kind the mapping reads is refused by name, the message naming
+// the library's commit, and nothing else is named (US3; FR-011, FR-012): on a throwaway
+// branch holding the library alone, DcimCable removed by a state: absent document. The
+// conformance check names it once, though Infrahub also leaves DcimConnector with no
+// implementer, and the read refuses the branch on it with no request beyond the schema's.
+func TestSchemaCheckNamesAMissingKind(t *testing.T) {
+	c, branch := throwaway(t, "nocable")
+	if err := c.LoadSchema(branch, filepath.Join(repoRoot(), "schema")); err != nil {
+		t.Fatalf("loading schema: %v", err)
+	}
+	began := time.Now()
+	if err := c.LoadSchemaFile(branch, filepath.Join("testdata", "dcim-cable-absent.yaml")); err != nil {
+		t.Fatalf("removing DcimCable: %v", err)
+	}
+	t.Logf("branch %s: DcimCable removed in %s", branch, time.Since(began).Round(100*time.Millisecond))
+
+	_, list := conformance(t, branch)
+	if len(list) != 1 {
+		t.Fatalf("findings %v; want schema.kind.missing DcimCable alone", list)
+	}
+	f := list[0]
+	if f.Severity != findings.Rejection || f.Rule != findings.RuleSchemaKindMissing || f.Object != "DcimCable" ||
+		!strings.HasSuffix(f.Message, "as "+LibraryModel+"@"+LibraryVersion+" has it") {
+		t.Errorf("finding %+v; want a rejection %s on DcimCable naming %s@%s", f, findings.RuleSchemaKindMissing, LibraryModel, LibraryVersion)
+	}
+
+	got, read, _, err := readUnder(t, branch, "", fixtureScope)
+	if err != nil {
+		t.Fatalf("reading %s: %v", branch, err)
+	}
+	if got != nil || !reflect.DeepEqual(read, list) {
+		t.Errorf("the read gave a CTM %v and findings %v; want none and the check's %v", got != nil, read, list)
 	}
 }

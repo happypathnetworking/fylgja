@@ -61,12 +61,17 @@ func throwaway(t *testing.T, prefix string) (*testsupport.Client, string) {
 // bundle (D-023).
 //
 // M5 extends it to configuration: between the first
-// two pinned reads n1's role changes and its artifact is regenerated — new bytes, new
-// checksum, a new storage object — and the read at T still fetches the artifact as it
+// two pinned reads n1's description changes and its artifact is regenerated — new bytes,
+// new checksum, a new storage object — and the read at T still fetches the artifact as it
 // stood at T, so the bundle, its id and every checksum are unchanged. The test asserts
 // what Infrahub 1.11.2 was seen to do: a listing pinned to `at` gives the storage id as
 // of `at`, and the older object is still served. Should the live system refuse instead,
 // re-verify that before changing the test.
+//
+// 017 extends it to the scope: the read selects its devices by the tag, and a pinned read
+// by the tag as it stood at T. cs1, a device complete but for the tag, rendered before T,
+// is tagged after it: the reads pinned to T never read it, and the unpinned read after
+// does.
 func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	c, branch := throwaway(t, "repro")
 	if err := c.LoadSchema(branch, filepath.Join("..", "..", "schema")); err != nil {
@@ -74,6 +79,17 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	}
 	if err := c.SeedThreeNode(branch); err != nil {
 		t.Fatalf("seeding: %v", err)
+	}
+	cs1, err := c.AddDevice(branch, testsupport.Device{Name: "cs1", Manufacturer: "Nokia", Platform: "SR Linux",
+		Ports: []string{"mgmt0"}, Management: "mgmt0"})
+	if err != nil {
+		t.Fatalf("adding cs1: %v", err)
+	}
+	if err := c.JoinArtifactGroup(branch, []string{cs1}); err != nil {
+		t.Fatalf("adding cs1 to the group: %v", err)
+	}
+	if err := c.GenerateArtifacts(branch); err != nil {
+		t.Fatalf("rendering cs1's artifact: %v", err)
 	}
 	// The local clock read after the seed returns sees the whole seed: Infrahub runs on
 	// the same kernel clock. Six fractional digits, since intent.at.precision refuses
@@ -109,7 +125,7 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 				what, got.Devices, got.Interfaces, got.Links, got.Artifacts, want.Devices, want.Interfaces, want.Links, want.Artifacts)
 		}
 	}
-	seeded := intent.Counts{Devices: 3, Interfaces: 12, Links: 3, Artifacts: 3}
+	seeded := intent.Counts{Devices: 3, Interfaces: 9, Links: 3, Artifacts: 3}
 
 	before, beforeID, snapshot := read(at)
 	counts("the read at T does not see the whole seed", snapshot, seeded)
@@ -127,7 +143,7 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	}
 	for deadline := time.Now().Add(90 * time.Second); artifactsOf(t, c, branch, "device-config")["n1"].Checksum == current["n1"].Checksum; {
 		if time.Now().After(deadline) {
-			t.Fatalf("n1's artifact checksum stayed %s for 90s after a role change was generated", current["n1"].Checksum)
+			t.Fatalf("n1's artifact checksum stayed %s for 90s after a description change was generated", current["n1"].Checksum)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -152,7 +168,7 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	}
 	// SeedFourthNode's generate returns once every artifact is Ready, which can come before
 	// n1's is rewritten for its new port, so the unpinned read below waits for n1's checksum
-	// to move and n4's artifact to be listed, as the role change's wait above does. 240s
+	// to move and n4's artifact to be listed, as the description change's wait above does. 240s
 	// bounds it, as scripts/e2e.sh bounds the same wait on a loaded host.
 	for deadline := time.Now().Add(240 * time.Second); ; {
 		listed := artifactsOf(t, c, branch, "device-config")
@@ -166,8 +182,16 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 		time.Sleep(500 * time.Millisecond)
 	}
 
+	// The tag, after T: cs1 is in the scope from now on, and was not at T.
+	if err := c.TagDevices(branch, testsupport.FixtureTag, "cs1"); err != nil {
+		t.Fatalf("tagging cs1 after T: %v", err)
+	}
+
 	after, afterID, snapshot := read(at)
 	counts("the read at T after the change", snapshot, seeded)
+	if snapshot.Device("cs1") != nil {
+		t.Error("the read pinned to T read cs1, which was tagged after T")
+	}
 	if got := checksums(snapshot); !maps.Equal(got, sumsAtT) {
 		t.Errorf("the read at T after both changes carries checksums %v, want T's %v", got, sumsAtT)
 	}
@@ -177,7 +201,10 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	}
 
 	unpinned, unpinnedID, snapshot := read("")
-	counts("the unpinned read after the change", snapshot, intent.Counts{Devices: 4, Interfaces: 16, Links: 4, Artifacts: 4})
+	counts("the unpinned read after the change", snapshot, intent.Counts{Devices: 5, Interfaces: 13, Links: 4, Artifacts: 5})
+	if snapshot.Device("cs1") == nil {
+		t.Error("the unpinned read after cs1 was tagged did not read it")
+	}
 	if unpinnedID == beforeID {
 		t.Errorf("the unpinned read after the change compiles to the pinned bundle_id %s", beforeID)
 	}

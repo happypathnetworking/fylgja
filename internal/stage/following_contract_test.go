@@ -53,7 +53,7 @@ func TestFollowingDetection(t *testing.T) {
 		}
 		return id
 	}
-	seeded := intent.Counts{Devices: 3, Interfaces: 12, Links: 3, Artifacts: 3}
+	seeded := intent.Counts{Devices: 3, Interfaces: 9, Links: 3, Artifacts: 3}
 
 	first := check("the first check", seeded)
 	second := check("the second check, branch unchanged", seeded)
@@ -64,7 +64,7 @@ func TestFollowingDetection(t *testing.T) {
 	if err := c.SeedThirdLink(branch); err != nil {
 		t.Fatalf("changing the branch: %v", err)
 	}
-	changed := check("the check after the change", intent.Counts{Devices: 3, Interfaces: 14, Links: 4, Artifacts: 3})
+	changed := check("the check after the change", intent.Counts{Devices: 3, Interfaces: 11, Links: 4, Artifacts: 3})
 	if changed == first {
 		t.Errorf("the check after the change compiles to the unchanged bundle_id %s", first)
 	}

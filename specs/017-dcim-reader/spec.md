@@ -249,7 +249,11 @@ platform's manufacturer.
    virtual interface, platform, manufacturer, or a cable on one of its ports is then
    written, **Then** the mark reads stale for that device, naming it.
 2. **Given** a write to an untagged device or to a cable between two untagged devices,
-   **When** stages are resolved, **Then** no tagged device's mark is made stale by it.
+   **When** stages are resolved, **Then** no tagged device's mark is made stale by it,
+   **except** an untagged device created on, or moved onto or off, a platform the tagged
+   devices share, or a platform created under, or moved onto or off, their manufacturer:
+   that write moves the shared node's stamp and names it in an event, and the tagged
+   devices' marks read stale, an over-report this story accepts.
 3. **Given** `main` holds the library's kinds and no tagged device, **When** `stage plan`
    or a rehearsal resolves the branch point, **Then** it is refused with the
    scope-selects-nothing finding, and the rehearsal and `fylgja-step` treat it as they
@@ -430,10 +434,14 @@ in `description`.
 #### Stages
 
 - **FR-022**: The stage reader's Infrahub-owned reads (proposed changes, branches,
-  artifact validators, the event log) MUST be unchanged.
+  artifact validators, the event log) MUST be unchanged, but for one that D-059 and D-060
+  add: the template query's internal `CoreGraphQLQueryGroup`s, read for the account that
+  created them, Infrahub's own.
 - **FR-023**: A device's intent stamp MUST be the latest write on the device, on any of
   its interfaces (virtual ones included), on its platform, on its platform's
-  manufacturer, and on any cable one of its ports is an end of. An event MUST count for a
+  manufacturer, and on any cable one of its ports is an end of, a write by Infrahub's own
+  account (the one that created the template query's groups) counting as the node's
+  creation instead (D-058, D-060). An event MUST count for a
   device when its node is one of those or a peer of one.
 - **FR-024**: Every 0.2 stage and rehearsal behaviour not named here MUST hold unchanged
   over the library's kinds.
@@ -541,7 +549,7 @@ in `description`.
   addresses), with the platform as a package and an optional version, and an envelope that
   carries the scope and the reader's fidelity list.
 - **A device's intent stamp**: the latest write on a device and everything it owns or
-  reaches by a cable, against which a stage's artifacts are judged fresh or stale.
+  reaches by a cable, but Infrahub's own (D-058), against which a stage's artifacts are judged fresh or stale.
 
 ## Success Criteria *(mandatory)*
 

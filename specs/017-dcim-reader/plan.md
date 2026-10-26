@@ -39,7 +39,9 @@ scope, the mapping and the reader's fidelity list), the manifest to `5` (the lis
 as `fidelity.read` by a compiler that holds no table of any source's rows), `twin.json` to
 `8`; the API stays `1` (R-06, R-07, R-16). The stage reader's Infrahub-owned roots are
 untouched; its stamps become each node's `node_metadata.updated_at`, which the probe found
-is the latest stamp among a node's current attributes and relationship edges, so a device's
+is the latest stamp among a node's current attributes and relationship edges, or its
+`created_at` when Infrahub's own account, the one that created the template query's
+groups, wrote it last (D-058, D-060), so a device's
 intent stamp covers every field of the device, its interfaces, its platform, its
 manufacturer and its cables with one field per node, and its events count any write on
 those nodes but Infrahub's churn (research §1.7, §1.8, R-10). The library is vendored

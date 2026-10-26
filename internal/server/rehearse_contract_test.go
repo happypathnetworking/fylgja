@@ -36,6 +36,11 @@ import (
 // rehearseDevices are the three-node fixture's devices, which the seed renders.
 var rehearseDevices = []string{"n1", "n2", "n3"}
 
+// fixtureScope is the scope the seeded fixture is read under, the tag each seeded device
+// carries (017 T013). handlerServer has no default scope, as a server started without
+// FYLGJA_DEFAULT_SCOPE has none, so every request that reads names it.
+var fixtureScope = "tag:" + testsupport.FixtureTag
+
 // creationChecksWait bounds a creation's user checks, as internal/checks bounds them: the
 // validators appeared 43–54 s after a creation, and fylgja-step concluded in 30 s and
 // fylgja-twin's skip in 18 s (research §5.6).
@@ -177,7 +182,7 @@ func TestRehearseRefusesBeforeAnyRun(t *testing.T) {
 
 	srv := handlerServer(t)
 	started = time.Now()
-	out, _, doc := answer(t, srv, findings.OpTwinRehearse, api.Request{Render: api.RenderText, Args: stringArgs("branch", branch)})
+	out, _, doc := answer(t, srv, findings.OpTwinRehearse, api.Request{Render: api.RenderText, Args: stringArgs("branch", branch, "scope", fixtureScope)})
 	t.Logf("twin.rehearse refused in %.1fs", time.Since(started).Seconds())
 
 	if doc.Status != findings.StatusRejected || doc.Status.ExitCode() != 1 {
@@ -375,7 +380,7 @@ func TestRehearseComposedByTheFixtureTool(t *testing.T) {
 
 	srv := handlerServer(t)
 	object := "n1:" + port
-	_, files, doc := answer(t, srv, findings.OpIntentRead, api.Request{Render: api.RenderText, Args: stringArgs("branch", branch, "out", "ctm.json")})
+	_, files, doc := answer(t, srv, findings.OpIntentRead, api.Request{Render: api.RenderText, Args: stringArgs("branch", branch, "out", "ctm.json", "scope", fixtureScope)})
 	if doc.Status.ExitCode() != 0 || len(files) != 1 {
 		t.Fatalf("intent.read: exit %d, %d file(s), findings %+v; want exit 0 and the CTM", doc.Status.ExitCode(), len(files), doc.Findings)
 	}

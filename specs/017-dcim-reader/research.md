@@ -1888,3 +1888,71 @@ template query's own groups. Only Infrahub's flow writes a `CoreGraphQLQueryGrou
 `group_type` `internal`, so whichever account last updated one is the account the task
 workers run as, on any install. Reading it is a read of an Infrahub-owned kind the reader
 does not make today (Constitution III's list, the read-only test).
+
+<a id="5-13"></a>
+### 5.13 Who else writes the template query's groups (T062, D-059; 2026-10-26, 15:15Z–15:25Z)
+
+Run 19 a third time, at `2610a74`, before any code. D-059 names Infrahub's own account as
+the `updated_by` of the template query's internal `CoreGraphQLQueryGroup`s, on the premise
+that only Infrahub's flow writes them (§5.12's last paragraph). The groups' read was tried
+first, read-only, on `fylgja-fixture` and `main`. Then the tier's removal was reproduced on
+the throwaway `fylgja-test-017-run19c-1793028213`, seeded by the fixture tool (24.5 s, with
+its render) and deleted (`deleted 0 stages, 0 proposed changes, branch …`). Nothing was
+written to `main`, the worker and the server were not used, and no token was printed.
+
+**The read D-059 asks for works as a query.** A device's artifact reaches its query by
+`definition { node { transformation { node { query { node { id } } } } } }`. On
+`fylgja-fixture` each `device-config` names `device_config` (`18dc77c3-196f-…`).
+`CoreGraphQLQueryGroup(group_type__value: "internal", query__ids: [<that id>])` answers
+the branch's three groups, with `node_metadata { updated_by { id } }` on each edge, with
+or without `node` selected. On `fylgja-fixture` all three read `Agent`.
+
+**A member's delete restamps the groups as the deleting account.**
+
+- On `main`, the three groups read `created_by` `Agent` (2026-10-21, the demo window's
+  renders) and `updated_by` **`Admin`**, all three at 2026-10-25T19:55:00.827234, with no
+  member left.
+- `main`'s event log at that instant: `infrahub.node.deleted` of a `NetworkPlatform` by
+  `Admin`, whose `member_of_groups` named all three groups. Then `infrahub.node.updated`
+  and `infrahub.group.member_removed` on each `CoreGraphQLQueryGroup`, each with
+  `account_id` `Admin`'s.
+- On the throwaway branch, after the seed's render, all three groups read `updated_by`
+  `Agent` (15:24:03.38–03.44), with 12 members each.
+- The n1 — n2 cable was then deleted as `Admin` (`DcimCableDelete`, sent 15:24:22.963,
+  returned 15:24:23.346). The two groups the cable was a member of, n1's and n2's, then
+  read `updated_by` **`Admin`** at 15:24:23.227218, with 11 members. n3's group stayed
+  `Agent` at 15:24:03.436.
+- Every group's `created_by` stayed `Agent`. So did each remaining member edge's
+  `relationship_metadata.created_by`.
+
+So the operator's account writes the groups too, whenever it deletes a node a generation
+has read. That includes a cable, a port, a device, or the platform. The deleted node's
+membership goes, and its group is stamped with the deleter's account.
+
+**D-059 as written would leave out the operator's own stamps.** After that delete, the
+groups' `updated_by` reads `{Admin, Agent}`. D-058's rule would then count every `Admin`
+stamp as its node's `created_at`:
+
+- `TestStagesSeeARemoval`'s assertion fails. It checks that the delete's port stamps are
+  `n1`'s and `n2`'s intent (§5.11), and they would read as the ports' creation.
+- On the source branch, an operator's later write is still caught by D-048's events,
+  which `Stale` reads after the earliest checksum.
+- The branch point reads `main`, and no events. `main`'s three groups read `Admin` today.
+  So once `main` holds devices again, every `Admin` stamp there would be left out. A
+  device on `main` edited after its render would then read fresh at the branch point,
+  when it is stale.
+
+D-059's own revisit names `__system__`, and not this case. So it is not built, and T062
+stays open for the operator.
+
+**What still tells the task workers' account apart, verified here:**
+
+- **The groups' `created_by`.** The flow creates each group, and a member's delete does
+  not move it: `Agent` on all three, before and after the delete. It is the same query
+  as D-059's, with one field changed. It fails safe. If an install moves its workers to
+  another account after the groups exist, that account's joins count again. That
+  over-reports as stale, and never reads as a wrong fresh.
+- **Each member edge's `relationship_metadata.created_by`.** Only the flow adds a member,
+  and a delete removes the edge rather than restamping it. This is exact after a token
+  change too. It is heavier: it reads every group's member edges, one group per rendered
+  device.

@@ -312,6 +312,16 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   read-only. So nothing but that account's name, which an install may change, tells it
   from an operator's. Read in the image's source and live. *(10-26;
   `specs/017-dcim-reader/research.md` §5.11, §5.12)*
+- **A member's delete restamps the template query's groups as the deleting account.**
+  When a node that a generation read is deleted (a cable, a port, a device, a platform),
+  it leaves each `CoreGraphQLQueryGroup` it was a member of. Each of those groups then
+  reads `node_metadata.updated_by` as the deleting account, at the delete's instant. The
+  event log records it as `infrahub.node.updated` and `infrahub.group.member_removed` on
+  the group, under that account's `account_id`. The group's `created_by` does not move,
+  and neither does any remaining member edge's `relationship_metadata.created_by`: both
+  stay the task workers' account. So the groups' `updated_by` is not that account alone.
+  Seen on `main` after the 10-25 platform delete, and on a throwaway branch after a
+  `DcimCableDelete`. *(10-26; `specs/017-dcim-reader/research.md` §5.13)*
 - **The event log records a removal, read-only.** `InfrahubEvent(branches: [<branch>],
   since: <branched_from>, order:, limit: ≤50)` (above 50 is refused) lists
   `infrahub.node.deleted` for a deleted link, primary node the concrete kind

@@ -1241,6 +1241,46 @@ in `description`.
       - `fylgja` is the only registration, at `c006bf9`.
     - 11.6 GiB of memory is available.
   - **Next**: the operator's answer on how the task workers' account is identified (above), as a decision entry. Then T062 again: the rule and its tier-1 test, then tier 2 whole. Separately, the operator's second push for T057.
+  - *2026-10-26 15:28Z, at `2610a74`, Run 19 a third time, of the converge loop (live): left unchecked, because D-059's premise does not hold.* The groups' read was tried live before any code. It showed that the operator's account writes the groups too. Building D-059 as written would leave out the operator's own stamps, so the rule (1), its tests (2) and the tier (3) were not built or run. The record is research §5.13 and `docs/verified-facts.md` (10-26).
+    - **The read works**: a device's artifact reaches its query by `definition → transformation → query`. `CoreGraphQLQueryGroup(group_type__value: "internal", query__ids: …)` answers each group's `node_metadata.updated_by`. On `fylgja-fixture` all three read `Agent`.
+    - **A member's delete restamps the groups as the deleter**:
+      - On the throwaway `fylgja-test-017-run19c-1793028213` (deleted), the seed's render left all three groups `Agent`.
+      - A `DcimCableDelete` as `Admin` then restamped the cable's two groups (n1's and n2's) `updated_by` `Admin`, at the delete's instant. n3's stayed `Agent`.
+      - On `main`, all three groups read `Admin` since the 10-25 platform delete. The event log names `node.updated` and `group.member_removed` on each group, under `Admin`'s `account_id`.
+      - Every group's `created_by`, and every remaining member edge's `relationship_metadata.created_by`, stayed `Agent`.
+    - **So D-059 as written** would read `{Admin, Agent}` after a delete. It would then count every operator stamp as its node's creation:
+      - `TestStagesSeeARemoval`'s stamp assertion would fail.
+      - The branch point, which reads `main` and no events, would read a device edited after its render fresh.
+      - D-059's revisit names `__system__`, not this case.
+    - **What it needs, the operator's**: which field identifies the task workers' account. Either is a decision entry superseding D-059's "`updated_by`", and then the build D-059's note above lists, unchanged otherwise.
+      1. *(recommended)* **The groups' `created_by`**. The flow creates each group, and a delete never moves it. It is the same query, with one field changed. It fails safe: after an install moves its workers to another account, that account's joins over-report as stale, never as a wrong fresh.
+      2. **Each member edge's `relationship_metadata.created_by`**. Only the flow adds a member, and a delete removes the edge. It stays exact after a token change, but it reads every group's member edges, one group per rendered device.
+    - **Not run, and why**:
+      - Tier 2: without the rule, `TestChecksInsideInfrahub` fails as in the first Run 19.
+      - Tier 3 is T063's.
+      - No hand scenario is named.
+    - **For T057**: unchanged.
+
+  *Run 19's third checkpoint, 15:28Z*:
+  - **Gates**, on the final tree:
+    - `make build`: static.
+    - `make test`: passed. Uncached (`go test -count=1 ./...`) it took 33.6 s wall, at a load average of 1.6 before and 3.5 after.
+    - `make lint`: 0 issues.
+    - `go vet -tags contract,fixture,e2e ./...`: clean.
+    - No golden moved, and no Go file changed.
+  - **The host**:
+    - The worker and the server were restarted from this tree after the build: the worker is pid 558794 and the server pid 558796.
+    - Both `/proc/<pid>/exe` read the tree's `bin/fylgja`. Their environment names carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`.
+    - The server reports both listeners, the bridge warning, `default scope: tag:fylgja` and both packages with their logins set. The worker reports both packages and `lab fylgja absent; twin directory absent`.
+    - From inside each task worker, `POST /v1/twin/show` answers `200` with the token and `401` without it.
+    - `clab inspect --all` is `{}`. There is no `local/twin`, and Temporal lists no Schedule and no running workflow.
+    - In Infrahub:
+      - `Branch` lists `main` and `fylgja-fixture` alone.
+      - `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` count 0.
+      - `main` holds no device, and its hash is `7c413536…`.
+      - `fylgja` is the only registration, at `c006bf9`.
+    - 11.8 GiB of memory is available.
+  - **Next**: the operator's answer on the field (above), as a decision entry. Then T062 again: the read, the rule and its tier-1 tests, then tier 2 whole. Separately, the operator's second push for T057.
 
 - [ ] T063 [live] [US6] Tier 3 on a quiet host (quickstart §8; SC-006), after T062 and never beside it. Read `free -m`; check both images, the worker and the server from this tree, and the checks and the template imported (T058).
   - Start `make test-e2e 2>&1 | tee local/017-e2e.out` detached, with its exit status in a file, and wait in foreground calls of under ten minutes.

@@ -94,3 +94,10 @@ The record's `provenance.scope` is the scope of every read the step and the foll
 the target's resolution, its staleness and its read. A `7` record is refused
 `step.twin.unsteppable` naming its version (`the twin was created from a record version
 this build no longer reads (twin.json 7); fylgja twin destroy clears it`), as a `5` is.
+
+A following twin created before 017 keeps a Schedule whose `ReconcileInput` names no
+scope (`omitempty`), so its checks ask for a read under `""`. `stage.Read` refuses a scope
+that is not `tag:<name>` before any connection, as `operation.failed` at `read`: `the read
+names scope "", which is not tag:<name>: a twin created before 017 follows its branch under
+no scope, and this build reads only under one; fylgja twin destroy clears it` (T080). The
+workflows are unchanged and the recorded histories replay.

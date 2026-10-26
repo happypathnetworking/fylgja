@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -49,6 +50,16 @@ type Config struct {
 
 // ScopePrefix begins every scope, tag:<name> (017).
 const ScopePrefix = "tag:"
+
+// scopeForm is the scope's one form, tag:<name>: the literal tag: and one shell word, the
+// name of the BuiltinTag on every device the twin is of (017 research R-04).
+var scopeForm = regexp.MustCompile(`^tag:\S+$`)
+
+// ValidScope is whether value is a scope, tag:<name>; the empty value is not. The server
+// refuses a request's scope by it, and stage.Read a scope that reached it unchecked.
+func ValidScope(value string) bool {
+	return scopeForm.MatchString(value)
+}
 
 // ScopeTag is the name of the tag a scope names: tag:<name> without its tag:. The server
 // has checked the scope's form before any read is made under it.

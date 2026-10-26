@@ -287,12 +287,12 @@ func TestReadIntentActivity(t *testing.T) {
 	const sentinel = "fylgja-secret-sentinel-4f2a9c"
 	const branch = "fylgja-fixture"
 
-	read := func(t *testing.T, c *ControlActivities) (ReadIntentResult, error) {
+	readUnder := func(t *testing.T, c *ControlActivities, scope string) (ReadIntentResult, error) {
 		t.Helper()
 		var suite testsuite.WorkflowTestSuite
 		env := suite.NewTestActivityEnvironment()
 		env.RegisterActivityWithOptions(c.ReadIntent, activity.RegisterOptions{Name: wire.ActReadIntent})
-		val, err := env.ExecuteActivity(wire.ActReadIntent, ReadIntentInput{Branch: branch})
+		val, err := env.ExecuteActivity(wire.ActReadIntent, ReadIntentInput{Branch: branch, Scope: scope})
 		if err != nil {
 			return ReadIntentResult{}, err
 		}
@@ -301,6 +301,10 @@ func TestReadIntentActivity(t *testing.T) {
 			t.Fatal(err)
 		}
 		return res, nil
+	}
+	read := func(t *testing.T, c *ControlActivities) (ReadIntentResult, error) {
+		t.Helper()
+		return readUnder(t, c, "tag:fylgja")
 	}
 	// nothingRead fails when anything is under bundles/.reads/: a read that ended before
 	// its CTM writes nothing.
@@ -391,6 +395,31 @@ func TestReadIntentActivity(t *testing.T) {
 				nothingRead(t, c)
 			})
 		}
+	})
+
+	// A following twin created before 017 keeps a Schedule whose ReconcileInput names no
+	// scope, so its checks read under "" (017; FR-020): refused before any request, as
+	// operation.failed naming the remedy, since the twin can only be destroyed.
+	t.Run("a read under no scope is operation.failed naming the remedy before any request", func(t *testing.T) {
+		var requests atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			requests.Add(1)
+			http.Error(w, "unexpected", http.StatusTeapot)
+		}))
+		defer srv.Close()
+		t.Setenv(intent.EnvAddress, srv.URL)
+		t.Setenv(intent.EnvToken, sentinel)
+
+		c := newControl(t)
+		_, err := readUnder(t, c, "")
+		f := readFailure(t, err, findings.RuleOperationFailed)
+		if f.Step != findings.StepRead || f.Object != "branch "+branch || !strings.HasSuffix(f.Message, "fylgja twin destroy clears it") {
+			t.Errorf("finding %+v, want step read on object %q naming fylgja twin destroy", f, "branch "+branch)
+		}
+		if n := requests.Load(); n != 0 {
+			t.Errorf("Infrahub received %d request(s) for a read under no scope", n)
+		}
+		nothingRead(t, c)
 	})
 
 	// Infrahub 1.11.2 answers a deleted branch as one never created. The finding

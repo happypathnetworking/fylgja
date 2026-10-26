@@ -996,7 +996,11 @@ otherwise. `platform.unsupported` stays, for a CTM naming a package this build l
 None is added, removed or changed: no workflow decision, activity, budget or version
 marker. `ProvisionInput`, `StartFollowingInput`, `ReconcileInput` and `ReadIntentInput`
 carry `scope`, omitted when empty, so the nine recorded histories replay; the runs branch
-on nothing of it.
+on nothing of it. The read refuses a scope that is not `tag:<name>` before any connection,
+as `operation.failed` at `read`, `the read names scope "", which is not tag:<name>: a twin
+created before 017 follows its branch under no scope, and this build reads only under one;
+fylgja twin destroy clears it`: the checks of a following twin created before 017, whose
+`ReconcileInput` names none, end so.
 
 ### Tier 3 (`scripts/e2e.sh`)
 

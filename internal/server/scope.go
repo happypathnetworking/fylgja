@@ -2,9 +2,9 @@ package server
 
 import (
 	"fmt"
-	"regexp"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/intent"
 )
 
 // EnvDefaultScope names the scope a request that names none is read under (017): read by
@@ -12,13 +12,12 @@ import (
 // whose every read carries its scope in its input.
 const EnvDefaultScope = "FYLGJA_DEFAULT_SCOPE"
 
-// scopeForm is the scope's one form, tag:<name>: the literal tag: and one shell word, the
-// name of the BuiltinTag on every device the twin is of (research R-04).
-var scopeForm = regexp.MustCompile(`^tag:\S+$`)
-
-// ValidScope is whether value is a scope, tag:<name>; the empty value is not.
+// ValidScope is whether value is a scope, tag:<name>: the literal tag: and one shell word,
+// the name of the BuiltinTag on every device the twin is of (research R-04); the empty
+// value is not. The form is the reader's (intent.ValidScope), which stage.Read holds every
+// read to.
 func ValidScope(value string) bool {
-	return scopeForm.MatchString(value)
+	return intent.ValidScope(value)
 }
 
 // scopeOf is the scope a request's read is made under: the request's --scope when it was

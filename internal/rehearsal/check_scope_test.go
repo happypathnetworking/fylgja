@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/stages"
 )
 
 // The checks pass no scope (FR-021): each asks its one operation with the branch alone, so
@@ -65,6 +66,41 @@ func TestTheChecksPassNoScopeAndFailAnError(t *testing.T) {
 	} {
 		if !regexp.MustCompile(c.pattern).MatchString(read(c.name)) {
 			t.Errorf("%s no longer reads as: %s", c.name, c.what)
+		}
+	}
+}
+
+// FR-017's one exception, as the checks hold it beside the server (017's FR-015;
+// contracts/scope-and-commands.md, scope.empty): fylgja_api's branch_point_refusal excuses
+// a branch point whose one rejection is scope.empty at read, as internal/server's
+// passedOver does, and nothing else. Its three values are the findings contract's and the
+// stage's, and the excuse compares all three with the one rejection; fylgja-step and
+// fylgja-twin's holders decide by it alone.
+func TestTheChecksExcuseTheBranchPointAsTheServerDoes(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "infrahub", "checks", "fylgja_api.py"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for name, want := range map[string]string{
+		"RULE_SCOPE_EMPTY": findings.RuleScopeEmpty, "STEP_READ": findings.StepRead, "AT_BRANCH_POINT": stages.AtBranchPoint,
+	} {
+		m := regexp.MustCompile(`(?m)^` + name + ` = "([^"]*)"$`).FindSubmatch(src)
+		if m == nil || string(m[1]) != want {
+			t.Errorf("fylgja_api.py's %s is %q; want %q", name, m, want)
+		}
+	}
+	fn := regexp.MustCompile(`(?s)\ndef branch_point_refusal\(.*?\n(?:def |$)`).Find(src)
+	if fn == nil {
+		t.Fatal("fylgja_api.py defines no branch_point_refusal")
+	}
+	for _, c := range []struct{ what, pattern string }{
+		{"the stage is the branch point", `if stage\.get\("at_source"\) != AT_BRANCH_POINT:\s+continue\n`},
+		{"its rejections are one, scope.empty at read",
+			`if \(\s*len\(rejections\) == 1\s+and rejections\[0\]\.get\("rule"\) == RULE_SCOPE_EMPTY\s+` +
+				`and rejections\[0\]\.get\("step"\) == STEP_READ\s*\):\s+return rejections\n`},
+	} {
+		if !regexp.MustCompile(c.pattern).Match(fn) {
+			t.Errorf("branch_point_refusal no longer reads as: %s\n%s", c.what, fn)
 		}
 	}
 }

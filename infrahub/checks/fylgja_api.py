@@ -60,11 +60,14 @@ INTERRUPT_TIMEOUT = 10.0
 CLOSE_MARGIN_S = 120
 
 # FR-017's one exception, the one rule the checks hold beside the status's mapping (D-052):
-# a branch point refused scope.empty, the scope selecting no device on main (017's FR-015,
-# R-20), is not a refusal of the change, and the other stages decide. It reads the finding's rule and the
-# stage's at_source and nothing else: fylgja-step passes it over in the plan, and fylgja-twin
-# in a refusal that says the host is held.
+# a branch point refused scope.empty at read, the scope selecting no device on main (017's
+# FR-015, R-20), is not a refusal of the change, and the other stages decide. It reads the
+# finding's rule and step and the stage's at_source and nothing else, as the server's
+# passedOver does: fylgja-step passes it over in the plan, and fylgja-twin in a refusal that
+# says the host is held. The three values are findings.RuleScopeEmpty, findings.StepRead and
+# stages.AtBranchPoint (internal/rehearsal's TestTheChecksExcuseTheBranchPointAsTheServerDoes).
 RULE_SCOPE_EMPTY = "scope.empty"
+STEP_READ = "read"
 AT_BRANCH_POINT = "branch_point"
 
 # MAX_PROBLEM_BYTES bounds what is read of a transport fault's body, as api.MaxProblemBytes.
@@ -221,7 +224,7 @@ def none_open(branch: str) -> str:
 def rejections_past_branch_point(
     found: list[dict[str, Any]] | None, stages: list[dict[str, Any]] | None
 ) -> list[dict[str, Any]]:
-    """A document's rejections, in order, but for the branch point's lone scope.empty
+    """A document's rejections, in order, but for the branch point's lone scope.empty at read
     among stages (FR-017's exception): the plan's stages for stage.plan, the rehearsal block's
     for twin.rehearse. Each stage's findings are also in the document's own list
     (stages.schema.json, rehearsal.schema.json), where the one passed over is found by key."""
@@ -236,12 +239,16 @@ def rejections_past_branch_point(
 
 
 def branch_point_refusal(stages: list[dict[str, Any]] | None) -> list[dict[str, Any]]:
-    """The branch point's one rejection when it is scope.empty, else none."""
+    """The branch point's one rejection when it is scope.empty at read, else none."""
     for stage in stages or []:
         if stage.get("at_source") != AT_BRANCH_POINT:
             continue
         rejections = [f for f in stage.get("findings") or [] if f.get("severity") == "rejection"]
-        if len(rejections) == 1 and rejections[0].get("rule") == RULE_SCOPE_EMPTY:
+        if (
+            len(rejections) == 1
+            and rejections[0].get("rule") == RULE_SCOPE_EMPTY
+            and rejections[0].get("step") == STEP_READ
+        ):
             return rejections
     return []
 

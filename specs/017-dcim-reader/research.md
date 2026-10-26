@@ -1208,3 +1208,39 @@ written to `main`, and no token was printed.
   stages, 0 proposed changes, branch fylgja-test-017-conf`). Afterwards `Branch` lists `main`
   and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage` count 0, and `main`'s
   hash is `e43a1cde…`.
+
+<a id="5-6"></a>
+### 5.6 The read against the running Infrahub (T039–T041; 2026-10-26, 01:57Z–01:59Z)
+
+Numbered after §5.4 and §5.5, which T058 and T061 hold. On one throwaway branch,
+`fylgja-test-017-read`. `fylgja-fixture -branch fylgja-test-017-read -schema-only` made it
+from `main` at 01:57:41Z and loaded the library and the stage kind in 42.3 s wall. A probe
+test that was not committed (`TestRun11Probe`, 13.0 s) then wrote, with test support's own
+writers, the three-node topology (no group join, no render), an untagged `cs1` with
+`port1`, a cable `c-out` from a new `n1:ethernet-1/3` to `cs1:port1`, and a cable
+`c-three` joining new `n1:ethernet-1/4`, `n2:ethernet-1/3` and `n3:ethernet-1/3`. The
+writes took 8.7 s. It then ran this tree's `CheckConformance` and `Fetch` under two scopes.
+Nothing was written to `main`, and no token was printed.
+
+- **`tag:fylgja`**: conformance gave no finding, and the read took 3.8 s, schema included.
+  Both new operations were accepted, and their answers decoded, the bound connector
+  included.
+  - **Devices**: `n1`, `n2` and `n3`, each `nokia_srlinux` by the pair `Nokia` / `SR Linux`;
+    `cs1` was not read.
+  - **Ports**: five on `n1`, four each on `n2` and `n3`, the management port by its role.
+    Every port read enabled: its status is the library's default, `active`.
+  - **Links**: the fixture's three, each port `link`ed to its canonical id.
+  - **Omitted**: `omit.cable.outside_scope c-out`, reason `an end outside the scope
+    (18e1f1c5-…:port1)`. The end outside the scope is named by its device's id, since the
+    read never reads that device. Also `omit.cable.ends c-three`, reason `other than two
+    ends (3)`. Each was an info finding and a fidelity row, beside the three fixed rows,
+    sorted.
+  - **Refused**: `artifact.missing` for each device, since nothing on this host renders
+    the library's kinds until the template's import (T058). The envelope carried `scope
+    tag:fylgja` and the mapping `infrahub-dcim`, `opsmill/schema-library`, `26336e9`.
+- **`tag:nothing`**: one `scope.empty tag:nothing`, `scope tag:nothing selects no device on
+  branch fylgja-test-017-read`, in 0.56 s, schema included. No port was asked for.
+- **The branch was deleted** by `-branch fylgja-test-017-read -delete` at 01:59:31Z
+  (`deleted 0 stages, 0 proposed changes, branch fylgja-test-017-read`). Afterwards
+  `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage`
+  count 0, and `main`'s hash is `e43a1cde…`.

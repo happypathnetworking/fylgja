@@ -613,13 +613,18 @@ three-ended, a one-ended, an outside and a foreign-typed cable are each omitted 
 rule, reason and row. A device with no platform, one with an orphan platform and one on
 `nokia` / `SR-Linux` are refused in one pass with no CTM. `tag:nothing` is `scope.empty`.
 
-- [ ] T038 [US1] In `internal/intent/queries.graphql`, replace `ContractVersion`, the fragments `PlatformFields` and `InterfaceFields`, and the operations `Devices` and `Links` with [contracts/mapping.md](contracts/mapping.md) §2's two operations. Keep `ArtifactFields`.
+- [X] T038 [US1] In `internal/intent/queries.graphql`, replace `ContractVersion`, the fragments `PlatformFields` and `InterfaceFields`, and the operations `Devices` and `Links` with [contracts/mapping.md](contracts/mapping.md) §2's two operations. Keep `ArtifactFields`.
   - `Devices($tag: String!, $limit: Int!, $offset: Int!)` is `DcimDevice(tags__name__value: $tag, limit, offset)`, selecting `id`, `name { value }`, `platform { node { name { value } manufacturer { node { name { value } } } } }` and `...ArtifactFields`. It selects no `interfaces`.
   - `Ports($devices: [ID], $limit: Int!, $offset: Int!)` is `InterfacePhysical(device__ids: $devices, limit, offset)`, selecting `id`, `name { value }`, `role { value }`, `status { value }`, `device { node { id } }` and `connector { node { id ... on DcimCable { label { value } } connected_endpoints { count edges { node { __typename id ... on InterfacePhysical { name { value } device { node { id } } } } } } } }`.
   - The stamps and the stage reader's operations are unchanged (T047).
   - Run `make generate`.
+  - *2026-10-26 02:03Z, Run 11 of the converge loop:* done. `ContractVersion`, `PlatformFields`, `InterfaceFields`, `Devices` and `Links` are gone; `Devices` and `Ports` are as the task gives them, `ArtifactFields` kept, the stamps' operations unchanged. `make generate`, and a second `go generate ./...` changes nothing.
+    - **For review, two genqlient directives the text did not name**:
+      - The port's connector node is bound (`@genqlient(bind:)`) to `connectorNode` in `cable.go`, a plain struct. genqlient's generated decoder refuses any `__typename` its SDL does not name, so an end on an endpoint kind of the operator's own would have failed the whole read, where R-05 omits the cable `omit.cable.endpoint`. A connector that is not a `DcimCable` decodes too, and is judged like one. The selection is still checked against the SDL at generate.
+      - The platform's and manufacturer's nodes are `pointer: true`, so a device with no platform, or a platform with no manufacturer, is told from one whose names are empty. A directive applies to every field on the line after it, so each node's selection spans lines.
+    - **The read-only test** lists `Devices` and `Ports`. `TestQueryRootsAreFylgjaGenerics` admits the mapping's two roots, each only in its own operation, beside the Fylgja and Infrahub roots, until T052 replaces the three tests. The stamps still select the generics' roots until T047.
 
-- [ ] T039 [US1] [US2] The read (R-01, R-05, R-06; data-model §6), in `internal/intent/project.go` and a new `internal/intent/cable.go`. This replaces T023's bridge.
+- [X] T039 [US1] [US2] The read (R-01, R-05, R-06; data-model §6), in `internal/intent/project.go` and a new `internal/intent/cable.go`. This replaces T023's bridge.
   - **`Fetch`** runs `Devices` with `Config.Scope`'s tag, paged by 100, every page at the read's `at` when one was given. Then it runs `Ports` once per page of 100 device ids, projects, judges the cables, writes the fidelity list, fetches the artifacts as today, relinks and normalizes.
   - **A port** is one per `InterfacePhysical`, by `name`. `mgmt_only` is `role == management`; `enabled` is `false` only when `status == disabled` (`null` and every other value is `true`).
   - **A cable** is judged once, by its id (`cableJudgement{id, label, ends []end{deviceID, deviceName, port, kind}}`), with the first reason that applies, in R-05's order:
@@ -629,19 +634,41 @@ rule, reason and row. A device with no platform, one with an orphan platform and
 
     Each omission is an `info` finding beside the read: its object is the cable's `label`, or its id when it has none, and its message gives the reason text of [contracts/mapping.md](contracts/mapping.md) §4 (`other than two ends (<n>)`, `an end not on a physical port (<kind>)`, `an end outside the scope (<device>:<port>)`) and names every known end as `<device>:<port>`. Each is also a fidelity row `{omitted, <object>, DcimCable, <reason>}`. Any other cable is a link with today's canonical id, both ports `link`ed.
   - **The envelope** gets `scope` (`tag:<name>`), `mapping` (the three constants) and `fidelity` (the three fixed rows of T019 plus one per omitted cable, sorted).
+  - *2026-10-26 02:03Z, Run 11 of the converge loop:* done, the bridge gone (`bridgeContract`, `ContractVersion`, `projectLink`, `relinkInterfaces`).
+    - **`Fetch`** (`project.go`) runs `Devices` by `Config.Scope`'s tag, then `Ports` per hundred ids, each page of either paged by 100, every request at the read's `at`. It then runs completeness, projects, judges the cables and runs the artifact pass as before. A scope that selects nothing never sends `Ports`, whose filter would be empty.
+    - **A port** is `role == management` and `status != disabled`, a null status enabled. Its link is set when its cable is judged one.
+    - **`cable.go`**: `cableJudgement` keyed by the connector's id, judged in object order, R-05's three reasons in order.
+      - The message is `cable <object> is omitted: <reason>; its ends are <device>:<port>, …`, every physical end listed, sorted. The row is `{omitted, <object>, DcimCable, <reason>}`.
+      - **For review**: an end on a device outside the scope is named by its device's id, `18e1f1c5-…:port1`, since FR-002 has that device never read and `Ports` selects only its id. An end that is not a physical port has no name or device to list; its kind is in the reason.
+      - **Added**: a cable that counts two ends and lists fewer (a null edge) is `omit.cable.ends`, `other than two ends (1 listed of 2)`, rather than a link with a missing end.
+    - **The envelope**: `scope` `tag:<name>`, the mapping `infrahub-dcim`, `opsmill/schema-library`, `26336e9`, and `readFidelity()`'s three rows plus one per omitted cable, sorted by `Normalize`.
+    - **Live** (research §5.6): on `fylgja-test-017-read`, holding the library and the three-node topology unrendered, plus an untagged `cs1` and two cables it cannot place, the read gave the fixture's three links and the two omissions with their rows. `cs1` was not read, and `tag:nothing` gave `scope.empty`. The branch is deleted.
 
-- [ ] T040 [US2] Completeness inside the scope (R-03; FR-014, FR-015), in `internal/intent/project.go` or a new `completeness.go`. Before any artifact is fetched, in one pass and with no CTM on any of them:
+- [X] T040 [US2] Completeness inside the scope (R-03; FR-014, FR-015), in `internal/intent/project.go` or a new `completeness.go`. Before any artifact is fetched, in one pass and with no CTM on any of them:
   - `scope.empty` (object the scope, the message naming the scope and the branch) when `Devices` answered 0.
   - `platform.missing` (object the device) for no platform, or a platform with no manufacturer. The message names what the device carries: `no platform`, or `platform "Orphan OS" with no manufacturer`.
   - `platform.unmatched` (object the device) when `reg.Match` finds nothing. The message is `manufacturer "nokia", platform "SR-Linux"; the packages match: nokia_srlinux [Nokia / SR Linux], arista_eos [Arista / EOS]`, every package and pair listed in a stable order.
 
   A device refused for its platform is not also refused for its artifact. The artifact rules are unchanged (FR-008).
+  - *2026-10-26 02:03Z, Run 11 of the converge loop:* done, in `completeness.go`, after `Devices` and `Ports`, before the artifact pass.
+    - **`scope.empty`** at the scope: `scope tag:nothing selects no device on branch b`, with ` at <at>` when pinned. It is filed alone, and no port is asked for.
+    - **`platform.missing`**: `device n2 carries no platform; …`, and `device n3 carries platform "Orphan OS" with no manufacturer; …`.
+    - **`platform.unmatched`**: `device n1: manufacturer "nokia", platform "SR-Linux"; the packages match: arista_eos [Arista / EOS], nokia_srlinux [Nokia / SR Linux]`. For review: the stable order is package id order, which puts `arista_eos` first where the task's example lists `nokia_srlinux` first.
+    - **One pass**: the devices are reported in name order. The artifact pass still runs over every device that has a package, so a refused read names their artifact faults beside the platform ones (FR-011); a device without a package is skipped by it. Then `Fetch` returns no CTM, so validation never runs on one.
 
-- [ ] T041 [US1] The read's report (R-17). `Counts.CablesOmitted` and `DevicesByPackage` reading `platform.package` live in `internal/intent/summary.go`. `intent read`'s summary line is `wrote <file>: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports; 1 cable omitted (branch b, scope tag:fylgja, schema 908871c3…)`, the omitted count only when non-zero, with a stage's `stage b/seeded: …` first as today (`internal/server/read.go` and where the line is rendered).
+- [X] T041 [US1] The read's report (R-17). `Counts.CablesOmitted` and `DevicesByPackage` reading `platform.package` live in `internal/intent/summary.go`. `intent read`'s summary line is `wrote <file>: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports; 1 cable omitted (branch b, scope tag:fylgja, schema 908871c3…)`, the omitted count only when non-zero, with a stage's `stage b/seeded: …` first as today (`internal/server/read.go` and where the line is rendered).
+  - *2026-10-26 02:03Z, Run 11 of the converge loop:* done. `Counts.CablesOmitted` counts the envelope's `omitted` rows of source `DcimCable`; `DevicesByPackage`'s comment no longer garbles why it stands apart from `Counts`.
+    - **The line**: `wrote ctm.json: …, 0 shared ports; 1 cable omitted (branch b, at T, scope tag:fylgja, schema …)`, with `2 cables omitted` for more than one and nothing when none. A stage's `stage b/l: ` stays first, before the reference.
+    - **For review**: only `intent read`'s line names the scope (`scopedSubject`). The dry run's `read:` line and `stage plan`'s keep the reference and schema alone (`readSubject`), as no task moves them; T046 adds the scope to `stage plan`'s and `twin rehearse`'s headings.
+    - **Tests**: `TestReadSummaryCountsTheLossyRecord` names the scope in its three lines and gains the one- and two-cable cases; `TestReadFromAStageIsThePinnedRead` names it too.
 
-- [ ] T042 [US1] `stage.Read` without the contract (`internal/stage/stage.go`). Remove `CheckContract`, and with it `contract.version.mismatch` and its constant (its last user). `twin compile` given a CTM of another version files `ctm.version.unsupported` (object the CTM file, exit 1, no step), naming both versions (`internal/server/compile.go`). Test it in `internal/server` or `internal/cli` with `testdata/ctm/defects/version-1.json`.
+- [X] T042 [US1] `stage.Read` without the contract (`internal/stage/stage.go`). Remove `CheckContract`, and with it `contract.version.mismatch` and its constant (its last user). `twin compile` given a CTM of another version files `ctm.version.unsupported` (object the CTM file, exit 1, no step), naming both versions (`internal/server/compile.go`). Test it in `internal/server` or `internal/cli` with `testdata/ctm/defects/version-1.json`.
+  - *2026-10-26 02:03Z, Run 11 of the converge loop:* done. `CheckContract` and `contract.version.mismatch` are gone, the constant and its row in `dataModelRules` with them, and `stage.Compile` validates first.
+    - **The refusal**: `ctm.Unmarshal` returns a `*ctm.VersionError` (same text as before), and `twin compile` files it as `rejection ctm.version.unsupported <the --ctm path>: the CTM declares ctm_version "1"; this build reads "2", and nothing converts one`, exit 1, no step. Any other decoding failure stays `operation.failed`, exit 2.
+    - **For review**: the run's Compile activity keeps `operation.failed` for a CTM it cannot read: it compiles only the CTM its own read wrote. `TestCreateReportsM1Findings` says so for `version-1.json`.
+    - **Tests**: `TestAnotherCTMVersionIsRefusedBeforeValidation` (`internal/cli`, through the harness's server) asserts the finding whole. `TestVersion1IsRefused` asserts the typed error. `TestUnreadableCTMIsAnOperationalFailure`'s malformed file is a `"2"`, since a `"1"` is now the version's refusal. The pure rehearsal test that paired `contract.version.mismatch` with the branch point's refusal pairs `platform.missing` instead.
 
-- [ ] T043 [US1] [US2] The read's tier-1 tests (R-18; quickstart §1).
+- [X] T043 [US1] [US2] The read's tier-1 tests (R-18; quickstart §1).
   - **The fake**: rewrite the harness's fake Infrahub (`internal/cli/infrahub_test.go`) to answer `Devices` and `Ports` in research §1.6's shapes for the three-node fixture, whose read equals `testdata/ctm/three-node.json` except for the envelope. Drop its generics answers (the stamps' too, if T047's run has not yet moved them: keep only what the old stamps operations still read).
   - **`internal/intent/project_test.go` and `cable_test.go`**, against an `httptest` Infrahub:
     - the three-node read, with the request's variables asserted: `tags__name__value` is `fylgja`, no status filter, and `Ports`' `device__ids` are the devices read;
@@ -654,6 +681,31 @@ rule, reason and row. A device with no platform, one with an orphan platform and
     - no platform, `Orphan OS` and `nokia` / `SR-Linux`, refused in one pass with no CTM;
     - `tag:nothing`, refused `scope.empty`.
   - **Moved**: every `internal/intent`, `internal/stage`, `internal/server` and `internal/cli` test that read through the old shapes.
+  - *2026-10-26 02:03Z, Run 11 of the converge loop:* done.
+    - **The fakes**:
+      - `internal/intent`'s fake moved to its own file, `infrahub_test.go`, and holds a branch in the library's terms: devices with tags and a pair, physical ports, virtual names it never serves, and cables. Its other-kind ends are written `<kind>#<id>`.
+      - The harness's fake (`internal/cli/infrahub_test.go`) answers `Devices` by the tag `fylgja` and `Ports` by ids from each branch's CTM, each package's pair taken from the packages themselves.
+      - Both dropped the generics' read answers and `contractless`. The harness keeps the generics' stamps answers and schema rows, which `IntentStamps` and the events still read until T047 and T048, but not the default branch's contract node.
+      - `untagged` names a branch whose read answers no device; `emptyMain` is simply an empty CTM.
+    - **`project_test.go`**:
+      - `TestReadIsTheFixture`: the devices and links equal `three-node.json`'s; the envelope's branch, scope, mapping and rows are the fixture's; `DcimDevice(tags__name__value: $tag, …)` is sent with `tag` `fylgja` and no other argument; `Ports` is sent with the three ids.
+      - `TestReadAsksForNothingOutsideItsScope` (US1 scenario 3) and `TestReadProjectsEachPort` (disabled, `maintenance`, a device with no port, `n2` under maintenance).
+      - `TestReadRefusesEveryDeviceWithoutAPackage`: the three platform refusals and a fourth device's `artifact.missing` in one pass, no content fetched for the three.
+      - `TestScopeSelectingNothingIsRefused`, and `TestReadPagesDevicesAndPorts` (150 devices, two pages of ports for the first hundred).
+    - **`cable_test.go`**:
+      - `TestCablesTheReadCannotPlace`: three ends, one end, outside, a `DcimConsolePort` end and a cable with no label, each finding and row exact, `CablesOmitted` 4.
+      - `TestACableIsJudgedOnceByTheFirstReason`, `TestManagementCableReachesTheCTM` (FR-007) and the short listing's case.
+    - **Moved**:
+      - `TestReadRefusesEveryDeviceInOnePass` puts its intent fault in a cable with both ends on `n1` (`link.endpoints.same_device`), since a one-ended cable is now an omission. `TestBridgedReadRefusesABranchWithNoContract` went.
+      - The harness's tests of a `main` holding no network, and of a branch whose devices are untagged, expect `scope.empty` at read: `stage plan`, `stage`, `twin step` and `twin rehearse`, their text included. `bridged()` and `bridgedFixtureBundleID` went.
+      - The read predicates name `Devices` and `Ports`.
+    - **For review, a bridge until T050**: `passedOver` (`internal/server/rehearse.go`) excuses `scope.empty` at read beside `contract.node.missing` at read. The new read refuses an empty `main` `scope.empty` where the generics' refused `contract.node.missing`, and T050 moves it to `resolve` and removes the old rule. `TestRehearsalStagesTakeTheBaselineRule` covers it.
+    - **Tier 2, compile only** (T044 rewrites them; they run at T062): `read_contract_test.go` expects the library's mapping.
+
+  *Run 11's checkpoint, 02:05Z*:
+  - **Gates**: `make build` static. `make test` uncached took 42.5 s wall (load average 3.3 before, 4.7 after), under 45 s. `make lint` 0 issues; `go vet -tags contract,fixture,e2e ./...` and `make linkcheck` clean; `go generate ./...` changes nothing. No golden moved.
+  - **Tier 2**: no task of this run names a tier-2 test. The read was proved live on `fylgja-test-017-read`, which is deleted (research §5.6). `Branch` lists `main` and `fylgja-fixture` alone, `CoreProposedChange` and `FylgjaStage` count 0, and `main`'s hash is `e43a1cde…`. Nothing was written to `main`.
+  - **The host**: no twin was booted. The worker (pid 2314364) and the server (pid 2314366) were not touched. A server built from this tree still refuses every read of today's fixture and `main` by conformance until T056–T060.
 
 - [ ] T044 [US1] [US2] [US3] The tier-2 tests of the read (quickstart §7; R-18), written against the re-seeded fixtures and throwaway `fylgja-test-*` branches, each deleted by the test that made it. They are run at T062; here they must compile (`go vet -tags contract ./...`).
   - `internal/intent/read_contract_test.go`:

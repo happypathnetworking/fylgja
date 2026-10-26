@@ -114,7 +114,8 @@ serve: build
 # Infrahub is operator-provided: bring your own instance and point INFRAHUB_ADDRESS /
 # INFRAHUB_API_TOKEN at it (see .env.example). Fylgja neither vendors nor starts it.
 #
-# Loads schema/*.yaml onto the fixture branch and seeds the three-node topology.
+# Loads the schema library (schema/dcim/) and the stage kind onto the fixture branch and
+# seeds the three-node topology in the library's kinds.
 # Build-tagged: this is the one place Fylgja code writes to Infrahub.
 infrahub-schema:
 	go run -tags fixture ./cmd/fylgja-fixture -schema-only

@@ -115,12 +115,12 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	counts("the read at T does not see the whole seed", snapshot, seeded)
 	sumsAtT := checksums(snapshot)
 
-	// The configuration change: n1's role, regenerated. Generation writes the new bytes
+	// The configuration change: n1's description, regenerated. Generation writes the new bytes
 	// with no status transition to wait on, so the wait is for n1's
 	// checksum to move on the branch.
 	current := artifactsOf(t, c, branch, "device-config")
-	if err := c.SetDeviceRole(branch, "n1", testsupport.MarkerRole(branch)+"-moved"); err != nil {
-		t.Fatalf("changing n1's role after T: %v", err)
+	if err := c.SetDeviceDescription(branch, "n1", testsupport.MarkerDescription(branch)+"-moved"); err != nil {
+		t.Fatalf("changing n1's description after T: %v", err)
 	}
 	if err := c.GenerateArtifacts(branch); err != nil {
 		t.Fatalf("regenerating after T: %v", err)

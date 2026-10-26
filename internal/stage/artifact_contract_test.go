@@ -229,10 +229,10 @@ func artifactDetection(t *testing.T, c *testsupport.Client, branch string, reg *
 		t.Fatalf("two reads of an unchanged branch compiled to %s and %s", id, again)
 	}
 
-	// The role change. Generation writes the new bytes in one step, with no status
+	// The description change. Generation writes the new bytes in one step, with no status
 	// transition to wait on, so the wait is for n1's checksum to move.
 	before := artifactsOf(t, c, branch, "device-config")
-	if err := c.SetDeviceRole(branch, "n1", testsupport.MarkerRole(branch)+"-moved"); err != nil {
+	if err := c.SetDeviceDescription(branch, "n1", testsupport.MarkerDescription(branch)+"-moved"); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.GenerateArtifacts(branch); err != nil {
@@ -259,11 +259,11 @@ func artifactDetection(t *testing.T, c *testsupport.Client, branch string, reg *
 	}
 	t.Logf("role change: bundle_id %s -> %s", id, movedID)
 
-	// The site change. A regeneration that writes nothing gives nothing to wait for, so
-	// the listing is watched for 20 seconds, well past the 7.6s a regeneration that changes
-	// bytes took, and must not move.
+	// The serial number change. A regeneration that writes nothing gives nothing to wait
+	// for, so the listing is watched for 20 seconds, well past the 7.6s a regeneration that
+	// changes bytes took, and must not move.
 	listed := artifactsOf(t, c, branch, "device-config")
-	if err := c.SetDeviceSite(branch, "n1", "lab"); err != nil {
+	if err := c.SetDeviceSerial(branch, "n1", "LAB-0001"); err != nil {
 		t.Fatal(err)
 	}
 	if err := c.GenerateArtifacts(branch); err != nil {
@@ -326,7 +326,7 @@ func artifactRefusals(t *testing.T, c *testsupport.Client, branch string, reg *p
 	}
 	device := func(name string) string {
 		id := create("NetworkDevice", fmt.Sprintf(`{name: {value: %q}, platform: {id: %q}, role: {value: %q}}`,
-			name, platform, testsupport.MarkerRole(branch)))
+			name, platform, testsupport.MarkerDescription(branch)))
 		create("NetworkInterface", fmt.Sprintf(
 			`{name: {value: "mgmt0"}, iftype: {value: "physical"}, mgmt_only: {value: true}, device: {id: %q}}`, id))
 		create("NetworkInterface", fmt.Sprintf(`{name: {value: "lo0"}, iftype: {value: "loopback"}, device: {id: %q}}`, id))

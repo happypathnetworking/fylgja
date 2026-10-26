@@ -167,7 +167,7 @@ func TestRehearseRefusesBeforeAnyRun(t *testing.T) {
 		t.Fatalf("marking seeded: %v", err)
 	}
 	for _, d := range rehearseDevices {
-		if err := c.SetDeviceRole(branch, d, "stale-role"); err != nil {
+		if err := c.SetDeviceDescription(branch, d, "stale-description"); err != nil {
 			t.Fatal(err)
 		}
 	}

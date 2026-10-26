@@ -652,7 +652,7 @@ func TestStageRefusals(t *testing.T) {
 
 	// An intent change the artifact renders, with no generate: stale on each device.
 	for _, d := range devices {
-		if err := c.SetDeviceRole(name, d, "stale-role"); err != nil {
+		if err := c.SetDeviceDescription(name, d, "stale-description"); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -666,11 +666,11 @@ func TestStageRefusals(t *testing.T) {
 	markStage(t, c, id, "role-fresh", "", "the role, rendered")
 	fresh("role-fresh")
 
-	// The site, which the template queries and does not print: a generate rewrites
-	// nothing, so the checksums stay older than the edit, and only the proposed change's
-	// checks clear it.
+	// The serial number, which the template does not print: a generate rewrites nothing,
+	// so the checksums stay older than the edit, and only the proposed change's checks
+	// clear it.
 	for _, d := range devices {
-		if err := c.SetDeviceSite(name, d, "stale-site"); err != nil {
+		if err := c.SetDeviceSerial(name, d, "stale-serial"); err != nil {
 			t.Fatal(err)
 		}
 	}

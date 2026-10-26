@@ -973,11 +973,11 @@ func (c *Client) OverviewThreads(id string) ([]string, error) {
 	return out, nil
 }
 
-// AddInterface writes one physical interface on a test branch's device: enabled, not
-// management, with no link. It renders nothing: Infrahub regenerates no artifact on its
-// own, so the caller generates, and the artifact then names a port the compile may omit
-// (research R-14). The fixture is refused, as every change is, and so is a second
-// interface of the name on the device.
+// AddInterface writes one physical port on a test branch's device: status active, no
+// role, with no cable. It renders nothing: Infrahub regenerates no artifact on its own, so
+// the caller generates, and the artifact then names a port the compile may omit (research
+// R-14). The fixture is refused, as every change is, and so is a second port of the name on
+// the device.
 func (c *Client) AddInterface(branch, device, name string) error {
 	if branch == FixtureBranch {
 		return fmt.Errorf("branch %s: the fixture is never changed", branch)
@@ -989,16 +989,14 @@ func (c *Client) AddInterface(branch, device, name string) error {
 	if err != nil {
 		return err
 	}
-	present, err := c.ids(branch, "NetworkInterface", fmt.Sprintf(`(device__name__value: %q, name__value: %q)`, device, name))
+	present, err := c.ids(branch, "InterfacePhysical", fmt.Sprintf(`(device__name__value: %q, name__value: %q)`, device, name))
 	if err != nil {
 		return err
 	}
 	if len(present) != 0 {
 		return fmt.Errorf("branch %s already holds %s:%s", branch, device, name)
 	}
-	id, err := c.create(branch, "NetworkInterface", fmt.Sprintf(
-		`{name: {value: %q}, iftype: {value: "physical"}, enabled: {value: true}, mgmt_only: {value: false}, device: {id: %q}}`,
-		name, dev))
+	id, err := c.createPort(branch, dev, name, "")
 	if err != nil {
 		return err
 	}

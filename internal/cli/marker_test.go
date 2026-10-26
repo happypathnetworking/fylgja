@@ -34,10 +34,10 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
-// marker is what the fixture's artifacts carry in their role comment line:
-// testsupport.MarkerRole("fylgja-fixture") less its "leaf-", spelled out because
-// testsupport is built only under the contract and fixture tags. A surface that quotes a
-// line of configuration carries it.
+// marker is what the fixture's artifacts carry in their header, the devices' description:
+// testsupport.MarkerDescription("fylgja-fixture"), spelled out because testsupport is
+// built only under the contract and fixture tags. A surface that quotes a line of
+// configuration carries it.
 const marker = "FYLGJA-MARKER-fixture"
 
 // surfaces collects what a run and the commands around it show anyone but the node: every

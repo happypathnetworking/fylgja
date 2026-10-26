@@ -1,7 +1,7 @@
 //go:build fixture
 
 // Command fylgja-fixture prepares a local Infrahub for development: it loads the
-// generics contract and reference schema onto a branch and seeds the three-node fixture
+// schema library and the stage kind onto a branch and seeds the three-node fixture
 // or the mixed one, or makes following's branch change on a throwaway branch, or opens,
 // marks, readies, checks and closes a throwaway branch's proposed change (D-045), or prepares main:
 // the schema, the group and this repository's read-only registration (D-044), or opens and
@@ -41,10 +41,8 @@ func main() {
 		"add link s1:ethernet-1/3 <-> e1:Ethernet3 to a throwaway branch seeded with -mixed, render both artifacts, and exit")
 	generate := flag.Bool("generate", false,
 		"render every device's artifact on a throwaway branch, wait for Ready, and exit")
-	setRole := flag.String("set-role", "",
-		"set every device's role on a throwaway branch and exit (the artifact-only change; regenerate with -generate)")
-	setSite := flag.String("set-site", "",
-		"set every device's site on a throwaway branch and exit (regenerates to identical bytes)")
+	setDescription := flag.String("set-description", "",
+		"set every device's description on a throwaway branch and exit (the artifact-only change; regenerate with -generate)")
 	disablePort := flag.String("disable-port", "",
 		"disable one interface on a throwaway branch and exit, as <device>:<interface>")
 	addInterface := flag.String("add-interface", "",
@@ -145,8 +143,8 @@ func main() {
 		}
 		return
 	}
-	if *generate || *setRole != "" || *setSite != "" || *disablePort != "" || *addInterface != "" {
-		if err := change(*branch, *generate, *setRole, *setSite, *disablePort, *addInterface); err != nil {
+	if *generate || *setDescription != "" || *disablePort != "" || *addInterface != "" {
+		if err := change(*branch, *generate, *setDescription, *disablePort, *addInterface); err != nil {
 			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
 			os.Exit(1)
 		}
@@ -259,10 +257,11 @@ func baseline(seed bool) error {
 // clearedLine says what -clear-main deleted, and how many of the devices' artifacts
 // Infrahub had already removed with them.
 func clearedLine(d testsupport.ClearedBaseline) string {
-	return fmt.Sprintf("%s, %s, %s, %s, %s; artifacts: %d gone with their devices, %d deleted",
-		plural(d.Links, "link", "links"), plural(d.Interfaces, "interface", "interfaces"),
+	return fmt.Sprintf("%s, %s, %s, %s, %s, %s, %s; artifacts: %d gone with their devices, %d deleted",
+		plural(d.Cables, "cable", "cables"), plural(d.Interfaces, "interface", "interfaces"),
 		plural(d.Devices, "device", "devices"), plural(d.Platforms, "platform", "platforms"),
-		plural(d.Contracts, "contract", "contracts"), d.ArtifactsWithDevices, d.Artifacts)
+		plural(d.Manufacturers, "manufacturer", "manufacturers"), plural(d.Locations, "location", "locations"),
+		plural(d.Tags, "tag", "tags"), d.ArtifactsWithDevices, d.Artifacts)
 }
 
 // prepareMain makes main what every branch needs before it can render (D-028, D-044):
@@ -597,7 +596,7 @@ func plural(n int, one, many string) string {
 // the proposed-change flags do, and a value that is not <device>:<name>, both before any
 // request. The port it adds is one the device's artifact names once generated, and the
 // compile may omit (research R-14): a rehearsal's stage made to fail at the push.
-func change(branch string, generate bool, role, site, port, addIface string) error {
+func change(branch string, generate bool, description, port, addIface string) error {
 	if branch == testsupport.FixtureBranch {
 		return fmt.Errorf("this flag refuses branch %s: the fixture is written once and never changed; "+
 			"seed a throwaway branch and name it with -branch", branch)
@@ -623,21 +622,13 @@ func change(branch string, generate bool, role, site, port, addIface string) err
 	if err != nil {
 		return err
 	}
-	if role != "" {
+	if description != "" {
 		for _, d := range devices {
-			if err := c.SetDeviceRole(branch, d, role); err != nil {
+			if err := c.SetDeviceDescription(branch, d, description); err != nil {
 				return err
 			}
 		}
-		fmt.Printf("role set to %q on %d device(s) on %s\n", role, len(devices), branch)
-	}
-	if site != "" {
-		for _, d := range devices {
-			if err := c.SetDeviceSite(branch, d, site); err != nil {
-				return err
-			}
-		}
-		fmt.Printf("site set to %q on %d device(s) on %s\n", site, len(devices), branch)
+		fmt.Printf("description set to %q on %d device(s) on %s\n", description, len(devices), branch)
 	}
 	if port != "" {
 		device, iface, ok := strings.Cut(port, ":")
@@ -653,7 +644,7 @@ func change(branch string, generate bool, role, site, port, addIface string) err
 		if err := c.AddInterface(branch, ifDevice, ifName); err != nil {
 			return err
 		}
-		fmt.Printf("interface %s added on %s on %s: physical, enabled, no link; -generate renders it\n", ifName, ifDevice, branch)
+		fmt.Printf("interface %s added on %s on %s: physical, active, no cable; -generate renders it\n", ifName, ifDevice, branch)
 	}
 	if generate {
 		if err := c.GenerateArtifacts(branch); err != nil {

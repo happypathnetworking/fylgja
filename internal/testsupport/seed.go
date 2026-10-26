@@ -4,8 +4,6 @@ package testsupport
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -13,55 +11,89 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 )
 
-// ContractVersion is the generics contract version the fixture declares. It is the
-// version Fylgja is built against: a fixture declaring anything else would be rejected
-// by every compile, which is the point of the check.
-const ContractVersion = ctm.ContractVersion
-
 // FixtureBranch is the durable branch the three-node fixture lives on.
 const FixtureBranch = "fylgja-fixture"
 
-// MarkerPrefix is what every seeded device's role carries, so that an artifact rendered
-// from it is recognisable wherever it might leak. The definition's template writes the
-// role into the artifact's comment line, so a grep for this string over a finding, a
-// log, an event, a payload or a record proves no content escaped.
+// MarkerPrefix is what every seeded device's description carries, so that an artifact
+// rendered from it is recognisable wherever it might leak. The definition's template writes
+// the description into the artifact's header (R-11), so a grep for this string over a
+// finding, a log, an event, a payload or a record proves no content escaped.
 const MarkerPrefix = "FYLGJA-MARKER"
 
-// MarkerRole is the role value the seed writes on a branch, and the value a tier greps
-// for. The suffix is the branch's, so two branches never share a marker and a leak can
-// be traced to the branch that produced it: "fixture" for the durable fixture branch,
-// whose value is fixed because the branch is written once, and the branch name
-// with its fylgja- prefix stripped for a throwaway.
-func MarkerRole(branch string) string {
+// MarkerDescription is the description the seed writes on every device of a branch, and
+// the value a tier greps for. The suffix is the branch's, so two branches never share a
+// marker and a leak can be traced to the branch that produced it: "fixture" for the
+// durable fixture branch, whose value is fixed because the branch is written once, and the
+// branch name with its fylgja- prefix stripped for a throwaway.
+func MarkerDescription(branch string) string {
 	suffix := "fixture"
 	if branch != FixtureBranch {
 		suffix = strings.TrimPrefix(branch, "fylgja-")
 	}
-	return "leaf-" + MarkerPrefix + "-" + suffix
+	return MarkerPrefix + "-" + suffix
 }
 
-// nodeSpec describes one fixture device.
+// FixtureTag is the tag every seeded device carries: the fixtures are read under the scope
+// tag:fylgja, the server's default on the development host.
+const FixtureTag = "fylgja"
+
+// RoleManagement is the role of a device's management port, the one the CTM marks
+// management-only (contracts/mapping.md §5). Every other port the seeds write has no role.
+const RoleManagement = "management"
+
+// StatusDisabled is the port status the template renders as an admin state down, and the
+// CTM reads as not enabled.
+const StatusDisabled = "disabled"
+
+// siteLevels is the location every seeded device stands in, from the top: the library's
+// minimal locations give a site a mandatory metro, a metro a country and a country a
+// region (research §1.5), and a device a mandatory location.
+var siteLevels = []struct{ kind, name string }{
+	{"LocationRegion", "Lab region"},
+	{"LocationCountry", "Lab country"},
+	{"LocationMetro", "Lab metro"},
+	{"LocationSite", "lab"},
+}
+
+// platformSpec is a platform by the names a support package matches exactly (FR-027).
+type platformSpec struct {
+	manufacturer, name string
+}
+
+var (
+	srLinux = platformSpec{"Nokia", "SR Linux"}
+	eos     = platformSpec{"Arista", "EOS"}
+)
+
+// nodeSpec describes one fixture device: its platform, the name that platform gives its
+// management port, and its data ports in production naming. Every name is one a booted
+// node of that platform carried.
 type nodeSpec struct {
 	name     string
-	loopback string
-	// data ports, in production naming
-	ports []string
+	platform platformSpec
+	mgmt     string
+	ports    []string
 }
 
-// linkSpec is one fixture link.
+// linkSpec is one fixture link, written as a cable between two ports.
 type linkSpec struct {
 	aDev, aPort string
 	bDev, bPort string
 }
 
-// The three-node fixture: a triangle, so every node has two cabled
-// ports, one management port, and one loopback. Small enough to boot on a small host, and
-// large enough that link ordering and per-node port ordering are actually exercised.
+// id is the link's canonical id, which the cable carries as its label.
+func (l linkSpec) id() string {
+	return ctm.CanonicalLinkID(ctm.Endpoint{Device: l.aDev, Interface: l.aPort}, ctm.Endpoint{Device: l.bDev, Interface: l.bPort})
+}
+
+// The three-node fixture: a triangle, so every node has two cabled ports and one
+// management port. Small enough to boot on a small host, and large enough that link
+// ordering and per-node port ordering are actually exercised.
 var (
 	fixtureNodes = []nodeSpec{
-		{name: "n1", loopback: "10.0.0.1/32", ports: []string{"ethernet-1/1", "ethernet-1/2"}},
-		{name: "n2", loopback: "10.0.0.2/32", ports: []string{"ethernet-1/1", "ethernet-1/2"}},
-		{name: "n3", loopback: "10.0.0.3/32", ports: []string{"ethernet-1/1", "ethernet-1/2"}},
+		{name: "n1", platform: srLinux, mgmt: "mgmt0", ports: []string{"ethernet-1/1", "ethernet-1/2"}},
+		{name: "n2", platform: srLinux, mgmt: "mgmt0", ports: []string{"ethernet-1/1", "ethernet-1/2"}},
+		{name: "n3", platform: srLinux, mgmt: "mgmt0", ports: []string{"ethernet-1/1", "ethernet-1/2"}},
 	}
 	fixtureLinks = []linkSpec{
 		{"n1", "ethernet-1/1", "n2", "ethernet-1/1"},
@@ -70,102 +102,15 @@ var (
 	}
 )
 
-// SeedThreeNode populates the three-node fixture on a branch. It is idempotent at the
-// branch level: seeding a branch that already has devices is a no-op.
-func (c *Client) SeedThreeNode(branch string) error {
-	data, err := c.GraphQL(branch, `{ FylgjaDevice { count } }`)
-	if err == nil {
-		var r struct {
-			D struct {
-				Count int `json:"count"`
-			} `json:"FylgjaDevice"`
-		}
-		if json_Unmarshal(data, &r) == nil && r.D.Count > 0 {
-			return nil
-		}
-	}
-
-	if _, err := c.create(branch, "FylgjaContract",
-		fmt.Sprintf(`{version: {value: %q}}`, ContractVersion)); err != nil {
-		return err
-	}
-
-	platform, err := c.create(branch, "NetworkPlatform",
-		`{vendor: {value: "nokia"}, nos: {value: "srlinux"}, version: {value: "24.7"}}`)
-	if err != nil {
-		return err
-	}
-
-	ifaceIDs := map[string]string{} // "device:interface" -> id
-	var deviceIDs []string
-	for _, n := range fixtureNodes {
-		dev, err := c.create(branch, "NetworkDevice",
-			fmt.Sprintf(`{name: {value: %q}, platform: {id: %q}, role: {value: %q}}`,
-				n.name, platform, MarkerRole(branch)))
-		if err != nil {
-			return err
-		}
-		deviceIDs = append(deviceIDs, dev)
-		// Management port: physical by kind, out-of-band by use (D-003).
-		if _, err := c.create(branch, "NetworkInterface", fmt.Sprintf(
-			`{name: {value: "mgmt0"}, iftype: {value: "physical"}, mgmt_only: {value: true}, device: {id: %q}}`,
-			dev)); err != nil {
-			return err
-		}
-		if _, err := c.create(branch, "NetworkInterface", fmt.Sprintf(
-			`{name: {value: "lo0"}, iftype: {value: "loopback"}, device: {id: %q}}`, dev)); err != nil {
-			return err
-		}
-		for _, p := range n.ports {
-			id, err := c.create(branch, "NetworkInterface", fmt.Sprintf(
-				`{name: {value: %q}, iftype: {value: "physical"}, device: {id: %q}}`, p, dev))
-			if err != nil {
-				return err
-			}
-			ifaceIDs[n.name+":"+p] = id
-		}
-	}
-
-	for _, l := range fixtureLinks {
-		a, b := ifaceIDs[l.aDev+":"+l.aPort], ifaceIDs[l.bDev+":"+l.bPort]
-		if a == "" || b == "" {
-			return fmt.Errorf("fixture link references an interface that was not created: %+v", l)
-		}
-		if _, err := c.create(branch, "NetworkLink",
-			fmt.Sprintf(`{endpoints: [{id: %q}, {id: %q}]}`, a, b)); err != nil {
-			return err
-		}
-	}
-
-	// The devices are targets only once they are in the group, and Infrahub renders
-	// nothing on its own, so a seed that stopped here would leave every read refusing
-	// artifact.missing. The wait is what makes a seeded branch readable at once: a read that
-	// follows a seed is never refused for an artifact that is merely not ready yet.
-	return c.generateFor(branch, deviceIDs)
-}
-
-// mixedNode is one device of the mixed fixture: its platform, the names that platform
-// gives its management port and its loopback, and its data ports in production naming.
-// Every name is one a booted node of that platform carried.
-type mixedNode struct {
-	name             string
-	vendor, nos, ver string
-	mgmt, loopback   string
-	ports            []string
-}
-
-// The mixed fixture, the live twin of testdata/ctm/mixed.json: one
-// node of the first platform and two of the second, cabled in a triangle so that every
-// link crosses something — the two platforms on a plain port, the second platform to
-// itself on a modular port, and the platforms again on a breakout lane.
+// The mixed fixture, the live twin of testdata/ctm/mixed.json: one node of the first
+// platform and two of the second, cabled in a triangle so that every link crosses
+// something — the two platforms on a plain port, the second platform to itself on a
+// modular port, and the platforms again on a breakout lane.
 var (
-	mixedNodes = []mixedNode{
-		{name: "s1", vendor: "nokia", nos: "srlinux", ver: "24.7", mgmt: "mgmt0", loopback: "lo0",
-			ports: []string{"ethernet-1/1", "ethernet-1/2"}},
-		{name: "e1", vendor: "arista", nos: "eos", ver: "4.32", mgmt: "Management1", loopback: "Loopback0",
-			ports: []string{"Ethernet1", "Ethernet2/1"}},
-		{name: "e2", vendor: "arista", nos: "eos", ver: "4.32", mgmt: "Management1", loopback: "Loopback0",
-			ports: []string{"Ethernet1", "Ethernet3/1/1"}},
+	mixedNodes = []nodeSpec{
+		{name: "s1", platform: srLinux, mgmt: "mgmt0", ports: []string{"ethernet-1/1", "ethernet-1/2"}},
+		{name: "e1", platform: eos, mgmt: "Management1", ports: []string{"Ethernet1", "Ethernet2/1"}},
+		{name: "e2", platform: eos, mgmt: "Management1", ports: []string{"Ethernet1", "Ethernet3/1/1"}},
 	}
 	mixedLinks = []linkSpec{
 		{"s1", "ethernet-1/1", "e1", "Ethernet1"},
@@ -174,10 +119,29 @@ var (
 	}
 )
 
-// SeedMixed populates the mixed fixture on a throwaway branch: the contract singleton,
-// one NetworkPlatform per platform, the three devices with their interfaces and links,
-// every device under the branch's marker role, then the group join and the generation
-// every seed ends with.
+// SeedThreeNode populates the three-node fixture on a branch, in the schema library's
+// kinds (R-15): the tag, Nokia's SR Linux, the lab site and its hierarchy, the three
+// devices with their ports and cables, then the group join and the generation every seed
+// ends with. It is idempotent at the branch level: seeding a branch that already has
+// devices is a no-op.
+func (c *Client) SeedThreeNode(branch string) error {
+	if n, err := c.count(branch, "DcimDevice"); err == nil && n > 0 {
+		return nil
+	}
+	devices, err := c.writeTopology(branch, fixtureNodes, fixtureLinks)
+	if err != nil {
+		return err
+	}
+	// The devices are targets only once they are in the group, and Infrahub renders
+	// nothing on its own, so a seed that stopped here would leave every read refusing
+	// artifact.missing. The wait is what makes a seeded branch readable at once: a read that
+	// follows a seed is never refused for an artifact that is merely not ready yet.
+	return c.generateFor(branch, devices)
+}
+
+// SeedMixed populates the mixed fixture on a throwaway branch: beside the three-node
+// seed's objects, Arista's EOS, and the three devices of two platforms with their ports and
+// cables, every device under the branch's marker, then the group join and the generation.
 //
 // It is idempotent at the branch level, as SeedThreeNode is, and it refuses the durable
 // fixture branch as every change flag does: that branch holds the three-node fixture,
@@ -187,76 +151,223 @@ func (c *Client) SeedMixed(branch string) error {
 		return fmt.Errorf("SeedMixed refuses branch %s: it holds the three-node fixture, written once and never changed; "+
 			"seed a throwaway branch instead", branch)
 	}
-	data, err := c.GraphQL(branch, `{ FylgjaDevice { count } }`)
-	if err == nil {
-		var r struct {
-			D struct {
-				Count int `json:"count"`
-			} `json:"FylgjaDevice"`
-		}
-		if json_Unmarshal(data, &r) == nil && r.D.Count > 0 {
-			return nil
-		}
+	if n, err := c.count(branch, "DcimDevice"); err == nil && n > 0 {
+		return nil
 	}
-
-	if _, err := c.create(branch, "FylgjaContract",
-		fmt.Sprintf(`{version: {value: %q}}`, ContractVersion)); err != nil {
+	devices, err := c.writeTopology(branch, mixedNodes, mixedLinks)
+	if err != nil {
 		return err
 	}
+	return c.generateFor(branch, devices)
+}
 
-	platforms := map[string]string{} // nos -> id
-	ifaceIDs := map[string]string{}  // "device:interface" -> id
-	var deviceIDs []string
-	for _, n := range mixedNodes {
-		if platforms[n.nos] == "" {
-			id, err := c.create(branch, "NetworkPlatform", fmt.Sprintf(
-				`{vendor: {value: %q}, nos: {value: %q}, version: {value: %q}}`, n.vendor, n.nos, n.ver))
-			if err != nil {
-				return err
+// writeTopology writes a fixture's devices, each with its management port and its data
+// ports, and a cable per link, and returns the devices' ids. Every device has status
+// active, the lab site, its platform, the fixture's tag and the branch's marker as its
+// description.
+func (c *Client) writeTopology(branch string, nodes []nodeSpec, links []linkSpec) ([]string, error) {
+	tag, err := c.EnsureTag(branch, FixtureTag)
+	if err != nil {
+		return nil, err
+	}
+	site, err := c.EnsureSite(branch)
+	if err != nil {
+		return nil, err
+	}
+	platforms := map[platformSpec]string{}
+	ports := map[string]string{} // "device:port" -> id
+	var devices []string
+	for _, n := range nodes {
+		platform, ok := platforms[n.platform]
+		if !ok {
+			if platform, err = c.EnsurePlatform(branch, n.platform.manufacturer, n.platform.name); err != nil {
+				return nil, err
 			}
-			platforms[n.nos] = id
+			platforms[n.platform] = platform
 		}
-		dev, err := c.create(branch, "NetworkDevice",
-			fmt.Sprintf(`{name: {value: %q}, platform: {id: %q}, role: {value: %q}}`,
-				n.name, platforms[n.nos], MarkerRole(branch)))
+		dev, err := c.createDevice(branch, n.name, platform, site, tag)
+		if err != nil {
+			return nil, err
+		}
+		devices = append(devices, dev)
+		// The management port is a port like any other; its role is what marks it
+		// out-of-band, never its name, so each platform calls it what it calls it.
+		if _, err := c.createPort(branch, dev, n.mgmt, RoleManagement); err != nil {
+			return nil, err
+		}
+		for _, p := range n.ports {
+			id, err := c.createPort(branch, dev, p, "")
+			if err != nil {
+				return nil, err
+			}
+			ports[n.name+":"+p] = id
+		}
+	}
+	for _, l := range links {
+		a, b := ports[l.aDev+":"+l.aPort], ports[l.bDev+":"+l.bPort]
+		if a == "" || b == "" {
+			return nil, fmt.Errorf("fixture link references a port that was not created: %+v", l)
+		}
+		if _, err := c.createCable(branch, l, a, b); err != nil {
+			return nil, err
+		}
+	}
+	return devices, nil
+}
+
+// createDevice writes one device: status active, at the site, on the platform, carrying
+// the tag, its description the branch's marker. An empty platform or tag is left out.
+func (c *Client) createDevice(branch, name, platform, site, tag string) (string, error) {
+	data := fmt.Sprintf(`{name: {value: %q}, status: {value: "active"}, location: {id: %q}, description: {value: %q}`,
+		name, site, MarkerDescription(branch))
+	if platform != "" {
+		data += fmt.Sprintf(`, platform: {id: %q}`, platform)
+	}
+	if tag != "" {
+		data += fmt.Sprintf(`, tags: [{id: %q}]`, tag)
+	}
+	return c.create(branch, "DcimDevice", data+"}")
+}
+
+// createPort writes one physical port on a device, with a role when one is given. Its
+// status is the library's default, active.
+func (c *Client) createPort(branch, device, name, role string) (string, error) {
+	data := fmt.Sprintf(`{name: {value: %q}, device: {id: %q}`, name, device)
+	if role != "" {
+		data += fmt.Sprintf(`, role: {value: %q}`, role)
+	}
+	return c.create(branch, "InterfacePhysical", data+"}")
+}
+
+// createCable writes one cable between two ports, labelled with the link's canonical id,
+// which is unique among the library's cables as the link's id is among the CTM's links.
+func (c *Client) createCable(branch string, l linkSpec, a, b string) (string, error) {
+	return c.create(branch, "DcimCable", fmt.Sprintf(
+		`{label: {value: %q}, connected_endpoints: [{id: %q}, {id: %q}]}`, l.id(), a, b))
+}
+
+// EnsureTag returns the id of the tag of a name on a branch, writing it when the branch
+// holds none.
+func (c *Client) EnsureTag(branch, name string) (string, error) {
+	return c.ensureNamed(branch, "BuiltinTag", name, fmt.Sprintf(`{name: {value: %q}}`, name))
+}
+
+// EnsureManufacturer returns the id of the manufacturer of a name on a branch, writing it
+// when the branch holds none.
+func (c *Client) EnsureManufacturer(branch, name string) (string, error) {
+	return c.ensureNamed(branch, "OrganizationManufacturer", name, fmt.Sprintf(`{name: {value: %q}}`, name))
+}
+
+// EnsurePlatform returns the id of the platform of a name on a branch, writing it, and its
+// manufacturer, when the branch holds none. An empty manufacturer is a platform with none,
+// which the read refuses as platform.missing. A platform of the name held under another
+// manufacturer is refused rather than reused, since a package matches the pair.
+func (c *Client) EnsurePlatform(branch, manufacturer, name string) (string, error) {
+	raw, err := c.GraphQL(branch, fmt.Sprintf(
+		`{ DcimPlatform(name__value: %q) { edges { node { id manufacturer { node { name { value } } } } } } }`, name))
+	if err != nil {
+		return "", fmt.Errorf("looking up platform %q on %s: %w", name, branch, err)
+	}
+	var r struct {
+		P struct {
+			Edges []struct {
+				Node struct {
+					ID           string `json:"id"`
+					Manufacturer struct {
+						Node *struct {
+							Name struct {
+								Value string `json:"value"`
+							} `json:"name"`
+						} `json:"node"`
+					} `json:"manufacturer"`
+				} `json:"node"`
+			} `json:"edges"`
+		} `json:"DcimPlatform"`
+	}
+	if err := json_Unmarshal(raw, &r); err != nil {
+		return "", err
+	}
+	if len(r.P.Edges) == 1 {
+		held := ""
+		if m := r.P.Edges[0].Node.Manufacturer.Node; m != nil {
+			held = m.Name.Value
+		}
+		if held != manufacturer {
+			return "", fmt.Errorf("branch %s holds platform %q of manufacturer %q, want %q", branch, name, held, manufacturer)
+		}
+		return r.P.Edges[0].Node.ID, nil
+	}
+	if len(r.P.Edges) > 1 {
+		return "", fmt.Errorf("branch %s holds %d platforms named %q, want one", branch, len(r.P.Edges), name)
+	}
+	data := fmt.Sprintf(`{name: {value: %q}`, name)
+	if manufacturer != "" {
+		m, err := c.EnsureManufacturer(branch, manufacturer)
+		if err != nil {
+			return "", err
+		}
+		data += fmt.Sprintf(`, manufacturer: {id: %q}`, m)
+	}
+	return c.create(branch, "DcimPlatform", data+"}")
+}
+
+// EnsureSite returns the id of the lab site on a branch, writing it and each level above
+// it the branch lacks: Lab region, Lab country, Lab metro, then lab.
+func (c *Client) EnsureSite(branch string) (string, error) {
+	parent := ""
+	for _, level := range siteLevels {
+		data := fmt.Sprintf(`{name: {value: %q}`, level.name)
+		if parent != "" {
+			data += fmt.Sprintf(`, parent: {id: %q}`, parent)
+		}
+		id, err := c.ensureNamed(branch, level.kind, level.name, data+"}")
+		if err != nil {
+			return "", err
+		}
+		parent = id
+	}
+	return parent, nil
+}
+
+// TagDevices adds the tag of a name, written when the branch holds none, to each named
+// device on a branch: the write that brings a device into the scope tag:<name>.
+func (c *Client) TagDevices(branch, tag string, devices ...string) error {
+	tagID, err := c.EnsureTag(branch, tag)
+	if err != nil {
+		return err
+	}
+	for _, d := range devices {
+		id, err := c.deviceID(branch, d)
 		if err != nil {
 			return err
 		}
-		deviceIDs = append(deviceIDs, dev)
-		// Management port: physical by kind, out-of-band by use (D-003). Each platform
-		// calls it what it calls it; the profile's management rule applies to whichever
-		// interface intent marked out-of-band, never to a name.
-		if _, err := c.create(branch, "NetworkInterface", fmt.Sprintf(
-			`{name: {value: %q}, iftype: {value: "physical"}, mgmt_only: {value: true}, device: {id: %q}}`,
-			n.mgmt, dev)); err != nil {
-			return err
+		raw, err := c.GraphQL(branch, fmt.Sprintf(
+			`mutation { RelationshipAdd(data: {id: %q, name: "tags", nodes: [{id: %q}]}) { ok } }`, id, tagID))
+		if err != nil {
+			return fmt.Errorf("tagging %s/%s with %s: %w", branch, d, tag, err)
 		}
-		if _, err := c.create(branch, "NetworkInterface", fmt.Sprintf(
-			`{name: {value: %q}, iftype: {value: "loopback"}, device: {id: %q}}`, n.loopback, dev)); err != nil {
-			return err
-		}
-		for _, p := range n.ports {
-			id, err := c.create(branch, "NetworkInterface", fmt.Sprintf(
-				`{name: {value: %q}, iftype: {value: "physical"}, device: {id: %q}}`, p, dev))
-			if err != nil {
-				return err
-			}
-			ifaceIDs[n.name+":"+p] = id
-		}
-	}
-
-	for _, l := range mixedLinks {
-		a, b := ifaceIDs[l.aDev+":"+l.aPort], ifaceIDs[l.bDev+":"+l.bPort]
-		if a == "" || b == "" {
-			return fmt.Errorf("mixed link references an interface that was not created: %+v", l)
-		}
-		if _, err := c.create(branch, "NetworkLink",
-			fmt.Sprintf(`{endpoints: [{id: %q}, {id: %q}]}`, a, b)); err != nil {
+		if err := okOf(raw, "RelationshipAdd", fmt.Sprintf("tagging %s/%s with %s", branch, d, tag)); err != nil {
 			return err
 		}
 	}
+	return nil
+}
 
-	return c.generateFor(branch, deviceIDs)
+// ensureNamed returns the id of the one object of a kind with a name on a branch, writing
+// it from data when the branch holds none.
+func (c *Client) ensureNamed(branch, kind, name, data string) (string, error) {
+	found, err := c.ids(branch, kind, fmt.Sprintf(`(name__value: %q)`, name))
+	if err != nil {
+		return "", err
+	}
+	switch len(found) {
+	case 0:
+		return c.create(branch, kind, data)
+	case 1:
+		return found[0], nil
+	default:
+		return "", fmt.Errorf("branch %s holds %d %s named %q, want one", branch, len(found), kind, name)
+	}
 }
 
 // generateFor joins devices to the artifact group and renders their artifacts, waiting
@@ -269,73 +380,84 @@ func (c *Client) generateFor(branch string, deviceIDs []string) error {
 	return c.GenerateArtifacts(branch)
 }
 
-// SeedFourthNode changes a branch seeded by SeedThreeNode: interface ethernet-1/3 on peer,
-// device n4 on the same platform with mgmt0, lo0 and ethernet-1/1, and a link
-// n4:ethernet-1/1 <-> peer:ethernet-1/3. It is the change the reproducibility proof makes
-// after T, on n1, chosen because the compiler emits it — a node, a link and a bootstrap
-// line — so a read that saw it compiles to a different topology, not only a different
-// manifest; and a demo's last stage, on n2, beside the third link that takes n1's and n3's
-// ethernet-1/3 (D-054). The change is made once per branch: a branch that already has n4,
-// or whose peer already has ethernet-1/3, is refused.
+// SeedFourthNode changes a branch seeded by SeedThreeNode: port ethernet-1/3 on peer,
+// device n4 with the peer's platform and site, the tag and the marker, with mgmt0 and
+// ethernet-1/1, and a cable n4:ethernet-1/1 <-> peer:ethernet-1/3. It is the change the
+// reproducibility proof makes after T, on n1, chosen because the compiler emits it — a
+// node, a link and a bootstrap line — so a read that saw it compiles to a different
+// topology, not only a different manifest; and a demo's last stage, on n2, beside the third
+// link that takes n1's and n3's ethernet-1/3 (D-054). The change is made once per branch: a
+// branch that already has n4, or whose peer already has ethernet-1/3, is refused.
 func (c *Client) SeedFourthNode(branch, peer string) error {
-	ids := func(kind, filter string) ([]string, error) { return c.ids(branch, kind, filter) }
-
-	platforms, err := ids("NetworkPlatform", "")
+	raw, err := c.GraphQL(branch, fmt.Sprintf(
+		`{ DcimDevice(name__value: %q) { edges { node { id platform { node { id } } location { node { id } } } } } }`, peer))
 	if err != nil {
+		return fmt.Errorf("looking up device %s on %s: %w", peer, branch, err)
+	}
+	var r struct {
+		D struct {
+			Edges []struct {
+				Node struct {
+					ID       string `json:"id"`
+					Platform struct {
+						Node *struct {
+							ID string `json:"id"`
+						} `json:"node"`
+					} `json:"platform"`
+					Location struct {
+						Node struct {
+							ID string `json:"id"`
+						} `json:"node"`
+					} `json:"location"`
+				} `json:"node"`
+			} `json:"edges"`
+		} `json:"DcimDevice"`
+	}
+	if err := json_Unmarshal(raw, &r); err != nil {
 		return err
 	}
-	if len(platforms) != 1 {
-		return fmt.Errorf("branch %s holds %d platforms, want the fixture's one", branch, len(platforms))
+	if len(r.D.Edges) != 1 {
+		return fmt.Errorf("branch %s holds %d devices named %s, want one", branch, len(r.D.Edges), peer)
 	}
-	peers, err := ids("NetworkDevice", fmt.Sprintf(`(name__value: %q)`, peer))
-	if err != nil {
-		return err
+	p := r.D.Edges[0].Node
+	if p.Platform.Node == nil {
+		return fmt.Errorf("branch %s: device %s has no platform for n4 to share", branch, peer)
 	}
-	if len(peers) != 1 {
-		return fmt.Errorf("branch %s holds %d devices named %s, want one", branch, len(peers), peer)
-	}
-	n4s, err := ids("NetworkDevice", `(name__value: "n4")`)
+	n4s, err := c.ids(branch, "DcimDevice", `(name__value: "n4")`)
 	if err != nil {
 		return err
 	}
 	if len(n4s) != 0 {
 		return fmt.Errorf("branch %s already holds device n4: the change is made once per branch", branch)
 	}
-	taken, err := ids("NetworkInterface", fmt.Sprintf(`(device__name__value: %q, name__value: "ethernet-1/3")`, peer))
+	taken, err := c.ids(branch, "InterfacePhysical", fmt.Sprintf(`(device__name__value: %q, name__value: "ethernet-1/3")`, peer))
 	if err != nil {
 		return err
 	}
 	if len(taken) != 0 {
 		return fmt.Errorf("branch %s already holds %s:ethernet-1/3: cable n4 to another peer", branch, peer)
 	}
+	tag, err := c.EnsureTag(branch, FixtureTag)
+	if err != nil {
+		return err
+	}
 
-	iface := func(device, name, iftype, extra string) (string, error) {
-		return c.create(branch, "NetworkInterface", fmt.Sprintf(
-			`{name: {value: %q}, iftype: {value: %q}, device: {id: %q}%s}`, name, iftype, device, extra))
-	}
-
-	peerE3, err := iface(peers[0], "ethernet-1/3", "physical", "")
+	peerE3, err := c.createPort(branch, p.ID, "ethernet-1/3", "")
 	if err != nil {
 		return err
 	}
-	n4, err := c.create(branch, "NetworkDevice",
-		fmt.Sprintf(`{name: {value: "n4"}, platform: {id: %q}, role: {value: %q}}`,
-			platforms[0], MarkerRole(branch)))
+	n4, err := c.createDevice(branch, "n4", p.Platform.Node.ID, p.Location.Node.ID, tag)
 	if err != nil {
 		return err
 	}
-	if _, err := iface(n4, "mgmt0", "physical", `, mgmt_only: {value: true}`); err != nil {
+	if _, err := c.createPort(branch, n4, "mgmt0", RoleManagement); err != nil {
 		return err
 	}
-	if _, err := iface(n4, "lo0", "loopback", ""); err != nil {
-		return err
-	}
-	n4e1, err := iface(n4, "ethernet-1/1", "physical", "")
+	n4e1, err := c.createPort(branch, n4, "ethernet-1/1", "")
 	if err != nil {
 		return err
 	}
-	if _, err := c.create(branch, "NetworkLink",
-		fmt.Sprintf(`{endpoints: [{id: %q}, {id: %q}]}`, n4e1, peerE3)); err != nil {
+	if _, err := c.createCable(branch, linkSpec{"n4", "ethernet-1/1", peer, "ethernet-1/3"}, n4e1, peerE3); err != nil {
 		return err
 	}
 	// n4 is a device like any other: it needs its own artifact, and the peer's changes too
@@ -344,53 +466,37 @@ func (c *Client) SeedFourthNode(branch, peer string) error {
 	return c.generateFor(branch, []string{n4})
 }
 
-// SeedThirdLink changes a branch seeded by SeedThreeNode without adding a node:
-// interface ethernet-1/3 on n1 and on n3, and a link n1:ethernet-1/3 <-> n3:ethernet-1/3.
-// It is the change following detects in tier 2 and rebuilds in tier 3, chosen because it
-// moves every file a bundle has — two bootstrap lines, the manifest and the topology — so
-// a rebuild deploys a different lab. The change is made once per branch:
-// a branch whose n1 already has ethernet-1/3 is refused.
+// SeedThirdLink changes a branch seeded by SeedThreeNode without adding a node: port
+// ethernet-1/3 on n1 and on n3, and a cable n1:ethernet-1/3 <-> n3:ethernet-1/3. It is the
+// change following detects in tier 2 and rebuilds in tier 3, chosen because it moves every
+// file a bundle has — two bootstrap lines, the manifest and the topology — so a rebuild
+// deploys a different lab. The change is made once per branch: a branch whose n1 already
+// has ethernet-1/3 is refused.
 func (c *Client) SeedThirdLink(branch string) error {
-	device := func(name string) (string, error) {
-		found, err := c.ids(branch, "NetworkDevice", fmt.Sprintf(`(name__value: %q)`, name))
-		if err != nil {
-			return "", err
-		}
-		if len(found) != 1 {
-			return "", fmt.Errorf("branch %s holds %d devices named %s, want one", branch, len(found), name)
-		}
-		return found[0], nil
-	}
-	n1, err := device("n1")
+	n1, err := c.deviceID(branch, "n1")
 	if err != nil {
 		return err
 	}
-	n3, err := device("n3")
+	n3, err := c.deviceID(branch, "n3")
 	if err != nil {
 		return err
 	}
-	present, err := c.ids(branch, "NetworkInterface", `(device__name__value: "n1", name__value: "ethernet-1/3")`)
+	present, err := c.ids(branch, "InterfacePhysical", `(device__name__value: "n1", name__value: "ethernet-1/3")`)
 	if err != nil {
 		return err
 	}
 	if len(present) != 0 {
 		return fmt.Errorf("branch %s already holds n1:ethernet-1/3: the change is made once per branch", branch)
 	}
-
-	iface := func(device string) (string, error) {
-		return c.create(branch, "NetworkInterface", fmt.Sprintf(
-			`{name: {value: "ethernet-1/3"}, iftype: {value: "physical"}, device: {id: %q}}`, device))
-	}
-	n1e3, err := iface(n1)
+	n1e3, err := c.createPort(branch, n1, "ethernet-1/3", "")
 	if err != nil {
 		return err
 	}
-	n3e3, err := iface(n3)
+	n3e3, err := c.createPort(branch, n3, "ethernet-1/3", "")
 	if err != nil {
 		return err
 	}
-	if _, err := c.create(branch, "NetworkLink",
-		fmt.Sprintf(`{endpoints: [{id: %q}, {id: %q}]}`, n1e3, n3e3)); err != nil {
+	if _, err := c.createCable(branch, linkSpec{"n1", "ethernet-1/3", "n3", "ethernet-1/3"}, n1e3, n3e3); err != nil {
 		return err
 	}
 	// No device is added, but n1's and n3's renderings both gain a port, so both
@@ -398,59 +504,43 @@ func (c *Client) SeedThirdLink(branch string) error {
 	return c.GenerateArtifacts(branch)
 }
 
-// SeedMixedLink changes a branch seeded by SeedMixed without adding a node: interface
-// ethernet-1/3 on s1 and Ethernet3 on e1, and a link between them. It is the change tier 3's
-// step case steps over, chosen because it
-// moves the two platforms differently: s1 gains a bootstrap line and is re-cabled live,
-// while e1 is restarted in place by containerlab and returns on its startup configuration,
-// so a step across it needs --allow-restart and pushes both. It refuses the
-// durable fixture branch, which holds the three-node fixture, and is made once per branch:
-// a branch whose s1 already has ethernet-1/3 is refused.
+// SeedMixedLink changes a branch seeded by SeedMixed without adding a node: port
+// ethernet-1/3 on s1 and Ethernet3 on e1, and a cable between them. It is the change tier
+// 3's step case steps over, chosen because it moves the two platforms differently: s1
+// gains a bootstrap line and is re-cabled live, while e1 is restarted in place by
+// containerlab and returns on its startup configuration, so a step across it needs
+// --allow-restart and pushes both. It refuses the durable fixture branch, which holds the
+// three-node fixture, and is made once per branch: a branch whose s1 already has
+// ethernet-1/3 is refused.
 func (c *Client) SeedMixedLink(branch string) error {
 	if branch == FixtureBranch {
 		return fmt.Errorf("SeedMixedLink refuses branch %s: it holds the three-node fixture, written once and never changed; "+
 			"seed a throwaway branch with the mixed fixture instead", branch)
 	}
-	device := func(name string) (string, error) {
-		found, err := c.ids(branch, "NetworkDevice", fmt.Sprintf(`(name__value: %q)`, name))
-		if err != nil {
-			return "", err
-		}
-		if len(found) != 1 {
-			return "", fmt.Errorf("branch %s holds %d devices named %s, want the mixed fixture's one", branch, len(found), name)
-		}
-		return found[0], nil
-	}
-	s1, err := device("s1")
+	s1, err := c.deviceID(branch, "s1")
 	if err != nil {
 		return err
 	}
-	e1, err := device("e1")
+	e1, err := c.deviceID(branch, "e1")
 	if err != nil {
 		return err
 	}
-	present, err := c.ids(branch, "NetworkInterface", `(device__name__value: "s1", name__value: "ethernet-1/3")`)
+	present, err := c.ids(branch, "InterfacePhysical", `(device__name__value: "s1", name__value: "ethernet-1/3")`)
 	if err != nil {
 		return err
 	}
 	if len(present) != 0 {
 		return fmt.Errorf("branch %s already holds s1:ethernet-1/3: the change is made once per branch", branch)
 	}
-
-	iface := func(device, name string) (string, error) {
-		return c.create(branch, "NetworkInterface", fmt.Sprintf(
-			`{name: {value: %q}, iftype: {value: "physical"}, device: {id: %q}}`, name, device))
-	}
-	s1e3, err := iface(s1, "ethernet-1/3")
+	s1e3, err := c.createPort(branch, s1, "ethernet-1/3", "")
 	if err != nil {
 		return err
 	}
-	e1e3, err := iface(e1, "Ethernet3")
+	e1e3, err := c.createPort(branch, e1, "Ethernet3", "")
 	if err != nil {
 		return err
 	}
-	if _, err := c.create(branch, "NetworkLink",
-		fmt.Sprintf(`{endpoints: [{id: %q}, {id: %q}]}`, s1e3, e1e3)); err != nil {
+	if _, err := c.createCable(branch, linkSpec{"s1", "ethernet-1/3", "e1", "Ethernet3"}, s1e3, e1e3); err != nil {
 		return err
 	}
 	// As SeedThirdLink: no device is added, but s1's and e1's renderings both gain a port,
@@ -482,262 +572,107 @@ func (c *Client) ids(branch, kind, filter string) ([]string, error) {
 	return out, nil
 }
 
-// SeedContractVersion creates the contract singleton with a chosen version. Used by
-// tests that need a branch declaring a contract Fylgja does not understand.
-func (c *Client) SeedContractVersion(branch, version string) error {
-	_, err := c.create(branch, "FylgjaContract", fmt.Sprintf(`{version: {value: %q}}`, version))
-	return err
-}
-
-// LoadGenericsOnly loads just the generics contract, without the reference schema that
-// provides concrete kinds. The result is a branch that defines Fylgja's generics but
-// has nothing implementing them.
-func (c *Client) LoadGenericsOnly(branch, schemaDir string) error {
-	dir, err := os.MkdirTemp("", "fylgja-generics-*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.RemoveAll(dir) }()
-	src, err := os.ReadFile(filepath.Join(schemaDir, "fylgja-generics.yaml"))
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(filepath.Join(dir, "fylgja-generics.yaml"), src, 0o644); err != nil {
-		return err
-	}
-	return c.LoadSchema(branch, dir)
-}
-
-// Defect names the five defects SeedDefects plants, by the rule each one trips. They
-// are exactly the defects Infrahub's own schema will let a branch hold: every other
-// rule Fylgja enforces is one Infrahub enforces first, and a branch cannot be made to
-// violate it (verified read-only). The rest stay covered by the CTM
-// fixtures under testdata/ctm/defects, which is where a hand-edited or foreign CTM is
-// caught anyway.
-const (
-	DefectIftypeUnimplemented = "interface.iftype.unimplemented"
-	DefectMgmtOnlyIftype      = "interface.mgmt_only.iftype"
-	DefectPlatformUnsupported = "platform.unsupported"
-	DefectLinkSameDevice      = "link.endpoints.same_device"
-	DefectLinkEndpointIftype  = "link.endpoint.iftype"
-)
-
-// SeededDefects is the set of rules a branch seeded by SeedDefects must trip, all in
-// one pass.
-var SeededDefects = []string{
-	DefectIftypeUnimplemented,
-	DefectMgmtOnlyIftype,
-	DefectPlatformUnsupported,
-	DefectLinkSameDevice,
-	DefectLinkEndpointIftype,
-}
-
-// SeededDefectObjects names the object each seeded defect is reported against, in the
-// CTM's identity scheme (device, device:interface, or a canonical link id). Asserting
-// on these rather than on rules alone is what proves the read names *which* thing is
-// wrong, not merely that something is.
-var SeededDefectObjects = map[string]string{
-	DefectIftypeUnimplemented: "d1:vlan100",
-	DefectMgmtOnlyIftype:      "d1:lo0",
-	DefectPlatformUnsupported: "d3",
-	DefectLinkSameDevice:      "d1:ethernet-1/1|d1:ethernet-1/2",
-	DefectLinkEndpointIftype:  "d1:lo1|d2:ethernet-1/1",
-}
-
-// SeedDefects populates a branch with intent that is well-formed for Infrahub and
-// unbuildable for Fylgja, so a read reports all five defects in one pass and writes
-// no CTM.
+// SetDeviceDescription changes one device's description on a branch.
 //
-// The layout is deliberate. `platform.unsupported` stops validation of that device's
-// interfaces, so the unsupported platform gets a device of its own (d3) and the two
-// interface defects live on a device Fylgja does support (d1). The two link defects
-// need distinct links: one folded back onto a single device, one reaching a loopback.
-func (c *Client) SeedDefects(branch string) error {
-	if _, err := c.create(branch, "FylgjaContract",
-		fmt.Sprintf(`{version: {value: %q}}`, ContractVersion)); err != nil {
-		return err
-	}
-
-	supported, err := c.create(branch, "NetworkPlatform",
-		`{vendor: {value: "nokia"}, nos: {value: "srlinux"}, version: {value: "24.7"}}`)
-	if err != nil {
-		return err
-	}
-	// Free text, so Infrahub stores it happily and Fylgja has no support package for
-	// it — which is the whole defect.
-	unsupported, err := c.create(branch, "NetworkPlatform",
-		`{vendor: {value: "acme"}, nos: {value: "acme_os"}}`)
-	if err != nil {
-		return err
-	}
-
-	d1, err := c.create(branch, "NetworkDevice",
-		fmt.Sprintf(`{name: {value: "d1"}, platform: {id: %q}, role: {value: "leaf"}}`, supported))
-	if err != nil {
-		return err
-	}
-	d2, err := c.create(branch, "NetworkDevice",
-		fmt.Sprintf(`{name: {value: "d2"}, platform: {id: %q}, role: {value: "leaf"}}`, supported))
-	if err != nil {
-		return err
-	}
-	// platform.unsupported: nothing else about d3 is ever examined, so it needs no
-	// interfaces.
-	d3, err := c.create(branch, "NetworkDevice",
-		fmt.Sprintf(`{name: {value: "d3"}, platform: {id: %q}, role: {value: "leaf"}}`, unsupported))
-	if err != nil {
-		return err
-	}
-
-	iface := func(device, name, iftype, extra string) (string, error) {
-		return c.create(branch, "NetworkInterface", fmt.Sprintf(
-			`{name: {value: %q}, iftype: {value: %q}, device: {id: %q}%s}`, name, iftype, device, extra))
-	}
-
-	// Two cabled ports on one device, so a link can be folded back onto it.
-	d1e1, err := iface(d1, "ethernet-1/1", "physical", "")
-	if err != nil {
-		return err
-	}
-	d1e2, err := iface(d1, "ethernet-1/2", "physical", "")
-	if err != nil {
-		return err
-	}
-	// interface.iftype.unimplemented: svi is in the contract's vocabulary and is a
-	// dropdown choice on the reference schema, so Infrahub accepts it.
-	if _, err := iface(d1, "vlan100", "svi", ""); err != nil {
-		return err
-	}
-	// interface.mgmt_only.iftype: mgmt_only is a plain boolean on any kind, so a
-	// loopback can carry it — and means nothing when it does.
-	if _, err := iface(d1, "lo0", "loopback", `, mgmt_only: {value: true}`); err != nil {
-		return err
-	}
-	// link.endpoint.iftype: a loopback with a link on it.
-	d1lo1, err := iface(d1, "lo1", "loopback", "")
-	if err != nil {
-		return err
-	}
-	d2e1, err := iface(d2, "ethernet-1/1", "physical", "")
-	if err != nil {
-		return err
-	}
-
-	// link.endpoints.same_device: two endpoints satisfy min 2 / max 2 even when both
-	// are on one device.
-	if _, err := c.create(branch, "NetworkLink",
-		fmt.Sprintf(`{endpoints: [{id: %q}, {id: %q}]}`, d1e1, d1e2)); err != nil {
-		return err
-	}
-	if _, err := c.create(branch, "NetworkLink",
-		fmt.Sprintf(`{endpoints: [{id: %q}, {id: %q}]}`, d1lo1, d2e1)); err != nil {
-		return err
-	}
-	// Every device renders its artifact, as every seed's do, so the five
-	// defects are the only findings: no artifact.missing beside them. d3's is rendered
-	// too and never selected, since no package names the artifact its platform takes.
-	return c.generateFor(branch, []string{d1, d2, d3})
-}
-
-// SetDeviceRole changes one device's role on a branch.
-//
-// Role is the artifact-only change: the compiler emits it nowhere, so
-// the topology and the manifest are untouched, while the definition's template prints it
-// in the artifact's comment line, so the rendered bytes and their checksum move. That
-// makes it the cheapest way for a tier to change what a twin runs without changing what
-// it is.
+// The description is the artifact-only change: the CTM carries it nowhere, so the
+// topology and the manifest are untouched, while the definition's template prints it in
+// the artifact's header (R-11), so the rendered bytes and their checksum move. That makes
+// it the cheapest way for a tier to change what a twin runs without changing what it is.
 //
 // It writes intent and nothing else: the caller regenerates, because Infrahub 1.11.2
 // regenerates nothing on its own.
-func (c *Client) SetDeviceRole(branch, device, role string) error {
-	return c.setDeviceAttribute(branch, device, "role", role)
+func (c *Client) SetDeviceDescription(branch, device, description string) error {
+	return c.setDeviceAttribute(branch, device, "description", description)
 }
 
-// SetDeviceSite changes one device's site on a branch.
+// SetDeviceSerial changes one device's serial number on a branch.
 //
-// Site is the change that regenerates to identical bytes: the template queries it
-// and prints nothing from it, so a regeneration after this leaves every checksum and
-// storage id where they were. That is what shows a regeneration alone moves no bundle_id.
-func (c *Client) SetDeviceSite(branch, device, site string) error {
-	return c.setDeviceAttribute(branch, device, "site", site)
+// The serial number is the change that regenerates to identical bytes: neither the CTM nor
+// the template reads it, so a regeneration after this leaves every checksum and storage id
+// where they were. That is what shows a regeneration alone moves no bundle_id (R-15).
+func (c *Client) SetDeviceSerial(branch, device, serial string) error {
+	return c.setDeviceAttribute(branch, device, "serial_number", serial)
 }
 
-// setDeviceAttribute updates one string attribute of one device, by name.
+// setDeviceAttribute updates one text attribute of one device, by name.
 func (c *Client) setDeviceAttribute(branch, device, attribute, value string) error {
 	id, err := c.deviceID(branch, device)
 	if err != nil {
 		return err
 	}
 	raw, err := c.GraphQL(branch, fmt.Sprintf(
-		`mutation { NetworkDeviceUpdate(data: {id: %q, %s: {value: %q}}) { ok } }`, id, attribute, value))
+		`mutation { DcimDeviceUpdate(data: {id: %q, %s: {value: %q}}) { ok } }`, id, attribute, value))
 	if err != nil {
 		return fmt.Errorf("setting %s on %s/%s: %w", attribute, branch, device, err)
 	}
-	return okOf(raw, "NetworkDeviceUpdate", fmt.Sprintf("setting %s on %s/%s", attribute, branch, device))
+	return okOf(raw, "DcimDeviceUpdate", fmt.Sprintf("setting %s on %s/%s", attribute, branch, device))
 }
 
-// DisablePort sets one interface's admin state to disabled on a branch.
+// DisablePort sets one port's status to disabled on a branch.
 //
 // This is the artifact-only change tier 3 makes: the compiler emits no interface's
 // `enabled`, so the topology is unchanged, while the template renders `admin-state
-// disable` where it rendered `enable`. It is visible over gNMI after the push, which is
-// what makes it a read-back rather than a file comparison — and it is the artifact
-// taking precedence over the bootstrap, seen live, since the bootstrap enables every cabled port and the artifact
-// overrides it.
+// disable` (or `shutdown`) for a disabled port where it rendered it enabled. It is visible
+// over gNMI after the push, which is what makes it a read-back rather than a file
+// comparison — and it is the artifact taking precedence over the bootstrap, seen live,
+// since the bootstrap enables every cabled port and the artifact overrides it.
 func (c *Client) DisablePort(branch, device, iface string) error {
-	found, err := c.ids(branch, "NetworkInterface",
-		fmt.Sprintf(`(device__name__value: %q, name__value: %q)`, device, iface))
+	port, err := c.portID(branch, device, iface)
 	if err != nil {
 		return err
 	}
-	if len(found) != 1 {
-		return fmt.Errorf("branch %s holds %d interfaces named %s on %s, want one", branch, len(found), iface, device)
-	}
 	raw, err := c.GraphQL(branch, fmt.Sprintf(
-		`mutation { NetworkInterfaceUpdate(data: {id: %q, enabled: {value: false}}) { ok } }`, found[0]))
+		`mutation { InterfacePhysicalUpdate(data: {id: %q, status: {value: %q}}) { ok } }`, port, StatusDisabled))
 	if err != nil {
 		return fmt.Errorf("disabling %s/%s:%s: %w", branch, device, iface, err)
 	}
-	return okOf(raw, "NetworkInterfaceUpdate", fmt.Sprintf("disabling %s/%s:%s", branch, device, iface))
+	return okOf(raw, "InterfacePhysicalUpdate", fmt.Sprintf("disabling %s/%s:%s", branch, device, iface))
 }
 
-// DeleteLink deletes the one link that ends at device's iface on a branch, by the
-// link kind's own delete mutation, as the seed creates it. It writes intent and nothing
-// else, and moves no stamp the stamps read selects: the link's endpoint edges go with it
-// and each endpoint interface's link edge reads null (research §8.17). It returns when
-// the delete returned, which a test compares with what the event log records (D-048).
+// DeleteLink deletes the one cable that ends at device's port on a branch, by the cable
+// kind's own delete mutation, as the seed creates it. It writes intent and nothing else:
+// the ports stay, and each reads no connector. It returns when the delete returned, which a
+// test compares with what the event log records (D-048).
 func (c *Client) DeleteLink(branch, device, iface string) (time.Time, error) {
-	found, err := c.ids(branch, "NetworkInterface",
-		fmt.Sprintf(`(device__name__value: %q, name__value: %q)`, device, iface))
+	port, err := c.portID(branch, device, iface)
 	if err != nil {
 		return time.Time{}, err
 	}
-	if len(found) != 1 {
-		return time.Time{}, fmt.Errorf("branch %s holds %d interfaces named %s on %s, want one", branch, len(found), iface, device)
-	}
-	links, err := c.ids(branch, "NetworkLink", fmt.Sprintf(`(endpoints__ids: [%q])`, found[0]))
+	cables, err := c.ids(branch, "DcimCable", fmt.Sprintf(`(connected_endpoints__ids: [%q])`, port))
 	if err != nil {
 		return time.Time{}, err
 	}
-	if len(links) != 1 {
-		return time.Time{}, fmt.Errorf("branch %s holds %d links ending at %s:%s, want one", branch, len(links), device, iface)
+	if len(cables) != 1 {
+		return time.Time{}, fmt.Errorf("branch %s holds %d cables ending at %s:%s, want one", branch, len(cables), device, iface)
 	}
-	raw, err := c.GraphQL(branch, fmt.Sprintf(`mutation { NetworkLinkDelete(data: {id: %q}) { ok } }`, links[0]))
+	raw, err := c.GraphQL(branch, fmt.Sprintf(`mutation { DcimCableDelete(data: {id: %q}) { ok } }`, cables[0]))
 	returned := time.Now().UTC()
 	if err != nil {
-		return time.Time{}, fmt.Errorf("deleting the link at %s/%s:%s: %w", branch, device, iface, err)
+		return time.Time{}, fmt.Errorf("deleting the cable at %s/%s:%s: %w", branch, device, iface, err)
 	}
-	return returned, okOf(raw, "NetworkLinkDelete", fmt.Sprintf("deleting the link at %s/%s:%s", branch, device, iface))
+	return returned, okOf(raw, "DcimCableDelete", fmt.Sprintf("deleting the cable at %s/%s:%s", branch, device, iface))
 }
 
 // deviceID returns the one device of a name on a branch.
 func (c *Client) deviceID(branch, name string) (string, error) {
-	found, err := c.ids(branch, "NetworkDevice", fmt.Sprintf(`(name__value: %q)`, name))
+	found, err := c.ids(branch, "DcimDevice", fmt.Sprintf(`(name__value: %q)`, name))
 	if err != nil {
 		return "", err
 	}
 	if len(found) != 1 {
 		return "", fmt.Errorf("branch %s holds %d devices named %s, want one", branch, len(found), name)
+	}
+	return found[0], nil
+}
+
+// portID returns the one physical port of a name on a device on a branch.
+func (c *Client) portID(branch, device, name string) (string, error) {
+	found, err := c.ids(branch, "InterfacePhysical", fmt.Sprintf(`(device__name__value: %q, name__value: %q)`, device, name))
+	if err != nil {
+		return "", err
+	}
+	if len(found) != 1 {
+		return "", fmt.Errorf("branch %s holds %d ports named %s on %s, want one", branch, len(found), name, device)
 	}
 	return found[0], nil
 }
@@ -760,7 +695,7 @@ func okOf(raw []byte, mutation, what string) error {
 // DeviceNames returns every device's name on a branch, sorted, so a change flag can act
 // on all of them without the caller naming each.
 func (c *Client) DeviceNames(branch string) ([]string, error) {
-	raw, err := c.GraphQL(branch, `{ NetworkDevice { edges { node { name { value } } } } }`)
+	raw, err := c.GraphQL(branch, `{ DcimDevice { edges { node { name { value } } } } }`)
 	if err != nil {
 		return nil, fmt.Errorf("listing devices on %s: %w", branch, err)
 	}
@@ -773,7 +708,7 @@ func (c *Client) DeviceNames(branch string) ([]string, error) {
 					} `json:"name"`
 				} `json:"node"`
 			} `json:"edges"`
-		} `json:"NetworkDevice"`
+		} `json:"DcimDevice"`
 	}
 	if err := json_Unmarshal(raw, &r); err != nil {
 		return nil, err

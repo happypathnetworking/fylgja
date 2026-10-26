@@ -141,47 +141,96 @@ func (c *Client) BranchExists(name string) (bool, error) {
 	return false, nil
 }
 
-// LoadSchema loads every YAML file in schemaDir onto a branch, then waits for the
-// branch's GraphQL schema to be rebuilt. The rebuild is asynchronous: seeding
-// immediately after a load races it.
+// LibraryDir is where schemaDir keeps the schema library's six files, vendored byte for
+// byte at the commit the reader reads (schema/dcim/README.md).
+const LibraryDir = "dcim"
+
+// LoadSchema loads schemaDir onto a branch, then waits for the branch's GraphQL schema to
+// be rebuilt. The rebuild is asynchronous: seeding immediately after a load races it.
+//
+// schemaDir is the repository's schema/: the schema library's files under dcim/ go in one
+// request, since they are one model whose kinds name each other (R-12), then the files
+// beside them, the stage kind, in a second, since the stage kind needs none of the library
+// and its extension of CoreProposedChange is already on main. A directory with no dcim/
+// loads its own files alone, as a test's additive load does. The wait is for the Create
+// mutation of every node the loaded files define and do not remove (state: absent), so
+// for DcimDeviceCreate and FylgjaStageCreate among them.
 func (c *Client) LoadSchema(branch, schemaDir string) error {
-	paths, err := filepath.Glob(filepath.Join(schemaDir, "*.yaml"))
+	library, err := filepath.Glob(filepath.Join(schemaDir, LibraryDir, "*.yml"))
 	if err != nil {
 		return err
 	}
-	sort.Strings(paths)
-	schemas := make([]any, 0, len(paths))
-	for _, p := range paths {
-		raw, err := os.ReadFile(p)
+	own, err := filepath.Glob(filepath.Join(schemaDir, "*.yaml"))
+	if err != nil {
+		return err
+	}
+	if len(library)+len(own) == 0 {
+		return fmt.Errorf("%s holds no schema file: neither %s/*.yml nor *.yaml", schemaDir, LibraryDir)
+	}
+	var mutations []string
+	for _, paths := range [][]string{library, own} {
+		if len(paths) == 0 {
+			continue
+		}
+		created, err := c.loadSchemaFiles(branch, paths)
 		if err != nil {
 			return err
 		}
+		mutations = append(mutations, created...)
+	}
+	if len(mutations) == 0 {
+		return nil
+	}
+	return c.waitForKinds(branch, mutations...)
+}
+
+// loadSchemaFiles loads files onto a branch in one request and returns the Create
+// mutation of each node they define and do not remove.
+func (c *Client) loadSchemaFiles(branch string, paths []string) ([]string, error) {
+	sort.Strings(paths)
+	schemas := make([]any, 0, len(paths))
+	var mutations []string
+	for _, p := range paths {
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			return nil, err
+		}
 		var doc any
 		if err := yaml.Unmarshal(raw, &doc); err != nil {
-			return fmt.Errorf("%s: %w", p, err)
+			return nil, fmt.Errorf("%s: %w", p, err)
+		}
+		var nodes struct {
+			Nodes []struct {
+				Name      string `yaml:"name"`
+				Namespace string `yaml:"namespace"`
+				State     string `yaml:"state"`
+			} `yaml:"nodes"`
+		}
+		if err := yaml.Unmarshal(raw, &nodes); err != nil {
+			return nil, fmt.Errorf("%s: %w", p, err)
+		}
+		for _, n := range nodes.Nodes {
+			if n.State != "absent" {
+				mutations = append(mutations, n.Namespace+n.Name+"Create")
+			}
 		}
 		schemas = append(schemas, doc)
 	}
 	status, body, err := c.do(http.MethodPost, "/api/schema/load?branch="+branch, map[string]any{"schemas": schemas})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if status != http.StatusOK && status != http.StatusAccepted {
-		return fmt.Errorf("schema load %d: %s", status, string(body))
+		return nil, fmt.Errorf("schema load of %d file(s) on %s, %d: %s", len(paths), branch, status, string(body))
 	}
-	// Wait only for what was actually loaded: a generics-only load defines
-	// FylgjaContract but no concrete Network* kinds, and waiting for those would time
-	// out on a branch that is deliberately incomplete.
-	if _, err := os.Stat(filepath.Join(schemaDir, "reference.yaml")); err == nil {
-		return c.waitForKinds(branch, "FylgjaContractCreate", "NetworkDeviceCreate", "NetworkLinkCreate")
-	}
-	return c.waitForKinds(branch, "FylgjaContractCreate")
+	return mutations, nil
 }
 
 // waitForKinds polls until the named mutations appear on the branch's GraphQL schema.
 func (c *Client) waitForKinds(branch string, mutations ...string) error {
 	const q = `{ __type(name: "Mutation") { fields { name } } }`
 	deadline := time.Now().Add(90 * time.Second)
+	missing := mutations
 	for time.Now().Before(deadline) {
 		data, err := c.GraphQL(branch, q)
 		if err == nil {
@@ -197,21 +246,20 @@ func (c *Client) waitForKinds(branch string, mutations ...string) error {
 				for _, f := range r.Type.Fields {
 					have[f.Name] = true
 				}
-				all := true
+				missing = nil
 				for _, m := range mutations {
 					if !have[m] {
-						all = false
-						break
+						missing = append(missing, m)
 					}
 				}
-				if all {
+				if len(missing) == 0 {
 					return nil
 				}
 			}
 		}
 		time.Sleep(time.Second)
 	}
-	return fmt.Errorf("branch %s: GraphQL schema did not expose %v within 90s", branch, mutations)
+	return fmt.Errorf("branch %s: GraphQL schema did not expose %v within 90s", branch, missing)
 }
 
 // create runs a Create mutation and returns the new object's id.

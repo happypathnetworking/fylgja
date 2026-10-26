@@ -165,8 +165,8 @@ func TestChecksInsideInfrahub(t *testing.T) {
 	}
 
 	// 6. A mark made stale: an intent change with no generate, then a mark.
-	if err := c.SetDeviceRole(branch, "n1", "stale-role"); err != nil {
-		t.Fatalf("changing n1's role: %v", err)
+	if err := c.SetDeviceDescription(branch, "n1", "stale-description"); err != nil {
+		t.Fatalf("changing n1's description: %v", err)
 	}
 	if _, _, err := c.MarkStage(id, "role-stale", "", "n1's role, not rendered"); err != nil {
 		t.Fatalf("marking role-stale: %v", err)

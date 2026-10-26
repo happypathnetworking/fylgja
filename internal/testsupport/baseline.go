@@ -12,24 +12,31 @@ import (
 // DefaultBranch is Infrahub's default branch, where a demo's baseline lives (D-054).
 const DefaultBranch = "main"
 
-// baselineKinds are the kinds a baseline is made of, in the order -clear-main deletes
-// them: a link before its endpoints, an interface before its device, a device before its
-// platform. Each concrete kind is counted beside its generic, so that an object of
-// another kind implementing the generic is seen too.
+// baselineKinds are the schema library's kinds a baseline is made of, in the order
+// -clear-main deletes them: a cable before its ports, a port before its device, a device
+// before its platform, its site and its tag, a platform before its manufacturer, and a
+// location before its parent. Each is counted beside the generic it implements, where it
+// has one, so that an object of another kind implementing the generic is seen too.
 var baselineKinds = []struct{ concrete, generic string }{
-	{"NetworkLink", "FylgjaLink"},
-	{"NetworkInterface", "FylgjaInterface"},
-	{"NetworkDevice", "FylgjaDevice"},
-	{"NetworkPlatform", "FylgjaPlatform"},
-	{"FylgjaContract", "FylgjaContract"},
+	{"DcimCable", "DcimConnector"},
+	{"InterfacePhysical", "DcimInterface"},
+	{"DcimDevice", "DcimGenericDevice"},
+	{"DcimPlatform", ""},
+	{"OrganizationManufacturer", "OrganizationGeneric"},
+	{"LocationSite", "LocationGeneric"},
+	{"LocationMetro", "LocationGeneric"},
+	{"LocationCountry", "LocationGeneric"},
+	{"LocationRegion", "LocationGeneric"},
+	{"BuiltinTag", ""},
 }
 
-// SeedMainBaseline writes D-054's baseline onto main: the three-node fixture, its
-// devices joined to the artifact group and their artifacts rendered and Ready, as
-// SeedThreeNode writes it on a branch. It refuses a main that holds anything of the
-// baseline's kinds, so it never adds to a network and never runs twice.
+// SeedMainBaseline writes D-054's baseline onto main: the three-node fixture in the schema
+// library's kinds, its devices joined to the artifact group and their artifacts rendered
+// and Ready, as SeedThreeNode writes it on a branch. It refuses a main that holds anything
+// of the baseline's kinds (the tag, the manufacturer, the platform, the locations, the
+// devices, their ports and cables), so it never adds to a network and never runs twice.
 func (c *Client) SeedMainBaseline() error {
-	held, err := c.baselineCounts()
+	held, err := c.baselineCounts(DefaultBranch)
 	if err != nil {
 		return err
 	}
@@ -40,20 +47,20 @@ func (c *Client) SeedMainBaseline() error {
 	return c.SeedThreeNode(DefaultBranch)
 }
 
-// ClearedBaseline counts what ClearMainBaseline deleted. Artifacts counts the baseline's
-// artifacts it deleted itself; ArtifactsWithDevices those Infrahub had already removed
-// with their devices.
+// ClearedBaseline counts what ClearMainBaseline deleted. Locations counts the site and the
+// three levels above it. Artifacts counts the baseline's artifacts it deleted itself;
+// ArtifactsWithDevices those Infrahub had already removed with their devices.
 type ClearedBaseline struct {
-	Links, Interfaces, Devices, Platforms, Contracts int
-	Artifacts, ArtifactsWithDevices                  int
+	Cables, Interfaces, Devices, Platforms, Manufacturers, Locations, Tags int
+	Artifacts, ArtifactsWithDevices                                        int
 }
 
 // ClearMainBaseline deletes what SeedMainBaseline wrote, and nothing else (D-054). It
 // refuses while any test branch exists, since the window closes after every demo branch
 // is deleted, and when main holds anything beyond the baseline, such as a merged change,
-// naming what it found; either refusal deletes nothing. Then it deletes the links, the
-// interfaces, the devices, the platform and the contract, and last any of the devices'
-// artifacts Infrahub left behind.
+// naming what it found; either refusal deletes nothing. Then it deletes the cables, the
+// ports, the devices, the platform, the manufacturer, the site and the levels above it,
+// and the tag, and last any of the devices' artifacts Infrahub left behind.
 func (c *Client) ClearMainBaseline() (ClearedBaseline, error) {
 	var done ClearedBaseline
 	open, err := c.testBranches()
@@ -64,46 +71,44 @@ func (c *Client) ClearMainBaseline() (ClearedBaseline, error) {
 		return done, fmt.Errorf("test branches still exist (%s): delete each with -delete before the baseline is removed (D-054); "+
 			"nothing was deleted", strings.Join(open, ", "))
 	}
-	inv, err := c.readBaseline()
+	return c.clearBaseline(DefaultBranch)
+}
+
+// clearBaseline deletes a branch's baseline, refusing, deleting nothing, a branch that
+// holds anything beyond it or nothing of it. ClearMainBaseline runs it on main; on any
+// other branch it is the same deletion, which is how it is proved without a window open.
+func (c *Client) clearBaseline(branch string) (ClearedBaseline, error) {
+	var done ClearedBaseline
+	inv, err := c.readBaseline(branch)
 	if err != nil {
 		return done, err
 	}
 	if extra := inv.beyondBaseline(); len(extra) > 0 {
-		return done, fmt.Errorf("main holds more than the baseline: %s; nothing was deleted", strings.Join(extra, "; "))
+		return done, fmt.Errorf("%s holds more than the baseline: %s; nothing was deleted", branch, strings.Join(extra, "; "))
 	}
-	if len(inv.devices)+len(inv.interfaces)+len(inv.links)+len(inv.platforms)+len(inv.contracts) == 0 {
-		return done, fmt.Errorf("main holds no baseline: nothing to remove")
+	if inv.empty() {
+		return done, fmt.Errorf("%s holds no baseline: nothing to remove", branch)
 	}
 
-	artifacts, err := c.artifactsOf(inv.deviceIDs())
+	artifacts, err := c.artifactsOf(branch, values(inv.devices))
 	if err != nil {
 		return done, err
 	}
-	for _, step := range []struct {
-		kind  string
-		ids   []string
-		count *int
-	}{
-		{"NetworkLink", inv.linkIDs(), &done.Links},
-		{"NetworkInterface", inv.interfaceIDs(), &done.Interfaces},
-		{"NetworkDevice", inv.deviceIDs(), &done.Devices},
-		{"NetworkPlatform", inv.platforms, &done.Platforms},
-		{"FylgjaContract", inv.contracts, &done.Contracts},
-	} {
-		for _, id := range step.ids {
-			if err := c.deleteNode(DefaultBranch, step.kind, id); err != nil {
+	for _, k := range baselineKinds {
+		for _, id := range values(inv.objects[k.concrete]) {
+			if err := c.deleteNode(branch, k.concrete, id); err != nil {
 				return done, err
 			}
-			*step.count++
+			*done.counter(k.concrete)++
 		}
 	}
-	left, err := c.existing("CoreArtifact", artifacts)
+	left, err := c.existing(branch, "CoreArtifact", artifacts)
 	if err != nil {
 		return done, err
 	}
 	done.ArtifactsWithDevices = len(artifacts) - len(left)
 	for _, id := range left {
-		if err := c.deleteNode(DefaultBranch, "CoreArtifact", id); err != nil {
+		if err := c.deleteNode(branch, "CoreArtifact", id); err != nil {
 			return done, err
 		}
 		done.Artifacts++
@@ -111,17 +116,37 @@ func (c *Client) ClearMainBaseline() (ClearedBaseline, error) {
 	return done, nil
 }
 
-// baselineCounts names each baseline kind main holds objects of, with how many.
-func (c *Client) baselineCounts() ([]string, error) {
+// counter is the count a deletion of a kind adds to.
+func (d *ClearedBaseline) counter(kind string) *int {
+	switch kind {
+	case "DcimCable":
+		return &d.Cables
+	case "InterfacePhysical":
+		return &d.Interfaces
+	case "DcimDevice":
+		return &d.Devices
+	case "DcimPlatform":
+		return &d.Platforms
+	case "OrganizationManufacturer":
+		return &d.Manufacturers
+	case "BuiltinTag":
+		return &d.Tags
+	default:
+		return &d.Locations
+	}
+}
+
+// baselineCounts names each baseline kind a branch holds objects of, with how many.
+func (c *Client) baselineCounts(branch string) ([]string, error) {
 	var held []string
 	seen := map[string]bool{}
 	for _, k := range baselineKinds {
 		for _, kind := range []string{k.concrete, k.generic} {
-			if seen[kind] {
+			if kind == "" || seen[kind] {
 				continue
 			}
 			seen[kind] = true
-			n, err := c.count(DefaultBranch, kind)
+			n, err := c.count(branch, kind)
 			if err != nil {
 				return nil, err
 			}
@@ -172,137 +197,106 @@ func (c *Client) testBranches() ([]string, error) {
 	return out, nil
 }
 
-// baselineInventory is what main holds of the baseline's kinds, read by name.
+// baselineInventory is what a branch holds of the baseline's kinds, read by name.
 type baselineInventory struct {
-	contracts, platforms []string
-	contractVersions     []string
-	platformNames        []string
-	devices              map[string]string // name -> id
-	roles                map[string]string // name -> role
-	interfaces           map[string]string // "device:interface" -> id
-	links                map[string]string // canonical "a|b" -> id
-	generics             map[string]int    // generic -> count
-	concretes            map[string]int    // concrete -> count
+	branch string
+
+	// objects holds each concrete kind's objects by key: a tag, a manufacturer or a
+	// location by name, a platform as "<manufacturer>/<name>", a device by name, a port as
+	// "device:port", and a cable by its ends' canonical id.
+	objects      map[string]map[string]string // kind -> key -> id
+	devices      map[string]string            // name -> id
+	descriptions map[string]string            // device name -> description
+	counts       map[string]int               // kind or generic -> count
 }
 
 const baselineQuery = `{
-  FylgjaContract { count edges { node { id version { value } } } }
-  NetworkPlatform { count edges { node { id vendor { value } nos { value } version { value } } } }
-  NetworkDevice { count edges { node { id name { value } role { value } } } }
-  NetworkInterface { count edges { node { id name { value } device { node { name { value } } } } } }
-  NetworkLink { count edges { node { id endpoints { edges { node { id } } } } } }
-  FylgjaPlatform { count } FylgjaDevice { count } FylgjaInterface { count } FylgjaLink { count }
+  BuiltinTag { count edges { node { id name { value } } } }
+  OrganizationManufacturer { count edges { node { id name { value } } } }
+  DcimPlatform { count edges { node { id name { value } manufacturer { node { name { value } } } } } }
+  LocationRegion { count edges { node { id name { value } } } }
+  LocationCountry { count edges { node { id name { value } } } }
+  LocationMetro { count edges { node { id name { value } } } }
+  LocationSite { count edges { node { id name { value } } } }
+  DcimDevice { count edges { node { id name { value } description { value } } } }
+  InterfacePhysical { count edges { node { id name { value } device { node { name { value } } } } } }
+  DcimCable { count edges { node { id connected_endpoints { edges { node { id } } } } } }
+  DcimConnector { count } DcimInterface { count } DcimGenericDevice { count }
+  OrganizationGeneric { count } LocationGeneric { count }
 }`
 
-// readBaseline reads main's objects of the baseline's kinds in one query.
-func (c *Client) readBaseline() (*baselineInventory, error) {
-	raw, err := c.GraphQL(DefaultBranch, baselineQuery)
+// readBaseline reads a branch's objects of the baseline's kinds in one query.
+func (c *Client) readBaseline(branch string) (*baselineInventory, error) {
+	raw, err := c.GraphQL(branch, baselineQuery)
 	if err != nil {
-		return nil, fmt.Errorf("reading main's network: %w", err)
+		return nil, fmt.Errorf("reading %s's network: %w", branch, err)
 	}
 	type value struct {
 		Value string `json:"value"`
 	}
-	var r struct {
-		Contract struct {
-			Count int `json:"count"`
+	type named struct {
+		Node *struct {
+			Name value `json:"name"`
+		} `json:"node"`
+	}
+	type node struct {
+		ID           string `json:"id"`
+		Name         value  `json:"name"`
+		Description  value  `json:"description"`
+		Manufacturer named  `json:"manufacturer"`
+		Device       named  `json:"device"`
+		Endpoints    struct {
 			Edges []struct {
 				Node struct {
-					ID      string `json:"id"`
-					Version value  `json:"version"`
+					ID string `json:"id"`
 				} `json:"node"`
 			} `json:"edges"`
-		} `json:"FylgjaContract"`
-		Platform struct {
-			Count int `json:"count"`
-			Edges []struct {
-				Node struct {
-					ID      string `json:"id"`
-					Vendor  value  `json:"vendor"`
-					NOS     value  `json:"nos"`
-					Version value  `json:"version"`
-				} `json:"node"`
-			} `json:"edges"`
-		} `json:"NetworkPlatform"`
-		Device struct {
-			Count int `json:"count"`
-			Edges []struct {
-				Node struct {
-					ID   string `json:"id"`
-					Name value  `json:"name"`
-					Role value  `json:"role"`
-				} `json:"node"`
-			} `json:"edges"`
-		} `json:"NetworkDevice"`
-		Interface struct {
-			Count int `json:"count"`
-			Edges []struct {
-				Node struct {
-					ID     string `json:"id"`
-					Name   value  `json:"name"`
-					Device struct {
-						Node struct {
-							Name value `json:"name"`
-						} `json:"node"`
-					} `json:"device"`
-				} `json:"node"`
-			} `json:"edges"`
-		} `json:"NetworkInterface"`
-		Link struct {
-			Count int `json:"count"`
-			Edges []struct {
-				Node struct {
-					ID        string `json:"id"`
-					Endpoints struct {
-						Edges []struct {
-							Node struct {
-								ID string `json:"id"`
-							} `json:"node"`
-						} `json:"edges"`
-					} `json:"endpoints"`
-				} `json:"node"`
-			} `json:"edges"`
-		} `json:"NetworkLink"`
-		GPlatform struct{ Count int } `json:"FylgjaPlatform"`
-		GDevice   struct{ Count int } `json:"FylgjaDevice"`
-		GIface    struct{ Count int } `json:"FylgjaInterface"`
-		GLink     struct{ Count int } `json:"FylgjaLink"`
+		} `json:"connected_endpoints"`
+	}
+	var r map[string]struct {
+		Count int `json:"count"`
+		Edges []struct {
+			Node node `json:"node"`
+		} `json:"edges"`
 	}
 	if err := json.Unmarshal(raw, &r); err != nil {
 		return nil, err
 	}
 	inv := &baselineInventory{
-		devices: map[string]string{}, roles: map[string]string{},
-		interfaces: map[string]string{}, links: map[string]string{},
-		generics: map[string]int{
-			"FylgjaPlatform": r.GPlatform.Count, "FylgjaDevice": r.GDevice.Count,
-			"FylgjaInterface": r.GIface.Count, "FylgjaLink": r.GLink.Count,
-		},
-		concretes: map[string]int{
-			"NetworkPlatform": r.Platform.Count, "NetworkDevice": r.Device.Count,
-			"NetworkInterface": r.Interface.Count, "NetworkLink": r.Link.Count,
-		},
+		branch:  branch,
+		objects: map[string]map[string]string{}, devices: map[string]string{},
+		descriptions: map[string]string{}, counts: map[string]int{},
 	}
-	for _, e := range r.Contract.Edges {
-		inv.contracts = append(inv.contracts, e.Node.ID)
-		inv.contractVersions = append(inv.contractVersions, e.Node.Version.Value)
+	for kind, v := range r {
+		inv.counts[kind] = v.Count
 	}
-	for _, e := range r.Platform.Edges {
-		inv.platforms = append(inv.platforms, e.Node.ID)
-		inv.platformNames = append(inv.platformNames,
-			e.Node.Vendor.Value+"/"+e.Node.NOS.Value+"/"+e.Node.Version.Value)
+	nameOf := func(n named) string {
+		if n.Node == nil {
+			return ""
+		}
+		return n.Node.Name.Value
 	}
-	for _, e := range r.Device.Edges {
-		inv.devices[e.Node.Name.Value] = e.Node.ID
-		inv.roles[e.Node.Name.Value] = e.Node.Role.Value
+	byID := map[string]string{} // port id -> "device:port"
+	for _, kind := range []string{"BuiltinTag", "OrganizationManufacturer", "DcimPlatform", "LocationRegion",
+		"LocationCountry", "LocationMetro", "LocationSite", "DcimDevice", "InterfacePhysical"} {
+		inv.objects[kind] = map[string]string{}
+		for _, e := range r[kind].Edges {
+			key := e.Node.Name.Value
+			switch kind {
+			case "DcimPlatform":
+				key = nameOf(e.Node.Manufacturer) + "/" + key
+			case "DcimDevice":
+				inv.devices[key] = e.Node.ID
+				inv.descriptions[key] = e.Node.Description.Value
+			case "InterfacePhysical":
+				key = nameOf(e.Node.Device) + ":" + key
+				byID[e.Node.ID] = key
+			}
+			inv.objects[kind][key] = e.Node.ID
+		}
 	}
-	byID := map[string]string{} // interface id -> "device:interface"
-	for _, e := range r.Interface.Edges {
-		key := e.Node.Device.Node.Name.Value + ":" + e.Node.Name.Value
-		inv.interfaces[key] = e.Node.ID
-		byID[e.Node.ID] = key
-	}
-	for _, e := range r.Link.Edges {
+	inv.objects["DcimCable"] = map[string]string{}
+	for _, e := range r["DcimCable"].Edges {
 		var ends []string
 		for _, p := range e.Node.Endpoints.Edges {
 			end := byID[p.Node.ID]
@@ -312,48 +306,78 @@ func (c *Client) readBaseline() (*baselineInventory, error) {
 			ends = append(ends, end)
 		}
 		sort.Strings(ends)
-		inv.links[strings.Join(ends, "|")] = e.Node.ID
+		inv.objects["DcimCable"][strings.Join(ends, "|")] = e.Node.ID
 	}
 	return inv, nil
 }
 
-// beyondBaseline names everything main holds that the baseline does not, and any of the
-// baseline's objects that has changed. What the baseline lacks is not named: a seed that
-// failed partway leaves part of it, which -clear-main still removes.
-func (inv *baselineInventory) beyondBaseline() []string {
-	var out []string
-	for generic, n := range inv.generics {
-		concrete := "Network" + strings.TrimPrefix(generic, "Fylgja")
-		if n != inv.concretes[concrete] {
-			out = append(out, fmt.Sprintf("%d %s but %d %s", n, generic, inv.concretes[concrete], concrete))
+// empty reports whether the branch holds nothing of the baseline's kinds.
+func (inv *baselineInventory) empty() bool {
+	for _, objects := range inv.objects {
+		if len(objects) > 0 {
+			return false
 		}
 	}
-	if len(inv.contracts) > 1 || (len(inv.contracts) == 1 && inv.contractVersions[0] != ContractVersion) {
-		out = append(out, fmt.Sprintf("contract(s) %v, want one at %s", inv.contractVersions, ContractVersion))
+	return true
+}
+
+// beyondBaseline names everything the branch holds that the baseline does not, and any of the
+// baseline's devices whose description has changed. What the baseline lacks is not named:
+// a seed that failed partway leaves part of it, which -clear-main still removes.
+func (inv *baselineInventory) beyondBaseline() []string {
+	var out []string
+	for _, g := range []struct {
+		generic   string
+		concretes []string
+	}{
+		{"DcimConnector", []string{"DcimCable"}},
+		{"DcimInterface", []string{"InterfacePhysical"}},
+		{"DcimGenericDevice", []string{"DcimDevice"}},
+		{"OrganizationGeneric", []string{"OrganizationManufacturer"}},
+		{"LocationGeneric", []string{"LocationRegion", "LocationCountry", "LocationMetro", "LocationSite"}},
+	} {
+		sum := 0
+		for _, k := range g.concretes {
+			sum += inv.counts[k]
+		}
+		if inv.counts[g.generic] != sum {
+			out = append(out, fmt.Sprintf("%d %s but %d %s", inv.counts[g.generic], g.generic, sum, strings.Join(g.concretes, " and ")))
+		}
 	}
-	if len(inv.platforms) > 1 || (len(inv.platforms) == 1 && inv.platformNames[0] != "nokia/srlinux/24.7") {
-		out = append(out, fmt.Sprintf("platform(s) %v, want nokia/srlinux/24.7 alone", inv.platformNames))
+	for kind, objects := range inv.objects {
+		if inv.counts[kind] > len(objects) {
+			out = append(out, fmt.Sprintf("%d %s, of which %d were read", inv.counts[kind], kind, len(objects)))
+		}
 	}
-	devices, interfaces, links := map[string]bool{}, map[string]bool{}, map[string]bool{}
+
+	want := map[string]map[string]bool{
+		"BuiltinTag":               {FixtureTag: true},
+		"OrganizationManufacturer": {srLinux.manufacturer: true},
+		"DcimPlatform":             {srLinux.manufacturer + "/" + srLinux.name: true},
+		"DcimDevice":               {},
+		"InterfacePhysical":        {},
+		"DcimCable":                {},
+	}
+	for _, level := range siteLevels {
+		want[level.kind] = map[string]bool{level.name: true}
+	}
 	for _, n := range fixtureNodes {
-		devices[n.name] = true
-		for _, p := range append([]string{"mgmt0", "lo0"}, n.ports...) {
-			interfaces[n.name+":"+p] = true
+		want["DcimDevice"][n.name] = true
+		for _, p := range append([]string{n.mgmt}, n.ports...) {
+			want["InterfacePhysical"][n.name+":"+p] = true
 		}
 	}
 	for _, l := range fixtureLinks {
-		ends := []string{l.aDev + ":" + l.aPort, l.bDev + ":" + l.bPort}
-		sort.Strings(ends)
-		links[strings.Join(ends, "|")] = true
+		want["DcimCable"][l.id()] = true
 	}
-	out = append(out, differ("device", inv.devices, devices)...)
-	for name, role := range inv.roles {
-		if devices[name] && role != MarkerRole(DefaultBranch) {
-			out = append(out, fmt.Sprintf("device %s has role %q, want %q", name, role, MarkerRole(DefaultBranch)))
+	for _, k := range baselineKinds {
+		out = append(out, differ(k.concrete, inv.objects[k.concrete], want[k.concrete])...)
+	}
+	for name, description := range inv.descriptions {
+		if want["DcimDevice"][name] && description != MarkerDescription(inv.branch) {
+			out = append(out, fmt.Sprintf("device %s has description %q, want %q", name, description, MarkerDescription(inv.branch)))
 		}
 	}
-	out = append(out, differ("interface", inv.interfaces, interfaces)...)
-	out = append(out, differ("link", inv.links, links)...)
 	sort.Strings(out)
 	return out
 }
@@ -378,15 +402,11 @@ func values(m map[string]string) []string {
 	return out
 }
 
-func (inv *baselineInventory) deviceIDs() []string    { return values(inv.devices) }
-func (inv *baselineInventory) interfaceIDs() []string { return values(inv.interfaces) }
-func (inv *baselineInventory) linkIDs() []string      { return values(inv.links) }
-
-// artifactsOf returns the ids of main's artifacts whose target is one of the devices.
-func (c *Client) artifactsOf(deviceIDs []string) ([]string, error) {
-	raw, err := c.GraphQL(DefaultBranch, `{ CoreArtifact { edges { node { id object { node { id } } } } } }`)
+// artifactsOf returns the ids of a branch's artifacts whose target is one of the devices.
+func (c *Client) artifactsOf(branch string, deviceIDs []string) ([]string, error) {
+	raw, err := c.GraphQL(branch, `{ CoreArtifact { edges { node { id object { node { id } } } } } }`)
 	if err != nil {
-		return nil, fmt.Errorf("listing main's artifacts: %w", err)
+		return nil, fmt.Errorf("listing %s's artifacts: %w", branch, err)
 	}
 	var r struct {
 		A struct {
@@ -418,8 +438,8 @@ func (c *Client) artifactsOf(deviceIDs []string) ([]string, error) {
 	return out, nil
 }
 
-// existing returns which of the ids main still holds as objects of a kind.
-func (c *Client) existing(kind string, ids []string) ([]string, error) {
+// existing returns which of the ids a branch still holds as objects of a kind.
+func (c *Client) existing(branch, kind string, ids []string) ([]string, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -427,7 +447,7 @@ func (c *Client) existing(kind string, ids []string) ([]string, error) {
 	for i, id := range ids {
 		quoted[i] = fmt.Sprintf("%q", id)
 	}
-	return c.ids(DefaultBranch, kind, fmt.Sprintf(`(ids: [%s])`, strings.Join(quoted, ", ")))
+	return c.ids(branch, kind, fmt.Sprintf(`(ids: [%s])`, strings.Join(quoted, ", ")))
 }
 
 // deleteNode deletes one object by its kind's own delete mutation.

@@ -137,9 +137,9 @@ type showText struct {
 	// hostHeld is set when a run in flight holds the host: the twin: line then says what the
 	// host holds, without M3's phrase or its remedy.
 	hostHeld bool
-	// provenance is the record line's last clause, the scope and the mapping the record
-	// names, or the scope unknown for a record that names none (provenanceClause).
-	provenance string
+	// record is the record line, whose last clause is the scope and the mapping the record
+	// names, or the scope unknown for a record that names none (recordLine).
+	record string
 	// step is the record block's line for a record that has stepped, or "".
 	step string
 	// towards is the stage each run in flight is for, by run id (towardsOf), which the in
@@ -212,7 +212,7 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 
 	text := showText{towards: towardsOf(reads.inFlight)}
 	if rec != nil {
-		text.provenance = provenanceClause(rec)
+		text.record = recordLine(rec)
 	}
 	if rec != nil && rec.Step != nil {
 		text.step = stepLine(rec, waitRecorded(rec))
@@ -410,6 +410,22 @@ func waitRecorded(rec *wire.TwinRecord) bool {
 func scopeRecorded(rec *wire.TwinRecord) bool {
 	v, err := strconv.Atoi(rec.TwinVersion)
 	return err == nil && v >= 8
+}
+
+// recordLine is the record line twin show and twin create print (contracts/cli.md, 017):
+// the reference the record was read from, its bundle, its schema and its provenance, "record:
+// branch b at …, bundle_id …, schema …, scope tag:fylgja, read by infrahub-dcim from
+// opsmill/schema-library@26336e9".
+func recordLine(rec *wire.TwinRecord) string {
+	ref := "branch " + rec.Provenance.Branch
+	if rec.Provenance.At != "" {
+		ref += " at " + rec.Provenance.At
+	}
+	if st := verify.StageBlock(rec.Stage); st != nil {
+		ref += fmt.Sprintf(" (stage %s, at %s)", st.Ref(), st.AtSource)
+	}
+	return fmt.Sprintf("record: %s, bundle_id %s, schema %s, %s", ref, rec.BundleID, rec.Provenance.SchemaHash,
+		provenanceClause(rec))
 }
 
 // provenanceClause is the record line's last clause (contracts/cli.md): "scope tag:fylgja,
@@ -744,14 +760,7 @@ func printShow(opts *options, block findings.ShowBlock, text showText) {
 	}
 
 	if r := block.Record; r != nil {
-		ref := "branch " + r.Branch
-		if r.At != "" {
-			ref += " at " + r.At
-		}
-		if st := r.Stage; st != nil {
-			ref += fmt.Sprintf(" (stage %s, at %s)", st.Ref(), st.AtSource)
-		}
-		opts.note("record: %s, bundle_id %s, schema %s, %s", ref, r.BundleID, r.SchemaHash, text.provenance)
+		opts.note("%s", text.record)
 		switch {
 		case r.ObservedAt == nil:
 			// The note says "unknown:" itself (lab.ObservedAtUnknown, M2's twin.json).

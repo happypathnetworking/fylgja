@@ -174,6 +174,9 @@ func provisionReport(opts *options, op string, subject *findings.Subject, in pro
 		for _, n := range res.Twin.Nodes {
 			opts.note("  %s  %s", n.Name, n.MgmtIPv4)
 		}
+		// The record's line after its nodes, as twin show prints it: the reference, the
+		// bundle, the schema, and the scope and the mapping the read was made under (017).
+		opts.note("%s", recordLine(res.Twin))
 		opts.note("twin directory %s", res.TwinDir)
 		switch {
 		case in.Source == wire.SourceBundle:

@@ -907,7 +907,10 @@ invalid support package`. `worker run` refuses to start on the same registry.
 - `twin show`'s record line ends with the record's provenance: `record: branch
   fylgja-fixture, bundle_id f764e1fa…, schema 7c413536…, scope tag:fylgja, read by
   infrahub-dcim from opsmill/schema-library@26336e9`; for a record of `7` or earlier, `…,
-  scope unknown (record 7)`.
+  scope unknown (record 7)`. `twin create` prints the same line for the twin it made, from
+  the record its run wrote, after the nodes and before `twin directory …`, as `twin show`
+  prints it after the nodes; `twin provision` does too, its record naming what its bundle's
+  provenance names.
 - `schema check`'s first line is `conformant with opsmill/schema-library@26336e9:
   DcimDevice, DcimPlatform, OrganizationManufacturer, InterfacePhysical, DcimCable`, then
   014's `stages: …` line.

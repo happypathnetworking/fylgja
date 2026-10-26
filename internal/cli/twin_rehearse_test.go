@@ -685,7 +685,7 @@ func TestRehearseAnswerLost(t *testing.T) {
 			interrupts = useInterrupts(t)
 			useService(t, c.service(interrupts))
 			code, md, _ := rehearse(t, "--branch", lessLink, "--markdown")
-			if want := `## Fylgja started rehearsing proposed change "change pc-1" on change-1` + "\n\nRun `fylgja-rehearse " +
+			if want := `## Fylgja started rehearsing proposed change "change pc-1" on change-1, scope tag:fylgja` + "\n\nRun `fylgja-rehearse " +
 				rehearseRun + "` was started, and its end was not read: "; code != findings.ExitError || !strings.HasPrefix(md, want) ||
 				!strings.Contains(md, "It goes on to its destroy, and `fylgja twin show` says where it is.") {
 				t.Errorf("exit %d, the markdown:\n%s\nwant 2, beginning:\n%s", code, md, want)
@@ -940,7 +940,7 @@ func TestRehearseText(t *testing.T) {
 	code, stdout, stderr := rehearse(t, "--branch", lessLink)
 	missing := "rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at " + fakeBranchedFrom
 	want := strings.Join([]string{
-		`rehearsal of proposed change "change pc-1" (pc-1) on branch change-1, draft: 4 stages; deadline 33m0s (ceiling 1h0m0s)`,
+		`rehearsal of proposed change "change pc-1" (pc-1) on branch change-1, draft: 4 stages; deadline 33m0s (ceiling 1h0m0s), scope tag:fylgja`,
 		`change-1/branch-point: refused (scope.empty)`,
 		`  ` + missing,
 		`change-1/seeded: branch change-1 at 2026-10-16T08:30:00.000000+00:00 (written), "after the link is cabled"; baseline`,
@@ -988,7 +988,7 @@ func TestRehearseMarkdown(t *testing.T) {
 	useInterrupts(t)
 
 	code, stdout, stderr := rehearse(t, "--branch", lessLink, "--markdown")
-	served, _ := ask(t, findings.OpTwinRehearse, api.RenderMarkdown, map[string]any{"branch": lessLink}, nil).document(t, "markdown")
+	served, doc := ask(t, findings.OpTwinRehearse, api.RenderMarkdown, map[string]any{"branch": lessLink}, nil).document(t, "markdown")
 	// Each request resolves its stages at its own second, which the run line names.
 	resolved := regexp.MustCompile(`stages resolved at [0-9T:Z-]+\.`)
 	sameRun := func(md string) string { return resolved.ReplaceAllString(md, "stages resolved at <when>.") }
@@ -997,6 +997,12 @@ func TestRehearseMarkdown(t *testing.T) {
 	}
 	if !strings.HasPrefix(stdout, `## Fylgja rehearsed proposed change `) || !strings.HasSuffix(stdout, rehearsal.Caveat+"\n") {
 		t.Errorf("stdout:\n%s\nwant the markdown, from its heading to its caveat", stdout)
+	}
+	// The comment fylgja-twin posts names the scope every stage was read under, as the
+	// document's subject does (017; US5 scenario 4).
+	if heading, _, _ := strings.Cut(stdout, "\n"); heading != `## Fylgja rehearsed proposed change "change pc-1" on change-1, scope tag:fylgja` ||
+		doc.Subject == nil || doc.Subject.Scope != defaultScope {
+		t.Errorf("heading %q, subject %+v; want both naming the scope %s", heading, doc.Subject, defaultScope)
 	}
 	for _, want := range []string{"\n| stage | at | bundle | step | wait | verify | new verification failures | verdict |\n", "\n```mermaid\nflowchart TD\n"} {
 		if !strings.Contains(stdout, want) {

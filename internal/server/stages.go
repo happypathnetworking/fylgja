@@ -116,8 +116,9 @@ func hostRecord(opts *options) *wire.TwinRecord {
 // heading names one proposed change as the list and the plan head its stages
 // (specs/014-proposed-change-stages/contracts/stage-commands.md): its name quoted, its
 // id, its source branch, the destination when into is set, whether it is a draft, and how
-// many stages it has.
-func heading(pc stages.ProposedChange, into bool, n int) string {
+// many stages it has; then, when scope is given, the scope every stage was read under,
+// as the plan's heading ends (017; contracts/scope-and-commands.md, "The text").
+func heading(pc stages.ProposedChange, into bool, n int, scope string) string {
 	line := fmt.Sprintf("proposed change %q (%s) on branch %s", pc.Name, pc.ID, pc.Branch)
 	if into {
 		line += " → " + pc.Destination
@@ -125,7 +126,11 @@ func heading(pc stages.ProposedChange, into bool, n int) string {
 	if pc.Draft {
 		line += ", draft"
 	}
-	return line + " (" + plural(n, "stage") + ")"
+	line += " (" + plural(n, "stage") + ")"
+	if scope != "" {
+		line += ", scope " + scope
+	}
+	return line
 }
 
 // printList prints the listing: a heading per proposed change, then one line per stage
@@ -159,7 +164,7 @@ func printList(opts *options, res stages.ListResult) {
 			atWidth = max(atWidth, len(atText(r.At)))
 			sourceWidth = max(sourceWidth, len(source(r.AtSource)))
 		}
-		opts.note("%s", heading(rows[0].ProposedChange, false, len(rows)))
+		opts.note("%s", heading(rows[0].ProposedChange, false, len(rows), ""))
 		for _, r := range rows {
 			mark := ""
 			if r.Twin {
@@ -214,7 +219,7 @@ func runStagePlan(ctx context.Context, opts *options, f *stageFlags) error {
 		ctx = context.Background()
 	}
 	planned, err := planStages(ctx, opts, op, subject, f.branch, scope,
-		func(pc stages.ProposedChange, n int) { opts.note("%s", heading(pc, true, n)) },
+		func(pc stages.ProposedChange, n int) { opts.note("%s", heading(pc, true, n, scope)) },
 		func(st stages.PlanStage) { printPlanned(opts, st) },
 		func(p step.Pair) { opts.note("%s", p.Text()) })
 	if err != nil {

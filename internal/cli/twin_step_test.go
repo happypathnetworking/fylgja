@@ -1470,6 +1470,50 @@ func TestStepTakesNoBranchFlags(t *testing.T) {
 	}
 }
 
+// The step reads under the scope its twin records, never the server's default (017;
+// FR-020; US1 scenario 7): with the server's default tag:other, a twin recorded under
+// tag:fylgja finds its target, resolves it and reads its devices by the tag fylgja, and its
+// document names that scope; beside the default tag:fylgja, a twin recorded under tag:other
+// reads by the tag other, which no device of the fake carries, and its target is refused
+// scope.empty naming tag:other.
+func TestStepReadsUnderTheRecordsScope(t *testing.T) {
+	for _, c := range []struct {
+		name, server, record, tag string
+		code                      int
+	}{
+		{"the record's tag:fylgja beside the default tag:other", "tag:other", "tag:fylgja", "fylgja", findings.ExitOK},
+		{"the record's tag:other beside the default tag:fylgja", "tag:fylgja", "tag:other", "other", findings.ExitRejected},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			saved := defaultScope
+			t.Cleanup(func() { defaultScope = saved })
+			defaultScope = c.server
+			h := stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Provenance.Scope = c.record })
+			out := runStepCmd(t, "--dry-run", "--allow-restart")
+			if out.code != c.code || out.doc.Subject == nil || out.doc.Subject.Scope != c.record {
+				t.Fatalf("exit %d, subject %+v, findings %+v; want %d under %s", out.code, out.doc.Subject, out.doc.Findings, c.code, c.record)
+			}
+			var tags []any
+			for _, r := range h.infra.requests()[h.before:] {
+				if r.Operation == "Devices" {
+					tags = append(tags, r.Variables["tag"])
+				}
+			}
+			if len(tags) == 0 || slices.ContainsFunc(tags, func(tag any) bool { return tag != c.tag }) {
+				t.Errorf("the step's device reads sent the tags %v; want %q on every one", tags, c.tag)
+			}
+			if c.code == findings.ExitOK {
+				return
+			}
+			empty := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleScopeEmpty, Object: c.record,
+				Step: findings.StepRead, Message: "scope " + c.record + " selects no device on branch change-1 at " + stepWrittenAt}
+			if !slices.Contains(out.doc.Findings, empty) {
+				t.Errorf("findings %+v; want %+v", out.doc.Findings, empty)
+			}
+		})
+	}
+}
+
 // A step run in flight, or a provisioning or destroy run, refuses the start with M2's
 // run.in_flight naming the run: the service is asked once and nothing starts.
 func TestStepRefusedBesideARunInFlight(t *testing.T) {

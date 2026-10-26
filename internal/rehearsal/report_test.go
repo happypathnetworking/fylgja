@@ -18,9 +18,10 @@ import (
 
 // The example proposed change of contracts/rehearse-command.md: change-1, its branch point
 // refused contract.node.missing on a main that holds no network, the mark seeded, the marks
-// third-link and bad-port, and the head.
+// third-link and bad-port, and the head, every stage read under the scope tag:fylgja (017).
 const (
 	change       = "change-1"
+	exampleScope = "tag:fylgja"
 	resolvedAt   = "2026-10-17T14:02:11Z"
 	rehearseRun  = "01a1b2c3-0000-7000-8000-0000000000aa"
 	provisionRun = "01a1b2c3-0000-7000-8000-0000000000b1"
@@ -341,7 +342,7 @@ func examples() []example {
 func (e example) document() *findings.Document {
 	b := Build(e.in, e.res)
 	list := Findings(b)
-	subject := &findings.Subject{Branch: change}
+	subject := &findings.Subject{Branch: change, Scope: exampleScope}
 	switch {
 	case e.res.Run == nil:
 		list.AddStep(findings.Rejection, findings.StepStart, findings.RuleRehearsalDeadlineUnfit, change,

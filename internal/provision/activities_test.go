@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -477,6 +478,70 @@ func TestReadIntentActivity(t *testing.T) {
 			t.Errorf("findings name %v, want the kinds %v", named, objects)
 		}
 		atStep(t, res.Findings, findings.StepRead)
+		nothingRead(t, c)
+	})
+
+	// The read is under the scope its input carries (017; FR-020): the create's run hands
+	// it the request's, and a following twin's check its run's, through ReconcileInput. The
+	// branch conforms and no device carries the tag edge, so the devices are asked for by
+	// that tag alone and the read is refused scope.empty naming the scope, with nothing
+	// written.
+	t.Run("the read is under the input's scope", func(t *testing.T) {
+		schema, err := os.ReadFile(repoPath("internal", "intent", "testdata", "schema-26336e9.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var tags []any
+		var mu sync.Mutex
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			switch {
+			case r.Method == http.MethodGet && r.URL.Path == "/api/schema":
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write(schema)
+			case r.Method == http.MethodPost && r.URL.Path == "/graphql/"+branch:
+				var req struct {
+					OperationName string         `json:"operationName"`
+					Variables     map[string]any `json:"variables"`
+				}
+				if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.OperationName != "Devices" {
+					t.Errorf("the read sent %q (%v); want the devices alone, since none carries the tag", req.OperationName, err)
+				}
+				mu.Lock()
+				tags = append(tags, req.Variables["tag"])
+				mu.Unlock()
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write([]byte(`{"data":{"DcimDevice":{"count":0,"edges":[]}}}`))
+			default:
+				t.Errorf("the read sent %s %s", r.Method, r.URL.Path)
+				http.Error(w, "unexpected", http.StatusTeapot)
+			}
+		}))
+		defer srv.Close()
+		t.Setenv(intent.EnvAddress, srv.URL)
+		t.Setenv(intent.EnvToken, sentinel)
+
+		c := newControl(t)
+		var suite testsuite.WorkflowTestSuite
+		env := suite.NewTestActivityEnvironment()
+		env.RegisterActivityWithOptions(c.ReadIntent, activity.RegisterOptions{Name: wire.ActReadIntent})
+		val, err := env.ExecuteActivity(wire.ActReadIntent, ReadIntentInput{Branch: branch, Scope: "tag:edge"})
+		if err != nil {
+			t.Fatalf("ReadIntent returned an error, want a result carrying the refusal: %v", err)
+		}
+		var res ReadIntentResult
+		if err := val.Get(&res); err != nil {
+			t.Fatal(err)
+		}
+		mu.Lock()
+		defer mu.Unlock()
+		if !slices.Equal(tags, []any{"edge"}) {
+			t.Errorf("the devices were asked for by the tags %v; want edge, once", tags)
+		}
+		want := findings.List{{Severity: findings.Rejection, Rule: findings.RuleScopeEmpty, Step: findings.StepRead,
+			Object: "tag:edge", Message: "scope tag:edge selects no device on branch " + branch}}
+		if !slices.Equal(res.Findings, want) || res.CTMPath != "" {
+			t.Errorf("findings %+v, ctm_path %q; want %+v and no CTM", res.Findings, res.CTMPath, want)
+		}
 		nothingRead(t, c)
 	})
 }

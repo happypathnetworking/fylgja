@@ -606,7 +606,7 @@ func TestStagePlanText(t *testing.T) {
 	cabled, live, head := *stages[1].BundleID, *stages[2].BundleID, *stages[3].BundleID
 	const missing = "rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at " + fakeBranchedFrom
 	want := strings.Join([]string{
-		`proposed change "change pc-1" (pc-1) on branch change-1 → main, draft (4 stages)`,
+		`proposed change "change pc-1" (pc-1) on branch change-1 → main, draft (4 stages), scope tag:fylgja`,
 		`change-1/branch-point: refused (scope.empty)`,
 		`  ` + missing,
 		`step change-1/branch-point → change-1/cabled (— → ` + cabled[:8] + `…): not computed (change-1/branch-point was refused)`,
@@ -632,6 +632,53 @@ func TestStagePlanText(t *testing.T) {
 		t.Errorf("exit %d, stderr\n%s; want 1 and the one finding", code, stderr)
 	}
 	mustQuoteNoContent(t, f, stdout, stderr)
+}
+
+// stage plan --scope reads every stage under the scope given, whatever the server's
+// default (017; US5 scenario 5): each stage's read sends the tag x, which no device of the
+// fake carries, so each is refused scope.empty naming tag:x, and the heading and the
+// document name the scope.
+func TestStagePlanReadsUnderTheScopeGiven(t *testing.T) {
+	useStateRoot(t)
+	useService(t, nil)
+	f := planInfrahub(t, twoMarks()...)
+	versioned(t, f)
+	f.start()
+
+	code, stdout, _ := runStage(t, "plan", "--branch", lessLink, "--scope", "tag:x")
+	_, doc, _ := stageDoc(t, "plan", "--branch", lessLink, "--scope", "tag:x")
+	if want := `proposed change "change pc-1" (pc-1) on branch change-1 → main, draft (4 stages), scope tag:x`; code != findings.ExitRejected ||
+		lineOf(stdout, 1) != want {
+		t.Errorf("exit %d, stdout\n%s\nwant 1, the heading %q", code, stdout, want)
+	}
+	if doc.Subject == nil || doc.Subject.Scope != "tag:x" {
+		t.Errorf("subject %+v; want the scope tag:x", doc.Subject)
+	}
+	stages, _ := planned(t, doc)
+	if want := []string{"change-1/branch-point", "change-1/cabled", "change-1/live", "change-1/head"}; !slices.Equal(stageRefs(stages), want) {
+		t.Fatalf("stages %v; want %v", stageRefs(stages), want)
+	}
+	for _, st := range stages {
+		if len(st.Findings) != 1 || st.Findings[0].Rule != findings.RuleScopeEmpty || st.Findings[0].Object != "tag:x" {
+			t.Errorf("stage %s's findings %+v; want scope.empty naming tag:x alone", st.Ref, st.Findings)
+		}
+	}
+	reads := map[string][]any{}
+	for _, r := range f.requests() {
+		if r.Operation == "Devices" {
+			reads[r.Path+"?"+r.Query] = append(reads[r.Path+"?"+r.Query], r.Variables["tag"])
+		}
+	}
+	// One read per stage, each at its own at, and each sent twice: once for the text and
+	// once for --json.
+	if len(reads) != len(stages) {
+		t.Errorf("devices were read at %d places, want one per stage's read (%d): %v", len(reads), len(stages), reads)
+	}
+	for where, tags := range reads {
+		if slices.ContainsFunc(tags, func(tag any) bool { return tag != "x" }) {
+			t.Errorf("the devices read at %s sent the tags %v; want x on every one", where, tags)
+		}
+	}
 }
 
 // --json prints the document alone, the plan block and every stage's findings in order,

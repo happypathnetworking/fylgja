@@ -40,7 +40,7 @@ func pairs() []step.Pair {
 func TestMarkdown(t *testing.T) {
 	passed := Markdown(passedRun().document(), pairs())
 	if want := strings.Join([]string{
-		`## Fylgja rehearsed proposed change "third link" on change-1`,
+		`## Fylgja rehearsed proposed change "third link" on change-1, scope tag:fylgja`,
 		"",
 		"Run `fylgja-rehearse 01a1b2c3-0000-7000-8000-0000000000aa`, stages resolved at 2026-10-17T14:02:11Z. Status **ok**. 118.4s of the 1980s deadline (ceiling 3600s).",
 		"",
@@ -81,7 +81,7 @@ func TestMarkdown(t *testing.T) {
 
 	failed := Markdown(failedRun().document(), pairs())
 	if want := strings.Join([]string{
-		`## Fylgja rehearsed proposed change "third link" on change-1`,
+		`## Fylgja rehearsed proposed change "third link" on change-1, scope tag:fylgja`,
 		"",
 		"Run `fylgja-rehearse 01a1b2c3-0000-7000-8000-0000000000aa`, stages resolved at 2026-10-17T14:02:11Z. Status **nonconforming**. 301.6s of the 2610s deadline (ceiling 3600s).",
 		"",
@@ -357,7 +357,7 @@ func TestMarkdownFitsAComment(t *testing.T) {
 			t.Errorf("%d more stages: the markdown is %d bytes, over the %d a comment holds", c.marks, len(md), CommentMax)
 		}
 		for _, want := range []string{
-			`## Fylgja rehearsed proposed change "third link" on change-1` + "\n\nRun `fylgja-rehearse " + rehearseRun + "`",
+			`## Fylgja rehearsed proposed change "third link" on change-1, scope tag:fylgja` + "\n\nRun `fylgja-rehearse " + rehearseRun + "`",
 			"\n" + c.row + "\n",
 			c.table, "; " + c.left + "; fylgja-twin's message is the whole report as text.*\n\n" + Caveat + "\n",
 		} {
@@ -511,10 +511,27 @@ func TestMarkdownFitsWhatTheCeilingDoesNotBound(t *testing.T) {
 	md = Markdown(e.document(), pairs())
 	heading, _, _ := strings.Cut(md, "\n")
 	if len(md) > CommentMax || len(heading) > 200 || !strings.HasPrefix(heading, `## Fylgja rehearsed proposed change "a long name a long`) ||
-		!strings.Contains(heading, `…" on change-1`) {
+		!strings.Contains(heading, `…" on change-1, scope tag:fylgja`) {
 		t.Errorf("a long name: %d bytes, heading %q; want within %d, the name cut with an ellipsis", len(md), heading, CommentMax)
 	}
 	wantStagesInTheTable(t, "a long name", md, Build(e.in, e.res), false)
+
+	// A scope longer than a comment, which the heading names after the branch (017): cut
+	// with an ellipsis as a name is, and never left out.
+	e = failedRun()
+	doc := e.document()
+	doc.Subject.Scope = "tag:" + strings.Repeat("a-long-tag-", 500)
+	full := join(parts(doc, pairs(), false))
+	if first, _, _ := strings.Cut(full, "\n"); !strings.HasSuffix(first, " on change-1, scope tag:a-long-tag-a-long-tag-"+strings.Repeat("a-long-tag-", 498)) {
+		t.Errorf("a long scope, in full: heading %q; want the whole scope after the branch", first)
+	}
+	md = Markdown(doc, pairs())
+	heading, _, _ = strings.Cut(md, "\n")
+	if len(md) > CommentMax || len(heading) > 200 || !strings.HasPrefix(heading, `## Fylgja rehearsed proposed change "third link" on change-1, scope tag:a-long-tag-`) ||
+		!strings.HasSuffix(heading, "…") {
+		t.Errorf("a long scope: %d bytes, heading %q; want within %d, the scope cut with an ellipsis", len(md), heading, CommentMax)
+	}
+	wantStagesInTheTable(t, "a long scope", md, Build(e.in, e.res), false)
 	if got := clip("ab€cd", 6); got != "ab…" {
 		t.Errorf("clip cut a rune: %q", got)
 	}
@@ -582,7 +599,7 @@ func TestMarkdownEscapes(t *testing.T) {
 	e = passedRun()
 	e.in.ProposedChange.Name = "a *bold* [link](x) <b>"
 	if md := Markdown(e.document(), nil); !strings.HasPrefix(md,
-		`## Fylgja rehearsed proposed change "a \*bold\* \[link\](x) \<b\>" on change-1`) {
+		`## Fylgja rehearsed proposed change "a \*bold\* \[link\](x) \<b\>" on change-1, scope tag:fylgja`) {
 		t.Errorf("the heading: %s", strings.SplitN(md, "\n", 2)[0])
 	}
 }
@@ -593,7 +610,7 @@ func TestMarkdownEscapes(t *testing.T) {
 func TestMarkdownOfARefusal(t *testing.T) {
 	md := Markdown(refusedRun().document(), pairs())
 	for _, want := range []string{
-		`## Fylgja did not rehearse proposed change "third link" on change-1`,
+		`## Fylgja did not rehearse proposed change "third link" on change-1, scope tag:fylgja`,
 		"No run was started; stages resolved at 2026-10-17T14:02:11Z. Status **rejected**. Deadline 3840s (ceiling 3600s).",
 		`  s0["change-1/seeded<br/>not reached"]`,
 		"**Findings**:\n\n- `rehearsal.deadline.unfit` change-1: the stages need 3840s, over the ceiling of 3600s",
@@ -607,7 +624,7 @@ func TestMarkdownOfARefusal(t *testing.T) {
 	// run touched nothing and needed no destroy, and rehearsed nothing (T078).
 	md = Markdown(heldRun().document(), pairs())
 	for _, want := range []string{
-		`## Fylgja did not rehearse proposed change "third link" on change-1`,
+		`## Fylgja did not rehearse proposed change "third link" on change-1, scope tag:fylgja`,
 		"Run `fylgja-rehearse " + rehearseRun + "` touched nothing, since a run already holds the id of its baseline's provision, " +
 			"and no destroy was needed; stages resolved at 2026-10-17T14:02:11Z. Status **rejected**. Deadline 1980s (ceiling 3600s).",
 		`  s1["change-1/seeded<br/>not reached"]`,
@@ -623,7 +640,7 @@ func TestMarkdownOfARefusal(t *testing.T) {
 	// goes on to its destroy; its stages read not read, and nothing says no run was started
 	// (T079).
 	if got, want := Markdown(lostRun().document(), pairs()), strings.Join([]string{
-		`## Fylgja started rehearsing proposed change "third link" on change-1`,
+		`## Fylgja started rehearsing proposed change "third link" on change-1, scope tag:fylgja`,
 		"",
 		"Run `fylgja-rehearse " + rehearseRun + "` was started, and its end was not read: " + lostWhy + ". It goes on to its destroy, " +
 			"and `fylgja twin show` says where it is. Stages resolved at 2026-10-17T14:02:11Z. Status **error**. Deadline 1980s (ceiling 3600s).",
@@ -688,6 +705,12 @@ func TestMarkdownOfARefusal(t *testing.T) {
 	}, "\n"); got != want {
 		t.Errorf("a document with no block:\n%s\nwant:\n%s", got, want)
 	}
+	// Refused once the scope was resolved, the heading names it after the branch (017); a
+	// refusal before it, of the scope itself above all, names none.
+	doc.Subject.Scope = exampleScope
+	if got, _, _ := strings.Cut(Markdown(doc, nil), "\n"); got != "## Fylgja did not rehearse branch change-9, scope tag:fylgja" {
+		t.Errorf("a document with no block, its scope resolved: heading %q", got)
+	}
 }
 
 // What a step changed is drawn by name for every kind of change: links removed, nodes added
@@ -745,7 +768,7 @@ func TestStepCellOfEveryOutcome(t *testing.T) {
 // the lab, each pinned but for its stages, which TestMarkdown pins (T087).
 func TestMarkdownOfACutAFailedBaselineAndAnUncleanDestroy(t *testing.T) {
 	head := func(status, used string) string {
-		return `## Fylgja rehearsed proposed change "third link" on change-1` + "\n\nRun `fylgja-rehearse " + rehearseRun +
+		return `## Fylgja rehearsed proposed change "third link" on change-1, scope tag:fylgja` + "\n\nRun `fylgja-rehearse " + rehearseRun +
 			"`, stages resolved at 2026-10-17T14:02:11Z. Status **" + status + "**. " + used + " of the 1980s deadline (ceiling 3600s).\n\n" +
 			"| stage | at | bundle | step | wait | verify | new verification failures | verdict |\n|---|---|---|---|---|---|---|---|\n"
 	}

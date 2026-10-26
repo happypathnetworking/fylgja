@@ -21,9 +21,9 @@ const CommentMax = 4092
 
 // Markdown is the rehearsal's report as GitHub-flavoured markdown (FR-014; research R-10;
 // contracts/rehearse-command.md, "The markdown"), the comment a check posts on the proposed
-// change: the heading naming Fylgja, the proposed change and its branch; the run, when the
-// stages were resolved, the status and the time used against the deadline and the
-// ceiling; a table of the stages; a Mermaid drawing of the stages and what each step between
+// change: the heading naming Fylgja, the proposed change, its branch and the scope read
+// (017); the run, when the stages were resolved, the status and the time used against the
+// deadline and the ceiling; a table of the stages; a Mermaid drawing of the stages and what each step between
 // them changed; on any status but ok the findings that say why; the stages as stage list
 // prints them, since Infrahub's view does not show them; the warnings; the baseline's
 // findings; on a failure the commands that reproduce it; and the fidelity caveat, last.
@@ -89,12 +89,18 @@ func parts(doc *findings.Document, steps []step.Pair, brief bool) []part {
 		}
 		return s
 	}
+	// The scope every stage was read under follows the branch in the heading (017), so
+	// the comment names what was read; a refusal before the scope was resolved names none.
+	scope := ""
+	if doc.Subject != nil && doc.Subject.Scope != "" {
+		scope = ", scope " + inline(name(doc.Subject.Scope))
+	}
 	if b == nil {
 		branch := ""
 		if doc.Subject != nil {
 			branch = doc.Subject.Branch
 		}
-		out = append(out, part{text: "## Fylgja did not rehearse branch " + inline(name(branch))},
+		out = append(out, part{text: "## Fylgja did not rehearse branch " + inline(name(branch)) + scope},
 			part{text: fmt.Sprintf("Status **%s**.", doc.Status)},
 			part{text: findingsSection("Findings", rejections(doc.Findings), brief, nil), name: "the findings", rank: 1},
 			part{text: warningsSection(doc.Findings, nil, brief), name: "the warnings", rank: 2})
@@ -109,8 +115,8 @@ func parts(doc *findings.Document, steps []step.Pair, brief bool) []part {
 	case b.Run == nil || !reachedAny(*b):
 		verb = "did not rehearse"
 	}
-	out = append(out, part{text: fmt.Sprintf("## Fylgja %s proposed change %s on %s", verb,
-		inline(fmt.Sprintf("%q", name(b.ProposedChange.Name))), inline(name(b.ProposedChange.Branch)))})
+	out = append(out, part{text: fmt.Sprintf("## Fylgja %s proposed change %s on %s%s", verb,
+		inline(fmt.Sprintf("%q", name(b.ProposedChange.Name))), inline(name(b.ProposedChange.Branch)), scope)})
 	switch {
 	case unread:
 		out = append(out, part{text: fmt.Sprintf("Run %s was started, and its end was not read: %s. It goes on to its destroy, "+
@@ -280,8 +286,9 @@ func fitNote(left []string, t tableShrunk) string {
 	return note + "; fylgja-twin's message is the whole report as text.*"
 }
 
-// nameMax is the most of a proposed change's name, or a branch's, a brief heading keeps, in
-// bytes: enough to tell one from another, and short enough that the heading always fits.
+// nameMax is the most of a proposed change's name, a branch's or a scope's, a brief
+// heading keeps, in bytes: enough to tell one from another, and short enough that the
+// heading always fits.
 const nameMax = 120
 
 // clip is s cut to at most limit bytes, at a rune's edge, with an ellipsis when cut.

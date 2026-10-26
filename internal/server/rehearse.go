@@ -376,8 +376,9 @@ func rehearsedStep(from, to stages.PlanStage, s step.Step, diff []byte, nodes []
 }
 
 // printPlan prints the plan as the rehearsal takes it (contracts/rehearse-command.md, "The
-// text"): the heading, with the deadline once it is known, then one line per stage, its
-// resolution and its role, or why it was refused, and its findings under it, indented.
+// text"): the heading, with the deadline once it is known and ending with the scope every
+// stage was read under (017), then one line per stage, its resolution and its role, or why
+// it was refused, and its findings under it, indented.
 func (r *rehearsing) printPlan(deadline time.Duration) {
 	pc := r.planned.res.ProposedChange
 	line := fmt.Sprintf("rehearsal of proposed change %q (%s) on branch %s", pc.Name, pc.ID, pc.Branch)
@@ -388,6 +389,7 @@ func (r *rehearsing) printPlan(deadline time.Duration) {
 	if deadline > 0 {
 		line += fmt.Sprintf("; deadline %s (ceiling %s)", deadline, r.ceiling)
 	}
+	line += ", scope " + r.planned.scope
 	r.opts.note("%s", line)
 	for _, row := range r.rows {
 		st := row.stage

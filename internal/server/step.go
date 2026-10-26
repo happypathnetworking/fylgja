@@ -104,6 +104,11 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	if refused := stepScopeUnknown(rec); refused != nil {
 		return finish(op, subject, findings.List{*refused})
 	}
+	// Every read the step makes is under the scope the twin records, never the server's
+	// default (017; FR-020): the target's resolution, its staleness and its read, each of
+	// which the proposed change found under it carries.
+	scope := rec.Provenance.Scope
+	subject.Scope = scope
 	opts.note("twin: stage %s (bundle %s), pinned at %s; %s", rec.Stage.Name(), shortID(rec.BundleID),
 		rec.Provenance.At, plural(len(rec.Nodes), "node"))
 
@@ -114,10 +119,7 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
-	// The scope is the record's (017): twin.json 8 carries provenance.scope, but until the
-	// step reads it from there (T046), the step reads under the server's default, and the
-	// read selects the devices that default's tag names.
-	ch, list, err := stages.Find(ctx, reader, intentStamper{}, rec.Stage.ProposedChange.Branch, opts.c.s.DefaultScope)
+	ch, list, err := stages.Find(ctx, reader, intentStamper{}, rec.Stage.ProposedChange.Branch, scope)
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}

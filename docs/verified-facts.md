@@ -296,6 +296,22 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   ([D-048](decisions.md#d-048)). The delete's own `node.updated` events on the two ports
   are stamped 0.1–1.1 s later than the ports, so the head passes the ports' stamp by
   them. *(10-26; `specs/017-dcim-reader/research.md` §5.11)*
+- **A generation's query-group joins are written by the task workers' account.** About
+  2–7 s after a generation's checksums move, each node the template query read for the
+  first time joins that query's `CoreGraphQLQueryGroup` (`device_config__<hash>`,
+  `group_type` `internal`). The join moves the node's `node_metadata.updated_at` past the
+  checksum. After a seed's own render, that is every device, platform, manufacturer,
+  interface and cable. A node already a member does not move. Infrahub's flow
+  `graphql-query-group-update` writes the join on a task worker through the SDK, as the
+  account that owns the worker's `INFRAHUB_API_TOKEN`. The account then reads as the
+  node's `updated_by`, and as the group's `created_by` and `updated_by`. Infrahub's
+  published Compose file gives the workers `INFRAHUB_INITIAL_AGENT_TOKEN`, whose account
+  Infrahub's initialization names `agent`, with `account_type` `User`, the same as
+  `admin`'s. Infrahub's own identity is `__system__` (shown as `[Infrahub System]`), which
+  created both accounts and wrote none of the joins. `CoreGenericAccount.name` is not
+  read-only. So nothing but that account's name, which an install may change, tells it
+  from an operator's. Read in the image's source and live. *(10-26;
+  `specs/017-dcim-reader/research.md` §5.11, §5.12)*
 - **The event log records a removal, read-only.** `InfrahubEvent(branches: [<branch>],
   since: <branched_from>, order:, limit: ≤50)` (above 50 is refused) lists
   `infrahub.node.deleted` for a deleted link, primary node the concrete kind

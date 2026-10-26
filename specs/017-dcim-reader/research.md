@@ -1805,3 +1805,86 @@ and R-10's event rule already call this churn and never intent.
 - `main` holds no device, and its hash is `7c413536…`.
 - The registration `fylgja` is the only one, at `c006bf9`.
 - `clab inspect --all` is `{}`, there is no `local/twin`, and Temporal lists no Schedule.
+
+<a id="5-12"></a>
+### 5.12 Who writes a generation's group joins (T062, D-058; 2026-10-26, 14:45Z–14:56Z)
+
+Run 19 again, at `78351aa`, before any code: D-058 has the build verify first how
+Infrahub marks its own account on `updated_by`, and stop if that account can be told only
+by a name an install may change. This was read two ways. First in Infrahub 1.11.2's source,
+inside `fylgja-infrahub-infrahub-server-1` (`/source/backend/infrahub`). Then live, on the
+throwaway branch `fylgja-test-017-run19-1793026272`, seeded by the fixture tool (28.3 s),
+given the third link by `-add-link`, read by an uncommitted GraphQL probe, and deleted
+(`deleted 0 stages, 0 proposed changes, branch …`). Nothing was written to `main`, the
+worker and the server were not used, and no token was printed.
+
+**Infrahub's own identity is `__system__`, and it writes none of the joins.**
+
+- `SYSTEM_USER_ID = "__system__"` (`core/constants/__init__.py`) is the default `user_id` of
+  every in-process save and delete. `node_metadata` resolves it to a synthetic account
+  whose display label is `[Infrahub System]` (`graphql/loaders/account.py`). No install
+  can change that id.
+- It is the `created_by` and `updated_by` of both accounts on `main`, `admin` and `agent`
+  (2026-10-08, the install's initialization).
+
+**The joins are written by the task workers' account, on this install `agent`.**
+
+- The template query's groups are written by the flow `graphql-query-group-update`
+  (`groups/tasks.py`). It runs on a task worker and saves the `CoreGraphQLQueryGroup`
+  through the SDK's client, `group.save(allow_upsert=True)`.
+- That client is built from the worker's settings (`workers/dependencies.py`), and the
+  SDK reads its token from `INFRAHUB_API_TOKEN`. Infrahub's published Compose file gives
+  the task workers `INFRAHUB_INITIAL_AGENT_TOKEN` there. So the account is whichever one
+  owns the token an install gives its task workers.
+- Infrahub's initialization creates `agent` only when an agent token or password is set,
+  under the hard-coded name `agent`, with `account_type` `User`, as it creates `admin`
+  (`core/initialization.py`, `create_account`).
+- Live, on `main`: `admin` (`18dc77a5-3850-…`, label `Admin`) and `agent`
+  (`18dc77a5-c3c3-…`, label `Agent`), both `account_type` `User`, `active`, with no
+  description.
+- `GET /api/schema?branch=main`: `CoreGenericAccount.name` is unique, `read_only: false`.
+  `account_type` is optional, defaults to `User`, and has the enum `User`, `Script`,
+  `Bot`, `Git`.
+- The branch's three `device_config__<hash>` groups (`group_type` `internal`, 12 members
+  each) were created by `Agent` (2026-10-21, the demo window's renders on `main`) and
+  updated by it at the seed's render.
+
+**What the seed's render stamped.** The seed wrote every node as `Admin` between
+14:51:27.6 and 14:51:30.7, and the checksums moved between 14:51:43.58 and 14:51:43.92.
+Then, at 14:51:45.78–14:51:47.44, `Agent` restamped **every node the stamps read**: each
+device, the platform, the manufacturer, every interface and every cable (`updated_by`
+`Agent`). §5.11 named the ports' and the cables' joins after the seed. The devices, the
+platform and the manufacturer join too, and only a first read joins. So, with R-10's
+stamps, every device reads stale after the seed's own hand render. The proposed change's
+creation covers that, as §5.11 found.
+
+**The third link's hand generate** (`-add-link`, 14:53:16.44–14:53:18.36):
+
+- Written as `Admin`: the two new ports at 14:53:17.107 and 14:53:17.251, which also moved
+  `n1`'s and `n3`'s own stamps by `Admin`, and the cable at 14:53:17.716.
+- The checksums moved at 14:53:24.591 (`n1`) and 14:53:25.682 (`n3`).
+- At 14:53:28.761, `Agent` restamped the two new ports and the cable. No node that was
+  already a member moved.
+- Today's rule therefore reads `n1`'s and `n3`'s intent at 14:53:28.761, after their
+  checksums: stale, as §5.11 found.
+- D-058's rule (an `Agent` stamp counts as its node's `created_at`), applied by hand to the
+  probe's output, reads `n1` 14:53:17.716 against 24.591 and `n3` 14:53:17.716 against
+  25.682. `n2` reads 14:51:30.540 against 14:51:43.579. All three are fresh. After the
+  seed, before the link, all three were fresh as well.
+
+**So the account is told apart only by its name.** Nothing Infrahub records marks `agent`
+as its own:
+
+- its `account_type` is `admin`'s, and `__system__` created both;
+- its token is the install's choice;
+- its name is Infrahub's default, which an administrator may rename, and an install may
+  run its task workers under another account, or with no `agent` at all.
+
+This is D-058's stop condition. The rule is not built, and T062 stays open for the
+operator (T062's note).
+
+A route that names no account is visible here, for the operator: the writer of the
+template query's own groups. Only Infrahub's flow writes a `CoreGraphQLQueryGroup` of
+`group_type` `internal`, so whichever account last updated one is the account the task
+workers run as, on any install. Reading it is a read of an Infrahub-owned kind the reader
+does not make today (Constitution III's list, the read-only test).

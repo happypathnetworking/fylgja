@@ -1198,6 +1198,48 @@ in `description`.
     - 11.4 GiB of memory is available.
   - **For T071**: tier 2 now takes about 29 minutes (1,712.5 s), not CLAUDE.md's twenty. `internal/stages` took 1,426.6 s against the `-timeout 30m`, which leaves about six minutes of margin.
   - **Next**: the operator's answer on the group joins. Then T062 again, which re-runs at least `internal/checks` and `internal/stages`, then T063. Separately, the operator's second push for T057.
+  - *2026-10-26 14:56Z, at `78351aa`, Run 19 again, of the converge loop (live): left unchecked at D-058's stop.* Step (1), the verification, was done first, as D-058 asks. The account that writes the joins can be told apart only by a name an install may change, so the rule (2) and the tier (3) were not built or run. The record is research §5.12 and `docs/verified-facts.md` (10-26).
+    - **What Infrahub marks as its own**:
+      - Its own identity is `__system__`, shown as `[Infrahub System]`, a fixed id that is the default writer of every in-process save. It created both of `main`'s accounts, and it wrote none of the joins.
+      - The joins, and the query groups themselves, are written by `graphql-query-group-update`, a flow that runs on a task worker. It writes through the SDK as whichever account owns that worker's `INFRAHUB_API_TOKEN`; on this install that is `agent` (label `Agent`).
+      - Infrahub's initialization creates `agent` under a hard-coded name, and only when an agent token or password is configured. Its `account_type` is `User`, the same as `admin`'s.
+      - `CoreGenericAccount.name` is not read-only, so an administrator may rename the account. An install may also run its task workers under another account's token.
+    - **Live**, on the throwaway `fylgja-test-017-run19-1793026272`, which is deleted:
+      - After the seed's hand render, `Agent` restamped every node the stamps read 1.9–3.9 s after the checksums: each device, the platform, the manufacturer, every interface and every cable. So R-10's stamps read all three devices stale after the seed.
+      - After `-add-link`, `Agent` restamped only the new ports and the cable, 3.1–4.2 s after the checksums.
+      - D-058's rule, applied by hand to the read (an `Agent` stamp counts as the node's `created_at`), reads all three devices fresh after both writes. So the rule would close §5.11's failure; only the identification blocks it.
+    - **What it needs, the operator's**: how Fylgja tells the task workers' account apart. Each route below reads `node_metadata.updated_by`, a `CoreGenericAccount`, which the read-only test must then name with its reason.
+      1. *(recommended)* **The account that writes the template query's groups**, read from Infrahub. Only Infrahub's flow writes a `CoreGraphQLQueryGroup` of `group_type` `internal`, so whichever account last updated one is the task workers' account on any install. Read it once per stamps read, on the branch, and leave out the stamps that account wrote. This adds an Infrahub-owned kind to Constitution III's reads, which may be an amendment (the list there is "a Fylgja kind relates to or depends on"; the devices are members of these groups). No install setting is needed.
+      2. **The name `agent`**, Infrahub's default, as a constant. The failure is safe: a renamed account, or task workers run under another one, brings the over-report back as stale, never as a wrong fresh. Write it down as a known limitation (architecture §6).
+      3. **A server setting naming the account** (for example `FYLGJA_INFRAHUB_AGENT_ACCOUNT`, default `agent`). This is route 2 made configurable. It is one more variable for `.env.example`, the server's report and the bring-up script.
+
+      Each is a decision entry beside D-058 (D-058 says "the build stops and asks"), and then T047's and T049's code, as D-058's consequences say.
+    - **Not run, and why**:
+      - Tier 2: without the rule, `TestChecksInsideInfrahub` fails as before, so the tier would only repeat the earlier Run 19 result (1,712.5 s).
+      - Tier 3 is T063's.
+      - No hand scenario is named.
+    - **For T057**: unchanged. The three CI fixes are committed (`8eb52f2`, `417d766`), and CI's contract job skips the failing test.
+
+  *Run 19's second checkpoint, 14:57Z*:
+  - **Gates**, on the final tree:
+    - `make build`: static.
+    - `make test`: passed from the cache, since no Go file changed. Uncached (`go test -count=1 ./...`) it took 43.6 s wall, at a load average of 2.1 before and 5.2 after.
+    - `make lint`: 0 issues.
+    - `go vet -tags contract,fixture,e2e ./...`: clean.
+    - No golden moved.
+  - **The host**:
+    - The worker and the server were restarted from this tree after the final build: the worker is pid 496151 and the server pid 496172.
+    - Both `/proc/<pid>/exe` read the tree's `bin/fylgja`. Their environment names carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`.
+    - The server reports both listeners, the bridge warning, `default scope: tag:fylgja` and both packages with their logins set. The worker reports both packages and `lab fylgja absent; twin directory absent`.
+    - From inside each task worker, `POST /v1/twin/show` answers `200 1 0.1.0-dev` with the token and `401` without it.
+    - `clab inspect --all` is `{}`. There is no `local/twin`, and Temporal lists no Schedule and no running workflow.
+    - In Infrahub:
+      - `Branch` lists `main` and `fylgja-fixture` alone.
+      - `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` count 0.
+      - `main` holds no device, and its hash is `7c413536…`.
+      - `fylgja` is the only registration, at `c006bf9`.
+    - 11.6 GiB of memory is available.
+  - **Next**: the operator's answer on how the task workers' account is identified (above), as a decision entry. Then T062 again: the rule and its tier-1 test, then tier 2 whole. Separately, the operator's second push for T057.
 
 - [ ] T063 [live] [US6] Tier 3 on a quiet host (quickstart §8; SC-006), after T062 and never beside it. Read `free -m`; check both images, the worker and the server from this tree, and the checks and the template imported (T058).
   - Start `make test-e2e 2>&1 | tee local/017-e2e.out` detached, with its exit status in a file, and wait in foreground calls of under ten minutes.

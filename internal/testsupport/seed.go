@@ -817,6 +817,34 @@ func (c *Client) AddVirtualInterface(branch, device, name string) error {
 	return nil
 }
 
+// SetVirtualInterfaceDescription changes the description of the one InterfaceVirtual of a
+// name on a test branch's device: an edit of an existing interface, which, unlike its
+// creation, adds no edge to the device and names no device in its event, so only the
+// interface's own stamp says the device's intent moved (SC-009; 017 research R-10). It
+// renders nothing the template reads of a port. The fixture is refused, as every change is.
+func (c *Client) SetVirtualInterfaceDescription(branch, device, name, description string) error {
+	if branch == FixtureBranch {
+		return fmt.Errorf("branch %s: the fixture is never changed", branch)
+	}
+	if err := testBranch(branch); err != nil {
+		return err
+	}
+	found, err := c.ids(branch, "InterfaceVirtual", fmt.Sprintf(`(device__name__value: %q, name__value: %q)`, device, name))
+	if err != nil {
+		return err
+	}
+	if len(found) != 1 {
+		return fmt.Errorf("branch %s holds %d InterfaceVirtual %s:%s, want one", branch, len(found), device, name)
+	}
+	what := fmt.Sprintf("setting the description of %s:%s on %s", device, name, branch)
+	raw, err := c.GraphQL(branch, fmt.Sprintf(
+		`mutation { InterfaceVirtualUpdate(data: {id: %q, description: {value: %q}}) { ok } }`, found[0], description))
+	if err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	return okOf(raw, "InterfaceVirtualUpdate", what)
+}
+
 // SetPlatformDescription changes the description of the one platform of a name on a test
 // branch: a write on a node every device on the platform reaches, which the template does
 // not render (017 research R-10, §5.8). The fixture is refused, as every change is.

@@ -809,14 +809,18 @@ func TestStageRefusals(t *testing.T) {
 // on what a tagged device owns or reaches makes the next mark stale on every tagged device
 // that reaches it, and on no other. The platform's description and the manufacturer's reach
 // the three devices on them; the cable on n1:ethernet-1/1 re-ended to n1's port alone reaches
-// n1 and n2, by the cable's event and its former port's, since no stamp moves; a virtual
-// interface added to n1 reaches n1 alone. cs1, an untagged device, created on the platform
-// the three stand on reaches all three, by the platform's reverse devices edge and its update
-// event, an over-report US5 scenario 2 accepts (T077); a write of cs1's own makes no mark
-// stale. Only the re-ending renders differently, so the proposed change's checks clear each
-// write before the next (D-046), and a mark after them is fresh. The virtual interface goes
-// last: the template's query reads every interface, and the first generation to read a node
-// moves its stamp (§5.8).
+// n1 and n2, by the cable's event and its former port's, since no stamp moves; an edit of a
+// virtual interface n1 already has, its description, reaches n1 alone, by the interface's own
+// stamp. The interface is created and its creation cleared first: a creation also adds n1's
+// reverse interfaces edge and names n1 in its event, and would make the mark stale whether or
+// not the edit moved a stamp the stamps read (T100). cs1, an untagged device, created on the
+// platform the three stand on reaches all three, by the platform's reverse devices edge and
+// its update event, an over-report US5 scenario 2 accepts (T077); a write of cs1's own makes
+// no mark stale. Only the re-ending renders differently, so the proposed change's checks
+// clear each write before the next (D-046), and a mark after them is fresh. The virtual
+// interface's creation is cleared as the others are: the first generation to read it adds it
+// to the template query's groups, a stamp Infrahub's own account writes, read as its creation
+// (D-058), so the mark after it is fresh, and the edit goes last.
 func TestStagesSeeEveryWriteOfADevice(t *testing.T) {
 	c := harness(t)
 	name := throwaway(t, c, true)
@@ -960,7 +964,11 @@ func TestStagesSeeEveryWriteOfADevice(t *testing.T) {
 	if err := c.AddVirtualInterface(name, "n1", "lo0"); err != nil {
 		t.Fatal(err)
 	}
-	mark("virtual", "a virtual interface added to n1", true, "n1")
+	checked("virtual-created", "a virtual interface added to n1")
+	if err := c.SetVirtualInterfaceDescription(name, "n1", "lo0", "described"); err != nil {
+		t.Fatal(err)
+	}
+	mark("virtual", "n1's virtual interface described", true, "n1")
 }
 
 // D-048 against the real Infrahub: the cable n1:ethernet-1/1 — n2:ethernet-1/1 deleted, by

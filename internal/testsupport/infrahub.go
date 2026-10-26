@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -156,11 +157,11 @@ const LibraryDir = "dcim"
 // mutation of every node the loaded files define and do not remove (state: absent), so
 // for DcimDeviceCreate and FylgjaStageCreate among them.
 func (c *Client) LoadSchema(branch, schemaDir string) error {
-	library, err := filepath.Glob(filepath.Join(schemaDir, LibraryDir, "*.yml"))
+	library, err := libraryFiles(schemaDir)
 	if err != nil {
 		return err
 	}
-	own, err := filepath.Glob(filepath.Join(schemaDir, "*.yaml"))
+	own, err := ownFiles(schemaDir)
 	if err != nil {
 		return err
 	}
@@ -172,7 +173,7 @@ func (c *Client) LoadSchema(branch, schemaDir string) error {
 		if len(paths) == 0 {
 			continue
 		}
-		created, err := c.loadSchemaFiles(branch, paths)
+		created, _, err := c.loadSchemaFiles(branch, paths)
 		if err != nil {
 			return err
 		}
@@ -184,46 +185,206 @@ func (c *Client) LoadSchema(branch, schemaDir string) error {
 	return c.waitForKinds(branch, mutations...)
 }
 
-// loadSchemaFiles loads files onto a branch in one request and returns the Create
-// mutation of each node they define and do not remove.
-func (c *Client) loadSchemaFiles(branch string, paths []string) ([]string, error) {
-	sort.Strings(paths)
-	schemas := make([]any, 0, len(paths))
-	var mutations []string
+func libraryFiles(schemaDir string) ([]string, error) {
+	return filepath.Glob(filepath.Join(schemaDir, LibraryDir, "*.yml"))
+}
+
+func ownFiles(schemaDir string) ([]string, error) {
+	return filepath.Glob(filepath.Join(schemaDir, "*.yaml"))
+}
+
+// definedKinds is what one schema file defines: its nodes and its generics, each with the
+// state that removes it.
+type definedKinds struct {
+	Nodes    []definedKind `yaml:"nodes"`
+	Generics []definedKind `yaml:"generics"`
+}
+
+type definedKind struct {
+	Name      string `yaml:"name"`
+	Namespace string `yaml:"namespace"`
+	State     string `yaml:"state"`
+}
+
+func (k definedKind) kind() string { return k.Namespace + k.Name }
+
+// LibraryKinds names every node and generic the schema library's files under
+// schemaDir/dcim define, sorted: the kinds -prepare-main's gate looks for (R-13). They are
+// read from the files the gate guards, so the list cannot drift from what is loaded; with
+// the repository's schema/ those are the embedded files, byte for byte
+// (TestVendoredLibraryIsThePinnedCommit).
+func LibraryKinds(schemaDir string) ([]string, error) {
+	paths, err := libraryFiles(schemaDir)
+	if err != nil {
+		return nil, err
+	}
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("%s holds no file of the schema library", filepath.Join(schemaDir, LibraryDir))
+	}
+	seen := map[string]bool{}
 	for _, p := range paths {
 		raw, err := os.ReadFile(p)
 		if err != nil {
 			return nil, err
 		}
+		var defined definedKinds
+		if err := yaml.Unmarshal(raw, &defined); err != nil {
+			return nil, fmt.Errorf("%s: %w", p, err)
+		}
+		for _, k := range append(defined.Nodes, defined.Generics...) {
+			if k.State != "absent" {
+				seen[k.kind()] = true
+			}
+		}
+	}
+	kinds := make([]string, 0, len(seen))
+	for k := range seen {
+		kinds = append(kinds, k)
+	}
+	sort.Strings(kinds)
+	return kinds, nil
+}
+
+// KindsHeld lists which of kinds the branch's schema holds, as a node or a generic, sorted.
+// It reads GET /api/schema?branch= and writes nothing.
+func (c *Client) KindsHeld(branch string, kinds []string) ([]string, error) {
+	status, body, err := c.do(http.MethodGet, "/api/schema?branch="+url.QueryEscape(branch), nil)
+	if err != nil {
+		return nil, err
+	}
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("reading the schema of %s: HTTP %d: %s", branch, status, c.redact(fmt.Errorf("%s", body)))
+	}
+	var doc struct {
+		Nodes []struct {
+			Kind string `json:"kind"`
+		} `json:"nodes"`
+		Generics []struct {
+			Kind string `json:"kind"`
+		} `json:"generics"`
+	}
+	if err := json.Unmarshal(body, &doc); err != nil {
+		return nil, fmt.Errorf("reading the schema of %s: %w", branch, err)
+	}
+	has := map[string]bool{}
+	for _, n := range doc.Nodes {
+		has[n.Kind] = true
+	}
+	for _, g := range doc.Generics {
+		has[g.Kind] = true
+	}
+	var held []string
+	for _, k := range kinds {
+		if has[k] {
+			held = append(held, k)
+		}
+	}
+	sort.Strings(held)
+	return held, nil
+}
+
+// LibraryHeldError is -prepare-main's refusal (R-13): the branch already holds some of the
+// schema library's kinds, so nothing was loaded. Its sentence is the one the bring-up
+// script reads as present.
+type LibraryHeldError struct {
+	Branch string
+	Held   []string
+}
+
+func (e *LibraryHeldError) Error() string {
+	return fmt.Sprintf("%s holds %d of the schema library's kinds (%s): -prepare-main is the development host's and CI's "+
+		"tool, which loads the library on an empty main alone; a main that already holds the library is yours, "+
+		"and fylgja schema check says whether it is the one the reader reads",
+		e.Branch, len(e.Held), strings.Join(e.Held, ", "))
+}
+
+// LoadLibrary is -prepare-main's gate and load (R-13). Before any write it reads which of
+// the library's kinds the branch holds: any, and it loads nothing and returns a
+// *LibraryHeldError naming them; none, and it loads schemaDir/dcim's files in one
+// request, waits for their Create mutations and returns how many files it loaded.
+func (c *Client) LoadLibrary(branch, schemaDir string) (files int, err error) {
+	kinds, err := LibraryKinds(schemaDir)
+	if err != nil {
+		return 0, err
+	}
+	held, err := c.KindsHeld(branch, kinds)
+	if err != nil {
+		return 0, err
+	}
+	if len(held) > 0 {
+		return 0, &LibraryHeldError{Branch: branch, Held: held}
+	}
+	paths, err := libraryFiles(schemaDir)
+	if err != nil {
+		return 0, err
+	}
+	mutations, _, err := c.loadSchemaFiles(branch, paths)
+	if err != nil {
+		return 0, err
+	}
+	return len(paths), c.waitForKinds(branch, mutations...)
+}
+
+// LoadOwnSchema loads schemaDir's own files, the stage kind, in one request and waits for
+// their Create mutations. loaded is false when the branch's schema hash did not move: the
+// kind was there already, as the files define it.
+func (c *Client) LoadOwnSchema(branch, schemaDir string) (loaded bool, err error) {
+	paths, err := ownFiles(schemaDir)
+	if err != nil {
+		return false, err
+	}
+	if len(paths) == 0 {
+		return false, fmt.Errorf("%s holds no *.yaml schema file", schemaDir)
+	}
+	mutations, loaded, err := c.loadSchemaFiles(branch, paths)
+	if err != nil {
+		return false, err
+	}
+	return loaded, c.waitForKinds(branch, mutations...)
+}
+
+// loadSchemaFiles loads files onto a branch in one request and returns the Create
+// mutation of each node they define and do not remove, and whether the branch's schema
+// hash moved, as infrahubctl tells an updated schema from one already in place.
+func (c *Client) loadSchemaFiles(branch string, paths []string) (mutations []string, updated bool, err error) {
+	sort.Strings(paths)
+	schemas := make([]any, 0, len(paths))
+	for _, p := range paths {
+		raw, err := os.ReadFile(p)
+		if err != nil {
+			return nil, false, err
+		}
 		var doc any
 		if err := yaml.Unmarshal(raw, &doc); err != nil {
-			return nil, fmt.Errorf("%s: %w", p, err)
+			return nil, false, fmt.Errorf("%s: %w", p, err)
 		}
-		var nodes struct {
-			Nodes []struct {
-				Name      string `yaml:"name"`
-				Namespace string `yaml:"namespace"`
-				State     string `yaml:"state"`
-			} `yaml:"nodes"`
+		var defined definedKinds
+		if err := yaml.Unmarshal(raw, &defined); err != nil {
+			return nil, false, fmt.Errorf("%s: %w", p, err)
 		}
-		if err := yaml.Unmarshal(raw, &nodes); err != nil {
-			return nil, fmt.Errorf("%s: %w", p, err)
-		}
-		for _, n := range nodes.Nodes {
+		for _, n := range defined.Nodes {
 			if n.State != "absent" {
-				mutations = append(mutations, n.Namespace+n.Name+"Create")
+				mutations = append(mutations, n.kind()+"Create")
 			}
 		}
 		schemas = append(schemas, doc)
 	}
 	status, body, err := c.do(http.MethodPost, "/api/schema/load?branch="+branch, map[string]any{"schemas": schemas})
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	if status != http.StatusOK && status != http.StatusAccepted {
-		return nil, fmt.Errorf("schema load of %d file(s) on %s, %d: %s", len(paths), branch, status, string(body))
+		return nil, false, fmt.Errorf("schema load of %d file(s) on %s, %d: %s", len(paths), branch, status, string(body))
 	}
-	return mutations, nil
+	var hashes struct {
+		Hash         string `json:"hash"`
+		PreviousHash string `json:"previous_hash"`
+	}
+	if err := json.Unmarshal(body, &hashes); err != nil {
+		return nil, false, fmt.Errorf("schema load of %d file(s) on %s: %w", len(paths), branch, err)
+	}
+	updated = hashes.Hash != "" && hashes.PreviousHash != "" && hashes.Hash != hashes.PreviousHash
+	return mutations, updated, nil
 }
 
 // waitForKinds polls until the named mutations appear on the branch's GraphQL schema.

@@ -21,35 +21,42 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/testsupport"
 )
 
 func main() {
 	branch := flag.String("branch", testsupport.FixtureBranch, "branch to prepare")
 	schemaDir := flag.String("schema-dir", "schema", "directory holding the schema YAML")
-	schemaOnly := flag.Bool("schema-only", false, "load the schema but do not seed data")
+	schemaOnly := flag.Bool("schema-only", false,
+		"load the schema (the schema library under -schema-dir's dcim/, then the stage kind) but do not seed data")
 	remove := flag.Bool("delete", false,
 		"delete the branch instead, a "+testsupport.TestBranchPrefix+"* one or "+testsupport.FixtureBranch+
 			": every stage of every proposed change whose source it is, those proposed changes, then the branch")
 	sdl := flag.String("sdl", "", "write the branch's GraphQL SDL to this path and exit")
 	addLink := flag.Bool("add-link", false,
-		"add link n1:ethernet-1/3 <-> n3:ethernet-1/3 to a seeded throwaway branch and exit")
+		"add the InterfacePhysical ports n1:ethernet-1/3 and n3:ethernet-1/3 and the DcimCable between them "+
+			"to a seeded throwaway branch and exit")
 	addFourthNode := flag.String("add-fourth-node", "",
-		"add device n4, cabled n4:ethernet-1/1 <-> <peer>:ethernet-1/3, to a "+testsupport.TestBranchPrefix+
+		"add the DcimDevice n4 with the InterfacePhysical ports mgmt0 and ethernet-1/1, and a DcimCable to a new "+
+			"<peer>:ethernet-1/3, to a "+testsupport.TestBranchPrefix+
 			"* -branch seeded with the three-node fixture, render every artifact, and exit; takes the peer's name")
 	addMixedLink := flag.Bool("add-mixed-link", false,
-		"add link s1:ethernet-1/3 <-> e1:Ethernet3 to a throwaway branch seeded with -mixed, render both artifacts, and exit")
+		"add the InterfacePhysical ports s1:ethernet-1/3 and e1:Ethernet3 and the DcimCable between them "+
+			"to a throwaway branch seeded with -mixed, render both artifacts, and exit")
 	generate := flag.Bool("generate", false,
-		"render every device's artifact on a throwaway branch, wait for Ready, and exit")
+		"render every DcimDevice's artifact on a throwaway branch, wait for Ready, and exit")
 	setDescription := flag.String("set-description", "",
-		"set every device's description on a throwaway branch and exit (the artifact-only change; regenerate with -generate)")
+		"set every DcimDevice's description on a throwaway branch and exit "+
+			"(the artifact-only change: the template's header prints it; regenerate with -generate)")
 	disablePort := flag.String("disable-port", "",
-		"disable one interface on a throwaway branch and exit, as <device>:<interface>")
+		"set one InterfacePhysical's status to disabled on a throwaway branch and exit, as <device>:<interface>")
 	addInterface := flag.String("add-interface", "",
-		"add one physical interface, enabled and uncabled, to a device on a "+testsupport.TestBranchPrefix+
+		"add one InterfacePhysical, active and uncabled, to a DcimDevice on a "+testsupport.TestBranchPrefix+
 			"* -branch and exit, as <device>:<name> (render it with -generate)")
 	mixed := flag.Bool("mixed", false,
-		"seed the mixed fixture (two platforms, three devices) on a throwaway branch instead of the three-node one")
+		"seed the mixed fixture (two DcimPlatforms under their manufacturers, three DcimDevices) "+
+			"on a throwaway branch instead of the three-node one")
 	propose := flag.Bool("propose", false,
 		"open a draft proposed change from a throwaway -branch into main, wait for its validators, print its id, and exit")
 	stage := flag.String("stage", "",
@@ -67,7 +74,8 @@ func main() {
 		"with -stage: its as_of, verbatim; omitted, its at is when it was written")
 	description := flag.String("description", "", "with -stage: its description")
 	prepare := flag.Bool("prepare-main", false,
-		"load the schema on main, create the group "+testsupport.ArtifactGroupName+
+		"load the schema library on a main holding none of its kinds (refused, loading nothing, when it holds any), "+
+			"then the stage kind, create the group "+testsupport.ArtifactGroupName+
 			", register this repository read-only with no credential, wait for its import, and exit; takes no -branch")
 	repoName := flag.String("repository-name", testsupport.RepositoryName, "with -prepare-main: the registration's name")
 	repoLocation := flag.String("repository-location", testsupport.RepositoryLocation,
@@ -75,11 +83,12 @@ func main() {
 	repoRef := flag.String("repository-ref", testsupport.RepositoryRef, "with -prepare-main: the ref the registration tracks")
 	wait := flag.Duration("wait", 300*time.Second, "with -prepare-main: how long to wait for the import")
 	seedMain := flag.Bool("seed-main", false,
-		"write the three-node baseline onto main, which must hold no network, for a demo's window (D-054), "+
-			"and exit; takes no other flag")
+		"write the three-node baseline onto main in the schema library's kinds (the tag, the manufacturer, the "+
+			"platform, the four locations, the DcimDevices, their InterfacePhysical ports and DcimCables), "+
+			"which must hold none of them, for a demo's window (D-054), and exit; takes no other flag")
 	clearMain := flag.Bool("clear-main", false,
-		"delete the baseline -seed-main wrote, and nothing else, once no "+testsupport.TestBranchPrefix+
-			"* branch exists, and exit; takes no other flag")
+		"delete the baseline -seed-main wrote in the schema library's kinds, and nothing else, once no "+
+			testsupport.TestBranchPrefix+"* branch exists, and exit; takes no other flag")
 	flag.Parse()
 
 	// -prepare-main is refused or allowed before any request: it writes main, so a flag
@@ -265,18 +274,35 @@ func clearedLine(d testsupport.ClearedBaseline) string {
 }
 
 // prepareMain makes main what every branch needs before it can render (D-028, D-044):
-// the schema, the group the definition targets, and this repository registered read-only
-// with no credential, imported. Each step looks up by name and skips what exists, so a
-// second run writes nothing; nothing is updated or deleted.
+// the schema library and the stage kind, the group the definition targets, and this
+// repository registered read-only with no credential, imported.
+//
+// The library goes first, and only onto a main that holds none of its kinds (R-13): the
+// development host's migrated main and CI's fresh one. A main holding any of them is
+// refused before any write, the group and the registration included, since a library
+// already there is its operator's, of whatever commit. So a second run is that refusal,
+// which the bring-up script reads as present. After the library, each step looks up by
+// name and skips what exists; nothing is updated or deleted.
 func prepareMain(schemaDir, name, location, ref string, wait time.Duration) error {
 	c, err := testsupport.NewClient()
 	if err != nil {
 		return err
 	}
-	if err := c.LoadSchema("main", schemaDir); err != nil {
+	files, err := c.LoadLibrary(testsupport.DefaultBranch, schemaDir)
+	if err != nil {
 		return err
 	}
-	fmt.Println("schema loaded on main")
+	fmt.Printf("schema library loaded on %s (%d files, %s@%s)\n",
+		testsupport.DefaultBranch, files, ctm.ModelSchemaLibrary, ctm.ModelVersion)
+	loaded, err := c.LoadOwnSchema(testsupport.DefaultBranch, schemaDir)
+	if err != nil {
+		return err
+	}
+	if loaded {
+		fmt.Printf("stage kind loaded on %s\n", testsupport.DefaultBranch)
+	} else {
+		fmt.Println("stage kind present")
+	}
 
 	created, err := c.EnsureGroup(testsupport.ArtifactGroupName)
 	if err != nil {

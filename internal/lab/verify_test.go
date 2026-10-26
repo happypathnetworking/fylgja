@@ -24,7 +24,7 @@ import (
 )
 
 // The step's wait against a scratch twin directory
-// holding the three-node golden as the staged bundle and a version 7 record whose step
+// holding the three-node golden as the staged bundle and a version 8 record whose step
 // names the run, a fake node table in the suite's shape, and a fake clock, so every wait
 // runs in milliseconds.
 
@@ -189,7 +189,7 @@ func waitRecord(t *testing.T, run string, change func(*StepFields)) wire.TwinRec
 		PSP: map[string]wire.PSPRef{}, Artifacts: map[string]*wire.TwinArtifact{}}
 	observed := "2026-10-03T11:58:00.000000Z"
 	create := RecordFields{BundleID: stepFromID, ObservedAt: &observed, Source: wire.SourceIntent, Stage: mark("seeded"),
-		Provenance: wire.Provenance{Branch: "fylgja-fixture", At: stepFromAt, SchemaHash: "fixture", ContractVersion: "0.2"},
+		Provenance: wire.Provenance{Branch: "fylgja-fixture", At: stepFromAt, SchemaHash: "fixture", Scope: "tag:fylgja", Mapping: dcimMapping},
 		RunID:      "01a0e9e3-0000-7000-8000-000000000001", Version: "0.1.0-dev", RecordedAt: time.Date(2026, 10, 3, 11, 0, 0, 0, time.UTC)}
 	var lab []wire.LabNode
 	var pushed []wire.StepPush

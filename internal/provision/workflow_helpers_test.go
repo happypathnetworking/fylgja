@@ -19,6 +19,10 @@ import (
 // testBundleID is the fixture bundle's identity.
 const testBundleID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
 
+// dcimMapping is the mapping a twin.json 8 record's provenance names when the Infrahub
+// reader read the schema library's DCIM (017).
+var dcimMapping = wire.Mapping{Reader: "infrahub-dcim", Model: "opsmill/schema-library", Version: "26336e9"}
+
 var errUnmocked = errors.New("activity called without a mock")
 
 // harness is a workflow test environment with both workflows and every activity
@@ -233,7 +237,7 @@ func srlinuxCheckHost(t *testing.T) wire.CheckHostResult {
 	return wire.CheckHostResult{
 		Nodes:       nodes,
 		MemorySumMB: sum,
-		Provenance:  wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "fixture", ContractVersion: "0.2"},
+		Provenance:  wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "fixture", Scope: "tag:fylgja", Mapping: dcimMapping},
 		Findings:    findings.List{},
 	}
 }

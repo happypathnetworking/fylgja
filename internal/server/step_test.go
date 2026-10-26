@@ -162,3 +162,24 @@ func TestACreateAndAStepBesideARehearsalNameIt(t *testing.T) {
 		}
 	}
 }
+
+// A stage twin whose record is of twin.json 7 or earlier names no scope, so twin step refuses
+// it naming the version, step.twin.unsteppable at resolve, its object the record's bundle
+// (017); a record of 8 or later passes on to the step's other checks.
+func TestStepRefusesARecordThatNamesNoScope(t *testing.T) {
+	const bundleID = "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777"
+	for _, version := range []string{"8", "9"} {
+		if f := stepScopeUnknown(&wire.TwinRecord{TwinVersion: version, BundleID: bundleID}); f != nil {
+			t.Errorf("twin.json %s: refused %+v, want it to pass", version, f)
+		}
+	}
+	for _, version := range []string{"7", "6", "2", ""} {
+		f := stepScopeUnknown(&wire.TwinRecord{TwinVersion: version, BundleID: bundleID})
+		want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: bundleID,
+			Step: findings.StepResolve, Message: "the twin was created from a record version this build no longer reads (twin.json " +
+				version + "); fylgja twin destroy clears it"}
+		if f == nil || *f != want {
+			t.Errorf("twin.json %q: refused %+v, want %+v", version, f, want)
+		}
+	}
+}

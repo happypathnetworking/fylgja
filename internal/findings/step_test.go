@@ -143,7 +143,7 @@ func showStepDocuments() []labelledDocument {
 	observed := "2026-10-02T09:14:01.000000Z"
 	record := func(state string, step *ShowStep) *ShowRecord {
 		return &ShowRecord{Branch: "change-1", At: "2026-10-16T17:30:00.000000+00:00", BundleID: stepToID, SchemaHash: "a8045729",
-			ContractVersion: "0.2", ObservedAt: &observed, Source: "intent", Run: ShowRef{WorkflowID: "fylgja-provision", RunID: "run-1"},
+			Scope: "tag:fylgja", Mapping: dcimMapping, ObservedAt: &observed, Source: "intent", Run: ShowRef{WorkflowID: "fylgja-provision", RunID: "run-1"},
 			WorkerVersion: "0.1.0-dev", RecordedAt: "2026-10-02T09:15:41Z", Nodes: 3,
 			Stage: showStage("live", "after its configuration is live", AtSourceGiven), State: state, Step: step}
 	}

@@ -355,7 +355,7 @@ func TestRecordStep(t *testing.T) {
 		a, _ := steppingTwin(t, &fakeRunner{})
 		observed := "2026-09-08T12:01:00.000000Z"
 		f := RecordFields{BundleID: goldenID, ObservedAt: &observed, Source: wire.SourceIntent, Stage: seededStage,
-			Provenance: wire.Provenance{Branch: "fylgja-fixture", At: goldenAt, SchemaHash: "fixture", ContractVersion: "0.2"},
+			Provenance: wire.Provenance{Branch: "fylgja-fixture", At: goldenAt, SchemaHash: "fixture", Scope: "tag:fylgja", Mapping: dcimMapping},
 			RunID:      "01a0e9e3-0000-7000-8000-000000000001", Version: "0.1.0-dev", RecordedAt: time.Now()}
 		for _, n := range golden {
 			f.Nodes = append(f.Nodes, wire.TwinNode{Name: n.Name, Container: "clab-fylgja-" + n.Name, Image: n.Image,

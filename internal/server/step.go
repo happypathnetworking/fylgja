@@ -101,6 +101,9 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 		return finish(op, subject, findings.List{*refused})
 	}
 	rec := host.Twin
+	if refused := stepScopeUnknown(rec); refused != nil {
+		return finish(op, subject, findings.List{*refused})
+	}
 	opts.note("twin: stage %s (bundle %s), pinned at %s; %s", rec.Stage.Name(), shortID(rec.BundleID),
 		rec.Provenance.At, plural(len(rec.Nodes), "node"))
 
@@ -111,9 +114,9 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
-	// The scope is the record's (017): until twin.json 8 carries provenance.scope (T025) and
-	// the step reads it from there (T046), the step reads under the server's default, which
-	// the bridged generics reader records in the CTM 2 envelope and does not filter by.
+	// The scope is the record's (017): twin.json 8 carries provenance.scope, but until the
+	// step reads it from there (T046), the step reads under the server's default, which the
+	// bridged generics reader records in the CTM 2 envelope and does not filter by.
 	ch, list, err := stages.Find(ctx, reader, intentStamper{}, rec.Stage.ProposedChange.Branch, opts.c.s.DefaultScope)
 	if err != nil {
 		return failAt(op, subject, findings.StepResolve, op, "%v", err)
@@ -156,6 +159,21 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 		return &result{doc: doc}
 	}
 	return withStage(stepTo(ctx, opts, f, op, subject, reg, paths, acts, rec, built, list), resolved)
+}
+
+// stepScopeUnknown is the refusal of a stage twin whose record is of twin.json 7 or earlier,
+// or nil for one of 8 or later (017): its provenance names no scope, and every read a step
+// makes is under the record's, so it cannot step, as a record of 5 or earlier naming M10's
+// waypoint cannot (provision.Ineligible). It is the command's refusal alone, before any
+// run: the run's second lock reads records of 4 and 5 in its recorded histories, which
+// must replay unchanged, and a worker of this build writes 8.
+func stepScopeUnknown(rec *wire.TwinRecord) *findings.Finding {
+	if scopeRecorded(rec) {
+		return nil
+	}
+	return &findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: rec.BundleID,
+		Step: findings.StepResolve, Message: "the twin was created from a record version this build no longer reads " +
+			"(twin.json " + rec.TwinVersion + "); fylgja twin destroy clears it"}
 }
 
 // stepTo is the step once the target is compiled and filed: the from bundle, the step, the

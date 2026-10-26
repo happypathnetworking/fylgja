@@ -27,7 +27,7 @@ func namedRecord(t *testing.T, at string, observedAt *string, nodes int) *wire.T
 	}
 	f := RecordFields{
 		BundleID:   namingBundleID,
-		Provenance: wire.Provenance{Branch: "fylgja-fixture", At: at, SchemaHash: "41349c3a", ContractVersion: "0.2"},
+		Provenance: wire.Provenance{Branch: "fylgja-fixture", At: at, SchemaHash: "41349c3a", Scope: "tag:fylgja", Mapping: dcimMapping},
 		ObservedAt: observedAt,
 		Source:     source,
 		RunID:      namingRunID,

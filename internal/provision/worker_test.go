@@ -200,7 +200,7 @@ func recordTwin(t *testing.T, acts *lab.Activities, at string) []byte {
 	observed := "2026-09-16T13:59:30.000000Z"
 	f := lab.RecordFields{
 		BundleID:   recordedBundleID,
-		Provenance: wire.Provenance{Branch: "fylgja-fixture", At: at, SchemaHash: "41349c3a", ContractVersion: "0.2"},
+		Provenance: wire.Provenance{Branch: "fylgja-fixture", At: at, SchemaHash: "41349c3a", Scope: "tag:fylgja", Mapping: dcimMapping},
 		ObservedAt: &observed,
 		Source:     wire.SourceIntent,
 		RunID:      recordedRunID,

@@ -130,7 +130,7 @@ func followingTwin(id string) wire.HostReport {
 		Nodes:          []wire.LabNode{{Name: "n1"}, {Name: "n2"}, {Name: "n3"}},
 		Twin: &wire.TwinRecord{
 			TwinVersion: "1", Lab: wire.LabName, BundleID: id,
-			Provenance: wire.Provenance{Branch: checkBranch, SchemaHash: "41349c3a", ContractVersion: "0.2"},
+			Provenance: wire.Provenance{Branch: checkBranch, SchemaHash: "41349c3a", Scope: "tag:fylgja", Mapping: dcimMapping},
 			ObservedAt: &observed, Source: wire.SourceIntent,
 			Run: wire.RunRef{WorkflowID: WorkflowProvision, RunID: "run-0"},
 		},

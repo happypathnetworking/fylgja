@@ -806,7 +806,7 @@ func TestRehearseOneStage(t *testing.T) {
 }
 
 // The baseline's provision child is the server's input, already compiled, with this run
-// named as its rehearsal and following stopped, so its record names the run (twin.json 7);
+// named as its rehearsal and following stopped, so its record names the run (from twin.json 7);
 // its wait reads from the record's time, under the stage's budget, as this run, which the
 // record does not name, so the wait is written into no record (R-07).
 func TestRehearseRecordNamesTheRun(t *testing.T) {

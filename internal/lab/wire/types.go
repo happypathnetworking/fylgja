@@ -104,12 +104,25 @@ const (
 	BasisNone     = "none"     // nothing to tear down
 )
 
-// Provenance is the manifest's provenance block, carried into twin.json verbatim.
+// Provenance is the manifest's provenance block, carried into twin.json verbatim: it
+// mirrors compiler.Provenance, which this package does not import. From twin.json 8
+// (017) it names the scope the read was made under and the mapping that read it, in place
+// of the generics contract's version. A record of 7 or earlier, which carries
+// contract_version and neither of these, reads with both empty.
 type Provenance struct {
-	Branch          string `json:"branch"`
-	At              string `json:"at,omitempty"`
-	SchemaHash      string `json:"schema_hash"`
-	ContractVersion string `json:"contract_version"`
+	Branch     string  `json:"branch"`
+	At         string  `json:"at,omitempty"`
+	SchemaHash string  `json:"schema_hash"`
+	Scope      string  `json:"scope"`
+	Mapping    Mapping `json:"mapping"`
+}
+
+// Mapping names the reader that produced the CTM and the version of the model it read,
+// as the CTM envelope's mapping block does (017; ctm.Mapping).
+type Mapping struct {
+	Reader  string `json:"reader"`
+	Model   string `json:"model"`
+	Version string `json:"version"`
 }
 
 // CheckHostInput names the bundle to check the host against.

@@ -106,7 +106,7 @@ func stepCheckHost(t *testing.T) wire.CheckHostResult {
 			Checksum: strings.Repeat(string(rune('a'+i)), 32)}
 	}
 	return wire.CheckHostResult{Nodes: nodes, MemorySumMB: 6144, LabPresent: true, TwinDirPresent: true,
-		Provenance: wire.Provenance{Branch: "change-1", At: stepToAt, SchemaHash: "4d5b37aa", ContractVersion: "0.2"},
+		Provenance: wire.Provenance{Branch: "change-1", At: stepToAt, SchemaHash: "4d5b37aa", Scope: "tag:fylgja", Mapping: dcimMapping},
 		Findings:   findings.List{}}
 }
 
@@ -124,7 +124,7 @@ func stepLab() []wire.LabNode {
 func stepTwinHost() wire.HostReport {
 	st := stageCabled
 	return wire.HostReport{LabPresent: true, TwinDirPresent: true, Nodes: stepLab(),
-		Twin: &wire.TwinRecord{TwinVersion: "7", Lab: wire.LabName, BundleID: stepFrom, Stage: &st, State: wire.StateReady,
+		Twin: &wire.TwinRecord{TwinVersion: "8", Lab: wire.LabName, BundleID: stepFrom, Stage: &st, State: wire.StateReady,
 			Provenance: wire.Provenance{Branch: "change-1", At: stepFromAt}, Source: wire.SourceIntent,
 			Run: wire.RunRef{WorkflowID: WorkflowProvision, RunID: "run-0"}},
 		Phrase: "the twin of branch change-1 at " + stepFromAt + ", stage change-1/cabled"}

@@ -340,7 +340,7 @@ func readyResult() provision.ProvisionResult {
 		Findings:   findings.List{},
 		Twin: &wire.TwinRecord{
 			TwinVersion: "2", Lab: "fylgja", BundleID: fixtureBundleID,
-			Provenance: wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "abc", ContractVersion: "0.2"},
+			Provenance: wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "abc", Scope: "tag:fylgja", Mapping: dcimMapping},
 			ObservedAt: &observed, Source: wire.SourceIntent,
 			Run:           wire.RunRef{WorkflowID: provision.WorkflowProvision, RunID: "run-1"},
 			ProvisionedBy: wire.ProvisionedBy{Version: "0.1.0-dev"},
@@ -572,11 +572,11 @@ func validateM2Document(t *testing.T, doc *findings.Document) {
 }
 
 // validateDocument validates a document against the findings schema at schemaPath, an
-// older contract than the current one: a subject's scope, which 017 added, is held to the
-// current contract and left out of what the older one reads (withoutScope).
+// older contract than the current one: what 017 changed is held to the current contract and
+// put back as the older one reads it (asEarlierContract).
 func validateDocument(t *testing.T, schemaPath string, doc *findings.Document) {
 	t.Helper()
-	doc = withoutScope(t, doc)
+	b := asEarlierContract(t, doc)
 	f, err := os.Open(schemaPath)
 	if err != nil {
 		t.Fatal(err)
@@ -594,10 +594,6 @@ func validateDocument(t *testing.T, schemaPath string, doc *findings.Document) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := json.Marshal(doc)
-	if err != nil {
-		t.Fatal(err)
-	}
 	v, err := jsonschema.UnmarshalJSON(bytes.NewReader(b))
 	if err != nil {
 		t.Fatal(err)
@@ -607,20 +603,44 @@ func validateDocument(t *testing.T, schemaPath string, doc *findings.Document) {
 	}
 }
 
-// withoutScope is doc for a contract older than 017's: a document whose subject names the
-// scope its reads were made under is validated whole against the current contract, and
-// returned as a copy with no scope, which is every older contract's subject (017).
-func withoutScope(t *testing.T, doc *findings.Document) *findings.Document {
+// asEarlierContract is doc as a contract older than 017's reads it, marshalled: a document
+// naming what 017 added, a subject's scope or a show record's scope and mapping, is
+// validated whole against the current contract; then the subject's scope is left out,
+// which is every older contract's subject, and a show record's provenance is put back as
+// the contract version every older contract requires in its place (017; contracts/
+// formats.md, "The findings blocks").
+func asEarlierContract(t *testing.T, doc *findings.Document) []byte {
 	t.Helper()
-	if doc.Subject == nil || doc.Subject.Scope == "" {
-		return doc
+	scoped := doc.Subject != nil && doc.Subject.Scope != ""
+	recorded := doc.Show != nil && doc.Show.Record != nil
+	if scoped || (recorded && doc.Show.Record.Scope != "") {
+		validateWithShow(t, currentContract, "017", doc)
 	}
-	validateWithShow(t, currentContract, "017", doc)
-	subject := *doc.Subject
-	subject.Scope = ""
-	older := *doc
-	older.Subject = &subject
-	return &older
+	b, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !scoped && !recorded {
+		return b
+	}
+	var generic map[string]any
+	if err := json.Unmarshal(b, &generic); err != nil {
+		t.Fatal(err)
+	}
+	if subject, ok := generic["subject"].(map[string]any); ok {
+		delete(subject, "scope")
+	}
+	if show, ok := generic["show"].(map[string]any); ok {
+		if record, ok := show["record"].(map[string]any); ok {
+			delete(record, "scope")
+			delete(record, "mapping")
+			record["contract_version"] = "0.2"
+		}
+	}
+	if b, err = json.Marshal(generic); err != nil {
+		t.Fatal(err)
+	}
+	return b
 }
 
 // validateM4Document validates a document against M4's findings contract, with the show
@@ -667,12 +687,14 @@ func validateM10Document(t *testing.T, doc *findings.Document) {
 // block's, from M12 the verify block's and from 015 the rehearsal block's under theirs.
 func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Document) {
 	t.Helper()
+	var b []byte
 	if feature != currentContract {
-		doc = withoutScope(t, doc)
-	}
-	b, err := json.Marshal(doc)
-	if err != nil {
-		t.Fatal(err)
+		b = asEarlierContract(t, doc)
+	} else {
+		var err error
+		if b, err = json.Marshal(doc); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if err := validateAgainst(findingsContract(t, feature), b); err != nil {
 		t.Errorf("document does not satisfy %s's findings contract:\n%v\n%s", milestone, err, b)

@@ -252,7 +252,7 @@ func verifyHost(t *testing.T, golden string, edit func(map[string]any), change f
 	ips := map[string]string{}
 	f := lab.RecordFields{
 		BundleID:   staged,
-		Provenance: wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "41349c3a9c582e5dd44e55d6771f79c2", ContractVersion: "0.2"},
+		Provenance: wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "41349c3a9c582e5dd44e55d6771f79c2", Scope: "tag:fylgja", Mapping: dcimMapping},
 		Source:     wire.SourceIntent,
 		RunID:      showRunID,
 		Version:    "0.1.0-dev",

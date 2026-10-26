@@ -375,6 +375,8 @@ func supersededHost(t *testing.T, waypoint map[string]any, diverged bool) *stepH
 			m[k] = "5"
 		}
 	}
+	contractProvenance(m)
+	delete(m, "rehearsal")
 	delete(m, "stage")
 	if waypoint != nil {
 		m["waypoint"] = waypoint
@@ -395,13 +397,41 @@ func supersededHost(t *testing.T, waypoint map[string]any, diverged bool) *stepH
 	return h
 }
 
-// stepRecordOf is twin.json 6 of the mixed twin created from stage change-1/sealed.
+// unscopedHost is stepHost's twin with its record rewritten as a worker of twin.json version,
+// 6 or 7, wrote it: the stage it names as written, the contract version in place of the
+// scope and the mapping (017), and for a 6 no rehearsal key.
+func unscopedHost(t *testing.T, version string) *stepHostFixture {
+	t.Helper()
+	h := stepHost(t, "plan-link-added.json", nil)
+	b, err := os.ReadFile(h.paths.TwinJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		t.Fatal(err)
+	}
+	m["twin_version"] = version
+	contractProvenance(m)
+	if version == "6" {
+		delete(m, "rehearsal")
+	}
+	if b, err = json.Marshal(m); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(h.paths.TwinJSON, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return h
+}
+
+// stepRecordOf is twin.json 8 of the mixed twin created from stage change-1/sealed.
 func stepRecordOf(t *testing.T, bundleID string, change func(*lab.RecordFields)) wire.TwinRecord {
 	t.Helper()
 	observed := "2026-09-21T09:00:00.000000Z"
 	f := lab.RecordFields{
 		BundleID:   bundleID,
-		Provenance: wire.Provenance{Branch: "change-1", At: stepMixedAt, SchemaHash: "fixture", ContractVersion: "0.2"},
+		Provenance: wire.Provenance{Branch: "change-1", At: stepMixedAt, SchemaHash: "fixture", Scope: "tag:fylgja", Mapping: dcimMapping},
 		ObservedAt: &observed,
 		Source:     wire.SourceIntent,
 		RunID:      createRunID,
@@ -1121,6 +1151,16 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 				"fylgja twin destroy"),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		{name: "a diverged twin", host: divergedStepHost, code: findings.ExitRejected, want: divergedRefusal(""),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		// A stage twin of a record of 7 or earlier names no scope (017): it is refused naming
+		// its version, before its proposed change is asked for, as a 5's waypoint is.
+		{name: "a record of twin.json 7", host: func(t *testing.T) *stepHostFixture { return unscopedHost(t, "7") },
+			code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
+				"the twin was created from a record version this build no longer reads (twin.json 7); fylgja twin destroy clears it"),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		{name: "a record of twin.json 6", host: func(t *testing.T) *stepHostFixture { return unscopedHost(t, "6") },
+			code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
+				"the twin was created from a record version this build no longer reads (twin.json 6); fylgja twin destroy clears it"),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		{name: "another branch", args: []string{"--stage", "other/x"}, code: findings.ExitRejected, asked: true, unread: true,
 			want: refusal(findings.RuleStepTargetForeign, findings.StepResolve, "other/x",

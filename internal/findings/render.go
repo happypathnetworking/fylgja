@@ -603,11 +603,15 @@ type ShowArtifact struct {
 
 // ShowRecord is twin.json, when it is present and readable.
 type ShowRecord struct {
-	Branch          string `json:"branch"`
-	At              string `json:"at,omitempty"`
-	BundleID        string `json:"bundle_id"`
-	SchemaHash      string `json:"schema_hash"`
-	ContractVersion string `json:"contract_version"`
+	Branch     string `json:"branch"`
+	At         string `json:"at,omitempty"`
+	BundleID   string `json:"bundle_id"`
+	SchemaHash string `json:"schema_hash"`
+	// Scope and Mapping are the record's provenance as twin.json 8 names it (017): the scope
+	// the read was made under and the mapping that read it, in place of the generics
+	// contract's version. Both are absent for a record of 7 or earlier, which names neither.
+	Scope   string       `json:"scope,omitempty"`
+	Mapping *ShowMapping `json:"mapping,omitempty"`
 	// ObservedAt is null when no read took place, as in twin.json.
 	ObservedAt     *string `json:"observed_at"`
 	ObservedAtNote string  `json:"observed_at_note,omitempty"`
@@ -629,6 +633,14 @@ type ShowRecord struct {
 	// Step is a version 4 record's last step as twin show shows it; absent when the record
 	// has none.
 	Step *ShowStep `json:"step,omitempty"`
+}
+
+// ShowMapping is the reader that produced the twin's CTM and the version of the model it
+// read, as the record's provenance.mapping names them (017).
+type ShowMapping struct {
+	Reader  string `json:"reader"`
+	Model   string `json:"model"`
+	Version string `json:"version"`
 }
 
 // ShowStep is twin.json 4's step block as far as twin show shows it:

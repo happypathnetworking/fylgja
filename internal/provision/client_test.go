@@ -180,7 +180,7 @@ func TestProvisionDocumentMapping(t *testing.T) {
 	observed := "2026-09-15T14:22:12.000000Z"
 	record := recordFor(wire.RecordInput{
 		BundleID: testBundleID, ObservedAt: &observed, Source: wire.SourceIntent, RunID: "run-1",
-		Provenance: wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "fixture", ContractVersion: "0.2"},
+		Provenance: wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "fixture", Scope: "tag:fylgja", Mapping: dcimMapping},
 		Nodes:      labNodes(srlinuxPlan(t)),
 		Pushed:     []wire.PushResult{{Node: "n1", PushedInS: 0.7}, {Node: "n2", PushedInS: 0.62}, {Node: "n3", PushedInS: 0.65}},
 	})

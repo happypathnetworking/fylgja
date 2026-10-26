@@ -152,7 +152,7 @@ func stageDocuments() []labelledDocument {
 				Nodes: []ShowNode{{Name: "n1", Container: "clab-fylgja-n1", State: "running", MgmtIPv4: "172.20.20.2",
 					Artifact: &ShowArtifact{Name: "device-config", Checksum: m5Checksum}}}},
 			Record: &ShowRecord{Branch: branch, At: at, BundleID: id, SchemaHash: "a8045729",
-				ContractVersion: "0.2", ObservedAt: &observed, Source: "intent",
+				Scope: "tag:fylgja", Mapping: dcimMapping, ObservedAt: &observed, Source: "intent",
 				Run:           ShowRef{WorkflowID: "fylgja-provision", RunID: "run-1"},
 				WorkerVersion: "0.1.0-dev", RecordedAt: "2026-10-16T17:32:00Z", Nodes: 1, State: "ready", Stage: stage},
 			Notes: []string{"pinned at " + at + ", stage " + stage.Ref() + "; not following"}}
@@ -251,9 +251,11 @@ func stageKeys(doc *Document) []string {
 	return keys
 }
 
-// A document with no stage is M7's, key for key: every new field is omitted when empty, so
-// M7's own contract, which forbids additional properties, still accepts every shape M5 and
-// M7 build, and so does the current one.
+// A document with no stage is M7's, key for key but for the show record's provenance:
+// every new field is omitted when empty, so M7's own contract, which forbids additional
+// properties, still accepts every shape M5 and M7 build once the record's scope and mapping
+// are put back as the contract_version M7 wrote (017; drop017ShowProvenance), and the
+// current one accepts them as built.
 //
 // M7's copy stays its milestone's when the newest contract moves on: the claim is that the
 // older contract still accepts these documents.
@@ -266,7 +268,7 @@ func TestAnM7DocumentIsUnchanged(t *testing.T) {
 			if strings.Contains(string(b), `"stage":`) || strings.Contains(string(b), `"stages":`) {
 				t.Errorf("a document with no stage names one: %s", b)
 			}
-			mustValidateBytes(t, m7, b, c.label+" against M7's contract")
+			mustValidateBytes(t, m7, asEarlier(t, c.doc), c.label+" against M7's contract")
 			mustValidateBytes(t, current, b, c.label+" against the current contract")
 		})
 	}

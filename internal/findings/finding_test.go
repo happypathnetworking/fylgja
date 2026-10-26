@@ -196,6 +196,10 @@ var dataModelRules = []string{
 	"psp.matches.duplicate",
 }
 
+// dcimMapping is the mapping a twin.json 8 record's provenance names when the Infrahub
+// reader read the schema library's DCIM (017), as twin show shows it.
+var dcimMapping = &ShowMapping{Reader: "infrahub-dcim", Model: "opsmill/schema-library", Version: "26336e9"}
+
 // declaredRules reads the Rule* constants out of finding.go's syntax tree rather than
 // a hand-kept list, so a constant added to the file cannot escape the comparison.
 func declaredRules(t *testing.T) map[string]string {
@@ -791,7 +795,9 @@ func TestM4DocumentsSatisfySchema(t *testing.T) {
 // asEarlier marshals a document as an earlier milestone's schema is asked to validate it:
 // with the keys a later milestone always writes taken out again. Every findings.schema.json
 // forbids additional properties, so what an earlier schema validates is its own
-// milestone's shape; withDryRunArtifacts is the same move in the other direction.
+// milestone's shape; withDryRunArtifacts is the same move in the other direction. Every
+// schema it serves predates 017, so the show record's provenance is always put back as
+// they read it (drop017ShowProvenance).
 func asEarlier(t *testing.T, doc *Document, drops ...func(doc map[string]any)) []byte {
 	t.Helper()
 	b, err := json.Marshal(doc)
@@ -802,7 +808,7 @@ func asEarlier(t *testing.T, doc *Document, drops ...func(doc map[string]any)) [
 	if err := json.Unmarshal(b, &generic); err != nil {
 		t.Fatal(err)
 	}
-	for _, drop := range drops {
+	for _, drop := range append(drops, drop017ShowProvenance) {
 		drop(generic)
 	}
 	b, err = json.Marshal(generic)
@@ -838,6 +844,21 @@ func dropM7ShowPSP(doc map[string]any) {
 		node, _ := n.(map[string]any)
 		delete(node, "psp")
 	}
+}
+
+// drop017ShowProvenance gives a show record the provenance every contract before 017's
+// requires: 017 removed record.contract_version and put the record's scope and mapping in
+// its place (contracts/formats.md, "The findings blocks"), a removal no earlier contract
+// accepts, so an earlier schema is asked to validate the record as its milestone wrote it.
+func drop017ShowProvenance(doc map[string]any) {
+	show, _ := doc["show"].(map[string]any)
+	record, _ := show["record"].(map[string]any)
+	if record == nil {
+		return
+	}
+	delete(record, "scope")
+	delete(record, "mapping")
+	record["contract_version"] = "0.2"
 }
 
 // dropM6DryRunCounts removes M6's two dry_run counts. M2's, M4's and M5's contracts
@@ -884,7 +905,7 @@ func m4Documents() []labelledDocument {
 		Nodes: []ShowNode{{Name: "n1", Container: "clab-fylgja-n1", State: "running", MgmtIPv4: "172.20.20.2"}}}
 	record := func(at string, observedAt *string, source string) *ShowRecord {
 		r := &ShowRecord{Branch: "fylgja-fixture", At: at, BundleID: twinID, SchemaHash: "41349c3a",
-			ContractVersion: "1", ObservedAt: observedAt, Source: source,
+			Scope: "tag:fylgja", Mapping: dcimMapping, ObservedAt: observedAt, Source: source,
 			Run:           ShowRef{WorkflowID: "fylgja-provision", RunID: "run-1"},
 			WorkerVersion: "0.1.0-dev", RecordedAt: "2026-09-16T19:01:02Z", Nodes: 1}
 		if observedAt == nil {
@@ -1188,7 +1209,7 @@ func m5Documents() []labelledDocument {
 	shown := NewDocument(OpTwinShow, nil, nil)
 	shown.Show = &ShowBlock{Host: host, Kind: ShowKindFrozen, Service: ShowServiceOK,
 		Record: &ShowRecord{Branch: "fylgja-fixture", BundleID: twinID, SchemaHash: "41349c3a",
-			ContractVersion: "0.2", ObservedAt: &observed, Source: "intent",
+			Scope: "tag:fylgja", Mapping: dcimMapping, ObservedAt: &observed, Source: "intent",
 			Run:           ShowRef{WorkflowID: "fylgja-provision", RunID: "run-1"},
 			WorkerVersion: "0.1.0-dev", RecordedAt: "2026-09-18T19:01:02Z", Nodes: 2}}
 

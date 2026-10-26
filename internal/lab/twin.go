@@ -22,8 +22,10 @@ import (
 // the bundle each node holds; version 5 carries the step's wait,
 // step.wait, or null while it has not run; version 6 names the stage the twin was created
 // from or stepped to, with its proposed change, in place of version 3's reference (014);
-// version 7 names the rehearsal run whose baseline the twin is, or null (015).
-const TwinVersion = "7"
+// version 7 names the rehearsal run whose baseline the twin is, or null (015); version 8's
+// provenance is bundle 5's, naming the scope and the mapping in place of the generics
+// contract's version (017).
+const TwinVersion = "8"
 
 // ObservedAtUnknown is what twin.json says when no read took place, so a null
 // observed_at is an explicit statement rather than a missing value (Constitution VI).
@@ -50,7 +52,8 @@ type RecordFields struct {
 // and a twin provisioned from a bundle never did, so its observed_at is null and the
 // note says why. A stage is recorded only on a pinned twin created from intent (014): a
 // bundle carries no stage, and a stage always resolves to an at. A rehearsal is recorded
-// only as the rehearsal workflow's run, by its id (015).
+// only as the rehearsal workflow's run, by its id (015). The provenance names the scope and
+// the mapping, as every bundle 5 manifest does (017).
 func NewRecord(f RecordFields) (wire.TwinRecord, error) {
 	switch f.Source {
 	case wire.SourceIntent:
@@ -69,6 +72,9 @@ func NewRecord(f RecordFields) (wire.TwinRecord, error) {
 	}
 	if st := f.Stage; st != nil && f.Provenance.At == "" {
 		return wire.TwinRecord{}, fmt.Errorf("a twin created from stage %s must record its at: a stage twin is pinned", st.Name())
+	}
+	if err := provenanceNamesItsRead(f.Provenance); err != nil {
+		return wire.TwinRecord{}, err
 	}
 	if !bundle.IsID(f.BundleID) {
 		return wire.TwinRecord{}, fmt.Errorf("%q is not a bundle identity", f.BundleID)
@@ -296,11 +302,13 @@ type StagedTarget struct {
 }
 
 // NewStepRecord builds the record a step leaves (contracts/twin.schema.json
-// version 7) from the record the step started from, and refuses what the contract would
+// version 8) from the record the step started from, and refuses what the contract would
 // not accept, or what would claim more than the step did:
 //
 //   - a previous record that is not the step's from side (another bundle or stage), or
 //     is diverged, which no step starts from;
+//   - a diverged step from a record of 7 or earlier, whose provenance it would keep with
+//     no scope and no mapping (017);
 //   - a phase given to a stepped or unchanged step, or none, or another, to a diverged one;
 //   - a stepped or unchanged step whose staged target is absent, hashes to another
 //     identity than its to side, or carries another at; or whose push plan holds a push
@@ -396,9 +404,25 @@ func NewStepRecord(prev wire.TwinRecord, f StepFields) (wire.TwinRecord, error) 
 		rec.Stage = f.To.Stage
 		rec.State = wire.StateReady
 	}
+	// A diverged step keeps the previous record's provenance, which a record of 7 or earlier
+	// wrote with no scope and no mapping: twin.json 8 cannot hold it (017). twin step refuses
+	// such a twin before any run, so only a record that changed under the run reaches here.
+	if err := provenanceNamesItsRead(rec.Provenance); err != nil {
+		return wire.TwinRecord{}, fmt.Errorf("the step's record keeps the provenance of twin.json %s: %w", prev.TwinVersion, err)
+	}
 	rec.Nodes = stepNodes(prev, f, moved, outcome)
 	rec.Step = stepBlock(f, ended.Sub(started))
 	return rec, nil
+}
+
+// provenanceNamesItsRead refuses a provenance twin.json 8 cannot hold (017): one naming no
+// scope, or a mapping with a field left empty.
+func provenanceNamesItsRead(p wire.Provenance) error {
+	if m := p.Mapping; p.Scope == "" || m.Reader == "" || m.Model == "" || m.Version == "" {
+		return fmt.Errorf("a twin record names the scope its read was made under and the mapping that read it, "+
+			"not scope %q and mapping %q, %q, %q", p.Scope, m.Reader, m.Model, m.Version)
+	}
+	return nil
 }
 
 // targetStaged refuses a step that moves the record to a target the twin directory does

@@ -25,7 +25,7 @@ import (
 // deadRun is the rehearsal run that left a twin and is no longer running.
 const deadRun = "r0"
 
-// rehearsalsTwin is the record a rehearsal's baseline wrote, twin.json 7 at change-1's
+// rehearsalsTwin is the record a rehearsal's baseline wrote, twin.json 8 at change-1's
 // seeded, of the rehearsal run of; nil is a hand twin of the same stage, whose rehearsal is
 // null.
 func rehearsalsTwin(t *testing.T, of *wire.RehearsalRef) wire.TwinRecord {
@@ -80,67 +80,97 @@ func destroyOf(svc *fakeService, cleanup provision.CleanupResult, list findings.
 	svc.destroyEvents = []provision.Event{{Notice: "run fylgja-destroy run-d"}}
 }
 
+// as7 rewrites the record in paths' twin directory as a worker of twin.json 7 wrote it: the
+// contract version in place of the scope and the mapping (017).
+func as7(t *testing.T, paths lab.Paths) {
+	t.Helper()
+	raw, err := os.ReadFile(paths.TwinJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var generic map[string]any
+	if err := json.Unmarshal(raw, &generic); err != nil {
+		t.Fatal(err)
+	}
+	generic["twin_version"] = "7"
+	contractProvenance(generic)
+	if raw, err = json.Marshal(generic); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(paths.TwinJSON, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
 // Scenario 4: the twin of rehearsal run r0, which is no longer running, is reclaimed before
 // the rehearsal starts. The notice and the destroy's lines come first, its event inside the
 // answer before the start frame and with no run frame of its own; the warning
 // rehearsal.twin.reclaimed names r0 and what the destroy removed; the report's reclaimed
 // block says the same; then the rehearsal is started and runs as scenario 1's, exit 0.
 func TestRehearseReclaimsADeadRehearsalsTwin(t *testing.T) {
-	paths, clab := reclaimHost(t, rehearsalsTwin(t, &wire.RehearsalRef{WorkflowID: provision.WorkflowRehearse, RunID: deadRun}))
-	rehearseInfrahub(t)
-	svc := okRun()
-	removed := []string{"lab fylgja (3 containers)", "twin directory " + paths.Twin}
-	destroyOf(svc, provision.CleanupResult{Teardown: provision.CleanupDone, Unstage: provision.CleanupDone, Removed: removed}, nil)
-	useService(t, &reclaimingService{fakeService: svc, paths: paths, clab: clab, t: t})
+	// A record of twin.json 7 still names its rehearsal, and is reclaimed as an 8 is (017).
+	for _, version := range []string{"8", "7"} {
+		t.Run("twin.json "+version, func(t *testing.T) {
+			paths, clab := reclaimHost(t, rehearsalsTwin(t, &wire.RehearsalRef{WorkflowID: provision.WorkflowRehearse, RunID: deadRun}))
+			if version == "7" {
+				as7(t, paths)
+			}
+			rehearseInfrahub(t)
+			svc := okRun()
+			removed := []string{"lab fylgja (3 containers)", "twin directory " + paths.Twin}
+			destroyOf(svc, provision.CleanupResult{Teardown: provision.CleanupDone, Unstage: provision.CleanupDone, Removed: removed}, nil)
+			useService(t, &reclaimingService{fakeService: svc, paths: paths, clab: clab, t: t})
 
-	a := ask(t, findings.OpTwinRehearse, api.RenderText, map[string]any{"branch": lessLink}, nil)
-	if a.status != http.StatusOK {
-		t.Fatalf("status %d", a.status)
-	}
-	f, doc := a.document(t, "the reclaim")
-	satisfiesContract(t, findingsContract(t, currentContract), f.Document, "the reclaim's document")
-	if doc.Status != findings.StatusOK {
-		t.Fatalf("status %s, findings %v; want ok", doc.Status, rulesOf(doc.Findings))
-	}
+			a := ask(t, findings.OpTwinRehearse, api.RenderText, map[string]any{"branch": lessLink}, nil)
+			if a.status != http.StatusOK {
+				t.Fatalf("status %d", a.status)
+			}
+			f, doc := a.document(t, "the reclaim")
+			satisfiesContract(t, findingsContract(t, currentContract), f.Document, "the reclaim's document")
+			if doc.Status != findings.StatusOK {
+				t.Fatalf("status %s, findings %v; want ok", doc.Status, rulesOf(doc.Findings))
+			}
 
-	// The destroy's event, then the rehearsal's own start, run and events: one run frame.
-	want := append([]string{api.KindEvent}, runKinds(len(svc.rehearseEvents))...)
-	if got := a.kinds(api.KindOut, api.KindErr); !slices.Equal(got, want) {
-		t.Errorf("frames %v, want %v: the destroy followed before the start, with no run frame of its own", got, want)
-	}
-	for _, fr := range a.frames {
-		if fr.Start != nil && fr.Start.WorkflowID != provision.WorkflowRehearse {
-			t.Errorf("a start frame for %s; want fylgja-rehearse's alone", fr.Start.WorkflowID)
-		}
-	}
-	if ev := a.events(); len(ev) == 0 || ev[0].Notice != "run fylgja-destroy run-d" {
-		t.Errorf("the first event %+v, want the destroy's notice", ev)
-	}
+			// The destroy's event, then the rehearsal's own start, run and events: one run frame.
+			want := append([]string{api.KindEvent}, runKinds(len(svc.rehearseEvents))...)
+			if got := a.kinds(api.KindOut, api.KindErr); !slices.Equal(got, want) {
+				t.Errorf("frames %v, want %v: the destroy followed before the start, with no run frame of its own", got, want)
+			}
+			for _, fr := range a.frames {
+				if fr.Start != nil && fr.Start.WorkflowID != provision.WorkflowRehearse {
+					t.Errorf("a start frame for %s; want fylgja-rehearse's alone", fr.Start.WorkflowID)
+				}
+			}
+			if ev := a.events(); len(ev) == 0 || ev[0].Notice != "run fylgja-destroy run-d" {
+				t.Errorf("the first event %+v, want the destroy's notice", ev)
+			}
 
-	out := a.text(api.KindOut)
-	reclaim := "reclaiming the twin of rehearsal run " + deadRun + "\nrun fylgja-destroy run-d\n" +
-		"removed lab fylgja (3 containers)\nremoved twin directory " + paths.Twin + "\n"
-	at, baseline := strings.Index(out, reclaim), strings.Index(out, "stage "+seededRef+": created")
-	if at < 0 || baseline < 0 || at > baseline {
-		t.Errorf("the text does not reclaim before the run:\n%s", out)
-	}
+			out := a.text(api.KindOut)
+			reclaim := "reclaiming the twin of rehearsal run " + deadRun + "\nrun fylgja-destroy run-d\n" +
+				"removed lab fylgja (3 containers)\nremoved twin directory " + paths.Twin + "\n"
+			at, baseline := strings.Index(out, reclaim), strings.Index(out, "stage "+seededRef+": created")
+			if at < 0 || baseline < 0 || at > baseline {
+				t.Errorf("the text does not reclaim before the run:\n%s", out)
+			}
 
-	reclaimed := findingOf(t, doc, findings.RuleRehearsalTwinReclaimed)
-	if reclaimed.Severity != findings.Warning || reclaimed.Step != findings.StepDestroy || reclaimed.Object != deadRun ||
-		reclaimed.Message != "the twin of rehearsal run r0, which is no longer running, was destroyed by destroy run run-d "+
-			"before this rehearsal: it removed lab fylgja (3 containers), twin directory "+paths.Twin {
-		t.Errorf("the warning %+v; want it to name r0, the destroy run and what it removed", reclaimed)
-	}
-	if doc.Rehearsal == nil || doc.Rehearsal.Reclaimed == nil {
-		t.Fatalf("the report carries no reclaimed block: %+v", doc.Rehearsal)
-	}
-	if r := doc.Rehearsal.Reclaimed; r.Run != (findings.ShowRef{WorkflowID: provision.WorkflowRehearse, RunID: deadRun}) ||
-		!slices.Equal(r.Cleanup.Removed, removed) || len(r.Cleanup.Remaining) != 0 ||
-		r.Cleanup.Teardown != provision.CleanupDone || r.Cleanup.Unstage != provision.CleanupDone {
-		t.Errorf("reclaimed %+v; want r0 and the destroy's clean cleanup", r)
-	}
-	if !slices.Equal(svc.calls, []string{"StartReclaim", "StartRehearse"}) || len(svc.rehearsed) != 1 {
-		t.Errorf("the service was asked %v; want the reclaim's destroy, then the one rehearsal", svc.calls)
+			reclaimed := findingOf(t, doc, findings.RuleRehearsalTwinReclaimed)
+			if reclaimed.Severity != findings.Warning || reclaimed.Step != findings.StepDestroy || reclaimed.Object != deadRun ||
+				reclaimed.Message != "the twin of rehearsal run r0, which is no longer running, was destroyed by destroy run run-d "+
+					"before this rehearsal: it removed lab fylgja (3 containers), twin directory "+paths.Twin {
+				t.Errorf("the warning %+v; want it to name r0, the destroy run and what it removed", reclaimed)
+			}
+			if doc.Rehearsal == nil || doc.Rehearsal.Reclaimed == nil {
+				t.Fatalf("the report carries no reclaimed block: %+v", doc.Rehearsal)
+			}
+			if r := doc.Rehearsal.Reclaimed; r.Run != (findings.ShowRef{WorkflowID: provision.WorkflowRehearse, RunID: deadRun}) ||
+				!slices.Equal(r.Cleanup.Removed, removed) || len(r.Cleanup.Remaining) != 0 ||
+				r.Cleanup.Teardown != provision.CleanupDone || r.Cleanup.Unstage != provision.CleanupDone {
+				t.Errorf("reclaimed %+v; want r0 and the destroy's clean cleanup", r)
+			}
+			if !slices.Equal(svc.calls, []string{"StartReclaim", "StartRehearse"}) || len(svc.rehearsed) != 1 {
+				t.Errorf("the service was asked %v; want the reclaim's destroy, then the one rehearsal", svc.calls)
+			}
+		})
 	}
 }
 
@@ -244,6 +274,7 @@ func TestRehearseRefusedByWhatHoldsTheHost(t *testing.T) {
 			t.Fatal(err)
 		}
 		generic["twin_version"] = "6"
+		contractProvenance(generic)
 		delete(generic, "rehearsal")
 		if raw, err = json.Marshal(generic); err != nil {
 			t.Fatal(err)

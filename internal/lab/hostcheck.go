@@ -434,13 +434,11 @@ func readManifest(bundleDir string) (compiler.Manifest, error) {
 	return m, nil
 }
 
-// recordProvenance is the manifest's provenance as twin.json 7 records it. A bundle "5"
-// names the scope and the mapping in place of the generics contract's version, which
-// record 7 has no place for: until twin.json 8 carries the manifest's block verbatim
-// (017's T025), the record keeps the branch, the pin and the schema hash, and an empty
-// contract_version, since no contract version was read.
+// recordProvenance is the manifest's provenance as twin.json 8 records it: the block
+// verbatim, the scope and the mapping included (017).
 func recordProvenance(p compiler.Provenance) wire.Provenance {
-	return wire.Provenance{Branch: p.Branch, At: p.At, SchemaHash: p.SchemaHash}
+	return wire.Provenance{Branch: p.Branch, At: p.At, SchemaHash: p.SchemaHash, Scope: p.Scope,
+		Mapping: wire.Mapping{Reader: p.Mapping.Reader, Model: p.Mapping.Model, Version: p.Mapping.Version}}
 }
 
 // exists reports whether anything is at path, without following a final symlink.

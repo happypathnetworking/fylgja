@@ -1371,7 +1371,7 @@ expect "$OUT/create-7.json" '.subject.stage==(env.FP + "/seeded") and .subject.b
     proposed_change: {id: env.PC7, name: env.FP, branch: env.FP, draft: true},
     at: env.AT7S, at_source: "written", description: "seeded"}
   and (has("following") | not)'
-expect "$TWIN/twin.json" '.twin_version=="7" and .rehearsal==null and .provenance.branch==env.FP and .provenance.at==env.AT7S and .step==null
+expect "$TWIN/twin.json" '.twin_version=="8" and .rehearsal==null and .provenance.branch==env.FP and .provenance.at==env.AT7S and .step==null
   and .stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "seeded", description: "seeded", at_source: "written"}'
 [ "$(schedule_state)" = absent ] || fail "case 7: Schedule $FOLLOW_SCHEDULE is not reported absent beside a stage's twin; see $OUT/schedule-describe.err"
 readback 7 "$FP" enable "$OUT/artifacts-7-sealed-1.json"
@@ -1404,7 +1404,7 @@ expect "$OUT/step-7a.json" '.status=="ok" and .operation=="twin.step" and .bundl
   and .step.outcome=="stepped" and .step.state=="ready" and .step.run.workflow_id=="fylgja-step"'
 RUN7A=$(jq -r .subject.run_id "$OUT/step-7a.json")
 export RUN7A
-expect "$TWIN/twin.json" '.twin_version=="7" and .rehearsal==null and .state=="ready" and .bundle_id==env.PLAN7T
+expect "$TWIN/twin.json" '.twin_version=="8" and .rehearsal==null and .state=="ready" and .bundle_id==env.PLAN7T
   and .provenance.branch==env.FP and .provenance.at==env.AT7T
   and .stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "third-link", description: "third link", at_source: "written"}
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN7A and .step.phase==null
@@ -1650,7 +1650,7 @@ CREATE_REF="$FS/seeded"
 create_twin 8
 CREATE8_TOOK=$CREATE_TOOK
 [ "$BID" = "$P1" ] || fail "case 8: create --stage $FS/seeded deployed $BID, but the plan printed $P1"
-expect "$TWIN/twin.json" '.twin_version=="7" and .rehearsal==null and .state=="ready" and .step==null
+expect "$TWIN/twin.json" '.twin_version=="8" and .rehearsal==null and .state=="ready" and .step==null
   and .stage.proposed_change.branch==env.FS and .stage.label=="seeded" and all(.nodes[]; .holds==env.P1)'
 readback_mixed 8 "$FS" "$OUT/artifacts-8-sealed-1.json"
 containers_of "$OUT/containers-8-created.txt"
@@ -1697,7 +1697,7 @@ expect "$OUT/step-8a.json" '.status=="ok" and .operation=="twin.step" and .bundl
   and .step.outcome=="stepped" and .step.state=="ready" and .step.run.workflow_id=="fylgja-step"'
 RUN8A=$(jq -r .subject.run_id "$OUT/step-8a.json")
 export RUN8A
-expect "$TWIN/twin.json" '.twin_version=="7" and .rehearsal==null and .state=="ready" and .bundle_id==env.P2
+expect "$TWIN/twin.json" '.twin_version=="8" and .rehearsal==null and .state=="ready" and .bundle_id==env.P2
   and .stage.proposed_change.branch==env.FS and .stage.label=="mixed-link" and .run.workflow_id=="fylgja-provision"
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN8A and .step.phase==null
   and .step.from.stage.label=="seeded" and .step.from.bundle_id==env.P1 and .step.to.bundle_id==env.P2

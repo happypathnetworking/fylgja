@@ -339,7 +339,7 @@ func TestProvisionDryRunNamesTheTwin(t *testing.T) {
 	observed := "2026-09-16T13:59:30.000000Z"
 	fields := lab.RecordFields{
 		BundleID:   bundleID,
-		Provenance: wire.Provenance{Branch: "fylgja-fixture", At: "2026-09-16T14:00:00Z", SchemaHash: "41349c3a", ContractVersion: "0.2"},
+		Provenance: wire.Provenance{Branch: "fylgja-fixture", At: "2026-09-16T14:00:00Z", SchemaHash: "41349c3a", Scope: "tag:fylgja", Mapping: dcimMapping},
 		ObservedAt: &observed,
 		Source:     wire.SourceIntent,
 		RunID:      runID,

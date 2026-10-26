@@ -29,6 +29,10 @@ import (
 
 const fixtureBundleID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
 
+// dcimMapping is the mapping a twin.json 8 record's provenance names when the Infrahub
+// reader read the schema library's DCIM (017).
+var dcimMapping = wire.Mapping{Reader: "infrahub-dcim", Model: "opsmill/schema-library", Version: "26336e9"}
+
 // fixtureArtifacts are the fixture bundle's artifact checksums, by node: what the
 // re-created fylgja-fixture branch rendered, 861 bytes each.
 var fixtureArtifacts = map[string]string{
@@ -243,7 +247,7 @@ func readyResult() provision.ProvisionResult {
 		Findings:   findings.List{},
 		Twin: &wire.TwinRecord{
 			TwinVersion: "2", Lab: "fylgja", BundleID: fixtureBundleID,
-			Provenance: wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "abc", ContractVersion: "0.2"},
+			Provenance: wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "abc", Scope: "tag:fylgja", Mapping: dcimMapping},
 			ObservedAt: &observed, Source: wire.SourceIntent,
 			Run:           wire.RunRef{WorkflowID: provision.WorkflowProvision, RunID: "run-1"},
 			ProvisionedBy: wire.ProvisionedBy{Version: "0.1.0-dev"},

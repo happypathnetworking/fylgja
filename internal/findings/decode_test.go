@@ -3,6 +3,7 @@ package findings
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -129,6 +130,56 @@ func TestSubjectScopeSatisfiesTheContract(t *testing.T) {
 		}
 		if err := schema.Validate(v); err == nil {
 			t.Errorf("subject.scope %q satisfies findings.schema.json; only tag:<name> may", scope)
+		}
+	}
+}
+
+// The show record carries the record's provenance (017): an 8 record's scope and mapping,
+// or neither for a 7 or earlier record, which names none. The contract refuses the one
+// without the other, a scope that is not tag:<name>, and the contract_version 017 removed.
+func TestShowRecordCarriesTheRecordsProvenance(t *testing.T) {
+	schema := compileCurrentFindingsSchema(t)
+	observed := "2026-10-25T09:00:00.000000Z"
+	shown := func(change func(r *ShowRecord)) *Document {
+		r := &ShowRecord{Branch: "fylgja-fixture", BundleID: strings.Repeat("b5", 32), SchemaHash: "908871c3",
+			Scope: "tag:fylgja", Mapping: dcimMapping, ObservedAt: &observed, Source: "intent",
+			Run: ShowRef{WorkflowID: "fylgja-provision", RunID: "run-1"}, WorkerVersion: "0.1.0-dev",
+			RecordedAt: "2026-10-25T09:01:02Z", Nodes: 3, State: "ready"}
+		change(r)
+		doc := NewDocument(OpTwinShow, nil, nil)
+		doc.Show = &ShowBlock{Kind: ShowKindFrozen, Service: ShowServiceOK, Record: r,
+			Host: ShowHost{LabPresent: true, TwinDirPresent: true, Phrase: "the twin of branch fylgja-fixture"}}
+		return doc
+	}
+	mustValidate(t, schema, shown(func(*ShowRecord) {}), "an 8 record")
+	b := mustMarshal(t, shown(func(*ShowRecord) {}))
+	if want := `"scope":"tag:fylgja","mapping":{"reader":"infrahub-dcim","model":"opsmill/schema-library","version":"26336e9"}`; !strings.Contains(string(b), want) {
+		t.Errorf("an 8 record's show block does not carry %s: %s", want, b)
+	}
+	older := shown(func(r *ShowRecord) { r.Scope, r.Mapping = "", nil })
+	mustValidate(t, schema, older, "a 7 record")
+	if b := mustMarshal(t, older); strings.Contains(string(b), `"scope"`) || strings.Contains(string(b), `"mapping"`) {
+		t.Errorf("a 7 record's show block names a scope or a mapping: %s", b)
+	}
+
+	for label, change := range map[string]func(g map[string]any){
+		"a scope with no mapping": func(g map[string]any) { delete(g, "mapping") },
+		"a mapping with no scope": func(g map[string]any) { delete(g, "scope") },
+		"a scope not tag:<name>":  func(g map[string]any) { g["scope"] = "fylgja" },
+		"a mapping with no model": func(g map[string]any) { delete(g["mapping"].(map[string]any), "model") },
+		"contract_version":        func(g map[string]any) { g["contract_version"] = "0.2" },
+	} {
+		var generic map[string]any
+		if err := json.Unmarshal(mustMarshal(t, shown(func(*ShowRecord) {})), &generic); err != nil {
+			t.Fatal(err)
+		}
+		change(generic["show"].(map[string]any)["record"].(map[string]any))
+		b, err := json.Marshal(generic)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := schema.Validate(mustAny(t, b)); err == nil {
+			t.Errorf("%s: show.schema.json's record accepts it", label)
 		}
 	}
 }

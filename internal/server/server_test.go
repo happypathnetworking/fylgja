@@ -1287,14 +1287,15 @@ func TestTheClientSpeaksToTheServer(t *testing.T) {
 	}
 }
 
-// rehearsalTwin is the record a rehearsal's baseline wrote (twin.json 7): change-1/seeded,
+// rehearsalTwin is the record a rehearsal's baseline wrote (twin.json 8): change-1/seeded,
 // of rehearsal run r1; nil rehearsal for the hand twin of the same stage.
 func rehearsalTwin(rehearsal *wire.RehearsalRef) *wire.TwinRecord {
-	return &wire.TwinRecord{TwinVersion: "7", Lab: wire.LabName, BundleID: "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777",
-		Provenance: wire.Provenance{Branch: "change-1", At: "2026-10-16T17:25:30.118244+00:00"}, Source: wire.SourceIntent,
-		Run:       wire.RunRef{WorkflowID: provision.WorkflowProvision, RunID: "p1"},
-		Stage:     &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "seeded", AtSource: "written"},
-		Rehearsal: rehearsal, State: wire.StateReady,
+	return &wire.TwinRecord{TwinVersion: "8", Lab: wire.LabName, BundleID: "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777",
+		Provenance: wire.Provenance{Branch: "change-1", At: "2026-10-16T17:25:30.118244+00:00", Scope: "tag:fylgja", Mapping: dcimMapping},
+		Source:     wire.SourceIntent,
+		Run:        wire.RunRef{WorkflowID: provision.WorkflowProvision, RunID: "p1"},
+		Stage:      &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "seeded", AtSource: "written"},
+		Rehearsal:  rehearsal, State: wire.StateReady,
 		Nodes: []wire.TwinNode{{Name: "n1"}, {Name: "n2"}, {Name: "n3"}}}
 }
 

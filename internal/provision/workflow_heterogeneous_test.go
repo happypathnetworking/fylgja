@@ -150,7 +150,7 @@ func heterogeneousCheckHost(t *testing.T) wire.CheckHostResult {
 	return wire.CheckHostResult{
 		Nodes:       nodes,
 		MemorySumMB: nodes[0].MemoryMB + nodes[1].MemoryMB,
-		Provenance:  wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "fixture", ContractVersion: "0.2"},
+		Provenance:  wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "fixture", Scope: "tag:fylgja", Mapping: dcimMapping},
 		Findings:    findings.List{},
 	}
 }
@@ -207,7 +207,7 @@ func mixedCheckHost(t *testing.T) wire.CheckHostResult {
 	return wire.CheckHostResult{
 		Nodes:       nodes,
 		MemorySumMB: sum,
-		Provenance:  wire.Provenance{Branch: "mixed-fixture", SchemaHash: "fixture", ContractVersion: "0.2"},
+		Provenance:  wire.Provenance{Branch: "mixed-fixture", SchemaHash: "fixture", Scope: "tag:fylgja", Mapping: dcimMapping},
 		Findings:    findings.List{},
 	}
 }

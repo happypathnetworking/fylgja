@@ -137,6 +137,9 @@ type showText struct {
 	// hostHeld is set when a run in flight holds the host: the twin: line then says what the
 	// host holds, without M3's phrase or its remedy.
 	hostHeld bool
+	// provenance is the record line's last clause, the scope and the mapping the record
+	// names, or the scope unknown for a record that names none (provenanceClause).
+	provenance string
 	// step is the record block's line for a record that has stepped, or "".
 	step string
 	// towards is the stage each run in flight is for, by run id (towardsOf), which the in
@@ -185,9 +188,16 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 	if rec != nil {
 		block.Record = &findings.ShowRecord{
 			Branch: rec.Provenance.Branch, At: rec.Provenance.At, BundleID: rec.BundleID, SchemaHash: rec.Provenance.SchemaHash,
-			ContractVersion: rec.Provenance.ContractVersion, ObservedAt: rec.ObservedAt, ObservedAtNote: rec.ObservedAtNote,
+			ObservedAt: rec.ObservedAt, ObservedAtNote: rec.ObservedAtNote,
 			Source: rec.Source, Run: findings.ShowRef{WorkflowID: rec.Run.WorkflowID, RunID: rec.Run.RunID},
 			WorkerVersion: rec.ProvisionedBy.Version, RecordedAt: rec.RecordedAt, Nodes: len(rec.Nodes),
+		}
+		// A version 8 record names the scope its read was made under and the mapping that
+		// read it (017); an earlier one names neither, and shows neither.
+		if scopeRecorded(rec) {
+			m := rec.Provenance.Mapping
+			block.Record.Scope = rec.Provenance.Scope
+			block.Record.Mapping = &findings.ShowMapping{Reader: m.Reader, Model: m.Model, Version: m.Version}
 		}
 		// A version 6 record names the stage the twin was created from or stepped to, and a
 		// version 7 record the rehearsal it is the twin of (015).
@@ -201,6 +211,9 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 	}
 
 	text := showText{towards: towardsOf(reads.inFlight)}
+	if rec != nil {
+		text.provenance = provenanceClause(rec)
+	}
 	if rec != nil && rec.Step != nil {
 		text.step = stepLine(rec, waitRecorded(rec))
 	}
@@ -389,6 +402,25 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 func waitRecorded(rec *wire.TwinRecord) bool {
 	v, err := strconv.Atoi(rec.TwinVersion)
 	return err == nil && v >= 5
+}
+
+// scopeRecorded says whether the record is version 8 or later, whose provenance names the
+// scope its read was made under and the mapping that read it (017). twin step refuses a
+// record that does not (stepScopeUnknown).
+func scopeRecorded(rec *wire.TwinRecord) bool {
+	v, err := strconv.Atoi(rec.TwinVersion)
+	return err == nil && v >= 8
+}
+
+// provenanceClause is the record line's last clause (contracts/cli.md): "scope tag:fylgja,
+// read by infrahub-dcim from opsmill/schema-library@26336e9", or, for a record of 7 or
+// earlier, "scope unknown (record 7)".
+func provenanceClause(rec *wire.TwinRecord) string {
+	if !scopeRecorded(rec) {
+		return fmt.Sprintf("scope unknown (record %s)", rec.TwinVersion)
+	}
+	m := rec.Provenance.Mapping
+	return fmt.Sprintf("scope %s, read by %s from %s@%s", rec.Provenance.Scope, m.Reader, m.Model, m.Version)
 }
 
 // showStep is twin.json 4's step block as twin show shows it (contracts/show.schema.json),
@@ -719,7 +751,7 @@ func printShow(opts *options, block findings.ShowBlock, text showText) {
 		if st := r.Stage; st != nil {
 			ref += fmt.Sprintf(" (stage %s, at %s)", st.Ref(), st.AtSource)
 		}
-		opts.note("record: %s, bundle_id %s, schema %s, contract %s", ref, r.BundleID, r.SchemaHash, r.ContractVersion)
+		opts.note("record: %s, bundle_id %s, schema %s, %s", ref, r.BundleID, r.SchemaHash, text.provenance)
 		switch {
 		case r.ObservedAt == nil:
 			// The note says "unknown:" itself (lab.ObservedAtUnknown, M2's twin.json).

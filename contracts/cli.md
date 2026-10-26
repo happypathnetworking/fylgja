@@ -958,7 +958,7 @@ Sixteen added and eight removed. No status, step or exit is new.
 | `omit.cable.ends` | info, 0, `read` | the cable | other than two ends |
 | `omit.cable.endpoint` | info, 0, `read` | the cable | an end not on a physical port |
 | `omit.cable.outside_scope` | info, 0, `read` | the cable | an end outside the scope |
-| `ctm.version.unsupported` | rejection, 1, none | the CTM file | `twin compile` given a CTM of another version; names both |
+| `ctm.version.unsupported` | rejection, 1, none | the CTM file | `twin compile` given a CTM of another version, or declaring none; names both, or the one it reads |
 | `psp.matches.missing` | rejection, 1, `verify` | the package path | no match, or a pair with an empty name |
 | `psp.matches.duplicate` | rejection, 1, `verify` | the package path | two packages name one pair; names both packages and the pair; also refuses `serve` and `worker run` at start, and the registry's load |
 
@@ -993,7 +993,11 @@ otherwise. `platform.unsupported` stays, for a CTM naming a package this build l
 | PSP | `0.7` | [psp.schema.json](psp.schema.json): `platform.matches`, the manufacturer and platform name pairs a package is, matched exactly |
 | contract | retired | the CTM's version is the contract's |
 
-- `twin compile` refuses a CTM `1` `ctm.version.unsupported`; `twin provision` refuses a
+- `twin compile` refuses a CTM `1` `ctm.version.unsupported`, and a CTM declaring no
+  version alike (`the CTM declares no ctm_version; this build reads "2", …`), never reading
+  it as a `2`; a CTM leaving out `envelope.fidelity`, or writing it null, is a rejection
+  `data.required.missing` naming `envelope.fidelity`, exit 1, nothing written, since `[]`
+  would say the reader approximated and omitted nothing; `twin provision` refuses a
   bundle `4` `bundle.version.unsupported`, naming both, as it refused a `3`; a package
   declaring `0.6` or earlier is `psp.version.unknown`, `package declares format version
   "0.6", this build understands "0.7"`.

@@ -51,11 +51,25 @@ func runCompile(opts *options, f *compileFlags, files []api.File) error {
 	// file the operator gave and both versions: every other finding would be about a format
 	// this build does not read, and nothing converts one (FR-028). With no step, as M1's
 	// operations carry none.
+	// A CTM declaring no version is refused alike, as a file of no version this build reads.
 	var other *ctm.VersionError
 	if errors.As(err, &other) {
+		declares := fmt.Sprintf("declares ctm_version %q", other.Got)
+		if other.Got == "" {
+			declares = "declares no ctm_version"
+		}
 		var list findings.List
 		list.Add(findings.Rejection, findings.RuleCTMVersionUnsupported, f.ctmPath, fmt.Sprintf(
-			"the CTM declares ctm_version %q; this build reads %q, and nothing converts one", other.Got, ctm.Version))
+			"the CTM %s; this build reads %q, and nothing converts one", declares, ctm.Version))
+		return finish(findings.OpCompile, subject, list)
+	}
+	// A file that leaves out a field the contract requires, which Normalize would fill, is
+	// named as validation names an empty envelope field: the fidelity list left out would
+	// otherwise compile to a manifest saying the reader approximated and omitted nothing.
+	var missing *ctm.MissingError
+	if errors.As(err, &missing) {
+		var list findings.List
+		list.Add(findings.Rejection, findings.RuleRequiredMissing, missing.Field, missing.Message)
 		return finish(findings.OpCompile, subject, list)
 	}
 	if err != nil {

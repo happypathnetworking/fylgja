@@ -228,6 +228,51 @@ func TestCompileActivity(t *testing.T) {
 		}
 	})
 
+	// The activity compiles only the CTM its own read wrote, which carries both, but its
+	// ctm.Load holds a file to the contract as twin compile does: one leaving out its
+	// version or its fidelity list fails the step naming the field, and nothing is filed
+	// (017, T090).
+	t.Run("a CTM leaving out its version or its fidelity list is refused", func(t *testing.T) {
+		for _, c := range []struct{ name, field, says string }{
+			{"no ctm_version", "ctm_version", `no ctm_version, expected "2"`},
+			{"no envelope.fidelity", "fidelity", "envelope.fidelity, "},
+		} {
+			t.Run(c.name, func(t *testing.T) {
+				b, err := os.ReadFile(fixture)
+				if err != nil {
+					t.Fatal(err)
+				}
+				var m map[string]any
+				if err := json.Unmarshal(b, &m); err != nil {
+					t.Fatal(err)
+				}
+				if c.field == "ctm_version" {
+					delete(m, c.field)
+				} else {
+					delete(m["envelope"].(map[string]any), c.field)
+				}
+				if b, err = json.Marshal(m); err != nil {
+					t.Fatal(err)
+				}
+				src := filepath.Join(t.TempDir(), "edited.ctm.json")
+				if err := os.WriteFile(src, b, 0o644); err != nil {
+					t.Fatal(err)
+				}
+				cx := newControl(t)
+				path := stageRead(t, cx, src, "run-5")
+
+				_, err = cx.Compile(ctx, CompileInput{CTMPath: path})
+				f := readFailure(t, err, findings.RuleOperationFailed)
+				if f.Step != findings.StepCompile || f.Object != path || !strings.HasPrefix(f.Message, c.says) {
+					t.Errorf("finding %+v, want operation.failed at step compile naming %s: %s…", f, path, c.says)
+				}
+				if got := entriesOf(t, cx.Paths.Bundles); !slices.Equal(got, []string{".reads"}) {
+					t.Errorf("the store holds %v, want nothing filed", got)
+				}
+			})
+		}
+	})
+
 	t.Run("a rejected read's copy is removed", func(t *testing.T) {
 		c := newControl(t)
 		defect := repoPath("testdata", "ctm", "defects", "platform-unsupported.json")

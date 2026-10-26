@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -29,6 +30,70 @@ func TestAnotherCTMVersionIsRefusedBeforeValidation(t *testing.T) {
 	}
 	if _, err := os.Stat(out); !os.IsNotExist(err) {
 		t.Errorf("a refused compile wrote something to %s", out)
+	}
+}
+
+// A CTM that leaves out its version or its fidelity list, both required of a file, is
+// refused by twin compile before anything is written, exit 1, naming the field, with no
+// bundle_id (017, T090): no ctm_version is ctm.version.unsupported at the file, naming
+// "2", as a "1" is; no envelope.fidelity, or a null one, is data.required.missing at the
+// field, as an empty envelope field is, since [] would say the reader approximated and
+// omitted nothing.
+func TestCompileRefusesACTMLeavingOutARequiredField(t *testing.T) {
+	for _, c := range []struct {
+		name, rule, object, message string
+		change                      func(map[string]any)
+	}{
+		{"no ctm_version", findings.RuleCTMVersionUnsupported, "",
+			`the CTM declares no ctm_version; this build reads "2", and nothing converts one`,
+			func(m map[string]any) { delete(m, "ctm_version") }},
+		{"no envelope.fidelity", findings.RuleRequiredMissing, "envelope.fidelity", "",
+			func(m map[string]any) { delete(m["envelope"].(map[string]any), "fidelity") }},
+		{"a null envelope.fidelity", findings.RuleRequiredMissing, "envelope.fidelity", "",
+			func(m map[string]any) { m["envelope"].(map[string]any)["fidelity"] = nil }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			b, err := os.ReadFile(repoPath("testdata", "ctm", "three-node.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var m map[string]any
+			if err := json.Unmarshal(b, &m); err != nil {
+				t.Fatal(err)
+			}
+			c.change(m)
+			if b, err = json.Marshal(m); err != nil {
+				t.Fatal(err)
+			}
+			dir := t.TempDir()
+			in, out := filepath.Join(dir, "edited.ctm.json"), filepath.Join(dir, "b")
+			if err := os.WriteFile(in, b, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			object := c.object
+			if object == "" {
+				object = in
+			}
+
+			code, doc := runCompileTo(t, in, out)
+			if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0].Rule != c.rule ||
+				doc.Findings[0].Object != object || doc.Findings[0].Severity != string(findings.Rejection) ||
+				doc.Findings[0].Location != nil {
+				t.Fatalf("exit %d, findings %+v; want 1 with %s naming %s alone", code, doc.Findings, c.rule, object)
+			}
+			if c.message != "" && doc.Findings[0].Message != c.message {
+				t.Errorf("message %q, want %q", doc.Findings[0].Message, c.message)
+			}
+			if c.rule == findings.RuleRequiredMissing && !strings.HasPrefix(doc.Findings[0].Message, "envelope.fidelity, ") {
+				t.Errorf("message %q does not name envelope.fidelity", doc.Findings[0].Message)
+			}
+			if _, err := os.Stat(out); !os.IsNotExist(err) {
+				t.Errorf("something was written to %s", out)
+			}
+			if doc.BundleID != "" {
+				t.Errorf("the document names bundle %s", doc.BundleID)
+			}
+		})
 	}
 }
 

@@ -158,21 +158,21 @@ func TestUnpinnedEnvelopeOmitsAt(t *testing.T) {
 	}
 }
 
+// Normalize fills the defaults of a CTM built in memory, as the reader's is: the version,
+// the fidelity list, an interface's admin state. A file that leaves out the version or the
+// list is refused by Unmarshal instead (TestUnmarshalRefusesAMissingVersion,
+// TestUnmarshalRefusesAMissingFidelityList).
 func TestNormalizeFillsDefaults(t *testing.T) {
-	c, err := Unmarshal([]byte(`{
-      "ctm_version": "2",
-      "envelope": {"branch": "b", "observed_at": "2026-09-08T12:00:00.000000Z",
-        "schema_hash": "fixture", "scope": "tag:fylgja",
-        "mapping": {"reader": "infrahub-dcim", "model": "opsmill/schema-library", "version": "26336e9"}},
-      "devices": [{"name": "n1", "platform": {"package": "nokia_srlinux"},
-        "interfaces": [{"name": "ethernet-1/1"}]}],
-      "links": []}`))
-	if err != nil {
-		t.Fatal(err)
+	c := sample()
+	c.CTMVersion = ""
+	c.Envelope.Fidelity = nil
+	c.Devices[0].Interfaces[1].Enabled = nil
+	Normalize(c)
+	if c.CTMVersion != Version {
+		t.Errorf("ctm_version = %q, want %q", c.CTMVersion, Version)
 	}
-	in := c.Devices[0].Interfaces[0]
-	if !in.IsEnabled() {
-		t.Error("enabled should default to true")
+	if in := c.Device("n2").Interfaces[0]; in.Name != "ethernet-1/1" || !in.IsEnabled() || in.Enabled == nil {
+		t.Errorf("%+v: enabled should default to true, and be filled", in)
 	}
 	if c.Envelope.Fidelity == nil || len(c.Envelope.Fidelity) != 0 {
 		t.Errorf("a CTM with no fidelity list should read as [], got %#v", c.Envelope.Fidelity)
@@ -321,6 +321,107 @@ func TestVersion1IsRefused(t *testing.T) {
 	}
 	if _, err := Load(path); err == nil || !strings.Contains(err.Error(), `ctm_version "1"`) {
 		t.Errorf("Load of a CTM 1 = %v, want the version refusal", err)
+	}
+}
+
+// ctmFile is a CTM "2" whose ctm_version and envelope.fidelity are given as
+// written: an empty argument leaves the key out.
+func ctmFile(version, fidelity string) []byte {
+	var b strings.Builder
+	b.WriteString("{")
+	if version != "" {
+		b.WriteString(`"ctm_version":` + version + `,`)
+	}
+	b.WriteString(`"envelope":{"branch":"b","observed_at":"x","schema_hash":"h","scope":"tag:fylgja",` +
+		`"mapping":{"reader":"r","model":"m","version":"v"}`)
+	if fidelity != "" {
+		b.WriteString(`,"fidelity":` + fidelity)
+	}
+	b.WriteString(`},"devices":[],"links":[]}`)
+	return []byte(b.String())
+}
+
+// A CTM file that declares no version is refused for its version, naming the one this
+// build reads, as a "1" is: Normalize would read it as a "2", a claim the file never made
+// (017, T090). Absent, null and empty alike.
+func TestUnmarshalRefusesAMissingVersion(t *testing.T) {
+	for _, c := range []struct{ name, version string }{
+		{"absent", ""},
+		{"null", "null"},
+		{"empty", `""`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Unmarshal(ctmFile(c.version, "[]"))
+			var other *VersionError
+			if !errors.As(err, &other) || other.Got != "" {
+				t.Fatalf("refusal %v, want a VersionError declaring none", err)
+			}
+			if got, want := err.Error(), `no ctm_version, expected "2"`; got != want {
+				t.Errorf("refusal = %q, want %q", got, want)
+			}
+		})
+	}
+	if _, err := Unmarshal(ctmFile(`"2"`, "[]")); err != nil {
+		t.Errorf("a CTM 2 was refused: %v", err)
+	}
+}
+
+// A CTM file that leaves out its fidelity list, or writes it null, is refused naming
+// envelope.fidelity: [] says the reader approximated and omitted nothing, which a missing
+// list cannot say, and Normalize would fill one before validation could see it was
+// missing (017, T090). [] is accepted and kept.
+func TestUnmarshalRefusesAMissingFidelityList(t *testing.T) {
+	for _, c := range []struct{ name, fidelity string }{
+		{"absent", ""},
+		{"null", "null"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Unmarshal(ctmFile(`"2"`, c.fidelity))
+			var missing *MissingError
+			if !errors.As(err, &missing) || missing.Field != "envelope.fidelity" {
+				t.Fatalf("refusal %v, want a MissingError naming envelope.fidelity", err)
+			}
+			if !strings.HasPrefix(err.Error(), "envelope.fidelity, ") {
+				t.Errorf("refusal %q does not name the field first", err)
+			}
+		})
+	}
+	c, err := Unmarshal(ctmFile(`"2"`, "[]"))
+	if err != nil {
+		t.Fatalf("a CTM with an empty fidelity list was refused: %v", err)
+	}
+	if c.Envelope.Fidelity == nil || len(c.Envelope.Fidelity) != 0 {
+		t.Errorf("fidelity = %#v, want []", c.Envelope.Fidelity)
+	}
+	// The version is read first: a file of no version and no list is refused for its
+	// version, as a "1" is, and never for the field it leaves out.
+	var other *VersionError
+	if _, err := Unmarshal(ctmFile("", "")); !errors.As(err, &other) {
+		t.Errorf("a file with neither = %v, want the version refusal", err)
+	}
+}
+
+// Every fixture under testdata/ctm/, the defects included, decodes: each declares its
+// version and records its fidelity list, as the contract requires of a file. version-1.json
+// alone is refused, for its version (TestVersion1IsRefused).
+func TestEveryFixtureDecodes(t *testing.T) {
+	root := filepath.Join("..", "..", "testdata", "ctm")
+	var n int
+	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".json") || d.Name() == "version-1.json" {
+			return err
+		}
+		n++
+		if _, err := Load(path); err != nil {
+			t.Errorf("%s: %v", path, err)
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n == 0 {
+		t.Fatalf("no fixture under %s", root)
 	}
 }
 

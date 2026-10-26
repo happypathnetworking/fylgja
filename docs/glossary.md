@@ -295,7 +295,8 @@ envelope carries the branch, the `at`, `observed_at`, the schema hash, the *scop
 *approximations* and *omissions*. Each device names its package (`platform.package`, the
 package's id), its ports (each with its name, `mgmt_only`, `enabled` and link) and its
 *artifact*; no role, site, interface type, parent or address. `twin compile` refuses a CTM
-of another version, naming both (`ctm.version.unsupported`), and nothing converts a `1`
+of another version, or declaring none, naming both (`ctm.version.unsupported`), and nothing
+converts a `1`
 ([§4.2](architecture.md#42-canonical-topology-model-ctm), [D-010](decisions.md#d-010)).
 
 **Cut** — M14's first half: this repository's first commit, of cleaned code and documents

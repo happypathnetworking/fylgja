@@ -37,7 +37,9 @@ func Normalize(c *CTM) {
 		c.Links = []Link{}
 	}
 	// The fidelity list is required too: [] says the reader approximated and omitted
-	// nothing, which a missing list could not say.
+	// nothing, which a missing list could not say. Filled here for a CTM built in memory,
+	// as the reader's is; Unmarshal refuses a file that leaves it out, as one that leaves
+	// out its version.
 	if c.Envelope.Fidelity == nil {
 		c.Envelope.Fidelity = []FidelityRow{}
 	}
@@ -98,7 +100,14 @@ func Marshal(c *CTM) ([]byte, error) {
 // The version is read first, on its own: a CTM of another version carries fields this
 // one does not (a "1" carries contract_version and iftype), and it is refused for its
 // version, naming both, rather than for the first field the strict decode trips on.
-// Nothing converts one (FR-028).
+// Nothing converts one (FR-028). A CTM declaring no version is refused alike: Normalize
+// would read it as a "2", a claim the file never made.
+//
+// The fidelity list is required of a file: Normalize fills a missing one with [] for a
+// CTM built in memory, as the reader's is, and [] says the reader approximated and
+// omitted nothing, which a file leaving the list out never said (Constitution X). So a
+// file's list is held here, before Normalize fills it and before validation could see
+// it was missing.
 func Unmarshal(data []byte) (*CTM, error) {
 	var head struct {
 		CTMVersion string `json:"ctm_version"`
@@ -106,7 +115,7 @@ func Unmarshal(data []byte) (*CTM, error) {
 	if err := json.Unmarshal(data, &head); err != nil {
 		return nil, fmt.Errorf("decoding CTM: %w", err)
 	}
-	if head.CTMVersion != "" && head.CTMVersion != Version {
+	if head.CTMVersion != Version {
 		return nil, &VersionError{Got: head.CTMVersion}
 	}
 	dec := json.NewDecoder(strings.NewReader(string(data)))
@@ -115,21 +124,40 @@ func Unmarshal(data []byte) (*CTM, error) {
 	if err := dec.Decode(&c); err != nil {
 		return nil, fmt.Errorf("decoding CTM: %w", err)
 	}
+	// Absent and null both decode to a nil slice; [] to an empty one.
+	if c.Envelope.Fidelity == nil {
+		return nil, &MissingError{Field: "envelope.fidelity", Message: "envelope.fidelity, the reader's fidelity list, is not recorded: " +
+			"[] says the reader approximated and omitted nothing, which a list left out cannot say"}
+	}
 	Normalize(&c)
 	return &c, nil
 }
 
-// VersionError is Unmarshal's refusal of a CTM of another version: Got is the version the
-// file declares, and Version the one this build reads. twin compile files it as
-// ctm.version.unsupported at the file, where any other decoding failure is the
-// operation's (017).
+// VersionError is Unmarshal's refusal of a CTM of another version, or of none: Got is the
+// version the file declares, empty when it declares none, and Version the one this build
+// reads. twin compile files it as ctm.version.unsupported at the file, where any other
+// decoding failure is the operation's (017).
 type VersionError struct {
 	Got string
 }
 
 func (e *VersionError) Error() string {
+	if e.Got == "" {
+		return fmt.Sprintf("no ctm_version, expected %q", Version)
+	}
 	return fmt.Sprintf("unsupported ctm_version %q, expected %q", e.Got, Version)
 }
+
+// MissingError is Unmarshal's refusal of a CTM file that leaves out a field the contract
+// requires and Normalize would otherwise fill: Field is its path in the CTM, and Message
+// names it and says why it cannot be filled. twin compile files it as
+// data.required.missing at the field, as validation names an empty envelope field (017).
+type MissingError struct {
+	Field   string
+	Message string
+}
+
+func (e *MissingError) Error() string { return e.Message }
 
 // Load reads a serialized CTM from a file.
 func Load(path string) (*CTM, error) {

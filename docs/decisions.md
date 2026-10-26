@@ -85,6 +85,7 @@ next one.
 | [D-056](#d-056) | Spec Kit's files are installed on each host, not carried in the tree | Repository |
 | [D-057](#d-057) | The CTM is the contract; a reader maps one source's model onto it; the Infrahub reader reads the schema library's DCIM at a pinned commit | Contract |
 | [D-058](#d-058) | A stamp Infrahub's own account wrote is not intent's | Intent |
+| [D-059](#d-059) | Infrahub's own account is the one that writes the template query's groups, read from Infrahub | Intent |
 
 ---
 
@@ -3621,6 +3622,53 @@ out, and the stamps did not.
   generate, without a race; tier 3's cases 7 and 9 are unchanged.
 - Revisit if Infrahub records a membership on the group alone, writes it under the
   operator's account, or stamps nodes on a later generation that reads them.
+
+---
+
+<a id="d-059"></a>
+## D-059 — Infrahub's own account is the one that writes the template query's groups, read from Infrahub
+
+**Status:** Accepted 2026-10-26, by the operator, at `017-dcim-reader`'s converge loop
+(Run 19's second question, T062). Refines [D-058](#d-058), which left how to identify the
+account to be verified, and stopped the build when only a name could. To be built by
+`017-dcim-reader`.
+
+### Context
+
+Verified on 1.11.2 on 2026-10-26 (`specs/017-dcim-reader/research.md` §5.12): Infrahub's
+own identity, `__system__`, writes none of the group joins. They are written by the flow
+`graphql-query-group-update` on a task worker, through the SDK, as whichever account owns
+the token the install gives its task workers; on this install that is `agent`. Infrahub
+creates `agent` under a fixed but editable name, with `admin`'s `account_type`, and an
+install may give its workers another account's token. So nothing Infrahub records about
+the account marks it as Infrahub's own: only its name does, and an install may change it.
+
+### Options considered
+
+- **The name `agent`, fixed.** Rejected: an install that renames the account or gives its
+  workers another one reads every newly rendered node stale again.
+- **A server setting naming the account**, defaulting to `agent`. Rejected: one more value
+  for an operator to keep in step with Infrahub's own configuration.
+- **Read it from Infrahub: the account that writes the template query's internal
+  groups.** Chosen. Only Infrahub's flow writes them, on any install, with no setting.
+
+### Decision
+
+- Infrahub's own account, in [D-058](#d-058)'s sense, is the `updated_by` of the internal
+  query groups (`CoreGraphQLQueryGroup`, `group_type: internal`) of the query the device's
+  artifact definition renders through, read on the branch pinned at the stage's `at`, as
+  the stamps are.
+- With no such group, nothing has been generated through that query on the branch, so no
+  join has been written and no stamp is left out.
+- `CoreGraphQLQueryGroup` joins the Infrahub-owned kinds the stage reader may read,
+  named in the read-only test with its reason (Constitution III, 2.1.0).
+
+### Consequences
+
+- The stamps' read gains one query of the groups' `updated_by`; the rule is pinned by a
+  tier-1 test over both an `agent`-named and a renamed account.
+- Revisit if Infrahub writes the groups as `__system__`, or marks its workers' account in
+  the account itself.
 
 ---
 

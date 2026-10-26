@@ -1,6 +1,12 @@
 <!--
 Sync Impact Report
-- Version change: 1.3.0 → 2.0.0 (2026-10-25, MAJOR: Principle III redefined). III read
+- Version change: 2.0.0 → 2.1.0 (2026-10-26, MINOR: Principle III materially expanded).
+  III's Infrahub-owned kinds gain the template query's internal `CoreGraphQLQueryGroup`s,
+  read for the account that writes Infrahub's own bookkeeping, so that a stamp that
+  account wrote is not counted as intent (verified on Infrahub 1.11.2, 2026-10-26).
+  Source: D-058 and D-059. Templates: .specify/templates/plan-template.md's Constitution
+  Check names 2.1.0; its row III names no kinds and is unchanged.
+- 1.3.0 → 2.0.0 (2026-10-25, MAJOR: Principle III redefined). III read
   "The Generics Are the Contract"; it now reads "The CTM Is the Contract; a Reader Maps
   One Source": a reader maps one source's model onto the CTM by one documented mapping,
   names the model version it reads, records approximations and omissions in the
@@ -77,8 +83,9 @@ nothing the mapping does not name; it MUST read the least possible. Specifically
   out) in the envelope's fidelity list, which the compiler copies into the manifest
   unchanged; the compiler MUST hold no table of any source's approximations.
 - MAY read an Infrahub-owned kind that a Fylgja kind relates to or depends on
-  (`CoreProposedChange`, its validators, `Branch`, `BuiltinTag` as the scope's tag), each
-  named in the read-only test with its reason, and the branch's event log
+  (`CoreProposedChange`, its validators, `Branch`, `BuiltinTag` as the scope's tag, and the
+  template query's internal `CoreGraphQLQueryGroup`s, for the account that writes
+  Infrahub's own bookkeeping), each named in the read-only test with its reason, and the branch's event log
   (`InfrahubEvent`) for when intent last changed, removals included, an event's kind read
   only to be mapped through the schema's `used_by` and never queried (D-048); the
   read-only test MUST hold the list of kinds the reader queries.
@@ -89,7 +96,7 @@ nothing the mapping does not name; it MUST read the least possible. Specifically
 - MUST validate schema conformance (the kinds and fields the mapping reads, as the named
   model version has them) and data completeness (inside the scope) separately, report all
   findings in one pass, and produce no CTM on failure.
-*Rationale: D-010, D-045, D-048, D-057.*
+*Rationale: D-010, D-045, D-048, D-057, D-058, D-059.*
 
 ### IV. Fylgja Never Renders Configuration
 Fylgja MUST consume the artifacts Infrahub renders for the branch under test and push
@@ -234,4 +241,4 @@ Detail lives in `docs/development.md`; these are the gates.
   preceded 1.0.0 at the repository root is retired and MUST NOT be edited in its
   place.
 
-**Version**: 2.0.0 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-25
+**Version**: 2.1.0 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-26

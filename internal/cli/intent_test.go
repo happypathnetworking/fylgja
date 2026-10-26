@@ -534,3 +534,87 @@ func TestReadFromAStageKeepsTheReadsRefusal(t *testing.T) {
 	}
 	validateM10Document(t, doc)
 }
+
+// cableLabel is a schema mutation of DcimCable's label: gone when kind is "", else held
+// as kind.
+func cableLabel(kind string) func(map[string]any) {
+	return func(doc map[string]any) {
+		for _, n := range doc["nodes"].([]any) {
+			node := n.(map[string]any)
+			if node["kind"] != "DcimCable" {
+				continue
+			}
+			var attrs []any
+			for _, a := range node["attributes"].([]any) {
+				attr := a.(map[string]any)
+				if attr["name"] == "label" {
+					if kind == "" {
+						continue
+					}
+					attr["kind"] = kind
+				}
+				attrs = append(attrs, attr)
+			}
+			node["attributes"] = attrs
+		}
+	}
+}
+
+// The cable's label is in the mapping's table, since the Ports query selects it and every
+// omitted cable is named by it (contracts/mapping.md §2–§4): a branch whose DcimCable
+// lacks it, or holds it as another kind, is refused by conformance naming the commit, as
+// schema check refuses it, before any query, where the Ports query would have failed
+// operation.failed naming nothing of the table (FR-012; US3 scenario 4). A conformant
+// branch reads as before.
+func TestReadHoldsTheCablesLabelToTheTable(t *testing.T) {
+	const branch = "fylgja-fixture"
+	for _, c := range []struct {
+		name   string
+		mutate func(map[string]any)
+		want   findings.Finding
+	}{
+		{"label gone", cableLabel(""), findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSchemaFieldMissing,
+			Object: "DcimCable.label", Message: "DcimCable has no attribute label; the mapping reads it as " +
+				"opsmill/schema-library@26336e9 has it"}},
+		{"label a Number", cableLabel("Number"), findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSchemaFieldMismatch,
+			Object: "DcimCable.label", Message: "kind Text, found Number; the mapping reads it as " +
+				"opsmill/schema-library@26336e9 has it"}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := newFakeInfrahub(t)
+			f.schemaMutations = map[string]func(map[string]any){branch: c.mutate}
+			f.start()
+			out := filepath.Join(t.TempDir(), "ctm.json")
+
+			code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{branch: branch, out: out}))
+			if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != c.want {
+				t.Fatalf("exit %d, findings %+v; want 1 with exactly %+v", code, doc.Findings, c.want)
+			}
+			if ops := operations(f, branch); len(ops) != 0 {
+				t.Errorf("%s was sent %v; want nothing past its schema, no Ports above all", branch, ops)
+			}
+			if _, err := os.Stat(out); !os.IsNotExist(err) {
+				t.Error("a refused read left a file behind")
+			}
+
+			code, doc = exitOf(t, runCheck(t.Context(), &options{asJSON: true}, &checkFlags{branch: branch}))
+			if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != c.want {
+				t.Errorf("schema check: exit %d, findings %+v; want the read's %+v", code, doc.Findings, c.want)
+			}
+		})
+	}
+
+	t.Run("conformant", func(t *testing.T) {
+		f := newFakeInfrahub(t)
+		f.start()
+		out := filepath.Join(t.TempDir(), "ctm.json")
+
+		code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{branch: branch, out: out}))
+		if code != findings.ExitOK || len(doc.Findings) != 0 {
+			t.Fatalf("exit %d, findings %+v; want 0 and none", code, doc.Findings)
+		}
+		if ops := operations(f, branch); ops["Devices"] == 0 || ops["Ports"] == 0 {
+			t.Errorf("%s was sent %v; want its Devices and Ports", branch, ops)
+		}
+	})
+}

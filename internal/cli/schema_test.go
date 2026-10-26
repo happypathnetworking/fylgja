@@ -233,7 +233,7 @@ func TestCheckReportsTheMappingsTable(t *testing.T) {
 		{Kind: "DcimPlatform", Fields: []string{"name", "manufacturer"}},
 		{Kind: "OrganizationManufacturer", Fields: []string{"name"}},
 		{Kind: "InterfacePhysical", Fields: []string{"name", "role", "status", "device", "connector"}},
-		{Kind: "DcimCable", Fields: []string{"connected_endpoints"}},
+		{Kind: "DcimCable", Fields: []string{"label", "connected_endpoints"}},
 	}
 	if v := doc.Verified; v.Model != "opsmill/schema-library" || v.Version != "26336e9" || !reflect.DeepEqual(v.Kinds, want) {
 		t.Errorf("verified %+v, want the library at 26336e9 with %+v", v, want)

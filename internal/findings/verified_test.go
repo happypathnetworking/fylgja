@@ -19,7 +19,7 @@ func libraryVerified(stages *StagesVerified) *Verified {
 			{Kind: "DcimPlatform", Fields: []string{"name", "manufacturer"}},
 			{Kind: "OrganizationManufacturer", Fields: []string{"name"}},
 			{Kind: "InterfacePhysical", Fields: []string{"name", "role", "status", "device", "connector"}},
-			{Kind: "DcimCable", Fields: []string{"connected_endpoints"}},
+			{Kind: "DcimCable", Fields: []string{"label", "connected_endpoints"}},
 		},
 		Stages: stages,
 	}
@@ -38,7 +38,7 @@ func TestVerifiedIsTheMappingsTable(t *testing.T) {
 		`{"kind":"DcimPlatform","fields":["name","manufacturer"]},` +
 		`{"kind":"OrganizationManufacturer","fields":["name"]},` +
 		`{"kind":"InterfacePhysical","fields":["name","role","status","device","connector"]},` +
-		`{"kind":"DcimCable","fields":["connected_endpoints"]}]}`
+		`{"kind":"DcimCable","fields":["label","connected_endpoints"]}]}`
 	if b := string(mustMarshal(t, doc)); !strings.Contains(b, want) {
 		t.Errorf("the document does not carry\n%s\n%s", want, b)
 	}

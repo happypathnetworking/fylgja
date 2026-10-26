@@ -108,6 +108,8 @@ var LibraryTables = []KindTable{
 	},
 	{
 		Kind: "DcimCable",
+		// The Ports query selects the label, which names every cable the read omits.
+		Attributes: []AttributeWant{{Name: "label", Kind: "Text"}},
 		Relationships: []RelationshipWant{
 			{Name: "connected_endpoints", Peer: "DcimEndpoint", Kind: "Attribute", Cardinality: "many"},
 		},

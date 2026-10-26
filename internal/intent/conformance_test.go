@@ -115,6 +115,12 @@ var (
 	managementGone = func(t *testing.T, doc map[string]any) { dropChoice(t, doc, "InterfacePhysical", "role", "management") }
 	disabledGone   = func(t *testing.T, doc map[string]any) { dropChoice(t, doc, "InterfacePhysical", "status", "disabled") }
 	endpointGone   = func(t *testing.T, doc map[string]any) { dropImplementer(t, doc, "DcimEndpoint", "InterfacePhysical") }
+	// The cable's label names every cable the read omits (contracts/mapping.md §4), so the
+	// Ports query selects it.
+	cableLabelGone   = func(t *testing.T, doc map[string]any) { dropMember(t, doc, "DcimCable", "attributes", "label") }
+	cableLabelNumber = func(t *testing.T, doc map[string]any) {
+		member(t, doc, "DcimCable", "attributes", "label")["kind"] = "Number"
+	}
 )
 
 // readsIt is the end of every conformance finding but used_by's: the commit the table was
@@ -140,7 +146,7 @@ func TestConformanceOfTheLibrary(t *testing.T) {
 		{Kind: "DcimPlatform", Fields: []string{"name", "manufacturer"}},
 		{Kind: "OrganizationManufacturer", Fields: []string{"name"}},
 		{Kind: "InterfacePhysical", Fields: []string{"name", "role", "status", "device", "connector"}},
-		{Kind: "DcimCable", Fields: []string{"connected_endpoints"}},
+		{Kind: "DcimCable", Fields: []string{"label", "connected_endpoints"}},
 	}
 	if !reflect.DeepEqual(conf.Kinds, want) {
 		t.Errorf("kinds %+v, want %+v", conf.Kinds, want)
@@ -192,6 +198,10 @@ func TestConformanceNamesWhatDiffers(t *testing.T) {
 		}, findings.Finding{Rule: findings.RuleSchemaUsedByMissing, Object: "DcimEndpoint",
 			Message: "the branch's schema has no generic DcimEndpoint; the mapping reads InterfacePhysical " +
 				"through it as opsmill/schema-library@26336e9 has it"}},
+		{"DcimCable.label gone", cableLabelGone, findings.Finding{Rule: findings.RuleSchemaFieldMissing, Object: "DcimCable.label",
+			Message: "DcimCable has no attribute label" + readsIt}},
+		{"DcimCable.label a Number", cableLabelNumber, findings.Finding{Rule: findings.RuleSchemaFieldMismatch, Object: "DcimCable.label",
+			Message: "kind Text, found Number" + readsIt}},
 		{"InterfacePhysical gone", func(t *testing.T, doc map[string]any) {
 			dropNode(t, doc, "InterfacePhysical")
 			dropImplementer(t, doc, "DcimInterface", "InterfacePhysical")
@@ -297,5 +307,27 @@ func TestReadIsRefusedByConformance(t *testing.T) {
 	}
 	if n := f.count("/graphql/" + f.branch); n != 0 {
 		t.Errorf("a refused read asked GraphQL %d times", n)
+	}
+}
+
+// A branch whose DcimCable lacks the label the Ports query selects is refused by
+// conformance before any query, where the query would have failed naming nothing of the
+// table; the label of another kind likewise (FR-012; US3 scenario 4).
+func TestReadIsRefusedWithoutTheCablesLabel(t *testing.T) {
+	for _, mutate := range []func(*testing.T, map[string]any){cableLabelGone, cableLabelNumber} {
+		f := newFakeInfrahub(t)
+		mutate(t, f.schema)
+
+		snapshot, list, err := readFake(t, f)
+
+		if err != nil {
+			t.Fatal(err)
+		}
+		if snapshot != nil || len(list) != 1 || list[0].Object != "DcimCable.label" || !list.Rejected() {
+			t.Errorf("CTM %v, findings %+v; want no CTM and DcimCable.label's finding alone", snapshot != nil, list)
+		}
+		if n := f.count("/graphql/" + f.branch); n != 0 {
+			t.Errorf("a refused read asked GraphQL %d times; the Ports query above all must not be sent", n)
+		}
 	}
 }

@@ -44,9 +44,11 @@ Two operations, paged by 100, every page at the read's `at` when one was given:
   name), as today. No `interfaces`.
 - **`Ports(devices: [ID], limit, offset)`**: `InterfacePhysical(device__ids: $devices,
   limit, offset)` selecting `id`, `name { value }`, `role { value }`, `status { value }`,
-  `device { node { id } }` and `connector { node { id connected_endpoints { count edges {
-  node { __typename id ... on InterfacePhysical { name { value } device { node { id } } }
-  } } } } } }`, once per page of devices.
+  `device { node { id } }` and `connector { node { __typename id ... on DcimCable { label {
+  value } } connected_endpoints { count edges { node { __typename id ... on
+  InterfacePhysical { name { value } device { node { id } } } } } } } }`, once per page of
+  devices. The cable's `label` names it in every omission (§4), so conformance holds it
+  (§3).
 
 The read-only test holds every operation's roots to `DcimDevice`, `InterfacePhysical`,
 `FylgjaStage`, `CoreProposedChange`, `CoreArtifactValidator`, `Branch`,
@@ -73,7 +75,7 @@ the table is reported.
 | `DcimPlatform` | `name`: Text, required | `manufacturer`: `OrganizationManufacturer`, Attribute, one, optional |
 | `OrganizationManufacturer` | `name`: Text, required | — |
 | `InterfacePhysical` | `name`: Text, required · `role`: Dropdown, optional, choices ⊇ {`management`} · `status`: Dropdown, optional, choices ⊇ {`disabled`} | `device`: `DcimGenericDevice`, Parent, one, required · `connector`: `DcimConnector`, Attribute, one, optional |
-| `DcimCable` | — | `connected_endpoints`: `DcimEndpoint`, Attribute, many, optional |
+| `DcimCable` | `label`: Text, optional | `connected_endpoints`: `DcimEndpoint`, Attribute, many, optional |
 
 `used_by`: `DcimGenericDevice` ⊇ {`DcimDevice`}, `DcimInterface` ⊇ {`InterfacePhysical`},
 `DcimEndpoint` ⊇ {`InterfacePhysical`}, `DcimConnector` ⊇ {`DcimCable`}. `optional` is

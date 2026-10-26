@@ -70,8 +70,8 @@ there is no interface type to read, and wiring is derived by the compiler from
 **The queries.** Two operations, paged by 100, every page at the read's `at` when one was
 given: `Devices`, `DcimDevice(tags__name__value: $tag)` selecting the name, the platform's
 name and its manufacturer's, and the artifacts; then `Ports`, `InterfacePhysical(device__ids:
-$devices)` selecting each port's name, role, status, device and cable with the cable's ends,
-once per page of devices. The read-only test holds every operation's roots to `DcimDevice`,
+$devices)` selecting each port's name, role, status, device and cable with the cable's label
+and ends, once per page of devices. The read-only test holds every operation's roots to `DcimDevice`,
 `InterfacePhysical`, `FylgjaStage` and Infrahub's own `CoreProposedChange`,
 `CoreArtifactValidator`, `Branch`, `InfrahubEvent` and `CoreGraphQLQueryGroup`, and every
 fragment target to `DcimDevice`, `DcimPlatform`, `InterfacePhysical`, `DcimCable`,
@@ -148,7 +148,7 @@ intent runs the same check first and is refused with the same findings, before a
 | `DcimPlatform` | `name`: Text, required | `manufacturer`: `OrganizationManufacturer`, Attribute, one, optional |
 | `OrganizationManufacturer` | `name`: Text, required | — |
 | `InterfacePhysical` | `name`: Text, required · `role`: Dropdown, optional, choices including `management` · `status`: Dropdown, optional, choices including `disabled` | `device`: `DcimGenericDevice`, Parent, one, required · `connector`: `DcimConnector`, Attribute, one, optional |
-| `DcimCable` | — | `connected_endpoints`: `DcimEndpoint`, Attribute, many, optional |
+| `DcimCable` | `label`: Text, optional | `connected_endpoints`: `DcimEndpoint`, Attribute, many, optional |
 
 And `used_by`: `DcimGenericDevice` by `DcimDevice`, `DcimInterface` and `DcimEndpoint` by
 `InterfacePhysical`, `DcimConnector` by `DcimCable`. `optional` is compared as Infrahub

@@ -274,7 +274,7 @@
         },
         "nos": {
           "type": "string",
-          "description": "Matches FylgjaPlatform.nos"
+          "description": "The network operating system, as the package names it: descriptive. From 0.7 (017) a device is matched to its package by matches alone, and no reader compares this name with intent"
         },
         "versions": {
           "type": "array",

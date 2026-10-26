@@ -56,8 +56,9 @@ cut along, in four specs, in this order:
 1. **[F-011](#f-011)**, the Infrahub reader reading the schema library's DCIM directly,
    the CTM becoming the contract in place of the generics, as `017-dcim-reader`
    ([brief](../specs/017-dcim-reader/brief.md)): the reader seam against the model OpsMill
-   publishes.
-2. **[F-024](#f-024)**, snapshots: the CTM, each node's configuration and the probe
+   publishes. **Built** on 2026-10-26, under [D-057](decisions.md#d-057) to
+   [D-060](decisions.md#d-060) and Constitution 2.1.0.
+2. **[F-024](#f-024)**, snapshots, **the next spec**: the CTM, each node's configuration and the probe
    declarations as one content-addressed document, the core's one input, which the
    Infrahub reader produces: the core and orchestrator seam itself.
 3. **[F-014](#f-014)**, probes, `ping` only, as `016-probes`
@@ -67,7 +68,7 @@ cut along, in four specs, in this order:
    and taking a stage as a snapshot: the reader seam against a second source of truth.
 
 A contract bump defines a release: 0.2 moved the twin record, the API and the CLI for
-stages while the contract stayed 0.2, and 0.3 retires the generics at F-011, after which
+stages while the contract stayed 0.2, and 0.3 retired the generics at F-011, after which
 the CTM is the contract and nothing moves it again in the release. What F-011 changes is
 under [Decisions the order needs](#decisions-the-order-needs). The release also takes one defect from 015, with
 no spec: a client following a rehearsal that is terminated outside Fylgja answers only once
@@ -139,16 +140,16 @@ first six are built ([the archive](archive/v0.1-built.md)), F-009 is removed,
 [F-025](#f-025). [F-024](#f-024) and [F-025](#f-025) were added on 2026-10-25 and take
 the next free numbers.
 
-Only [F-011](#f-011) has a brief and a probe behind its estimate, and none has a decision
-entry. [F-011](#f-011), [F-013](#f-013), [F-014](#f-014), [F-015](#f-015),
+[F-011](#f-011), the one feature with a brief and a probe behind its estimate, is built,
+as `017-dcim-reader`; none of the rest has a decision entry. [F-011](#f-011), [F-013](#f-013), [F-014](#f-014), [F-015](#f-015),
 [F-017](#f-017) to [F-021](#f-021), [F-024](#f-024) and [F-025](#f-025) are each one
 spec, with one contract boundary and one new kind of infrastructure. [F-012](#f-012) and
 [F-016](#f-016) are chores or records, with no spec.
 
 | # | Feature | What it bundles | Needs | Hours | Why here |
 |---|---|---|---|---|---|
-| F-010 | *Generic transform*, folded into [F-011](#f-011) | the shipped template already queries `FylgjaDevice`, so a DCIM device renders through it; what was left, the template documented as a reference transform, is a paragraph in [F-011](#f-011)'s README | — | — | Overtaken: Infrahub renders from the generics already. |
-| F-011 | **The Infrahub reader reads the schema library's DCIM** | the generics retired and the CTM the contract; the library vendored at a pinned commit and loaded on `main`; the reader's mapping documented and its approximations in the manifest; packages matching platforms by name; the fixtures re-seeded in the library's kinds | nothing new | 6–10 | The strongest OpsMill signal, and the first reader written as an adapter. Probed live on 2026-10-16; its [brief](../specs/017-dcim-reader/brief.md) written 2026-10-25. Opens 0.3. |
+| F-010 | *Generic transform*, folded into [F-011](#f-011) | the shipped template queried `FylgjaDevice`, so a DCIM device rendered through it; what was left, the template documented as a reference transform, is a paragraph in [F-011](#f-011)'s README | — | — | Overtaken: Infrahub renders from the generics already. |
+| F-011 | **The Infrahub reader reads the schema library's DCIM** | the generics retired and the CTM the contract; the library vendored at a pinned commit and loaded on `main`; the reader's mapping documented and its approximations in the manifest; packages matching platforms by name; the fixtures re-seeded in the library's kinds | nothing new | 6–10 | The strongest OpsMill signal, and the first reader written as an adapter. Probed live on 2026-10-16; its [brief](../specs/017-dcim-reader/brief.md) written 2026-10-25. Opens 0.3. Built as `017-dcim-reader` on 2026-10-26. |
 | F-024 | **Snapshots** | the CTM, each node's configuration and the probe declarations as one content-addressed document; the core's one input; `twin create` from one | [F-011](#f-011) | 3–5 | The core and orchestrator seam, proved before anything is split. |
 | F-022 | *`infrahub-sync` into the DCIM*, superseded by [F-025](#f-025) | a sync mapping from NetBox onto [F-011](#f-011)'s schema | — | — | The operator wants NetBox read directly, not synced into Infrahub. |
 | F-025 | **The NetBox reader** | NetBox with its branching plugin on the development host; a reader producing snapshots from a branch, with `render-config` as the configuration; a stage taken as a snapshot; a twin of a NetBox branch | [F-024](#f-024), a NetBox instance | 8–12 | The reader seam against a second source of truth, and the first that cannot replay time. |
@@ -214,7 +215,12 @@ library's kinds, the CTM thins and reshapes its platform, all three goldens move
 re-baselined on their own commit, and the PSP format moves for `matches`. The schema
 README gains the paragraph feature 10 left: the shipped template as a reference transform
 that renders ports, and a user's own transform rendering their layer 2 and 3 from their
-own kinds. Needs nothing new.
+own kinds. Needs nothing new. **Built** on 2026-10-26 as `017-dcim-reader`, under
+[D-057](decisions.md#d-057), with Constitution 2.0.0; [D-058](decisions.md#d-058) and
+[D-060](decisions.md#d-060), written at its tier-2 run, read a stamp Infrahub's own
+account wrote on a node as the node's creation (Constitution 2.1.0). Its goldens are
+`43d91715…`, `4213b3cf…` and `ecb665f5…`, and both tiers passed over the library's kinds
+on the development host.
 
 <a id="f-024"></a>
 **F-024. Snapshots: the core's one input.** Added on 2026-10-25, the second spec of
@@ -440,7 +446,10 @@ show beyond a status line. It is a second client of the same API.
   [D-042](decisions.md#d-042)'s loopback default for this deployment; `twin rehearse` as a
   fifth short workflow; and the check concluding from the report's status, Fylgja's
   verdicts staying advisory ([D-039](decisions.md#d-039)).
-- At [F-011](#f-011) (017): the CTM as the contract in place of the generics, the
+- ~~At [F-011](#f-011) (017)~~: written on 2026-10-25 as [D-057](decisions.md#d-057) and
+  built by 017, with Constitution 2.0.0; [D-058](decisions.md#d-058) to
+  [D-060](decisions.md#d-060), written on 2026-10-26 at its tier-2 run, refine what a
+  device's intent stamp is (2.1.0). As set: the CTM as the contract in place of the generics, the
   Infrahub reader an adapter for the schema library's DCIM at a pinned commit, with its
   mapping (a port is `InterfacePhysical`; `mgmt_only` from `role`, `enabled` from `status`,
   each approximated; a cable with other than two physical ends omitted and recorded; the

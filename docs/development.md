@@ -610,17 +610,23 @@ draft's skip is proved, saying why; on the development host it needs the lab hos
 server from this tree on the bridge, and once the checks have reached a server it fails
 unless that server's process runs this tree's `bin/fylgja`, as case 9's precondition
 compares it. It took 199.5 s within the tier on 2026-10-19,
-309.4 s alone on 2026-10-20 with its seventh step, the ready proposed change, and 252.8 s
-within the tier that day beside the host's imported checks.
+309.4 s alone on 2026-10-20 with its seventh step, the ready proposed change, 252.8 s
+within the tier that day beside the host's imported checks, and 278.8 s in the tier's
+second `go test` on 2026-10-26, over the library's kinds.
 
 **Tier 3, as `scripts/e2e.sh` runs it.** Before anything runs the script checks the cEOS
 image is present under the reference `psp/arista_eos.yaml` names, and stops saying to
 import it, since it is never pulled. That is a default run, and its `E2E-OK` means all
-nine cases. Case 9's needs are checked before any case too: `fylgja-step` and
+nine cases; it takes about 29.5 minutes (1,769.0 s on 2026-10-26). Every case reads under
+the server's default scope, `tag:fylgja`, which every fixture's devices carry, but case
+5's create, which names it: the script's own server must report `default scope:
+tag:fylgja`, read from `local/.env`, or the run fails before any case, saying to add
+`FYLGJA_DEFAULT_SCOPE` there. Case 9's needs are checked before any case too: `fylgja-step` and
 `fylgja-twin` among `main`'s check definitions, and the lab host's server answering on the
 bridge with `local/.env`'s token and this tree's build, its process (the `fylgja serve`
 whose arguments listen there) running this tree's `bin/fylgja`, neither `(deleted)` nor
-another file, since every unstamped build has the same version; without either it fails
+another file, since every unstamped build has the same version, with
+`FYLGJA_DEFAULT_SCOPE=tag:fylgja` in its environment, since the checks send no scope; without either it fails
 before any case, saying what to do. A server whose `/proc/<pid>/exe` the script cannot
 read, as one started under `sg docker`, is said and not compared. **`PLATFORMS=<list> make test-e2e`** narrows a run to a list of shipped
 package names (the stems of `psp/*.yaml`, comma- or space-separated). A case runs when the
@@ -631,8 +637,8 @@ package, never by image. A name no package has, or a list that selects no case, 
 before anything starts. A list that skipped nothing ends `E2E-OK`; one that skipped a case
 and passed every case it ran ends `E2E-PARTIAL: platforms <list>; ran <cases>; skipped
 <case> (<why>) …`, exit 0, and never prints `E2E-OK`. Narrowed to `nokia_srlinux` it runs
-cases 1–5, 7 and 9 and takes about 17 minutes (1,027.7 s on 2026-10-19, 1,042.9 s on
-2026-10-20). After the workflow service's health check it
+cases 1–5, 7 and 9 and takes about 19 minutes (1,027.7 s on 2026-10-19, 1,042.9 s on
+2026-10-20, 1,156.3 s on 2026-10-26). After the workflow service's health check it
 makes a token for the run (never exported), starts `bin/fylgja serve --listen 127.0.0.1:0`
 from the tree in its full environment, logging to `$OUT/server.log`, and reads the port
 the system chose. Every `fylgja` command, the trap's destroy included, runs with `PATH`,
@@ -644,15 +650,18 @@ short-lived worker stay direct. The cases:
    nodes with the compiled `bundle_id`; each node read back over gNMI (its `ethernet-1/1`
    description is the one its staged artifact sets, and `twin.json`'s checksums are
    Infrahub's); the conformance suite's boot half against it; `twin verify --json` (three
-   host names, six ports, six link ends and three record claims held, nothing skipped); a
-   second create refused naming the twin; destroy.
+   host names, six ports, six link ends and three record claims held, nothing skipped);
+   `twin.json`'s provenance and `twin show` naming `scope tag:fylgja, read by
+   infrahub-dcim from opsmill/schema-library@26336e9`; a second create refused naming the
+   twin; destroy.
 2. **Another reference.** A create `--at T`, T taken once the fixture's three artifacts are
    `Ready`; destroy.
 3. **An orphan.** A one-node lab `fylgja` deployed by hand, named an orphan by a
    short-lived worker of the script's own and by a dry run, and cleared by destroy.
 4. **Reproducibility.** The create `--at T` again, with the same `bundle_id`; destroy.
 5. **Following.** A throwaway branch `fylgja-test-e2e-<pid>` is seeded and followed at
-   `--interval 15s`. An unchanged check touches neither `twin.json` nor the containers. An
+   `--interval 15s`, the create naming `--scope tag:fylgja`, which `twin.json`'s provenance
+   records and the checks read under. An unchanged check touches neither `twin.json` nor the containers. An
    artifact-only change (`-disable-port n1:ethernet-1/2 -generate`) is rebuilt with no
    command, n1 then reads `disable`, and `twin verify` skips that port and both ends of its
    link. A link change (`-add-link`) is rebuilt to the compiled `bundle_id`. `twin show
@@ -666,11 +675,11 @@ short-lived worker stay direct. The cases:
 7. **A proposed change's stages.** A throwaway branch `fylgja-test-e2e-st-<pid>-<n>`:
    seed, `-propose`, `-stage seeded`, `-add-link`, n1's and n3's checksums awaited,
    `-stage third-link`. `stage plan --json` lists four stages and three steps, exit 1: the
-   branch point refused `contract.node.missing`, since the development host's `main`
-   holds no network, and its step not computed; `seeded`, `third-link` and the head
+   branch point refused `scope.empty`, since the development host's `main` holds no
+   device tagged `fylgja`, and its step not computed; `seeded`, `third-link` and the head
    compiled to three ids; a link added with n1 and n3 changed, their artifacts included;
    and `unchanged` to the head. `stage list --json` lists the four with no twin. `twin
-   create --stage …/seeded` carries the plan's `seeded` id, its `twin.json` `7` names the
+   create --stage …/seeded` carries the plan's `seeded` id, its `twin.json` `8` names the
    stage and the proposed change, `twin show` calls it pinned and `stage list` marks it;
    it is read back against the artifacts Infrahub held when `seeded` was marked. A `twin
    step` with no target takes it to `third-link`, the link re-cabled live on n1 and n3 and
@@ -703,7 +712,8 @@ short-lived worker stay direct. The cases:
    are gone. The two rehearsals are no command of the script's: the check asks them of the
    lab host's server on the bridge.
 
-Every artifact carries `FYLGJA-MARKER` in its role comment, and the script finds it, and
+Every seeded device's `description` carries `FYLGJA-MARKER`, which the template writes
+into its artifact's header comment, and the script finds it, and
 the API's token, `local/.env`'s token and both passwords, in no output, record, document,
 decoded run history, server log (or the worker's, with `WORKER_LOG`), check message or
 comment: the marker only in a read's CTM and a compiled bundle. The server is stopped before the greps, and one that
@@ -759,8 +769,9 @@ Rules:
 - **Tier 3 and the hand checks run on a quiet host.** A twin boot must not overlap
   `make test-contract` or other heavy work: a starved worker misses heartbeats, so its
   deploys are cut short and retried until the step fails, and Infrahub times out the
-  contract tier. Tier 3 takes about 26 minutes on the development host (1,619.1 s on
-  2026-10-19 and 1,536.9 s on 2026-10-20, against 1,198.9 s before 015's case 9): nine
+  contract tier. Tier 3 takes about 29.5 minutes on the development host (1,769.0 s on
+  2026-10-26 over the library's kinds, 1,619.1 s on 2026-10-19 and 1,536.9 s on
+  2026-10-20, against 1,198.9 s before 015's case 9): nine
   twins, two rebuilds, four steps, two of which restart a cEOS node, three proposed
   changes' pipelines, two rehearsals inside Infrahub's checks and an orphan boot. Read `free -m`
   before it, give the host room and rest it between runs. It starts and stops a worker of
@@ -1390,7 +1401,9 @@ their checkpoints; `converge` follows the last run.
 for each gate it passes or justifies; the plan template carries the checklist. The default simplicity gate
 will flag three layers; each is blessed with its reason in the decision log and is not
 re-litigated per plan: the CTM ([D-010](decisions.md#d-010)), the PSP abstraction
-([D-016](decisions.md#d-016)), and the generics contract ([D-002](decisions.md#d-002)).
+([D-016](decisions.md#d-016)), and the mapping, one per reader, from a source's model onto
+the CTM ([D-057](decisions.md#d-057), Constitution 2.1.0's III), in place of the generics
+contract ([D-002](decisions.md#d-002)), which it superseded.
 
 ### Verification is just-in-time
 

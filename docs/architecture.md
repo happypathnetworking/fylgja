@@ -320,7 +320,7 @@ source branch's `branched_from`, verbatim; the **marks**, each at its `as_of` as
 the later of the latest of every device's intent stamp and every artifact's
 `checksum.updated_at`, and the `occurred_at` of its latest intent event, in
 Infrahub's own layout, since a read pinned at exactly a stamp sees the node and not the
-value. A removal (a link or an interface deleted, a relationship unset) moves no stamp, and
+value. A removal (a cable or a port deleted, a relationship unset) moves no stamp, and
 its event is how the head moves past it ([D-048](decisions.md#d-048)). An event lands in
 the log a few seconds after its write, a varying time (half a second to over six were
 seen), so a head read in that window is the stamps' and does not see the removal yet; a
@@ -860,7 +860,7 @@ sequenceDiagram
 and destroys the twin, in one run. The server does everything that touches nothing first:
 it plans the proposed change as `stage plan` does, every stage resolved, read, compiled and
 filed; takes the first compiled stage as the **baseline stage**, passing over a branch
-point refused `contract.node.missing` alone, as on a `main` with no network, and refusing
+point refused `scope.empty` alone, as on a `main` with no device in the scope, and refusing
 the rehearsal for any other refused stage; sums the deadline (below) and refuses one over
 the ceiling (`rehearsal.deadline.unfit`); refuses beside any run in flight; reclaims a
 dead rehearsal's twin (below); runs the host check of the baseline's bundle in its own
@@ -1007,8 +1007,9 @@ has no state root: it reads no store and no twin directory of its own.
     │                           a step swaps it for the target's (through .bundle.next and .bundle.prev)
     ├── clab-fylgja/            containerlab's working directory, placed here with CLAB_LABDIR_BASE; root-owned;
     │                           its .state.clab.yaml is what containerlab's plan for a step reads
-    └── twin.json               written last (version 7): provenance, observed_at (or why it is
-                                unknown), bundle_id, the run, the worker's version, the stage it
+    └── twin.json               written last (version 8): provenance (the reference read, its
+                                schema hash, the scope and the mapping that read it), observed_at
+                                (or why it is unknown), bundle_id, the run, the worker's version, the stage it
                                 was built from (its proposed change's id and branch, its label,
                                 description and where its at came from; or null), the rehearsal
                                 whose run built it (or null), each node's address, its artifact
@@ -1085,6 +1086,16 @@ kind line and `twin verify` on its first, with the workflow service down too, an
 how a rehearsal tells a twin its own dead run left, which it reclaims, from the
 operator's, which refuses it. A record of `6` or earlier reads with no rehearsal.
 
+**The record names its scope** ([D-057](decisions.md#d-057)). `twin.json` `8` carries the
+bundle `5` manifest's provenance verbatim: the branch, the `at` when pinned, the schema
+hash, the scope the read was made under and the mapping that read it, `{reader, model,
+version}`, in place of the retired contract version. `twin show` ends its record line with
+both, and `twin create` prints the same line for the twin it made; `twin step` resolves,
+judges and reads its target under the record's scope, and a following twin's checks read
+under it too. A record of `7` or earlier reads with no scope and no mapping: `twin show`
+shows its scope unknown, `twin step` refuses it `step.twin.unsteppable`, `twin destroy`
+clears it, and `twin rehearse` reclaims it when its own dead run left it.
+
 **What `twin verify` reads** ([D-038](decisions.md#d-038)). It reads containerlab, the
 record and the staged manifest, and writes nothing. Its assertions are derived from the
 manifest, whose mapping rows carry intent's `enabled` from bundle `4`: a port intent
@@ -1123,16 +1134,17 @@ fylgja serve         [--listen <host:port>]... [--psp-dir <dir>]
                                                   # the API's server, on the lab host beside the worker; serves
                                                   #   every command below but worker run; --listen repeated, on
                                                   #   the lab host loopback and the Docker bridge
-fylgja twin create   --branch <b> [--at <ts>] [--no-follow] [--interval <d>]
+fylgja twin create   --branch <b> [--at <ts>] [--no-follow] [--interval <d>] [--scope tag:<name>]
                                                   # all stages; refused while a twin exists; follows unless --at or --no-follow
-fylgja twin create   --stage <branch>/<label>
+fylgja twin create   --stage <branch>/<label> [--scope tag:<name>]
                                                   # the same run, pinned to what the stage resolves to; never follows
 fylgja twin step     [--stage <branch>/<label>] [--allow-restart] [--wait <duration>] [--dry-run]
                                                   # a twin built from a stage to another stage of its proposed change
                                                   #   (the next by default) without a rebuild; --allow-restart when containerlab
                                                   #   would restart or recreate a node; --wait bounds the wait for
                                                   #   the twin to settle after the record (2m0s by default; 0 reads
-                                                  #   once); --dry-run changes nothing
+                                                  #   once); --dry-run changes nothing; reads under the record's
+                                                  #   scope and takes no --scope
 fylgja twin verify   [--wait[=<duration>]]        # reads the twin against intent: host names, cabled ports,
                                                   #   adjacencies, and the record's claim of what each node holds;
                                                   #   --wait reads again until it conforms (2m0s bare); no run, no
@@ -1142,25 +1154,30 @@ fylgja twin show                                  # the host, twin.json, the kin
                                                   #   the step that brought it there with how its wait ended, each
                                                   #   node's artifact, the last and next check, runs in flight;
                                                   #   changes nothing
-fylgja twin rehearse --branch <b> [--markdown]    # an open proposed change's stages in turn on one twin: the first
+fylgja twin rehearse --branch <b> [--scope tag:<name>] [--markdown]
+                                                  # an open proposed change's stages in turn on one twin: the first
                                                   #   compiled built and verified, each later stepped and verified,
                                                   #   stopped at the first that fails, then destroyed and reported;
                                                   #   --markdown prints the report as markdown
 fylgja twin destroy                               # stops following first, cancels a step and waits for its record,
                                                   #   or a rehearsal and waits for its destroy, then removes the twin
 
-fylgja intent read   --branch <b> [--at <ts>] --out ctm.json
-fylgja intent read   --stage <branch>/<label> --out ctm.json
+fylgja intent read   --branch <b> [--at <ts>] [--scope tag:<name>] --out ctm.json
+fylgja intent read   --stage <branch>/<label> [--scope tag:<name>] --out ctm.json
 fylgja twin compile  --ctm ctm.json --out <bundle-dir>   # the pure function, same code path as the golden tests
 fylgja twin provision <bundle-dir>                # starts the provision workflow from an existing bundle
 
-fylgja stage list    [--branch <b>]               # every open proposed change's stages, or one's, and what each
+fylgja stage list    [--branch <b>] [--scope tag:<name>]
+                                                  # every open proposed change's stages, or one's, and what each
                                                   #   resolves to; marks the twin's row, and where a diverged twin
                                                   #   was going
-fylgja stage plan    --branch <b>                 # reads and compiles each stage; the step between each pair
+fylgja stage plan    --branch <b> [--scope tag:<name>]
+                                                  # reads and compiles each stage; the step between each pair
 
-fylgja schema check  --branch <b>                 # also says whether the default branch has the stage kind and
-                                                  #   its extension
+fylgja schema check  --branch <b>                 # the branch's schema against the mapping's table of the schema
+                                                  #   library's DCIM at its commit, kind by kind and field by
+                                                  #   field; also says whether the default branch has the stage
+                                                  #   kind and its extension
 fylgja psp validate  <file>...
 fylgja worker run    [--psp-dir <dir>]
 ```
@@ -1218,6 +1235,17 @@ a client run the core.
   ![The server's components: the packages the API's server runs and the imports between them](c4/structurizr-ServerComponents.svg)
 
   *The server's components, derived from [`c4/workspace.dsl`](c4/workspace.dsl) by `make diagrams`.*
+- **A read is made under a scope** ([D-057](decisions.md#d-057)). The five commands that
+  read intent from a reference, `twin create`, `twin rehearse`, `intent read`, `stage
+  plan` and `stage list`, take `--scope tag:<name>`, sent as the request's `scope`; not
+  given, the server's `FYLGJA_DEFAULT_SCOPE` stands, which the server alone reads and
+  reports at start (`default scope: tag:fylgja`). The server refuses a value that is not
+  `tag:<name>` `scope.invalid`, and a request naming none beside a server with no default
+  `scope.unset`, both at `start` and before any connection. Every stage one request
+  resolves, reads or plans is read under that one scope, and the document's
+  `subject.scope` names it. `twin step` takes none: it, and a following twin's checks,
+  read under the scope the twin's record carries. The checks `fylgja-step` and
+  `fylgja-twin` send none, so theirs is the default of the server they reach.
 - **An answer is frames**: one JSON object a line (`application/x-ndjson`), the last
   always the findings document. With nothing asked, a command that is one answer is the
   document alone, after the `files` frame that `intent read` and `twin compile` send
@@ -1350,8 +1378,8 @@ Fylgja's: it finds the open proposed change by its source branch, sends one requ
 `FYLGJA_API_ADDRESS` with `FYLGJA_API_TOKEN`, both from the task worker's environment,
 reads the frames to the document, and concludes from its status. **`fylgja-step`**
 (timeout 300 s) asks for `stage.plan` and logs its text as its message. It fails when a
-stage is refused as intent, a branch point refused `contract.node.missing` excepted, the
-one rule the Python holds, when the stages cannot be listed, when the source branch has no
+stage is refused as intent, a branch point refused `scope.empty` excepted, the one rule
+the Python holds, when the stages cannot be listed, when the source branch has no
 open proposed change, when Fylgja cannot be asked: a variable unset, the API
 unreachable, or its token or version refused, and when the plan has not answered by the
 check's own deadline, 120 s before its timeout. It writes nothing. **`fylgja-twin`** (timeout 4,260 s) passes a draft, saying it skipped it.
@@ -1379,12 +1407,12 @@ core.
 ### 4.7 Platform Support Packages
 
 A **PSP** is the declarative bundle that makes one platform supported
-([D-016](decisions.md#d-016)). The format is `0.6`, and [`psp/README.md`](../psp/README.md)
+([D-016](decisions.md#d-016)). The format is `0.7`, and [`psp/README.md`](../psp/README.md)
 documents each field:
 
 | Facet | Contents |
 |---|---|
-| Identity | vendor, platform family, OS versions covered (the boot half checks the version a node reports against them) |
+| Identity | vendor, platform family, OS versions covered (the boot half checks the version a node reports against them); and `platform.matches`, the manufacturer and platform name pairs the package is, which the read matches each device against exactly ([§4.1](#41-intent-reader)) |
 | Image | containerlab node kind, image reference, acquisition method (read at run time by the host check, [§4.5](#45-lab-host-containerlab-and-the-twin-directory)), memory budget, deploy and destroy budgets |
 | Interfaces | the mapping profile ([§4.3](#43-compiler)): ordered named rules (`match`, per-placeholder `ranges`, `port`, `node_name`, a checked `lossy`, optional `breakout.parent`) and exactly one management rule; and the declared mappings, one per kind the profile handles, that the conformance suite holds it to |
 | Config | bootstrap template and the `comment_prefix` its generated header is written under; how a deploy delivers the bootstrap (`bootstrap_via`: `startup_config`, containerlab applies it, or `push`, its lines go ahead of the artifact's; under `mode: replace` the push sends it after the reset either way); the artifact that is a device's configuration (`artifact_name`, `artifact_content_types`); how it is pushed after boot (`delivery`, `commit`, `mode`, `push_timeout_s`, and `push`: scheme, port and the names of the login's environment variables). `mode` is `replace`, [D-033](decisions.md#d-033)'s reset to the node's baseline for the delivery, then the bootstrap and the artifact, in one atomic commit, which both shipped packages declare; or `merge`, which creates but cannot step |
@@ -1393,6 +1421,18 @@ documents each field:
 | Conformance | optional: what the suite's boot half, `twin verify` and the step's wait read over the readiness probe's transport, and the values it expects: the host name and version paths, and per cabled port the admin state, the discovery state and the neighbour list with the leaves naming the far node and port, the port given by its node name. A neighbour leaf may be a path relative to one neighbour entry, and a checked value may declare what the node means by reporting nothing at all (`absent`), since OpenConfig reports no default. Never reaches a bundle |
 | Capabilities | what this container can and cannot do relative to hardware |
 | Fidelity | declared approximations; software- or hardware-forwarding; `link_change`, required: what containerlab's reconcile does to a node of the kind when a link of its is added or removed, `restart` (restarted in place, its push lost) or `live` (re-cabled, its push kept). Asserted by the package, measured by containerlab's plan at each step, both recorded, and a difference warned (`step.restart.undeclared`); the step acts on containerlab's plan |
+
+**A device's package is the one that names its pair** ([D-057](decisions.md#d-057)). The
+read takes each device's platform name and its platform's manufacturer's name, and the
+package whose `platform.matches` names that pair exactly, letter case and spacing
+included, is the device's; the CTM then names the package (`platform.package`), not the
+source's names. No package naming it is `platform.unmatched`, which names the pair and
+every package's pairs; a device with no platform, or a platform with no manufacturer, is
+`platform.missing`. The pairs are data, so a platform added is a package added, never an
+arm in the reader. A package with no pair, or a pair with an empty name, is
+`psp.matches.missing`, and two packages naming one pair are `psp.matches.duplicate`,
+which also refuses `serve` and `worker run` at start; the suite's pure half holds every
+package meant to load to pairs of its own.
 
 Readiness, the budgets and the probe login are consumed from the worker's own packages
 at provision time, looked up by each node's manifest `psp.id`, and never reach the
@@ -1427,14 +1467,16 @@ by `twin verify` and by the step's wait, so a change to them moves no
 `bundle_id`; a change to a rule that alters a port, a node name or a
 rule's lossiness does, and a following twin is rebuilt for it at its next check.
 
-PSPs and the schema are embedded in the binary with a runtime override directory
+PSPs and the schema (the vendored library and the stage kind) are embedded in the binary,
+the packages with a runtime override directory
 ([D-018](decisions.md#d-018)). A platform is supported only when its PSP passes
 the **conformance suite** (M6): `go test` in `internal/conformance`, a package no product
 code imports, in two halves.
 
 - **The pure half** runs in tier 1 on every package meant to load, shipped or test: the
-  package validates, every declared mapping maps as declared and round-trips back to its
-  production name, and bootstrap renders for it.
+  package validates, it declares at least one pair and shares none with another, every
+  declared mapping maps as declared and round-trips back to its production name, and
+  bootstrap renders for it.
 - **The boot half** runs inside tier 3's run, against case 1's ready twin, and reads each
   node once over the readiness probe's transport, by the paths the Conformance facet
   declares, through the readers in `internal/verify`, which product code shares with it
@@ -1463,8 +1505,8 @@ fixed.
 | Everything Fylgja runs | **Go**, one static binary of three roles: the client's commands, the worker and, from M13, the API's server | one toolchain, one test framework, one artifact per host; no second runtime ([D-005](decisions.md#d-005), [D-018](decisions.md#d-018)) |
 | Infrahub's checks | **Python**, as Infrahub's task-worker image carries it: `infrahub-sdk`'s `InfrahubCheck` and `httpx`; from 015 | glue on Infrahub's runtime, as the template is: run by Infrahub's task workers, never by a process of Fylgja's, and deciding nothing but how a status maps to a conclusion; proved inside a running Infrahub by a Go contract test, with no Python test framework ([D-049](decisions.md#d-049), [D-052](decisions.md#d-052)) |
 | Durable execution | **Temporal**, self-hosted; `temporal server start-dev` until M8 | durable, resumable, inspectable provisioning; Go SDK and test suite ([D-006](decisions.md#d-006)) |
-| Source of truth | **Infrahub** 1.11.2, operator-provided; Fylgja only reads it | branches and points in time give a twin its reference; a flexible schema lets an organisation's own model implement Fylgja's generics; it renders each device's configuration ([D-001](decisions.md#d-001), [D-028](decisions.md#d-028)) |
-| Intent interface | GraphQL via `genqlient`, plus REST for the schema and artifact content | branch- and time-scoped queries typed at build time; schema drift fails the build, not the twin |
+| Source of truth | **Infrahub** 1.11.2, operator-provided; Fylgja only reads it | branches and points in time give a twin its reference; the reader reads the OpsMill schema library's DCIM at a pinned commit by one documented mapping, and a DCIM that diverges from it needs a reader of its own; it renders each device's configuration ([D-001](decisions.md#d-001), [D-028](decisions.md#d-028), [D-057](decisions.md#d-057)) |
+| Intent interface | GraphQL via `genqlient`, plus REST for the schema and artifact content | branch- and time-scoped queries typed at build time against the library's kinds; schema drift fails the build, and a branch whose schema is not the mapping's is refused at the read, before any device is read |
 | Lab runtime | containerlab, driven as a CLI | the interface operators already know ([D-008](decisions.md#d-008)) |
 | State | containerlab, files and Temporal; no database | nothing to keep in sync ([D-014](decisions.md#d-014), [D-026](decisions.md#d-026)) |
 | CLI | Cobra, noun-verb; from M13 a client of the API alone | ([D-019](decisions.md#d-019), [D-040](decisions.md#d-040)) |
@@ -1478,10 +1520,13 @@ To be stated in the product surface, not buried here.
 
 - **Intent-conformant, not production-faithful.** `twin verify` measures the twin against
   intent (M12): each node's host name, every cabled port intent enables, and every link
-  as an adjacency seen from both ends. Fidelity to production is still asserted by the
-  manifest and never measured (Constitution X): nothing compares the twin with the
-  network it models, and a node's configuration is reported from the record's claim of
-  what it holds, not read back.
+  as an adjacency seen from both ends. Intent is the scope as the mapping read it: what
+  the read approximated or omitted, a cable without two physical ends inside the scope
+  among them, is named in the manifest's `fidelity.read` and is not in the twin, and
+  verify does not look for it ([D-057](decisions.md#d-057)). Fidelity to production is
+  still asserted by the manifest and never measured (Constitution X): nothing compares the
+  twin with the network it models, and a node's configuration is reported from the
+  record's claim of what it holds, not read back.
 - **No hardware data plane.** No ASIC, TCAM, buffers, hardware QoS or line rate.
   Where production forwards in software the twin is more faithful; the PSP says which.
 - **Timing differs** in containers: convergence, BFD, control-plane policing.
@@ -1506,9 +1551,10 @@ To be stated in the product surface, not buried here.
   discards its earlier history from pinned reads, so every mark made before the rebase
   falls before the new branch point and is refused. A twin built from one keeps what it
   was built from.
-- **The branch point needs a network on `main`.** It is `main` at `branched_from`, so on
-  an install whose `main` holds the schema and no intent, as the development host's does,
-  it is refused `contract.node.missing`, and a twin starts from the first mark.
+- **The branch point needs a tagged device on `main`.** It is `main` at `branched_from`,
+  read under the request's scope, so on an install whose `main` holds the library and no
+  device carrying the scope's tag, as the development host's does, it is refused
+  `scope.empty`, and a twin starts from the first mark.
 - **Infrahub's proposed-change view does not show stages.** They are listed by `stage
   list`, in the UI as objects of their own, and in each rehearsal's thread.
 - **A rehearsal is bounded by its deadline** ([D-051](decisions.md#d-051)): its stages'
@@ -1561,12 +1607,16 @@ To be stated in the product surface, not buried here.
   git sync needs a rebase) and someone generates. A proposed change's pipeline
   regenerates at its creation and on a run-check, never as the branch is edited, so **a
   stage marked after an intent change and before the regenerate is refused stale**,
-  naming the device and both remedies ([D-046](decisions.md#d-046)): mark after the
-  branch's writes and after their artifacts have moved. The rule is per device, so a
+  naming the device and both remedies ([D-046](decisions.md#d-046),
+  [D-058](decisions.md#d-058)): mark after the branch's writes and after their artifacts
+  have moved. A stamp that only the template query's group join moved, which Infrahub's own
+  account writes a few seconds after a generation first reads a node, is read as the
+  node's creation, so a generate is not undone by its own churn
+  ([D-060](decisions.md#d-060)). The rule is per device, so a
   neighbour's change that alters a device's rendered lines is not named on that device
-  while none of the device's own stamps moves and no intent event names the device or one
-  of its interfaces, as the event's node or a peer ([D-048](decisions.md#d-048)): a link
-  removed between them names both ends, an edit of the neighbour's own attributes does
+  while none of the device's own stamps moves and no intent event names the device, one
+  of its interfaces, its platform, its manufacturer or one of its cables, as the event's
+  node or a peer ([D-048](decisions.md#d-048)): a cable removed between them names both ends, an edit of the neighbour's own attributes does
   not. The proposed change's checks cover it, since a run-check re-stamps the validator
   for every device.
 - **A lossy mapping loses interfaces.** Where a container has fewer ports than the
@@ -1611,8 +1661,9 @@ To be stated in the product surface, not buried here.
    verification: a read pinned before the branch's creation answers with `main` as it
    then stood, back to the default branch's creation, and is refused before that; a read
    pinned at exactly a stamp sees the node and not the value, so the head is pinned one
-   microsecond after the branch's latest stamp, or after its latest intent event, when
-   that is later ([D-048](decisions.md#d-048)); there is no server-side marker for the
+   microsecond after the latest of its devices' intent stamps and its artifacts'
+   checksums, or after its latest intent event, when that is later
+   ([D-048](decisions.md#d-048), [D-058](decisions.md#d-058)); there is no server-side marker for the
    read time ([D-012](decisions.md#d-012)).
 3. ~~**Change detection for following.**~~ Closed by [D-026](decisions.md#d-026): a
    scheduled read and compare. Neither the event stream nor the branch diff decides

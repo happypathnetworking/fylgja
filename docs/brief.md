@@ -48,9 +48,12 @@ provides durable execution for provisioning.
 
 ## Principles carried from the first design
 
-Go end to end, static binary, no second runtime · schema contract as Infrahub generics
-with a shipped reference schema; `iftype` is kind, `mgmt_only` is the one use-flag,
-wiring derived never declared, VLAN generic deferred · thin CTM with provenance,
+Go end to end, static binary, no second runtime · the CTM is the contract, and a reader
+maps one source's model onto it by one documented mapping: the Infrahub reader reads the
+OpsMill schema library's DCIM at a pinned commit, under a scope, `tag:<name>`
+([D-057](decisions.md#d-057), in place of Fylgja's generics and reference schema); every
+interface a port, `mgmt_only` the one use-flag, wiring derived never declared, VLANs
+deferred · thin CTM with provenance,
 justified by synthesized nodes · pure compiler producing a deterministic,
 content-addressed, self-describing bundle (topology, bootstrap per node, manifest) ·
 fidelity manifest on every bundle · platforms are data: PSPs, conformance suite,

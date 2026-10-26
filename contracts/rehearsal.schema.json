@@ -120,7 +120,7 @@
         "bundle_id": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "null when the stage was refused" },
         "role": {
           "enum": ["refused", "baseline", "rehearsed", "not_reached"],
-          "description": "refused: a stage the plan refused: a branch point refused contract.node.missing, passed over (FR-003), or in a refused rehearsal's block every stage whose refusal refused it. baseline: the first compiled stage, created and verified. rehearsed: stepped to and verified. not_reached: after a stage that was not passed, the baseline of a run that touched nothing because another run held its provision's id, and every stage but a refused one of a run whose end was not read"
+          "description": "refused: a stage the plan refused: a branch point refused scope.empty (contract.node.missing before 017), passed over (FR-003), or in a refused rehearsal's block every stage whose refusal refused it. baseline: the first compiled stage, created and verified. rehearsed: stepped to and verified. not_reached: after a stage that was not passed, the baseline of a run that touched nothing because another run held its provision's id, and every stage but a refused one of a run whose end was not read"
         },
         "verdict": {
           "enum": ["refused", "baseline", "passed", "failed", "error", "not_reached"],

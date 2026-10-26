@@ -90,7 +90,11 @@ where the cEOS image comes from.
 ## A walking twin, start to finish
 
 This is a real session on one lab host, with Infrahub running beside it. Each step's
-`begins` line is left out, and other trimmed lines are marked `…`. Start the workflow
+`begins` line is left out, and other trimmed lines are marked `…`. It was recorded at
+`v0.2.0`, before Fylgja read the schema library's DCIM: its ids, counts and schema hashes
+are that release's, and the lines 017 changed (the record's scope and mapping, the scope
+in a plan's heading, `scope.empty` at the branch point) are shown as this build prints
+them. Start the workflow
 service, the worker, which runs on the lab host and does everything that touches it, and
 the API's server beside it, which every command below talks to. The two roles share one
 state root, here `/var/tmp/fylgja`; any absolute directory both can write will do:
@@ -150,6 +154,7 @@ twin ready: bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd
   n1  172.20.20.3
   n2  172.20.20.4
   n3  172.20.20.2
+record: branch fylgja-test-readme, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 4d5b37aa0a894aec4cdca69fdb9fe455, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
 twin directory /var/tmp/fylgja/twin
 following branch fylgja-test-readme, checked every 15s (schedule fylgja-follow)
 warning host.memory.unbudgeted [step host_check] host: sum 6144 MiB (n1 2048, n2 2048, n3 2048) is not checked against a host budget: FYLGJA_HOST_MEMORY_MB is unset
@@ -168,7 +173,7 @@ twin: lab fylgja present (3 nodes); twin directory present
   n1  clab-fylgja-n1  running  172.20.20.3  nokia_srlinux  device-config f05634801639578ed97c10f9d0265546
   n2  clab-fylgja-n2  running  172.20.20.4  nokia_srlinux  device-config 36667eef6c8a92923957b9549784273b
   n3  clab-fylgja-n3  running  172.20.20.2  nokia_srlinux  device-config 7efd0c0d5f40e5119d75b8b8d31d3e57
-record: branch fylgja-test-readme, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 4d5b37aa0a894aec4cdca69fdb9fe455, contract 0.2
+record: branch fylgja-test-readme, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 4d5b37aa0a894aec4cdca69fdb9fe455, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
   intent read at 2026-10-06T19:13:21.796364Z; reproducing it with --at that instant is best-effort
   provisioned by run fylgja-provision 01a112a2-7ee6-7772-a701-af726d528abc (source intent), worker 0.1.0-dev, recorded 2026-10-06T19:14:09.579682296Z, 3 nodes
 kind: following branch fylgja-test-readme, checked every 15s
@@ -307,9 +312,9 @@ whatever its `at` and the step to it changes nothing:
 
 ```console
 $ bin/fylgja stage plan --branch fylgja-test-readme
-proposed change "fylgja-test-readme" (18df36fe-997f-c213-33b8-c510acd939bd) on branch fylgja-test-readme → main, draft (4 stages)
-fylgja-test-readme/branch-point: refused (contract.node.missing)
-  rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
+proposed change "fylgja-test-readme" (18df36fe-997f-c213-33b8-c510acd939bd) on branch fylgja-test-readme → main, draft (4 stages), scope tag:fylgja
+fylgja-test-readme/branch-point: refused (scope.empty)
+  rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at …
 step fylgja-test-readme/branch-point → fylgja-test-readme/seeded (— → b63404c3…): not computed (fylgja-test-readme/branch-point was refused)
 fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-17T04:34:59.424352+00:00 (written), "seeded"
   bundle_id b63404c330b6144f78dc3dae5daf2d675e3ddd71eec11e899cb4af14dfa00efd
@@ -325,7 +330,7 @@ step fylgja-test-readme/third-link → fylgja-test-readme/head (d05dc990… → 
 fylgja-test-readme/head: branch fylgja-test-readme at 2026-10-17T04:35:08.687492+00:00 (head)
   bundle_id 6ecc489c6a38c219abf5b3d84ecbabb57db6b74d1982e409937a060a05d188d2
   read: 3 devices (nokia_srlinux 3), 14 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
-rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
+rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at …
 1 finding(s): 1 rejection, 0 warning, 0 info
 ```
 
@@ -504,14 +509,14 @@ seconds, its `Message` the plan of the two stages a proposed change has before a
 marked, the branch point refused for want of a network on `main`, then its findings:
 
 ```text
-proposed change "fylgja-test-readme" (18e01843-9cb0-c335-33b3-c51c6053f556) on branch fylgja-test-readme → main, draft (2 stages)
-fylgja-test-readme/branch-point: refused (contract.node.missing)
-  rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
+proposed change "fylgja-test-readme" (18e01843-9cb0-c335-33b3-c51c6053f556) on branch fylgja-test-readme → main, draft (2 stages), scope tag:fylgja
+fylgja-test-readme/branch-point: refused (scope.empty)
+  rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at 2026-10-20T01:21:38.649050Z
 step fylgja-test-readme/branch-point → fylgja-test-readme/head (— → e26a0e65…): not computed (fylgja-test-readme/branch-point was refused)
 fylgja-test-readme/head: branch fylgja-test-readme at 2026-10-20T01:21:59.327451+00:00 (head)
   bundle_id e26a0e6578ce80add8f096da796187d56139f204e08cd13a1c9b32b7744f98ad
   read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
-rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
+rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at 2026-10-20T01:21:38.649050Z
 1 finding(s): 1 rejection, 0 warning, 0 info
 ```
 
@@ -549,13 +554,13 @@ and when the stages were resolved, so a later rehearsal's comment, a new one, is
 it:
 
 ````markdown
-## Fylgja rehearsed proposed change "fylgja-test-readme" on fylgja-test-readme
+## Fylgja rehearsed proposed change "fylgja-test-readme" on fylgja-test-readme, scope tag:fylgja
 
 Run `fylgja-rehearse 01a156e8-da76-7743-9ca7-53c29d65ddc5`, stages resolved at 2026-10-20T01:24:14Z. Status **ok**. 70.7s of the 1980s deadline (ceiling 3600s).
 
 | stage | at | bundle | step | wait | verify | new verification failures | verdict |
 |---|---|---|---|---|---|---|---|
-| fylgja-test-readme/branch-point | 2026-10-20T01:21:38.649050Z | — | | | | | refused (contract.node.missing) |
+| fylgja-test-readme/branch-point | 2026-10-20T01:21:38.649050Z | — | | | | | refused (scope.empty) |
 | fylgja-test-readme/seeded | 2026-10-20T01:23:39.142559+00:00 | f278dcb6… | created | settled after 4.6s | 15 held, 0 failed, 0 skipped | — | baseline |
 | fylgja-test-readme/third-link | 2026-10-20T01:23:48.370039+00:00 | 9827fe8f… | stepped 5.1s; push n1, n3 | settled after 5.7s | 19 held, 0 failed, 0 skipped | none | passed |
 | fylgja-test-readme/head | 2026-10-20T01:23:46.627087+00:00 | 904addf9… | unchanged | settled after 5.9s | 19 held, 0 failed, 0 skipped | none | passed |
@@ -597,9 +602,9 @@ and no ready proposed change:
 
 ```console
 $ bin/fylgja twin rehearse --branch fylgja-test-readme
-rehearsal of proposed change "fylgja-test-readme" (18e01843-9cb0-c335-33b3-c51c6053f556) on branch fylgja-test-readme: 4 stages; deadline 33m0s (ceiling 1h0m0s)
-fylgja-test-readme/branch-point: refused (contract.node.missing)
-  rejection contract.node.missing [step read] main: branch defines FylgjaContract but holds no instance of it
+rehearsal of proposed change "fylgja-test-readme" (18e01843-9cb0-c335-33b3-c51c6053f556) on branch fylgja-test-readme: 4 stages; deadline 33m0s (ceiling 1h0m0s), scope tag:fylgja
+fylgja-test-readme/branch-point: refused (scope.empty)
+  rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at 2026-10-20T01:21:38.649050Z
 fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-20T01:23:39.142559+00:00 (written), "seeded"; baseline
 fylgja-test-readme/third-link: branch fylgja-test-readme at 2026-10-20T01:23:48.370039+00:00 (written), "third link"
 fylgja-test-readme/head: branch fylgja-test-readme at 2026-10-20T01:23:46.627087+00:00 (head)
@@ -619,7 +624,7 @@ run fylgja-destroy 01a156eb-724d-70c9-a6a1-5be1450ce34b
 …
 removed lab fylgja (3 containers)
 removed twin directory /var/tmp/fylgja/twin
-stage fylgja-test-readme/branch-point: refused (contract.node.missing)
+stage fylgja-test-readme/branch-point: refused (scope.empty)
 stage fylgja-test-readme/seeded: created; settled after 4.9s (1 read); 15 held, 0 failed, 0 skipped; baseline
 stage fylgja-test-readme/third-link: stepped in 4.7s (push n1 2.6s, n3 2.7s); settled after 6.2s (1 read); 19 held, 0 failed, 0 skipped; passed
 stage fylgja-test-readme/head: unchanged in 1.1s; settled after 6.0s (1 read); 19 held, 0 failed, 0 skipped; passed
@@ -705,8 +710,9 @@ can stop anywhere and look. Like every command, each is a request to a running `
 serve`, and is checked against the server's packages:
 
 ```sh
-fylgja schema check  --branch B                           # does the branch conform? reads nothing else
-fylgja intent read   --branch B [--at T] --out ctm.json   # the validated intent snapshot (CTM)
+fylgja schema check  --branch B                           # is the branch's DCIM the one the reader reads? reads nothing else
+fylgja intent read   --branch B [--at T] [--scope tag:S] --out ctm.json
+                                                          # the validated intent snapshot (CTM) of the devices tagged S
 fylgja twin compile  --ctm ctm.json --out bundle/         # the pure compiler: same CTM, same bytes
 fylgja twin provision bundle/                             # boot a bundle
 fylgja psp validate  psp/*.yaml                           # check platform support packages

@@ -954,9 +954,11 @@ start on the same registry.
 - `twin step` on a record of `7` or earlier is refused at `resolve`, exit 1:
   `step.twin.unsteppable`, `the twin was created from a record version this build no
   longer reads (twin.json 7); fylgja twin destroy clears it`, as a `5` is; on an `8` whose
-  scope is not `tag:<name>` alike, before any connection: `the twin's record names scope
-  "fylgja", which is not tag:<name>, and every read a step makes is under the record's
-  scope; fylgja twin destroy clears it`.
+  scope is not `tag:<name>` alike: `the twin's record names scope "fylgja", which is not
+  tag:<name>, and every read a step makes is under the record's scope; fylgja twin destroy
+  clears it`. Each is refused before any Infrahub read, after the check for a rehearsal in
+  flight, which comes before every other refusal: with the workflow service down, a step
+  that is not a dry run ends `operation.failed` at `start` first.
 
 ### Identifiers
 

@@ -25,17 +25,16 @@ func (d readDevice) match() psp.Match {
 	return psp.Match{Manufacturer: d.manufacturer, Platform: d.platform}
 }
 
-// scopeEmpty refuses a read whose scope selects no device (FR-015): the tag absent from
+// ScopeEmpty refuses a read whose scope selects no device (FR-015): the tag absent from
 // the branch, or on no DcimDevice, which the read does not tell apart, since telling them
-// apart would read BuiltinTag itself (R-03).
-func scopeEmpty(scope, branch, at string) findings.List {
-	var list findings.List
+// apart would read BuiltinTag itself (R-03). at is the read's, "" unpinned. The stages
+// file it at resolve for a head whose stamps selected no device, in the read's words.
+func ScopeEmpty(scope, branch, at string) findings.Finding {
 	msg := fmt.Sprintf("scope %s selects no device on branch %s", scope, branch)
 	if at != "" {
 		msg += " at " + at
 	}
-	list.Add(findings.Rejection, findings.RuleScopeEmpty, scope, msg)
-	return list
+	return findings.Finding{Severity: findings.Rejection, Rule: findings.RuleScopeEmpty, Object: scope, Message: msg}
 }
 
 // completeness refuses every device in the scope that no package can be chosen for, all

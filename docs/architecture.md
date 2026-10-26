@@ -336,9 +336,10 @@ resolution reads stamps and never a value of intent: the kind or its extension a
 (`stage.unknown`); a branch whose schema does not conform, the source branch or the
 destination, with the read's own findings (`schema.*`), each branch checked once per command
 before its stamps are first read, since they select the library's kinds; a mark carrying a
-reserved label (`stage.label.reserved`); a stage with no `at` at all (a mark with neither
-`as_of` nor its label's stamp, a head of a branch with neither a stamp nor an intent event,
-a branch point with no `branched_from`), or a given one later than now
+reserved label (`stage.label.reserved`); the head of a scope that selects no device on its
+branch, with no intent event to name its `at` (`scope.empty`); a stage with no `at` at all
+(a mark with neither `as_of` nor its label's stamp, a head whose devices carry no stamp and
+no intent event, a branch point with no `branched_from`), or a given one later than now
 (`stage.at.unresolved`); more than six fractional digits (`intent.at.precision`); an `at`
 before the branch point (`stage.at.before_branch_point`), which names the rebase when
 `branched_from` has moved past the mark while `created_at` has not, since a rebase

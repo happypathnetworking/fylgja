@@ -282,6 +282,33 @@ func TestCreateStageResolutionRefusals(t *testing.T) {
 	}
 }
 
+// The head of a scope that selects no device on its branch has no at: its stamps selected
+// no device and the branch holds no intent event. The create is refused scope.empty at
+// resolve, exit 1, naming the scope in the read's words, before anything is read or
+// started (017; FR-015), where 0.2's wording said the branch held nothing stamped.
+func TestCreateStageHeadOfAnEmptyScope(t *testing.T) {
+	useStateRoot(t)
+	useService(t, nil)
+	f := demoInfrahub(t)
+	f.start()
+
+	const ref = "fylgja-fixture/head"
+	code, doc := executeTwin(t, "twin", "create", "--stage", ref, "--scope", "tag:nothing")
+	if code != findings.ExitRejected || len(doc.Findings) != 1 {
+		t.Fatalf("exit %d, findings %+v; want 1 with scope.empty alone", code, doc.Findings)
+	}
+	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleScopeEmpty, Object: "tag:nothing",
+		Message: "scope tag:nothing selects no device on branch fylgja-fixture", Step: findings.StepResolve}
+	if got := doc.Findings[0]; got != want {
+		t.Errorf("finding %+v; want %+v", got, want)
+	}
+	if doc.Subject == nil || doc.Subject.Stage != ref || doc.Subject.Scope != "tag:nothing" || doc.Stage != nil {
+		t.Errorf("subject %+v, stage %+v; want subject.stage %s under tag:nothing and no block", doc.Subject, doc.Stage, ref)
+	}
+	readsNoIntent(t, "the head of an empty scope", f)
+	validateM10Document(t, doc)
+}
+
 // An Infrahub the resolution cannot reach, or a credential it lacks, is M1's
 // operation.failed, exit 2, at step resolve: the reader's error as it is, never one of the
 // resolution's refusals, and no credential in it.

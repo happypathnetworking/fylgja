@@ -496,14 +496,25 @@ func (c *Change) describe() string {
 // check is steps 5 and 7: the stage has an at, honoured by Infrahub, not in the future
 // when given, and not before the branch point. The branch point's at is branched_from and
 // the head's after every stamp, so neither can be refused but for having none.
+//
+// The head has none when the scope's stamps selected no device and the branch holds no
+// intent event since its branch point: the scope selects nothing there, which is the
+// read's own refusal, scope.empty naming the scope, filed here at resolve, since there is
+// no at to read at (017; FR-015). A head whose devices Infrahub returned no stamp for is
+// stage.at.unresolved.
 func (c *Change) check(st Stage, now time.Time) findings.List {
 	ref := st.Ref
 	if st.At == "" {
 		why := "no as_of is written on it and Infrahub returned no updated_at for its label"
 		switch {
 		case st.Mark != nil:
+		case st.AtSource == AtHead && len(c.head.Devices) == 0:
+			f := intent.ScopeEmpty(c.Scope, ref.Branch, "")
+			f.Step = findings.StepResolve
+			return findings.List{f}
 		case st.AtSource == AtHead:
-			why = "branch " + ref.Branch + " holds no stamped device, interface, link or artifact"
+			why = "Infrahub returned no stamp for the devices scope " + c.Scope + " selects on branch " + ref.Branch +
+				" or for anything of theirs"
 		default:
 			why = "Infrahub returned no branched_from for branch " + ref.Branch
 		}

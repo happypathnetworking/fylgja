@@ -80,7 +80,7 @@ func (c *Client) Fetch(ctx context.Context, conf *Conformance, observedAt string
 	}
 	// No device, no ports to ask for: a Ports request with no ids would filter by none.
 	if len(devices) == 0 {
-		return nil, scopeEmpty(out.Envelope.Scope, c.cfg.Branch, c.cfg.At), nil
+		return nil, findings.List{ScopeEmpty(out.Envelope.Scope, c.cfg.Branch, c.cfg.At)}, nil
 	}
 
 	ids := make([]string, 0, len(devices))

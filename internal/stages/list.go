@@ -87,8 +87,8 @@ type ListResult struct {
 // still listed); the schema.* findings of a branch whose schema does not conform, the
 // source's or the destination's, rejections filed once per branch before its stamps are
 // read, the source's head listed with no at (017); and warnings, which refuse nothing:
-// stage.at.unresolved for a stage nothing names an at for, whose row has none;
-// stage.unknown for a source branch deleted
+// stage.at.unresolved for a stage nothing names an at for, or scope.empty for a head whose
+// scope selects no device (017), whose row has none; stage.unknown for a source branch deleted
 // under its open proposed change, whose marks are listed at their own ats and whose two
 // derived stages have none, until Infrahub cancels it; stage.main.moved per proposed
 // change; stage.orphaned per orphan; and stage.twin.moved when the record's stage no

@@ -294,11 +294,22 @@ func TestResolveRefusals(t *testing.T) {
 				"label, so it names no point in time",
 		},
 		{
-			name: "the head of a branch holding neither a stamp nor an intent event",
+			// The scope's stamps selected no device, and the branch holds no intent event:
+			// the scope selects nothing, the read's own refusal, filed at resolve (017).
+			name: "the head of a scope that selects no device, with no intent event",
 			edit: func(_ *fakeReader, s *fakeStamper) { s.byBranch["change-1"] = intent.Stamps{} },
-			ref:  Ref{"change-1", "head"}, rule: findings.RuleStageAtUnresolved, object: "change-1/head", stamps: true,
-			message: "stage change-1/head has no at: branch change-1 holds no stamped device, interface, link or artifact, " +
-				"so it names no point in time",
+			ref:  Ref{"change-1", "head"}, rule: findings.RuleScopeEmpty, object: testScope, stamps: true,
+			message: "scope " + testScope + " selects no device on branch change-1",
+		},
+		{
+			// Devices selected, and Infrahub returned no stamp for any of them or of theirs.
+			name: "the head of devices holding neither a stamp nor an intent event",
+			edit: func(_ *fakeReader, s *fakeStamper) {
+				s.byBranch["change-1"] = intent.Stamps{Devices: map[string]intent.DeviceStamps{"n1": {}}}
+			},
+			ref: Ref{"change-1", "head"}, rule: findings.RuleStageAtUnresolved, object: "change-1/head", stamps: true,
+			message: "stage change-1/head has no at: Infrahub returned no stamp for the devices scope " + testScope +
+				" selects on branch change-1 or for anything of theirs, so it names no point in time",
 		},
 		{
 			name: "nine fractional digits",

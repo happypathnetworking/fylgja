@@ -147,9 +147,10 @@ func TestListReserved(t *testing.T) {
 	}
 }
 
-// Every stage has its row: one nothing names an at for — the head of a branch that holds
-// nothing stamped, a mark Infrahub returned no stamp for — is listed with no at and warned
-// of, stage.at.unresolved in the resolution's words, and the listing exits 0.
+// Every stage has its row: one nothing names an at for — the head of a scope that selects
+// no device on its branch, a mark Infrahub returned no stamp for — is listed with no at and
+// warned of in the resolution's words, scope.empty for the head (017) and
+// stage.at.unresolved for the mark, and the listing exits 0.
 func TestListUnresolved(t *testing.T) {
 	r, s := story(change1(mark("st-cabled", "cabled", "", nil, "after the link is cabled")), change2())
 	s.byBranch["change-2"] = intent.Stamps{}
@@ -169,9 +170,8 @@ func TestListUnresolved(t *testing.T) {
 		{Severity: findings.Warning, Rule: findings.RuleStageAtUnresolved, Object: "change-1/cabled", Step: findings.StepResolve,
 			Message: "stage change-1/cabled has no at: no as_of is written on it and Infrahub returned no updated_at for its label, " +
 				"so it names no point in time"},
-		{Severity: findings.Warning, Rule: findings.RuleStageAtUnresolved, Object: "change-2/head", Step: findings.StepResolve,
-			Message: "stage change-2/head has no at: branch change-2 holds no stamped device, interface, link or artifact, " +
-				"so it names no point in time"},
+		{Severity: findings.Warning, Rule: findings.RuleScopeEmpty, Object: testScope, Step: findings.StepResolve,
+			Message: "scope " + testScope + " selects no device on branch change-2"},
 	}
 	if !reflect.DeepEqual(list, wantList) {
 		t.Errorf("findings:\n%+v\nwant\n%+v", list, wantList)

@@ -638,8 +638,9 @@ func TestStagePlanText(t *testing.T) {
 // default (017; US5 scenario 5): each stage's read and stamps send the tag x, which no
 // device of the fake carries, so the branch point and each mark are refused scope.empty
 // naming tag:x at their read, and the head, whose at is computed from the branch's stamps
-// under the scope, has none and is refused stage.at.unresolved before any read, as a branch
-// holding nothing stamped is (R-10). The heading and the document name the scope.
+// under the scope, has none and is refused scope.empty naming tag:x at resolve, before any
+// read, the stamps having selected no device (R-10; FR-015). The heading and the document
+// name the scope.
 func TestStagePlanReadsUnderTheScopeGiven(t *testing.T) {
 	useStateRoot(t)
 	useService(t, nil)
@@ -667,10 +668,9 @@ func TestStagePlanReadsUnderTheScopeGiven(t *testing.T) {
 		}
 	}
 	head := stages[3]
-	if len(head.Findings) != 1 || head.Findings[0].Rule != findings.RuleStageAtUnresolved || head.Findings[0].Step != findings.StepResolve ||
-		head.Findings[0].Message != "stage change-1/head has no at: branch change-1 holds no stamped device, interface, link or "+
-			"artifact, so it names no point in time" {
-		t.Errorf("the head's findings %+v; want stage.at.unresolved alone, at resolve", head.Findings)
+	if len(head.Findings) != 1 || head.Findings[0].Rule != findings.RuleScopeEmpty || head.Findings[0].Object != "tag:x" ||
+		head.Findings[0].Step != findings.StepResolve || head.Findings[0].Message != "scope tag:x selects no device on branch change-1" {
+		t.Errorf("the head's findings %+v; want scope.empty naming tag:x alone, at resolve", head.Findings)
 	}
 	reads, stamped := map[string][]any{}, []any{}
 	for _, r := range f.requests() {

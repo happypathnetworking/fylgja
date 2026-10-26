@@ -947,7 +947,7 @@ Sixteen added and eight removed. No status, step or exit is new.
 |---|---|---|---|
 | `scope.invalid` | rejection, 2, `start` | the value given | `--scope` is not `tag:<name>`, an empty value included; before any connection, after `--branch`'s and `--stage`'s guards |
 | `scope.unset` | rejection, 2, `start` | `FYLGJA_DEFAULT_SCOPE` | no `--scope` and the server has no default; before any connection |
-| `scope.empty` | rejection, 1, `read` (none on `intent read`; a stage's at its read, the branch point's included, where `contract.node.missing` was) | the scope | the device query answered 0 on the branch at the `at`; the rehearsal and `fylgja-step` pass over a branch point refused by this rule alone, as they passed over `contract.node.missing` |
+| `scope.empty` | rejection, 1, `read` (none on `intent read`; a stage's at its read, the branch point's included, where `contract.node.missing` was); `resolve` for a stage's head (a warning in `stage list`) | the scope | the device query answered 0 on the branch at the `at`; or, for a head, the stamps read under the scope selected no device and the branch holds no intent event since its branch point, so the head has no `at` (`scope <scope> selects no device on branch <b>`); the rehearsal and `fylgja-step` pass over a branch point refused by this rule at `read` alone, as they passed over `contract.node.missing` |
 | `schema.kind.missing` | rejection, 1, `read`; `resolve` in a stage command (below); none on `schema check` | the kind | the branch's schema lacks a kind the mapping reads |
 | `schema.field.missing` | rejection, 1, `read` | `<kind>.<field>` | the kind lacks a field the mapping reads |
 | `schema.field.mismatch` | rejection, 1, `read` | `<kind>.<field>` | the field's kind, cardinality, peer or optionality is not the mapping's; names both |
@@ -969,7 +969,10 @@ branch that does not conform under the read's `schema.*` findings at `resolve`, 
 in one pass, each message prefixed `branch <b>: `, exit 1: the source branch's refuses the
 proposed change whole; the destination's refuses a plan's branch point, and any other
 stage's resolution at `stage.main.moved`; `stage list` lists its rows beside them, the
-source branch's head with no `at`.
+source branch's head with no `at`. A stage's head with no `at` because the stamps read under
+the scope selected no device is `scope.empty` at `resolve`; `stage.at.unresolved` names a
+head whose devices carry no stamp (`… Infrahub returned no stamp for the devices scope
+<scope> selects on branch <b> or for anything of theirs …`).
 
 Removed: `contract.version.mismatch`, `contract.node.missing`,
 `schema.generic.unimplemented`, `schema.artifact_target.missing`,

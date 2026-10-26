@@ -48,7 +48,9 @@ Two operations, paged by 100, every page at the read's `at` when one was given:
   value } } connected_endpoints { count edges { node { __typename id ... on
   InterfacePhysical { name { value } device { node { id } } } } } } } }`, once per page of
   devices. The cable's `label` names it in every omission (§4), so conformance holds it
-  (§3).
+  (§3). `connected_endpoints` is selected on the connector outside the `DcimCable`
+  fragment, so on the generic `DcimConnector`'s GraphQL interface: conformance holds it on
+  the generic, not only on `DcimCable` (§3).
 
 The read-only test holds every operation's roots to `DcimDevice`, `InterfacePhysical`,
 `FylgjaStage`, `CoreProposedChange`, `CoreArtifactValidator`, `Branch`,
@@ -76,6 +78,15 @@ the table is reported.
 | `OrganizationManufacturer` | `name`: Text, required | — |
 | `InterfacePhysical` | `name`: Text, required · `role`: Dropdown, optional, choices ⊇ {`management`} · `status`: Dropdown, optional, choices ⊇ {`disabled`} | `device`: `DcimGenericDevice`, Parent, one, required · `connector`: `DcimConnector`, Attribute, one, optional |
 | `DcimCable` | `label`: Text, optional | `connected_endpoints`: `DcimEndpoint`, Attribute, many, optional |
+| `DcimConnector` (generic) | — | `connected_endpoints`: `DcimEndpoint`, Attribute, many, optional |
+
+The generic's row is the field the `Ports` query reads through its interface (§2), read
+from the endpoint's `generics` as a node's fields are from its `nodes`: a branch whose
+`DcimConnector` lacks it, with `DcimCable` declaring it itself (as a later library commit
+could move it), would otherwise pass conformance and fail the query naming nothing of this
+table. Present without it is `schema.field.missing DcimConnector.connected_endpoints`, of
+another peer or cardinality `schema.field.mismatch`; the generic absent is the one
+`schema.used_by.missing` below, not named twice.
 
 `used_by`: `DcimGenericDevice` ⊇ {`DcimDevice`}, `DcimInterface` ⊇ {`InterfacePhysical`},
 `DcimEndpoint` ⊇ {`InterfacePhysical`}, `DcimConnector` ⊇ {`DcimCable`}. `optional` is
@@ -85,7 +96,9 @@ whatever its YAML says).
 
 `fylgja schema check --branch <b>` runs this half alone and, on success, prints
 `conformant with opsmill/schema-library@26336e9: DcimDevice, DcimPlatform,
-OrganizationManufacturer, InterfacePhysical, DcimCable`, then the stages line as today.
+OrganizationManufacturer, InterfacePhysical, DcimCable, DcimConnector`, the table's rows in
+its order, the generic among them; then the stages line as today. The `verified` block
+names each row with its fields, `DcimConnector`'s `connected_endpoints` last.
 
 ## 4. Completeness, inside the scope
 

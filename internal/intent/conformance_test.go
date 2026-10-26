@@ -69,6 +69,12 @@ func member(t *testing.T, doc map[string]any, kind, section, name string) map[st
 	return entry(t, schemaList(t, entry(t, schemaList(t, doc, "nodes"), "kind", kind), section), "name", name)
 }
 
+// genericMember is a generic's attribute or relationship.
+func genericMember(t *testing.T, doc map[string]any, generic, section, name string) map[string]any {
+	t.Helper()
+	return entry(t, schemaList(t, entry(t, schemaList(t, doc, "generics"), "kind", generic), section), "name", name)
+}
+
 func dropNode(t *testing.T, doc map[string]any, kind string) {
 	doc["nodes"] = without(schemaList(t, doc, "nodes"), "kind", kind)
 }
@@ -121,6 +127,20 @@ var (
 	cableLabelNumber = func(t *testing.T, doc map[string]any) {
 		member(t, doc, "DcimCable", "attributes", "label")["kind"] = "Number"
 	}
+	// The Ports query selects connected_endpoints on the generic DcimConnector, outside the
+	// DcimCable fragment. A later library commit could move it to DcimCable, which would
+	// then declare it itself rather than inherit it.
+	connectorEndpointsMoved = func(t *testing.T, doc map[string]any) {
+		g := entry(t, schemaList(t, doc, "generics"), "kind", "DcimConnector")
+		g["relationships"] = without(schemaList(t, g, "relationships"), "name", "connected_endpoints")
+		member(t, doc, "DcimCable", "relationships", "connected_endpoints")["inherited"] = false
+	}
+	connectorEndpointsToInterfaces = func(t *testing.T, doc map[string]any) {
+		genericMember(t, doc, "DcimConnector", "relationships", "connected_endpoints")["peer"] = "DcimInterface"
+	}
+	connectorEndpointsOne = func(t *testing.T, doc map[string]any) {
+		genericMember(t, doc, "DcimConnector", "relationships", "connected_endpoints")["cardinality"] = "one"
+	}
 )
 
 // readsIt is the end of every conformance finding but used_by's: the commit the table was
@@ -147,6 +167,7 @@ func TestConformanceOfTheLibrary(t *testing.T) {
 		{Kind: "OrganizationManufacturer", Fields: []string{"name"}},
 		{Kind: "InterfacePhysical", Fields: []string{"name", "role", "status", "device", "connector"}},
 		{Kind: "DcimCable", Fields: []string{"label", "connected_endpoints"}},
+		{Kind: "DcimConnector", Fields: []string{"connected_endpoints"}},
 	}
 	if !reflect.DeepEqual(conf.Kinds, want) {
 		t.Errorf("kinds %+v, want %+v", conf.Kinds, want)
@@ -202,6 +223,22 @@ func TestConformanceNamesWhatDiffers(t *testing.T) {
 			Message: "DcimCable has no attribute label" + readsIt}},
 		{"DcimCable.label a Number", cableLabelNumber, findings.Finding{Rule: findings.RuleSchemaFieldMismatch, Object: "DcimCable.label",
 			Message: "kind Text, found Number" + readsIt}},
+		{"DcimConnector.connected_endpoints moved to DcimCable", connectorEndpointsMoved, findings.Finding{
+			Rule: findings.RuleSchemaFieldMissing, Object: "DcimConnector.connected_endpoints",
+			Message: "DcimConnector has no relationship connected_endpoints" + readsIt}},
+		{"DcimConnector.connected_endpoints to DcimInterface", connectorEndpointsToInterfaces, findings.Finding{
+			Rule: findings.RuleSchemaFieldMismatch, Object: "DcimConnector.connected_endpoints",
+			Message: "peer DcimEndpoint, found DcimInterface" + readsIt}},
+		{"DcimConnector.connected_endpoints of one", connectorEndpointsOne, findings.Finding{
+			Rule: findings.RuleSchemaFieldMismatch, Object: "DcimConnector.connected_endpoints",
+			Message: "cardinality many, found one" + readsIt}},
+		// The generic gone is its used_by's one finding, as it was before the table read a
+		// field of it: never its field named beside it.
+		{"DcimConnector gone", func(t *testing.T, doc map[string]any) {
+			doc["generics"] = without(schemaList(t, doc, "generics"), "kind", "DcimConnector")
+		}, findings.Finding{Rule: findings.RuleSchemaUsedByMissing, Object: "DcimConnector",
+			Message: "the branch's schema has no generic DcimConnector; the mapping reads DcimCable " +
+				"through it as opsmill/schema-library@26336e9 has it"}},
 		{"InterfacePhysical gone", func(t *testing.T, doc map[string]any) {
 			dropNode(t, doc, "InterfacePhysical")
 			dropImplementer(t, doc, "DcimInterface", "InterfacePhysical")
@@ -307,6 +344,31 @@ func TestReadIsRefusedByConformance(t *testing.T) {
 	}
 	if n := f.count("/graphql/" + f.branch); n != 0 {
 		t.Errorf("a refused read asked GraphQL %d times", n)
+	}
+}
+
+// A branch whose DcimConnector lacks the connected_endpoints the Ports query selects on
+// it, DcimCable declaring them itself, is refused by conformance before any query, where
+// the query would have failed naming nothing of the table; another peer or cardinality
+// likewise (FR-012; US3 scenario 4).
+func TestReadIsRefusedWithoutTheConnectorsEndpoints(t *testing.T) {
+	for _, mutate := range []func(*testing.T, map[string]any){
+		connectorEndpointsMoved, connectorEndpointsToInterfaces, connectorEndpointsOne,
+	} {
+		f := newFakeInfrahub(t)
+		mutate(t, f.schema)
+
+		snapshot, list, err := readFake(t, f)
+
+		if err != nil {
+			t.Fatal(err)
+		}
+		if snapshot != nil || len(list) != 1 || list[0].Object != "DcimConnector.connected_endpoints" || !list.Rejected() {
+			t.Errorf("CTM %v, findings %+v; want no CTM and DcimConnector.connected_endpoints' finding alone", snapshot != nil, list)
+		}
+		if n := f.count("/graphql/" + f.branch); n != 0 {
+			t.Errorf("a refused read asked GraphQL %d times; the Ports query above all must not be sent", n)
+		}
 	}
 }
 

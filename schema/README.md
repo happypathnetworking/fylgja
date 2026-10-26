@@ -151,11 +151,16 @@ intent runs the same check first and is refused with the same findings, before a
 | `OrganizationManufacturer` | `name`: Text, required | — |
 | `InterfacePhysical` | `name`: Text, required · `role`: Dropdown, optional, choices including `management` · `status`: Dropdown, optional, choices including `disabled` | `device`: `DcimGenericDevice`, Parent, one, required · `connector`: `DcimConnector`, Attribute, one, optional |
 | `DcimCable` | `label`: Text, optional | `connected_endpoints`: `DcimEndpoint`, Attribute, many, optional |
+| `DcimConnector` (generic) | — | `connected_endpoints`: `DcimEndpoint`, Attribute, many, optional |
 
 And `used_by`: `DcimGenericDevice` by `DcimDevice`, `DcimInterface` and `DcimEndpoint` by
 `InterfacePhysical`, `DcimConnector` by `DcimCable`. `optional` is compared as Infrahub
 reports it: a required attribute must read `optional: false`, and an optional one may read
-either.
+either. The generic's row is there because `Ports` selects a port's cable's ends on the
+connector outside the `DcimCable` fragment, so through `DcimConnector` itself: a branch
+whose generic lacks them, `DcimCable` declaring them itself, is refused naming
+`DcimConnector.connected_endpoints` rather than failing the query; the generic absent is
+its one `schema.used_by.missing`.
 
 | Rule | Object | When |
 |---|---|---|
@@ -170,7 +175,8 @@ DcimCable; the mapping reads it as opsmill/schema-library@26336e9 has it`); ever
 reported in one pass, and nothing beyond the table is reported, so kinds, fields and
 choices a branch adds fail nothing. On success it prints `conformant with
 opsmill/schema-library@26336e9: DcimDevice, DcimPlatform, OrganizationManufacturer,
-InterfacePhysical, DcimCable`, then the stages line, which reads the default branch
+InterfacePhysical, DcimCable, DcimConnector`, the table's rows with the generic among them,
+then the stages line, which reads the default branch
 whatever branch was checked (`stages: FylgjaStage present on the default branch, with its
 extension`); `--json`'s `verified` block is `{model, version, kinds: [{kind, fields}],
 stages}`. It takes no `--at`: the schema endpoint answers for now.

@@ -580,41 +580,114 @@ func TestReadHoldsTheCablesLabelToTheTable(t *testing.T) {
 			Object: "DcimCable.label", Message: "kind Text, found Number; the mapping reads it as " +
 				"opsmill/schema-library@26336e9 has it"}},
 	} {
-		t.Run(c.name, func(t *testing.T) {
-			f := newFakeInfrahub(t)
-			f.schemaMutations = map[string]func(map[string]any){branch: c.mutate}
-			f.start()
-			out := filepath.Join(t.TempDir(), "ctm.json")
+		t.Run(c.name, func(t *testing.T) { readAndCheckRefusedAlike(t, branch, c.mutate, c.want) })
+	}
+	t.Run("conformant", func(t *testing.T) { readsDevicesAndPorts(t, branch) })
+}
 
-			code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{branch: branch, out: out}))
-			if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != c.want {
-				t.Fatalf("exit %d, findings %+v; want 1 with exactly %+v", code, doc.Findings, c.want)
-			}
-			if ops := operations(f, branch); len(ops) != 0 {
-				t.Errorf("%s was sent %v; want nothing past its schema, no Ports above all", branch, ops)
-			}
-			if _, err := os.Stat(out); !os.IsNotExist(err) {
-				t.Error("a refused read left a file behind")
-			}
+// The connector's connected_endpoints are in the mapping's table on the generic
+// DcimConnector, since the Ports query selects them on the generic, outside the DcimCable
+// fragment: a branch whose DcimConnector lacks them, DcimCable declaring them itself as a
+// later library commit could, or holds them to another peer, is refused by conformance
+// naming the commit, as schema check refuses it, before any query, where the Ports query
+// would have failed operation.failed naming nothing of the table (FR-012; US3 scenario
+// 4). A conformant branch reads as before.
+func TestReadHoldsTheConnectorsEndpointsToTheTable(t *testing.T) {
+	const branch = "fylgja-fixture"
+	for _, c := range []struct {
+		name   string
+		mutate func(map[string]any)
+		want   findings.Finding
+	}{
+		{"moved to DcimCable", connectorEndpoints(""), findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSchemaFieldMissing,
+			Object: "DcimConnector.connected_endpoints", Message: "DcimConnector has no relationship connected_endpoints; " +
+				"the mapping reads it as opsmill/schema-library@26336e9 has it"}},
+		{"to DcimInterface", connectorEndpoints("DcimInterface"), findings.Finding{Severity: findings.Rejection,
+			Rule: findings.RuleSchemaFieldMismatch, Object: "DcimConnector.connected_endpoints",
+			Message: "peer DcimEndpoint, found DcimInterface; the mapping reads it as opsmill/schema-library@26336e9 has it"}},
+	} {
+		t.Run(c.name, func(t *testing.T) { readAndCheckRefusedAlike(t, branch, c.mutate, c.want) })
+	}
+	t.Run("conformant", func(t *testing.T) { readsDevicesAndPorts(t, branch) })
+}
 
-			code, doc = exitOf(t, runCheck(t.Context(), &options{asJSON: true}, &checkFlags{branch: branch}))
-			if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != c.want {
-				t.Errorf("schema check: exit %d, findings %+v; want the read's %+v", code, doc.Findings, c.want)
+// connectorEndpoints changes the generic DcimConnector's connected_endpoints: gone, with
+// DcimCable declaring them itself rather than inheriting them, when peer is empty; to peer
+// otherwise.
+func connectorEndpoints(peer string) func(map[string]any) {
+	return func(doc map[string]any) {
+		for _, g := range doc["generics"].([]any) {
+			generic := g.(map[string]any)
+			if generic["kind"] != "DcimConnector" {
+				continue
 			}
-		})
+			var rels []any
+			for _, r := range generic["relationships"].([]any) {
+				rel := r.(map[string]any)
+				if rel["name"] == "connected_endpoints" {
+					if peer == "" {
+						continue
+					}
+					rel["peer"] = peer
+				}
+				rels = append(rels, rel)
+			}
+			generic["relationships"] = rels
+		}
+		if peer != "" {
+			return
+		}
+		for _, n := range doc["nodes"].([]any) {
+			if node := n.(map[string]any); node["kind"] == "DcimCable" {
+				for _, r := range node["relationships"].([]any) {
+					if rel := r.(map[string]any); rel["name"] == "connected_endpoints" {
+						rel["inherited"] = false
+					}
+				}
+			}
+		}
+	}
+}
+
+// readAndCheckRefusedAlike holds intent read and schema check of branch, its schema changed
+// by mutate, to the one finding want: the read sends nothing past the schema, the Ports
+// query above all, and writes no file.
+func readAndCheckRefusedAlike(t *testing.T, branch string, mutate func(map[string]any), want findings.Finding) {
+	t.Helper()
+	f := newFakeInfrahub(t)
+	f.schemaMutations = map[string]func(map[string]any){branch: mutate}
+	f.start()
+	out := filepath.Join(t.TempDir(), "ctm.json")
+
+	code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{branch: branch, out: out}))
+	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != want {
+		t.Fatalf("exit %d, findings %+v; want 1 with exactly %+v", code, doc.Findings, want)
+	}
+	if ops := operations(f, branch); len(ops) != 0 {
+		t.Errorf("%s was sent %v; want nothing past its schema, no Ports above all", branch, ops)
+	}
+	if _, err := os.Stat(out); !os.IsNotExist(err) {
+		t.Error("a refused read left a file behind")
 	}
 
-	t.Run("conformant", func(t *testing.T) {
-		f := newFakeInfrahub(t)
-		f.start()
-		out := filepath.Join(t.TempDir(), "ctm.json")
+	code, doc = exitOf(t, runCheck(t.Context(), &options{asJSON: true}, &checkFlags{branch: branch}))
+	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != want {
+		t.Errorf("schema check: exit %d, findings %+v; want the read's %+v", code, doc.Findings, want)
+	}
+}
 
-		code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{branch: branch, out: out}))
-		if code != findings.ExitOK || len(doc.Findings) != 0 {
-			t.Fatalf("exit %d, findings %+v; want 0 and none", code, doc.Findings)
-		}
-		if ops := operations(f, branch); ops["Devices"] == 0 || ops["Ports"] == 0 {
-			t.Errorf("%s was sent %v; want its Devices and Ports", branch, ops)
-		}
-	})
+// readsDevicesAndPorts holds a read of the conformant branch to its Devices and Ports.
+func readsDevicesAndPorts(t *testing.T, branch string) {
+	t.Helper()
+	f := newFakeInfrahub(t)
+	f.start()
+	out := filepath.Join(t.TempDir(), "ctm.json")
+
+	code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{branch: branch, out: out}))
+	if code != findings.ExitOK || len(doc.Findings) != 0 {
+		t.Fatalf("exit %d, findings %+v; want 0 and none", code, doc.Findings)
+	}
+	if ops := operations(f, branch); ops["Devices"] == 0 || ops["Ports"] == 0 {
+		t.Errorf("%s was sent %v; want its Devices and Ports", branch, ops)
+	}
 }

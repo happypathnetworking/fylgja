@@ -9,7 +9,8 @@ its kinds; the one kind of its own is the stage (`schema/fylgja-stage.yaml`). Th
 shows, of the library's kinds, the five the mapping reads and the four generics their
 relationships pass through. Each of the five carries the attributes the mapping reads,
 typed by their Infrahub kind, and the relationships its conformance table checks, each to
-the peer the table names, with their cardinalities. Most of them the library declares on
+the peer the table names, with their cardinalities; the table checks `connected_endpoints`
+on the generic `DcimConnector` as well, since the read selects it through the generic. Most of them the library declares on
 a generic and the kind inherits, as Infrahub's schema endpoint reports them for the pinned
 commit. Beside them stand Infrahub's own `BuiltinTag`, which carries the scope, and the
 stage with the proposed change it belongs to. Names are as the YAML spells them;
@@ -43,6 +44,7 @@ erDiagram
     DcimGenericDevice ||--o{ InterfacePhysical : "device"
     DcimConnector |o--o{ InterfacePhysical : "connector"
     DcimCable |o--o{ DcimEndpoint : "connected_endpoints"
+    DcimConnector |o--o{ DcimEndpoint : "connected_endpoints"
     DcimDevice ||--|| DcimGenericDevice : "inherits"
     InterfacePhysical ||--|| DcimInterface : "inherits"
     InterfacePhysical ||--|| DcimEndpoint : "inherits"

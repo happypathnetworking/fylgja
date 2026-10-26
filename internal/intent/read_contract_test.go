@@ -451,8 +451,10 @@ func TestUnknownBranchIsReported(t *testing.T) {
 }
 
 // The schema endpoint is what conformance is read from, and it is the only place a
-// generic's implementers can be named: on the fixture branch, every kind the mapping reads
-// is there, and every generic the mapping reads through is implemented as the table says.
+// generic's implementers and its own fields can be named: on the fixture branch, every
+// kind the mapping reads is there, the generic it reads a field of among them with the
+// relationships it reads, and every generic the mapping reads through is implemented as
+// the table says.
 func TestSchemaInfoReportsImplementers(t *testing.T) {
 	harness(t)
 	cfg, err := FromEnv(testsupport.FixtureBranch, "")
@@ -466,8 +468,20 @@ func TestSchemaInfoReportsImplementers(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, k := range LibraryTables {
-		if _, ok := info.Nodes[k.Kind]; !ok {
+		kinds := info.Nodes
+		if k.Generic {
+			kinds = info.Generics
+		}
+		kind, ok := kinds[k.Kind]
+		if !ok {
 			t.Errorf("kind %s is absent", k.Kind)
+			continue
+		}
+		// The generic's own fields are what the Ports query reads through its interface.
+		for _, r := range k.Relationships {
+			if _, ok := kind.Relationships[r.Name]; !ok {
+				t.Errorf("%s has no relationship %s", k.Kind, r.Name)
+			}
 		}
 	}
 	for _, u := range LibraryUsedBy {

@@ -912,8 +912,10 @@ invalid support package`. `worker run` refuses to start on the same registry.
   prints it after the nodes; `twin provision` does too, its record naming what its bundle's
   provenance names.
 - `schema check`'s first line is `conformant with opsmill/schema-library@26336e9:
-  DcimDevice, DcimPlatform, OrganizationManufacturer, InterfacePhysical, DcimCable`, then
-  014's `stages: …` line.
+  DcimDevice, DcimPlatform, OrganizationManufacturer, InterfacePhysical, DcimCable,
+  DcimConnector`, the mapping's table in its order, the generic `DcimConnector` among it
+  since the `Ports` query reads its `connected_endpoints` through it; then 014's `stages:
+  …` line.
 - `stage plan`'s heading and `twin rehearse`'s end `, scope tag:fylgja`, and the report's
   markdown heading names the scope; `stage list`'s headings do not.
 - The branch point of a `main` holding no device in the scope, in `stage plan` and `twin

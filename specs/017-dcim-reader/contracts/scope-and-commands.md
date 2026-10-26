@@ -94,7 +94,8 @@ Removed: `contract.version.mismatch`, `contract.node.missing`,
   schema …, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9`;
   a `7` record: `…, scope unknown (record 7)`.
 - `schema check`: `conformant with opsmill/schema-library@26336e9: DcimDevice,
-  DcimPlatform, OrganizationManufacturer, InterfacePhysical, DcimCable`, then `stages:
+  DcimPlatform, OrganizationManufacturer, InterfacePhysical, DcimCable, DcimConnector`
+  (the generic among the table's rows, [mapping.md](mapping.md) §3), then `stages:
   …`; `--json`'s `verified` is `{model, version, kinds: [{kind, fields: [...]}], stages}`.
 - `stage plan` and `twin rehearse` headings end `, scope tag:fylgja`.
 - The document's `subject` carries `scope` whenever a read was made under one.

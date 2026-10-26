@@ -125,7 +125,8 @@ bin/fylgja twin compile --ctm local/fixture.ctm.json --out local/fixture.bundle 
 ```
 
 Expected: `conformant with opsmill/schema-library@26336e9: DcimDevice, DcimPlatform,
-OrganizationManufacturer, InterfacePhysical, DcimCable` and the stages line; `wrote
+OrganizationManufacturer, InterfacePhysical, DcimCable, DcimConnector` (the generic since
+T091) and the stages line; `wrote
 local/fixture.ctm.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0
 lossy mappings, 0 shared ports (branch fylgja-fixture, scope tag:fylgja, schema …)`;
 `same`; the envelope's scope `tag:fylgja`, mapping `{infrahub-dcim, opsmill/schema-library,

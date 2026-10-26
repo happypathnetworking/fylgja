@@ -182,9 +182,9 @@ func TestCheckNamesTheStageKind(t *testing.T) {
 }
 
 // conformantLine is schema check's success line on a branch holding the library at the
-// pinned commit (contracts/scope-and-commands.md).
+// pinned commit (contracts/scope-and-commands.md), the generic DcimConnector named last.
 const conformantLine = "conformant with opsmill/schema-library@26336e9: DcimDevice, DcimPlatform, " +
-	"OrganizationManufacturer, InterfacePhysical, DcimCable"
+	"OrganizationManufacturer, InterfacePhysical, DcimCable, DcimConnector"
 
 // A conformant branch's answer names the commit and the kinds, and --json's verified
 // block names each kind's fields, valid against the current contract (FR-013; US3
@@ -234,6 +234,7 @@ func TestCheckReportsTheMappingsTable(t *testing.T) {
 		{Kind: "OrganizationManufacturer", Fields: []string{"name"}},
 		{Kind: "InterfacePhysical", Fields: []string{"name", "role", "status", "device", "connector"}},
 		{Kind: "DcimCable", Fields: []string{"label", "connected_endpoints"}},
+		{Kind: "DcimConnector", Fields: []string{"connected_endpoints"}},
 	}
 	if v := doc.Verified; v.Model != "opsmill/schema-library" || v.Version != "26336e9" || !reflect.DeepEqual(v.Kinds, want) {
 		t.Errorf("verified %+v, want the library at 26336e9 with %+v", v, want)

@@ -11,8 +11,8 @@ import (
 )
 
 // SchemaInfo is what Infrahub's schema endpoint says about a branch: the schema's own
-// hash, which concrete kinds implement each generic, and each node kind's attributes and
-// relationships.
+// hash, which concrete kinds implement each generic, and each node kind's and each
+// generic's attributes and relationships.
 //
 // Conformance is read from here rather than inferred from a failed query. A failed
 // query yields a transport error; the mapping's table names the kind and the field a
@@ -24,11 +24,14 @@ type SchemaInfo struct {
 	UsedBy map[string][]string
 	// Nodes is every node kind defined on the branch, by kind.
 	Nodes map[string]NodeSchema
+	// Generics is every generic defined on the branch, by kind: the fields it declares,
+	// which a query reads through its GraphQL interface.
+	Generics map[string]NodeSchema
 }
 
-// NodeSchema is one node kind as the endpoint reports it, its inherited attributes and
-// relationships merged in (the endpoint marks them inherited; nothing here needs to
-// know which).
+// NodeSchema is one node kind, or one generic, as the endpoint reports it, a node's
+// inherited attributes and relationships merged in (the endpoint marks them inherited;
+// nothing here needs to know which).
 type NodeSchema struct {
 	Attributes    map[string]AttributeSchema
 	Relationships map[string]RelationshipSchema
@@ -92,27 +95,10 @@ func (c *Client) SchemaInfo(ctx context.Context) (*SchemaInfo, error) {
 	var doc struct {
 		Main     string `json:"main"`
 		Generics []struct {
-			Kind   string   `json:"kind"`
+			kindDoc
 			UsedBy []string `json:"used_by"`
 		} `json:"generics"`
-		Nodes []struct {
-			Kind       string `json:"kind"`
-			Attributes []struct {
-				Name     string `json:"name"`
-				Kind     string `json:"kind"`
-				Optional bool   `json:"optional"`
-				Choices  []struct {
-					Name string `json:"name"`
-				} `json:"choices"`
-			} `json:"attributes"`
-			Relationships []struct {
-				Name        string `json:"name"`
-				Peer        string `json:"peer"`
-				Kind        string `json:"kind"`
-				Cardinality string `json:"cardinality"`
-				Optional    bool   `json:"optional"`
-			} `json:"relationships"`
-		} `json:"nodes"`
+		Nodes []kindDoc `json:"nodes"`
 	}
 	if err := json.Unmarshal(body, &doc); err != nil {
 		return nil, fmt.Errorf("reading the schema %s: %w", c.cfg.describe(), err)
@@ -120,23 +106,49 @@ func (c *Client) SchemaInfo(ctx context.Context) (*SchemaInfo, error) {
 	if doc.Main == "" {
 		return nil, fmt.Errorf("reading the schema %s: no schema hash reported", c.cfg.describe())
 	}
-	info := &SchemaInfo{Hash: doc.Main, UsedBy: map[string][]string{}, Nodes: map[string]NodeSchema{}}
+	info := &SchemaInfo{Hash: doc.Main, UsedBy: map[string][]string{}, Nodes: map[string]NodeSchema{}, Generics: map[string]NodeSchema{}}
 	for _, g := range doc.Generics {
 		info.UsedBy[g.Kind] = g.UsedBy
+		info.Generics[g.Kind] = g.schema()
 	}
 	for _, n := range doc.Nodes {
-		node := NodeSchema{Attributes: map[string]AttributeSchema{}, Relationships: map[string]RelationshipSchema{}}
-		for _, a := range n.Attributes {
-			attr := AttributeSchema{Kind: a.Kind, Optional: a.Optional}
-			for _, ch := range a.Choices {
-				attr.Choices = append(attr.Choices, ch.Name)
-			}
-			node.Attributes[a.Name] = attr
-		}
-		for _, r := range n.Relationships {
-			node.Relationships[r.Name] = RelationshipSchema{Peer: r.Peer, Kind: r.Kind, Cardinality: r.Cardinality, Optional: r.Optional}
-		}
-		info.Nodes[n.Kind] = node
+		info.Nodes[n.Kind] = n.schema()
 	}
 	return info, nil
+}
+
+// kindDoc is one node or generic in the endpoint's document.
+type kindDoc struct {
+	Kind       string `json:"kind"`
+	Attributes []struct {
+		Name     string `json:"name"`
+		Kind     string `json:"kind"`
+		Optional bool   `json:"optional"`
+		Choices  []struct {
+			Name string `json:"name"`
+		} `json:"choices"`
+	} `json:"attributes"`
+	Relationships []struct {
+		Name        string `json:"name"`
+		Peer        string `json:"peer"`
+		Kind        string `json:"kind"`
+		Cardinality string `json:"cardinality"`
+		Optional    bool   `json:"optional"`
+	} `json:"relationships"`
+}
+
+// schema is the kind's attributes and relationships by name.
+func (k kindDoc) schema() NodeSchema {
+	node := NodeSchema{Attributes: map[string]AttributeSchema{}, Relationships: map[string]RelationshipSchema{}}
+	for _, a := range k.Attributes {
+		attr := AttributeSchema{Kind: a.Kind, Optional: a.Optional}
+		for _, ch := range a.Choices {
+			attr.Choices = append(attr.Choices, ch.Name)
+		}
+		node.Attributes[a.Name] = attr
+	}
+	for _, r := range k.Relationships {
+		node.Relationships[r.Name] = RelationshipSchema{Peer: r.Peer, Kind: r.Kind, Cardinality: r.Cardinality, Optional: r.Optional}
+	}
+	return node
 }

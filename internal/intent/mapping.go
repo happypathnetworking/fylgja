@@ -22,8 +22,12 @@ const (
 )
 
 // KindTable is one kind the mapping reads, with the attributes and relationships it reads.
+// Generic marks a generic the mapping reads a field of through its GraphQL interface,
+// outside any inline fragment, so the field must be the generic's and not only an
+// implementer's. A generic absent is named by its used_by (LibraryUsedBy), never here.
 type KindTable struct {
 	Kind          string
+	Generic       bool
 	Attributes    []AttributeWant
 	Relationships []RelationshipWant
 }
@@ -69,8 +73,8 @@ func (k KindTable) Fields() []string {
 	return out
 }
 
-// LibraryTables are the five kinds the mapping reads, in the order `schema check` names
-// them.
+// LibraryTables are the five kinds the mapping reads, and the one generic it reads a field
+// of, in the order `schema check` names them.
 var LibraryTables = []KindTable{
 	{
 		Kind:       "DcimDevice",
@@ -110,6 +114,15 @@ var LibraryTables = []KindTable{
 		Kind: "DcimCable",
 		// The Ports query selects the label, which names every cable the read omits.
 		Attributes: []AttributeWant{{Name: "label", Kind: "Text"}},
+		Relationships: []RelationshipWant{
+			{Name: "connected_endpoints", Peer: "DcimEndpoint", Kind: "Attribute", Cardinality: "many"},
+		},
+	},
+	{
+		// The Ports query selects a port's connector's connected_endpoints on the generic,
+		// outside the DcimCable fragment, so DcimCable declaring it alone does not serve.
+		Kind:    "DcimConnector",
+		Generic: true,
 		Relationships: []RelationshipWant{
 			{Name: "connected_endpoints", Peer: "DcimEndpoint", Kind: "Attribute", Cardinality: "many"},
 		},

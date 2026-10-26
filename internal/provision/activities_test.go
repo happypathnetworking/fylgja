@@ -535,9 +535,14 @@ func TestReadIntentActivity(t *testing.T) {
 		}
 
 		// A branch holding none of the library's kinds: each kind the mapping reads is
-		// named once, in the table's order, and nothing else.
+		// named once, in the table's order, and nothing else. The generic the table reads
+		// a field of is named by its used_by when absent, which its implementer absent
+		// leaves unsaid.
 		var want, objects []string
 		for _, k := range intent.LibraryTables {
+			if k.Generic {
+				continue
+			}
 			want = append(want, findings.RuleSchemaKindMissing)
 			objects = append(objects, k.Kind)
 		}

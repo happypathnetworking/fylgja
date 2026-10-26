@@ -35,8 +35,9 @@ type Conformance struct {
 // Every finding is a rejection naming the commit, and all of them come in one pass, so
 // one run shows an operator setting a branch up everything that differs (SC-004). A kind
 // absent is named once: its fields, and the generics it should implement, are not named
-// again beside it, since each would be a second account of the one fault. Nothing beyond
-// the table is reported.
+// again beside it, since each would be a second account of the one fault. A generic the
+// table reads a field of is named by its used_by when absent, and by its field when
+// present without it. Nothing beyond the table is reported.
 func (c *Client) CheckConformance(ctx context.Context) (*Conformance, findings.List, error) {
 	info, err := c.SchemaInfo(ctx)
 	if err != nil {
@@ -84,6 +85,12 @@ func conformanceFindings(info *SchemaInfo) findings.List {
 	absent := map[string]bool{}
 	for _, k := range LibraryTables {
 		node, ok := info.Nodes[k.Kind]
+		if k.Generic {
+			// Absent, it is the one schema.used_by.missing below, not named twice.
+			if node, ok = info.Generics[k.Kind]; !ok {
+				continue
+			}
+		}
 		if !ok {
 			absent[k.Kind] = true
 			reject(findings.RuleSchemaKindMissing, k.Kind, "the branch's schema has no kind "+k.Kind+readsIt)

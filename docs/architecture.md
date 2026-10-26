@@ -220,8 +220,9 @@ never claims a meaning the source does not carry, and says so where it approxima
 **Read validates two things before projecting.** Schema conformance: `GET /api/schema`
 holds every kind and field the mapping reads as the pinned commit loads them, per kind and
 per field (an attribute's kind and optionality, a relationship's peer, kind, cardinality
-and optionality, the dropdown choices `management` and `disabled`, and the generics'
-`used_by`), each difference a rejection naming the commit (`schema.kind.missing`,
+and optionality, the dropdown choices `management` and `disabled`, the generic
+`DcimConnector`'s own `connected_endpoints`, which the read selects through it, and the
+generics' `used_by`), each difference a rejection naming the commit (`schema.kind.missing`,
 `schema.field.missing`, `schema.field.mismatch`, `schema.choice.missing`,
 `schema.used_by.missing`), and nothing beyond the table reported, so a branch may carry
 kinds and fields of its own. Then data completeness, strict inside the scope: a scope that
@@ -230,7 +231,8 @@ manufacturer (`platform.missing`), and one whose pair no package names
 (`platform.unmatched`). Every finding comes in one pass, and a failing read produces no
 CTM. `fylgja schema check` runs the conformance half alone and, on success, says
 `conformant with opsmill/schema-library@26336e9: DcimDevice, DcimPlatform,
-OrganizationManufacturer, InterfacePhysical, DcimCable`.
+OrganizationManufacturer, InterfacePhysical, DcimCable, DcimConnector`, the last the generic
+whose `connected_endpoints` the read selects through its interface.
 
 **The read fetches each device's configuration artifact** ([D-028](decisions.md#d-028)).
 The `Devices` query lists the device's artifacts through a fragment on the

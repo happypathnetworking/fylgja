@@ -37,6 +37,8 @@ func TestInvalidOverrideIsRefusedAtLoad(t *testing.T) {
 		// Valid alone, and so past the override set's validation: refused by the
 		// registry's, since it names the embedded SR Linux package's pair under another NOS.
 		{"matches-shared", findings.RulePSPMatchesDuplicate},
+		// Likewise, naming the embedded SR Linux package's id under another NOS.
+		{"identity-shared", findings.RulePSPIdentityDuplicate},
 	} {
 		t.Run(tc.fixture, func(t *testing.T) {
 			dir, path := overrideWith(t, repo("testdata", "psp", "defects", tc.fixture+".yaml"))
@@ -170,6 +172,71 @@ func TestOverrideSharingAPairIsRefusedAtLoad(t *testing.T) {
 	}
 	if p, ok := reg.Match("Nokia", "SR Linux"); !ok || p.Origin != OriginOverride {
 		t.Errorf("Match(Nokia, SR Linux) = %+v, %v; want the override", p, ok)
+	}
+}
+
+// A CTM device names its package by id, and validation and the compiler find it again by
+// LookupID: an override that keeps an embedded package's id under another NOS, with a pair
+// of its own, would have its devices written that id and compiled with the embedded
+// package. It is refused, naming both packages and the id, at the override's file; one
+// that shadows the embedded package by its NOS keeps the id and loads.
+func TestOverrideSharingAnIDIsRefusedAtLoad(t *testing.T) {
+	dir, path := overrideWith(t, repo("testdata", "psp", "defects", "identity-shared.yaml"))
+	if alone := Validate([]string{path}); alone.Rejected() {
+		t.Fatalf("the override must validate alone, its defect being the registry's: %v", alone)
+	}
+	_, err := Load(dir)
+	var inv *InvalidError
+	if !errors.As(err, &inv) {
+		t.Fatalf("Load = %v; want *InvalidError", err)
+	}
+	want := `platform "nokia_srlinux" is already declared by psp/nokia_srlinux.yaml`
+	if len(inv.Findings) != 1 || inv.Findings[0].Rule != findings.RulePSPIdentityDuplicate || inv.Findings[0].Message != want ||
+		inv.Findings[0].Object != "nokia_srlinux" || inv.Findings[0].Location == nil || inv.Findings[0].Location.File != path {
+		t.Errorf("findings %+v, want one %s at %s:\n  %s", inv.Findings, findings.RulePSPIdentityDuplicate, path, want)
+	}
+	if msg := err.Error(); msg != "invalid support package: "+path+": "+findings.RulePSPIdentityDuplicate+": "+want {
+		t.Errorf("error %q must name the override's file, the rule, the id and the embedded package", msg)
+	}
+}
+
+// Every package the tree means to load still loads beside the embedded ones: the
+// heterogeneous and lossy test packages, each under an id of its own, and every defect
+// fixture validate passes alone, each shadowing an embedded package by its NOS and keeping
+// its id. The two set fixtures are the exceptions, refused above.
+func TestEveryOverrideFixtureStillLoads(t *testing.T) {
+	if _, err := Load(""); err != nil {
+		t.Fatalf("the shipped packages: %v", err)
+	}
+	for _, dir := range []string{
+		repo("testdata", "psp", "heterogeneous"),
+		repo("testdata", "psp", "lossy"),
+	} {
+		if _, err := Load(dir); err != nil {
+			t.Errorf("Load(%s): %v", dir, err)
+		}
+	}
+	defects, err := filepath.Glob(repo("testdata", "psp", "defects", "*.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var loaded int
+	for _, src := range defects {
+		switch filepath.Base(src) {
+		case "matches-shared.yaml", "identity-shared.yaml":
+			continue
+		}
+		if Validate([]string{src}).Rejected() {
+			continue
+		}
+		dir, _ := overrideWith(t, src)
+		if _, err := Load(dir); err != nil {
+			t.Errorf("%s: %v", filepath.Base(src), err)
+		}
+		loaded++
+	}
+	if loaded == 0 {
+		t.Fatal("no defect fixture validates alone; the test is reading the wrong place")
 	}
 }
 

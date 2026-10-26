@@ -895,7 +895,9 @@ fylgja stage list    [--branch <b>] [--scope tag:<name>]
 Two packages naming one manufacturer and platform pair, among the embedded and the override
 packages once shadowed, refuse the start as an override package `psp validate` rejects does:
 the `psp.matches.duplicate` finding as text, then `fylgja serve: refusing to serve with an
-invalid support package`. `worker run` refuses to start on the same registry.
+invalid support package`. Two declaring one `platform.id` refuse it alike, under
+`psp.identity.duplicate`, since a device names its package by id. `worker run` refuses to
+start on the same registry.
 
 ### The text
 

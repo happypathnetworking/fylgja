@@ -150,17 +150,18 @@ func invalidPackageDir(t *testing.T) (dir, text string) {
 	return dir, b.String()
 }
 
-// sharedPairDir is an override directory holding a package valid alone that names the
-// embedded SR Linux package's pair under another NOS, and the findings text the registry's
-// load gives for it, as the server prints it.
-func sharedPairDir(t *testing.T) (dir, text string) {
+// sharedDir is an override directory holding a package valid alone that names the embedded
+// SR Linux package's pair (matches-shared.yaml, psp.matches.duplicate) or its id
+// (identity-shared.yaml, psp.identity.duplicate) under another NOS, and the findings text
+// the registry's load gives for it, as the server prints it.
+func sharedDir(t *testing.T, fixture, rule string) (dir, text string) {
 	t.Helper()
-	src, err := os.ReadFile(repoPath("testdata", "psp", "defects", "matches-shared.yaml"))
+	src, err := os.ReadFile(repoPath("testdata", "psp", "defects", fixture))
 	if err != nil {
 		t.Fatal(err)
 	}
 	dir = t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "sharedos.yaml"), src, 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, fixture), src, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	_, err = psp.Load(dir)
@@ -172,8 +173,8 @@ func sharedPairDir(t *testing.T) (dir, text string) {
 	if err := findings.NewDocument(findings.OpPSPValidate, nil, invalid.Findings).WriteText(&b); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(b.String(), findings.RulePSPMatchesDuplicate) {
-		t.Fatalf("the package's findings do not name %s:\n%s", findings.RulePSPMatchesDuplicate, b.String())
+	if !strings.Contains(b.String(), rule) {
+		t.Fatalf("the package's findings do not name %s:\n%s", rule, b.String())
 	}
 	return dir, b.String()
 }
@@ -262,7 +263,15 @@ func TestServeRefusesToStartInOrder(t *testing.T) {
 		// Valid alone, refused by the registry's load beside the embedded packages (017).
 		{name: "an override package sharing a pair, from FYLGJA_PSP_DIR", free: true, setup: func(t *testing.T) (*serveOptions, *lockedBuffer, *lockedBuffer, string) {
 			t.Setenv(lab.EnvStateRoot, t.TempDir())
-			dir, text := sharedPairDir(t)
+			dir, text := sharedDir(t, "matches-shared.yaml", findings.RulePSPMatchesDuplicate)
+			o, out, errb := serveTestOptions("", "", map[string]string{api.EnvToken: serveToken, lab.EnvPSPDir: dir})
+			return o, out, errb, text + "fylgja serve: refusing to serve with an invalid support package\n"
+		}},
+		// Likewise one naming the embedded SR Linux package's id under another NOS: its
+		// devices would be written that id and compiled with the embedded package.
+		{name: "an override package sharing an id, from FYLGJA_PSP_DIR", free: true, setup: func(t *testing.T) (*serveOptions, *lockedBuffer, *lockedBuffer, string) {
+			t.Setenv(lab.EnvStateRoot, t.TempDir())
+			dir, text := sharedDir(t, "identity-shared.yaml", findings.RulePSPIdentityDuplicate)
 			o, out, errb := serveTestOptions("", "", map[string]string{api.EnvToken: serveToken, lab.EnvPSPDir: dir})
 			return o, out, errb, text + "fylgja serve: refusing to serve with an invalid support package\n"
 		}},

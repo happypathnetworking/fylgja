@@ -108,6 +108,16 @@ Two rules are new:
   package's pair refuses `fylgja serve` and `fylgja worker run` at start, as any invalid
   override does.
 
+The registry's load holds the embedded and override packages to one more rule of the set,
+`psp.identity.duplicate`, as `psp validate` holds the files given: no two packages declare
+one `platform.id`. A CTM names a device's package by its id, so an override copied from a
+shipped package for another release, with its own `nos`, image and pair and the shipped
+`id` left, would have its devices compiled with the shipped package. It is refused at the
+override's file (`platform "nokia_srlinux" is already declared by
+psp/nokia_srlinux.yaml`), and refuses `fylgja serve` and `fylgja worker run` at start; give
+it an id of its own. An override that shadows a shipped package by its `nos` keeps its id.
+`testdata/psp/defects/identity-shared.yaml` is that copy.
+
 The conformance suite's pure half gains one check, `matches`: the package names at least
 one pair with both names (`package <id> (<path>): matches: declared 0 pairs, produced
 none`); and `TestShippedPackagesShareNoMatch` holds every package meant to load, shipped and

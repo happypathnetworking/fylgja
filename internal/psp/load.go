@@ -34,7 +34,9 @@ func (r *Registry) Lookup(nos string) (*PSP, bool) {
 }
 
 // LookupID returns the package with a platform id: the join from a bundle manifest's
-// nodes[].psp.id, which is how provisioning finds a stored bundle's budgets and probe.
+// nodes[].psp.id, which is how provisioning finds a stored bundle's budgets and probe, and
+// from a CTM device's platform.package. No two packages of a registry share an id: Load
+// refuses one that would, so the package a device's pair matched is the one its id finds.
 func (r *Registry) LookupID(id string) (*PSP, bool) {
 	p, ok := r.byID[id]
 	return p, ok
@@ -59,11 +61,13 @@ func (r *Registry) Match(manufacturer, platform string) (*PSP, bool) {
 }
 
 // index rebuilds the id, kind and match joins from the packages that survived shadowing.
-// When two packages share an id or a kind, the one whose NOS sorts first answers, so the
-// answer never depends on map order. Two that share a manufacturer and platform pair are
-// refused instead, under psp.matches.duplicate as psp validate names it, since a device of
-// that pair would have two packages: the registry is not built. The embedded packages are
-// held first, so the finding is at the override's file, the one an operator can change.
+// When two packages share a kind, the one whose NOS sorts first answers, so the answer
+// never depends on map order. Two that share an id or a manufacturer and platform pair are
+// refused instead, under psp.identity.duplicate and psp.matches.duplicate as psp validate
+// names them, and the registry is not built: a device of a shared pair would have two
+// packages, and one matched to a package whose id another holds would be written that id
+// and compiled with whichever package LookupID answered. The embedded packages are held
+// first, so each finding is at the override's file, the one an operator can change.
 func (r *Registry) index() error {
 	r.byID = map[string]*PSP{}
 	r.byKind = map[string]*PSP{}
@@ -89,7 +93,9 @@ func (r *Registry) index() error {
 		}
 	}
 	var list findings.List
-	checkDuplicateMatch(append(embedded, override...), &list)
+	held := append(embedded, override...)
+	checkDuplicateIdentity(held, &list)
+	checkDuplicateMatch(held, &list)
 	if list.Rejected() {
 		return &InvalidError{Findings: list}
 	}
@@ -97,8 +103,8 @@ func (r *Registry) index() error {
 }
 
 // InvalidError reports that an override directory holds a package `psp validate`
-// rejects, or one that names the pair of an embedded package it does not shadow
-// (psp.matches.duplicate). It carries the findings, so a command can report them under
+// rejects, or one that names the id or the pair of an embedded package it does not shadow
+// (psp.identity.duplicate, psp.matches.duplicate). It carries the findings, so a command can report them under
 // their own psp.* identifiers as a rejection rather than as a failure to load.
 type InvalidError struct {
 	Findings findings.List
@@ -212,10 +218,10 @@ func FromDir(dir string) ([]*PSP, error) {
 // accepting it and failing later under the wrong identifier (Constitution II, X).
 // Embedded packages are not re-validated here: TestShippedPackagesAreValidAndEmbedded
 // guarantees them at build time. The packages that survive shadowing, embedded and
-// override together, are then held to sharing no manufacturer and platform pair: an
-// override valid alone that names an embedded package's pair under another NOS is an
-// *InvalidError carrying psp.matches.duplicate, so fylgja serve and fylgja worker run
-// refuse it at start.
+// override together, are then held to sharing no platform id and no manufacturer and
+// platform pair: an override valid alone that names an embedded package's id or pair under
+// another NOS is an *InvalidError carrying psp.identity.duplicate or psp.matches.duplicate,
+// so fylgja serve and fylgja worker run refuse it at start.
 func Load(overrideDir string) (*Registry, error) {
 	r := &Registry{byNOS: map[string]*PSP{}}
 	embedded, err := Embedded()

@@ -36,6 +36,7 @@ manufacturer, a second spelling); two packages may not share one.
 | `psp.schema` | `psp validate`, load | `matches` absent, empty, or a pair without both names (the schema's `required` and `minItems`) |
 | `psp.matches.missing` | `psp validate`, load | the same, under the rule that says what the field is for |
 | `psp.matches.duplicate` | `psp validate` over the files given; `psp.Load` over the embedded and override packages after shadowing, refusing the registry as an invalid override refuses it; `serve` and `worker run` at start | two packages name one pair; names both packages and the pair |
+| `psp.identity.duplicate` | `psp validate` over the files given; `psp.Load` over the embedded and override packages after shadowing, as for a shared pair; `serve` and `worker run` at start | two packages declare one `platform.id`: an override copied from a shipped package under another `nos`, with a pair of its own, its `id` left. A device names its package by id (`platform.package`), so one matched to the override would be compiled with the embedded package. At the override's file, naming the id and the package that declared it first (`platform "nokia_srlinux" is already declared by psp/nokia_srlinux.yaml`) |
 | `psp.version.unknown` | `psp validate`, load | a package declaring `0.6` or earlier: `declares format version "0.6", this build understands "0.7"` |
 
 ## The registry

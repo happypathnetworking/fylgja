@@ -235,6 +235,11 @@ func TestDefectsAreNamed(t *testing.T) {
 			`manufacturer "Nokia", platform "SR Linux" is matched by package nokia_srlinux (` + repo("psp", "nokia_srlinux.yaml") +
 				`) and by package sharedos (` + repo("testdata", "psp", "defects", "matches-shared.yaml") + `); a device of that pair would have two packages`,
 		}, false},
+		// The shipped SR Linux package copied for another release, its NOS, image and pair
+		// its own and its id left: valid alone, refused beside it by this rule alone.
+		{"identity-shared", findings.RulePSPIdentityDuplicate, []string{repo("psp", "nokia_srlinux.yaml")}, []string{
+			`platform "nokia_srlinux" is already declared by ` + repo("psp", "nokia_srlinux.yaml"),
+		}, false},
 	}
 	for _, tc := range cases {
 		t.Run(tc.fixture, func(t *testing.T) {

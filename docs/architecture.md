@@ -1441,8 +1441,9 @@ every package's pairs; a device with no platform, or a platform with no manufact
 `platform.missing`. The pairs are data, so a platform added is a package added, never an
 arm in the reader. A package with no pair, or a pair with an empty name, is
 `psp.matches.missing`, and two packages naming one pair are `psp.matches.duplicate`,
-which also refuses `serve` and `worker run` at start; the suite's pure half holds every
-package meant to load to pairs of its own.
+which also refuses `serve` and `worker run` at start, as two declaring one `platform.id`
+(`psp.identity.duplicate`) do, since the CTM names a package by id; the suite's pure half
+holds every package meant to load to pairs of its own.
 
 Readiness, the budgets and the probe login are consumed from the worker's own packages
 at provision time, looked up by each node's manifest `psp.id`, and never reach the

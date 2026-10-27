@@ -5,6 +5,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 )
 
@@ -36,6 +37,10 @@ type createFlags struct {
 	// stands, and an explicit empty one is the server's to refuse (017).
 	scope      string
 	scopeGiven bool
+	// snapshot is --snapshot as given (018): a snapshot id, sent as it is, or the path of a
+	// file the client reads and sends. snapshotGiven is whether it was given at all.
+	snapshot      string
+	snapshotGiven bool
 }
 
 func newTwinCreateCmd(opts *options) *cobra.Command {
@@ -56,10 +61,11 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 			f.intervalGiven = cmd.Flags().Changed("interval")
 			f.stageGiven = cmd.Flags().Changed("stage")
 			f.scopeGiven = cmd.Flags().Changed("scope")
+			f.snapshotGiven = cmd.Flags().Changed("snapshot")
 			return runCreate(cmd.Context(), opts, f)
 		},
 	}
-	cmd.Flags().StringVar(&f.branch, "branch", "", "Infrahub branch to read (this or --stage is required)")
+	cmd.Flags().StringVar(&f.branch, "branch", "", "Infrahub branch to read (this, --stage or --snapshot is required)")
 	cmd.Flags().StringVar(&f.at, "at", "",
 		"point in time to read at, passed verbatim; omitted entirely when not given")
 	cmd.Flags().StringVar(&f.stage, "stage", "",
@@ -71,6 +77,9 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false,
 		"read, compile, file the bundle and check the host; start no run")
 	cmd.Flags().StringVar(&f.scope, "scope", "", scopeUsage)
+	cmd.Flags().StringVar(&f.snapshot, "snapshot", "",
+		"snapshot to build the twin from, <id|file>: a snapshot id (64 lowercase hex characters) the server's store holds, "+
+			"or a snapshot file, which is read here and sent; no branch is read, and the twin never follows")
 	return cmd
 }
 
@@ -80,9 +89,17 @@ func (f *createFlags) fromStage() bool {
 	return f.stageGiven || f.stage != ""
 }
 
+// fromSnapshot is whether the create names a snapshot, as fromStage is whether it names a
+// stage.
+func (f *createFlags) fromSnapshot() bool {
+	return f.snapshotGiven || f.snapshot != ""
+}
+
 // runCreate is twin create as one request: the flags given, and the server's answer printed
-// as it comes. Every guard, the stage's and the following's among them,
-// is the server's.
+// as it comes. Every guard, the stage's, the snapshot's and the following's among them,
+// is the server's. A --snapshot that is no id is a file, read here and sent as the
+// request's one file under that path; one the client cannot read is its own failure,
+// before any connection (R-07).
 func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	a := given{}
 	a.string("branch", f.branch)
@@ -96,5 +113,32 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	a.bool("no_follow", f.noFollow)
 	a.bool("dry_run", f.dryRun)
 	a.scope(f.scope, f.scopeGiven)
-	return send(ctx, opts, findings.OpTwinCreate, a, nil, handlers{})
+	var files []api.File
+	if f.fromSnapshot() {
+		a["snapshot"] = f.snapshot
+		if !isSnapshotID(f.snapshot) {
+			file, err := readSnapshot(f.snapshot)
+			if err != nil {
+				return fail(findings.OpTwinCreate, &findings.Subject{Branch: f.branch, At: f.at, Snapshot: f.snapshot}, "%v", err)
+			}
+			files = []api.File{file}
+		}
+	}
+	return send(ctx, opts, findings.OpTwinCreate, a, files, handlers{})
+}
+
+// isSnapshotID is whether --snapshot's value is a snapshot id, 64 lowercase hex characters,
+// and not a file's path: the core's snapshot.IsID, written here because the client links
+// nothing of the core's but the findings, and held to it by a test
+// (TestSnapshotIDShapeIsTheCoresOwn).
+func isSnapshotID(s string) bool {
+	if len(s) != 64 {
+		return false
+	}
+	for _, r := range s {
+		if (r < '0' || r > '9') && (r < 'a' || r > 'f') {
+			return false
+		}
+	}
+	return true
 }

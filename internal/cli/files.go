@@ -48,6 +48,17 @@ func readCTM(path string) (api.File, error) {
 	return api.File{Path: path, Data: data}, nil
 }
 
+// readSnapshot reads the snapshot file twin create --snapshot sends, under the path given,
+// worded as snapshot.Load words a file it cannot read. It replaces readCTM once twin compile
+// sends a snapshot too (018).
+func readSnapshot(path string) (api.File, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return api.File{}, fmt.Errorf("reading snapshot: %w", err)
+	}
+	return api.File{Path: path, Data: data}, nil
+}
+
 // readPackages reads each package psp validate sends, in order, under the path given; one
 // it cannot read is the operating system's sentence, as M12's readable gave it.
 func readPackages(paths []string) ([]api.File, error) {

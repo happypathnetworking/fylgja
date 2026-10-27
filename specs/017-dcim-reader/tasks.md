@@ -1470,7 +1470,7 @@ tier leaves it.
   - **The host**: the worker (pid 751228) and the server (pid 751230) still read `(deleted)`, as Run 21 left them; this run's builds replaced `bin/fylgja` again, and neither was restarted. Infrahub was read, not written: `Branch` `main` and `fylgja-fixture` alone, no proposed change, stage or thread.
   - **Next**: Run 23 (T074), the operator's; and T057's second push of `origin`'s `main`, the operator's.
 
-- [ ] T074 [operator] The operator reads the feature's diff and its records, commits by hand (conventional messages, bodies saying why), and runs `make command-log` once the session is closed.
+- [X] T074 [operator] The operator reads the feature's diff and its records, commits by hand (conventional messages, bodies saying why), and runs `make command-log` once the session is closed.
   - *2026-10-26 18:34Z, at `1b1e296`, Run 23 of the converge loop (live): left unchecked.* The review is the operator's, and a session cannot run the command log for a session that is still open. Nothing was merged, pushed or fetched. What is ready:
     - **The feature's diff**: `git diff fe497a2 1b1e296`, from `main` as it stood before 017's specify. It is 71 commits (19 `feat`, 8 `test`, 1 `refactor`, 2 `chore`, 41 `docs`) over 348 files, +61,360 and −30,279 lines. Two generated files carry most of those lines: the SDL captured from the migrated `main`, `schema/infrahub.graphql` (51,815 lines changed), and its client, `internal/intent/generated.go` (6,703).
     - **Since the operator's second push**: `origin`'s `main` is `3af5d41`, read with `git ls-remote` at 18:32Z, which moves no remote-tracking ref; `3af5d41` is an ancestor of the branch. Since then, 14 commits over 31 files (+2,507 −596). Three of them are code, which no CI run has seen:
@@ -1489,6 +1489,7 @@ tier leaves it.
     - **The command log**: `local/command-log/pending.jsonl` is empty. The loop publishes each session's entry when the session exits: 31 are in `specs/017-dcim-reader/commands/runs.jsonl` through Run 22, and this session's follows when it exits. `make command-log`, run after the attended session closes, publishes whatever that session kept.
     - **With it, T057**: the next push of `origin`'s `main`, now that T062 and T063 are green. It is a fast-forward to the branch's head, made after the loop stops: `git fetch . 017-dcim-reader:main`, then `git push origin main`. Read CI's contract job on it, then tick T057 on a green job.
   - *2026-10-26, the attended session, under the loop's pause at `94b625d`: the operator's answer to Run 23's question (`a`).* **Skipped for now, left for the operator**: the review comes once the loop's convergence passes have run and the loop has stopped, so that it covers whatever converge adds, in one read and one push (T057, also skipped). Its start is the note above, to be read again then against the branch head.
+  - *2026-10-27, the attended session:* **reviewed by the operator**, who gave no notes to keep. The diff read is the whole feature, `fe497a2..7ddd157`, as CI ran it green (T057). No hand commits were owed, since every run committed its own work. `make command-log` is the operator's once the attended session is closed, as this task says.
 
   *Run 23's checkpoint, 2026-10-26 18:34Z*:
   - **Gates**, on the final tree:

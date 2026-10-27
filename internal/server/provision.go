@@ -80,7 +80,7 @@ func runTwinProvision(ctx context.Context, opts *options, f *provisionFlags, dir
 
 	// A dry run reports what the run would do from here, with no read, and starts nothing.
 	if f.dryRun {
-		return dryRunReport(ctx, opts, op, subject, reg, paths, store.Path(id), id, nil, nil,
+		return dryRunReport(ctx, opts, op, subject, reg, paths, nil, store.Path(id), id, nil, nil,
 			findings.DryRunFollow{Reason: findings.FollowReasonBundle})
 	}
 

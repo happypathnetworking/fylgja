@@ -155,6 +155,7 @@ func TestProbeLoginNeverReachesOutput(t *testing.T) {
 	t.Setenv("FYLGJA_SRLINUX_PASSWORD", probeSentinel)
 
 	t.Run("create reporting a readiness timeout", func(t *testing.T) {
+		useFixtureRead(t)
 		result, events := readinessTimeoutRun()
 		useService(t, &fakeService{runID: "run-1", events: events, result: result})
 		useInterrupts(t)

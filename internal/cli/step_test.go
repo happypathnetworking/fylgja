@@ -74,12 +74,14 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 			}},
 		{"create, the start fails", findings.StepStart, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
+				useFixtureRead(t)
 				useInterrupts(t)
 				useService(t, &fakeService{startErr: boom})
 				return findings.StepStart, runCreate(ctx, jsonOut, &createFlags{branch: "fylgja-fixture"})
 			}},
 		{"create, waiting for the run fails during deploy", findings.StepDeploy, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
+				useFixtureRead(t)
 				useInterrupts(t)
 				useService(t, &fakeService{runID: "run-1", resultErr: boom,
 					events: []provision.Event{event(provision.WorkflowProvision, "deploy", findings.StepDeploy)}})
@@ -87,6 +89,7 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 			}},
 		{"create, a second interrupt during readiness", findings.StepReadiness, findings.RuleRunCancelled,
 			func(t *testing.T) (string, error) {
+				useFixtureRead(t)
 				interrupts := useInterrupts(t)
 				svc := &fakeService{runID: "run-1", release: make(chan struct{}),
 					events: []provision.Event{event(provision.WorkflowProvision, "readiness n1", findings.StepReadiness)}}
@@ -178,8 +181,9 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 					t.Errorf("finding %+v, want step %s and object %q", f, c.step, object)
 				}
 			}
-			// twin step is M11's operation, which M2's contract does not name.
-			if doc.Operation == findings.OpTwinStep {
+			// twin step is M11's operation, which M2's contract does not name; a create's
+			// document past its read names the snapshot the server took (018).
+			if doc.Operation == findings.OpTwinStep || namesSnapshot(t, doc) {
 				validateM10Document(t, doc)
 			} else {
 				validateM2Document(t, doc)

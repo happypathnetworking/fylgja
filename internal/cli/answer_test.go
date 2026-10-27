@@ -294,12 +294,12 @@ func steppedResult() provision.StepResult {
 func answerCases() []answerCase {
 	return []answerCase{
 		{"twin create, a run (TestCreateReadyPrintsTheTwin)", findings.OpTwinCreate, func(t *testing.T) answerWant {
-			useStateRoot(t)
+			paths := useFixtureRead(t)
 			events := createReadyEvents()
 			useService(t, &fakeService{runID: "run-1", result: readyResult(), events: events})
 			return answerWant{args: map[string]any{"branch": "fylgja-fixture"},
 				kinds: runKinds(len(events)), status: findings.StatusOK, events: stepsOf(events),
-				stdout: lines("run fylgja-provision run-1",
+				stdout: lines(append(storedLines(paths, headSnapshotID, headBundleID), "run fylgja-provision run-1",
 					"step read: begins",
 					"step read: done in 2.1s",
 					"step compile: begins",
@@ -314,7 +314,7 @@ func answerCases() []answerCase {
 					"  n2  172.20.20.3",
 					"  n3  172.20.20.4",
 					"record: branch fylgja-fixture, snapshot none, bundle_id "+fixtureBundleID+", schema abc, "+showRead,
-					"twin directory /abs/local/twin")}
+					"twin directory /abs/local/twin")...)}
 		}},
 		{"twin create --dry-run", findings.OpTwinCreate, func(t *testing.T) answerWant {
 			useStateRoot(t)

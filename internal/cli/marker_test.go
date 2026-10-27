@@ -392,7 +392,10 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 	}
 	seen.add("twin.json", record)
 
-	// The create, as the operator sees it: progress and the twin, in text and in JSON.
+	// The create, as the operator sees it: progress and the twin, in text and in JSON. Its
+	// read is the server's since 018, from the fake Infrahub serving the fixture, whose
+	// artifacts carry the marker; the snapshot it files is the store's, never output.
+	newFakeInfrahub(t).start()
 	for _, asJSON := range []bool{false, true} {
 		useService(t, &fakeService{runID: "run-1", result: res, events: events})
 		useInterrupts(t)

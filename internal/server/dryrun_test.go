@@ -60,14 +60,14 @@ func TestDryRunFollowCreate(t *testing.T) {
 
 			var runErr error
 			out := captureStdout(t, func() {
-				runErr = dryRunReport(context.Background(), testOptions(t, false), findings.OpTwinCreate, subject, reg, paths, dir, fixtureBundleID,
+				runErr = dryRunReport(context.Background(), testOptions(t, false), findings.OpTwinCreate, subject, reg, paths, nil, dir, fixtureBundleID,
 					nil, nil, c.want)
 			})
 			if code, _ := exitOf(t, runErr); code != findings.ExitOK || !strings.Contains(out, "\n"+c.line+"\nverdict: clear\n") {
 				t.Errorf("exit %d, stdout:\n%s\nwant %q after host: and before verdict:", code, out, c.line)
 			}
 			_, doc := exitOf(t, dryRunReport(context.Background(), testOptions(t, true), findings.OpTwinCreate, subject, reg, paths,
-				dir, fixtureBundleID, nil, nil, c.want))
+				nil, dir, fixtureBundleID, nil, nil, c.want))
 			if doc.DryRun == nil || doc.DryRun.Follow == nil || *doc.DryRun.Follow != c.want {
 				t.Errorf("dry_run %+v, want follow %+v", doc.DryRun, c.want)
 			}
@@ -111,7 +111,7 @@ func TestDryRunCountsTheLossyRecord(t *testing.T) {
 	follow := findings.DryRunFollow{Reason: findings.FollowReasonPinned}
 	out = captureStdout(t, func() {
 		err = dryRunReport(context.Background(), testOptions(t, false), findings.OpTwinCreate, &findings.Subject{Branch: c.Envelope.Branch},
-			reg, paths, dir, lossyID, read, nil, follow)
+			reg, paths, nil, dir, lossyID, read, nil, follow)
 	})
 	want := "read: 3 devices (chassisos 2, nokia_srlinux 1), 16 interfaces, 3 links, 3 artifacts, " +
 		"9 lossy mappings, 3 shared ports (branch lossy-fixture, at 2026-09-19T12:00:00Z, schema fixture)\n"

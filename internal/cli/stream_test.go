@@ -39,7 +39,7 @@ func TestInterruptsBeforeTheStartReachNoServer(t *testing.T) {
 		}, findings.Finding{Severity: findings.Rejection, Rule: findings.RuleFollowIntervalInvalid, Object: "", Step: findings.StepStart,
 			Message: `--interval  is not a duration: time: invalid duration ""`}},
 		{"twin create, the workflow service unreachable", func(t *testing.T) error {
-			useStateRoot(t)
+			useFixtureRead(t)
 			startRefusals()[0].use(t)
 			return runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"})
 		}, findings.Finding{Rule: findings.RuleRunServiceUnreachable, Step: findings.StepStart}},

@@ -252,7 +252,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 	create := map[string]any{"branch": "fylgja-fixture", "no_follow": true}
 
 	t.Run("before start", func(t *testing.T) {
-		useStateRoot(t)
+		useFixtureRead(t) // the create reads on the server before its dial (018)
 		svc := &goneService{fakeService: &fakeService{runID: "run-1", result: readyResult()}, reached: make(chan struct{})}
 		var dialReturned atomic.Bool
 		saved := dialService
@@ -288,7 +288,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 	// The dial returns once the client has gone: nothing is started for a request that ended
 	// before its start began (contracts/cli.md, "Runs").
 	t.Run("after the dial, before start", func(t *testing.T) {
-		useStateRoot(t)
+		useFixtureRead(t) // the create reads on the server before its dial (018)
 		svc := &goneService{fakeService: &fakeService{runID: "run-1", result: readyResult()}, reached: make(chan struct{})}
 		saved := dialService
 		t.Cleanup(func() { dialService = saved })
@@ -313,7 +313,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 	})
 
 	t.Run("the start waiting for a worker", func(t *testing.T) {
-		useStateRoot(t)
+		useFixtureRead(t) // the create reads on the server before its dial (018)
 		svc := newStartService()
 		useStartService(t, svc)
 		awaitIdle(t)
@@ -328,7 +328,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 	// The server's stop ends every request's context as a client's departure ends one, and a
 	// start waiting for a worker finishes all the same.
 	t.Run("the start waiting for a worker, the server stopped", func(t *testing.T) {
-		useStateRoot(t)
+		useFixtureRead(t) // the create reads on the server before its dial (018)
 		svc := newStartService()
 		useStartService(t, svc)
 		ts := stoppingServer(t)
@@ -342,7 +342,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 	})
 
 	t.Run("the run followed", func(t *testing.T) {
-		useStateRoot(t)
+		useFixtureRead(t) // the create reads on the server before its dial (018)
 		svc := &goneService{fakeService: &fakeService{runID: "run-1", result: readyResult()}, holdFollow: true,
 			reached: make(chan struct{})}
 		useService(t, svc)
@@ -368,7 +368,7 @@ func TestAClientGoneDuringARun(t *testing.T) {
 // to cancel all the same, on a context the client's departure does not end, since the client
 // that survives to report says it was.
 func TestAClientGoneAfterItsInterrupt(t *testing.T) {
-	useStateRoot(t)
+	useFixtureRead(t) // the create reads on the server before its dial (018)
 	svc := &cancelService{goneService: &goneService{fakeService: &fakeService{runID: "run-1", result: readyResult()},
 		holdFollow: true, reached: make(chan struct{})}}
 	saved := dialService

@@ -8,7 +8,9 @@ import (
 	"maps"
 	"net"
 	"net/http/httptest"
+	"net/url"
 	"os"
+	"path/filepath"
 	"reflect"
 	"slices"
 	"strconv"
@@ -83,6 +85,29 @@ func readsNoIntent(t *testing.T, label string, f *fakeInfrahub) {
 			r.Operation == "Devices" || r.Operation == "Ports":
 			t.Errorf("%s: the resolution asked %+v; a branch's intent is the read's", label, r)
 		}
+	}
+}
+
+// readsAtAlone fails unless the branch's intent was read, and every request of that read
+// named at, verbatim, as --at would: since 018 a create's read is the server's, before its
+// run, made at the reference its stage resolved to. The resolution's own reads of a
+// branch's latest stamps, the head's and main's, are unpinned and are not the read's.
+func readsAtAlone(t *testing.T, label string, f *fakeInfrahub, at string) {
+	t.Helper()
+	read := false
+	for _, r := range f.requests() {
+		if (r.Operation == "IntentStamps" || r.Operation == "PortStamps") && r.Query == "" {
+			continue
+		}
+		read = read || r.Operation == "Devices"
+		if strings.HasPrefix(r.Path, "/graphql/") || strings.HasPrefix(r.Path, "/api/storage/") {
+			if r.Query != "at="+url.QueryEscape(at) {
+				t.Errorf("%s: the read asked %+v, want the stage's at %s on it", label, r, at)
+			}
+		}
+	}
+	if !read {
+		t.Errorf("%s: no request read the branch's devices; the server reads before the run", label)
 	}
 }
 
@@ -343,8 +368,10 @@ func TestCreateStageResolutionCannotRun(t *testing.T) {
 // A resolved create starts M2–M7's pinned run for the reference the stage resolves to,
 // with the stage as data and no following: the input carries branch and at as resolved and
 // the stage, never Follow; --no-follow beside it changes nothing. The document names the
-// stage in its subject and its block. The CLI reads nothing of the branch's intent: the
-// read is the run's.
+// stage in its subject and its block. Since 018 the server reads the branch's intent at the
+// resolved at, takes and files its snapshot and compiles before the run, so the input
+// carries the bundle and the snapshot by id beside the stage, and the record will name all
+// three (TestCreateFromAStageTakesItsPinnedRead is US1's scenario 3).
 func TestCreateFromAStage(t *testing.T) {
 	for _, c := range []struct {
 		name  string
@@ -359,7 +386,7 @@ func TestCreateFromAStage(t *testing.T) {
 			demoBlock("sealed", fixtureAt, findings.AtSourceGiven, "after the first cut-over")},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			useStateRoot(t)
+			paths := useStateRoot(t)
 			useInterrupts(t)
 			svc := &fakeService{runID: "run-1", result: readyResult()}
 			useService(t, svc)
@@ -370,12 +397,30 @@ func TestCreateFromAStage(t *testing.T) {
 			if code != findings.ExitOK {
 				t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
 			}
+			if len(svc.started) != 1 {
+				t.Fatalf("started %+v; want one run", svc.started)
+			}
+			got := svc.started[0]
 			want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture", At: c.block.At, Version: version,
 				StopFollowing: true, Scope: defaultScope, Stage: &provision.StageInput{
 					ProposedChange: wire.StageChange{ID: demoChange, Branch: "fylgja-fixture"},
-					Label:          c.block.Label, Description: c.block.Description, AtSource: c.block.AtSource}}
-			if len(svc.started) != 1 || !reflect.DeepEqual(svc.started[0], want) {
-				t.Errorf("started %+v; want %+v", svc.started, want)
+					Label:          c.block.Label, Description: c.block.Description, AtSource: c.block.AtSource},
+				BundlePath: filepath.Join(paths.Bundles, got.BundleID), BundleID: got.BundleID, ObservedAt: got.ObservedAt,
+				SnapshotID: got.SnapshotID}
+			if !reflect.DeepEqual(got, want) || !bundleIDRE.MatchString(got.BundleID) || !bundleIDRE.MatchString(got.SnapshotID) ||
+				got.ObservedAt == "" {
+				t.Errorf("started %+v; want %+v, compiled on the server", got, want)
+			}
+			// The given stage pins the fixture's own at, so its read is the fixture itself.
+			if c.block.At == fixtureAt && (got.BundleID != fixtureBundleID || got.SnapshotID != fixtureSnapshotID) {
+				t.Errorf("bundle %s, snapshot %s; want the fixture's, %s and %s", got.BundleID, got.SnapshotID, fixtureBundleID, fixtureSnapshotID)
+			}
+			if _, err := os.Stat(filepath.Join(paths.Snapshots, got.SnapshotID+".json")); err != nil {
+				t.Errorf("the snapshot the run names was not filed: %v", err)
+			}
+			// The bundle the document names is the fake run's result; the snapshot is the take's.
+			if doc.SnapshotID != got.SnapshotID {
+				t.Errorf("document names snapshot %q; want the run's %s", doc.SnapshotID, got.SnapshotID)
 			}
 			if doc.Stage == nil || *doc.Stage != c.block {
 				t.Errorf("stage block %+v, want %+v", doc.Stage, c.block)
@@ -388,7 +433,7 @@ func TestCreateFromAStage(t *testing.T) {
 			if doc.Following != nil {
 				t.Errorf("a stage twin carries a following block %+v", doc.Following)
 			}
-			readsNoIntent(t, c.name, f)
+			readsAtAlone(t, c.name, f, c.block.At)
 			mustCarryNoToken(t, c.name, doc, svc.started)
 			validateM10Document(t, doc)
 		})
@@ -461,7 +506,7 @@ func TestCreateFromAStageWhoseRunRefuses(t *testing.T) {
 // The resolved reference is reported on one line before the run's first line (contracts/
 // cli.md), and a refused one prints nothing on stdout.
 func TestCreateFromAStageReportsTheReference(t *testing.T) {
-	useStateRoot(t)
+	paths := useStateRoot(t)
 	useInterrupts(t)
 	svc := &fakeService{runID: "run-1", result: readyResult()}
 	useService(t, svc)
@@ -475,8 +520,11 @@ func TestCreateFromAStageReportsTheReference(t *testing.T) {
 		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
 	}
 	const line = `stage fylgja-fixture/sealed: branch fylgja-fixture at 2026-09-08T12:00:00Z (given), "after the first cut-over"`
-	if !strings.HasPrefix(out, line+"\nrun fylgja-provision run-1\n") {
-		t.Errorf("stdout:\n%s\nwant it to begin with the stage line, then the run's", out)
+	// The stage line, then the server's read's two stored lines (018), then the run's.
+	head := strings.Join(append(append([]string{line}, storedLines(paths, fixtureSnapshotID, fixtureBundleID)...),
+		"run fylgja-provision run-1"), "\n") + "\n"
+	if !strings.HasPrefix(out, head) {
+		t.Errorf("stdout:\n%s\nwant it to begin with the stage line, the stored lines, then the run's:\n%s", out, head)
 	}
 	if strings.Contains(out, fakeToken) {
 		t.Errorf("stdout carries the credential:\n%s", out)
@@ -609,6 +657,7 @@ func validateTwinJSON(t *testing.T, record []byte) {
 // written.
 type writtenRecord struct {
 	TwinVersion string           `json:"twin_version"`
+	SnapshotID  *string          `json:"snapshot_id"`
 	BundleID    string           `json:"bundle_id"`
 	Provenance  wire.Provenance  `json:"provenance"`
 	Source      string           `json:"source"`
@@ -691,9 +740,15 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 			useService(t, svc)
 			useInterrupts(t)
 			code, created := executeTwin(t, "twin", "create", "--stage", ref)
+			if len(svc.started) != 1 {
+				t.Fatalf("exit %d, started %+v; want one run", code, svc.started)
+			}
+			// Compiled on the server (018): the plan's bundle, and the snapshot taken of the read.
+			started := svc.started[0]
 			want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: c.branch, At: c.at, Version: version,
-				StopFollowing: true, Scope: defaultScope, Stage: &stage}
-			if code != findings.ExitOK || len(svc.started) != 1 || !reflect.DeepEqual(svc.started[0], want) {
+				StopFollowing: true, Scope: defaultScope, Stage: &stage, BundlePath: filepath.Join(paths.Bundles, id), BundleID: id,
+				ObservedAt: started.ObservedAt, SnapshotID: started.SnapshotID}
+			if code != findings.ExitOK || !reflect.DeepEqual(started, want) || !bundleIDRE.MatchString(started.SnapshotID) {
 				t.Fatalf("exit %d, started %+v; want 0 and one run of %+v", code, svc.started, want)
 			}
 			if created.Stage == nil || *created.Stage != block || created.Following != nil {
@@ -705,7 +760,7 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 			w := decodeRecord(t, record)
 			if res.BundleID != id || w.BundleID != id || w.TwinVersion != "9" || w.Source != wire.SourceIntent ||
 				w.Provenance.Branch != c.branch || w.Provenance.At != c.at || w.Provenance.Scope != defaultScope ||
-				!reflect.DeepEqual(w.Stage, &stage) || w.Step != nil {
+				!reflect.DeepEqual(w.Stage, &stage) || w.Step != nil || w.SnapshotID == nil || *w.SnapshotID != started.SnapshotID {
 				t.Errorf("the run deployed %s and recorded\n%s\nwant %s, twin_version 9, provenance %s at %s under %s, stage %+v, step null",
 					res.BundleID, record, id, c.branch, c.at, defaultScope, stage)
 			}
@@ -917,9 +972,15 @@ func TestCreateAlongMainAfterAStageTwin(t *testing.T) {
 	svc = &fakeService{runID: "run-2", result: readyResult()}
 	useService(t, svc)
 	code, created := executeTwin(t, "twin", "create", "--branch", "main", "--at", mainAt)
+	var observedAt string
+	if len(svc.started) == 1 {
+		observedAt = svc.started[0].ObservedAt
+	}
+	// Compiled on the server (018): the dry run's bundle and snapshot, the same intent.
 	want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: "main", At: mainAt, Version: version, StopFollowing: true,
-		Scope: defaultScope}
-	if code != findings.ExitOK || len(svc.started) != 1 || !reflect.DeepEqual(svc.started[0], want) ||
+		Scope: defaultScope, BundlePath: filepath.Join(paths.Bundles, dry.BundleID), BundleID: dry.BundleID, ObservedAt: observedAt,
+		SnapshotID: dry.SnapshotID}
+	if code != findings.ExitOK || len(svc.started) != 1 || !reflect.DeepEqual(svc.started[0], want) || dry.SnapshotID == "" ||
 		created.Stage != nil || created.Subject.Stage != "" {
 		t.Fatalf("exit %d, started %+v, stage %+v, subject %+v; want 0, one run of %+v and no stage",
 			code, svc.started, created.Stage, created.Subject, want)

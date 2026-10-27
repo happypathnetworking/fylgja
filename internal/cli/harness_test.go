@@ -24,6 +24,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/server"
@@ -108,8 +109,23 @@ func TestMain(m *testing.M) {
 		}
 		return "", false
 	}
+	// No tier-1 test reaches the host: a test that gives no state root of its own files in
+	// a scratch one, never the operator's local/, and one that serves no fake Infrahub reads
+	// from an address nothing answers, never the operator's Infrahub, whatever the shell
+	// that ran the tests had loaded (018: every create now reads on the server).
+	state, err := os.MkdirTemp("", "fylgja-cli-state-*")
+	if err != nil {
+		panic(err)
+	}
+	for name, value := range map[string]string{lab.EnvStateRoot: state, intent.EnvAddress: unreachable,
+		intent.EnvToken: "tier-1-no-token"} {
+		if err := os.Setenv(name, value); err != nil {
+			panic(err)
+		}
+	}
 	code := m.Run()
 	harness.http.Close()
+	_ = os.RemoveAll(state)
 	os.Exit(code)
 }
 
@@ -354,6 +370,12 @@ func wantStartRefusal(t *testing.T, err error, rule string) {
 	}
 	if doc.Subject != nil && doc.Subject.RunID != "" {
 		t.Errorf("subject names run %q, but no run was started", doc.Subject.RunID)
+	}
+	// A create's document names the snapshot the server took before the start (018), which
+	// only the current contract reads.
+	if namesSnapshot(t, doc) {
+		validateM10Document(t, doc)
+		return
 	}
 	validateM2Document(t, doc)
 }

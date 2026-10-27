@@ -63,7 +63,7 @@ func waitFor(t *testing.T, ch <-chan struct{}, what string) {
 // exit 1, in M12's words, by the workflow service and not by the server; the first goes on to
 // its own end, unaffected.
 func TestTwoCreatesAtOnce(t *testing.T) {
-	useStateRoot(t)
+	useFixtureRead(t)
 	useInterrupts(t)
 	svc := &inFlightService{fakeService: &fakeService{runID: "run-1", result: readyResult()},
 		entered: make(chan struct{}), release: make(chan struct{})}
@@ -81,7 +81,8 @@ func TestTwoCreatesAtOnce(t *testing.T) {
 	if code != findings.ExitRejected || doc.Status != findings.StatusRejected || len(doc.Findings) != 1 || doc.Findings[0] != want {
 		t.Errorf("the second create: exit %d, status %s, findings %+v; want 1, rejected, %+v alone", code, doc.Status, doc.Findings, want)
 	}
-	validateM2Document(t, doc)
+	// The second's document names the snapshot its own read took (018).
+	validateM10Document(t, doc)
 
 	// The first's request is open, under the stream its client named: nothing is open under
 	// the workflow's identity.

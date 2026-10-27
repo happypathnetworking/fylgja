@@ -512,6 +512,8 @@ func TestCreateDryRunFromAStage(t *testing.T) {
 		"dry run: no lab, container, twin directory or run is created",
 		"read: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports " +
 			"(branch fylgja-fixture, at 2026-09-08T12:00:00Z, schema fixture)",
+		// The snapshot above the bundle, each filed with its store path (018).
+		"snapshot_id " + fixtureSnapshotID + "  stored: " + filepath.Join(paths.Snapshots, fixtureSnapshotID+".json"),
 		"bundle_id " + readID + "  stored: " + filepath.Join(paths.Bundles, readID),
 	} {
 		if i >= len(lines) || lines[i] != want {
@@ -539,7 +541,7 @@ func TestCreateDryRunFromAStage(t *testing.T) {
 	want := findings.StageBlock{Ref: "fylgja-fixture/cabled", Branch: "fylgja-fixture", Label: "cabled",
 		ProposedChange: findings.StageChange{ID: "pc-1", Name: "change pc-1", Branch: "fylgja-fixture"},
 		At:             fixtureAt, AtSource: findings.AtSourceGiven, Description: "the leaf cabled"}
-	if code != findings.ExitOK || doc.BundleID != readID || doc.Stage == nil || *doc.Stage != want ||
+	if code != findings.ExitOK || doc.BundleID != readID || doc.SnapshotID != fixtureSnapshotID || doc.Stage == nil || *doc.Stage != want ||
 		doc.DryRun == nil || doc.DryRun.Follow == nil || doc.DryRun.Follow.Reason != findings.FollowReasonStage ||
 		doc.Subject.Stage != "fylgja-fixture/cabled" || doc.Subject.Branch != "fylgja-fixture" || doc.Subject.At != fixtureAt {
 		t.Errorf("exit %d, document %+v; want 0 naming the golden bundle, the stage and the reason stage", code, doc)

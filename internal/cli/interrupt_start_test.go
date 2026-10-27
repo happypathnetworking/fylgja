@@ -26,6 +26,7 @@ func TestCreateInterruptWhileStartingAbandonsTheStart(t *testing.T) {
 		{"no run had been started", context.Canceled, "nothing was started"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			useFixtureRead(t)
 			interrupts := useInterrupts(t)
 			svc := &fakeService{startBlocks: true, startErr: c.startErr}
 			useService(t, svc)
@@ -45,7 +46,8 @@ func TestCreateInterruptWhileStartingAbandonsTheStart(t *testing.T) {
 			if svc.cancels != 0 {
 				t.Errorf("Cancel called %d times, want none: no run was followed", svc.cancels)
 			}
-			validateM2Document(t, doc)
+			// The document names the snapshot the server took before the start (018).
+			validateM10Document(t, doc)
 		})
 	}
 }
@@ -53,6 +55,7 @@ func TestCreateInterruptWhileStartingAbandonsTheStart(t *testing.T) {
 // An interrupt that arrives just as a start succeeds is the first interrupt: the run is
 // cancelled and the command waits for its cleanup.
 func TestCreateInterruptRacingASuccessfulStartCancelsTheRun(t *testing.T) {
+	useFixtureRead(t)
 	interrupts := useInterrupts(t)
 	release := make(chan struct{})
 	svc := &fakeService{runID: "run-1", startBlocks: true, release: release, result: provision.ProvisionResult{

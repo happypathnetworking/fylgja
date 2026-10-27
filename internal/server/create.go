@@ -2,11 +2,14 @@ package server
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
@@ -107,15 +110,32 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 		opts.note("%s", resolved.block.Line())
 	}
 	if f.dryRun {
-		return withStage(runCreateDryRun(ctx, opts, op, subject, branch, at, scope, reg, follow), resolved)
+		return withStage(runCreateDryRun(ctx, opts, op, subject, stage.Read, branch, at, scope, reg, follow), resolved)
 	}
 
+	// The server reads, takes the snapshot, compiles and files before any run starts, so
+	// the run begins at the host check and reads nothing (R-11): every refusal here is the
+	// command's document, and no run starts.
+	compiled, err := readTakeCompile(ctx, opts, op, subject, stage.Read, branch, at, scope, reg)
+	if err != nil {
+		return withStage(err, resolved)
+	}
+	// The input above the output, before the run's start (R-09).
+	opts.note("%s", snapshotStoredLine(compiled.snapshot.id, compiled.snapshot.path))
+	opts.note("%s", bundleStoredLine(compiled.bundleID, compiled.bundlePath))
+
+	// Compiled already, as a check's rebuild is: the run takes the bundle and the snapshot
+	// by id and starts at the host check.
 	in := provision.ProvisionInput{
-		Source:  wire.SourceIntent,
-		Branch:  branch,
-		At:      at,
-		Version: opts.version(),
-		Scope:   scope,
+		Source:     wire.SourceIntent,
+		Branch:     branch,
+		At:         at,
+		BundlePath: compiled.bundlePath,
+		BundleID:   compiled.bundleID,
+		ObservedAt: compiled.observedAt,
+		SnapshotID: compiled.snapshot.id,
+		Version:    opts.version(),
+		Scope:      scope,
 	}
 	// A twin built from the branch head follows it unless --no-follow; a pinned one never does.
 	if follow.Enabled {
@@ -125,7 +145,7 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	if resolved != nil {
 		in.Stage = resolved.record
 	}
-	return withStage(runProvision(ctx, opts, op, subject, in), resolved)
+	return withStage(compiled.carried(runProvision(ctx, opts, op, subject, in)), resolved)
 }
 
 // followFlagsConflict refuses --interval given with --at or with --no-follow as
@@ -186,49 +206,125 @@ func followInterval(op string, subject *findings.Subject, f *createFlags) (time.
 	return d, nil
 }
 
-// runCreateDryRun reads, compiles and files the bundle in this process, then reports what a
-// real create would do; it never dials the workflow service. Read and compile are
-// the stage commands' own pipelines, so a dry run refuses exactly what `intent read` and
-// `twin compile` would, under the same identifiers. The bundle is filed as a run's
-// compile step files it, so the report's bundle is there to inspect.
-func runCreateDryRun(ctx context.Context, opts *options, op string, subject *findings.Subject, branch, at, scope string, reg *psp.Registry,
-	follow findings.DryRunFollow) error {
+// runCreateDryRun reads, takes the snapshot, compiles and files the bundle in this
+// process, as the create does, then reports what a real create would do; it never dials
+// the workflow service. Read and compile are the stage commands' own pipelines, so a dry
+// run refuses exactly what `intent read` and `twin compile` would, under the same
+// identifiers. The snapshot and the bundle are filed as the create files them, so the
+// report's snapshot and bundle are there to inspect (FR-014).
+func runCreateDryRun(ctx context.Context, opts *options, op string, subject *findings.Subject, read readFunc, branch, at, scope string,
+	reg *psp.Registry, follow findings.DryRunFollow) error {
+	compiled, err := readTakeCompile(ctx, opts, op, subject, read, branch, at, scope, reg)
+	if err != nil {
+		return err
+	}
+	return dryRunReport(ctx, opts, op, subject, reg, compiled.paths, &compiled.snapshot, compiled.bundlePath, compiled.bundleID,
+		compiled.read, compiled.findings, follow)
+}
+
+// readFunc is stage.Read's shape: what a create reads its intent through. The create
+// passes stage.Read; a tier-1 test, which has no Infrahub in this package, passes its own.
+type readFunc func(ctx context.Context, branch, at, scope string, reg *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error)
+
+// filedSnapshot is a snapshot a command filed, as its stored: line names it.
+type filedSnapshot struct {
+	id, path string
+}
+
+// compiledRead is a create's read once taken, compiled and filed on the server: what the
+// run is started with, and what the dry run reports.
+type compiledRead struct {
+	paths      lab.Paths
+	snapshot   filedSnapshot
+	bundleID   string
+	bundlePath string
+	// observedAt is the read's time, which the twin records.
+	observedAt string
+	read       *readSummary
+	// findings are the read's and the compile's, each at its step: none refuses.
+	findings findings.List
+}
+
+// readTakeCompile is the create's one path from a reference to a filed bundle (D-011),
+// shared by the create and its dry run: the state root; observed_at captured; the read,
+// bounded by stage.ReadTimeout; the snapshot taken and filed; the compile; the bundle
+// filed (R-11). Each refusal, and each step that cannot run, is the command's document,
+// returned as the error, at read or compile as the run's own steps placed them. A refused
+// read files nothing. A compile refused after a clean read leaves the snapshot filed, and
+// its document names it, since the input validated and only the output was refused
+// (R-05). An Infrahub that fails or times out during the read is operation.failed at
+// read, at once: no retry and no heartbeat stand between a create and its read (FR-010).
+func readTakeCompile(ctx context.Context, opts *options, op string, subject *findings.Subject, read readFunc,
+	branch, at, scope string, reg *psp.Registry) (*compiledRead, error) {
 	paths, err := opts.paths()
 	if err != nil {
-		return failAt(op, subject, findings.StepRead, findings.StepRead, "%v", err)
+		return nil, failAt(op, subject, findings.StepRead, findings.StepRead, "%v", err)
 	}
 
 	// Every finding is placed at its step, and a step that could not run names the object the
-	// run's own read and compile name, so a dry run reports as the run does.
+	// run's own read and compile name, so the server reports as the run did.
 	//
 	// Captured before the first request, so observed_at is never later than anything the
 	// read could have seen.
 	observedAt := time.Now().UTC().Format(stage.ObservedAtFormat)
-	snapshot, list, err := stage.Read(ctx, branch, at, scope, reg, observedAt)
+	c, list, err := read(ctx, branch, at, scope, reg, observedAt)
 	if err != nil {
-		return failAt(op, subject, findings.StepRead, "branch "+branch, "%v", err)
+		return nil, failAt(op, subject, findings.StepRead, "branch "+branch, "%v", err)
 	}
 	list = list.AtStep(findings.StepRead)
-	if snapshot == nil {
-		return finish(op, subject, list)
+	if c == nil {
+		return nil, finish(op, subject, list)
 	}
 
-	files, id, compiled := stage.Compile(snapshot, reg)
+	// The input is filed before the output: a refused compile leaves it to inspect. The
+	// stores' refusals are the compile step's, a corrupt snapshot entry's as a corrupt
+	// bundle entry's (contracts/cli.md, "018: snapshots", Identifiers), where the run's
+	// compile step filed the sidecar this replaces.
+	snap, snapPath, taken, err := takeSnapshot(ctx, paths, findings.StepCompile, c)
+	if err != nil {
+		return nil, failAt(op, subject, findings.StepCompile, paths.Snapshots, "%v", err)
+	}
+	if taken.Rejected() {
+		return nil, finish(op, subject, append(list, taken...))
+	}
+	cr := &compiledRead{paths: paths, snapshot: filedSnapshot{id: snap.ID, path: snapPath}, observedAt: observedAt}
+
+	files, id, compiled := stage.Compile(c, reg)
 	compiled = compiled.AtStep(findings.StepCompile)
 	list = append(list, compiled...)
 	if compiled.Rejected() {
-		return finish(op, subject, list)
+		return nil, cr.carried(finish(op, subject, list))
 	}
 
 	store, filed, err := fileCompiled(ctx, paths.Bundles, files, id)
 	if err != nil {
-		return failAt(op, subject, findings.StepCompile, paths.Bundles, "%v", err)
+		return nil, cr.carried(failAt(op, subject, findings.StepCompile, paths.Bundles, "%v", err))
 	}
 	if filed.Rejected() {
-		return finish(op, subject, append(list, filed...))
+		return nil, cr.carried(finish(op, subject, append(list, filed...)))
 	}
 
-	read := &readSummary{counts: intent.Summarize(snapshot), packages: intent.DevicesByPackage(snapshot, reg),
-		envelope: snapshot.Envelope}
-	return dryRunReport(ctx, opts, op, subject, reg, paths, store.Path(id), id, read, list, follow)
+	cr.bundleID, cr.bundlePath = id, store.Path(id)
+	cr.read = &readSummary{counts: intent.Summarize(c), packages: intent.DevicesByPackage(c, reg), envelope: c.Envelope}
+	cr.findings = list
+	return cr, nil
+}
+
+// carried puts what the server took and compiled before any run on the document err
+// holds, whatever it reports: the snapshot's id once the take completed, the bundle's once
+// it was filed, and the read's and the compile's findings before the run's own, which the
+// run, starting at the host check, no longer reports.
+func (cr *compiledRead) carried(err error) error {
+	var res *result
+	if !errors.As(err, &res) {
+		return err
+	}
+	res.doc.SnapshotID = cr.snapshot.id
+	if res.doc.BundleID == "" && cr.bundleID != "" {
+		res.doc.BundleID = cr.bundleID
+	}
+	if len(cr.findings) > 0 {
+		res.doc.Findings = append(append(findings.List{}, cr.findings...), res.doc.Findings...)
+	}
+	return err
 }

@@ -19,11 +19,41 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 )
 
 const fixtureBundleID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
+
+// fixtureSnapshotID is the fixture CTM's snapshot id (testdata/snapshot/three-node.json):
+// what a create of the fake Infrahub's fixture branch takes and files before its run (018).
+const fixtureSnapshotID = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
+
+// useFixtureRead serves the fixture branch from a fake Infrahub and points the state root
+// at a fresh directory: a create reads, takes, compiles and files on the server before it
+// starts its run (018), so every create that starts one reads something.
+func useFixtureRead(t *testing.T) lab.Paths {
+	t.Helper()
+	newFakeInfrahub(t).start()
+	return useStateRoot(t)
+}
+
+// headSnapshotID and headBundleID are what an unpinned read of the fake Infrahub's fixture
+// branch takes and compiles to: the fixture's intent, its envelope naming no at.
+const (
+	headSnapshotID = "856af9ad8f6e5d13d2d99e3af7d21d86c2cc9645c45d548a2df0494a11aad617"
+	headBundleID   = "951b7d2145f65a6d906b786dab9e05b12d172b36ce85229f671f7c334a37444e"
+)
+
+// storedLines are the two lines a create prints before its run's start, the snapshot's
+// above the bundle's, under the state root of paths (018, R-09).
+func storedLines(paths lab.Paths, snapshotID, bundleID string) []string {
+	return []string{
+		"snapshot_id " + snapshotID + "  stored: " + filepath.Join(paths.Snapshots, snapshotID+".json"),
+		"bundle_id " + bundleID + "  stored: " + filepath.Join(paths.Bundles, bundleID),
+	}
+}
 
 // fixtureArtifacts are the fixture bundle's artifact checksums, by node: what 017's
 // template renders for the fylgja-fixture branch, 707 bytes each, predicted at T016
@@ -361,6 +391,7 @@ func exitOf(t *testing.T, err error) (int, *findings.Document) {
 }
 
 func TestCreateReadyPrintsTheTwin(t *testing.T) {
+	paths := useFixtureRead(t)
 	svc := &fakeService{runID: "run-1", result: readyResult(), events: []provision.Event{
 		{Step: "read"},
 		{Step: "read", End: true, Outcome: provision.EventDone, Duration: 2100 * time.Millisecond},
@@ -383,26 +414,27 @@ func TestCreateReadyPrintsTheTwin(t *testing.T) {
 	if code, doc := exitOf(t, err); code != findings.ExitOK {
 		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
 	}
-	want := strings.Join([]string{
+	// The server's read, take, compile and filing print first, before the run's start (018).
+	want := strings.Join(append(storedLines(paths, headSnapshotID, headBundleID),
 		"run fylgja-provision run-1",
 		"step read: begins",
 		"step read: done in 2.1s",
 		"step compile: begins",
-		"step compile: done in 0.1s (bundle_id " + fixtureBundleID + ")",
+		"step compile: done in 0.1s (bundle_id "+fixtureBundleID+")",
 		"step readiness n1: ready in 9.8s",
 		"step push n1: begins",
 		"step push n1: done in 0.7s",
 		"step record: begins",
 		"step record: done in 0.0s",
-		"twin ready: bundle_id " + fixtureBundleID,
+		"twin ready: bundle_id "+fixtureBundleID,
 		"  n1  172.20.20.2",
 		"  n2  172.20.20.3",
 		"  n3  172.20.20.4",
 		// The record's line, as twin show prints it (017): the scope and the mapping the read
 		// was made under.
-		"record: branch fylgja-fixture, snapshot none, bundle_id " + fixtureBundleID + ", schema abc, " + showRead,
+		"record: branch fylgja-fixture, snapshot none, bundle_id "+fixtureBundleID+", schema abc, "+showRead,
 		"twin directory /abs/local/twin",
-	}, "\n") + "\n"
+	), "\n") + "\n"
 	if out != want {
 		t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
 	}
@@ -415,6 +447,7 @@ func TestCreateReadyPrintsTheTwin(t *testing.T) {
 }
 
 func TestCreateJSONDocumentCarriesTheTwin(t *testing.T) {
+	useFixtureRead(t)
 	useService(t, &fakeService{runID: "run-1", result: readyResult()})
 	useInterrupts(t)
 
@@ -437,7 +470,11 @@ func TestCreateJSONDocumentCarriesTheTwin(t *testing.T) {
 			t.Errorf("twin node %s: artifact %+v, pushed in %v; want %+v in 0.7s", n.Name, n.Artifact, n.PushedInS, want)
 		}
 	}
-	validateM5Document(t, doc)
+	// The snapshot the server took names the document beside the run's bundle (018).
+	if doc.SnapshotID != headSnapshotID {
+		t.Errorf("snapshot_id %q, want the take's %s", doc.SnapshotID, headSnapshotID)
+	}
+	validateM10Document(t, doc)
 }
 
 func TestCreateRefusesBeforeDialling(t *testing.T) {
@@ -461,6 +498,7 @@ func TestCreateRefusesBeforeDialling(t *testing.T) {
 
 // No service and no worker are exit 2 under their own identifiers, not a wait.
 func TestCreateStartRefusals(t *testing.T) {
+	useFixtureRead(t)
 	for _, c := range startRefusals() {
 		t.Run(c.name, func(t *testing.T) {
 			c.use(t)
@@ -472,6 +510,7 @@ func TestCreateStartRefusals(t *testing.T) {
 // The first interrupt cancels the run and keeps waiting for its cleanup; the exit status
 // is then the run's.
 func TestCreateFirstInterruptCancelsAndWaits(t *testing.T) {
+	useFixtureRead(t)
 	interrupts := useInterrupts(t)
 	release := make(chan struct{})
 	svc := &fakeService{runID: "run-1", release: release, result: provision.ProvisionResult{
@@ -494,6 +533,7 @@ func TestCreateFirstInterruptCancelsAndWaits(t *testing.T) {
 // A second interrupt stops waiting: exit 2, run.cancelled, and the run is left to finish
 // on the service.
 func TestCreateSecondInterruptStopsWaiting(t *testing.T) {
+	useFixtureRead(t)
 	interrupts := useInterrupts(t)
 	svc := &fakeService{runID: "run-1", release: make(chan struct{})}
 	useService(t, svc)
@@ -510,13 +550,14 @@ func TestCreateSecondInterruptStopsWaiting(t *testing.T) {
 	if msg := doc.Findings[0].Message; !strings.Contains(msg, "fylgja twin destroy") || doc.Findings[0].Object != "run-1" {
 		t.Errorf("finding %+v, want the run id and fylgja twin destroy named", doc.Findings[0])
 	}
-	validateM2Document(t, doc)
+	validateM10Document(t, doc)
 }
 
 // A run that stopped short of ready after the host check cleared says, in text, what its
 // cleanup removed, whether or not its progress lines arrived; one cancelled before the host
 // check touched nothing and says nothing of cleanup.
 func TestCreateStoppedShortReportsWhatCleanupRemoved(t *testing.T) {
+	paths := useFixtureRead(t)
 	deployFailed := findings.List{{Severity: findings.Rejection, Rule: findings.RuleDeployFailed, Object: "lab fylgja",
 		Step: findings.StepDeploy, Message: "clab deploy exited 1"}}
 	for _, c := range []struct {
@@ -550,7 +591,7 @@ func TestCreateStoppedShortReportsWhatCleanupRemoved(t *testing.T) {
 			if code, doc := exitOf(t, err); code != c.wantCode {
 				t.Fatalf("exit %d, findings %+v; want %d", code, doc.Findings, c.wantCode)
 			}
-			want := strings.Join(append([]string{"run fylgja-provision run-1"}, c.want...), "\n") + "\n"
+			want := strings.Join(append(append(storedLines(paths, headSnapshotID, headBundleID), "run fylgja-provision run-1"), c.want...), "\n") + "\n"
 			if out != want {
 				t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
 			}
@@ -563,7 +604,7 @@ func TestCreateStoppedShortReportsWhatCleanupRemoved(t *testing.T) {
 				t.Errorf("--json printed on stdout:\n%s", out)
 			}
 			_, doc := exitOf(t, err)
-			validateM2Document(t, doc)
+			validateM10Document(t, doc)
 		})
 	}
 }
@@ -947,6 +988,7 @@ func executeCreate(t *testing.T, args ...string) (int, *findings.Document) {
 // A create without --at follows its branch at the interval given, or every five minutes; its
 // run stops any following itself, so the command stops none.
 func TestCreateFollowsByDefault(t *testing.T) {
+	useFixtureRead(t)
 	for _, c := range []struct {
 		interval  string
 		intervalS int
@@ -989,13 +1031,14 @@ func TestCreateFollowsByDefault(t *testing.T) {
 			if doc.Following == nil || *doc.Following != wantBlock {
 				t.Errorf("following block %+v, want %+v", doc.Following, wantBlock)
 			}
-			validateM5Document(t, doc)
+			validateM10Document(t, doc)
 		})
 	}
 }
 
 // A create whose run replaced another following says so before its success lines.
 func TestCreateReplacesFollowing(t *testing.T) {
+	useFixtureRead(t)
 	res := followingResult(300)
 	res.FollowingStopped = &provision.StopFollowingResult{Deleted: true, Branch: "other"}
 	svc := &fakeService{runID: "run-1", result: res}
@@ -1020,6 +1063,7 @@ func TestCreateReplacesFollowing(t *testing.T) {
 
 // A ready run whose following could not begin: exit 0, the warning, and a not_started block.
 func TestCreateFollowStartFailed(t *testing.T) {
+	useFixtureRead(t)
 	res := readyResult()
 	res.Findings = findings.List{{Severity: findings.Warning, Rule: findings.RuleFollowStartFailed, Object: provision.FollowScheduleID,
 		Step: findings.StepFollow, Message: provision.FollowStartFailedMessage("namespace unavailable")}}
@@ -1046,12 +1090,13 @@ func TestCreateFollowStartFailed(t *testing.T) {
 	if doc.Following == nil || *doc.Following != want || !carriesRule(doc.Findings, findings.RuleFollowStartFailed) {
 		t.Errorf("following %+v, findings %+v; want %+v and the warning", doc.Following, doc.Findings, want)
 	}
-	validateM5Document(t, doc)
+	validateM10Document(t, doc)
 }
 
 // A run that could not stop following ended at step follow with the host untouched: exit 2,
 // as any run ended before the host was touched, and the command stopped nothing itself.
 func TestCreateFollowStopFailed(t *testing.T) {
+	paths := useFixtureRead(t)
 	res := provision.ProvisionResult{
 		Outcome: provision.OutcomeError, Step: findings.StepFollow, BundleID: fixtureBundleID,
 		Findings: findings.List{{Severity: findings.Rejection, Rule: findings.RuleFollowStopFailed, Object: provision.FollowScheduleID,
@@ -1070,13 +1115,13 @@ func TestCreateFollowStopFailed(t *testing.T) {
 	if code != findings.ExitError || !carriesRule(doc.Findings, findings.RuleFollowStopFailed) {
 		t.Errorf("exit %d, findings %+v; want 2 with follow.stop.failed", code, doc.Findings)
 	}
-	if out != "run fylgja-provision run-1\n" {
-		t.Errorf("stdout:\n%s\nwant only the run line: nothing was touched, nothing removed", out)
+	if want := strings.Join(append(storedLines(paths, headSnapshotID, headBundleID), "run fylgja-provision run-1"), "\n") + "\n"; out != want {
+		t.Errorf("stdout:\n%s\nwant only the stored lines and the run line: nothing was touched, nothing removed", out)
 	}
 	if slices.Contains(svc.calls, "StopFollowing") {
 		t.Errorf("calls %v: the command stopped following itself", svc.calls)
 	}
-	validateM4Document(t, doc)
+	validateM10Document(t, doc)
 }
 
 // --interval given with --at or with --no-follow is refused before anything is dialled:
@@ -1126,6 +1171,12 @@ func TestCreateCarriesItsScope(t *testing.T) {
 		{"the default", createFlags{branch: "fylgja-fixture", noFollow: true}, defaultScope},
 	} {
 		t.Run(c.name, func(t *testing.T) {
+			// The server reads under the scope before the run (018): the fake tags the
+			// fixture's devices with the scope's tag, so either reads the fixture.
+			f := newFakeInfrahub(t)
+			f.tag = strings.TrimPrefix(c.want, "tag:")
+			f.start()
+			useStateRoot(t)
 			svc := &fakeService{runID: "run-1", result: readyResult()}
 			useService(t, svc)
 			useInterrupts(t)
@@ -1146,6 +1197,7 @@ func TestCreateCarriesItsScope(t *testing.T) {
 // A --no-follow create starts M3's run: its input is M3's for the same flags but for
 // stop_following, which every run the CLI starts carries, and nothing follows.
 func TestCreateNoFollow(t *testing.T) {
+	paths := useFixtureRead(t)
 	svc := &fakeService{runID: "run-1", result: readyResult()}
 	useService(t, svc)
 	useInterrupts(t)
@@ -1164,10 +1216,12 @@ func TestCreateNoFollow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"source":"intent","branch":"fylgja-fixture","at":"","bundle_path":"","bundle_id":"","version":"` + version +
-		`","stop_following":true,"scope":"tag:fylgja"}`
-	if string(b) != want {
-		t.Errorf("input\n  %s\nwant M3's with stop_following, and 017's scope, the server's default\n  %s", b, want)
+	// Compiled on the server (018): the bundle and the snapshot by id, and the read's time.
+	want := `{"source":"intent","branch":"fylgja-fixture","at":"","bundle_path":"` + filepath.Join(paths.Bundles, headBundleID) +
+		`","bundle_id":"` + headBundleID + `","version":"` + version + `","observed_at":"` + svc.started[0].ObservedAt +
+		`","stop_following":true,"scope":"tag:fylgja","snapshot_id":"` + headSnapshotID + `"}`
+	if string(b) != want || svc.started[0].ObservedAt == "" {
+		t.Errorf("input\n  %s\nwant M3's with stop_following, 017's scope, the server's default, and 018's compiled input\n  %s", b, want)
 	}
 	if want := "twin directory /abs/local/twin\nnot following\n"; !strings.HasSuffix(out, want) {
 		t.Errorf("stdout:\n%s\nwant it to end:\n%s", out, want)
@@ -1184,11 +1238,12 @@ func TestCreateNoFollow(t *testing.T) {
 	if doc.Following != nil {
 		t.Errorf("following block %+v, want none", doc.Following)
 	}
-	validateM5Document(t, doc)
+	validateM10Document(t, doc)
 }
 
 // A pinned create never follows, with or without --no-follow, and says it is pinned.
 func TestCreatePinnedNotFollowing(t *testing.T) {
+	useFixtureRead(t)
 	const at = "2026-09-16T14:00:00Z"
 	for _, noFollow := range []bool{false, true} {
 		t.Run(fmt.Sprintf("no-follow %v", noFollow), func(t *testing.T) {

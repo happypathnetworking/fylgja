@@ -38,11 +38,12 @@ type readSummary struct {
 // Sound because the server and the worker share the host (D-041); at M9 this moves behind
 // the queue.
 //
-// read is nil when no read took place (twin provision). prior holds the read's and the
-// compile's findings, reported with the host check's. follow is whether the twin would follow
-// its branch (M4); the dry run schedules nothing either way.
+// snap is the snapshot the dry run filed before the bundle, nil when it took none (twin
+// provision). read is nil when no read took place (twin provision). prior holds the read's
+// and the compile's findings, reported with the host check's. follow is whether the twin
+// would follow its branch (M4); the dry run schedules nothing either way.
 func dryRunReport(ctx context.Context, opts *options, op string, subject *findings.Subject, reg *psp.Registry,
-	paths lab.Paths, bundlePath, id string, read *readSummary, prior findings.List, follow findings.DryRunFollow) error {
+	paths lab.Paths, snap *filedSnapshot, bundlePath, id string, read *readSummary, prior findings.List, follow findings.DryRunFollow) error {
 	plan, err := lab.CheckHost(ctx, dryRunActivities(opts, reg, paths), wire.CheckHostInput{BundlePath: bundlePath, BundleID: id})
 	if err != nil {
 		return failAt(op, subject, findings.StepHostCheck, findings.StepHostCheck, "host check: %s", activityMessage(err))
@@ -65,7 +66,11 @@ func dryRunReport(ctx context.Context, opts *options, op string, subject *findin
 	if read != nil {
 		opts.note("read: %s (%s)", readCounts(read.counts, read.packages, lossy), readSubject(read.envelope))
 	}
-	opts.note("bundle_id %s  stored: %s", id, bundlePath)
+	// The input above the output, as the create prints them (R-09).
+	if snap != nil {
+		opts.note("%s", snapshotStoredLine(snap.id, snap.path))
+	}
+	opts.note("%s", bundleStoredLine(id, bundlePath))
 	opts.note("nodes:")
 	for _, n := range block.Nodes {
 		push := ""
@@ -81,6 +86,9 @@ func dryRunReport(ctx context.Context, opts *options, op string, subject *findin
 
 	list := append(append(findings.List{}, prior...), plan.Findings...)
 	doc := findings.NewDocument(op, subject, list)
+	if snap != nil {
+		doc.SnapshotID = snap.id
+	}
 	doc.BundleID = id
 	doc.DryRun = block
 	return &result{doc: doc}

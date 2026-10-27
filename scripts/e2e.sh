@@ -20,7 +20,9 @@
 # which differs per platform. Every artifact carries a marker in its header, where the
 # template writes the device's description (017); it is found in no output, record,
 # document, history or worker log. Every create files the snapshot the server took under
-# snapshots/, names it in twin.json, and writes no CTM sidecar (018).
+# snapshots/, names it in twin.json, and writes no CTM sidecar (018). No token or password is
+# found there either, nor in the bundle store or the snapshot store, which hold the marker
+# by design.
 #
 #   1. create from fylgja-fixture; the conformance suite's boot half reads that twin (M6:
 #      host name, every cabled port enabled, discovering and seeing the far end the bundle's
@@ -2185,9 +2187,12 @@ stop_server
 # Case 9's stage.plan and twin.rehearse went to the operator's server on the bridge, not to
 # the script's: its log, local/server.log by CLAUDE.md's start line, is searched too (SC-008).
 # The worker's log is searched when WORKER_LOG names it, and the line after the greps says
-# whether it was.
-scan=("$OUT" "$FYLGJA_STATE_ROOT/bundles")
-searched="the run's outputs and the bundle store"
+# whether it was. The bundle store holds every bundle the host compiled, and the snapshot
+# store every snapshot its servers took, each read's CTM with every device's rendered
+# configuration in it, filed beside its bundle as a sidecar before 018 (FR-006): both are
+# searched for the credentials, and neither for the marker, which each holds by design.
+scan=("$OUT" "$FYLGJA_STATE_ROOT/bundles" "$FYLGJA_STATE_ROOT/snapshots")
+searched="the run's outputs, the bundle store and the snapshot store"
 BRIDGE_LOG=""
 if ran 9; then
   BRIDGE_LOG="$FYLGJA_STATE_ROOT/server.log"

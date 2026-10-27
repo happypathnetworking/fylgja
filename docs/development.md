@@ -745,7 +745,9 @@ Every seeded device's `description` carries `FYLGJA-MARKER`, which the template 
 into its artifact's header comment, and the script finds it, and
 the API's token, `local/.env`'s token and both passwords, in no output, record, document,
 decoded run history, server log (or the worker's, with `WORKER_LOG`), check message or
-comment: the marker only in a read's CTM and a compiled bundle. The server is stopped before the greps, and one that
+comment, and the tokens and passwords in neither the bundle store nor the snapshot store
+either: the marker only in a read's snapshot and a compiled bundle, as both stores hold it
+by design. The server is stopped before the greps, and one that
 does not exit 0 on SIGTERM fails the run. The script leaves the host clean: a leaked lab,
 twin directory or Schedule `fylgja-follow` exits 99, and the trap deletes the throwaway
 branches with their stages and proposed changes, after a narrowed run too. Its closing

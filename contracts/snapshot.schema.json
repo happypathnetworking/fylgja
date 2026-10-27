@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/contracts/snapshot/v1",
+  "title": "Fylgja snapshot v1 — the core's one input (018)",
+  "description": "A snapshot is one JSON document wrapping an unchanged CTM 2 (ctm.schema.json): the core's one input (D-061). The server takes one for every twin create, intent read --out writes one, twin create --snapshot and twin compile --snapshot take one, and the store keeps each under snapshots/<snapshot_id>.json beside the bundles, never overwritten. The outer part is snapshot_version, snapshot_id and observed_at, the take's time; the body is ctm and probes, a list required and empty in version 1, which 016 fills with a version bump. snapshot_id is the lowercase-hex SHA-256 of the body's canonical bytes with the inner envelope's observed_at left out and nothing else left out: the bytes the id hashes differ from the stored bytes, which keep observed_at and the outer part. The canonical bytes are the CTM's own form (ctm.Normalize, struct field order, two-space indent, LF, a trailing newline) wrapped as {\"ctm\": …, \"probes\": []}; by hand, jq --indent 2 'del(.snapshot_version, .snapshot_id, .observed_at, .ctm.envelope.observed_at)' snapshots/<id>.json | sha256sum, exact when no string holds <, > or &, which Go's encoder escapes. So the same intent taken twice has one id, whenever it was read, while the branch's history stands: a rebase re-stamps the branch and moves every stage's snapshot, and an artifact re-rendered to different bytes for unchanged data, never seen, would move it. A file a client sends may leave out snapshot_id, which the server computes, and observed_at, which it fills from the inner CTM; present, each is checked (snapshot.id.mismatch, snapshot.invalid). A document of another version, or of none, is refused (snapshot.version.unsupported) and nothing converts one; a non-empty probes list is refused (snapshot.invalid); the inner CTM is refused by its own rules, the object prefixed ctm. (ctm.version.unsupported, data.required.missing). A snapshot holds configuration, as the CTM does: it lives in the store and crosses as a file, never in a finding, a log line or a document.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["snapshot_version", "ctm", "probes"],
+  "properties": {
+    "snapshot_version": {
+      "const": "1"
+    },
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "The lowercase-hex SHA-256 of the hashed bytes: the body with the inner CTM's observed_at left out, in the canonical form the description gives. Required in a document Fylgja writes; optional in a file a client sends, computed when absent and checked when present. Not hashed."
+    },
+    "observed_at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}\\.\\d{6}Z$",
+      "description": "The UTC time the take began, six fractional digits, as the CTM envelope records a read's. In version 1 a take is one read, so it equals ctm.envelope.observed_at; a file whose two differ is refused snapshot.invalid. Required in a document Fylgja writes; optional in a file a client sends, filled from the inner CTM when absent. Not hashed. Informational: it governs nothing (Constitution VI)."
+    },
+    "ctm": {
+      "$ref": "https://github.com/happypathnetworking/fylgja/contracts/ctm/v2",
+      "description": "One CTM 2, unchanged by this feature: the reader's contract (D-057), which the compiler compiles. Hashed with its envelope's observed_at left out."
+    },
+    "probes": {
+      "type": "array",
+      "maxItems": 0,
+      "description": "The probe declarations: 'this intent, with no probe declarations'. Required and empty in version 1; 016 defines the element and bumps the version. Hashed."
+    }
+  }
+}

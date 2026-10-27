@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/step.schema.json",
   "title": "fylgja twin step — the step block (M11, M12)",
-  "description": "The `step` block of the findings document fylgja twin step emits (operation twin.step), on the dry run and on the run. The two sides, M10's step between their bundles (stages.schema.json $defs/step since 014), containerlab's dry-run plan with each touched node's package declaration beside what containerlab reported, the push plan with each node's reasons, and, once a run closed, the step run, its outcome, the phase that failed, each push's outcome, the timings and when it started and ended. No device diff, artifact or bootstrap content, token or login. M12: wait, the step's waiting form after the record: budget_s on the dry run and before the run closed; outcome, reads, after_s and failing once the run closed and the wait ran; absent when the run was cancelled before the wait began. 014: each side names its stage (twin.json 6's shape) where it named a waypoint. 015: wait_counts, the wait's last read counted by kind as verify.schema.json counts them, optional beside wait.",
+  "description": "The `step` block of the findings document fylgja twin step emits (operation twin.step), on the dry run and on the run. The two sides, M10's step between their bundles (stages.schema.json $defs/step since 014), containerlab's dry-run plan with each touched node's package declaration beside what containerlab reported, the push plan with each node's reasons, and, once a run closed, the step run, its outcome, the phase that failed, each push's outcome, the timings and when it started and ended. No device diff, artifact or bootstrap content, token or login. M12: wait, the step's waiting form after the record: budget_s on the dry run and before the run closed; outcome, reads, after_s and failing once the run closed and the wait ran; absent when the run was cancelled before the wait began. 014: each side names its stage (twin.json 6's shape) where it named a waypoint. 015: wait_counts, the wait's last read counted by kind as verify.schema.json counts them, optional beside wait. 018: each side names its snapshot_id beside its bundle_id, optional: absent on a from side whose record names none (a record of 8).",
   "$defs": {
     "stage": {
       "type": ["object", "null"],
@@ -30,6 +30,7 @@
       "additionalProperties": false,
       "properties": {
         "stage": { "$ref": "#/$defs/stage" },
+        "snapshot_id": { "type": "string", "pattern": "^[0-9a-f]{64}$", "description": "018: the side's snapshot; absent on a from side whose record names none (a record of 8)" },
         "bundle_id": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "at": { "type": "string", "description": "the side's pinned at, verbatim" },
         "branch": { "type": "string", "description": "the target's branch; absent on the from side" }

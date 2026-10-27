@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/rehearsal.schema.json",
   "title": "fylgja twin rehearse — the rehearsal block (015)",
-  "description": "The `rehearsal` block of the findings document fylgja twin rehearse emits (operation twin.rehearse): the proposed change rehearsed, when its stages were resolved, the deadline and the time used, whether a dead rehearsal's twin was reclaimed, the run, the baseline's findings, one entry per stage in order with its reference, its bundle or its refusal, its role, the step into it, its wait, its verify's counts, the findings new against the baseline and its verdict, the destroy's outcome, and, when a stage failed, the commands that reproduce it. Every list is sorted or in the stages' order, so the same run gives the same document. No configuration line, device diff, artifact or bootstrap content, token or login (Constitution X). The markdown rendering is not in the block: it rides beside the document in its frame (contracts/api.md, 015). The run's own warnings (rehearsal.twin.reclaimed, rehearsal.stage.moved, rehearsal.change.closed) ride in the document's findings beside the block; each stage's ride in its findings.",
+  "description": "The `rehearsal` block of the findings document fylgja twin rehearse emits (operation twin.rehearse): the proposed change rehearsed, when its stages were resolved, the deadline and the time used, whether a dead rehearsal's twin was reclaimed, the run, the baseline's findings, one entry per stage in order with its reference, its bundle or its refusal, its role, the step into it, its wait, its verify's counts, the findings new against the baseline and its verdict, the destroy's outcome, and, when a stage failed, the commands that reproduce it. Every list is sorted or in the stages' order, so the same run gives the same document. No configuration line, device diff, artifact or bootstrap content, token or login (Constitution X). The markdown rendering is not in the block: it rides beside the document in its frame (contracts/api.md, 015). The run's own warnings (rehearsal.twin.reclaimed, rehearsal.stage.moved, rehearsal.change.closed) ride in the document's findings beside the block; each stage's ride in its findings. 018: each stage names its snapshot_id beside its bundle_id, null when the stage was refused; the markdown's table carries a snapshot column before bundle, the short id or — for a refused stage.",
   "$defs": {
     "ref": {
       "type": "string",
@@ -108,7 +108,7 @@
     "stage": {
       "type": "object",
       "description": "one stage of the rehearsal, in the proposed change's order: the plan's stage, its role and its verdict, and what the run did at it",
-      "required": ["ref", "label", "description", "at_source", "bundle_id", "role", "verdict", "findings", "provision", "step", "wait", "verify", "new_findings", "took_s"],
+      "required": ["ref", "label", "description", "at_source", "snapshot_id", "bundle_id", "role", "verdict", "findings", "provision", "step", "wait", "verify", "new_findings", "took_s"],
       "additionalProperties": false,
       "properties": {
         "ref": { "$ref": "#/$defs/ref" },
@@ -117,6 +117,7 @@
         "at_source": { "enum": ["given", "written", "branch_point", "head"] },
         "branch": { "type": "string", "description": "once resolved" },
         "at": { "type": "string", "description": "once resolved, verbatim" },
+        "snapshot_id": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "018: the stage's snapshot, beside bundle_id; null when the stage was refused" },
         "bundle_id": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "null when the stage was refused" },
         "role": {
           "enum": ["refused", "baseline", "rehearsed", "not_reached"],

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/stages.schema.json",
   "title": "Fylgja stage blocks — 014",
-  "description": "The three stage blocks of the findings document, referenced from findings.schema.json by this $id: `resolved`, the reference one stage resolves to (the `stage` block on twin.create, twin.create --dry-run, intent.read with --stage and twin.step once its target resolved); `list`, stage.list's `stages` block; `plan`, stage.plan's `plan` block, whose steps are step.Diff's result. Replaces waypoints.schema.json (M10, M11): a stage is a moment of a proposed change (D-045), named <branch>/<label>, with two derived stages, branch-point and head, beside the operator's marks. Every fact the text prints and no more: artifacts by name and checksum, bootstraps as changed or not, never a line of either (Constitution X). Every list is sorted, so the same input gives the same document.",
+  "description": "The three stage blocks of the findings document, referenced from findings.schema.json by this $id: `resolved`, the reference one stage resolves to (the `stage` block on twin.create, twin.create --dry-run, intent.read with --stage and twin.step once its target resolved); `list`, stage.list's `stages` block; `plan`, stage.plan's `plan` block, whose steps are step.Diff's result. Replaces waypoints.schema.json (M10, M11): a stage is a moment of a proposed change (D-045), named <branch>/<label>, with two derived stages, branch-point and head, beside the operator's marks. Every fact the text prints and no more: artifacts by name and checksum, bootstraps as changed or not, never a line of either (Constitution X). Every list is sorted, so the same input gives the same document. 018: plan_stage.snapshot_id, required beside bundle_id, the stage's snapshot once its read was filed, or null.",
   "$defs": {
     "ref": {
       "type": "string",
@@ -229,7 +229,7 @@
     "plan_stage": {
       "type": "object",
       "description": "one stage of a plan: its reference, label, description and where its at comes from in every case; branch and at once it resolved; the bundle when the compile did; the read counts when the read did; and its findings. A stage refused at resolution carries ref, label, description, at_source and findings alone, with bundle_id and read null",
-      "required": ["ref", "label", "description", "at_source", "bundle_id", "read", "findings"],
+      "required": ["ref", "label", "description", "at_source", "snapshot_id", "bundle_id", "read", "findings"],
       "additionalProperties": false,
       "properties": {
         "ref": {"$ref": "#/$defs/ref"},
@@ -238,6 +238,7 @@
         "at_source": {"$ref": "#/$defs/at_source"},
         "branch": {"type": "string"},
         "at": {"type": "string"},
+        "snapshot_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "018: the stage's snapshot once its read was filed; null when the stage was refused at resolution or read"},
         "bundle_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "null when the stage was refused at resolution, read or compile"},
         "read": {"oneOf": [{"$ref": "#/$defs/read_counts"}, {"type": "null"}]},
         "findings": {

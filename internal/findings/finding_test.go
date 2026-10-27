@@ -826,7 +826,8 @@ func TestM4DocumentsSatisfySchema(t *testing.T) {
 // forbids additional properties, so what an earlier schema validates is its own
 // milestone's shape; withDryRunArtifacts is the same move in the other direction. Every
 // schema it serves predates 017, so the show record's provenance is always put back as
-// they read it (drop017ShowProvenance).
+// they read it (drop017ShowProvenance), and the snapshot ids 018 always writes are taken
+// out (drop018Snapshots).
 func asEarlier(t *testing.T, doc *Document, drops ...func(doc map[string]any)) []byte {
 	t.Helper()
 	b, err := json.Marshal(doc)
@@ -837,7 +838,7 @@ func asEarlier(t *testing.T, doc *Document, drops ...func(doc map[string]any)) [
 	if err := json.Unmarshal(b, &generic); err != nil {
 		t.Fatal(err)
 	}
-	for _, drop := range append(drops, drop017ShowProvenance) {
+	for _, drop := range append(drops, drop018Snapshots, drop017ShowProvenance) {
 		drop(generic)
 	}
 	b, err = json.Marshal(generic)
@@ -888,6 +889,32 @@ func drop017ShowProvenance(doc map[string]any) {
 	delete(record, "scope")
 	delete(record, "mapping")
 	record["contract_version"] = "0.2"
+}
+
+// drop018Snapshots removes the snapshot ids 018 writes as null wherever a block names none:
+// the show record's, each plan stage's and each rehearsal stage's. Every contract before
+// 018's predates the key and forbids additional properties, and from 018 each of them is
+// always written. An id that is set is left, so a document that names a snapshot is still
+// refused by an earlier contract, as it should be.
+func drop018Snapshots(doc map[string]any) {
+	dropNull := func(m any) {
+		if o, ok := m.(map[string]any); ok {
+			if v, ok := o["snapshot_id"]; ok && v == nil {
+				delete(o, "snapshot_id")
+			}
+		}
+	}
+	if show, ok := doc["show"].(map[string]any); ok {
+		dropNull(show["record"])
+	}
+	for _, block := range []string{"plan", "rehearsal"} {
+		if b, ok := doc[block].(map[string]any); ok {
+			stages, _ := b["stages"].([]any)
+			for _, st := range stages {
+				dropNull(st)
+			}
+		}
+	}
 }
 
 // dropM6DryRunCounts removes M6's two dry_run counts. M2's, M4's and M5's contracts

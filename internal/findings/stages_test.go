@@ -31,18 +31,24 @@ var currentResources = []string{"show.schema.json", "stages.schema.json", "step.
 // compileFeatureFindingsSchema loads one feature's copy of the findings contract with the
 // blocks it references added under their own $ids. A feature's findings contract that
 // refers to a block cannot compile without it, so a caller names every block its
-// feature's copy refers to: currentResources for the current contract.
+// feature's copy refers to: currentResources for the current contract. A block the
+// feature's directory does not hold had not moved since that feature, so the current one
+// is read in its place: verify.schema.json beside 017's copy, which 018 does not move.
 func compileFeatureFindingsSchema(t *testing.T, feature string, resources ...string) *jsonschema.Schema {
 	t.Helper()
 	load := func(name string) any {
-		f, err := os.Open(contractPath(feature, name))
+		path := contractPath(feature, name)
+		if _, err := os.Stat(path); err != nil && name != "findings.schema.json" {
+			path = contractPath(currentContract, name)
+		}
+		f, err := os.Open(path)
 		if err != nil {
 			t.Fatal(err)
 		}
 		defer func() { _ = f.Close() }()
 		doc, err := jsonschema.UnmarshalJSON(f)
 		if err != nil {
-			t.Fatalf("parsing %s: %v", contractPath(feature, name), err)
+			t.Fatalf("parsing %s: %v", path, err)
 		}
 		return doc
 	}
@@ -539,10 +545,10 @@ func TestStageListAndPlanSatisfySchema(t *testing.T) {
 		{docs[3].doc, []string{`"status":"rejected"`, `"rule":"stage.label.reserved"`}},
 		{docs[4].doc, []string{`"stages":{"branch":null,"rows":[],"orphans":[],"record":null}`}},
 		{docs[5].doc, []string{`"plan":{"branch":"change-1","proposed_change":{"id":"pc-1","name":"third link","branch":"change-1","draft":true},"stages":[`,
-			`{"ref":"change-1/live","label":"live","description":"after its configuration is live","at_source":"given","bundle_id":null,"read":null,"findings":[{`}},
+			`{"ref":"change-1/live","label":"live","description":"after its configuration is live","at_source":"given","snapshot_id":null,"bundle_id":null,"read":null,"findings":[{`}},
 		{docs[6].doc, []string{`{"ref":"change-1/branch-point","label":"branch-point","description":"","at_source":"branch_point","branch":"main",`,
-			`"bundle_id":null,"read":null,"findings":[{`, `"not_computed":"change-1/branch-point was refused"`}},
-		{docs[7].doc, []string{`"bundle_id":null,"read":{"devices":3,`}},
+			`"snapshot_id":null,"bundle_id":null,"read":null,"findings":[{`, `"not_computed":"change-1/branch-point was refused"`}},
+		{docs[7].doc, []string{`"snapshot_id":null,"bundle_id":null,"read":{"devices":3,`}},
 		{docs[8].doc, []string{`"computed":true,"unchanged":true`, `"findings":[]`}},
 	} {
 		if b := string(mustMarshal(t, c.doc)); !containsAll(b, c.keys) {

@@ -102,6 +102,9 @@ type Subject struct {
 	// before the packages load. Absent on an operation that reads under none, and on a
 	// request refused before its scope was resolved.
 	Scope string `json:"scope,omitempty"`
+	// Snapshot is --snapshot as given (018), a snapshot id or the path of the file the
+	// request carried, on twin compile and twin create --snapshot.
+	Snapshot string `json:"snapshot,omitempty"`
 }
 
 // Where a stage's at came from (stages.schema.json, $defs/at_source).
@@ -287,8 +290,8 @@ func (b PlanBlock) MarshalJSON() ([]byte, error) {
 
 // PlanStage is one stage of a plan. Its reference, label, description and the source of
 // its at are known whether or not it resolves; Branch and At are set once it resolved,
-// BundleID once it compiled, Read once its read did. A stage refused at resolution
-// carries those four and its findings alone.
+// SnapshotID once its read was filed (018), BundleID once it compiled, Read once its read
+// did. A stage refused at resolution carries those four and its findings alone.
 type PlanStage struct {
 	Ref         string      `json:"ref"`
 	Label       string      `json:"label"`
@@ -296,6 +299,7 @@ type PlanStage struct {
 	AtSource    string      `json:"at_source"`
 	Branch      string      `json:"branch,omitempty"`
 	At          string      `json:"at,omitempty"`
+	SnapshotID  *string     `json:"snapshot_id"`
 	BundleID    *string     `json:"bundle_id"`
 	Read        *ReadCounts `json:"read"`
 	// Findings are this stage's, each also in the document's own list.
@@ -606,10 +610,11 @@ type ShowArtifact struct {
 
 // ShowRecord is twin.json, when it is present and readable.
 type ShowRecord struct {
-	Branch     string `json:"branch"`
-	At         string `json:"at,omitempty"`
-	BundleID   string `json:"bundle_id"`
-	SchemaHash string `json:"schema_hash"`
+	Branch     string  `json:"branch"`
+	At         string  `json:"at,omitempty"`
+	SnapshotID *string `json:"snapshot_id"` // twin.json 9's (018); null for a 9 naming none and a record of 8 or earlier
+	BundleID   string  `json:"bundle_id"`
+	SchemaHash string  `json:"schema_hash"`
 	// Scope and Mapping are the record's provenance as twin.json 8 names it (017): the scope
 	// the read was made under and the mapping that read it, in place of the generics
 	// contract's version. Both are absent for a record of 7 or earlier, which names neither.
@@ -618,7 +623,7 @@ type ShowRecord struct {
 	// ObservedAt is null when no read took place, as in twin.json.
 	ObservedAt     *string `json:"observed_at"`
 	ObservedAtNote string  `json:"observed_at_note,omitempty"`
-	Source         string  `json:"source"`
+	Source         string  `json:"source"` // intent, bundle, or snapshot for a twin create --snapshot built (018)
 	Run            ShowRef `json:"run"`
 	WorkerVersion  string  `json:"worker_version"`
 	RecordedAt     string  `json:"recorded_at"`
@@ -815,6 +820,7 @@ type Document struct {
 	Operation       string          `json:"operation"`
 	Status          Status          `json:"status"`
 	Subject         *Subject        `json:"subject,omitempty"`
+	SnapshotID      string          `json:"snapshot_id,omitempty"` // 018: the snapshot taken, read or stepped to, beside the bundle
 	BundleID        string          `json:"bundle_id,omitempty"`
 	Verified        *Verified       `json:"verified,omitempty"`
 	Twin            *TwinBlock      `json:"twin,omitempty"`
@@ -1062,13 +1068,15 @@ type StepWaitFailing struct {
 	Message string `json:"message"`
 }
 
-// StepSideBlock is one side of a step: the stage, the bundle and the pinned at, verbatim,
-// and for the target the branch it resolved to.
+// StepSideBlock is one side of a step: the stage, the snapshot when the side names one
+// (018), the bundle and the pinned at, verbatim, and for the target the branch it resolved
+// to. A from side whose record names no snapshot, a record of 8, carries none.
 type StepSideBlock struct {
-	Stage    *ShowStage `json:"stage"`
-	BundleID string     `json:"bundle_id"`
-	At       string     `json:"at"`
-	Branch   string     `json:"branch,omitempty"`
+	Stage      *ShowStage `json:"stage"`
+	SnapshotID string     `json:"snapshot_id,omitempty"`
+	BundleID   string     `json:"bundle_id"`
+	At         string     `json:"at"`
+	Branch     string     `json:"branch,omitempty"`
 }
 
 // StepReconcileBlock is containerlab's plan (clab deploy --dry-run): the
@@ -1214,9 +1222,10 @@ func (b RehearsalBaseline) MarshalJSON() ([]byte, error) {
 
 // RehearsalStage is one stage of a rehearsal, in the proposed change's order: the plan's
 // stage, the role the rehearsal gave it and the verdict it came to, and what the run did at
-// it. Branch and At are set once the stage resolved; BundleID once it compiled, nil for a
-// stage refused. Role is refused (the branch point passed over), baseline, rehearsed or
-// not_reached; Verdict is refused, baseline, passed, failed, error or not_reached.
+// it. Branch and At are set once the stage resolved; SnapshotID (018) and BundleID once it
+// compiled, nil for a stage refused. Role is refused (the branch point passed over),
+// baseline, rehearsed or not_reached; Verdict is refused, baseline, passed, failed, error
+// or not_reached.
 type RehearsalStage struct {
 	Ref         string  `json:"ref"`
 	Label       string  `json:"label"`
@@ -1224,6 +1233,7 @@ type RehearsalStage struct {
 	AtSource    string  `json:"at_source"`
 	Branch      string  `json:"branch,omitempty"`
 	At          string  `json:"at,omitempty"`
+	SnapshotID  *string `json:"snapshot_id"`
 	BundleID    *string `json:"bundle_id"`
 	Role        string  `json:"role"`
 	Verdict     string  `json:"verdict"`

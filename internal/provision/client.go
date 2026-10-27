@@ -1776,7 +1776,7 @@ func StepDocument(subject *findings.Subject, in StepInput, res StepResult) *find
 // run carries it as it is; StepDocument adds the run's fields.
 func StepBlockOf(in StepInput, plan wire.ReconcilePlan) *findings.StepBlock {
 	side := func(s wire.StepSide) findings.StepSideBlock {
-		b := findings.StepSideBlock{BundleID: s.BundleID, At: s.At, Branch: s.Branch}
+		b := findings.StepSideBlock{SnapshotID: s.SnapshotID, BundleID: s.BundleID, At: s.At, Branch: s.Branch}
 		if st := s.Stage; st != nil {
 			b.Stage = &findings.ShowStage{ProposedChange: findings.StageChangeRef{ID: st.ProposedChange.ID,
 				Branch: st.ProposedChange.Branch}, Label: st.Label, Description: st.Description, AtSource: st.AtSource}

@@ -271,19 +271,86 @@ func validateM6Document(t *testing.T, doc *findings.Document) {
 }
 
 // validateM10Document validates a document against the newest findings contract, under the
-// module root's contracts/.
+// module root's contracts/. 018 is additive: a document that names no snapshot is 017's too,
+// so it is also validated against 017's frozen copy, the null snapshot ids taken out
+// (as017Contract).
 func validateM10Document(t *testing.T, doc *findings.Document) {
 	t.Helper()
 	validateWithShow(t, currentContract, "M13", doc)
+	if !namesSnapshot(t, doc) {
+		validateWithShow(t, contract017, "017", doc)
+	}
+}
+
+// contract017 is the feature argument that names 017's copies of the findings contract and
+// the four blocks 018 moves, frozen under testdata/contracts/017-dcim-reader/.
+const contract017 = "017-dcim-reader"
+
+// namesSnapshot says whether doc names a snapshot anywhere 018 puts one: such a document is
+// 018's, which no earlier contract accepts.
+func namesSnapshot(t *testing.T, doc *findings.Document) bool {
+	t.Helper()
+	b, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.Contains(string(b), `"snapshot_id":"`) || strings.Contains(string(b), `"snapshot":"`)
+}
+
+// dropNullSnapshots removes the snapshot ids 018 writes as null where a block names none:
+// the show record's, each plan stage's and each rehearsal stage's. Every contract before
+// 018's forbids the key, and from 018 each is always written. An id that is set is left, so
+// an earlier contract still refuses a document naming a snapshot.
+func dropNullSnapshots(generic map[string]any) {
+	dropNull := func(m any) {
+		if o, ok := m.(map[string]any); ok {
+			if v, ok := o["snapshot_id"]; ok && v == nil {
+				delete(o, "snapshot_id")
+			}
+		}
+	}
+	if show, ok := generic["show"].(map[string]any); ok {
+		dropNull(show["record"])
+	}
+	for _, block := range []string{"plan", "rehearsal"} {
+		if b, ok := generic[block].(map[string]any); ok {
+			stages, _ := b["stages"].([]any)
+			for _, st := range stages {
+				dropNull(st)
+			}
+		}
+	}
+}
+
+// as017Contract is doc as 017's contract reads it, marshalled: the null snapshot ids taken
+// out, and nothing else.
+func as017Contract(t *testing.T, doc *findings.Document) []byte {
+	t.Helper()
+	b, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var generic map[string]any
+	if err := json.Unmarshal(b, &generic); err != nil {
+		t.Fatal(err)
+	}
+	dropNullSnapshots(generic)
+	if b, err = json.Marshal(generic); err != nil {
+		t.Fatal(err)
+	}
+	return b
 }
 
 // validateWithShow validates doc against feature's findings contract, with the
-// blocks' schemas added under their $ids.
+// blocks' schemas added under their $ids; 017's reads it as as017Contract gives it.
 func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Document) {
 	t.Helper()
 	b, err := json.Marshal(doc)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if feature == contract017 {
+		b = as017Contract(t, doc)
 	}
 	v, err := jsonschema.UnmarshalJSON(bytes.NewReader(b))
 	if err != nil {
@@ -320,8 +387,8 @@ func findingsContract(t *testing.T, feature string) *jsonschema.Schema {
 	if schema, ok := findingsContracts.byFeature[feature]; ok {
 		return schema
 	}
-	load := func(name string) any {
-		f, err := os.Open(contractPath(feature, name))
+	load := func(path string) any {
+		f, err := os.Open(path)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -332,18 +399,29 @@ func findingsContract(t *testing.T, feature string) *jsonschema.Schema {
 		}
 		return v
 	}
+	refers, err := os.ReadFile(contractPath(feature, "findings.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	c := jsonschema.NewCompiler()
-	if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/show.schema.json", load("show.schema.json")); err != nil {
+	if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/show.schema.json", load(contractPath(feature, "show.schema.json"))); err != nil {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
-		if _, err := os.Stat(contractPath(feature, name)); err == nil {
-			if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/"+name, load(name)); err != nil {
-				t.Fatal(err)
+		path := contractPath(feature, name)
+		if _, err := os.Stat(path); err != nil {
+			// A block the feature's contract refers to but its directory does not hold had not
+			// moved since the feature: 017's verify.schema.json, which 018 does not move.
+			if feature == currentContract || !strings.Contains(string(refers), "/schemas/"+name) {
+				continue
 			}
+			path = contractPath(currentContract, name)
+		}
+		if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/"+name, load(path)); err != nil {
+			t.Fatal(err)
 		}
 	}
-	if err := c.AddResource("findings.schema.json", load("findings.schema.json")); err != nil {
+	if err := c.AddResource("findings.schema.json", load(contractPath(feature, "findings.schema.json"))); err != nil {
 		t.Fatal(err)
 	}
 	schema, err := c.Compile("findings.schema.json")

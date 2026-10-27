@@ -1,0 +1,206 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/schemas/rehearsal.schema.json",
+  "title": "fylgja twin rehearse — the rehearsal block (015)",
+  "description": "The `rehearsal` block of the findings document fylgja twin rehearse emits (operation twin.rehearse): the proposed change rehearsed, when its stages were resolved, the deadline and the time used, whether a dead rehearsal's twin was reclaimed, the run, the baseline's findings, one entry per stage in order with its reference, its bundle or its refusal, its role, the step into it, its wait, its verify's counts, the findings new against the baseline and its verdict, the destroy's outcome, and, when a stage failed, the commands that reproduce it. Every list is sorted or in the stages' order, so the same run gives the same document. No configuration line, device diff, artifact or bootstrap content, token or login (Constitution X). The markdown rendering is not in the block: it rides beside the document in its frame (contracts/api.md, 015). The run's own warnings (rehearsal.twin.reclaimed, rehearsal.stage.moved, rehearsal.change.closed) ride in the document's findings beside the block; each stage's ride in its findings.",
+  "$defs": {
+    "ref": {
+      "type": "string",
+      "pattern": "^[^/\\s]+/[^/\\s]+$",
+      "description": "<branch>/<label>, as stages.schema.json names a stage"
+    },
+    "run": {
+      "type": "object",
+      "required": ["workflow_id", "run_id"],
+      "additionalProperties": false,
+      "properties": {
+        "workflow_id": { "enum": ["fylgja-rehearse", "fylgja-provision", "fylgja-step", "fylgja-destroy"] },
+        "run_id": { "type": "string", "minLength": 1 }
+      }
+    },
+    "finding_ref": {
+      "type": "object",
+      "description": "one finding by identifier, object and message, as the record keeps a step's: the baseline's findings and a stage's new ones",
+      "required": ["rule", "object", "message"],
+      "additionalProperties": false,
+      "properties": {
+        "rule": { "type": "string", "pattern": "^[a-z]+(\\.[a-z_]+)+$" },
+        "object": { "type": "string" },
+        "message": { "type": "string" }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "description": "what a destroy did, as findings.schema.json's cleanup block says it",
+      "required": ["teardown", "unstage", "remaining"],
+      "additionalProperties": false,
+      "properties": {
+        "teardown": { "enum": ["done", "nothing", "failed", "skipped"] },
+        "unstage": { "enum": ["done", "nothing", "failed", "skipped"] },
+        "removed": { "type": "array", "items": { "type": "string" } },
+        "remaining": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "count": {
+      "type": "object",
+      "required": ["held", "failed"],
+      "additionalProperties": false,
+      "properties": {
+        "held": { "type": "integer", "minimum": 0 },
+        "failed": { "type": "integer", "minimum": 0, "description": "failed and absent together" },
+        "skipped": { "type": "integer", "minimum": 0 },
+        "unread": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "provision": {
+      "type": "object",
+      "description": "the baseline's provision child, as it ended",
+      "required": ["outcome", "run"],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": { "enum": ["ready", "rejected", "failed", "cancelled", "error"] },
+        "run": { "$ref": "#/$defs/run" },
+        "step": { "type": "string", "description": "the step the run stopped at, when it did not end ready" },
+        "cleanup": { "$ref": "#/$defs/cleanup" }
+      }
+    },
+    "step": {
+      "type": "object",
+      "description": "the step child into a rehearsed stage, as it ended: its outcome, the phase a diverged one stopped at, the nodes containerlab restarted, recreated or created, each push's outcome, and the timings (step.schema.json's shapes)",
+      "required": ["outcome", "run", "restarted", "recreated", "created", "pushed", "timings"],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": { "enum": ["stepped", "unchanged", "diverged", "rejected", "error", "cancelled"] },
+        "run": { "$ref": "#/$defs/run" },
+        "phase": { "enum": ["reconcile", "readiness", "push", "record"] },
+        "restarted": { "type": "array", "items": { "type": "string" } },
+        "recreated": { "type": "array", "items": { "type": "string" } },
+        "created": { "type": "array", "items": { "type": "string" } },
+        "pushed": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["node", "outcome"],
+            "additionalProperties": false,
+            "properties": {
+              "node": { "type": "string" },
+              "outcome": { "enum": ["landed", "refused", "failed", "not_attempted"] },
+              "rule": { "type": "string" },
+              "took_s": { "type": "number", "minimum": 0 }
+            }
+          }
+        },
+        "timings": { "$ref": "https://github.com/happypathnetworking/fylgja/schemas/step.schema.json#/$defs/timings" }
+      }
+    },
+    "wait": {
+      "type": "object",
+      "description": "the baseline's wait (verify's waiting form after the record) or a rehearsed stage's (the step's own); a stage's wait is null when the wait did not run",
+      "required": ["outcome", "budget_s", "reads", "after_s"],
+      "additionalProperties": false,
+      "properties": {
+        "outcome": { "enum": ["settled", "expired", "cancelled", "incomplete"] },
+        "budget_s": { "type": "integer", "minimum": 0 },
+        "reads": { "type": "integer", "minimum": 0 },
+        "after_s": { "type": "number", "minimum": 0 }
+      }
+    },
+    "stage": {
+      "type": "object",
+      "description": "one stage of the rehearsal, in the proposed change's order: the plan's stage, its role and its verdict, and what the run did at it",
+      "required": ["ref", "label", "description", "at_source", "bundle_id", "role", "verdict", "findings", "provision", "step", "wait", "verify", "new_findings", "took_s"],
+      "additionalProperties": false,
+      "properties": {
+        "ref": { "$ref": "#/$defs/ref" },
+        "label": { "type": "string", "pattern": "^[^/\\s]+$" },
+        "description": { "type": "string" },
+        "at_source": { "enum": ["given", "written", "branch_point", "head"] },
+        "branch": { "type": "string", "description": "once resolved" },
+        "at": { "type": "string", "description": "once resolved, verbatim" },
+        "bundle_id": { "type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "null when the stage was refused" },
+        "role": {
+          "enum": ["refused", "baseline", "rehearsed", "not_reached"],
+          "description": "refused: a stage the plan refused: a branch point refused scope.empty (contract.node.missing before 017), passed over (FR-003), or in a refused rehearsal's block every stage whose refusal refused it. baseline: the first compiled stage, created and verified. rehearsed: stepped to and verified. not_reached: after a stage that was not passed, the baseline of a run that touched nothing because another run held its provision's id, and every stage but a refused one of a run whose end was not read"
+        },
+        "verdict": {
+          "enum": ["refused", "baseline", "passed", "failed", "error", "not_reached"],
+          "description": "passed: the step ended stepped or unchanged and the wait's failing assertions are all among the baseline's, by rule and object. failed: the step diverged, or a finding the baseline did not have. error: the step could not run, was rejected by its locks or cancelled before its stage, its wait was incomplete, or the deadline or an interrupt cut the stage. The document's status follows the verdicts (contracts/rehearse-command.md)"
+        },
+        "findings": {
+          "type": "array",
+          "items": { "type": "object" },
+          "description": "this stage's findings, each also in the document's own list: the plan's at resolve, read and compile, the child's, the wait's as warnings"
+        },
+        "provision": { "oneOf": [{ "$ref": "#/$defs/provision" }, { "type": "null" }], "description": "the baseline's child; null on every other stage" },
+        "step": { "oneOf": [{ "$ref": "#/$defs/step" }, { "type": "null" }], "description": "the step child into a rehearsed stage; null on the baseline, a refused stage and one not reached" },
+        "wait": { "oneOf": [{ "$ref": "#/$defs/wait" }, { "type": "null" }] },
+        "verify": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["host_name", "port_enabled", "neighbor", "record"],
+              "additionalProperties": false,
+              "properties": {
+                "host_name": { "$ref": "#/$defs/count" },
+                "port_enabled": { "$ref": "#/$defs/count" },
+                "neighbor": { "$ref": "#/$defs/count" },
+                "record": { "$ref": "#/$defs/count" }
+              }
+            },
+            { "type": "null" }
+          ],
+          "description": "the counts of the wait's last read; null when no read was made"
+        },
+        "new_findings": { "type": "array", "items": { "$ref": "#/$defs/finding_ref" }, "description": "the wait's failing assertions the baseline's wait did not have, sorted by rule then object; [] otherwise" },
+        "took_s": { "type": "number", "minimum": 0, "description": "the stage's whole time on the run's clock: its child and its wait; 0 for a stage not reached or refused" }
+      }
+    },
+    "rehearsal": {
+      "type": "object",
+      "required": ["proposed_change", "resolved_at", "deadline_s", "ceiling_s", "used_s", "reclaimed", "baseline", "stages", "destroy", "reproduce"],
+      "additionalProperties": false,
+      "properties": {
+        "proposed_change": { "$ref": "https://github.com/happypathnetworking/fylgja/schemas/stages.schema.json#/$defs/proposed_change" },
+        "resolved_at": { "type": "string", "description": "RFC 3339 UTC: when the server resolved and read the stages, the plan's first read; what the report and the comment are headed by" },
+        "deadline_s": { "type": "integer", "minimum": 0, "description": "the stages' summed budgets (data-model.md §4)" },
+        "ceiling_s": { "type": "integer", "minimum": 0, "description": "Fylgja's ceiling, a mechanism constant" },
+        "used_s": { "type": "number", "minimum": 0, "description": "the run's whole time on its clock; 0 when refused before any run, and when the run was started and its end was not read" },
+        "reclaimed": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["run", "cleanup"],
+              "additionalProperties": false,
+              "properties": { "run": { "$ref": "#/$defs/run" }, "cleanup": { "$ref": "#/$defs/cleanup" } },
+              "description": "the dead rehearsal whose twin was destroyed before this one started, and what its destroy did"
+            },
+            { "type": "null" }
+          ]
+        },
+        "run": { "$ref": "#/$defs/run", "description": "the fylgja-rehearse run, once started; absent when refused before any run" },
+        "baseline": {
+          "oneOf": [
+            {
+              "type": "object",
+              "required": ["ref", "findings"],
+              "additionalProperties": false,
+              "properties": {
+                "ref": { "$ref": "#/$defs/ref" },
+                "findings": { "type": "array", "items": { "$ref": "#/$defs/finding_ref" }, "description": "the baseline findings: the baseline's wait's failing assertions, which fail nothing" }
+              }
+            },
+            { "type": "null" }
+          ],
+          "description": "set once the baseline's verdict is baseline, its wait settled or expired; null when no stage compiled, the baseline was not built, the baseline was built and its wait did not settle or expire (its verdict error, its wait's failing assertions in the stage's findings alone), or the run was started and its end was not read"
+        },
+        "stages": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/stage" } },
+        "destroy": { "oneOf": [{ "$ref": "#/$defs/cleanup" }, { "type": "null" }], "description": "the destroy child's cleanup; null when the rehearsal was refused before any run, when its run was refused at its baseline's start, another run holding the provision's id, and touched nothing, and when the run was started and its end was not read, run then set" },
+        "reproduce": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "when a stage failed: the commands that reproduce it by hand on the same stages, in order (twin create --stage … --scope naming the scope every stage was read under, always, since the reproducing server may hold another default (017), twin step --stage … --allow-restart per stage to the failed one, twin verify, twin destroy), a rehearsed stage at the branch and at of the last stage a command named having no step of its own, since twin step would refuse it step.target.current, and the verify twin verify --wait when no step precedes it, since twin create waits for no settle; [] otherwise"
+        }
+      }
+    }
+  }
+}

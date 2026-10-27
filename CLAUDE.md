@@ -495,19 +495,25 @@ Rewritten whole at each release's close, never appended to.
   outside Fylgja (015's research §5.2). What they explore toward is the roadmap's
   [production shape](docs/roadmap.md#the-production-shape), a direction and not a
   decision. F-012 and F-022 left the release.
-  - **017** (`017-dcim-reader`, F-011, 2026-10-26): the Infrahub reader reads the schema
+  - **017** (`017-dcim-reader`, F-011, closed 2026-10-27): the Infrahub reader reads the schema
     library's DCIM at `26336e9` by one documented mapping, in place of the generics and
     the reference schema ([D-057](docs/decisions.md#d-057); Constitution 2.0.0, then
     2.1.0 with [D-060](docs/decisions.md#d-060)); a request's scope, `tag:<name>`, and the
     server's `FYLGJA_DEFAULT_SCOPE`; `platform.matches` in PSP `0.7`; CTM `2`, bundle `5`,
     `twin.json` `8`; the contract version retired; a stamp Infrahub's own account wrote
     read as its node's creation ([D-058](docs/decisions.md#d-058)); `main` migrated
-    (`7c413536…`) and both fixtures re-seeded. Tiers 2 and 3 green on 2026-10-26 (above).
-    `infrahubctl schema format` is never run on the vendored files (017 research R-22).
+    (`7c413536…`) and both fixtures re-seeded. Built by the attended converge loop,
+    T001–T121, its seven convergence passes all built, the last still finding work, so it
+    stopped at its cap. Tiers 2 and 3 green on 2026-10-26 (above), before the convergence
+    passes; their changes since are covered by tier 1 and by CI, whose run `40501281477` is
+    green whole, tier 2 included, on `origin`'s `main` at `7ddd157` (2026-10-27). Reviewed by
+    the operator. `infrahubctl schema format` is never run on the vendored files (017
+    research R-22).
 - **Next**: F-024 snapshots, Release 0.3's second spec.
-- **Open, the operator's**: 017's second push of `origin`'s `main` once the branch is
-  merged, its contract job read green (its T057); 017's review, commits and command log
-  (its T074); file 014's upstream request for named points in time
+- **Open, the operator's**: 017's command log (`make command-log`, once its attended
+  session is closed); import `origin`'s `main` into the registration `fylgja` (still at
+  `c006bf9`), since `3c81b8b` changed the three checks after that import and Infrahub runs
+  them as imported until then; file 014's upstream request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left
   padding) and a zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read

@@ -12,7 +12,7 @@ Read in this order, then the current feature under `specs/`:
 `docs/archive/`) · `docs/development.md` (conventions).
 Terms are in `docs/glossary.md`. What has been verified about a dependency is in
 `docs/verified-facts.md`, read when a task touches that dependency. The constitution at
-`.specify/memory/constitution.md` (2.1.0) binds every plan's Constitution Check. The schema
+`.specify/memory/constitution.md` (2.2.0) binds every plan's Constitution Check. The schema
 Fylgja reads is the OpsMill schema library's DCIM at a pinned commit, by one documented
 mapping ([D-057](docs/decisions.md#d-057)); `schema/README.md` says which kinds and fields.
 
@@ -178,7 +178,9 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   Its schema hash is `main`'s, `7c413536…`, since a branch sees `main`'s schema as it was
   at the branch's creation; it is never rebased, only deleted and re-seeded. It has no
   proposed change. It compiles to **`f764e1fa…`** on this install (`47b2c449…` in the
-  generics' kinds before 017); its CTM equals `testdata/ctm/three-node.json` in
+  generics' kinds before 017), and its snapshot id is **`576933ec…`**
+  (`576933ec51da1866cdb7344a1f60ec2468c7d04aafbee42eacd171e352bd7482`, the same for every
+  read while the branch stands); its CTM equals `testdata/ctm/three-node.json` in
   everything but the envelope. It is written by its seed (`make infrahub-seed`, which the bring-up
   script runs when the branch is absent) and by no test. Contract tests make their own
   throwaway `fylgja-test-*` branches, with their draft proposed changes and stages, and
@@ -221,8 +223,9 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   `/run/srlinux/** rw,` and `/run/syslogd.pid* rw,`, which the bring-up script's lab part
   writes and reloads with `apparmor_parser -r`. The kernel log's `net_admin` denials of
   SR Linux's `rsyslogd` are harmless: every deploy passes.
-- **Go**: Ubuntu 26.04's `golang-go` is go1.26.0, the release `go.mod` names, so nothing
-  is fetched. The module is `github.com/happypathnetworking/fylgja`.
+- **Go**: Ubuntu 26.04's `golang-go`, go1.26.8 since an update (`golang-1.26-go
+  1.26.8-1~ubuntu0.26.04.2`; go1.26.0 at the launch); `go.mod` names `go 1.26.0`, so
+  nothing is fetched. The module is `github.com/happypathnetworking/fylgja`.
 - **golangci-lint 2.14.0** (`/usr/local/bin`; the v2 line — `.golangci.yml` declares
   `version: "2"`, which v1 rejects). **ShellCheck 0.11.0**, 26.04's package: CI's lint job
   runs it over `scripts/bring-up.sh` and `scripts/e2e.sh`.
@@ -283,8 +286,9 @@ Then verify it: `/proc/<pid>/exe` is not `(deleted)`; its environment carries
 `FYLGJA_DEFAULT_SCOPE`; and its report (`local/server.log`) says `listening on
 127.0.0.1:7650 (API version 1, build …)`, then `listening on 172.17.0.1:7650 (…)` (the
 bridge's address) followed straight away by `172.17.0.1:7650 is not a loopback address:
-the API's token is sent unencrypted on it`, says `default scope: tag:fylgja` after the
-state root, and names both packages with their logins set. From inside each Infrahub task worker, a
+the API's token is sent unencrypted on it`, names `bundles:`, `snapshots:` and `twin:` in
+its state root line (the worker's names the same), says `default scope: tag:fylgja` after
+the state root, and names both packages with their logins set. From inside each Infrahub task worker, a
 `POST` to `http://$FYLGJA_API_ADDRESS/v1/twin/show` with the container's token answers
 `200` with this build, and `401` without it
 (`specs/015-proposed-change-rehearsal/quickstart.md` §2). **Find both with `pgrep -x fylgja`**
@@ -303,10 +307,14 @@ built from this tree.
 **Formats**: bundle `5` (a bundle of another format is refused), CTM `2` (its version is
 the contract's: contract `0.2` is retired, [D-057](docs/decisions.md#d-057)), PSP `0.7`
 (each package's `platform.matches`, matched exactly; both shipped packages on `mode:
-replace`), `twin.json` `8`, findings `1`, the API `1` (`contracts/api.md`, the version in
-every path; `scope` an optional argument). The three goldens are three-node
-**`43d91715…`**, lossy **`4213b3cf…`** and mixed **`ecb665f5…`**, and the live fixture
-compiles to `f764e1fa…` on this install. The current contracts are in `contracts/`; a test of an
+replace`), snapshot `1` (CTM `2` wrapped, its id the hash of the body without the read's
+`observed_at`, filed under `snapshots/`, [D-061](docs/decisions.md#d-061)), `twin.json`
+`9`, findings `1`, the API `1` (`contracts/api.md`, the version in every path; `scope` an
+optional argument; `snapshot` on `twin.create` and `twin.compile`). `twin compile --ctm`
+and the bundle's CTM sidecar are retired. The three goldens are three-node
+**`43d91715…`**, lossy **`4213b3cf…`** and mixed **`ecb665f5…`**, their wrapped fixtures
+under `testdata/snapshot/` compiling to each, and the live fixture compiles to `f764e1fa…`
+on this install, from snapshot `576933ec…`. The current contracts are in `contracts/`; a test of an
 older format reads a frozen copy under its package's `testdata/contracts/`.
 
 ## Verified facts a session acts on (trust these over recollection)
@@ -403,14 +411,15 @@ what CI's contract job runs; a second run installs nothing; it asks for sudo, so
 the operator's) · `make build` → `bin/fylgja` (CGO disabled; must stay static; `make
 build VERSION=…` stamps `--version`) · `make test` (tier 1, no infrastructure; under 45s
 wall uncached, raised from 35s on 2026-10-17 when 014's close measured 35.3–38.7s under a
-load average of 2–5, `internal/cli` about 26s of it; CI's unit job on every push and pull request, beside its lint job, which
+load average of 2–5, `internal/cli` about 26s of it; 40.6s on 2026-10-27 at a load of
+1.5–2.6, `internal/cli` 36.2s of it, since 018's tests; CI's unit job on every push and pull request, beside its lint job, which
 runs golangci-lint and `shellcheck scripts/bring-up.sh scripts/e2e.sh`) · `make
 test-contract` (tier 2, real
 Infrahub, never cached; needs `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN`; CI's contract
 job on every push to `main`, against an Infrahub the script brings up on the runner, with
-no secret; about 29 minutes (1,714.7 s on 2026-10-26, beside the imported checks),
-`internal/stages` the longest package at 1,422.1 s, under the `-timeout 30m` it sets, then
-`internal/checks` alone in a second `go test` (278.8 s), whose `TestChecksInsideInfrahub`
+no secret; about 30 minutes (1,814.4 s on 2026-10-27, 1,714.7 s on 2026-10-26, beside the
+imported checks), `internal/stages` the longest package at 1,514.6 s, under the `-timeout
+30m` it sets, then `internal/checks` alone in a second `go test` (291.7 s), whose `TestChecksInsideInfrahub`
 runs the tree's checks inside Infrahub's pipeline under a registration of its own, needs
 the server on the bridge from this tree here, and skips, saying why, where the task workers
 reach none, as in CI) · `make lint` (runs with build
@@ -433,10 +442,10 @@ proposed change rehearsed twice by `fylgja-twin` inside Infrahub, through the op
 server on the bridge; needs the dev
 server and a worker running from the repository root, Docker, containerlab, **both**
 images and Infrahub, and for case 9 the server on the bridge from this tree and both
-checks imported on `main`, each checked before any case; about 29.5 minutes (1,769.0 s on
-2026-10-26); `WORKER_LOG=<file>`
+checks imported on `main`, each checked before any case; about 29.5 minutes (1,758.0 s on
+2026-10-27, 1,769.0 s on 2026-10-26); `WORKER_LOG=<file>`
 adds the worker's log to its credential greps; `PLATFORMS=nokia_srlinux` narrows it to
-the seven cases SR Linux alone runs, about 19 minutes, ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
+the seven cases SR Linux alone runs, about 19 minutes (1,156.1 s on 2026-10-27), ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
 never `E2E-OK`; never in CI). A command that runs longer than one tool call (tier 3)
 starts detached with its exit status in a file, and is waited on in foreground calls of
 under ten minutes.
@@ -492,9 +501,10 @@ Rewritten whole at each release's close, never appended to.
     API or findings version moved; the schemas' `$id` prefix did
     ([D-055](docs/decisions.md#d-055)).
 - **Release 0.3**, set on 2026-10-25 as exploratory coding toward the production
-  refactor ([roadmap](docs/roadmap.md#release-03)), four specs in order: F-011, F-024
-  snapshots, F-014 probes (`016-probes`, its [brief](specs/016-probes/brief.md) re-read
-  against 017's close), F-025 the NetBox reader; and the follow of a rehearsal terminated
+  refactor ([roadmap](docs/roadmap.md#release-03)), five specs in order: F-011, F-024
+  snapshots, F-026 following removed from the core, F-014 probes (`016-probes`, its
+  [brief](specs/016-probes/brief.md) re-read against 017's and 018's close), F-025 the
+  NetBox reader; and the follow of a rehearsal terminated
   outside Fylgja (015's research §5.2). What they explore toward is the roadmap's
   [production shape](docs/roadmap.md#the-production-shape), a direction and not a
   decision. F-012 and F-022 left the release.
@@ -512,9 +522,28 @@ Rewritten whole at each release's close, never appended to.
     green whole, tier 2 included, on `origin`'s `main` at `7ddd157` (2026-10-27). Reviewed by
     the operator. `infrahubctl schema format` is never run on the vendored files (017
     research R-22).
-- **Next**: F-024 snapshots, Release 0.3's second spec.
-- **Open, the operator's**: 017's command log (`make command-log`, once its attended
-  session is closed); file 014's upstream request for named points in time
+  - **018** (`018-snapshots`, F-024, closed 2026-10-27): the snapshot, the core's one
+    input ([D-061](docs/decisions.md#d-061); Constitution 2.2.0): CTM `2` wrapped
+    unchanged in a document of version `1` with an empty probe list, its id the hash of
+    the body without the read's `observed_at`, filed under the state root's `snapshots/`
+    by a store that never overwrites. The server takes and files one for every create,
+    dry run, plan, step, rehearsal and `intent read --out`, and starts every workflow but
+    the reconcile already compiled, with a snapshot id and a bundle id; `twin create
+    --snapshot <id|file>` builds one with no read, frozen or pinned by its envelope;
+    `twin compile --snapshot` in place of the retired `--ctm`; `twin.json` `9` and five
+    documents name the snapshot, a rebuild's none; the bundle's CTM sidecar retired;
+    bundle `5` and the goldens unmoved, and the three fixtures wrapped under
+    `testdata/snapshot/`; the fixture's snapshot `576933ec…`; sixteen contracts frozen
+    under `017-dcim-reader/` (49 copies). Built by the converge loop, T001–T063, the
+    operator's T002–T005 at `analyze` among them. Tier 2
+    green on 2026-10-27 in 1,814.4 s but for `internal/cli`, whose contract tests read
+    the tier-1 harness's placeholder Infrahub; fixed (`1c0f97c`) and green alone in
+    66.9 s. Tier 3 `E2E-OK` in 1,758.0 s on its second attempt, the first lost to an SR
+    Linux `sr_cli` segfault under load, and `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in
+    1,156.1 s. The operator's review is T064's.
+- **Next**: F-026 following removed from the core, Release 0.3's third spec.
+- **Open, the operator's**: 017's and 018's command logs (`make command-log`, once each
+  session is closed); 018's review (T064); file 014's upstream request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left
   padding) and a zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read

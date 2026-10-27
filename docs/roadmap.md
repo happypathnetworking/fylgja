@@ -58,14 +58,15 @@ cut along, in five specs, in this order:
    ([brief](../specs/017-dcim-reader/brief.md)): the reader seam against the model OpsMill
    publishes. **Built** on 2026-10-26, under [D-057](decisions.md#d-057) to
    [D-060](decisions.md#d-060) and Constitution 2.1.0.
-2. **[F-024](#f-024)**, snapshots, **the next spec**, as `018-snapshots`
+2. **[F-024](#f-024)**, snapshots, as `018-snapshots`
    ([brief](../specs/018-snapshots/brief.md), written 2026-10-27): the CTM wrapped in one
    content-addressed document with a slot for the probe declarations, the core's one
    input, which the Infrahub reader produces and the server takes: the core and
-   orchestrator seam itself.
-3. **[F-026](#f-026)**, following removed from the core: a twin is frozen at its snapshot
-   and nothing rebuilds it but the operator; added on 2026-10-27 so that probes are
-   specified against a twin that cannot rebuild itself.
+   orchestrator seam itself. **Built** on 2026-10-27, under [D-061](decisions.md#d-061)
+   and Constitution 2.2.0.
+3. **[F-026](#f-026)**, following removed from the core, **the next spec**: a twin is
+   frozen at its snapshot and nothing rebuilds it but the operator; added on 2026-10-27
+   so that probes are specified against a twin that cannot rebuild itself.
 4. **[F-014](#f-014)**, probes, `ping` only, as `016-probes`
    ([brief](../specs/016-probes/brief.md), re-read against 017's and 018's close): a node
    declared outside intent, the explicit-instruction input to the core.
@@ -145,8 +146,8 @@ first six are built ([the archive](archive/v0.1-built.md)), F-009 is removed,
 [F-025](#f-025). [F-024](#f-024) and [F-025](#f-025) were added on 2026-10-25 and take
 the next free numbers; [F-026](#f-026) was added on 2026-10-27 and takes the next.
 
-[F-011](#f-011), the one feature with a brief and a probe behind its estimate, is built,
-as `017-dcim-reader`; none of the rest has a decision entry. [F-011](#f-011), [F-013](#f-013), [F-014](#f-014), [F-015](#f-015),
+[F-011](#f-011) and [F-024](#f-024) are built, as `017-dcim-reader` and `018-snapshots`;
+none of the rest has a decision entry. [F-011](#f-011), [F-013](#f-013), [F-014](#f-014), [F-015](#f-015),
 [F-017](#f-017) to [F-021](#f-021), [F-024](#f-024), [F-025](#f-025) and [F-026](#f-026)
 are each one spec, with one contract boundary and one new kind of infrastructure. [F-012](#f-012) and
 [F-016](#f-016) are chores or records, with no spec.
@@ -155,7 +156,7 @@ are each one spec, with one contract boundary and one new kind of infrastructure
 |---|---|---|---|---|---|
 | F-010 | *Generic transform*, folded into [F-011](#f-011) | the shipped template queried `FylgjaDevice`, so a DCIM device rendered through it; what was left, the template documented as a reference transform, is a paragraph in [F-011](#f-011)'s README | — | — | Overtaken: Infrahub rendered from the generics already, and renders from the library's kinds since [F-011](#f-011). |
 | F-011 | **The Infrahub reader reads the schema library's DCIM** | the generics retired and the CTM the contract; the library vendored at a pinned commit and loaded on `main`; the reader's mapping documented and its approximations in the manifest; packages matching platforms by name; the fixtures re-seeded in the library's kinds | nothing new | 6–10 | The strongest OpsMill signal, and the first reader written as an adapter. Probed live on 2026-10-16; its [brief](../specs/017-dcim-reader/brief.md) written 2026-10-25. Opens 0.3. Built as `017-dcim-reader` on 2026-10-26. |
-| F-024 | **Snapshots** | the CTM, which carries each node's configuration, wrapped in one content-addressed document with a slot for the probe declarations; the core's one input, taken by the server and stored beside the bundles; `twin create` and `twin compile` from one | [F-011](#f-011) | 3–5 | The core and orchestrator seam, proved before anything is split. Its [brief](../specs/018-snapshots/brief.md) written 2026-10-27. |
+| F-024 | **Snapshots** | the CTM, which carries each node's configuration, wrapped in one content-addressed document with a slot for the probe declarations; the core's one input, taken by the server and stored beside the bundles; `twin create` and `twin compile` from one | [F-011](#f-011) | 3–5 | The core and orchestrator seam, proved before anything is split. Its [brief](../specs/018-snapshots/brief.md) written 2026-10-27. Built as `018-snapshots` on 2026-10-27. |
 | F-026 | **Following removed from the core** | D-012's following, D-026 and D-027 superseded; the reconcile workflow, its Schedule, `--interval` and `--no-follow` gone; a twin frozen at its snapshot; `twin step --snapshot` | [F-024](#f-024) | 3–5 | A snapshot-fed core does not read a branch on a timer; the production shape's orchestrator may bring following back as take, compare, rebuild. Added 2026-10-27. |
 | F-022 | *`infrahub-sync` into the DCIM*, superseded by [F-025](#f-025) | a sync mapping from NetBox onto [F-011](#f-011)'s schema | — | — | The operator wants NetBox read directly, not synced into Infrahub. |
 | F-025 | **The NetBox reader** | NetBox with its branching plugin on the development host; a reader producing snapshots from a branch, with `render-config` as the configuration; a stage taken as a snapshot; a twin of a NetBox branch | [F-024](#f-024), a NetBox instance | 8–12 | The reader seam against a second source of truth, and the first that cannot replay time. |
@@ -251,7 +252,13 @@ a sentence saying what addresses intent when the source of truth cannot replay t
 snapshot's id. This is the core and orchestrator seam of the production shape, proved
 before anything is split, and the feature that lets [F-025](#f-025) exist. Small, since
 the pieces are all in the tree. Following is untouched by it and removed by
-[F-026](#f-026).
+[F-026](#f-026). **Built** on 2026-10-27 as `018-snapshots`, under
+[D-061](decisions.md#d-061), with Constitution 2.2.0: every create, plan, step, rehearsal
+and `intent read --out` takes and files its snapshot on the server, and every workflow but
+the reconcile starts with a snapshot id and a bundle id; `twin.json` `9` and five
+documents name the snapshot; the sidecar and `twin compile --ctm` are retired; bundle
+`5` and the three goldens did not move. The fixture branch's snapshot is `576933ec…`, and
+both tiers passed on the development host.
 
 <a id="f-026"></a>
 **F-026. Following removed from the core.** Added on 2026-10-27, the third spec of
@@ -495,7 +502,7 @@ show beyond a status line. It is a second client of the same API.
   every stage resolving to one, the bundle's CTM sidecar retired by its store; and
   Constitution VI amended, a minor bump, with its sentence on what addresses intent when
   the source of truth cannot replay time. Its [brief](../specs/018-snapshots/brief.md)
-  settles the shape.
+  settles the shape. Taken as [D-061](decisions.md#d-061), with Constitution 2.2.0.
 - At [F-026](#f-026): [D-012](decisions.md#d-012) superseded in its following, and
   [D-026](decisions.md#d-026) and [D-027](decisions.md#d-027) whole; following leaves the
   core and the orchestrator may bring it back.

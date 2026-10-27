@@ -121,7 +121,8 @@ func mustQuoteNoContent(t *testing.T, f *fakeInfrahub, outputs ...string) {
 
 var bundleIDRE = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
-// storedBundles is the ids the store holds, each with its CTM beside it.
+// storedBundles is the ids the store holds, none with a CTM beside it: the sidecar is
+// retired (018).
 func storedBundles(t *testing.T, bundles string) []string {
 	t.Helper()
 	entries, err := os.ReadDir(bundles)
@@ -135,8 +136,8 @@ func storedBundles(t *testing.T, bundles string) []string {
 	for _, e := range entries {
 		if e.IsDir() && bundleIDRE.MatchString(e.Name()) {
 			ids = append(ids, e.Name())
-			if _, err := os.Stat(bundles + "/" + e.Name() + ".ctm.json"); err != nil {
-				t.Errorf("bundle %s is filed with no CTM beside it: %v", e.Name(), err)
+			if _, err := os.Stat(bundles + "/" + e.Name() + ".ctm.json"); !os.IsNotExist(err) {
+				t.Errorf("bundle %s is filed with a CTM beside it (%v); the sidecar is retired", e.Name(), err)
 			}
 		}
 	}

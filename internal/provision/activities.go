@@ -204,9 +204,11 @@ func (c *ControlActivities) ReadIntent(ctx context.Context, in ReadIntentInput) 
 }
 
 // Compile compiles the read's CTM through the pipeline `twin compile` runs, files the
-// bundle in the store under its identity (reused, never duplicated) with the CTM
-// beside it, and returns the stored copy's absolute path, which is what crosses the queue.
-// A corrupt store entry blocking the filing is bundle.id.mismatch, a rejection.
+// bundle in the store under its identity (reused, never duplicated), and returns the
+// stored copy's absolute path, which is what crosses the queue. It files no CTM beside the
+// bundle: the sidecar is retired (018), and the reconcile, the one run that still reads,
+// takes no snapshot. A corrupt store entry blocking the filing is bundle.id.mismatch, a
+// rejection.
 //
 // The read's transient copy under bundles/.reads/ is removed on every exit once it has
 // been read: each exit ends the run — a filing, a rejection, or a failure
@@ -255,11 +257,8 @@ func (c *ControlActivities) Compile(ctx context.Context, in CompileInput) (res C
 			fmt.Errorf("the written bundle hashes to %s, but compiled to %s", stored, id))
 	}
 
-	if err := c.Store.PutCTM(ctx, id, in.CTMPath); err != nil {
-		return CompileResult{}, operationFailed(findings.StepCompile, in.CTMPath, err)
-	}
-	// The read's CTM is now filed beside its bundle; its transient copy has served, and the
-	// deferred removal takes it.
+	// The bundle is filed; the read's transient copy has served, and the deferred removal
+	// takes it.
 	return CompileResult{BundleID: id, BundlePath: c.Store.Path(id), Findings: list}, nil
 }
 

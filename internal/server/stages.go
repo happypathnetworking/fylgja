@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
@@ -321,9 +320,9 @@ func planStages(ctx context.Context, opts *options, op string, subject *findings
 		return plannedStages{}, failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
 
-	// Each bundle and its CTM are filed as the dry run files them.
-	file := func(ctx context.Context, files map[string][]byte, id string, snapshot *ctm.CTM) (findings.List, error) {
-		_, list, err := fileCompiled(ctx, paths.Bundles, files, id, snapshot)
+	// Each bundle is filed as the dry run files it.
+	file := func(ctx context.Context, files map[string][]byte, id string) (findings.List, error) {
+		_, list, err := fileCompiled(ctx, paths.Bundles, files, id)
 		return list, err
 	}
 	now := time.Now().UTC()

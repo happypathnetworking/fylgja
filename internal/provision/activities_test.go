@@ -89,6 +89,45 @@ func mustNotExist(t *testing.T, path, what string) {
 	}
 }
 
+// The Compile activity files no CTM beside the bundle it files (018, FR-008): the sidecar
+// is retired. One an earlier build left, placed by hand before the filing, is neither read
+// nor removed: the compile files the fixture's bundle beside it as ever, and
+// the hand-placed bytes stay as they were.
+func TestNoSidecarIsWritten(t *testing.T) {
+	ctx := context.Background()
+	c := newControl(t)
+	sidecar := filepath.Join(c.Paths.Bundles, fixtureBundleID+".ctm.json")
+	left := []byte("{\"left\": \"by an earlier build\"}\n")
+	if err := os.MkdirAll(c.Paths.Bundles, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(sidecar, left, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	res, err := c.Compile(ctx, CompileInput{CTMPath: stageRead(t, c, repoPath("testdata", "ctm", "three-node.json"), "run-1")})
+	if err != nil || res.Findings.Rejected() || res.BundleID != fixtureBundleID {
+		t.Fatalf("Compile = %+v, %v; want the fixture's bundle filed", res, err)
+	}
+	if got, err := os.ReadFile(sidecar); err != nil || !bytes.Equal(got, left) {
+		t.Errorf("the hand-placed sidecar reads %q (%v) after the compile; want it untouched", got, err)
+	}
+	if got, want := entriesOf(t, c.Paths.Bundles), []string{".reads", fixtureBundleID, fixtureBundleID + ".ctm.json"}; !slices.Equal(got, want) {
+		t.Errorf("the store holds %v, want %v: the bundle beside the sidecar left there, and nothing more", got, want)
+	}
+
+	// A store with no sidecar gets none.
+	clean := newControl(t)
+	if _, err := clean.Compile(ctx, CompileInput{CTMPath: stageRead(t, clean, repoPath("testdata", "ctm", "three-node.json"), "run-2")}); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range entriesOf(t, clean.Paths.Bundles) {
+		if strings.HasSuffix(name, ".ctm.json") {
+			t.Errorf("the Compile activity wrote %s beside the bundle", name)
+		}
+	}
+}
+
 // The compile step files the read's bundle as the run needs it filed:
 // in the store under its identity, reused rather than duplicated, with the read's CTM
 // kept beside it and the read's transient copy removed; and a corrupt store entry that
@@ -120,33 +159,18 @@ func TestCompileActivity(t *testing.T) {
 			t.Errorf("the store entry hashes to %q (%v), want %s", got, err, fixtureBundleID)
 		}
 
-		// The read's CTM is kept beside its bundle, byte for byte, and its transient copy is gone.
-		sidecar := filepath.Join(c.Paths.Bundles, fixtureBundleID+".ctm.json")
-		read, err := os.ReadFile(fixture)
-		if err != nil {
-			t.Fatal(err)
-		}
-		kept, err := os.ReadFile(sidecar)
-		if err != nil {
-			t.Fatalf("the read's CTM was not kept beside the bundle: %v", err)
-		}
-		if !bytes.Equal(kept, read) {
-			t.Error("the CTM kept beside the bundle differs from the read's")
-		}
+		// No CTM is kept beside the bundle (018), and the read's transient copy is gone.
+		mustNotExist(t, filepath.Join(c.Paths.Bundles, fixtureBundleID+".ctm.json"), "a CTM sidecar")
 		mustNotExist(t, path, "the read's transient CTM")
 
 		// Nothing else is left in the store: no temporary directory from the compile.
-		want := []string{".reads", fixtureBundleID, fixtureBundleID + ".ctm.json"}
+		want := []string{".reads", fixtureBundleID}
 		if got := entriesOf(t, c.Paths.Bundles); !slices.Equal(got, want) {
 			t.Errorf("the store holds %v, want %v", got, want)
 		}
 
 		t.Run("a second compile of the same read reuses the entry", func(t *testing.T) {
 			entryBefore, err := os.Stat(res.BundlePath)
-			if err != nil {
-				t.Fatal(err)
-			}
-			sidecarBefore, err := os.Stat(sidecar)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -163,13 +187,6 @@ func TestCompileActivity(t *testing.T) {
 			}
 			if !entryAfter.ModTime().Equal(entryBefore.ModTime()) {
 				t.Error("a present entry was rewritten; it is reused, never duplicated")
-			}
-			sidecarAfter, err := os.Stat(sidecar)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if os.SameFile(sidecarBefore, sidecarAfter) && sidecarAfter.ModTime().Equal(sidecarBefore.ModTime()) {
-				t.Error("the CTM beside the bundle was not overwritten by the later read")
 			}
 			if got := entriesOf(t, c.Paths.Bundles); !slices.Equal(got, want) {
 				t.Errorf("the store holds %v after a second compile, want %v", got, want)

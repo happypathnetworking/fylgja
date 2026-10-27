@@ -23,7 +23,6 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/compiler"
-	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/provision"
@@ -283,10 +282,10 @@ func stagedManifest(dir string) (compiler.Manifest, error) {
 	return m, nil
 }
 
-// fileCompiled files a compiled bundle in the store under dir, and the CTM beside it, as a
-// run's compile step and the server's stage plan file them: a test that builds a host
-// files its bundles the same way.
-func fileCompiled(ctx context.Context, dir string, files map[string][]byte, id string, snapshot *ctm.CTM) (bundle.Store, findings.List, error) {
+// fileCompiled files a compiled bundle in the store under dir, as a run's compile step and
+// the server's stage plan file it: a test that builds a host files its bundles the same
+// way. No CTM is filed beside it: the sidecar is retired (018).
+func fileCompiled(ctx context.Context, dir string, files map[string][]byte, id string) (bundle.Store, findings.List, error) {
 	store := bundle.NewDirStore(dir)
 	stored, err := bundle.PutFiles(ctx, store, files, dir)
 	if err != nil {
@@ -295,16 +294,7 @@ func fileCompiled(ctx context.Context, dir string, files map[string][]byte, id s
 	if stored != id {
 		return store, nil, fmt.Errorf("the written bundle hashes to %s, but compiled to %s", stored, id)
 	}
-	scratch, err := os.MkdirTemp(dir, ".fylgja-ctm-*")
-	if err != nil {
-		return store, nil, err
-	}
-	defer func() { _ = os.RemoveAll(scratch) }()
-	path := filepath.Join(scratch, "ctm.json")
-	if err := ctm.Save(snapshot, path); err != nil {
-		return store, nil, err
-	}
-	return store, nil, store.PutCTM(ctx, id, path)
+	return store, nil, nil
 }
 
 // captureStderr runs fn with os.Stderr redirected and returns what it wrote.

@@ -3,8 +3,6 @@ package server
 import (
 	"context"
 	"fmt"
-	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/api"
@@ -202,32 +200,3 @@ func reference(e ctm.Envelope) string {
 
 // ctmFile is the name intent read's CTM crosses under.
 const ctmFile = "ctm.json"
-
-// writeCTM writes the snapshot atomically: a reader either sees the whole CTM or no
-// file at all. A half-written CTM would be worse than none, because it looks like intent.
-func writeCTM(c *ctm.CTM, path string) error {
-	b, err := ctm.Marshal(c)
-	if err != nil {
-		return err
-	}
-	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".fylgja-ctm-*")
-	if err != nil {
-		return fmt.Errorf("writing CTM: %w", err)
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	if _, err := tmp.Write(b); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("writing CTM: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("writing CTM: %w", err)
-	}
-	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
-		return fmt.Errorf("writing CTM: %w", err)
-	}
-	if err := os.Rename(tmp.Name(), path); err != nil {
-		return fmt.Errorf("writing CTM: %w", err)
-	}
-	return nil
-}

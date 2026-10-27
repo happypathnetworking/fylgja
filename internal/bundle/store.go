@@ -25,8 +25,6 @@ type Store interface {
 	Path(id string) string
 	// Fetch copies the entry for id to dstDir and verifies the copy hashes to id.
 	Fetch(ctx context.Context, id, dstDir string) error
-	// PutCTM keeps the CTM a read produced beside its bundle, overwriting any earlier one.
-	PutCTM(ctx context.Context, id, ctmPath string) error
 }
 
 // ErrIDMismatch reports bytes at Path that hash to Got where Want was claimed: a
@@ -39,9 +37,9 @@ func (e *ErrIDMismatch) Error() string {
 	return fmt.Sprintf("%s hashes to %s, not %s", e.Path, e.Got, e.Want)
 }
 
-// DirStore is the Store on a local directory: <root>/<id>/ per bundle and
-// <root>/<id>.ctm.json beside it. The sidecar sits outside the hashed directory, so
-// keeping a CTM never changes an entry's id.
+// DirStore is the Store on a local directory: <root>/<id>/ per bundle. The CTM sidecar
+// <root>/<id>.ctm.json is retired (018): the input is the snapshot, in its own store, and
+// a sidecar an earlier build left is neither read nor removed.
 type DirStore struct {
 	root string
 }
@@ -133,34 +131,6 @@ func (s *DirStore) Fetch(ctx context.Context, id, dstDir string) error {
 		return fmt.Errorf("preparing %s: %w", dstDir, err)
 	}
 	return copyDirAtomic(ctx, s.Path(id), dstDir, id)
-}
-
-// PutCTM implements Store: the latest read of an intent replaces an earlier one, which
-// is the more useful record.
-func (s *DirStore) PutCTM(_ context.Context, id, ctmPath string) error {
-	if err := os.MkdirAll(s.root, 0o755); err != nil {
-		return fmt.Errorf("preparing the bundle store: %w", err)
-	}
-	dst := filepath.Join(s.root, id+".ctm.json")
-	tmp, err := os.CreateTemp(s.root, ".fylgja-ctm-*")
-	if err != nil {
-		return fmt.Errorf("storing CTM: %w", err)
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	if err := copyFileTo(ctmPath, tmp); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("storing CTM: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("storing CTM: %w", err)
-	}
-	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
-		return fmt.Errorf("storing CTM: %w", err)
-	}
-	if err := os.Rename(tmp.Name(), dst); err != nil {
-		return fmt.Errorf("storing CTM: %w", err)
-	}
-	return nil
 }
 
 // verifyEntry reports whether the entry for id exists, and an *ErrIDMismatch naming its

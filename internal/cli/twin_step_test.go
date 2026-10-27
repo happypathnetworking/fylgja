@@ -265,9 +265,8 @@ func stepHost(t *testing.T, plan string, change func(*lab.RecordFields)) *stepHo
 
 // compiledStage is what stage plan's path hands its filing for one label.
 type compiledStage struct {
-	files    map[string][]byte
-	id       string
-	snapshot *ctm.CTM
+	files map[string][]byte
+	id    string
 }
 
 // builtStages holds buildStage's read and compile by label, once for the package. Every
@@ -301,7 +300,7 @@ func buildStage(t *testing.T, paths lab.Paths, label string) string {
 	built, ok := builtStages.byLabel[label]
 	builtStages.Unlock()
 	if ok {
-		if _, _, err := fileCompiled(context.Background(), paths.Bundles, built.files, built.id, built.snapshot); err != nil {
+		if _, _, err := fileCompiled(context.Background(), paths.Bundles, built.files, built.id); err != nil {
 			t.Fatal(err)
 		}
 		return built.id
@@ -332,9 +331,9 @@ func compileStage(t *testing.T, paths lab.Paths, label string) compiledStage {
 	if err != nil || ch == nil {
 		t.Fatalf("change-1's proposed change was not found: %v %+v", err, list)
 	}
-	file := func(ctx context.Context, files map[string][]byte, id string, snapshot *ctm.CTM) (findings.List, error) {
-		built = compiledStage{files: files, id: id, snapshot: snapshot}
-		_, list, err := fileCompiled(ctx, paths.Bundles, files, id, snapshot)
+	file := func(ctx context.Context, files map[string][]byte, id string) (findings.List, error) {
+		built = compiledStage{files: files, id: id}
+		_, list, err := fileCompiled(ctx, paths.Bundles, files, id)
 		return list, err
 	}
 	ref := stages.Ref{Branch: "change-1", Label: label}
@@ -1866,8 +1865,7 @@ func TestStepRuns(t *testing.T) {
 			// Both sides whole, as the record and the resolved target give them, which the
 			// step's record names; containerlab's plan as
 			// its recording reads; and the target read's own observed_at, which the record takes
-			// once the step moves the twin. The command's second run filed the
-			// target's CTM last, so its read's time is the one beside the bundle in the store.
+			// once the step moves the twin.
 			wantFrom := wire.StepSide{Stage: stepStage("sealed", "the mixed fixture as sealed", "given"), BundleID: h.fromID, At: stepMixedAt}
 			wantTo := wire.StepSide{Stage: stepStage("linked", "a link between e1 and s1", "written"), BundleID: toID,
 				At: stepWrittenAt, Branch: "change-1"}
@@ -1890,13 +1888,14 @@ func TestStepRuns(t *testing.T) {
 					t.Errorf("run %d's plan %s; want %s, as containerlab's plan reads", i, asJSON(got.Plan), asJSON(wantPlan))
 				}
 			}
-			read, err := ctm.Load(filepath.Join(h.paths.Bundles, toID+".ctm.json"))
-			if err != nil {
-				t.Fatal(err)
-			}
+			// Each run's observed_at is its own command's read's time: within the commands'
+			// span, the second's no earlier than the first's. The store kept the read beside
+			// the bundle until 018 retired the sidecar.
+			ended := time.Now().UTC()
 			firstAt, lastAt := svc.stepped[0].ObservedAt, svc.stepped[1].ObservedAt
-			if lastAt != read.Envelope.ObservedAt {
-				t.Errorf("the second run's observed_at %q; want its target read's, %q", lastAt, read.Envelope.ObservedAt)
+			if at, err := time.Parse(intentstage.ObservedAtFormat, lastAt); err != nil || at.After(ended) || firstAt > lastAt {
+				t.Errorf("the second run's observed_at %q; want a read's time from the first run's %s to %s", lastAt, firstAt,
+					ended.Format(intentstage.ObservedAtFormat))
 			}
 			if at, err := time.Parse(intentstage.ObservedAtFormat, firstAt); err != nil || at.Before(began) || firstAt > lastAt {
 				t.Errorf("the first run's observed_at %q; want a read's time from %s to %s", firstAt, began.Format(intentstage.ObservedAtFormat), lastAt)

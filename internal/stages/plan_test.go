@@ -71,7 +71,7 @@ func (f *fakePipeline) pipeline() Pipeline {
 			return c, f.readWarnings[branch], nil
 		},
 		Compile: stage.Compile,
-		File: func(_ context.Context, _ map[string][]byte, id string, _ *ctm.CTM) (findings.List, error) {
+		File: func(_ context.Context, _ map[string][]byte, id string) (findings.List, error) {
 			if f.fileErr != nil || f.fileRefusals != nil {
 				return f.fileRefusals, f.fileErr
 			}

@@ -189,9 +189,8 @@ func followInterval(op string, subject *findings.Subject, f *createFlags) (time.
 // runCreateDryRun reads, compiles and files the bundle in this process, then reports what a
 // real create would do; it never dials the workflow service. Read and compile are
 // the stage commands' own pipelines, so a dry run refuses exactly what `intent read` and
-// `twin compile` would, under the same identifiers. The bundle, and the CTM beside
-// it, are filed as a run's compile step files them, so the report's bundle is there to
-// inspect.
+// `twin compile` would, under the same identifiers. The bundle is filed as a run's
+// compile step files it, so the report's bundle is there to inspect.
 func runCreateDryRun(ctx context.Context, opts *options, op string, subject *findings.Subject, branch, at, scope string, reg *psp.Registry,
 	follow findings.DryRunFollow) error {
 	paths, err := opts.paths()
@@ -221,7 +220,7 @@ func runCreateDryRun(ctx context.Context, opts *options, op string, subject *fin
 		return finish(op, subject, list)
 	}
 
-	store, filed, err := fileCompiled(ctx, paths.Bundles, files, id, snapshot)
+	store, filed, err := fileCompiled(ctx, paths.Bundles, files, id)
 	if err != nil {
 		return failAt(op, subject, findings.StepCompile, paths.Bundles, "%v", err)
 	}

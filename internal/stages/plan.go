@@ -16,20 +16,21 @@ import (
 )
 
 // Pipeline is what a plan runs each stage through: the stage read, the stage compile, and
-// the filing of the bundle and its CTM in the store. They are function values so tier 1
+// the filing of the bundle in the store. They are function values so tier 1
 // can fake what lies under them; the product's are stage.Read, stage.Compile and the dry
 // run's filing, one code path with `intent read`, `twin compile` and a create (D-011).
 type Pipeline struct {
 	Read    func(ctx context.Context, branch, at, scope string, reg *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error)
 	Compile func(c *ctm.CTM, reg *psp.Registry) (files map[string][]byte, id string, list findings.List)
-	// File files a compiled bundle and the CTM it was compiled from. A refusal is its
-	// findings (bundle.id.mismatch); an error is a filing that could not run.
-	File func(ctx context.Context, files map[string][]byte, id string, snapshot *ctm.CTM) (findings.List, error)
+	// File files a compiled bundle. A refusal is its findings (bundle.id.mismatch); an
+	// error is a filing that could not run. No CTM is filed beside it: the sidecar is
+	// retired (018).
+	File func(ctx context.Context, files map[string][]byte, id string) (findings.List, error)
 }
 
 // NewPipeline is the product's pipeline: the stage pipelines, and file, the command's
 // filing in the store under its state root.
-func NewPipeline(file func(ctx context.Context, files map[string][]byte, id string, snapshot *ctm.CTM) (findings.List, error)) Pipeline {
+func NewPipeline(file func(ctx context.Context, files map[string][]byte, id string) (findings.List, error)) Pipeline {
 	return Pipeline{Read: stage.Read, Compile: stage.Compile, File: file}
 }
 
@@ -113,7 +114,7 @@ type PlanResult struct {
 //  2. read with an observed_at of its own, findings at read; a read that cannot run is
 //     operation.failed naming the stage;
 //  3. compiled, findings at compile;
-//  4. filed with its CTM, as the dry run files them.
+//  4. filed, as the dry run files its bundle.
 //
 // onChange is called once the proposed change is found, with how many stages it has;
 // onStage as each stage finishes; and onStep as each step is known, which is once its
@@ -166,7 +167,7 @@ func Plan(ctx context.Context, r Reader, s Stamper, branch, scope string, reg *p
 }
 
 // Build runs one stage of a proposed change already found as far as it goes: resolved
-// (steps 4–9), read with an observed_at of its own, compiled, and filed with its CTM,
+// (steps 4–9), read with an observed_at of its own, compiled, and filed,
 // each finding at its step. twin step builds its target with it, and the plan builds each
 // stage the same way, so the target's bundle_id is the one stage plan prints for that
 // stage, by construction (D-011).
@@ -257,7 +258,7 @@ func build(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 	}
 	ps.Findings = append(ps.Findings, compiled...)
 
-	filed, err := p.File(ctx, files, id, snapshot)
+	filed, err := p.File(ctx, files, id)
 	if err != nil {
 		return failed(findings.StepCompile, err)
 	}

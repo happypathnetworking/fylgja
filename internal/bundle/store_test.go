@@ -5,7 +5,6 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 )
 
@@ -139,31 +138,9 @@ func TestCorruptEntryRefused(t *testing.T) {
 	}
 }
 
-func TestPutCTMOverwrites(t *testing.T) {
-	ctx := context.Background()
-	root := filepath.Join(t.TempDir(), "bundles")
-	s := NewDirStore(root)
-	id := strings.Repeat("ab", 32)
-	for _, content := range []string{"first read\n", "second read\n"} {
-		ctm := filepath.Join(t.TempDir(), "read.ctm.json")
-		if err := os.WriteFile(ctm, []byte(content), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		if err := s.PutCTM(ctx, id, ctm); err != nil {
-			t.Fatal(err)
-		}
-		got, err := os.ReadFile(filepath.Join(root, id+".ctm.json"))
-		if err != nil || string(got) != content {
-			t.Errorf("stored CTM = %q (%v), want %q", got, err, content)
-		}
-	}
-	if got := entries(t, root); len(got) != 1 {
-		t.Errorf("PutCTM left %v, want the one sidecar", got)
-	}
-}
-
-// The CTM sidecar and a read's transient CTM live beside entries, never inside one, so
-// neither can move an id.
+// A sidecar an earlier build left and a read's transient CTM live beside entries, never
+// inside one, so neither can move an id. No build writes a sidecar since 018; the host's
+// store still holds them.
 func TestSidecarsDoNotAffectEntries(t *testing.T) {
 	ctx := context.Background()
 	src, want := storeFixture(t)
@@ -173,11 +150,7 @@ func TestSidecarsDoNotAffectEntries(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ctm := filepath.Join(t.TempDir(), "c.json")
-	if err := os.WriteFile(ctm, []byte("{}\n"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := s.PutCTM(ctx, id, ctm); err != nil {
+	if err := os.WriteFile(filepath.Join(root, id+".ctm.json"), []byte("{}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.MkdirAll(filepath.Join(root, ".reads"), 0o755); err != nil {

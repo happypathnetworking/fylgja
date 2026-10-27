@@ -12,7 +12,6 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/compiler"
-	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
@@ -139,8 +138,8 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	list = append(list, stages.Moved(ch, view)...)
 	subject.Stage = target.String()
 
-	file := func(ctx context.Context, files map[string][]byte, id string, snapshot *ctm.CTM) (findings.List, error) {
-		_, filed, err := fileCompiled(ctx, paths.Bundles, files, id, snapshot)
+	file := func(ctx context.Context, files map[string][]byte, id string) (findings.List, error) {
+		_, filed, err := fileCompiled(ctx, paths.Bundles, files, id)
 		return filed, err
 	}
 	built := stages.Build(ctx, reader, stamper, reg, ch, target, stages.NewPipeline(file), time.Now().UTC())

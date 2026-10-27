@@ -21,6 +21,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/stage"
 	"github.com/happypathnetworking/fylgja/internal/testsupport"
 )
@@ -163,20 +164,29 @@ func stageReader(t *testing.T) *intent.StageReader {
 }
 
 // filing is the plan's pipeline, filing each bundle in a store under the test's temporary
-// directory, as the dry run files them; it keeps each filed bundle's CTM by id.
+// directory, as the dry run files them; it keeps the CTM each filed bundle compiled from,
+// by id, as the compile is handed it: the store keeps no CTM since 018.
 func filing(t *testing.T) (Pipeline, map[string]*ctm.CTM) {
 	t.Helper()
 	store := bundle.NewDirStore(filepath.Join(t.TempDir(), "bundles"))
 	scratch := t.TempDir()
+	compiled := map[string]*ctm.CTM{}
 	filed := map[string]*ctm.CTM{}
-	return NewPipeline(func(ctx context.Context, files map[string][]byte, id string, snapshot *ctm.CTM) (findings.List, error) {
+	p := NewPipeline(func(ctx context.Context, files map[string][]byte, id string) (findings.List, error) {
 		stored, err := bundle.PutFiles(ctx, store, files, scratch)
 		if err == nil && stored != id {
 			err = fmt.Errorf("bundle %s was stored as %s", id, stored)
 		}
-		filed[id] = snapshot
+		filed[id] = compiled[id]
 		return nil, err
-	}), filed
+	})
+	compile := p.Compile
+	p.Compile = func(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, string, findings.List) {
+		files, id, list := compile(c, reg)
+		compiled[id] = c
+		return files, id, list
+	}
+	return p, filed
 }
 
 // planOf plans branch's proposed change through the product's reader and the live stamper.

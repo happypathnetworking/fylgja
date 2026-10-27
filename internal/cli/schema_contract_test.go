@@ -31,14 +31,21 @@ import (
 // read, so a failing test here cannot damage either; the one it makes, a throwaway holding
 // the mixed fixture, is deleted when its test ends.
 
-// live skips unless an Infrahub is configured, and returns its address.
+// shell is the Infrahub the shell that ran the tests named, read as the package
+// initialises: TestMain then points the package at an address nothing answers, so that no
+// tier-1 test reaches the host (018), and these tests need the real one back.
+var shell = struct{ address, token string }{os.Getenv(intent.EnvAddress), os.Getenv(intent.EnvToken)}
+
+// live skips unless the shell configured an Infrahub, gives the test that Infrahub's
+// address and token in place of TestMain's, and returns the address.
 func live(t *testing.T) string {
 	t.Helper()
-	addr := os.Getenv("INFRAHUB_ADDRESS")
-	if addr == "" || os.Getenv("INFRAHUB_API_TOKEN") == "" {
+	if shell.address == "" || shell.token == "" {
 		t.Skip("contract tests need INFRAHUB_ADDRESS and INFRAHUB_API_TOKEN")
 	}
-	return strings.TrimRight(addr, "/")
+	t.Setenv(intent.EnvAddress, shell.address)
+	t.Setenv(intent.EnvToken, shell.token)
+	return strings.TrimRight(shell.address, "/")
 }
 
 // recorder proxies every request the command makes to the real Infrahub and keeps the

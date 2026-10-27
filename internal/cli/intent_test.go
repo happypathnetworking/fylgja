@@ -12,6 +12,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/psp"
+	snap "github.com/happypathnetworking/fylgja/internal/snapshot"
 	"github.com/happypathnetworking/fylgja/internal/stage"
 )
 
@@ -129,15 +130,23 @@ func TestReadDocumentsNameTheOperation(t *testing.T) {
 	}
 }
 
-// pinnedCTM reads the CTM at path with its observed_at pinned, as the ctm package's own
-// parity test pins it, and marshals it canonically: two reads of one reference differ by
-// when they were taken and by nothing else.
-func pinnedCTM(t *testing.T, path string) []byte {
+// snapshotCTM is the CTM of the snapshot file at path, as intent read --out writes one
+// (018).
+func snapshotCTM(t *testing.T, path string) *ctm.CTM {
 	t.Helper()
-	c, err := ctm.Load(path)
+	s, err := snap.Load(path)
 	if err != nil {
 		t.Fatal(err)
 	}
+	return s.CTM
+}
+
+// pinnedCTM reads the CTM of the snapshot file at path with its observed_at pinned, as the
+// ctm package's own parity test pins it, and marshals it canonically: two reads of one
+// reference differ by when they were taken and by nothing else.
+func pinnedCTM(t *testing.T, path string) []byte {
+	t.Helper()
+	c := snapshotCTM(t, path)
 	c.Envelope.ObservedAt = "2026-09-28T00:00:00.000000Z"
 	b, err := ctm.Marshal(c)
 	if err != nil {
@@ -146,14 +155,11 @@ func pinnedCTM(t *testing.T, path string) []byte {
 	return b
 }
 
-// compiledCTM compiles the CTM at path on the stage pipeline twin compile and a run share
-// (D-011), and returns the bundle's files and its id.
+// compiledCTM compiles the CTM of the snapshot file at path on the stage pipeline twin
+// compile and a create share (D-011), and returns the bundle's files and its id.
 func compiledCTM(t *testing.T, path string) (map[string][]byte, string) {
 	t.Helper()
-	c, err := ctm.Load(path)
-	if err != nil {
-		t.Fatal(err)
-	}
+	c := snapshotCTM(t, path)
 	reg, err := psp.Load("")
 	if err != nil {
 		t.Fatal(err)
@@ -163,6 +169,78 @@ func compiledCTM(t *testing.T, path string) (map[string][]byte, string) {
 		t.Fatalf("%s did not compile: %+v", path, list)
 	}
 	return files, id
+}
+
+// intent read --out writes a snapshot 1 and files it in the server's store, so a hand read
+// and a create of the same intent share one stored document (US4 scenario 2; FR-020). Over
+// the fake Infrahub: the file is one snapshot.Unmarshal accepts, the head's take; the store's
+// entry is the file byte for byte; the summary line ends naming the snapshot and its store
+// path; the document names it, valid against the contract. A second read, observed later,
+// writes a file differing in its two observed_at lines alone, and leaves the entry as the
+// first take filed it.
+func TestReadWritesAndFilesASnapshot(t *testing.T) {
+	paths := useStateRoot(t)
+	newFakeInfrahub(t).start()
+	dir := t.TempDir()
+	first, second := filepath.Join(dir, "first.json"), filepath.Join(dir, "second.json")
+	stored := filepath.Join(paths.Snapshots, headSnapshotID+".json")
+
+	var err error
+	out := captureStdout(t, func() {
+		err = runRead(t.Context(), &options{}, &readFlags{branch: "fylgja-fixture", out: first})
+	})
+	if code, doc := exitOf(t, err); code != findings.ExitOK {
+		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
+	}
+	if want := "; snapshot " + headSnapshotID + ", stored at " + stored + "\n"; !strings.HasPrefix(out, "wrote "+first+": ") ||
+		!strings.HasSuffix(out, want) || strings.Count(out, "\n") != 1 {
+		t.Errorf("stdout %q; want the one summary line, ending %q", out, want)
+	}
+	file, err := os.ReadFile(first)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := snap.Unmarshal(file)
+	if err != nil || s.ID != headSnapshotID || s.Version != snap.Version {
+		t.Fatalf("--out reads as %+v (%v); want snapshot %s, version %s", s, err, headSnapshotID, snap.Version)
+	}
+	if entry, err := os.ReadFile(stored); err != nil || !bytes.Equal(entry, file) {
+		t.Errorf("the store's entry %s is not --out's file, byte for byte (%v)", stored, err)
+	}
+	if got := filedSnapshots(t, paths); len(got) != 1 {
+		t.Errorf("snapshots/ holds %v, want the one take", got)
+	}
+
+	code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{branch: "fylgja-fixture", out: second}))
+	if code != findings.ExitOK || doc.SnapshotID != headSnapshotID {
+		t.Fatalf("the second read: exit %d, snapshot %q; want 0 naming %s", code, doc.SnapshotID, headSnapshotID)
+	}
+	validateM10Document(t, doc)
+	again, err := os.ReadFile(second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	later, err := snap.Unmarshal(again)
+	if err != nil || later.ObservedAt == s.ObservedAt {
+		t.Fatalf("the second file reads as %+v (%v); want another observed_at than %s", later, err, s.ObservedAt)
+	}
+	oldLines, newLines := strings.Split(string(file), "\n"), strings.Split(string(again), "\n")
+	if len(oldLines) != len(newLines) {
+		t.Fatalf("the second file has %d lines, the first %d", len(newLines), len(oldLines))
+	}
+	var moved []string
+	for i := range oldLines {
+		if oldLines[i] != newLines[i] {
+			moved = append(moved, strings.TrimSpace(newLines[i]))
+		}
+	}
+	at := `"observed_at": "` + later.ObservedAt + `"`
+	if len(moved) != 2 || !strings.HasPrefix(moved[0], at) || !strings.HasPrefix(moved[1], at) {
+		t.Errorf("the second file differs from the first in %q; want its two observed_at lines alone", moved)
+	}
+	if entry, err := os.ReadFile(stored); err != nil || !bytes.Equal(entry, file) {
+		t.Errorf("the second read changed the store's entry (%v); want the first take's", err)
+	}
 }
 
 // intent read --stage writes exactly the CTM intent read --branch B --at T writes for the
@@ -178,6 +256,7 @@ func TestReadFromAStageIsThePinnedRead(t *testing.T) {
 		{"cabled", demoWrittenAt, findings.AtSourceWritten, "before the change"},
 	} {
 		t.Run(c.source, func(t *testing.T) {
+			paths := useStateRoot(t)
 			f := demoInfrahub(t)
 			f.start()
 			dir := t.TempDir()
@@ -192,9 +271,14 @@ func TestReadFromAStageIsThePinnedRead(t *testing.T) {
 			if code, doc := exitOf(t, err); code != findings.ExitOK {
 				t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
 			}
+			taken, err := snap.Load(byStage)
+			if err != nil {
+				t.Fatal(err)
+			}
 			want := block.Line() + "\n" +
 				"wrote " + byStage + ": 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, " +
-				"0 shared ports (stage " + ref + ": branch fylgja-fixture, at " + c.at + ", scope tag:fylgja, schema fixture)\n"
+				"0 shared ports (stage " + ref + ": branch fylgja-fixture, at " + c.at + ", scope tag:fylgja, schema fixture); " +
+				"snapshot " + taken.ID + ", stored at " + filepath.Join(paths.Snapshots, taken.ID+".json") + "\n"
 			if out != want {
 				t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
 			}
@@ -234,7 +318,7 @@ func TestReadFromAStageIsThePinnedRead(t *testing.T) {
 					}
 				}
 			}
-			if c.source == findings.AtSourceGiven && !bytes.Equal(got, pinnedCTM(t, repoPath("testdata", "ctm", "three-node.json"))) {
+			if c.source == findings.AtSourceGiven && !bytes.Equal(got, pinnedCTM(t, wrappedFixture("three-node"))) {
 				t.Error("the fixture's stage does not read as the fixture")
 			}
 
@@ -658,7 +742,7 @@ func readAndCheckRefusedAlike(t *testing.T, branch string, mutate func(map[strin
 	f := newFakeInfrahub(t)
 	f.schemaMutations = map[string]func(map[string]any){branch: mutate}
 	f.start()
-	out := filepath.Join(t.TempDir(), "ctm.json")
+	out := filepath.Join(t.TempDir(), "snapshot.json")
 
 	code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{branch: branch, out: out}))
 	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != want {
@@ -682,7 +766,7 @@ func readsDevicesAndPorts(t *testing.T, branch string) {
 	t.Helper()
 	f := newFakeInfrahub(t)
 	f.start()
-	out := filepath.Join(t.TempDir(), "ctm.json")
+	out := filepath.Join(t.TempDir(), "snapshot.json")
 
 	code, doc := exitOf(t, runRead(t.Context(), &options{asJSON: true}, &readFlags{branch: branch, out: out}))
 	if code != findings.ExitOK || len(doc.Findings) != 0 {

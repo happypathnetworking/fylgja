@@ -309,7 +309,7 @@ func TestReportRendersTheClientsOwnDocument(t *testing.T) {
 func TestSendHandsTheFilesOverBeforeWhatFollows(t *testing.T) {
 	newAPIFake(t, func(w *fakeAnswer, op string, _ api.Request) {
 		w.frame(api.Frame{Out: "before\n"})
-		w.frame(api.Frame{Files: []api.File{{Path: "ctm.json", Data: []byte(`{"a":1}`)}}})
+		w.frame(api.Frame{Files: []api.File{{Path: "snapshot.json", Data: []byte(`{"a":1}`)}}})
 		w.frame(api.Frame{Out: "after\n"})
 		w.document(okDocument(op), "")
 	})
@@ -325,11 +325,11 @@ func TestSendHandsTheFilesOverBeforeWhatFollows(t *testing.T) {
 	if stdout != "before\n<files taken>\nafter\n" {
 		t.Errorf("stdout %q", stdout)
 	}
-	if len(got) != 1 || got[0].Path != "ctm.json" || string(got[0].Data) != `{"a":1}` {
+	if len(got) != 1 || got[0].Path != "snapshot.json" || string(got[0].Data) != `{"a":1}` {
 		t.Errorf("files %+v", got)
 	}
 
-	refused := fail(findings.OpIntentRead, nil, "writing CTM: a disk that is full")
+	refused := fail(findings.OpIntentRead, nil, "writing snapshot: a disk that is full")
 	stdout, _ = printedBy(t, func() {
 		err := send(context.Background(), &options{}, findings.OpIntentRead, nil, nil,
 			handlers{files: func([]api.File) error { return refused }})

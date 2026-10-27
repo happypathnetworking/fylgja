@@ -441,19 +441,19 @@ func answerCases() []answerCase {
 				stdout: lines(threeNodeLines(h.staged)...)}
 		}},
 		{"twin compile (TestCommandAndGoldenShareTheCompilerPath)", findings.OpCompile, func(t *testing.T) answerWant {
-			path := repoPath("testdata", "ctm", "three-node.json")
-			file, err := readCTM(path)
+			path := wrappedFixture("three-node")
+			file, err := readSnapshot(path)
 			if err != nil {
 				t.Fatal(err)
 			}
 			// The server writes nothing: the client's command, run after the three requests,
 			// writes the bundle there.
 			out := filepath.Join(t.TempDir(), "b")
-			return answerWant{args: map[string]any{"ctm": path, "out": out}, files: []api.File{file},
+			return answerWant{args: map[string]any{"snapshot": path, "out": out}, files: []api.File{file},
 				kinds: []string{api.KindFiles, api.KindDocument}, status: findings.StatusOK,
 				cli: func(t *testing.T) string {
 					return cliStdout(t, func() error {
-						return runCompile(&options{}, &compileFlags{ctmPath: path, out: out})
+						return runCompile(&options{}, &compileFlags{snapshotPath: path, out: out})
 					})
 				}}
 		}},
@@ -484,8 +484,9 @@ func answerCases() []answerCase {
 				}}
 		}},
 		{"intent read", findings.OpIntentRead, func(t *testing.T) answerWant {
+			useStateRoot(t)
 			newFakeInfrahub(t).start()
-			out := filepath.Join(t.TempDir(), "ctm.json")
+			out := filepath.Join(t.TempDir(), "snapshot.json")
 			return answerWant{args: map[string]any{"branch": "fylgja-fixture", "out": out},
 				kinds: []string{api.KindFiles, api.KindDocument}, status: findings.StatusOK,
 				cli: func(t *testing.T) string {

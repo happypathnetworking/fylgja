@@ -63,7 +63,7 @@ func TestStageCommandsRefuseANonConformantBranch(t *testing.T) {
 		{"stage plan", []string{"stage", "plan", "--branch", lessLink}},
 		{"twin create --stage", []string{"twin", "create", "--stage", lessLink + "/cabled"}},
 		{"twin create --stage, the head", []string{"twin", "create", "--stage", lessLink + "/head"}},
-		{"intent read --stage", []string{"intent", "read", "--stage", lessLink + "/live", "--out", filepath.Join(t.TempDir(), "ctm.json")}},
+		{"intent read --stage", []string{"intent", "read", "--stage", lessLink + "/live", "--out", filepath.Join(t.TempDir(), "snapshot.json")}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			paths := useStateRoot(t)

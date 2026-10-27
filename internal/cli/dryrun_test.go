@@ -498,7 +498,7 @@ func TestCreateDryRunFromAStage(t *testing.T) {
 	pc.BranchedFrom, pc.CreatedAt = "2026-09-01T00:00:00.000000+00:00", "2026-09-01T00:00:00.000000+00:00"
 	f.start()
 
-	_, readID := compiledCTM(t, repoPath("testdata", "ctm", "three-node.json"))
+	_, readID := compiledCTM(t, wrappedFixture("three-node"))
 	var err error
 	out := captureStdout(t, func() {
 		err = runCreate(context.Background(), &options{}, &createFlags{stage: "fylgja-fixture/cabled", dryRun: true})

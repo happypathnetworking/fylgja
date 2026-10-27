@@ -35,7 +35,7 @@ func TestCreateReportsM1Findings(t *testing.T) {
 	for _, path := range defects {
 		t.Run(filepath.Base(path), func(t *testing.T) {
 			_, doc := docOf(t, runCompile(&options{asJSON: true},
-				&compileFlags{ctmPath: path, out: filepath.Join(t.TempDir(), "bundle")}))
+				&compileFlags{snapshotPath: wrappedCTM(t, path), out: filepath.Join(t.TempDir(), "bundle")}))
 			var want []string
 			for _, f := range doc.Findings {
 				want = append(want, f.Rule)

@@ -504,8 +504,8 @@ func TestTheClientsOwnFailures(t *testing.T) {
 			op, step, message string
 			run               func(opts *options) error
 		}{
-			{findings.OpCompile, "", "reading CTM: open " + missing + ": no such file or directory", func(opts *options) error {
-				return runCompile(opts, &compileFlags{ctmPath: missing, out: filepath.Join(t.TempDir(), "out")})
+			{findings.OpCompile, "", "reading snapshot: open " + missing + ": no such file or directory", func(opts *options) error {
+				return runCompile(opts, &compileFlags{snapshotPath: missing, out: filepath.Join(t.TempDir(), "out")})
 			}},
 			{findings.OpTwinProvision, findings.StepVerify, "reading bundle directory: stat " + missing + ": no such file or directory",
 				func(opts *options) error {
@@ -667,7 +667,7 @@ func TestTheClientsOwnFailures(t *testing.T) {
 	t.Run("an answer frame over the client's bound", func(t *testing.T) {
 		const bound = 1 << 20
 		lowerFrameBound(t, bound)
-		ctmPath := repoPath("testdata", "ctm", "three-node.json")
+		snapshotPath := wrappedFixture("three-node")
 		address := stubAPI(t, func(w http.ResponseWriter, r *http.Request) {
 			answerHeaders(w)
 			a := &fakeAnswer{t: t, w: w}
@@ -676,7 +676,7 @@ func TestTheClientsOwnFailures(t *testing.T) {
 		})
 		out := filepath.Join(t.TempDir(), "bundle")
 		text, asJSON := runBothModes(t, func(opts *options) error {
-			return runCompile(opts, &compileFlags{ctmPath: ctmPath, out: out})
+			return runCompile(opts, &compileFlags{snapshotPath: snapshotPath, out: out})
 		})
 		wantClientFailure(t, findings.OpCompile, text, asJSON, findings.Finding{Severity: findings.Rejection,
 			Rule: findings.RuleAPITransferTooLarge, Object: findings.OpCompile,
@@ -693,7 +693,7 @@ func TestTheClientsOwnFailures(t *testing.T) {
 			a.document(okDocument(findings.OpCompile), "")
 		})
 		printedBy(t, func() {
-			sentDocument(t, runCompile(&options{asJSON: true}, &compileFlags{ctmPath: ctmPath, out: out}))
+			sentDocument(t, runCompile(&options{asJSON: true}, &compileFlags{snapshotPath: snapshotPath, out: out}))
 		})
 		if got := entriesOf(t, out); len(got) != 1 {
 			t.Errorf("a frame at the bound wrote %v, want its one file", got)

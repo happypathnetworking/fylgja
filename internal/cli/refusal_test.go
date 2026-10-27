@@ -26,7 +26,7 @@ func TestRejectionLeavesNothingBehind(t *testing.T) {
 		}
 		t.Run(e.Name(), func(t *testing.T) {
 			out := filepath.Join(t.TempDir(), "b")
-			code, doc := runCompileTo(t, repoPath("testdata", "ctm", "defects", e.Name()), out)
+			code, doc := runCompileTo(t, wrappedCTM(t, repoPath("testdata", "ctm", "defects", e.Name())), out)
 			if code != 1 {
 				t.Fatalf("exit %d, want 1 (a rejection): %+v", code, doc.Findings)
 			}
@@ -60,7 +60,7 @@ func TestRejectionLeavesNothingBehind(t *testing.T) {
 // cable a second time (LinkTerminations).
 func TestFiveDefectsGiveOneFindingPerFault(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "b")
-	code, doc := runCompileTo(t, repoPath("testdata", "ctm", "defects", "five.json"), out)
+	code, doc := runCompileTo(t, wrappedCTM(t, repoPath("testdata", "ctm", "defects", "five.json")), out)
 	if code != 1 {
 		t.Fatalf("exit %d, want 1", code)
 	}
@@ -98,7 +98,7 @@ func TestFiveDefectsGiveOneFindingPerFault(t *testing.T) {
 // what produced it and the branch is half of what the operator has to correct.
 func TestEmptyCTMIsRefusedNamingTheBranch(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "b")
-	code, doc := runCompileTo(t, repoPath("testdata", "ctm", "defects", "devices-empty.json"), out)
+	code, doc := runCompileTo(t, wrappedCTM(t, repoPath("testdata", "ctm", "defects", "devices-empty.json")), out)
 	if code != 1 {
 		t.Fatalf("exit %d, want 1: %+v", code, doc.Findings)
 	}
@@ -130,12 +130,12 @@ func TestNonEmptyOutputDirectoryIsRefusedAndUntouched(t *testing.T) {
 	root := t.TempDir()
 	out := filepath.Join(root, "b")
 
-	if code, doc := runCompileTo(t, repoPath("testdata", "ctm", "three-node.json"), out); code != 0 {
+	if code, doc := runCompileTo(t, wrappedFixture("three-node"), out); code != 0 {
 		t.Fatalf("first compile: exit %d: %+v", code, doc.Findings)
 	}
 	before := snapshot(t, out)
 
-	code, doc := runCompileTo(t, repoPath("testdata", "ctm", "three-node.json"), out)
+	code, doc := runCompileTo(t, wrappedFixture("three-node"), out)
 	if code != 2 {
 		t.Fatalf("exit %d, want 2 (an operational failure): %+v", code, doc.Findings)
 	}

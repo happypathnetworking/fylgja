@@ -380,9 +380,9 @@ func TestRehearseComposedByTheFixtureTool(t *testing.T) {
 
 	srv := handlerServer(t)
 	object := "n1:" + port
-	_, files, doc := answer(t, srv, findings.OpIntentRead, api.Request{Render: api.RenderText, Args: stringArgs("branch", branch, "out", "ctm.json", "scope", fixtureScope)})
+	_, files, doc := answer(t, srv, findings.OpIntentRead, api.Request{Render: api.RenderText, Args: stringArgs("branch", branch, "out", "snapshot.json", "scope", fixtureScope)})
 	if doc.Status.ExitCode() != 0 || len(files) != 1 {
-		t.Fatalf("intent.read: exit %d, %d file(s), findings %+v; want exit 0 and the CTM", doc.Status.ExitCode(), len(files), doc.Findings)
+		t.Fatalf("intent.read: exit %d, %d file(s), findings %+v; want exit 0 and the snapshot", doc.Status.ExitCode(), len(files), doc.Findings)
 	}
 	var warned bool
 	for _, f := range doc.Findings {
@@ -395,7 +395,7 @@ func TestRehearseComposedByTheFixtureTool(t *testing.T) {
 			findings.RuleArtifactInterfaceUnrepresented, object, findings.RuleOmitInterfaceUnmappable)
 	}
 	_, _, doc = answer(t, srv, findings.OpCompile, api.Request{Render: api.RenderText,
-		Args: stringArgs("ctm", "ctm.json", "out", "bundle"), Files: []api.File{{Path: "ctm.json", Data: files[0].Data}}})
+		Args: stringArgs("snapshot", "snapshot.json", "out", "bundle"), Files: []api.File{{Path: "snapshot.json", Data: files[0].Data}}})
 	var omitted bool
 	for _, f := range doc.Findings {
 		if f.Rule == findings.RuleOmitInterfaceUnmappable && f.Object == object {

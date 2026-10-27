@@ -731,7 +731,7 @@ func TestStageCommandsReadUnderTheScopeGiven(t *testing.T) {
 			useService(t, nil)
 			return demoInfrahub(t), nil
 		}, func(t *testing.T) []string {
-			return []string{"intent", "read", "--stage", "fylgja-fixture/sealed", "--out", filepath.Join(t.TempDir(), "ctm.json")}
+			return []string{"intent", "read", "--stage", "fylgja-fixture/sealed", "--out", filepath.Join(t.TempDir(), "snapshot.json")}
 		}, true, nil},
 		{"twin create --stage", func(t *testing.T) (*fakeInfrahub, *fakeService) {
 			useInterrupts(t)
@@ -924,7 +924,7 @@ func TestStageKindAbsentEverywhere(t *testing.T) {
 			f.start()
 
 			if c.edit != nil {
-				out := filepath.Join(t.TempDir(), "ctm.json")
+				out := filepath.Join(t.TempDir(), "snapshot.json")
 				for _, args := range [][]string{
 					{"stage", "plan", "--branch", lessLink},
 					{"stage", "list"},

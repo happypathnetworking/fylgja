@@ -14,9 +14,10 @@ import (
 // the file the operator gave, naming both versions, with no step, and nothing is written:
 // every other finding would be about a format this build does not read, and nothing
 // converts one (017; FR-028). A CTM "2" carries no contract version; its own version is
-// the contract's (D-057). The file is a CTM "1" as the last build of that format wrote it.
+// the contract's (D-057). The file is a CTM "1" as the last build of that format wrote it,
+// wrapped by hand as a snapshot, and the file named is the snapshot (018).
 func TestAnotherCTMVersionIsRefusedBeforeValidation(t *testing.T) {
-	path := repoPath("testdata", "ctm", "defects", "version-1.json")
+	path := wrappedCTM(t, repoPath("testdata", "ctm", "defects", "version-1.json"))
 	out := filepath.Join(t.TempDir(), "b")
 	code, doc := runCompileTo(t, path, out)
 	if code != findings.ExitRejected || doc.Status != string(findings.StatusRejected) {
@@ -40,7 +41,8 @@ func TestAnotherCTMVersionIsRefusedBeforeValidation(t *testing.T) {
 // field, as an empty envelope field is, since [] would say the reader approximated and
 // omitted nothing. No links, or a device's interfaces left out, is refused alike, the
 // device named by its place in the file (T095): filled with [], either would compile as a
-// twin with no cable or a node with no port.
+// twin with no cable or a node with no port. From 018 the CTM is a snapshot's, so the file
+// is the snapshot and each field is named where it sits in it, under ctm.
 func TestCompileRefusesACTMLeavingOutARequiredField(t *testing.T) {
 	for _, c := range []struct {
 		name, rule, object, message string
@@ -49,15 +51,15 @@ func TestCompileRefusesACTMLeavingOutARequiredField(t *testing.T) {
 		{"no ctm_version", findings.RuleCTMVersionUnsupported, "",
 			`the CTM declares no ctm_version; this build reads "2", and nothing converts one`,
 			func(m map[string]any) { delete(m, "ctm_version") }},
-		{"no envelope.fidelity", findings.RuleRequiredMissing, "envelope.fidelity", "",
+		{"no envelope.fidelity", findings.RuleRequiredMissing, "ctm.envelope.fidelity", "",
 			func(m map[string]any) { delete(m["envelope"].(map[string]any), "fidelity") }},
-		{"a null envelope.fidelity", findings.RuleRequiredMissing, "envelope.fidelity", "",
+		{"a null envelope.fidelity", findings.RuleRequiredMissing, "ctm.envelope.fidelity", "",
 			func(m map[string]any) { m["envelope"].(map[string]any)["fidelity"] = nil }},
-		{"no links", findings.RuleRequiredMissing, "links", "",
+		{"no links", findings.RuleRequiredMissing, "ctm.links", "",
 			func(m map[string]any) { delete(m, "links") }},
-		{"a null links", findings.RuleRequiredMissing, "links", "",
+		{"a null links", findings.RuleRequiredMissing, "ctm.links", "",
 			func(m map[string]any) { m["links"] = nil }},
-		{"a device's interfaces left out", findings.RuleRequiredMissing, "devices[1].interfaces", "",
+		{"a device's interfaces left out", findings.RuleRequiredMissing, "ctm.devices[1].interfaces", "",
 			func(m map[string]any) { delete(m["devices"].([]any)[1].(map[string]any), "interfaces") }},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -74,10 +76,11 @@ func TestCompileRefusesACTMLeavingOutARequiredField(t *testing.T) {
 				t.Fatal(err)
 			}
 			dir := t.TempDir()
-			in, out := filepath.Join(dir, "edited.ctm.json"), filepath.Join(dir, "b")
-			if err := os.WriteFile(in, b, 0o644); err != nil {
+			bare, out := filepath.Join(dir, "edited.ctm.json"), filepath.Join(dir, "b")
+			if err := os.WriteFile(bare, b, 0o644); err != nil {
 				t.Fatal(err)
 			}
+			in := wrappedCTM(t, bare)
 			object := c.object
 			if object == "" {
 				object = in
@@ -106,10 +109,11 @@ func TestCompileRefusesACTMLeavingOutARequiredField(t *testing.T) {
 }
 
 // The document is the contract, so the success shape is asserted through it: one
-// document, the operation named, a 64-hex bundle_id, no findings (contracts/cli.md).
+// document, the operation named, a 64-hex bundle_id and from 018 the snapshot_id beside it,
+// no findings (contracts/cli.md).
 func TestSuccessDocumentCarriesTheBundleID(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "b")
-	code, doc := runCompileTo(t, repoPath("testdata", "ctm", "three-node.json"), out)
+	code, doc := runCompileTo(t, wrappedFixture("three-node"), out)
 	if code != 0 {
 		t.Fatalf("exit %d: %+v", code, doc.Findings)
 	}
@@ -122,6 +126,9 @@ func TestSuccessDocumentCarriesTheBundleID(t *testing.T) {
 	if len(doc.BundleID) != 64 {
 		t.Errorf("bundle_id = %q, want 64 hex characters", doc.BundleID)
 	}
+	if doc.SnapshotID != fixtureSnapshotID {
+		t.Errorf("snapshot_id = %q, want the fixture's %s", doc.SnapshotID, fixtureSnapshotID)
+	}
 	if len(doc.Findings) != 0 {
 		t.Errorf("a clean compile reported findings: %+v", doc.Findings)
 	}
@@ -131,7 +138,7 @@ func TestSuccessDocumentCarriesTheBundleID(t *testing.T) {
 // rejections, and the bundle is written.
 func TestOmissionsAreReportedButDoNotFail(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "b")
-	code, doc := runCompileTo(t, repoPath("testdata", "ctm", "mgmt-link.json"), out)
+	code, doc := runCompileTo(t, wrappedCTM(t, repoPath("testdata", "ctm", "mgmt-link.json")), out)
 	if code != 0 {
 		t.Fatalf("exit %d, want 0: %+v", code, doc.Findings)
 	}
@@ -151,13 +158,14 @@ func TestOmissionsAreReportedButDoNotFail(t *testing.T) {
 }
 
 // Text mode keeps stdout for the success lines and stderr for findings, and the
-// bundle_id is on stdout where a shell can capture it (contracts/cli.md).
+// bundle_id is on stdout where a shell can capture it, below the snapshot_id from 018
+// (contracts/cli.md).
 func TestTextModePrintsTheBundleIDOnStdout(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "b")
 	stdout := captureStdout(t, func() {
 		opts := &options{}
 		if err := runCompile(opts, &compileFlags{
-			ctmPath: repoPath("testdata", "ctm", "three-node.json"), out: out,
+			snapshotPath: wrappedFixture("three-node"), out: out,
 		}); err != nil {
 			var res *result
 			if !asResult(err, &res) || res.doc.Status != findings.StatusOK {
@@ -168,8 +176,8 @@ func TestTextModePrintsTheBundleIDOnStdout(t *testing.T) {
 	if !strings.Contains(stdout, "wrote bundle to "+out+" (3 nodes, 3 links)") {
 		t.Errorf("stdout does not carry the success line:\n%s", stdout)
 	}
-	if !strings.Contains(stdout, "bundle_id ") {
-		t.Errorf("stdout does not carry the bundle id:\n%s", stdout)
+	if !strings.Contains(stdout, "\nsnapshot_id "+fixtureSnapshotID+"\nbundle_id "+fixtureBundleID+"\n") {
+		t.Errorf("stdout does not carry the snapshot id above the bundle id:\n%s", stdout)
 	}
 }
 

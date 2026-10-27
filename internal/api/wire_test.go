@@ -153,12 +153,13 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 		{"twin.destroy", nil, nil},
 		{"twin.show", nil, nil},
 		{"twin.verify", map[string]json.RawMessage{"wait": str("2m0s"), "args": mustJSON(t, []string{"30s"})}, nil},
-		{"twin.compile", map[string]json.RawMessage{"ctm": str("ctm.json"), "out": str("out")},
-			[]File{{Path: "ctm.json", Data: []byte(`{"ctm_version":"1"}`)}}},
+		// 018: the snapshot under the path snapshot gives, in place of the CTM under ctm's.
+		{"twin.compile", map[string]json.RawMessage{"snapshot": str("snap.json"), "out": str("out")},
+			[]File{{Path: "snap.json", Data: []byte(`{"snapshot_version":"1"}`)}}},
 		{"stage.list", map[string]json.RawMessage{"branch": str(""), "scope": str("tag:fylgja")}, nil},
 		{"stage.plan", map[string]json.RawMessage{"branch": str("change-1"), "scope": str("")}, nil},
 		{"intent.read", map[string]json.RawMessage{"branch": str("b"), "at": str("2026-09-14T12:00:00Z"), "stage": str("change-1/cabled"),
-			"out": str("ctm.json"), "scope": str("tag:fylgja")}, nil},
+			"out": str("snapshot.json"), "scope": str("tag:fylgja")}, nil},
 		{"schema.check", map[string]json.RawMessage{"branch": str("fylgja-fixture")}, nil},
 		{"psp.validate", map[string]json.RawMessage{"files": mustJSON(t, []string{"a.yaml", "b.yaml"})},
 			[]File{{Path: "a.yaml", Data: []byte("psp_version: \"0.6\"\n")}, {Path: "b.yaml", Data: nil}}},
@@ -204,6 +205,8 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 		invalid(t, apiSchema(t, "args/$defs/"+op), `{"waypoint":"demo/2"}`, op+" with a waypoint")
 	}
 	invalid(t, apiSchema(t, "args/$defs/stage.list"), `{"series":"demo"}`, "stage.list with a series")
+	// 018: twin.compile's ctm is gone, renamed snapshot.
+	invalid(t, apiSchema(t, "args/$defs/twin.compile"), `{"ctm":"ctm.json","out":"out"}`, "twin.compile with a ctm")
 	invalid(t, apiSchema(t, "args/$defs/twin.provision"), `{"dry_run":true}`, "twin.provision without a bundle")
 	invalid(t, apiSchema(t, "args/$defs/twin.verify"), `{"args":["30s"]}`, "twin.verify's args without wait")
 	// 015: twin.rehearse takes the branch alone: no stage, no flag of twin step's, no dry run.
@@ -304,7 +307,7 @@ func TestEveryFrameKindSatisfiesTheContract(t *testing.T) {
 		{"destroy's start", Frame{Start: &RunRef{WorkflowID: "fylgja-destroy"}}, KindStart},
 		{"run", Frame{Run: &RunRef{WorkflowID: "fylgja-step", RunID: "01a1"}}, KindRun},
 		{"event", Frame{Event: &Event{WorkflowID: "fylgja-provision", Step: "read", FindingStep: "read"}}, KindEvent},
-		{"files", Frame{Files: []File{{Path: "ctm.json", Data: []byte("{}\n")}}}, KindFiles},
+		{"files", Frame{Files: []File{{Path: "snapshot.json", Data: []byte("{}\n")}}}, KindFiles},
 		{"document", Frame{Document: documentBytes(t, doc)}, KindDocument},
 		{"document with text", Frame{Document: documentBytes(t, refusedDoc), Text: "rejection api.unreachable 127.0.0.1:7650: …\n"}, KindDocument},
 		// 015: the rehearsal's start, run and children's events, and its document with the
@@ -348,7 +351,7 @@ func TestEveryFrameKindSatisfiesTheContract(t *testing.T) {
 // < included: the client prints --json from the frame without passing it through its own
 // types.
 func TestADocumentFrameReindentsToWriteJSONsBytes(t *testing.T) {
-	doc := findings.ErrorDocument(findings.OpCompile, &findings.Subject{Out: "/tmp/<b>"}, "--ctm is required & --out <dir>")
+	doc := findings.ErrorDocument(findings.OpCompile, &findings.Subject{Out: "/tmp/<b>"}, "--snapshot is required & --out <dir>")
 	want := documentBytes(t, doc)
 	raw := mustJSON(t, Frame{Document: want})
 	var back Frame

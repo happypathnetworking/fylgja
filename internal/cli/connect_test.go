@@ -316,7 +316,7 @@ func TestEachCommandNeedsWhatItNeededAtM12(t *testing.T) {
 		useService(t, nil)
 		closedInfrahub(t)
 		out := filepath.Join(t.TempDir(), "b")
-		code, doc, raw := executeClient(t, "twin", "compile", "--ctm", repoPath("testdata", "ctm", "three-node.json"), "--out", out)
+		code, doc, raw := executeClient(t, "twin", "compile", "--snapshot", wrappedFixture("three-node"), "--out", out)
 		if code != findings.ExitOK || doc.BundleID != fixtureBundleID {
 			t.Errorf("exit %d, %s; want 0 and bundle_id %s", code, raw, fixtureBundleID)
 		}

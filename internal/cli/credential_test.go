@@ -307,8 +307,8 @@ func TestBundleCarriesNoCredential(t *testing.T) {
 	served := markServed()
 	defer noSecretServed(t, served, sentinel)
 	err := runCompile(&options{}, &compileFlags{
-		ctmPath: repoPath("testdata", "ctm", "three-node.json"),
-		out:     out,
+		snapshotPath: wrappedFixture("three-node"),
+		out:          out,
 	})
 	var res *result
 	if !asResult(err, &res) {

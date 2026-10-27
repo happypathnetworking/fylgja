@@ -141,47 +141,50 @@ func TestAPackageNotSentUnderItsPathIsRefused(t *testing.T) {
 	}
 }
 
-// twin.compile takes the CTM alone, under the path --ctm gives: a request carrying no file
-// or two is refused in one sentence naming the count, and one whose file is under another
-// path in one saying so, before anything is parsed or loaded. The third compiled the golden
-// and answered ok, naming a.json, before.
-func TestACompileWithoutOneCTMIsRefused(t *testing.T) {
+// twin.compile takes the snapshot alone, under the path --snapshot gives (018, in place of
+// the CTM under --ctm's): a request carrying no file or two is refused in one sentence naming
+// the count, and one whose file is under another path in one saying so, before anything is
+// parsed or loaded. The third compiled the golden and answered ok, naming a.json, before.
+func TestACompileWithoutOneSnapshotIsRefused(t *testing.T) {
 	srv := handlerServer(t)
-	ctm, err := os.ReadFile(repoPath("testdata", "ctm", "three-node.json"))
+	snap, err := os.ReadFile(repoPath("testdata", "snapshot", "three-node.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	args := map[string]json.RawMessage{"ctm": json.RawMessage(`"a.json"`), "out": json.RawMessage(`"out"`)}
+	args := map[string]json.RawMessage{"snapshot": json.RawMessage(`"a.json"`), "out": json.RawMessage(`"out"`)}
 	for _, c := range []struct {
 		label string
 		files []api.File
 		says  string
 	}{
-		{"no file", nil, "the request carries 0 files where twin compile takes the CTM alone"},
-		{"two files", []api.File{{Path: "a.json", Data: ctm}, {Path: "a.json", Data: ctm}},
-			"the request carries 2 files where twin compile takes the CTM alone"},
-		{"a file under another path", []api.File{{Path: "b.json", Data: ctm}},
-			"the request carries its CTM under another path than --ctm gives, where twin compile takes the CTM alone, under that path"},
+		{"no file", nil, "the request carries 0 files where twin compile takes the snapshot alone"},
+		{"two files", []api.File{{Path: "a.json", Data: snap}, {Path: "a.json", Data: snap}},
+			"the request carries 2 files where twin compile takes the snapshot alone"},
+		{"a file under another path", []api.File{{Path: "b.json", Data: snap}},
+			"the request carries its snapshot under another path than --snapshot gives, where twin compile takes the snapshot alone, under that path"},
 	} {
 		out, doc := handled(t, srv, findings.OpCompile, api.Request{Render: api.RenderText, Args: args, Files: c.files})
 		if out != "" {
 			t.Errorf("%s: printed %q", c.label, out)
 		}
 		wantOperationFailed(t, c.label, doc, c.says)
-		if doc.BundleID != "" || doc.Subject == nil || doc.Subject.CTM != "a.json" || doc.Subject.Branch != "" {
-			t.Errorf("%s: bundle_id %q, subject %+v; want no bundle_id and a.json alone, nothing parsed", c.label, doc.BundleID, doc.Subject)
+		if doc.BundleID != "" || doc.SnapshotID != "" || doc.Subject == nil || doc.Subject.Snapshot != "a.json" ||
+			doc.Subject.CTM != "" || doc.Subject.Branch != "" {
+			t.Errorf("%s: bundle_id %q, snapshot_id %q, subject %+v; want no ids and a.json alone, nothing parsed", c.label,
+				doc.BundleID, doc.SnapshotID, doc.Subject)
 		}
 		for _, f := range doc.Findings {
-			if strings.Contains(f.Message, string(ctm[:40])) || strings.Contains(f.Message, "b.json") {
+			if strings.Contains(f.Message, string(snap[:40])) || strings.Contains(f.Message, "b.json") {
 				t.Errorf("%s: the sentence carries the file: %q", c.label, f.Message)
 			}
 		}
 	}
 
-	// The CLI's request, the CTM under the path --ctm gives, compiles as before.
+	// The CLI's request, the snapshot under the path --snapshot gives, compiles as the CTM did,
+	// and names the snapshot it compiled above the bundle.
 	out, doc := handled(t, srv, findings.OpCompile, api.Request{Render: api.RenderText, Args: args,
-		Files: []api.File{{Path: "a.json", Data: ctm}}})
-	if doc.Status != findings.StatusOK || !strings.HasPrefix(out, "wrote bundle to out (3 nodes, 3 links)\n") {
-		t.Errorf("the CLI's request: status %s, printed %q", doc.Status, out)
+		Files: []api.File{{Path: "a.json", Data: snap}}})
+	if want := "wrote bundle to out (3 nodes, 3 links)\nsnapshot_id " + fixtureSnapshotID + "\nbundle_id " + fixtureBundleID + "\n"; doc.Status != findings.StatusOK || out != want {
+		t.Errorf("the CLI's request: status %s, printed %q, want %q", doc.Status, out, want)
 	}
 }

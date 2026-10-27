@@ -9,27 +9,64 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/psp"
+	snap "github.com/happypathnetworking/fylgja/internal/snapshot"
 )
 
 func repoPath(parts ...string) string {
 	return filepath.Join(append([]string{"..", ".."}, parts...)...)
 }
 
-// runCompileTo runs the command exactly as the CLI does and returns the exit code.
-func runCompileTo(t *testing.T, ctmPath, out string) (int, *findingsDoc) {
+// wrappedFixture is testdata/snapshot/<name>.json, a fixture CTM wrapped as a snapshot,
+// which compiles to testdata/golden/<name>/ (018).
+func wrappedFixture(name string) string {
+	return repoPath("testdata", "snapshot", name+".json")
+}
+
+// wrappedCTM wraps the bare CTM file at path by hand, as contracts/cli.md tells a hand user
+// to (018): {"snapshot_version": "1", "ctm": <the CTM>, "probes": []}, leaving out the
+// snapshot_id the server computes and the observed_at it fills from the CTM. The CTM is
+// wrapped as its bytes, so a CTM the server refuses is sent as it is. The snapshot is
+// written to a temporary file named as the CTM, whose path it returns.
+func wrappedCTM(t *testing.T, path string) string {
 	t.Helper()
-	return runCompileWith(t, &options{asJSON: true}, ctmPath, out)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrapped := filepath.Join(t.TempDir(), filepath.Base(path))
+	if err := os.WriteFile(wrapped, []byte(`{"snapshot_version": "1", "ctm": `+string(raw)+`, "probes": []}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return wrapped
+}
+
+// wrappedCTMOf is wrappedCTM of c, written as ctm.Save writes it.
+func wrappedCTMOf(t *testing.T, c *ctm.CTM) string {
+	t.Helper()
+	in := filepath.Join(t.TempDir(), "edited.ctm.json")
+	if err := ctm.Save(c, in); err != nil {
+		t.Fatal(err)
+	}
+	return wrappedCTM(t, in)
+}
+
+// runCompileTo runs the command exactly as the CLI does and returns the exit code.
+func runCompileTo(t *testing.T, snapshotPath, out string) (int, *findingsDoc) {
+	t.Helper()
+	return runCompileWith(t, &options{asJSON: true}, snapshotPath, out)
 }
 
 // runCompileWith is runCompileTo with the caller's options, such as --psp-dir.
-func runCompileWith(t *testing.T, opts *options, ctmPath, out string) (int, *findingsDoc) {
+func runCompileWith(t *testing.T, opts *options, snapshotPath, out string) (int, *findingsDoc) {
 	t.Helper()
-	err := runCompile(opts, &compileFlags{ctmPath: ctmPath, out: out})
+	err := runCompile(opts, &compileFlags{snapshotPath: snapshotPath, out: out})
 	var res *result
 	if !asResult(err, &res) {
 		t.Fatalf("runCompile returned %v, want a findings result", err)
@@ -49,10 +86,15 @@ func runCompileWith(t *testing.T, opts *options, ctmPath, out string) (int, *fin
 // builds it: asserting on the serialized shape is what makes these tests about the
 // contract instead of about the struct.
 type findingsDoc struct {
-	Operation string `json:"operation"`
-	Status    string `json:"status"`
-	BundleID  string `json:"bundle_id"`
-	Verified  *struct {
+	Operation  string `json:"operation"`
+	Status     string `json:"status"`
+	SnapshotID string `json:"snapshot_id"`
+	BundleID   string `json:"bundle_id"`
+	Subject    *struct {
+		Snapshot string `json:"snapshot"`
+		CTM      string `json:"ctm"`
+	} `json:"subject"`
+	Verified *struct {
 		Model   string                `json:"model"`
 		Version string                `json:"version"`
 		Kinds   []findings.KindFields `json:"kinds"`
@@ -85,12 +127,12 @@ func asResult(err error, target **result) bool {
 // second path.
 func TestCommandAndGoldenShareTheCompilerPath(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "b")
-	code, doc := runCompileTo(t, repoPath("testdata", "ctm", "three-node.json"), out)
+	code, doc := runCompileTo(t, wrappedFixture("three-node"), out)
 	if code != 0 {
 		t.Fatalf("exit %d: %+v", code, doc.Findings)
 	}
 
-	c, err := ctm.Load(repoPath("testdata", "ctm", "three-node.json"))
+	s, err := snap.Load(wrappedFixture("three-node"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +140,7 @@ func TestCommandAndGoldenShareTheCompilerPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, list := compiler.Compile(c, reg)
+	want, list := compiler.Compile(s.CTM, reg)
 	if list.Rejected() {
 		t.Fatalf("the fixture was rejected: %v", list)
 	}
@@ -128,13 +170,17 @@ func TestCommandAndGoldenShareTheCompilerPath(t *testing.T) {
 }
 
 // Compiling the same CTM twice must give the same id, and the bundle must match the
-// committed golden — the command's own proof that a compile is reproducible.
+// committed golden — the command's own proof that a compile is reproducible. The snapshot's
+// id does not move with the CTM's order either (018).
 func TestCommandIsDeterministic(t *testing.T) {
 	root := t.TempDir()
-	_, first := runCompileTo(t, repoPath("testdata", "ctm", "three-node.json"), filepath.Join(root, "b1"))
-	_, second := runCompileTo(t, repoPath("testdata", "ctm", "three-node.shuffled.json"), filepath.Join(root, "b2"))
+	_, first := runCompileTo(t, wrappedFixture("three-node"), filepath.Join(root, "b1"))
+	_, second := runCompileTo(t, wrappedCTM(t, repoPath("testdata", "ctm", "three-node.shuffled.json")), filepath.Join(root, "b2"))
 	if first.BundleID != second.BundleID {
 		t.Errorf("bundle_id differs across input order: %s vs %s", first.BundleID, second.BundleID)
+	}
+	if first.SnapshotID != fixtureSnapshotID || second.SnapshotID != fixtureSnapshotID {
+		t.Errorf("snapshot_id %s and %s across input order, want %s for both", first.SnapshotID, second.SnapshotID, fixtureSnapshotID)
 	}
 	golden, err := bundle.IDOfDir(repoPath("testdata", "golden", "three-node"))
 	if err != nil {
@@ -150,7 +196,7 @@ func TestCommandIsDeterministic(t *testing.T) {
 // every node — including a device with no interfaces at all.
 func TestEveryNodeGetsTheManagementPort(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "b")
-	if code, doc := runCompileTo(t, repoPath("testdata", "ctm", "no-mgmt.json"), out); code != 0 {
+	if code, doc := runCompileTo(t, wrappedCTM(t, repoPath("testdata", "ctm", "no-mgmt.json")), out); code != 0 {
 		t.Fatalf("exit %d: %+v", code, doc.Findings)
 	}
 	b, err := os.ReadFile(filepath.Join(out, compiler.ManifestFile))
@@ -187,11 +233,11 @@ func TestEveryNodeGetsTheManagementPort(t *testing.T) {
 // nothing was validated, so there is nothing to report findings about.
 func TestMissingFlagsAreOperationalFailures(t *testing.T) {
 	for _, tc := range []struct {
-		label string
-		flags compileFlags
+		label, says string
+		flags       compileFlags
 	}{
-		{"no --ctm", compileFlags{out: "/tmp/x"}},
-		{"no --out", compileFlags{ctmPath: repoPath("testdata", "ctm", "three-node.json")}},
+		{"no --snapshot", "--snapshot is required", compileFlags{out: "/tmp/x"}},
+		{"no --out", "--out is required", compileFlags{snapshotPath: wrappedFixture("three-node")}},
 	} {
 		t.Run(tc.label, func(t *testing.T) {
 			f := tc.flags
@@ -200,8 +246,8 @@ func TestMissingFlagsAreOperationalFailures(t *testing.T) {
 			if !asResult(err, &res) {
 				t.Fatalf("got %v, want a findings result", err)
 			}
-			if got := res.doc.Status.ExitCode(); got != 2 {
-				t.Errorf("exit %d, want 2", got)
+			if got := res.doc.Status.ExitCode(); got != 2 || len(res.doc.Findings) != 1 || res.doc.Findings[0].Message != tc.says {
+				t.Errorf("exit %d, findings %+v; want 2 saying %q", got, res.doc.Findings, tc.says)
 			}
 		})
 	}
@@ -221,14 +267,9 @@ func TestCompileRefusesAnArtifactNotNamedAsItsPackageNamesIt(t *testing.T) {
 			c.Devices[i].Artifact.Name = "cli"
 		}
 	}
-	dir := t.TempDir()
-	in := filepath.Join(dir, "renamed.ctm.json")
-	if err := ctm.Save(c, in); err != nil {
-		t.Fatal(err)
-	}
-	out := filepath.Join(dir, "b")
+	out := filepath.Join(t.TempDir(), "b")
 
-	code, doc := runCompileTo(t, in, out)
+	code, doc := runCompileTo(t, wrappedCTMOf(t, c), out)
 	if code != 1 {
 		t.Errorf("exit %d, want 1", code)
 	}
@@ -258,7 +299,7 @@ func TestCompileRefusesAPortCollision(t *testing.T) {
 	out := filepath.Join(t.TempDir(), "b")
 	usePSPDir(t, repoPath("testdata", "psp", "lossy"))
 	code, doc := runCompileWith(t, &options{asJSON: true},
-		repoPath("testdata", "ctm", "defects", "port-collision.json"), out)
+		wrappedCTM(t, repoPath("testdata", "ctm", "defects", "port-collision.json")), out)
 	if code != 1 {
 		t.Errorf("exit %d, want 1", code)
 	}
@@ -275,27 +316,34 @@ func TestCompileRefusesAPortCollision(t *testing.T) {
 	}
 }
 
-// An unreadable or malformed CTM is exit 2 as well: the file could not be interpreted,
-// which is a different thing from intent that could be interpreted and was wrong. A CTM
-// of another version is neither: it is refused ctm.version.unsupported, exit 1
-// (TestAnotherCTMVersionIsRefusedBeforeValidation).
-func TestUnreadableCTMIsAnOperationalFailure(t *testing.T) {
+// An unreadable or malformed snapshot is exit 2 as well: the file could not be
+// interpreted, which is a different thing from intent that could be interpreted and was
+// wrong. A snapshot that is not JSON, one whose CTM does not decode (a key the CTM does not
+// hold, an envelope of M1's contract), and a file the client cannot read are each that. A
+// snapshot or a CTM of another version is neither: it is refused under its own rule, exit 1
+// (TestCompileReadsASnapshotByItsRules).
+func TestUnreadableSnapshotIsAnOperationalFailure(t *testing.T) {
 	dir := t.TempDir()
-	bad := filepath.Join(dir, "bad.json")
-	if err := os.WriteFile(bad, []byte(`{"ctm_version":"2","typo":true}`), 0o644); err != nil {
-		t.Fatal(err)
+	write := func(name, body string) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return path
 	}
-	wrongVersion := filepath.Join(dir, "v2.json")
-	if err := os.WriteFile(wrongVersion, []byte(`{"ctm_version":"2","envelope":{"branch":"b",
-	  "observed_at":"x","schema_hash":"h","contract_version":"0.2"},"devices":[],"links":[]}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	for _, path := range []string{bad, wrongVersion, filepath.Join(dir, "missing.json")} {
-		t.Run(filepath.Base(path), func(t *testing.T) {
+	for _, c := range []struct{ path, says string }{
+		{write("not-json.json", `{"snapshot_version":"1",`), "decoding snapshot: "},
+		{write("bad.json", `{"snapshot_version":"1","ctm":{"ctm_version":"2","typo":true},"probes":[]}`), "in the snapshot's ctm: "},
+		{write("v2.json", `{"snapshot_version":"1","ctm":{"ctm_version":"2","envelope":{"branch":"b",
+		  "observed_at":"x","schema_hash":"h","contract_version":"0.2"},"devices":[],"links":[]},"probes":[]}`), "in the snapshot's ctm: "},
+		{filepath.Join(dir, "missing.json"), "reading snapshot: open " + filepath.Join(dir, "missing.json") + ": no such file or directory"},
+	} {
+		t.Run(filepath.Base(c.path), func(t *testing.T) {
 			out := filepath.Join(t.TempDir(), "b")
-			code, _ := runCompileTo(t, path, out)
-			if code != 2 {
-				t.Errorf("exit %d, want 2", code)
+			code, doc := runCompileTo(t, c.path, out)
+			if code != 2 || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleOperationFailed ||
+				!strings.HasPrefix(doc.Findings[0].Message, c.says) {
+				t.Errorf("exit %d, findings %+v; want 2, operation.failed saying %q", code, doc.Findings, c.says)
 			}
 			if _, err := os.Stat(out); !os.IsNotExist(err) {
 				t.Errorf("something was written to %s", out)
@@ -304,26 +352,28 @@ func TestUnreadableCTMIsAnOperationalFailure(t *testing.T) {
 	}
 }
 
-// A golden CTM sent through the API comes back as its golden bundle, byte for byte: the
-// server's compile is the code path the golden tests run, so the client writes what
-// compiler.Compile wrote.
+// Each wrapped fixture sent through the API comes back as its golden bundle, byte for byte:
+// the server's compile is the code path the golden tests run, so the client writes what
+// compiler.Compile wrote. The document names the snapshot the file declares, and nothing is
+// filed: the state root's snapshots/ stays absent (018, US4 scenario 1).
 // The lossy golden compiles with the test-only package beside the embedded ones, as
 // internal/compiler's golden test loads it.
-func TestGoldenCTMsComeBackAsTheGoldenBundles(t *testing.T) {
+func TestWrappedFixturesComeBackAsTheGoldenBundles(t *testing.T) {
 	for _, c := range []struct {
-		golden, ctm, pspDir string
+		golden, pspDir string
 	}{
-		{"three-node", "three-node.json", ""},
-		{"lossy", "lossy.json", repoPath("testdata", "psp", "lossy")},
-		{"mixed", "mixed.json", ""},
+		{"three-node", ""},
+		{"lossy", repoPath("testdata", "psp", "lossy")},
+		{"mixed", ""},
 	} {
 		t.Run(c.golden, func(t *testing.T) {
+			paths := useStateRoot(t)
 			if c.pspDir != "" {
 				usePSPDir(t, c.pspDir)
 			}
 			golden := repoPath("testdata", "golden", c.golden)
 			out := filepath.Join(t.TempDir(), "bundle")
-			code, doc := runCompileTo(t, repoPath("testdata", "ctm", c.ctm), out)
+			code, doc := runCompileTo(t, wrappedFixture(c.golden), out)
 			if code != findings.ExitOK {
 				t.Fatalf("exit %d: %+v", code, doc.Findings)
 			}
@@ -331,7 +381,111 @@ func TestGoldenCTMsComeBackAsTheGoldenBundles(t *testing.T) {
 			if want := idOfDir(t, golden); doc.BundleID != want {
 				t.Errorf("bundle_id %s, want the golden's %s", doc.BundleID, want)
 			}
+			s, err := snap.Load(wrappedFixture(c.golden))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if doc.SnapshotID != s.ID || doc.Subject == nil || doc.Subject.Snapshot != wrappedFixture(c.golden) || doc.Subject.CTM != "" {
+				t.Errorf("snapshot_id %s, subject %+v; want the file's %s, and the file as the snapshot", doc.SnapshotID, doc.Subject, s.ID)
+			}
+			if _, err := os.Stat(paths.Snapshots); !os.IsNotExist(err) {
+				t.Errorf("snapshots/ exists after a compile (%v): twin compile files nothing", err)
+			}
 		})
+	}
+}
+
+// A bare CTM wrapped by hand, declaring neither its snapshot_id nor its observed_at,
+// compiles: the server computes the one and fills the other, and the snapshot is the one
+// the shipped wrap names, since neither is in what its id hashes (US4 scenario 3).
+func TestAHandWrappedCTMCompiles(t *testing.T) {
+	out := filepath.Join(t.TempDir(), "bundle")
+	code, doc := runCompileTo(t, wrappedCTM(t, repoPath("testdata", "ctm", "three-node.json")), out)
+	if code != findings.ExitOK || doc.SnapshotID != fixtureSnapshotID || doc.BundleID != fixtureBundleID {
+		t.Fatalf("exit %d, snapshot %q, bundle %q, findings %+v; want 0, %s and %s", code, doc.SnapshotID, doc.BundleID,
+			doc.Findings, fixtureSnapshotID, fixtureBundleID)
+	}
+	sameTree(t, out, repoPath("testdata", "golden", "three-node"))
+}
+
+// twin compile reads a snapshot and nothing else: a bare CTM, which declares no
+// snapshot_version, is snapshot.version.unsupported at the file, and a snapshot wrapping a
+// CTM "1" is ctm.version.unsupported at the file, each exit 1 with no step, nothing written
+// and no id named (R-03; contracts/cli.md, "018: snapshots").
+func TestCompileReadsASnapshotByItsRules(t *testing.T) {
+	bare := repoPath("testdata", "ctm", "three-node.json")
+	versionOne := wrappedCTM(t, repoPath("testdata", "ctm", "defects", "version-1.json"))
+	for _, c := range []struct {
+		name, path, rule, message string
+	}{
+		{"a bare CTM", bare, findings.RuleSnapshotVersionUnsupported,
+			`the snapshot declares no snapshot_version; this build reads "1", and nothing converts one`},
+		{"a wrapped CTM 1", versionOne, findings.RuleCTMVersionUnsupported,
+			`the CTM declares ctm_version "1"; this build reads "2", and nothing converts one`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out := filepath.Join(t.TempDir(), "b")
+			code, doc := runCompileTo(t, c.path, out)
+			if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0].Rule != c.rule ||
+				doc.Findings[0].Object != c.path || doc.Findings[0].Message != c.message {
+				t.Errorf("exit %d, findings %+v; want 1, one %s at %s: %s", code, doc.Findings, c.rule, c.path, c.message)
+			}
+			if doc.SnapshotID != "" || doc.BundleID != "" {
+				t.Errorf("a refused snapshot names snapshot %q, bundle %q", doc.SnapshotID, doc.BundleID)
+			}
+			if _, err := os.Stat(out); !os.IsNotExist(err) {
+				t.Errorf("something was written to %s", out)
+			}
+		})
+	}
+}
+
+// --ctm is retired (018): cobra answers its own unknown flag, exit 2, and the client sends
+// no request, so no server sees it; the help names --snapshot, and how a bare CTM is
+// wrapped.
+func TestCompileTakesNoCTM(t *testing.T) {
+	awaitIdle(t)
+	before := requestsLogged()
+	opts := &options{}
+	root := &cobra.Command{Use: "fylgja", SilenceUsage: true, SilenceErrors: true}
+	root.PersistentFlags().BoolVar(&opts.asJSON, "json", false, "")
+	root.AddCommand(newTwinCmd(opts))
+	// --json comes first: cobra stops reading flags at the unknown one.
+	root.SetArgs([]string{"--json", "twin", "compile", "--ctm", repoPath("testdata", "ctm", "three-node.json"),
+		"--out", filepath.Join(t.TempDir(), "b")})
+	var code int
+	out := captureStdout(t, func() {
+		cmd, err := root.ExecuteC()
+		code = report(opts, cmd, err)
+	})
+	var doc findings.Document
+	if err := json.Unmarshal([]byte(out), &doc); err != nil {
+		t.Fatalf("stdout is not one findings document: %v\n%s", err, out)
+	}
+	if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0].Message != "unknown flag: --ctm" {
+		t.Errorf("exit %d, findings %+v; want 2, cobra's unknown flag", code, doc.Findings)
+	}
+	awaitIdle(t)
+	if got := requestsLogged(); got != before {
+		t.Errorf("the server logged %d requests, want none", got-before)
+	}
+
+	help := &cobra.Command{Use: "fylgja"}
+	help.AddCommand(newTwinCmd(&options{}))
+	help.SetArgs([]string{"twin", "compile", "--help"})
+	text := captureStdout(t, func() {
+		if err := help.Execute(); err != nil {
+			t.Error(err)
+		}
+	})
+	for _, want := range []string{"--snapshot string", "the snapshot file to compile (required)",
+		`{"snapshot_version": "1", "ctm": <the CTM>, "probes": []}`} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the help does not say %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "--ctm") {
+		t.Errorf("the help names --ctm:\n%s", text)
 	}
 }
 
@@ -423,19 +577,14 @@ func TestCompileRefusesAnEnvelopeOfAnotherForm(t *testing.T) {
 		}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			snapshot, err := ctm.Load(repoPath("testdata", "ctm", "three-node.json"))
+			edited, err := ctm.Load(repoPath("testdata", "ctm", "three-node.json"))
 			if err != nil {
 				t.Fatal(err)
 			}
-			c.change(&snapshot.Envelope)
-			dir := t.TempDir()
-			in := filepath.Join(dir, "edited.ctm.json")
-			if err := ctm.Save(snapshot, in); err != nil {
-				t.Fatal(err)
-			}
-			out := filepath.Join(dir, "b")
+			c.change(&edited.Envelope)
+			out := filepath.Join(t.TempDir(), "b")
 
-			code, doc := runCompileTo(t, in, out)
+			code, doc := runCompileTo(t, wrappedCTMOf(t, edited), out)
 			if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleRequiredMissing ||
 				doc.Findings[0].Object != c.object || doc.Findings[0].Severity != string(findings.Rejection) {
 				t.Errorf("exit %d, findings %+v; want 1 with %s naming %s alone", code, doc.Findings, findings.RuleRequiredMissing, c.object)

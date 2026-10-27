@@ -770,7 +770,7 @@ func TestServeReportsAndServesItsDefaultScope(t *testing.T) {
 			}
 
 			req, err := http.NewRequest(http.MethodPost, "http://"+reportAddress(t, stdout.String())+api.Path(findings.OpIntentRead),
-				strings.NewReader(`{"render":"json","args":{"branch":"fylgja-test-serve","out":"ctm.json"}}`))
+				strings.NewReader(`{"render":"json","args":{"branch":"fylgja-test-serve","out":"snapshot.json"}}`))
 			if err != nil {
 				t.Fatal(err)
 			}

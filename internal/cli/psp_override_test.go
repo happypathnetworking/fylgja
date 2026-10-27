@@ -62,7 +62,7 @@ func TestInvalidOverridePackageIsARejection(t *testing.T) {
 		out := filepath.Join(t.TempDir(), "b")
 		usePSPDir(t, dir)
 		err := runCompile(&options{asJSON: true},
-			&compileFlags{ctmPath: repoPath("testdata", "ctm", "three-node.json"), out: out})
+			&compileFlags{snapshotPath: wrappedFixture("three-node"), out: out})
 		code, doc := docOf(t, err)
 		if code != findings.ExitRejected || !carries(doc, findings.RulePSPReadinessEncoding) {
 			t.Errorf("exit %d, findings %+v; want 1 with %s", code, doc.Findings, findings.RulePSPReadinessEncoding)
@@ -83,7 +83,7 @@ func TestInvalidOverridePackageIsARejection(t *testing.T) {
 		t.Setenv("INFRAHUB_ADDRESS", srv.URL)
 		t.Setenv("INFRAHUB_API_TOKEN", "not-a-real-token")
 
-		out := filepath.Join(t.TempDir(), "ctm.json")
+		out := filepath.Join(t.TempDir(), "snapshot.json")
 		usePSPDir(t, dir)
 		err := runRead(t.Context(), &options{asJSON: true},
 			&readFlags{branch: "fylgja-fixture", out: out})

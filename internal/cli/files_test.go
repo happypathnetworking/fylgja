@@ -11,12 +11,12 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/tree"
 )
 
-// The CTM a read answers with is written whole or not at all, and a write that fails is
-// M12's sentence.
-func TestWriteCTMIsAtomic(t *testing.T) {
+// The snapshot a read answers with is written whole or not at all, and a write that fails
+// is M12's sentence, worded for the snapshot (018).
+func TestWriteSnapshotIsAtomic(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "ctm.json")
-	if err := writeCTM([]byte(`{"a":1}`), path); err != nil {
+	path := filepath.Join(dir, "snapshot.json")
+	if err := writeSnapshot([]byte(`{"a":1}`), path); err != nil {
 		t.Fatal(err)
 	}
 	if b, _ := os.ReadFile(path); string(b) != `{"a":1}` {
@@ -29,8 +29,8 @@ func TestWriteCTMIsAtomic(t *testing.T) {
 	if info, _ := os.Stat(path); info.Mode().Perm() != 0o644 {
 		t.Errorf("mode %v", info.Mode().Perm())
 	}
-	err := writeCTM([]byte(`{}`), filepath.Join(dir, "absent", "ctm.json"))
-	if err == nil || !strings.HasPrefix(err.Error(), "writing CTM: ") {
+	err := writeSnapshot([]byte(`{}`), filepath.Join(dir, "absent", "snapshot.json"))
+	if err == nil || !strings.HasPrefix(err.Error(), "writing snapshot: ") {
 		t.Errorf("an unwritable path: %v", err)
 	}
 }
@@ -39,22 +39,22 @@ func TestWriteCTMIsAtomic(t *testing.T) {
 func TestTheFilesACommandSends(t *testing.T) {
 	dir := t.TempDir()
 	missing := filepath.Join(dir, "absent.json")
-	if _, err := readCTM(missing); err == nil || err.Error() != "reading CTM: open "+missing+": no such file or directory" {
-		t.Errorf("readCTM: %v", err)
+	if _, err := readSnapshot(missing); err == nil || err.Error() != "reading snapshot: open "+missing+": no such file or directory" {
+		t.Errorf("readSnapshot: %v", err)
 	}
-	ctm := filepath.Join(dir, "ctm.json")
-	if err := os.WriteFile(ctm, []byte("{}"), 0o644); err != nil {
+	snap := filepath.Join(dir, "snapshot.json")
+	if err := os.WriteFile(snap, []byte("{}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if f, err := readCTM(ctm); err != nil || f.Path != ctm || string(f.Data) != "{}" {
-		t.Errorf("readCTM: %+v %v", f, err)
+	if f, err := readSnapshot(snap); err != nil || f.Path != snap || string(f.Data) != "{}" {
+		t.Errorf("readSnapshot: %+v %v", f, err)
 	}
 
-	files, err := readPackages([]string{ctm, ctm})
-	if err != nil || len(files) != 2 || files[1].Path != ctm {
+	files, err := readPackages([]string{snap, snap})
+	if err != nil || len(files) != 2 || files[1].Path != snap {
 		t.Errorf("readPackages: %+v %v", files, err)
 	}
-	if _, err := readPackages([]string{ctm, missing}); err == nil || err.Error() != "open "+missing+": no such file or directory" {
+	if _, err := readPackages([]string{snap, missing}); err == nil || err.Error() != "open "+missing+": no such file or directory" {
 		t.Errorf("readPackages of a missing file: %v", err)
 	}
 }

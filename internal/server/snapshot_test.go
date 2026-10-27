@@ -141,20 +141,25 @@ func fixtureFile(t *testing.T, edit func(map[string]any)) []api.File {
 	return []api.File{{Path: "snap.json", Data: b}}
 }
 
-// A snapshot file is refused by snapshot.Unmarshal's rules, each under its own identifier at
-// resolve, exit 1, naming the file or the field (R-03; contracts/cli.md, "018: snapshots",
-// the refusals as they print); a file that is not JSON was never validated and is
-// operation.failed, exit 2. Nothing is filed for any of them.
-func TestResolveSnapshotRefusesAFileByItsRules(t *testing.T) {
+// fileRefusal is a snapshot file the server refuses by snapshot.Unmarshal's rules, and the
+// one finding it is refused with, but for its step, which the command places: resolve for
+// twin create --snapshot, none for twin compile (R-03).
+type fileRefusal struct {
+	name          string
+	files         []api.File
+	code          int
+	rule, object  string
+	message       string
+	messagePrefix bool
+}
+
+// fileRefusals are the refusals of contracts/cli.md, "018: snapshots", as they print, each
+// sent under the path snap.json; a file that is not JSON was never validated and is
+// operation.failed, exit 2.
+func fileRefusals(t *testing.T) []fileRefusal {
+	t.Helper()
 	ctmOf := func(doc map[string]any) map[string]any { return doc["ctm"].(map[string]any) }
-	for _, c := range []struct {
-		name          string
-		files         []api.File
-		code          int
-		rule, object  string
-		message       string
-		messagePrefix bool
-	}{
+	return []fileRefusal{
 		{"another version", fixtureFile(t, func(d map[string]any) { d["snapshot_version"] = "2" }), findings.ExitRejected,
 			findings.RuleSnapshotVersionUnsupported, "snap.json",
 			`the snapshot declares snapshot_version "2"; this build reads "1", and nothing converts one`, false},
@@ -178,7 +183,15 @@ func TestResolveSnapshotRefusesAFileByItsRules(t *testing.T) {
 				", but its body hashes to " + fixtureSnapshotID + "; leave snapshot_id out to have it computed", false},
 		{"not JSON", []api.File{{Path: "snap.json", Data: []byte("{")}}, findings.ExitError, findings.RuleOperationFailed, "snap.json",
 			"decoding snapshot: ", true},
-	} {
+	}
+}
+
+// A snapshot file is refused by snapshot.Unmarshal's rules, each under its own identifier at
+// resolve, exit 1, naming the file or the field (R-03; contracts/cli.md, "018: snapshots",
+// the refusals as they print); a file that is not JSON was never validated and is
+// operation.failed, exit 2. Nothing is filed for any of them.
+func TestResolveSnapshotRefusesAFileByItsRules(t *testing.T) {
+	for _, c := range fileRefusals(t) {
 		t.Run(c.name, func(t *testing.T) {
 			paths := useStateRoot(t)
 			_, _, err := resolveSnapshot(context.Background(), paths, findings.OpTwinCreate, &findings.Subject{Snapshot: "snap.json"},

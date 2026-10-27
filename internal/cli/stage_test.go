@@ -16,6 +16,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	snap "github.com/happypathnetworking/fylgja/internal/snapshot"
 )
 
 // The stage commands' files through the API. The server reads, compiles and validates; the
@@ -48,12 +49,13 @@ func readFixture(opts *options, out string) error {
 	return runRead(context.Background(), opts, &readFlags{branch: "fylgja-fixture", out: out})
 }
 
-// intent read --out writes exactly the bytes of the CTM the server sent, and nothing beside
-// them.
-func TestIntentReadWritesTheCTMTheServerSent(t *testing.T) {
+// intent read --out writes exactly the bytes of the snapshot the server sent (018: the CTM
+// before it), and nothing beside them.
+func TestIntentReadWritesTheSnapshotTheServerSent(t *testing.T) {
+	useStateRoot(t)
 	newFakeInfrahub(t).start()
 	dir := t.TempDir()
-	out := filepath.Join(dir, "ctm.json")
+	out := filepath.Join(dir, "snapshot.json")
 	m := markServed()
 
 	run := oneMode(t, false, func(opts *options) error { return readFixture(opts, out) })
@@ -61,8 +63,8 @@ func TestIntentReadWritesTheCTMTheServerSent(t *testing.T) {
 		t.Fatalf("exit %d\nstderr: %s", run.code, run.stderr)
 	}
 	frames := filesFramesSince(t, m)
-	if len(frames) != 1 || len(frames[0]) != 1 || frames[0][0].Path != "ctm.json" {
-		t.Fatalf("the server sent files frames %+v, want one carrying ctm.json alone", frames)
+	if len(frames) != 1 || len(frames[0]) != 1 || frames[0][0].Path != "snapshot.json" {
+		t.Fatalf("the server sent files frames %+v, want one carrying snapshot.json alone", frames)
 	}
 	got, err := os.ReadFile(out)
 	if err != nil {
@@ -71,21 +73,21 @@ func TestIntentReadWritesTheCTMTheServerSent(t *testing.T) {
 	if !bytes.Equal(got, frames[0][0].Data) {
 		t.Errorf("--out holds %d bytes that are not the %d the server sent", len(got), len(frames[0][0].Data))
 	}
-	if _, err := ctm.Unmarshal(got); err != nil {
-		t.Errorf("--out is not a CTM: %v", err)
+	if _, err := snap.Unmarshal(got); err != nil {
+		t.Errorf("--out is not a snapshot: %v", err)
 	}
-	if entries := entriesOf(t, dir); !slices.Equal(entries, []string{"ctm.json"}) {
-		t.Errorf("--out's directory holds %v, want ctm.json alone", entries)
+	if entries := entriesOf(t, dir); !slices.Equal(entries, []string{"snapshot.json"}) {
+		t.Errorf("--out's directory holds %v, want snapshot.json alone", entries)
 	}
 	if !strings.Contains(run.stdout, out) {
 		t.Errorf("stdout %q does not carry the summary line naming %s", run.stdout, out)
 	}
 }
 
-// An answer cut inside its files frame writes nothing: a CTM already at --out is left as it
-// was, and no temporary file is left beside it.
-func TestIntentReadCutInsideTheCTMWritesNothing(t *testing.T) {
-	line, err := json.Marshal(api.Frame{Files: []api.File{{Path: "ctm.json", Data: bytes.Repeat([]byte("{}\n"), 4096)}}})
+// An answer cut inside its files frame writes nothing: a snapshot already at --out is left
+// as it was, and no temporary file is left beside it.
+func TestIntentReadCutInsideTheSnapshotWritesNothing(t *testing.T) {
+	line, err := json.Marshal(api.Frame{Files: []api.File{{Path: "snapshot.json", Data: bytes.Repeat([]byte("{}\n"), 4096)}}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,8 +98,8 @@ func TestIntentReadCutInsideTheCTMWritesNothing(t *testing.T) {
 		dropConnection(t, w)
 	})
 	dir := t.TempDir()
-	out := filepath.Join(dir, "ctm.json")
-	earlier := []byte("the CTM an earlier read wrote\n")
+	out := filepath.Join(dir, "snapshot.json")
+	earlier := []byte("the snapshot an earlier read wrote\n")
 	writeFile(t, out, string(earlier))
 
 	text, asJSON := runBothModes(t, func(opts *options) error { return readFixture(opts, out) })
@@ -107,20 +109,22 @@ func TestIntentReadCutInsideTheCTMWritesNothing(t *testing.T) {
 		}
 	}
 	if got, _ := os.ReadFile(out); !bytes.Equal(got, earlier) {
-		t.Errorf("--out now holds %q, want the earlier CTM unchanged", got)
+		t.Errorf("--out now holds %q, want the earlier snapshot unchanged", got)
 	}
-	if entries := entriesOf(t, dir); !slices.Equal(entries, []string{"ctm.json"}) {
-		t.Errorf("--out's directory holds %v, want ctm.json alone", entries)
+	if entries := entriesOf(t, dir); !slices.Equal(entries, []string{"snapshot.json"}) {
+		t.Errorf("--out's directory holds %v, want snapshot.json alone", entries)
 	}
 }
 
-// A read the server refuses sends no CTM, and the client writes nothing.
+// A read the server refuses sends no snapshot and files none, and the client writes
+// nothing.
 func TestIntentReadRefusedWritesNothing(t *testing.T) {
+	paths := useStateRoot(t)
 	f := newFakeInfrahub(t)
 	f.branches = map[string]*ctm.CTM{"refused": &f.fixture}
 	f.untagged = map[string]bool{"refused": true}
 	f.start()
-	out := filepath.Join(t.TempDir(), "ctm.json")
+	out := filepath.Join(t.TempDir(), "snapshot.json")
 	m := markServed()
 
 	run := oneMode(t, true, func(opts *options) error {
@@ -135,24 +139,28 @@ func TestIntentReadRefusedWritesNothing(t *testing.T) {
 	if _, err := os.Stat(out); !os.IsNotExist(err) {
 		t.Errorf("a refused read left %s: %v", out, err)
 	}
+	if got := filedSnapshots(t, paths); len(got) != 0 {
+		t.Errorf("a refused read filed %v", got)
+	}
 }
 
-// A CTM the client cannot write ends the read with M12's operation.failed, "writing CTM: …",
-// under the subject the server's document names, and the summary line after the files frame
-// is not printed.
+// A snapshot the client cannot write ends the read with M12's operation.failed, "writing
+// snapshot: …" (018: "writing CTM: …" before it), under the subject the server's document
+// names, and the summary line after the files frame is not printed.
 func TestIntentReadUnwritableOutIsTheClientsOwnFailure(t *testing.T) {
+	useStateRoot(t)
 	newFakeInfrahub(t).start()
-	out := filepath.Join(t.TempDir(), "absent", "ctm.json")
+	out := filepath.Join(t.TempDir(), "absent", "snapshot.json")
 
 	text, asJSON := runBothModes(t, func(opts *options) error { return readFixture(opts, out) })
-	if text.code != findings.ExitError || text.stdout != "" || !strings.Contains(text.stderr, "writing CTM: ") {
-		t.Errorf("text: exit %d, stdout %q, stderr %q; want 2, nothing on stdout and writing CTM on stderr", text.code, text.stdout, text.stderr)
+	if text.code != findings.ExitError || text.stdout != "" || !strings.Contains(text.stderr, "writing snapshot: ") {
+		t.Errorf("text: exit %d, stdout %q, stderr %q; want 2, nothing on stdout and writing snapshot on stderr", text.code, text.stdout, text.stderr)
 	}
 	doc := asJSON.doc
 	if asJSON.code != findings.ExitError || doc.Operation != findings.OpIntentRead || len(doc.Findings) != 1 {
 		t.Fatalf("--json: exit %d, document %+v; want 2 from intent.read with one finding", asJSON.code, doc)
 	}
-	prefix := "writing CTM: open " + filepath.Join(filepath.Dir(out), ".fylgja-ctm-")
+	prefix := "writing snapshot: open " + filepath.Join(filepath.Dir(out), ".fylgja-snapshot-")
 	if f := doc.Findings[0]; f.Rule != findings.RuleOperationFailed || f.Object != findings.OpIntentRead ||
 		!strings.HasPrefix(f.Message, prefix) || !strings.HasSuffix(f.Message, ": no such file or directory") {
 		t.Errorf("finding %+v, want operation.failed on intent.read saying %s…: no such file or directory", f, prefix)
@@ -169,8 +177,8 @@ func TestIntentReadUnwritableOutIsTheClientsOwnFailure(t *testing.T) {
 // empty", under the compile's subject, with nothing else printed and the directory left as
 // it was.
 func TestCompileIntoANonEmptyDirectory(t *testing.T) {
-	ctmPath := repoPath("testdata", "ctm", "three-node.json")
-	c, err := ctm.Load(ctmPath)
+	snapshotPath := wrappedFixture("three-node")
+	c, err := ctm.Load(repoPath("testdata", "ctm", "three-node.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +186,7 @@ func TestCompileIntoANonEmptyDirectory(t *testing.T) {
 	writeFile(t, filepath.Join(out, "keep.txt"), "the operator's\n")
 
 	text, asJSON := runBothModes(t, func(opts *options) error {
-		return runCompile(opts, &compileFlags{ctmPath: ctmPath, out: out})
+		return runCompile(opts, &compileFlags{snapshotPath: snapshotPath, out: out})
 	})
 	message := "output directory " + out + " is not empty"
 	if text.code != findings.ExitError || text.stdout != "" || !strings.Contains(text.stderr, message) ||
@@ -186,7 +194,7 @@ func TestCompileIntoANonEmptyDirectory(t *testing.T) {
 		t.Errorf("text: exit %d, stdout %q, stderr %q; want 2, nothing on stdout and %q alone on stderr", text.code, text.stdout, text.stderr, message)
 	}
 	want := findings.ErrorDocument(findings.OpCompile,
-		&findings.Subject{CTM: ctmPath, Out: out, Branch: c.Envelope.Branch, At: c.Envelope.At}, message)
+		&findings.Subject{Snapshot: snapshotPath, Out: out, Branch: c.Envelope.Branch, At: c.Envelope.At}, message)
 	if asJSON.code != findings.ExitError || !sameJSON(t, asJSON.doc, want) {
 		t.Errorf("--json: exit %d, document %+v\nwant 2 and %+v", asJSON.code, asJSON.doc, want)
 	}
@@ -307,7 +315,7 @@ func TestPSPValidateChecksThePackageSentAlone(t *testing.T) {
 		t.Errorf("exit %d, stdout %q, stderr %q; want 0 and %s valid", run.code, run.stdout, run.stderr, shipped)
 	}
 
-	code, doc := runCompileTo(t, repoPath("testdata", "ctm", "three-node.json"), filepath.Join(t.TempDir(), "bundle"))
+	code, doc := runCompileTo(t, wrappedFixture("three-node"), filepath.Join(t.TempDir(), "bundle"))
 	if code != findings.ExitRejected || len(doc.Findings) == 0 || !strings.HasPrefix(doc.Findings[0].Rule, "psp.") {
 		t.Errorf("a compile against the same server: exit %d, findings %+v; want 1 with the override's psp findings", code, doc.Findings)
 	}

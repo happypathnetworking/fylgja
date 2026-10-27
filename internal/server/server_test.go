@@ -436,6 +436,8 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 		// 014: the argument M10 named is gone with the waypoint; stage is its successor.
 		{findings.OpTwinCreate, `{"args":{"waypoint":"demo/2"}}`, `twin.create takes no argument "waypoint"`},
 		{findings.OpStageList, `{"args":{"series":"demo"}}`, `stage.list takes no argument "series"`},
+		// 018: twin.compile's ctm is renamed snapshot.
+		{findings.OpCompile, `{"args":{"ctm":"ctm.json","out":"out"}}`, `twin.compile takes no argument "ctm"`},
 		{findings.OpTwinCreate, `{"args":{"branch":true}}`, `twin.create's argument "branch" is not a string`},
 		{findings.OpTwinCreate, `{"args":{"dry_run":"yes"}}`, `twin.create's argument "dry_run" is not a boolean`},
 		{findings.OpTwinVerify, `{"args":{"args":"x"}}`, `twin.verify's argument "args" is not an array of strings`},
@@ -996,7 +998,7 @@ func TestTheConsoleRendersAsAsked(t *testing.T) {
 		_ = c.frames.write(api.Frame{Run: &api.RunRef{WorkflowID: provision.WorkflowStep, RunID: "01a1"}})
 		_ = c.frames.write(api.Frame{Event: &api.Event{WorkflowID: provision.WorkflowStep, Step: "read", End: true, Outcome: "done", DurationS: 2.1}})
 		_ = c.frames.write(api.Frame{Event: &api.Event{Notice: "a notice"}})
-		_ = c.frames.write(api.Frame{Files: []api.File{{Path: "ctm.json", Data: []byte("{}")}}})
+		_ = c.frames.write(api.Frame{Files: []api.File{{Path: "snapshot.json", Data: []byte("{}")}}})
 		_, _ = io.WriteString(c.console.stderr(), "no newline")
 		return &result{doc: doc}
 	}

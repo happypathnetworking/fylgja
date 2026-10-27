@@ -28,6 +28,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
+	snap "github.com/happypathnetworking/fylgja/internal/snapshot"
 	intentstage "github.com/happypathnetworking/fylgja/internal/stage"
 	"github.com/happypathnetworking/fylgja/internal/stages"
 )
@@ -228,6 +229,8 @@ type stepHostFixture struct {
 	infra  *fakeInfrahub
 	clab   *stepClab
 	fromID string
+	// fromSnapshot is the snapshot the record names, as a create since 018 records it.
+	fromSnapshot string
 	// before is how many requests Infrahub had answered once the fixture was built.
 	before int
 	// svc is the workflow service useNoRunsInFlight installed.
@@ -247,9 +250,9 @@ func useNoRunsInFlight(t *testing.T) *fakeService {
 // stepHost is a host running the mixed twin, built from stage change-1/sealed by run
 // createRunID: the state root, the fake Infrahub, containerlab answering inspect-three.json
 // and plan, both logins set and no host budget, and a workflow service with no run in
-// flight that starts nothing (useNoRunsInFlight). The from bundle is built and filed through
-// stage plan's own path, as a create's compile files it, and twin.json 6 records it; change
-// adjusts the record before it is written.
+// flight that starts nothing (useNoRunsInFlight). The from stage's snapshot and bundle are
+// taken, built and filed through stage plan's own path, as a create files them, and twin.json
+// 9 records both; change adjusts the record before it is written.
 func stepHost(t *testing.T, plan string, change func(*lab.RecordFields)) *stepHostFixture {
 	t.Helper()
 	paths := useStateRoot(t)
@@ -258,25 +261,46 @@ func stepHost(t *testing.T, plan string, change func(*lab.RecordFields)) *stepHo
 	infra := stepInfrahub(t)
 	infra.start()
 	fromID := buildStage(t, paths, "sealed")
-	writeTwin(t, paths, stepRecordOf(t, fromID, change))
+	fromSnapshot := snapshotOf(t, fromID)
+	writeTwin(t, paths, stepRecordOf(t, fromID, func(f *lab.RecordFields) {
+		f.SnapshotID = fromSnapshot
+		if change != nil {
+			change(f)
+		}
+	}))
 	return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-three.json", plan), fromID: fromID,
-		before: len(infra.requests()), svc: svc}
+		fromSnapshot: fromSnapshot, before: len(infra.requests()), svc: svc}
 }
 
-// compiledStage is what stage plan's path hands its filing for one label.
+// compiledStage is what stage plan's path hands its take and its filing for one label.
 type compiledStage struct {
-	files map[string][]byte
-	id    string
+	snapshot *snap.Snapshot
+	files    map[string][]byte
+	id       string
 }
 
-// builtStages holds buildStage's read and compile by label, once for the package. Every
-// caller reads stepInfrahub's proposed change as stepHost builds it, unchanged, so a label
-// compiles to the same files each time; only the filing, into each test's own store, is
-// done again.
+// builtStages holds buildStage's read, take and compile by label, once for the package, and
+// the snapshot each bundle compileStage built was taken as. Every caller reads stepInfrahub's
+// proposed change as stepHost builds it, unchanged, so a label compiles to the same files
+// each time; only the filing, into each test's own stores, is done again.
 var builtStages = struct {
 	sync.Mutex
-	byLabel map[string]compiledStage
-}{byLabel: map[string]compiledStage{}}
+	byLabel    map[string]compiledStage
+	snapshotOf map[string]string
+}{byLabel: map[string]compiledStage{}, snapshotOf: map[string]string{}}
+
+// snapshotOf is the snapshot id of a bundle compileStage built, as a create records it beside
+// the bundle.
+func snapshotOf(t *testing.T, bundleID string) string {
+	t.Helper()
+	builtStages.Lock()
+	defer builtStages.Unlock()
+	id, ok := builtStages.snapshotOf[bundleID]
+	if !ok {
+		t.Fatalf("bundle %s was not built by compileStage", bundleID)
+	}
+	return id
+}
 
 // stepStamper reads a branch's stamps as the server's does, but for the conformance check
 // before a branch's first, which every branch stepInfrahub serves passes.
@@ -300,6 +324,9 @@ func buildStage(t *testing.T, paths lab.Paths, label string) string {
 	built, ok := builtStages.byLabel[label]
 	builtStages.Unlock()
 	if ok {
+		if _, err := snap.NewDirStore(paths.Snapshots).Put(context.Background(), built.snapshot); err != nil {
+			t.Fatal(err)
+		}
 		if _, _, err := fileCompiled(context.Background(), paths.Bundles, built.files, built.id); err != nil {
 			t.Fatal(err)
 		}
@@ -312,7 +339,7 @@ func buildStage(t *testing.T, paths lab.Paths, label string) string {
 	return built.id
 }
 
-// compileStage is buildStage's read, compile and filing, against the fake Infrahub as it
+// compileStage is buildStage's read, take, compile and filing, against the fake Infrahub as it
 // stands: a test that has changed stepInfrahub's proposed change builds its stages here,
 // never through builtStages.
 func compileStage(t *testing.T, paths lab.Paths, label string) compiledStage {
@@ -331,19 +358,27 @@ func compileStage(t *testing.T, paths lab.Paths, label string) compiledStage {
 	if err != nil || ch == nil {
 		t.Fatalf("change-1's proposed change was not found: %v %+v", err, list)
 	}
+	take := func(ctx context.Context, c *ctm.CTM) (string, findings.List, error) {
+		built.snapshot = snap.Take(c)
+		_, err := snap.NewDirStore(paths.Snapshots).Put(ctx, built.snapshot)
+		return built.snapshot.ID, nil, err
+	}
 	file := func(ctx context.Context, files map[string][]byte, id string) (findings.List, error) {
-		built = compiledStage{files: files, id: id}
+		built.files, built.id = files, id
 		_, list, err := fileCompiled(ctx, paths.Bundles, files, id)
 		return list, err
 	}
 	ref := stages.Ref{Branch: "change-1", Label: label}
-	s := stages.Build(ctx, reader, stepStamper{}, reg, ch, ref, stages.NewPipeline(file), time.Now().UTC())
+	s := stages.Build(ctx, reader, stepStamper{}, reg, ch, ref, stages.NewPipeline(take, file), time.Now().UTC())
 	if s.Status != stages.PlanCompiled {
 		t.Fatalf("%s did not compile: %+v", ref, s.Findings)
 	}
-	if built.id != s.Bundle.ID {
-		t.Fatalf("%s filed %s and compiled to %s", ref, built.id, s.Bundle.ID)
+	if built.id != s.Bundle.ID || built.snapshot.ID != s.SnapshotID {
+		t.Fatalf("%s filed %s and %s and compiled to %s and %s", ref, built.snapshot.ID, built.id, s.SnapshotID, s.Bundle.ID)
 	}
+	builtStages.Lock()
+	builtStages.snapshotOf[built.id] = built.snapshot.ID
+	builtStages.Unlock()
 	return built
 }
 
@@ -602,13 +637,14 @@ func samePlan(a, b wire.ReconcilePlan) bool {
 }
 
 // stepDryRunLines is the dry run's text for the step change-1/sealed → change-1/linked
-// under plan-link-added.json, through the push: line (contracts/cli.md).
-func stepDryRunLines(fromID, toID string) []string {
+// under plan-link-added.json, through the push: line (contracts/cli.md), from h's twin.
+func stepDryRunLines(h *stepHostFixture, toID string) []string {
 	return []string{
 		"dry run: no lab, container, twin directory or run is changed",
-		"twin: stage change-1/sealed (bundle " + short(fromID) + "), pinned at " + stepMixedAt + "; 3 nodes",
+		"twin: stage change-1/sealed (snapshot " + short(h.fromSnapshot) + ", bundle " + short(h.fromID) + "), pinned at " +
+			stepMixedAt + "; 3 nodes",
 		`stage change-1/linked: branch change-1 at ` + stepWrittenAt + ` (written), "a link between e1 and s1"`,
-		"step change-1/sealed → change-1/linked (" + short(fromID) + " → " + short(toID) + "):",
+		"step change-1/sealed → change-1/linked (" + short(h.fromID) + " → " + short(toID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
 		"  links: +e1:eth3 — s1:e1-3",
 		"  artifacts: e1 device-config 6b31a6de… → fb3cbaf9…; s1 device-config 5e2a65f4… → 22ada947…",
@@ -652,7 +688,7 @@ func TestStepDryRun(t *testing.T) {
 				t.Fatalf("exit %d, want %d; findings %+v", out.code, c.code, out.doc.Findings)
 			}
 			toID := out.doc.BundleID
-			want := strings.Join(append(stepDryRunLines(h.fromID, toID),
+			want := strings.Join(append(stepDryRunLines(h, toID),
 				"memory: sum 5120 MiB; host budget unset",
 				"host: lab fylgja present; twin directory present",
 				"verdict: "+c.verdict), "\n") + "\n"
@@ -1170,7 +1206,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		{name: "a twin of a bundle", host: func(t *testing.T) *stepHostFixture {
 			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) {
-				f.Stage, f.Source, f.ObservedAt, f.Provenance.At = nil, wire.SourceBundle, nil, ""
+				f.Stage, f.Source, f.ObservedAt, f.Provenance.At, f.SnapshotID = nil, wire.SourceBundle, nil, "", ""
 			})
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
 			"the twin was created from a bundle"+noStage),
@@ -1866,14 +1902,21 @@ func TestStepRuns(t *testing.T) {
 			// step's record names; containerlab's plan as
 			// its recording reads; and the target read's own observed_at, which the record takes
 			// once the step moves the twin.
-			wantFrom := wire.StepSide{Stage: stepStage("sealed", "the mixed fixture as sealed", "given"), BundleID: h.fromID, At: stepMixedAt}
-			wantTo := wire.StepSide{Stage: stepStage("linked", "a link between e1 and s1", "written"), BundleID: toID,
-				At: stepWrittenAt, Branch: "change-1"}
+			// Each side names its snapshot (018): the record's, and the one the target's build
+			// took, which the document names beside the target's bundle.
+			wantFrom := wire.StepSide{Stage: stepStage("sealed", "the mixed fixture as sealed", "given"), SnapshotID: h.fromSnapshot,
+				BundleID: h.fromID, At: stepMixedAt}
+			toSnapshot := out.doc.SnapshotID
+			if !snap.IsID(toSnapshot) || toSnapshot == h.fromSnapshot || !slices.Contains(filedSnapshots(t, h.paths), toSnapshot+".json") {
+				t.Errorf("the document names snapshot %q; want the target's, filed in the store", toSnapshot)
+			}
+			wantTo := wire.StepSide{Stage: stepStage("linked", "a link between e1 and s1", "written"), SnapshotID: toSnapshot,
+				BundleID: toID, At: stepWrittenAt, Branch: "change-1"}
 			wantPlan := wire.ReconcilePlan{Restarted: []string{"e1"}, LinksAdded: []string{"e1:eth2 -- s1:e1-2"},
 				Reasons: map[string]string{"e1": "added link"}}
 			if unchanged {
-				wantTo = wire.StepSide{Stage: stepStage("again", "the fixture again", "given"), BundleID: toID, At: stepLaterAt,
-					Branch: "change-1"}
+				wantTo = wire.StepSide{Stage: stepStage("again", "the fixture again", "given"), SnapshotID: toSnapshot, BundleID: toID,
+					At: stepLaterAt, Branch: "change-1"}
 				wantPlan = wire.ReconcilePlan{}
 			}
 			asJSON := func(v any) string {
@@ -2294,10 +2337,13 @@ type stepTwin struct {
 	retired                                      bool
 }
 
-// twinAt rewrites stepHost's record as the twin of w, which then steps from w's bundle.
+// twinAt rewrites stepHost's record as the twin of w, which then steps from w's snapshot and
+// bundle.
 func twinAt(t *testing.T, h *stepHostFixture, w stepTwin) {
 	t.Helper()
+	h.fromSnapshot = snapshotOf(t, w.id)
 	writeTwin(t, h.paths, stepRecordOf(t, w.id, func(f *lab.RecordFields) {
+		f.SnapshotID = h.fromSnapshot
 		f.Provenance.Branch, f.Provenance.At = w.branch, w.at
 		f.Stage = stepStage(w.label, w.description, w.atSource)
 		if w.retired {
@@ -2407,7 +2453,8 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 		"recreated-nodes": [], "started-nodes": [], "added-links": [], "deleted-endpoints": ["e1:eth3", "s1:e1-3"],
 		"restarted-nodes": ["e1"], "node-change-reasons": {"e1": "deleted endpoint"}}`)
 	first := []string{
-		"twin: stage change-1/linked (bundle " + short(linkedID) + "), pinned at " + stepWrittenAt + "; 3 nodes",
+		"twin: stage change-1/linked (snapshot " + short(h.fromSnapshot) + ", bundle " + short(linkedID) + "), pinned at " +
+			stepWrittenAt + "; 3 nodes",
 		`stage change-1/sealed: branch change-1 at ` + stepMixedAt + ` (given), "the mixed fixture as sealed"`,
 		"step change-1/linked → change-1/sealed (" + short(linkedID) + " → " + short(sealedID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
@@ -2479,9 +2526,10 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 			out.stdout, want)
 	}
 	in := svc.stepped[0]
-	wantFrom := wire.StepSide{Stage: stepStage("linked", "a link between e1 and s1", "written"), BundleID: linkedID, At: stepWrittenAt}
-	wantTo := wire.StepSide{Stage: stepStage("sealed", "the mixed fixture as sealed", "given"), BundleID: sealedID, At: stepMixedAt,
-		Branch: "change-1"}
+	wantFrom := wire.StepSide{Stage: stepStage("linked", "a link between e1 and s1", "written"), SnapshotID: snapshotOf(t, linkedID),
+		BundleID: linkedID, At: stepWrittenAt}
+	wantTo := wire.StepSide{Stage: stepStage("sealed", "the mixed fixture as sealed", "given"), SnapshotID: snapshotOf(t, sealedID),
+		BundleID: sealedID, At: stepMixedAt, Branch: "change-1"}
 	if !reflect.DeepEqual(in.From, wantFrom) || !reflect.DeepEqual(in.To, wantTo) || len(in.PushPlan) != 2 ||
 		!slices.Equal(in.PushPlan[0].Reasons, []string{"artifact", "restarted"}) || !slices.Equal(in.PushPlan[1].Reasons, []string{"artifact", "bootstrap"}) {
 		t.Errorf("the run's input from %+v to %+v, push plan %+v; want linked → sealed, e1 (artifact, restarted) and s1 "+
@@ -2552,7 +2600,8 @@ func TestStepFromTheBranchPointToTheHead(t *testing.T) {
 	h.infra.branches["main"] = mixed
 	bp := compileStage(t, h.paths, "branch-point")
 	twinAt(t, h, stepTwin{id: bp.id, label: "branch-point", atSource: "branch_point", branch: "main", at: fakeBranchedFrom})
-	const twinLine = "twin: stage change-1/branch-point (bundle %s), pinned at " + fakeBranchedFrom + "; 3 nodes"
+	twinLine := "twin: stage change-1/branch-point (snapshot " + short(bp.snapshot.ID) + ", bundle %s), pinned at " +
+		fakeBranchedFrom + "; 3 nodes"
 
 	t.Run("to the head", func(t *testing.T) {
 		h.clab.plan = []byte(`{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": [],
@@ -2830,4 +2879,129 @@ func TestStepToAStaleStageIsRefused(t *testing.T) {
 	if got := intentReadAfter(h.infra, before); len(got) != 0 {
 		t.Errorf("the stale target was read: %+v", got)
 	}
+}
+
+// A step names each side's snapshot (018; R-13, R-09). From a 9 record of stage sealed to
+// stage again, the twin line names the record's snapshot, the run's input names sealed's on
+// its from side and the one the target's build took on its to side, which the document names
+// beside the target's bundle; the record NewStepRecord builds from that input names the
+// target's at its top level once the step moves the twin, and both in its step, while a
+// diverged step keeps the record's own. From a record of 8, which names none, the twin line
+// says none and the from side carries no snapshot_id, and the document validates.
+func TestStepNamesEachSidesSnapshot(t *testing.T) {
+	t.Run("from a 9 record", func(t *testing.T) {
+		h := stepHost(t, "plan-nothing.json", nil)
+		svc := &fakeService{runID: stepRunID, events: unchangedStepEvents()}
+		useService(t, svc)
+		useInterrupts(t)
+		svc.stepResult = provision.StepResult{Outcome: provision.StepUnchanged, PushPlan: []wire.StepPush{},
+			Timings: wire.StepTimings{WholeS: 1.8}, Record: &wire.TwinRecord{State: wire.StateReady}, Findings: findings.List{},
+			StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:14:32Z"}
+
+		out := runStepCmd(t, "--stage", "change-1/again")
+		if out.code != findings.ExitOK || len(svc.stepped) != 2 {
+			t.Fatalf("exit %d, %d runs started; want 0 and one per run of the command: %+v", out.code, len(svc.stepped), out.doc.Findings)
+		}
+		in := svc.stepped[1]
+		if want := "twin: stage change-1/sealed (snapshot " + short(h.fromSnapshot) + ", bundle " + short(h.fromID) + "), pinned at " +
+			stepMixedAt + "; 3 nodes"; lineOf(out.stdout, 1) != want {
+			t.Errorf("the twin line %q, want %q", lineOf(out.stdout, 1), want)
+		}
+		if in.From.SnapshotID != h.fromSnapshot || !snap.IsID(in.To.SnapshotID) || in.To.SnapshotID == h.fromSnapshot ||
+			in.To.SnapshotID != snapshotOfTarget(t, h, in.To.BundleID) {
+			t.Errorf("the input's sides name snapshots %q → %q; want the record's %s, then the target's", in.From.SnapshotID,
+				in.To.SnapshotID, h.fromSnapshot)
+		}
+		if st := out.doc.Step; out.doc.SnapshotID != in.To.SnapshotID || out.doc.BundleID != in.To.BundleID || st == nil ||
+			st.From.SnapshotID != h.fromSnapshot || st.To.SnapshotID != in.To.SnapshotID {
+			t.Errorf("the document names snapshot %q and step %+v; want the target's beside its bundle, and both sides'",
+				out.doc.SnapshotID, st)
+		}
+
+		prev, err := lab.ReadRecord(h.paths.TwinJSON)
+		if err != nil {
+			t.Fatal(err)
+		}
+		moved, err := lab.NewStepRecord(prev, recordedStep(prev, in, wire.StepUnchanged))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if moved.SnapshotID == nil || *moved.SnapshotID != in.To.SnapshotID || moved.Step == nil ||
+			moved.Step.From.SnapshotID != h.fromSnapshot || moved.Step.To.SnapshotID != in.To.SnapshotID {
+			t.Errorf("the record after the step names snapshot %v and step %+v; want the target's, and both sides'",
+				moved.SnapshotID, moved.Step)
+		}
+		diverged, err := lab.NewStepRecord(prev, recordedStep(prev, in, wire.StepDiverged))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if diverged.SnapshotID == nil || *diverged.SnapshotID != h.fromSnapshot || diverged.Step == nil ||
+			diverged.Step.From.SnapshotID != h.fromSnapshot || diverged.Step.To.SnapshotID != in.To.SnapshotID {
+			t.Errorf("the record after a diverged step names snapshot %v and step %+v; want the record's own, and both sides'",
+				diverged.SnapshotID, diverged.Step)
+		}
+	})
+
+	t.Run("from an 8 record", func(t *testing.T) {
+		h := editedRecordHost(t, func(m map[string]any) {
+			m["twin_version"] = "8"
+			unsnapshotted(m)
+		})
+		out := runStepCmd(t, "--dry-run", "--allow-restart")
+		if want := "twin: stage change-1/sealed (snapshot none, bundle " + short(h.fromID) + "), pinned at " + stepMixedAt +
+			"; 3 nodes"; out.code != findings.ExitOK || lineOf(out.stdout, 2) != want {
+			t.Errorf("exit %d, the twin line %q; want 0 and %q", out.code, lineOf(out.stdout, 2), want)
+		}
+		st := out.doc.Step
+		if st == nil || st.From.SnapshotID != "" || !snap.IsID(st.To.SnapshotID) || out.doc.SnapshotID != st.To.SnapshotID {
+			t.Fatalf("the step %+v, the document's snapshot %q; want none on the from side, the target's on the to side", st,
+				out.doc.SnapshotID)
+		}
+		from, err := json.Marshal(st.From)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(from), "snapshot_id") {
+			t.Errorf("the from side %s carries a snapshot_id; a record of 8 names none", from)
+		}
+	})
+}
+
+// snapshotOfTarget is the snapshot the step's build of its target filed: the one entry of
+// snapshots/ that is not the from side's, whose bundle is bundleID.
+func snapshotOfTarget(t *testing.T, h *stepHostFixture, bundleID string) string {
+	t.Helper()
+	var found []string
+	for _, name := range filedSnapshots(t, h.paths) {
+		if id := strings.TrimSuffix(name, ".json"); id != h.fromSnapshot {
+			found = append(found, id)
+		}
+	}
+	if len(found) != 1 || !slices.Contains(storedBundles(t, h.paths.Bundles), bundleID) {
+		t.Fatalf("snapshots/ holds %v beside the from side's, and bundles/ %v; want the target's one snapshot and bundle %s",
+			found, storedBundles(t, h.paths.Bundles), bundleID)
+	}
+	return found[0]
+}
+
+// recordedStep is what the step's record activity hands NewStepRecord for a step of in from
+// prev ending outcome: an unchanged step with the target staged and every node of prev
+// running, or a diverged one at its push, with nothing staged and nothing landed.
+func recordedStep(prev wire.TwinRecord, in provision.StepInput, outcome string) lab.StepFields {
+	f := lab.StepFields{Outcome: outcome, From: in.From, To: in.To, ObservedAt: in.ObservedAt, RunID: stepRunID,
+		Version: version, Pushed: []wire.StepPush{}, StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:14:32Z",
+		RecordedAt: time.Date(2026, 10, 2, 9, 14, 32, 0, time.UTC)}
+	if outcome == wire.StepDiverged {
+		f.Phase = findings.StepPush
+		return f
+	}
+	provenance := prev.Provenance
+	provenance.At = in.To.At
+	f.Staged = &lab.StagedTarget{BundleID: in.To.BundleID, Provenance: provenance, PSP: map[string]wire.PSPRef{}}
+	for _, n := range prev.Nodes {
+		f.Nodes = append(f.Nodes, wire.LabNode{Name: n.Name, Container: n.Container, Image: n.Image, State: "running",
+			MgmtIPv4: n.MgmtIPv4})
+		f.Staged.PSP[n.Name] = n.PSP
+	}
+	return f
 }

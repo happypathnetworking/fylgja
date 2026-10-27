@@ -394,7 +394,7 @@ func answerCases() []answerCase {
 			toID := runStepCmd(t, "--dry-run", "--allow-restart").doc.BundleID
 			return answerWant{args: map[string]any{"dry_run": true, "allow_restart": true},
 				kinds: []string{api.KindDocument}, status: findings.StatusOK,
-				stdout: lines(append(stepDryRunLines(h.fromID, toID),
+				stdout: lines(append(stepDryRunLines(h, toID),
 					"memory: sum 5120 MiB; host budget unset",
 					"host: lab fylgja present; twin directory present",
 					"verdict: "+findings.VerdictClear)...)}

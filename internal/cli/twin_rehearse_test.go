@@ -13,10 +13,13 @@ import (
 	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/api"
+	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/rehearsal"
+	snap "github.com/happypathnetworking/fylgja/internal/snapshot"
 )
 
 // US1's acceptance scenarios through the harness (015, T028–T029): `twin rehearse
@@ -272,8 +275,24 @@ func TestRehearseEveryStagePasses(t *testing.T) {
 		}
 		point, seeded := in.Stages[0], in.Stages[1]
 		if point.Refused == nil || point.Refused.Rule != findings.RuleScopeEmpty || point.Provision != nil || point.Step != nil ||
-			point.BundleID != "" {
+			point.BundleID != "" || point.SnapshotID != "" {
 			t.Errorf("the branch point %+v; want it passed over, refused %s, with no child", point, findings.RuleScopeEmpty)
+		}
+		// Each compiled stage names its snapshot, taken in the plan before any boot: the
+		// baseline's provision, and each step's two sides (018; R-13).
+		for _, s := range in.Stages[1:] {
+			if !snap.IsID(s.SnapshotID) {
+				t.Errorf("%s names snapshot %q; want the one its read was taken as", s.Ref, s.SnapshotID)
+			}
+		}
+		if p := seeded.Provision; p == nil || p.SnapshotID != seeded.SnapshotID {
+			t.Errorf("the baseline's provision %+v; want it to name snapshot %s", p, seeded.SnapshotID)
+		}
+		for i := 2; i < len(in.Stages); i++ {
+			s, prev := in.Stages[i], in.Stages[i-1]
+			if st := s.Step; st == nil || st.From.SnapshotID != prev.SnapshotID || st.To.SnapshotID != s.SnapshotID {
+				t.Errorf("%s's step %+v; want its sides to name %s and %s", s.Ref, st, prev.SnapshotID, s.SnapshotID)
+			}
 		}
 		// Already compiled, as a rebuild's child is: from intent, with the bundle set.
 		if p := seeded.Provision; p == nil || p.Source != wire.SourceIntent || p.Branch != lessLink || p.At != cabledAt ||
@@ -342,6 +361,13 @@ func TestRehearseEveryStagePasses(t *testing.T) {
 		if want := []string{pointRef + " baseline baseline", seededRef + " rehearsed passed", thirdRef + " rehearsed passed",
 			headRef + " rehearsed passed"}; !slices.Equal(rehearsalStages(doc), want) {
 			t.Errorf("the report's stages %v, want %v", rehearsalStages(doc), want)
+		}
+		// The report names the snapshot each stage was rehearsed from, the one the run's
+		// input named, beside its bundle.
+		for i, s := range doc.Rehearsal.Stages {
+			if s.SnapshotID == nil || *s.SnapshotID != in.Stages[i].SnapshotID || !snap.IsID(*s.SnapshotID) {
+				t.Errorf("the report's %s names snapshot %v; want %s", s.Ref, s.SnapshotID, in.Stages[i].SnapshotID)
+			}
 		}
 		mustQuoteNoContent(t, f, raw)
 	})
@@ -593,6 +619,46 @@ func TestRehearseRefusedBeforeAnyBoot(t *testing.T) {
 		}
 		startedNothing(t, "no proposed change", clab, nil)
 	})
+}
+
+// US5 scenario 3 (018): every stage's snapshot is taken in the plan, before the first boot.
+// On a main that carries the network, the branch point and seeded compile, each its snapshot
+// filed, and third-link reads a branch holding no device from its at on, refused scope.empty
+// at its read, as is the head after it: the rehearsal is refused before the host is read or
+// the workflow service asked to start anything, exit 1, the two snapshots filed and named in
+// the report, the refused stages naming none.
+func TestRehearseFilesEachStagesSnapshotBeforeAnyBoot(t *testing.T) {
+	clab := rehearseHost(t)
+	paths := lab.PathsAt(os.Getenv(lab.EnvStateRoot))
+	f := planInfrahub(t, rehearseMarks()...)
+	versioned(t, f)
+	f.versions[lessLink] = append(f.versions[lessLink], fakeVersion{Since: planLiveAt, CTM: &ctm.CTM{}})
+	f.start()
+	svc := &fakeService{readOnly: t}
+	useService(t, svc)
+
+	code, doc, raw := rehearseDoc(t, "--branch", lessLink)
+	if code != findings.ExitRejected || doc.Status != findings.StatusRejected || doc.Rehearsal == nil || doc.Rehearsal.Run != nil {
+		t.Fatalf("exit %d, status %s; want 1, rejected, the stages named and no run\n%s", code, doc.Status, raw)
+	}
+	third := doc.Rehearsal.Stages[2]
+	if third.Ref != thirdRef || len(third.Findings) == 0 || !carriesRule(third.Findings, findings.RuleScopeEmpty) {
+		t.Errorf("%s's findings %v; want it refused %s at its read", third.Ref, rulesOf(third.Findings), findings.RuleScopeEmpty)
+	}
+	var named, files []string
+	for _, s := range doc.Rehearsal.Stages {
+		if s.SnapshotID != nil {
+			named = append(named, s.Ref)
+			files = append(files, *s.SnapshotID+".json")
+		}
+	}
+	if want := []string{pointRef, seededRef}; !slices.Equal(named, want) {
+		t.Errorf("the report names the snapshots of %v; want the two stages that compiled, %v\n%s", named, want, raw)
+	}
+	if got := filedSnapshots(t, paths); !slices.Equal(got, sortedCopy(files...)) {
+		t.Errorf("snapshots/ holds %v; want the two stages' %v, taken before any boot", got, files)
+	}
+	startedNothing(t, "a stage refused at its read", clab, svc)
 }
 
 // Scenario 6: on a main that holds no network the branch point's row reads refused, as the
@@ -1042,6 +1108,19 @@ func TestRehearseMarkdown(t *testing.T) {
 	for _, want := range []string{"\n| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |\n", "\n```mermaid\nflowchart TD\n"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("the markdown lacks %q:\n%s", want, stdout)
+		}
+	}
+	// Each row names its stage's snapshot before its bundle, and the branch point, refused at
+	// its read, neither (018; T021's column).
+	for _, s := range doc.Rehearsal.Stages {
+		cells := " | — | — | "
+		if s.SnapshotID != nil && s.BundleID != nil {
+			cells = " | " + (*s.SnapshotID)[:8] + "… | " + (*s.BundleID)[:8] + "… | "
+		} else if s.Ref != pointRef {
+			t.Errorf("%s names snapshot %v and bundle %v; want both", s.Ref, s.SnapshotID, s.BundleID)
+		}
+		if !strings.Contains(stdout, "\n| "+s.Ref+" | ") || !strings.Contains(stdout, cells) {
+			t.Errorf("the markdown's row for %s lacks %q:\n%s", s.Ref, cells, stdout)
 		}
 	}
 	for _, progress := range []string{"run fylgja-rehearse r1\n", "stage " + seededRef + ": creating the twin\n", "rehearsal ok: "} {

@@ -590,7 +590,7 @@ func TestStagePlanStageFailed(t *testing.T) {
 // computed, the step block by node and port name as the bundles give them, unchanged.
 // stderr carries the document's findings, as every command's text does.
 func TestStagePlanText(t *testing.T) {
-	useStateRoot(t)
+	paths := useStateRoot(t)
 	useService(t, nil)
 	f := planInfrahub(t, twoMarks()...)
 	versioned(t, f)
@@ -600,8 +600,24 @@ func TestStagePlanText(t *testing.T) {
 	code, stdout, stderr := runStage(t, "plan", "--branch", lessLink)
 	_, doc, _ := stageDoc(t, "plan", "--branch", lessLink)
 	stages, steps := planned(t, doc)
-	if len(stages) != 4 || stages[1].BundleID == nil || stages[2].BundleID == nil || stages[3].BundleID == nil || len(steps) != 3 {
+	if len(stages) != 4 || len(steps) != 3 {
 		t.Fatalf("the plan %+v", doc.Plan)
+	}
+	// Each compiled stage names its snapshot above its bundle (018), filed in the store; the
+	// branch point, refused at its read, names neither.
+	if stages[0].SnapshotID != nil || stages[0].BundleID != nil {
+		t.Errorf("the branch point names snapshot %v and bundle %v; want null for each", stages[0].SnapshotID, stages[0].BundleID)
+	}
+	var snapshots, files []string
+	for _, st := range stages[1:] {
+		if st.SnapshotID == nil || st.BundleID == nil {
+			t.Fatalf("%s names snapshot %v and bundle %v; want both", st.Ref, st.SnapshotID, st.BundleID)
+		}
+		snapshots = append(snapshots, *st.SnapshotID)
+		files = append(files, *st.SnapshotID+".json")
+	}
+	if got := filedSnapshots(t, paths); !slices.Equal(got, sortedCopy(files...)) {
+		t.Errorf("the store holds %v; want the three stages' snapshots %v", got, files)
 	}
 	cabled, live, head := *stages[1].BundleID, *stages[2].BundleID, *stages[3].BundleID
 	const missing = "rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at " + fakeBranchedFrom
@@ -611,6 +627,7 @@ func TestStagePlanText(t *testing.T) {
 		`  ` + missing,
 		`step change-1/branch-point → change-1/cabled (— → ` + cabled[:8] + `…): not computed (change-1/branch-point was refused)`,
 		`change-1/cabled: branch change-1 at ` + cabledAt + ` (written), "the leaf cabled"`,
+		`  snapshot_id ` + snapshots[0],
 		`  bundle_id ` + cabled,
 		`  read: 3 devices (nokia_srlinux 3), 9 interfaces, 2 links, 3 artifacts, 0 lossy mappings, 0 shared ports`,
 		`step change-1/cabled → change-1/live (` + cabled[:8] + `… → ` + live[:8] + `…):`,
@@ -618,10 +635,12 @@ func TestStagePlanText(t *testing.T) {
 		`  links: +n2:e1-2 — n3:e1-1`,
 		`  artifacts: unchanged`,
 		`change-1/live: branch change-1 at ` + planLiveAt + ` (given), "the leaf live"`,
+		`  snapshot_id ` + snapshots[1],
 		`  bundle_id ` + live,
 		`  read: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports`,
 		`step change-1/live → change-1/head (` + live[:8] + `… → ` + head[:8] + `…): unchanged; the ids differ by provenance alone`,
 		`change-1/head: branch change-1 at ` + planHeadAt + ` (head)`,
+		`  snapshot_id ` + snapshots[2],
 		`  bundle_id ` + head,
 		`  read: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports`,
 	}, "\n") + "\n"

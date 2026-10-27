@@ -13,18 +13,23 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/psp"
+	"github.com/happypathnetworking/fylgja/internal/snapshot"
 	"github.com/happypathnetworking/fylgja/internal/stage"
 	"github.com/happypathnetworking/fylgja/internal/step"
 )
 
-// fakePipeline is Infrahub's branches under the stage read, and a store, with the real pure
-// compile between them: each reference reads as the fixture CTM at the at asked for,
-// except those a case names, and every read and filing is recorded.
+// fakePipeline is Infrahub's branches under the stage read, and two stores, with the real
+// pure take and compile between them: each reference reads as the fixture CTM at the at
+// asked for, except those a case names, each read is taken by snapshot.Take with no store,
+// and every read, take, compile and filing is recorded.
 type fakePipeline struct {
 	t      *testing.T
 	reads  []string // branch@at, in order
 	scopes []string // the scope of each read, in order
+	taken  []string // snapshot ids, in order
 	filed  []string // bundle ids, in order
+	// calls is every call into the pipeline, in order: read, take, compile, file.
+	calls []string
 	// Per branch: a read that could not run, a read refused, a read's warnings, a CTM of a
 	// platform no package covers. Per branch@at: a CTM with the last link removed.
 	readErr      map[string]error
@@ -32,6 +37,9 @@ type fakePipeline struct {
 	readWarnings map[string]findings.List
 	unsupported  map[string]bool
 	lessLink     map[string]bool
+	// A take that could not run and a take refused (a corrupt store entry), on every stage.
+	takeErr      error
+	takeRefusals findings.List
 	fileErr      error
 	fileRefusals findings.List
 }
@@ -39,6 +47,7 @@ type fakePipeline struct {
 func (f *fakePipeline) pipeline() Pipeline {
 	return Pipeline{
 		Read: func(_ context.Context, branch, at, scope string, _ *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error) {
+			f.calls = append(f.calls, "read")
 			f.reads = append(f.reads, branch+"@"+at)
 			f.scopes = append(f.scopes, scope)
 			if err := f.readErr[branch]; err != nil {
@@ -70,8 +79,21 @@ func (f *fakePipeline) pipeline() Pipeline {
 			}
 			return c, f.readWarnings[branch], nil
 		},
-		Compile: stage.Compile,
+		Take: func(_ context.Context, c *ctm.CTM) (string, findings.List, error) {
+			f.calls = append(f.calls, "take")
+			if f.takeErr != nil || f.takeRefusals != nil {
+				return "", f.takeRefusals, f.takeErr
+			}
+			id := snapshot.Take(c).ID
+			f.taken = append(f.taken, id)
+			return id, nil, nil
+		},
+		Compile: func(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, string, findings.List) {
+			f.calls = append(f.calls, "compile")
+			return stage.Compile(c, reg)
+		},
 		File: func(_ context.Context, _ map[string][]byte, id string) (findings.List, error) {
+			f.calls = append(f.calls, "file")
 			if f.fileErr != nil || f.fileRefusals != nil {
 				return f.fileRefusals, f.fileErr
 			}
@@ -138,18 +160,33 @@ func TestPlanStages(t *testing.T) {
 		bp.AtSource != AtBranchPoint || bp.Bundle != nil || len(bp.Findings) != 1 || bp.Findings[0].Step != findings.StepRead {
 		t.Errorf("branch-point: %+v", bp)
 	}
-	var ids []string
+	if bp.SnapshotID != "" || bp.Block().SnapshotID != nil {
+		t.Errorf("branch-point: snapshot %q; a stage refused at read files none and names null", bp.SnapshotID)
+	}
+	var ids, snapshots []string
 	for _, st := range res.Stages[1:] {
-		if st.Bundle == nil || st.Read == nil || st.Resolved == nil || st.ObservedAt == "" {
+		if st.Bundle == nil || st.Read == nil || st.Resolved == nil || st.ObservedAt == "" || !snapshot.IsID(st.SnapshotID) {
 			t.Fatalf("%s: %+v", st.Ref, st)
 		}
+		if b := st.Block(); b.SnapshotID == nil || *b.SnapshotID != st.SnapshotID {
+			t.Errorf("%s: the block names snapshot %v, want %s", st.Ref, b.SnapshotID, st.SnapshotID)
+		}
 		ids = append(ids, st.Bundle.ID)
+		snapshots = append(snapshots, st.SnapshotID)
 	}
 	if !reflect.DeepEqual(f.filed, ids) {
 		t.Errorf("filed %v, want one bundle per stage compiled: %v", f.filed, ids)
 	}
+	if !reflect.DeepEqual(f.taken, snapshots) {
+		t.Errorf("took %v, want one snapshot per stage read: %v", f.taken, snapshots)
+	}
 	if ids[0] == ids[1] || ids[1] == ids[2] {
 		t.Errorf("ids %v: two ats of one intent must differ by provenance", ids)
+	}
+	// The snapshot hashes the CTM's envelope, at included, but not observed_at: live and head
+	// read one intent at two ats, so two snapshots, as two bundles.
+	if snapshots[0] == snapshots[1] || snapshots[1] == snapshots[2] {
+		t.Errorf("snapshots %v: two ats of one intent must differ by provenance", snapshots)
 	}
 	if got, want := res.Steps[0].Text(), "step change-1/branch-point → change-1/cabled (— → "+ids[0][:8]+"…): not computed (change-1/branch-point was refused)"; got != want {
 		t.Errorf("step 1: %s\nwant %s", got, want)
@@ -368,6 +405,9 @@ func TestPlanPerStageOutcomes(t *testing.T) {
 		Message: "the store's entry hashes otherwise", Step: findings.StepCompile}}
 	gone := errors.Join(intent.ErrBranchNotFound, errors.New("Branch: change-2 not found."))
 
+	corrupt := findings.List{{Severity: findings.Rejection, Rule: findings.RuleSnapshotIDMismatch, Object: "/store/s.json",
+		Message: "the store's entry hashes otherwise"}}
+
 	for _, c := range []struct {
 		name   string
 		f      *fakePipeline
@@ -376,17 +416,24 @@ func TestPlanPerStageOutcomes(t *testing.T) {
 		step   string
 		object string
 		read   bool
+		// taken is whether the stage names its snapshot: filed before the compile, so kept by
+		// a compile or a filing refused after it.
+		taken bool
 	}{
 		{"read refused", &fakePipeline{readRefused: map[string]findings.List{"change-2": notReady}},
-			PlanRefused, findings.RuleArtifactNotReady, findings.StepRead, "n1", false},
+			PlanRefused, findings.RuleArtifactNotReady, findings.StepRead, "n1", false, false},
 		{"branch gone", &fakePipeline{readErr: map[string]error{"change-2": gone}},
-			PlanFailed, findings.RuleOperationFailed, findings.StepRead, "change-2/head", false},
+			PlanFailed, findings.RuleOperationFailed, findings.StepRead, "change-2/head", false, false},
+		{"take refused", &fakePipeline{takeRefusals: corrupt},
+			PlanRefused, findings.RuleSnapshotIDMismatch, findings.StepCompile, "/store/s.json", true, false},
+		{"take could not run", &fakePipeline{takeErr: errors.New("disk full")},
+			PlanFailed, findings.RuleOperationFailed, findings.StepCompile, "change-2/head", true, false},
 		{"compile refused", &fakePipeline{unsupported: map[string]bool{"change-2": true}},
-			PlanRefused, findings.RulePlatformUnsupported, findings.StepCompile, "n1", true},
+			PlanRefused, findings.RulePlatformUnsupported, findings.StepCompile, "n1", true, true},
 		{"filing refused", &fakePipeline{fileRefusals: mismatch},
-			PlanRefused, findings.RuleBundleIDMismatch, findings.StepCompile, "/store/x", true},
+			PlanRefused, findings.RuleBundleIDMismatch, findings.StepCompile, "/store/x", true, true},
 		{"filing could not run", &fakePipeline{fileErr: errors.New("disk full")},
-			PlanFailed, findings.RuleOperationFailed, findings.StepCompile, "change-2/head", true},
+			PlanFailed, findings.RuleOperationFailed, findings.StepCompile, "change-2/head", true, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			c.f.t = t
@@ -396,6 +443,9 @@ func TestPlanPerStageOutcomes(t *testing.T) {
 			st := res.Stages[1]
 			if st.Status != c.status || st.Rule != c.rule || st.Bundle != nil || (st.Read != nil) != c.read {
 				t.Errorf("status %s, rule %s, read %v, bundle %v", st.Status, st.Rule, st.Read != nil, st.Bundle)
+			}
+			if taken := st.SnapshotID != ""; taken != c.taken || taken != (st.Block().SnapshotID != nil) {
+				t.Errorf("snapshot %q, block %v; want one named: %v", st.SnapshotID, st.Block().SnapshotID, c.taken)
 			}
 			var f *findings.Finding
 			for i := range st.Findings {
@@ -410,6 +460,39 @@ func TestPlanPerStageOutcomes(t *testing.T) {
 				t.Errorf("findings %v, filed %v, steps %v", res.Findings, c.f.filed, res.Steps)
 			}
 		})
+	}
+}
+
+// Each stage runs read, take, compile, file, in that order, and the next stage starts after
+// the last: the snapshot is filed before the compile, so the input of a compile refused is
+// kept (018; R-05). A refused read takes no snapshot.
+func TestPlanTakesEachReadBeforeItsCompile(t *testing.T) {
+	r, s := story()
+	f := &fakePipeline{t: t, readRefused: emptyMain}
+	res, _ := planned(t, r, s, "change-1", f)
+	if got := labelsOf(res); !reflect.DeepEqual(got, []string{"branch-point refused", "cabled compiled", "live compiled", "head compiled"}) {
+		t.Fatalf("stages %v", got)
+	}
+	want := []string{"read"}
+	for range 3 {
+		want = append(want, "read", "take", "compile", "file")
+	}
+	if !reflect.DeepEqual(f.calls, want) {
+		t.Errorf("calls %v\nwant %v: the branch point's refused read takes nothing", f.calls, want)
+	}
+
+	// twin step's target is built on the same path.
+	ch, list, err := Find(t.Context(), r, s, "change-1", testScope)
+	if err != nil || list != nil {
+		t.Fatal(err, list)
+	}
+	f = &fakePipeline{t: t}
+	built := Build(t.Context(), r, s, registry(t), ch, Ref{"change-1", "live"}, f.pipeline(), now)
+	if want := []string{"read", "take", "compile", "file"}; !reflect.DeepEqual(f.calls, want) {
+		t.Errorf("Build's calls %v, want %v", f.calls, want)
+	}
+	if built.SnapshotID != res.Stages[2].SnapshotID {
+		t.Errorf("built snapshot %s; the plan's live %s", built.SnapshotID, res.Stages[2].SnapshotID)
 	}
 }
 

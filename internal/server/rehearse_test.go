@@ -2,6 +2,8 @@ package server
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -68,8 +70,15 @@ func goldenBundle(t *testing.T, golden string) step.Bundle {
 	return step.Bundle{ID: id, Files: files}
 }
 
-// compiledStage is change-1's stage label, resolved at at from atSource, read at observed
-// and compiled to b.
+// snapshotOf is a stage's snapshot id as the tests name it: 64 hex characters of the label's,
+// as a take of each stage's read files one (018).
+func snapshotOf(label string) string {
+	sum := sha256.Sum256([]byte("the snapshot of " + label))
+	return hex.EncodeToString(sum[:])
+}
+
+// compiledStage is change-1's stage label, resolved at at from atSource, read at observed,
+// taken as snapshotOf(label) and compiled to b.
 func compiledStage(label, atSource, at, observed string, b step.Bundle) stages.PlanStage {
 	ref := stages.Ref{Branch: rehearseBranch, Label: label}
 	description := ""
@@ -79,7 +88,7 @@ func compiledStage(label, atSource, at, observed string, b step.Bundle) stages.P
 	return stages.PlanStage{Ref: ref, Label: label, Description: description, AtSource: atSource,
 		Resolved: &stages.Resolved{Ref: ref, Branch: rehearseBranch, Label: label, ProposedChange: rehearseChange, At: at,
 			AtSource: atSource, Description: description},
-		Bundle: &b, ObservedAt: observed, Findings: findings.List{}, Status: stages.PlanCompiled}
+		SnapshotID: snapshotOf(label), Bundle: &b, ObservedAt: observed, Findings: findings.List{}, Status: stages.PlanCompiled}
 }
 
 // branchPoint is change-1's branch point, resolved on main and refused at read with list,
@@ -290,21 +299,23 @@ func TestRehearseStagesAreTheStepChain(t *testing.T) {
 
 	bp := got[0]
 	if bp.Ref != "change-1/branch-point" || bp.Role != rehearsal.RoleRefused || bp.Refused == nil || bp.Provision != nil ||
-		bp.Step != nil || bp.BundleID != "" || bp.Branch != "main" || bp.At != "2026-10-16T17:20:19.944651+00:00" {
+		bp.Step != nil || bp.SnapshotID != "" || bp.BundleID != "" || bp.Branch != "main" || bp.At != "2026-10-16T17:20:19.944651+00:00" {
 		t.Errorf("the branch point %+v", bp)
 	}
 
+	// Every compiled stage names its snapshot beside its bundle, the baseline's provision and
+	// each step's two sides included (018; R-13).
 	seeded, third := plan.Stages[1], plan.Stages[2]
 	base := got[1]
 	want := &provision.ProvisionInput{Source: wire.SourceIntent, Branch: rehearseBranch, At: seeded.Resolved.At,
 		BundlePath: path(seeded.Bundle.ID), BundleID: seeded.Bundle.ID, ObservedAt: seeded.ObservedAt,
-		Stage: seeded.Resolved.StageRef(), Version: "0.2.0-test", Scope: "tag:fylgja"}
+		SnapshotID: snapshotOf("seeded"), Stage: seeded.Resolved.StageRef(), Version: "0.2.0-test", Scope: "tag:fylgja"}
 	if base.Role != rehearsal.RoleBaseline || base.Step != nil || base.Diff != nil || base.WaitS != waitS ||
-		base.BundlePath != path(seeded.Bundle.ID) || base.Description != "the seeded mark" {
+		base.BundlePath != path(seeded.Bundle.ID) || base.Description != "the seeded mark" || base.SnapshotID != snapshotOf("seeded") {
 		t.Errorf("the baseline %+v", base)
 	}
 	if p := base.Provision; p == nil || p.Source != want.Source || p.Branch != want.Branch || p.At != want.At ||
-		p.BundlePath != want.BundlePath || p.BundleID != want.BundleID || p.ObservedAt != want.ObservedAt ||
+		p.BundlePath != want.BundlePath || p.BundleID != want.BundleID || p.ObservedAt != want.ObservedAt || p.SnapshotID != want.SnapshotID ||
 		*p.Stage != *want.Stage || p.Version != want.Version || p.Scope != want.Scope || p.Rehearsal != nil || p.StopFollowing ||
 		p.Follow != nil {
 		t.Errorf("the baseline's provision %+v, want %+v", base.Provision, want)
@@ -324,12 +335,12 @@ func TestRehearseStagesAreTheStepChain(t *testing.T) {
 			t.Errorf("stage %s: diff %s, want the plan's %s", got.Ref, in.Diff, diff)
 		}
 		if *in.From.Stage != *c.from.Resolved.StageRef() || in.From.BundleID != c.from.Bundle.ID || in.From.At != c.from.Resolved.At ||
-			in.From.Branch != "" {
+			in.From.Branch != "" || in.From.SnapshotID != c.from.SnapshotID {
 			t.Errorf("stage %s: from %+v", got.Ref, in.From)
 		}
 		if *in.To.Stage != *c.to.Resolved.StageRef() || in.To.BundleID != c.to.Bundle.ID || in.To.At != c.to.Resolved.At ||
-			in.To.Branch != rehearseBranch {
-			t.Errorf("stage %s: to %+v", got.Ref, in.To)
+			in.To.Branch != rehearseBranch || in.To.SnapshotID != c.to.SnapshotID || got.SnapshotID != c.to.SnapshotID {
+			t.Errorf("stage %s: to %+v, the stage's snapshot %s", got.Ref, in.To, got.SnapshotID)
 		}
 		s := *c.pair.Step
 		wantPush := []step.NodePush{}
@@ -817,5 +828,67 @@ func TestRehearseInputIsWhatTheServerDecided(t *testing.T) {
 		in.ResolvedAt != "2026-10-19T10:00:00Z" || in.DeadlineS != 1980 || in.CeilingS != 2400 ||
 		in.Version != helperServer.Build || len(in.Stages) != 4 || in.Stages[1].BundlePath != filepath.Join(paths.Bundles, in.Stages[1].BundleID) {
 		t.Errorf("%+v", in)
+	}
+}
+
+// The report names each compiled stage's snapshot beside its bundle, and a refused stage
+// neither (018; R-13): the branch point refused at its read, and a stage whose compile was
+// refused after its snapshot was filed, which stage plan names but the rehearsal, refused,
+// does not. The block validates against rehearsal.schema.json through the findings contract,
+// and the markdown's table carries the column before the bundle's (T021).
+func TestRehearsalReportNamesEachStagesSnapshot(t *testing.T) {
+	plan := rehearsePlan(t)
+	_, rows, refusal := rehearsalStages(plan)
+	if refusal != nil {
+		t.Fatalf("the plan is refused: %+v", *refusal)
+	}
+	when := time.Date(2026, 10, 19, 10, 0, 0, 0, time.UTC)
+	r := &rehearsing{rows: rows, ceiling: 40 * time.Minute, deadlineS: 1980,
+		planned: plannedStages{res: plan, scope: "tag:fylgja", now: when}}
+	block := rehearsal.Build(r.report(), rehearsal.Result{})
+	var named []string
+	for _, s := range block.Stages {
+		id := "null"
+		if s.SnapshotID != nil {
+			id = *s.SnapshotID
+		}
+		named = append(named, s.Ref+" "+id)
+	}
+	if want := []string{"change-1/branch-point null", "change-1/seeded " + snapshotOf("seeded"),
+		"change-1/third-link " + snapshotOf("third-link"), "change-1/head " + snapshotOf("head")}; !slices.Equal(named, want) {
+		t.Errorf("the block's snapshots %v\nwant %v", named, want)
+	}
+	doc := findings.NewDocument(findings.OpTwinRehearse, &findings.Subject{Branch: rehearseBranch, Scope: "tag:fylgja"},
+		rehearsal.Findings(block))
+	doc.Status = findings.StatusRejected
+	doc.Rehearsal = &block
+	validateM10Document(t, doc)
+	md := rehearsal.Markdown(doc, plan.Steps)
+	seeded := plan.Stages[1]
+	for _, want := range []string{
+		"\n| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |\n",
+		" | " + shortID(snapshotOf("seeded")) + " | " + shortID(seeded.Bundle.ID) + " | ",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("the markdown lacks %q:\n%s", want, md)
+		}
+	}
+
+	// third-link's compile refused once its snapshot was filed: the plan names the snapshot,
+	// and the refused rehearsal's row names none.
+	third := &plan.Stages[2]
+	third.Bundle, third.Status, third.Rule = nil, stages.PlanRefused, findings.RulePlatformUnsupported
+	third.Findings = findings.List{rejectionAt(findings.StepCompile, findings.RulePlatformUnsupported, "n1")}
+	if third.Block().SnapshotID == nil {
+		t.Fatal("the plan's third-link names no snapshot; a compile refused after the take leaves it named")
+	}
+	_, rows, refusal = rehearsalStages(plan)
+	if refusal == nil {
+		t.Fatal("a stage refused at its compile did not refuse the rehearsal")
+	}
+	r.rows = rows
+	block = rehearsal.Build(r.report(), rehearsal.Result{})
+	if s := block.Stages[2]; s.Ref != "change-1/third-link" || s.SnapshotID != nil || s.BundleID != nil {
+		t.Errorf("the refused stage %s names snapshot %v and bundle %v; want null for each", s.Ref, s.SnapshotID, s.BundleID)
 	}
 }

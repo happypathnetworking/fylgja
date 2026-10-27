@@ -175,7 +175,7 @@ func TestCreateStageRefusedBeforeAnyConnection(t *testing.T) {
 		want findings.Finding
 	}{
 		{"neither", nil, findings.Finding{Severity: findings.Rejection, Rule: findings.RuleOperationFailed,
-			Object: findings.OpTwinCreate, Message: "--branch or --stage is required"}},
+			Object: findings.OpTwinCreate, Message: "--branch or --stage or --snapshot is required"}},
 		{"not a reference", []string{"--stage", "demo"}, findings.Finding{Severity: findings.Rejection,
 			Rule: findings.RuleStageRefInvalid, Object: "demo", Step: findings.StepStart, Message: stageRefInvalid("demo")}},
 		{"no label", []string{"--stage", "change-1/", "--branch", "x"}, findings.Finding{Severity: findings.Rejection,

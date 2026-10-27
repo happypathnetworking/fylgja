@@ -19,7 +19,7 @@
         "files": {
           "type": "array",
           "items": { "$ref": "#/$defs/file" },
-          "description": "twin.compile: the CTM, under the path given. twin.provision: every regular file of the bundle directory, each under its slash-separated path inside it. psp.validate: each package, under the path given, in order."
+          "description": "twin.create: the snapshot, under the path snapshot gives, when snapshot is a path (018). twin.compile: the CTM, under the path given. twin.provision: every regular file of the bundle directory, each under its slash-separated path inside it. psp.validate: each package, under the path given, in order."
         }
       }
     },
@@ -45,7 +45,8 @@
             "interval": { "type": "string", "description": "--interval as given; present and empty is --interval=" },
             "no_follow": { "type": "boolean" },
             "dry_run": { "type": "boolean" },
-            "scope": { "type": "string", "description": "--scope as given, tag:<name> (017): the devices the read selects; absent is the server's default scope, and present and empty is --scope=, refused scope.invalid" }
+            "scope": { "type": "string", "description": "--scope as given, tag:<name> (017): the devices the read selects; absent is the server's default scope, and present and empty is --scope=, refused scope.invalid" },
+            "snapshot": { "type": "string", "description": "--snapshot as given: a snapshot id (64 lowercase hex characters) the store holds, or the path of the file the request carries" }
           }
         },
         "twin.provision": {

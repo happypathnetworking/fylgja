@@ -100,7 +100,7 @@ func TestRefusalsBeforeAnyConnectionAreTheServers(t *testing.T) {
 	cases := []refusalCase{
 		// twin create (M1, M4, 014).
 		{name: "create with neither --branch nor --stage", args: []string{"twin", "create"},
-			want: refusal(findings.RuleOperationFailed, "", findings.OpTwinCreate, "--branch or --stage is required")},
+			want: refusal(findings.RuleOperationFailed, "", findings.OpTwinCreate, "--branch or --stage or --snapshot is required")},
 		{name: "create with an at finer than microseconds", args: []string{"twin", "create", "--branch", "fylgja-fixture", "--at", tooPrecise},
 			want: refusal(findings.RuleAtPrecision, "", tooPrecise, "at "+tooPrecise+" carries 7 fractional digits; "+
 				"Infrahub honours at most 6 (microseconds). Re-run with a coarser --at.")},

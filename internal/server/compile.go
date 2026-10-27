@@ -54,13 +54,8 @@ func runCompile(opts *options, f *compileFlags, files []api.File) error {
 	// A CTM declaring no version is refused alike, as a file of no version this build reads.
 	var other *ctm.VersionError
 	if errors.As(err, &other) {
-		declares := fmt.Sprintf("declares ctm_version %q", other.Got)
-		if other.Got == "" {
-			declares = "declares no ctm_version"
-		}
 		var list findings.List
-		list.Add(findings.Rejection, findings.RuleCTMVersionUnsupported, f.ctmPath, fmt.Sprintf(
-			"the CTM %s; this build reads %q, and nothing converts one", declares, ctm.Version))
+		list.Add(findings.Rejection, findings.RuleCTMVersionUnsupported, f.ctmPath, ctmVersionMessage(other))
 		return finish(findings.OpCompile, subject, list)
 	}
 	// A file that leaves out a field the contract requires, which Normalize would fill, is
@@ -102,6 +97,16 @@ func runCompile(opts *options, f *compileFlags, files []api.File) error {
 	doc := findings.NewDocument(findings.OpCompile, subject, list)
 	doc.BundleID = id
 	return &result{doc: doc}
+}
+
+// ctmVersionMessage is ctm.version.unsupported's message for a CTM declaring another version,
+// or none, naming both: a bare CTM's and a snapshot's inner one's alike.
+func ctmVersionMessage(other *ctm.VersionError) string {
+	declares := fmt.Sprintf("declares ctm_version %q", other.Got)
+	if other.Got == "" {
+		declares = "declares no ctm_version"
+	}
+	return fmt.Sprintf("the CTM %s; this build reads %q, and nothing converts one", declares, ctm.Version)
 }
 
 // manifestCounts reads the node and link counts back out of the manifest the compiler

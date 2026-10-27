@@ -142,6 +142,11 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 	}{
 		{"twin.create", map[string]json.RawMessage{"branch": str("fylgja-fixture"), "at": str("2026-09-14T12:00:00Z"),
 			"stage": str("change-1/cabled"), "interval": str(""), "no_follow": yes, "dry_run": yes, "scope": str("tag:fylgja")}, nil},
+		// 018: --snapshot as a file, the one file the request carries under its path; as an id,
+		// none. The case above is an earlier client's, which never sends it.
+		{"twin.create", map[string]json.RawMessage{"snapshot": str("snap.json"), "no_follow": yes, "dry_run": yes},
+			[]File{{Path: "snap.json", Data: []byte(`{"snapshot_version":"1"}`)}}},
+		{"twin.create", map[string]json.RawMessage{"snapshot": str(strings.Repeat("6a", 32))}, nil},
 		{"twin.provision", map[string]json.RawMessage{"bundle": str("./b9d53ebc"), "dry_run": yes},
 			[]File{{Path: "manifest.json", Data: []byte("{}\n")}, {Path: "configs/n1.cli", Data: []byte("set / system name host-name n1\n")}}},
 		{"twin.step", map[string]json.RawMessage{"stage": str("change-1/head"), "allow_restart": yes, "dry_run": yes, "wait": str("20s")}, nil},

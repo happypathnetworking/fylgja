@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
@@ -35,6 +36,11 @@ type createFlags struct {
 	// stands (017).
 	scope      string
 	scopeGiven bool
+	// snapshot is --snapshot as given (018): a snapshot id the store holds, or the path of
+	// the file the request carries. snapshotGiven is whether it was given at all, as
+	// stageGiven is.
+	snapshot      string
+	snapshotGiven bool
 }
 
 // fromStage is whether the create names a stage: --stage given, whatever its value, or a
@@ -43,12 +49,26 @@ func (f *createFlags) fromStage() bool {
 	return f.stageGiven || f.stage != ""
 }
 
-func runCreate(ctx context.Context, opts *options, f *createFlags) error {
-	const op = findings.OpTwinCreate
-	subject := &findings.Subject{Branch: f.branch, At: f.at}
+// fromSnapshot is whether the create names a snapshot, as fromStage is whether it names a
+// stage.
+func (f *createFlags) fromSnapshot() bool {
+	return f.snapshotGiven || f.snapshot != ""
+}
 
-	if f.branch == "" && !f.fromStage() {
-		return fail(op, subject, "--branch or --stage is required")
+// runCreate is twin create. files are the request's: a snapshot file beside a --snapshot
+// that is a path, and none otherwise.
+func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.File) error {
+	const op = findings.OpTwinCreate
+	subject := &findings.Subject{Branch: f.branch, At: f.at, Snapshot: f.snapshot}
+
+	if refused := snapshotFiles(op, subject, f, files); refused != nil {
+		return refused
+	}
+	if f.branch == "" && !f.fromStage() && !f.fromSnapshot() {
+		return fail(op, subject, "--branch or --stage or --snapshot is required")
+	}
+	if f.fromSnapshot() {
+		return runCreateFromSnapshot(ctx, opts, op, subject, f, files)
 	}
 	var ref stages.Ref
 	var follow findings.DryRunFollow
@@ -148,15 +168,85 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	return withStage(compiled.carried(runProvision(ctx, opts, op, subject, in)), resolved)
 }
 
-// followFlagsConflict refuses --interval given with --at or with --no-follow as
+// runCreateFromSnapshot is twin create --snapshot (R-12): the guards, before any
+// connection; the snapshot resolved, an id from the store or the request's file read and
+// filed; the compile and the bundle's filing, on the create's path; then the run, or the dry
+// run's report. The twin is frozen by rule: its reference is a document, which does not
+// move, so it never follows, whatever the envelope's at says. No request reaches Infrahub:
+// nothing on this path builds an intent client, and the run, handed the bundle compiled,
+// reads nothing.
+func runCreateFromSnapshot(ctx context.Context, opts *options, op string, subject *findings.Subject, f *createFlags,
+	files []api.File) error {
+	if refused := snapshotGuards(op, subject, f); refused != nil {
+		return refused
+	}
+	// A twin built from a snapshot never follows, so no interval is read.
+	follow := createFollow(f, 0)
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	// An override package psp validate rejects is refused under its own findings before the
+	// snapshot is resolved, at compile, the first step that reads the packages: a create
+	// from a snapshot reads no intent.
+	reg, err := psp.Load(opts.pspDir)
+	if err != nil {
+		return loadFailureAt(op, subject, findings.StepCompile, err)
+	}
+	paths, err := opts.paths()
+	if err != nil {
+		return failAt(op, subject, findings.StepResolve, findings.StepResolve, "%v", err)
+	}
+	s, path, err := resolveSnapshot(ctx, paths, op, subject, f.snapshot, files)
+	if err != nil {
+		return err
+	}
+	// The document names what the snapshot is of from here on, as a stage's names the
+	// reference it resolved to.
+	env := s.CTM.Envelope
+	subject.Branch, subject.At = env.Branch, env.At
+
+	// The stored document's observed_at, the first take's, is the one the twin records
+	// (US3 scenario 8).
+	cr := &compiledRead{paths: paths, snapshot: filedSnapshot{id: s.ID, path: path}, observedAt: s.ObservedAt}
+	if err := cr.compileAndFile(ctx, op, subject, s.CTM, reg, nil); err != nil {
+		return err
+	}
+	if f.dryRun {
+		// No read took place, so the report has no read: line.
+		return dryRunReport(ctx, opts, op, subject, reg, paths, &cr.snapshot, cr.bundlePath, cr.bundleID, nil, cr.findings, follow)
+	}
+	opts.note("%s", snapshotStoredLine(cr.snapshot.id, cr.snapshot.path))
+	opts.note("%s", bundleStoredLine(cr.bundleID, cr.bundlePath))
+
+	// Compiled already: the run takes the bundle and the snapshot by id and starts at the
+	// host check. The branch, the at and the scope are the envelope's, which the record's
+	// provenance reads from the staged manifest as every record's does. No Follow, no Stage.
+	in := provision.ProvisionInput{
+		Source:     wire.SourceSnapshot,
+		Branch:     env.Branch,
+		At:         env.At,
+		BundlePath: cr.bundlePath,
+		BundleID:   cr.bundleID,
+		ObservedAt: cr.observedAt,
+		SnapshotID: cr.snapshot.id,
+		Version:    opts.version(),
+		Scope:      env.Scope,
+	}
+	return cr.carried(runProvision(ctx, opts, op, subject, in))
+}
+
+// followFlagsConflict refuses --interval given with --snapshot, --at or --no-follow as
 // follow.flags.conflict, before any connection: the twin would not follow, so the interval
-// would mean nothing (contracts/cli.md, create step 1). --at with --no-follow is accepted.
+// would mean nothing (contracts/cli.md, create step 1). --at with --no-follow is accepted,
+// and so is --snapshot with --no-follow.
 func followFlagsConflict(op string, subject *findings.Subject, f *createFlags) error {
 	if !f.intervalGiven {
 		return nil
 	}
 	var message string
 	switch {
+	case f.fromSnapshot():
+		message = "--interval is meaningless with --snapshot: a twin built from a snapshot never follows"
 	case f.at != "":
 		message = "--interval is meaningless with --at: a pinned twin never follows"
 	case f.noFollow:
@@ -173,6 +263,8 @@ func followFlagsConflict(op string, subject *findings.Subject, f *createFlags) e
 // checked, or why it does not: what the run is started with and what a dry run reports.
 func createFollow(f *createFlags, interval time.Duration) findings.DryRunFollow {
 	switch {
+	case f.fromSnapshot():
+		return findings.DryRunFollow{Reason: findings.FollowReasonSnapshot}
 	case f.fromStage():
 		return findings.DryRunFollow{Reason: findings.FollowReasonStage}
 	case f.at != "":
@@ -288,26 +380,38 @@ func readTakeCompile(ctx context.Context, opts *options, op string, subject *fin
 		return nil, finish(op, subject, append(list, taken...))
 	}
 	cr := &compiledRead{paths: paths, snapshot: filedSnapshot{id: snap.ID, path: snapPath}, observedAt: observedAt}
+	if err := cr.compileAndFile(ctx, op, subject, c, reg, list); err != nil {
+		return nil, err
+	}
+	cr.read = &readSummary{counts: intent.Summarize(c), packages: intent.DevicesByPackage(c, reg), envelope: c.Envelope}
+	return cr, nil
+}
 
+// compileAndFile compiles c, the CTM of the snapshot cr names, and files the bundle under the
+// state root, after list, the findings before the compile: what a create from a read and a
+// create from a snapshot share once the snapshot is filed. Each refusal, and each step that
+// cannot run, is the command's document at compile, naming the snapshot, which stays filed,
+// since its CTM validated and only the output was refused (R-05).
+func (cr *compiledRead) compileAndFile(ctx context.Context, op string, subject *findings.Subject, c *ctm.CTM,
+	reg *psp.Registry, list findings.List) error {
 	files, id, compiled := stage.Compile(c, reg)
 	compiled = compiled.AtStep(findings.StepCompile)
 	list = append(list, compiled...)
 	if compiled.Rejected() {
-		return nil, cr.carried(finish(op, subject, list))
+		return cr.carried(finish(op, subject, list))
 	}
 
-	store, filed, err := fileCompiled(ctx, paths.Bundles, files, id)
+	store, filed, err := fileCompiled(ctx, cr.paths.Bundles, files, id)
 	if err != nil {
-		return nil, cr.carried(failAt(op, subject, findings.StepCompile, paths.Bundles, "%v", err))
+		return cr.carried(failAt(op, subject, findings.StepCompile, cr.paths.Bundles, "%v", err))
 	}
 	if filed.Rejected() {
-		return nil, cr.carried(finish(op, subject, append(list, filed...)))
+		return cr.carried(finish(op, subject, append(list, filed...)))
 	}
 
 	cr.bundleID, cr.bundlePath = id, store.Path(id)
-	cr.read = &readSummary{counts: intent.Summarize(c), packages: intent.DevicesByPackage(c, reg), envelope: c.Envelope}
 	cr.findings = list
-	return cr, nil
+	return nil
 }
 
 // carried puts what the server took and compiled before any run on the document err

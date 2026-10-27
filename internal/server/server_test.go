@@ -506,6 +506,14 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 			}
 		}
 	}
+	// 018: twin.create takes a snapshot file, which the create holds to its one shape, beside
+	// --snapshot under its path; the transport refuses none of them.
+	for _, body := range []string{`{"args":{"snapshot":"s.json"},"files":[{"path":"s.json","data":""}]}`,
+		`{"args":{"branch":"b"},"files":[{"path":"s.json","data":""}]}`} {
+		if resp, _ := post(t, nil, srv.URL+api.Path(findings.OpTwinCreate), testToken, body, nil); resp.StatusCode != http.StatusOK {
+			t.Errorf("twin.create with %s: status %d", body, resp.StatusCode)
+		}
+	}
 	for _, body := range []string{`{"args":{"wait":"","args":["x"]}}`, `{"args":{"wait":"2m0s"}}`} {
 		if resp, _ := post(t, nil, srv.URL+api.Path(findings.OpTwinVerify), testToken, body, nil); resp.StatusCode != http.StatusOK {
 			t.Errorf("twin.verify with %s: status %d", body, resp.StatusCode)

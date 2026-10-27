@@ -23,7 +23,7 @@ const (
 // not given; one that is present was given, whatever its value.
 var operationArgs = map[string]map[string]string{
 	findings.OpTwinCreate: {"branch": argString, "at": argString, "stage": argString, "interval": argString,
-		"no_follow": argBool, "dry_run": argBool, "scope": argString},
+		"no_follow": argBool, "dry_run": argBool, "scope": argString, "snapshot": argString},
 	findings.OpTwinProvision: {"bundle": argString, "dry_run": argBool},
 	findings.OpTwinStep:      {"stage": argString, "allow_restart": argBool, "dry_run": argBool, "wait": argString},
 	findings.OpTwinDestroy:   {},
@@ -125,7 +125,8 @@ var handlers = map[string]func(*call) error{
 			interval: a.string("interval"), intervalGiven: a.given("interval"),
 			noFollow: a.bool("no_follow"), dryRun: a.bool("dry_run"),
 			scope: a.string("scope"), scopeGiven: a.given("scope"),
-		})
+			snapshot: a.string("snapshot"), snapshotGiven: a.given("snapshot"),
+		}, c.req.Files)
 	},
 	findings.OpTwinProvision: func(c *call) error {
 		a := args(c.req.Args)
@@ -217,8 +218,11 @@ func checkRequired(op string, given map[string]json.RawMessage) error {
 	return nil
 }
 
-// takesFiles are the operations a request's files belong to.
-var takesFiles = []string{findings.OpCompile, findings.OpTwinProvision, findings.OpPSPValidate}
+// takesFiles are the operations a request's files belong to. twin.create takes one, a
+// snapshot file beside --snapshot alone (018), which the create holds to that shape itself,
+// as twin compile holds its CTM, so a request carrying another is its operation.failed and
+// not the transport's.
+var takesFiles = []string{findings.OpCompile, findings.OpTwinProvision, findings.OpPSPValidate, findings.OpTwinCreate}
 
 // checkFiles refuses files on an operation that takes none.
 func checkFiles(op string, n int) error {

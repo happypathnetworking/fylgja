@@ -962,7 +962,7 @@ twin and Infrahub as the contract tier leaves it.
 
 **Purpose**: every document says what is now true (FR-028, FR-029; R-18, R-23; quickstart §9).
 
-- [ ] T055 [P] `docs/architecture.md`, per R-18:
+- [X] T055 [P] `docs/architecture.md`, per R-18:
   - §2: the pipeline names the snapshot.
   - §3: a Snapshot row in the core objects' table.
   - §4.2: the CTM is the snapshot's body.
@@ -973,16 +973,30 @@ twin and Infrahub as the contract tier leaves it.
 
   Work through T002's grep hits and grep again (`ctm.json`, `sidecar`, `.reads`, `ReadIntent`, `--ctm`, `read and compile`). Every sentence is made true or marked historical. State the rebase and re-render limits once, linking D-061.
 
-- [ ] T056 [P] `docs/glossary.md`:
+  - *2026-10-27, Run 16, the converge loop's session, at `c5e104c`:* **done.** `docs/architecture.md`, through T002's hits and R-18's list:
+    - §2: the pipeline paragraph and drawing name the snapshot (`snapshot 1`, `twin.json 9`, and `twin create --snapshot: no read` as an edge into it), and the stages' table gains a **Take** row; a step is "the same read, take and compile".
+    - §3: the objects' drawing gains `──take──▶ snapshot`, the table a **Snapshot** row (the CTM's row now lives in "a snapshot's body", not the bundle store), and the rules "A snapshot is the core's one input", frozen by rule.
+    - §4.2: the CTM is the snapshot's body; a new paragraph, **The snapshot**: version `1`, the id's hashed bytes, strict reading and its rules, the store that never overwrites, the hand wrap for a bare CTM, and that it crosses as a file alone. §4.3: the compiler's input is a snapshot's CTM, the wrapped fixtures compiling to the goldens; the secrets sentence names the snapshot in place of "the CTM file".
+    - §4.4: the provision chain begins at `CheckHost`, every run started already compiled, `ReadIntent ─▶ Compile` kept for histories before 018; `ReadIntent` and `Compile` the reconcile's alone, `bundles/.reads/` named, no sidecar; a rebuild names no snapshot until F-026; the create's sequence drawing reads, takes and compiles on the server; the step and rehearsal chains say "taken"; following is a `--branch` create's.
+    - §4.5: three directories, a snapshot store row, `snapshots/` in the tree with `.reads/` beside the bundles and the sidecar line gone, `twin.json` version 9 with `snapshot_id`, the sidecar paragraph replaced by its retirement, and a new **The record names its snapshot** paragraph.
+    - §4.6: `twin create --snapshot`, `intent read --out snapshot.json` and `twin compile --snapshot` in the commands; the scope bullet, the server's components (`internal/snapshot`, and `stages`' arrow to it being the function the handlers hand it, not an import), the stage commands' files, `stage plan`, the step's dry run, `twin show`'s record and kind lines, the rehearsal's block and the API's "no fetch" all name the snapshot.
+    - §6: one bullet states the rebase and re-render limits, linking D-061.
+    - Grep again: `ReadIntent` hits are the reconcile's and the replayed histories'; `.reads` the reconcile's; `sidecar` and `--ctm` retirement notes. No "read and compile" left in a current sentence.
+
+- [X] T056 [P] `docs/glossary.md`:
   - new entries: Snapshot, Snapshot id (with the hashed-bytes sentence and the two limits), and Snapshot store;
   - Bundle store without the sidecar;
   - Frozen twin and Pinned gain the snapshot twin;
   - Intent reference names the snapshot as a reference;
   - grep for `ctm.json`, `--ctm` and `sidecar`.
 
-- [ ] T057 [P] `docs/development.md`: the state root listing gains `snapshots/`, and the frozen copies' paragraph names `017-dcim-reader/`'s sixteen copies and the count `49`. Note the snapshot's tier-1 tests where the tiers are described. Grep for `--ctm` and `ctm.json`.
+  - *2026-10-27, Run 16, the converge loop's session, at `c5e104c`:* **done.** `docs/glossary.md`: new entries **Snapshot**, **Snapshot id** (the hashed bytes, the schema's `jq` recipe, the two limits, the fixture's `576933ec…`) and **Snapshot store**. **Bundle store** loses `PutCTM` and the sidecar, with its retirement and `.reads/` named. **Frozen twin**, **Pinned** and **Kind** gain the snapshot twin; **Intent reference** names the snapshot as a reference with `snapshot.flags.conflict`. Also moved: **Client** (`--snapshot` among its files), **Compiler**, **CTM**, **Dry run**, **Interval**, **`observed_at`**, **`provision` (workflow)** (already compiled), **Rebuild** (names no snapshot), **Stage commands**, **Stage reference**, **State root**, and **`twin.json`** (`9`, `snapshot_id`, `source`, an `8` naming none). Grep: `ctm.json`, `--ctm` and `sidecar` hit retirement notes alone.
 
-- [ ] T058 [P] `README.md`:
+- [X] T057 [P] `docs/development.md`: the state root listing gains `snapshots/`, and the frozen copies' paragraph names `017-dcim-reader/`'s sixteen copies and the count `49`. Note the snapshot's tier-1 tests where the tiers are described. Grep for `--ctm` and `ctm.json`.
+
+  - *2026-10-27, Run 16, the converge loop's session, at `c5e104c`:* **done.** `docs/development.md`: the layout gains `internal/snapshot/` and `testdata/snapshot/`, and `local/`'s state root lists `snapshots/` (`.reads/` worded as the check's); the frozen copies' paragraph names the sixteen under `017-dcim-reader/` and the count 49 (counted: 49 files, `TestFrozenContractCopiesAgree` green); tier 1's cell gains **The snapshot** and the API's snapshot cases; tier 2's cell names the snapshot ids in `TestPinnedReadReproducesItsBundle` and `TestStageTakenTwiceHasOneSnapshot`, and T053's times (1,814.4 s; `internal/stages` 1,514.6 s, `internal/server` 933.5 s, `internal/stage` 709.0 s, `internal/intent` 477.5 s, `internal/checks` 291.7 s, `internal/cli` 66.9 s alone); tier 3's assertions and T054's times (1,758.0 s, narrowed 1,156.1 s); the constants table gains the snapshot store. Grep: no `--ctm` or `ctm.json`; `.ctm.json` appears only in the tier-3 sentence on the retired sidecars.
+
+- [X] T058 [P] `README.md`:
   - the offline walk-through compiles `testdata/snapshot/mixed.json` with `twin compile --snapshot` to `ecb665f5…` (R-15);
   - the `intent read --out` lines say a snapshot;
   - the stage commands' sample lines gain `snapshot_id`;
@@ -990,13 +1004,21 @@ twin and Infrahub as the contract tier leaves it.
 
   Run every command shown that needs only the server against this tree, and paste its real output.
 
-- [ ] T059 [P] `docs/verified-facts.md`: under 2026-10-27, research §1.2 (two unpinned reads differ in `observed_at` alone) and §1.3 (the hashed-bytes encoding and the `jq` recipe agree), with T051's fixture id and T046's stage-taken-twice result, each with Infrahub 1.11.2 and the date.
+  - *2026-10-27, Run 16, the converge loop's session, at `c5e104c`:* **done.** `README.md`: the offline walk-through runs `twin compile --snapshot testdata/snapshot/mixed.json`, run here against the server from this tree (pid `1494776`): `ok`, snapshot `37d7378a36568e870eb1eb43dbcd580207fb5cae847fb979b54f50eef8800ebf`, bundle `ecb665f5…`, the two `artifact.interface.unrepresented` warnings, exit 0, and the same three links; pasted with the path the README uses. `local/snapshots` held 67 entries before and after: the compile filed nothing. "The stages on their own" says `intent read --out snapshot.json`, `twin compile --snapshot` and the hand wrap, `--ctm` retired. The stage plan's sample, `fylgja-step`'s message and the step's twin line gain `snapshot_id` and `snapshot`; the rehearsal table gains the `snapshot` column; the create's sample shows its two `stored:` lines in place of the run's read and compile, and the record lines name the snapshot (a rebuild's `snapshot none`); "Pinned and frozen twins" gains `twin create --snapshot`. Every other sample needs Infrahub or a twin, so it was not re-run: the README's samples were recorded at `v0.2.0`, and its note now says the lines 018 changed are shown as this build prints them, with the snapshot ids, which that release did not take, trimmed to `…`, as 017's lines were.
 
-- [ ] T060 [P] `docs/roadmap.md`: F-024 marked built by 018, with a one-line summary and links to D-061 and this feature; Release 0.3's list moves its marker to F-026 next. The brief (`specs/018-snapshots/brief.md`) is left as written.
+- [X] T059 [P] `docs/verified-facts.md`: under 2026-10-27, research §1.2 (two unpinned reads differ in `observed_at` alone) and §1.3 (the hashed-bytes encoding and the `jq` recipe agree), with T051's fixture id and T046's stage-taken-twice result, each with Infrahub 1.11.2 and the date.
 
-- [ ] T061 [P] Re-read `SECURITY.md` and `.env.example` for anything the snapshot changes. Expected: nothing in `.env.example`. A sentence in `SECURITY.md` that a snapshot holds configuration, as the CTM does, if it describes the CTM's or the bundle store's contents. Grep the tree for any log or finding message that could carry a snapshot's bytes (`grep -rn 'snapshot' internal/server/*.go | grep -i 'log\|Printf'`). Only ids and paths may cross.
+  - *2026-10-27, Run 16, the converge loop's session, at `c5e104c`:* **done.** `docs/verified-facts.md`, Infrahub 1.11.2, "Reading intent": two unpinned reads differ in `observed_at` alone (§1.2), with T051's fixture id `576933ec…`; a stage resolved twice has one snapshot (T046's `4345c370…`/`e8c31ea7…` and T053's `ffa1dac8…`/`98c33061…`, and T045's pinned reads); and the `jq` recipe (§1.3), re-run here with jq 1.8.1: the schema's recipe over the stored fixture snapshot gives `576933ec…` and over the three wrapped fixtures their ids, and the bare-CTM recipe over `testdata/ctm/` the same three. Beside them, two host facts the runs found: the `sr_cli` segfault on 26.04 under load (T054's first attempt), and go1.26.8 in place of go1.26.0 (T001).
 
-- [ ] T062 `CLAUDE.md`:
+- [X] T060 [P] `docs/roadmap.md`: F-024 marked built by 018, with a one-line summary and links to D-061 and this feature; Release 0.3's list moves its marker to F-026 next. The brief (`specs/018-snapshots/brief.md`) is left as written.
+
+  - *2026-10-27, Run 16, the converge loop's session, at `c5e104c`:* **done.** `docs/roadmap.md`: Release 0.3's item 2 marks F-024 **built** on 2026-10-27 under D-061 and Constitution 2.2.0, and item 3, F-026, is **the next spec**; the backlog's paragraph names F-011 and F-024 built; F-024's row and its paragraph say built as `018-snapshots`, with one summary sentence; "Decisions the order needs" says it was taken as D-061 with 2.2.0. The brief is left as written.
+
+- [X] T061 [P] Re-read `SECURITY.md` and `.env.example` for anything the snapshot changes. Expected: nothing in `.env.example`. A sentence in `SECURITY.md` that a snapshot holds configuration, as the CTM does, if it describes the CTM's or the bundle store's contents. Grep the tree for any log or finding message that could carry a snapshot's bytes (`grep -rn 'snapshot' internal/server/*.go | grep -i 'log\|Printf'`). Only ids and paths may cross.
+
+  - *2026-10-27, Run 16, the converge loop's session, at `c5e104c`:* **done.** `SECURITY.md` describes no CTM's or store's contents, so no configuration sentence is added; its credential lists gain "a snapshot", which T054's greps over `local/snapshots` hold true. `.env.example`: its no-value sentence names the snapshot, and the state root's comment `snapshots/`. The grep `grep -rn 'snapshot' internal/server/*.go | grep -i 'log\|Printf'` finds the read's summary clause, the record line, the stored lines and the refusals: ids and paths alone. The `internal/snapshot` messages carry a version, a field name, a count, ids and paths, never the document.
+
+- [X] T062 `CLAUDE.md`:
   - Formats: snapshot `1`; `twin.json` `9`; `--ctm` retired; the fixture's snapshot id from T051 beside `f764e1fa…`.
   - The Environment's description of the server's report: `snapshots:` in the state root line.
   - Build and test: tier 2's and tier 3's new times from T053 and T054, and the tier-1 time if it moved.
@@ -1004,7 +1026,9 @@ twin and Infrahub as the contract tier leaves it.
   - State: 018 closed, summarised as 017's entry is (D-061, Constitution 2.2.0, the snapshot store, `twin.json` `9`, the sidecar retired, the tiers' results); **Next**: F-026.
   - The constitution's version where `CLAUDE.md` names it (2.2.0).
 
-- [ ] T063 The closing gates and greps:
+  - *2026-10-27, Run 16, the converge loop's session, at `c5e104c`:* **done.** `CLAUDE.md`: the constitution named 2.2.0; Formats gain snapshot `1`, `twin.json` `9`, `snapshot` on the API, `--ctm` and the sidecar retired, the wrapped fixtures, and the live fixture's snapshot `576933ec…`; the fixture branch's paragraph names its snapshot id in full; the server's report names `bundles:`, `snapshots:` and `twin:`; Go is go1.26.8; Build and test carry tier 1's 40.6 s (T063), tier 2's 1,814.4 s with `internal/stages` 1,514.6 s and `internal/checks` 291.7 s, and tier 3's 1,758.0 s and 1,156.1 s; State: Release 0.3's five specs, **018** closed, **Next** F-026, and 018's command log and review among the operator's open items.
+
+- [X] T063 The closing gates and greps:
   - `make build`, static; `make test` uncached under 45 s; `make lint`; `go vet -tags contract,fixture,e2e ./...`; `shellcheck scripts/bring-up.sh scripts/e2e.sh`; `make linkcheck`;
   - `git diff --stat main -- testdata/golden` empty;
   - `/usr/bin/grep -rn -- '--ctm\|PutCTM\|\.ctm\.json\|sidecar' --include=*.go --include=*.md --include=*.sh --include=*.json --include=*.dsl .`, excluding `specs/0[01]*`, `local/` and `.venv/`. Each hit is historical, the reconcile's `.reads/`, or a retirement note;
@@ -1012,6 +1036,14 @@ twin and Infrahub as the contract tier leaves it.
   - `TestFrozenContractCopiesAgree` at 49.
 
   Record each result in this task's note.
+
+  - *2026-10-27, Run 16, the converge loop's session, at `c5e104c`:* **done.**
+    - `make build` exit 0, `statically linked`. `GOFLAGS=-count=1 make test` exit 0 in 40.6 s wall at load 1.45 → 2.57, `internal/cli` 36.2 s, `internal/lab` 11.5 s, `internal/provision` 9.2 s. `make lint` `0 issues`; `go vet -tags contract,fixture,e2e ./...` clean; `shellcheck scripts/bring-up.sh scripts/e2e.sh` clean; `make linkcheck` `84 files, 1911 relative links checked, 42 external skipped, 0 broken` (and clean again after the brief's edit below).
+    - `git diff --stat main -- testdata/golden` empty.
+    - The retired names: the task's command passes `--include` after `--`, so grep reads them as files; run as `/usr/bin/grep -rn --include=… -e '--ctm\|PutCTM\|\.ctm\.json\|sidecar' .`, 105 hits outside `specs/0[01]*`, `local/` and `.venv/`. Each is a retirement note (contracts' 018 sections and pointers, D-061, the records above, code comments), the reconcile's `.reads/` (`internal/provision`, its tests), an earlier decision's history (D-038, `docs/decisions.md:2227`), a test asserting no sidecar, or a test's own temporary `*.ctm.json` file. One was none of these: `docs/brief.md` still listed `twin compile --ctm` and `--out ctm.json` and drew the pipeline without the snapshot, so its CLI and drawing were made true and the principles gained the snapshot.
+    - The credential greps (`/usr/bin/grep -F`, counts and file names only): the Infrahub token, the API's token, the secret key, the agent token and the admin password are in no file of the tree (`.git`, `local/`, `.venv/` and `bin/` aside), in none of the 52 commits' diffs on `main..HEAD`, and in no commit message. The node logins are the images' published defaults: the SR Linux one is in `scripts/bring-up.sh`, `scripts/e2e.sh` and two tests as before, and in no line of the branch's diffs; the EOS one is a five-letter lowercase word that appears throughout the tree as prose, and its nine lines in the branch's diffs are that word in prose.
+    - `TestFrozenContractCopiesAgree` passes, with 49 copies under `internal/*/testdata/contracts/`.
+    - `make build` rewrote `bin/fylgja`, so the worker (`1494754`) and the server (`1494776`) read `(deleted)`; neither was restarted (this run may not stop the worker, and nothing here needs the server again).
 
 - [ ] T064 [operator] The operator's review of the feature, the commits by hand that the runs left uncommitted, and `make command-log` once the session is closed. Record the review's outcome in this task's note.
 

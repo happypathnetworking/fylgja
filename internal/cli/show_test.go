@@ -52,6 +52,17 @@ func contractProvenance(generic map[string]any) {
 	p["contract_version"] = "0.2"
 }
 
+// unsnapshotted is a record as a worker of twin.json 8 or earlier wrote it, in generic, a
+// record as JSON: no snapshot_id at the top level or on a step's sides, which 018 added.
+func unsnapshotted(generic map[string]any) {
+	delete(generic, "snapshot_id")
+	if step, ok := generic["step"].(map[string]any); ok {
+		for _, side := range []string{"from", "to"} {
+			delete(step[side].(map[string]any), "snapshot_id")
+		}
+	}
+}
+
 func twinOf(t *testing.T, change func(*lab.RecordFields)) wire.TwinRecord {
 	t.Helper()
 	observed := showObserved
@@ -352,6 +363,7 @@ func TestShowPinnedFromAStage(t *testing.T) {
 				t.Fatal(err)
 			}
 			generic["twin_version"] = "2"
+			unsnapshotted(generic)
 			contractProvenance(generic)
 			delete(generic, "stage")
 			delete(generic, "rehearsal")
@@ -419,6 +431,7 @@ func TestShowRecordNamesItsScope(t *testing.T) {
 					t.Fatal(err)
 				}
 				generic["twin_version"] = "7"
+				unsnapshotted(generic)
 				contractProvenance(generic)
 				if raw, err = json.Marshal(generic); err != nil {
 					t.Fatal(err)
@@ -457,10 +470,11 @@ func TestShowRecordNamesItsScope(t *testing.T) {
 	}
 }
 
-// An 8 record whose scope is not tag:<name>, edited by hand since no build of this tree
-// writes one, names no scope a read can be made under: twin show prints its scope unknown,
-// naming the value, as it prints a 7's, and its JSON record carries neither scope nor
-// mapping, so the document stays the show contract's (T097). One whose mapping twin.json 8
+// A record of 8 or later (here the 9 this build writes) whose scope is not tag:<name>, edited
+// by hand since no build of this tree writes one, names no scope a read can be made under:
+// twin show prints its scope unknown, naming the value and the record's version, as it
+// prints a 7's, and its JSON record carries neither scope nor mapping, so the document stays
+// the show contract's (T097). One whose mapping twin.json 8 or later
 // cannot hold, a reader's name not of its form or a model or version left empty, prints its
 // reader unknown, naming each field it fails, and its JSON record carries neither too, since
 // the contract shows the scope only beside the mapping (T106).
@@ -481,17 +495,17 @@ func TestShowTreatsAnUnreadableScopeAsUnknown(t *testing.T) {
 	var cases []unreadable
 	for _, scope := range []string{"", "fylgja", "tag:"} {
 		cases = append(cases, unreadable{fmt.Sprintf("scope %q", scope), []edit{{"scope", scope}},
-			`scope unknown (record 8 names scope "` + scope + `", not tag:<name>)`})
+			`scope unknown (record 9 names scope "` + scope + `", not tag:<name>)`})
 	}
 	cases = append(cases, []unreadable{
 		{"mapping reader \"Infrahub DCIM\"", []edit{{"reader", "Infrahub DCIM"}},
-			`scope tag:fylgja, read by an unknown reader (record 8 names mapping reader "Infrahub DCIM")`},
+			`scope tag:fylgja, read by an unknown reader (record 9 names mapping reader "Infrahub DCIM")`},
 		{"an empty mapping model", []edit{{"model", ""}},
-			`scope tag:fylgja, read by an unknown reader (record 8 names mapping model "")`},
+			`scope tag:fylgja, read by an unknown reader (record 9 names mapping model "")`},
 		{"an empty mapping version", []edit{{"version", ""}},
-			`scope tag:fylgja, read by an unknown reader (record 8 names mapping version "")`},
+			`scope tag:fylgja, read by an unknown reader (record 9 names mapping version "")`},
 		{"a reader and a model", []edit{{"reader", "-dcim"}, {"model", ""}},
-			`scope tag:fylgja, read by an unknown reader (record 8 names mapping reader "-dcim", model "")`},
+			`scope tag:fylgja, read by an unknown reader (record 9 names mapping reader "-dcim", model "")`},
 	}...)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1781,6 +1795,7 @@ func TestShowRecordsBeforeStages(t *testing.T) {
 				t.Fatal(err)
 			}
 			generic["twin_version"] = version
+			unsnapshotted(generic)
 			contractProvenance(generic)
 			delete(generic, "stage")
 			delete(generic, "rehearsal")
@@ -1894,6 +1909,7 @@ func record5(t *testing.T, rec wire.TwinRecord) []byte {
 			"at_source": "given"}
 	}
 	generic["twin_version"] = "5"
+	unsnapshotted(generic)
 	contractProvenance(generic)
 	delete(generic, "stage")
 	delete(generic, "rehearsal")
@@ -1994,8 +2010,8 @@ func TestShowStepWait(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			paths := useStateRoot(t)
 			rec := steppedTwin(t, c.change)
-			if rec.TwinVersion != "8" {
-				t.Fatalf("lab.NewStepRecord wrote version %q, want 8", rec.TwinVersion)
+			if rec.TwinVersion != "9" {
+				t.Fatalf("lab.NewStepRecord wrote version %q, want 9", rec.TwinVersion)
 			}
 			rec.Step.Wait = c.wait
 			writeTwin(t, paths, rec)
@@ -2027,17 +2043,17 @@ func TestShowStepWait(t *testing.T) {
 	}
 }
 
-// A version 8 record written by a create (step: null) is shown exactly as the same record
+// A version 9 record written by a create (step: null) is shown exactly as the same record
 // written with M11's step shape: no step line and no step key.
-func TestShowCreatedVersion8RecordAsM11(t *testing.T) {
+func TestShowCreatedVersion9RecordAsM11(t *testing.T) {
 	show := func(write func(*testing.T, lab.Paths, wire.TwinRecord)) showOutput {
 		paths := useStateRoot(t)
 		write(t, paths, seededTwin(t))
 		return showWith(t, paths, "inspect-three.json", &fakeService{})
 	}
 	five, four := show(writeTwin), show(writeM11Twin)
-	if seededTwin(t).TwinVersion != "8" {
-		t.Fatalf("a create's record is version %q, want 8", seededTwin(t).TwinVersion)
+	if seededTwin(t).TwinVersion != "9" {
+		t.Fatalf("a create's record is version %q, want 9", seededTwin(t).TwinVersion)
 	}
 	if five.stdout != four.stdout {
 		t.Errorf("version 5 stdout:\n%s\nversion 4:\n%s", five.stdout, four.stdout)

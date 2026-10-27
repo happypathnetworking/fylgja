@@ -14,6 +14,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/snapshot"
 )
 
 // TwinVersion is the twin.json format version (contracts/twin.schema.json). Version 2 named
@@ -25,8 +26,10 @@ import (
 // from or stepped to, with its proposed change, in place of version 3's reference (014);
 // version 7 names the rehearsal run whose baseline the twin is, or null (015); version 8's
 // provenance is bundle 5's, naming the scope and the mapping in place of the generics
-// contract's version (017).
-const TwinVersion = "8"
+// contract's version (017); version 9 names the snapshot the twin was built from or last
+// stepped to, or null, each step side's snapshot when it is known, and a third source,
+// snapshot (018).
+const TwinVersion = "9"
 
 // ObservedAtUnknown is what twin.json says when no read took place, so a null
 // observed_at is an explicit statement rather than a missing value (Constitution VI).
@@ -38,7 +41,11 @@ type RecordFields struct {
 	BundleID   string
 	Provenance wire.Provenance
 	ObservedAt *string // nil when no read took place
-	Source     string  // wire.SourceIntent or wire.SourceBundle
+	Source     string  // wire.SourceIntent, wire.SourceBundle or wire.SourceSnapshot
+	// SnapshotID is the snapshot the run's bundle was compiled from (018): required on a
+	// snapshot twin, refused on a bundle twin, and "" on an intent twin whose run names
+	// none, a following check's rebuild.
+	SnapshotID string
 	RunID      string
 	Version    string // the worker binary's --version
 	RecordedAt time.Time
@@ -51,25 +58,44 @@ type RecordFields struct {
 // NewRecord builds twin.json's content and refuses a record the contract would not
 // accept: a twin created from intent always had a read, so its observed_at is known,
 // and a twin provisioned from a bundle never did, so its observed_at is null and the
-// note says why. A stage is recorded only on a pinned twin created from intent (014): a
-// bundle carries no stage, and a stage always resolves to an at. A rehearsal is recorded
-// only as the rehearsal workflow's run, by its id (015). The provenance names the scope and
-// the mapping, as every bundle 5 manifest does (017).
+// note says why. A twin created from a snapshot records the snapshot's stored take as its
+// observed_at and names the snapshot; a bundle twin names none, and an intent twin names
+// the one its run was given, if any (018). A stage is recorded only on a pinned twin
+// created from intent (014): a bundle and a snapshot carry no stage, and a stage always
+// resolves to an at. A rehearsal is recorded only as the rehearsal workflow's run, by its
+// id (015). The provenance names the scope and the mapping, as every bundle 5 manifest
+// does (017).
 func NewRecord(f RecordFields) (wire.TwinRecord, error) {
 	switch f.Source {
 	case wire.SourceIntent:
 		if f.ObservedAt == nil {
 			return wire.TwinRecord{}, fmt.Errorf("a twin created from intent must record when the intent was observed")
 		}
+	case wire.SourceSnapshot:
+		if f.ObservedAt == nil {
+			return wire.TwinRecord{}, fmt.Errorf("a twin created from a snapshot must record when the snapshot's intent was observed")
+		}
+		if f.SnapshotID == "" {
+			return wire.TwinRecord{}, fmt.Errorf("a twin created from a snapshot must name the snapshot")
+		}
+		if st := f.Stage; st != nil {
+			return wire.TwinRecord{}, fmt.Errorf("a twin created from a snapshot cannot record stage %s: a snapshot carries no stage", st.Name())
+		}
 	case wire.SourceBundle:
 		if f.ObservedAt != nil {
 			return wire.TwinRecord{}, fmt.Errorf("a twin provisioned from a bundle had no read, so it cannot record observed_at %q", *f.ObservedAt)
+		}
+		if f.SnapshotID != "" {
+			return wire.TwinRecord{}, fmt.Errorf("a twin provisioned from a bundle had no snapshot, so it cannot record snapshot %s", f.SnapshotID)
 		}
 		if st := f.Stage; st != nil {
 			return wire.TwinRecord{}, fmt.Errorf("a twin provisioned from a bundle cannot record stage %s: a bundle carries no stage", st.Name())
 		}
 	default:
 		return wire.TwinRecord{}, fmt.Errorf("unknown twin source %q", f.Source)
+	}
+	if f.SnapshotID != "" && !snapshot.IsID(f.SnapshotID) {
+		return wire.TwinRecord{}, fmt.Errorf("%q is not a snapshot identity", f.SnapshotID)
 	}
 	if st := f.Stage; st != nil && f.Provenance.At == "" {
 		return wire.TwinRecord{}, fmt.Errorf("a twin created from stage %s must record its at: a stage twin is pinned", st.Name())
@@ -102,6 +128,7 @@ func NewRecord(f RecordFields) (wire.TwinRecord, error) {
 	rec := wire.TwinRecord{
 		TwinVersion:   TwinVersion,
 		Lab:           LabName,
+		SnapshotID:    snapshotRef(f.SnapshotID),
 		BundleID:      f.BundleID,
 		Provenance:    f.Provenance,
 		ObservedAt:    f.ObservedAt,
@@ -215,6 +242,7 @@ func (a *Activities) RecordTwin(_ context.Context, in wire.RecordInput) (wire.Re
 		Provenance: recordProvenance(m.Provenance),
 		ObservedAt: in.ObservedAt,
 		Source:     in.Source,
+		SnapshotID: in.SnapshotID,
 		RunID:      in.RunID,
 		Version:    a.Version,
 		RecordedAt: time.Now(),
@@ -239,6 +267,8 @@ func (a *Activities) RecordTwin(_ context.Context, in wire.RecordInput) (wire.Re
 // record's bundle_id); a version 4 one's step has no wait and reads with Step.Wait nil, as
 // a version 5, 6 or 7 one's does while its wait has not run. A record of version 6 or
 // earlier has no rehearsal key and reads with Rehearsal nil, as a hand twin's 7 does (015).
+// A record of 8 or earlier has no snapshot key, at the top level or on a step's sides, and
+// reads with SnapshotID nil and each side's empty (018).
 func ReadRecord(path string) (wire.TwinRecord, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -303,7 +333,7 @@ type StagedTarget struct {
 }
 
 // NewStepRecord builds the record a step leaves (contracts/twin.schema.json
-// version 8) from the record the step started from, and refuses what the contract would
+// version 9) from the record the step started from, and refuses what the contract would
 // not accept, or what would claim more than the step did:
 //
 //   - a previous record that is not the step's from side (another bundle or stage), or
@@ -317,9 +347,9 @@ type StagedTarget struct {
 //     it does;
 //   - a node of the previous record holding a bundle that is neither side.
 //
-// After a stepped or unchanged step the top level is the target's and every node holds
-// it: a pushed node landed its bundle, and a node the step left alone runs what both
-// bundles give it. After a diverged step the top level stays the previous record's; a
+// After a stepped or unchanged step the top level is the target's, its snapshot included
+// (none when the to side names none), and every node holds it: a pushed node landed its
+// bundle, and a node the step left alone runs what both bundles give it. After a diverged step the top level stays the previous record's; a
 // node whose push landed holds the target, one containerlab restarted, recreated or
 // created that no push reached holds nothing (null) and runs its baseline, and
 // every other node holds what it held. run, provisioned_by and rehearsal stay the
@@ -328,6 +358,11 @@ type StagedTarget struct {
 func NewStepRecord(prev wire.TwinRecord, f StepFields) (wire.TwinRecord, error) {
 	if !bundle.IsID(f.From.BundleID) || !bundle.IsID(f.To.BundleID) {
 		return wire.TwinRecord{}, fmt.Errorf("a step is between two bundle identities, not %q and %q", f.From.BundleID, f.To.BundleID)
+	}
+	for _, id := range []string{f.From.SnapshotID, f.To.SnapshotID} {
+		if id != "" && !snapshot.IsID(id) {
+			return wire.TwinRecord{}, fmt.Errorf("%q is not a snapshot identity", id)
+		}
 	}
 	if prev.BundleID != f.From.BundleID {
 		return wire.TwinRecord{}, fmt.Errorf("the record names bundle %s, not bundle %s the step started from", prev.BundleID, f.From.BundleID)
@@ -398,6 +433,7 @@ func NewStepRecord(prev wire.TwinRecord, f StepFields) (wire.TwinRecord, error) 
 	rec.State = wire.StateDiverged
 	if moved {
 		observed := f.ObservedAt
+		rec.SnapshotID = snapshotRef(f.To.SnapshotID)
 		rec.BundleID = f.To.BundleID
 		rec.Provenance = f.Staged.Provenance
 		rec.ObservedAt = &observed
@@ -416,6 +452,14 @@ func NewStepRecord(prev wire.TwinRecord, f StepFields) (wire.TwinRecord, error) 
 	rec.Nodes = stepNodes(prev, f, moved, outcome)
 	rec.Step = stepBlock(f, ended.Sub(started))
 	return rec, nil
+}
+
+// snapshotRef is a record's snapshot_id for id: nil, written null, when id is "" (018).
+func snapshotRef(id string) *string {
+	if id == "" {
+		return nil
+	}
+	return &id
 }
 
 // provenanceNamesItsRead refuses a provenance twin.json 8 cannot hold (017): one naming no

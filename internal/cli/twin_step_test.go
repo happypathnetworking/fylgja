@@ -381,6 +381,7 @@ func supersededHost(t *testing.T, waypoint map[string]any, diverged bool) *stepH
 			m[k] = "5"
 		}
 	}
+	unsnapshotted(m)
 	contractProvenance(m)
 	delete(m, "rehearsal")
 	delete(m, "stage")
@@ -410,6 +411,7 @@ func unscopedHost(t *testing.T, version string) *stepHostFixture {
 	t.Helper()
 	return editedRecordHost(t, func(m map[string]any) {
 		m["twin_version"] = version
+		unsnapshotted(m)
 		contractProvenance(m)
 		if version == "6" {
 			delete(m, "rehearsal")

@@ -11,7 +11,7 @@ import (
 // frozenContractCopies is how many frozen contract files the packages' testdata holds.
 // Fewer means a directory moved or was dropped, and the glob below would then pass over
 // copies it no longer sees.
-const frozenContractCopies = 33
+const frozenContractCopies = 34
 
 // An older milestone's published schema is frozen under each package that validates
 // against it, at testdata/contracts/<feature>/<name>, so one file can sit in up to four

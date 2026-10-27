@@ -471,6 +471,7 @@ graph LR
     internal_lab --> internal_findings
     internal_lab --> internal_lab_wire
     internal_lab --> internal_psp
+    internal_lab --> internal_snapshot
     internal_lab --> internal_verify
     internal_lab_wire --> internal_findings
     internal_provision --> internal_bundle

@@ -93,6 +93,7 @@ func as7(t *testing.T, paths lab.Paths) {
 		t.Fatal(err)
 	}
 	generic["twin_version"] = "7"
+	unsnapshotted(generic)
 	contractProvenance(generic)
 	if raw, err = json.Marshal(generic); err != nil {
 		t.Fatal(err)
@@ -274,6 +275,7 @@ func TestRehearseRefusedByWhatHoldsTheHost(t *testing.T) {
 			t.Fatal(err)
 		}
 		generic["twin_version"] = "6"
+		unsnapshotted(generic)
 		contractProvenance(generic)
 		delete(generic, "rehearsal")
 		if raw, err = json.Marshal(generic); err != nil {

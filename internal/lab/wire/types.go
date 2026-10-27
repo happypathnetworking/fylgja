@@ -93,8 +93,13 @@ const DefaultDestroyTimeoutS = 60
 
 // Source says how a twin came to be provisioned.
 const (
-	SourceIntent = "intent" // twin create: read and compile ran in the run
+	// SourceIntent is a twin created by twin create --branch or --stage: the server read and
+	// compiled, or a check's rebuild did (018).
+	SourceIntent = "intent"
 	SourceBundle = "bundle" // twin provision: an existing bundle, no read
+	// SourceSnapshot is a twin created by twin create --snapshot from a stored or sent
+	// snapshot: no read (018).
+	SourceSnapshot = "snapshot"
 )
 
 // Teardown plan bases: what PlanTeardown budgeted from.
@@ -330,6 +335,10 @@ type RecordInput struct {
 	// every input and recorded history of a run a rehearsal did not start, and omitted when
 	// nil, as Stage is.
 	Rehearsal *RehearsalRef `json:"rehearsal,omitempty"`
+	// SnapshotID is the snapshot the run's bundle was compiled from (018), copied into the
+	// record as data. Empty in every input and recorded history before 018, and in a
+	// rebuild's and a twin provision's, and omitted when empty, as Stage is.
+	SnapshotID string `json:"snapshot_id,omitempty"`
 }
 
 // RecordResult is where the record was written and the record exactly as written, so
@@ -343,8 +352,13 @@ type RecordResult struct {
 // lives here, not in internal/lab, because RecordTwin returns it to the workflow.
 // RecordedAt is a string so this package needs no time import.
 type TwinRecord struct {
-	TwinVersion    string        `json:"twin_version"`
-	Lab            string        `json:"lab"`
+	TwinVersion string `json:"twin_version"`
+	Lab         string `json:"lab"`
+	// SnapshotID names the snapshot the twin was built from or last stepped to, or is nil
+	// (018): a twin built by twin provision, one a following check's rebuild made, and a
+	// record of 8 or earlier, which has no key and reads as nil. No omitempty: version 9
+	// writes an explicit null for none, as stage does.
+	SnapshotID     *string       `json:"snapshot_id"`
 	BundleID       string        `json:"bundle_id"`
 	Provenance     Provenance    `json:"provenance"`
 	ObservedAt     *string       `json:"observed_at"`
@@ -646,15 +660,19 @@ type ReconcileResult struct {
 	TookS float64   `json:"took_s"`
 }
 
-// StepSide is one side of a step: the stage, the bundle and the pinned at, verbatim.
-// Branch is the target's, for the document's to side
+// StepSide is one side of a step: the stage, the snapshot, the bundle and the pinned at,
+// verbatim. Branch is the target's, for the document's to side
 // (contracts/step.schema.json); the record's sides carry none (contracts/twin.schema.json),
-// so a side written into a record leaves it empty.
+// so a side written into a record leaves it empty. SnapshotID is the side's snapshot (018),
+// empty where it is not known: the from side of a record of 8 or earlier. Empty in every
+// input and recorded history before 018, and omitted when empty, so their payloads are
+// byte-identical.
 type StepSide struct {
-	Stage    *StageRef `json:"stage"`
-	BundleID string    `json:"bundle_id"`
-	At       string    `json:"at"`
-	Branch   string    `json:"branch,omitempty"`
+	Stage      *StageRef `json:"stage"`
+	SnapshotID string    `json:"snapshot_id,omitempty"`
+	BundleID   string    `json:"bundle_id"`
+	At         string    `json:"at"`
+	Branch     string    `json:"branch,omitempty"`
 }
 
 // RecordStepInput is everything a step's record holds that the lab host cannot read for

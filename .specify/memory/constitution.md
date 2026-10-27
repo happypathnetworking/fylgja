@@ -1,5 +1,12 @@
 <!--
 Sync Impact Report
+- Version change: 2.1.0 → 2.2.0 (2026-10-27, MINOR: Principle VI materially expanded).
+  VI's provenance sentence names the snapshot beside the CTM and the bundle;
+  `observed_at` appears neither in the bundle nor in the bytes a snapshot's id hashes;
+  and a sentence is added for the reader of a source that cannot replay time: the
+  snapshot's id addresses intent, and a stage there is the snapshot Fylgja took when the
+  operator marked it. Source: D-061. Templates: .specify/templates/plan-template.md's
+  Constitution Check names 2.2.0; its row VI reads the amended text.
 - Version change: 2.0.0 → 2.1.0 (2026-10-26, MINOR: Principle III materially expanded).
   III's Infrahub-owned kinds gain the template query's internal `CoreGraphQLQueryGroup`s,
   read for the account that writes Infrahub's own bookkeeping, so that a stamp that
@@ -119,20 +126,22 @@ compiler.
 *Rationale: D-010, D-011, D-040.*
 
 ### VI. Intent Is Addressed
-Every CTM and bundle MUST record its provenance: branch, `at` if supplied, the schema
-hash Infrahub reports, the scope, and the mapping with the model version it read.
-`observed_at`, the UTC time the read
-began, MUST be recorded on every read, pinned or not, in the CTM and in the twin
-directory, and MUST NOT appear in the bundle, so that the same intent hashes the same
-whenever it was read. When the operator supplies `at`, it MUST be passed verbatim on
-every query of the read. When the operator does not, Fylgja MUST NOT send an `at` it
-composed from a clock of its own; an `at` read from Infrahub — a stamp it returned, or
-the first instant after one — MAY be passed as the operator's would be, verbatim on
-every query, and is then recorded as the read's `at`. A read with neither has
-`observed_at` as the only record of when the intent was seen. `observed_at` is
+Every CTM, snapshot and bundle MUST record its provenance: branch, `at` if supplied, the
+schema hash Infrahub reports, the scope, and the mapping with the model version it read.
+`observed_at`, the UTC time the read began, MUST be recorded on every read, pinned or
+not, in the CTM, in the snapshot's outer part and in the twin directory, and MUST appear
+neither in the bundle nor in the bytes a snapshot's id hashes, so that the same intent
+hashes the same whenever it was read. When the operator supplies `at`, it MUST be passed
+verbatim on every query of the read. When the operator does not, Fylgja MUST NOT send an
+`at` it composed from a clock of its own; an `at` read from Infrahub — a stamp it
+returned, or the first instant after one — MAY be passed as the operator's would be,
+verbatim on every query, and is then recorded as the read's `at`. A read with neither
+has `observed_at` as the only record of when the intent was seen. `observed_at` is
 informational in every case, governs nothing when `at` is supplied, and any claim of
-reproducibility from it MUST say best-effort.
-*Rationale: D-001, D-012, D-023, D-045.*
+reproducibility from it MUST say best-effort. Where the source of truth cannot replay
+time, the snapshot's id addresses intent, and a stage there is the snapshot Fylgja took
+when the operator marked it.
+*Rationale: D-001, D-012, D-023, D-045, D-061.*
 
 ### VII. One Twin at a Time
 Fylgja MUST refuse to create a twin while lab `fylgja` exists on the host, stating
@@ -241,4 +250,4 @@ Detail lives in `docs/development.md`; these are the gates.
   preceded 1.0.0 at the repository root is retired and MUST NOT be edited in its
   place.
 
-**Version**: 2.1.0 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-26
+**Version**: 2.2.0 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-27

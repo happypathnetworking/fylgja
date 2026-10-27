@@ -40,7 +40,7 @@
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-Constitution 2.1.0 (`.specify/memory/constitution.md`). Mark each gate PASS, N/A (say
+Constitution 2.2.0 (`.specify/memory/constitution.md`). Mark each gate PASS, N/A (say
 why), or VIOLATION (justify in Complexity Tracking). Cite the principle number.
 
 | # | Gate | Status |
@@ -50,7 +50,7 @@ why), or VIOLATION (justify in Complexity Tracking). Cite the principle number.
 | III | The CTM is the contract; the reader names its model version; approximations and omissions in the envelope's fidelity list, copied by the compiler; nothing read the mapping does not name; the read-only test's list; wiring derived from what was mapped; conformance and completeness checked separately | |
 | IV | No configuration rendered; bootstrap from the PSP only; production config is an Infrahub artifact | |
 | V | Compiler pure (test-enforced); bundle deterministic, self-describing, content-addressed, deployable as emitted; `twin compile` shares the test code path | |
-| VI | Provenance recorded (branch, `at`, schema hash, scope, mapping and model version in the bundle; `observed_at` in the CTM envelope and `twin.json`, never in the bundle); `at` passed verbatim or not at all | |
+| VI | Provenance recorded (branch, `at`, schema hash, scope, mapping and model version in the bundle; `observed_at` in the CTM envelope, the snapshot's outer part and `twin.json`, never in the bundle nor in the bytes a snapshot's id hashes); `at` passed verbatim or not at all; where the source cannot replay time, the snapshot's id addresses intent | |
 | VII | One twin at a time: create refused while lab `fylgja` exists; orphan detection at create and worker start; nothing per-twin | |
 | VIII | Temporal: `provision`/`destroy` with fixed IDs; deterministic workflow code; idempotent activities passing references; heartbeats with PSP budgets; cleanup on a disconnected context; one task queue; host-bound code in `internal/lab` | |
 | IX | No database; containerlab + twin directory + bundle store + Temporal history | |

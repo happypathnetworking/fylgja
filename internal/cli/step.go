@@ -30,15 +30,16 @@ func newTwinStepCmd(opts *options) *cobra.Command {
 		Use:   "step",
 		Short: "Take the stage twin to another stage of its proposed change, without a rebuild",
 		Long: "Take the running twin, built from a stage, to another stage of its proposed change:\n" +
-			"the next one, or the one --stage names. The API's server resolves, reads, compiles and\n" +
-			"files the target; the step between the two bundles is printed, the host is checked for\n" +
-			"the twin after the step, and containerlab's own plan for the lab is read. Then one run\n" +
-			"with the fixed identity fylgja-step stages the target, lets containerlab reconcile the\n" +
-			"lab, waits for every node it restarted, recreated or created, pushes every node whose\n" +
-			"configuration changed by replace, and records the twin. Nothing is torn down: a step\n" +
-			"that fails or is cancelled after its stage leaves the twin up and diverged (exit 4),\n" +
-			"and only fylgja twin destroy clears it. A plan that restarts or recreates a node needs\n" +
-			"--allow-restart.\n" +
+			"the next one, or the one --stage names. The API's server resolves the target, reads\n" +
+			"it, takes the snapshot of what it read, compiles it and files the snapshot and the\n" +
+			"bundle, as stage plan builds a stage; the step between the two bundles is printed,\n" +
+			"the host is checked for the twin after the step, and containerlab's own plan for the\n" +
+			"lab is read. Then one run with the fixed identity fylgja-step stages the target, lets\n" +
+			"containerlab reconcile the lab, waits for every node it restarted, recreated or\n" +
+			"created, pushes every node whose configuration changed by replace, and records the\n" +
+			"twin. Nothing is torn down: a step that fails or is cancelled after its stage leaves\n" +
+			"the twin up and diverged (exit 4), and only fylgja twin destroy clears it. A plan that\n" +
+			"restarts or recreates a node needs --allow-restart.\n" +
 			"After the record the run reads the twin against the target until it conforms, at most\n" +
 			"--wait (default " + defaultBudget + "), and records how that ended; the step's outcome does not\n" +
 			"depend on it.",
@@ -54,14 +55,16 @@ func newTwinStepCmd(opts *options) *cobra.Command {
 	cmd.Flags().BoolVar(&f.allowRestart, "allow-restart", false,
 		"proceed when containerlab's plan restarts or recreates a node, which loses its running state until the step pushes it again")
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false,
-		"resolve, read, compile and file the target, check the host and read containerlab's plan; start no run")
+		"resolve and read the target, take and file its snapshot, compile and file its bundle, check the host "+
+			"and read containerlab's plan; start no run")
 	cmd.Flags().StringVar(&f.wait, "wait", "",
 		"after the record, read the twin until it conforms, at most this long (default "+defaultBudget+"; 0 reads once)")
 	return cmd
 }
 
-// runTwinStep is twin step as one request; the server resolves, reads, compiles and files
-// the target, checks its host, reads containerlab's plan and starts the run.
+// runTwinStep is twin step as one request; the server resolves and reads the target, takes
+// and files its snapshot, compiles it and files its bundle, checks its host, reads
+// containerlab's plan and starts the run.
 func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	a := given{}
 	if f.stageGiven || f.stage != "" {

@@ -64,13 +64,14 @@ func newStagePlanCmd(opts *options) *cobra.Command {
 		Use:   "plan",
 		Short: "Read and compile each stage of a proposed change, and print the step between each pair",
 		Long: "Read and compile each stage of the open proposed change whose source branch\n" +
-			"--branch names, in order, on the pipeline intent read and twin compile run, and file\n" +
-			"each bundle and its CTM in the store. Between each consecutive pair, print what\n" +
-			"differs: nodes and links, then the configuration artifacts by checksum, never by\n" +
-			"content. A stage that is refused, a stale one among them, is reported with its\n" +
-			"reason and the plan goes on. The API's server reads, compiles and files them in its\n" +
-			"bundle store, and needs Infrahub and the store for it: no workflow service, worker,\n" +
-			"containerlab or host budget.",
+			"--branch names, in order, on the pipeline intent read and twin compile run. The API's\n" +
+			"server resolves each stage, reads it, takes the snapshot of what it read and files it\n" +
+			"in its snapshot store, compiles it and files the bundle in its bundle store, and\n" +
+			"prints the stage's snapshot_id above its bundle_id. Between each consecutive pair,\n" +
+			"print what differs: nodes and links, then the configuration artifacts by checksum,\n" +
+			"never by content. A stage that is refused, a stale one among them, is reported with\n" +
+			"its reason and the plan goes on. The server needs Infrahub and its two stores for it:\n" +
+			"no workflow service, worker, containerlab or host budget.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			f.branchGiven = cmd.Flags().Changed("branch")
@@ -99,8 +100,9 @@ func runStageList(ctx context.Context, opts *options, f *stageFlags) error {
 	return send(ctx, opts, findings.OpStageList, stageArgs(f), nil, handlers{})
 }
 
-// runStagePlan is stage plan as one request: the server reads, compiles and files each
-// stage of the proposed change, and prints each as it is known. --branch left out is the
+// runStagePlan is stage plan as one request: the server resolves and reads each stage of
+// the proposed change, takes and files its snapshot, compiles it and files its bundle, and
+// prints each as it is known. --branch left out is the
 // server's to refuse, before anything is dialled.
 func runStagePlan(ctx context.Context, opts *options, f *stageFlags) error {
 	return send(ctx, opts, findings.OpStagePlan, stageArgs(f), nil, handlers{})

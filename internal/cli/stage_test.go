@@ -341,6 +341,55 @@ func TestStageHelpTextsNameTheServer(t *testing.T) {
 	}
 }
 
+// stage plan, twin step and twin rehearse say that the API's server takes each stage's
+// snapshot and files it beside its bundle, as twin create's help does since T065, and stage
+// plan no longer files a CTM beside each bundle (018: FR-008, FR-011, FR-012, FR-014). The
+// whole help is read, flags included, its whitespace folded so no line break is pinned.
+func TestStageHelpsNameTheServersTake(t *testing.T) {
+	for _, c := range []struct {
+		args       []string
+		said, gone []string
+	}{
+		{[]string{"stage", "plan", "--help"}, []string{
+			"The API's server resolves each stage, reads it, takes the snapshot of what it read and files it in its " +
+				"snapshot store, compiles it and files the bundle in its bundle store,",
+			"prints the stage's snapshot_id above its bundle_id.",
+		}, []string{"its CTM", "reads, compiles and files them"}},
+		{[]string{"twin", "step", "--help"}, []string{
+			"The API's server resolves the target, reads it, takes the snapshot of what it read, compiles it and " +
+				"files the snapshot and the bundle, as stage plan builds a stage;",
+			"resolve and read the target, take and file its snapshot, compile and file its bundle, check the host " +
+				"and read containerlab's plan; start no run",
+		}, []string{"resolves, reads, compiles and files the target", "resolve, read, compile and file the target"}},
+		{[]string{"twin", "rehearse", "--help"}, []string{
+			"The API's server builds every stage first, as stage plan does: it resolves the stage, reads it, takes " +
+				"the snapshot of what it read, compiles it and files the snapshot and the bundle,",
+		}, []string{"resolves, reads, compiles and files every stage"}},
+	} {
+		t.Run(strings.Join(c.args[:2], " "), func(t *testing.T) {
+			root := &cobra.Command{Use: "fylgja"}
+			opts := &options{}
+			root.AddCommand(newTwinCmd(opts), newStageCmd(opts))
+			root.SetArgs(c.args)
+			text := strings.Join(strings.Fields(captureStdout(t, func() {
+				if err := root.Execute(); err != nil {
+					t.Error(err)
+				}
+			})), " ")
+			for _, want := range c.said {
+				if !strings.Contains(text, want) {
+					t.Errorf("the help does not say %q:\n%s", want, text)
+				}
+			}
+			for _, gone := range c.gone {
+				if strings.Contains(text, gone) {
+					t.Errorf("the help still says %q:\n%s", gone, text)
+				}
+			}
+		})
+	}
+}
+
 // stage list, stage plan, twin step and twin show do their work in the API's server,
 // and their help no longer says the command needs Infrahub alone, or Infrahub and the bundle
 // store, or does its work here, or runs on the lab host.
@@ -353,9 +402,9 @@ func TestWorkHelpTextsNameTheServer(t *testing.T) {
 		{newStageListCmd(opts), []string{"Needs Infrahub and nothing else"},
 			[]string{"The API's server reads them, and needs Infrahub and nothing else for it."}},
 		{newStagePlanCmd(opts), []string{"Needs Infrahub and the bundle store"},
-			[]string{"The API's server reads, compiles and files them in its bundle store, and needs Infrahub and the store for it"}},
+			[]string{"The server needs Infrahub and its two stores for it"}},
 		{newTwinStepCmd(opts), []string{"compiled and filed here"},
-			[]string{"The API's server resolves, reads, compiles and files the target;"}},
+			[]string{"The API's server resolves the target, reads it,"}},
 		{newTwinShowCmd(opts), []string{"Runs on the lab host"},
 			[]string{"The API's server reports it from the lab host, needs no worker, and changes nothing."}},
 	} {

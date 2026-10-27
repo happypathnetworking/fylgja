@@ -176,7 +176,7 @@ const (
 	// CLI's refusals before any run are at resolve (the twin, the target, the from
 	// bundle) and compare (the plan's rules); the run's second locks reword them at
 	// inspect and compare. A run in flight is M2's run.in_flight, not a new rule.
-	RuleStepTwinUnsteppable   = "step.twin.unsteppable"   // rejection, exit 1, resolve (inspect from the run's second lock): lab fylgja, M3's object, or the record's bundle_id; no twin, an orphan, an unreadable record, a record without its lab, a record of twin.json 5 or earlier, or a record naming no stage; from 017, a record of 7 or earlier, or an 8 naming a scope that is not tag:<name> or a mapping twin.json 8 cannot hold
+	RuleStepTwinUnsteppable   = "step.twin.unsteppable"   // rejection, exit 1, resolve (inspect from the run's second lock): lab fylgja, M3's object, or the record's bundle_id; no twin, an orphan, an unreadable record, a record without its lab, a record of twin.json 5 or earlier, or a record naming no stage; from 017, a record of 7 or earlier, or one of 8 or later naming a scope that is not tag:<name> or a mapping twin.json 8 cannot hold
 	RuleStepTwinDiverged      = "step.twin.diverged"      // rejection, exit 1, resolve (inspect): the record's bundle_id; the record's state is diverged, which only twin destroy clears
 	RuleStepTargetForeign     = "step.target.foreign"     // rejection, exit 1, resolve: the given reference; --stage names another branch than the record's, or another proposed change on it
 	RuleStepTargetUnknown     = "step.target.unknown"     // rejection, exit 1, resolve: the record's stage or the reference; the record's label is gone, no stage follows it, or the proposed change has not the one given
@@ -249,7 +249,7 @@ const (
 	RuleOmitCableEndpoint     = "omit.cable.endpoint"      // info, exit 0, read: the cable; an end is not on a physical port
 	RuleOmitCableOutsideScope = "omit.cable.outside_scope" // info, exit 0, read: the cable; an end is outside the scope
 	RuleOmitCableKind         = "omit.cable.kind"          // info, exit 0, read: the connector; it is not a DcimCable, naming its kind (T096)
-	RuleCTMVersionUnsupported = "ctm.version.unsupported"  // rejection, exit 1, no step: the CTM file; twin compile was given a CTM of another version, naming both
+	RuleCTMVersionUnsupported = "ctm.version.unsupported"  // rejection, exit 1, no step at twin compile --snapshot, resolve at twin create --snapshot <file>: the snapshot file; its inner CTM is of another version, naming both (018; a bare CTM is snapshot.version.unsupported)
 	RulePSPMatchesMissing     = "psp.matches.missing"      // rejection, exit 1, verify: the package path; no match, or a pair with an empty name
 	RulePSPMatchesDuplicate   = "psp.matches.duplicate"    // rejection, exit 1, verify: the package path; two packages name one pair, naming both packages and the pair; it also refuses the registry's load, and so serve and worker run at start
 

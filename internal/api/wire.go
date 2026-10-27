@@ -127,7 +127,8 @@ type Request struct {
 	// Args are the command's arguments as given: an absent key is a flag not given, and a
 	// present one a flag given, whatever its value. Each handler decodes them strictly.
 	Args map[string]json.RawMessage `json:"args,omitempty"`
-	// Files are the operator's files, on twin.compile, twin.provision and psp.validate.
+	// Files are the operator's files, on twin.create (its one snapshot file, beside a
+	// --snapshot that is a path), twin.compile, twin.provision and psp.validate.
 	Files []File `json:"files,omitempty"`
 }
 

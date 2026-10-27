@@ -83,8 +83,9 @@ func loadFailure(op string, subject *findings.Subject, err error) error {
 }
 
 // loadFailureAt is loadFailure for a command whose findings belong to a step: twin create
-// loads packages for its read, as the run's read step does, and twin provision for its
-// verify.
+// loads packages before the server's own read, at read, or before the compile for
+// --snapshot, at compile, since from 018 its run has no read step; and twin provision for
+// its verify.
 func loadFailureAt(op string, subject *findings.Subject, step string, err error) error {
 	var invalid *psp.InvalidError
 	if errors.As(err, &invalid) {

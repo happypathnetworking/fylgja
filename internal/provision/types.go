@@ -89,7 +89,7 @@ const (
 // absolute and no bytes cross the queue.
 type ProvisionInput struct {
 	Source     string `json:"source"`      // wire.SourceIntent, wire.SourceSnapshot or wire.SourceBundle
-	Branch     string `json:"branch"`      // intent: the branch to read
+	Branch     string `json:"branch"`      // intent: the branch the server read, or the snapshot's; provenance, which the following's checks read (a run recorded before 018 reads it)
 	At         string `json:"at"`          // intent: --at verbatim, empty when not given
 	BundlePath string `json:"bundle_path"` // bundle: the stored copy's absolute path
 	BundleID   string `json:"bundle_id"`   // bundle: its identity
@@ -111,8 +111,10 @@ type ProvisionInput struct {
 	// writes into twin.json. The run branches on nothing of it. Nil in every input and
 	// recorded history of a run a rehearsal did not start, and omitted when nil.
 	Rehearsal *wire.RehearsalRef `json:"rehearsal,omitempty"`
-	// Scope is the scope the run's read is made under, tag:<name>, as the server resolved
-	// it (017), and the following's checks after it. The run branches on nothing of it.
+	// Scope is the scope the server's read was made under, tag:<name>, as the server
+	// resolved it (017), or the snapshot's: provenance, which the following's checks read
+	// under, and the read's scope only in a history recorded before 018, whose run reads.
+	// The run branches on nothing of it.
 	// Empty in every recorded history before 017, and omitted when empty, so they replay.
 	Scope string `json:"scope,omitempty"`
 	// SnapshotID is the snapshot BundleID was compiled from, as the server took or fetched

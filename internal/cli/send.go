@@ -21,7 +21,7 @@ var newClient = api.NewClient
 
 // handlers are what a command does with the frames that are its own to act on.
 type handlers struct {
-	// files takes the operator's files an answer carries, the CTM or the bundle, before
+	// files takes the operator's files an answer carries, the snapshot or the bundle, before
 	// anything after them is printed. An error ends the command with its own
 	// operation.failed, in M12's words, and nothing more of the answer is printed.
 	files func([]api.File) error

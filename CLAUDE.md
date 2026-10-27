@@ -141,7 +141,8 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   was `4d5b37aa…`); the empty group
   `fylgja-devices`; and the registration `fylgja`, a `CoreReadOnlyRepository` at
   `https://github.com/happypathnetworking/fylgja.git`, `ref main`, with no credential
-  ([D-044](docs/decisions.md#d-044)), imported at `c006bf9` on 2026-10-26, whose import
+  ([D-044](docs/decisions.md#d-044)), imported at `c006bf9` on 2026-10-26 and at
+  `cb0a8d7` on 2026-10-27, whose import
   made the query `device_config` (over the library's kinds), the transform
   `srlinux_device_config` and the definition `srlinux_device_config` → artifact
   `device-config`, `text/plain`, and the query `fylgja_branch` and the two checks beside
@@ -161,7 +162,9 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   only when asked**: once it is on `origin`'s `main`, which the operator pushes,
   `InfrahubReadOnlyRepositoryImportLastCommit(data: {id})` on `main` imports it (neither
   the minute sync nor rewriting `ref` does), and both task workers fetch it about 15 s
-  after the import's own flow, before which a run-check fails; a branch then sees it only
+  after the import's own flow, before which a run-check fails; a worker's fetch can fail
+  and is never retried, so read both workers' `commits/` after an import
+  (`docs/verified-facts.md`, 10-27); a branch then sees it only
   after `BranchRebase` or re-creation, so a branch made before a check's import never runs
   it, and each artifact changes only once generated again. `make sdl`
   fetches the SDL from `main`. Prefect's `git_repositories_sync` runs every minute with
@@ -511,9 +514,7 @@ Rewritten whole at each release's close, never appended to.
     research R-22).
 - **Next**: F-024 snapshots, Release 0.3's second spec.
 - **Open, the operator's**: 017's command log (`make command-log`, once its attended
-  session is closed); import `origin`'s `main` into the registration `fylgja` (still at
-  `c006bf9`), since `3c81b8b` changed the three checks after that import and Infrahub runs
-  them as imported until then; file 014's upstream request for named points in time
+  session is closed); file 014's upstream request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left
   padding) and a zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read

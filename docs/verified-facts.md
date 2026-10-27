@@ -566,7 +566,17 @@ registration `fylgja`.
   the worker that had not fetched (`SHA … could not be resolved`) and started no
   validator. *(10-17, 10-19, 10-20)* On 10-26 the import's task ran 28.4 s, `commit`
   moving at its end, and the second task worker held the commit 4.6 s after the flow
-  ended. *(10-26; `specs/017-dcim-reader/research.md` §5.4)*
+  ended. *(10-26; `specs/017-dcim-reader/research.md` §5.4)* **A worker's pull can fail
+  and is never retried.** On 10-27 the import of `cb0a8d7` moved `commit` 25 s after the
+  call and task-worker-2 held `commits/cb0a8d7…`; task-worker-1's `Pull latest commit`,
+  21 s after the call, failed `CommitNotFoundError` (`git worktree add … fatal: invalid
+  reference`): its clone's `origin/main` was still the previous import's commit, and no
+  `Fetch git repository` flow ran on either worker. Nothing repaired it: a second import
+  (`ok: true`, `commit` already the head) and a `docker restart` of the worker each left
+  its clone unfetched. A `git fetch origin` in that worker's `/opt/infrahub/git/<repository
+  id>/main`, then the `git worktree add` its flow had failed, gave it the commit's checks
+  byte for byte. After an import, read both workers' `commits/` before relying on a
+  check. *(10-27)*
 - **A query's `models` are derived at its import**, from every kind it reaches, generics
   through fragments included: `device_config` over the library reads `DcimCable`,
   `DcimConnector`, `DcimDevice`, `DcimEndpoint`, `DcimGenericDevice`, `DcimInterface`,

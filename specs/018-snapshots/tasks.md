@@ -1064,6 +1064,7 @@ twin and Infrahub as the contract tier leaves it.
     - **The host, beyond the feature**: with no twin up, `free -m` reads 10,473 MiB available, not the about 24 GiB `CLAUDE.md` gives. Infrahub's eight containers hold about 15.4 GiB, its server 7.97 GiB, after 14 days up, against the 5.2 GiB idle `CLAUDE.md` records. Run 15 (T054) lost one tier-3 attempt to an SR Linux `sr_cli` segfault under that load. Restarting Infrahub's containers, or changing the figure, is the operator's call.
     - **Commits by hand**: none are owed. Each run committed its own work, and the tree was clean at `3518b4e` before this note.
     - **The command log**: `local/command-log/` holds no `pending.jsonl`. The loop publishes each session's entry when the session exits: 20 are in `specs/018-snapshots/commands/runs.jsonl` (`specify`, `clarify`, `plan`, `tasks`, `analyze`, and Runs 1 and 3–16), and this session's follows when it exits. `make command-log`, run after the attended session closes, publishes whatever that session kept.
+  - *2026-10-27 22:10Z, the operator's answer to the attended loop's question 1: "1a".* T064 is left for the operator at the feature's close: the review covers the whole branch once the loop has stopped, with any commits a later convergence pass adds, and the outcome is recorded here then. The operator stopped the loop and had Infrahub's containers restarted to win back the memory the host note above describes.
 
 **Checkpoint**: every record true; the feature closed.
 

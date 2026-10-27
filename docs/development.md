@@ -435,6 +435,7 @@ graph LR
     internal_psp["internal/psp"]
     internal_rehearsal["internal/rehearsal"]
     internal_server["internal/server"]
+    internal_snapshot["internal/snapshot"]
     internal_stage["internal/stage"]
     internal_stages["internal/stages"]
     internal_step["internal/step"]
@@ -466,6 +467,7 @@ graph LR
     internal_intent --> internal_psp
     internal_lab --> internal_bundle
     internal_lab --> internal_compiler
+    internal_lab --> internal_ctm
     internal_lab --> internal_findings
     internal_lab --> internal_lab_wire
     internal_lab --> internal_psp
@@ -503,6 +505,7 @@ graph LR
     internal_server --> internal_step
     internal_server --> internal_tree
     internal_server --> internal_verify
+    internal_snapshot --> internal_ctm
     internal_stage --> internal_bundle
     internal_stage --> internal_compiler
     internal_stage --> internal_ctm

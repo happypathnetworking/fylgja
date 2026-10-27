@@ -40,8 +40,9 @@ Deployment_Node(Lab.Labhost, "Lab host", $type="", $descr="Ubuntu, Docker, conta
     Container(Lab.Labhost.temporalserverstartdev.Workflowservice_1, "Workflow service", $techn="Temporal", $descr="Durable execution: run history, Schedule fylgja-follow.", $tags="Container", $link="")
   }
 
-  Deployment_Node(Lab.Labhost.Stateroot, "State root", $type="directory", $descr="FYLGJA_STATE_ROOT: bundles/, twin/", $tags="Element", $link="") {
+  Deployment_Node(Lab.Labhost.Stateroot, "State root", $type="directory", $descr="FYLGJA_STATE_ROOT: bundles/, snapshots/, twin/", $tags="Element", $link="") {
     ContainerDb(Lab.Labhost.Stateroot.Bundlestore_1, "Bundle store", $techn="Files", $descr="<state root>/bundles/<bundle_id>/: every bundle compiled or provisioned.", $tags="Container,Files", $link="")
+    ContainerDb(Lab.Labhost.Stateroot.Snapshotstore_1, "Snapshot store", $techn="Files", $descr="<state root>/snapshots/<snapshot_id>.json: every snapshot taken, each kept as first filed.", $tags="Container,Files", $link="")
     ContainerDb(Lab.Labhost.Stateroot.Twindirectory_1, "Twin directory", $techn="Files", $descr="<state root>/twin/: the staged bundle, containerlab's directory, twin.json.", $tags="Container,Files", $link="")
   }
 
@@ -68,6 +69,7 @@ Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.temporalserverstartdev.Wo
 Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.temporalserverstartdev.Workflowservice_1, "Polls task queue fylgja", $techn="gRPC", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.Stateroot.Bundlestore_1, "Files and reads bundles", $techn="", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.Stateroot.Bundlestore_1, "Files and reads bundles", $techn="", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.Stateroot.Snapshotstore_1, "Files and reads snapshots", $techn="", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.Stateroot.Twindirectory_1, "Reads the record and the staged bundle", $techn="", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.Stateroot.Twindirectory_1, "Stages, records", $techn="", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.containerlab_1, "Inspects; dry runs", $techn="", $tags="Relationship", $link="")

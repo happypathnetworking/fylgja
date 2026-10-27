@@ -32,6 +32,7 @@ workspace "Fylgja" "A walking twin of network intent." {
                 rehearsal = component "rehearsal" "A rehearsal's pure rules and renderings: the deadline, the verdict, the report and its markdown." "internal/rehearsal"
                 compiler = component "compiler" "CTM + PSPs -> bundle. Pure. Its manifest is what the others read." "internal/compiler"
                 bundle = component "bundle" "The bundle format, canonical hashing, the store." "internal/bundle"
+                snapshot = component "snapshot" "The snapshot: the document, its id, its validation, the store." "internal/snapshot"
                 psp = component "psp" "Platform support packages: loading and validation." "internal/psp"
                 findings = component "findings" "Findings, rules, the findings document, exit codes. The client's side links it too." "internal/findings"
             }
@@ -45,6 +46,7 @@ workspace "Fylgja" "A walking twin of network intent." {
             }
             temporal = container "Workflow service" "Durable execution: run history, Schedule fylgja-follow." "Temporal"
             store = container "Bundle store" "<state root>/bundles/<bundle_id>/: every bundle compiled or provisioned." "Files" "Files"
+            snapshotStore = container "Snapshot store" "<state root>/snapshots/<snapshot_id>.json: every snapshot taken, each kept as first filed." "Files" "Files"
             twindir = container "Twin directory" "<state root>/twin/: the staged bundle, containerlab's directory, twin.json." "Files" "Files"
             clab = container "containerlab" "Deploys, reconciles, inspects and destroys lab fylgja." "CLI"
         }
@@ -65,6 +67,7 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.server -> infrahub.iserver "Reads intent and artifacts" "GraphQL, REST"
         fylgja.server -> fylgja.temporal "Starts, follows, cancels runs" "gRPC"
         fylgja.server -> fylgja.store "Files and reads bundles"
+        fylgja.server -> fylgja.snapshotStore "Files and reads snapshots"
         fylgja.server -> fylgja.twindir "Reads the record and the staged bundle"
         fylgja.server -> fylgja.clab "Inspects; dry runs"
         fylgja.server -> twin.node "Reads for verify" "gNMI"
@@ -134,8 +137,9 @@ workspace "Fylgja" "A walking twin of network intent." {
                 deploymentNode "temporal server start-dev" ":7233; UI :8233" "process" {
                     containerInstance fylgja.temporal
                 }
-                deploymentNode "State root" "FYLGJA_STATE_ROOT: bundles/, twin/" "directory" {
+                deploymentNode "State root" "FYLGJA_STATE_ROOT: bundles/, snapshots/, twin/" "directory" {
                     containerInstance fylgja.store
+                    containerInstance fylgja.snapshotStore
                     containerInstance fylgja.twindir
                 }
                 containerInstance fylgja.clab

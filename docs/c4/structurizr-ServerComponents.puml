@@ -36,6 +36,7 @@ System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
     Component(Fylgja.fylgjaserve.rehearsal, "rehearsal", $techn="internal/rehearsal", $descr="A rehearsal's pure rules and renderings: the deadline, the verdict, the report and its markdown.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.compiler, "compiler", $techn="internal/compiler", $descr="CTM + PSPs -> bundle. Pure. Its manifest is what the others read.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.bundle, "bundle", $techn="internal/bundle", $descr="The bundle format, canonical hashing, the store.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.snapshot, "snapshot", $techn="internal/snapshot", $descr="The snapshot: the document, its id, its validation, the store.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.psp, "psp", $techn="internal/psp", $descr="Platform support packages: loading and validation.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.findings, "findings", $techn="internal/findings", $descr="Findings, rules, the findings document, exit codes. The client's side links it too.", $tags="Component", $link="")
   }

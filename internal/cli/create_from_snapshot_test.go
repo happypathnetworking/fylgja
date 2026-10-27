@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/cobra"
+
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
@@ -423,5 +425,38 @@ func TestSnapshotIDShapeIsTheCoresOwn(t *testing.T) {
 		if got, want := isSnapshotID(s), snap.IsID(s); got != want {
 			t.Errorf("isSnapshotID(%q) = %v, snapshot.IsID says %v", s, got, want)
 		}
+	}
+}
+
+// FR-009, FR-015: twin create's help says what the server does before the run, as twin
+// compile's says it takes a snapshot (TestCompileTakesNoCTM): it reads, takes the snapshot,
+// compiles and files, or builds from --snapshot with no read, and the run begins at the host
+// check. The help's line breaks are not pinned.
+func TestCreateHelpNamesTheServersTake(t *testing.T) {
+	help := &cobra.Command{Use: "fylgja"}
+	help.AddCommand(newTwinCmd(&options{}))
+	help.SetArgs([]string{"twin", "create", "--help"})
+	text := strings.Join(strings.Fields(captureStdout(t, func() {
+		if err := help.Execute(); err != nil {
+			t.Error(err)
+		}
+	})), " ")
+	for _, want := range []string{
+		"Provision one twin from an Infrahub branch, a proposed change's stage or a snapshot.",
+		"The API's server resolves the stage, reads the branch, takes the snapshot of what it read, compiles it " +
+			"and files the snapshot and the bundle, before any run.",
+		"--snapshot <id|file> builds the twin from a snapshot instead",
+		"no branch is read, and the twin never follows.",
+		"one run with the fixed identity fylgja-provision, from the host check on,",
+		"--snapshot string",
+		"read, take and file the snapshot, compile and file the bundle, and check the host; start no run " +
+			"(with --snapshot, nothing is read)",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("the help does not say %q:\n%s", want, text)
+		}
+	}
+	if strings.Contains(text, "Read an Infrahub branch, compile it") {
+		t.Errorf("the help still says the run reads and compiles:\n%s", text)
 	}
 }

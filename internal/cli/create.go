@@ -47,11 +47,16 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 	f := &createFlags{}
 	cmd := &cobra.Command{
 		Use:   "create",
-		Short: "Read, compile and provision one twin from a branch",
-		Long: "Read an Infrahub branch, compile it and provision the twin through the lab host's\n" +
-			"worker, as one run with the fixed identity fylgja-provision. Prints a line as each\n" +
-			"step begins and ends, and blocks until every node answers its readiness probe or\n" +
-			"the run has cleaned up after itself. Interrupt once to cancel the run and wait for\n" +
+		Short: "Provision one twin from a branch, a stage or a snapshot",
+		Long: "Provision one twin from an Infrahub branch, a proposed change's stage or a snapshot.\n" +
+			"The API's server resolves the stage, reads the branch, takes the snapshot of what it\n" +
+			"read, compiles it and files the snapshot and the bundle, before any run. --snapshot\n" +
+			"<id|file> builds the twin from a snapshot instead, one the server's store holds by its\n" +
+			"id or a snapshot file sent from here, which the server files: no branch is read, and\n" +
+			"the twin never follows. Then one run with the fixed identity fylgja-provision, from\n" +
+			"the host check on, provisions the twin through the lab host's worker. Prints a line\n" +
+			"as each step begins and ends, and blocks until every node answers its readiness probe\n" +
+			"or the run has cleaned up after itself. Interrupt once to cancel the run and wait for\n" +
 			"its cleanup; a second time to stop waiting.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -75,7 +80,8 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 	cmd.Flags().BoolVar(&f.noFollow, "no-follow", false,
 		"build the twin from the branch head and never check it: a frozen twin")
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false,
-		"read, compile, file the bundle and check the host; start no run")
+		"read, take and file the snapshot, compile and file the bundle, and check the host; start no run "+
+			"(with --snapshot, nothing is read)")
 	cmd.Flags().StringVar(&f.scope, "scope", "", scopeUsage)
 	cmd.Flags().StringVar(&f.snapshot, "snapshot", "",
 		"snapshot to build the twin from, <id|file>: a snapshot id (64 lowercase hex characters) the server's store holds, "+

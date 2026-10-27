@@ -1112,11 +1112,13 @@ fylgja twin rehearse --branch <b> …                                           
   host check and runs no read and no compile. A read or compile refusal is the server's
   document before any run, at `read` or `compile`, under the identifiers `intent read`
   and `twin compile` use; a refused read files nothing, and a refused compile leaves the
-  snapshot filed, since its CTM validated. An Infrahub that fails or times out during the
-  read is `operation.failed` at `read` at once; the worker's retries and heartbeat no
-  longer apply to a create, as they do not to a step or a rehearsal. Following is as
-  before: a `--branch` twin with no `--at` and no `--no-follow` follows its branch, and a
-  twin a check's rebuild makes names no snapshot.
+  snapshot filed, since its CTM validated, and its `snapshot_id … stored:` line names it,
+  as the document's `snapshot_id` does; so does a bundle's filing that is refused or
+  fails. An Infrahub that fails or times out during the read is `operation.failed` at
+  `read` at once; the worker's retries and heartbeat no longer apply to a create, as they
+  do not to a step or a rehearsal. Following is as before: a `--branch` twin with no
+  `--at` and no `--no-follow` follows its branch, and a twin a check's rebuild makes names
+  no snapshot.
 - **`twin create --snapshot <arg>`**: `<arg>` of 64 lowercase hex characters is a
   snapshot id, looked up in the store; anything else is a file the client reads and
   sends. An id the store does not hold is `snapshot.unknown` at `resolve`, exit 1,
@@ -1160,8 +1162,11 @@ fylgja twin rehearse --branch <b> …                                           
   bundle_id f764e1fabdcd70b39a91cc2269ef0a3443c7ae6752af62bdf0936c4eda034147  stored: /home/…/local/bundles/f764e1fabdcd70b39a91cc2269ef0a3443c7ae6752af62bdf0936c4eda034147
   ```
 
-  The dry run's `follow:` line for `--snapshot` reads `would not follow (--snapshot given:
-  a twin built from a snapshot never follows)`.
+  A compile, or the bundle's filing, that refuses or fails once the snapshot is filed
+  (by a create's take, or at `--snapshot`'s `resolve`) prints the snapshot's line alone on
+  stdout, and the refusal on stderr; a refused read, or a snapshot refused at `resolve`,
+  prints neither line. The dry run's `follow:` line for `--snapshot` reads `would not
+  follow (--snapshot given: a twin built from a snapshot never follows)`.
 - `intent read`'s summary line ends with the snapshot: `wrote snap.json: 3 devices
   (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
   (branch fylgja-fixture, scope tag:fylgja, schema 7c413536…); snapshot 576933ec…, stored at

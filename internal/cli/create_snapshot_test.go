@@ -5,6 +5,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -150,6 +151,85 @@ func TestRefusedReadStartsNothingAndFilesNothing(t *testing.T) {
 		t.Errorf("bundles/ holds %v after a refused read", got)
 	}
 	validateM10Document(t, doc)
+}
+
+// FR-010 and FR-014: a create, its dry run and a create from a snapshot file, each refused at
+// compile once the snapshot is filed, name it in the text answer as the --json document names
+// it: the snapshot's stored line, once and alone on stdout, naming the filed entry's path,
+// with the refusal on stderr; no run is started. The --branch create's filing meets a
+// corrupt entry under the id its read compiles to (bundle.id.mismatch); the file's CTM names
+// a package this server lacks (platform.unsupported). A snapshot refused at resolve, which
+// files nothing, prints nothing on stdout.
+func TestARefusedCompileNamesTheSnapshotInText(t *testing.T) {
+	corruptEntry := func(t *testing.T, paths lab.Paths) {
+		entry := filepath.Join(paths.Bundles, headBundleID)
+		if err := os.MkdirAll(entry, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(entry, "manifest.json"), []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	unknownPackage := func(d map[string]any) {
+		delete(d, "snapshot_id")
+		device := d["ctm"].(map[string]any)["devices"].([]any)[0].(map[string]any)
+		device["platform"].(map[string]any)["package"] = "nosuch"
+	}
+	for _, c := range []struct {
+		name string
+		// args readies the state root and returns the arguments after twin create.
+		args func(t *testing.T, paths lab.Paths) []string
+		rule string
+		step string
+	}{
+		{"--branch", func(t *testing.T, paths lab.Paths) []string {
+			corruptEntry(t, paths)
+			return []string{"--branch", "fylgja-fixture", "--no-follow"}
+		}, findings.RuleBundleIDMismatch, findings.StepCompile},
+		{"--branch --dry-run", func(t *testing.T, paths lab.Paths) []string {
+			corruptEntry(t, paths)
+			return []string{"--branch", "fylgja-fixture", "--dry-run"}
+		}, findings.RuleBundleIDMismatch, findings.StepCompile},
+		{"--snapshot <file>", func(t *testing.T, _ lab.Paths) []string {
+			return []string{"--snapshot", snapshotFile(t, unknownPackage)}
+		}, findings.RulePlatformUnsupported, findings.StepCompile},
+		{"--snapshot <unknown id>", func(*testing.T, lab.Paths) []string {
+			return []string{"--snapshot", fixtureSnapshotID}
+		}, findings.RuleSnapshotUnknown, findings.StepResolve},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			paths := useFixtureRead(t)
+			dials := countDials(t)
+			args := append([]string{"twin", "create"}, c.args(t, paths)...)
+
+			code, stdout, stderr := runRoot(t, args...)
+			jsonCode, doc := executeTwin(t, args...)
+			refused := slices.ContainsFunc(doc.Findings, func(f findings.Finding) bool { return f.Rule == c.rule && f.Step == c.step })
+			if code != findings.ExitRejected || jsonCode != code || !refused || doc.BundleID != "" {
+				t.Fatalf("exit %d (--json %d), document %+v; want 1 with %s at %s, naming no bundle", code, jsonCode, doc, c.rule, c.step)
+			}
+			if !strings.Contains(stderr, "rejection "+c.rule) {
+				t.Errorf("stderr:\n%s\nwant the %s refusal", stderr, c.rule)
+			}
+			if n := dials.Load(); n != 0 {
+				t.Errorf("the workflow service was dialled %d times", n)
+			}
+			if c.step == findings.StepResolve {
+				if stdout != "" || doc.SnapshotID != "" {
+					t.Errorf("stdout %q, snapshot %q; want nothing printed and no snapshot named", stdout, doc.SnapshotID)
+				}
+				return
+			}
+			if got := filedSnapshots(t, paths); len(got) != 1 || got[0] != doc.SnapshotID+".json" {
+				t.Fatalf("snapshots/ holds %v; want the snapshot the document names, %s", got, doc.SnapshotID)
+			}
+			want := "snapshot_id " + doc.SnapshotID + "  stored: " + filepath.Join(paths.Snapshots, doc.SnapshotID+".json") + "\n"
+			if stdout != want {
+				t.Errorf("stdout:\n%s\nwant the snapshot's stored line alone:\n%s", stdout, want)
+			}
+			validateM10Document(t, doc)
+		})
+	}
 }
 
 // FR-010: an Infrahub that cannot be reached fails the create at read at once, exit 2,

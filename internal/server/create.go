@@ -208,7 +208,7 @@ func runCreateFromSnapshot(ctx context.Context, opts *options, op string, subjec
 	// The stored document's observed_at, the first take's, is the one the twin records
 	// (US3 scenario 8).
 	cr := &compiledRead{paths: paths, snapshot: filedSnapshot{id: s.ID, path: path}, observedAt: s.ObservedAt}
-	if err := cr.compileAndFile(ctx, op, subject, s.CTM, reg, nil); err != nil {
+	if err := cr.compileAndFile(ctx, opts, op, subject, s.CTM, reg, nil); err != nil {
 		return err
 	}
 	if f.dryRun {
@@ -343,9 +343,10 @@ type compiledRead struct {
 // filed (R-11). Each refusal, and each step that cannot run, is the command's document,
 // returned as the error, at read or compile as the run's own steps placed them. A refused
 // read files nothing. A compile refused after a clean read leaves the snapshot filed, and
-// its document names it, since the input validated and only the output was refused
-// (R-05). An Infrahub that fails or times out during the read is operation.failed at
-// read, at once: no retry and no heartbeat stand between a create and its read (FR-010).
+// its document and its text answer name it, since the input validated and only the output
+// was refused (R-05). An Infrahub that fails or times out during the read is
+// operation.failed at read, at once: no retry and no heartbeat stand between a create and
+// its read (FR-010).
 func readTakeCompile(ctx context.Context, opts *options, op string, subject *findings.Subject, read readFunc,
 	branch, at, scope string, reg *psp.Registry) (*compiledRead, error) {
 	paths, err := opts.paths()
@@ -380,7 +381,7 @@ func readTakeCompile(ctx context.Context, opts *options, op string, subject *fin
 		return nil, finish(op, subject, append(list, taken...))
 	}
 	cr := &compiledRead{paths: paths, snapshot: filedSnapshot{id: snap.ID, path: snapPath}, observedAt: observedAt}
-	if err := cr.compileAndFile(ctx, op, subject, c, reg, list); err != nil {
+	if err := cr.compileAndFile(ctx, opts, op, subject, c, reg, list); err != nil {
 		return nil, err
 	}
 	cr.read = &readSummary{counts: intent.Summarize(c), packages: intent.DevicesByPackage(c, reg), envelope: c.Envelope}
@@ -391,27 +392,38 @@ func readTakeCompile(ctx context.Context, opts *options, op string, subject *fin
 // state root, after list, the findings before the compile: what a create from a read and a
 // create from a snapshot share once the snapshot is filed. Each refusal, and each step that
 // cannot run, is the command's document at compile, naming the snapshot, which stays filed,
-// since its CTM validated and only the output was refused (R-05).
-func (cr *compiledRead) compileAndFile(ctx context.Context, op string, subject *findings.Subject, c *ctm.CTM,
+// since its CTM validated and only the output was refused (R-05); the text answer names it
+// too, by its stored line.
+func (cr *compiledRead) compileAndFile(ctx context.Context, opts *options, op string, subject *findings.Subject, c *ctm.CTM,
 	reg *psp.Registry, list findings.List) error {
 	files, id, compiled := stage.Compile(c, reg)
 	compiled = compiled.AtStep(findings.StepCompile)
 	list = append(list, compiled...)
 	if compiled.Rejected() {
-		return cr.carried(finish(op, subject, list))
+		return cr.refused(opts, finish(op, subject, list))
 	}
 
 	store, filed, err := fileCompiled(ctx, cr.paths.Bundles, files, id)
 	if err != nil {
-		return cr.carried(failAt(op, subject, findings.StepCompile, cr.paths.Bundles, "%v", err))
+		return cr.refused(opts, failAt(op, subject, findings.StepCompile, cr.paths.Bundles, "%v", err))
 	}
 	if filed.Rejected() {
-		return cr.carried(finish(op, subject, append(list, filed...)))
+		return cr.refused(opts, finish(op, subject, append(list, filed...)))
 	}
 
 	cr.bundleID, cr.bundlePath = id, store.Path(id)
 	cr.findings = list
 	return nil
+}
+
+// refused is carried for a compile, or a bundle's filing, that refused or failed once the
+// snapshot was filed: the text answer prints the snapshot's stored line, as the create's
+// success prints it above the bundle's, so it names the snapshot the document names and the
+// path of its entry, left to inspect (FR-010, FR-014). A refused read, a refused take and a
+// snapshot refused at resolve never reach here: none leaves one filed.
+func (cr *compiledRead) refused(opts *options, err error) error {
+	opts.note("%s", snapshotStoredLine(cr.snapshot.id, cr.snapshot.path))
+	return cr.carried(err)
 }
 
 // carried puts what the server took and compiled before any run on the document err

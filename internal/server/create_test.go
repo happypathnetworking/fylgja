@@ -6,11 +6,13 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
@@ -148,6 +150,115 @@ func TestRefusedCompileKeepsTheSnapshot(t *testing.T) {
 		t.Errorf("bundles/ holds %v after a refused compile", entries)
 	}
 	validateWithShow(t, currentContract, "018", doc)
+}
+
+// A compile, or the bundle's filing, that refuses or fails after the take names the snapshot
+// in the text answer as the document names it: its stored line, once, on stdout, naming the
+// filed entry's path, and no bundle's (FR-010, FR-014). A create from a stored snapshot whose
+// compile is refused prints it the same way. A refused read files nothing and prints nothing.
+func TestARefusedCompileNamesTheSnapshotInText(t *testing.T) {
+	unknownPackage := func(c *ctm.CTM) { c.Devices[0].Platform.Package = "nosuch" }
+	for _, c := range []struct {
+		name string
+		read func(t *testing.T, reads *int) readFunc
+		// before readies the state root: the bundle's entry, or the store's directory.
+		before func(t *testing.T, paths lab.Paths)
+		code   int
+		rule   string
+		// printed is whether the take completed, so the line is printed.
+		printed bool
+	}{
+		{name: "the compile refused", read: func(t *testing.T, reads *int) readFunc {
+			return fakeRead(t, "three-node.json", unknownPackage, reads)
+		}, code: findings.ExitRejected, rule: findings.RulePlatformUnsupported, printed: true},
+		// A corrupt entry under the id the fixture compiles to.
+		{name: "the bundle's filing refused", before: func(t *testing.T, paths lab.Paths) {
+			entry := filepath.Join(paths.Bundles, fixtureBundleID)
+			if err := os.MkdirAll(entry, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(entry, "manifest.json"), []byte("{}"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}, code: findings.ExitRejected, rule: findings.RuleBundleIDMismatch, printed: true},
+		// The store's directory is a file, under which no bundle can be filed.
+		{name: "the bundle's filing failed", before: func(t *testing.T, paths lab.Paths) {
+			if err := os.WriteFile(paths.Bundles, nil, 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}, code: findings.ExitError, rule: findings.RuleOperationFailed, printed: true},
+		{name: "the read refused", read: func(*testing.T, *int) readFunc {
+			return func(context.Context, string, string, string, *psp.Registry, string) (*ctm.CTM, findings.List, error) {
+				return nil, findings.List{{Severity: findings.Rejection, Rule: findings.RuleScopeEmpty, Object: "tag:fylgja",
+					Message: "scope tag:fylgja selects no device on branch b"}}, nil
+			}
+		}, code: findings.ExitRejected, rule: findings.RuleScopeEmpty},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			paths := useStateRoot(t)
+			useService(t, nil)
+			if c.before != nil {
+				c.before(t, paths)
+			}
+			reads := 0
+			read := fakeRead(t, "three-node.json", nil, &reads)
+			if c.read != nil {
+				read = c.read(t, &reads)
+			}
+
+			var err error
+			out := captureStdout(t, func() {
+				_, err = readTakeCompile(context.Background(), testOptions(t, false), findings.OpTwinCreate, &findings.Subject{Branch: "b"},
+					read, "b", "", "tag:fylgja", shippedPackages(t))
+			})
+			code, doc := exitOf(t, err)
+			if code != c.code || !hasRule(doc.Findings, c.rule) || doc.BundleID != "" {
+				t.Fatalf("exit %d, document %+v; want %d with %s, naming no bundle", code, doc, c.code, c.rule)
+			}
+			if !c.printed {
+				if out != "" || doc.SnapshotID != "" {
+					t.Errorf("stdout %q, snapshot %q; want nothing printed and no snapshot named", out, doc.SnapshotID)
+				}
+				return
+			}
+			entry := filepath.Join(paths.Snapshots, doc.SnapshotID+".json")
+			if want := snapshotStoredLine(doc.SnapshotID, entry) + "\n"; doc.SnapshotID == "" || out != want {
+				t.Errorf("stdout:\n%s\nwant the snapshot's stored line alone:\n%s", out, want)
+			}
+			if _, err := os.Stat(entry); err != nil {
+				t.Errorf("the snapshot the line names is not filed: %v", err)
+			}
+		})
+	}
+
+	t.Run("a stored snapshot's compile refused", func(t *testing.T) {
+		paths := useStateRoot(t)
+		useService(t, nil)
+		c := loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z")
+		unknownPackage(c)
+		s, entry, _, err := takeSnapshot(context.Background(), paths, findings.StepCompile, c)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		out := captureStdout(t, func() {
+			err = runCreate(context.Background(), testOptions(t, false), &createFlags{snapshot: s.ID, snapshotGiven: true}, nil)
+		})
+		code, doc := exitOf(t, err)
+		if code != findings.ExitRejected || !hasRule(doc.Findings, findings.RulePlatformUnsupported) || doc.SnapshotID != s.ID ||
+			doc.BundleID != "" {
+			t.Fatalf("exit %d, document %+v; want 1 with %s, naming snapshot %s and no bundle", code, doc,
+				findings.RulePlatformUnsupported, s.ID)
+		}
+		if want := snapshotStoredLine(s.ID, entry) + "\n"; out != want {
+			t.Errorf("stdout:\n%s\nwant the snapshot's stored line alone:\n%s", out, want)
+		}
+	})
+}
+
+// hasRule is whether list holds a finding under rule.
+func hasRule(list findings.List, rule string) bool {
+	return slices.ContainsFunc(list, func(f findings.Finding) bool { return f.Rule == rule })
 }
 
 // A refused read files nothing and names no snapshot; a read that cannot run is

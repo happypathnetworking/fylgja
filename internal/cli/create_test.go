@@ -339,7 +339,7 @@ func readyResult() provision.ProvisionResult {
 		TwinDir:    "/abs/local/twin",
 		Findings:   findings.List{},
 		Twin: &wire.TwinRecord{
-			TwinVersion: "8", Lab: "fylgja", BundleID: fixtureBundleID,
+			TwinVersion: "9", Lab: "fylgja", BundleID: fixtureBundleID,
 			Provenance: wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "abc", Scope: "tag:fylgja", Mapping: dcimMapping},
 			ObservedAt: &observed, Source: wire.SourceIntent,
 			Run:           wire.RunRef{WorkflowID: provision.WorkflowProvision, RunID: "run-1"},
@@ -400,7 +400,7 @@ func TestCreateReadyPrintsTheTwin(t *testing.T) {
 		"  n3  172.20.20.4",
 		// The record's line, as twin show prints it (017): the scope and the mapping the read
 		// was made under.
-		"record: branch fylgja-fixture, bundle_id " + fixtureBundleID + ", schema abc, " + showRead,
+		"record: branch fylgja-fixture, snapshot none, bundle_id " + fixtureBundleID + ", schema abc, " + showRead,
 		"twin directory /abs/local/twin",
 	}, "\n") + "\n"
 	if out != want {

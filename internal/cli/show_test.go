@@ -42,6 +42,16 @@ const showRead = "scope tag:fylgja, read by infrahub-dcim from opsmill/schema-li
 // which names no scope (017).
 func unknownScope(version string) string { return "scope unknown (record " + version + ")" }
 
+// noSnapshot is the record line's snapshot for a record naming none (018): "snapshot none"
+// for a record of the version this build writes, and "snapshot none (record <version>)" for
+// one of 8 or earlier, which names none.
+func noSnapshot(version string) string {
+	if version == lab.TwinVersion {
+		return "snapshot none"
+	}
+	return "snapshot none (record " + version + ")"
+}
+
 // contractProvenance is a record's provenance as a worker of twin.json 7 or earlier wrote
 // it, in generic, a record as JSON: the generics contract's version, and no scope or
 // mapping, which 017 put in its place.
@@ -222,7 +232,7 @@ const threeBareNodes = "twin: lab fylgja present (3 nodes); twin directory prese
 	"  n2  clab-fylgja-n2  running  172.20.20.3\n" +
 	"  n3  clab-fylgja-n3  running  172.20.20.4\n"
 
-const recordLine = "record: branch fylgja-fixture, bundle_id " + showBundleID + ", schema 41349c3a9c582e5dd44e55d6771f79c2, " + showRead + "\n"
+const recordLine = "record: branch fylgja-fixture, snapshot none, bundle_id " + showBundleID + ", schema 41349c3a9c582e5dd44e55d6771f79c2, " + showRead + "\n"
 
 const provisionedLine = "  provisioned by run fylgja-provision " + showRunID + " (source intent), worker 0.1.0-dev, recorded 2026-09-16T19:01:02Z, 3 nodes\n"
 
@@ -309,7 +319,7 @@ func TestShowPinned(t *testing.T) {
 	writeTwin(t, paths, twinOf(t, func(f *lab.RecordFields) { f.Provenance.At = at }))
 	out := showWith(t, paths, "inspect-three.json", &fakeService{})
 	wantShow(t, out, threeNodes+
-		"record: branch fylgja-fixture at "+at+", bundle_id "+showBundleID+", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead+"\n"+
+		"record: branch fylgja-fixture at "+at+", snapshot none, bundle_id "+showBundleID+", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead+"\n"+
 		"  intent read at "+showObserved+"\n"+provisionedLine+lines("kind: pinned at "+at+"; not following", "in flight: none"),
 		findings.ShowKindPinned, "pinned at "+at+"; not following")
 	if r := out.doc.Show.Record; r == nil || r.At != at {
@@ -332,7 +342,7 @@ func TestShowPinnedFromAStage(t *testing.T) {
 	out := showWith(t, paths, "inspect-three.json", &fakeService{})
 	kind := "pinned at " + at + ", stage fylgja-fixture/cabled; not following"
 	wantShow(t, out, threeNodes+
-		"record: branch fylgja-fixture at "+at+" (stage fylgja-fixture/cabled, at written), bundle_id "+showBundleID+
+		"record: branch fylgja-fixture at "+at+" (stage fylgja-fixture/cabled, at written), snapshot none, bundle_id "+showBundleID+
 		", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead+"\n"+
 		"  intent read at "+showObserved+"\n"+provisionedLine+lines("kind: "+kind, "in flight: none"),
 		findings.ShowKindPinned, kind)
@@ -382,12 +392,12 @@ func TestShowPinnedFromAStage(t *testing.T) {
 				t.Fatal(err)
 			}
 			out := showWith(t, paths, "inspect-three.json", &fakeService{})
-			read := showRead
+			read, snapshot := showRead, noSnapshot(lab.TwinVersion)
 			if label == "version 2" {
-				read = unknownScope("2")
+				read, snapshot = unknownScope("2"), noSnapshot("2")
 			}
 			wantShow(t, out, threeNodes+
-				"record: branch fylgja-fixture at "+pinnedAt+", bundle_id "+showBundleID+", schema 41349c3a9c582e5dd44e55d6771f79c2, "+read+"\n"+
+				"record: branch fylgja-fixture at "+pinnedAt+", "+snapshot+", bundle_id "+showBundleID+", schema 41349c3a9c582e5dd44e55d6771f79c2, "+read+"\n"+
 				"  intent read at "+showObserved+"\n"+provisionedLine+lines("kind: pinned at "+pinnedAt+"; not following", "in flight: none"),
 				findings.ShowKindPinned, "pinned at "+pinnedAt+"; not following")
 			if b, err := json.Marshal(out.doc); err != nil || strings.Contains(string(b), `"stage":{`) {
@@ -408,15 +418,17 @@ func TestShowRecordNamesItsScope(t *testing.T) {
 		f.Stage = showStage("seeded")
 		f.Rehearsal = &wire.RehearsalRef{WorkflowID: wire.RehearseWorkflowID, RunID: "r0"}
 	})
-	head := "record: branch fylgja-fixture at " + stepFromAt + " (stage fylgja-fixture/seeded, at given), bundle_id " +
-		showBundleID + ", schema 41349c3a9c582e5dd44e55d6771f79c2, "
+	head := func(version string) string {
+		return "record: branch fylgja-fixture at " + stepFromAt + " (stage fylgja-fixture/seeded, at given), " + noSnapshot(version) +
+			", bundle_id " + showBundleID + ", schema 41349c3a9c582e5dd44e55d6771f79c2, "
+	}
 	for _, c := range []struct {
 		version, line string
 		mapping       *findings.ShowMapping
 	}{
-		{"8", head + showRead,
+		{"8", head(lab.TwinVersion) + showRead,
 			&findings.ShowMapping{Reader: "infrahub-dcim", Model: "opsmill/schema-library", Version: "26336e9"}},
-		{"7", head + "scope unknown (record 7)", nil},
+		{"7", head("7") + "scope unknown (record 7)", nil},
 	} {
 		t.Run("twin.json "+c.version, func(t *testing.T) {
 			paths := useStateRoot(t)
@@ -483,7 +495,7 @@ func TestShowTreatsAnUnreadableScopeAsUnknown(t *testing.T) {
 		f.Provenance.At = stepFromAt
 		f.Stage = showStage("seeded")
 	})
-	head := "record: branch fylgja-fixture at " + stepFromAt + " (stage fylgja-fixture/seeded, at given), bundle_id " +
+	head := "record: branch fylgja-fixture at " + stepFromAt + " (stage fylgja-fixture/seeded, at given), snapshot none, bundle_id " +
 		showBundleID + ", schema 41349c3a9c582e5dd44e55d6771f79c2, "
 	// An edit sets the provenance's scope, or a field of its mapping, to value.
 	type edit struct{ field, value string }
@@ -774,7 +786,7 @@ func TestShowStageRecordWithoutLab(t *testing.T) {
 	}))
 	out := showWith(t, paths, "inspect-empty.json", &fakeService{})
 	wantShow(t, out, lines("twin: lab fylgja absent; twin directory present; "+phrase+"; fylgja twin destroy clears it")+
-		"record: branch fylgja-fixture at "+at+" (stage fylgja-fixture/cabled, at written), bundle_id "+showBundleID+
+		"record: branch fylgja-fixture at "+at+" (stage fylgja-fixture/cabled, at written), snapshot none, bundle_id "+showBundleID+
 		", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead+"\n"+
 		"  intent read at "+showObserved+"\n"+provisionedLine+lines("kind: none", "in flight: none"),
 		findings.ShowKindNone, phrase+"; fylgja twin destroy clears it")
@@ -1413,7 +1425,7 @@ func TestShowSteppedRecord(t *testing.T) {
 		"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux  device-config "+stepAfter["n1"],
 		"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config "+stepAfter["n2"],
 		"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config "+stepAfter["n3"],
-		"record: branch fylgja-fixture at "+stepToAt+" (stage fylgja-fixture/cabled, at given), bundle_id "+stepToID+
+		"record: branch fylgja-fixture at "+stepToAt+" (stage fylgja-fixture/cabled, at given), snapshot none, bundle_id "+stepToID+
 			", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead,
 		"  intent read at 2026-10-02T09:14:01.000000Z",
 		"  provisioned by run fylgja-provision "+showRunID+" (source intent), worker 0.1.0-dev, recorded 2026-10-02T09:15:41Z, 3 nodes",
@@ -1490,7 +1502,7 @@ func TestShowTwiceSteppedRecord(t *testing.T) {
 		"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux  device-config "+later["n1"],
 		"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config "+later["n2"],
 		"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config "+later["n3"],
-		"record: branch fylgja-fixture at "+thirdAt+" (stage fylgja-fixture/third-link, at given), bundle_id "+thirdID+
+		"record: branch fylgja-fixture at "+thirdAt+" (stage fylgja-fixture/third-link, at given), snapshot none, bundle_id "+thirdID+
 			", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead,
 		"  intent read at 2026-10-02T09:25:30.000000Z",
 		"  provisioned by run fylgja-provision "+showRunID+" (source intent), worker 0.1.0-dev, recorded "+endedB+", 3 nodes",
@@ -1552,7 +1564,7 @@ func TestShowStepThatRecreatesAndCreates(t *testing.T) {
 		"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux  device-config "+stepAfter["n1"],
 		"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config "+stepAfter["n2"],
 		"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config "+stepAfter["n3"],
-		"record: branch fylgja-fixture at "+stepToAt+" (stage fylgja-fixture/cabled, at given), bundle_id "+stepToID+
+		"record: branch fylgja-fixture at "+stepToAt+" (stage fylgja-fixture/cabled, at given), snapshot none, bundle_id "+stepToID+
 			", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead,
 		"  intent read at 2026-10-02T09:14:01.000000Z",
 		"  provisioned by run fylgja-provision "+showRunID+" (source intent), worker 0.1.0-dev, recorded 2026-10-02T09:15:41Z, 3 nodes",
@@ -1583,7 +1595,7 @@ func TestShowDivergedRecord(t *testing.T) {
 		"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux",
 		"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config "+stepAfter["n2"],
 		"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config "+fixtureArtifacts["n3"],
-		"record: branch fylgja-fixture at "+stepFromAt+" (stage fylgja-fixture/seeded, at given), bundle_id "+showBundleID+
+		"record: branch fylgja-fixture at "+stepFromAt+" (stage fylgja-fixture/seeded, at given), snapshot none, bundle_id "+showBundleID+
 			", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead,
 		"  intent read at "+showObserved,
 		"  provisioned by run fylgja-provision "+showRunID+" (source intent), worker 0.1.0-dev, recorded 2026-10-02T09:15:41Z, 3 nodes",
@@ -1686,7 +1698,7 @@ func TestShowEveryDivergedShape(t *testing.T) {
 			wantShow(t, out, lines(
 				"twin: lab fylgja present (3 nodes); twin directory present",
 				node("n1", 0), node("n2", 1), node("n3", 2),
-				"record: branch fylgja-fixture at "+stepFromAt+" (stage fylgja-fixture/seeded, at given), bundle_id "+showBundleID+
+				"record: branch fylgja-fixture at "+stepFromAt+" (stage fylgja-fixture/seeded, at given), snapshot none, bundle_id "+showBundleID+
 					", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead,
 				"  intent read at "+showObserved,
 				"  provisioned by run fylgja-provision "+showRunID+" (source intent), worker 0.1.0-dev, recorded 2026-10-02T09:15:41Z, 3 nodes",
@@ -1777,7 +1789,7 @@ func TestShowRecordsBeforeStages(t *testing.T) {
 	const kind = "pinned at " + stepFromAt + "; not following"
 	for _, version := range []string{"3", "4", "5"} {
 		want := threeNodes +
-			"record: branch fylgja-fixture at " + stepFromAt + ", bundle_id " + showBundleID +
+			"record: branch fylgja-fixture at " + stepFromAt + ", " + noSnapshot(version) + ", bundle_id " + showBundleID +
 			", schema 41349c3a9c582e5dd44e55d6771f79c2, " + unknownScope(version) + "\n" +
 			"  intent read at " + showObserved + "\n" + provisionedLine + lines("kind: "+kind, "in flight: none")
 		t.Run("version "+version, func(t *testing.T) {
@@ -1830,7 +1842,7 @@ func TestShowRecordsBeforeStages(t *testing.T) {
 	}
 
 	record := func(at, id string) string {
-		return "record: branch fylgja-fixture at " + at + ", bundle_id " + id + ", schema 41349c3a9c582e5dd44e55d6771f79c2, " + unknownScope("5")
+		return "record: branch fylgja-fixture at " + at + ", " + noSnapshot("5") + ", bundle_id " + id + ", schema 41349c3a9c582e5dd44e55d6771f79c2, " + unknownScope("5")
 	}
 	provisioned := "  provisioned by run fylgja-provision " + showRunID +
 		" (source intent), worker 0.1.0-dev, recorded 2026-10-02T09:15:41Z, 3 nodes"
@@ -2164,7 +2176,7 @@ func TestShowNamesTheStageAsRecorded(t *testing.T) {
 			out := showWith(t, paths, "inspect-three.json", &fakeService{})
 			kind := "pinned at " + c.at + ", stage change-1/" + c.label + "; not following"
 			wantShow(t, out, threeNodes+
-				"record: branch "+c.branch+" at "+c.at+" (stage change-1/"+c.label+", at "+c.source+"), bundle_id "+showBundleID+
+				"record: branch "+c.branch+" at "+c.at+" (stage change-1/"+c.label+", at "+c.source+"), snapshot none, bundle_id "+showBundleID+
 				", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead+"\n"+
 				"  intent read at "+showObserved+"\n"+provisionedLine+lines("kind: "+kind, "in flight: none"),
 				findings.ShowKindPinned, kind)
@@ -2216,4 +2228,96 @@ func TestShowNamesTheStepsStagesAsRecorded(t *testing.T) {
 		!strings.Contains(out.stdout, "kind: pinned at "+stepFromAt+", stage fylgja-fixture/seeded; not following; "+running+"\n") {
 		t.Errorf("notes %q, stdout:\n%s\nwant the kind line naming the stage it steps towards", s.Notes, out.stdout)
 	}
+}
+
+// The record line names the record's snapshot between its reference and its bundle (018;
+// specs/018-snapshots/data-model.md §8), its full id as the bundle's is printed: a 9 naming
+// one names it, a 9 naming none says none, and a record of 8 or earlier, which names none,
+// says none with its version. The JSON record carries the id, or null for both kinds of
+// none, and a step's sides carry each side's when the record's step names it.
+func TestShowRecordNamesItsSnapshot(t *testing.T) {
+	const fromSnapshot, toSnapshot = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6",
+		"37d7378a36568e870eb1eb43dbcd580207fb5cae847fb979b54f50eef8800ebf"
+	head := "record: branch fylgja-fixture at " + stepFromAt + " (stage fylgja-fixture/seeded, at given), "
+	named := twinOf(t, func(f *lab.RecordFields) {
+		f.Provenance.At = stepFromAt
+		f.Stage = showStage("seeded")
+		f.SnapshotID = fromSnapshot
+	})
+	eight := func() []byte {
+		raw, err := json.Marshal(seededTwin(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		var generic map[string]any
+		if err := json.Unmarshal(raw, &generic); err != nil {
+			t.Fatal(err)
+		}
+		generic["twin_version"] = "8"
+		unsnapshotted(generic)
+		if raw, err = json.Marshal(generic); err != nil {
+			t.Fatal(err)
+		}
+		return raw
+	}
+	for _, c := range []struct {
+		label string
+		write func(paths lab.Paths)
+		line  string
+		id    *string
+	}{
+		{"a 9 naming its snapshot", func(paths lab.Paths) { writeTwin(t, paths, named) },
+			head + "snapshot " + fromSnapshot + ", bundle_id " + showBundleID, named.SnapshotID},
+		{"a 9 naming none", func(paths lab.Paths) { writeTwin(t, paths, seededTwin(t)) },
+			head + "snapshot none, bundle_id " + showBundleID, nil},
+		{"an 8", func(paths lab.Paths) {
+			if err := os.MkdirAll(paths.Twin, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(paths.TwinJSON, eight(), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}, head + "snapshot none (record 8), bundle_id " + showBundleID, nil},
+	} {
+		t.Run(c.label, func(t *testing.T) {
+			paths := useStateRoot(t)
+			c.write(paths)
+			out := showWith(t, paths, "inspect-three.json", &fakeService{})
+			if !strings.Contains(out.stdout, "\n"+c.line+", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead+"\n") {
+				t.Errorf("stdout:\n%s\nwant the record line %q", out.stdout, c.line)
+			}
+			r := out.doc.Show.Record
+			if r == nil {
+				t.Fatal("the document carries no record")
+			}
+			if (r.SnapshotID == nil) != (c.id == nil) || (r.SnapshotID != nil && *r.SnapshotID != *c.id) {
+				t.Errorf("record snapshot_id %v, want %v", r.SnapshotID, c.id)
+			}
+			b, err := json.Marshal(out.doc)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c.id == nil && !strings.Contains(string(b), `"snapshot_id":null,"bundle_id":`) {
+				t.Errorf("a record naming no snapshot does not say so: %s", b)
+			}
+			validateM10Document(t, out.doc)
+		})
+	}
+
+	// A step's sides name their snapshots as the record's step block records them, and the
+	// record's own is the target's.
+	paths := useStateRoot(t)
+	writeM11Twin(t, paths, steppedTwin(t, func(f *lab.StepFields) {
+		f.From.SnapshotID, f.To.SnapshotID = fromSnapshot, toSnapshot
+	}))
+	out := showWith(t, paths, "inspect-three.json", &fakeService{})
+	r := out.doc.Show.Record
+	if r == nil || r.SnapshotID == nil || *r.SnapshotID != toSnapshot || r.Step == nil ||
+		r.Step.From.SnapshotID != fromSnapshot || r.Step.To.SnapshotID != toSnapshot {
+		t.Errorf("a stepped record's snapshots: %+v (step %+v)", r, r.Step)
+	}
+	if !strings.Contains(out.stdout, "(stage fylgja-fixture/cabled, at given), snapshot "+toSnapshot+", bundle_id ") {
+		t.Errorf("stdout:\n%s\nwant the target's snapshot on the record line", out.stdout)
+	}
+	validateM10Document(t, out.doc)
 }

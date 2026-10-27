@@ -188,7 +188,8 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 	rec := host.Twin
 	if rec != nil {
 		block.Record = &findings.ShowRecord{
-			Branch: rec.Provenance.Branch, At: rec.Provenance.At, BundleID: rec.BundleID, SchemaHash: rec.Provenance.SchemaHash,
+			Branch: rec.Provenance.Branch, At: rec.Provenance.At, SnapshotID: rec.SnapshotID, BundleID: rec.BundleID,
+			SchemaHash: rec.Provenance.SchemaHash,
 			ObservedAt: rec.ObservedAt, ObservedAtNote: rec.ObservedAtNote,
 			Source: rec.Source, Run: findings.ShowRef{WorkflowID: rec.Run.WorkflowID, RunID: rec.Run.RunID},
 			WorkerVersion: rec.ProvisionedBy.Version, RecordedAt: rec.RecordedAt, Nodes: len(rec.Nodes),
@@ -449,10 +450,10 @@ func mappingUnheld(m wire.Mapping) []string {
 	return named
 }
 
-// recordLine is the record line twin show and twin create print (contracts/cli.md, 017):
-// the reference the record was read from, its bundle, its schema and its provenance, "record:
-// branch b at …, bundle_id …, schema …, scope tag:fylgja, read by infrahub-dcim from
-// opsmill/schema-library@26336e9".
+// recordLine is the record line twin show, twin create and twin provision print
+// (contracts/cli.md, 017 and 018): the reference the record was read from, its snapshot, its
+// bundle, its schema and its provenance, "record: branch b at …, snapshot …, bundle_id …,
+// schema …, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9".
 func recordLine(rec *wire.TwinRecord) string {
 	ref := "branch " + rec.Provenance.Branch
 	if rec.Provenance.At != "" {
@@ -461,8 +462,30 @@ func recordLine(rec *wire.TwinRecord) string {
 	if st := verify.StageBlock(rec.Stage); st != nil {
 		ref += fmt.Sprintf(" (stage %s, at %s)", st.Ref(), st.AtSource)
 	}
-	return fmt.Sprintf("record: %s, bundle_id %s, schema %s, %s", ref, rec.BundleID, rec.Provenance.SchemaHash,
-		provenanceClause(rec))
+	return fmt.Sprintf("record: %s, %s, bundle_id %s, schema %s, %s", ref, snapshotClause(rec), rec.BundleID,
+		rec.Provenance.SchemaHash, provenanceClause(rec))
+}
+
+// snapshotClause is the record line's snapshot (018): "snapshot <id>", the full id, as the
+// bundle's is printed; "snapshot none" for a 9 naming none, a twin twin provision built or a
+// following rebuild made; and "snapshot none (record 8)" for a record of 8 or earlier,
+// which names none.
+func snapshotClause(rec *wire.TwinRecord) string {
+	switch {
+	case rec.SnapshotID != nil:
+		return "snapshot " + *rec.SnapshotID
+	case snapshotRecorded(rec):
+		return "snapshot none"
+	default:
+		return fmt.Sprintf("snapshot none (record %s)", rec.TwinVersion)
+	}
+}
+
+// snapshotRecorded says whether the record is version 9 or later, which names the snapshot
+// the twin was built from or last stepped to, or null for none (018).
+func snapshotRecorded(rec *wire.TwinRecord) bool {
+	v, err := strconv.Atoi(rec.TwinVersion)
+	return err == nil && v >= 9
 }
 
 // provenanceClause is the record line's last clause (contracts/cli.md): "scope tag:fylgja,
@@ -494,7 +517,7 @@ func showStep(st *wire.StepRecord, waitKnown bool) *findings.ShowStep {
 		return nil
 	}
 	side := func(s wire.StepSide) findings.StepSideBlock {
-		return findings.StepSideBlock{Stage: verify.StageBlock(s.Stage), BundleID: s.BundleID, At: s.At}
+		return findings.StepSideBlock{Stage: verify.StageBlock(s.Stage), SnapshotID: s.SnapshotID, BundleID: s.BundleID, At: s.At}
 	}
 	out := &findings.ShowStep{Outcome: st.Outcome, From: side(st.From), To: side(st.To),
 		Run: findings.ShowRef{WorkflowID: st.Run.WorkflowID, RunID: st.Run.RunID}, Restarted: lifecycleNodes(st.Reconcile),

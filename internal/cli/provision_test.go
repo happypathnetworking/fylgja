@@ -408,7 +408,10 @@ func TestProvisionNotFollowing(t *testing.T) {
 		if slices.Contains(svc.calls, "StopFollowing") {
 			t.Errorf("calls %v: the command stopped following itself", svc.calls)
 		}
-		if want := "twin directory /abs/local/twin\nnot following (provisioned from a bundle)\n"; !strings.HasSuffix(out, want) {
+		// The record line is twin create's and twin show's (018): a bundle's twin names no
+		// snapshot.
+		if want := "record: branch fylgja-fixture, snapshot none, bundle_id " + fixtureBundleID + ", schema abc, " + showRead + "\n" +
+			"twin directory /abs/local/twin\nnot following (provisioned from a bundle)\n"; !strings.HasSuffix(out, want) {
 			t.Errorf("stdout:\n%s\nwant it to end:\n%s", out, want)
 		}
 	})

@@ -313,7 +313,7 @@ func answerCases() []answerCase {
 					"  n1  172.20.20.2",
 					"  n2  172.20.20.3",
 					"  n3  172.20.20.4",
-					"record: branch fylgja-fixture, bundle_id "+fixtureBundleID+", schema abc, "+showRead,
+					"record: branch fylgja-fixture, snapshot none, bundle_id "+fixtureBundleID+", schema abc, "+showRead,
 					"twin directory /abs/local/twin")}
 		}},
 		{"twin create --dry-run", findings.OpTwinCreate, func(t *testing.T) answerWant {

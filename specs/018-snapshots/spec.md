@@ -232,8 +232,9 @@ takes every stage's snapshot in its plan, up front, as it already compiles every
 front, so a refused stage is found before the first boot. The rehearsal's per-stage rows
 carry the snapshot id, and the report posted on the proposed change gains a `snapshot`
 column before `bundle`, in the same eight-character short form, within the comment's
-existing size limit. The rule that a step to an identical bundle is a step to nowhere
-(`rehearsal.steps.none`) still judges by bundle equality.
+existing size limit. The rule that files `rehearsal.steps.none` is unchanged: it judges
+as 015 defined it, by whether one stage alone compiled, so two adjacent stages of one
+bundle are rehearsed without it.
 
 **Why this priority**: the seam has to reach every workflow, and the reader of a report
 should see why two stages are the same twin.
@@ -431,7 +432,8 @@ frozen record of the earlier formats; each loads.
   record of `8` or earlier MUST load and say it names no snapshot.
 - **FR-024**: The rehearsal report's table MUST gain a `snapshot` column before `bundle`,
   in the eight-character short form, inside the existing comment size guard;
-  `rehearsal.steps.none` MUST still judge by bundle equality.
+  `rehearsal.steps.none` MUST judge as 015 defined it, by whether one stage alone
+  compiled; the snapshot column changes nothing it files.
 - **FR-025**: The records that move (`twin.json`, `show`, `stages`, `step`, `rehearsal`)
   MUST keep frozen copies of their earlier formats under their packages'
   `testdata/contracts/`, each still loading.

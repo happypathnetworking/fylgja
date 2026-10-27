@@ -667,26 +667,31 @@ before it; the read-then-compile helper reads with `intent read --out`, a snapsh
 compiles with `twin compile --snapshot`. The cases:
 
 1. **A create.** `twin create --no-follow` from `fylgja-fixture`, to three ready SR Linux
-   nodes with the compiled `bundle_id`; each node read back over gNMI (its `ethernet-1/1`
-   description is the one its staged artifact sets, and `twin.json`'s checksums are
-   Infrahub's); the conformance suite's boot half against it; `twin verify --json` (three
-   host names, six ports, six link ends and three record claims held, nothing skipped);
-   `twin.json`'s provenance and `twin show` naming `scope tag:fylgja, read by
-   infrahub-dcim from opsmill/schema-library@26336e9`; a second create refused naming the
-   twin; destroy.
+   nodes with the snapshot and the `bundle_id` that `intent read | twin compile` gives;
+   each node read back over gNMI (its `ethernet-1/1` description is the one its staged
+   artifact sets, and `twin.json`'s checksums are Infrahub's); the conformance suite's boot
+   half against it; `twin verify --json` (three host names, six ports, six link ends and
+   three record claims held, nothing skipped); `twin show` naming the snapshot beside the
+   bundle, `snapshot <id>, bundle_id <id>`; `twin.json`'s provenance and `twin show` naming
+   `scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9`; a second
+   create refused naming the twin; destroy.
 2. **Another reference.** A create `--at T`, T taken once the fixture's three artifacts are
-   `Ready`; destroy.
+   `Ready`, with the snapshot and the `bundle_id` that `intent read --at T | twin compile`
+   gives; destroy.
 3. **An orphan.** A one-node lab `fylgja` deployed by hand, named an orphan by a
    short-lived worker of the script's own and by a dry run, and cleared by destroy.
-4. **Reproducibility.** The create `--at T` again, with the same `bundle_id`; destroy.
+4. **Reproducibility.** The create `--at T` again, holding case 2's snapshot and
+   `bundle_id`; destroy.
 5. **Following.** A throwaway branch `fylgja-test-e2e-<pid>` is seeded and followed at
    `--interval 15s`, the create naming `--scope tag:fylgja`, which `twin.json`'s provenance
    records and the checks read under. An unchanged check touches neither `twin.json` nor the containers. An
    artifact-only change (`-disable-port n1:ethernet-1/2 -generate`) is rebuilt with no
    command, n1 then reads `disable`, and `twin verify` skips that port and both ends of its
    link. A link change (`-add-link`) is rebuilt to the compiled `bundle_id`. `twin show
-   --json` names both states; destroy stops following and leaves no Schedule; the branch is
-   deleted.
+   --json` names both states: the created twin with its snapshot, and the rebuilt one with
+   none (`snapshot_id` null, and `snapshot none` beside its bundle in the text), since the
+   check read and compiled in the worker; destroy stops following and leaves no Schedule;
+   the branch is deleted.
 6. **Two vendors.** A throwaway branch seeded with `-mixed` (one SR Linux node, two EOS),
    created to three ready nodes, each read back over its own package's transport (SR Linux
    over TLS gNMI on 57400, EOS plaintext on 6030); the boot half and `twin verify` (both
@@ -696,15 +701,18 @@ compiles with `twin compile --snapshot`. The cases:
    seed, `-propose`, `-stage seeded`, `-add-link`, n1's and n3's checksums awaited,
    `-stage third-link`. `stage plan --json` lists four stages and three steps, exit 1: the
    branch point refused `scope.empty`, since the development host's `main` holds no
-   device tagged `fylgja`, and its step not computed; `seeded`, `third-link` and the head
-   compiled to three ids; a link added with n1 and n3 changed, their artifacts included;
-   and `unchanged` to the head. `stage list --json` lists the four with no twin. `twin
-   create --stage …/seeded` carries the plan's `seeded` id, its `twin.json` `8` names the
-   stage and the proposed change, `twin show` calls it pinned and `stage list` marks it;
-   it is read back against the artifacts Infrahub held when `seeded` was marked. A `twin
-   step` with no target takes it to `third-link`, the link re-cabled live on n1 and n3 and
-   both pushed, n2 untouched; a second, to the head, is `unchanged` and moves the record,
-   and the list's mark follows each. Destroy; `-delete` reports two stages, one proposed
+   device tagged `fylgja`, its snapshot and bundle ids null and its step not computed;
+   `seeded`, `third-link` and the head taken and compiled to three snapshot ids and three
+   bundle ids; a link added with n1 and n3 changed, their artifacts included; and
+   `unchanged` to the head. `stage list --json` lists the four with no twin. `twin create
+   --stage …/seeded` deploys the plan's `seeded` snapshot and bundle, its `twin.json` `9`
+   names the stage and the proposed change, `twin show` calls it pinned and `stage list`
+   marks it; it is read back against the artifacts Infrahub held when `seeded` was marked.
+   A `twin step` with no target takes it to `third-link`, the link re-cabled live on n1
+   and n3 and both pushed, n2 untouched; a second, to the head, is `unchanged` and moves
+   the record, and the list's mark follows each. Each step's sides, its document and the
+   record it leaves name the plan's snapshot and bundle ids for their stages. Destroy;
+   `-delete` reports two stages, one proposed
    change and the branch, after which `stage list --branch` lists nothing, exit 0, and
    `stage plan --branch` is refused `stage.unknown`, exit 1.
 8. **A step.** A throwaway mixed branch `fylgja-test-e2e-step-<pid>-<n>`: `-mixed`,
@@ -724,7 +732,8 @@ compiles with `twin compile --snapshot`. The cases:
    was posted. `-stage seeded`, `-add-link`, n1's and n3's checksums awaited, `-stage
    third-link`, `-ready`, `-run-checks user`: `fylgja-twin` rehearsed it on a twin and
    passed, its message ending `rehearsal ok`, with one thread in the proposed change's
-   overview holding one comment, the table, the drawing and the stages, and no twin left.
+   overview holding one comment, the table (with its `snapshot` column), the drawing and
+   the stages, and no twin left.
    Then `-add-interface n1:ethernet-1/99`, `-generate`, n1's checksum awaited, `-stage
    bad-port`, `-run-checks user`: `fylgja-twin` failed, naming `bad-port`'s push refused on
    n1, with a second thread holding the commands that reproduce it and `head` `not

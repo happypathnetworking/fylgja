@@ -226,7 +226,9 @@ func TestChecksInsideInfrahub(t *testing.T) {
 
 // posted holds the proposed change id to the comments fylgja-twin posted on a refused
 // rehearsal: at least one, each its thread's only comment, each the report's markdown with
-// the status rejected and the stale finding and no credential's value, and each thread
+// the status rejected and the stale finding and no credential's value, its heading ending
+// with the scope it was read under, the server's default, since the check names none, and
+// the bridge server reads FYLGJA_DEFAULT_SCOPE tag:fylgja from local/.env (T119), and each thread
 // listed by the proposed change's overview once Infrahub's event log has it (research §5.9).
 // The host's own registration, whose fylgja-twin runs beside the test's, may post one more,
 // the same report. Each thread and comment it reads is kept in left, for nothingLeft.
@@ -249,6 +251,10 @@ func posted(t *testing.T, c *testsupport.Client, id string, left leftovers) {
 			if !strings.Contains(cm.Text, want) {
 				t.Errorf("comment %s does not carry %q:\n%s", cm.ID, want, cm.Text)
 			}
+		}
+		heading, _, _ := strings.Cut(cm.Text, "\n")
+		if want := ", scope tag:" + testsupport.FixtureTag; !strings.HasSuffix(strings.TrimRight(heading, "\r "), want) {
+			t.Errorf("comment %s's first line %q does not end %q, the scope the server's default read it under", cm.ID, heading, want)
 		}
 	}
 	for thread, n := range threads {

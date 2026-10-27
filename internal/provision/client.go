@@ -23,6 +23,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/snapshot"
 )
 
 // Workflow service defaults: the dev server.
@@ -1699,8 +1700,8 @@ func StepClosedAs(res StepResult) string {
 	return res.Outcome
 }
 
-// StepDocument reports a step run as twin.step's findings document: the step block the
-// command printed, the run's fields added once
+// StepDocument reports a step run as twin.step's findings document: the target's snapshot
+// and bundle, the step block the command printed, the run's fields added once
 // the run closed, and the run's findings. Status: ok for stepped and unchanged; rejected for
 // a refusal before the stage, the run's second locks included; error for a step that could
 // not run or was cancelled before its stage; diverged, exit 4, for any failure or
@@ -1711,6 +1712,10 @@ func StepDocument(subject *findings.Subject, in StepInput, res StepResult) *find
 	doc.Status = stepStatus(res)
 	if bundle.IsID(in.To.BundleID) {
 		doc.BundleID = in.To.BundleID
+	}
+	// The target's snapshot beside its bundle (018), as the command's dry run names it.
+	if snapshot.IsID(in.To.SnapshotID) {
+		doc.SnapshotID = in.To.SnapshotID
 	}
 	plan := in.Plan
 	if res.Plan != nil {

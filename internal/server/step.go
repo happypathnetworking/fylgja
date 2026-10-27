@@ -108,8 +108,8 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	// which the proposed change found under it carries.
 	scope := rec.Provenance.Scope
 	subject.Scope = scope
-	opts.note("twin: stage %s (bundle %s), pinned at %s; %s", rec.Stage.Name(), shortID(rec.BundleID),
-		rec.Provenance.At, plural(len(rec.Nodes), "node"))
+	opts.note("twin: stage %s (snapshot %s, bundle %s), pinned at %s; %s", rec.Stage.Name(), shortSnapshot(rec),
+		shortID(rec.BundleID), rec.Provenance.At, plural(len(rec.Nodes), "node"))
 
 	// The record's proposed change, found once by its source branch (steps 1–3 and the
 	// head's at), and the target chosen among its stages; then the target resolved
@@ -138,11 +138,7 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	list = append(list, stages.Moved(ch, view)...)
 	subject.Stage = target.String()
 
-	file := func(ctx context.Context, files map[string][]byte, id string) (findings.List, error) {
-		_, filed, err := fileCompiled(ctx, paths.Bundles, files, id)
-		return filed, err
-	}
-	built := stages.Build(ctx, reader, stamper, reg, ch, target, stages.NewPipeline(file), time.Now().UTC())
+	built := stages.Build(ctx, reader, stamper, reg, ch, target, stagePipeline(paths), time.Now().UTC())
 	list = append(list, built.Findings...)
 	var resolved *resolvedStage
 	if r := built.Resolved; r != nil {
@@ -162,6 +158,23 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 		return &result{doc: doc}
 	}
 	return withStage(stepTo(ctx, opts, f, op, subject, reg, paths, acts, rec, built, list), resolved)
+}
+
+// shortSnapshot is the record's snapshot as the step's twin line names it (018; R-09): its
+// short id, or none for a record naming none, a record of 8 or earlier among them.
+func shortSnapshot(rec *wire.TwinRecord) string {
+	if rec.SnapshotID == nil {
+		return "none"
+	}
+	return shortID(*rec.SnapshotID)
+}
+
+// recordSnapshot is the snapshot the record names, "" for none: a step's from side.
+func recordSnapshot(rec *wire.TwinRecord) string {
+	if rec.SnapshotID == nil {
+		return ""
+	}
+	return *rec.SnapshotID
 }
 
 // stepScopeUnknown is the refusal of a stage twin whose record is of twin.json 7 or earlier,
@@ -329,7 +342,10 @@ type stepPackages struct {
 // the target's from the host check's plan, which read them from the registry; the from
 // bundle's from its manifest, each node's package looked up in the registry by its id, since
 // a merge package on either side refuses the step. Declared is each target node's
-// package's fidelity.link_change, which the host check's plan does not carry.
+// package's fidelity.link_change, which the host check's plan does not carry. Each side
+// names its snapshot (018; R-13): the from side the record's, none when the record names
+// none (a record of 8), and the to side the one the target's build took; the run copies
+// both into the record it writes.
 func stepInput(f *stepFlags, rec *wire.TwinRecord, from step.Bundle, built stages.PlanStage, toPath string, s step.Step, diff []byte,
 	plan wire.CheckHostResult, lifecycle wire.ReconcilePlan, reg *psp.Registry, version string) (provision.StepInput, stepPackages, error) {
 	var packages stepPackages
@@ -362,8 +378,8 @@ func stepInput(f *stepFlags, rec *wire.TwinRecord, from step.Bundle, built stage
 	}
 	r := built.Resolved
 	return provision.StepInput{
-		From:         wire.StepSide{Stage: rec.Stage, BundleID: rec.BundleID, At: rec.Provenance.At},
-		To:           wire.StepSide{Stage: r.StageRef(), BundleID: built.Bundle.ID, At: r.At, Branch: r.Branch},
+		From:         wire.StepSide{Stage: rec.Stage, SnapshotID: recordSnapshot(rec), BundleID: rec.BundleID, At: rec.Provenance.At},
+		To:           wire.StepSide{Stage: r.StageRef(), SnapshotID: built.SnapshotID, BundleID: built.Bundle.ID, At: r.At, Branch: r.Branch},
 		ObservedAt:   built.ObservedAt,
 		ToBundlePath: toPath,
 		Diff:         diff,
@@ -420,7 +436,7 @@ func stepDryRun(opts *options, op string, subject *findings.Subject, in provisio
 	opts.note("verdict: %s", verdict)
 
 	doc := findings.NewDocument(op, subject, list)
-	doc.BundleID = in.To.BundleID
+	doc.SnapshotID, doc.BundleID = in.To.SnapshotID, in.To.BundleID
 	doc.DryRun = block
 	doc.Step = provision.StepBlockOf(in, lifecycle)
 	return &result{doc: doc}

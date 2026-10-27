@@ -15,12 +15,18 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/step"
 )
 
-// Pipeline is what a plan runs each stage through: the stage read, the stage compile, and
-// the filing of the bundle in the store. They are function values so tier 1
-// can fake what lies under them; the product's are stage.Read, stage.Compile and the dry
-// run's filing, one code path with `intent read`, `twin compile` and a create (D-011).
+// Pipeline is what a plan runs each stage through: the stage read, the take of its
+// snapshot, the stage compile, and the filing of the bundle in the store. They are function
+// values so tier 1 can fake what lies under them; the product's are stage.Read, the server's
+// take, stage.Compile and the dry run's filing, one code path with `intent read`, `twin
+// compile` and a create (D-011).
 type Pipeline struct {
-	Read    func(ctx context.Context, branch, at, scope string, reg *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error)
+	Read func(ctx context.Context, branch, at, scope string, reg *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error)
+	// Take wraps a clean read as its snapshot and files it in the store, returning its id
+	// (018). A refusal is its findings (snapshot.id.mismatch, a corrupt store entry); an
+	// error is a filing that could not run. It runs before the compile, so a refused read
+	// files nothing and a compile refused after it leaves the snapshot filed (R-05).
+	Take    func(ctx context.Context, c *ctm.CTM) (id string, list findings.List, err error)
 	Compile func(c *ctm.CTM, reg *psp.Registry) (files map[string][]byte, id string, list findings.List)
 	// File files a compiled bundle. A refusal is its findings (bundle.id.mismatch); an
 	// error is a filing that could not run. No CTM is filed beside it: the sidecar is
@@ -28,10 +34,11 @@ type Pipeline struct {
 	File func(ctx context.Context, files map[string][]byte, id string) (findings.List, error)
 }
 
-// NewPipeline is the product's pipeline: the stage pipelines, and file, the command's
-// filing in the store under its state root.
-func NewPipeline(file func(ctx context.Context, files map[string][]byte, id string) (findings.List, error)) Pipeline {
-	return Pipeline{Read: stage.Read, Compile: stage.Compile, File: file}
+// NewPipeline is the product's pipeline: the stage pipelines, and take and file, the
+// command's filing of the snapshot and the bundle in the stores under its state root.
+func NewPipeline(take func(ctx context.Context, c *ctm.CTM) (string, findings.List, error),
+	file func(ctx context.Context, files map[string][]byte, id string) (findings.List, error)) Pipeline {
+	return Pipeline{Read: stage.Read, Take: take, Compile: stage.Compile, File: file}
 }
 
 // How far one planned stage got.
@@ -57,6 +64,10 @@ type PlanStage struct {
 	// Read is set once its read returned intent: what the read holds, as `intent read`'s
 	// summary counts it.
 	Read *ReadSummary
+	// SnapshotID is its read's snapshot, set once filed and "" when the stage was refused
+	// before it (018). A compile refused after the take leaves it set: the snapshot stays
+	// filed.
+	SnapshotID string
 	// Bundle is set once it compiled and was filed.
 	Bundle *step.Bundle
 	// ObservedAt is when its read began, set once the read ran: twin step's record takes
@@ -113,8 +124,10 @@ type PlanResult struct {
 //     not), findings at resolve;
 //  2. read with an observed_at of its own, findings at read; a read that cannot run is
 //     operation.failed naming the stage;
-//  3. compiled, findings at compile;
-//  4. filed, as the dry run files its bundle.
+//  3. its snapshot taken and filed, as a create takes its read (018), a refusal at compile,
+//     where a create places the stores' refusals;
+//  4. compiled, findings at compile;
+//  5. filed, as the dry run files its bundle.
 //
 // onChange is called once the proposed change is found, with how many stages it has;
 // onStage as each stage finishes; and onStep as each step is known, which is once its
@@ -167,7 +180,7 @@ func Plan(ctx context.Context, r Reader, s Stamper, branch, scope string, reg *p
 }
 
 // Build runs one stage of a proposed change already found as far as it goes: resolved
-// (steps 4–9), read with an observed_at of its own, compiled, and filed,
+// (steps 4–9), read with an observed_at of its own, its snapshot taken, compiled, and filed,
 // each finding at its step. twin step builds its target with it, and the plan builds each
 // stage the same way, so the target's bundle_id is the one stage plan prints for that
 // stage, by construction (D-011).
@@ -250,6 +263,21 @@ func build(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 	ps.Findings = append(ps.Findings, list...)
 	ps.Read = &ReadSummary{Counts: intent.Summarize(snapshot), Packages: intent.DevicesByPackage(snapshot, reg),
 		Lossy: compiler.Survey(snapshot, reg)}
+
+	// The input is filed before the output, as a create files it (018; R-05): a compile
+	// refused below leaves the snapshot to inspect. The stores' refusals are the compile
+	// step's, a corrupt snapshot entry's as a corrupt bundle entry's (contracts/cli.md,
+	// "018: snapshots", Identifiers).
+	snapshotID, taken, err := p.Take(ctx, snapshot)
+	if err != nil {
+		return failed(findings.StepCompile, err)
+	}
+	taken = taken.AtStep(findings.StepCompile)
+	if taken.Rejected() {
+		return stop(taken)
+	}
+	ps.Findings = append(ps.Findings, taken...)
+	ps.SnapshotID = snapshotID
 
 	files, id, compiled := p.Compile(snapshot, reg)
 	compiled = compiled.AtStep(findings.StepCompile)

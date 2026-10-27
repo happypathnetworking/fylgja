@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
@@ -302,9 +303,9 @@ type plannedStages struct {
 // planStages is stage plan's plan of branch's open proposed change under scope, which twin
 // rehearse plans with too (015), so a rehearsal's stages are the plan's by construction: the
 // packages, loaded before anything is dialled as a create loads them for its read; the state
-// root; the stage reader; then stages.Plan, each bundle and its CTM filed as the dry run
-// files them, with onChange, onStage and onStep as stages.Plan calls them. A failure is the
-// document the command ends with, subject its subject.
+// root; the stage reader; then stages.Plan, each stage's snapshot and bundle filed as a
+// create files them, with onChange, onStage and onStep as stages.Plan calls them. A failure
+// is the document the command ends with, subject its subject.
 func planStages(ctx context.Context, opts *options, op string, subject *findings.Subject, branch, scope string,
 	onChange func(stages.ProposedChange, int), onStage func(stages.PlanStage), onStep func(step.Pair)) (plannedStages, error) {
 	reg, err := psp.Load(opts.pspDir)
@@ -320,21 +321,36 @@ func planStages(ctx context.Context, opts *options, op string, subject *findings
 		return plannedStages{}, failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
 
-	// Each bundle is filed as the dry run files it.
-	file := func(ctx context.Context, files map[string][]byte, id string) (findings.List, error) {
-		_, list, err := fileCompiled(ctx, paths.Bundles, files, id)
-		return list, err
-	}
 	now := time.Now().UTC()
-	res, err := stages.Plan(ctx, reader, newIntentStamper(), branch, scope, reg, stages.NewPipeline(file), now, onChange, onStage, onStep)
+	res, err := stages.Plan(ctx, reader, newIntentStamper(), branch, scope, reg, stagePipeline(paths), now, onChange, onStage, onStep)
 	if err != nil {
 		return plannedStages{}, failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
 	return plannedStages{res: res, reg: reg, paths: paths, reader: reader, scope: scope, now: now}, nil
 }
 
-// printPlanned prints one planned stage: its resolution, bundle_id and what its read holds
-// when it compiled, and otherwise one line naming the first rejection's rule; then its
+// stagePipeline is the stages' pipeline on the server, under paths: each stage's read taken
+// as its snapshot and filed by takeSnapshot, as a create takes its read, its refusals at
+// compile (018), and each bundle filed as the dry run files it. stage plan, twin step and
+// twin rehearse build every stage through it, so a stage's ids are the same whichever
+// command built it (D-011).
+func stagePipeline(paths lab.Paths) stages.Pipeline {
+	take := func(ctx context.Context, c *ctm.CTM) (string, findings.List, error) {
+		s, _, list, err := takeSnapshot(ctx, paths, findings.StepCompile, c)
+		if s == nil {
+			return "", list, err
+		}
+		return s.ID, list, err
+	}
+	file := func(ctx context.Context, files map[string][]byte, id string) (findings.List, error) {
+		_, list, err := fileCompiled(ctx, paths.Bundles, files, id)
+		return list, err
+	}
+	return stages.NewPipeline(take, file)
+}
+
+// printPlanned prints one planned stage: its resolution, snapshot_id, bundle_id and what its
+// read holds when it compiled, and otherwise one line naming the first rejection's rule; then its
 // findings under it, indented, each in the document's text-line shape. The document's
 // stderr rendering is unchanged, so text prints each twice: under its stage, where a
 // finding naming a device or an interface says whose it is, and with the rest.
@@ -347,6 +363,7 @@ func printPlanned(opts *options, st stages.PlanStage) {
 		opts.note("%s: %s", st.Ref, why)
 	} else {
 		opts.note("%s: %s", st.Ref, st.Resolved.Block().Resolution())
+		opts.note("  snapshot_id %s", st.SnapshotID)
 		opts.note("  bundle_id %s", st.Bundle.ID)
 		opts.note("  read: %s", readCounts(st.Read.Counts, st.Read.Packages, st.Read.Lossy))
 	}

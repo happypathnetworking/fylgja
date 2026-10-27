@@ -106,12 +106,17 @@ func (p *PlanResult) Block() (*findings.PlanBlock, error) {
 
 // Block is one stage as the plan block carries it ($defs/plan_stage): its reference,
 // label, description and at's source in every case, its branch and at once it resolved,
-// its bundle once it compiled and its read counts once the read did.
+// its snapshot once its read was filed (018), written null before, its bundle once it
+// compiled and its read counts once the read did.
 func (p PlanStage) Block() findings.PlanStage {
 	out := findings.PlanStage{Ref: p.Ref.String(), Label: p.Label, Description: p.Description, AtSource: p.AtSource,
 		Findings: p.Findings}
 	if r := p.Resolved; r != nil {
 		out.Branch, out.At, out.AtSource = r.Branch, r.At, r.AtSource
+	}
+	if p.SnapshotID != "" {
+		id := p.SnapshotID
+		out.SnapshotID = &id
 	}
 	if p.Bundle != nil {
 		id := p.Bundle.ID

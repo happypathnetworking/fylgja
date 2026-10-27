@@ -276,8 +276,9 @@ func (r *rehearsing) input(baseline int, nodes map[string][]wire.NodePlan) (prov
 func (r *rehearsing) resolvedAt() string { return r.planned.now.UTC().Format(time.RFC3339) }
 
 // rehearseStages is every stage of the plan as the run takes it, in order (data-model §6):
-// its reference, its mark's words, what it resolved to and compiled to, and its role; the
-// baseline's provision, already compiled, with its stage; and each rehearsed stage's step
+// its reference, its mark's words, what it resolved to, the snapshot it was taken as (018)
+// and what it compiled to, and its role, a refused stage naming neither; the baseline's
+// provision, already compiled, with its stage and its snapshot; and each rehearsed stage's step
 // from the compiled stage before it, as twin step builds one but reading no twin (research
 // R-05): From the previous stage's side, To the target's, the store's copy of its bundle,
 // the plan's step between the two and what it changes, the push plan before containerlab's
@@ -299,13 +300,13 @@ func rehearseStages(rows []rehearsalRow, baseline int, pairs []step.Pair, nodes 
 			out = append(out, in)
 			continue
 		}
-		in.BundleID, in.BundlePath = st.Bundle.ID, bundlePath(st.Bundle.ID)
+		in.SnapshotID, in.BundleID, in.BundlePath = st.SnapshotID, st.Bundle.ID, bundlePath(st.Bundle.ID)
 		switch {
 		case i == baseline:
 			r := st.Resolved
 			in.Provision = &provision.ProvisionInput{Source: wire.SourceIntent, Branch: r.Branch, At: r.At,
-				BundlePath: in.BundlePath, BundleID: in.BundleID, ObservedAt: st.ObservedAt, Stage: r.StageRef(),
-				Version: version, Scope: scope}
+				BundlePath: in.BundlePath, BundleID: in.BundleID, ObservedAt: st.ObservedAt, SnapshotID: st.SnapshotID,
+				Stage: r.StageRef(), Version: version, Scope: scope}
 		case prev != nil:
 			pair, ok := pairBetween(pairs, prev.Ref.String(), in.Ref)
 			if !ok {
@@ -334,7 +335,8 @@ func pairBetween(pairs []step.Pair, from, to string) (step.Pair, bool) {
 	return step.Pair{}, false
 }
 
-// rehearsedStep is the step run's input from one compiled stage to the next.
+// rehearsedStep is the step run's input from one compiled stage to the next, each side
+// naming its stage's snapshot (018), as twin step's do.
 func rehearsedStep(from, to stages.PlanStage, s step.Step, diff []byte, nodes []wire.NodePlan, reg *psp.Registry,
 	toPath string, waitS int, version string) *provision.StepInput {
 	declared := map[string]string{}
@@ -353,8 +355,8 @@ func rehearsedStep(from, to stages.PlanStage, s step.Step, diff []byte, nodes []
 	}
 	f, t := from.Resolved, to.Resolved
 	return &provision.StepInput{
-		From:         wire.StepSide{Stage: f.StageRef(), BundleID: from.Bundle.ID, At: f.At},
-		To:           wire.StepSide{Stage: t.StageRef(), BundleID: to.Bundle.ID, At: t.At, Branch: t.Branch},
+		From:         wire.StepSide{Stage: f.StageRef(), SnapshotID: from.SnapshotID, BundleID: from.Bundle.ID, At: f.At},
+		To:           wire.StepSide{Stage: t.StageRef(), SnapshotID: to.SnapshotID, BundleID: to.Bundle.ID, At: t.At, Branch: t.Branch},
 		ObservedAt:   to.ObservedAt,
 		ToBundlePath: toPath,
 		Diff:         diff,
@@ -407,7 +409,9 @@ func (r *rehearsing) printPlan(deadline time.Duration) {
 
 // report is the report's input: the proposed change, when its stages were resolved, the
 // scope they were read under, which the commands that reproduce a failure name, the deadline
-// and the ceiling, the reclaim, and every stage with its role and its findings.
+// and the ceiling, the reclaim, and every stage with its role and its findings, and its
+// snapshot and bundle once it compiled. A refused stage names neither (018; formats.md §7),
+// even one whose compile was refused after its snapshot was filed, which stage plan names.
 func (r *rehearsing) report() rehearsal.Input {
 	pc := r.planned.res.ProposedChange
 	in := rehearsal.Input{ProposedChange: findings.StageChange{ID: pc.ID, Name: pc.Name, Branch: pc.Branch, Draft: pc.Draft},
@@ -416,6 +420,9 @@ func (r *rehearsing) report() rehearsal.Input {
 	for _, row := range r.rows {
 		st := rehearsal.Stage{Ref: row.stage.Ref.String(), Label: row.stage.Label, Description: row.stage.Description,
 			AtSource: row.stage.AtSource, BundleID: row.stage.BundleID(), Role: row.role, Findings: row.findings}
+		if row.stage.Bundle != nil {
+			st.SnapshotID = row.stage.SnapshotID
+		}
 		if res := row.stage.Resolved; res != nil {
 			st.Branch, st.At = res.Branch, res.At
 		}

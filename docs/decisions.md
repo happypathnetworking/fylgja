@@ -87,6 +87,7 @@ next one.
 | [D-058](#d-058) | A stamp Infrahub's own account wrote is not intent's | Intent |
 | [D-059](#d-059) | Infrahub's own account is the one that writes the template query's groups, read from Infrahub | Intent |
 | [D-060](#d-060) | Infrahub's own account is the one that created the template query's groups | Intent |
+| [D-061](#d-061) | The snapshot is the core's one input: a content-addressed wrap of the CTM, stored beside the bundles; the bundle's CTM sidecar retired | Contract |
 
 ---
 
@@ -3719,6 +3720,72 @@ through the delete.
   group whose `updated_by` is the operator's account.
 - Revisit if Infrahub re-creates the groups on a change of the workers' token, or if a
   stale reading from such a change is met in practice.
+
+---
+
+<a id="d-061"></a>
+## D-061 — The snapshot is the core's one input: a content-addressed wrap of the CTM, stored beside the bundles, and the bundle's CTM sidecar is retired
+
+**Status:** Accepted 2026-10-27, by the operator, at `018-snapshots`'s `analyze` (T002).
+Beside [D-023](#d-023), whose rule the id reuses, and [D-057](#d-057), whose contract it wraps
+unchanged. To be built by `018-snapshots`.
+
+### Context
+
+Two of the three live paths, `twin step` and `twin rehearse`, read, compile and file on
+the server and hand the worker a bundle id; `twin create` still read the branch inside
+its provision workflow (`ReadIntent`), through a CTM under `bundles/.reads/`, and the
+bundle store kept the CTM a create read as a sidecar beside its bundle. Until every
+workflow the core runs takes one input that is not a branch, the production shape's
+core (`docs/roadmap.md`, "The production shape"), which knows no branch, proposed
+change, stage or source of truth, is a drawing; and F-025's reader of NetBox, which
+cannot replay time, has nothing to address a stage by.
+
+### Options considered
+
+- **A CTM `3` that gains the probe slot and loses `observed_at`.** One noun fewer, but
+  the CTM is the reader's contract (D-057) and would carry the core's concerns.
+- **A snapshot that holds the configurations beside the CTM**, as the roadmap first
+  wrote. The CTM has carried each device's artifact since M5; a second copy would be a
+  second place for one fact.
+- **A thin document wrapping an unchanged CTM `2`**, with an empty slot for probe
+  declarations and an id of its own: the hash of the body minus the read's
+  `observed_at`, by the rule the manifest already uses for `bundle_id` (D-023).
+
+### Decision
+
+The snapshot, version `1`, wraps CTM `2` unchanged: `snapshot_version`, `snapshot_id`,
+the take's `observed_at`, the `ctm` and `probes`, required and empty until 016. The id
+is the SHA-256 of the body's canonical bytes with the inner `observed_at` left out and
+nothing else left out: the branch, the `at`, the schema hash, the scope, the mapping,
+the fidelity list, every artifact and the probe list are in it. It is filed by id under
+the state root's `snapshots/`, beside `bundles/`, behind a store of the bundle store's
+shape (D-014) that never overwrites, so two takes of one intent share one document, the
+first take's. The server takes the snapshot for every create, as it reads for a step
+and a rehearsal, and every workflow the core runs but the reconcile is started with a
+snapshot id and a bundle id and never a branch. `twin create --snapshot <id|file>` and
+`twin compile --snapshot <file>` take one directly; `intent read --out` writes one;
+`twin compile --ctm` is retired. A twin built from a snapshot is frozen by rule: its
+reference is a document, which does not move. Wherever a record names a bundle id it
+names the snapshot id beside it, except in the bundle, so bundle `5` and the goldens do
+not move. The bundle's CTM sidecar is retired: no build writes one, and those on disk
+are never read. The reconcile workflow is untouched until F-026.
+
+### Consequences
+
+- The same intent read twice has one snapshot id, and one stage resolved twice has one,
+  while the branch's history stands: a rebase re-stamps the branch and moves every
+  stage's snapshot, and an artifact re-rendered to different bytes for unchanged data,
+  never seen, would move it. Both are limits, documented and not tested.
+- Where the source of truth cannot replay time, the snapshot's id addresses intent, and
+  a stage there is the snapshot Fylgja took when the operator marked it: Constitution VI
+  says so from 2.2.0, for F-025 to inherit.
+- `twin.json` `9` names the snapshot, or none for a twin `twin provision` built or a
+  following rebuild made; the five documents that name a bundle id name it too.
+- The compile that `twin compile` asks for runs on the snapshot's CTM, the goldens'
+  path (D-011); the CTM stays the reader's contract (D-057).
+- A snapshot holds configuration, as the CTM does: it lives in the store and crosses as
+  a file, never in a finding, a log line or a document.
 
 ---
 

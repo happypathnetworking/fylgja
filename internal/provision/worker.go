@@ -86,7 +86,7 @@ func StartupReport(ctx context.Context, acts *lab.Activities, address, namespace
 	}
 	lines := []string{
 		fmt.Sprintf("serving task queue %s at %s (namespace %s)", TaskQueue, address, namespace),
-		fmt.Sprintf("state root %s (bundles: %s, twin: %s)", acts.Paths.Root, acts.Paths.Bundles, acts.Paths.Twin),
+		fmt.Sprintf("state root %s (bundles: %s, snapshots: %s, twin: %s)", acts.Paths.Root, acts.Paths.Bundles, acts.Paths.Snapshots, acts.Paths.Twin),
 		BudgetLine(getenv),
 	}
 	lines = append(lines, LoginLines(ctx, acts.Registry, acts.Images, getenv)...)

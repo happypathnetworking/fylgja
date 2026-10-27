@@ -604,7 +604,7 @@ func TestServeListensOnEveryAddress(t *testing.T) {
 		"fylgja serve: listening on " + addrs[1] + " (API version 1, build 0.1.0-test)",
 		"fylgja serve: " + addrs[1] + " is not a loopback address: the API's token is sent unencrypted on it",
 		"fylgja serve: listening on " + addrs[2] + " (API version 1, build 0.1.0-test)",
-		fmt.Sprintf("fylgja serve: state root %s (bundles: %s, twin: %s)", root, filepath.Join(root, "bundles"), filepath.Join(root, "twin")),
+		fmt.Sprintf("fylgja serve: state root %s (bundles: %s, snapshots: %s, twin: %s)", root, filepath.Join(root, "bundles"), filepath.Join(root, "snapshots"), filepath.Join(root, "twin")),
 	}
 	if got := strings.Split(stdout.String(), "\n"); len(got) < len(want) || strings.Join(got[:len(want)], "\n") != strings.Join(want, "\n") {
 		t.Errorf("report:\n%s\nwant it to begin:\n%s", stdout, strings.Join(want, "\n"))
@@ -697,7 +697,7 @@ func TestServeReportsBeforeTakingARequest(t *testing.T) {
 				want = append(want, "fylgja serve: "+addr+" is not a loopback address: the API's token is sent unencrypted on it")
 			}
 			want = append(want,
-				fmt.Sprintf("fylgja serve: state root %s (bundles: %s, twin: %s)", root, filepath.Join(root, "bundles"), filepath.Join(root, "twin")),
+				fmt.Sprintf("fylgja serve: state root %s (bundles: %s, snapshots: %s, twin: %s)", root, filepath.Join(root, "bundles"), filepath.Join(root, "snapshots"), filepath.Join(root, "twin")),
 				"fylgja serve: default scope: tag:fylgja",
 				"fylgja serve: the workflow service ("+temporal+", namespace default) and Infrahub are dialled when a request needs them",
 				"fylgja serve: host memory budget: unset (memory sums will be warnings)",

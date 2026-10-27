@@ -99,7 +99,8 @@ func TestStartupReportClearHost(t *testing.T) {
 	got := StartupReport(context.Background(), acts, "localhost:7233", "default")
 	want := []string{
 		"fylgja worker: serving task queue fylgja at localhost:7233 (namespace default)",
-		"fylgja worker: state root " + root + " (bundles: " + filepath.Join(root, "bundles") + ", twin: " + filepath.Join(root, "twin") + ")",
+		"fylgja worker: state root " + root + " (bundles: " + filepath.Join(root, "bundles") + ", snapshots: " + filepath.Join(root, "snapshots") +
+			", twin: " + filepath.Join(root, "twin") + ")",
 		"fylgja worker: host memory budget: unset (memory sums will be warnings)",
 		// Every shipped package, in NOS order, each with its own login and its own
 		// mechanism: the report is written from the packages, so the second platform

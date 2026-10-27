@@ -33,6 +33,7 @@ const DefaultStateRoot = "local"
 type Paths struct {
 	Root       string // the state root
 	Bundles    string // <root>/bundles: the bundle store
+	Snapshots  string // <root>/snapshots: the snapshot store (018), made by its first Put
 	Twin       string // <root>/twin: the twin directory, present exactly while a twin is
 	TwinBundle string // <root>/twin/bundle: the verified copy of the bundle deployed
 	TwinJSON   string // <root>/twin/twin.json: the twin's record, written last
@@ -44,6 +45,7 @@ func PathsAt(root string) Paths {
 	return Paths{
 		Root:       root,
 		Bundles:    filepath.Join(root, "bundles"),
+		Snapshots:  filepath.Join(root, "snapshots"),
 		Twin:       twin,
 		TwinBundle: filepath.Join(twin, "bundle"),
 		TwinJSON:   filepath.Join(twin, "twin.json"),

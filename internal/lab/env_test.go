@@ -21,6 +21,7 @@ func TestResolvePathsDefaultsUnderWorkingDirectory(t *testing.T) {
 	want := Paths{
 		Root:       root,
 		Bundles:    filepath.Join(root, "bundles"),
+		Snapshots:  filepath.Join(root, "snapshots"),
 		Twin:       filepath.Join(root, "twin"),
 		TwinBundle: filepath.Join(root, "twin", "bundle"),
 		TwinJSON:   filepath.Join(root, "twin", "twin.json"),

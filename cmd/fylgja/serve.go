@@ -276,7 +276,7 @@ func serveReport(ctx context.Context, opts *serveOptions, reg *psp.Registry, pat
 		scopeLine = "default scope: " + defaultScope
 	}
 	lines = append(lines,
-		fmt.Sprintf("state root %s (bundles: %s, twin: %s)", paths.Root, paths.Bundles, paths.Twin),
+		fmt.Sprintf("state root %s (bundles: %s, snapshots: %s, twin: %s)", paths.Root, paths.Bundles, paths.Snapshots, paths.Twin),
 		scopeLine,
 		fmt.Sprintf("the workflow service (%s, namespace %s) and Infrahub are dialled when a request needs them",
 			envOr(opts.getenv, lab.EnvTemporalAddress, provision.DefaultAddress),

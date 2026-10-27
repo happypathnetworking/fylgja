@@ -44,9 +44,28 @@ type readSummary struct {
 // would follow its branch (M4); the dry run schedules nothing either way.
 func dryRunReport(ctx context.Context, opts *options, op string, subject *findings.Subject, reg *psp.Registry,
 	paths lab.Paths, snap *filedSnapshot, bundlePath, id string, read *readSummary, prior findings.List, follow findings.DryRunFollow) error {
+	// A host check that cannot run leaves what was filed before it filed, so the answer names
+	// it as the success does, the input above the output (R-09), and as a create's run that
+	// fails at the host check names it: the stored lines on stdout, and the ids and the
+	// earlier findings on the failure's document (FR-014, FR-010).
+	failed := func(err error) error {
+		if snap != nil {
+			opts.note("%s", snapshotStoredLine(snap.id, snap.path))
+		}
+		opts.note("%s", bundleStoredLine(id, bundlePath))
+		var res *result
+		if errors.As(err, &res) {
+			if snap != nil {
+				res.doc.SnapshotID = snap.id
+			}
+			res.doc.BundleID = id
+		}
+		return withFound(err, prior)
+	}
+
 	plan, err := lab.CheckHost(ctx, dryRunActivities(opts, reg, paths), wire.CheckHostInput{BundlePath: bundlePath, BundleID: id})
 	if err != nil {
-		return failAt(op, subject, findings.StepHostCheck, findings.StepHostCheck, "host check: %s", activityMessage(err))
+		return failed(failAt(op, subject, findings.StepHostCheck, findings.StepHostCheck, "host check: %s", activityMessage(err)))
 	}
 
 	// What would be pushed, and what the mapping loses, are the manifest's to say: the plan
@@ -56,7 +75,7 @@ func dryRunReport(ctx context.Context, opts *options, op string, subject *findin
 	// operational failure.
 	artifacts, lossy, err := manifestSummary(bundlePath)
 	if err != nil {
-		return failAt(op, subject, findings.StepHostCheck, findings.StepHostCheck, "host check: %v", err)
+		return failed(failAt(op, subject, findings.StepHostCheck, findings.StepHostCheck, "host check: %v", err))
 	}
 
 	block, verdict := dryRunBlock(plan, artifacts, lossy, plan.Findings)

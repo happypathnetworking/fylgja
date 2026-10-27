@@ -232,6 +232,47 @@ func TestARefusedCompileNamesTheSnapshotInText(t *testing.T) {
 	}
 }
 
+// FR-014 and FR-010: a create's dry run whose host check cannot run has filed the snapshot
+// and the bundle, and its answer names both, as a run that fails at the host check does:
+// their stored lines alone on stdout, in the success's order, with the failure on stderr,
+// and both ids on the --json document. A host budget that is no number fails the host check
+// before it looks at the host; no workflow service is dialled.
+func TestADryRunWhoseHostCheckCannotRunNamesWhatItFiled(t *testing.T) {
+	paths := useFixtureRead(t)
+	dials := countDials(t)
+	dryRunEnv(t)
+	t.Setenv(lab.EnvHostMemoryMB, "lots")
+	args := []string{"twin", "create", "--branch", "fylgja-fixture", "--dry-run"}
+
+	code, stdout, stderr := runRoot(t, args...)
+	jsonCode, doc := executeTwin(t, args...)
+	failed := slices.ContainsFunc(doc.Findings, func(f findings.Finding) bool {
+		return f.Rule == findings.RuleOperationFailed && f.Step == findings.StepHostCheck
+	})
+	if code != findings.ExitError || jsonCode != code || !failed {
+		t.Fatalf("exit %d (--json %d), findings %+v; want 2 with operation.failed at host_check", code, jsonCode, doc.Findings)
+	}
+	if !strings.Contains(stderr, "rejection "+findings.RuleOperationFailed) {
+		t.Errorf("stderr:\n%s\nwant the host check's failure", stderr)
+	}
+	if want := lines(storedLines(paths, headSnapshotID, headBundleID)...); stdout != want {
+		t.Errorf("stdout:\n%s\nwant both stored lines alone:\n%s", stdout, want)
+	}
+	if got := filedSnapshots(t, paths); len(got) != 1 || got[0] != headSnapshotID+".json" {
+		t.Errorf("snapshots/ holds %v; want %s alone", got, headSnapshotID)
+	}
+	if _, err := os.Stat(filepath.Join(paths.Bundles, headBundleID)); err != nil {
+		t.Errorf("the bundle the line names is not filed: %v", err)
+	}
+	if doc.SnapshotID != headSnapshotID || doc.BundleID != headBundleID {
+		t.Errorf("document names snapshot %q and bundle %q; want %s and %s", doc.SnapshotID, doc.BundleID, headSnapshotID, headBundleID)
+	}
+	if n := dials.Load(); n != 0 {
+		t.Errorf("the workflow service was dialled %d times", n)
+	}
+	validateM10Document(t, doc)
+}
+
 // FR-010: an Infrahub that cannot be reached fails the create at read at once, exit 2,
 // naming the branch; no workflow service is dialled and nothing is filed. The worker's
 // retries no longer stand between a create and its read.

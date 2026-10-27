@@ -1165,8 +1165,13 @@ fylgja twin rehearse --branch <b> …                                           
   A compile, or the bundle's filing, that refuses or fails once the snapshot is filed
   (by a create's take, or at `--snapshot`'s `resolve`) prints the snapshot's line alone on
   stdout, and the refusal on stderr; a refused read, or a snapshot refused at `resolve`,
-  prints neither line. The dry run's `follow:` line for `--snapshot` reads `would not
-  follow (--snapshot given: a twin built from a snapshot never follows)`.
+  prints neither line. A dry run whose host check cannot run (`operation.failed` at
+  `host_check`) has filed both, and prints both lines alone on stdout, in this order, with
+  the failure on stderr; its document names both ids, after the read's and the compile's
+  findings, as a create's run failing at the host check does (`twin provision --dry-run`,
+  which files no snapshot, prints and names its bundle alone). The dry run's `follow:` line
+  for `--snapshot` reads `would not follow (--snapshot given: a twin built from a snapshot
+  never follows)`.
 - `intent read`'s summary line ends with the snapshot: `wrote snap.json: 3 devices
   (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
   (branch fylgja-fixture, scope tag:fylgja, schema 7c413536…); snapshot 576933ec…, stored at

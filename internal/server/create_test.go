@@ -256,6 +256,110 @@ func TestARefusedCompileNamesTheSnapshotInText(t *testing.T) {
 	})
 }
 
+// A dry run whose host check cannot run has filed the snapshot and the bundle, so its answer
+// names both, as a create's run that fails at the host check names them (FR-014, FR-010): in
+// text, the snapshot's stored line, then the bundle's, alone on stdout, each naming the one
+// entry its store holds; in --json, operation.failed at host_check after the read's warning,
+// naming both ids. A host budget that is no number fails the host check before it looks at
+// the host. A dry run from a snapshot file does the same, and twin provision's, which files
+// no snapshot, prints and names its bundle alone.
+func TestADryRunWhoseHostCheckCannotRunNamesWhatItFiled(t *testing.T) {
+	warning := findings.Finding{Severity: findings.Warning, Rule: findings.RuleArtifactInterfaceUnrepresented,
+		Object: "n1:ethernet-1/9", Message: "the artifact names ethernet-1/9, which the mapping omitted"}
+	for _, c := range []struct {
+		name string
+		run  func(t *testing.T, opts *options) error
+		// warned is whether the read gave the warning, which then leads the findings.
+		warned bool
+	}{
+		{"--branch --dry-run", func(t *testing.T, opts *options) error {
+			reads := 0
+			fake := fakeRead(t, "three-node.json", nil, &reads)
+			read := func(ctx context.Context, branch, at, scope string, reg *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error) {
+				c, _, err := fake(ctx, branch, at, scope, reg, observedAt)
+				return c, findings.List{warning}, err
+			}
+			subject := &findings.Subject{Branch: "fylgja-fixture"}
+			return runCreateDryRun(context.Background(), opts, findings.OpTwinCreate, subject, read, subject.Branch, "",
+				"tag:fylgja", shippedPackages(t), findings.DryRunFollow{Reason: findings.FollowReasonNoFollow})
+		}, true},
+		{"--snapshot <file> --dry-run", func(t *testing.T, opts *options) error {
+			return runCreate(context.Background(), opts, &createFlags{snapshot: "snap.json", snapshotGiven: true, dryRun: true},
+				fixtureFile(t, nil))
+		}, false},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			paths := useStateRoot(t)
+			useService(t, nil)
+			dryRunEnv(t)
+			t.Setenv(lab.EnvHostMemoryMB, "lots")
+
+			var err error
+			out := captureStdout(t, func() { err = c.run(t, testOptions(t, false)) })
+			if code, doc := exitOf(t, err); code != findings.ExitError {
+				t.Fatalf("exit %d, findings %+v; want 2", code, doc.Findings)
+			}
+			snapshotID := strings.TrimSuffix(onlyEntry(t, paths.Snapshots), ".json")
+			bundleID := onlyEntry(t, paths.Bundles)
+			want := snapshotStoredLine(snapshotID, filepath.Join(paths.Snapshots, snapshotID+".json")) + "\n" +
+				bundleStoredLine(bundleID, filepath.Join(paths.Bundles, bundleID)) + "\n"
+			if out != want {
+				t.Errorf("stdout:\n%s\nwant both stored lines alone:\n%s", out, want)
+			}
+
+			code, doc := exitOf(t, c.run(t, testOptions(t, true)))
+			last := doc.Findings[len(doc.Findings)-1]
+			if code != findings.ExitError || last.Rule != findings.RuleOperationFailed || last.Step != findings.StepHostCheck {
+				t.Fatalf("exit %d, findings %+v; want 2, ending operation.failed at host_check", code, doc.Findings)
+			}
+			if doc.SnapshotID != snapshotID || doc.BundleID != bundleID {
+				t.Errorf("document names snapshot %q and bundle %q; want %s and %s", doc.SnapshotID, doc.BundleID, snapshotID, bundleID)
+			}
+			if c.warned {
+				if first := doc.Findings[0]; first.Rule != warning.Rule || first.Step != findings.StepRead || len(doc.Findings) != 2 {
+					t.Errorf("findings %+v; want the read's warning at read, then the failure", doc.Findings)
+				}
+			} else if len(doc.Findings) != 1 {
+				t.Errorf("findings %+v; want the failure alone", doc.Findings)
+			}
+			validateWithShow(t, currentContract, "018", doc)
+		})
+	}
+
+	t.Run("twin provision --dry-run", func(t *testing.T) {
+		paths := useStateRoot(t)
+		useService(t, nil)
+		dryRunEnv(t)
+		t.Setenv(lab.EnvHostMemoryMB, "lots")
+		dir := copyGoldenBundle(t, fixtureBundleID)
+		report := func(opts *options) error {
+			return dryRunReport(context.Background(), opts, findings.OpTwinProvision, &findings.Subject{Bundle: "bundle"},
+				shippedPackages(t), paths, nil, dir, fixtureBundleID, nil, nil, findings.DryRunFollow{Reason: findings.FollowReasonBundle})
+		}
+
+		var err error
+		out := captureStdout(t, func() { err = report(testOptions(t, false)) })
+		if code, _ := exitOf(t, err); code != findings.ExitError || out != bundleStoredLine(fixtureBundleID, dir)+"\n" {
+			t.Errorf("exit %d, stdout:\n%s\nwant 2 and the bundle's stored line alone", code, out)
+		}
+		code, doc := exitOf(t, report(testOptions(t, true)))
+		if code != findings.ExitError || doc.BundleID != fixtureBundleID || doc.SnapshotID != "" || len(doc.Findings) != 1 {
+			t.Errorf("exit %d, document %+v; want 2 naming bundle %s, no snapshot, and the failure alone", code, doc, fixtureBundleID)
+		}
+		validateWithShow(t, currentContract, "018", doc)
+	})
+}
+
+// onlyEntry is the name of the one entry dir holds.
+func onlyEntry(t *testing.T, dir string) string {
+	t.Helper()
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 1 {
+		t.Fatalf("%s holds %v (%v); want one entry", dir, entries, err)
+	}
+	return entries[0].Name()
+}
+
 // hasRule is whether list holds a finding under rule.
 func hasRule(list findings.List, rule string) bool {
 	return slices.ContainsFunc(list, func(f findings.Finding) bool { return f.Rule == rule })

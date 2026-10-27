@@ -395,7 +395,7 @@ type Frame struct {
 	Run *RunRef `json:"run,omitempty"`
 	// Event is one step boundary of a run, or one notice about a run.
 	Event *Event `json:"event,omitempty"`
-	// Files are the CTM (intent.read's ctm.json) or every file of a compiled bundle.
+	// Files are the snapshot (intent.read's snapshot.json, 018) or every file of a compiled bundle.
 	Files []File `json:"files,omitempty"`
 	// Document is the findings document, always the last frame; Text, beside it under
 	// RenderText and RenderMarkdown, is its findings as text.

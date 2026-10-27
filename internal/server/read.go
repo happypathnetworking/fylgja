@@ -11,6 +11,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/psp"
+	"github.com/happypathnetworking/fylgja/internal/snapshot"
 	"github.com/happypathnetworking/fylgja/internal/stage"
 	"github.com/happypathnetworking/fylgja/internal/stages"
 )
@@ -108,39 +109,66 @@ func runRead(ctx context.Context, opts *options, f *readFlags) error {
 	if resolved != nil {
 		block = &resolved.block
 	}
-	return withStage(read(ctx, opts, subject, branch, at, scope, f.out, reg, observedAt, block), resolved)
+	return withStage(read(ctx, opts, subject, stage.Read, branch, at, scope, f.out, reg, observedAt, block), resolved)
 }
 
-// read is intent read's read and write of one reference, pinned or not, under scope.
-func read(ctx context.Context, opts *options, subject *findings.Subject, branch, at, scope, out string, reg *psp.Registry,
-	observedAt string, resolved *findings.StageBlock) error {
-	// Conformance, fetch and validation, reported together in one pass: the
-	// same pipeline a create runs inside its run (internal/stage).
-	snapshot, list, err := stage.Read(ctx, branch, at, scope, reg, observedAt)
+// read is intent read's read, take and write of one reference, pinned or not, under scope,
+// read through readFn: stage.Read, or a tier-1 test's own.
+func read(ctx context.Context, opts *options, subject *findings.Subject, readFn readFunc, branch, at, scope, out string,
+	reg *psp.Registry, observedAt string, resolved *findings.StageBlock) error {
+	// The state root first, as the create's: the snapshot a clean read takes is filed there,
+	// so a read that could not be filed is never made.
+	paths, err := opts.paths()
 	if err != nil {
 		return fail(findings.OpIntentRead, subject, "%v", err)
 	}
-	if snapshot == nil {
+
+	// Conformance, fetch and validation, reported together in one pass: the
+	// same pipeline a create runs before its run (internal/stage).
+	c, list, err := readFn(ctx, branch, at, scope, reg, observedAt)
+	if err != nil {
+		return fail(findings.OpIntentRead, subject, "%v", err)
+	}
+	if c == nil {
 		return finish(findings.OpIntentRead, subject, list)
 	}
 
-	// The CTM goes to the client whole, before the summary line, and the client writes it
-	// to --out atomically, as writeCTM did here: what the server holds of
-	// the operator's machine is the path, for wording alone.
-	b, err := ctm.Marshal(snapshot)
+	// A clean read is taken and filed where a create's is, so a hand read and a create of
+	// the same intent share one stored document (FR-020; R-09). With no step, as M1's
+	// operations carry none. The store keeps a first take's entry; the file is this take.
+	s, stored, taken, err := takeSnapshot(ctx, paths, "", c)
 	if err != nil {
 		return fail(findings.OpIntentRead, subject, "%v", err)
 	}
-	if err := opts.c.files([]api.File{{Path: ctmFile, Data: b}}); err != nil {
+	if taken.Rejected() {
+		return finish(findings.OpIntentRead, subject, append(list, taken...))
+	}
+
+	// The snapshot goes to the client whole, before the summary line, and the client writes
+	// it to --out atomically: what the server holds of the operator's machine is the path, for
+	// wording alone.
+	b, err := snapshot.Marshal(s)
+	if err != nil {
+		return fail(findings.OpIntentRead, subject, "%v", err)
+	}
+	if err := opts.c.files([]api.File{{Path: snapshotFile, Data: b}}); err != nil {
 		return err
 	}
 
-	named := scopedSubject(snapshot.Envelope)
+	named := scopedSubject(c.Envelope)
 	if resolved != nil {
 		named = fmt.Sprintf("stage %s: %s", resolved.Ref, named)
 	}
-	opts.note("%s", summaryLine(out, snapshot, reg, named))
-	return finish(findings.OpIntentRead, subject, list)
+	opts.note("%s%s", summaryLine(out, c, reg, named), snapshotSummary(s.ID, stored))
+	doc := findings.NewDocument(findings.OpIntentRead, subject, list)
+	doc.SnapshotID = s.ID
+	return &result{doc: doc}
+}
+
+// snapshotSummary ends intent read's success line, after its parenthesis: the snapshot the
+// read wrote and the store path it is filed at (018).
+func snapshotSummary(id, path string) string {
+	return fmt.Sprintf("; snapshot %s, stored at %s", id, path)
 }
 
 // readSummaryLine is intent read's success line: what the CTM holds, and what the
@@ -198,5 +226,5 @@ func reference(e ctm.Envelope) string {
 	return s
 }
 
-// ctmFile is the name intent read's CTM crosses under.
-const ctmFile = "ctm.json"
+// snapshotFile is the name intent read's snapshot crosses under (018: ctm.json before it).
+const snapshotFile = "snapshot.json"

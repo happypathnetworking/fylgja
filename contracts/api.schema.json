@@ -19,7 +19,7 @@
         "files": {
           "type": "array",
           "items": { "$ref": "#/$defs/file" },
-          "description": "twin.create: the snapshot, under the path snapshot gives, when snapshot is a path (018). twin.compile: the CTM, under the path given. twin.provision: every regular file of the bundle directory, each under its slash-separated path inside it. psp.validate: each package, under the path given, in order."
+          "description": "twin.create: the snapshot, under the path snapshot gives, when snapshot is a path (018). twin.compile: the snapshot, under the path given (018; the CTM before it). twin.provision: every regular file of the bundle directory, each under its slash-separated path inside it. psp.validate: each package, under the path given, in order."
         }
       }
     },
@@ -83,7 +83,7 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "ctm": { "type": "string" },
+            "snapshot": { "type": "string", "description": "--snapshot as given: the path of the snapshot file the request carries, under that path (018; ctm before it, which is no argument of this operation)" },
             "out": { "type": "string" }
           }
         },

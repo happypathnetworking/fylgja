@@ -20,7 +20,9 @@ const (
 
 // operationArgs are the arguments each operation takes, by the name the request gives each,
 // and the kind of its value. An argument that is absent is a flag that was
-// not given; one that is present was given, whatever its value.
+// not given; one that is present was given, whatever its value. From 018 twin.compile takes
+// snapshot in place of ctm, and a request carrying ctm is refused as any argument not taken,
+// pre-1.0, as 014 renamed series to stage.
 var operationArgs = map[string]map[string]string{
 	findings.OpTwinCreate: {"branch": argString, "at": argString, "stage": argString, "interval": argString,
 		"no_follow": argBool, "dry_run": argBool, "scope": argString, "snapshot": argString},
@@ -29,7 +31,7 @@ var operationArgs = map[string]map[string]string{
 	findings.OpTwinDestroy:   {},
 	findings.OpTwinShow:      {},
 	findings.OpTwinVerify:    {"wait": argString, "args": argStrings},
-	findings.OpCompile:       {"ctm": argString, "out": argString},
+	findings.OpCompile:       {"snapshot": argString, "out": argString},
 	findings.OpStageList:     {"branch": argString, "scope": argString},
 	findings.OpStagePlan:     {"branch": argString, "scope": argString},
 	findings.OpIntentRead:    {"branch": argString, "at": argString, "stage": argString, "out": argString, "scope": argString},
@@ -154,7 +156,7 @@ var handlers = map[string]func(*call) error{
 	},
 	findings.OpCompile: func(c *call) error {
 		a := args(c.req.Args)
-		return runCompile(c.options(), &compileFlags{ctmPath: a.string("ctm"), out: a.string("out")}, c.req.Files)
+		return runCompile(c.options(), &compileFlags{snapshotPath: a.string("snapshot"), out: a.string("out")}, c.req.Files)
 	},
 	findings.OpStageList: func(c *call) error {
 		a := args(c.req.Args)
@@ -220,8 +222,8 @@ func checkRequired(op string, given map[string]json.RawMessage) error {
 
 // takesFiles are the operations a request's files belong to. twin.create takes one, a
 // snapshot file beside --snapshot alone (018), which the create holds to that shape itself,
-// as twin compile holds its CTM, so a request carrying another is its operation.failed and
-// not the transport's.
+// as twin compile holds its snapshot, so a request carrying another is its operation.failed
+// and not the transport's.
 var takesFiles = []string{findings.OpCompile, findings.OpTwinProvision, findings.OpPSPValidate, findings.OpTwinCreate}
 
 // checkFiles refuses files on an operation that takes none.

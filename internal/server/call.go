@@ -118,7 +118,7 @@ func (c *call) eventFrame(e provision.Event) {
 		Message: e.Message, Notice: e.Notice}})
 }
 
-// files sends the operator's files an answer carries, the CTM or the bundle, in one
+// files sends the operator's files an answer carries, the snapshot or the bundle, in one
 // frame.
 // An answer whose client has gone is not written to.
 func (c *call) files(files []api.File) error {

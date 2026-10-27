@@ -741,7 +741,7 @@ whole and narrowed (SC-001–SC-006).
 **Independent Test**: quickstart §2–§8's expected outcomes, each recorded in its task's
 note.
 
-- [ ] T050 [live] Restart the worker and the server from this tree's `bin/fylgja` (`make build` first), as `CLAUDE.md` prescribes, and verify both:
+- [X] T050 [live] Restart the worker and the server from this tree's `bin/fylgja` (`make build` first), as `CLAUDE.md` prescribes, and verify both:
   - `/proc/<pid>/exe` is not `(deleted)`;
   - the environments carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`;
   - the server's report names `snapshots:` in its state root line (T008), both listeners, the plaintext warning, the default scope and both packages;
@@ -750,7 +750,20 @@ note.
 
   Restart the dev server if it is down. Record the pids and lines, never a token.
 
-- [ ] T051 [live] [US1] [US3] [US4] The hand checks of quickstart §2 to §5, on a host with no twin (`twin show` → `none`), recording each outcome in this task's note:
+  - *2026-10-27, Run 14, the converge loop's session, at `d71a7c4`:* **done.**
+    - **The restart:** `make build` exit 0, `statically linked`. The worker (`3867740`) and the server (`3867762`), both `(deleted)` since Run 3, were stopped. Both were started again at 18:54:19Z by `CLAUDE.md`'s two lines: the worker is `342010` and the server `342070`. Each `exe` is `bin/fylgja`, not deleted. The dev server was up (`SERVING`), so it was not restarted.
+    - **The environments:** both carry `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`. Only the names were read.
+    - **The server's report**, in order:
+      - `listening on 127.0.0.1:7650 (API version 1, build 0.1.0-dev)`;
+      - `listening on 172.17.0.1:7650 (…)`, then straight away `172.17.0.1:7650 is not a loopback address: the API's token is sent unencrypted on it`;
+      - `state root …/local (bundles: …/local/bundles, snapshots: …/local/snapshots, twin: …/local/twin)`;
+      - `default scope: tag:fylgja`;
+      - both packages, each with `…_USERNAME set, …_PASSWORD set`.
+    - **The worker's report:** the same state root line with `snapshots: …/local/snapshots`, both packages with their logins set, and `host: lab fylgja absent; twin directory absent`.
+    - **The bridge:** from inside each of `fylgja-infrahub-task-worker-1` and `-2`, `POST /v1/twin/show` with the container's token answered `200 1 0.1.0-dev` (240 bytes read whole). Without the token it answered `401`, and so did the host without it.
+    - **At the run's end:** the closing `make build` did not replace `bin/fylgja`, so both processes still read not deleted, and neither was restarted again.
+
+- [X] T051 [live] [US1] [US3] [US4] The hand checks of quickstart §2 to §5, on a host with no twin (`twin show` → `none`), recording each outcome in this task's note:
   - **§2**: the wrapped fixtures compile to the goldens; `--ctm` is unknown, and the server's log shows no request; a hand-wrapped CTM compiles; `local/snapshots` count unchanged.
   - **§3**: two `intent read --out` of `fylgja-fixture` give one id, **the fixture's snapshot id for T062** (`576933ec…` is the candidate). Their diff is the two `observed_at` lines. The store holds the first take byte for byte. The `jq` recipe reproduces the id.
   - **§4**: the dry run's two `stored:` lines; the create `ok` with `f764e1fa…`. The run's activities read from `temporal workflow show` are `CheckHost, StageBundle, DeployLab, AwaitReadiness, PushConfig, RecordTwin, StopFollowing`, with no `ReadIntent` or `Compile` (SC-001). `twin show`'s record line; `twin.json` `9`; no sidecar newer than the create; a refused read (`--scope tag:nothing`) starting no run and filing nothing.
@@ -758,7 +771,49 @@ note.
 
   Destroy every twin at the end. Defects found get a tier-1 test pinning them, fixed in the package that holds the behaviour.
 
-- [ ] T052 [live] [US5] The hand checks of quickstart §6 on `B=fylgja-test-018`, recording each outcome in this task's note:
+  - *2026-10-27, Run 14, the converge loop's session, at `d71a7c4`:* **done; no defect found, so no tier-1 test was added.** Six twins were created and each destroyed, and the host ends with no twin.
+    - **§2, the hand tools:**
+      - `twin compile --snapshot testdata/snapshot/three-node.json` gives `ok`, snapshot `6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6` and bundle `43d91715…`.
+      - `mixed.json` gives snapshot `37d7378a…` and bundle `ecb665f5…`.
+      - Each bundle written is `diff -r`-equal to its golden.
+      - `--ctm` is `rejection operation.failed twin.compile: unknown flag: --ctm`, exit 2, and the server's log gains no line.
+      - The hand-wrapped lossy CTM, and `testdata/snapshot/lossy.json`, are refused `platform.unsupported` for `c1` and `c2` (`no support package "chassisos"`), exit 1, because the server holds the shipped packages alone. This is Run 5's departure, now on the host. A second server from the same binary, on `127.0.0.1:7651` with `--psp-dir testdata/psp/lossy` and stopped afterwards, compiles both `ok` to `4213b3cf…` with the computed id `91f06cd67de31f6c986bc47019e79870b02403a2970d50b6b4497df64c17f10c`. That bundle equals the lossy golden.
+      - `local/snapshots` was absent before and after: `twin compile` filed nothing.
+    - **§3, the same intent read twice:**
+      - Two `intent read --branch fylgja-fixture --out`, 6 s apart, give one id, `576933ec51da1866cdb7344a1f60ec2468c7d04aafbee42eacd171e352bd7482`, the candidate. This is **the fixture's snapshot id for T062**.
+      - Their `diff` is lines 4 and 9, the outer and inner `observed_at` (`18:55:42.651748Z` against `18:55:48.949360Z`), and nothing else.
+      - `local/snapshots/576933ec….json` (6,769 bytes) is `cmp`-equal to the first take.
+      - The summary line ends `; snapshot 576933ec…, stored at …/local/snapshots/576933ec….json`.
+      - The `jq` recipe gives `576933ec…`. Each read took 1.2–1.3 s.
+    - **§4, a create the server takes a snapshot for:**
+      - Before it, `twin show` read `twin: none`.
+      - The dry run prints `snapshot_id 576933ec…  stored: …/local/snapshots/576933ec….json`, then `bundle_id f764e1fa…  stored: …/local/bundles/f764e1fa…`, then `follow: would follow branch fylgja-fixture, checked every 5m0s` and `verdict: clear`.
+      - `twin create --branch fylgja-fixture --no-follow --json` ended `ok` with `576933ec…` and `f764e1fa…` in 55.5 s.
+      - Its run, `fylgja-provision 01a17eb8-5a0a-752d-9af7-121d6ab9d52b`, scheduled `CheckHost, StopFollowing, StageBundle, DeployLab, AwaitReadiness ×3, PushConfig ×3, RecordTwin`, and no `ReadIntent` or `Compile`. This is SC-001 on a real history.
+      - `twin show`'s record line reads `record: branch fylgja-fixture, snapshot 576933ec…, bundle_id f764e1fa…, schema 7c413536d67ef86321c629c076a0d3a4, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9`, and the kind `frozen; not following`.
+      - `twin.json` gives `"9"`, `576933ec…`, `intent` and a null `step`. Its `observed_at` is this create's own read (`18:56:11.804202Z`), not the stored take's, as R-11 has it.
+      - No `*.ctm.json` in `local/bundles` is newer than the create; 481 older ones remain.
+      - With the twin up, `twin create --branch fylgja-fixture --no-follow --scope tag:nothing` is `rejection scope.empty [step read]`, exit 1. No run started (the workflow count is unchanged), and `local/snapshots` stayed at 1.
+    - **§5, a twin from a snapshot, frozen**, after `twin destroy`:
+      - `--snapshot <id> --interval 1m` is `follow.flags.conflict [step start] --interval: --interval is meaningless with --snapshot: a twin built from a snapshot never follows`, exit 2.
+      - `--branch` beside it is `snapshot.flags.conflict [step start] --branch: --branch is meaningless with --snapshot: a snapshot carries its own branch, at and scope`, exit 2. `--stage`, `--at` and `--scope` are refused the same way, each exit 2.
+      - Each of those refusals is the server's guard: one `outcome=error` request line of 0–1 ms, before it dials Infrahub or the workflow service, as R-12 and the contract say.
+      - The zero id is `snapshot.unknown [step resolve]`, exit 1, naming the id and the store `…/local/snapshots`.
+      - **The create from `576933ec…` needs no Infrahub.** The server logs none of its requests to Infrahub, so its log cannot show this. Instead the create ran on a second server on `127.0.0.1:7651` whose `INFRAHUB_ADDRESS` was a closed port. There, a branch's dry run was refused `operation.failed` at `read` (`connection refused`), and the create from the id ended `ok` with `f764e1fa…` in 60.6 s.
+      - On the operator's server, `twin show` gives the record line as in §4, `intent read at 2026-10-27T18:55:42.651748Z`, `(source snapshot)`, and `kind: frozen; not following; built from snapshot 576933ec…`.
+      - `twin.json`: `source` `snapshot`, the id, `observed_at` the first take's, and a null `stage`.
+      - `temporal schedule describe -s fylgja-follow` finds none.
+      - `twin step --stage fylgja-fixture/head` is `step.twin.unsteppable [step resolve]`, "the twin was created from branch fylgja-fixture, not from a stage, …", exit 1.
+      - The file with no id built a twin, `ok`, under `576933ec…`.
+      - The file declaring `1111…` is `snapshot.id.mismatch [step resolve]`, "… declares snapshot_id 1111…, but its body hashes to 576933ec…; leave snapshot_id out to have it computed", exit 1, and no twin.
+      - A read pinned at the first take's instant (`--at 2026-10-27T18:55:42.651748Z`) gives snapshot `01e9b883fadb2dacafe67e1676f19a9c789fe532543d0103363a49acc42343a5`, with the `at` in its envelope. The create from its id ended `ok` with bundle `d6479065…`. Its record reads `branch fylgja-fixture at 2026-10-27T18:55:42.651748Z, snapshot 01e9b883…`, its kind `pinned at 2026-10-27T18:55:42.651748Z; not following; built from snapshot 01e9b883…`, and no Schedule was made.
+    - **Beyond the task's text:** a create from the second take's file (`observed_at` `18:55:48.949360Z`, its id declared) ended `ok`. Its `twin.json` records the stored first take's `observed_at`, `18:55:42.651748Z`, and the store's entry is `cmp`-unchanged. This is US3's scenario 8 and R-12, on the host.
+    - **quickstart.md corrected** to what the host showed, as 017's Run 9 corrected its own:
+      - §2: the lossy CTM needs a second server with its design-case package.
+      - §3: the candidate markers are dropped for the values read.
+      - §5: the no-request proof, since the server's log names no Infrahub request.
+
+- [X] T052 [live] [US5] The hand checks of quickstart §6 on `B=fylgja-test-018`, recording each outcome in this task's note:
   - the throwaway branch, its proposed change and two stages, by the fixture tool;
   - `stage plan` twice, giving equal snapshot ids and the branch point `null`;
   - `twin create --stage $B/seeded`, then `twin step --stage $B/third-link --allow-restart`, whose document and `twin.json` name both sides' snapshots;
@@ -767,6 +822,40 @@ note.
   - `-delete`.
 
   Afterwards `Branch` lists `main` and `fylgja-fixture` alone, and `CoreProposedChange` and `FylgjaStage` count 0.
+
+  - *2026-10-27, Run 14, the converge loop's session, at `d71a7c4`:* **done; one stage marked again, the quickstart's sequence corrected.** The fixture tool was built once with `-tags fixture` into the session's scratch directory and run from there.
+    - **The branch:**
+      - `-branch fylgja-test-018` seeded the three-node fixture with every artifact Ready.
+      - `-propose` opened draft `18e2784e-7ca8-0e0e-33b7-c515e27088d4`; its 3 validators concluded in 47 s.
+      - `-stage seeded` was marked at `19:05:34.211812`.
+      - `-add-link` added `n1:ethernet-1/3 <-> n3:ethernet-1/3`, and `-stage third-link` was marked 2 s later.
+    - **The first plan refused `third-link` `stage.artifact.stale`** for n1 and n3. Their intent was written at `19:05:34.878`, after their checksums' `19:04:25`. It refused the head the same way.
+      - A plan 13 s later compiled the head, so the regeneration had landed in between.
+      - The quickstart's sequence lacks the wait that `scripts/e2e.sh`'s case 7 makes (`await_checksums_moved n1 n3`): `-add-link`'s generate returns before the two are rewritten. The refusal is the guard working, not a defect.
+      - n1's and n3's checksums had moved (`e6ef2e06…`, `e4ea36c0…`, all three Ready). So the stale stage was deleted on `main` (`FylgjaStageDelete`, stages being branch-agnostic) and marked again, at `19:06:58.756016`.
+      - quickstart §6 now names the wait and the refusal without it.
+    - **`stage plan --branch fylgja-test-018 --json`**, exit 1:
+      - the branch point refused `scope.empty`, with `null` ids;
+      - seeded: snapshot `f509731c38561f4bd44c88d21f2d6446f4b62cf47b4fedcce3771b29700a1fb0`, bundle `30d774a9…`;
+      - third-link: snapshot `73acb037ee03bd14b1bc3a2514c98f6700822a3d673d478ec711257902613165`, bundle `ae199106…`;
+      - head: snapshot `dd7be4364ee27b431a3b9161c989c8ff630b70cc9c32320441aec7b1cff238f5`, bundle `00fb18cb…`.
+      - The text prints `  snapshot_id …` over `  bundle_id …` for each of the three.
+      - The second plan's ids equal the first's (`same-ids-twice`). The store gained third-link's entry alone (4 → 5); the earlier plans had filed seeded's and the head's.
+    - **The create and the step:**
+      - `twin create --stage fylgja-test-018/seeded` ended `ok`, its record naming `f509731c…`.
+      - `twin step --stage fylgja-test-018/third-link --allow-restart --json` ended `ok`, with `.snapshot_id` `73acb037…`, `.step.from.snapshot_id` `f509731c…` and `.step.to.snapshot_id` `73acb037…`.
+      - `twin.json` (`"9"`) names the same three. `twin show`'s record line reads `…, snapshot 73acb037…, bundle_id ae199106…`.
+      - Push n1 2.5 s, n3 2.9 s; settled after 5.0 s. Then `twin destroy`.
+    - **`twin rehearse --branch fylgja-test-018 --markdown`**, exit 0, run `fylgja-rehearse 01a17ec4-e89f-79cb-b732-20a77233bbc5`:
+      - It ended `rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 70.1s of the 1980s deadline`.
+      - The report's header reads `| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |`. Each compiled stage's row names its snapshot (`f509731c…`, `73acb037…`, `dd7be436…`), and the branch point's reads `—`.
+      - The report is 1,987 bytes, within 4,092.
+    - **`-delete`:** `deleted 2 stages, 1 proposed change, branch fylgja-test-018`. Afterwards `Branch` lists `main` and `fylgja-fixture` alone. On `main`, `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread`, `CoreUserValidator` and `DcimPhysicalDevice` count 0.
+    - **The run's checkpoint:**
+      - `make build` exit 0, `statically linked`.
+      - `GOFLAGS=-count=1 make test` exit 0 in 43.5 s wall at load 2.99 → 3.44, with `internal/cli` 36.0 s, `internal/lab` 11.6 s and `internal/provision` 9.3 s.
+      - `make lint` `0 issues`; `go vet -tags contract,fixture,e2e ./...` clean; `git diff --stat main -- testdata/golden` empty.
+    - **The host left clean:** `clab inspect --all` is `{}`, there is no `local/twin`, the Schedule list is empty, no workflow runs, and no `fylgja-test-*` branch remains. The worker and the server run from this tree. Tiers 2 and 3 are T053's and T054's, and neither ran.
 
 - [ ] T053 [live] The whole contract tier (quickstart §7). Preconditions: no twin on the host, and the worker and the server from this tree beside the bridge (T050). Run `set -a; . local/.env; set +a; make test-contract 2>&1 | tee local/018-contract.out`, started detached with its exit status in a file and waited on in foreground calls of under ten minutes. Expected green, about a minute over 017's 1,714.7 s. In the output: `TestPinnedReadReproducesItsBundle` and `TestStageTakenTwiceHasOneSnapshot` log their ids; `internal/stages` and `internal/checks` are green, `TestChecksInsideInfrahub` included, with the id in their rows (SC-006). Afterwards, Infrahub as the contract tier leaves it (`CLAUDE.md`, "Stages"). Record the total time, `internal/stages`' and `internal/checks`' times, and the ids. Never boot a twin while it runs.
 

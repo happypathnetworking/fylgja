@@ -65,13 +65,17 @@ bin/fylgja twin compile --snapshot testdata/snapshot/three-node.json --out /tmp/
 bin/fylgja twin compile --snapshot testdata/snapshot/mixed.json --out /tmp/s-mixed --json | jq -r .bundle_id
 bin/fylgja twin compile --ctm testdata/ctm/three-node.json --out /tmp/x; echo "exit $?"
 jq '{snapshot_version: "1", ctm: ., probes: []}' testdata/ctm/lossy.json > /tmp/hand.json && bin/fylgja twin compile --snapshot /tmp/hand.json --out /tmp/s-hand --json | jq -r '.snapshot_id, .bundle_id'
+FYLGJA_STATE_ROOT="$PWD/local" bin/fylgja serve --listen 127.0.0.1:7651 --psp-dir testdata/psp/lossy &   # stopped after the next line
+FYLGJA_API_ADDRESS=127.0.0.1:7651 bin/fylgja twin compile --snapshot /tmp/hand.json --out /tmp/s-hand --json | jq -r '.snapshot_id, .bundle_id'
 ls local/snapshots 2>/dev/null | wc -l   # before and after: twin compile files nothing
 ```
 
-Expected: `6a8a77fc…` (*candidate*) and `43d91715…`; `ecb665f5…`; `unknown flag: --ctm`,
-exit 2, no request (the server's log shows none); the hand-wrapped lossy CTM compiles to
-`4213b3cf…` with its id computed (`91f06cd6…`, *candidate*); the store's count is
-unchanged.
+Expected: `6a8a77fc…` and `43d91715…`; `ecb665f5…`; `unknown flag: --ctm`, exit 2, no
+request (the server's log shows none); the hand-wrapped lossy CTM refused
+`platform.unsupported` (`chassisos`) by the server, whose packages are the shipped ones,
+and compiled to `4213b3cf…` with its id computed (`91f06cd6…`) by a second server given
+the design-case package its golden was compiled with; the store's count is unchanged.
+Each id as T051 read it.
 
 ## 3. By hand: `intent read --out` and the same intent twice
 
@@ -84,8 +88,8 @@ ls -la local/snapshots/$(jq -r .snapshot_id /tmp/snap-1.json).json && cmp /tmp/s
 jq --indent 2 'del(.snapshot_version, .snapshot_id, .observed_at, .ctm.envelope.observed_at)' /tmp/snap-1.json | sha256sum
 ```
 
-Expected: one id twice (`576933ec…`, *candidate*: the shipped code's value is **the
-fixture's snapshot id for `CLAUDE.md`**); the diff is the two `observed_at` lines (outer
+Expected: one id twice (`576933ec…`, as T051 read it: **the fixture's snapshot id for
+`CLAUDE.md`**); the diff is the two `observed_at` lines (outer
 and inner) and nothing else; the store holds the first take byte for byte; the summary
 line ends `; snapshot <id>, stored at <path>`; the `jq` recipe gives the id.
 
@@ -133,8 +137,10 @@ bin/fylgja twin destroy
 Expected, in order: `follow.flags.conflict`, exit 2, `--interval is meaningless with
 --snapshot: a twin built from a snapshot never follows`; `snapshot.flags.conflict`, exit
 2, naming `--branch`; `snapshot.unknown` at `resolve`, exit 1, naming the id and the store;
-the create ends `ok` with `f764e1fa…`, the server's log showing no request to Infrahub
-(no `intent` read lines), `twin show` reading `kind: frozen; not following; built from
+the create ends `ok` with `f764e1fa…` with no request to Infrahub (the server logs none
+of its requests to Infrahub, so T051 showed it on a second server whose
+`INFRAHUB_ADDRESS` is a closed port: a branch's dry run there is `operation.failed` at
+`read`, and the create from the id ends `ok`), `twin show` reading `kind: frozen; not following; built from
 snapshot <id8>…` and the record line as in §4, `twin.json` with `source` `snapshot`, the
 stored take's `observed_at` (§3's first take) and `stage` null; the Schedule absent; the
 step refused `step.twin.unsteppable` ("created from branch fylgja-fixture, not from a
@@ -152,6 +158,8 @@ go run -tags fixture ./cmd/fylgja-fixture -branch $B
 go run -tags fixture ./cmd/fylgja-fixture -branch $B -propose
 go run -tags fixture ./cmd/fylgja-fixture -branch $B -stage seeded -description seeded
 go run -tags fixture ./cmd/fylgja-fixture -branch $B -add-link
+# wait for n1's and n3's device-config checksums to move, as scripts/e2e.sh's case 7 does
+# (await_checksums_moved): -add-link's generate returns before they are rewritten
 go run -tags fixture ./cmd/fylgja-fixture -branch $B -stage third-link -description "third link"
 bin/fylgja stage plan --branch $B --json > /tmp/plan.json; jq -r '.plan.stages[] | "\(.ref) \(.snapshot_id) \(.bundle_id)"' /tmp/plan.json
 bin/fylgja stage plan --branch $B --json | jq -r '.plan.stages[].snapshot_id' | diff - <(jq -r '.plan.stages[].snapshot_id' /tmp/plan.json) && echo same-ids-twice
@@ -162,7 +170,9 @@ bin/fylgja twin rehearse --branch $B --markdown > /tmp/rehearsal.md; grep -m1 '|
 go run -tags fixture ./cmd/fylgja-fixture -branch $B -delete
 ```
 
-Expected: the branch point refused `scope.empty` with `null` ids, three compiled stages
+Expected: `stage plan` exiting 1 for the branch point, refused `scope.empty` with `null`
+ids (a `third-link` marked before the checksums move is refused `stage.artifact.stale`,
+as is the head until they do); three compiled stages
 each with a snapshot id beside its bundle id, printed as `  snapshot_id …` over
 `  bundle_id …`; the second plan's ids equal the first's; the step's document and the
 record name the from side's snapshot (seeded's) and the to side's (third-link's), the top

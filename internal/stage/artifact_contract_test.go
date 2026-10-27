@@ -3,12 +3,14 @@
 package stage
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"encoding/json"
 	"maps"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -140,6 +142,50 @@ func compileClean(t *testing.T, branch string, reg *psp.Registry) (*ctm.CTM, str
 	return snapshot, id
 }
 
+// outsideArtifacts is a CTM's canonical encoding with each device's artifact content and
+// checksum and the envelope's observed_at blanked: everything a read carries but the
+// artifacts' bytes and the instant it was made. The CTM itself is left as it was.
+func outsideArtifacts(t *testing.T, c *ctm.CTM) []byte {
+	t.Helper()
+	raw, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cp ctm.CTM
+	if err := json.Unmarshal(raw, &cp); err != nil {
+		t.Fatal(err)
+	}
+	cp.Envelope.ObservedAt = ""
+	for i := range cp.Devices {
+		if a := cp.Devices[i].Artifact; a != nil {
+			a.Content, a.Checksum = "", ""
+		}
+	}
+	out, err := ctm.Marshal(&cp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
+// sameOutsideArtifacts fails the test, naming the first line that differs, when two reads
+// differ anywhere but in the artifacts' bytes and the instant each was made.
+func sameOutsideArtifacts(t *testing.T, what string, was, now *ctm.CTM) {
+	t.Helper()
+	a, b := outsideArtifacts(t, was), outsideArtifacts(t, now)
+	if bytes.Equal(a, b) {
+		return
+	}
+	al, bl := strings.Split(string(a), "\n"), strings.Split(string(b), "\n")
+	for i := range min(len(al), len(bl)) {
+		if al[i] != bl[i] {
+			t.Errorf("%s changed the CTM outside the artifacts, first at line %d:\n was %s\n now %s", what, i+1, al[i], bl[i])
+			return
+		}
+	}
+	t.Errorf("%s changed the CTM outside the artifacts: %d lines, then %d", what, len(al), len(bl))
+}
+
 // contentOf maps each device to its artifact's bytes.
 func contentOf(c *ctm.CTM) map[string]string {
 	out := map[string]string{}
@@ -219,7 +265,8 @@ func artifactReadAndBundle(t *testing.T, c *testsupport.Client, branch string, r
 // else is (D-026). Two reads of an unchanged branch compile to one
 // bundle_id. A description change, regenerated, moves it: the template prints the
 // description in the artifact's header and the compiler emits it nowhere, so only the
-// artifact moved it. A serial number change, regenerated, leaves it exactly where it was:
+// artifact moved it, and the two CTMs are equal outside the artifacts and the instant each
+// was read (US6/AC4, FR-038): no device or port field and no fidelity row carries it. A serial number change, regenerated, leaves it exactly where it was:
 // neither the template nor the read reads the serial number, and Infrahub writes nothing
 // for a regeneration whose output matches — not the checksum, and not the storage id
 // either (R-15).
@@ -258,6 +305,7 @@ func artifactDetection(t *testing.T, c *testsupport.Client, branch string, reg *
 			t.Errorf("%s's artifact bytes changed with n1's description", d)
 		}
 	}
+	sameOutsideArtifacts(t, "a description change, regenerated,", first, moved)
 	t.Logf("description change: bundle_id %s -> %s", id, movedID)
 
 	// The serial number change. A regeneration that writes nothing gives nothing to wait
@@ -282,6 +330,7 @@ func artifactDetection(t *testing.T, c *testsupport.Client, branch string, reg *
 	if !maps.Equal(contentOf(unmoved), now) {
 		t.Error("a serial number change, regenerated, changed an artifact's bytes")
 	}
+	sameOutsideArtifacts(t, "a serial number change, regenerated,", moved, unmoved)
 }
 
 // A device with no current artifact is refused by name, and the read writes no CTM (US2

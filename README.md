@@ -736,9 +736,11 @@ against a live twin.
 
 ## The stages on their own
 
-`twin create` runs every stage inside one durable run. Each one is also a command, so you
-can stop anywhere and look. Like every command, each is a request to a running `fylgja
-serve`, and is checked against the server's packages:
+`twin create` runs every stage for you: the API's server reads the branch, takes and files
+the snapshot, compiles it and files the bundle, then one durable run boots the twin from
+the host check on. Each stage is also a command, so you can stop anywhere and look. Like
+every command, each is a request to a running `fylgja serve`, and is checked against the
+server's packages:
 
 ```sh
 fylgja schema check  --branch B                           # is the branch's DCIM the one the reader reads? reads nothing else

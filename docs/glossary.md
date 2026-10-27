@@ -440,8 +440,8 @@ when a later create or provision replaces it. Contrast *pinned* and *frozen twin
 
 **Frame** — From M13: one line of an *API* answer, a JSON object whose one key names its
 kind: `out` and `err` (text for stdout and stderr), `start` (the server begins to start a
-run), `run` (the run's identity), `event` (one step boundary, or a notice), `files` (the
-CTM or a bundle, base64) and `document` (the findings document, with its text when a
+run), `run` (the run's identity), `event` (one step boundary, or a notice), `files` (a
+snapshot or a bundle, base64) and `document` (the findings document, with its text when a
 rendering was asked for, and a *rehearsal*'s markdown beside it when that was). The answer is `application/x-ndjson`, and its last frame is
 always `document`. One with no `document` frame did not finish. By default an answer is
 the `document` frame alone, after the `files` frame of `intent read` and `twin compile`,

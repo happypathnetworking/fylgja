@@ -161,7 +161,7 @@ never a client:
 
 | Variable | Default | Read by |
 |---|---|---|
-| `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` | none | the server, for every command that reads intent (`intent read`, `schema check`, `stage list` and `stage plan`, a create's resolution and dry run, `twin step`'s target); the worker (the read step runs there) |
+| `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` | none | the server, for every command that reads intent (`intent read`, `schema check`, `stage list` and `stage plan`, every `twin create` from a branch or a stage and its dry run, from the resolution to the read, `twin step`'s target, and `twin rehearse`'s plan and its stages read again once the run has closed); never `twin create --snapshot`, which reads none. The worker, for a following check's read alone, and for a provision recorded before 018, which it replays |
 | `FYLGJA_TEMPORAL_ADDRESS` | `localhost:7233` | the server, for every command that starts, follows, cancels or lists runs (`twin show` and `twin verify` best-effort); `worker run` |
 | `FYLGJA_TEMPORAL_NAMESPACE` | `default` | the same |
 | `FYLGJA_STATE_ROOT` | `local` under the working directory, made absolute at start | the server and the worker, each resolving it once at start: start both from the repository root, or set it (`make worker` and `make serve` set it absolute). The conformance suite's boot half reads the twin under it and refuses it unset or relative, since `go test` runs in the package's directory (`scripts/e2e.sh` exports it absolute) |
@@ -365,7 +365,7 @@ internal/lab/          host-bound activities: containerlab shell-out, host check
 internal/lab/wire/     types only: activity names and the payloads crossing the task queue; workflow files import it, never internal/lab
 internal/*/testdata/contracts/<feature>/
                        frozen copies of older formats' schemas, which additivity tests read; never edited
-contracts/             the current formats' contracts: the CLI and the API (cli.md, api.md) and every JSON schema (findings, show, twin, manifest, CTM, PSP, step, verify, stages, API frames); the tests read them here
+contracts/             the current formats' contracts: the CLI and the API (cli.md, api.md) and every JSON schema (findings, show, twin, manifest, CTM, snapshot, PSP, step, verify, stages, rehearsal, API frames); the tests read them here
 schema/                dcim/, the schema library's six DCIM files at opsmill/schema-library@26336e9, vendored byte for byte with its licence and a README of their SHA-256s, and fylgja-stage.yaml, the stage kind; infrahub.graphql, the default branch's SDL, committed, and genqlient's input (`make sdl`); README, with the guide to marking a stage
 psp/                   platform support packages (YAML) + JSON schema; README's Supported packages table
 .infrahub.yml          the artifacts template's manifest and the two checks' registration, which Infrahub reads at the repository root

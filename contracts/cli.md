@@ -1212,7 +1212,7 @@ Five added. No status, step or exit is new.
 
 | Rule | Severity, exit, step | Object | When |
 |---|---|---|---|
-| `snapshot.invalid` | rejection, 1, none (`twin compile`) or `resolve` (`twin create --snapshot <file>`) | the field, or the file | the outer shape is not version 1's: an unknown key, `ctm` absent or not an object, `probes` absent, null or not empty, `snapshot_id` not 64 lowercase hex characters, `observed_at` not of the CTM's form or not the inner CTM's |
+| `snapshot.invalid` | rejection, 1, none (`twin compile`) or `resolve` (`twin create --snapshot <file>`) | the field, or the file | the outer shape is not version 1's: an unknown key, `ctm` absent or not an object, `probes` absent, null or not empty, `snapshot_id` not 64 lowercase hex characters, `observed_at` not of the CTM's form or not the inner CTM's; or the inner CTM's `observed_at` not of that form, at `ctm.envelope.observed_at` |
 | `snapshot.version.unsupported` | rejection, 1, none or `resolve` | the file | `snapshot_version` is not `"1"`, or absent; names the version read, or that none was, and `"1"` |
 | `snapshot.id.mismatch` | rejection, 1, none or `resolve`; `compile` for the store | the file, or the store path | a declared `snapshot_id` is not what the body hashes to, naming both; or an entry under the id hashes to another, naming the path and both |
 | `snapshot.unknown` | rejection, 1, `resolve` | the id | `twin create --snapshot <id>` names an id the store does not hold; names the store's directory |
@@ -1220,7 +1220,11 @@ Five added. No status, step or exit is new.
 
 `follow.flags.conflict` gains the `--snapshot` sentence. The inner CTM's faults keep
 `ctm.version.unsupported` and `data.required.missing`, the object prefixed `ctm.`;
-validation's rules refuse at compile as they do a bare CTM. The client's own refusal of a
+validation's rules refuse at compile as they do a bare CTM. Its `observed_at` is held at the
+file, before anything is filed, since the id leaves it out and an entry filed without it
+could not be read back under the id every take of that intent hashes to: none recorded is
+`data.required.missing`, one not of the CTM's form `snapshot.invalid`, each at
+`ctm.envelope.observed_at`. The client's own refusal of a
 snapshot file it cannot read is `operation.failed`, exit 2, `reading snapshot: open
 <path>: …`, before any connection, as for a CTM at M13.
 

@@ -180,7 +180,8 @@ func IsID(s string) bool {
 // snapshot_id, observed_at), then ctm, then probes; struct field order, two-space indent,
 // LF, a trailing newline, the CTM normalised. It refuses a snapshot that breaks version
 // 1's invariants, so nothing writes a document Unmarshal would refuse: the version is
-// "1", the id is the body's hash, observed_at is the inner CTM's, and probes is empty.
+// "1", the id is the body's hash, observed_at is the inner CTM's and of its form, and
+// probes is empty.
 func Marshal(s *Snapshot) ([]byte, error) {
 	if err := check(s); err != nil {
 		return nil, err
@@ -207,6 +208,10 @@ func check(s *Snapshot) error {
 	}
 	if s.ObservedAt != s.CTM.Envelope.ObservedAt {
 		return fmt.Errorf("snapshot: observed_at %q is not the inner CTM's %q", s.ObservedAt, s.CTM.Envelope.ObservedAt)
+	}
+	if !isObservedAt(s.ObservedAt) {
+		return fmt.Errorf("snapshot: observed_at %q is not a UTC time with six fractional digits (%s)", s.ObservedAt,
+			ObservedAtLayout)
 	}
 	id, err := ID(s)
 	if err != nil {

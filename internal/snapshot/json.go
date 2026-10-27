@@ -31,7 +31,9 @@ var outerKeys = []string{"snapshot_version", "snapshot_id", "observed_at", "ctm"
 //     is an *InvalidError naming no field.
 //  3. the inner CTM under ctm.Unmarshal's own refusals: a *ctm.VersionError as it is, a
 //     *ctm.MissingError with its field and message prefixed "ctm.".
-//  4. observed_at filled from the inner CTM when absent.
+//  4. the inner CTM's observed_at: none recorded is a *ctm.MissingError, one not of the
+//     CTM's form an *InvalidError, each naming ctm.envelope.observed_at; then observed_at
+//     filled from it when absent.
 //  5. the id computed: an *IDMismatchError when declared and different; set when absent.
 //
 // JSON that does not parse is a decoding error, as a CTM's is: nothing was validated.
@@ -94,7 +96,14 @@ func Unmarshal(data []byte) (*Snapshot, error) {
 		return nil, fmt.Errorf("in the snapshot's ctm: %w", err)
 	}
 
-	// 4. observed_at, filled from the inner CTM when the document leaves it out.
+	// 4. The take's time, the inner CTM's, held to the CTM's rule before anything can file
+	// the document: the id leaves observed_at out, so a document refused here hashes to the
+	// id every valid take of its intent does, and filed it would be an entry the store
+	// cannot read back, under that id. Then observed_at, filled from it when the document
+	// leaves it out.
+	if err := innerObservedAt(c.Envelope.ObservedAt); err != nil {
+		return nil, err
+	}
 	if observedAt == "" {
 		observedAt = c.Envelope.ObservedAt
 	}
@@ -218,6 +227,23 @@ func readObservedAt(outer map[string]json.RawMessage, rawCTM json.RawMessage) (s
 	return at, nil
 }
 
+// innerObservedAt refuses the inner CTM's observed_at when it records none, under the CTM's
+// own rule for a required field, its field prefixed "ctm." as step 3's are, and when it is
+// not of the CTM's form, as the outer one is refused.
+func innerObservedAt(at string) error {
+	const field = "ctm.envelope.observed_at"
+	switch {
+	case at == "":
+		return &ctm.MissingError{Field: field, Message: field + ", the read's time, is not recorded: in snapshot " + Version +
+			" a take is one read, and its time is the read's, which nothing can fill"}
+	case !isObservedAt(at):
+		return &InvalidError{Field: field, Message: fmt.Sprintf(
+			"%s %q is not a UTC time with six fractional digits (%s), the form a read records its time in",
+			field, at, ObservedAtLayout)}
+	}
+	return nil
+}
+
 // isObservedAt reports whether s is a time in ObservedAtLayout, written as that layout
 // writes it.
 func isObservedAt(s string) bool {
@@ -253,9 +279,10 @@ func (e *VersionError) Error() string {
 	return fmt.Sprintf("the snapshot %s; this build reads %q, and nothing converts one", declares, Version)
 }
 
-// InvalidError is Unmarshal's refusal of a document whose outer shape is not version 1's:
-// Field is the outer key at fault (probes, snapshot_id, observed_at, ctm, or an unknown
-// key), empty when the document itself is at fault, and Message names it and says why.
+// InvalidError is Unmarshal's refusal of a document whose outer shape is not version 1's,
+// or whose inner CTM's observed_at is not of the CTM's form: Field is the key at fault
+// (probes, snapshot_id, observed_at, ctm, an unknown key, or ctm.envelope.observed_at),
+// empty when the document itself is at fault, and Message names it and says why.
 // The server files it as snapshot.invalid at the field, or at the file when Field is
 // empty.
 type InvalidError struct {

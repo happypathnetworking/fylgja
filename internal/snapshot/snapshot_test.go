@@ -178,6 +178,27 @@ func TestUnmarshalRefusals(t *testing.T) {
 			delete(innerCTM(m)["devices"].([]any)[1].(map[string]any), "interfaces")
 			return encode(t, m)
 		}, wantMissing("ctm.devices[1].interfaces")},
+		// No outer observed_at, so step 2 has none to hold to the inner CTM's: what
+		// refuses each is the inner CTM's own, after step 3.
+		{"a wrapped CTM recording no observed_at", func(t *testing.T) []byte {
+			m := document(t)
+			delete(m, "observed_at")
+			delete(innerCTM(m)["envelope"].(map[string]any), "observed_at")
+			return encode(t, m)
+		}, wantMissing("ctm.envelope.observed_at")},
+		{"a wrapped CTM recording an empty observed_at", func(t *testing.T) []byte {
+			m := document(t)
+			delete(m, "observed_at")
+			innerCTM(m)["envelope"].(map[string]any)["observed_at"] = ""
+			return encode(t, m)
+		}, wantMissing("ctm.envelope.observed_at")},
+		{"a wrapped CTM's observed_at not of its form", func(t *testing.T) []byte {
+			m := document(t)
+			delete(m, "observed_at")
+			innerCTM(m)["envelope"].(map[string]any)["observed_at"] = "2026-10-27T18:55:42Z"
+			return encode(t, m)
+		}, wantInvalid("ctm.envelope.observed_at",
+			`ctm.envelope.observed_at "2026-10-27T18:55:42Z" is not a UTC time with six fractional digits`, ObservedAtLayout)},
 		{"a document not an object", func(*testing.T) []byte { return []byte(`[]`) },
 			wantInvalid("", "not a JSON object")},
 		{"a document null", func(*testing.T) []byte { return []byte(`null`) },
@@ -274,6 +295,24 @@ func TestUnmarshalRefusesInOrder(t *testing.T) {
 	if _, err := Unmarshal(encode(t, m)); !errors.As(err, &ctmVersion) {
 		t.Errorf("a wrong id beside a CTM 1: %T %v, want the CTM's refusal", err, err)
 	}
+
+	// The inner CTM's own refusals before its observed_at; its observed_at before the id.
+	m = document(t)
+	delete(m, "observed_at")
+	delete(innerCTM(m)["envelope"].(map[string]any), "observed_at")
+	delete(innerCTM(m), "links")
+	var missing *ctm.MissingError
+	if _, err := Unmarshal(encode(t, m)); !errors.As(err, &missing) || missing.Field != "ctm.links" {
+		t.Errorf("no links and no observed_at: %T %v, want the links' refusal", err, err)
+	}
+
+	m = document(t)
+	m["snapshot_id"] = wrongID
+	delete(m, "observed_at")
+	delete(innerCTM(m)["envelope"].(map[string]any), "observed_at")
+	if _, err := Unmarshal(encode(t, m)); !errors.As(err, &missing) || missing.Field != "ctm.envelope.observed_at" {
+		t.Errorf("a wrong id and no observed_at: %T %v, want observed_at's refusal", err, err)
+	}
 }
 
 // A hand user wraps a bare CTM and nothing else: the id is computed and observed_at is
@@ -362,6 +401,12 @@ func TestMarshalRefusesABrokenSnapshot(t *testing.T) {
 		{"no id", func(s *Snapshot) { s.ID = "" }},
 		{"another version", func(s *Snapshot) { s.Version = "2" }},
 		{"observed_at not the CTM's", func(s *Snapshot) { s.ObservedAt = "2026-09-14T09:30:15.123456Z" }},
+		// Each beside an inner CTM recording the same, so the id still hashes and the two
+		// still agree: the form alone refuses it.
+		{"no observed_at", func(s *Snapshot) { s.ObservedAt, s.CTM.Envelope.ObservedAt = "", "" }},
+		{"observed_at not of the CTM's form", func(s *Snapshot) {
+			s.ObservedAt, s.CTM.Envelope.ObservedAt = "2026-10-27T18:55:42Z", "2026-10-27T18:55:42Z"
+		}},
 		{"a probe", func(s *Snapshot) { s.Probes = []json.RawMessage{json.RawMessage(`{}`)} }},
 		{"no ctm", func(s *Snapshot) { s.CTM = nil }},
 	} {

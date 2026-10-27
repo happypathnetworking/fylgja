@@ -178,6 +178,16 @@ func fileRefusals(t *testing.T) []fileRefusal {
 		{"an inner CTM with no fidelity list", fixtureFile(t, func(d map[string]any) {
 			delete(ctmOf(d)["envelope"].(map[string]any), "fidelity")
 		}), findings.ExitRejected, findings.RuleRequiredMissing, "ctm.envelope.fidelity", "ctm.envelope.fidelity", true},
+		{"an inner CTM recording no observed_at", fixtureFile(t, func(d map[string]any) {
+			delete(d, "observed_at")
+			delete(ctmOf(d)["envelope"].(map[string]any), "observed_at")
+		}), findings.ExitRejected, findings.RuleRequiredMissing, "ctm.envelope.observed_at",
+			"ctm.envelope.observed_at, the read's time, is not recorded", true},
+		{"an inner CTM's observed_at not of its form", fixtureFile(t, func(d map[string]any) {
+			delete(d, "observed_at")
+			ctmOf(d)["envelope"].(map[string]any)["observed_at"] = "2026-10-27T18:55:42Z"
+		}), findings.ExitRejected, findings.RuleSnapshotInvalid, "ctm.envelope.observed_at",
+			`ctm.envelope.observed_at "2026-10-27T18:55:42Z" is not a UTC time with six fractional digits`, true},
 		{"a declared id its body does not hash to", fixtureFile(t, func(d map[string]any) { d["snapshot_id"] = strings.Repeat("1", 64) }),
 			findings.ExitRejected, findings.RuleSnapshotIDMismatch, "snap.json", "snap.json declares snapshot_id " + strings.Repeat("1", 64) +
 				", but its body hashes to " + fixtureSnapshotID + "; leave snapshot_id out to have it computed", false},
@@ -209,6 +219,44 @@ func TestResolveSnapshotRefusesAFileByItsRules(t *testing.T) {
 				t.Errorf("snapshots/ exists after a refused file (%v)", err)
 			}
 			validateWithShow(t, currentContract, "018", doc)
+		})
+	}
+}
+
+// A file whose inner CTM records no observed_at, or one not of its form, hashes to the id
+// every valid take of its intent does, since the id leaves observed_at out. It is refused
+// before anything is filed, so a later take of the same intent, read with a proper
+// observed_at, files and returns the entry rather than meeting one the store cannot read
+// back.
+func TestARefusedObservedAtLeavesTheTakeOfItsIntent(t *testing.T) {
+	ctx := context.Background()
+	var refused []fileRefusal
+	for _, c := range fileRefusals(t) {
+		if c.object == "ctm.envelope.observed_at" {
+			refused = append(refused, c)
+		}
+	}
+	if len(refused) != 2 {
+		t.Fatalf("fileRefusals holds %d refusals of the inner CTM's observed_at, want 2", len(refused))
+	}
+	for _, c := range refused {
+		t.Run(c.name, func(t *testing.T) {
+			paths := useStateRoot(t)
+			_, _, err := resolveSnapshot(ctx, paths, findings.OpTwinCreate, &findings.Subject{Snapshot: "snap.json"}, "snap.json",
+				c.files)
+			if code, doc := exitOf(t, err); code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0].Rule != c.rule {
+				t.Fatalf("exit %d, findings %+v; want %s alone", code, doc.Findings, c.rule)
+			}
+
+			const observedAt = "2026-10-27T09:00:00.000000Z"
+			s, path, list, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", observedAt))
+			if err != nil || len(list) != 0 || s.ID != fixtureSnapshotID || path != filepath.Join(paths.Snapshots, fixtureSnapshotID+".json") {
+				t.Fatalf("takeSnapshot = %v at %s, %v, %v; want %s filed", s, path, list, err, fixtureSnapshotID)
+			}
+			stored, err := snapshot.NewDirStore(paths.Snapshots).Fetch(ctx, fixtureSnapshotID)
+			if err != nil || stored.ObservedAt != observedAt {
+				t.Errorf("the store holds %+v (%v); want the take observed at %s", stored, err, observedAt)
+			}
 		})
 	}
 }

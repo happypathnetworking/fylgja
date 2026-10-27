@@ -436,7 +436,9 @@ read strictly, its version first: one of another version, or declaring none, is
 `snapshot.version.unsupported`; an unknown key, a missing `ctm` or a non-empty `probes` is
 `snapshot.invalid`; a declared id the body does not hash to is `snapshot.id.mismatch`,
 naming both; and the inner CTM is refused under its own rules, its object prefixed
-`ctm.`. The server files each snapshot under its id in the **snapshot store**
+`ctm.`, and for its `observed_at`, none recorded (`data.required.missing`) or one not of
+its form (`snapshot.invalid`), before anything is filed, since the id leaves `observed_at`
+out and such an entry could not be read back. The server files each snapshot under its id in the **snapshot store**
 (`snapshots/<snapshot_id>.json`, [§4.5](#45-lab-host-containerlab-and-the-twin-directory)),
 behind an interface of the bundle store's shape that never overwrites: two takes of one
 intent keep one document, the first. `fylgja intent read --out` writes the read as a

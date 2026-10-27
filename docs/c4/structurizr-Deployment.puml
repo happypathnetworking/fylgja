@@ -29,7 +29,7 @@ Deployment_Node(Lab.Operatorsmachine, "Operator's machine", $type="", $descr="FY
 
 Deployment_Node(Lab.Labhost, "Lab host", $type="", $descr="Ubuntu, Docker, containerlab, the NOS images", $tags="Element", $link="") {
   Deployment_Node(Lab.Labhost.fylgjaserve, "fylgja serve", $type="process", $descr="127.0.0.1:7650, and 172.17.0.1:7650 on docker0, the Docker bridge, in plaintext; FYLGJA_API_TOKEN, INFRAHUB_API_TOKEN, both node logins", $tags="Element", $link="") {
-    Container(Lab.Labhost.fylgjaserve.fylgjaserve_1, "fylgja serve", $techn="Go, the same binary; HTTP on 127.0.0.1:7650 and on the Docker bridge", $descr="The API's server, on the lab host. Reads Infrahub, compiles, checks the host, starts and follows runs, reads the twin.", $tags="Container", $link="")
+    Container(Lab.Labhost.fylgjaserve.fylgjaserve_1, "fylgja serve", $techn="Go, the same binary; HTTP on 127.0.0.1:7650 and on the Docker bridge", $descr="The API's server, on the lab host. Reads Infrahub, takes and files each read's snapshot, compiles, checks the host, starts and follows runs, reads the twin.", $tags="Container", $link="")
   }
 
   Deployment_Node(Lab.Labhost.fylgjaworkerrun, "fylgja worker run", $type="process", $descr="INFRAHUB_API_TOKEN, both node logins; no API token", $tags="Element", $link="") {
@@ -78,7 +78,7 @@ Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Labhost.Docker.Labfylgja.NOSnode_
 Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Labhost.Docker.Labfylgja.NOSnode_1, "Probes; pushes the artifact; waits", $techn="gNMI; JSON-RPC or eAPI", $tags="Relationship", $link="")
 Rel(Lab.Labhost.containerlab_1, Lab.Labhost.Docker.Labfylgja.NOSnode_1, "Creates and cables", $techn="", $tags="Relationship", $link="")
 Rel(Lab.Labhost.fylgjaserve.fylgjaserve_1, Lab.Infrahubhost.Infrahubserver_1, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
-Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Infrahubhost.Infrahubserver_1, "Reads intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
+Rel(Lab.Labhost.fylgjaworkerrun.fylgjaworkerrun_1, Lab.Infrahubhost.Infrahubserver_1, "Reads a followed branch's intent and artifacts", $techn="GraphQL, REST", $tags="Relationship", $link="")
 Rel(Lab.Infrahubhost.taskworker.Taskworker_1, Lab.Labhost.fylgjaserve.fylgjaserve_1, "fylgja-step asks for the stage plan; fylgja-twin for the rehearsal, in markdown", $techn="HTTP over the Docker bridge, bearer token, plaintext", $tags="Relationship", $link="")
 Rel(Lab.Infrahubhost.taskworker.Taskworker_1, Lab.Infrahubhost.Infrahubserver_1, "Reads the proposed change; posts fylgja-twin's comment in a new thread; concludes each check", $techn="GraphQL", $tags="Relationship", $link="")
 

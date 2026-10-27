@@ -18,7 +18,7 @@ workspace "Fylgja" "A walking twin of network intent." {
 
         fylgja = softwareSystem "Fylgja" "Reads intent from Infrahub, compiles it into a deterministic bundle, boots it as a twin and pushes each device's production configuration." {
             cli = container "fylgja (client)" "Every command but the two roles, twin rehearse among them. Sends one request to the API and prints what comes back; twin rehearse --markdown prints the report as the markdown the server rendered." "Go, one static binary"
-            server = container "fylgja serve" "The API's server, on the lab host. Reads Infrahub, compiles, checks the host, starts and follows runs, reads the twin." "Go, the same binary; HTTP on 127.0.0.1:7650 and on the Docker bridge" {
+            server = container "fylgja serve" "The API's server, on the lab host. Reads Infrahub, takes and files each read's snapshot, compiles, checks the host, starts and follows runs, reads the twin." "Go, the same binary; HTTP on 127.0.0.1:7650 and on the Docker bridge" {
                 handlers = component "server" "The handlers: each command's logic behind POST /v1/<noun>/<verb>." "internal/server"
                 api = component "api" "The wire: paths, frames, requests, problems, bounds. The client's side links it too." "internal/api"
                 stage = component "stage" "The read and compile pipelines, shared with the worker." "internal/stage"
@@ -37,7 +37,7 @@ workspace "Fylgja" "A walking twin of network intent." {
                 findings = component "findings" "Findings, rules, the findings document, exit codes. The client's side links it too." "internal/findings"
             }
             worker = container "fylgja worker run" "The lab-host worker: runs the workflows and the host-bound activities." "Go, the same binary" {
-                workflows = component "provision" "The five workflows, the rehearsal running the provision, step and destroy as its children; their control activities; the worker's registration." "internal/provision"
+                workflows = component "provision" "The five workflows, the rehearsal running the provision, step and destroy as its children; their control activities; the worker's registration. The provision, step and rehearsal take a snapshot id and a bundle id; the reconcile alone reads." "internal/provision"
                 wlab = component "lab" "The host-bound activities: deploy, readiness, push, reconcile, record, the wait." "internal/lab"
                 wstage = component "stage" "The read and compile pipelines." "internal/stage"
                 wverify = component "verify" "The readers and the wait." "internal/verify"
@@ -72,8 +72,8 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.server -> fylgja.clab "Inspects; dry runs"
         fylgja.server -> twin.node "Reads for verify" "gNMI"
         fylgja.worker -> fylgja.temporal "Polls task queue fylgja" "gRPC"
-        fylgja.worker -> infrahub "Reads intent and artifacts" "GraphQL, REST"
-        fylgja.worker -> infrahub.iserver "Reads intent and artifacts" "GraphQL, REST"
+        fylgja.worker -> infrahub "Reads a followed branch's intent and artifacts" "GraphQL, REST"
+        fylgja.worker -> infrahub.iserver "Reads a followed branch's intent and artifacts" "GraphQL, REST"
         fylgja.worker -> fylgja.store "Files and reads bundles"
         fylgja.worker -> fylgja.twindir "Stages, records"
         fylgja.worker -> fylgja.clab "Deploys, reconciles, destroys"
@@ -88,6 +88,7 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.server.handlers -> fylgja.server.intent "Reads stages and stamps; checks the schema against the mapping's table"
         fylgja.server.handlers -> fylgja.server.step "Diffs; plans the push"
         fylgja.server.handlers -> fylgja.server.bundle "Verifies and files bundles"
+        fylgja.server.handlers -> fylgja.server.snapshot "Takes, validates and files snapshots"
         fylgja.server.handlers -> fylgja.server.compiler "Reads manifests"
         fylgja.server.handlers -> fylgja.server.lab "Host check, inspect, dry run"
         fylgja.server.handlers -> fylgja.server.verify "Reads the twin"
@@ -95,6 +96,7 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.server.handlers -> fylgja.server.rehearsal "Decides the deadline; builds the report and its markdown"
         fylgja.server.api -> fylgja.server.findings "Carries the document"
         fylgja.server.stages -> fylgja.server.stage "Reads and compiles each stage"
+        fylgja.server.stages -> fylgja.server.snapshot "Takes each stage's snapshot"
         fylgja.server.stages -> fylgja.server.intent "Reads proposed changes, stages, stamps and intent events"
         fylgja.server.stages -> fylgja.server.step "Diffs each pair"
         fylgja.server.stages -> fylgja.server.compiler "Surveys each stage's lossy mappings"
@@ -115,7 +117,7 @@ workspace "Fylgja" "A walking twin of network intent." {
 
         fylgja.worker.workflows -> fylgja.worker.wire "Schedules activities by name"
         fylgja.worker.workflows -> fylgja.worker.wlab "Registers the host-bound activities"
-        fylgja.worker.workflows -> fylgja.worker.wstage "ReadIntent, Compile"
+        fylgja.worker.workflows -> fylgja.worker.wstage "ReadIntent, Compile: a following check's"
         fylgja.worker.workflows -> fylgja.worker.wrehearsal "Classifies each stage"
         fylgja.worker.workflows -> fylgja.worker.wverify "Takes the wait's default budget for the deadline"
         fylgja.worker.wlab -> fylgja.worker.wire "Takes and returns the payloads"

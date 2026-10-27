@@ -498,6 +498,26 @@ func TestRecordStep(t *testing.T) {
 		}
 	})
 
+	// The sides' snapshots cross as data (018): the record names each side's beside its
+	// bundle, and the top level moves to the target's.
+	t.Run("names each side's snapshot", func(t *testing.T) {
+		a := prepared(t, true)
+		in := input(a)
+		in.From.SnapshotID, in.To.SnapshotID = lossySnapshot, mixedSnapshot
+		if _, err := record(t, a, in); err != nil {
+			t.Fatal(err)
+		}
+		written, err := ReadRecord(a.Paths.TwinJSON)
+		if err != nil {
+			t.Fatal(err)
+		}
+		validateRecord(t, schema, written)
+		if written.SnapshotID == nil || *written.SnapshotID != mixedSnapshot || written.Step == nil ||
+			written.Step.From.SnapshotID != lossySnapshot || written.Step.To.SnapshotID != mixedSnapshot {
+			t.Errorf("snapshot_id %v, step %+v; want the target's %s, and each side's", written.SnapshotID, written.Step, mixedSnapshot)
+		}
+	})
+
 	t.Run("diverged at its stage", func(t *testing.T) {
 		a := prepared(t, false)
 		res, err := record(t, a, divergedAtStage(a))

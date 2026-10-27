@@ -41,6 +41,10 @@ import (
 var (
 	stepFrom = strings.Repeat("34", 32)
 	stepTo   = strings.Repeat("ee", 32)
+	// Each side's snapshot (018): the lossy and mixed fixtures' wrapped ids, any identity
+	// serving.
+	stepFromSnapshot = "91f06cd67de31f6c986bc47019e79870b02403a2970d50b6b4497df64c17f10c"
+	stepToSnapshot   = "37d7378a36568e870eb1eb43dbcd580207fb5cae847fb979b54f50eef8800ebf"
 	// stageCabled and stageLive are two stages of proposed change pc-1 on branch change-1
 	// (014): the step goes from change-1/cabled to change-1/live.
 	stageCabled = wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled",
@@ -436,6 +440,8 @@ func TestStepStepped(t *testing.T) {
 		wire.ReconcileResult{Nodes: stepLab(), TookS: 3.9}, nil).After(4 * time.Second)
 	h.mockHappyPath()
 	in := stepInput()
+	// Each side's snapshot crosses as data (018): the record step is given both.
+	in.From.SnapshotID, in.To.SnapshotID = stepFromSnapshot, stepToSnapshot
 	res := h.run(in)
 
 	if res.Outcome != StepStepped || res.Phase != "" || res.Step != "" {
@@ -461,6 +467,10 @@ func TestStepStepped(t *testing.T) {
 	if !bytes.Equal(rec.Diff, in.Diff) || !reflect.DeepEqual(rec.To, in.To) || !reflect.DeepEqual(rec.From, in.From) ||
 		!rec.AllowRestart || len(rec.Findings) != 0 || !reflect.DeepEqual(rec.Declared, in.Declared) {
 		t.Errorf("record input sides, diff, flag, declarations or findings differ from the input: %+v", rec)
+	}
+	if rec.From.SnapshotID != stepFromSnapshot || rec.To.SnapshotID != stepToSnapshot {
+		t.Errorf("record input sides name snapshots %q and %q, want %s and %s", rec.From.SnapshotID, rec.To.SnapshotID,
+			stepFromSnapshot, stepToSnapshot)
 	}
 	if len(rec.Nodes) != 3 || len(rec.Ready) != 1 || rec.Ready[0].Node != "e1" {
 		t.Errorf("record input nodes %v, ready %v; want the three the reconcile reported and e1 awaited", rec.Nodes, rec.Ready)

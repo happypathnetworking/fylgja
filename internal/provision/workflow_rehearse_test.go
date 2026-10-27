@@ -171,24 +171,28 @@ func branchPoint() RehearseStage {
 }
 
 // baselineStage is the first compiled stage, the baseline, with its provision already
-// compiled.
+// compiled and its snapshot named (018).
 func baselineStage(label string) RehearseStage {
 	id := bundleOf(label)
 	return RehearseStage{Ref: rehearsalBranch + "/" + label, Label: label, AtSource: "written", Branch: rehearsalBranch,
-		At: "2026-10-16T17:25:30.118244+00:00", BundleID: id, BundlePath: "/state/bundles/" + id, Role: rehearsal.RoleBaseline,
+		At: "2026-10-16T17:25:30.118244+00:00", BundleID: id, BundlePath: "/state/bundles/" + id, SnapshotID: snapshotOf(label),
+		Role: rehearsal.RoleBaseline,
 		Provision: &ProvisionInput{Source: wire.SourceIntent, Branch: rehearsalBranch, At: "2026-10-16T17:25:30.118244+00:00",
 			BundlePath: "/state/bundles/" + id, BundleID: id, ObservedAt: "2026-10-17T14:02:10.000000Z",
-			Stage: stageRef(label), Version: "0.1.0-test"},
+			Stage: stageRef(label), Version: "0.1.0-test", SnapshotID: snapshotOf(label)},
 		WaitS: 120}
 }
 
-// rehearsedStage is a compiled stage after the baseline, stepped to from the stage before it.
+// rehearsedStage is a compiled stage after the baseline, stepped to from the stage before it,
+// each side naming its snapshot (018).
 func rehearsedStage(from, label string) RehearseStage {
 	id := bundleOf(label)
 	return RehearseStage{Ref: rehearsalBranch + "/" + label, Label: label, AtSource: "written", Branch: rehearsalBranch,
-		At: "2026-10-16T17:30:00.000000+00:00", BundleID: id, BundlePath: "/state/bundles/" + id, Role: rehearsal.RoleRehearsed,
-		Step: &StepInput{From: wire.StepSide{Stage: stageRef(from), BundleID: bundleOf(from)},
-			To:         wire.StepSide{Stage: stageRef(label), BundleID: id, Branch: rehearsalBranch, At: "2026-10-16T17:30:00.000000+00:00"},
+		At: "2026-10-16T17:30:00.000000+00:00", BundleID: id, BundlePath: "/state/bundles/" + id, SnapshotID: snapshotOf(label),
+		Role: rehearsal.RoleRehearsed,
+		Step: &StepInput{From: wire.StepSide{Stage: stageRef(from), SnapshotID: snapshotOf(from), BundleID: bundleOf(from)},
+			To: wire.StepSide{Stage: stageRef(label), SnapshotID: snapshotOf(label), BundleID: id, Branch: rehearsalBranch,
+				At: "2026-10-16T17:30:00.000000+00:00"},
 			ObservedAt: "2026-10-17T14:02:10.000000Z", ToBundlePath: "/state/bundles/" + id, AllowRestart: true,
 			Declared: map[string]string{"n1": "live", "n2": "live", "n3": "live"}, WaitS: 120, Version: "0.1.0-test"},
 		WaitS: 120}
@@ -196,7 +200,18 @@ func rehearsedStage(from, label string) RehearseStage {
 
 // bundleOf is a stage's bundle id: one per label, so a mix-up shows.
 func bundleOf(label string) string {
-	id := []byte(label + "0000000000000000000000000000000000000000000000000000000000000000")[:64]
+	return idOf(label, "0")
+}
+
+// snapshotOf is a stage's snapshot id (018): one per label, and never its bundle's.
+func snapshotOf(label string) string {
+	return idOf(label, "f")
+}
+
+// idOf is an identity for label: label padded to 64 characters with pad, each character
+// that is not lowercase hex made a.
+func idOf(label, pad string) string {
+	id := []byte(label + strings.Repeat(pad, 64))[:64]
 	for i, b := range id {
 		if b < '0' || b > 'f' || (b > '9' && b < 'a') {
 			id[i] = 'a'
@@ -829,6 +844,20 @@ func TestRehearseRecordNamesTheRun(t *testing.T) {
 	}
 	if in.Stages[1].Provision.Rehearsal != nil {
 		t.Error("the input's own provision was changed")
+	}
+	// The stages' snapshots reach the children as data (018): the baseline's provision names
+	// its stage's, and each step names its two sides'. Each child's record step is given them
+	// (TestProvisionCreatesCarryTheirSnapshot, TestStepStepped).
+	if got := h.provisions[0].SnapshotID; got != snapshotOf("seeded") || got != in.Stages[1].SnapshotID {
+		t.Errorf("the provision child names snapshot %q, want the baseline's %s", got, snapshotOf("seeded"))
+	}
+	if len(h.steps) != 2 {
+		t.Fatalf("steps %+v, want two", h.steps)
+	}
+	for i, pair := range [][2]string{{"seeded", "third-link"}, {"third-link", "head"}} {
+		if s := h.steps[i]; s.From.SnapshotID != snapshotOf(pair[0]) || s.To.SnapshotID != snapshotOf(pair[1]) {
+			t.Errorf("step %d names snapshots %q to %q, want %s's and %s's", i, s.From.SnapshotID, s.To.SnapshotID, pair[0], pair[1])
+		}
 	}
 	if v := h.verifies[0]; v != (wire.VerifyInput{RunID: self, From: rehearsalRecordedAt, BudgetS: 120}) {
 		t.Errorf("the baseline's wait %+v, want this run's, from the record's time, for 120s", v)

@@ -291,8 +291,10 @@ ones, with their stages), `Branch` (`branched_from` and `created_at`),
 the branch point's `at` and unpinned for the head), as Constitution III allows from 1.2.1,
 `InfrahubEvent` (the source branch's event log since `branched_from`, pinned to nothing),
 as it allows from 1.3.0 ([D-048](decisions.md#d-048)), and `CoreGraphQLQueryGroup` (the
-template query's internal groups, read on the source branch with the stamps, for the
-account that created them), as it allows from 2.1.0 ([D-060](decisions.md#d-060)); the
+template query's internal groups, read on the stamps' branch at their `at`, for the
+account that created them: the source branch, or `main` for the branch point and for
+`stage.main.moved`, as [mapping.md](../specs/017-dcim-reader/contracts/mapping.md) §6
+says), as it allows from 2.1.0 ([D-060](decisions.md#d-060)); the
 read-only test names each with its reason, and every operation is still a query.
 An event is intent's when its primary node's kind is one the stamps read (`DcimDevice`,
 an implementer of `DcimInterface` or of `DcimConnector`, mapped through the branch
@@ -324,8 +326,9 @@ source branch's `branched_from`, verbatim; the **marks**, each at its `as_of` as
 the later of the latest of every device's intent stamp and every artifact's
 `checksum.updated_at`, and the `occurred_at` of its latest intent event, in
 Infrahub's own layout, since a read pinned at exactly a stamp sees the node and not the
-value. A removal (a cable or a port deleted, a relationship unset) moves no stamp, and
-its event is how the head moves past it ([D-048](decisions.md#d-048)). An event lands in
+value. A cable re-ended, a port deleted and a relationship unset move no stamp, and a
+cable's delete stamps its two end ports ([verified facts](verified-facts.md)); the event is how the
+head moves past the rest ([D-048](decisions.md#d-048)). An event lands in
 the log a few seconds after its write, a varying time (half a second to over six were
 seen), so a head read in that window is the stamps' and does not see the removal yet; a
 mark is judged by each event's `occurred_at` against its `at`, whenever the event lands. `branch-point` and `head` are reserved labels. Every

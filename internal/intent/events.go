@@ -39,9 +39,10 @@ var churnRelationships = map[string]bool{
 
 // Event is one write the branch's event log records that is intent's (D-048): its primary
 // node's kind is one the stamps read on the branch, and it created or deleted that node, or
-// changed an attribute or a relationship that is not Infrahub's churn. A removal moves no
-// stamp the stamps read selects (research §8.17); its event is how the head and the
-// staleness rule see it. Every field is as Infrahub returned it.
+// changed an attribute or a relationship that is not Infrahub's churn. A cable re-ended, a
+// port deleted and a relationship unset move no stamp the stamps read selects (research
+// §8.17, 017 §5.8), and a cable's delete stamps its two end ports (017 §5.11); the event is
+// how the head and the staleness rule see the rest. Every field is as Infrahub returned it.
 type Event struct {
 	// Name is Infrahub's name for the event: infrahub.node.deleted.
 	Name string

@@ -151,11 +151,17 @@ becomes `{SchemaHash, Model, Version, Kinds []findings.KindFields}`; `Verified` 
 - `Config` gains `Scope` (the tag's name, after `tag:`); `Fetch` runs `Devices` by tag,
   then `Ports` by the devices' ids per page, projects, judges cables (R-05), writes the
   envelope's fidelity list (R-06), fetches the artifacts as today, relinks and normalizes.
-- `projectDevice` resolves the package through `reg.Match`; a device no package matches is
-  the completeness pass's to refuse (`platform.missing`, `platform.unmatched`) before any
-  artifact is fetched, so no CTM carries a device without a package.
-- `cableJudgement{id, label, ends []end{deviceID, deviceName, port, kind}}` → a link, or an
-  omission with its rule and reason; judged once per cable id.
+- `projectDevice` flattens a device to its id, its name and its platform's pair as far as
+  it carries one (`hasPlatform`, `hasManufacturer`, T115); the completeness pass resolves
+  the package through `reg.Match` and refuses a device no package matches
+  (`platform.missing`, `platform.unmatched`) before any artifact is fetched, so no CTM
+  carries a device without a package.
+- `cableJudgement{id, label, kind, count, ends []cableEnd{deviceID, deviceName, port,
+  kind}}` → a link, or an omission with its rule and reason; judged once per cable id.
+  `kind` is the connector's `__typename`, a connector that is not a `DcimCable` omitted
+  under its own reason (T096); `count` is `connected_endpoints.count` as Infrahub answered
+  it, which the ends rule reads, so a cable listing fewer ends than it counts is "listed of"
+  and omitted.
 - `Counts` gains `CablesOmitted`; `DevicesByPackage` reads `platform.package`.
 
 ## 7. The stamps and the events (`internal/intent/stamps.go`, `events.go`)

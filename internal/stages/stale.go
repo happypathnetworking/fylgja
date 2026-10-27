@@ -19,7 +19,8 @@ const remedy = "regenerate (fylgja-fixture -generate, POST /api/artifact/generat
 // stamp, the later of its artifact's checksum.updated_at and the proposed change's
 // artifact validator's completed_at. Its intent was written at the later of the latest
 // stamp of its own intent and the latest intent event that names it, no later than the
-// stage's at: a removal moves no stamp, and its event is how it is seen. The artifact is
+// stage's at: a cable re-ended, a port deleted and a relationship unset move no stamp, a
+// cable's delete stamps its two end ports, and the event is how the rest are seen. The artifact is
 // the one named by the device's package's config.artifact_name, the package found in the
 // registry by the device's manufacturer and platform pair, exactly (Constitution II). One stage.artifact.stale per stale
 // device, sorted by name, each a rejection at step resolve naming the device.

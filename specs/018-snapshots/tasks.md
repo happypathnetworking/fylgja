@@ -663,7 +663,7 @@ written and checked here. It runs in Phase 12.
 scripts/e2e.sh`, and the changed `jq` filters against recorded outputs (`local/e2e-*.outputs`)
 and against tier-1 documents.
 
-- [ ] T047 [US6] `scripts/e2e.sh` (R-17; snapshot-commands.md "Tier 3"). Make these changes:
+- [X] T047 [US6] `scripts/e2e.sh` (R-17; snapshot-commands.md "Tier 3"). Make these changes:
   - `compiled_id` (lines 522–531) reads with `intent read --out "$OUT/snapshot-$case.json"` and compiles with `twin compile --snapshot`. Rename its files from `ctm-` to `snapshot-`.
   - `create_twin` (from line 560) reads `SID` from the create's `.snapshot_id` and asserts `snapshots/$SID.json` exists. Its line 595 sidecar check becomes "no `bundles/*.ctm.json` newer than the case's start": take a marker file at the case's start and use `find "$FYLGJA_STATE_ROOT/bundles" -maxdepth 1 -name '*.ctm.json' -newer "$marker"`, which must be empty. It expects `twin.json`'s `.snapshot_id==env.SID`.
   - Case 1's `twin show` grep (near line 871) gains `snapshot $SID1, bundle_id $BID1`.
@@ -673,9 +673,60 @@ and against tier-1 documents.
 
   No case is added, and `PLATFORMS=nokia_srlinux` still ends `E2E-PARTIAL`. Run `shellcheck scripts/bring-up.sh scripts/e2e.sh` clean. Check each changed `jq` filter offline against documents the tier-1 tests produce or against `local/e2e-*.outputs`, as the memory note on offline checks says: an old output must fail the new filter for the reason expected, and a hand-edited one must pass. Note the checks in this task.
 
-- [ ] T048 [P] [US6] `contracts/cli.md` and `contracts/api.md`: append `## 018: snapshots` to each, after the 017 section. Use the text of [contracts/snapshot-commands.md](contracts/snapshot-commands.md)'s two sections, with relative links fixed for their new home: `snapshot.schema.json`, `formats.md`'s content, `../docs/decisions.md#d-061`. Fold `formats.md`'s per-schema changes into cli.md's "Formats and versions" table, as earlier sections do. In the earlier sections, mark `twin compile --ctm` and the sidecar retired, where they are described as current, with a one-line pointer to 018, as 017 marked what it retired. Run `make linkcheck` clean.
+  - *2026-10-27, Run 13, the converge loop's session, at `96c701a`:* **done; checked offline, not run.** `compiled_id` reads to `$OUT/snapshot-$case.json`, compiles it with `--snapshot`, and sets `COMPILED_SNAPSHOT` beside `COMPILED_ID`. `create_twin` touches `$OUT/began-<case>` before the create, reads and exports `SID` from `.snapshot_id`, expects `twin.json`'s `.snapshot_id==env.SID`, and asserts `snapshots/$SID.json`, the bundle's entry, and that `find "$FYLGJA_STATE_ROOT/bundles" -maxdepth 1 -name '*.ctm.json' -newer "$began"` is empty. Case 1's `twin show` grep holds `snapshot $SID1, bundle_id $BID1`. Case 5's rebuilt twin reads `.show.record | has("snapshot_id") and .snapshot_id==null`: the key is required, since a 015 document, which lacks it, passes a bare `==null`. Case 7's steps hold `.step.to.snapshot_id` a string, in each step's document and `twin.json`. The destroy comment names `bundles/.reads/` as the reconcile's alone. The header's case list says what moved. No case is added and no case's packages changed, so `PLATFORMS=nokia_srlinux` selects the same seven cases.
+    - **Beyond the task's text**, each an id the run already holds:
+      - **Marker grep:** its exclusion moves from `ctm-*.json` to `snapshot-*.json`. A read's snapshot carries the marker (3 lines in the fixture's), so the old exclusion would report a LEAK after every `compiled_id`.
+      - **Cases 1, 2 and 4:** cases 1 and 2 hold the create's snapshot to the one `compiled_id` reads, as they hold the bundle. Case 4's create holds case 2's snapshot.
+      - **Case 5:** the created twin's `twin show` names `SID5`. The rebuilt twin's text holds `snapshot none, bundle_id <id>`, SC-006's words.
+      - **Case 7:** the plan names three distinct snapshot ids, the branch point's null. The create's snapshot is the plan's for `seeded`. Each step's from and to sides, and its document's `snapshot_id`, are the plan's for their stages. This is SC-002 and D-011 in tier 3: a stage's ids are one whichever command built it (Run 11, T040), and T046 found one snapshot for one stage taken twice.
+    - **A scratch server from this build** ran the real commands. It listened on `127.0.0.1:0`, with its own state root in the session's scratch directory, a token made for it and no node logins. The operator's worker and server were untouched; it was stopped afterwards, and its log holds no token.
+      - `compiled_id`, extracted verbatim and run against `fylgja-fixture`, read snapshot `576933ec51da1866cdb7344a1f60ec2468c7d04aafbee42eacd171e352bd7482` and compiled bundle `f764e1fa…`, `CLAUDE.md`'s id. The store held `snapshots/576933ec….json`, and the summary line ends `; snapshot <id>, stored at <path>`. The old `--ctm` line is refused `unknown flag: --ctm`, exit 2.
+      - A dry-run create was refused `host.probe.login_unset`, since that server holds no login. Its document still named the same snapshot and bundle at the top level, and no `*.ctm.json` was written.
+      - `twin show` over hand-made records printed the record lines the greps read. A `9` naming the snapshot gives `record: branch fylgja-fixture, snapshot 576933ec…, bundle_id f764e1fa…, …`. A `9` naming none gives `snapshot none, bundle_id …`, and an `8` gives `snapshot none (record 8), bundle_id …`.
+    - **27 `jq` filters**, extracted verbatim, were checked against the 015 run's `local/e2e-015-full-4.outputs` as recorded: each fails. The same documents, hand-edited to this build's shape but for the snapshot's keys, fail too. That shape is `twin_version` `9`, and for the plan, 017's `scope.empty` in place of 015's `contract.node.missing`. With the keys added, each passes. Five mutations each fail: a create naming none, two stages naming one snapshot, the refused branch point naming one, a step's to side naming none, and the record left at the from side's snapshot. The scratch server's own show documents pass case 5's null check when the record names none and fail it when it names one.
+    - **15 shell checks**, each line taken verbatim:
+      - Case 1's grep fails on 017's record line and on an `8`'s, and passes on this build's.
+      - Case 5's text grep passes on a `9` naming none. It fails on a twin naming one, on 017's line and on an `8`'s.
+      - The sidecar `find` over `local/bundles` is empty for a case started now. Back-dated to 10-26, it finds 84 sidecars and fails.
+      - `snapshots/$SID.json` holds in the scratch store, but not in `local/`, which no 018 create has filed into.
+      - The marker grep with the new exclusion finds nothing in the scratch outputs. With the old exclusion it finds the read's snapshot.
+    - `shellcheck scripts/bring-up.sh scripts/e2e.sh` is clean. Tier 3 itself is T054's.
 
-- [ ] T049 [P] [US6] Check that the six moved schemas' and the new one's descriptions quote formats.md's 018 sentences exactly, and that `contracts/README.md` (if present) or the contracts index lists `snapshot.schema.json` with its version. Grep `contracts/` for `ctm.json`, `--ctm` and `sidecar`. Each hit is either historical, inside an earlier section, or made true.
+- [X] T048 [P] [US6] `contracts/cli.md` and `contracts/api.md`: append `## 018: snapshots` to each, after the 017 section. Use the text of [contracts/snapshot-commands.md](contracts/snapshot-commands.md)'s two sections, with relative links fixed for their new home: `snapshot.schema.json`, `formats.md`'s content, `../docs/decisions.md#d-061`. Fold `formats.md`'s per-schema changes into cli.md's "Formats and versions" table, as earlier sections do. In the earlier sections, mark `twin compile --ctm` and the sidecar retired, where they are described as current, with a one-line pointer to 018, as 017 marked what it retired. Run `make linkcheck` clean.
+
+  - *2026-10-27, Run 13, the converge loop's session, at `96c701a`:* **done.** Both sections are appended after 017's. Their links are fixed: `../docs/decisions.md#d-061`, `api.md` and `cli.md`, and the schemas in place of `formats.md`.
+    - **cli.md's section** is snapshot-commands.md's text, plus three things:
+      - a bullet on the state root line `serve` and `worker run` print since T008;
+      - a "Formats and versions" table that folds in formats.md's per-schema changes, one row each for the snapshot, `twin.json` `9`, findings (with `subject.snapshot` from T004), the `show`, `stages`, `step` and `rehearsal` blocks, the API, and the unmoved bundle manifest, CTM and PSP, followed by a bullet on the `017-dcim-reader/` frozen copies;
+      - a Tier 3 paragraph that says what T047's script asserts.
+    - **api.md's section** is the design's, plus the two `twin.compile` file refusals the server now words (`internal/server/compile.go`). Every quoted refusal and line was checked against the source, and the record lines against the scratch server of T047.
+    - **The earlier sections** gain one-line pointers to 018, as 017 marked what it retired.
+      - In cli.md: the title, the opening paragraph, `serve`'s state root line, the stage commands table (`intent read` writes a snapshot; `twin compile --ctm` is retired at 018 for `--snapshot <file>`), the file errors (`reading snapshot: …`, `writing snapshot: …`), the dry run's and the plan's filing (no sidecar), the M13 formats row, the workflows, tier 3, and 014's `stage plan` filing.
+      - In api.md: the title, the opening paragraph, and the operations table, made current (`twin.create` `snapshot` with its file, `twin.compile` `snapshot`, `intent.read` the snapshot) with a "Moved at 018" sentence as 014's and 017's are. Also the `files` frame row, "Files"' `twin.compile` and `intent.read`, and 014's plan filing.
+    - `make linkcheck`: 84 files, 1,880 relative links, 0 broken.
+
+- [X] T049 [P] [US6] Check that the six moved schemas' and the new one's descriptions quote formats.md's 018 sentences exactly, and that `contracts/README.md` (if present) or the contracts index lists `snapshot.schema.json` with its version. Grep `contracts/` for `ctm.json`, `--ctm` and `sidecar`. Each hit is either historical, inside an earlier section, or made true.
+
+  - *2026-10-27, Run 13, the converge loop's session, at `96c701a`:* **done; one description made true.**
+    - **The quotes**, checked by script:
+      - `twin.schema.json`'s description holds formats §2's quoted 018 sentence exactly.
+      - Each property formats.md gives as JSON equals the schema's: `twin` `snapshot_id` (type and pattern), and the full specs of findings', `show.record`'s, `plan_stage`'s, the step side's and the rehearsal stage's `snapshot_id`, and `api.schema.json`'s `twin.create` `snapshot`.
+      - The `required` lists match (the step side's alone lacks it), as do the enums (`source` in twin and show; `follow.reason` `snapshot`). `$id` is `…/twin/v9`, and `twin_version` is const `9`. `api.schema.json`'s request `files` description holds both of formats §8's strings.
+      - `snapshot.schema.json` is byte-equal to the design's, and its description carries the bytes sentence and the `jq` recipe. The findings', show's, step's, rehearsal's and stages' descriptions each carry an 018 sentence; formats.md quotes none of those verbatim.
+    - **The index:** there is no `contracts/README.md`. The index of formats with their versions is cli.md's "Formats and versions", and the 018 table lists `snapshot.schema.json` at `1`. `docs/development.md:367`'s repository listing names the schemas without versions, and lacks `snapshot` and 015's `rehearsal`. That is left for T057, whose file it is.
+    - **The grep**, each hit classified:
+      - `api.md` 120 and 225, and `cli.md` 18, 205, 211–217 and 396: pointed to 018 (T048).
+      - `api.md` 223, inside "Files"' `twin.compile` bullet, now marked: historical.
+      - `cli.md` 320 (014), and 879 and 915 (017), and `api.md` 387 (017): inside earlier sections.
+      - The 018 sections: true.
+      - **One made true:** `api.schema.json`'s answer `files` frame read `intent.read: one file, ctm.json, the CTM`. It now reads `intent.read: one file, snapshot.json, the snapshot (018; ctm.json, the CTM, before it)`, as `internal/server/read.go`'s `snapshotFile` names it. formats §8 did not name this description. No test pins it, and no frozen copy of `api.schema.json` exists.
+      - `findings.schema.json` names `subject.ctm` with no description: T004's choice, kept for older documents.
+    - **The phase's checkpoint:**
+      - `make build` exit 0, `statically linked`.
+      - `GOFLAGS=-count=1 make test` exit 0 in 40.6 s wall at load 1.43 → 3.13, with `internal/cli` 36.2 s, `internal/lab` 11.2 s and `internal/provision` 8.7 s.
+      - `make lint` `0 issues`; `go vet -tags contract,fixture,e2e ./...` clean; `shellcheck scripts/bring-up.sh scripts/e2e.sh` clean; `make linkcheck` 0 broken; `git diff --stat main -- testdata/golden` empty.
+    - **Tier 2:** no task in this run names a tier-2 test, so none ran. Infrahub was only read: `fylgja-fixture`, by T047's scratch server. `Branch` lists `main` and `fylgja-fixture` alone.
+    - **The processes:** `make build` rewrote `bin/fylgja`, so the worker (`3867740`) and the server (`3867762`) still read `(deleted)`. Neither was restarted: the worker is not this run's to stop, and the server waits for T050.
 
 **Checkpoint**: `make test`, `make lint`, `shellcheck`, `make linkcheck`.
 

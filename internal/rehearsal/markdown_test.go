@@ -44,12 +44,12 @@ func TestMarkdown(t *testing.T) {
 		"",
 		"Run `fylgja-rehearse 01a1b2c3-0000-7000-8000-0000000000aa`, stages resolved at 2026-10-17T14:02:11Z. Status **ok**. 118.4s of the 1980s deadline (ceiling 3600s).",
 		"",
-		"| stage | at | bundle | step | wait | verify | new verification failures | verdict |",
-		"|---|---|---|---|---|---|---|---|",
-		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (scope.empty) |",
-		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | baseline |",
-		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | stepped 4.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | none | passed |",
-		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |",
+		"| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |",
+		"|---|---|---|---|---|---|---|---|---|",
+		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | | refused (scope.empty) |",
+		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | baseline |",
+		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 4.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | none | passed |",
+		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |",
 		"",
 		"```mermaid",
 		"flowchart TD",
@@ -85,13 +85,13 @@ func TestMarkdown(t *testing.T) {
 		"",
 		"Run `fylgja-rehearse 01a1b2c3-0000-7000-8000-0000000000aa`, stages resolved at 2026-10-17T14:02:11Z. Status **nonconforming**. 301.6s of the 2610s deadline (ceiling 3600s).",
 		"",
-		"| stage | at | bundle | step | wait | verify | new verification failures | verdict |",
-		"|---|---|---|---|---|---|---|---|",
-		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (scope.empty) |",
-		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | created | expired after 120.0s | 14 held, 1 failed, 0 skipped | — | baseline |",
-		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | stepped 4.5s; push n1, n3 | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | passed |",
-		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | diverged at push 29.8s; restarted n3 61.2s; push n3; not landed n1 (push.refused) | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | failed |",
-		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | | | | | not reached |",
+		"| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |",
+		"|---|---|---|---|---|---|---|---|---|",
+		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | | refused (scope.empty) |",
+		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | expired after 120.0s | 14 held, 1 failed, 0 skipped | — | baseline |",
+		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 4.5s; push n1, n3 | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | passed |",
+		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | a3a3a3a3… | babababa… | diverged at push 29.8s; restarted n3 61.2s; push n3; not landed n1 (push.refused) | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | failed |",
+		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | | | | | not reached |",
 		"",
 		"```mermaid",
 		"flowchart TD",
@@ -166,7 +166,7 @@ func TestMarkdown(t *testing.T) {
 func TestMarkdownOfABaselineNotVerified(t *testing.T) {
 	md := Markdown(unverifiedRun().document(), pairs())
 	for _, want := range []string{
-		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | created | incomplete after 0.0s | | — | error |",
+		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | incomplete after 0.0s | | — | error |",
 		"**Findings**:\n\n- `rehearsal.stage.error` change-1/seeded: its wait ended incomplete after 0.0s\n" +
 			"- `scope.empty` tag:fylgja: scope tag:fylgja selects no device on branch main\n\n",
 		"**Warnings**:\n\n- `operation.failed` change-1/seeded: " + rehearseRun + ": activity verify\\_twin failed: the workflow service did not answer (stage seeded)\n\n",
@@ -220,9 +220,9 @@ func TestMarkdownNamesTheRestartsTime(t *testing.T) {
 		e    example
 		want string
 	}{
-		{restartedRun(), "| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | stepped 95.3s; restarted n3 61.2s; recreated n1 70.4s; push n1, n3 | settled after 6.1s |"},
-		{cutBeforeReadinessRun(), "| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | cancelled at readiness; restarted n3 | | | | error |"},
-		{cutAtPushRun(), "| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | cancelled at push; restarted n3 61.2s; push n3; not landed n1 | | | | error |"},
+		{restartedRun(), "| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 95.3s; restarted n3 61.2s; recreated n1 70.4s; push n1, n3 | settled after 6.1s |"},
+		{cutBeforeReadinessRun(), "| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | a3a3a3a3… | babababa… | cancelled at readiness; restarted n3 | | | | error |"},
+		{cutAtPushRun(), "| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | a3a3a3a3… | babababa… | cancelled at push; restarted n3 61.2s; push n3; not landed n1 | | | | error |"},
 	} {
 		md := Markdown(c.e.document(), pairs())
 		if !strings.Contains(md, c.want) {
@@ -311,7 +311,7 @@ func TestMarkdownFitsAComment(t *testing.T) {
 		t.Errorf("the markdown is %d bytes, over the %d a comment holds:\n%s", len(md), CommentMax, md)
 	}
 	for _, want := range []string{
-		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | babababa… | diverged at push | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | failed |",
+		"| change-1/bad-port | 2026-10-16T17:30:05.000000+00:00 | a3a3a3a3… | babababa… | diverged at push | expired after 120.0s | 18 held, 1 failed, 0 skipped | none | failed |",
 		`  s3["change-1/bad-port<br/>failed"]`,
 		"**Findings**:\n\n- `push.refused` n1 (×2)\n- `rehearsal.stage.failed` change-1/bad-port\n- `scope.empty` tag:fylgja\n- `step.diverged` " + stepRun + "2\n\n",
 		"**Stages** (Infrahub's view does not show them):",
@@ -340,7 +340,7 @@ func TestMarkdownFitsAComment(t *testing.T) {
 		row   string
 	}{
 		{14, "and the table each step by its outcome and its new verification failures by the first few", "the drawing and the stages are left out",
-			"| change-1/mark-13 | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |"},
+			"| change-1/mark-13 | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |"},
 		{60, "; the table gives each stage's reference and verdict alone", "the drawing and the stages are left out",
 			"| change-1/mark-59 | passed |"},
 	} {
@@ -550,7 +550,7 @@ func TestMarkdownEscapes(t *testing.T) {
 	for _, want := range []string{
 		`  s3["change-1/a#quot;#lt;b#gt;#35;c|d<br/>passed"]`,
 		`  s2 -. "not computed" .-> s3`,
-		`| change-1/a"\<b\>\#c\|d | 2026-10-16T17:30:05.000000+00:00 | babababa… | unchanged |`,
+		`| change-1/a"\<b\>\#c\|d | 2026-10-16T17:30:05.000000+00:00 | a3a3a3a3… | babababa… | unchanged |`,
 		"- `change-1/a\"<b>#c|d` change-1 at 2026-10-16T17:30:05.000000+00:00 (given) " +
 			`"a port \<disabled\> \\"by mistake\\" \| n1\\nsecond line"`,
 	} {
@@ -645,12 +645,12 @@ func TestMarkdownOfARefusal(t *testing.T) {
 		"Run `fylgja-rehearse " + rehearseRun + "` was started, and its end was not read: " + lostWhy + ". It goes on to its destroy, " +
 			"and `fylgja twin show` says where it is. Stages resolved at 2026-10-17T14:02:11Z. Status **error**. Deadline 1980s (ceiling 3600s).",
 		"",
-		"| stage | at | bundle | step | wait | verify | new verification failures | verdict |",
-		"|---|---|---|---|---|---|---|---|",
-		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (scope.empty) |",
-		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | | | | | not read |",
-		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | | | | | not read |",
-		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | | | | | not read |",
+		"| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |",
+		"|---|---|---|---|---|---|---|---|---|",
+		"| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | | refused (scope.empty) |",
+		"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | | | | | not read |",
+		"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | | | | | not read |",
+		"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | | | | | not read |",
 		"",
 		"```mermaid",
 		"flowchart TD",
@@ -770,11 +770,11 @@ func TestMarkdownOfACutAFailedBaselineAndAnUncleanDestroy(t *testing.T) {
 	head := func(status, used string) string {
 		return `## Fylgja rehearsed proposed change "third link" on change-1, scope tag:fylgja` + "\n\nRun `fylgja-rehearse " + rehearseRun +
 			"`, stages resolved at 2026-10-17T14:02:11Z. Status **" + status + "**. " + used + " of the 1980s deadline (ceiling 3600s).\n\n" +
-			"| stage | at | bundle | step | wait | verify | new verification failures | verdict |\n|---|---|---|---|---|---|---|---|\n"
+			"| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |\n|---|---|---|---|---|---|---|---|---|\n"
 	}
 	const (
-		bp     = "| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | | | | | refused (scope.empty) |\n"
-		base   = "| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | baseline |\n"
+		bp     = "| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | | refused (scope.empty) |\n"
+		base   = "| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | baseline |\n"
 		link   = `  s1 -- "+link n1:e1-3 — n3:e1-3; ~n1, ~n3 (bootstrap, mapping); artifacts n1, n3" --> s2` + "\n"
 		missed = "- `scope.empty` tag:fylgja: scope tag:fylgja selects no device on branch main\n"
 		tail   = "**Warnings**: none\n\n**Baseline findings** (reported, failing nothing): none\n\n" + Caveat + "\n"
@@ -790,24 +790,24 @@ func TestMarkdownOfACutAFailedBaselineAndAnUncleanDestroy(t *testing.T) {
 	}{
 		{"cut", cutRun().document(), head("error", "2001.2s") +
 			base +
-			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | cancelled at readiness | | | | error |\n" +
-			"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | | | | | not reached |\n\n" +
+			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | cancelled at readiness | | | | error |\n" +
+			"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | | | | | not reached |\n\n" +
 			"```mermaid\nflowchart TD\n" + `  s0["change-1/seeded<br/>baseline"]` + "\n" + `  s1["change-1/third-link<br/>error"]` + "\n" +
 			`  s2["change-1/head<br/>not reached"]` + "\n" +
 			`  s0 -- "+link n1:e1-3 — n3:e1-3; ~n1, ~n3 (bootstrap, mapping); artifacts n1, n3" --> s1` + "\n" +
 			`  s1 -- "unchanged" --> s2` + "\n" + failedClass("s1") + "```\n\n**Findings**:\n\n" +
 			"- `rehearsal.deadline.cut` change-1/third-link: the deadline of 1980s passed at stage change-1/third-link: change-1/seeded took 88.1s\n\n"},
 		{"not built", notBuiltRun().document(), head("failed", "243.0s") + bp +
-			"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | 5c5c5c5c… | not built (failed at readiness) | | | — | error |\n" +
-			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | | | | | not reached |\n\n" +
+			"| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | not built (failed at readiness) | | | — | error |\n" +
+			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | | | | | not reached |\n\n" +
 			"```mermaid\nflowchart TD\n" + `  s0["change-1/branch-point<br/>refused"]` + "\n" + `  s1["change-1/seeded<br/>error"]` + "\n" +
 			`  s2["change-1/third-link<br/>not reached"]` + "\n" + `  s0 -. "not computed" .-> s1` + "\n" + link + failedClass("s1") + "```\n\n**Findings**:\n\n" +
 			"- `readiness.timeout` n2: n2 did not answer its probe within 60s\n" +
 			"- `rehearsal.baseline.failed` change-1/seeded: the baseline change-1/seeded could not be built: its provision ended failed at readiness\n" +
 			missed + "\n"},
 		{"unclean", uncleanDoc, head("unclean", "118.4s") + bp + base +
-			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | d0d0d0d0… | stepped 4.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | none | passed |\n" +
-			"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |\n\n" +
+			"| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 4.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | none | passed |\n" +
+			"| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | none | passed |\n\n" +
 			"```mermaid\nflowchart TD\n" + `  s0["change-1/branch-point<br/>refused"]` + "\n" + `  s1["change-1/seeded<br/>baseline"]` + "\n" +
 			`  s2["change-1/third-link<br/>passed"]` + "\n" + `  s3["change-1/head<br/>passed"]` + "\n" + `  s0 -. "not computed" .-> s1` + "\n" +
 			link + `  s2 -- "unchanged" --> s3` + "\n```\n\n**Findings**:\n\n" + "- `cleanup.incomplete` lab fylgja: clab destroy exited 1; fylgja twin destroy clears it\n" +
@@ -828,4 +828,54 @@ func TestMarkdownOfACutAFailedBaselineAndAnUncleanDestroy(t *testing.T) {
 // keeps a class and drops a node's style attribute.
 func failedClass(nodes string) string {
 	return "  classDef failed stroke:#d32f2f,stroke-width:3px\n  class " + nodes + " failed\n"
+}
+
+// The table names each stage's snapshot before its bundle (018, R-14), by the short id as
+// the bundle is named, or — for the stage refused, which has neither. Two adjacent stages of
+// one bundle are one twin, and their rows show why they are two stages at all: two
+// snapshots, the step between them unchanged. rehearsal.steps.none, which the server files
+// when one stage alone compiled, judges by compiled stages and never by an id, so two
+// stages of one bundle are a baseline and a rehearsed stage, as before.
+func TestSnapshotColumnBeforeBundle(t *testing.T) {
+	e := passedRun()
+	e.in.Stages[3].BundleID = thirdID // the head: third-link's bundle, its own snapshot
+	doc := e.document()
+	md := Markdown(doc, pairs())
+	for _, want := range []string{
+		"\n| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |\n|---|---|---|---|---|---|---|---|---|\n",
+		"\n| change-1/branch-point | 2026-10-16T17:20:19.944651+00:00 | — | — | | | | | refused (scope.empty) |\n",
+		"\n| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created |",
+		"\n| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 4.5s;",
+		"\n| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | d0d0d0d0… | unchanged |",
+	} {
+		if !strings.Contains(md, want) {
+			t.Errorf("the markdown lacks %q:\n%s", want, md)
+		}
+	}
+	if len(md) > CommentMax {
+		t.Errorf("the markdown is %d bytes, over %d", len(md), CommentMax)
+	}
+
+	// The block carries each id whole, null for the stage refused.
+	stages := doc.Rehearsal.Stages
+	if stages[0].SnapshotID != nil || stages[0].BundleID != nil {
+		t.Errorf("the refused branch point names snapshot %v, bundle %v", stages[0].SnapshotID, stages[0].BundleID)
+	}
+	for i, want := range []string{seededSnapshot, thirdSnapshot, headSnapshot} {
+		if st := stages[i+1]; st.SnapshotID == nil || *st.SnapshotID != want {
+			t.Errorf("stage %s names snapshot %v, want %s", st.Ref, st.SnapshotID, want)
+		}
+	}
+	if *stages[2].BundleID != *stages[3].BundleID || *stages[2].SnapshotID == *stages[3].SnapshotID {
+		t.Errorf("third-link and the head: bundles %s and %s, snapshots %s and %s",
+			*stages[2].BundleID, *stages[3].BundleID, *stages[2].SnapshotID, *stages[3].SnapshotID)
+	}
+	if got := []string{stages[2].Role, stages[3].Role}; got[0] != RoleRehearsed || got[1] != RoleRehearsed {
+		t.Errorf("two stages of one bundle take the roles %v", got)
+	}
+	for _, f := range doc.Findings {
+		if f.Rule == findings.RuleRehearsalStepsNone {
+			t.Errorf("two compiled stages of one bundle file %s", f.Rule)
+		}
+	}
 }

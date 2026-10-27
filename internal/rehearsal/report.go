@@ -41,11 +41,13 @@ type Input struct {
 
 // Stage is one stage of the plan as the server resolved, read and compiled it: its
 // reference and the mark's label and description, where its at came from, the branch and
-// the at it resolved to (empty when it did not), its bundle (empty when refused), the role
-// the rehearsal gives it, and the plan's findings at resolve, read and compile.
+// the at it resolved to (empty when it did not), its snapshot (018) and its bundle (each
+// empty when refused), the role the rehearsal gives it, and the plan's findings at resolve,
+// read and compile.
 type Stage struct {
 	Ref, Label, Description, AtSource string
 	Branch, At                        string
+	SnapshotID                        string
 	BundleID                          string
 	Role                              string
 	Findings                          findings.List
@@ -126,6 +128,10 @@ func Build(in Input, res Result) findings.RehearsalBlock {
 	for _, s := range in.Stages {
 		st := findings.RehearsalStage{Ref: s.Ref, Label: s.Label, Description: s.Description, AtSource: s.AtSource,
 			Branch: s.Branch, At: s.At, Role: s.Role, Findings: append(findings.List{}, s.Findings...)}
+		if s.SnapshotID != "" {
+			id := s.SnapshotID
+			st.SnapshotID = &id
+		}
 		if s.BundleID != "" {
 			id := s.BundleID
 			st.BundleID = &id

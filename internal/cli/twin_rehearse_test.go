@@ -1039,7 +1039,7 @@ func TestRehearseMarkdown(t *testing.T) {
 		doc.Subject == nil || doc.Subject.Scope != defaultScope {
 		t.Errorf("heading %q, subject %+v; want both naming the scope %s", heading, doc.Subject, defaultScope)
 	}
-	for _, want := range []string{"\n| stage | at | bundle | step | wait | verify | new verification failures | verdict |\n", "\n```mermaid\nflowchart TD\n"} {
+	for _, want := range []string{"\n| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |\n", "\n```mermaid\nflowchart TD\n"} {
 		if !strings.Contains(stdout, want) {
 			t.Errorf("the markdown lacks %q:\n%s", want, stdout)
 		}

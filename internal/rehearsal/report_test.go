@@ -35,6 +35,15 @@ var (
 	headID   = strings.Repeat("cc", 32)
 )
 
+// Each compiled stage's snapshot (018), named apart from its bundle so the table's two
+// columns cannot be told the same by chance.
+var (
+	seededSnapshot = strings.Repeat("a1", 32)
+	thirdSnapshot  = strings.Repeat("a2", 32)
+	badSnapshot    = strings.Repeat("a3", 32)
+	headSnapshot   = strings.Repeat("a4", 32)
+)
+
 func branchPoint() Stage {
 	var l findings.List
 	l.AddStep(findings.Rejection, findings.StepRead, findings.RuleScopeEmpty, "tag:fylgja",
@@ -45,25 +54,26 @@ func branchPoint() Stage {
 
 func seeded() Stage {
 	return Stage{Ref: change + "/seeded", Label: "seeded", Description: "after the link is cabled",
-		AtSource: findings.AtSourceWritten, Branch: change, At: "2026-10-16T17:25:30.118244+00:00", BundleID: seededID,
-		Role: RoleBaseline}
+		AtSource: findings.AtSourceWritten, Branch: change, At: "2026-10-16T17:25:30.118244+00:00",
+		SnapshotID: seededSnapshot, BundleID: seededID, Role: RoleBaseline}
 }
 
 func thirdLink(role string) Stage {
 	return Stage{Ref: change + "/third-link", Label: "third-link", Description: "third link", AtSource: findings.AtSourceGiven,
-		Branch: change, At: "2026-10-16T17:30:00.000000+00:00", BundleID: thirdID, Role: role}
+		Branch: change, At: "2026-10-16T17:30:00.000000+00:00", SnapshotID: thirdSnapshot, BundleID: thirdID, Role: role}
 }
 
 // badPort's description holds what markdown and Mermaid must escape: quotes, angle
 // brackets, a pipe and a newline.
 func badPort(role string) Stage {
 	return Stage{Ref: change + "/bad-port", Label: "bad-port", Description: "a port <disabled> \"by mistake\" | n1\nsecond line",
-		AtSource: findings.AtSourceGiven, Branch: change, At: "2026-10-16T17:30:05.000000+00:00", BundleID: badID, Role: role}
+		AtSource: findings.AtSourceGiven, Branch: change, At: "2026-10-16T17:30:05.000000+00:00", SnapshotID: badSnapshot,
+		BundleID: badID, Role: role}
 }
 
 func head(role string) Stage {
 	return Stage{Ref: change + "/head", Label: "head", AtSource: findings.AtSourceHead, Branch: change,
-		At: "2026-10-16T17:30:11.884302+00:00", BundleID: headID, Role: role}
+		At: "2026-10-16T17:30:11.884302+00:00", SnapshotID: headSnapshot, BundleID: headID, Role: role}
 }
 
 func input(deadlineS int, stages ...Stage) Input {

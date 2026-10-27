@@ -319,19 +319,23 @@ func whyText(doc *findings.Document, brief bool) string {
 	return orNone(rules)
 }
 
-// table is one row per stage: the reference, the at, the bundle, the step's outcome with the
-// nodes it touched, the wait's outcome, the counts, the new findings and the verdict, which
-// reads not read for a stage of a run whose end was not read. Brief, the step is its outcome
-// alone and the new findings the first few and how many more.
+// table is one row per stage: the reference, the at, the snapshot (018) and the bundle by
+// their short ids (— for a stage refused), the step's outcome with the nodes it touched,
+// the wait's outcome, the counts, the new findings and the verdict, which reads not read
+// for a stage of a run whose end was not read. Brief, the step is its outcome alone and the
+// new findings the first few and how many more.
 func table(b findings.RehearsalBlock, unread, brief bool) string {
 	lines := []string{
-		"| stage | at | bundle | step | wait | verify | new verification failures | verdict |",
-		"|---|---|---|---|---|---|---|---|",
+		"| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |",
+		"|---|---|---|---|---|---|---|---|---|",
 	}
 	for _, s := range b.Stages {
-		at, bundle := "—", "—"
+		at, snapshot, bundle := "—", "—", "—"
 		if s.At != "" {
 			at = cell(s.At)
+		}
+		if s.SnapshotID != nil {
+			snapshot = short(*s.SnapshotID)
 		}
 		if s.BundleID != nil {
 			bundle = short(*s.BundleID)
@@ -347,7 +351,7 @@ func table(b findings.RehearsalBlock, unread, brief bool) string {
 		if brief {
 			stepped, found = stepOutcome(s), newBrief(s)
 		}
-		lines = append(lines, row(cell(s.Ref), at, bundle, cell(stepped), wait, counts, cell(found), cell(verdictCell(s, unread))))
+		lines = append(lines, row(cell(s.Ref), at, snapshot, bundle, cell(stepped), wait, counts, cell(found), cell(verdictCell(s, unread))))
 	}
 	return strings.Join(lines, "\n")
 }
@@ -769,7 +773,8 @@ func counted(lines []string) []string {
 	return out
 }
 
-// short is a bundle id's first eight characters and an ellipsis, as the text prints it.
+// short is a snapshot's or a bundle's id, its first eight characters and an ellipsis, as the
+// text prints it.
 func short(id string) string {
 	if len(id) > 8 {
 		return id[:8] + "…"

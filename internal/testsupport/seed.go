@@ -928,6 +928,68 @@ func (c *Client) ReEndCable(branch, device, iface string, ends ...string) error 
 	return okOf(raw, "DcimCableUpdate", what)
 }
 
+// SetCableStatus sets the status of the one cable labelled label on a test branch, a
+// choice of the library's DcimCable.status (connected, planned): the cable's own write,
+// which moves its stamp and so the intent of the device of each of its ends, through the
+// ports' connector (FR-023; 017 research §5.8). It renders nothing. The fixture is refused,
+// as every change is.
+func (c *Client) SetCableStatus(branch, label, status string) error {
+	if branch == FixtureBranch {
+		return fmt.Errorf("branch %s: the fixture is never changed", branch)
+	}
+	if err := testBranch(branch); err != nil {
+		return err
+	}
+	id, err := c.cableID(branch, label)
+	if err != nil {
+		return err
+	}
+	what := fmt.Sprintf("setting the status of cable %s on %s to %s", label, branch, status)
+	raw, err := c.GraphQL(branch, fmt.Sprintf(`mutation { DcimCableUpdate(data: {id: %q, status: {value: %q}}) { ok } }`,
+		id, status))
+	if err != nil {
+		return fmt.Errorf("%s: %w", what, err)
+	}
+	return okOf(raw, "DcimCableUpdate", what)
+}
+
+// CableStamp returns the stamp of the one cable labelled label on a branch, its edge
+// wrapper's node_metadata.updated_at, as Infrahub writes it and the stamps read it.
+func (c *Client) CableStamp(branch, label string) (string, error) {
+	raw, err := c.GraphQL(branch, fmt.Sprintf(`{ DcimCable(label__value: %q) { edges { node_metadata { updated_at } } } }`, label))
+	if err != nil {
+		return "", fmt.Errorf("reading the stamp of cable %s on %s: %w", label, branch, err)
+	}
+	var r struct {
+		Cable struct {
+			Edges []struct {
+				Meta struct {
+					UpdatedAt string `json:"updated_at"`
+				} `json:"node_metadata"`
+			} `json:"edges"`
+		} `json:"DcimCable"`
+	}
+	if err := json_Unmarshal(raw, &r); err != nil {
+		return "", err
+	}
+	if len(r.Cable.Edges) != 1 {
+		return "", fmt.Errorf("branch %s holds %d cables labelled %s, want one", branch, len(r.Cable.Edges), label)
+	}
+	return r.Cable.Edges[0].Meta.UpdatedAt, nil
+}
+
+// cableID returns the one cable of a label on a branch.
+func (c *Client) cableID(branch, label string) (string, error) {
+	found, err := c.ids(branch, "DcimCable", fmt.Sprintf(`(label__value: %q)`, label))
+	if err != nil {
+		return "", err
+	}
+	if len(found) != 1 {
+		return "", fmt.Errorf("branch %s holds %d cables labelled %s, want one", branch, len(found), label)
+	}
+	return found[0], nil
+}
+
 // deviceID returns the one device of a name on a branch.
 func (c *Client) deviceID(branch, name string) (string, error) {
 	found, err := c.ids(branch, "DcimDevice", fmt.Sprintf(`(name__value: %q)`, name))

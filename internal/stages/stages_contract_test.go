@@ -808,7 +808,9 @@ func TestStageRefusals(t *testing.T) {
 // SC-009 against the real Infrahub (017 research R-10, §5.8): after a fresh mark, each write
 // on what a tagged device owns or reaches makes the next mark stale on every tagged device
 // that reaches it, and on no other. The platform's description and the manufacturer's reach
-// the three devices on them; the cable on n1:ethernet-1/1 re-ended to n1's port alone reaches
+// the three devices on them; the n1 — n2 cable's status, the cable's own write, moves its
+// stamp, which reaches n1's and n2's intent through their ports' connector and n3's not at
+// all (T118); the same cable re-ended to n1's port alone reaches
 // n1 and n2, by the cable's event and its former port's, since no stamp moves; an edit of a
 // virtual interface n1 already has, its description, reaches n1 alone, by the interface's own
 // stamp. The interface is created and its creation cleared first: a creation also adds n1's
@@ -928,6 +930,40 @@ func TestStagesSeeEveryWriteOfADevice(t *testing.T) {
 		t.Fatal(err)
 	}
 	mark("manufacturer", "the manufacturer described", false, "n1", "n2", "n3")
+
+	// The n1 — n2 cable's status, a write of the cable alone: its stamp is read through the
+	// connector of each of its ends' ports (PortStamps), so n1's and n2's intent move to it
+	// and n3's does not (T118).
+	const n1n2 = "n1:ethernet-1/1|n2:ethernet-1/1"
+	stamps := func() intent.Stamps {
+		t.Helper()
+		s, err := liveStamper{}.Stamps(t.Context(), name, "", testScope)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	before := stamps()
+	if err := c.SetCableStatus(name, n1n2, "planned"); err != nil {
+		t.Fatal(err)
+	}
+	cableAt, err := c.CableStamp(name, n1n2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	after := stamps()
+	for _, d := range []string{"n1", "n2"} {
+		if got := after.Devices[d].Intent; got != cableAt {
+			t.Errorf("after the cable's status %s's intent stamp is %s (before it %s); want the cable's, %s",
+				d, got, before.Devices[d].Intent, cableAt)
+		}
+	}
+	if after.Devices["n3"].Intent != before.Devices["n3"].Intent {
+		t.Errorf("the cable's status moved n3's intent stamp from %s to %s", before.Devices["n3"].Intent, after.Devices["n3"].Intent)
+	}
+	t.Logf("the cable's status stamped it at %s; n1's and n2's intent before it %s, %s", cableAt,
+		before.Devices["n1"].Intent, before.Devices["n2"].Intent)
+	mark("cable-status", "the n1 — n2 cable's status set", false, "n1", "n2")
 
 	// The re-ending moves no stamp: the cable's event, and its former port's, land in the log
 	// a few seconds after the write (§5.8), and the head passes the write by them alone. The

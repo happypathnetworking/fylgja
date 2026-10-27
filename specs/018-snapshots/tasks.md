@@ -857,9 +857,36 @@ note.
       - `make lint` `0 issues`; `go vet -tags contract,fixture,e2e ./...` clean; `git diff --stat main -- testdata/golden` empty.
     - **The host left clean:** `clab inspect --all` is `{}`, there is no `local/twin`, the Schedule list is empty, no workflow runs, and no `fylgja-test-*` branch remains. The worker and the server run from this tree. Tiers 2 and 3 are T053's and T054's, and neither ran.
 
-- [ ] T053 [live] The whole contract tier (quickstart §7). Preconditions: no twin on the host, and the worker and the server from this tree beside the bridge (T050). Run `set -a; . local/.env; set +a; make test-contract 2>&1 | tee local/018-contract.out`, started detached with its exit status in a file and waited on in foreground calls of under ten minutes. Expected green, about a minute over 017's 1,714.7 s. In the output: `TestPinnedReadReproducesItsBundle` and `TestStageTakenTwiceHasOneSnapshot` log their ids; `internal/stages` and `internal/checks` are green, `TestChecksInsideInfrahub` included, with the id in their rows (SC-006). Afterwards, Infrahub as the contract tier leaves it (`CLAUDE.md`, "Stages"). Record the total time, `internal/stages`' and `internal/checks`' times, and the ids. Never boot a twin while it runs.
+- [X] T053 [live] The whole contract tier (quickstart §7). Preconditions: no twin on the host, and the worker and the server from this tree beside the bridge (T050). Run `set -a; . local/.env; set +a; make test-contract 2>&1 | tee local/018-contract.out`, started detached with its exit status in a file and waited on in foreground calls of under ten minutes. Expected green, about a minute over 017's 1,714.7 s. In the output: `TestPinnedReadReproducesItsBundle` and `TestStageTakenTwiceHasOneSnapshot` log their ids; `internal/stages` and `internal/checks` are green, `TestChecksInsideInfrahub` included, with the id in their rows (SC-006). Afterwards, Infrahub as the contract tier leaves it (`CLAUDE.md`, "Stages"). Record the total time, `internal/stages`' and `internal/checks`' times, and the ids. Never boot a twin while it runs.
 
-- [ ] T054 [live] The end-to-end tier, on a quiet host after T053, never beside it (quickstart §8). Preconditions:
+  - *2026-10-27, Run 15, the converge loop's session, at `bd2dae2`:* **done; one defect in the tier's own tests, fixed in `1c0f97c`, and the failed package run again alone**, as Release 0.2's close ran `internal/stage` again.
+    - **Before it:** `twin show` read `twin: none`. The worker (`342010`) and the server (`342070`) read `(deleted)` again. So `make build` (exit 0, `statically linked`) was run, and both were restarted at 19:17:32Z by `CLAUDE.md`'s two lines: the worker is `528336` and the server `528355`, neither deleted. Both environments carry the names T050 lists, and the reports read as T050's: `snapshots:` in both state root lines, both listeners, the plaintext warning, `default scope: tag:fylgja` and both packages with their logins set. From inside each task worker, `POST /v1/twin/show` answered `200 1 0.1.0-dev` (240 bytes read whole) with the token and `401` without. The dev server was `SERVING`. Infrahub held what `CLAUDE.md` says the contract tier leaves.
+    - **The command:** `set -a; . local/.env; set +a; GOFLAGS=-v make test-contract > local/018-contract.out 2>&1`, started detached, its exit and times in files. `-v` was added because `go test` prints a passing test's `t.Logf` lines only with it, and the task asks for the ids. quickstart §7 now says so.
+    - **The tier:** 1,814.4 s wall, 19:18:41Z → 19:48:56Z, at load 2.1 → 3.9. That is 99.7 s over 017's 1,714.7 s. Exit 2: every package green but `internal/cli`.
+      - The longest packages: `internal/stages` 1,514.6 s (017: 1,422.1 s), `internal/server` 933.5 s, `internal/stage` 709.0 s and `internal/intent` 477.5 s.
+      - `internal/checks`, the second `go test`, took 291.7 s (017: 278.8 s). `TestChecksInsideInfrahub` passed in 291.68 s against the server on `172.17.0.1:7650`, pid `528355`, which the test read as this tree's `bin/fylgja`.
+    - **The defect:** `internal/cli` failed in 30.4 s, against 017's 207.7 s.
+      - `TestSchemaCheckPassesOnBothFixtures` failed with `creating branch: Post "http://127.0.0.1:1/graphql/main": … connection refused`.
+      - `TestSchemaCheckOnAMissingBranch` failed with its proxy's `HTTP 502` from the same address.
+      - `TestSchemaCheckIssuesNoObjectQuery` passed without reaching Infrahub at all: its proxy records the path before forwarding it.
+      - The cause is `85698fa` (T025's harness change). `TestMain` points `INFRAHUB_ADDRESS` at `http://127.0.0.1:1` and the token at a placeholder, so that no tier-1 test reaches the operator's Infrahub. `schema_contract_test.go` shares that binary under `-tags contract` and read the same variables.
+      - The fix: the file keeps the shell's address and token as the package initialises, before `TestMain` runs, and `live` gives each contract test those values with `t.Setenv`. Tier 1 keeps its harmless defaults. No tier-1 test pins this, because the defect exists only under the contract tag, and that run is its test.
+      - Run again alone with `go test -count=1 -timeout 30m -tags contract -v ./internal/cli`: `ok` in 66.9 s (77.1 s wall). `TestSchemaCheckPassesOnBothFixtures` passed in 29.93 s, seeding and deleting `fylgja-test-mixed-1793130607-9923`; `TestSchemaCheckOnAMissingBranch` in 0.01 s; and `TestSchemaCheckIssuesNoObjectQuery` in 1.19 s.
+    - **`TestPinnedReadReproducesItsBundle`** passed in 205.17 s, on branch `fylgja-test-repro-1793129231-8885` with T = `2026-10-27T19:28:52.492917Z`.
+      - The three reads pinned at T (before the change, after n1's regeneration and after the change) give bundle `4e9ccfb53b6a87404584a492c368e206ad3d0e130473241ffdcf93b6cc16c2f1` and snapshot **`201fa5e2efecb98c8dbd2886e91473ea13e9f464fd03fcea73345a4b3a48235e`**.
+      - The unpinned read after the change gives bundle `7b164084…` and snapshot `2bab33dc92d5725c6c2617e1b7f6ea59a5f7cc167ac3e41b1c2446628cd91f55`.
+    - **`TestStageTakenTwiceHasOneSnapshot`** passed in 178.96 s, on branch `fylgja-test-rh-1793129481-9774`: seed 30 s, the pipeline 92 s, the plans exit 1 in 10.1 s and 8.6 s.
+      - `seeded`, taken twice: snapshot **`ffa1dac886d77dff5db6b4fde6f1848b020c5fda323530e8daa00842c7168754`**, bundle `d2755c9b…`.
+      - The head: snapshot `98c33061ce0599a1803eb96ffce0d8ca0d73c4e14b8dcd4f9bcb72deb2075d23`, bundle `79772f1b…`.
+      - The branch point is refused `scope.empty`.
+      - Cleanup: `deleted 1 stage(s), 1 proposed change(s), branch …`.
+    - **The id in the rows (SC-006):**
+      - `internal/stages`' plan pipeline takes and files each stage's snapshot, and the package is green.
+      - `internal/checks`' rows are rendered by the server on the bridge. Its store gained four entries under the test's branch `fylgja-test-ck-1793130286-2462` (`0406644f…`, `26fb2112…`, `ba4a670b…`, `7dd6d789…`), filed by the checks' `stage.plan` and `twin.rehearse` requests at 19:46–19:47.
+      - The test asserts no snapshot itself (T021's note on formats.md §10). Tier 3's case 9 pins the header (T054).
+    - **After it:** `Branch` lists `main` and `fylgja-fixture` alone. `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread`, `CoreUserValidator` and `DcimPhysicalDevice` count 0. `CoreReadOnlyRepository` holds `fylgja` alone with its two check definitions. No twin was booted while it ran.
+
+- [X] T054 [live] The end-to-end tier, on a quiet host after T053, never beside it (quickstart §8). Preconditions:
   - `free -m` read;
   - the dev server, the worker and the server on the bridge from this tree;
   - Docker, containerlab, both images and Infrahub;
@@ -874,6 +901,57 @@ note.
   - both times.
 
   A failed attempt for the host's sake (a lost heartbeat, a starved deploy) is run again after a rest. A failure of the feature gets a tier-1 test and a fix before the re-run.
+
+  - *2026-10-27, Run 15, the converge loop's session, at `bd2dae2`:* **done; one attempt lost to the host, the second green, then the narrowed run green.**
+    - **Preconditions**, at 19:51Z:
+      - `free -m` read 10,817 MiB available at load 2.3. Infrahub's containers held about 15 GiB, its server 7.9 GiB of that.
+      - Both images present: `ghcr.io/nokia/srlinux:24.7.1` (`171ec8d41d6e`) and `ceos:4.32.0.2F` (`2b2efd540c12`).
+      - The dev server `SERVING`.
+      - `fylgja` registered at `cb0a8d7` with its two check definitions, and that commit in both task workers' `commits/`. 018 changes nothing under `infrahub/` or `.infrahub.yml` since it.
+    - **The first start was refused at once:**
+      - `make test-e2e` builds first. The uncommitted fix of T053 flipped `vcs.modified`, so the build replaced `bin/fylgja`.
+      - Case 9's check then refused the server on the bridge, whose binary read `(deleted)`, before any case ran.
+      - The fix was committed (`1c0f97c`) and `make build` run again (`vcs.modified=false`).
+      - Both processes were restarted at 19:52:49Z (worker `612841`, server `612863`) and verified as T050's were: the environments, the reports, and from each task worker `200 1 0.1.0-dev` with the token and `401` without.
+      - A second `make build` left the binary in place.
+      - quickstart §8 now asks for a committed tree.
+    - **Attempt 1** started 19:53Z (10,653 MiB available, load 2.1).
+      - Cases 1–8 and 9a passed.
+      - Case 9b failed. The `fylgja-twin` check concluded `failure` as expected, but at the baseline's deploy, not at `bad-port`'s push. SR Linux's `sr_cli` segfaulted in n3's containerlab post-deploy (`Segmentation fault (core dumped)`; the kernel logged `python[907983]: segfault … in python3.11` at 20:21:28), and containerlab cancelled n1's and n2's post-deploy.
+      - The load was 5–6, with about 10.2 GiB available.
+      - This is `docs/verified-facts.md`'s "under memory pressure SR Linux's own `sr_cli` can segfault", seen here on 26.04 for the first time, for T059.
+      - The script's trap left no lab, no twin directory, no Schedule and no `fylgja-test-*` branch.
+      - Its output is kept in `local/018-e2e-1.out` and `local/018-e2e-1.outputs/`.
+      - A host failure, so the host was rested to a five-minute load of 2.4.
+    - **Attempt 2** started 20:29:38Z (10,617 MiB available, load 1.1): **`E2E-OK`**, exit 0, wall 1,758.0 s (017: 1,769.0 s), boot half 9.0 s (case 1) and 8.0 s (case 6).
+      - Creates: case 1 53.2 s, 2 44.7 s, 4 44.9 s, 5 45.2 s, 6 103.3 s, 7 54.3 s, 8 105.9 s.
+      - Verify: 3.5 s (case 1), 3.9 s (case 5) and 3.0 s (case 6); case 8 settled after 4.472 s and 3.797 s.
+      - Case 9's rehearsals: 69.9 s of the 1,980 s deadline (passed) and 76.2 s of the 2,610 s deadline (failed at `bad-port`'s push on n1, as designed).
+      - Outputs are in `local/018-e2e.out` and `local/018-e2e.outputs/`.
+      - **Every create's snapshot is filed** under `local/snapshots/<id>.json`:
+        - case 1: `576933ec51da1866cdb7344a1f60ec2468c7d04aafbee42eacd171e352bd7482`, bundle `f764e1fa…`, T051's fixture id;
+        - cases 2 and 4: one snapshot, `839e80816e4ffbce2e2d66bb17651bc35d419b94205df4d3a3945b0b09936f58`, and one bundle, `0465c540…`;
+        - case 5: `8af8d789…`, bundle `1f80f592…`;
+        - case 6: `064bbfef…`, bundle `f271b7a8…`;
+        - case 7: `1e097519…`, bundle `c6019f79…`;
+        - case 8: `25023edb…`, bundle `78438299…`.
+      - **Case 1's `twin show`** reads `record: branch fylgja-fixture, snapshot 576933ec…, bundle_id f764e1fa…, schema 7c413536d67ef86321c629c076a0d3a4, scope tag:fylgja, read by infrahub-dcim …`.
+      - **Case 5's rebuilt twin** has `.show.record` holding `snapshot_id: null`, and its text reads `snapshot none, bundle_id 81d21e46…`.
+      - **Case 7's steps:**
+        - the plan gives seeded `1e097519…`, third-link `675bba24…` and the head `9719208f…`, and the create took seeded's;
+        - step 7a ended `stepped`, from `1e097519…` to `675bba24…`;
+        - step 7b ended `unchanged`, from `675bba24…` to `9719208f…`;
+        - each document's top-level `snapshot_id` is its target's.
+      - **Case 9:** both comments carry `| stage | at | snapshot | bundle | … |`, in 2,260 and 3,557 bytes.
+      - **The credential greps:** `e2e: no credential and no marker in the run's outputs and the bundle store, the log of the server on the bridge …, and not the worker's log, since WORKER_LOG is unset`. Six values were also searched for: the Infrahub token, the API's token, the SR Linux password, the secret key, the agent token and the admin password. None was found in `local/worker.log`, `local/server.log`, this run's outputs and logs, or `local/snapshots`. Only counts were printed.
+    - **The narrowed run** started 21:05:53Z, after a rest (10,591 MiB available, load 1.5): **`E2E-PARTIAL: platforms nokia_srlinux; ran 1 2 3 4 5 7 9; skipped 6 (…) 8 (…)`**, exit 0, wall 1,156.1 s (017: about 19 minutes).
+      - Case 1's snapshot is `576933ec…` again.
+      - Cases 2 and 4 share `02d759f6…`.
+      - Case 5's rebuilt twin reads `null`.
+      - Case 7 steps `b9079af3…` → `6032e920…` (`stepped`) → `9c1d2c65…` (`unchanged`).
+      - The script's credential greps are clean.
+      - Outputs are in `local/018-e2e-srlinux.out` and `local/018-e2e-srlinux.outputs/`.
+    - **The host left clean:** `clab inspect --all` finds no containers, there is no `local/twin`, the Schedule list is empty and no workflow runs. `Branch` lists `main` and `fylgja-fixture` alone. `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread`, `CoreUserValidator` and `DcimPhysicalDevice` count 0. `main` holds the registration `fylgja` alone, the two check definitions, the queries `device_config` and `fylgja_branch`, and the group `fylgja-devices`. The worker (`612841`) and the server (`612863`) run from this tree.
 
 **Checkpoint**: every tier green; the fixture's snapshot id known; the host left with no
 twin and Infrahub as the contract tier leaves it.

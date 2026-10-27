@@ -185,28 +185,32 @@ No twin on the host (`twin show` → `none`), the worker and the server from thi
 (§0 of `CLAUDE.md`'s rules; `/proc/<pid>/exe` not deleted), then:
 
 ```
-set -a; . local/.env; set +a; make test-contract 2>&1 | tee local/018-contract.out; tail -5 local/018-contract.out
+set -a; . local/.env; set +a; GOFLAGS=-v make test-contract 2>&1 | tee local/018-contract.out; tail -5 local/018-contract.out
 ```
 
-Green, about a minute over 017's 1,714.7 s, with `TestPinnedReadReproducesItsBundle`
-logging one snapshot id for the three pinned reads and another for the unpinned,
-`TestStageTakenTwiceHasOneSnapshot` logging the id and the store's unchanged entry, and
-`internal/stages` and `internal/checks` green. After it: `CoreProposedChange`,
+`-v` prints a passing test's logged lines, which `go test` otherwise shows only on a
+failure. Green in about 30 minutes (1,814.4 s on 2026-10-27, against 017's 1,714.7 s),
+with `TestPinnedReadReproducesItsBundle` logging one snapshot id for the three pinned
+reads and another for the unpinned, `TestStageTakenTwiceHasOneSnapshot` logging the id
+each plan took, and `internal/stages` and `internal/checks` green. After it: `CoreProposedChange`,
 `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` count 0, `Branch` lists `main`
 and `fylgja-fixture` alone, no `fylgja-test-*` branch remains.
 
 ## 8. Tier 3
 
 The dev server and the worker up, Docker, containerlab, both images, Infrahub, the
-server on the bridge, both checks imported, `free -m` read, no tier 2 running:
+server on the bridge, both checks imported, `free -m` read, no tier 2 running, and the
+tree committed: `make test-e2e` builds first, an uncommitted edit changes the binary's
+VCS stamp, the build then replaces `bin/fylgja`, and case 9 refuses a server whose binary
+reads `(deleted)` before any case runs:
 
 ```
 set -a; . local/.env; set +a; setsid nohup sh -c 'make test-e2e > local/018-e2e.out 2>&1; echo $? > local/018-e2e.exit' < /dev/null > /dev/null 2>&1 &
 ```
 
 Then wait in foreground calls of under ten minutes until `local/018-e2e.exit` exists.
-`E2E-OK` in about 29.5 minutes; then `PLATFORMS=nokia_srlinux make test-e2e` ending
-`E2E-PARTIAL` in about 19. The outputs show every create's `snapshots/<id>.json`, case
+`E2E-OK` in about 29.5 minutes (1,758.0 s on 2026-10-27); then `PLATFORMS=nokia_srlinux
+make test-e2e` ending `E2E-PARTIAL` in about 19 (1,156.1 s). The outputs show every create's `snapshots/<id>.json`, case
 1's `twin show` text holding `snapshot <id>, bundle_id <id>`, case 5's rebuilt twin
 reading `.show.record.snapshot_id == null`, and case 7's steps naming the target's
 snapshot. Rest the host between the two runs.

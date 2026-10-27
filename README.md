@@ -93,10 +93,12 @@ where the cEOS image comes from.
 
 This is a real session on one lab host, with Infrahub running beside it. Each step's
 `begins` line is left out, and other trimmed lines are marked `…`. It was recorded at
-`v0.2.0`, before Fylgja read the schema library's DCIM: its ids, counts and schema hashes
-are that release's, and the lines 017 changed (the record's scope and mapping, the scope
-in a plan's heading, `scope.empty` at the branch point) are shown as this build prints
-them. Start the workflow
+`v0.2.0`, before Fylgja read the schema library's DCIM or took snapshots: its ids, counts
+and schema hashes are that release's, and the lines 017 and 018 changed (the record's
+scope, mapping and snapshot, the scope in a plan's heading, `scope.empty` at the branch
+point, a create's two `stored:` lines in place of its run's read and compile, each stage's
+`snapshot_id`, the report's `snapshot` column) are shown as this build prints them, with
+the snapshot ids, which that release did not take, trimmed to `…`. Start the workflow
 service, the worker, which runs on the lab host and does everything that touches it, and
 the API's server beside it, which every command below talks to. The two roles share one
 state root, here `/var/tmp/fylgja`; any absolute directory both can write will do:
@@ -105,7 +107,7 @@ state root, here `/var/tmp/fylgja`; any absolute directory both can write will d
 set -a; . local/.env; set +a     # Infrahub, the node logins, FYLGJA_API_TOKEN and FYLGJA_DEFAULT_SCOPE
 make build                       # once: both roles below run this binary
 make temporal-dev &              # the workflow service
-mkdir -p /var/tmp/fylgja         # the state root: the bundle store and the twin directory
+mkdir -p /var/tmp/fylgja         # the state root: the bundle and snapshot stores and the twin directory
 FYLGJA_STATE_ROOT=/var/tmp/fylgja bin/fylgja worker run &   # the lab host worker: prints what it will run, and what's on the host
 FYLGJA_STATE_ROOT=/var/tmp/fylgja bin/fylgja serve &        # the API's server on 127.0.0.1:7650: prints where it listens, its state root, its default scope and packages
 ```
@@ -132,8 +134,10 @@ schema loaded on fylgja-test-readme
 three-node fixture seeded on fylgja-test-readme, with every artifact rendered and Ready
 ```
 
-**Create the twin.** Fylgja reads the branch, compiles it, checks the host, deploys, waits
-for every node to answer, pushes each artifact, and records what it built. It reads the
+**Create the twin.** Fylgja reads the branch, takes what it read as a **snapshot**,
+content-addressed and filed, and compiles it, all before the run starts; the run then
+checks the host, deploys, waits for every node to answer, pushes each artifact, and
+records what it built. It reads the
 devices tagged by its scope, `--scope tag:<name>`, or, given none as here, the server's
 default, `FYLGJA_DEFAULT_SCOPE` from `local/.env` (`tag:fylgja`, the tag the fixture puts
 on every device), which the record line names; a server started with no default refuses a
@@ -142,9 +146,9 @@ before 017 does, since the script keeps the file it finds: add the line to it.
 
 ```console
 $ bin/fylgja twin create --branch fylgja-test-readme --interval 15s
+snapshot_id …  stored: /var/tmp/fylgja/snapshots/….json
+bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee  stored: /var/tmp/fylgja/bundles/777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee
 run fylgja-provision 01a112a2-7ee6-7772-a701-af726d528abc
-step read: done in 3.0s
-step compile: done in 0.0s (bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee)
 step host check: done in 0.1s
 step follow: done in 0.0s
 step stage: done in 0.0s
@@ -161,7 +165,7 @@ twin ready: bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd
   n1  172.20.20.3
   n2  172.20.20.4
   n3  172.20.20.2
-record: branch fylgja-test-readme, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 4d5b37aa0a894aec4cdca69fdb9fe455, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
+record: branch fylgja-test-readme, snapshot …, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 4d5b37aa0a894aec4cdca69fdb9fe455, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
 twin directory /var/tmp/fylgja/twin
 following branch fylgja-test-readme, checked every 15s (schedule fylgja-follow)
 warning host.memory.unbudgeted [step host_check] host: sum 6144 MiB (n1 2048, n2 2048, n3 2048) is not checked against a host budget: FYLGJA_HOST_MEMORY_MB is unset
@@ -169,7 +173,10 @@ warning host.memory.unbudgeted [step host_check] host: sum 6144 MiB (n1 2048, n2
 ```
 
 Nearly all of the time is containerlab booting three SR Linux nodes, and it depends on
-how busy the host is. A second `twin create` is refused, naming this twin.
+how busy the host is. The snapshot's id is the hash of what was read, without the time it
+was read, so the same intent read again has the same id; `twin create --snapshot <id>`
+builds it again from the server's store, with no read
+([Pinned and frozen twins](#pinned-and-frozen-twins)). A second `twin create` is refused, naming this twin.
 
 **Look at it.** `twin show` reads containerlab, the record and the workflow service, and
 changes nothing:
@@ -180,7 +187,7 @@ twin: lab fylgja present (3 nodes); twin directory present
   n1  clab-fylgja-n1  running  172.20.20.3  nokia_srlinux  device-config f05634801639578ed97c10f9d0265546
   n2  clab-fylgja-n2  running  172.20.20.4  nokia_srlinux  device-config 36667eef6c8a92923957b9549784273b
   n3  clab-fylgja-n3  running  172.20.20.2  nokia_srlinux  device-config 7efd0c0d5f40e5119d75b8b8d31d3e57
-record: branch fylgja-test-readme, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 4d5b37aa0a894aec4cdca69fdb9fe455, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
+record: branch fylgja-test-readme, snapshot …, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 4d5b37aa0a894aec4cdca69fdb9fe455, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
   intent read at 2026-10-06T19:13:21.796364Z; reproducing it with --at that instant is best-effort
   provisioned by run fylgja-provision 01a112a2-7ee6-7772-a701-af726d528abc (source intent), worker 0.1.0-dev, recorded 2026-10-06T19:14:09.579682296Z, 3 nodes
 kind: following branch fylgja-test-readme, checked every 15s
@@ -229,7 +236,8 @@ With no further command, a check sees a new `bundle_id` and rebuilds the twin: a
 and a create, about as long as the first. The fixture tool can return before Infrahub has
 rewritten an artifact, so here the 19:15:00Z check read the disabled port beside n1's old
 artifact and rebuilt to that, and the 19:16:00Z check read the new artifact and rebuilt
-again. Only n1's artifact moved:
+again. Only n1's artifact moved, and a rebuilt twin names no snapshot: a check reads and
+compiles in the worker and takes none:
 
 ```console
 $ bin/fylgja twin show
@@ -237,7 +245,7 @@ twin: lab fylgja present (3 nodes); twin directory present
   n1  clab-fylgja-n1  running  172.20.20.4  nokia_srlinux  device-config cf9fe341574d6bd1f8d9a2f721429d6f
   n2  clab-fylgja-n2  running  172.20.20.2  nokia_srlinux  device-config 36667eef6c8a92923957b9549784273b
   n3  clab-fylgja-n3  running  172.20.20.3  nokia_srlinux  device-config 7efd0c0d5f40e5119d75b8b8d31d3e57
-record: branch fylgja-test-readme, bundle_id e26f042ab5e63d1e6815544da7639bdc22cfc3fd1343512d10a0757b535faa59, …
+record: branch fylgja-test-readme, snapshot none, bundle_id e26f042ab5e63d1e6815544da7639bdc22cfc3fd1343512d10a0757b535faa59, …
 …
 kind: following branch fylgja-test-readme, checked every 15s
   last check: fylgja-reconcile-2026-10-06T19:16:00Z at 19:16:45Z, rebuilt
@@ -311,8 +319,9 @@ are. If the seed answers `graphql: None` straight after the delete, run it again
 1.11.2 can refuse to create a branch just after one of the same name was deleted
 ([verified facts](docs/verified-facts.md#infrahub-1112)).
 
-**Plan the stages.** `stage plan` reads and compiles every stage of the proposed change, in
-order, and shows what each step between them would change. It needs no lab and no worker.
+**Plan the stages.** `stage plan` reads every stage of the proposed change, takes and files
+its snapshot and compiles it, in order, and shows what each step between them would
+change. It needs no lab and no worker.
 `main` holds no network here, so the branch point is refused at its read and the plan exits
 1; the head is the branch as it is now, which the second mark already seals, so it is last
 whatever its `at` and the step to it changes nothing:
@@ -324,6 +333,7 @@ fylgja-test-readme/branch-point: refused (scope.empty)
   rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at …
 step fylgja-test-readme/branch-point → fylgja-test-readme/seeded (— → b63404c3…): not computed (fylgja-test-readme/branch-point was refused)
 fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-17T04:34:59.424352+00:00 (written), "seeded"
+  snapshot_id …
   bundle_id b63404c330b6144f78dc3dae5daf2d675e3ddd71eec11e899cb4af14dfa00efd
   read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
 step fylgja-test-readme/seeded → fylgja-test-readme/third-link (b63404c3… → d05dc990…):
@@ -331,10 +341,12 @@ step fylgja-test-readme/seeded → fylgja-test-readme/third-link (b63404c3… �
   links: +n1:e1-3 — n3:e1-3
   artifacts: n1 device-config f0563480… → a5d72b0d…; n3 device-config 7efd0c0d… → 01125980…
 fylgja-test-readme/third-link: branch fylgja-test-readme at 2026-10-17T04:35:09.759424+00:00 (written), "third link"
+  snapshot_id …
   bundle_id d05dc990c7f49e6de0755978bc9f4cb75f138fc79e6c5b43ee95c2e541db6daa
   read: 3 devices (nokia_srlinux 3), 14 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
 step fylgja-test-readme/third-link → fylgja-test-readme/head (d05dc990… → 6ecc489c…): unchanged; the ids differ by provenance alone
 fylgja-test-readme/head: branch fylgja-test-readme at 2026-10-17T04:35:08.687492+00:00 (head)
+  snapshot_id …
   bundle_id 6ecc489c6a38c219abf5b3d84ecbabb57db6b74d1982e409937a060a05d188d2
   read: 3 devices (nokia_srlinux 3), 14 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports
 rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at …
@@ -347,6 +359,8 @@ stage's instant, and it never follows:
 ```console
 $ bin/fylgja twin create --stage fylgja-test-readme/seeded
 stage fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-17T04:34:59.424352+00:00 (written), "seeded"
+snapshot_id …  stored: /var/tmp/fylgja/snapshots/….json
+bundle_id b63404c330b6144f78dc3dae5daf2d675e3ddd71eec11e899cb4af14dfa00efd  stored: /var/tmp/fylgja/bundles/b63404c330b6144f78dc3dae5daf2d675e3ddd71eec11e899cb4af14dfa00efd
 run fylgja-provision 01a14824-b77c-7ed6-958f-d5b3ad006e5f
 …
 step deploy: done in 43.2s (3 nodes)
@@ -363,7 +377,7 @@ running lab, and touches nothing:
 ```console
 $ bin/fylgja twin step --dry-run
 dry run: no lab, container, twin directory or run is changed
-twin: stage fylgja-test-readme/seeded (bundle b63404c3…), pinned at 2026-10-17T04:34:59.424352+00:00; 3 nodes
+twin: stage fylgja-test-readme/seeded (snapshot …, bundle b63404c3…), pinned at 2026-10-17T04:34:59.424352+00:00; 3 nodes
 stage fylgja-test-readme/third-link: branch fylgja-test-readme at 2026-10-17T04:35:09.759424+00:00 (written), "third link"
 step fylgja-test-readme/seeded → fylgja-test-readme/third-link (b63404c3… → d05dc990…):
   nodes: ~n1 (bootstrap, mapping); ~n3 (bootstrap, mapping)
@@ -522,6 +536,7 @@ fylgja-test-readme/branch-point: refused (scope.empty)
   rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at 2026-10-20T01:21:38.649050Z
 step fylgja-test-readme/branch-point → fylgja-test-readme/head (— → e26a0e65…): not computed (fylgja-test-readme/branch-point was refused)
 fylgja-test-readme/head: branch fylgja-test-readme at 2026-10-20T01:21:59.327451+00:00 (head)
+  snapshot_id …
   bundle_id e26a0e6578ce80add8f096da796187d56139f204e08cd13a1c9b32b7744f98ad
   read: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
 rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at 2026-10-20T01:21:38.649050Z
@@ -566,12 +581,12 @@ it:
 
 Run `fylgja-rehearse 01a156e8-da76-7743-9ca7-53c29d65ddc5`, stages resolved at 2026-10-20T01:24:14Z. Status **ok**. 70.7s of the 1980s deadline (ceiling 3600s).
 
-| stage | at | bundle | step | wait | verify | new verification failures | verdict |
-|---|---|---|---|---|---|---|---|
-| fylgja-test-readme/branch-point | 2026-10-20T01:21:38.649050Z | — | | | | | refused (scope.empty) |
-| fylgja-test-readme/seeded | 2026-10-20T01:23:39.142559+00:00 | f278dcb6… | created | settled after 4.6s | 15 held, 0 failed, 0 skipped | — | baseline |
-| fylgja-test-readme/third-link | 2026-10-20T01:23:48.370039+00:00 | 9827fe8f… | stepped 5.1s; push n1, n3 | settled after 5.7s | 19 held, 0 failed, 0 skipped | none | passed |
-| fylgja-test-readme/head | 2026-10-20T01:23:46.627087+00:00 | 904addf9… | unchanged | settled after 5.9s | 19 held, 0 failed, 0 skipped | none | passed |
+| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |
+|---|---|---|---|---|---|---|---|---|
+| fylgja-test-readme/branch-point | 2026-10-20T01:21:38.649050Z | — | — | | | | | refused (scope.empty) |
+| fylgja-test-readme/seeded | 2026-10-20T01:23:39.142559+00:00 | … | f278dcb6… | created | settled after 4.6s | 15 held, 0 failed, 0 skipped | — | baseline |
+| fylgja-test-readme/third-link | 2026-10-20T01:23:48.370039+00:00 | … | 9827fe8f… | stepped 5.1s; push n1, n3 | settled after 5.7s | 19 held, 0 failed, 0 skipped | none | passed |
+| fylgja-test-readme/head | 2026-10-20T01:23:46.627087+00:00 | … | 904addf9… | unchanged | settled after 5.9s | 19 held, 0 failed, 0 skipped | none | passed |
 
 ```mermaid
 flowchart TD
@@ -668,16 +683,23 @@ deleted 2 stages, 1 proposed change, branch fylgja-test-readme
 
 ## Pinned and frozen twins
 
-Following the branch is the default. Three other kinds of twin never rebuild:
+Following the branch is the default. The other twins never rebuild:
 
 - `twin create --branch B --at 2026-09-20T12:00:00Z` builds the branch **as it was at
   that instant**: a pinned twin. Pinned reads are reproducible, so the same reference
-  compiles to the same `bundle_id` even after the branch moves on.
+  takes the same snapshot and compiles to the same `bundle_id` even after the branch
+  moves on.
 - `twin create --branch B --no-follow` builds the branch head **once**, as a frozen twin.
+- `twin create --snapshot <id|file>` builds a snapshot already taken, by its id in the
+  server's store or from a file, with **no read**: frozen by rule, or pinned at the `at` it
+  names, and never following. It carries its own branch, `at` and scope, so `--branch`,
+  `--stage`, `--at`, `--scope` and `--interval` are refused beside it.
 - `twin provision <bundle-dir>` boots a bundle you already have, with no read at all.
 
-`--dry-run` on `create` and `provision` reads, compiles, files the bundle and checks the
-host, then stops before starting a run.
+`--dry-run` on `create` and `provision` reads, takes and files the snapshot, compiles and
+files the bundle and checks the host, then stops before starting a run. The same intent
+read twice has one snapshot id while the branch's history stands: a rebase moves it
+([D-061](docs/decisions.md#d-061)).
 
 ## Two vendors, one twin
 
@@ -686,12 +708,13 @@ production interface names map onto a lab image, how to tell when a node is read
 how to push its configuration. The compiler has no vendor branch
 ([D-031](docs/decisions.md#d-031)). Here a twin of two cEOS nodes and one SR Linux node
 compiles from a snapshot on disk, with no Infrahub and no workflow service: the command
-sends the CTM to the API's server, which compiles it and sends the bundle back to be
-written on your disk:
+sends the snapshot to the API's server, which compiles its CTM and sends the bundle back
+to be written on your disk, filing nothing:
 
 ```console
-$ bin/fylgja twin compile --ctm testdata/ctm/mixed.json --out /tmp/mixed
+$ bin/fylgja twin compile --snapshot testdata/snapshot/mixed.json --out /tmp/mixed
 wrote bundle to /tmp/mixed (3 nodes, 3 links)
+snapshot_id 37d7378a36568e870eb1eb43dbcd580207fb5cae847fb979b54f50eef8800ebf
 bundle_id ecb665f58ffc9882024a06e29b01e681ee38ce40f55b76994d470fe3272a2aec
 warning artifact.interface.unrepresented e1:Management1: artifact device-config names interface Management1 at line 10, which the node calls Management0; the line is pushed as production wrote it
 …
@@ -719,20 +742,25 @@ serve`, and is checked against the server's packages:
 
 ```sh
 fylgja schema check  --branch B                           # is the branch's DCIM the one the reader reads? reads nothing else
-fylgja intent read   --branch B [--at T] [--scope tag:S] --out ctm.json
-                                                          # the validated intent snapshot (CTM) of the devices tagged S
-fylgja twin compile  --ctm ctm.json --out bundle/         # the pure compiler: same CTM, same bytes
+fylgja intent read   --branch B [--at T] [--scope tag:S] --out snapshot.json
+                                                          # the validated intent of the devices tagged S, as a snapshot
+fylgja twin compile  --snapshot snapshot.json --out bundle/
+                                                          # the pure compiler: same snapshot, same bytes
 fylgja twin provision bundle/                             # boot a bundle
 fylgja psp validate  psp/*.yaml                           # check platform support packages
 ```
 
 The files are yours, on the machine the command runs on. `intent read --out` writes the
-CTM the server read, and `twin compile` sends the CTM and writes the bundle the server
-compiled to `--out`, on your disk, byte for byte what the golden tests compare.
+snapshot the server took of what it read, and files it in the server's store too; `twin
+compile` sends a snapshot and writes the bundle the server compiled to `--out`, on your
+disk, byte for byte what the golden tests compare. A bare CTM compiles once wrapped:
+`{"snapshot_version": "1", "ctm": <the CTM>, "probes": []}`, its id and `observed_at`
+left for the server to fill. `--ctm` is retired.
 `twin provision` sends the bundle directory's files, which the server verifies and files
 in its store on the lab host before it boots them, and `psp validate` sends each package.
 `psp validate` and `twin compile` need neither Infrahub nor the workflow service, but they
-do need the server. A bundle a dry run or a plan files stays in the lab host's store.
+do need the server. A snapshot or a bundle a dry run or a plan files stays in the lab
+host's stores.
 
 `fylgja` only ever reads from Infrahub (the fixture tool is the one thing that writes). Every refusal is reported in one pass, each as a
 finding with a stable rule name (`device.name.duplicate`, `host.image.absent`, …), and

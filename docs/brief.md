@@ -54,7 +54,8 @@ OpsMill schema library's DCIM at a pinned commit, under a scope, `tag:<name>`
 ([D-057](decisions.md#d-057), in place of Fylgja's generics and reference schema); every
 interface a port, `mgmt_only` the one use-flag, wiring derived never declared, VLANs
 deferred · thin CTM with provenance,
-justified by synthesized nodes · pure compiler producing a deterministic,
+justified by synthesized nodes · the snapshot, the CTM wrapped and content-addressed, the
+core's one input ([D-061](decisions.md#d-061)) · pure compiler producing a deterministic,
 content-addressed, self-describing bundle (topology, bootstrap per node, manifest) ·
 fidelity manifest on every bundle · platforms are data: PSPs, conformance suite,
 heterogeneous twins · drive the `clab` CLI, never link it · test tiers: pure and
@@ -67,11 +68,11 @@ the process environment only, never persisted.
 ## Pipeline
 
 ```
-read ──▶ compile ──▶ provision ──▶ operate
-(Infrahub    (CTM →      (bundle →      (show, destroy,
- → CTM;       bundle;     running lab;   reconcile, step,
- conformance  pure)       pushed;        verify, rehearse)
- + complete-              durable)
+read ──────▶ take ────▶ compile ─────▶ provision ───▶ operate
+(Infrahub    (CTM →     (snapshot's    (bundle →      (show, destroy,
+ → CTM;       snapshot;  CTM →         running lab;   reconcile, step,
+ conformance  content-   bundle;       pushed;        verify, rehearse)
+ + complete-  addressed) pure)         durable)
  ness checks)
 ```
 
@@ -90,15 +91,16 @@ fylgja worker run    [--psp-dir <dir>]
 
 fylgja twin create   --branch <b> [--at <ts>] [--no-follow] [--interval <d>]
 fylgja twin create   --stage <branch>/<label>
+fylgja twin create   --snapshot <id|file>
 fylgja twin step     [--stage <branch>/<label>] [--allow-restart] [--wait <duration>] [--dry-run]
 fylgja twin verify   [--wait[=<duration>]]
 fylgja twin rehearse --branch <b> [--markdown]
 fylgja twin show
 fylgja twin destroy
 
-fylgja intent read   --branch <b> [--at <ts>] --out ctm.json
-fylgja intent read   --stage <branch>/<label> --out ctm.json
-fylgja twin compile  --ctm ctm.json --out <bundle-dir>
+fylgja intent read   --branch <b> [--at <ts>] --out snapshot.json
+fylgja intent read   --stage <branch>/<label> --out snapshot.json
+fylgja twin compile  --snapshot snapshot.json --out <bundle-dir>
 fylgja twin provision <bundle-dir>
 
 fylgja stage list    [--branch <b>]

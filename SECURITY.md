@@ -40,8 +40,8 @@ Infrahub's token and both node logins in their process environment. The server a
 holds the API's token, which the worker never reads; a client holds the API's token
 alone. `local/.env`, kept at mode `0600`, is the one file that holds a value. Fylgja
 reads the process environment only, and never prints, logs or persists a credential: none
-is in a bundle, a finding, an answer, a log line, a start-up report, a check's message or
-the thread a check posts.
+is in a snapshot, a bundle, a finding, an answer, a log line, a start-up report, a check's
+message or the thread a check posts.
 
 ### On a shared host
 
@@ -82,4 +82,4 @@ scripts under `scripts/`, and the workflows under `.github/workflows/`.
   [Temporal](https://github.com/temporalio/temporal)).
 - What this page states as the design: one token with no roles, sent without TLS, and the
   shared-host exposure above. A way around the token, or a credential that reaches a
-  bundle, a finding, a log line or the output of a command or a script, is in scope.
+  snapshot, a bundle, a finding, a log line or the output of a command or a script, is in scope.

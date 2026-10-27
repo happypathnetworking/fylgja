@@ -177,10 +177,13 @@ same one; a changed `bundle_id` is how *reconcile* knows the branch moved. The
 ([D-024](decisions.md#d-024)).
 
 **Bundle store** — `bundles/<bundle_id>/` under the *state root*: every bundle ever
-compiled or provisioned, by identity, with the CTM a `create` read kept beside it as
-`<bundle_id>.ctm.json`, outside the hashed bytes. Behind a small interface (`Put`, `Has`,
-`Path`, `Fetch`, `PutCTM`) so object storage can replace the directory at M8
-([D-014](decisions.md#d-014)).
+compiled or provisioned, by identity. Behind a small interface (`Put`, `Has`, `Path`,
+`Fetch`) so object storage can replace the directory at M8
+([D-014](decisions.md#d-014)). Until 018 it kept the CTM a create read beside each bundle
+as `<bundle_id>.ctm.json`; that sidecar is retired ([D-061](decisions.md#d-061)): no build
+writes one, those on disk are never read, and the *snapshot store* holds what a read
+took. `bundles/.reads/` holds a *check*'s CTM between its `ReadIntent` and its `Compile`
+alone.
 
 **C4 model** — The architecture's diagrams, drawn from one Structurizr model,
 `docs/c4/workspace.dsl`: five views (the system context, the containers, the server's and
@@ -230,7 +233,7 @@ are clients too, from inside Infrahub's task workers. Every command but the two 
 serve` and `fylgja worker run`, is a client's command: one request to the server, which
 prints what comes back and exits by the document's status. Its environment is
 `FYLGJA_API_ADDRESS` (default `127.0.0.1:7650`) and the *API token*, and its files are
-the operator's own (`--ctm`, `--out`, a bundle directory, a package). It links
+the operator's own (`--snapshot`, `--out`, a bundle directory, a package). It links
 `internal/api`, `internal/findings` and `internal/tree` and nothing else of the module
 (`TestClientReachesTheCoreThroughTheAPIAlone`). Its own failures are `api.unreachable`,
 `api.token.refused`, `api.version.unknown` and `api.transfer.too_large`, each status
@@ -243,8 +246,8 @@ to `local/command-log/pending.jsonl`, and published by `make command-log` into
 log stays on the developer's disk ([development.md](development.md#spec-kit-workflow)).
 
 **Compiler** — The pure function CTM → bundle. No I/O, no clock. Golden-file tested;
-exposed as `fylgja twin compile` on the same code path
-([D-011](decisions.md#d-011)).
+exposed as `fylgja twin compile --snapshot` on the same code path, compiling the
+*snapshot*'s CTM ([D-011](decisions.md#d-011), [D-061](decisions.md#d-061)).
 
 **Conformance suite** — From M6: the test a PSP passes to count as a *supported
 package*. It is `go test` in `internal/conformance`, which no product code imports, and
@@ -287,15 +290,17 @@ each such question to the operator while the loop goes on with what does not wai
 and a **live session** runs what needs the host: the worker, a twin, tier 3
 ([development.md](development.md#spec-kit-workflow)).
 
-**CTM — Canonical Topology Model** — The compiler's input and, from 017, the contract
-([D-057](decisions.md#d-057)): a thin, branch-addressed projection of intent, version `2`,
-which a reader writes by its *mapping*, and the only place synthesized nodes can live. Its
+**CTM — Canonical Topology Model** — The compiler's input, the body of a *snapshot* from
+018, and, from 017, the contract ([D-057](decisions.md#d-057)): a thin, branch-addressed
+projection of intent, version `2`, which a reader writes by its *mapping*, and the only
+place synthesized nodes can live. Its
 envelope carries the branch, the `at`, `observed_at`, the schema hash, the *scope*, the
 `mapping` block (`{reader, model, version}`) and the reader's fidelity list of
 *approximations* and *omissions*. Each device names its package (`platform.package`, the
 package's id), its ports (each with its name, `mgmt_only`, `enabled` and link) and its
 *artifact*; no role, site, interface type, parent or address. `twin compile` refuses a CTM
-of another version, or declaring none, naming both (`ctm.version.unsupported`), and nothing
+of another version, or declaring none, naming both (`ctm.version.unsupported`, the
+object prefixed `ctm.` inside a snapshot), and nothing
 converts a `1`; a file leaving out its fidelity list, its links or a device's interfaces is
 refused naming the field, never read as `[]`
 ([§4.2](architecture.md#42-canonical-topology-model-ctm), [D-010](decisions.md#d-010)).
@@ -362,9 +367,9 @@ does not say it holds that bundle is a failed *record claim*
 
 **Dry run** — `--dry-run` on `twin create`, `twin provision` and `twin step`: every
 refusal the run would make, and what it would do, with no run started and no lab,
-container or twin directory touched. Like a plan, it files the bundle and the CTM it read
-in the *bundle store*. The *server* makes it on the lab host, so it needs `docker` and
-`containerlab` on the server's `PATH`.
+container or twin directory touched. Like a plan, it files the *snapshot* it took in the
+*snapshot store* and the bundle in the *bundle store*. The *server* makes it on the lab
+host, so it needs `docker` and `containerlab` on the server's `PATH`.
 
 **Feature (`F-NNN`)** — One row of the roadmap's backlog, with an anchor
 (`roadmap.md#f-011`): a unit of planned work with an estimate, built as one or more
@@ -452,9 +457,13 @@ schemas are the *contracts*.
 
 **Frozen twin** — A twin built from an unpinned reference that is not *following*:
 created with `--no-follow`, one whose following could not begin (`follow.start.failed`)
-or was lost, or one of a branch other than the one a Schedule follows. Not reproducible,
-unlike a *pinned* twin: its `observed_at` is a local clock reading, and reproducing it
-with `--at` is best-effort ([D-027](decisions.md#d-027)).
+or was lost, or one of a branch other than the one a Schedule follows. Not reproducible
+from Infrahub, unlike a *pinned* twin: its `observed_at` is a local clock reading, and
+reproducing it with `--at` is best-effort ([D-027](decisions.md#d-027)). From 018 a twin
+built from a *snapshot* (`twin create --snapshot`) whose envelope names no `at` is frozen
+by rule, whatever flag it was given: its reference is a document, which does not move, and
+the snapshot rebuilds it exactly ([D-061](decisions.md#d-061)). Its kind line ends `built
+from snapshot <id>`.
 
 **Fylgja** — In Norse tradition, a spirit that accompanies a person: a follower, a
 fetch. Here, the platform, and the reason the twin *walks*.
@@ -556,20 +565,24 @@ operation reads it. It measures conformance to intent, never fidelity to product
 which the *fidelity manifest* still asserts. Also called **verify**.
 
 **Intent reference** — `(branch, at?)`: the address of intent as the operator gives
-it; the provenance of every CTM, bundle and twin ([§3](architecture.md#3-core-objects),
+it; the provenance of every CTM, snapshot, bundle and twin ([§3](architecture.md#3-core-objects),
 [D-012](decisions.md#d-012)). The operator may also name one by a *stage reference*,
 which the *server* resolves to a pinned `(branch, at)` before any run starts; the stage's
-name is not part of the reference and enters no CTM or bundle
-([D-045](decisions.md#d-045)).
+name is not part of the reference and enters no CTM, snapshot or bundle
+([D-045](decisions.md#d-045)). From 018 a *snapshot* is a reference too, by its *snapshot
+id* or as a file (`twin create --snapshot`): intent already read, which carries its own
+branch, `at` and *scope*, so `--branch`, `--stage`, `--at` and `--scope` beside it are
+refused (`snapshot.flags.conflict`) ([D-061](decisions.md#d-061)).
 
 **Interval** — How often a *following* twin is *checked*: `twin create --interval`,
 in Go duration syntax. Default 5 minutes, floor 10 seconds. Held only by the Schedule,
-and refused with `--at` or `--no-follow`.
+and refused with `--at`, `--no-follow` or `--snapshot`.
 
 **Kind (of a twin)** — What `twin show` calls the twin on the host: `following`,
 `pinned` (built from an `at` or a *stage*, stepped or not; a *rehearsal*'s twin is pinned,
 and its kind line names the rehearsal's run), `frozen`, from a bundle (`twin provision`),
-`diverged`, or `none`.
+`diverged`, or `none`. A twin built from a *snapshot* is `pinned` or `frozen` as its
+envelope's `at` says, never following, and its kind line ends `built from snapshot <id>`.
 
 **Lab host** — A machine with Docker, containerlab, NOS images, one `fylgja worker run`
 process and one `fylgja serve` process beside it ([D-041](decisions.md#d-041)). The
@@ -717,8 +730,10 @@ are held against them.
 **`observed_at`** — UTC time a read began, from the local clock. Recorded on **every**
 read, pinned or not: when the read is pinned it governs nothing, but a CTM that cannot
 say when it was read is worth less than one that can. Informational provenance, not a
-transaction marker. Recorded in the CTM envelope and `twin.json`, never in the bundle,
-so it cannot disturb `bundle_id` ([D-023](decisions.md#d-023), constitution VI).
+transaction marker. Recorded in the CTM envelope, a *snapshot*'s outer part and
+`twin.json`, never in the bundle nor in the bytes a *snapshot id* hashes, so it disturbs
+neither `bundle_id` nor `snapshot_id` ([D-023](decisions.md#d-023),
+[D-061](decisions.md#d-061), constitution VI).
 
 **Omission** — From 017 ([D-057](decisions.md#d-057)): something on the branch, inside or
 touching the *scope*, that a reader leaves out of the CTM, recorded as an `omitted` row of
@@ -784,6 +799,8 @@ frozen and reproducible. A twin built from a *stage* is always pinned: a *mark* 
 to the `at` written on it or to the moment Infrahub recorded its writing, the *branch
 point* to `branched_from` and the *head* to the first instant after the latest stamp in
 its *scope* or its latest intent event, whichever is later, and the twin never follows.
+From 018 a twin built from a *snapshot* whose envelope names an `at` is pinned at it, and
+never follows either ([D-061](decisions.md#d-061)); it has no stage, so it does not step.
 
 **Pass** — One run of one Spec Kit command (`specify`, `plan`, `implement`, …) over one
 *spec*, as [how-it-was-built.md](how-it-was-built.md) counts them. Not a whole workflow:
@@ -821,10 +838,13 @@ the block in every manifest recording branch, `at`, schema hash, the *scope* and
 *mapping* block (`{reader, model, version}`), in place of the retired *contract version*;
 the CTM envelope and `twin.json` add `observed_at`.
 
-**`provision` (workflow)** — The short Temporal workflow that turns an intent
-reference into a ready twin: read, compile, check host, stage, deploy, await
-readiness, push, record. The twin is ready only once every node's *push* succeeded.
-Fixed ID; cleans up after itself ([D-007](decisions.md#d-007)).
+**`provision` (workflow)** — The short Temporal workflow that turns a compiled bundle
+into a ready twin: check host, stage, deploy, await readiness, push, record. The twin is
+ready only once every node's *push* succeeded. Fixed ID; cleans up after itself
+([D-007](decisions.md#d-007)). From 018 every run the *server* starts is already compiled,
+its input a *snapshot id* and a `bundle_id`, as a *rebuild*'s has been since M4; the
+read-and-compile branch it began with stays for the histories recorded before it
+([D-061](decisions.md#d-061)).
 
 **PSP — Platform Support Package** — The declarative bundle that makes one NOS
 supported. Format `0.7`, which adds the *package match* (`platform.matches`);
@@ -868,7 +888,8 @@ ready node, once, in tier 3.
 
 **Rebuild** — What a *check* does when its branch's `bundle_id` moved: the `destroy` and
 `provision` workflows as children, under their fixed IDs, to the newly compiled bundle. A
-failed rebuild stops *following*.
+failed rebuild stops *following*. A rebuilt twin names no *snapshot*: the check reads and
+compiles in the worker and takes none.
 
 **Reclaim** — From 015 ([D-051](decisions.md#d-051)): the destroy, before a *rehearsal*
 starts, of a twin whose `twin.json` names a rehearsal run that is no longer running, run
@@ -1014,6 +1035,46 @@ that one holds the port and the others are omitted (`omit.interface.shared`). Wi
 cabled, all keep it. Two cabled is `interface.port.collision`, a refusal. Every member is
 recorded in `fidelity.lossy` with the others it shares with.
 
+**Snapshot** — From 018 ([D-061](decisions.md#d-061)): the core's one input, one document
+of version `1` ([contracts/snapshot.schema.json](../contracts/snapshot.schema.json)) that
+wraps a *CTM* `2` unchanged: `snapshot_version`, `snapshot_id`, the take's `observed_at`,
+equal to the CTM's, the `ctm`, and `probes`, required and empty until probe declarations
+are defined. The *server* takes one of every read before it compiles: for a create, a
+dry run, each stage a plan, a step or a *rehearsal* reads, and `intent read --out`, which
+writes it; it files each in the *snapshot store*. `twin create --snapshot <id|file>`
+builds a twin from one with no read, *frozen* or *pinned* by rule as its envelope says;
+`twin compile --snapshot <file>` compiles one's CTM. A bare CTM is wrapped by hand as
+`{"snapshot_version": "1", "ctm": …, "probes": []}`, its id and `observed_at` left for
+the server to fill. Read strictly, its version first (`snapshot.version.unsupported`,
+`snapshot.invalid`, `snapshot.id.mismatch`). It holds each device's *artifact*, as the
+CTM does, so it lives in the store and crosses as a file, never in a finding, a log line
+or a document, which name its id alone. `twin.json` `9` and the documents that name a
+`bundle_id` name its id beside it; the bundle does not.
+
+**Snapshot id** — From 018 ([D-061](decisions.md#d-061)): a *snapshot*'s content
+address, `snapshot_id`, the lowercase-hex SHA-256 of the body's canonical bytes,
+`{"ctm": …, "probes": []}` with the CTM normalised and its envelope's `observed_at` left
+out, indented two spaces and ending in a newline. The bytes hashed are not the bytes
+stored, which carry the outer part; the schema's description gives the hand recipe, `jq
+--indent 2 'del(.snapshot_version, .snapshot_id, .observed_at,
+.ctm.envelope.observed_at)' snapshots/<id>.json | sha256sum`, exact when no string holds
+`<`, `>` or `&`, which Go's encoder escapes. Nothing else is left out, so the same
+intent read twice has one id whenever it was read, and one stage resolved twice has one,
+while any change of intent, the `at`
+or the scope moves it. Two limits, stated and not tested: a rebase re-stamps a branch's
+content, so a stage resolved after it reads differently, or empty, and gets another id;
+and an artifact Infrahub re-rendered to different bytes for unchanged data, never seen,
+would move it. The *fixture branch*'s is `576933ec…`.
+
+**Snapshot store** — From 018 ([D-061](decisions.md#d-061)): `snapshots/<snapshot_id>.json`
+under the *state root*, beside the *bundle store*: every snapshot taken or sent, by
+identity. Behind an interface of the bundle store's shape (`Put`, `Has`, `Path`,
+`Fetch`) that never overwrites, so two takes of one intent keep one document, the first,
+and a twin built from the second records the first's `observed_at`. An entry that does not
+hash to its name is `snapshot.id.mismatch`. Made by the first snapshot filed, never at
+start. `twin create --snapshot <id>` reads it; an id it does not hold is
+`snapshot.unknown`.
+
 **Spec** — One `specs/NNN-<slug>/` directory taken through the Spec Kit workflow, from
 its `brief.md` to `converge`; the workflow's unit. A *feature* is built as one spec or
 more, and one spec may build two features, as `015-proposed-change-rehearsal` builds
@@ -1044,8 +1105,9 @@ step` walks a twin through its own proposed change's stages. Replaces the *waypo
 each exposes one stage of the pipeline on its own, on the code path a run uses
 ([D-019](decisions.md#d-019)). Each is a request to the *server* like every command;
 `twin compile` and `psp validate` need neither Infrahub nor the workflow service, and are
-checked against the server's packages. Not the `stage` noun's commands, `stage list` and
-`stage plan`, which act on *stages (of a proposed change)*.
+checked against the server's packages. From 018 `intent read --out` writes a *snapshot*
+and `twin compile` takes one (`--snapshot`; `--ctm` is retired). Not the `stage` noun's
+commands, `stage list` and `stage plan`, which act on *stages (of a proposed change)*.
 
 **Stage reference** — From `014-proposed-change-stages` ([D-045](decisions.md#d-045)):
 `<branch>/<label>`, e.g. `change-1/cabled`, the way to name a *stage* on the command line,
@@ -1055,10 +1117,10 @@ the *proposed change* by its source branch, among the open ones, then a *mark*'s
 reference is one shell word. Those two labels are reserved, and a mark carrying one is
 refused (`stage.label.reserved`). It resolves on the *server*, before any run and before
 any branch's intent is read, to a pinned `(branch, at)` and where the `at` came from; the
-stage's name enters no CTM or bundle.
+stage's name enters no CTM, snapshot or bundle.
 
-**State root** — The one directory under which the *bundle store* and the *twin
-directory* live: `FYLGJA_STATE_ROOT`, defaulting to `local/` under the process's
+**State root** — The one directory under which the *bundle store*, the *snapshot store*
+and the *twin directory* live: `FYLGJA_STATE_ROOT`, defaulting to `local/` under the process's
 working directory, resolved once at start. The worker and the *server* each report their
 root, so two roles started from different directories are visibly, not silently, apart.
 A *client* has none.
@@ -1155,11 +1217,13 @@ own working directory; and `twin.json`. Present exactly while a twin is provisio
 being provisioned; removed whole by unstage. With containerlab, the whole state of the
 twin ([D-014](decisions.md#d-014)).
 
-**`twin.json`** — The twin's record, version `8`, written last by the record step and
+**`twin.json`** — The twin's record, version `9`, written last by the record step and
 removed with the *twin directory*
 ([contracts/twin.schema.json](../contracts/twin.schema.json)): the manifest's provenance
 block, with its *scope* and *mapping*, `observed_at` (or an explicit statement that it is unknown, when no read took
-place), `bundle_id`, the provisioning run's identity, the version of the worker binary
+place), `snapshot_id` (the *snapshot* the twin was built from, or `null` for a twin `twin
+provision` or a *rebuild* made), `source` (`intent`, `snapshot` or `bundle`), `bundle_id`,
+the provisioning run's identity, the version of the worker binary
 that provisioned it, and each node's management address, *artifact* (name, content type,
 checksum, size, never the bytes) and how long its *push* took; the *stage* the twin was
 built from (its proposed change's id and branch, its label, description and where its `at`
@@ -1170,7 +1234,9 @@ record), or `null`, by which a rehearsal knows a twin to *reclaim*; `state`
 plan with each package's declaration, each node's push outcome, the timings, and the
 step's `wait`, `null` until `VerifyTwin` writes it), or `null`; and on each node `holds`,
 the bundle whose content it runs. A step rewrites it whole, on every path after its stage.
-Older versions are read where a twin may still carry one: a `7` or earlier names no scope,
+Older versions are read where a twin may still carry one: an `8` names no snapshot, so
+`twin show` says `snapshot none (record 8)` and `twin step` steps it with a from side
+naming none; a `7` or earlier names no scope,
 so `twin show` says `scope unknown (record 7)` and `twin step` refuses it
 (`step.twin.unsteppable`), though `twin destroy` clears it, and a rehearsal reclaims it when it names a dead one, and an
 `8` whose scope is not `tag:<name>`, or whose mapping `twin.json` 8 cannot hold, which no build writes, is shown and refused alike; a

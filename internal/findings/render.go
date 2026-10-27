@@ -483,6 +483,7 @@ const (
 	FollowReasonNoFollow = "no_follow" // --no-follow given
 	FollowReasonBundle   = "bundle"    // twin provision: a bundle never follows
 	FollowReasonStage    = "stage"     // --stage given: a stage is pinned (014)
+	FollowReasonSnapshot = "snapshot"  // --snapshot given: a twin built from a snapshot never follows (018)
 )
 
 // DryRunFollow is whether the twin a real run would build follows its branch, and how

@@ -96,7 +96,7 @@ const (
 	// gives the step the finding belongs to and when it fires.
 
 	RuleFollowIntervalInvalid  = "follow.interval.invalid"  // start: --interval unparseable or below the floor, before any connection (exit 2)
-	RuleFollowFlagsConflict    = "follow.flags.conflict"    // start: --interval given with --at or --no-follow (exit 2)
+	RuleFollowFlagsConflict    = "follow.flags.conflict"    // start: --interval given with --at or --no-follow, or (018) with --snapshot, since a twin built from a snapshot never follows (exit 2)
 	RuleFollowStartFailed      = "follow.start.failed"      // follow: a warning; the run ended ready but schedule fylgja-follow could not be created
 	RuleFollowStopFailed       = "follow.stop.failed"       // follow: schedule fylgja-follow could not be deleted; a destroy or a run's stop step refuses to go on
 	RuleCheckSkipped           = "check.skipped"            // inspect: a warning; nothing to compare against, another branch, a twin that does not follow, or a run in flight
@@ -252,6 +252,18 @@ const (
 	RuleCTMVersionUnsupported = "ctm.version.unsupported"  // rejection, exit 1, no step: the CTM file; twin compile was given a CTM of another version, naming both
 	RulePSPMatchesMissing     = "psp.matches.missing"      // rejection, exit 1, verify: the package path; no match, or a pair with an empty name
 	RulePSPMatchesDuplicate   = "psp.matches.duplicate"    // rejection, exit 1, verify: the package path; two packages name one pair, naming both packages and the pair; it also refuses the registry's load, and so serve and worker run at start
+
+	// 018, snapshots, the core's one input (D-061;
+	// specs/018-snapshots/contracts/snapshot-commands.md, "Identifiers"). Each comment
+	// gives the severity, the exit, the step, the object and when it fires. A snapshot's
+	// inner CTM keeps its own rules, ctm.version.unsupported and data.required.missing,
+	// the object prefixed ctm.; --interval beside --snapshot is follow.flags.conflict.
+	// No status, step or exit is new.
+	RuleSnapshotInvalid            = "snapshot.invalid"             // rejection, exit 1, no step (twin compile) or resolve (twin create --snapshot <file>): the field, or the file; the outer shape is not version 1's: an unknown key, ctm absent or not an object, probes absent, null or not empty, snapshot_id not 64 lowercase hex characters, observed_at not of the CTM's form or not the inner CTM's
+	RuleSnapshotVersionUnsupported = "snapshot.version.unsupported" // rejection, exit 1, no step or resolve: the file; snapshot_version is not "1", or absent, naming the version read, or that none was, and "1"
+	RuleSnapshotIDMismatch         = "snapshot.id.mismatch"         // rejection, exit 1, no step or resolve, compile for the store: the file, or the store path; a declared snapshot_id is not what the body hashes to, naming both, or an entry under the id hashes to another, naming the path and both
+	RuleSnapshotUnknown            = "snapshot.unknown"             // rejection, exit 1, resolve: the id; twin create --snapshot <id> names an id the store does not hold, naming the store's directory
+	RuleSnapshotFlagsConflict      = "snapshot.flags.conflict"      // rejection, exit 2, start: the flag; --snapshot beside --branch, --stage, --at or --scope, the first found in that order, before any connection
 )
 
 // Steps a finding can belong to, as contracts/findings.schema.json enumerates them. New

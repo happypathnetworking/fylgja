@@ -191,6 +191,14 @@ var dataModelRules = []string{
 	"ctm.version.unsupported",
 	"psp.matches.missing",
 	"psp.matches.duplicate",
+
+	// 018's rules (research R-03, R-07). Appended; the inner CTM's faults keep their
+	// identifiers, and --interval beside --snapshot is follow.flags.conflict.
+	"snapshot.invalid",
+	"snapshot.version.unsupported",
+	"snapshot.id.mismatch",
+	"snapshot.unknown",
+	"snapshot.flags.conflict",
 }
 
 // dcimMapping is the mapping a twin.json 8 record's provenance names when the Infrahub

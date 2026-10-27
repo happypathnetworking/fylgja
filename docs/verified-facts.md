@@ -128,6 +128,34 @@ development host up again there, or on a fresh 26.04 VM before it.
 - **A pinned read filters by the tag as it stood at `at`**: a device tagged after `at` is
   absent from a read pinned at `at` and present in the unpinned one. *(10-26;
   `specs/017-dcim-reader/research.md` §5.7, §5.11, §5.14)*
+- **Two unpinned reads of an unchanged branch differ in `observed_at` alone.** `intent
+  read --branch fylgja-fixture --out` twice, 14.4 s apart, wrote two CTM files whose `diff`
+  was one line, the envelope's `observed_at`: Infrahub served the same artifact bytes to
+  both, and the reader's output is canonical. Taken as snapshots by 018's code, two reads
+  6 s apart had one snapshot id, `576933ec51da1866cdb7344a1f60ec2468c7d04aafbee42eacd171e352bd7482`,
+  the fixture branch's, their files differing in the outer and the inner `observed_at`
+  alone, and the store kept the first take byte for byte. *(10-27;
+  `specs/018-snapshots/research.md` §1.2, `tasks.md` T051)*
+- **A stage resolved twice has one snapshot.** On a throwaway branch with a draft proposed
+  change and one mark, `stage plan` run twice on the server's path named one snapshot id
+  for the mark and one for the head in both plans, left the stored documents' bytes and
+  back-dated modification times as the first plan filed them, and wrote no
+  `bundles/*.ctm.json`: `4345c370…` and `e8c31ea7…` alone, `ffa1dac8…` and `98c33061…`
+  within the whole contract tier (`TestStageTakenTwiceHasOneSnapshot`). Three reads pinned
+  at one T, before a change, after n1's regeneration and after the change, had one
+  snapshot id with different `observed_at`s, and the unpinned read after the change
+  another (`TestPinnedReadReproducesItsBundle`). *(10-27; `specs/018-snapshots/tasks.md`
+  T045, T046, T053)*
+- **A snapshot id is reproduced by `jq`.** jq 1.8.1 keeps a file's key order, indents two
+  spaces as Go's `json.MarshalIndent` does, writes `[]` for an empty list and ends with a
+  newline, so `jq --indent 2 '{ctm: del(.envelope.observed_at), probes: []}' <ctm> |
+  sha256sum` over a bare CTM, and the schema's recipe over a stored snapshot, `jq --indent
+  2 'del(.snapshot_version, .snapshot_id, .observed_at, .ctm.envelope.observed_at)' |
+  sha256sum`, give the id Go's encoding gives: `576933ec…` for the fixture's two reads and
+  its stored snapshot, and `6a8a77fc…`, `91f06cd6…` and `37d7378a…` for the three wrapped
+  fixtures. Exact only while no string holds `<`, `>` or `&`, which Go's encoder escapes
+  and `jq` does not; no fixture artifact does. *(10-27; `specs/018-snapshots/research.md`
+  §1.3)*
 - **A read pinned before a kind's load answers as if the kind had no node then.** A query
   pinned at an `at` is checked against the branch's current GraphQL schema.
   - On `main`, pinned at `2026-10-26T12:00:00Z`, before the schema library's load at
@@ -1055,7 +1083,11 @@ re-verified here.
   tier. Read `free -m` before booting a twin. *(09-15)* Not re-verified on 26.04, on
   purpose: proving it starves the host again.
 - Under memory pressure SR Linux's own `sr_cli` can segfault, or refuse containerlab's
-  post-deploy checkpoint, failing the deploy. *(09-16, 09-17)* Not re-verified on 26.04.
+  post-deploy checkpoint, failing the deploy. *(09-16, 09-17)* Seen on 26.04 too, unasked:
+  in a tier-3 run at a load of 5–6 with about 10.2 GiB available, n3's `sr_cli` segfaulted
+  in containerlab's post-deploy (`python3.11` in the kernel log), containerlab cancelled
+  the other two nodes' post-deploy and the deploy failed; the run after a rest passed
+  whole. *(26.04, 10-27; `specs/018-snapshots/tasks.md` T054)*
 - A group added to the user reaches no process that began before it: a shell, an agent's
   session or the user's `systemd --user` started before the bring-up script's lab part
   lacks `docker` and `clab_admins` while `getent` lists the user in both, until the next
@@ -1065,5 +1097,6 @@ re-verified here.
   rule naming the user is `NOPASSWD`, while `sudo -n true` passes on one (`verifypw=all`),
   and `-E` is ignored with a warning. *(26.04, 10-07)*
 - Ubuntu 26.04's `golang-go` (`2:1.26~1`) is go1.26.0, the release `go.mod` names, so no
-  toolchain is fetched; its `python3` is 3.14.4, inside `infrahub-sdk` 1.23.2's `>=3.10,
+  toolchain is fetched; by 10-27 an update had made it go1.26.8 (`golang-1.26-go
+  1.26.8-1~ubuntu0.26.04.2`), and `go.mod`'s `go 1.26.0` still fetches nothing; its `python3` is 3.14.4, inside `infrahub-sdk` 1.23.2's `>=3.10,
   <3.15`. *(26.04, 10-07, 10-08)*

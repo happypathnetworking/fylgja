@@ -1,0 +1,794 @@
+# Tasks: Snapshots, the core's one input
+
+**Input**: Design documents from `/specs/018-snapshots/`: [plan.md](plan.md),
+[spec.md](spec.md), [research.md](research.md) (§1 verified at plan, §2 decisions
+R-01–R-24, §3 D-061 and Constitution 2.2.0 drafted, §4 owed at implement),
+[data-model.md](data-model.md), [contracts/](contracts/) (`snapshot.schema.json`,
+`snapshot-commands.md`, `formats.md`), [quickstart.md](quickstart.md); the
+[brief](brief.md); Constitution 2.1.0, moving to 2.2.0 at T003;
+[D-011](../../docs/decisions.md#d-011), [D-014](../../docs/decisions.md#d-014),
+[D-023](../../docs/decisions.md#d-023), [D-040](../../docs/decisions.md#d-040),
+[D-045](../../docs/decisions.md#d-045), [D-055](../../docs/decisions.md#d-055),
+[D-057](../../docs/decisions.md#d-057).
+
+**Tests**: requested. The brief's Exit, the spec's SC-001–SC-008 and quickstart §1, §7 and
+§8 name each tier's cases, and each is a task below. Every format test validates against
+the contract file under `contracts/`, and every earlier format against its frozen copy.
+**No golden moves**: `testdata/golden/` must be byte-identical to `main`'s after every run
+(FR-026, SC-003). A run that changes it has broken the feature, and the loop will stop.
+
+**Organization**: bottom-up, in the plan's order ("Order of the work"), because every story
+stands on the same document and the same records. First the identifiers and the contract
+(Phase 2). Then the snapshot, its id and its store (US2, Phase 3), the wrapped fixtures
+(US4, Phase 4), and the records and the wire (US6, Phase 5). Then the create the server
+takes a snapshot for (US1, Phase 6, the MVP), `--snapshot` on create (US3, Phase 7), the
+hand tools (US4, Phase 8), and the stages, step and rehearsal (US5, Phase 9). Then the
+tier-2 tests (US2, Phase 10), the end-to-end script and the contracts' prose (US6, Phase
+11), the host, live (Phase 12), and the records at the close (Phase 13). The loop runs the
+pure gates after every implement run, so every run must leave the tree green: `make
+build`, static, `make test`, `make lint` (with tags `contract,fixture,e2e`, so every tagged
+test must compile after every run). Story labels mark which story each task builds or
+proves.
+
+**Decisions this file takes, against or beyond the plan's text** (each for `analyze` to
+settle at T004):
+
+- **The frozen copies all go under `017-dcim-reader/`.** R-06 says to name each directory
+  after the feature that last wrote the file, as `git log -1` reports it. formats.md §9
+  puts all six under `017-dcim-reader/`. `git log` names 017's commits for `twin`,
+  `findings`, `show` and `rehearsal`. For `stages` and `step` it names `fc709ed`, Release
+  0.2's `$id` hygiene commit, which belongs to no feature. So every copy is frozen as 017
+  left the tree, under `017-dcim-reader/`, as formats.md's table says. That is 16 files
+  (`twin` in `internal/lab`; the other five in each of `internal/findings`,
+  `internal/server` and `internal/cli`), and `frozenContractCopies` goes from 33 to 49.
+  T020 confirms the count.
+- **The findings subject gains `snapshot`.** `twin compile` writes `subject.ctm` today, and
+  no design document says what a `--snapshot` command's subject names. This file adds
+  `subject.snapshot` (optional string, the `--snapshot` argument as given: an id or a
+  path) on `twin.compile` and `twin.create --snapshot`. `subject.ctm` stays in the schema
+  for older documents, and no build of this tree writes it (T020, T030, T036).
+- **`ObservedAtLayout` lives in `internal/snapshot`.** The plan has `internal/snapshot`
+  import the CTM and nothing of the reader or the compiler. `stage.ObservedAtFormat` is in
+  `internal/stage`, which imports the compiler. So the snapshot package keeps its own
+  constant, and a test in an external `snapshot_test` package holds it equal to
+  `stage.ObservedAtFormat` (T009).
+- **The sidecar is retired before the create moves** (Phase 6, T023). Removing
+  `bundle.Store.PutCTM` changes `stages.Pipeline.File`'s signature in the same compile. So
+  T023 changes `File` and adds no `Take`; Phase 9 (T040) adds `Take`.
+
+**Tags**: `[operator]` marks a task that needs the operator: a decision entry, the
+constitution, a spec amendment, a commit of the operator's uncommitted edits, or the
+review. `[live]` marks a task that needs the development host's server or worker restarted
+from this tree, a twin, a hand check, the whole contract tier beside the server on the
+bridge, or the end-to-end tier. Unattended, the loop stops at both. A single tier-2 test a
+task names is not `[live]`: the loop's sessions hold Infrahub's address and token and run
+it. Commits are by hand, conventional, with a body saying why, and end with the model's
+`Co-Authored-By` trailer. A session never pushes.
+
+## Format: `[ID] [tag?] [P?] [Story] Description`
+
+- **[P]**: can run in parallel (different files, no dependency on an incomplete task)
+- **[Story]**: US1–US6, from spec.md
+
+---
+
+## Phase 1: Setup (the baseline and the decisions)
+
+**Purpose**: confirm the tree's gates pass on this branch before anything changes, so any
+later failure is this feature's own. Then the operator's gates: D-061, Constitution 2.2.0,
+the plan's six departures with this file's four decisions, and the roadmap's edits
+committed.
+
+- [ ] T001 Run the pure gates from the repository root and confirm each passes. The gates: `make build`; `file bin/fylgja` reports a statically linked executable; `make test` uncached (`GOFLAGS=-count=1`; note the wall time against the 45 s budget, and the load average); `make lint`; `go vet -tags contract,fixture,e2e ./...`; `git diff --stat main -- testdata/golden` is empty. Read, writing nothing:
+  - `git status`: `docs/roadmap.md` modified and `specs/018-snapshots/` untracked, as research §1.7 found.
+  - `ls local/bundles/*.ctm.json | wc -l`, the sidecars already on disk (research §1.1).
+  - `ls local/snapshots 2>/dev/null` (expected: absent).
+  - `pgrep -x fylgja`: the worker and the server, each `/proc/<pid>/exe`.
+  - `grep -n 'D-060\|D-061' docs/decisions.md | tail -3` and the constitution's version line.
+
+  Report the results in this task's note.
+
+- [x] T002 [operator] Put [D-061](research.md#31-d-061--the-snapshot-is-the-cores-one-input) to the operator. It says: the snapshot is the core's one input, a content-addressed wrap of an unchanged CTM `2`, stored under `snapshots/` beside the bundles; the server takes it for every create; the bundle's CTM sidecar is retired; and two limits stand, the rebase and the re-render. If accepted, append it to `docs/decisions.md` after D-060 and before "Parked", in D-060's format, with `**Status:** Accepted <date>` and its row in the index. Then grep `docs/architecture.md` for the positions it retires (`ctm.json`, `sidecar`, `.reads`, `ReadIntent`, `--ctm`, `read and compile`) and note each hit's line for T055. If declined, record the answer in `research.md` as a new §5 and build nothing past Phase 2. Blocks T009 onward.
+  - *2026-10-27, the hand session at `analyze`, by the operator:* **done.** D-061 accepted as research §3.1 drafts it and appended after D-060, before Parked, in D-060's format, with its index row (area Contract). `docs/architecture.md`'s positions it retires, for T055: line 95 ("the same read and compile"), 532 and 542 (the provision and reconcile activity chains with `ReadIntent ─▶ Compile`), 570 and 573 (the worker's activities), 725 (the sequence drawing's `ReadIntent`), 1017 and 1055 (`<bundle_id>.ctm.json` in the state root tree and its paragraph), 1187–1189 (`intent read --out ctm.json` and `twin compile --ctm`).
+
+- [x] T003 [operator] Amend the constitution to 2.2.0 as [research §3.2](research.md#32-constitution-210--220) drafts it, citing D-061, after T002. In `.specify/memory/constitution.md`: Principle VI replaced by §3.2's text (the snapshot in the provenance sentence; `observed_at` neither in the bundle nor in the bytes a snapshot's id hashes; the sentence for a source that cannot replay time; D-061 in its rationale), the Sync Impact Report, and the version line (2.2.0, Last Amended the date). In `.specify/templates/plan-template.md`: the Constitution Check's version, and row VI as §3.2's last paragraph gives it. Then in `specs/018-snapshots/plan.md`: the Constitution Check's "Constitution 2.1.0" becomes 2.2.0, and row VI's status becomes `**PASS**. Under 2.1.0 on its own: `observed_at` is in the snapshot's outer part and the twin directory, never the bundle. 2.2.0 adds the snapshot to the provenance sentence and the F-025 sentence, which binds nothing here (R-01, R-02).` Blocks T016 onward, the records' move.
+  - *2026-10-27, the hand session at `analyze`, by the operator:* **done.** Constitution 2.2.0 as research §3.2 drafts it: Principle VI replaced, its rationale citing D-061, the Sync Impact Report's first entry and the version line (Last Amended 2026-10-27). The plan template's Constitution Check names 2.2.0 and its row VI reads §3.2's last paragraph. `plan.md`'s Constitution Check names 2.2.0 and its row VI the status this task gives; its Input line records the amendment. `CLAUDE.md`'s mention of 2.1.0 is T062's.
+
+- [x] T004 [operator] Settle at `analyze` the plan's six departures from the spec (plan, Summary) and this file's four decisions (the header above). Amend `spec.md` where an answer changes its text. The plan's six:
+  - (a) tier 3's sidecar assertion is moved, not dropped, and reads "no sidecar newer than the case's start" (R-17);
+  - (b) a compile refused after a clean read leaves the snapshot filed (R-05; FR-010 names a refused read alone);
+  - (c) `--scope` beside `--snapshot` is refused too (R-07; FR-018 names three flags);
+  - (d) `twin verify`'s block keeps naming the bundle alone (R-21);
+  - (e) a record of `8` can still step, with a from side naming no snapshot (R-06);
+  - (f) the provision workflow keeps its read-and-compile branch for the recorded histories (R-10).
+  - *2026-10-27, the hand session at `analyze`, by the operator:* **done.** The operator accepts the plan's reading of (a)–(f) and this file's four decisions. (b), (c) and (d) are now in the spec's text, amended by `analyze`: FR-010 (a refused compile leaves the snapshot filed and named), FR-018 and its edge case (`--scope`, the first flag found in order), SC-005 (FR-022's five records) with a new Assumption for `twin verify`'s block. `analyze` also amended FR-014 (the dry run prints paths, the plan prints ids, as `printPlanned` prints the bundle id alone today), and this file: T003 re-cites `plan.md`; T011 carries the C4 redraw of the package and the store, leaving T029 the handler and stages relations; T017's workflow test covers the create's `Source: intent` input beside `Source: snapshot`; Phase 2 depends on T002; T021 is `[US6]`; T036 names no `required` list. Open at `analyze` and left as the plan reads them: the kind line's `built from snapshot <id8>…` suffix beside the note (R-08), and the inner CTM's faults keeping the CTM's own rules (R-03).
+
+  This file builds the plan's reading of (a)–(f), plus `subject.snapshot`, the frozen copies under `017-dcim-reader/`, `snapshot.ObservedAtLayout`, and the sidecar retired before `Take`. A different answer changes T020 (frozen copies, subject), T030 (c), T047 (a) or T026 (b). Record the operator's answers in this task's note.
+
+- [x] T005 [operator] Commit the roadmap's uncommitted F-024 and F-026 edits (`docs/roadmap.md`, research §1.7) and the feature's design directory (`specs/018-snapshots/`: brief, spec, plan, research, data-model, quickstart, contracts, checklists, this file). Use conventional commits whose bodies say why (`docs(roadmap): …`, `docs(018): …`). The operator's: the edits are theirs.
+  - *2026-10-27, the hand session at `analyze`, by the operator:* **done in this commit** for the design directory (`docs(018): …`), after three commits by hand: the roadmap's F-024 and F-026 edits at `c693508`, D-061 at `9378915`, Constitution 2.2.0 with the plan template at `4fc1635`. `make linkcheck` was clean but for the roadmap's two links to the then-untracked brief, which this commit resolves. Nothing pushed.
+
+**Checkpoint**: baseline green; D-061 and 2.2.0 accepted; the departures settled; the
+design committed.
+
+---
+
+## Phase 2: Foundational — the identifiers, the contract and the path
+
+**Purpose**: the five identifiers, the snapshot's contract and the store's directory, so
+every later task files by constant, validates against the contract, and names the path
+one way.
+
+- [ ] T006 [P] In `internal/findings/finding.go`, add the five rule constants of [contracts/snapshot-commands.md](contracts/snapshot-commands.md) "Identifiers" as one block, "018, snapshots": `RuleSnapshotInvalid` (`snapshot.invalid`), `RuleSnapshotVersionUnsupported` (`snapshot.version.unsupported`), `RuleSnapshotIDMismatch` (`snapshot.id.mismatch`), `RuleSnapshotUnknown` (`snapshot.unknown`), `RuleSnapshotFlagsConflict` (`snapshot.flags.conflict`). Each gets the house comment with the table's severity, exit, step and object exactly. For example: `// rejection, exit 2, start: the flag; --snapshot beside --branch, --stage, --at or --scope, the first found in that order`. Add `FollowReasonSnapshot = "snapshot" // --snapshot given: a twin built from a snapshot never follows (018)` beside `FollowReasonStage` in `internal/findings/render.go`. Register the five rules in `internal/findings/finding_test.go`'s `dataModelRules` as an appended 018 block. Extend `RuleFollowFlagsConflict`'s comment with the `--snapshot` case. Nothing files them yet.
+
+- [ ] T007 [P] Land the contract. Copy [contracts/snapshot.schema.json](contracts/snapshot.schema.json) byte for byte to `contracts/snapshot.schema.json`. Its `$id` is `https://github.com/happypathnetworking/fylgja/contracts/snapshot/v1`, its `ctm` a `$ref` to CTM 2's `$id`, and its description holds the hashed-bytes sentence and the hand recipe (FR-004). Check that every test that loads `contracts/*.schema.json` by glob, or holds the `$id` namespace ([D-055](../../docs/decisions.md#d-055)), finds and accepts it. Grep `internal/` for `contracts/\*.schema.json` and for `fylgja/contracts/`, and add the file to any explicit list such a test keeps.
+
+- [ ] T008 [P] Add `Snapshots string` to `lab.Paths` in `internal/lab/env.go`: `<state root>/snapshots`, beside `Bundles` and `Twin`, made by the same constructor. Name it in the state root lines. `cmd/fylgja/serve.go` line 279 becomes `state root %s (bundles: %s, snapshots: %s, twin: %s)`, and the worker's line in `cmd/fylgja/worker.go` changes the same way. Update `cmd/fylgja/serve_test.go`'s and `worker_test.go`'s pinned lines, and `CLAUDE.md`'s description of the server's report is left for T062. The directory is created by the store's first `Put`, never at start.
+
+**Checkpoint**: `make test`, `make lint`; nothing files a snapshot yet.
+
+---
+
+## Phase 3: User Story 2, part 1 — the snapshot, its id and its store (Priority: P1)
+
+**Goal**: `internal/snapshot`, the document of version `1`, the id R-01 defines, the
+refusals in R-03's order and the store R-04 defines, proved in tier 1 (FR-001–FR-007).
+
+**Independent Test**: `go test ./internal/snapshot` proves, over `testdata/ctm/`, that:
+`three-node.json`, `observed-later.json` and `three-node.shuffled.json` wrap to one id
+(`6a8a77fc…` by research §1.3, a candidate); a changed artifact byte or fidelity row moves
+it; a test-local recomputation equals the stored id; each refusal fires under its rule;
+`Put` twice writes nothing the second time.
+
+- [ ] T009 [US2] Create `internal/snapshot/snapshot.go`, a package that imports `internal/ctm` and the standard library alone (data-model §1, §2; R-01, R-02).
+  - `const Version = "1"`, and `const ObservedAtLayout = "2006-01-02T15:04:05.000000Z"`.
+  - `type Snapshot struct { Version string \`json:"snapshot_version"\`; ID string \`json:"snapshot_id"\`; ObservedAt string \`json:"observed_at"\`; CTM *ctm.CTM \`json:"ctm"\`; Probes []json.RawMessage \`json:"probes"\` }`, in that field order. That order is the stored order: the outer part first.
+  - `Take(c *ctm.CTM) *Snapshot`, pure. It deep-copies `c` through `ctm.Marshal`/`ctm.Unmarshal` so the caller's CTM is untouched, sets `Version`, copies `c.Envelope.ObservedAt` to `ObservedAt`, sets `Probes` to an empty non-nil slice, and computes `ID`.
+  - `Hashed(s *Snapshot) ([]byte, error)`: the hashed bytes, `{"ctm": …, "probes": []}`. The CTM is normalised and its envelope written through an unexported `hashedEnvelope` type that lists `ctm.Envelope`'s fields but `ObservedAt`, in its order and with its tags. Encoding as `ctm.Marshal`: `json.MarshalIndent` with two spaces, a trailing LF, Go's default escaping.
+  - `ID(s *Snapshot) (string, error)`: the lowercase-hex SHA-256 of `Hashed`. `IsID(s string) bool`: 64 lowercase hex characters, `bundle.IsID`'s rule. Copy the rule; do not import `internal/bundle`.
+  - `Marshal(s *Snapshot) ([]byte, error)`: the stored form. Two-space indent, LF, a trailing newline, the CTM normalised.
+
+  Tests in `internal/snapshot/id_test.go`:
+  - `TestHashedEnvelopeMirrorsTheCTMEnvelope`, by reflection: every `ctm.Envelope` field but `ObservedAt`, same names, types, tags and order. A field added to the envelope fails tier 1.
+  - In an external `snapshot_test` file, `TestObservedAtLayoutIsTheStages`: `snapshot.ObservedAtLayout == stage.ObservedAtFormat`.
+  - `TestTakeLeavesItsInputAlone`.
+
+- [ ] T010 [US2] `Unmarshal(data []byte) (*Snapshot, error)` in `internal/snapshot/json.go`, strict, in R-03's order (data-model §1).
+  1. `snapshot_version` decoded on its own: not `"1"`, or absent, is `*VersionError{Got}`. Its message names the version read, or that none was, and `"1"`, worded as [snapshot-commands.md](contracts/snapshot-commands.md) "The text" gives it. A bare CTM is refused here.
+  2. The outer shape, decoded with `DisallowUnknownFields` into a raw struct, each fault an `*InvalidError{Field, Message}`. The faults, by field:
+     - an unknown key, named;
+     - `ctm` absent, null or not an object;
+     - `probes` absent, null, not a list, or not empty: `probes holds 1 entry; in snapshot 1 the list is required and empty, since 016 defines its element`;
+     - `snapshot_id` present and not `IsID`;
+     - `observed_at` present and not parsable by `ObservedAtLayout`, or not equal to the inner CTM's.
+  3. The inner CTM under `ctm.Unmarshal`. `*ctm.VersionError` is returned as is. `*ctm.MissingError` has its `Field` prefixed `ctm.` (`ctm.envelope.fidelity`, `ctm.links`, `ctm.devices[<i>].interfaces`); its message keeps the field name and is prefixed the same way.
+  4. `observed_at` filled from the inner CTM when absent.
+  5. The id computed. When declared and different, `*IDMismatchError{Declared, Computed}`, whose message reads `declares snapshot_id <declared>, but its body hashes to <computed>; leave snapshot_id out to have it computed`. When absent, it is set.
+
+  `Load(path)` and `Save(s, path)` (atomic: a temporary sibling, then a rename) for tests and the client. Tests in `internal/snapshot/snapshot_test.go`: one case per refusal, with its error type, its field and its message's key words. The cases: `snapshot_version` `"2"` and absent; a bare CTM file; an unknown outer key; `probes` absent, null and `[{}]`; `snapshot_id` `"ABC"` and a wrong 64-hex id; `observed_at` malformed and unequal; a wrapped CTM `1` (`ctm.VersionError`); a wrapped CTM missing its fidelity list (`ctm.envelope.fidelity`). A file with neither `snapshot_id` nor `observed_at` is accepted with both filled.
+
+- [ ] T011 [US2] Write the store in `internal/snapshot/store.go` (R-04; data-model §3).
+  - The interface: `type Store interface { Put(ctx, *Snapshot) (string, error); Has(ctx, id string) (bool, error); Path(id string) string; Fetch(ctx, id string) (*Snapshot, error) }`.
+  - `NewDirStore(root string) *DirStore` on `<state root>/snapshots/`, created on the first `Put` with mode `0755`.
+  - An entry is `<root>/<id>.json`, mode `0644`, written as `Marshal` writes it, to a temporary sibling and then renamed.
+  - `Put` of an id already held reads the entry back, re-hashes its body, and keeps it, writing nothing; it returns the id. An entry that hashes to another id is `*ErrIDMismatch{Path, Want, Got}`, worded as `bundle.ErrIDMismatch` is.
+  - `Has` is false for an absent entry and for a corrupt one.
+  - `Fetch` reads through `Unmarshal` and verifies the id. An absent entry is an error matching `errors.Is(err, fs.ErrNotExist)`.
+
+  Mirror `internal/bundle/store.go`'s shape and comments: two interfaces of one shape, not one generic.
+
+  Redraw in the same change (`CLAUDE.md`, "A changed package … is redrawn"): in `docs/c4/workspace.dsl`, the server's `snapshot` component ("The snapshot: the document, its id, its validation, the store.", `internal/snapshot`), the container `Snapshot store` (`<state root>/snapshots/<snapshot_id>.json`), the relation `server -> snapshot store "Files and reads snapshots"`, and the deployment's state root naming `snapshots/`. Then `make diagrams`, and commit the views with the model.
+
+- [ ] T012 [P] [US2] The id's rules over the fixtures, in `internal/snapshot/id_test.go`. These are US2's acceptance scenarios 1–4 and the brief's tier-1 exit.
+  - `TestObservedAtIsNotHashed`: `three-node.json` and `observed-later.json` wrap to one id, and their stored bytes differ.
+  - `TestOrderIsNotHashed`: each of `three-node`, `lossy` and `mixed` has the same id as its `.shuffled.json`.
+  - `TestAnArtifactByteMovesTheID`: one byte of one device's artifact `content` changed (with its checksum recomputed by `ctm.ChecksumOf`, so the CTM stays valid).
+  - `TestAFidelityRowMovesTheID`: one row added, and one row's `reason` altered.
+  - `TestEnvelopeFieldsMoveTheID`: branch, `at`, schema hash, scope and mapping version, each changed alone.
+  - `TestStoredIDIsTheBodysHash`: an independent computation by a test-local struct that does not use `Hashed`. It marshals the stored document's body, deletes the inner `observed_at` through a `map[string]any` round-trip with the CTM's field order kept by a test-local struct, and SHA-256s it. It must equal `ID`.
+
+  Log the three fixtures' ids with `t.Logf` (R-15: the implementation's values stand, research §1.3's are candidates).
+
+- [ ] T013 [P] [US2] The store and the contract, in `internal/snapshot/store_test.go` and `contract_test.go`.
+  - `TestPutKeepsTheFirstTake`: `Put` of two takes differing only in `observed_at` returns one id, and the entry's bytes and modification time are unchanged by the second `Put`. This is FR-007 and the brief's "the first take's".
+  - `TestPutRefusesACorruptEntry`: an entry overwritten by hand with another body is `ErrIDMismatch` naming the path.
+  - `TestFetchUnknownIsNotExist`.
+  - `TestHasIsFalseForACorruptEntry`.
+  - `TestSnapshotSatisfiesTheContract`: `Marshal` of each fixture's take validates against `contracts/snapshot.schema.json`, with `contracts/ctm.schema.json` registered for the `$ref`, through the `jsonschema` library the other contract tests use. Two documents are refused by the schema: one with `probes: [{}]`, and one with `snapshot_version: "2"`.
+
+**Checkpoint**: `make test`, `make lint`; `internal/snapshot` complete and used by nothing.
+
+---
+
+## Phase 4: User Story 4, part 1 — the wrapped fixtures compile to the goldens (Priority: P2)
+
+**Goal**: `testdata/snapshot/` holds the three fixture CTMs wrapped, each compiling to its
+golden byte for byte (FR-021, SC-003; R-15).
+
+**Independent Test**: `go test ./internal/stage -run TestWrappedFixturesCompileToTheGoldens`
+passes, and `git diff --stat main -- testdata/golden` is empty.
+
+- [ ] T014 [US4] Write `testdata/snapshot/three-node.json`, `lossy.json` and `mixed.json`: each `testdata/ctm/<name>.json` loaded, wrapped by `snapshot.Take` and written by `snapshot.Marshal`. Generate them with a test in `internal/snapshot/fixtures_test.go`, `TestWrappedFixtures`, behind an `-update` flag, as `internal/compiler`'s goldens are generated. Without the flag, it holds each file equal to a fresh take of its CTM, its inner CTM equal to the `testdata/ctm/` file after `ctm.Marshal`, and its `snapshot_id` equal to `snapshot.ID`. Commit the three files; record their ids in this task's note.
+
+- [ ] T015 [US4] Add `TestWrappedFixturesCompileToTheGoldens` in `internal/stage` (a tier-1 test file, no build tag). For each wrapped fixture: `snapshot.Load`, then `stage.Compile` of its CTM with the shipped registry. The bundle's files must equal `testdata/golden/<name>/` byte for byte, and its id must be `43d91715…`, `4213b3cf…` and `ecb665f5…` in turn. It must also equal the compile of the bare `testdata/ctm/<name>.json`. `TestCompilerIsPure` and the golden tests stay untouched. Confirm `git diff --stat main -- testdata/golden` is empty.
+
+**Checkpoint**: `make test`, `make lint`; no golden moved.
+
+---
+
+## Phase 5: User Story 6, part 1 — the records and the wire (Priority: P3)
+
+**Goal**: `twin.json` `9`, the workflow inputs carrying the id, the findings blocks and the
+five moved contracts with their frozen copies, and the rehearsal's column. Records only:
+nothing yet sets a snapshot id but the tests (FR-022–FR-025, SC-005, SC-007; R-06, R-10,
+R-14, R-20).
+
+**Independent Test**: `go test ./internal/lab ./internal/findings ./internal/provision
+./internal/rehearsal ./internal/server ./internal/cli` shows: a `9` validates against the
+contract; an `8` validates against the frozen copy and reads with no snapshot; the nine
+histories replay; `TestFrozenContractCopiesAgree` counts 49.
+
+- [ ] T016 [US6] `twin.json` `9`. First freeze: copy `contracts/twin.schema.json` byte for byte to `internal/lab/testdata/contracts/017-dcim-reader/twin.schema.json`. Then edit the contract and the code as follows.
+  - `contracts/twin.schema.json`: per [formats.md](contracts/formats.md) §2. `$id …/contracts/twin/v9`; `twin_version` `const "9"`; top-level `snapshot_id` required, `{"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"}`; `source` enum `["intent", "bundle", "snapshot"]` with R-20's descriptions; `step.properties.from` and `.to` gain an optional `snapshot_id`; `observed_at`'s description is reworded; and the description gains formats.md §2's 018 sentence quoted.
+  - `internal/lab/twin.go`: `TwinVersion = "9"`, with the version comment's 9 line.
+  - `internal/lab/wire/types.go`: `SourceSnapshot = "snapshot"` with R-20's comment, and `SourceIntent`'s comment reworded as R-20 gives it. `TwinRecord.SnapshotID *string` (`json:"snapshot_id"`, written as an explicit `null` when nil). `StepSide.SnapshotID string` (`json:"snapshot_id,omitempty"`).
+  - `RecordFields.SnapshotID string`. `NewRecord`'s rules by `Source` (data-model §5.1):
+    - `intent`: `ObservedAt` required, `SnapshotID` as given, `""` for a rebuild's provision.
+    - `snapshot`: `ObservedAt` and `SnapshotID` required, `Stage` refused, `At` as the envelope has it.
+    - `bundle`: `ObservedAt`, `SnapshotID` and `Stage` refused.
+    - A given `SnapshotID` must satisfy `snapshot.IsID`.
+  - `NewStepRecord`: a stepped or unchanged step moves the top level's `SnapshotID` to `To.SnapshotID`, or nil when empty; a diverged step keeps the previous record's. `ReadRecord` reads an `8` with `SnapshotID` nil and no side ids.
+
+  Tests in `internal/lab/twin_test.go`:
+  - every `9` `NewRecord` and `NewStepRecord` writes validates against `contracts/twin.schema.json`;
+  - the existing `8` fixtures validate against `twinSchemaOf(t, "017-dcim-reader")`;
+  - `NewRecord` refuses `snapshot` without an id and `bundle` with one, and accepts `intent` without one;
+  - a step from an `8` record writes a from side with no `snapshot_id` and a to side with one.
+
+- [ ] T017 [US6] The workflow inputs (R-10; data-model §5.2). `ProvisionInput.SnapshotID string` (`json:"snapshot_id,omitempty"`) in `internal/provision/types.go`, with a comment in the house style ("The run branches on nothing of it. Empty in every recorded history before 018, and omitted when empty, so they replay."). Also widen `Source`'s comment to name `wire.SourceSnapshot`. Add `wire.RecordInput.SnapshotID string` (`omitempty`) and `RehearseStage.SnapshotID string` (`omitempty`). `StepSide.SnapshotID` is T016's. Pass `in.SnapshotID` into the record input in `internal/provision/workflow_provision.go`'s record step, and the record activity into `RecordFields.SnapshotID`. A `Source: snapshot` input with `BundleID` set takes the existing already-compiled branch (`case in.BundleID != ""`): confirm by reading `Provision` that no branch tests `Source == SourceIntent` before it, and change nothing else in the workflow. Leave `readAndCompile`, `ReadIntent`, `ReadOptions` and the reconcile untouched (FR-013). Run `go test ./internal/provision -run Replay`: the nine histories replay. Add one tier-1 workflow test (the test environment the package's workflow tests use). In it, two inputs each schedule no `ReadIntent` and no `Compile` activity, and each `RecordTwin` input carries the id: `ProvisionInput{Source: intent, Branch, BundleID, BundlePath, ObservedAt, SnapshotID, StopFollowing: true}`, the shape T025's create sends, and `ProvisionInput{Source: snapshot, BundleID, BundlePath, ObservedAt, SnapshotID}`, T031's. That is SC-001's tier-1 half for both creates.
+
+- [ ] T018 [US6] The step and rehearsal workflows carry the sides' ids as data. `internal/provision/workflow_step.go` and `workflow_rehearse.go` copy `StepSide` and `RehearseStage` as they are, so read both and confirm that no field is rebuilt by hand in a way that would drop `SnapshotID`. Fix any copy that would drop it. Extend a step workflow test and a rehearse workflow test so that a side's `SnapshotID` reaches the record step's input. The replay test still passes.
+
+- [ ] T019 [P] [US6] The findings blocks in `internal/findings/render.go` (data-model §5.3):
+  - `Document.SnapshotID string` (`json:"snapshot_id,omitempty"`), placed beside `BundleID`;
+  - `Subject.Snapshot string` (`json:"snapshot,omitempty"`; this file's decision, header);
+  - `PlanStage.SnapshotID *string` (`json:"snapshot_id"`, null when nil);
+  - `RehearsalStage.SnapshotID *string` (`json:"snapshot_id"`);
+  - `ShowRecord.SnapshotID *string` (`json:"snapshot_id"`);
+  - the step blocks' side type and `ShowStep`'s sides `SnapshotID string` (`omitempty`);
+  - `ShowRecord.Source`'s comment names `snapshot`.
+
+  Update every constructor and test helper that builds these, so the tree compiles with nil or `""` where nothing yet sets an id.
+
+- [ ] T020 [US6] The five moved contracts and their frozen copies (formats.md §3–§7, §9). **Freeze first.** Copy `contracts/findings.schema.json`, `show.schema.json`, `stages.schema.json`, `step.schema.json` and `rehearsal.schema.json` byte for byte to `internal/findings/testdata/contracts/017-dcim-reader/`, `internal/server/testdata/contracts/017-dcim-reader/` and `internal/cli/testdata/contracts/017-dcim-reader/` (15 files). Then edit the contracts as formats.md gives them, quoting its descriptions:
+  - `findings.schema.json`: top-level optional `snapshot_id`; `subject.snapshot` an optional string; `dry_run.follow.reason` gains `snapshot`; the 018 sentence in the description.
+  - `show.schema.json`: `record.snapshot_id` required, string or null; `record.source` gains `snapshot`; `record.step` sides gain an optional `snapshot_id`.
+  - `stages.schema.json`: `plan_stage.snapshot_id` required, string or null.
+  - `step.schema.json`: `side.snapshot_id` optional.
+  - `rehearsal.schema.json`: `stage.snapshot_id` required, string or null; the description names the markdown's `snapshot` column.
+
+  Then the tests:
+  - Set `frozenContractCopies` in `internal/findings/frozen_contracts_test.go` to the count the glob finds: 33 + 16 = 49, unless T016's and these copies say otherwise. Record the count.
+  - Each package's additivity test (the one that loads a frozen findings contract beside today's, in `internal/findings`, `internal/server` and `internal/cli`) gains the `017-dcim-reader` case. Read the existing cases for the pattern: a document of a twin with no snapshot (a `twin provision`'s, a `stage list`'s) validates under both.
+  - Every document test in those packages that validates against today's contracts passes with the new required keys. Fix the builders, not the schemas.
+
+- [ ] T021 [US6] The rehearsal's table (R-14; formats.md §10). In `internal/rehearsal/markdown.go`, the header becomes `| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |`, and the separator gains a column. Each row's cell is `shortID(snapshot_id)` (eight characters and `…`, as the bundle's), or `—` when null. `rehearsal.Stage.SnapshotID string` in `internal/rehearsal/report.go` is carried into `findings.RehearsalStage.SnapshotID`. `fit`, its order of leaving parts out, the brief table and `CommentMax` stay unchanged. Update the pinned headers in `internal/rehearsal/markdown_test.go` (lines 47, 88, 648, 773) and `internal/cli/twin_rehearse_test.go` (line 1042). Add `TestSnapshotColumnBeforeBundle`, with a refused stage showing `—`. `TestCommentFitsTheLimit`, or its equivalent, still holds at the largest report the tests build. `rehearsal.steps.none` still judges by bundle equality: a test with two adjacent stages of one bundle id and two snapshot ids still raises it (US5 scenario 5).
+
+- [ ] T022 [US6] `twin show` reads the record (R-08; data-model §8). In `internal/server/show.go`:
+  - `recordLine` becomes `record: <ref>, snapshot <id|none|none (record <v>)>, bundle_id <id>, schema <hash>, <provenance clause>`. The full id is printed. `none` is for a `9` naming none. `none (record <v>)` is for a record before `9`, naming its `twin_version`.
+  - `ShowRecord.SnapshotID` is the record's (nil for an `8`), and the step sides carry their ids.
+  - The kind and notes for `source: snapshot` are T034's.
+
+  Update the pinned record lines in `internal/server` and `internal/cli` show tests. Add cases for a `9` with an id, a `9` naming none, and an `8`. `twin create`'s and `twin provision`'s closing record line is the same function: confirm both print it.
+
+**Checkpoint**: `make test`, `make lint`; the nine histories replay; `twin show` names
+`snapshot none` for every twin this tree can yet make.
+
+---
+
+## Phase 6: User Story 1 — A create the server takes a snapshot for (Priority: P1) 🎯 MVP
+
+**Goal**: `twin create --branch` and `--stage` read, take, file, compile and file on the
+server, and start the provision workflow with both ids, so the run begins at the host
+check. The bundle's CTM sidecar is retired (FR-008–FR-010, FR-013, FR-014, SC-001; R-05,
+R-09, R-11).
+
+**Independent Test**: over the harness's fake Infrahub, a `twin create --branch` makes
+these true: `snapshots/<id>.json` is filed; the bundle is filed with no `<id>.ctm.json`
+beside it; the provision input the fake service receives carries `SnapshotID` and
+`BundleID`; the answer prints the two `stored:` lines before `start`; a refused read
+starts no run and files nothing.
+
+- [ ] T023 [US1] Retire the sidecar (FR-008; R-04, R-05).
+  - `internal/bundle/store.go`: `Store` loses `PutCTM`, `DirStore` its implementation, and the type's comment drops the sidecar sentence (line 43).
+  - `internal/provision/activities.go`: the `Compile` activity no longer calls `PutCTM` (line 258). It still removes the `.reads/` CTM it compiled. `ReadIntent` and `readsDir` are untouched.
+  - `internal/server/filing.go`: `fileCompiled(ctx, dir, files, id)` loses its CTM parameter, and `keepCTM` goes.
+  - `internal/stages/plan.go`: `Pipeline.File` and `NewPipeline`'s argument lose the CTM parameter, and the comments drop "and its CTM".
+  - Fix every caller (`create.go`, `stages.go`, `step.go`, `rehearse.go`, the stages' fakes) and every test that asserted a sidecar.
+
+  Add `TestNoSidecarIsWritten`: a dry run's filing, and the `Compile` activity over a test store, each leave no `*.ctm.json` beside the bundle. A sidecar placed in the store by hand before the filing is neither read nor removed. `grep -rn 'PutCTM\|\.ctm\.json' internal cmd` finds only `ReadIntent`'s `.reads/` path and comments that say the sidecar is retired.
+
+- [ ] T024 [US1] Create `internal/server/snapshot.go` (data-model §4; R-05, R-09).
+  - `takeSnapshot(ctx, paths lab.Paths, step string, c *ctm.CTM) (s *snapshot.Snapshot, path string, list findings.List, err error)`. It calls `snapshot.Take`, then `snapshot.NewDirStore(paths.Snapshots).Put`. A `*snapshot.ErrIDMismatch` is `snapshot.id.mismatch` at `step`, naming the store path and both ids. Any other failure is an error the caller reports as `operation.failed`.
+  - `snapshotStoredLine(id, path string) string` returns `snapshot_id <id>  stored: <path>`. The existing bundle line's function sits beside it, so the two are worded once.
+
+  Tests in `internal/server/snapshot_test.go`: a take filed under its id; a second take of the same CTM (another `observed_at`) leaves the entry's bytes unchanged; a corrupt entry is `snapshot.id.mismatch` at the step given.
+
+- [ ] T025 [US1] The create's live path on the server (R-11). In `internal/server/create.go`'s `runCreate`, after the stage's resolution and before any run starts, run these steps in order:
+  1. the state root;
+  2. `observedAt` captured;
+  3. `stage.Read` under `stage.ReadTimeout`;
+  4. `takeSnapshot` at `read`;
+  5. `stage.Compile`;
+  6. `fileCompiled`;
+  7. the `snapshot_id … stored:` line, then the `bundle_id … stored:` line;
+  8. `ProvisionInput{Source: intent, Branch, At, BundlePath, BundleID, ObservedAt, SnapshotID, Scope, Stage, Follow, StopFollowing: true}`.
+
+  Each refusal is the document the command ends with, at `read` or `compile`, as `runCreateDryRun` places them, and no run starts. A refused read files nothing. A refused compile after a clean read leaves the snapshot filed (R-05; T004 (b)). An Infrahub that fails or times out during the read is `operation.failed` at `read`, at once. Factor the read-take-compile-file sequence into one function that `runCreate` and `runCreateDryRun` both call (D-011's one path), and set `Document.SnapshotID` on the answer once the take completed. The text: the two `stored:` lines print before the run's `start` event (snapshot-commands.md "The text").
+
+- [ ] T026 [US1] The dry run (R-09). `runCreateDryRun`, now on T025's shared function, prints the `snapshot_id … stored:` line above the `bundle_id … stored:` line and sets `Document.SnapshotID`. `internal/server/dryrun.go`'s report is otherwise unchanged. Update the pinned dry-run outputs in `internal/server/dryrun_test.go` and `internal/cli/dryrun_test.go`. Also validate the dry run's document against `contracts/findings.schema.json` with `snapshot_id` present.
+
+- [ ] T027 [US1] Tier-1 tests of the create, in `internal/server` (the server's tests over faked pipelines and service) and `internal/cli` (the harness's fake Infrahub, `harness_test.go`). These are US1 scenarios 1, 3, 4 and 5 and edge cases.
+  - `TestCreateTakesTheSnapshotBeforeTheRun`: a `--branch` create files one snapshot and one bundle before the fake service's start; the `ProvisionInput` it receives carries both ids, `Source: intent` and a `BundleID` (so the workflow runs no read); the text holds the two `stored:` lines before `start`.
+  - `TestCreateFromAStageTakesItsPinnedRead`: the record input names the stage, the snapshot and the bundle.
+  - `TestRefusedReadStartsNothingAndFilesNothing`: a scope matching no device (`scope.empty`) or a device no package matches ends `rejected` at `read`; no run starts; `snapshots/` is absent or empty.
+  - `TestRefusedCompileKeepsTheSnapshot`: a package the server lacks; the run does not start; the snapshot is filed.
+  - `TestUnreachableInfrahubFailsTheCreateAtRead`: `operation.failed` at `read`, no run.
+  - `TestCreateTwiceFilesOneSnapshot`.
+
+  In `internal/cli`, the existing create tests' pinned text gains the two lines, and their documents validate.
+
+- [ ] T028 [US1] A following twin is unchanged (US1 scenario 6; FR-013). Read `internal/server/follow.go` and the check workflow's rebuild. The rebuild's `ProvisionInput` sets no `SnapshotID`, so its record names none. Add a tier-1 test (in `internal/provision` with the workflow test environment, or wherever the rebuild's input is built) that a rebuild's provision input has an empty `SnapshotID` and its record's `snapshot_id` is null. Check that `twin show` over such a record prints `snapshot none`. `bundles/.reads/` is still written by `ReadIntent` and removed by `Compile`.
+
+- [ ] T029 [US1] Redraw the C4 model in the same change (`CLAUDE.md`, "A changed package … is redrawn"; data-model §10). In `docs/c4/workspace.dsl`:
+  - the relations `handlers -> snapshot "Takes, validates and files snapshots"` and `stages -> snapshot "Takes each stage's snapshot"` (the component and the store container are T011's);
+  - the worker's `workflows` description saying the provision, step and rehearsal take a snapshot id and a bundle id and the reconcile alone reads;
+  - the bundle store's description without the sidecar.
+
+  Then `make diagrams`, and commit the regenerated views with the model.
+
+**Checkpoint**: `make test`, `make lint`, `go vet -tags contract,fixture,e2e ./...`. The
+MVP is in tier 1: every create the server starts is compiled, names its snapshot and
+writes no sidecar.
+
+---
+
+## Phase 7: User Story 3 — A twin from a snapshot, frozen (Priority: P2)
+
+**Goal**: `twin create --snapshot <id|file>` builds a twin from a stored or sent snapshot
+with no read, frozen by rule (FR-015–FR-018; R-07, R-08, R-12).
+
+**Independent Test**: in tier 1, these hold: `--snapshot <id>` of a stored snapshot starts
+a provision with `Source: snapshot` and both ids, and the fake Infrahub receives no
+request; an unknown id is `snapshot.unknown`; a mismatched file is `snapshot.id.mismatch`;
+`--interval` and `--branch` beside it are refused before any connection; `twin show` over
+the record reads `frozen; not following; built from snapshot <id8>…`.
+
+- [ ] T030 [US3] The guards, in `internal/server/create.go` and `snapshot.go`, before any connection (R-07).
+  - `--branch or --stage or --snapshot is required` replaces today's required message. Update its pins.
+  - `--snapshot` beside `--branch`, `--stage`, `--at` or `--scope` is `snapshot.flags.conflict` at `start`, exit 2, naming the first found in that order. Message: `--<flag> is meaningless with --snapshot: a snapshot carries its own branch, at and scope`.
+  - `--interval` beside `--snapshot` is `follow.flags.conflict`: `--interval is meaningless with --snapshot: a twin built from a snapshot never follows`, through `followFlagsConflict`.
+  - `--no-follow` and `--dry-run` are accepted. `createFollow` gives `FollowReasonSnapshot` for `--snapshot`, and the dry run's follow line reads `would not follow (--snapshot given: a twin built from a snapshot never follows)`.
+  - `createFlags` gains `snapshot string`. `Subject.Snapshot` is set to the argument as given.
+
+- [ ] T031 [US3] `resolveSnapshot` in `internal/server/snapshot.go` (R-12), at `resolve`.
+  - An argument that `snapshot.IsID`: `store.Fetch`. Absent is `snapshot.unknown`, exit 1, at the id: `the store under <dir> holds no snapshot <id>; a snapshot id comes from a create, a dry run, a plan or intent read --out on this server`. A corrupt entry is `snapshot.id.mismatch` naming the store path.
+  - Otherwise the request's one file under that path: `snapshot.Unmarshal`. Each error type maps to its rule, at `resolve`, object the file or the field: `*VersionError` → `snapshot.version.unsupported`; `*InvalidError` → `snapshot.invalid` at its field; `*ctm.VersionError` → `ctm.version.unsupported`; `*ctm.MissingError` → `data.required.missing` at its prefixed field; `*IDMismatchError` → `snapshot.id.mismatch`. Then `store.Put`, which keeps an entry already there; the twin then records the stored document's `observed_at`, via `Fetch` after `Put` (US3 scenario 8).
+  - Then T025's compile and filing; `Document.SnapshotID` set; the two `stored:` lines.
+  - Then `ProvisionInput{Source: snapshot, Branch: env.Branch, At: env.At, BundlePath, BundleID, ObservedAt: the stored document's, SnapshotID, Scope: env.Scope, Stage: nil, Follow: nil, StopFollowing: true}`.
+
+  No request reaches Infrahub: build no intent client on this path. `--dry-run` reports as a create's dry run, with no read and no start.
+
+- [ ] T032 [US3] The API (data-model §7; formats.md §8).
+  - `internal/server/handlers.go`: `twin.create` accepts the argument `snapshot` and at most one file, only beside `snapshot` and only under the path it gives. A file beside no `snapshot`, two files, or one under another path is refused before anything is parsed: `operation.failed`, exit 2, `the request carries 1 file where twin create takes a snapshot file beside --snapshot alone`, through `checkFiles` and `checkRequired`.
+  - `contracts/api.schema.json`: `$defs.args.twin.create.properties.snapshot`, and the `files` description sentence for `twin.create`.
+  - `internal/api/wire_test.go`: the `twin.create` case with `snapshot`.
+  - `internal/api`'s request types, if they list arguments.
+
+  An earlier client's `--branch` create is answered as before (US6 scenario 4): an existing request fixture still passes.
+
+- [ ] T033 [US3] The client (R-07). In `internal/cli/create.go`, `--snapshot <id|file>`, with help text naming both forms. An argument of 64 lowercase hex characters is sent as `args.snapshot`. Anything else is read whole by a `readSnapshot(path) (api.File, error)` in `internal/cli/files.go`, which replaces `readCTM` there and is worded `reading snapshot: …`. The file is sent as the request's one file under that path, with `args.snapshot` the path. A file the client cannot read is its own `operation.failed`, exit 2, before any connection. The client checks no flag combination: every guard is the server's (XI).
+
+- [ ] T034 [US3] `twin show` for a snapshot twin (R-08; FR-017). In `internal/server/show.go`, a record whose `source` is `snapshot` is decided by its envelope and never as following:
+  - with an `at`: `kind: pinned at <T>; not following; built from snapshot <id8>…`;
+  - without: `kind: frozen; not following; built from snapshot <id8>…`.
+
+  Its block kind is `pinned` or `frozen`. The note `built from snapshot <id>`, with the full id, joins `notes`. The following branch of the kind table is not taken for it, whatever Schedule exists. `from a bundle` stays the kind for a record with no envelope. `twin step` against such a record is refused by the existing `step.twin.unsteppable` guard, since the record names no stage. Confirm with a test; its message names the record's branch as today.
+
+- [ ] T035 [US3] Tier-1 tests (US3 scenarios 1–8), in `internal/server` and `internal/cli`.
+  - `TestCreateFromAStoredSnapshot`: the fake Infrahub counts zero requests; the input is `Source: snapshot` with both ids and no `Follow`.
+  - `TestCreateFromAnUnknownSnapshot` (`snapshot.unknown`, exit 1, `resolve`).
+  - `TestCreateFromAMismatchedFile` (`snapshot.id.mismatch` naming both ids).
+  - `TestCreateFromAFileWithNoID`: computed and filed.
+  - `TestCreateFromAFileOfAStoredSnapshotKeepsTheFirstTake`: the input's `ObservedAt` is the stored document's.
+  - `TestSnapshotFlagConflicts`: `--branch`, `--stage`, `--at` and `--scope` each give `snapshot.flags.conflict` naming it, the first found when two are given; `--interval` gives `follow.flags.conflict`; `--no-follow` is accepted; all of this before any connection, which the harness counts.
+  - `TestUnreadableSnapshotFileIsTheClients`.
+  - `TestShowSnapshotTwin`: with and without `at`; the note.
+  - `TestStepFromSnapshotTwinIsUnsteppable`.
+
+  Each document validates against `contracts/findings.schema.json`.
+
+**Checkpoint**: `make test`, `make lint`.
+
+---
+
+## Phase 8: User Story 4, part 2 — the hand tools read and write snapshots (Priority: P2)
+
+**Goal**: `twin compile --snapshot` in place of `--ctm`, and `intent read --out` writing
+and filing a snapshot (FR-019, FR-020; R-07, R-09).
+
+**Independent Test**: these hold in tier 1. `twin compile --snapshot
+testdata/snapshot/three-node.json` answers `43d91715…` and files nothing. `twin compile
+--ctm` is `unknown flag: --ctm`, exit 2, with no request. `intent read --out` over the
+fake Infrahub writes a snapshot `1`, and the store holds it byte for byte.
+
+- [ ] T036 [US4] `twin compile --snapshot` on the server. In `internal/server/compile.go`'s `runCompile`: the argument `snapshot` replaces `ctm`, and the one file is read under the path it gives, through `snapshot.Unmarshal`, its errors mapped to their rules as in T031 but with no step (R-03). Then `stage.Compile` of its CTM, as today. On ok, `Document.SnapshotID` is the computed id. `Subject.Snapshot` is set, and `Subject.CTM` no longer. The text is `wrote bundle to <dir> (<n> nodes, <m> links)`, then `snapshot_id <id>`, then `bundle_id <id>`. Nothing is filed and no state root is needed. In `handlers.go`, `twin.compile` takes `snapshot` and `out`, and exactly one file under `args.snapshot`. A request carrying `ctm` is `400`, `the request is not one: twin.compile takes no argument "ctm"`. In `contracts/api.schema.json`, `twin.compile`'s `ctm` is renamed `snapshot` in `properties`, and the `files` sentence is updated. `internal/api/wire_test.go`'s `twin.compile` case changes to match.
+
+- [ ] T037 [US4] `twin compile --snapshot` in the client. In `internal/cli/compile.go`: the flag `--snapshot <file>` (required) replaces `--ctm`, and the short and long help name a snapshot and say a bare CTM is wrapped as `{"snapshot_version": "1", "ctm": …, "probes": []}`. The file is sent through `readSnapshot`, and `--ctm` is gone, so cobra answers `unknown flag: --ctm` with exit 2 and no request. Rewrite `internal/cli/compile_test.go`:
+  - each wrapped fixture compiles to its golden, and the state root's `snapshots/` stays absent;
+  - a hand-wrapped bare CTM with no `snapshot_id` and no `observed_at` compiles (US4 scenario 3);
+  - a bare CTM is `snapshot.version.unsupported`;
+  - a wrapped CTM `1` is `ctm.version.unsupported`;
+  - `--ctm` is unknown, and the harness sees no request;
+  - the help text names `--snapshot`.
+
+  Update any other test or fixture under `internal/` that runs `twin compile --ctm`: `grep -rn -- '--ctm\|"ctm"' internal cmd`.
+
+- [ ] T038 [US4] `intent read --out` writes and files a snapshot (R-09; FR-020). In `internal/server/read.go`, after a clean read: `takeSnapshot` (no step), and the files frame carries `snapshot.json` (`ctmFile` renamed `snapshotFile = "snapshot.json"`), its bytes `snapshot.Marshal`'s. `Document.SnapshotID` is set. The summary line ends `; snapshot <id>, stored at <path>`, after its parenthesis, as snapshot-commands.md "The text" gives it, and the same for a stage's read. `writeCTM` goes if nothing else uses it. A refused read has no files frame and files nothing. In `internal/cli/read.go`: the help and the `--out` flag say a snapshot file; the answer's one file is written atomically by a `writeSnapshot` in `files.go`, which replaces `writeCTM`; the guard reads `the answer carries %d files where intent read sends the snapshot alone`. `internal/api/wire.go` line 398's comment names `snapshot.json`.
+
+- [ ] T039 [US4] Tier-1 tests of `intent read` (US4 scenario 2), in `internal/server/read_test.go` and `internal/cli/intent_test.go` over the fake Infrahub.
+  - The file is a snapshot `1` that `snapshot.Unmarshal` accepts.
+  - `snapshots/<id>.json` equals the file byte for byte.
+  - A second read, with another `observed_at`, writes a file differing only in its two `observed_at` lines, and leaves the store's entry unchanged.
+  - The summary line ends with the id and the path.
+  - The document's `snapshot_id` validates against the contract.
+
+  Update `internal/cli`'s pinned summary lines. `grep -rn 'ctm.json' internal cmd` finds no product use but `.reads/`.
+
+**Checkpoint**: `make test`, `make lint`; `--ctm` is gone from every command and test.
+
+---
+
+## Phase 9: User Story 5 — Stages, steps and rehearsals name the snapshot (Priority: P2)
+
+**Goal**: the stages' pipeline takes each stage's snapshot; `stage plan`, `twin step` and
+`twin rehearse` carry it into their rows, sides and report (FR-011, FR-012, FR-022,
+FR-024; R-13).
+
+**Independent Test**: in tier 1 over the stages' fakes: a plan of two stages names two
+snapshot ids beside two bundle ids, and a stage refused at read names `null`; a step's
+input and record name the from side's snapshot and the to side's; a rehearsal's stages and
+the baseline's provision input carry their ids.
+
+- [ ] T040 [US5] The pipeline (data-model §4). In `internal/stages/plan.go`, add `Pipeline.Take func(ctx context.Context, c *ctm.CTM) (id string, list findings.List, err error)`. `NewPipeline(take, file)` takes it beside `File`. `build` calls `p.Take` after a clean read and before the compile: a rejection is the stage's at `read`, and an error is `PlanFailed`. Add `PlanStage.SnapshotID string`, set once filed and `""` when refused before it, with a `SnapshotID()` accessor beside `BundleID()`. In `internal/stages/blocks.go`, `PlanStage.Block` writes `SnapshotID` as a `*string` (nil when `""`). The server's pipeline (`stages.go`, `step.go`, `rehearse.go`) passes a `take` that wraps `takeSnapshot` with its paths. The stages' tier-1 fakes gain a `Take`, which takes a real `snapshot.Take` with no store or records calls. Assert in `internal/stages`' plan tests: the order is read, take, compile, file; a refused read calls no `Take`; `SnapshotID` is set on a compiled stage.
+
+- [ ] T041 [US5] `stage plan`'s text and document. In `internal/server/stages.go`'s `printPlanned`, each compiled stage prints `  snapshot_id <id>` above `  bundle_id <id>`, then its read line as before. The plan document's `plan.stages[].snapshot_id` is the id or null. Update the pinned plan outputs in `internal/server` and `internal/cli` (`stage_plan_test.go`). Each plan document validates against `contracts/findings.schema.json` with `stages.schema.json`. A stage refused at the branch point (`scope.empty`) has `snapshot_id: null`. `stage list` is unchanged.
+
+- [ ] T042 [US5] `twin step` (R-13; R-09).
+  - In `internal/server/step.go`'s `stepInput`, `To.SnapshotID` comes from the built stage and `From.SnapshotID` from the record's `SnapshotID`, empty when nil (a record of `8`).
+  - `Document.SnapshotID` is the target's, on the step and its dry run.
+  - The step's twin line reads `twin: stage <s> (snapshot <id8>…, bundle <id8>…), pinned at …`, or `snapshot none` for a record naming none.
+  - The step blocks' sides carry `snapshot_id`.
+
+  Tests in `internal/server/step_test.go` and `internal/cli/twin_step_test.go`:
+  - a step from a `9` record of stage A to stage B: the input's sides name A's snapshot and B's, and the record after `NewStepRecord` names B's at the top level and both in `step`;
+  - a step from an `8` record: the from side has no `snapshot_id`, and the document validates against `step.schema.json`;
+  - a diverged step keeps the previous record's top-level id.
+
+  `step.twin.unsteppable` is unchanged.
+
+- [ ] T043 [US5] `twin rehearse` (R-13). In `internal/server/rehearse.go`:
+  - `rehearseStages` fills each `RehearseStage.SnapshotID`, the baseline's `ProvisionInput.SnapshotID` (`Source: intent`, as today) and each step's sides through `rehearsedStep`;
+  - `rehearsalStages` and `report()` carry each row's id into `rehearsal.Stage.SnapshotID`;
+  - a refused stage names null.
+
+  Every stage's snapshot is taken in the plan, before the first boot, which the pipeline already guarantees, since the plan builds every stage up front. Tests in `internal/server/rehearse_test.go` and `internal/cli/twin_rehearse_test.go`:
+  - a rehearsal whose third stage's read is refused is refused before the fake service starts any run, and the first two stages' snapshots are filed (US5 scenario 3);
+  - the baseline's provision input and each step's sides carry the ids;
+  - the rehearsal document validates against `rehearsal.schema.json`;
+  - the markdown carries T021's column.
+
+- [ ] T044 [US5] Run `go test ./internal/stages ./internal/checks ./internal/rehearsal ./internal/server ./internal/cli` (tier 1) and fix what the ids broke in `internal/checks`' tier-1 tests. `internal/checks` reads the plan's and the rehearsal's documents and the report's markdown; any pinned header or row there moves to T021's. Read `infrahub/checks/fylgja_step.py` and `fylgja_twin.py`: neither parses a key that moved or the table's header (R-24). Note it in this task, and change nothing there.
+
+**Checkpoint**: `make test`, `make lint`, `go vet -tags contract,fixture,e2e ./...`. The
+code of the feature is complete in tier 1.
+
+---
+
+## Phase 10: User Story 2, part 2 — the same intent, read twice, in Infrahub (Priority: P1)
+
+**Goal**: tier 2 proves SC-002's first half: the same intent read twice, and the same
+stage resolved twice through the server's path, give one snapshot id (R-16). The loop's
+sessions hold Infrahub's address and token, so these two tests run in their run. No twin,
+no worker and no server are needed.
+
+**Independent Test**: `go test -count=1 -tags contract -run
+'TestPinnedReadReproducesItsBundle' ./internal/stage` and `go test -count=1 -tags contract
+-run 'TestStageTakenTwiceHasOneSnapshot' ./internal/server` both pass, and each leaves no
+`fylgja-test-*` branch, proposed change or stage behind.
+
+- [ ] T045 [US2] Extend `TestPinnedReadReproducesItsBundle` in `internal/stage/reproducibility_contract_test.go` (tag `contract`). Wrap each read with `snapshot.Take`. The three reads pinned at T share one snapshot id beside the one bundle id the test already asserts, and the unpinned read after the change has another id. `t.Logf` both ids. Run it, with `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN` from the environment and the token never printed, and record the result and its time in this task's note.
+
+- [ ] T046 [US2] Add `TestStageTakenTwiceHasOneSnapshot` in a new `internal/server/snapshot_contract_test.go` (tag `contract`), composed as `rehearse_contract_test.go` is.
+  1. A throwaway `fylgja-test-*` branch seeded through `testsupport`, a draft proposed change on it, and one stage marked.
+  2. `runStagePlan` run twice through `testOptions` and `useStateRoot` on a temporary state root.
+  3. Assert: every compiled stage's `snapshot_id` is equal across the two plans; the stored document's bytes and modification time are unchanged by the second plan; no `bundles/*.ctm.json` exists.
+  4. At cleanup, delete the stages, then the proposed change, then the branch, as the existing contract tests do.
+
+  `t.Logf` the id. Run it; record the result, its time and the id in this task's note. Afterwards read `CoreProposedChange` and `FylgjaStage` counts (0) and `Branch` (`main` and `fylgja-fixture` alone).
+
+**Checkpoint**: `make test`, `make lint`, `go vet -tags contract,fixture,e2e ./...`; both
+tier-2 tests green; Infrahub left as the contract tier leaves it.
+
+---
+
+## Phase 11: User Story 6, part 2 — the end-to-end script and the contracts' prose (Priority: P3)
+
+**Goal**: the end-to-end script asserts the snapshot where it asserted the sidecar, and
+`cli.md` and `api.md` carry their 018 sections (FR-027, SC-006; R-17). The script is
+written and checked here. It runs in Phase 12.
+
+**Independent Test**: these checks run offline, never booting a twin: `shellcheck
+scripts/e2e.sh`, and the changed `jq` filters against recorded outputs (`local/e2e-*.outputs`)
+and against tier-1 documents.
+
+- [ ] T047 [US6] `scripts/e2e.sh` (R-17; snapshot-commands.md "Tier 3"). Make these changes:
+  - `compiled_id` (lines 522–531) reads with `intent read --out "$OUT/snapshot-$case.json"` and compiles with `twin compile --snapshot`. Rename its files from `ctm-` to `snapshot-`.
+  - `create_twin` (from line 560) reads `SID` from the create's `.snapshot_id` and asserts `snapshots/$SID.json` exists. Its line 595 sidecar check becomes "no `bundles/*.ctm.json` newer than the case's start": take a marker file at the case's start and use `find "$FYLGJA_STATE_ROOT/bundles" -maxdepth 1 -name '*.ctm.json' -newer "$marker"`, which must be empty. It expects `twin.json`'s `.snapshot_id==env.SID`.
+  - Case 1's `twin show` grep (near line 871) gains `snapshot $SID1, bundle_id $BID1`.
+  - Case 5's rebuilt twin expects `.show.record.snapshot_id==null`.
+  - Case 7's steps expect `.step.to.snapshot_id` to be a string.
+  - The destroy comment near line 1197 still names `.reads/` as the reconcile's.
+
+  No case is added, and `PLATFORMS=nokia_srlinux` still ends `E2E-PARTIAL`. Run `shellcheck scripts/bring-up.sh scripts/e2e.sh` clean. Check each changed `jq` filter offline against documents the tier-1 tests produce or against `local/e2e-*.outputs`, as the memory note on offline checks says: an old output must fail the new filter for the reason expected, and a hand-edited one must pass. Note the checks in this task.
+
+- [ ] T048 [P] [US6] `contracts/cli.md` and `contracts/api.md`: append `## 018: snapshots` to each, after the 017 section. Use the text of [contracts/snapshot-commands.md](contracts/snapshot-commands.md)'s two sections, with relative links fixed for their new home: `snapshot.schema.json`, `formats.md`'s content, `../docs/decisions.md#d-061`. Fold `formats.md`'s per-schema changes into cli.md's "Formats and versions" table, as earlier sections do. In the earlier sections, mark `twin compile --ctm` and the sidecar retired, where they are described as current, with a one-line pointer to 018, as 017 marked what it retired. Run `make linkcheck` clean.
+
+- [ ] T049 [P] [US6] Check that the six moved schemas' and the new one's descriptions quote formats.md's 018 sentences exactly, and that `contracts/README.md` (if present) or the contracts index lists `snapshot.schema.json` with its version. Grep `contracts/` for `ctm.json`, `--ctm` and `sidecar`. Each hit is either historical, inside an earlier section, or made true.
+
+**Checkpoint**: `make test`, `make lint`, `shellcheck`, `make linkcheck`.
+
+---
+
+## Phase 12: User Story 6, part 3 — the host, live (Priority: P3)
+
+**Goal**: the feature proved on the development host: the processes from this tree, the
+hand checks of quickstart §2–§6, then the whole contract tier, then the end-to-end tier
+whole and narrowed (SC-001–SC-006).
+
+**Independent Test**: quickstart §2–§8's expected outcomes, each recorded in its task's
+note.
+
+- [ ] T050 [live] Restart the worker and the server from this tree's `bin/fylgja` (`make build` first), as `CLAUDE.md` prescribes, and verify both:
+  - `/proc/<pid>/exe` is not `(deleted)`;
+  - the environments carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`;
+  - the server's report names `snapshots:` in its state root line (T008), both listeners, the plaintext warning, the default scope and both packages;
+  - the worker's start-up report names `snapshots:`;
+  - from inside each Infrahub task worker, `POST /v1/twin/show` answers `200` with the token and `401` without (`specs/015-proposed-change-rehearsal/quickstart.md` §2).
+
+  Restart the dev server if it is down. Record the pids and lines, never a token.
+
+- [ ] T051 [live] [US1] [US3] [US4] The hand checks of quickstart §2 to §5, on a host with no twin (`twin show` → `none`), recording each outcome in this task's note:
+  - **§2**: the wrapped fixtures compile to the goldens; `--ctm` is unknown, and the server's log shows no request; a hand-wrapped CTM compiles; `local/snapshots` count unchanged.
+  - **§3**: two `intent read --out` of `fylgja-fixture` give one id, **the fixture's snapshot id for T062** (`576933ec…` is the candidate). Their diff is the two `observed_at` lines. The store holds the first take byte for byte. The `jq` recipe reproduces the id.
+  - **§4**: the dry run's two `stored:` lines; the create `ok` with `f764e1fa…`. The run's activities read from `temporal workflow show` are `CheckHost, StageBundle, DeployLab, AwaitReadiness, PushConfig, RecordTwin, StopFollowing`, with no `ReadIntent` or `Compile` (SC-001). `twin show`'s record line; `twin.json` `9`; no sidecar newer than the create; a refused read (`--scope tag:nothing`) starting no run and filing nothing.
+  - **§5**: the three refusals; the create from the id with no Infrahub request in the server's log; the kind `frozen; not following; built from snapshot …`; no `fylgja-follow` Schedule; `step.twin.unsteppable`; the file with no id; the file with a wrong id; a pinned read's snapshot showing `pinned at <T>; not following; built from snapshot …`.
+
+  Destroy every twin at the end. Defects found get a tier-1 test pinning them, fixed in the package that holds the behaviour.
+
+- [ ] T052 [live] [US5] The hand checks of quickstart §6 on `B=fylgja-test-018`, recording each outcome in this task's note:
+  - the throwaway branch, its proposed change and two stages, by the fixture tool;
+  - `stage plan` twice, giving equal snapshot ids and the branch point `null`;
+  - `twin create --stage $B/seeded`, then `twin step --stage $B/third-link --allow-restart`, whose document and `twin.json` name both sides' snapshots;
+  - `twin destroy`;
+  - `twin rehearse --branch $B --markdown`, whose header carries the `snapshot` column, within 4,092 bytes;
+  - `-delete`.
+
+  Afterwards `Branch` lists `main` and `fylgja-fixture` alone, and `CoreProposedChange` and `FylgjaStage` count 0.
+
+- [ ] T053 [live] The whole contract tier (quickstart §7). Preconditions: no twin on the host, and the worker and the server from this tree beside the bridge (T050). Run `set -a; . local/.env; set +a; make test-contract 2>&1 | tee local/018-contract.out`, started detached with its exit status in a file and waited on in foreground calls of under ten minutes. Expected green, about a minute over 017's 1,714.7 s. In the output: `TestPinnedReadReproducesItsBundle` and `TestStageTakenTwiceHasOneSnapshot` log their ids; `internal/stages` and `internal/checks` are green, `TestChecksInsideInfrahub` included, with the id in their rows (SC-006). Afterwards, Infrahub as the contract tier leaves it (`CLAUDE.md`, "Stages"). Record the total time, `internal/stages`' and `internal/checks`' times, and the ids. Never boot a twin while it runs.
+
+- [ ] T054 [live] The end-to-end tier, on a quiet host after T053, never beside it (quickstart §8). Preconditions:
+  - `free -m` read;
+  - the dev server, the worker and the server on the bridge from this tree;
+  - Docker, containerlab, both images and Infrahub;
+  - both checks imported on `main`.
+
+  Run `make test-e2e` detached, its exit in `local/018-e2e.exit`, waited on in foreground calls under ten minutes. Expect `E2E-OK` in about 29.5 minutes. Rest the host, then run `PLATFORMS=nokia_srlinux make test-e2e`, ending `E2E-PARTIAL` in about 19. From the outputs, record:
+  - every create's `snapshots/<id>.json`;
+  - case 1's `twin show` text holding `snapshot <id>, bundle_id <id>`;
+  - case 5's rebuilt twin with `.show.record.snapshot_id == null`;
+  - case 7's steps naming the target's snapshot;
+  - the credential greps clean;
+  - both times.
+
+  A failed attempt for the host's sake (a lost heartbeat, a starved deploy) is run again after a rest. A failure of the feature gets a tier-1 test and a fix before the re-run.
+
+**Checkpoint**: every tier green; the fixture's snapshot id known; the host left with no
+twin and Infrahub as the contract tier leaves it.
+
+---
+
+## Phase 13: Polish — the records at the close
+
+**Purpose**: every document says what is now true (FR-028, FR-029; R-18, R-23; quickstart §9).
+
+- [ ] T055 [P] `docs/architecture.md`, per R-18:
+  - §2: the pipeline names the snapshot.
+  - §3: a Snapshot row in the core objects' table.
+  - §4.2: the CTM is the snapshot's body.
+  - §4.3: the compiler's input is a snapshot's CTM.
+  - §4.4: a create's provision begins at the host check; the sequence drawing; `ReadIntent` and `Compile` are the reconcile's alone.
+  - §4.5: the state root tree gains `snapshots/` and loses the sidecar and its paragraph.
+  - §4.6: the commands.
+
+  Work through T002's grep hits and grep again (`ctm.json`, `sidecar`, `.reads`, `ReadIntent`, `--ctm`, `read and compile`). Every sentence is made true or marked historical. State the rebase and re-render limits once, linking D-061.
+
+- [ ] T056 [P] `docs/glossary.md`:
+  - new entries: Snapshot, Snapshot id (with the hashed-bytes sentence and the two limits), and Snapshot store;
+  - Bundle store without the sidecar;
+  - Frozen twin and Pinned gain the snapshot twin;
+  - Intent reference names the snapshot as a reference;
+  - grep for `ctm.json`, `--ctm` and `sidecar`.
+
+- [ ] T057 [P] `docs/development.md`: the state root listing gains `snapshots/`, and the frozen copies' paragraph names `017-dcim-reader/`'s sixteen copies and the count `49`. Note the snapshot's tier-1 tests where the tiers are described. Grep for `--ctm` and `ctm.json`.
+
+- [ ] T058 [P] `README.md`:
+  - the offline walk-through compiles `testdata/snapshot/mixed.json` with `twin compile --snapshot` to `ecb665f5…` (R-15);
+  - the `intent read --out` lines say a snapshot;
+  - the stage commands' sample lines gain `snapshot_id`;
+  - the rehearsal table sample (line 569) gains the `snapshot` column.
+
+  Run every command shown that needs only the server against this tree, and paste its real output.
+
+- [ ] T059 [P] `docs/verified-facts.md`: under 2026-10-27, research §1.2 (two unpinned reads differ in `observed_at` alone) and §1.3 (the hashed-bytes encoding and the `jq` recipe agree), with T051's fixture id and T046's stage-taken-twice result, each with Infrahub 1.11.2 and the date.
+
+- [ ] T060 [P] `docs/roadmap.md`: F-024 marked built by 018, with a one-line summary and links to D-061 and this feature; Release 0.3's list moves its marker to F-026 next. The brief (`specs/018-snapshots/brief.md`) is left as written.
+
+- [ ] T061 [P] Re-read `SECURITY.md` and `.env.example` for anything the snapshot changes. Expected: nothing in `.env.example`. A sentence in `SECURITY.md` that a snapshot holds configuration, as the CTM does, if it describes the CTM's or the bundle store's contents. Grep the tree for any log or finding message that could carry a snapshot's bytes (`grep -rn 'snapshot' internal/server/*.go | grep -i 'log\|Printf'`). Only ids and paths may cross.
+
+- [ ] T062 `CLAUDE.md`:
+  - Formats: snapshot `1`; `twin.json` `9`; `--ctm` retired; the fixture's snapshot id from T051 beside `f764e1fa…`.
+  - The Environment's description of the server's report: `snapshots:` in the state root line.
+  - Build and test: tier 2's and tier 3's new times from T053 and T054, and the tier-1 time if it moved.
+  - The fixture branch's paragraph: "It compiles to `f764e1fa…` … and its snapshot id is `<id>`".
+  - State: 018 closed, summarised as 017's entry is (D-061, Constitution 2.2.0, the snapshot store, `twin.json` `9`, the sidecar retired, the tiers' results); **Next**: F-026.
+  - The constitution's version where `CLAUDE.md` names it (2.2.0).
+
+- [ ] T063 The closing gates and greps:
+  - `make build`, static; `make test` uncached under 45 s; `make lint`; `go vet -tags contract,fixture,e2e ./...`; `shellcheck scripts/bring-up.sh scripts/e2e.sh`; `make linkcheck`;
+  - `git diff --stat main -- testdata/golden` empty;
+  - `/usr/bin/grep -rn -- '--ctm\|PutCTM\|\.ctm\.json\|sidecar' --include=*.go --include=*.md --include=*.sh --include=*.json --include=*.dsl .`, excluding `specs/0[01]*`, `local/` and `.venv/`. Each hit is historical, the reconcile's `.reads/`, or a retirement note;
+  - the credential greps over the tree and the branch's history (`/usr/bin/grep`, since Bash's `grep` skips git-ignored files), finding nothing;
+  - `TestFrozenContractCopiesAgree` at 49.
+
+  Record each result in this task's note.
+
+- [ ] T064 [operator] The operator's review of the feature, the commits by hand that the runs left uncommitted, and `make command-log` once the session is closed. Record the review's outcome in this task's note.
+
+**Checkpoint**: every record true; the feature closed.
+
+---
+
+## Dependencies & Execution Order
+
+### Phase dependencies
+
+- **Setup (Phase 1)**: T001 first. T002–T005 are the operator's. T002 blocks T009 onward.
+  T003 blocks T016 onward. T004's answers may change T020, T025, T030 and T047. T005 any
+  time after T001.
+- **Foundational (Phase 2)**: after T001 and T002. T006, T007 and T008 in parallel, before every
+  task that files a new rule, validates a snapshot, or names `paths.Snapshots`.
+- **US2 part 1 (Phase 3)**: after T002 and Phase 2. T009 → T010 → T011; T012 and T013
+  after T011, in parallel.
+- **US4 part 1 (Phase 4)**: after Phase 3. T014 → T015.
+- **US6 part 1, the records (Phase 5)**: after T003 and Phase 3. T016 → T017 → T018;
+  T019 beside T016; T020 after T019; T021 after T019; T022 after T016 and T020.
+- **US1, the MVP (Phase 6)**: after Phase 5. T023 → T024 → T025 → T026 → T027; T028
+  after T025; T029 after T024, in the same commit as the component it draws or the next.
+- **US3 (Phase 7)**: after Phase 6. T030 → T031 → T032 → T033; T034 after T022; T035
+  last.
+- **US4 part 2 (Phase 8)**: after T024 and T031 (the error mapping). T036 → T037; T038 →
+  T039. The two pairs touch different files and may run side by side.
+- **US5 (Phase 9)**: after Phase 6 and T021. T040 → T041; T042 and T043 after T040; T044
+  last.
+- **US2 part 2, tier 2 (Phase 10)**: after Phase 9. T045 and T046 in parallel.
+- **US6 part 2 (Phase 11)**: T047 after Phases 6–9. T048 and T049 after Phase 9.
+- **The host, live (Phase 12)**: after Phase 11. T050 → T051 → T052 → T053 → T054. T053
+  never beside a twin, and T054 never beside T053.
+- **Polish (Phase 13)**: after Phase 12. T059 needs T046's and T051's results; T062 needs
+  T051's id and T053–T054's times. T055–T061 together; T063 after them; T064 last.
+
+### Within a phase
+
+Pure code is gated in tier 1 before its harness, tier-2 or live proof. A story's test names
+the scenario it proves. A defect a test finds is fixed in that phase, in the package that
+holds the behaviour, before the checkpoint. A live task's defect gets a tier-1 test that
+pins it.
+
+### Parallel opportunities
+
+- Phase 2: T006, T007 and T008.
+- Phase 3: T012 and T013, once T011 is in.
+- Phase 5: T019 beside T016–T018.
+- Phase 8: T036–T037 beside T038–T039.
+- Phase 9: T042 beside T043, once T040 is in.
+- Phase 10: T045 beside T046.
+- Phase 11: T048 and T049 beside T047.
+- Phase 13: T055–T061 together.
+
+### Parallel example: the foundation
+
+```text
+T006  internal/findings/finding.go, finding_test.go, render.go   (the identifiers)
+T007  contracts/snapshot.schema.json                             (the contract)
+T008  internal/lab/env.go, cmd/fylgja/serve.go, worker.go        (the path)
+→ then T009–T011 in order, then T012 beside T013
+```
+
+### Parallel example: User Story 5
+
+```text
+T040        internal/stages/plan.go, blocks.go                   (the pipeline's Take)
+→ T042      internal/server/step.go, internal/cli/twin_step_test.go
+  T043      internal/server/rehearse.go, internal/cli/twin_rehearse_test.go
+→ T044      internal/checks/
+```
+
+---
+
+## Implementation Strategy
+
+**MVP**: Phases 1–6. After Phase 6, every create the server starts is read, taken,
+compiled and filed on the server, and the provision workflow begins at the host check. The
+record names the snapshot and no build writes a sidecar, proved in tier 1. Phase 12 proves
+it on the host.
+
+**Incremental delivery**: the identifiers, the contract and the path → the snapshot, its
+id and its store → the wrapped fixtures → the records and the wire → the create (MVP) →
+`--snapshot` on create → the hand tools → stages, step and rehearsal → the two tier-2
+tests → the end-to-end script and the contracts' prose → the host, live → the records.
+Every checkpoint leaves the tree green, and no golden moves.
+
+### Recommended route
+
+Each line is one implement run's prompt. Every run: only the tasks it names; stop at its
+checkpoint and report; a hand run leaves its work for the operator to commit, a loop run
+commits its own.
+
+1. **Run 1** — the baseline: the pure gates and the tree's state read (T001). Only this; stop and report.
+2. **Run 2** — [operator] D-061 accepted and appended, Constitution 2.2.0 and the plan template, the plan's six departures and this file's four decisions settled, the roadmap's edits and the design committed (T002–T005). Stop and report.
+3. **Run 3** — the five identifiers, the snapshot's contract landed, and paths.Snapshots in the state root lines (T006–T008). Only these; stop and report.
+4. **Run 4** — internal/snapshot: the document, Take, the hashed bytes and the id with the reflection test, Unmarshal's refusals in order, the store, the id's and the store's tests over the fixtures and the contract, and the C4 model redrawn with the package and the store (T009–T013). Only these; stop and report.
+5. **Run 5** — the three wrapped fixtures under testdata/snapshot and their compile to the three goldens, no golden moved (T014–T015). Only these; stop and report.
+6. **Run 6** — twin.json 9 with the 8 frozen, the workflow inputs with the nine histories replaying, the step and rehearse workflows carrying the sides' ids (T016–T018). Only these; stop and report.
+7. **Run 7** — the findings blocks, the five moved contracts with their sixteen frozen copies, the rehearsal's snapshot column, and twin show's record line (T019–T022). Only these; stop and report.
+8. **Run 8** — the sidecar retired, takeSnapshot, the create read, taken, compiled and filed on the server with its dry run, the create's tests, the follow's rebuild naming none, and the C4 model redrawn (T023–T029). Only these; stop and report.
+9. **Run 9** — twin create --snapshot: the guards, resolveSnapshot by id or file, the API's argument and file, the client's flag, twin show's kind for a snapshot twin, and the tests (T030–T035). Only these; stop and report.
+10. **Run 10** — twin compile --snapshot with --ctm retired, and intent read --out writing and filing a snapshot, with their tests (T036–T039). Only these; stop and report.
+11. **Run 11** — the stages' pipeline takes each stage's snapshot; stage plan, twin step and twin rehearse carry it; the checks' tier-1 tests (T040–T044). Only these; stop and report.
+12. **Run 12** — the two tier-2 tests written and run: the pinned read's snapshot id, and one stage taken twice through the server's path (T045–T046). Only these; stop and report.
+13. **Run 13** — the end-to-end script's assertions moved to the snapshot and checked offline, and the contracts' 018 sections (T047–T049). Only these; stop and report.
+14. **Run 14** — [live] the worker and the server restarted from this tree and verified, and the hand scenarios of quickstart §2–§6 (T050–T052). Stop and report.
+15. **Run 15** — [live] the contract tier whole beside the server on the bridge, then tier 3 whole and narrowed on a quiet host (T053–T054). Stop and report.
+16. **Run 16** — the records: architecture, glossary, development.md, README, verified-facts.md, roadmap, SECURITY.md and .env.example re-read, CLAUDE.md, then the closing gates and greps (T055–T063). Only these; stop and report.
+17. **Run 17** — [operator] the operator's review, commits and the command log (T064). Stop and report.
+
+`converge` follows Run 17.
+
+## Notes
+
+The heading above closes the route: `scripts/converge-loop.sh` reads "Recommended route"
+only up to the next heading.
+
+**For `analyze` to settle**, beside T004's list:
+
+- **R-21, `twin verify`**: its block keeps `verify.twin.bundle_id` alone, against a
+  literal reading of SC-005 ("every record that names a bundle id names a snapshot id or
+  says it has none"). FR-022's list of five records is what this file builds. Verify's
+  block is a document, not a record, and moves at F-026.
+- **SC-001's proof**: tier 1 shows it on the workflow's input shape (T017), and T051 shows
+  it on a real history. Tier 3 adds no assertion for it, since no case is added (SC-006).
+- **The rebase and re-render limits** are stated in the schema (T007), the glossary
+  (T056), the architecture (T055) and D-061 (T002), and tested by nothing, as the spec's
+  Assumptions say.

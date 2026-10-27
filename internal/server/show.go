@@ -326,6 +326,28 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 		block.Kind = findings.ShowKindDiverged
 		text.kind = divergedKind(rec)
 		note(text.kind)
+	case rec.Source == wire.SourceSnapshot:
+		// A twin built from a snapshot is of what its envelope says, pinned or frozen, and
+		// never following, by rule: its reference is a document, which does not move, so the
+		// following branch of the table is not taken whatever Schedule exists (R-08; FR-017).
+		// Otherwise the existing rules stand: a frozen twin's read time is noted as any is.
+		built := "built from a snapshot"
+		if id := rec.SnapshotID; id != nil {
+			built = "built from snapshot " + shortID(*id)
+		}
+		if at := rec.Provenance.At; at != "" {
+			block.Kind = findings.ShowKindPinned
+			text.kind = fmt.Sprintf("pinned at %s; not following; %s", at, built)
+			note(fmt.Sprintf("pinned at %s; not following", at))
+		} else {
+			block.Kind = findings.ShowKindFrozen
+			text.kind = "frozen; not following; " + built
+			note("not following")
+			bestEffort()
+		}
+		if id := rec.SnapshotID; id != nil {
+			note("built from snapshot " + *id)
+		}
 	case rec.Provenance.At != "":
 		block.Kind = findings.ShowKindPinned
 		text.kind = fmt.Sprintf("pinned at %s; not following", rec.Provenance.At)

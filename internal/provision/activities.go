@@ -164,9 +164,11 @@ func followedBranch(desc *client.ScheduleDescription) string {
 }
 
 // ReadIntent reads the branch on the worker through the pipeline `intent read` runs
-// (internal/stage), so a create that stops here reports M1's findings under M1's
-// identifiers. The CTM is written to bundles/.reads/<run id>.ctm.json until
-// compile has named its bundle.
+// (internal/stage), so a following check that stops here reports M1's findings under M1's
+// identifiers, as the server's read reports a create's. Since 018 the server reads for
+// every create, and a provision schedules this only in a history recorded before 018,
+// which it replays. The CTM is written to bundles/.reads/<run id>.ctm.json until compile
+// has named its bundle.
 //
 // A rejection is a result, not an error. A read that could not run at all — Infrahub
 // unreachable, its address or credential unset — fails as operation.failed, which no

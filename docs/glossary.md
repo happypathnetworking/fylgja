@@ -1139,13 +1139,17 @@ computed beside a refused stage, and `twin step` prints it and acts on it
 ([D-045](decisions.md#d-045)).
 
 **Step (of a run)** — One idempotent unit of a provisioning or destroy run, implemented
-as a Temporal *activity*: read, compile, host check, stage, deploy, readiness (one per
-node), push (one per node), record; teardown and unstage. Takes paths and identities,
-never bundle bytes; a step that can run for minutes heartbeats under a budget from the
-PSP. Host-bound steps run only on the lab host, in `internal/lab`
-([D-015](decisions.md#d-015)). A finding names the step it was raised at. `start`,
-`verify` and `resolve` are the command's own steps, taken by the *server* before any run
-starts. A *step (of a twin)* runs its own: inspect, host check, plan reconcile (findings
+as a Temporal *activity*: host check, stage, deploy, readiness (one per node), push (one
+per node), record; teardown and unstage. Takes paths and identities, never bundle bytes;
+a step that can run for minutes heartbeats under a budget from the PSP. Host-bound steps
+run only on the lab host, in `internal/lab` ([D-015](decisions.md#d-015)). A finding
+names the step it was raised at. `start`, `verify`, `resolve`, `read` and `compile` are
+the command's own steps, taken by the *server* before any run starts: from 018 every
+provision it starts begins at the host check, already compiled, as a step's and a
+rehearsal's do ([D-061](decisions.md#d-061)). Only a following check's run reads and
+compiles, on the worker, and a provision's history recorded before 018 begins with
+those two, a branch the workflow keeps so that it replays. A *step (of a twin)* runs its
+own: inspect, host check, plan reconcile (findings
 step `compare`), stage, reconcile, readiness, push, record, and *observe*, which is also
 `twin verify`'s.
 

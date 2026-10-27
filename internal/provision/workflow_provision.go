@@ -15,11 +15,11 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 )
 
-// Provision is the provisioning run: read, compile, check the host, stage, deploy, wait
-// for every node, push each its configuration, record. Activities are scheduled by name
-// with the options their budgets give them, and
-// everything the run needs to know about the host arrives in activity results, never from
-// disk.
+// Provision is the provisioning run: check the host, stage, deploy, wait for every node,
+// push each its configuration, record. Its read and compile are the server's, or a
+// following check's, before it starts (018). Activities are scheduled by name with the
+// options their budgets give them, and everything the run needs to know about the host
+// arrives in activity results, never from disk.
 //
 // It returns a result in every case, never an error, so the CLI reads one shape. Up to and
 // including the host check nothing on the host has been touched: a refusal
@@ -34,7 +34,9 @@ import (
 // starts at the host check too, and records the check's read. So is a create whose server
 // read, took and compiled, or one from a snapshot (018): BundleID set, from intent or from
 // a snapshot, it starts at the host check and records the read's observed_at, or the
-// snapshot's stored take, and the snapshot its input names.
+// snapshot's stored take, and the snapshot its input names. An input from intent with no
+// BundleID, which no build of this tree starts, reads and compiles first, as a create's
+// run did before 018: the branch stays so that the histories recorded then replay.
 //
 // Following (M4) adds two steps, each taken only when the input asks, so M2's inputs run
 // and replay as they did. With StopFollowing, once the host check has cleared and before

@@ -966,3 +966,54 @@ func TestReconcileConfigurationChange(t *testing.T) {
 		}
 	})
 }
+
+// A following twin is unchanged by 018 (US1 scenario 6; FR-013): the check still reads into
+// bundles/.reads/ and compiles from there in the worker, and its rebuild's provision is
+// started already compiled and naming no snapshot, so the record step is given none. An
+// intent twin given none records "snapshot_id": null (internal/lab, TestRecord9), which
+// twin show prints as snapshot none (internal/server, TestRecordLineNamesTheSnapshot).
+func TestARebuildNamesNoSnapshot(t *testing.T) {
+	h := newReconcileHarness(t)
+	h.scope = "tag:fylgja"
+	var compiledFrom string
+	h.env.OnActivity(wire.ActCompile, mock.Anything, mock.Anything).Return(
+		func(_ context.Context, in CompileInput) (CompileResult, error) {
+			compiledFrom = in.CTMPath
+			return CompileResult{BundleID: changedBundleID, BundlePath: "/state/bundles/" + changedBundleID, Findings: findings.List{}}, nil
+		})
+	h.mockCheck(twinBundleID, changedBundleID)
+
+	if res := h.run(); res.Outcome != CheckRebuilt {
+		t.Fatalf("outcome %q at %q, want rebuilt", res.Outcome, res.Step)
+	}
+	if compiledFrom != "/state/bundles/.reads/check.ctm.json" {
+		t.Errorf("the check compiled %q, want its own read under bundles/.reads/", compiledFrom)
+	}
+	if len(h.children) != 1 {
+		t.Fatalf("provision children %+v, want one", h.children)
+	}
+	child := h.children[0]
+	if child.SnapshotID != "" || child.BundleID != changedBundleID || child.Source != wire.SourceIntent {
+		t.Fatalf("the rebuild's provision input %+v; want the check's bundle, from intent, naming no snapshot", child)
+	}
+
+	p := newHarness(t)
+	var recorded wire.RecordInput
+	p.env.OnActivity(wire.ActRecordTwin, mock.Anything, mock.Anything).Return(
+		func(_ context.Context, in wire.RecordInput) (wire.RecordResult, error) {
+			recorded = in
+			return wire.RecordResult{Path: in.TwinDir + "/twin.json", Record: recordFor(in)}, nil
+		})
+	p.mockHappyPath()
+	if res := p.run(child); res.Outcome != OutcomeReady {
+		t.Fatalf("the rebuild's provision ended %q at %q, want ready", res.Outcome, res.Step)
+	}
+	if p.ran(wire.ActReadIntent) || p.ran(wire.ActCompile) {
+		t.Errorf("activities %v; the rebuild's provision is compiled already", p.calls())
+	}
+	if recorded.SnapshotID != "" || recorded.Source != wire.SourceIntent || recorded.ObservedAt == nil ||
+		*recorded.ObservedAt != checkObservedAt {
+		t.Errorf("record input snapshot %q, source %q, observed_at %v; want none, intent and the check's read %s",
+			recorded.SnapshotID, recorded.Source, recorded.ObservedAt, checkObservedAt)
+	}
+}

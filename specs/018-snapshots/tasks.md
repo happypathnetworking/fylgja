@@ -1047,6 +1047,24 @@ twin and Infrahub as the contract tier leaves it.
 
 - [ ] T064 [operator] The operator's review of the feature, the commits by hand that the runs left uncommitted, and `make command-log` once the session is closed. Record the review's outcome in this task's note.
 
+  - *2026-10-27 21:58Z, at `3518b4e`, Run 17 of the converge loop (live): left unchecked.* The review is the operator's, and a session cannot run the command log for a session that is still open. Nothing was merged, pushed or fetched. What is ready:
+    - **The feature's diff**: `git diff 168fd63 3518b4e`, from `main` as it stood before 018's specify. It is 56 commits (19 `feat`, 1 `refactor`, 11 `test`, 25 `docs`) over 177 files, +19,998 and −1,373 lines. The code is 37 Go files (+1,733 −367) and their tests 77 (+5,726 −629). The 16 contract copies frozen under `internal/*/testdata/contracts/017-dcim-reader/` add 6,793 lines, and the feature's 11 files under `specs/018-snapshots/` 3,968.
+    - **`origin`**: its `main` is `cb0a8d7`, read with `git ls-remote` at 21:57Z, which moves no remote-tracking ref; it is an ancestor of the branch, and local `main` (`168fd63`) is one `docs` commit past it. No CI run has seen 018's code. 018 changes nothing under `infrahub/`, `.infrahub.yml`, `schema/` or `testdata/golden/`, so no import into Infrahub is owed and no task here waits on a push, as 017's T057 did. The merge and the push are the operator's, once the review is done; CI's contract job runs on that push.
+    - **To read on their own**:
+      - D-061 (`9378915`), with Constitution 2.2.0 (`4fc1635`).
+      - The four breaking commits: `d110840` (`twin.json` 9), `e4c0a62` (the CTM sidecar retired), and `82b05cc` with `4874612` (`twin compile --snapshot` in place of `--ctm`).
+      - The contract `c07214f` (`snapshot.schema.json`, version 1), and the frozen copies, landed in `c3009ed`, `82b05cc`, `d110840` and `ed39b9b`.
+      - No golden re-baseline: `6bb34f9` proves the three wrapped fixtures compile to `43d91715…`, `4213b3cf…` and `ecb665f5…`, unmoved.
+    - **What a session decided where the documents left it open**, each in its task's note:
+      - Run 5 (T015): the lossy fixture compiles through `testdata/psp/lossy`, the registry its golden was compiled with.
+      - Run 7: the five contracts frozen as this file's header decides (T020); no file in `internal/checks` pins the report's header, though formats.md §10 and R-14 say one does, so case 9 of `scripts/e2e.sh` moved instead (T021); `rehearsal.steps.none` still judges by count, not bundle equality, since "still raises it" could not hold (T021).
+      - Runs 8–10: the take's and the store's refusals at `compile`, not `read` (T025, T040); a snapshot create's subject names the envelope's `branch` and `at` and no scope (T030); the packages load before the snapshot resolves (T031); the client's own id check, held to `snapshot.IsID` (T033); a frozen snapshot twin keeps the frozen rule's best-effort note (T034); M1's documents held to the current contract (T037); the state root resolved before an `intent read` (T038); `PlanStage.SnapshotID` a field, not a method (T040).
+      - Run 16: the README's samples kept from the v0.2.0 recording, with the ids that release never had written `…` (T058); a line each in `SECURITY.md` and `.env.example`; the architecture's sentence on the server diagram's arrows reworded, the diagram unchanged; T063's grep run with `-e`.
+      - And, for `analyze`, R-21 (Notes): `twin verify`'s block names no snapshot.
+    - **The host, beyond the feature**: with no twin up, `free -m` reads 10,473 MiB available, not the about 24 GiB `CLAUDE.md` gives. Infrahub's eight containers hold about 15.4 GiB, its server 7.97 GiB, after 14 days up, against the 5.2 GiB idle `CLAUDE.md` records. Run 15 (T054) lost one tier-3 attempt to an SR Linux `sr_cli` segfault under that load. Restarting Infrahub's containers, or changing the figure, is the operator's call.
+    - **Commits by hand**: none are owed. Each run committed its own work, and the tree was clean at `3518b4e` before this note.
+    - **The command log**: `local/command-log/` holds no `pending.jsonl`. The loop publishes each session's entry when the session exits: 20 are in `specs/018-snapshots/commands/runs.jsonl` (`specify`, `clarify`, `plan`, `tasks`, `analyze`, and Runs 1 and 3–16), and this session's follows when it exits. `make command-log`, run after the attended session closes, publishes whatever that session kept.
+
 **Checkpoint**: every record true; the feature closed.
 
 ---

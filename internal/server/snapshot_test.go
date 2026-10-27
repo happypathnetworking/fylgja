@@ -3,10 +3,13 @@ package server
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
+	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/snapshot"
@@ -112,5 +115,206 @@ func TestACorruptEntryIsSnapshotIDMismatch(t *testing.T) {
 	}
 	if stored, err := os.ReadFile(entry); err != nil || !bytes.Equal(stored, corrupt) {
 		t.Errorf("the corrupt entry was rewritten (%v)", err)
+	}
+}
+
+// fixtureFile is testdata/snapshot/three-node.json as a map, edited by edit, as a client
+// would send it under the path snap.json.
+func fixtureFile(t *testing.T, edit func(map[string]any)) []api.File {
+	t.Helper()
+	raw, err := os.ReadFile(repoPath("testdata", "snapshot", "three-node.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if edit == nil {
+		return []api.File{{Path: "snap.json", Data: raw}}
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	edit(doc)
+	b, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return []api.File{{Path: "snap.json", Data: b}}
+}
+
+// A snapshot file is refused by snapshot.Unmarshal's rules, each under its own identifier at
+// resolve, exit 1, naming the file or the field (R-03; contracts/cli.md, "018: snapshots",
+// the refusals as they print); a file that is not JSON was never validated and is
+// operation.failed, exit 2. Nothing is filed for any of them.
+func TestResolveSnapshotRefusesAFileByItsRules(t *testing.T) {
+	ctmOf := func(doc map[string]any) map[string]any { return doc["ctm"].(map[string]any) }
+	for _, c := range []struct {
+		name          string
+		files         []api.File
+		code          int
+		rule, object  string
+		message       string
+		messagePrefix bool
+	}{
+		{"another version", fixtureFile(t, func(d map[string]any) { d["snapshot_version"] = "2" }), findings.ExitRejected,
+			findings.RuleSnapshotVersionUnsupported, "snap.json",
+			`the snapshot declares snapshot_version "2"; this build reads "1", and nothing converts one`, false},
+		{"a bare CTM", func() []api.File {
+			raw, err := os.ReadFile(repoPath("testdata", "ctm", "three-node.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			return []api.File{{Path: "snap.json", Data: raw}}
+		}(), findings.ExitRejected, findings.RuleSnapshotVersionUnsupported, "snap.json",
+			`the snapshot declares no snapshot_version; this build reads "1", and nothing converts one`, false},
+		{"a probe", fixtureFile(t, func(d map[string]any) { d["probes"] = []any{map[string]any{}} }), findings.ExitRejected,
+			findings.RuleSnapshotInvalid, "probes", "probes holds 1 entry", true},
+		{"an inner CTM of version 1", fixtureFile(t, func(d map[string]any) { ctmOf(d)["ctm_version"] = "1" }), findings.ExitRejected,
+			findings.RuleCTMVersionUnsupported, "snap.json", `the CTM declares ctm_version "1"; this build reads "2", and nothing converts one`, false},
+		{"an inner CTM with no fidelity list", fixtureFile(t, func(d map[string]any) {
+			delete(ctmOf(d)["envelope"].(map[string]any), "fidelity")
+		}), findings.ExitRejected, findings.RuleRequiredMissing, "ctm.envelope.fidelity", "ctm.envelope.fidelity", true},
+		{"a declared id its body does not hash to", fixtureFile(t, func(d map[string]any) { d["snapshot_id"] = strings.Repeat("1", 64) }),
+			findings.ExitRejected, findings.RuleSnapshotIDMismatch, "snap.json", "snap.json declares snapshot_id " + strings.Repeat("1", 64) +
+				", but its body hashes to " + fixtureSnapshotID + "; leave snapshot_id out to have it computed", false},
+		{"not JSON", []api.File{{Path: "snap.json", Data: []byte("{")}}, findings.ExitError, findings.RuleOperationFailed, "snap.json",
+			"decoding snapshot: ", true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			paths := useStateRoot(t)
+			_, _, err := resolveSnapshot(context.Background(), paths, findings.OpTwinCreate, &findings.Subject{Snapshot: "snap.json"},
+				"snap.json", c.files)
+			code, doc := exitOf(t, err)
+			if code != c.code || len(doc.Findings) != 1 {
+				t.Fatalf("exit %d, findings %+v; want %d with %s alone", code, doc.Findings, c.code, c.rule)
+			}
+			f := doc.Findings[0]
+			matches := f.Message == c.message || c.messagePrefix && strings.HasPrefix(f.Message, c.message)
+			if f.Rule != c.rule || f.Step != findings.StepResolve || f.Object != c.object || !matches {
+				t.Errorf("finding %+v; want %s at resolve on %s: %s", f, c.rule, c.object, c.message)
+			}
+			if _, err := os.Stat(paths.Snapshots); !os.IsNotExist(err) {
+				t.Errorf("snapshots/ exists after a refused file (%v)", err)
+			}
+			validateWithShow(t, currentContract, "018", doc)
+		})
+	}
+}
+
+// An id the store does not hold is snapshot.unknown at resolve, naming the store's
+// directory; an entry under the id that hashes to another is snapshot.id.mismatch naming its
+// path; a stored one is the stored document, at its store path (R-12).
+func TestResolveSnapshotByID(t *testing.T) {
+	ctx := context.Background()
+	paths := useStateRoot(t)
+	subject := &findings.Subject{Snapshot: fixtureSnapshotID}
+
+	_, _, err := resolveSnapshot(ctx, paths, findings.OpTwinCreate, subject, fixtureSnapshotID, nil)
+	code, doc := exitOf(t, err)
+	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSnapshotUnknown, Step: findings.StepResolve,
+		Object: fixtureSnapshotID, Message: "the store under " + paths.Snapshots + " holds no snapshot " + fixtureSnapshotID +
+			"; a snapshot id comes from a create, a dry run, a plan or intent read --out on this server"}
+	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != want {
+		t.Errorf("exit %d, findings %+v; want 1 with %+v", code, doc.Findings, want)
+	}
+	validateWithShow(t, currentContract, "018", doc)
+
+	stored, path, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, got, err := resolveSnapshot(ctx, paths, findings.OpTwinCreate, subject, fixtureSnapshotID, nil)
+	if err != nil || s.ID != stored.ID || s.ObservedAt != stored.ObservedAt || got != path {
+		t.Errorf("resolved %+v at %s (%v); want the stored %s at %s", s, got, err, stored.ID, path)
+	}
+
+	// The lossy fixture's stored bytes under the three-node's id.
+	other, _, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Rename(filepath.Join(paths.Snapshots, other.ID+".json"), path); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = resolveSnapshot(ctx, paths, findings.OpTwinCreate, subject, fixtureSnapshotID, nil)
+	code, doc = exitOf(t, err)
+	want = findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSnapshotIDMismatch, Step: findings.StepResolve,
+		Object: path, Message: "store entry " + path + " hashes to " + other.ID + ", not " + fixtureSnapshotID + ", so snapshot " +
+			fixtureSnapshotID + " cannot be read"}
+	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != want {
+		t.Errorf("exit %d, findings %+v; want 1 with %+v", code, doc.Findings, want)
+	}
+}
+
+// A file is filed under the id its body hashes to, computed when it declares none; one of a
+// snapshot the store holds leaves the entry as it was, and what is returned is the stored
+// document, its observed_at the first take's (US3 scenarios 4 and 8).
+func TestResolveSnapshotFilesAFile(t *testing.T) {
+	ctx := context.Background()
+	paths := useStateRoot(t)
+	files := fixtureFile(t, func(d map[string]any) {
+		delete(d, "snapshot_id")
+		delete(d, "observed_at")
+	})
+	s, path, err := resolveSnapshot(ctx, paths, findings.OpTwinCreate, &findings.Subject{Snapshot: "snap.json"}, "snap.json", files)
+	if err != nil || s.ID != fixtureSnapshotID || path != filepath.Join(paths.Snapshots, fixtureSnapshotID+".json") {
+		t.Fatalf("resolved %+v at %s (%v); want %s filed", s, path, err, fixtureSnapshotID)
+	}
+	first, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	later := fixtureFile(t, func(d map[string]any) {
+		d["observed_at"] = "2026-10-27T10:30:00.000000Z"
+		d["ctm"].(map[string]any)["envelope"].(map[string]any)["observed_at"] = "2026-10-27T10:30:00.000000Z"
+	})
+	again, _, err := resolveSnapshot(ctx, paths, findings.OpTwinCreate, &findings.Subject{Snapshot: "snap.json"}, "snap.json", later)
+	if err != nil || again.ID != fixtureSnapshotID || again.ObservedAt != s.ObservedAt {
+		t.Errorf("resolved %+v (%v); want %s observed at the first take's %s", again, err, fixtureSnapshotID, s.ObservedAt)
+	}
+	if b, err := os.ReadFile(path); err != nil || !bytes.Equal(b, first) {
+		t.Errorf("the second file changed the entry (%v)", err)
+	}
+}
+
+// A create's files are one snapshot file beside a --snapshot that is a path, under that
+// path, or none: any other is refused before anything is parsed, operation.failed, exit 2,
+// as twin compile's are, and nothing is dialled or filed (contracts/api.md, "018:
+// snapshots").
+func TestACreatesFilesAreOneSnapshotFile(t *testing.T) {
+	one := []api.File{{Path: "snap.json", Data: []byte("{")}}
+	for _, c := range []struct {
+		name    string
+		flags   createFlags
+		files   []api.File
+		message string
+	}{
+		{"a file beside --branch", createFlags{branch: "b"}, one,
+			"the request carries 1 file where twin create takes a snapshot file beside --snapshot alone"},
+		{"a file beside an id", createFlags{snapshot: fixtureSnapshotID}, one,
+			"the request carries 1 file where twin create takes a snapshot file beside --snapshot alone"},
+		{"two files", createFlags{snapshot: "snap.json"}, append(one, api.File{Path: "other.json"}),
+			"the request carries 2 files where twin create takes a snapshot file beside --snapshot alone"},
+		{"no file beside a path", createFlags{snapshot: "snap.json"}, nil,
+			"the request carries no file where twin create takes the snapshot file --snapshot names, under that path"},
+		{"a file under another path", createFlags{snapshot: "other.json"}, one,
+			"the request carries its snapshot file under another path than --snapshot gives, where twin create takes a snapshot " +
+				"file beside --snapshot alone, under that path"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			paths := useStateRoot(t)
+			useService(t, nil)
+			code, doc := exitOf(t, runCreate(context.Background(), testOptions(t, true), &c.flags, c.files))
+			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleOperationFailed, Object: findings.OpTwinCreate,
+				Message: c.message}
+			if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != want {
+				t.Errorf("exit %d, findings %+v; want 2 with %+v", code, doc.Findings, want)
+			}
+			if _, err := os.Stat(paths.Root); err == nil {
+				if entries, _ := os.ReadDir(paths.Root); len(entries) != 0 {
+					t.Errorf("the state root holds %v after the refusal", entries)
+				}
+			}
+		})
 	}
 }

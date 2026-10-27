@@ -37,6 +37,11 @@ func TestDryRunFollowCreate(t *testing.T) {
 			findings.DryRunFollow{Reason: findings.FollowReasonStage}, "follow: would not follow (--stage given: a stage is pinned)"},
 		{"--stage --no-follow", createFlags{stage: "change-1/cabled", noFollow: true},
 			findings.DryRunFollow{Reason: findings.FollowReasonStage}, "follow: would not follow (--stage given: a stage is pinned)"},
+		// 018: a twin built from a snapshot never follows, by rule, and says so.
+		{"--snapshot", createFlags{snapshot: fixtureSnapshotID}, findings.DryRunFollow{Reason: findings.FollowReasonSnapshot},
+			"follow: would not follow (--snapshot given: a twin built from a snapshot never follows)"},
+		{"--snapshot --no-follow", createFlags{snapshot: "snap.json", noFollow: true}, findings.DryRunFollow{Reason: findings.FollowReasonSnapshot},
+			"follow: would not follow (--snapshot given: a twin built from a snapshot never follows)"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			interval, err := followInterval(findings.OpTwinCreate, &findings.Subject{}, &c.flags)
@@ -71,10 +76,14 @@ func TestDryRunFollowCreate(t *testing.T) {
 			if doc.DryRun == nil || doc.DryRun.Follow == nil || *doc.DryRun.Follow != c.want {
 				t.Errorf("dry_run %+v, want follow %+v", doc.DryRun, c.want)
 			}
-			// The reason stage is the current enum's; every other document is M6's.
-			if c.want.Reason == findings.FollowReasonStage {
+			// The reason stage is the current enum's from 014, and snapshot from 018; every other
+			// document is M6's.
+			switch c.want.Reason {
+			case findings.FollowReasonSnapshot:
+				validateWithShow(t, currentContract, "018", doc)
+			case findings.FollowReasonStage:
 				validateM10Document(t, doc)
-			} else {
+			default:
 				validateM6Document(t, doc)
 			}
 		})

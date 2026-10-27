@@ -31,7 +31,10 @@ import (
 // A run from a stored bundle (twin provision) has no read and no compile: it starts at the
 // host check with the bundle it was given, and records that no read took place. A rebuild's
 // provision is already compiled: from intent with BundleID set, it
-// starts at the host check too, and records the check's read.
+// starts at the host check too, and records the check's read. So is a create whose server
+// read, took and compiled, or one from a snapshot (018): BundleID set, from intent or from
+// a snapshot, it starts at the host check and records the read's observed_at, or the
+// snapshot's stored take, and the snapshot its input names.
 //
 // Following (M4) adds two steps, each taken only when the input asks, so M2's inputs run
 // and replay as they did. With StopFollowing, once the host check has cleared and before
@@ -208,6 +211,7 @@ func provisionHost(ctx workflow.Context, in ProvisionInput, res *ProvisionResult
 		Pushed:     pushed,
 		Stage:      in.Stage,
 		Rehearsal:  in.Rehearsal,
+		SnapshotID: in.SnapshotID,
 	}); err != nil {
 		return stopAt(ctx, findings.StepRecord, staged.TwinDir, err)
 	}

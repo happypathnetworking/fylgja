@@ -84,10 +84,11 @@ const (
 	CleanupSkipped = "skipped" // not attempted: nothing on the host was touched
 )
 
-// ProvisionInput starts a provisioning run: from intent (twin create) or from a stored
-// bundle (twin provision). Paths are absolute and no bytes cross the queue.
+// ProvisionInput starts a provisioning run: from intent (twin create), from a snapshot
+// (twin create --snapshot, 018) or from a stored bundle (twin provision). Paths are
+// absolute and no bytes cross the queue.
 type ProvisionInput struct {
-	Source     string `json:"source"`      // wire.SourceIntent or wire.SourceBundle
+	Source     string `json:"source"`      // wire.SourceIntent, wire.SourceSnapshot or wire.SourceBundle
 	Branch     string `json:"branch"`      // intent: the branch to read
 	At         string `json:"at"`          // intent: --at verbatim, empty when not given
 	BundlePath string `json:"bundle_path"` // bundle: the stored copy's absolute path
@@ -114,6 +115,11 @@ type ProvisionInput struct {
 	// it (017), and the following's checks after it. The run branches on nothing of it.
 	// Empty in every recorded history before 017, and omitted when empty, so they replay.
 	Scope string `json:"scope,omitempty"`
+	// SnapshotID is the snapshot BundleID was compiled from, as the server took or fetched
+	// it (018), which the record step writes into twin.json. The run branches on nothing of
+	// it. Empty in every recorded history before 018, and on a rebuild's and a twin
+	// provision's input, and omitted when empty, so they replay.
+	SnapshotID string `json:"snapshot_id,omitempty"`
 }
 
 // StageInput names a stage as the record does: its proposed change by id and source
@@ -397,6 +403,10 @@ type RehearseStage struct {
 	// WaitS is the budget of the stage's wait, in seconds: the baseline's VerifyTwin, or the
 	// step's own, which Step.WaitS carries.
 	WaitS int `json:"wait_s"`
+	// SnapshotID is the stage's snapshot, beside BundleID, empty when the plan refused the
+	// stage (018). The run branches on nothing of it. Empty in every recorded history before
+	// 018, and omitted when empty, so they replay.
+	SnapshotID string `json:"snapshot_id,omitempty"`
 }
 
 // RehearseRefusal is why the plan refused a stage the rehearsal passes over: the branch

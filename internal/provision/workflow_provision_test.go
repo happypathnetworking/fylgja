@@ -162,8 +162,9 @@ func TestProvisionCarriesTheRehearsalToTheRecord(t *testing.T) {
 	}
 }
 
-// The fields are omitted when nil, so an M2–M7 input and the record step's input for it
-// serialise as they did: the recorded histories' payloads are byte-identical.
+// The fields are omitted when nil or empty, so an M2–M7 input and the record step's input
+// for it serialise as they did: the recorded histories' payloads are byte-identical. A
+// snapshot id is omitted when empty too (018), on the inputs and on a step's sides.
 func TestAnInputWithNoStageSerialisesAsBefore(t *testing.T) {
 	for label, v := range map[string]any{
 		"ProvisionInput":   ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"},
@@ -173,8 +174,20 @@ func TestAnInputWithNoStageSerialisesAsBefore(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(b), `"stage"`) || strings.Contains(string(b), `"rehearsal"`) {
-			t.Errorf("%s with no stage or rehearsal serialises its key: %s", label, b)
+		if strings.Contains(string(b), `"stage"`) || strings.Contains(string(b), `"rehearsal"`) || strings.Contains(string(b), `"snapshot_id"`) {
+			t.Errorf("%s with no stage, rehearsal or snapshot serialises its key: %s", label, b)
+		}
+	}
+	for label, v := range map[string]any{
+		"StepInput":     StepInput{From: wire.StepSide{BundleID: testBundleID}, To: wire.StepSide{BundleID: testBundleID}},
+		"RehearseStage": RehearseStage{Ref: "change-1/seeded", BundleID: testBundleID},
+	} {
+		b, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(b), `"snapshot_id"`) {
+			t.Errorf("%s with no snapshot serialises its key: %s", label, b)
 		}
 	}
 }
@@ -364,6 +377,67 @@ func TestProvisionAlreadyCompiled(t *testing.T) {
 	}
 	if res.Outcome != OutcomeReady || res.ObservedAt != observed || res.BundleID != testBundleID {
 		t.Errorf("result %+v, want ready with the given bundle and read", res)
+	}
+}
+
+// Both creates the server starts from 018 are already compiled (SC-001): one from intent,
+// read, taken and compiled on the server, which stops any following, and one from a
+// snapshot. Neither schedules a read or a compile: each starts at the host check with the
+// bundle it was given, and its record step carries the snapshot the input names, the
+// read's observed_at and the input's source, as data.
+func TestProvisionCreatesCarryTheirSnapshot(t *testing.T) {
+	const observed = "2026-10-27T09:31:02.118842Z"
+	const snapshotID = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
+	bundlePath := "/state/bundles/" + testBundleID
+	for _, c := range []struct {
+		name string
+		in   ProvisionInput
+	}{
+		{"from intent", ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture", BundleID: testBundleID, BundlePath: bundlePath,
+			ObservedAt: observed, SnapshotID: snapshotID, StopFollowing: true}},
+		{"from a snapshot", ProvisionInput{Source: wire.SourceSnapshot, BundleID: testBundleID, BundlePath: bundlePath,
+			ObservedAt: observed, SnapshotID: snapshotID}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := newHarness(t)
+			var checked wire.CheckHostInput
+			var recorded wire.RecordInput
+			h.env.OnActivity(wire.ActCheckHost, mock.Anything, mock.Anything).Return(
+				func(_ context.Context, in wire.CheckHostInput) (wire.CheckHostResult, error) {
+					checked = in
+					return h.plan, nil
+				})
+			h.env.OnActivity(wire.ActRecordTwin, mock.Anything, mock.Anything).Return(
+				func(_ context.Context, in wire.RecordInput) (wire.RecordResult, error) {
+					recorded = in
+					return wire.RecordResult{Path: in.TwinDir + "/twin.json", Record: recordFor(in)}, nil
+				})
+			h.env.OnActivity(ActStopFollowing, mock.Anything).Return(StopFollowingResult{}, nil)
+			h.mockHappyPath()
+
+			res := h.run(c.in)
+
+			if res.Outcome != OutcomeReady || res.BundleID != testBundleID || res.ObservedAt != observed {
+				t.Fatalf("result %+v, want ready with the given bundle and read", res)
+			}
+			if h.ran(wire.ActReadIntent) || h.ran(wire.ActCompile) {
+				t.Errorf("activities %v; a create the server compiled reads and compiles nothing in the run", h.calls())
+			}
+			if calls := h.calls(); len(calls) == 0 || calls[0] != wire.ActCheckHost {
+				t.Errorf("activities %v, want the host check first", calls)
+			}
+			if checked != (wire.CheckHostInput{BundlePath: bundlePath, BundleID: testBundleID}) {
+				t.Errorf("host check got %+v, want the given bundle", checked)
+			}
+			if recorded.SnapshotID != snapshotID || recorded.Source != c.in.Source || recorded.BundleID != testBundleID ||
+				recorded.ObservedAt == nil || *recorded.ObservedAt != observed {
+				t.Errorf("record input snapshot %q, source %q, bundle %s, observed_at %v; want %s, %s, %s and %s",
+					recorded.SnapshotID, recorded.Source, recorded.BundleID, recorded.ObservedAt, snapshotID, c.in.Source, testBundleID, observed)
+			}
+			if stopped := h.ran(ActStopFollowing); stopped != c.in.StopFollowing {
+				t.Errorf("following stopped %t, want %t", stopped, c.in.StopFollowing)
+			}
+		})
 	}
 }
 

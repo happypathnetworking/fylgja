@@ -16,6 +16,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/psp"
+	"github.com/happypathnetworking/fylgja/internal/snapshot"
 	"github.com/happypathnetworking/fylgja/internal/testsupport"
 )
 
@@ -72,6 +73,11 @@ func throwaway(t *testing.T, prefix string) (*testsupport.Client, string) {
 // by the tag as it stood at T. cs1, a device complete but for the tag, rendered before T,
 // is tagged after it: the reads pinned to T never read it, and the unpinned read after
 // does.
+//
+// 018 extends it to the snapshot (D-061): each read is taken with snapshot.Take, as the
+// server takes it, and compiled from the snapshot's CTM. The three takes pinned to T have
+// one snapshot_id beside their one bundle_id, though each was observed at another time, so
+// the id leaves observed_at out (R-01); the unpinned take after the change has another.
 func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	c, branch := throwaway(t, "repro")
 	if err := c.LoadSchema(branch, filepath.Join("..", "..", "schema")); err != nil {
@@ -103,20 +109,21 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	read := func(at string) (map[string][]byte, string, *ctm.CTM) {
+	read := func(at string) (map[string][]byte, string, *snapshot.Snapshot) {
 		t.Helper()
-		snapshot, list, err := Read(t.Context(), branch, at, "tag:fylgja", reg, time.Now().UTC().Format(ObservedAtFormat))
+		got, list, err := Read(t.Context(), branch, at, "tag:fylgja", reg, time.Now().UTC().Format(ObservedAtFormat))
 		if err != nil {
 			t.Fatalf("reading %s at %q: %v", branch, at, err)
 		}
 		if list.Rejected() {
 			t.Fatalf("reading %s at %q was rejected: %v", branch, at, list)
 		}
-		files, id, list := Compile(snapshot, reg)
+		taken := snapshot.Take(got)
+		files, id, list := Compile(taken.CTM, reg)
 		if list.Rejected() {
 			t.Fatalf("compiling %s at %q was rejected: %v", branch, at, list)
 		}
-		return files, id, snapshot
+		return files, id, taken
 	}
 	counts := func(what string, snapshot *ctm.CTM, want intent.Counts) {
 		t.Helper()
@@ -127,9 +134,9 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	}
 	seeded := intent.Counts{Devices: 3, Interfaces: 9, Links: 3, Artifacts: 3}
 
-	before, beforeID, snapshot := read(at)
-	counts("the read at T does not see the whole seed", snapshot, seeded)
-	sumsAtT := checksums(snapshot)
+	before, beforeID, beforeTake := read(at)
+	counts("the read at T does not see the whole seed", beforeTake.CTM, seeded)
+	sumsAtT := checksums(beforeTake.CTM)
 
 	// The configuration change: n1's description, regenerated. Generation writes the new bytes
 	// with no status transition to wait on, so the wait is for n1's
@@ -152,15 +159,19 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 		t.Fatalf("n1's regeneration kept storage id %s; the proof needs a new object", regenerated.StorageID)
 	}
 
-	reconfigured, reconfiguredID, snapshot := read(at)
-	counts("the read at T after the configuration change", snapshot, seeded)
-	if got := checksums(snapshot); !maps.Equal(got, sumsAtT) {
+	reconfigured, reconfiguredID, reconfiguredTake := read(at)
+	counts("the read at T after the configuration change", reconfiguredTake.CTM, seeded)
+	if got := checksums(reconfiguredTake.CTM); !maps.Equal(got, sumsAtT) {
 		t.Errorf("the read at T after n1 was regenerated carries checksums %v, want T's %v", got, sumsAtT)
 	}
 	sameBundle(t, "the configuration change", before, reconfigured)
 	if reconfiguredID != beforeID {
 		t.Errorf("the reads pinned to T either side of the configuration change compile to %s and %s, want one bundle_id",
 			beforeID, reconfiguredID)
+	}
+	if reconfiguredTake.ID != beforeTake.ID {
+		t.Errorf("the takes pinned to T either side of the configuration change have snapshot_ids %s and %s, want one",
+			beforeTake.ID, reconfiguredTake.ID)
 	}
 
 	if err := c.SeedFourthNode(branch, "n1"); err != nil {
@@ -187,26 +198,38 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 		t.Fatalf("tagging cs1 after T: %v", err)
 	}
 
-	after, afterID, snapshot := read(at)
-	counts("the read at T after the change", snapshot, seeded)
-	if snapshot.Device("cs1") != nil {
+	after, afterID, afterTake := read(at)
+	counts("the read at T after the change", afterTake.CTM, seeded)
+	if afterTake.CTM.Device("cs1") != nil {
 		t.Error("the read pinned to T read cs1, which was tagged after T")
 	}
-	if got := checksums(snapshot); !maps.Equal(got, sumsAtT) {
+	if got := checksums(afterTake.CTM); !maps.Equal(got, sumsAtT) {
 		t.Errorf("the read at T after both changes carries checksums %v, want T's %v", got, sumsAtT)
 	}
 	sameBundle(t, "both changes", before, after)
 	if afterID != beforeID {
 		t.Errorf("the two reads pinned to T compile to %s and %s, want one bundle_id", beforeID, afterID)
 	}
+	if afterTake.ID != beforeTake.ID {
+		t.Errorf("the two takes pinned to T have snapshot_ids %s and %s, want one", beforeTake.ID, afterTake.ID)
+	}
+	// Each take stamped its own observed_at, minutes apart, so the one id above is the id
+	// leaving observed_at out, not two takes that happened to stamp one time.
+	if afterTake.ObservedAt == beforeTake.ObservedAt {
+		t.Errorf("the takes pinned to T either side of the change were both observed at %s; the proof needs two times",
+			beforeTake.ObservedAt)
+	}
 
-	unpinned, unpinnedID, snapshot := read("")
-	counts("the unpinned read after the change", snapshot, intent.Counts{Devices: 5, Interfaces: 13, Links: 4, Artifacts: 5})
-	if snapshot.Device("cs1") == nil {
+	unpinned, unpinnedID, unpinnedTake := read("")
+	counts("the unpinned read after the change", unpinnedTake.CTM, intent.Counts{Devices: 5, Interfaces: 13, Links: 4, Artifacts: 5})
+	if unpinnedTake.CTM.Device("cs1") == nil {
 		t.Error("the unpinned read after cs1 was tagged did not read it")
 	}
 	if unpinnedID == beforeID {
 		t.Errorf("the unpinned read after the change compiles to the pinned bundle_id %s", beforeID)
+	}
+	if unpinnedTake.ID == beforeTake.ID {
+		t.Errorf("the unpinned take after the change has the pinned snapshot_id %s", beforeTake.ID)
 	}
 	if bytes.Equal(unpinned[compiler.TopologyFile], before[compiler.TopologyFile]) {
 		t.Errorf("the unpinned %s is the pinned one: the change did not reach the topology", compiler.TopologyFile)
@@ -214,15 +237,16 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	// SeedFourthNode cables n1 to n4 and regenerates, so n1's artifact moved twice after
 	// T; the unpinned read carries whatever Infrahub lists now, never T's.
 	listed := artifactsOf(t, c, branch, "device-config")["n1"].Checksum
-	if now := checksums(snapshot)["n1"]; now == sumsAtT["n1"] || now != listed {
+	if now := checksums(unpinnedTake.CTM)["n1"]; now == sumsAtT["n1"] || now != listed {
 		t.Errorf("the unpinned read carries n1's checksum %s; want the current %s, not T's %s",
 			now, listed, sumsAtT["n1"])
 	}
 
-	t.Logf("pinned at T before the change:      %s", beforeID)
-	t.Logf("pinned at T after the regeneration: %s (n1 %s, now %s)", reconfiguredID, sumsAtT["n1"], regenerated.Checksum)
-	t.Logf("pinned at T after the change:       %s", afterID)
-	t.Logf("unpinned after the change:          %s", unpinnedID)
+	t.Logf("pinned at T before the change:      bundle %s, snapshot %s", beforeID, beforeTake.ID)
+	t.Logf("pinned at T after the regeneration: bundle %s, snapshot %s (n1 %s, now %s)", reconfiguredID, reconfiguredTake.ID,
+		sumsAtT["n1"], regenerated.Checksum)
+	t.Logf("pinned at T after the change:       bundle %s, snapshot %s", afterID, afterTake.ID)
+	t.Logf("unpinned after the change:          bundle %s, snapshot %s", unpinnedID, unpinnedTake.ID)
 }
 
 // checksums maps each device of a read to its artifact's checksum.

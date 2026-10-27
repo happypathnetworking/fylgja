@@ -1,10 +1,11 @@
-# CLI contract: M13 — API; 014 — the stage surface; 015 — the rehearsal; 017 — the scope and the DCIM reader
+# CLI contract: M13 — API; 014 — the stage surface; 015 — the rehearsal; 017 — the scope and the DCIM reader; 018 — snapshots
 
 Extends the CLI as M2–M12 built it, and 014 moves it once more: the section "014: the
 stage surface" at the end says what moved. 015 adds to it, and the section "015: the
 rehearsal" after that says what was added. 017 moves it again, and the section "017: the
-scope and the DCIM reader", last, says what moved. **Everything not named here is as M12
-left it**:
+scope and the DCIM reader" says what moved. 018 makes the snapshot the core's one input,
+and the section "018: snapshots", last, says what moved. **Everything not named here is as
+M12 left it**:
 every command's text on stdout and stderr, its `--json` document, each identifier, step,
 object and message, and each exit status. Identifiers, exit statuses and the JSON
 documents are the contract; text is illustrative except where a sentence is quoted. The
@@ -13,14 +14,16 @@ for byte: bundle `4`, CTM `1`, PSP `0.6`, `twin.json` `5`, findings `1`; 014 mov
 findings blocks, `twin.json` to `6` and the schemas that carry the record's stage, and 015
 moved `twin.json` to `7` and added the rehearsal's block; 017 moved the CTM to `2`, the
 bundle manifest to `5`, `twin.json` to `8` and PSP to `0.7`, and retired the contract
-version.
+version; 018 added the snapshot `1`, moved `twin.json` to `9`, and retired `twin compile
+--ctm` and the bundle's CTM sidecar.
 
 ## `fylgja serve [--listen <host:port>]... [--psp-dir <dir>]`
 
 `--listen` is repeatable since 015 ("015: the rehearsal", below): the server listens on
 every address given, and on `127.0.0.1:7650` when none is. It reads `FYLGJA_DEFAULT_SCOPE`
 since 017 ("017: the scope and the DCIM reader", below), which adds one refusal to start
-and one line of the report. What follows is M13's, for each address.
+and one line of the report. Since 018 the state root line names the snapshot store beside
+the bundles ("018: snapshots", below). What follows is M13's, for each address.
 
 The API's server: a role of the binary, run on the lab host beside `fylgja worker run`,
 as a process of its own. It serves until interrupted, prints its start-up report on
@@ -198,8 +201,8 @@ what follows holds for it, with its own interrupt below.
 
 | Command | The client | The server |
 |---|---|---|
-| `intent read … --out <file>` | writes the CTM that comes back, atomically; writes nothing when the read is refused | reads, validates, answers with the CTM and M12's summary line |
-| `twin compile --ctm <file> --out <dir>` | reads the CTM once both flags are given; writes the bundle that comes back | parses it, checks its contract, compiles on the golden tests' code path |
+| `intent read … --out <file>` | writes the CTM that comes back, atomically; writes nothing when the read is refused (since 018 a snapshot, which the server also files: "018: snapshots") | reads, validates, answers with the CTM and M12's summary line |
+| `twin compile --ctm <file> --out <dir>` (retired at 018: `--snapshot <file>`) | reads the CTM once both flags are given; writes the bundle that comes back | parses it, checks its contract, compiles on the golden tests' code path |
 | `psp validate <file>…` | reads each file | refuses a second YAML document, validates the set; every finding names the path given |
 | `twin provision <bundle-dir>` | reads the directory's regular files | verifies, files in its store, and deploys the filed copy |
 | `schema check --branch <b>` | sends the branch | answers as at M12 |
@@ -207,9 +210,11 @@ what follows holds for it, with its own interrupt below.
 - A file the client cannot read, or cannot write, is its own `operation.failed`, exit 2,
   in M12's words for that command: `reading CTM: open ctm.json: no such file or
   directory`; `reading bundle directory: …` at step `verify`; `output directory out is
-  not empty`; `writing CTM: …`. No request is sent for a file that cannot be read.
+  not empty`; `writing CTM: …` (since 018 `reading snapshot: …` and `writing snapshot:
+  …`). No request is sent for a file that cannot be read.
 - A dry run and a plan file their bundle and CTM in the store on the lab host, and print
-  the store's path there. There is no fetch by identifier.
+  the store's path there (since 018 the snapshot in its own store, `snapshots/`, and no
+  CTM sidecar beside the bundle: "018: snapshots"). There is no fetch by identifier.
 - The package `psp validate` is sent is checked on its own, as a file, as at M12. The
   server's override directory decides only what the other commands are checked against.
 
@@ -252,14 +257,14 @@ exit status changes. `serve`'s refusals to start and the build line have no iden
 |---|---|---|
 | the API | `1` | new: [api.md](api.md), [api.schema.json](api.schema.json) |
 | findings | `1` | none; the four identifiers match its `rule` pattern |
-| bundle manifest, `twin.json`, PSP, CTM, contract | `4`, `5`, `0.6`, `1`, `0.2` | none (`twin.json` `6` since 014, `7` since 015; since 017 the bundle manifest `5`, `twin.json` `8`, PSP `0.7` and CTM `2`, and the contract version retired) |
+| bundle manifest, `twin.json`, PSP, CTM, contract | `4`, `5`, `0.6`, `1`, `0.2` | none (`twin.json` `6` since 014, `7` since 015; since 017 the bundle manifest `5`, `twin.json` `8`, PSP `0.7` and CTM `2`, and the contract version retired; since 018 `twin.json` `9`, and the snapshot `1` new) |
 
 ## Workflows and activities
 
 None is added, removed or changed. `fylgja-provision`, `fylgja-destroy`, `fylgja-step`,
 `Reconcile`, the Schedule, all twenty activities and every wire type are M12's, and the
 nine recorded histories replay. 015 adds one workflow, `fylgja-rehearse`, below; 017 adds
-none, its scope riding the runs' inputs. The server starts, follows and cancels runs through
+none, its scope riding the runs' inputs; 018 adds none, its snapshot id riding them too. The server starts, follows and cancels runs through
 `provision.Service`, as the CLI did. `worker run` is M12's, with `--psp-dir` now its own
 flag.
 
@@ -286,7 +291,8 @@ two checks of 015, inside Infrahub's task workers, are clients too, and read
 ## Tier 3 (`scripts/e2e.sh`)
 
 Eight cases, M12's, unchanged in what they assert (cases 7 and 8 moved to stages at 014,
-and case 9 added at 015, and every case moved to the library's kinds at 017, below). The
+and case 9 added at 015, every case moved to the library's kinds at 017, and the records'
+assertions moved to the snapshot at 018, below). The
 script starts a server of its own
 from the tree, with a token it makes for the run, and stops it in its trap. Every
 `fylgja` command runs with `PATH`, `HOME`, `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN`
@@ -388,7 +394,8 @@ plan goes on, the steps touching it not computed; that exits 1 as well, since th
 and reported every stage, where 2 is an operation that did not run. `--branch` is required:
 `--branch is required`, exit 2, with no request. `--json`: the `plan` block and the
 findings, every stage's, in order. Each bundle and its CTM are filed in the store, as a dry
-run files them.
+run files them (since 018 each stage's snapshot in its own store and no CTM sidecar: "018:
+snapshots").
 
 ### `--stage` on `twin create` and `intent read`
 
@@ -1072,3 +1079,205 @@ tagged device on `main`. Before any case, the script's own server must report `d
 scope: tag:fylgja`, read from `local/.env`, and for case 9 the operator's server on the
 bridge must carry `FYLGJA_DEFAULT_SCOPE=tag:fylgja` in its environment, since the checks
 send no scope.
+
+## 018: snapshots
+
+The core's one input is the **snapshot**: one document of version `1` wrapping an
+unchanged CTM `2`, with a slot for probe declarations, empty until 016, and an id of its
+own, the hash of its body without the read's `observed_at`
+([snapshot.schema.json](snapshot.schema.json); [D-061](../docs/decisions.md#d-061)).
+The server takes one for every create and files it under the state root's `snapshots/`,
+beside the bundles; every workflow the core runs but the reconcile takes a snapshot id
+and a bundle id and never a branch. **Everything not named here is as 017 left it.**
+Identifiers, exit statuses and the JSON documents are the contract; text is illustrative
+except where a sentence is quoted. The wire is [api.md](api.md), "018: snapshots".
+
+### The commands
+
+```
+fylgja twin create   --branch <b> [--at <t>] [--scope tag:<name>] [--interval <d> | --no-follow] [--dry-run]   # as before: the server reads, takes, files, compiles and starts
+fylgja twin create   --stage <b>/<label> [--scope tag:<name>] [--no-follow] [--dry-run]                       # as before, the same way
+fylgja twin create   --snapshot <id|file> [--no-follow] [--dry-run]                                         # from a snapshot alone; frozen; no read
+fylgja twin compile  --snapshot <file> --out <dir>                                                          # in place of --ctm, which is retired
+fylgja intent read   --branch <b> | --stage <b>/<label> [--at <t>] [--scope tag:<name>] --out <file>          # writes a snapshot, and files it
+fylgja stage plan    --branch <b> [--scope tag:<name>]                                                      # each compiled stage names its snapshot
+fylgja twin step     --stage <b>/<label> …                                                                  # unchanged flags; the step's sides name their snapshots
+fylgja twin rehearse --branch <b> …                                                                         # unchanged flags; the rows and the report name them
+```
+
+- **`twin create --branch` and `--stage` are one step for the operator, as before.** The
+  server resolves the stage if one is named, reads under the read bound (`stage.ReadTimeout`,
+  five minutes), takes the snapshot and files it, compiles and files the bundle, and
+  starts `fylgja-provision` with the snapshot id and the bundle id: the run begins at the
+  host check and runs no read and no compile. A read or compile refusal is the server's
+  document before any run, at `read` or `compile`, under the identifiers `intent read`
+  and `twin compile` use; a refused read files nothing, and a refused compile leaves the
+  snapshot filed, since its CTM validated. An Infrahub that fails or times out during the
+  read is `operation.failed` at `read` at once; the worker's retries and heartbeat no
+  longer apply to a create, as they do not to a step or a rehearsal. Following is as
+  before: a `--branch` twin with no `--at` and no `--no-follow` follows its branch, and a
+  twin a check's rebuild makes names no snapshot.
+- **`twin create --snapshot <arg>`**: `<arg>` of 64 lowercase hex characters is a
+  snapshot id, looked up in the store; anything else is a file the client reads and
+  sends. An id the store does not hold is `snapshot.unknown` at `resolve`, exit 1,
+  before any run; a file is read as [snapshot.schema.json](snapshot.schema.json) says and
+  filed under its id (an entry already there is kept, and the twin records the stored
+  document's `observed_at`, the first take's); then the compile, the filing and the run as
+  above. No request reaches Infrahub. Such a twin is **frozen by rule**: its reference is
+  a document, which does not move. `--interval` beside it is `follow.flags.conflict`,
+  exit 2, `--interval is meaningless with --snapshot: a twin built from a snapshot never
+  follows`; `--no-follow` is accepted and changes nothing; no Schedule is made whatever
+  the envelope's `at` says. It has no stage, so it does not step (`step.twin.unsteppable`,
+  as a `--branch` twin). `--snapshot` beside `--branch`, `--stage`, `--at` or `--scope`
+  is `snapshot.flags.conflict`, exit 2 at `start`, naming the first found in that order
+  (`--branch is meaningless with --snapshot: a snapshot carries its own branch, at and
+  scope`), before any connection; the scope is the snapshot's. `--dry-run` reads nothing,
+  files the bundle and reports as a create's dry run does.
+- **`twin compile --snapshot <file> --out <dir>`** compiles the snapshot's CTM on the
+  golden tests' code path and writes the bundle, filing nothing and needing no state
+  root. **`--ctm` is retired**: `unknown flag: --ctm`, exit 2, no request; the help names
+  `--snapshot`. A hand user with a bare CTM wraps it: `{"snapshot_version": "1", "ctm":
+  <the CTM>, "probes": []}`, leaving out `snapshot_id`, which the server computes, and
+  `observed_at`, which it fills from the CTM. The repository ships the three fixture CTMs
+  wrapped under `testdata/snapshot/`, each compiling to its golden.
+- **`intent read --out <file>`** writes a snapshot, version `1`, with its id, and files it
+  in the store, so a hand read and a create of the same intent share one stored document.
+- **`twin show`** names the snapshot in the record line of every twin, or says `none`;
+  for a `--snapshot` twin the kind line is what the envelope says, with a note.
+- **`stage list`** is unchanged: it neither reads nor compiles.
+- **`fylgja serve`** and `worker run` name the snapshot store in their state root line:
+  `fylgja serve: state root /srv/fylgja/local (bundles: /srv/fylgja/local/bundles,
+  snapshots: /srv/fylgja/local/snapshots, twin: /srv/fylgja/local/twin)`. Nothing creates
+  the directory at start; the first snapshot filed does.
+
+### The text
+
+- `twin create` and its dry run print, before the run's `start` (or the dry run's
+  report):
+
+  ```
+  snapshot_id 576933ec51da1866cdb7344a1f60ec2468c7d04aafbee42eacd171e352bd7482  stored: /home/…/local/snapshots/576933ec51da1866cdb7344a1f60ec2468c7d04aafbee42eacd171e352bd7482.json
+  bundle_id f764e1fabdcd70b39a91cc2269ef0a3443c7ae6752af62bdf0936c4eda034147  stored: /home/…/local/bundles/f764e1fabdcd70b39a91cc2269ef0a3443c7ae6752af62bdf0936c4eda034147
+  ```
+
+  The dry run's `follow:` line for `--snapshot` reads `would not follow (--snapshot given:
+  a twin built from a snapshot never follows)`.
+- `intent read`'s summary line ends with the snapshot: `wrote snap.json: 3 devices
+  (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports
+  (branch fylgja-fixture, scope tag:fylgja, schema 7c413536…); snapshot 576933ec…, stored at
+  /home/…/local/snapshots/576933ec….json` (the ids in full); with a stage, as 014 has it.
+- `twin compile` prints `wrote bundle to <dir> (3 nodes, 3 links)`, then `snapshot_id
+  <id>`, then `bundle_id <id>`.
+- `stage plan` prints, under each compiled stage, `  snapshot_id <id>` then `  bundle_id
+  <id>`, then its read line as before.
+- `twin step`'s twin line reads `twin: stage change-1/seeded (snapshot 1a2b3c4d…, bundle
+  5e6f7a8b…), pinned at …; 3 nodes`, `snapshot none` for a record of `8`.
+- `twin show`'s record line reads `record: branch fylgja-fixture, snapshot
+  576933ec51da1866cdb7344a1f60ec2468c7d04aafbee42eacd171e352bd7482, bundle_id
+  f764e1fa…, schema 7c413536…, scope tag:fylgja, read by infrahub-dcim from
+  opsmill/schema-library@26336e9`; `record: branch b, snapshot none, bundle_id …` for a
+  `9` naming none (a twin `twin provision` built, or a following rebuild made); `record:
+  branch b, snapshot none (record 8), bundle_id …` for a record of `8` or earlier. `twin
+  create` and `twin provision` print the same line for the twin they made.
+- `twin show`'s kind line for a `--snapshot` twin: `kind: pinned at
+  2026-10-27T14:13:38.380155Z; not following; built from snapshot 576933ec…` with an `at`
+  in the envelope, `kind: frozen; not following; built from snapshot 576933ec…` without;
+  the note `built from snapshot <id>` (in full) joins the notes. `from a bundle` is
+  unchanged.
+- The rehearsal's report table gains the column `snapshot` before `bundle`, eight
+  characters and an ellipsis, `—` on a refused stage:
+
+  ```
+  | stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |
+  ```
+
+- The refusals, as they print:
+
+  ```
+  rejection snapshot.unknown [step resolve] 0000…0000: the store under /home/…/local/snapshots holds no snapshot 0000…0000; a snapshot id comes from a create, a dry run, a plan or intent read --out on this server
+  rejection snapshot.id.mismatch snap.json: snap.json declares snapshot_id 1111…1111, but its body hashes to 576933ec…; leave snapshot_id out to have it computed
+  rejection snapshot.version.unsupported snap.json: the snapshot declares snapshot_version "2"; this build reads "1", and nothing converts one
+  rejection snapshot.invalid probes: probes holds 1 entry; in snapshot 1 the list is required and empty, since 016 defines its element
+  rejection snapshot.flags.conflict [step start] --branch: --branch is meaningless with --snapshot: a snapshot carries its own branch, at and scope
+  rejection follow.flags.conflict [step start] --interval: --interval is meaningless with --snapshot: a twin built from a snapshot never follows
+  rejection ctm.version.unsupported snap.json: the CTM declares ctm_version "1"; this build reads "2", and nothing converts one
+  rejection data.required.missing ctm.envelope.fidelity: ctm.envelope.fidelity, the reader's fidelity list, is not recorded: …
+  ```
+
+  (`[step resolve]` on `twin create --snapshot`; no step on `twin compile`.)
+
+### Identifiers
+
+Five added. No status, step or exit is new.
+
+| Rule | Severity, exit, step | Object | When |
+|---|---|---|---|
+| `snapshot.invalid` | rejection, 1, none (`twin compile`) or `resolve` (`twin create --snapshot <file>`) | the field, or the file | the outer shape is not version 1's: an unknown key, `ctm` absent or not an object, `probes` absent, null or not empty, `snapshot_id` not 64 lowercase hex characters, `observed_at` not of the CTM's form or not the inner CTM's |
+| `snapshot.version.unsupported` | rejection, 1, none or `resolve` | the file | `snapshot_version` is not `"1"`, or absent; names the version read, or that none was, and `"1"` |
+| `snapshot.id.mismatch` | rejection, 1, none or `resolve`; `compile` for the store | the file, or the store path | a declared `snapshot_id` is not what the body hashes to, naming both; or an entry under the id hashes to another, naming the path and both |
+| `snapshot.unknown` | rejection, 1, `resolve` | the id | `twin create --snapshot <id>` names an id the store does not hold; names the store's directory |
+| `snapshot.flags.conflict` | rejection, 2, `start` | the flag | `--snapshot` beside `--branch`, `--stage`, `--at` or `--scope`, the first found in that order; before any connection |
+
+`follow.flags.conflict` gains the `--snapshot` sentence. The inner CTM's faults keep
+`ctm.version.unsupported` and `data.required.missing`, the object prefixed `ctm.`;
+validation's rules refuse at compile as they do a bare CTM. The client's own refusal of a
+snapshot file it cannot read is `operation.failed`, exit 2, `reading snapshot: open
+<path>: …`, before any connection, as for a CTM at M13.
+
+### Formats and versions
+
+| Format | Version | Change |
+|---|---|---|
+| snapshot | `1` | new: [snapshot.schema.json](snapshot.schema.json), `$id` `…/contracts/snapshot/v1`, referencing CTM `2` by its `$id`; its description says that the bytes the id hashes differ from the stored bytes, and gives the hand recipe |
+| `twin.json` | `9` | [twin.schema.json](twin.schema.json): `snapshot_id`, required, a snapshot id or null (null for a twin `twin provision` built, one a following rebuild made, or a record of `8` or earlier, which reads with none); `source` gains `snapshot`, a twin `twin create --snapshot` built, and `intent` reads "created by twin create --branch or --stage: the server read and compiled, or a check's rebuild did"; `step.from` and `step.to` gain an optional `snapshot_id`, absent where the side's is not known (the from side of an `8` record that stepped); `observed_at` is the run's input's read time, a create's, a snapshot's stored take or a check's, null for `twin provision` |
+| findings | `1` | [findings.schema.json](findings.schema.json): `snapshot_id`, optional, beside `bundle_id` on `twin.compile` and `intent.read` (status ok), `twin.create` and its dry run (once the take completed), and `twin.step` and its dry run (the target's); `subject.snapshot`, `--snapshot` as given, an id or a path, on `twin.compile` and `twin.create --snapshot`, where `subject.ctm` stays for older documents and no build writes it; `dry_run.follow.reason` gains `snapshot`; the five identifiers |
+| the `show` block | `1` | [show.schema.json](show.schema.json): `record.snapshot_id`, required, the record's id or null (a `9` naming none, or a record of `8` or earlier, whose record line says `(record 8)`); `record.source` gains `snapshot`; `record.step.from` and `.to` gain an optional `snapshot_id`; `kind` unchanged, a `--snapshot` twin `pinned` or `frozen`, its note `built from snapshot <id>` among `notes` |
+| the `stages` block | `1` | [stages.schema.json](stages.schema.json): `plan_stage.snapshot_id`, required, the stage's snapshot once its read was filed, null when the stage was refused at resolution or read; the step pair, the rows, the record and the list unchanged, since `stage list` neither reads nor compiles |
+| the `step` block | `1` | [step.schema.json](step.schema.json): each side's optional `snapshot_id`, absent on a from side whose record names none (a record of `8`) |
+| the `rehearsal` block | `1` | [rehearsal.schema.json](rehearsal.schema.json): each stage's `snapshot_id`, required, beside `bundle_id`, null when the stage was refused; the markdown's table carries a `snapshot` column before `bundle` |
+| the API | `1` | `snapshot` on `twin.create`, with one file beside it; `twin.compile`'s `ctm` becomes `snapshot`; `intent.read` answers `snapshot.json` ([api.md](api.md), [api.schema.json](api.schema.json)) |
+| bundle manifest, CTM, PSP | `5`, `2`, `0.7` | none: the goldens stand |
+
+- `twin compile --snapshot` refuses a snapshot of another version, or declaring none,
+  `snapshot.version.unsupported`, never reading it as a `1`; the inner CTM's version and
+  required fields as 017 refuses a bare CTM's, the object prefixed `ctm.`.
+- The bundle's CTM sidecar `<bundle_id>.ctm.json` is retired: no build writes one and the
+  ones on disk are never read. `bundles/.reads/` stays, the reconcile's alone.
+- A `9` record reads with its snapshot; an `8` reads with none: `twin show` says `snapshot
+  none (record 8)`, `twin step` steps it with a from side naming no snapshot, `twin
+  destroy` clears it.
+- The earlier contracts are frozen where tests read them: `twin.json` `8` under
+  `internal/lab/testdata/contracts/017-dcim-reader/`, and the findings contract with its
+  `show`, `stages`, `step` and `rehearsal` blocks as 017 left them under each of
+  `internal/findings`, `internal/server` and `internal/cli`'s
+  `testdata/contracts/017-dcim-reader/`, so a document naming no snapshot still validates
+  under 017's contract.
+- The version of the findings document and of the API did not move: a `1` reader ignores
+  `snapshot_id` and a block's new key, and a client that never sends `snapshot` is served
+  as before.
+
+### Workflows and activities
+
+None is added, removed or changed: no workflow decision, activity, budget or version
+marker. `ProvisionInput`, `RecordInput`, `StepSide` and `RehearseStage` carry
+`snapshot_id`, omitted when empty, so the nine recorded histories replay; the runs branch
+on nothing of it. Every `fylgja-provision` the server starts is already compiled, as a
+check's rebuild has been since M4, so its history holds no `ReadIntent` and no `Compile`;
+the provision workflow keeps its read-and-compile branch for the recorded histories and
+the reconcile keeps both activities. The `Compile` activity files no sidecar.
+
+### Tier 3 (`scripts/e2e.sh`)
+
+The nine cases, unchanged in what they assert but the records': the read-then-compile
+helper reads with `--out`, a snapshot, and compiles with `--snapshot`, and cases 1 and 2
+hold the create's snapshot to the one it compiles, as they hold the bundle; every create
+asserts `snapshots/<snapshot_id>.json` exists and that no `bundles/*.ctm.json` is newer
+than the case's start, since the host's store keeps the sidecars of every read before this
+feature; `twin.json` names the create's snapshot; case 1's `twin show` text holds
+`snapshot <id>, bundle_id <id>`; case 4's create takes case 2's snapshot; case 5's
+created twin names its snapshot in `twin show`, and its rebuilt twin reads
+`.show.record.snapshot_id == null` and `snapshot none, bundle_id <id>`; case 7's plan names
+three snapshot ids, the branch point's null, the create takes the plan's for `seeded`, and
+each step's sides name the plan's snapshots, the target's in `twin.json` too. The marker
+grep passes over a read's snapshot (`snapshot-*.json`) where it passed over its CTM. No case
+is added.

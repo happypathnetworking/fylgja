@@ -1,12 +1,12 @@
-# API contract: M13, version 1; 014's stage surface; 015's rehearsal; 017's scope
+# API contract: M13, version 1; 014's stage surface; 015's rehearsal; 017's scope; 018's snapshots
 
 What crosses between a client and `fylgja serve`. The shapes are
 [api.schema.json](api.schema.json); the documents are M12's
 ([findings.schema.json](findings.schema.json) and the blocks beside it), as 014 moved them
 ("014: the stage surface", at the end) and 015 added to them ("015: the rehearsal", after
-it), and 017 moved them again ("017: the scope and the DCIM reader", last). The addresses,
-the statuses, the frame kinds and the document are the contract; a sentence is contract
-only where it is quoted.
+it), and 017 moved them again ("017: the scope and the DCIM reader"), and 018 added the
+snapshot ("018: snapshots", last). The addresses, the statuses, the frame kinds and the
+document are the contract; a sentence is contract only where it is quoted.
 
 ## Transport
 
@@ -49,17 +49,17 @@ frames. A dry run is its operation with `dry_run` set.
 
 | Operation | Path | `args` | Files in | Files out | Takes an interrupt |
 |---|---|---|---|---|---|
-| `twin.create` | `/v1/twin/create` | `branch`, `at`, `stage`, `interval`, `no_follow`, `dry_run`, `scope` | | | from `start` |
+| `twin.create` | `/v1/twin/create` | `branch`, `at`, `stage`, `interval`, `no_follow`, `dry_run`, `scope`, `snapshot` | the snapshot, when `snapshot` is a path | | from `start` |
 | `twin.provision` | `/v1/twin/provision` | `bundle`, `dry_run` | the bundle's regular files | | from `start` |
 | `twin.step` | `/v1/twin/step` | `stage`, `allow_restart`, `dry_run`, `wait` | | | from `start` |
 | `twin.destroy` | `/v1/twin/destroy` | | | | no |
 | `twin.show` | `/v1/twin/show` | | | | no |
 | `twin.verify` | `/v1/twin/verify` | `wait`, `args` | | | no |
 | `twin.rehearse` | `/v1/twin/rehearse` | `branch`, `scope` | | | from `start` |
-| `twin.compile` | `/v1/twin/compile` | `ctm`, `out` | the CTM | the bundle | no |
+| `twin.compile` | `/v1/twin/compile` | `snapshot`, `out` | the snapshot | the bundle | no |
 | `stage.list` | `/v1/stage/list` | `branch`, `scope` | | | no |
 | `stage.plan` | `/v1/stage/plan` | `branch`, `scope` | | | no |
-| `intent.read` | `/v1/intent/read` | `branch`, `at`, `stage`, `out`, `scope` | | the CTM | no |
+| `intent.read` | `/v1/intent/read` | `branch`, `at`, `stage`, `out`, `scope` | | the snapshot | no |
 | `schema.check` | `/v1/schema/check` | `branch` | | | no |
 | `psp.validate` | `/v1/psp/validate` | `files` | each package | | no |
 
@@ -68,7 +68,10 @@ runs or to fetch a filed bundle. Moved at 014: `waypoint.list` and `waypoint.pla
 (`/v1/waypoint/list`, `/v1/waypoint/plan`, argument `series`) became `stage.list` and
 `stage.plan`, and `twin.create`, `twin.step` and `intent.read` take `stage` where they took
 `waypoint`. Added at 015: `twin.rehearse`. Added at 017: the argument `scope` on
-`twin.create`, `twin.rehearse`, `intent.read`, `stage.list` and `stage.plan`.
+`twin.create`, `twin.rehearse`, `intent.read`, `stage.list` and `stage.plan`. Moved at 018:
+`twin.compile` takes `snapshot` and the snapshot where it took `ctm` and the CTM,
+`intent.read` answers with a snapshot where it answered with the CTM, and `twin.create`
+takes the argument `snapshot`, with the snapshot's file when it is a path.
 
 **Arguments are as given.** An absent key is a flag that was not given; a present key is
 one that was, whatever its value (`"interval": ""` is `--interval=`). Every guard is the
@@ -114,7 +117,7 @@ no bytes.
 | `{"start": {"workflow_id": "…"}}` | the server begins to start this run; from here an interrupt reaches it, but for `twin.destroy`'s, `fylgja-destroy`, which opens no stream |
 | `{"run": {"workflow_id": "…", "run_id": "…"}}` | the run's identity |
 | `{"event": {…}}` | one step boundary of a run, or one notice about a run |
-| `{"files": [{"path": "…", "data": "<base64>"}]}` | the CTM (`ctm.json`), or every file of the bundle |
+| `{"files": [{"path": "…", "data": "<base64>"}]}` | the CTM (`ctm.json`; since 018 the snapshot, `snapshot.json`), or every file of the bundle |
 | `{"document": {…}, "text": "…", "markdown": "…"}` | the command's findings document; `text` under `render: "text"` or `"markdown"` when it has findings; `markdown` under `render: "markdown"` on `twin.rehearse` alone (015) |
 
 **What `render` asks for.**
@@ -210,7 +213,8 @@ nothing to produce them.
 Each file crosses whole, as base64, in the one request or the one `files` frame. The
 bytes written are the bytes read.
 
-- **`twin.compile`**: `files` holds the CTM under the path given. The answer's `files`
+- **`twin.compile`** (moved at 018: the snapshot under `args.snapshot`, "018: snapshots"):
+  `files` holds the CTM under the path given. The answer's `files`
   frame holds the bundle, each file under its path inside it. A golden CTM comes back
   as the golden bundle, byte for byte. A request carrying no file or two, or one file
   under another path than `args.ctm`, is refused before anything is parsed:
@@ -218,8 +222,8 @@ bytes written are the bytes read.
   where twin compile takes the CTM alone`) or the path's mismatch (`the request carries its
   CTM under another path than --ctm gives, where twin compile takes the CTM alone, under
   that path`), and nothing of the file.
-- **`intent.read`**: the answer's `files` frame holds `ctm.json`, before the summary
-  line. A refused read has no `files` frame.
+- **`intent.read`**: the answer's `files` frame holds `ctm.json` (since 018
+  `snapshot.json`), before the summary line. A refused read has no `files` frame.
 - **`twin.provision`**: `files` holds every regular file of the bundle directory, each
   under its slash-separated path inside it. The server verifies and files it, and every
   refusal names the directory as `args.bundle` gave it. Files that cannot all be files of
@@ -279,7 +283,8 @@ frames, the statuses and the files are as M13 left them.
   without it is `operation.failed`, `--branch is required`, exit 2.
 - `stage.list` and `stage.plan` are one answer each, their `document` frame alone when no
   rendering is asked for, and take no interrupt. The plan files each bundle and its CTM in
-  the store on the lab host; there is still no fetch by identifier.
+  the store on the lab host (since 018 each stage's snapshot and no CTM sidecar: "018:
+  snapshots"); there is still no fetch by identifier.
 - [api.schema.json](api.schema.json)'s `args` definitions move with the table. The
   documents' blocks are [findings.schema.json](findings.schema.json)'s at version `1`: the
   `stage`, `stages` and `plan` blocks of [stages.schema.json](stages.schema.json), which
@@ -393,3 +398,55 @@ transport, the token, the frames, the statuses and the files are as 015 left the
   default of the server they reach, and a server with none refuses each `scope.unset`. They
   pass over a branch point refused `scope.empty` alone, where they passed over
   `contract.node.missing`.
+
+## 018: snapshots
+
+The core's one input is the snapshot ([D-061](../docs/decisions.md#d-061);
+[cli.md](cli.md), "018: snapshots", says what each command does). The API's version stays
+`1`: a client that never sends `snapshot` is served as before. Every operation, the
+transport, the token, the frames, the statuses and the files are as 017 left them, but for
+these.
+
+| | Operation | `args` | Files in | Files out |
+|---|---|---|---|---|
+| argument added | `twin.create` | `snapshot` | the snapshot, when `snapshot` is a path | |
+| argument renamed | `twin.compile` | `snapshot` (was `ctm`) | the snapshot, under the path given | the bundle |
+| file renamed | `intent.read` | | | `snapshot.json` (was `ctm.json`) |
+
+- **`snapshot`** on `twin.create` is `--snapshot` as given: 64 lowercase hex characters
+  name a snapshot the store holds, and the request carries no file; anything else is the
+  path of a file the client read, and the request carries that one file under that path.
+  The guards are the server's, before any connection: `snapshot` beside `branch`, `stage`,
+  `at` or `scope` is `snapshot.flags.conflict` at `start`, exit 2, naming the first
+  found; beside `interval`, `follow.flags.conflict`; `no_follow` and `dry_run` are
+  accepted. A request carrying a file beside no `snapshot`, two files, or one under
+  another path than `snapshot` gives, is refused before anything is parsed,
+  `operation.failed`, exit 2, as `twin.compile`'s are (`the request carries 1 file where
+  twin create takes a snapshot file beside --snapshot alone`). An id the store does not
+  hold is `snapshot.unknown` at `resolve`, exit 1.
+- **`twin.compile`** takes `snapshot` and `out`, and `files` holds the snapshot under the
+  path `snapshot` gives, as it held the CTM under `ctm`; a request carrying `ctm` is `400`,
+  `the request is not one: twin.compile takes no argument "ctm"`, pre-1.0 as 014 renamed
+  `series` to `stage`. The refusals of a request's files are "Files"' with the snapshot for
+  the CTM (`the request carries 0 files where twin compile takes the snapshot alone`; `the
+  request carries its snapshot under another path than --snapshot gives, where twin
+  compile takes the snapshot alone, under that path`). The snapshot is read as
+  [snapshot.schema.json](snapshot.schema.json) says: `snapshot_id` and `observed_at`
+  optional, computed and filled when absent, checked when present. The answer's `files`
+  frame holds the bundle, as before; nothing is filed.
+- **`intent.read`**'s `files` frame holds `snapshot.json`, a snapshot `1` with its id,
+  before the summary line; the server files it in its store. A refused read has no `files`
+  frame.
+- **The documents** stay `findings_version` `1`: `snapshot_id` beside `bundle_id` where
+  [cli.md](cli.md) says; the blocks' new keys are their schemas'
+  ([show.schema.json](show.schema.json), [stages.schema.json](stages.schema.json),
+  [step.schema.json](step.schema.json), [rehearsal.schema.json](rehearsal.schema.json)),
+  each named in cli.md's "018: snapshots", "Formats and versions". The five identifiers are
+  cli.md's.
+- **The files**: a snapshot is snapshot `1`; a CTM sent bare is refused
+  `snapshot.version.unsupported` (it declares no `snapshot_version`); the bundle is `5`
+  as before. A snapshot holds configuration, as the CTM did: it crosses as a file and
+  never in a document, a finding or a log line.
+- **The checks** `fylgja-step` and `fylgja-twin` send nothing new: the plan's and the
+  rehearsal's documents gain a key per stage, which neither reads, and the report's table
+  gains a column.

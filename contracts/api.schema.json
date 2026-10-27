@@ -184,7 +184,7 @@
               "type": "array",
               "minItems": 1,
               "items": { "$ref": "#/$defs/file" },
-              "description": "intent.read: one file, ctm.json, the CTM. twin.compile: every file of the bundle, each under its path inside it."
+              "description": "intent.read: one file, snapshot.json, the snapshot (018; ctm.json, the CTM, before it). twin.compile: every file of the bundle, each under its path inside it."
             }
           }
         },

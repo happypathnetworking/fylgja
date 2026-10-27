@@ -13,44 +13,35 @@ import (
 // Reading and writing the operator's files is all a client's command does beside sending
 // and printing. Each sentence is M12's.
 
-// writeCTM writes the CTM a read answered with to path, atomically: a temporary file beside
-// it, then a rename, so a cut answer or a failed write leaves no partial file.
-func writeCTM(data []byte, path string) error {
+// writeSnapshot writes the snapshot a read answered with to path, atomically: a temporary
+// file beside it, then a rename, so a cut answer or a failed write leaves no partial file
+// (018: in place of M12's CTM, worded as its write was).
+func writeSnapshot(data []byte, path string) error {
 	dir := filepath.Dir(path)
-	tmp, err := os.CreateTemp(dir, ".fylgja-ctm-*")
+	tmp, err := os.CreateTemp(dir, ".fylgja-snapshot-*")
 	if err != nil {
-		return fmt.Errorf("writing CTM: %w", err)
+		return fmt.Errorf("writing snapshot: %w", err)
 	}
 	defer func() { _ = os.Remove(tmp.Name()) }()
 	if _, err := tmp.Write(data); err != nil {
 		_ = tmp.Close()
-		return fmt.Errorf("writing CTM: %w", err)
+		return fmt.Errorf("writing snapshot: %w", err)
 	}
 	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("writing CTM: %w", err)
+		return fmt.Errorf("writing snapshot: %w", err)
 	}
 	if err := os.Chmod(tmp.Name(), 0o644); err != nil {
-		return fmt.Errorf("writing CTM: %w", err)
+		return fmt.Errorf("writing snapshot: %w", err)
 	}
 	if err := os.Rename(tmp.Name(), path); err != nil {
-		return fmt.Errorf("writing CTM: %w", err)
+		return fmt.Errorf("writing snapshot: %w", err)
 	}
 	return nil
 }
 
-// readCTM reads the CTM twin compile sends, under the path given, worded as M12's
-// ctm.Load worded a file it could not read.
-func readCTM(path string) (api.File, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return api.File{}, fmt.Errorf("reading CTM: %w", err)
-	}
-	return api.File{Path: path, Data: data}, nil
-}
-
-// readSnapshot reads the snapshot file twin create --snapshot sends, under the path given,
-// worded as snapshot.Load words a file it cannot read. It replaces readCTM once twin compile
-// sends a snapshot too (018).
+// readSnapshot reads the snapshot file twin create --snapshot and twin compile send, under
+// the path given, worded as snapshot.Load words a file it cannot read (018: in place of
+// M12's CTM, worded as ctm.Load worded it).
 func readSnapshot(path string) (api.File, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {

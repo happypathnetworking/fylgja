@@ -47,9 +47,11 @@ func newIntentReadCmd(opts *options) *cobra.Command {
 		Use:   "read",
 		Short: "Read a branch into a validated intent snapshot",
 		Long: "Read the devices an Infrahub branch's scope selects, by the mapping of the schema\n" +
-			"library's DCIM at 26336e9, and write a canonical CTM file. Conformance, data\n" +
-			"completeness and the compiler's intent rules are checked in one pass and reported\n" +
-			"together; any rejection means no file is written.\n" +
+			"library's DCIM at 26336e9, and write a snapshot file: the canonical CTM, wrapped\n" +
+			"with its snapshot_id, which the API's server also files in its store, so twin\n" +
+			"create --snapshot <id> builds from it. Conformance, data completeness and the\n" +
+			"compiler's intent rules are checked in one pass and reported together; any\n" +
+			"rejection means no file is written and nothing is filed.\n" +
 			"Reads only — Fylgja never writes to Infrahub.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -63,15 +65,15 @@ func newIntentReadCmd(opts *options) *cobra.Command {
 		"point in time to read at, passed verbatim; omitted entirely when not given")
 	cmd.Flags().StringVar(&f.stage, "stage", "",
 		"stage to read, <branch>/<label>: the pinned branch and at a proposed change's stage resolves to")
-	cmd.Flags().StringVar(&f.out, "out", "", "path of the CTM file to write (required)")
+	cmd.Flags().StringVar(&f.out, "out", "", "path of the snapshot file to write (required)")
 	cmd.Flags().StringVar(&f.scope, "scope", "", scopeUsage)
 	return cmd
 }
 
-// runRead is intent read as one request: the server reads and validates, and answers with
-// the CTM in a files frame before its summary line, which the client writes to --out
-// atomically, as writeCTM did. A refused read sends no CTM, and nothing is
-// written.
+// runRead is intent read as one request: the server reads and validates, takes and files
+// the snapshot, and answers with it in a files frame before its summary line, which the
+// client writes to --out atomically (018: in place of the CTM). A refused read sends no
+// snapshot, and nothing is written.
 func runRead(ctx context.Context, opts *options, f *readFlags) error {
 	a := given{}
 	a.string("branch", f.branch)
@@ -84,9 +86,9 @@ func runRead(ctx context.Context, opts *options, f *readFlags) error {
 	return send(ctx, opts, findings.OpIntentRead, a, nil, handlers{
 		files: func(files []api.File) error {
 			if len(files) != 1 {
-				return fmt.Errorf("the answer carries %d files where intent read sends the CTM alone", len(files))
+				return fmt.Errorf("the answer carries %d files where intent read sends the snapshot alone", len(files))
 			}
-			return writeCTM(files[0].Data, f.out)
+			return writeSnapshot(files[0].Data, f.out)
 		},
 	})
 }

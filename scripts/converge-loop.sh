@@ -1,9 +1,23 @@
 #!/bin/bash
-# The feature's implement runs, then the converge→implement cycle, unattended
-# (docs/development.md, "Spec Kit workflow"). Each command runs as its own headless
-# `claude -p` session, so every one starts from a fresh context on the model and effort its
-# table row names, reads its inputs from disk, and is logged by the command-log hook like a
-# typed command. Everything it finishes is committed on the current branch; nothing is pushed.
+# The feature chain: specify → clarify → plan → tasks → analyze → the implement runs → the
+# converge→implement cycle (docs/development.md, "Spec Kit workflow"). Each command runs as
+# its own headless `claude -p` session, so every one starts from a fresh context on the
+# model and effort its table row names, reads its inputs from disk, and is logged by the
+# command-log hook like a typed command. Everything it finishes is committed on the current
+# branch; nothing is pushed. --from and --to choose the stages; by default the loop starts
+# at the implement runs, as it always did.
+#
+# Stage 0, the chain's first five commands, each gated on the tree before the next starts:
+# specify (its prompt is the brief's fenced line; the git extension's hook creates the
+# feature's branch inside the session, the one remote fetch the loop allows) gates on
+# spec.md with no [NEEDS CLARIFICATION] and a checklist with no open box; clarify runs by
+# --resume in specify's session and ends its report with CLARIFY-DONE, or CLARIFY-WAIT above
+# the questions it would have asked, which attended become one text question to the
+# operator and unattended stop the loop; plan gates on plan.md's Constitution Check filled
+# and research.md's sections; tasks gates on a route the planner reads whole, every line
+# with its Read first, every [operator] task with its reason; analyze applies what the
+# artifacts settle, ends ANALYZE-DONE or ANALYZE-WAIT like clarify, and the tasks gate runs
+# again. The script commits each stage's artifacts, the feature directory alone.
 #
 # Stage 1, the planned runs. tasks.md's "Recommended route" lists them, one line each:
 # `N. **Run N** [∥ Run M] — <what> (T0xx–T0yy, T0zz). Read first: …`. The line is the run's
@@ -38,6 +52,7 @@
 #
 # The loop stops, and hands back to the operator, at the first of:
 #
+#   done         the stages --to asked for ran, before the implement runs
 #   converged    a converge pass appended nothing (the stopping rule's second clause)
 #   rule         two consecutive passes appended only [pin] tasks, and the second is
 #                implemented and gated (the stopping rule's first clause)
@@ -89,14 +104,23 @@
 # ref or index touched), so `git diff <before> <after>` shows its work alone. The summary,
 # each session's report and the gate logs are in local/converge-loop/<started>/.
 #
-# Usage: scripts/converge-loop.sh [--max-passes N] [--budget-usd D] [--no-planned]
+# Usage: scripts/converge-loop.sh [--from STAGE] [--to STAGE] [--feature specs/NNN-slug]
+#                                 [--plan-effort high|xhigh] [--implement-effort high|xhigh]
+#                                 [--max-passes N] [--budget-usd D] [--no-planned]
 #                                 [--no-converge] [--allow-dirty] [--lanes N] [--dry-run]
 #                                 [--attended [--live-budget-usd D] [--verdict-timeout S]
 #                                             [--skip IDS]]
+#   --from, --to       the first and last stage to run, of specify, clarify, plan, tasks,
+#                      analyze, implement, converge (default implement to converge)
+#   --feature          the feature's directory; required for --from specify, when
+#                      .specify/feature.json still names the previous feature
+#   --plan-effort      plan's effort: xhigh for new design (default), high for a port
+#   --implement-effort the planned implement runs' effort (default high); live and
+#                      converge-appended runs are xhigh whatever this says
 #   --max-passes       convergence passes before stopping at "cap" (default 7)
 #   --budget-usd       ceiling per claude session, passed as --max-budget-usd (default 25)
-#   --no-planned       skip stage 1
-#   --no-converge      stop after stage 1 ("planned", exit 0)
+#   --no-planned       skip the implement runs (--from converge)
+#   --no-converge      stop after the implement runs ("planned", exit 0; --to implement)
 #   --allow-dirty      start on a tree with uncommitted changes; they stay uncommitted, and
 #                      the uncommitted-changes check is off
 #   --lanes            runs that may run at once (default 2; 1 runs every run in this tree)
@@ -108,31 +132,46 @@
 #   --verdict-timeout  seconds to wait for a verdict before taking it as hold (default 900)
 #   --skip             task IDs (T056 or "T056 T074", unchecked) skipped from the start
 #
-# Exit 0 for converged, rule and planned; 2 for operator, golden, contract, merge and cap;
-# 1 for gate and error.
+# Exit 0 for done, converged, rule and planned; 2 for operator, golden, contract, merge and
+# cap; 1 for gate and error.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
+
+STAGES=(specify clarify plan tasks analyze implement converge)
+stage_index() { # <stage>: its place in STAGES, or 99
+	local i
+	for i in "${!STAGES[@]}"; do [ "${STAGES[$i]}" != "$1" ] || { echo "$i"; return; }; done
+	echo 99
+}
 
 MAX_PASSES=7
 BUDGET_USD=25
 LIVE_BUDGET_USD=""
 VERDICT_TIMEOUT=900
 ALLOW_DIRTY=0
-PLANNED=1
-CONVERGE=1
 ATTENDED=0
 SKIP_ARG=""
 LANES=2
 DRY_RUN=0
+FROM=implement
+TO=converge
+FEATURE_ARG=""
+PLAN_EFFORT=xhigh
+IMPLEMENT_EFFORT=high
 while [ $# -gt 0 ]; do
 	case "$1" in
+	--from) FROM="$2"; shift 2 ;;
+	--to) TO="$2"; shift 2 ;;
+	--feature) FEATURE_ARG="${2%/}"; shift 2 ;;
+	--plan-effort) PLAN_EFFORT="$2"; shift 2 ;;
+	--implement-effort) IMPLEMENT_EFFORT="$2"; shift 2 ;;
 	--max-passes) MAX_PASSES="$2"; shift 2 ;;
 	--budget-usd) BUDGET_USD="$2"; shift 2 ;;
 	--live-budget-usd) LIVE_BUDGET_USD="$2"; shift 2 ;;
 	--verdict-timeout) VERDICT_TIMEOUT="$2"; shift 2 ;;
-	--no-planned) PLANNED=0; shift ;;
-	--no-converge) CONVERGE=0; shift ;;
+	--no-planned) FROM=converge; shift ;;
+	--no-converge) TO=implement; shift ;;
 	--allow-dirty) ALLOW_DIRTY=1; shift ;;
 	--lanes) LANES="$2"; shift 2 ;;
 	--dry-run) DRY_RUN=1; shift ;;
@@ -143,15 +182,42 @@ while [ $# -gt 0 ]; do
 done
 [ -n "$LIVE_BUDGET_USD" ] || LIVE_BUDGET_USD=$((BUDGET_USD * 2))
 [[ $LANES =~ ^[1-9][0-9]*$ ]] || { echo "converge-loop: --lanes takes a count, not '$LANES'" >&2; exit 2; }
+for e in "$PLAN_EFFORT" "$IMPLEMENT_EFFORT"; do
+	[[ $e == high || $e == xhigh ]] || { echo "converge-loop: an effort is high or xhigh, not '$e'" >&2; exit 2; }
+done
+FROM_I=$(stage_index "$FROM")
+TO_I=$(stage_index "$TO")
+[ "$FROM_I" != 99 ] && [ "$TO_I" != 99 ] || { echo "converge-loop: a stage is one of ${STAGES[*]}" >&2; exit 2; }
+[ "$FROM_I" -le "$TO_I" ] || { echo "converge-loop: --from $FROM is after --to $TO" >&2; exit 2; }
+IMPLEMENT_I=$(stage_index implement)
+runs_stage() { [ "$FROM_I" -le "$(stage_index "$1")" ] && [ "$(stage_index "$1")" -le "$TO_I" ]; }
 
-# The table rows (docs/development.md): converge and implement on Opus 5.5 at xhigh.
-CONVERGE_MODEL=claude-opus-5-5
-IMPLEMENT_MODEL=claude-opus-5-5
-EFFORT=xhigh
+# The table rows (docs/development.md, "Model and effort per command"), set here and
+# nowhere else. A planned implement run is `implement`; a live one `implement-live`; a
+# run of what a convergence pass appended `implement-appended`.
+declare -A MODEL=(
+	[specify]=claude-fable-5-1 [clarify]=claude-fable-5-1 [plan]=claude-fable-5-1
+	[tasks]=claude-fable-5-1 [analyze]=claude-fable-5-1 [converge]=claude-fable-5-1
+	[implement]=claude-opus-5-5 [implement-live]=claude-opus-5-5 [implement-appended]=claude-opus-5-5
+)
+declare -A EFFORT=(
+	[specify]=high [clarify]=high [plan]="$PLAN_EFFORT" [tasks]=high [analyze]=high [converge]=high
+	[implement]="$IMPLEMENT_EFFORT" [implement-live]=xhigh [implement-appended]=xhigh
+)
+trailer_for() { # <model>: the commit trailer a commit made by or for that model carries
+	case "$1" in
+	claude-fable-*) echo "Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>" ;;
+	*) echo "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" ;;
+	esac
+}
 
-# What a session was asked for, read by run_claude's event line and the dry-run stub.
+# What a session was asked for, read by run_claude's event line and the dry-run stub; and
+# the session to resume instead of starting one (clarify in specify's; an answer in the
+# session that asked), cleared by run_claude once used.
 RUN_LABEL=""
 RUN_IDS=""
+RESUME_SID=""
+LAST_SID=""
 
 # golangci-lint lives in $GOPATH/bin, which a non-login shell may not have.
 PATH="$PATH:$(go env GOPATH)/bin"
@@ -188,12 +254,29 @@ else
 	CONVERGE_TAGS="[behaviour] when its fix changes what the code does; [pin] when it is a test, a doc or record line, or a named constant, with the code under test unchanged (the stopping rule in docs/development.md); [operator] when it needs what only the operator can give: a choice between designs the artifacts do not settle, a change to spec.md, plan.md or docs/decisions.md, a golden or fixture id that would move, $CONVERGE_LIVE. Example: '- [ ] T<next id> [pin] Pin ...'"
 fi
 
-FEATURE_DIR=$(bash .specify/scripts/bash/check-prerequisites.sh --paths-only | sed -n 's/^FEATURE_DIR: //p')
+if [ -n "$FEATURE_ARG" ]; then
+	FEATURE_DIR="$PWD/$FEATURE_ARG"
+	[ -d "$FEATURE_DIR" ] || { echo "converge-loop: no directory $FEATURE_ARG" >&2; exit 2; }
+else
+	[ "$FROM" != specify ] || { echo "converge-loop: --from specify needs --feature specs/NNN-slug" >&2; exit 2; }
+	FEATURE_DIR=$(bash .specify/scripts/bash/check-prerequisites.sh --paths-only | sed -n 's/^FEATURE_DIR: //p')
+fi
 TASKS="$FEATURE_DIR/tasks.md"
-[ -f "$TASKS" ] || { echo "converge-loop: no tasks.md at $TASKS" >&2; exit 2; }
+if [ "$FROM_I" -ge "$IMPLEMENT_I" ] && [ ! -f "$TASKS" ]; then
+	echo "converge-loop: no tasks.md at $TASKS" >&2
+	exit 2
+fi
 FEATURE_REL=${FEATURE_DIR#"$PWD"/}
-SCOPE=$(basename "$FEATURE_DIR" | cut -d- -f1) # NNN-slug → NNN, the commit scope
+FEATURE_NAME=$(basename "$FEATURE_DIR")       # NNN-slug, the feature's branch
+SCOPE=${FEATURE_NAME%%-*}                      # NNN, the commit scope
 BRANCH=$(git symbolic-ref --short HEAD)
+if [ "$FROM" = specify ]; then
+	[ -f "$FEATURE_REL/brief.md" ] || { echo "converge-loop: --from specify needs $FEATURE_REL/brief.md" >&2; exit 2; }
+	if git show-ref --verify --quiet "refs/heads/$FEATURE_NAME"; then
+		echo "converge-loop: branch $FEATURE_NAME exists; specify's hook would refuse to create it" >&2
+		exit 2
+	fi
+fi
 
 if [ "$ATTENDED" = 1 ] && [ "$LOGINS" = 0 ]; then
 	echo "converge-loop: --attended needs both node logins in local/.env for its live sessions" >&2
@@ -239,7 +322,6 @@ mkdir -p "$RUN_DIR"
 SUMMARY="$RUN_DIR/summary.md"
 EVENTS="$RUN_DIR/events.jsonl"
 : > "$EVENTS"
-TRAILER="Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ATT="$RUN_DIR/attended"
 QUESTIONS="$ATT/questions.jsonl"
 [ "$ATTENDED" = 0 ] || { mkdir -p "$ATT"; : > "$QUESTIONS"; }
@@ -289,19 +371,28 @@ checked_ids() { grep -oE '^\s*- \[[xX]\] T[0-9]+' "$TASKS" | grep -oE 'T[0-9]+' 
 # A session started from inside an interactive one is not a nested one (verified
 # 2026-10-02: a `claude -p` from a session's shell, its CLAUDE_* variables inherited, ran
 # and wrote its transcript as any session does), so nothing is unset for that.
-run_claude() { # <model> <out file> <prompt> [live]
-	local model="$1" out="$2" prompt="$3" live="${4:-}" sid transcript status=0
+run_claude() { # <stage> <out file> <prompt> [live]
+	local stage="$1" out="$2" prompt="$3" live="${4:-}" sid transcript status=0
+	local model="${MODEL[$stage]}" effort="${EFFORT[$stage]}"
 	local -a strip=(-u FYLGJA_SRLINUX_USERNAME -u FYLGJA_SRLINUX_PASSWORD -u FYLGJA_EOS_USERNAME -u FYLGJA_EOS_PASSWORD)
+	local -a session
 	local budget="$BUDGET_USD"
 	if [ "$live" = live ]; then strip=(); budget="$LIVE_BUDGET_USD"; fi
-	sid=$(python3 -c 'import uuid; print(uuid.uuid4())')
+	if [ -n "$RESUME_SID" ]; then
+		sid="$RESUME_SID"
+		session=(--resume "$sid")
+		RESUME_SID=""
+	else
+		sid=$(python3 -c 'import uuid; print(uuid.uuid4())')
+		session=(--session-id "$sid")
+	fi
 	LAST_SID="$sid"
 	SESSION_HEAD=$(git rev-parse HEAD)
 	if [ "$DRY_RUN" = 1 ]; then
 		dry_run_session "$out" "$prompt" || status=$?
 	else
 		env "${strip[@]}" \
-			claude -p --session-id "$sid" --model "$model" --effort "$EFFORT" \
+			claude -p "${session[@]}" --model "$model" --effort "$effort" \
 			--permission-mode auto --max-budget-usd "$budget" "$prompt" \
 			< /dev/null > "$out" 2>&1 || status=$?
 		# From the working directory, a lane's worktree included: the hook then reads that
@@ -312,8 +403,8 @@ run_claude() { # <model> <out file> <prompt> [live]
 				CLAUDE_PROJECT_DIR="$PWD" python3 .claude/hooks/command-log.py stop > /dev/null || true
 		fi
 	fi
-	say "  session $sid, $model${live:+ ($live, budget \$$budget)}, exit $status, report $out"
-	event session label="$RUN_LABEL" tasks="$RUN_IDS" sid="$sid" model="$model" live="${live:-}" exit="$status" report="$out" cwd="$PWD"
+	say "  session $sid, $model $effort${live:+ ($live, budget \$$budget)}, exit $status, report $out"
+	event session stage="$stage" label="$RUN_LABEL" tasks="$RUN_IDS" sid="$sid" model="$model" effort="$effort" live="${live:-}" exit="$status" report="$out" cwd="$PWD"
 	return "$status"
 }
 
@@ -323,11 +414,40 @@ run_claude() { # <model> <out file> <prompt> [live]
 # question path runs, and one saying DRY-CONFLICT also rewrites the Notes heading, so two
 # lanes meet a conflict the merge driver may not resolve; a converge pass appends nothing.
 dry_run_session() { # <out file> <prompt>
-	local out="$1" prompt="$2" tasks="$FEATURE_REL/tasks.md" id ticked=""
-	if [[ $prompt == /speckit-converge* ]]; then
+	local out="$1" prompt="$2" tasks="$FEATURE_REL/tasks.md" id ticked="" n
+	case "$prompt" in
+	/speckit-converge*)
 		printf 'Dry run: convergence pass, nothing appended.\n' > "$out"
-		return 0
-	fi
+		return 0 ;;
+	/speckit-specify*)
+		# The hook's work, by hand: the branch, the pointer, a spec and its checklist.
+		git checkout -q -b "$FEATURE_NAME"
+		printf '{\n  "feature_directory": "%s"\n}\n' "$FEATURE_REL" > .specify/feature.json
+		mkdir -p "$FEATURE_REL/checklists"
+		printf '# Feature Specification: dry run\n\n## User Scenarios & Testing\n\nOne story.\n\n## Requirements\n\n- **FR-001**: the file exists.\n\n## Success Criteria\n\n- **SC-001**: one read confirms it.\n' > "$FEATURE_REL/spec.md"
+		printf '# Specification Quality Checklist\n\n- [x] All mandatory sections completed\n- [x] No [NEEDS CLARIFICATION] markers remain\n' > "$FEATURE_REL/checklists/requirements.md"
+		printf 'Dry run: spec.md and its checklist written on branch %s.\n' "$FEATURE_NAME" > "$out"
+		return 0 ;;
+	/speckit-clarify*)
+		printf 'Dry run: nothing to ask.\n\nCLARIFY-DONE\n' > "$out"
+		return 0 ;;
+	/speckit-plan*)
+		printf '# Implementation Plan: dry run\n\n## Constitution Check\n\n| # | Gate | Status |\n|---|---|---|\n' > "$FEATURE_REL/plan.md"
+		for n in I II III IV V VI VII VIII IX X XI; do printf '| %s | the gate | **PASS** |\n' "$n" >> "$FEATURE_REL/plan.md"; done
+		printf '# research.md\n\n## 1. Verified at plan\n\nNothing.\n\n## 2. Decisions\n\n- R-01: none.\n\n## 3. Drafted for the operator\n\nNone.\n\n## 4. Owed at implement\n\nNothing.\n' > "$FEATURE_REL/research.md"
+		printf 'Dry run: plan.md and research.md written.\n' > "$out"
+		return 0 ;;
+	/speckit-tasks*)
+		# A route the planner reads: the fixture beside the brief when there is one.
+		if [ -f "$FEATURE_REL/dry-run/tasks.md" ]; then cp "$FEATURE_REL/dry-run/tasks.md" "$tasks"; else
+			printf '# Tasks: dry run\n\n## Phase 1: Setup\n\n- [ ] T001 the baseline\n\n### Recommended route\n\n1. **Run 1** — the baseline (T001). Read first: Makefile. Only this; stop and report.\n\n## Notes\n' > "$tasks"
+		fi
+		printf 'Dry run: tasks.md written.\n' > "$out"
+		return 0 ;;
+	/speckit-analyze*)
+		printf 'Dry run: nothing to fix.\n\nANALYZE-DONE\n' > "$out"
+		return 0 ;;
+	esac
 	mkdir -p "$FEATURE_REL/notes"
 	for id in $RUN_IDS; do
 		grep -qE "^\s*- \[ \] $id\b.*DRY-FAIL" "$tasks" && continue
@@ -340,7 +460,7 @@ dry_run_session() { # <out file> <prompt>
 	done
 	printf 'Dry run of %s: ticked%s; the rest stays unchecked.\n' "$RUN_LABEL" "${ticked:- nothing}" > "$out"
 	git add -A -- "$FEATURE_REL"
-	git diff --cached --quiet || git commit -q -m "chore($SCOPE): dry run, $RUN_LABEL" -m "A stand-in for a session, by scripts/converge-loop.sh --dry-run." -m "$TRAILER"
+	git diff --cached --quiet || git commit -q -m "chore($SCOPE): dry run, $RUN_LABEL" -m "A stand-in for a session, by scripts/converge-loop.sh --dry-run." -m "$(trailer_for "${MODEL[implement]}")"
 }
 
 # Whether stdin carries the token's value. grep reads all of its input (no -q, whose early
@@ -577,7 +697,9 @@ implement() { # <label> <ids> <prompt> <report file> [live]
 	say "- implement $label${live:+ ($live)}: $(echo $ids)"
 	RUN_LABEL="$label"
 	RUN_IDS="$(echo $ids)"
-	run_claude "$IMPLEMENT_MODEL" "$out" "$(implement_prompt "$line" "$ids" "$clause")" ${live:+"$live"} ||
+	local kind=implement
+	if [ "$live" = live ]; then kind=implement-live; elif [[ $label == pass* || $label == answered* ]]; then kind=implement-appended; fi
+	run_claude "$kind" "$out" "$(implement_prompt "$line" "$ids" "$clause")" ${live:+"$live"} ||
 		{ publish_log "$label"; finish error 1 "The implement session failed; its report is $out."; }
 	publish_log "$label"
 	settle "$label" "$ids" "$out" "$before_checked" "$before_tree"
@@ -634,7 +756,7 @@ merge_lane() { # <label> <worktree> <branch> <seeded list file>
 	fi
 	if git merge --no-ff -q -m "merge($SCOPE): $label" \
 		-m "Lane $label, built in its own worktree on branch $branch and merged back by scripts/converge-loop.sh in route order; tasks.md by scripts/merge-tasks.py, ticks and notes alone." \
-		-m "$TRAILER" "$branch" > "$log" 2>&1; then
+		-m "$(trailer_for "${MODEL[implement]}")" "$branch" > "$log" 2>&1; then
 		say "  merged $label at $(git rev-parse --short HEAD)"
 		event merge label="$label" outcome=merged head="$(git rev-parse --short HEAD)"
 		git worktree remove --force "$wt"
@@ -678,7 +800,7 @@ implement_lanes() { # <row>...
 			RUN_LABEL="$label"
 			RUN_IDS="$(echo $ids)"
 			status=0
-			run_claude "$IMPLEMENT_MODEL" "${outs[$i]}" "$(implement_prompt "$line" "$ids" "$IMPLEMENT_LIVE" lane)" || status=$?
+			run_claude implement "${outs[$i]}" "$(implement_prompt "$line" "$ids" "$IMPLEMENT_LIVE" lane)" || status=$?
 			echo "$status" > "${outs[$i]}.status"
 		) &
 		pids+=($!)
@@ -737,7 +859,7 @@ START_HEAD=$(git rev-parse HEAD)
 say "# Converge loop, $FEATURE_REL"
 say ""
 say "Started $(date -u +%FT%TZ) on $BRANCH at $(git rev-parse --short HEAD), tree $START_TREE; this file is $SUMMARY."
-say "Converge $CONVERGE_MODEL, implement $IMPLEMENT_MODEL, effort $EFFORT, at most $MAX_PASSES passes, \$$BUDGET_USD per session."
+say "Stages $FROM to $TO. Models: specify ${MODEL[specify]} ${EFFORT[specify]}, plan ${MODEL[plan]} ${EFFORT[plan]}, tasks ${MODEL[tasks]} ${EFFORT[tasks]}, analyze ${MODEL[analyze]} ${EFFORT[analyze]}, implement ${MODEL[implement]} ${EFFORT[implement]} (live and appended runs ${EFFORT[implement-live]}), converge ${MODEL[converge]} ${EFFORT[converge]}; at most $MAX_PASSES passes, \$$BUDGET_USD per session, $LANES lanes."
 if [ "$TIER2" = 1 ] && [ "$ATTENDED" = 1 ]; then
 	say "Tier 2: the sessions have Infrahub's address and token (local/.env); the node logins go to live sessions alone."
 elif [ "$TIER2" = 1 ]; then
@@ -791,13 +913,205 @@ run_planned() { # [<ids>]
 	return "$none"
 }
 
-if [ "$PLANNED" = 1 ]; then
+# --- The chain's first five stages ----------------------------------------------------
+#
+# Each stage: one session, a check that it wrote inside the feature directory alone, its
+# gate on the tree, a commit of the directory, the command log. A stage that cannot go on
+# without the operator asks a text question (attended) or stops the loop.
+
+# Commit the feature directory as a stage's artifacts, when it changed.
+stage_commit() { # <stage>
+	git add -A -- "$FEATURE_REL"
+	git diff --cached --quiet && return 0
+	if git diff --cached | carries_token; then
+		git reset -q -- "$FEATURE_REL"
+		finish contract 2 "/speckit-$1's artifacts carry the value of INFRAHUB_API_TOKEN, so they were not committed. Remove it from $FEATURE_REL before anything else."
+	fi
+	git commit -q -m "docs($SCOPE): $1" \
+		-m "Written by /speckit-$1, run headless by scripts/converge-loop.sh as one stage of the feature chain (docs/development.md, The feature chain)." \
+		-m "$(trailer_for "${MODEL[$1]}")"
+	say "  committed $(git rev-parse --short HEAD) ($1)"
+}
+
+# A stage writes inside the feature directory and nowhere else.
+stage_writes() { # <stage>
+	local stray
+	stray=$(git status --porcelain | grep -vE "^.. (\"?)$FEATURE_REL/" || true)
+	[ -z "$stray" ] || finish contract 2 "/speckit-$1 wrote outside $FEATURE_REL: $(echo "$stray" | tr '\n' ' ')"
+}
+
+# A question whose answer is text: clarify's and analyze's. Attended, the attended session
+# puts the report's questions to the operator and writes the reply to reply-<n>; a
+# skip-<n> means "take your own recommendations". Unattended it is the operator stop.
+# Prints the reply.
+ask_text() { # <kind> <label> <report> <sentence>
+	local kind="$1" label="$2" report="$3" sentence="$4"
+	[ "$ATTENDED" = 1 ] || finish operator 2 "$sentence"
+	QN=$((QN + 1))
+	printf '{"id":%d,"kind":%s,"run":%s,"tasks":"","report":%s,"sentence":%s,"asked_at":%s}\n' \
+		"$QN" "$(json_str "$kind")" "$(json_str "$label")" "$(json_str "$report")" "$(json_str "$sentence")" "$(json_str "$(date -u +%FT%TZ)")" >> "$QUESTIONS"
+	say "- question $QN ($kind): $label, report $report"
+	say "  $sentence"
+	event question id="$QN" kind="$kind" label="$label" tasks="" report="$report"
+	while [ ! -s "$ATT/reply-$QN" ] && [ ! -e "$ATT/skip-$QN" ]; do
+		stop_requested && finish operator 2 "The attended session asked the loop to stop while question $QN waited for its reply."
+		sleep 5
+	done
+	if [ -e "$ATT/skip-$QN" ]; then
+		mv "$ATT/skip-$QN" "$ATT/skipped-$QN"
+		say "  question $QN skipped: the session takes its own recommendations"
+		echo "No answer from the operator: take your own recommendations and go on."
+	else
+		say "  reply $QN received"
+		cp "$ATT/reply-$QN" "$ATT/answered-$QN"
+		cat "$ATT/reply-$QN"
+	fi
+}
+
+# A stage that may end asking (clarify, analyze): run it, and while its report ends with
+# <wait marker>, put the questions to the operator and resume the session with the reply.
+stage_dialogue() { # <stage> <first prompt> <wait marker> <done marker>
+	local stage="$1" prompt="$2" wait="$3" done_="$4" n=0 out reply
+	RUN_LABEL="$stage"
+	RUN_IDS=""
+	while :; do
+		n=$((n + 1))
+		out="$RUN_DIR/$stage-$n.md"
+		run_claude "$stage" "$out" "$prompt" || { publish_log "$stage"; finish error 1 "The $stage session failed; its report is $out."; }
+		publish_log "$stage"
+		if grep -q "^$done_" "$out"; then
+			return 0
+		elif grep -q "^$wait" "$out"; then
+			reply=$(ask_text "$stage" "$stage $n" "$out" "/speckit-$stage asks the operator; its report ($out) holds the questions and its recommendations.")
+			RESUME_SID="$LAST_SID"
+			prompt="The operator's answers to your questions follow. Record each where /speckit-$stage records an answer, then end your turn with the line $done_, or with $wait above any question still open.
+
+$reply"
+		else
+			finish contract 2 "/speckit-$stage ended with neither $done_ nor $wait; its report is $out."
+		fi
+	done
+}
+
+stage_specify() {
+	local prompt
+	# shellcheck disable=SC2016  # sed's $ is its last-line address
+	prompt=$(sed -n '/^```$/,/^```$/p' "$FEATURE_REL/brief.md" | sed '1d;$d' | head -1)
+	[ -n "$prompt" ] || finish error 1 "$FEATURE_REL/brief.md has no fenced prompt for specify."
+	say ""
+	say "## specify"
+	RUN_LABEL=specify
+	RUN_IDS=""
+	run_claude specify "$RUN_DIR/specify.md" "/speckit-specify $prompt
+Headless (scripts/converge-loop.sh): ask nothing, since the brief settles every decision; take its Decided section as given and its Open section as empty; do not commit and do not push." ||
+		{ publish_log specify; finish error 1 "The specify session failed; its report is $RUN_DIR/specify.md."; }
+	publish_log specify
+	# The hook created the branch inside the session and fetched origin once: read both.
+	BRANCH=$(git symbolic-ref --short HEAD)
+	[ "$BRANCH" = "$FEATURE_NAME" ] || finish contract 2 "specify left the tree on branch $BRANCH, not $FEATURE_NAME."
+	grep -q "\"feature_directory\": *\"$FEATURE_REL\"" .specify/feature.json 2> /dev/null ||
+		finish contract 2 ".specify/feature.json does not name $FEATURE_REL after specify."
+	REMOTE_REFS=$(remote_refs)
+	say "  on branch $BRANCH; remote refs re-read after the hook's fetch"
+	check_session
+	[ -f "$FEATURE_REL/spec.md" ] || finish gate 1 "specify wrote no $FEATURE_REL/spec.md."
+	! grep -q 'NEEDS CLARIFICATION' "$FEATURE_REL/spec.md" || finish gate 1 "$FEATURE_REL/spec.md carries a NEEDS CLARIFICATION marker; the brief should have settled it."
+	! grep -qE '^- \[ \]' "$FEATURE_REL"/checklists/*.md 2> /dev/null || finish gate 1 "A checklist under $FEATURE_REL/checklists/ has an open box."
+	stage_writes specify
+	stage_commit specify
+	event stage stage=specify outcome=pass
+}
+
+stage_clarify() {
+	say ""
+	say "## clarify"
+	RESUME_SID="${SPECIFY_SID:-}"
+	stage_dialogue clarify "/speckit-clarify Headless (scripts/converge-loop.sh): you cannot ask interactively. Run your coverage scan; if you would ask questions, write them all in one report under '## Questions', each with its options and your recommendation, and end your turn with the line CLARIFY-WAIT; if none, record the coverage summary in the spec as the command does and end your turn with the line CLARIFY-DONE. Do not commit." CLARIFY-WAIT CLARIFY-DONE
+	check_session
+	! grep -qE '^- \[ \]' "$FEATURE_REL"/checklists/*.md 2> /dev/null || finish gate 1 "A checklist under $FEATURE_REL/checklists/ has an open box after clarify."
+	stage_writes clarify
+	stage_commit clarify
+	event stage stage=clarify outcome=pass
+}
+
+stage_plan() {
+	say ""
+	say "## plan"
+	RUN_LABEL=plan
+	RUN_IDS=""
+	run_claude plan "$RUN_DIR/plan.md" "/speckit-plan Headless (scripts/converge-loop.sh): ask nothing; the brief and the spec settle the decisions, and what they leave to the plan is yours. Write research.md, data-model.md and quickstart.md to the section lists in docs/templates/research-template.md, docs/templates/data-model-template.md and docs/templates/quickstart-template.md. Verify against the running system where the brief leaves a fact to the plan, and load the Infrahub skill the brief names before writing data-model.md. Do not commit." ||
+		{ publish_log plan; finish error 1 "The plan session failed; its report is $RUN_DIR/plan.md."; }
+	publish_log plan
+	check_session
+	[ -f "$FEATURE_REL/plan.md" ] && [ -f "$FEATURE_REL/research.md" ] || finish gate 1 "plan wrote no plan.md or research.md under $FEATURE_REL."
+	[ "$(grep -cE '^\| (I|II|III|IV|V|VI|VII|VIII|IX|X|XI) \|.*\| *\|$' "$FEATURE_REL/plan.md")" = 0 ] ||
+		finish gate 1 "$FEATURE_REL/plan.md's Constitution Check has a row with no Status."
+	! grep -q 'NEEDS CLARIFICATION' "$FEATURE_REL/plan.md" || finish gate 1 "$FEATURE_REL/plan.md carries a NEEDS CLARIFICATION marker."
+	[ "$(grep -cE '^## [1-5]\. ' "$FEATURE_REL/research.md")" -ge 4 ] ||
+		finish gate 1 "$FEATURE_REL/research.md lacks the template's numbered sections (docs/templates/research-template.md)."
+	stage_writes plan
+	stage_commit plan
+	event stage stage=plan outcome=pass
+}
+
+# tasks.md as the loop needs it: a route the planner reads whole, Read first on every
+# line, a reason on every [operator] task.
+tasks_gate() { # <after what>
+	local rows phases bare noread
+	[ -f "$TASKS" ] || finish gate 1 "No $FEATURE_REL/tasks.md after $1."
+	rows=$(planned_runs)
+	[ -n "$rows" ] || finish gate 1 "$FEATURE_REL/tasks.md has no run to implement after $1."
+	phases=$(awk -F'\t' '$1 ~ /^Phase/ {print $1 ": " $3}' <<< "$rows")
+	[ -z "$phases" ] || finish gate 1 "$FEATURE_REL/tasks.md's route does not name every unchecked task after $1: $(echo "$phases" | tr '\n' ';')"
+	noread=$(grep -E '^\s*[0-9]+\.\s+\*\*Run [0-9]+\*\*' "$TASKS" | grep -vE '\[(operator|live)\]' | grep -v 'Read first:' | grep -oE 'Run [0-9]+' || true)
+	[ -z "$noread" ] || finish gate 1 "Route lines without 'Read first:' after $1: $(echo $noread | sed 's/ /, /g')."
+	bare=$(grep -E '^\s*- \[ \] T[0-9]+ \[operator\]' "$TASKS" | grep -vE '\b(since|because)\b' | grep -oE 'T[0-9]+' || true)
+	[ -z "$bare" ] || finish gate 1 "[operator] tasks without a reason (since …, because …) after $1: $(echo $bare | sed 's/ /, /g')."
+	say "  tasks.md: $(grep -cE '^\s*- \[ \] T[0-9]+' "$TASKS") open tasks in $(wc -l <<< "$rows") runs; [operator]: $(grep -cE '^\s*- \[ \] T[0-9]+ \[operator\]' "$TASKS")"
+}
+
+stage_tasks() {
+	say ""
+	say "## tasks"
+	RUN_LABEL=tasks
+	RUN_IDS=""
+	run_claude tasks "$RUN_DIR/tasks.md" "/speckit-tasks Headless (scripts/converge-loop.sh): ask nothing. Follow the template's rules (.specify/templates/overrides/tasks-template.md): a run is the tasks that share one context, its ids need not be contiguous, every route line names what to read first, lane marks follow the lane rule, and an [operator] task is allowed only where it could not precede the chain, with its reason on its line (since …, because …). A loop run commits its own work. Do not commit." ||
+		{ publish_log tasks; finish error 1 "The tasks session failed; its report is $RUN_DIR/tasks.md."; }
+	publish_log tasks
+	check_session
+	tasks_gate tasks
+	stage_writes tasks
+	stage_commit tasks
+	event stage stage=tasks outcome=pass
+}
+
+stage_analyze() {
+	say ""
+	say "## analyze"
+	stage_dialogue analyze "/speckit-analyze Headless (scripts/converge-loop.sh): you cannot ask interactively. Write the read-only report first; then apply every fix that spec.md, plan.md, research.md, the brief and docs/decisions.md settle, judging each [operator] task (drop or re-tag one the artifacts already settle; keep one that is necessary, with its reason on its line); list what needs the operator under '## For the operator', each with its options and your recommendation, and end your turn with the line ANALYZE-WAIT; with nothing for the operator, end with the line ANALYZE-DONE. Do not commit." ANALYZE-WAIT ANALYZE-DONE
+	check_session
+	tasks_gate analyze
+	stage_writes analyze
+	stage_commit analyze
+	event stage stage=analyze outcome=pass
+}
+
+SPECIFY_SID=""
+if runs_stage specify; then stage_specify; SPECIFY_SID="$LAST_SID"; fi
+! runs_stage clarify || stage_clarify
+! runs_stage plan || stage_plan
+! runs_stage tasks || stage_tasks
+! runs_stage analyze || stage_analyze
+[ "$TO_I" -ge "$IMPLEMENT_I" ] || finish "done" 0 "The stages $FROM to $TO ran."
+[ -f "$TASKS" ] || finish error 1 "No tasks.md at $TASKS."
+
+if runs_stage implement; then
 	say ""
 	say "## Planned runs"
 	run_planned || say "Every planned task is checked."
 fi
 
-[ "$CONVERGE" = 1 ] || finish planned 0 "Every planned run is implemented; convergence was not asked for."
+runs_stage converge || finish planned 0 "Every planned run is implemented; convergence was not asked for."
 
 # Land a pending answer, then build every asked task answered after its pass's implement
 # began, so no answer is left unbuilt; a pin streak does not count across what it changes.
@@ -824,7 +1138,7 @@ for pass in $(seq 1 "$MAX_PASSES"); do
 	say "- converge"
 	RUN_LABEL="pass $pass"
 	RUN_IDS=""
-	run_claude "$CONVERGE_MODEL" "$RUN_DIR/pass-$pass.converge.md" "/speckit-converge Loop pass $pass (scripts/converge-loop.sh). Tag every task you append directly after its ID with exactly one of: $CONVERGE_TAGS. The append contract is otherwise unchanged; do not commit." ||
+	run_claude converge "$RUN_DIR/pass-$pass.converge.md" "/speckit-converge Loop pass $pass (scripts/converge-loop.sh). Tag every task you append directly after its ID with exactly one of: $CONVERGE_TAGS. The append contract is otherwise unchanged; do not commit." ||
 		{ publish_log "convergence pass $pass"; finish error 1 "The converge session failed; its report is $RUN_DIR/pass-$pass.converge.md."; }
 	check_session
 
@@ -869,7 +1183,7 @@ for pass in $(seq 1 "$MAX_PASSES"); do
 	fi
 	git commit -q -m "docs($SCOPE): convergence pass $pass appends $span" \
 		-m "Found by /speckit-converge, run $([ "$ATTENDED" = 1 ] && echo attended || echo unattended) by scripts/converge-loop.sh against the tree at $(git rev-parse --short HEAD). The phase names each gap with its evidence; the tags decide the stopping rule and whether the loop may implement them:$tags" \
-		-m "$TRAILER" -- "$TASKS"
+		-m "$(trailer_for "${MODEL[converge]}")" -- "$TASKS"
 	say "  committed $(git rev-parse --short HEAD) (the phase)"
 	event pass pass="$pass" appended="$(echo $ids)" tags="$(echo "$tags" | tr '\n' ' ')" head="$(git rev-parse --short HEAD)"
 	publish_log "convergence pass $pass"

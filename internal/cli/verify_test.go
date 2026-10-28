@@ -1701,3 +1701,41 @@ func TestVerifyNamesTheSnapshot(t *testing.T) {
 		})
 	}
 }
+
+// A twin twin create --snapshot built keeps source snapshot for life, across every step
+// (019, twin.schema.json), and twin verify names it so: ready, and stepped to a stage. Each
+// document is the contract's (runVerify validates it), verify.twin.source included.
+func TestVerifyASnapshotTwin(t *testing.T) {
+	const at = "2026-10-28T09:00:00.000000+00:00"
+	from, to := strings.Repeat("576933ec", 8), strings.Repeat("9c2d01e7", 8)
+	for _, c := range []struct {
+		name   string
+		change func(rec *wire.TwinRecord)
+		line   string // %s is the bundle
+	}{
+		{"ready", func(rec *wire.TwinRecord) { rec.Source, rec.SnapshotID = wire.SourceSnapshot, &from },
+			"twin: branch fylgja-fixture (snapshot 576933ec…, bundle %s), ready; 3 nodes"},
+		{"stepped to a stage", func(rec *wire.TwinRecord) {
+			rec.Source, rec.SnapshotID, rec.Provenance.At = wire.SourceSnapshot, &to, at
+			rec.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled", AtSource: "given"}
+			rec.Step = &wire.StepRecord{Outcome: wire.StepStepped,
+				From: wire.StepSide{SnapshotID: from, BundleID: "348fd9340000000000000000000000000000000000000000000000000000abcd"},
+				To:   wire.StepSide{Stage: rec.Stage, SnapshotID: to, BundleID: rec.BundleID, At: at},
+				Run:  wire.RunRef{WorkflowID: wire.StepWorkflowID, RunID: stepRunID}}
+		}, "twin: stage change-1/cabled (snapshot 9c2d01e7…, bundle %s), ready, pinned at " + at + "; 3 nodes"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := verifyHost(t, "three-node", nil, c.change)
+			out := runVerify(t, h.paths.Root, func() *fakeNodes { return h.healthy(t) })
+			if out.code != findings.ExitOK {
+				t.Fatalf("exit %d, findings %+v; want 0", out.code, out.doc.Findings)
+			}
+			if got, want := lines2(out.stdout)[0], fmt.Sprintf(c.line, short(h.staged)); got != want {
+				t.Errorf("first line %q\nwant %q", got, want)
+			}
+			if tw := out.doc.Verify.Twin; tw.Source != wire.SourceSnapshot {
+				t.Errorf("verify.twin.source %q, want %q", tw.Source, wire.SourceSnapshot)
+			}
+		})
+	}
+}

@@ -596,10 +596,7 @@ Rewritten whole at each release's close, never appended to.
   Arista's own checksum for the cEOS tar at the next download.
 - **Open, for a session**: the fixture tool's `-propose` waits its 6 minutes for an
   artifact validator a branch with no change from `main` never gets (D-054's window);
-  bound with `timeout` there, as the release's demo did. `contracts/verify.schema.json`'s
-  `twin.source` admits `intent` and `bundle`, so a verify of a twin `twin create
-  --snapshot` built writes a `source: snapshot` its contract refuses: 018's gap, found at
-  019's T025, which no test meets and no task fixes. The tier
+  bound with `timeout` there, as the release's demo did. The tier
   durations in `docs/development.md` and `README.md` predate 019's measured 2,009 s and
   1,894.1 s, and the README's walk-through counts `12 interfaces` where the three-node read
   now counts 9 (019's T049 note).

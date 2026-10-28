@@ -1518,7 +1518,7 @@ The wordings, in shape:
 | `twin.json` | `10` | [twin.schema.json](twin.schema.json), `$id` `…/contracts/twin/v10`: a stage needs `provenance.at` alone, so a `--snapshot` twin stepped to a stage names it beside `source: snapshot`; a step keeps `source`; `snapshot_id` null names an earlier build's rebuild, not a check's |
 | findings | `1` | [findings.schema.json](findings.schema.json): `following` and `dry_run.follow` removed; the step `follow` and the eight identifiers retired |
 | the `show` block | `1` | [show.schema.json](show.schema.json): `kind` one of `none`, `snapshot`, `from_bundle` and `diverged`; `following`, `last_check` and `$defs/check` removed |
-| the `verify` block | `1` | [verify.schema.json](verify.schema.json): `twin.snapshot_id`, required, the staged bundle's snapshot (the record's, or the step's target's for a diverged twin), or null |
+| the `verify` block | `1` | [verify.schema.json](verify.schema.json): `twin.snapshot_id`, required, the staged bundle's snapshot (the record's, or the step's target's for a diverged twin), or null; `twin.source` admits `snapshot`, a `--snapshot` twin's, which its steps keep; additive |
 | the `stages` block | `1` | [stages.schema.json](stages.schema.json): `$defs/side_name`, a step's side named `<branch>/<label>` or `snapshot <8 hex>…`; additive |
 | the `step` block | `1` | [step.schema.json](step.schema.json): unchanged in shape; its description says a side names no stage when the step's target was a snapshot, or when the twin was built from one and has not stepped to a stage |
 | the API | `1` | [api.schema.json](api.schema.json): `twin.create` takes neither `interval` nor `no_follow`; `twin.step` takes `snapshot`, with one file beside a path |

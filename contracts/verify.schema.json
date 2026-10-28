@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/verify.schema.json",
   "title": "fylgja twin verify — the verify block (M12)",
-  "description": "The `verify` block of the findings document fylgja twin verify emits (operation twin.verify): the intent conformance report. The twin as its record names it; every assertion derived from the staged bundle's manifest with its outcome, grouped by node and by link; each node's configuration as the record claims it (nodes[].holds against the staged bundle), labelled recorded, never read; every cabled port intent disables, skipped with its reason; the counts by kind; the runs in flight as twin show reads them; and, with --wait, the wait. Advisory: no Fylgja operation reads it. No configuration line, artifact or bootstrap content, device diff, token or login anywhere: the values read are host names, admin states and neighbour names. 014: twin.stage and diverged.towards.stage name the stage (twin.json 6's shape) where they named a waypoint. 015: twin.rehearsal names the rehearsal run whose baseline the twin is, as twin.json 7 records it, or null. 019: twin.snapshot_id, required, names the snapshot of the staged bundle beside its bundle_id, or null; the one addition beside 019's removals, without a version move (findings.schema.json).",
+  "description": "The `verify` block of the findings document fylgja twin verify emits (operation twin.verify): the intent conformance report. The twin as its record names it; every assertion derived from the staged bundle's manifest with its outcome, grouped by node and by link; each node's configuration as the record claims it (nodes[].holds against the staged bundle), labelled recorded, never read; every cabled port intent disables, skipped with its reason; the counts by kind; the runs in flight as twin show reads them; and, with --wait, the wait. Advisory: no Fylgja operation reads it. No configuration line, artifact or bootstrap content, device diff, token or login anywhere: the values read are host names, admin states and neighbour names. 014: twin.stage and diverged.towards.stage name the stage (twin.json 6's shape) where they named a waypoint. 015: twin.rehearsal names the rehearsal run whose baseline the twin is, as twin.json 7 records it, or null. 019: twin.snapshot_id, required, names the snapshot of the staged bundle beside its bundle_id, or null; and twin.source admits snapshot, a twin twin create --snapshot built (twin.json's source since 018), which its every step keeps; the two additions beside 019's removals, without a version move (findings.schema.json).",
   "$defs": {
     "stage": {
       "type": ["object", "null"],
@@ -183,7 +183,7 @@
               }
             },
             "state": { "enum": ["ready", "diverged"], "description": "a record before 4 reads ready" },
-            "source": { "enum": ["intent", "bundle"] },
+            "source": { "enum": ["intent", "bundle", "snapshot"], "description": "019: snapshot, a twin twin create --snapshot built, kept across every step as twin.json's source is" },
             "nodes": { "type": "integer", "minimum": 0, "description": "the record's node count" },
             "diverged": {
               "type": "object",

@@ -557,6 +557,7 @@ dialled.
     - `TestStepRefusedBeforeAnyConnection`: the two `noStage` cases are now the no-target refusal. The stage-less cases that test a later refusal pass `--stage change-1/linked` (`aStage`): the bundle twins of 10, 8 and 7, the branch twin naming no snapshot, and the three records of 5. "another branch" is now `stage.unknown` naming the branches with an open proposed change. Rule 2's case takes its new words.
 
     `internal/server`: `TestStepRefusesARecordThatNamesNoSnapshot` checks `noTarget` in place of `stepStageless`. T033 and T034 are one commit (`dbe0585`): either half alone steps a twin to the wrong proposed change's stage.
+  - *Note (operator, 2026-10-28)*: R-08's literal reach is not kept: FR-014 and R-08 are amended so a record's own refusals come before the no-target one. T058 builds it.
 
 **Checkpoint**: `make test`, `make lint`.
 
@@ -1298,6 +1299,7 @@ only up to the next heading.
   Record the answer in this task's note.
 
   per FR-012, FR-014, Edge Cases (contradicts)
+  - *Note (operator, 2026-10-28)*: **(b)**, widened. FR-014 and R-08 are amended to say it (`docs(019)` commit beside this note): on the record the file read gives, before any connection, `stepNoTarget` gives first `provision.Ineligible`'s two record cases (a diverged twin, `step.twin.diverged`; a record naming M10's waypoint), then `stepScopeUnknown`, then `stepUnsourced`, and `noTarget` only for a record none of them refuses. A twin whose lab is gone, or an orphan, still meets the no-target refusal first, since finding either needs the host's inspection. The tests and `contracts/cli.md`'s 019 section move as option (b) lists. Build it as a `[behaviour]` change.
 - [ ] T059 [pin] Pin FR-017's `--allow-restart` and `--wait` for a `--snapshot` target in tier 1. The code is unchanged: the snapshot path hands over to the stage step's `stepTo`.
   - **The gap**: every `--snapshot` step test in `internal/cli/twin_step_test.go` passes `--allow-restart` over `plan-link-added.json`, whose plan restarts e1, and none passes `--wait`: `TestStepToASnapshot` (line 3470) and its `…Refused`, `…Edges`, `…DryRun` and `…Closes` siblings. Tier 3's two snapshot steps (`scripts/e2e.sh:1149`, `:1200`) pass neither flag. So no test shows a step to a snapshot refused `step.restart.required` without `--allow-restart`, or its `--wait` reaching the run's `WaitS`. The spec's edge case names both ("A step's `--wait`, `--allow-restart` and phases: unchanged for a snapshot target"), and T031's edges covered only `run.in_flight` and `step.twin.diverged`.
   - **The cases**: tier 1 has about a second of headroom (43.9 s uncached on this pass, `internal/cli` 39.3 s of it), so add `--snapshot` cases to the stage step's own tests rather than new tests:

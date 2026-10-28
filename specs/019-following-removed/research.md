@@ -342,8 +342,13 @@ the identifier is retired from the catalogue and FR-004's list names it.
 
 **Decision.** When neither `--stage` nor `--snapshot` is given, the server reads the twin
 directory's record (`lab.ReadRecord`, a file read; no connection) **before**
-`rehearsalHolds` dials the workflow service. A readable record naming no stage is refused
-as `step.target.unknown`, rejection, exit 1, at resolve, object the record's `bundle_id`:
+`rehearsalHolds` dials the workflow service. A readable record naming no stage is first held to the refusals its
+record alone decides, in the order the step gives them once the host is inspected:
+`provision.Ineligible`'s two record cases (a diverged twin, `step.twin.diverged`; a record
+naming M10's waypoint), then `stepScopeUnknown`, then `stepUnsourced` (R-03). The first
+that applies is given, with its own rule and words, so a twin no target can step is refused
+for itself and never told to give one. A record none of them refuses is refused as
+`step.target.unknown`, rejection, exit 1, at resolve, object the record's `bundle_id`:
 `the twin names no stage, so there is no next stage to step to; give --stage
 <branch>/<label> or --snapshot <id|file>`. An absent or unreadable record, or one that
 names a stage, goes on as today, so a rehearsal's host (no record during its baseline's
@@ -352,6 +357,10 @@ provision, a staged record after) still meets `run.in_flight` first.
 **Rationale.** FR-014 and US3 scenario 1 say "before any connection". The record is the
 only fact needed, and reading it first cannot misname a rehearsal's twin, since a
 rehearsal's records always name a stage.
+
+*Amended 2026-10-28, the operator's:* the literal reading built at T034 told a twin that no
+target can step to give one, then refused it for itself once given; the record's own
+refusals now come first.
 
 ### R-09 The record: `twin.json` 10, and its rule on a stage
 

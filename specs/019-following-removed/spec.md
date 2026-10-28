@@ -447,10 +447,12 @@ remaining history.
 - **FR-014**: `twin step --stage <branch>/<label>` MUST name a stage of any proposed
   change, resolved, judged and read under the record's scope as today; `--stage` left out
   MUST mean the next stage of the twin's own proposed change; for a twin that names no
-  stage, a target MUST be required and its absence refused before any connection;
-  `stage.twin.moved` MUST apply only when the record names a stage of the proposed change
-  the target is found in. `--stage` beside
-  `--snapshot` MUST be refused before any connection.
+  stage, a target MUST be required and its absence refused before any connection, unless
+  the twin's record alone refuses the step (a diverged twin, a record naming M10's
+  waypoint, a record of `twin.json` 7 or earlier, or one naming no snapshot), in which
+  case that refusal MUST be given instead, also before any connection; `stage.twin.moved`
+  MUST apply only when the record names a stage of the proposed change the target is found
+  in. `--stage` beside `--snapshot` MUST be refused before any connection.
 - **FR-015**: A twin's scope and mapping MUST be fixed for its life: a target whose
   snapshot names another scope or another mapping than the record's MUST be refused by
   `step.twin.unsteppable`, naming both, before any run, for a `--snapshot` target by its

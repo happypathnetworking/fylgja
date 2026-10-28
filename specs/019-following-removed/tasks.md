@@ -903,9 +903,36 @@ SC-008).
 
 **Independent Test**: quickstart §4 and §5's expected outcomes.
 
-- [ ] T050 [live] [US2] `make test-contract` whole (quickstart §4), beside the server on the bridge from this tree (T048), with no twin up and none booted while it runs. Expected: `TestFollowingDetection` absent; `TestStepTargetFromASnapshot` passes; `internal/stages` and `internal/checks` pass; afterwards Infrahub is left as `CLAUDE.md`'s Stages paragraph says the tier leaves it, and `Branch` lists `main` and `fylgja-fixture` alone. Record each package's time, the whole, and any re-run with its cause.
+- [X] T050 [live] [US2] `make test-contract` whole (quickstart §4), beside the server on the bridge from this tree (T048), with no twin up and none booted while it runs. Expected: `TestFollowingDetection` absent; `TestStepTargetFromASnapshot` passes; `internal/stages` and `internal/checks` pass; afterwards Infrahub is left as `CLAUDE.md`'s Stages paragraph says the tier leaves it, and `Branch` lists `main` and `fylgja-fixture` alone. Record each package's time, the whole, and any re-run with its cause.
+  - *Note (Run 15, 2026-10-28)*: run at `5dd67fb`. `make build` there did not replace the binary, but the worker and the server were still restarted from it at 16:55:21 by `CLAUDE.md`'s two lines (worker 129774, server 129776, no workflow running), and verified as T048 does:
+    - each `/proc/<pid>/exe` is not `(deleted)`;
+    - both environments carry `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`;
+    - both reports read line by line as T048's note gives them;
+    - from inside each task worker, `200` with a 240-byte body with the token, and `401` without.
 
-- [ ] T051 [live] [US1] Tier 3 (quickstart §5), on a quiet host after T050, from a commit, so the build's VCS stamp matches (memory: the stamp replaces the binary). Steps:
+    The dev server (1039393) was up. No twin was up, and none was booted while the tier ran. Infrahub before: `main` and `fylgja-fixture`, no proposed change, stage, thread or validator, and the registration `fylgja` with two check definitions.
+    - **The whole**: `GOFLAGS=-v make test-contract` (`-v` only so the log names each test), from 16:56:26 to 17:29:55, **2,009 s**, exit 2 with one failure. The first `go test` took about 1,700 s, then `internal/checks` alone 310.0 s.
+    - **Each package**:
+      - `internal/stages` 1,690.6 s, `internal/server` 1,182.9 s, `internal/stage` 736.3 s, `internal/intent` 666.5 s (FAIL), `internal/checks` 310.0 s, `internal/cli` 282.2 s;
+      - `internal/lab` 10.9 s, `internal/provision` 8.0 s, `internal/psp` 4.4 s, `internal/compiler` 2.2 s;
+      - under 2 s each: `internal/api` 1.5, `internal/findings` 1.5, `internal/rehearsal` 1.0, `internal/validate` 0.9, `cmd/fylgja` 0.6, `internal/conformance` 0.6, `internal/verify` 0.6, `internal/bundle` 0.2, `internal/snapshot` 0.2, `internal/ctm` 0.1, `internal/step` 0.1, `internal/testsupport` 0.07, `internal/tree` 0.05, `internal/lab/wire` 0.02, the root 0.02.
+    - **The named tests**:
+      - `TestStepTargetFromASnapshot` passes in 200.9 s.
+      - `TestFollowingDetection` is absent: no `_test.go` names it, and the log lists no such test.
+      - `TestChecksInsideInfrahub` passes in 310.0 s, not skipped. No test in the tier skipped.
+      - The slowest: `TestStagesListAndPlan` 567.0 s, `TestRehearseComposedByTheFixtureTool` 473.6 s, `TestStagesSeeEveryWriteOfADevice` 427.7 s, `TestStageRefusals` 426.7 s, `TestPinnedReadReproducesItsBundle` 333.0 s.
+    - **The failure**: `TestSeededDefectsAreAllReportedInOnePass` (183.6 s) failed at its seed: `branch fylgja-test-defects-…: 3 artifact(s) did not all reach Ready within 1m30s (last saw 3 artifact(s), states map[Pending:1 Ready:2])`.
+      - That is the seed's fixed artifact wait (`internal/testsupport/infrahub.go`, `WaitForArtifacts`).
+      - Infrahub was under the tier's own parallel load at the time: a load average of 4.5 and its task manager at 100% CPU. The test before it took 1m27.6 s to see a `DcimCable` removed.
+      - 019 touches neither the reader nor the seed.
+    - **The re-run**, for that cause: `go test -count=1 -timeout 30m -tags contract -v ./internal/intent` alone, from 17:30:16, passes in 220.3 s, the test in 51.7 s.
+    - **Afterwards**, after both runs:
+      - `Branch` lists `main` and `fylgja-fixture` alone;
+      - `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` count 0;
+      - `CoreReadOnlyRepository` holds `fylgja` alone, with its two check definitions.
+    - **A commit this run did not make**: `691632c` (`docs(016)`, `specs/016-probes/brief.md` alone) landed on this branch at 17:10, during the tier. The test binaries were compiled from `5dd67fb` at the tier's start, and no Go file, script or Makefile reads that file, so the result holds for `691632c`'s code too.
+
+- [X] T051 [live] [US1] Tier 3 (quickstart §5), on a quiet host after T050, from a commit, so the build's VCS stamp matches (memory: the stamp replaces the binary). Steps:
   1. Read `free -m` and restart Infrahub's containers if it reads well below `CLAUDE.md`'s figure.
   2. Start `make test-e2e` detached, its exit status in a file, and wait in foreground calls under ten minutes.
   3. Expected: `E2E-OK`, nine cases. Case 5's log shows the 330 s frozen wait with no run started and the record, the containers and the kind line unchanged, then `stepped to snapshot …` twice (by file, then by id), the readback, and verify 5a's skipped port and link.
@@ -913,8 +940,49 @@ SC-008).
 
   Record its time against the 32–33 minute estimate (R-18), and any attempt lost to the host with its cause.
   - *Note (operator, 2026-10-28)*: the narrowed run (`PLATFORMS=nokia_srlinux make test-e2e`) is dropped for 019: on the same host and binary the whole run covers every case it runs, and 019 changes neither `scripts/e2e.sh`'s case-to-package table nor its skip logic, so it would prove nothing the whole run does not.
+  - *Note (Run 15, 2026-10-28)*: run after T050's re-run, at `691632c`.
+    - **Step 1**: at 17:34, `free -m` read 19,554 MiB available. Infrahub's containers held about 7.3 GiB (server 2.18 GiB, Neo4j 2.80 GiB, up 20 hours), with a load average of 2.9 once tier 2 had ended. That is not well below `CLAUDE.md`'s figure, so Infrahub was not restarted.
+    - **The first start**, 17:34:30, was refused before any case.
+      - `make test-e2e`'s `go build` replaced `bin/fylgja`, since `691632c` (T050's note) had moved `vcs.revision` after the two processes were started from `5dd67fb`.
+      - Case 9's precheck then refused the bridge server's binary: `e2e: FAILED: case 9 needs the server on 172.17.0.1:7650 to run this tree's ./bin/fylgja, and pid 129776 runs a replaced binary (… (deleted))`.
+      - Both were restarted at 17:35:33 from `691632c` (worker 225458, server 225461) and verified as T048 does, both task workers answering `200` with 240 bytes with the token and `401` without. A second `make build` left both binaries in place.
+      - This is no attempt lost to the host: the stamp did it, as the memory says.
+    - **The second start**, 17:35:51: **`E2E-OK`**, nine cases, exit 0, **wall time 1,894.1 s (31m34s)**, under R-18's estimate of 32–33 minutes. Case 9's precheck named the checks imported at `cb0a8d7e3401` and the bridge server pid 225461, this tree's binary. The closing lines:
+      - creates: 50.0 s (case 1), 43.5 s (2), 44.0 s (4), 43.9 s (5), 94.7 s (6), 52.6 s (7), 83.3 s (8);
+      - case 5: seed 35.4 s, frozen wait 330.0 s from the change, step 5a 9.8 s and step 5b 11.1 s, destroy 2.6 s;
+      - case 7: proposed change 57.0 s, plan 12.5 s, steps 21.0 s and 15.4 s;
+      - case 8: proposed change 58.7 s, steps 77.5 s and 77.1 s;
+      - case 9: seed 29.1 s, proposed change 70.4 s; its checks with the rehearsals 119.3 s (73.8 s of the 1950 s deadline) and 114.0 s (the failing rehearsal, 71.7 s of the 2580 s deadline);
+      - verify 4.2 s (case 1), 4.0 s (5) and 2.7 s (6); case 8 settled after 4.67 s and 3.52 s; boot half 10.3 s (case 1) and 7.9 s (case 6).
+    - **Case 5**, read from the script's log and its outputs:
+      - The kind line after the create: `kind: snapshot b55d91e9… (branch fylgja-test-e2e-226575-16241, read at 2026-10-28T17:40:17.772749Z)`. `show-5-frozen.out`'s, after the wait, is the same line.
+      - The wait: `330.0s after the change, twin.json, the containers and the kind line had not moved, and no run had started since 2026-10-28T17:41:04.927793415Z`, the query answering `[]`.
+      - The step by file to snapshot `ea2f7739…` (bundle `a1362a0b…`): `.status` `ok`, `.step.outcome` `stepped`, `.step.to.stage` null.
+      - Readback 5a: `n1 ethernet-1/2 disable`.
+      - Verify 5a: 12 held and 3 skipped, namely `n1:ethernet-1/2` (`intent disables n1:ethernet-1/2`) and the link `n1:ethernet-1/2|n3:ethernet-1/2` at both ends. `.verify.twin.snapshot_id` is the target's.
+      - The step by id to `d43038f2…` (bundle `a8d49874…`): stepped, then readback 5b.
+      - The kind line after it: `kind: snapshot d43038f2… (…) (stepped from snapshot ea2f7739… by run fylgja-step 01a1839f-9ecd-…, ended …)`.
+      - Both records: `stage` null, `source` `"intent"`, `twin_version` `"10"`, no `following` key.
+    - **Afterwards**:
+      - `temporal schedule list` prints its header alone, and no workflow is running.
+      - The trap's leak check is silent: no branch-left or Schedule line. The credential grep reads `no credential and no marker in the run's outputs, the bundle store and the snapshot store, the log of the server on the bridge`.
+      - `clab inspect --all` finds no containers, and there is no `local/twin`. Infrahub is as T050 leaves it.
+      - The run's outputs are kept under `local/e2e-019-full.outputs/`, with its log at `local/e2e-019-full.log` (git-ignored).
 
 **Checkpoint**: tiers 2 and 3 green.
+
+  *Run 15's checkpoint, 2026-10-28 (T050–T051)*:
+  - **Commits**: one, this run's notes and ticks. No code, script or golden moved, so there is no re-baseline commit. `testdata/golden/` equals `main`'s.
+  - **Gates**, on the tree with the notes:
+    - `make build` is statically linked.
+    - `make test` uncached (`GOFLAGS=-count=1`) passes in 43.6 s wall, under the 45 s bound, at a load of 1.5–2.6, with `internal/cli` taking 39.2 s.
+    - `make lint` reports 0 issues.
+  - **Tier 2**: green whole once `internal/intent` was re-run alone, after a seed's 1m30s artifact wait under the tier's own load (T050). **Tier 3**: `E2E-OK` in 1,894.1 s at its second start; the first was refused by case 9's precheck before any case, because of the stamp (T051).
+  - **The host**: no twin, no `local/twin`, no Schedule. `clab inspect --all` is empty, and no `fylgja-test-*` branch is left. The dev server (1039393) was up throughout. The worker and the server ran `691632c` for tier 3; the gates' `make build` on the dirtied tree replaces the binary, so both are restarted from this run's commit once it is made, and verified the same way.
+  - **For later tasks**:
+    - T054's figures are T050's and T051's notes: tier 2 2,009 s whole with one re-run, `internal/checks` 310.0 s, `internal/stages` 1,690.6 s; tier 3 1,894.1 s.
+    - `internal/stages` ran 1,690.6 s against the `-timeout 30m` (1,800 s) that `make test-contract` sets: 109 s of headroom, down from 285 s on 2026-10-27. No task raises the bound. `CLAUDE.md`'s line on it is T054's to update.
+    - `docs/development.md`'s and `README.md`'s tier-3 durations (Run 13's checkpoint) can now cite 1,894.1 s. No task names those two files.
 
 ---
 

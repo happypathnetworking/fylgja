@@ -86,6 +86,14 @@ following one waits out its timeout. Two features left the release on 2026-10-25
 [F-012](#f-012), the skill, which bolts on later and touches no core, and
 [F-022](#f-022), the sync from NetBox, superseded by [F-025](#f-025).
 
+**Upgrading a 0.2 host.** 0.3's release notes copy this list into
+`.github/workflows/release.yml` when they are written at the release's close; a feature
+whose upgrade needs a step adds it here:
+
+1. Destroy a following twin before upgrading a host of an earlier build: a Schedule
+   `fylgja-follow` left behind starts a workflow no worker of this build serves, and this
+   build carries no code to clear it ([F-026](#f-026), [D-062](decisions.md#d-062)).
+
 <a id="the-production-shape"></a>
 ## The production shape
 

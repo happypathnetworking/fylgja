@@ -172,9 +172,9 @@ in place of the scope and the mapping ([§4.3](architecture.md#43-compiler),
 [D-011](decisions.md#d-011), [D-057](decisions.md#d-057)).
 
 **`bundle_id`** — Hash of a bundle's canonical bytes. The same intent compiles to the
-same one; a changed `bundle_id` is how *reconcile* knows the branch moved. The
-*artifacts* are among the bytes, so a configuration change moves it too
-([D-024](decisions.md#d-024)).
+same one. The *artifacts* are among the bytes, so a configuration change moves it too
+([D-024](decisions.md#d-024)). Until 019 a changed `bundle_id` was how following's
+*check* knew its branch had moved ([D-062](decisions.md#d-062)).
 
 **Bundle store** — `bundles/<bundle_id>/` under the *state root*: every bundle ever
 compiled or provisioned, by identity. Behind a small interface (`Put`, `Has`, `Path`,
@@ -182,8 +182,8 @@ compiled or provisioned, by identity. Behind a small interface (`Put`, `Has`, `P
 ([D-014](decisions.md#d-014)). Until 018 it kept the CTM a create read beside each bundle
 as `<bundle_id>.ctm.json`; that sidecar is retired ([D-061](decisions.md#d-061)): no build
 writes one, those on disk are never read, and the *snapshot store* holds what a read
-took. `bundles/.reads/` holds a *check*'s CTM between its `ReadIntent` and its `Compile`
-alone.
+took. Until 019 `bundles/.reads/` held following's *check*'s CTM between its `ReadIntent`
+and its `Compile`; nothing writes it now ([D-062](decisions.md#d-062)).
 
 **C4 model** — The architecture's diagrams, drawn from one Structurizr model,
 `docs/c4/workspace.dsl`: five views (the system context, the containers, the server's and
@@ -191,22 +191,14 @@ the worker's components, and the deployment on the lab host), exported to images
 diagrams`. A changed package, import or component is redrawn in the same change
 ([development.md](development.md#keeping-the-documents-true)).
 
-**Check** — One run of *reconcile* for a *following* twin, started by Schedule
-`fylgja-follow` every *interval*, under the workflow ID `fylgja-reconcile-<scheduled
-time>`. One at a time. It reads the followed branch without `at`, compiles it, and
-compares the `bundle_id` with `twin.json`'s. It ends with one of seven outcomes:
-
-- `unchanged`: nothing touched.
-- `rebuilt`: destroyed and provisioned again, ready.
-- `rejected`: the read, compile or host check refused; nothing touched.
-- `error`: a step before the destroy could not run; the next check tries again.
-- `rebuild_failed`: the destroy or the provision failed; *following* stops.
-- `skipped`: nothing to compare against, a twin that does not follow, or a run in
-  flight.
-- `cancelled`: `twin destroy` cancelled it.
-
-`twin show` reports the last one ([§4.4](architecture.md#44-provisioner--temporal),
-[D-026](decisions.md#d-026)). Not a *check (Infrahub)*.
+**Check** — Said alone, a *check (Infrahub)*. From M4 until 019 it also named one run of
+following's `reconcile` workflow, which a Temporal Schedule, `fylgja-follow`, started every
+interval for a twin built from a branch with no `at` and no `--no-follow`: the run read the
+branch, compiled it in the worker, compared the `bundle_id` with `twin.json`'s and
+*rebuilt* the twin when it had moved, and `twin show` reported the last one.
+[D-062](decisions.md#d-062) removed following from the core, and with it the workflow, the
+Schedule, `--interval` and `--no-follow`; it supersedes [D-026](decisions.md#d-026) and
+[D-027](decisions.md#d-027).
 
 **Check (Infrahub)** — From 015 ([D-049](decisions.md#d-049), [D-052](decisions.md#d-052),
 [D-053](decisions.md#d-053)): one of the two check definitions this repository registers
@@ -224,8 +216,7 @@ deadline, and writes nothing. `fylgja-twin`
 proposed change, a `CoreChangeThread` holding one `CoreThreadComment`, which the proposed
 change's overview shows. Infrahub's merge rule reads the conclusion, so a failed stage
 blocks the merge. A change to a check reaches Infrahub only once it is on `origin`'s `main`
-and imported ([development.md](development.md#local-environment)). Not the *check* of a
-following twin.
+and imported ([development.md](development.md#local-environment)).
 
 **Client** — From M13 ([D-040](decisions.md#d-040)): a program that reaches Fylgja
 through the *API* alone. The CLI is the first, and from 015 the two *checks (Infrahub)*
@@ -313,7 +304,7 @@ Fylgja was built stays private ([D-043](decisions.md#d-043)). The *launch* is th
 *rehearsal* may run before its destroy: its stages' budgets summed from their node plans,
 each the largest of its packages' deploy, readiness, push and destroy budgets over the
 stage's nodes, plus the mechanism constants that bound each activity and the wait's
-default. It is 1,980 s for the three SR Linux stages the fixture tool composes. Over the
+default. It is 1,950 s for the three SR Linux stages the fixture tool composes. Over the
 **ceiling**, 3,600 s, a constant of Fylgja's own, a rehearsal is refused before any run
 (`rehearsal.deadline.unfit`); a stage still running when it passes is cut, its *verdict*
 `error` (`rehearsal.deadline.cut`), and the twin destroyed. `fylgja-twin`'s timeout,
@@ -352,8 +343,8 @@ that failed or was cancelled after its stage and a *rehearsal*'s destroy.
 
 **Diverged** — From M11: the state of a twin whose *step* failed or was cancelled after it
 touched the host (from the stage on). The twin stays up, part on the *stage (of a proposed
-change)* it came from and part on the one it was going to; `twin.json` keeps the first at
-its top level, names the second, the run and the *phase* in its `step` block, records
+change)* or *snapshot* it came from and part on the one it was going to; `twin.json` keeps
+the first at its top level, names the second, the run and the *phase* in its `step` block, records
 `state: diverged`, and gives each node the bundle it is last known to hold, or `null` for
 a node containerlab restarted whose push did not land. Each push's outcome sits beside it,
 and only `refused` is the node's own answer. A `failed` push may have committed (a node
@@ -369,9 +360,9 @@ does not say it holds that bundle is a failed *record claim*
 refusal the run would make, and what it would do, with no run started and no lab,
 container or twin directory touched. Like a plan, `twin create`'s and `twin step`'s file
 the *snapshot* they took in the *snapshot store* and the bundle in the *bundle store*.
-`twin create --snapshot`'s takes none: it files the snapshot a file carries, or reads the
-stored one, then compiles and files the bundle. `twin provision`'s reads, takes and
-compiles nothing: it verifies the bundle it was given and files it. The *server* makes it on the lab
+`twin create --snapshot`'s and `twin step --snapshot`'s take none: each files the snapshot
+a file carries, or reads the stored one, then compiles and files the bundle. `twin
+provision`'s reads, takes and compiles nothing: it verifies the bundle it was given and files it. The *server* makes it on the lab
 host, so it needs `docker` and `containerlab` on the server's `PATH`.
 
 **Feature (`F-NNN`)** — One row of the roadmap's backlog, with an anchor
@@ -433,14 +424,6 @@ and refused, loading nothing, on one holding any; then the stage kind, the group
 `-seed-main` and `-clear-main` open and close a
 *demo window*, and `-add-fourth-node` adds n4 to a throwaway branch, cabled to a peer.
 
-**Following** — From M4: a twin built from an unpinned reference is checked every
-*interval* and rebuilt when its `bundle_id` moves. `twin create` begins it unless `--at`
-or `--no-follow` is given. It is Schedule `fylgja-follow`, which holds the branch and the
-interval and nothing else. It stops when a rebuild fails, when `twin destroy` runs, and
-when a later create or provision replaces it. Contrast *pinned* and *frozen twin*
-([§1](architecture.md#1-claims-that-shape-everything), [D-012](decisions.md#d-012),
-[D-026](decisions.md#d-026), [D-027](decisions.md#d-027)).
-
 **Frame** — From M13: one line of an *API* answer, a JSON object whose one key names its
 kind: `out` and `err` (text for stdout and stderr), `start` (the server begins to start a
 run), `run` (the run's identity), `event` (one step boundary, or a notice), `files` (a
@@ -457,16 +440,6 @@ whose test reads it (`internal/<package>/testdata/contracts/<feature>/`), so tha
 can show a consumer of that format still reads what the code writes. Never edited;
 `TestFrozenContractCopiesAgree` holds two copies of one schema equal. The current
 schemas are the *contracts*.
-
-**Frozen twin** — A twin built from an unpinned reference that is not *following*:
-created with `--no-follow`, one whose following could not begin (`follow.start.failed`)
-or was lost, or one of a branch other than the one a Schedule follows. Not reproducible
-from Infrahub, unlike a *pinned* twin: its `observed_at` is a local clock reading, and
-reproducing it with `--at` is best-effort ([D-027](decisions.md#d-027)). From 018 a twin
-built from a *snapshot* (`twin create --snapshot`) whose envelope names no `at` is frozen
-by rule, whatever flag it was given: its reference is a document, which does not move, and
-the snapshot rebuilds it exactly ([D-061](decisions.md#d-061)). Its kind line ends `built
-from snapshot <id>`.
 
 **Fylgja** — In Norse tradition, a spirit that accompanies a person: a follower, a
 fetch. Here, the platform, and the reason the twin *walks*.
@@ -573,19 +546,22 @@ it; the provenance of every CTM, snapshot, bundle and twin ([§3](architecture.m
 which the *server* resolves to a pinned `(branch, at)` before any run starts; the stage's
 name is not part of the reference and enters no CTM, snapshot or bundle
 ([D-045](decisions.md#d-045)). From 018 a *snapshot* is a reference too, by its *snapshot
-id* or as a file (`twin create --snapshot`): intent already read, which carries its own
-branch, `at` and *scope*, so `--branch`, `--stage`, `--at` and `--scope` beside it are
-refused (`snapshot.flags.conflict`) ([D-061](decisions.md#d-061)).
+id* or as a file (`twin create --snapshot`, and from 019 `twin step --snapshot`): intent
+already read, which carries its own branch, `at` and *scope*, so `--branch`, `--stage`,
+`--at` and `--scope` beside it are refused (`snapshot.flags.conflict`)
+([D-061](decisions.md#d-061), [D-062](decisions.md#d-062)).
 
-**Interval** — How often a *following* twin is *checked*: `twin create --interval`,
-in Go duration syntax. Default 5 minutes, floor 10 seconds. Held only by the Schedule,
-and refused with `--at`, `--no-follow` or `--snapshot`.
-
-**Kind (of a twin)** — What `twin show` calls the twin on the host: `following`,
-`pinned` (built from an `at` or a *stage*, stepped or not; a *rehearsal*'s twin is pinned,
-and its kind line names the rehearsal's run), `frozen`, from a bundle (`twin provision`),
-`diverged`, or `none`. A twin built from a *snapshot* is `pinned` or `frozen` as its
-envelope's `at` says, never following, and its kind line ends `built from snapshot <id>`.
+**Kind (of a twin)** — What `twin show` calls the twin on the host, from 019 one of four
+([D-062](decisions.md#d-062)). `snapshot`: every twin built from intent or a *snapshot*,
+stepped or not, its kind line naming the snapshot its record names and what that was read
+from, `snapshot 576933ec… (branch B at T)` for a *pinned* reference and `(branch B, read
+at T)` for one with no `at`, then the *stage* it names, the *step (of a twin)* that took it
+there and, for a *rehearsal*'s twin, the rehearsal's run; `snapshot none (…)` when the
+record names none (one an earlier build's *rebuild* made, or a `twin.json` of `8` or
+earlier), with a note that `twin step` refuses it. `from_bundle`, a twin `twin provision`
+built (`from a bundle`). `diverged`. `none`. Until 019 the kinds were `following`,
+`pinned`, `frozen`, from a bundle, `diverged` and `none`, and a snapshot twin's line ended
+`built from snapshot <id>`.
 
 **Lab host** — A machine with Docker, containerlab, NOS images, one `fylgja worker run`
 process and one `fylgja serve` process beside it ([D-041](decisions.md#d-041)). The
@@ -797,13 +773,16 @@ touched the host stopped: `reconcile` (the stage swap or containerlab's apply),
 `readiness`, `push` or `record`. A *diverged* record names it, and `step.diverged`
 carries it. A step that ended `stepped` or `unchanged` has none.
 
-**Pinned** — Of a reference: has an `at`. Of a twin: built from one, and therefore
-frozen and reproducible. A twin built from a *stage* is always pinned: a *mark* resolves
-to the `at` written on it or to the moment Infrahub recorded its writing, the *branch
-point* to `branched_from` and the *head* to the first instant after the latest stamp in
-its *scope* or its latest intent event, whichever is later, and the twin never follows.
-From 018 a twin built from a *snapshot* whose envelope names an `at` is pinned at it, and
-never follows either ([D-061](decisions.md#d-061)); it has no stage, so it does not step.
+**Pinned** — Of a reference: has an `at`. A *stage* always resolves to a pinned one: a
+*mark* to the `at` written on it or to the moment Infrahub recorded its writing, the
+*branch point* to `branched_from` and the *head* to the first instant after the latest
+stamp in its *scope* or its latest intent event, whichever is later. A *snapshot* whose
+envelope names an `at` was read pinned, and Infrahub can be read at it again; one read
+unpinned has only its `observed_at`, a local clock reading, so reproducing its twin with
+`--at` is best-effort, as `twin show` notes, and its snapshot builds the twin again
+exactly ([D-061](decisions.md#d-061)). Never a twin's *kind*: until 019 `pinned` was one,
+beside `following` and `frozen`, and `twin show` now names the snapshot
+([D-062](decisions.md#d-062)).
 
 **Pass** — One run of one Spec Kit command (`specify`, `plan`, `implement`, …) over one
 *spec*, as [how-it-was-built.md](how-it-was-built.md) counts them. Not a whole workflow:
@@ -845,9 +824,10 @@ the CTM envelope and `twin.json` add `observed_at`.
 into a ready twin: check host, stage, deploy, await readiness, push, record. The twin is
 ready only once every node's *push* succeeded. Fixed ID; cleans up after itself
 ([D-007](decisions.md#d-007)). From 018 every run the *server* starts is already compiled,
-its input a *snapshot id* and a `bundle_id`, as a *rebuild*'s has been since M4; the
-read-and-compile branch it began with stays for the histories recorded before it
-([D-061](decisions.md#d-061)).
+its input a *snapshot id* and a `bundle_id`, as a *rebuild*'s was from M4 until 019
+([D-061](decisions.md#d-061)). From 019 that is its only input: the read-and-compile branch
+it began with is gone, and a run started with no bundle id ends `operation.failed` at the
+host check, scheduling nothing ([D-062](decisions.md#d-062)).
 
 **PSP — Platform Support Package** — The declarative bundle that makes one NOS
 supported. Format `0.7`, which adds the *package match* (`platform.matches`);
@@ -889,10 +869,13 @@ itself may travel over it. Both waits share the one timeout, and `ready_after_s`
 both ([D-029](decisions.md#d-029)). The conformance suite's boot half reads more of a
 ready node, once, in tier 3.
 
-**Rebuild** — What a *check* does when its branch's `bundle_id` moved: the `destroy` and
-`provision` workflows as children, under their fixed IDs, to the newly compiled bundle. A
-failed rebuild stops *following*. A rebuilt twin names no *snapshot*: the check reads and
-compiles in the worker and takes none.
+**Rebuild** — From M4 until 019 ([D-062](decisions.md#d-062)): what following's *check*
+did when its branch's `bundle_id` moved, the `destroy` and `provision` workflows as its
+children, under their fixed IDs, to the newly compiled bundle. The check read and compiled
+in the worker and took no *snapshot*, so the record a rebuild made names none: a twin an
+earlier build rebuilt shows as `snapshot none`, and `twin step` refuses it
+(`step.twin.unsteppable`, saying an earlier build's rebuild made it) until `twin destroy`
+clears it. Nothing rebuilds a twin now but the operator.
 
 **Reclaim** — From 015 ([D-051](decisions.md#d-051)): the destroy, before a *rehearsal*
 starts, of a twin whose `twin.json` names a rehearsal run that is no longer running, run
@@ -907,14 +890,10 @@ refuses a create.
 `clab deploy` without `--reconfigure`, the third phase of a *step*. It re-cables, restarts,
 recreates, creates or removes each node as its plan says; what it will do is read first
 from `clab deploy --dry-run --format json`, with `CLAB_LABDIR_BASE` at the twin directory
-so that containerlab sees the state it stored there, and that read writes nothing. Not to
-be confused with the `reconcile` workflow below, whose *rebuild* destroys and provisions.
-
-**`reconcile` (workflow)** — M4: the short workflow a *check* runs. Inspect the host
-and the runs in flight, read, compile, compare `bundle_id` with `twin.json`'s. If it
-changed, check the host for the new bundle, then *rebuild*. Stop following when the
-rebuild fails. Started only by Schedule `fylgja-follow`
-([§4.4](architecture.md#44-provisioner--temporal)).
+so that containerlab sees the state it stored there, and that read writes nothing. From M4
+until 019 the word also named following's `reconcile` workflow, which ran each *check* and,
+when the branch had moved, the *rebuild*; [D-062](decisions.md#d-062) removed it, and
+"reconcile" now names this phase alone.
 
 **Record claim** — From M12: what `twin.json` says a node holds (`nodes[].holds`, or for
 a record before version `4` its `bundle_id`), held against the staged bundle by `twin
@@ -977,9 +956,6 @@ the shipped template.
 lab host; each reads its own environment ([D-018](decisions.md#d-018),
 [D-040](decisions.md#d-040)).
 
-**Schedule (Temporal)** — A server-side cron that starts a workflow on an interval.
-How following runs without a long-lived workflow.
-
 **Schema library** — OpsMill's published Infrahub schemas (`opsmill/schema-library`,
 Apache 2.0). From 017 ([D-057](decisions.md#d-057)) its DCIM base and its cable and
 minimal-location extensions, at commit `26336e9`, are the model the Infrahub reader reads,
@@ -1000,8 +976,10 @@ another form is `scope.invalid`, and neither given is `scope.unset`, both before
 connection; a scope selecting no device is `scope.empty`. It is recorded in the CTM's
 envelope, the manifest's and `twin.json`'s provenance and the findings document's
 `subject`. Every stage a command resolves, reads or plans is read under the one scope, the
-*head*'s `at` included. `twin step` and a *following* twin's *checks* read under the scope
-the twin's record carries, and the *checks (Infrahub)* send none, so the server's default
+*head*'s `at` included. `twin step` reads a stage under the scope the twin's record
+carries, and refuses a target whose scope or *mapping* differs from the record's
+(`step.twin.unsteppable`): both are fixed for the twin's life, though its branch is not
+([D-062](decisions.md#d-062)). The *checks (Infrahub)* send none, so the server's default
 holds.
 
 **Series** — From M10, superseded by a *proposed change*'s *stages* from
@@ -1045,13 +1023,15 @@ equal to the CTM's, the `ctm`, and `probes`, required and empty until probe decl
 are defined. The *server* takes one of every read before it compiles: for a create, a
 dry run, each stage a plan, a step or a *rehearsal* reads, and `intent read --out`, which
 writes it; it files each in the *snapshot store*. `twin create --snapshot <id|file>`
-builds a twin from one with no read, *frozen* or *pinned* by rule as its envelope says;
-`twin compile --snapshot <file>` compiles one's CTM. A bare CTM is wrapped by hand as
+builds a twin from one with no read, and from 019 `twin step --snapshot <id|file>` steps a
+twin to one of any branch, with no request to Infrahub ([D-062](decisions.md#d-062)); `twin
+compile --snapshot <file>` compiles one's CTM. A twin stays at the snapshot it was built
+from until the operator steps it. A bare CTM is wrapped by hand as
 `{"snapshot_version": "1", "ctm": …, "probes": []}`, its id and `observed_at` left for
 the server to fill. Read strictly, its version first (`snapshot.version.unsupported`,
 `snapshot.invalid`, `snapshot.id.mismatch`). It holds each device's *artifact*, as the
 CTM does, so it lives in the store and crosses as a file, never in a finding, a log line
-or a document, which name its id alone. `twin.json` `9` and the documents that name a
+or a document, which name its id alone. `twin.json` from `9` and the documents that name a
 `bundle_id` name its id beside it; the bundle does not.
 
 **Snapshot id** — From 018 ([D-061](decisions.md#d-061)): a *snapshot*'s content
@@ -1073,12 +1053,12 @@ would move it. The *fixture branch*'s is `576933ec…`.
 under the *state root*, beside the *bundle store*: every snapshot taken or sent, by
 identity. Behind an interface of the bundle store's shape (`Put`, `Has`, `Path`,
 `Fetch`) that never overwrites, so two takes of one intent keep one document, the first.
-A twin built by `twin create --snapshot`, by its id or from a file of a later take, records
-the stored first take's `observed_at`; a `twin create --branch` or `--stage` whose take is
-the second records its own read's time. An entry that does not
+A twin built by `twin create --snapshot`, or stepped by `twin step --snapshot`, by its id
+or from a file of a later take, records the stored first take's `observed_at`; a `twin
+create --branch` or `--stage` whose take is the second records its own read's time. An entry that does not
 hash to its name, or declares another id, is `snapshot.id.mismatch`. Made by the first snapshot filed, never at
-start. `twin create --snapshot <id>` reads it; an id it does not hold is
-`snapshot.unknown`.
+start. `twin create --snapshot <id>` and `twin step --snapshot <id>` read it; an id it does
+not hold is `snapshot.unknown`.
 
 **Spec** — One `specs/NNN-<slug>/` directory taken through the Spec Kit workflow, from
 its `brief.md` to `converge`; the workflow's unit. A *feature* is built as one spec or
@@ -1104,7 +1084,8 @@ is before the branch point or later than now, and when it is stale: a device's i
 newer than its *generation stamp* ([D-046](decisions.md#d-046),
 [D-058](decisions.md#d-058)). Every stage is read under one *scope*. `stage list` lists them,
 `stage plan` reads and compiles each and prints the step between each pair, and `twin
-step` walks a twin through its own proposed change's stages. Replaces the *waypoint*.
+step` takes a twin to any of them, by default the next of its own proposed change's.
+Replaces the *waypoint*.
 
 **Stage commands** — `intent read`, `twin compile`, `schema check` and `psp validate`:
 each exposes one stage of the pipeline on its own, on the code path a run uses
@@ -1149,10 +1130,10 @@ run only on the lab host, in `internal/lab` ([D-015](decisions.md#d-015)). A fin
 names the step it was raised at. `start`, `verify`, `resolve`, `read` and `compile` are
 the command's own steps, taken by the *server* before any run starts: from 018 every
 provision it starts begins at the host check, already compiled, as a step's and a
-rehearsal's do ([D-061](decisions.md#d-061)). Only a following check's run reads and
-compiles, on the worker, and a provision's history recorded before 018 begins with
-those two, a branch the workflow keeps so that it replays. A *step (of a twin)* runs its
-own: inspect, host check, plan reconcile (findings
+rehearsal's do ([D-061](decisions.md#d-061)). From 019 no run reads or compiles: the last
+that did, following's *check*, on the worker, is gone, and so is the read-and-compile
+branch a provision recorded before 018 began with ([D-062](decisions.md#d-062)). A *step
+(of a twin)* runs its own: inspect, host check, plan reconcile (findings
 step `compare`), stage, reconcile, readiness, push, record, and *observe*, which is also
 `twin verify`'s.
 
@@ -1160,12 +1141,21 @@ step `compare`), stage, reconcile, readiness, push, record, and *observe*, which
 `014-proposed-change-stages` ([D-045](decisions.md#d-045)): the step between two
 consecutive *waypoints* of a *series* ([D-032](decisions.md#d-032)).
 
-**Step (of a twin)** — From M11: `twin step`, which takes a running twin built from a
-*stage* to another stage of its own *proposed change*, the next by default, forward or
-back, the *head* included once it has moved, without a rebuild; a stage of another
-proposed change is refused (`step.target.foreign`). The *server* reads and compiles the
-target, computes the *step (between stages)* between the two bundles and the *push plan*,
-and reads containerlab's plan,
+**Step (of a twin)** — From M11: `twin step`, which takes a running twin to another
+*stage* or, from 019, to a *snapshot*, without a rebuild ([D-062](decisions.md#d-062)).
+Any twin whose record names a snapshot steps, built by `--branch`, `--stage` or
+`--snapshot`; a twin `twin provision` built, a record of `8` or earlier and a record
+naming no snapshot do not (`step.twin.unsteppable`). Its target is a stage, `--stage
+<branch>/<label>` of any *proposed change*, forward or back, the *head* included once it
+has moved, or, left out, the next stage of the twin's own; or a snapshot of any branch,
+`--snapshot <id|file>`, for which no request reaches Infrahub. A twin whose record names
+no stage needs one or the other (`step.target.unknown`). A `--stage` of another proposed
+change is the target, where until 019 it was refused (`step.target.foreign`), and is
+refused `step.target.unknown`, naming that proposed change's stages, when it has no such
+label. A target whose *scope* or *mapping* is not the record's is refused
+(`step.twin.unsteppable`): both are the twin's for life, and its branch is not. The
+*server* resolves and compiles the target, computes the *step (between stages)* between
+the two bundles and the *push plan*, and reads containerlab's plan,
 making every refusal before any connection to the workflow service; the `fylgja-step`
 workflow then stages the target, *reconciles* the lab, waits for every node containerlab
 restarted, recreated or created, *replaces* every changed or restarted node's
@@ -1176,10 +1166,12 @@ under `--wait <duration>` or 2m0s, and records how the wait ended; the wait neve
 its outcome.
 
 **Stepped** — From M11: a twin a *step (of a twin)* took to its target. Its `twin.json`
-names the target's stage and bundle at the top level, `state: ready`, and the step in
-its `step` block (outcome `stepped`, or `unchanged` when the two bundles differ by
-provenance alone), and every node holds the target's bundle. `twin show` still calls it
-`pinned`, and adds `stepped from change-1/cabled by run fylgja-step …` to the kind line.
+names the target's branch, `at`, snapshot and bundle at the top level, and its stage, or
+none for a snapshot target, `state: ready`, and the step in its `step` block (outcome
+`stepped`, or `unchanged` when the two bundles differ by provenance alone), and every node
+holds the target's bundle. `twin show`'s kind is `snapshot`, naming the target's, and its
+kind line adds `(stepped from change-1/cabled by run fylgja-step …, ended …)`, or `stepped
+from snapshot 576933ec…` for a side that names no stage.
 
 **Stream** — From M13: an *API* answer that is a run's progress. A client names it
 (`Fylgja-Stream`, 16 random bytes in hex) on the request of a create, a provision, a
@@ -1226,31 +1218,35 @@ own working directory; and `twin.json`. Present exactly while a twin is provisio
 being provisioned; removed whole by unstage. With containerlab, the whole state of the
 twin ([D-014](decisions.md#d-014)).
 
-**`twin.json`** — The twin's record, version `9`, written last by the record step and
+**`twin.json`** — The twin's record, version `10`, written last by the record step and
 removed with the *twin directory*
 ([contracts/twin.schema.json](../contracts/twin.schema.json)): the manifest's provenance
 block, with its *scope* and *mapping*, `observed_at` (or an explicit statement that it is unknown, when no read took
-place), `snapshot_id` (the *snapshot* the twin was built from, or `null` for a twin `twin
-provision` or a *rebuild* made), `source` (`intent`, `snapshot` or `bundle`), `bundle_id`,
-the provisioning run's identity, the version of the worker binary
+place), `snapshot_id` (the *snapshot* the twin was built from or last stepped to, or `null`
+for a twin `twin provision` built or one an earlier build's *rebuild* made), `source`
+(`intent`, `snapshot` or `bundle`: how the twin was created, which a step keeps),
+`bundle_id`, the provisioning run's identity, the version of the worker binary
 that provisioned it, and each node's management address, *artifact* (name, content type,
 checksum, size, never the bytes) and how long its *push* took; the *stage* the twin was
 built from (its proposed change's id and branch, its label, description and where its `at`
-came from: `given`, `written`, `branch_point` or `head`), or an explicit `null`; the
+came from: `given`, `written`, `branch_point` or `head`), or an explicit `null`, and from
+`10` a stage needs only an `at`, so a twin built by `--snapshot` and stepped to a stage
+names it beside `source: snapshot`; the
 *rehearsal* whose run built it (`fylgja-rehearse` and the run's id, kept by each step's
 record), or `null`, by which a rehearsal knows a twin to *reclaim*; `state`
 (`ready` or *diverged*); the last *step* (its sides, run, outcome, *phase*, containerlab's
 plan with each package's declaration, each node's push outcome, the timings, and the
 step's `wait`, `null` until `VerifyTwin` writes it), or `null`; and on each node `holds`,
 the bundle whose content it runs. A step rewrites it whole, on every path after its stage.
-Older versions are read where a twin may still carry one: an `8` names no snapshot, so
-`twin show` says `snapshot none (record 8)` and `twin step` steps it with a from side
-naming none; a `7` or earlier names no scope,
+Older versions are read where a twin may still carry one: a `9` reads as 018 wrote it; an
+`8` names no snapshot, so `twin show` says `snapshot none (record 8)` and `twin step`
+refuses it (`step.twin.unsteppable`), where 018 stepped one that named a stage
+([D-062](decisions.md#d-062)); a `7` or earlier names no scope,
 so `twin show` says `scope unknown (record 7)` and `twin step` refuses it
 (`step.twin.unsteppable`), though `twin destroy` clears it, and a rehearsal reclaims it when it names a dead one, and an
 `8` whose scope is not `tag:<name>`, or whose mapping `twin.json` 8 cannot hold, which no build writes, is shown and refused alike; a
 `6` names no rehearsal; and a record of `5` or earlier names M10's *waypoint*, which reads
-as no stage, so its twin shows as pinned and cannot step.
+as no stage, so its twin shows as `snapshot none` and cannot step.
 
 **Verdict (of a stage)** — From 015 ([D-051](decisions.md#d-051)): what a *rehearsal*
 concluded of one stage, a pure function of its child run's result and its wait against the
@@ -1275,8 +1271,16 @@ is re-verified on any upgrade ([verified-facts.md](verified-facts.md)).
 
 **Walking twin** — The provisioned environment: a running virtual topology built from
 one intent reference. "Twin" and "environment" are synonyms. One at a time. Walking
-because a following twin tracks its intent
-([§1](architecture.md#1-claims-that-shape-everything), [D-013](decisions.md#d-013)).
+because the operator steps it from the *snapshot* it was built from to another, through a
+*proposed change*'s *stages* or to any snapshot taken, without a rebuild; between two steps
+it stays at its snapshot, and nothing rebuilds it but the operator
+([§1](architecture.md#1-claims-that-shape-everything), [D-013](decisions.md#d-013),
+[D-062](decisions.md#d-062)). From M4 until 019 a twin built from a branch with no `at`
+also walked by following that branch, rebuilt by a *check* whenever its `bundle_id`
+moved. That sense of "follow", a twin following a branch, is gone from the core, and an
+orchestrator outside it may bring it back as take, compare, step. The sense that stays is
+following a run's events: the *server* follows a run through the *workflow service*, and
+a *client* follows it in the answer's *frames*.
 
 **Waypoint** — From M10, superseded by the *stage (of a proposed change)* from
 `014-proposed-change-stages` ([D-045](decisions.md#d-045)): a mark the operator writes
@@ -1305,11 +1309,12 @@ attribute. The resolved reference is printed before every run and recorded in
 **Worker (Temporal)** — The process that polls the task queue and runs workflow and
 activity code: `fylgja worker run`, one per lab host.
 
-**Workflow (Temporal)** — Durable, deterministic orchestration code. Fylgja has five, each
-short: `provision`, `destroy`, `reconcile` (a *check*), `step` (`fylgja-step`), which
-ends with `VerifyTwin`, and `rehearse` (`fylgja-rehearse`), whose children are the
-provision, the steps and the destroy, bounded by its *deadline*
-([D-007](decisions.md#d-007), [D-051](decisions.md#d-051)).
+**Workflow (Temporal)** — Durable, deterministic orchestration code. Fylgja has four,
+each short: `provision`, `destroy`, `step` (`fylgja-step`), which ends with `VerifyTwin`,
+and `rehearse` (`fylgja-rehearse`), whose children are the provision, the steps and the
+destroy, bounded by its *deadline*. None reads a source of truth. Until 019 a fifth,
+`reconcile`, ran following's *check* ([D-007](decisions.md#d-007),
+[D-051](decisions.md#d-051), [D-062](decisions.md#d-062)).
 
 **Workflow service** — The Temporal service the worker polls and the server starts,
 follows and cancels runs through: `temporal server start-dev`, file-backed, on `:7233`,

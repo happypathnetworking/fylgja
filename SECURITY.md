@@ -35,8 +35,10 @@ revisit [D-042](docs/decisions.md#d-042) names for the check inside Infrahub, a 
 that needs less than everything, is consciously deferred
 ([D-050](docs/decisions.md#d-050)).
 
-**The server and the worker hold every credential.** Both run on the lab host with
-Infrahub's token and both node logins in their process environment. The server also
+**The server and the worker hold every credential.** Both run on the lab host with both
+node logins in their process environment, and the server with Infrahub's token, which the
+worker no longer reads ([D-062](docs/decisions.md#d-062)) but carries when it is started
+from `local/.env`, as the bring-up script starts it. The server also
 holds the API's token, which the worker never reads; a client holds the API's token
 alone. `local/.env`, kept at mode `0600`, is the one file that holds a value. Fylgja
 reads the process environment only, and never prints, logs or persists a credential: none

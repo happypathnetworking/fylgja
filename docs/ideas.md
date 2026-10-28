@@ -179,21 +179,27 @@ proposed change first, and
 `fylgja stage list` printing `no open proposed change` after a tier is how a run is seen
 to have cleaned up.
 
-## A webhook that starts a proposed-change check early
+## A webhook that starts a take and a step
 
 **Raised** 2026-09-14 in [D-026](decisions.md#d-026), as the candidate next step once
 Fylgja ran a long-lived listener; carried as roadmap feature 9 until 2026-10-16.
-**When**: not planned. **Status**: dropped from the roadmap, kept here.
+**When**: not planned. **Status**: dropped from the roadmap, kept here; reworded on
+2026-10-28, when following left the core ([D-062](decisions.md#d-062)).
 
 ### The idea
 
-Once `fylgja serve` listens, a webhook from Infrahub starts a check early, adding to the
-interval and never replacing the compare, so following's latency falls from the interval
-to seconds. D-026 names it and keeps the compare whether or not it is built.
+As raised, a webhook from Infrahub started following's check early, adding to the
+interval and never replacing the compare, so that a following twin's latency fell from
+the interval to seconds. Since D-062 nothing follows and there is no interval, so that
+argument is moot. What is left is a trigger for an orchestrator outside the core, which
+brings following back as take, compare, step: on a webhook it takes a snapshot of the
+branch (`intent read --out`), compares its id with the one the twin's record names, and
+calls `twin step --snapshot` when they differ. The core gains nothing for it: the take
+and the step are already the API's.
 
 ### Why it was dropped
 
 Infrahub 1.11.2 runs a proposed change's checks at its creation and on a retry, not on a
 branch update (the 014 probe, 2026-10-16), so a webhook adds nothing to a check posted on
-a proposed change, which is what 0.2 builds. It returns to the roadmap if following's
-latency matters to a consumer, or if Infrahub fires on a branch update.
+a proposed change, which is what 0.2 builds. It returns with an orchestrator that follows
+a branch, if Infrahub fires on a branch update.

@@ -7,7 +7,8 @@ Fylgja builds a **walking twin** of a network from its intent. You name a branch
 reads it, compiles it into a deterministic bundle, and boots it as a running
 [containerlab](https://containerlab.dev) topology on real network operating system
 images. Then it pushes each device's production configuration as Infrahub rendered it.
-If the branch changes, the twin rebuilds itself to match. Provisioning runs through
+The twin stays as it was read until you step it, to a later read of the branch or to a
+stage of a proposed change, and a step changes only what differs. Provisioning runs through
 [Temporal](https://temporal.io), so a create that fails or is cancelled cleans up after
 itself; state lives in containerlab, a few files and Temporal, and there is no database.
 There is one twin at a time, on one lab host. Every command is a request to Fylgja's API,
@@ -27,9 +28,9 @@ refused and the first marked stage is. [What the rehearsal posts in
 Infrahub](#a-proposed-change-rehearsed) is shown below.
 
 Today it runs Nokia SR Linux and Arista EOS, alone or mixed in one twin. A vendor is a
-YAML file, not code ([psp/README.md](psp/README.md)). A twin built from a stage of a
-proposed change can step to another stage of it without a rebuild, and `twin verify`
-reports whether the running twin matches its intent. A rehearsal takes a twin through every
+YAML file, not code ([psp/README.md](psp/README.md)). A twin steps to another read or to a
+stage of a proposed change without a rebuild, and `twin verify` reports whether the running
+twin matches its intent. A rehearsal takes a twin through every
 stage of a proposed change and destroys it, from the shell or from a check inside Infrahub
 that posts the report on the proposed change and fails it when a stage fails.
 
@@ -93,13 +94,18 @@ where the cEOS image comes from.
 
 This is a real session on one lab host, with Infrahub running beside it. Each step's
 `begins` line is left out, and other trimmed lines are marked `…`. It was recorded at
-`v0.2.0`, before Fylgja read the schema library's DCIM or took snapshots: its ids, counts
-and schema hashes are that release's, and the lines 017 and 018 changed (the record's
-scope, mapping and snapshot, the scope in a plan's heading, `scope.empty` at the branch
-point, a create's two `stored:` lines in place of its run's read and compile, each stage's
-`snapshot_id`, the report's `snapshot` column) are shown as this build prints them, with
-the snapshot ids, which that release did not take, trimmed to `…`. Start the workflow
-service, the worker, which runs on the lab host and does everything that touches it, and
+`v0.2.0`, before Fylgja read the schema library's DCIM or took snapshots, and while a twin
+followed its branch: its ids, counts and schema hashes are that release's, and the lines
+017, 018 and 019 changed (the record's scope, mapping and snapshot, the scope in a plan's
+heading, `scope.empty` at the branch point, a create's two `stored:` lines in place of its
+run's read and compile, each stage's `snapshot_id`, the report's `snapshot` column, the
+kind line, the snapshot in `twin verify`'s first line, a rehearsal's deadline) are shown as
+this build prints them, with the snapshot ids, which that release did not take, trimmed to
+`…`. Where that release rebuilt the twin on the branch's change, this build steps it: the
+reads and the steps to their snapshots are shown as this build prints them, with the ids,
+checksums and times no recorded run printed trimmed to `…`, and the bundle ids and
+checksums the release's rebuild printed kept. Start the workflow service, the worker,
+which runs on the lab host and does everything that touches it, and
 the API's server beside it, which every command below talks to. The two roles share one
 state root, here `/var/tmp/fylgja`; any absolute directory both can write will do:
 
@@ -145,12 +151,11 @@ command that names no scope `scope.unset`, as one started from a `local/.env` wr
 before 017 does, since the script keeps the file it finds: add the line to it.
 
 ```console
-$ bin/fylgja twin create --branch fylgja-test-readme --interval 15s
+$ bin/fylgja twin create --branch fylgja-test-readme
 snapshot_id …  stored: /var/tmp/fylgja/snapshots/….json
 bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee  stored: /var/tmp/fylgja/bundles/777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee
 run fylgja-provision 01a112a2-7ee6-7772-a701-af726d528abc
 step host check: done in 0.1s
-step follow: done in 0.0s
 step stage: done in 0.0s
 step deploy: done in 41.3s (3 nodes)
 step readiness n1: ready in 0.3s
@@ -160,14 +165,12 @@ step push n2: done in 2.3s
 step push n1: done in 2.4s
 step push n3: done in 2.5s
 step record: done in 0.0s
-step follow: done in 0.1s
 twin ready: bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee
   n1  172.20.20.3
   n2  172.20.20.4
   n3  172.20.20.2
 record: branch fylgja-test-readme, snapshot …, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 4d5b37aa0a894aec4cdca69fdb9fe455, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
 twin directory /var/tmp/fylgja/twin
-following branch fylgja-test-readme, checked every 15s (schedule fylgja-follow)
 warning host.memory.unbudgeted [step host_check] host: sum 6144 MiB (n1 2048, n2 2048, n3 2048) is not checked against a host budget: FYLGJA_HOST_MEMORY_MB is unset
 1 finding(s): 0 rejection, 1 warning, 0 info
 ```
@@ -175,11 +178,11 @@ warning host.memory.unbudgeted [step host_check] host: sum 6144 MiB (n1 2048, n2
 Nearly all of the time is containerlab booting three SR Linux nodes, and it depends on
 how busy the host is. The snapshot's id is the hash of what was read, without the time it
 was read, so the same intent read again has the same id; `twin create --snapshot <id>`
-builds it again from the server's store, with no read
-([Pinned and frozen twins](#pinned-and-frozen-twins)). A second `twin create` is refused, naming this twin.
+builds it again from the server's store, with no read, as the end of this walk-through
+says. A second `twin create` is refused, naming this twin.
 
 **Look at it.** `twin show` reads containerlab, the record and the workflow service, and
-changes nothing:
+changes nothing. Its kind line names the snapshot the twin is at:
 
 ```console
 $ bin/fylgja twin show
@@ -190,10 +193,8 @@ twin: lab fylgja present (3 nodes); twin directory present
 record: branch fylgja-test-readme, snapshot …, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 4d5b37aa0a894aec4cdca69fdb9fe455, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
   intent read at 2026-10-06T19:13:21.796364Z; reproducing it with --at that instant is best-effort
   provisioned by run fylgja-provision 01a112a2-7ee6-7772-a701-af726d528abc (source intent), worker 0.1.0-dev, recorded 2026-10-06T19:14:09.579682296Z, 3 nodes
-kind: following branch fylgja-test-readme, checked every 15s
-  next check: 2026-10-06T19:14:30Z
-  a rebuild discards the twin's runtime state
-in flight: check fylgja-reconcile-2026-10-06T19:14:15Z at step read
+kind: snapshot … (branch fylgja-test-readme, read at 2026-10-06T19:13:21.796364Z)
+in flight: none
 ```
 
 The nodes are real. `twin verify` asks each one over its own package's transport whether
@@ -203,28 +204,21 @@ labelled as the record's claim. It needs no worker and changes nothing:
 
 ```console
 $ bin/fylgja twin verify
-twin: branch fylgja-test-readme (bundle 777e9899…), ready; 3 nodes
+twin: branch fylgja-test-readme (snapshot …, bundle 777e9899…), ready; 3 nodes
 staged: bundle 777e9899…; 15 assertions over 3 nodes, 0 skipped
 n1 (172.20.20.3:57400, nokia_srlinux): host name n1; ethernet-1/1, ethernet-1/2 enabled; neighbours n2 ethernet-1/1, n3 ethernet-1/2; record: holds 777e9899…
 n2 (172.20.20.4:57400, nokia_srlinux): host name n2; ethernet-1/1, ethernet-1/2 enabled; neighbours n1 ethernet-1/1, n3 ethernet-1/1; record: holds 777e9899…
 n3 (172.20.20.2:57400, nokia_srlinux): host name n3; ethernet-1/1, ethernet-1/2 enabled; neighbours n2 ethernet-1/2, n1 ethernet-1/2; record: holds 777e9899…
 skipped: none
-in flight: check fylgja-reconcile-2026-10-06T19:14:15Z at step read
+in flight: none
 held: 3 host names, 6 ports, 6 link ends, 3 record claims (the record's, not read); failed: none; unread: none
 ```
 
 A port disabled by hand outside Fylgja draws three findings (its own state and both ends'
 neighbours) and exit 5, `nonconforming`; `--wait` reads again until the twin settles.
 
-**Change the branch.** Every 15 seconds a check reads and compiles the branch and compares
-the result with the twin. While nothing changes, it touches nothing:
-
-```console
-  last check: fylgja-reconcile-2026-10-06T19:14:45Z at 19:14:46Z, unchanged
-```
-
-Now disable n1's `ethernet-1/2` in Infrahub and have it re-render the artifacts. Infrahub
-1.11 doesn't regenerate them on its own, so the fixture tool asks it to:
+**Change the branch.** Disable n1's `ethernet-1/2` in Infrahub and have it re-render the
+artifacts. Infrahub 1.11 doesn't regenerate them on its own, so the fixture tool asks it to:
 
 ```console
 $ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -disable-port n1:ethernet-1/2 -generate
@@ -232,45 +226,96 @@ interface ethernet-1/2 on n1 disabled on fylgja-test-readme
 artifacts rendered and Ready on fylgja-test-readme
 ```
 
-With no further command, a check sees a new `bundle_id` and rebuilds the twin: a destroy
-and a create, about as long as the first. The fixture tool can return before Infrahub has
-rewritten an artifact, so here the 19:15:00Z check read the disabled port beside n1's old
-artifact and rebuilt to that, and the 19:16:00Z check read the new artifact and rebuilt
-again. Only n1's artifact moved, and a rebuilt twin names no snapshot: a check reads and
-compiles in the worker and takes none:
+The twin does not move. Nothing reads the branch for it, and nothing changes it but you:
+`twin show` prints what it printed before, the same record and the same kind line, with
+nothing in flight:
 
 ```console
 $ bin/fylgja twin show
-twin: lab fylgja present (3 nodes); twin directory present
-  n1  clab-fylgja-n1  running  172.20.20.4  nokia_srlinux  device-config cf9fe341574d6bd1f8d9a2f721429d6f
-  n2  clab-fylgja-n2  running  172.20.20.2  nokia_srlinux  device-config 36667eef6c8a92923957b9549784273b
-  n3  clab-fylgja-n3  running  172.20.20.3  nokia_srlinux  device-config 7efd0c0d5f40e5119d75b8b8d31d3e57
-record: branch fylgja-test-readme, snapshot none, bundle_id e26f042ab5e63d1e6815544da7639bdc22cfc3fd1343512d10a0757b535faa59, …
 …
-kind: following branch fylgja-test-readme, checked every 15s
-  last check: fylgja-reconcile-2026-10-06T19:16:00Z at 19:16:45Z, rebuilt
+kind: snapshot … (branch fylgja-test-readme, read at 2026-10-06T19:13:21.796364Z)
+in flight: none
+```
+
+**Step it to the change.** Read the branch again. `intent read --out` takes and files a
+snapshot as a create does, writes it to the file, and prints its id; `twin step --snapshot`
+takes that file, or the id, and steps the twin to it with no request to Infrahub: the server
+compiles the snapshot and compares its bundle with the twin's, and the run changes only what
+differs. The fixture tool can return before Infrahub has rewritten an artifact, so read once
+n1's checksum has moved in Infrahub. Only n1's artifact moved, so only n1 is pushed, by
+replace, and no container restarts:
+
+```console
+$ bin/fylgja intent read --branch fylgja-test-readme --out local/readme-1.json
+wrote local/readme-1.json: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports (branch fylgja-test-readme, scope tag:fylgja, schema 4d5b37aa0a894aec4cdca69fdb9fe455); snapshot …, stored at /var/tmp/fylgja/snapshots/….json
+$ bin/fylgja twin step --snapshot local/readme-1.json
+twin: snapshot … (bundle 777e9899…), branch fylgja-test-readme, read at 2026-10-06T19:13:21.796364Z; 3 nodes
+target: snapshot … (branch fylgja-test-readme, read at …)
+step snapshot … → snapshot … (777e9899… → e26f042a…):
+  nodes: unchanged
+  links: unchanged
+  artifacts: n1 device-config f0563480… → cf9fe341…
+reconcile: nothing to apply
+push: n1 (artifact); n2, n3 untouched
+run fylgja-step …
 …
+stepped to snapshot … (bundle e26f042a…) in …: push n1 …; settled after …
+```
+
+The record now names the new snapshot and its bundle, and still no stage. After its record
+the run waits, as `twin verify --wait` would, until the twin conforms to its new intent, and
+`twin verify` names the snapshot the twin is at:
+
+```console
 $ bin/fylgja twin verify
-twin: branch fylgja-test-readme (bundle e26f042a…), ready; 3 nodes
+twin: branch fylgja-test-readme (snapshot …, bundle e26f042a…), ready; 3 nodes
 staged: bundle e26f042a…; 15 assertions over 3 nodes, 3 skipped
-n1 (172.20.20.4:57400, nokia_srlinux): host name n1; ethernet-1/1 enabled; neighbour n2 ethernet-1/1; record: holds e26f042a…
-n2 (172.20.20.2:57400, nokia_srlinux): host name n2; ethernet-1/1, ethernet-1/2 enabled; neighbours n1 ethernet-1/1, n3 ethernet-1/1; record: holds e26f042a…
-n3 (172.20.20.3:57400, nokia_srlinux): host name n3; ethernet-1/1, ethernet-1/2 enabled; neighbour n2 ethernet-1/2; record: holds e26f042a…
+n1 (172.20.20.3:57400, nokia_srlinux): host name n1; ethernet-1/1 enabled; neighbour n2 ethernet-1/1; record: holds e26f042a…
+n2 (172.20.20.4:57400, nokia_srlinux): host name n2; ethernet-1/1, ethernet-1/2 enabled; neighbours n1 ethernet-1/1, n3 ethernet-1/1; record: holds e26f042a…
+n3 (172.20.20.2:57400, nokia_srlinux): host name n3; ethernet-1/1, ethernet-1/2 enabled; neighbour n2 ethernet-1/2; record: holds e26f042a…
 skipped: n1:ethernet-1/2 (intent disables it); link n1:ethernet-1/2|n3:ethernet-1/2 at both ends (intent disables n1:ethernet-1/2)
-in flight: check fylgja-reconcile-2026-10-06T19:17:30Z at step read
+in flight: none
 held: 3 host names, 5 ports, 4 link ends, 3 record claims (the record's, not read); failed: none; unread: none
 ```
 
-Intent now disables `n1:ethernet-1/2`, and the artifact says so, so verify skips that port
-and its link rather than expecting them up, and names what it skipped. Tier 3 makes the same change and reads it to the same
-counts.
+Intent now disables `n1:ethernet-1/2`, and the artifact n1 was pushed says so, so verify
+skips that port and its link rather than expecting them up, and names what it skipped. Tier
+3 makes the same change and step, reads the port disabled on n1 itself, and reads verify to
+the same skips.
 
-**Destroy it.** Following stops first. A check in flight is cancelled and waited for;
-here none was:
+**Step it again, by id.** Add a third link, between n1 and n3, and once both their
+checksums have moved in Infrahub, read the branch again. The read files the snapshot in the
+server's store, so the step names it by the id the read printed, and sends no file. SR Linux
+takes the new link live: containerlab re-cables the running lab without restarting a
+container, and n1 and n3 are pushed their new artifacts:
+
+```console
+$ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -add-link
+link n1:ethernet-1/3 <-> n3:ethernet-1/3 added on fylgja-test-readme
+$ bin/fylgja intent read --branch fylgja-test-readme --out local/readme-2.json
+wrote local/readme-2.json: 3 devices (nokia_srlinux 3), 14 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports (branch fylgja-test-readme, scope tag:fylgja, schema 4d5b37aa0a894aec4cdca69fdb9fe455); snapshot …, stored at /var/tmp/fylgja/snapshots/….json
+$ bin/fylgja twin step --snapshot …
+twin: snapshot … (bundle e26f042a…), branch fylgja-test-readme, read at …; 3 nodes
+target: snapshot … (branch fylgja-test-readme, read at …)
+step snapshot … → snapshot … (e26f042a… → …):
+  nodes: ~n1 (bootstrap, mapping); ~n3 (bootstrap, mapping)
+  links: +n1:e1-3 — n3:e1-3
+  artifacts: n1 device-config cf9fe341… → …; n3 device-config 7efd0c0d… → …
+reconcile: live n1 (nokia_srlinux declares live); live n3 (nokia_srlinux declares live)
+push: n1 (artifact, bootstrap); n3 (artifact, bootstrap); n2 untouched
+run fylgja-step …
+…
+stepped to snapshot … (bundle …) in …: reconcile …; push n1 …, n3 …; settled after …
+```
+
+`twin show`'s kind line now names the second read's snapshot, read at that read's time, and
+the step that took the twin there from the first's.
+
+**Destroy it.** A run in flight, a create's, a step's or a rehearsal's, is cancelled and
+waited for first; here none was:
 
 ```console
 $ bin/fylgja twin destroy
-following of branch fylgja-test-readme stopped
 run fylgja-destroy 01a112a6-9096-7338-8a2d-a2f03734039f
 step plan teardown: done in 0.0s
 step teardown: done in 1.9s (3 containers)
@@ -283,22 +328,42 @@ kind: none
 in flight: none
 ```
 
+**What the kind line says.** A twin built from intent stays at the snapshot it was built
+from, or last stepped to, until you step it or destroy it. Its kind line names that
+snapshot and, in brackets, what it is of: the branch and the `at` its reference named,
+`(branch B at T)`, or, when the reference named none, the time the branch's head was read,
+`(branch B, read at T)`. An `at` makes the read pinned, and pinned reads are reproducible:
+`twin create --branch B --at T` takes the same snapshot again and compiles to the same
+`bundle_id`, even after the branch moves on. A read time is no reference: the head moves on,
+and a read pinned at that instant takes the same snapshot only best-effort, as `twin show`
+says. Either way the snapshot is filed, and `twin create --snapshot <id|file>` builds it
+again, by its id in the server's store or from a file, with **no read**; it carries its own
+branch, `at` and scope, so `--branch`, `--stage`, `--at` and `--scope` are refused beside
+it. `twin provision <bundle-dir>` boots a bundle you already have, with no read at all: its
+kind is `from a bundle`, and it names no snapshot, so it does not step.
+
+`--dry-run` stops before starting a run. On `create` it reads, takes and files the
+snapshot, compiles and files the bundle and checks the host; with `--snapshot` it reads
+and takes nothing, files the snapshot a file carries, and compiles, files and checks as
+before. On `provision` it reads, takes and compiles nothing: it verifies the bundle, files
+it and checks the host. The same intent read twice has one snapshot id while the branch's
+history stands: a rebase moves it ([D-061](docs/decisions.md#d-061)).
+
 ## A stepping twin
 
-A walking twin keeps up with its branch by rebuilding: a destroy and a create, about a
-minute each time here. A twin built from a **stage** steps instead. A stage is a moment of
-a change under review, as Infrahub holds one: a proposed change, opened from the branch the
-change is built on. Every proposed change has two stages of its own, its **branch point**
+The walking twin above stepped to reads of its branch, each taken by hand. A twin also
+steps to a **stage**. A stage is a moment of a change under review, as Infrahub holds one: a
+proposed change, opened from the branch the change is built on. Every proposed change has two stages of its own, its **branch point**
 (`main` as it was when the branch was made) and its **head** (the branch as it is now), and
 you mark the moments between, each after the writes it seals
 ([schema/README.md](schema/README.md) says how). A stage is named `<branch>/<label>`.
-`twin step` takes the running twin to another stage of the same proposed change and
-changes only what differs: containerlab re-cables the running lab, and only the nodes whose
-configuration moved are pushed. The push is a replace, so whatever the new stage drops is
+`twin step --stage` takes the running twin to a stage, of its own proposed change or
+another, and changes only what differs, as a step to a snapshot does: containerlab
+re-cables the running lab, and only the nodes whose configuration moved are pushed. The push is a replace, so whatever the new stage drops is
 removed from the node. Same host, same services, `begins` lines left out as before.
 
-Start from a fresh fixture, since the walking twin's branch still has the port disabled.
-The fixture tool works on test branches (their names begin `fylgja-test-`): `-propose`
+Start from a fresh fixture, since the walking twin's branch now has the port disabled and
+the third link. The fixture tool works on test branches (their names begin `fylgja-test-`): `-propose`
 opens a draft proposed change from one into `main` and waits for its checks, which render
 the branch's artifacts. Mark `seeded`, add a third link, wait for n1's and n3's artifacts
 to be re-rendered (their checksums move in Infrahub, here 8 to 10 seconds after `-add-link` returns), then
@@ -354,7 +419,7 @@ rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device
 ```
 
 **Create the twin at `seeded`.** It is the same run as the walking twin's, pinned at the
-stage's instant, and it never follows:
+stage's instant:
 
 ```console
 $ bin/fylgja twin create --stage fylgja-test-readme/seeded
@@ -367,7 +432,7 @@ step deploy: done in 43.2s (3 nodes)
 …
 twin ready: bundle_id b63404c330b6144f78dc3dae5daf2d675e3ddd71eec11e899cb4af14dfa00efd
 …
-pinned at 2026-10-17T04:34:59.424352+00:00, stage fylgja-test-readme/seeded; not following
+twin directory /var/tmp/fylgja/twin
 ```
 
 **Step it.** With no `--stage`, `twin step` goes to the next stage of the proposed change.
@@ -404,7 +469,7 @@ step observe: settled after 6.1s (1 read)
 stepped to stage fylgja-test-readme/third-link (bundle d05dc990…) in 4.5s: reconcile 0.8s; push n1 2.5s, n3 2.6s; settled after 6.1s
 ```
 
-The step took 4.5 seconds where a rebuild takes about a minute. SR Linux takes the new link
+The step took 4.5 seconds where a destroy and a create take about a minute. SR Linux takes the new link
 live, so no container restarted (each still had the create's start time), n2 was neither
 touched nor pushed, and n1 and n3 were pushed their new artifacts by replace. After its
 record the run waits, as `twin verify --wait` would, until the twin conforms to its new
@@ -413,7 +478,7 @@ and `stage list` marks the twin's stage:
 
 ```console
 $ bin/fylgja twin verify
-twin: stage fylgja-test-readme/third-link (bundle d05dc990…), ready, pinned at 2026-10-17T04:35:09.759424+00:00; 3 nodes
+twin: stage fylgja-test-readme/third-link (snapshot …, bundle d05dc990…), ready, pinned at 2026-10-17T04:35:09.759424+00:00; 3 nodes
 staged: bundle d05dc990…; 19 assertions over 3 nodes, 0 skipped
 n1 (172.20.20.3:57400, nokia_srlinux): host name n1; ethernet-1/1, ethernet-1/2, ethernet-1/3 enabled; neighbours n2 ethernet-1/1, n3 ethernet-1/2, n3 ethernet-1/3; record: holds d05dc990…
 n2 (172.20.20.2:57400, nokia_srlinux): host name n2; ethernet-1/1, ethernet-1/2 enabled; neighbours n1 ethernet-1/1, n3 ethernet-1/1; record: holds d05dc990…
@@ -449,9 +514,10 @@ stages, then the proposed change, then the branch: Infrahub refuses to delete a 
 change while a stage names it, and a branch deleted first leaves its proposed change behind,
 canceled. Not every step is this light. A cEOS node restarts in place when it is
 re-cabled, and a changed image or kind recreates a node, so a step that needs either is
-refused (`step.restart.required`, exit 1) until you pass `--allow-restart`. A step stays
-inside the proposed change the twin was built from: a stage of another is refused
-(`step.target.foreign`). A step that fails once it has started leaves the twin up and
+refused (`step.restart.required`, exit 1) until you pass `--allow-restart`. A step can go
+to a stage of another proposed change, or to a snapshot of any branch, but never to one of
+another scope or mapping than the twin's, which are fixed when it is created
+(`step.twin.unsteppable`). A step that fails once it has started leaves the twin up and
 `diverged` (exit 4), recorded with what each node was last known to hold, and a diverged
 twin accepts only `twin destroy`.
 
@@ -579,7 +645,7 @@ it:
 ````markdown
 ## Fylgja rehearsed proposed change "fylgja-test-readme" on fylgja-test-readme, scope tag:fylgja
 
-Run `fylgja-rehearse 01a156e8-da76-7743-9ca7-53c29d65ddc5`, stages resolved at 2026-10-20T01:24:14Z. Status **ok**. 70.7s of the 1980s deadline (ceiling 3600s).
+Run `fylgja-rehearse 01a156e8-da76-7743-9ca7-53c29d65ddc5`, stages resolved at 2026-10-20T01:24:14Z. Status **ok**. 70.7s of the 1950s deadline (ceiling 3600s).
 
 | stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |
 |---|---|---|---|---|---|---|---|---|
@@ -625,7 +691,7 @@ and no ready proposed change:
 
 ```console
 $ bin/fylgja twin rehearse --branch fylgja-test-readme
-rehearsal of proposed change "fylgja-test-readme" (18e01843-9cb0-c335-33b3-c51c6053f556) on branch fylgja-test-readme: 4 stages; deadline 33m0s (ceiling 1h0m0s), scope tag:fylgja
+rehearsal of proposed change "fylgja-test-readme" (18e01843-9cb0-c335-33b3-c51c6053f556) on branch fylgja-test-readme: 4 stages; deadline 32m30s (ceiling 1h0m0s), scope tag:fylgja
 fylgja-test-readme/branch-point: refused (scope.empty)
   rejection scope.empty [step read] tag:fylgja: scope tag:fylgja selects no device on branch main at 2026-10-20T01:21:38.649050Z
 fylgja-test-readme/seeded: branch fylgja-test-readme at 2026-10-20T01:23:39.142559+00:00 (written), "seeded"; baseline
@@ -651,7 +717,7 @@ stage fylgja-test-readme/branch-point: refused (scope.empty)
 stage fylgja-test-readme/seeded: created; settled after 4.9s (1 read); 15 held, 0 failed, 0 skipped; baseline
 stage fylgja-test-readme/third-link: stepped in 4.7s (push n1 2.6s, n3 2.7s); settled after 6.2s (1 read); 19 held, 0 failed, 0 skipped; passed
 stage fylgja-test-readme/head: unchanged in 1.1s; settled after 6.0s (1 read); 19 held, 0 failed, 0 skipped; passed
-rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 72.1s of the 1980s deadline
+rehearsal ok: 3 stages rehearsed, every one passed; the twin is destroyed; 72.1s of the 1950s deadline
 ```
 
 It took 83 seconds end to end, and wrote nothing to Infrahub: the comment is the check's.
@@ -680,28 +746,6 @@ with it, then the branch:
 $ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -delete
 deleted 2 stages, 1 proposed change, branch fylgja-test-readme
 ```
-
-## Pinned and frozen twins
-
-Following the branch is the default. The other twins never rebuild:
-
-- `twin create --branch B --at 2026-09-20T12:00:00Z` builds the branch **as it was at
-  that instant**: a pinned twin. Pinned reads are reproducible, so the same reference
-  takes the same snapshot and compiles to the same `bundle_id` even after the branch
-  moves on.
-- `twin create --branch B --no-follow` builds the branch head **once**, as a frozen twin.
-- `twin create --snapshot <id|file>` builds a snapshot already taken, by its id in the
-  server's store or from a file, with **no read**: frozen by rule, or pinned at the `at` it
-  names, and never following. It carries its own branch, `at` and scope, so `--branch`,
-  `--stage`, `--at`, `--scope` and `--interval` are refused beside it.
-- `twin provision <bundle-dir>` boots a bundle you already have, with no read at all.
-
-`--dry-run` stops before starting a run. On `create` it reads, takes and files the
-snapshot, compiles and files the bundle and checks the host; with `--snapshot` it reads
-and takes nothing, files the snapshot a file carries, and compiles, files and checks as
-before. On `provision` it reads, takes and compiles nothing: it verifies the bundle, files
-it and checks the host. The same intent read twice has one snapshot id while the branch's
-history stands: a rebase moves it ([D-061](docs/decisions.md#d-061)).
 
 ## Two vendors, one twin
 
@@ -802,7 +846,8 @@ the dev server and a worker running from the repository root (the script leaves 
 Docker, containerlab, Infrahub and both images, and for case 9 the two checks imported and
 the API's server from the same tree on the Docker bridge, as [A proposed change,
 rehearsed](#a-proposed-change-rehearsed) starts it; it refuses before any case without
-them. It takes about 29.5 minutes. Without the cEOS image it refuses before any case too;
+them. It takes about 32 to 33 minutes, among them case 5's five and a half minutes of
+watching a twin that must not move. Without the cEOS image it refuses before any case too;
 `PLATFORMS` narrows it to the packages you name, and on an SR Linux-only host it ends on a
 partial pass, exit 0:
 

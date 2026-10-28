@@ -14,28 +14,33 @@ provides durable execution for provisioning.
 ## Scope
 
 - **Input is an intent reference: `(branch, at?)`, or a stage that names one.** With
-  `at`, the twin is pinned and reproducible. Without it, Fylgja reads the branch head,
-  sends no `at`, and records the read time as informational provenance. A stage is a
-  moment of an Infrahub proposed change: its branch point, its head, or a mark the
-  operator writes between them; it always resolves to a pinned reference.
+  `at`, the reference is pinned and its read can be taken again. Without it, Fylgja
+  reads the branch head, sends no `at`, and records the read time as informational
+  provenance. A stage is a moment of an Infrahub proposed change: its branch point, its
+  head, or a mark the operator writes between them; it always resolves to a pinned
+  reference.
 - **One twin at a time.** `create` is refused while a twin exists; the operator
   destroys first. Comparisons between references are sequential, and a twin built from a
-  stage steps to another stage of its proposed change without a rebuild. A rehearsal
-  builds a proposed change's stages on one twin in turn, verifies each, and destroys it.
+  snapshot steps to a stage of any proposed change, or to a snapshot of any branch,
+  without a rebuild. A rehearsal builds a proposed change's stages on one twin in turn,
+  verifies each, and destroys it.
 - **One lab host**, the development host, until remote hosts are built.
-- **Temporal runs short workflows with fixed IDs**: `provision`, `destroy`, a `reconcile`
-  check, `step` and `rehearse`, whose children are the other three, under a deadline.
-  Provisioning cleans up after itself on failure or cancellation, and a rehearsal ends in
-  its destroy. There is no long-running lifecycle workflow, no TTL, no signals and no
-  scheduled sweeper; an orphan lab is detected at `create` and at worker start.
+- **Temporal runs short workflows with fixed IDs**: `provision`, `destroy`, `step` and
+  `rehearse`, whose children are the other three, under a deadline. The server reads and
+  compiles before it starts one, and none reads a source of truth. Provisioning cleans up
+  after itself on failure or cancellation, and a rehearsal ends in its destroy. There is no
+  long-running lifecycle workflow, no Schedule, no TTL, no signals and no scheduled
+  sweeper; an orphan lab is detected at `create` and at worker start.
 - **State lives in containerlab and files.** The twin is the lab containerlab reports
   plus the manifest staged beside it; bundles live in a directory by content hash;
   Temporal keeps run history. No database.
 - **One task queue** until remote hosts; host-bound activities live in their own
   package so the boundary stays visible.
-- **A twin built from an unpinned reference follows its branch.** A Temporal Schedule
-  starts a `reconcile` check every interval, which rebuilds the twin when its compiled
-  bundle has changed. `--no-follow` builds a frozen twin instead.
+- **A twin is frozen at its snapshot.** Nothing rebuilds it but the operator: it walks
+  when the operator steps it, through a proposed change's stages or to any snapshot taken
+  since. Its scope and mapping are fixed for its life; its branch is not. Following a
+  branch left the core ([D-062](decisions.md#d-062)): an orchestrator outside it may take
+  a snapshot, compare and step.
 - **Fylgja never renders configuration.** Per-node bootstrap (hostname, cabled ports
   enabled, discovery on) comes from the platform support package. Production
   configuration is an artifact Infrahub rendered for the branch, pushed to each node
@@ -70,16 +75,17 @@ the process environment only, never persisted.
 ```
 read ──────▶ take ────▶ compile ─────▶ provision ───▶ operate
 (Infrahub    (CTM →     (snapshot's    (bundle →      (show, destroy,
- → CTM;       snapshot;  CTM →         running lab;   reconcile, step,
- conformance  content-   bundle;       pushed;        verify, rehearse)
+ → CTM;       snapshot;  CTM →         running lab;   step, verify,
+ conformance  content-   bundle;       pushed;        rehearse)
  + complete-  addressed) pure)         durable)
  ness checks)
 ```
 
 No separate resolve or bind stage. The compiler emits a deployable topology with the
 fixed lab name `fylgja` and containerlab's default management network; image
-overrides use the PSP override directory. `step` takes a twin built from a stage to
-another stage's bundle in place; `verify` reads the running twin against the intent it was
+overrides use the PSP override directory. `step` takes a twin built from a snapshot to
+the bundle of a stage of any proposed change, or of a snapshot of any branch, in place,
+and is how a twin walks; `verify` reads the running twin against the intent it was
 built from and changes nothing; `rehearse` builds, steps and verifies a proposed change's
 stages in turn, stops at the first that fails, destroys the twin and reports.
 
@@ -89,10 +95,10 @@ stages in turn, stops at the first that fails, destroys the twin and reports.
 fylgja serve         [--listen <host:port>]... [--psp-dir <dir>]
 fylgja worker run    [--psp-dir <dir>]
 
-fylgja twin create   --branch <b> [--at <ts>] [--no-follow] [--interval <d>]
+fylgja twin create   --branch <b> [--at <ts>]
 fylgja twin create   --stage <branch>/<label>
 fylgja twin create   --snapshot <id|file>
-fylgja twin step     [--stage <branch>/<label>] [--allow-restart] [--wait <duration>] [--dry-run]
+fylgja twin step     [--stage <branch>/<label> | --snapshot <id|file>] [--allow-restart] [--wait <duration>] [--dry-run]
 fylgja twin verify   [--wait[=<duration>]]
 fylgja twin rehearse --branch <b> [--markdown]
 fylgja twin show

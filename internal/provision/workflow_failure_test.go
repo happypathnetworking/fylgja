@@ -2,7 +2,6 @@ package provision
 
 import (
 	"context"
-	"errors"
 	"slices"
 	"strings"
 	"testing"
@@ -30,7 +29,7 @@ func rejection(step, rule string) findings.List {
 // refusal is rejected while a step that could not run is error; after the host check has
 // cleared, teardown then unstage run to completion and the run is failed.
 func TestProvisionFailureAtEachStepRunsCleanup(t *testing.T) {
-	in := ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"}
+	in := compiled("fylgja-fixture")
 
 	t.Run("before the host is touched", func(t *testing.T) {
 		for _, c := range []struct {
@@ -40,28 +39,6 @@ func TestProvisionFailureAtEachStepRunsCleanup(t *testing.T) {
 			outcome string
 			rule    string
 		}{
-			{"read refused", func(h *harness) {
-				h.env.OnActivity(wire.ActReadIntent, mock.Anything, mock.Anything).Return(
-					ReadIntentResult{Findings: rejection(findings.StepRead, findings.RuleDevicesEmpty)}, nil)
-			}, findings.StepRead, OutcomeRejected, findings.RuleDevicesEmpty},
-			{"read could not run", func(h *harness) {
-				h.env.OnActivity(wire.ActReadIntent, mock.Anything, mock.Anything).Return(
-					ReadIntentResult{}, injected(findings.StepRead, findings.RuleOperationFailed, "branch fylgja-fixture"))
-			}, findings.StepRead, OutcomeError, findings.RuleOperationFailed},
-			// An unknown branch is M1–M3's operation.failed and error for a create, whatever
-			// type ReadIntent gives it for a check.
-			{"read of a branch that does not exist", func(h *harness) {
-				h.env.OnActivity(wire.ActReadIntent, mock.Anything, mock.Anything).Return(
-					ReadIntentResult{}, branchNotFound("branch fylgja-fixture", errors.New("Branch: fylgja-fixture not found.")))
-			}, findings.StepRead, OutcomeError, findings.RuleOperationFailed},
-			{"compile refused", func(h *harness) {
-				h.env.OnActivity(wire.ActCompile, mock.Anything, mock.Anything).Return(
-					CompileResult{Findings: rejection(findings.StepCompile, findings.RuleLinkEndpointsCount)}, nil)
-			}, findings.StepCompile, OutcomeRejected, findings.RuleLinkEndpointsCount},
-			{"compile could not run", func(h *harness) {
-				h.env.OnActivity(wire.ActCompile, mock.Anything, mock.Anything).Return(
-					CompileResult{}, injected(findings.StepCompile, findings.RuleOperationFailed, "/state/bundles/.reads/run.ctm.json"))
-			}, findings.StepCompile, OutcomeError, findings.RuleOperationFailed},
 			{"host check refused", func(h *harness) {
 				refused := h.plan
 				refused.Findings = rejection(findings.StepHostCheck, findings.RuleHostLabPresent)

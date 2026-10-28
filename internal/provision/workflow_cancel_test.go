@@ -49,14 +49,6 @@ func (c *canceller) block(ctx context.Context) error {
 func (c *canceller) mock(step string) {
 	env := c.h.env
 	switch step {
-	case findings.StepRead:
-		env.OnActivity(wire.ActReadIntent, mock.Anything, mock.Anything).Return(
-			func(ctx context.Context, _ ReadIntentInput) (ReadIntentResult, error) {
-				return ReadIntentResult{}, c.block(ctx)
-			})
-	case findings.StepCompile:
-		env.OnActivity(wire.ActCompile, mock.Anything, mock.Anything).Return(
-			func(ctx context.Context, _ CompileInput) (CompileResult, error) { return CompileResult{}, c.block(ctx) })
 	case findings.StepHostCheck:
 		env.OnActivity(wire.ActCheckHost, mock.Anything, mock.Anything).Return(
 			func(ctx context.Context, _ wire.CheckHostInput) (wire.CheckHostResult, error) {
@@ -104,8 +96,6 @@ func TestProvisionCancelAtEachStepRunsCleanupToCompletion(t *testing.T) {
 		step, activity string
 		touched        bool
 	}{
-		{findings.StepRead, wire.ActReadIntent, false},
-		{findings.StepCompile, wire.ActCompile, false},
 		{findings.StepHostCheck, wire.ActCheckHost, false},
 		{findings.StepStage, wire.ActStageBundle, true},
 		{findings.StepDeploy, wire.ActDeployLab, true},
@@ -119,7 +109,7 @@ func TestProvisionCancelAtEachStepRunsCleanupToCompletion(t *testing.T) {
 			h.mockHappyPath()
 			h.mockCleanup()
 
-			res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"})
+			res := h.run(compiled("fylgja-fixture"))
 
 			if res.Outcome != OutcomeCancelled || res.Step != c.step {
 				t.Errorf("outcome %q at %q, want cancelled at %q", res.Outcome, res.Step, c.step)

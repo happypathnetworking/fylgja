@@ -18,9 +18,9 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 )
 
-// A run from a stored bundle has no read and no compile: it starts at the host check with
-// the bundle it was given, and its twin records that no read took place.
-func TestProvisionFromBundleSkipsReadAndCompile(t *testing.T) {
+// A run from a stored bundle starts at the host check with the bundle it was given, and its
+// twin records that no read took place.
+func TestProvisionFromBundleRecordsNoRead(t *testing.T) {
 	h := newHarness(t)
 	bundlePath := "/state/bundles/" + testBundleID
 	var checked wire.CheckHostInput
@@ -45,9 +45,6 @@ func TestProvisionFromBundleSkipsReadAndCompile(t *testing.T) {
 
 	res := h.run(ProvisionInput{Source: wire.SourceBundle, BundlePath: bundlePath, BundleID: testBundleID})
 
-	if h.ran(wire.ActReadIntent) || h.ran(wire.ActCompile) {
-		t.Errorf("activities started: %v; a run from a bundle reads and compiles nothing", h.calls())
-	}
 	if calls, want := h.calls(), []string{wire.ActCheckHost, wire.ActStageBundle, wire.ActDeployLab}; len(calls) < 3 || !slices.Equal(calls[:3], want) {
 		t.Errorf("activities started: %v, want the run to begin %v", calls, want)
 	}

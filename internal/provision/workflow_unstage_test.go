@@ -26,7 +26,7 @@ func TestAnUnstageThatNeverAnsweredSaysHowToClear(t *testing.T) {
 		h.mockHappyPath()
 		h.mockCleanup()
 
-		res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"})
+		res := h.run(compiled("fylgja-fixture"))
 
 		if res.Cleanup.Unstage != CleanupFailed || !slices.Equal(res.Cleanup.Remaining, []string{"twin directory /state/twin"}) {
 			t.Errorf("cleanup %+v, want unstage failed and the twin directory's path remaining", res.Cleanup)

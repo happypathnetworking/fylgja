@@ -24,36 +24,36 @@ import (
 
 // A clean create runs every step once, in order, waits for all three nodes, pushes each its
 // artifact once every node is ready and before the record, and never tears
-// anything down.
+// anything down. Its read and compile were the server's, before the run.
 func TestProvisionHappyPath(t *testing.T) {
 	h := newHarness(t)
 	h.mockHappyPath()
 
-	res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"})
+	res := h.run(compiled("fylgja-fixture"))
 
 	calls := h.calls()
-	if len(calls) != 12 {
-		t.Fatalf("activities started: %v, want read, compile, host check, stage, deploy, readiness ×3, push ×3, record", calls)
+	if len(calls) != 10 {
+		t.Fatalf("activities started: %v, want host check, stage, deploy, readiness ×3, push ×3, record", calls)
 	}
-	if want := []string{wire.ActReadIntent, wire.ActCompile, wire.ActCheckHost, wire.ActStageBundle, wire.ActDeployLab}; !slices.Equal(calls[:5], want) {
-		t.Errorf("first five activities = %v, want %v", calls[:5], want)
+	if want := []string{wire.ActCheckHost, wire.ActStageBundle, wire.ActDeployLab}; !slices.Equal(calls[:3], want) {
+		t.Errorf("first three activities = %v, want %v", calls[:3], want)
 	}
 	// The three readiness activities run concurrently, and so do the three pushes, so only
 	// their counts are an order.
-	for _, c := range calls[5:8] {
+	for _, c := range calls[3:6] {
 		if c != wire.ActAwaitReadiness {
-			t.Errorf("activities 6–8 = %v, want three %s", calls[5:8], wire.ActAwaitReadiness)
+			t.Errorf("activities 4–6 = %v, want three %s", calls[3:6], wire.ActAwaitReadiness)
 			break
 		}
 	}
-	for _, c := range calls[8:11] {
+	for _, c := range calls[6:9] {
 		if c != wire.ActPushConfig {
-			t.Errorf("activities 9–11 = %v, want three %s", calls[8:11], wire.ActPushConfig)
+			t.Errorf("activities 7–9 = %v, want three %s", calls[6:9], wire.ActPushConfig)
 			break
 		}
 	}
-	if calls[11] != wire.ActRecordTwin {
-		t.Errorf("last activity = %s, want %s", calls[11], wire.ActRecordTwin)
+	if calls[9] != wire.ActRecordTwin {
+		t.Errorf("last activity = %s, want %s", calls[9], wire.ActRecordTwin)
 	}
 	for _, c := range calls {
 		if c == wire.ActDestroyLab || c == wire.ActUnstageTwin {
@@ -76,11 +76,11 @@ func TestProvisionHappyPath(t *testing.T) {
 	if len(res.Twin.Nodes) != 3 {
 		t.Errorf("twin nodes = %+v, want three", res.Twin.Nodes)
 	}
-	if res.Twin.ObservedAt == nil || *res.Twin.ObservedAt != res.ObservedAt {
-		t.Errorf("twin observed_at = %v, want the read's %q", res.Twin.ObservedAt, res.ObservedAt)
+	if res.ObservedAt != testObservedAt || res.Twin.ObservedAt == nil || *res.Twin.ObservedAt != testObservedAt {
+		t.Errorf("observed_at %q, twin's %v; want the read's %q", res.ObservedAt, res.Twin.ObservedAt, testObservedAt)
 	}
 	if res.Twin.Source != wire.SourceIntent || res.Twin.BundleID != testBundleID {
-		t.Errorf("twin record = %+v, want source intent and the compiled bundle", res.Twin)
+		t.Errorf("twin record = %+v, want source intent and the given bundle", res.Twin)
 	}
 	for _, n := range res.Twin.Nodes {
 		if n.Artifact == nil || n.Artifact.Checksum != fixtureArtifacts[n.Name] || n.PushedInS != 0.7 {
@@ -108,7 +108,9 @@ func TestProvisionCarriesTheStageToTheRecord(t *testing.T) {
 				})
 			h.mockHappyPath()
 
-			res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "change-1", At: "2026-09-28T15:20:44.000000+00:00", Stage: given})
+			in := compiled("change-1")
+			in.At, in.Stage = "2026-09-28T15:20:44.000000+00:00", given
+			res := h.run(in)
 
 			if res.Outcome != OutcomeReady {
 				t.Fatalf("outcome %q, findings %+v; want ready", res.Outcome, res.Findings)
@@ -119,8 +121,8 @@ func TestProvisionCarriesTheStageToTheRecord(t *testing.T) {
 			if res.Twin == nil || !reflect.DeepEqual(res.Twin.Stage, given) {
 				t.Errorf("twin = %+v, want the record naming %+v", res.Twin, given)
 			}
-			if calls := h.calls(); len(calls) != 12 || calls[11] != wire.ActRecordTwin {
-				t.Errorf("activities %v, want the pinned create's twelve, the record last", calls)
+			if calls := h.calls(); len(calls) != 10 || calls[9] != wire.ActRecordTwin {
+				t.Errorf("activities %v, want the pinned create's ten, the record last", calls)
 			}
 		})
 	}
@@ -146,8 +148,9 @@ func TestProvisionCarriesTheRehearsalToTheRecord(t *testing.T) {
 				})
 			h.mockHappyPath()
 
-			res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "change-1", At: "2026-10-19T09:00:00+00:00",
-				Stage: seeded, Rehearsal: given})
+			in := compiled("change-1")
+			in.At, in.Stage, in.Rehearsal = "2026-10-19T09:00:00+00:00", seeded, given
+			res := h.run(in)
 
 			if res.Outcome != OutcomeReady {
 				t.Fatalf("outcome %q, findings %+v; want ready", res.Outcome, res.Findings)
@@ -194,7 +197,9 @@ func TestAnInputWithNoStageSerialisesAsBefore(t *testing.T) {
 
 // followInput is a create from intent that follows its branch every 300s.
 func followInput() ProvisionInput {
-	return ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture", Version: "0.1.0-test", Follow: &FollowInput{IntervalS: 300}}
+	in := compiled("fylgja-fixture")
+	in.Version, in.Follow = "0.1.0-test", &FollowInput{IntervalS: 300}
+	return in
 }
 
 // mockStartFollowing answers StartFollowing as a created Schedule does, keeping its input.
@@ -206,17 +211,9 @@ func (h *harness) mockStartFollowing(got *StartFollowingInput) {
 		})
 }
 
-// A run reads under the scope its input carries, and a following twin's checks are
-// scheduled under it (017).
-func TestProvisionReadsAndFollowsUnderItsScope(t *testing.T) {
+// A following twin's checks are scheduled under the scope the run's input carries (017).
+func TestProvisionFollowsUnderItsScope(t *testing.T) {
 	h := newHarness(t)
-	var read ReadIntentInput
-	h.env.OnActivity(wire.ActReadIntent, mock.Anything, mock.Anything).Return(
-		func(_ context.Context, in ReadIntentInput) (ReadIntentResult, error) {
-			read = in
-			return ReadIntentResult{CTMPath: "/state/bundles/.reads/run.ctm.json", ObservedAt: "2026-09-15T14:22:12.000000Z",
-				Findings: findings.List{}}, nil
-		})
 	var following StartFollowingInput
 	h.mockStartFollowing(&following)
 	h.mockHappyPath()
@@ -225,9 +222,6 @@ func TestProvisionReadsAndFollowsUnderItsScope(t *testing.T) {
 	in.At, in.Scope = "", "tag:fylgja"
 	if res := h.run(in); res.Outcome != OutcomeReady {
 		t.Fatalf("outcome %q at %q, want ready", res.Outcome, res.Step)
-	}
-	if want := (ReadIntentInput{Branch: "fylgja-fixture", Scope: "tag:fylgja"}); read != want {
-		t.Errorf("the run read %+v, want %+v", read, want)
 	}
 	if want := (StartFollowingInput{Branch: "fylgja-fixture", IntervalS: 300, Version: "0.1.0-test", Scope: "tag:fylgja"}); following != want {
 		t.Errorf("StartFollowing input %+v, want %+v", following, want)
@@ -263,7 +257,7 @@ func TestProvisionFollowBeginsAfterRecord(t *testing.T) {
 // scheduled.
 func TestProvisionFollowNilSchedulesNothing(t *testing.T) {
 	for _, in := range []ProvisionInput{
-		{Source: wire.SourceIntent, Branch: "fylgja-fixture"},
+		compiled("fylgja-fixture"),
 		{Source: wire.SourceBundle, BundlePath: "/state/bundles/" + testBundleID, BundleID: testBundleID},
 	} {
 		t.Run(in.Source, func(t *testing.T) {
@@ -343,43 +337,6 @@ func TestProvisionFollowCancelled(t *testing.T) {
 	}
 }
 
-// A rebuild's provision is already compiled: no read and no compile, the host check and the
-// stage given its bundle, and the record saying intent with the check's read.
-func TestProvisionAlreadyCompiled(t *testing.T) {
-	h := newHarness(t)
-	const observed = "2026-09-16T19:10:00.000000Z"
-	bundlePath := "/state/bundles/" + testBundleID
-	var checked wire.CheckHostInput
-	var recorded wire.RecordInput
-	h.env.OnActivity(wire.ActCheckHost, mock.Anything, mock.Anything).Return(
-		func(_ context.Context, in wire.CheckHostInput) (wire.CheckHostResult, error) {
-			checked = in
-			return h.plan, nil
-		})
-	h.env.OnActivity(wire.ActRecordTwin, mock.Anything, mock.Anything).Return(
-		func(_ context.Context, in wire.RecordInput) (wire.RecordResult, error) {
-			recorded = in
-			return wire.RecordResult{Path: in.TwinDir + "/twin.json", Record: recordFor(in)}, nil
-		})
-	h.mockHappyPath()
-
-	res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture", BundlePath: bundlePath, BundleID: testBundleID,
-		ObservedAt: observed})
-
-	if h.ran(wire.ActReadIntent) || h.ran(wire.ActCompile) {
-		t.Errorf("activities %v; an already-compiled run reads and compiles nothing", h.calls())
-	}
-	if checked != (wire.CheckHostInput{BundlePath: bundlePath, BundleID: testBundleID}) {
-		t.Errorf("host check got %+v, want the given bundle", checked)
-	}
-	if recorded.Source != wire.SourceIntent || recorded.ObservedAt == nil || *recorded.ObservedAt != observed {
-		t.Errorf("record input source %q, observed_at %v; want intent and %q", recorded.Source, recorded.ObservedAt, observed)
-	}
-	if res.Outcome != OutcomeReady || res.ObservedAt != observed || res.BundleID != testBundleID {
-		t.Errorf("result %+v, want ready with the given bundle and read", res)
-	}
-}
-
 // Both creates the server starts from 018 are already compiled (SC-001): one from intent,
 // read, taken and compiled on the server, which stops any following, and one from a
 // snapshot. Neither schedules a read or a compile: each starts at the host check with the
@@ -420,9 +377,6 @@ func TestProvisionCreatesCarryTheirSnapshot(t *testing.T) {
 			if res.Outcome != OutcomeReady || res.BundleID != testBundleID || res.ObservedAt != observed {
 				t.Fatalf("result %+v, want ready with the given bundle and read", res)
 			}
-			if h.ran(wire.ActReadIntent) || h.ran(wire.ActCompile) {
-				t.Errorf("activities %v; a create the server compiled reads and compiles nothing in the run", h.calls())
-			}
 			if calls := h.calls(); len(calls) == 0 || calls[0] != wire.ActCheckHost {
 				t.Errorf("activities %v, want the host check first", calls)
 			}
@@ -448,7 +402,8 @@ func TestProvisionStopStepBeforeStage(t *testing.T) {
 	h.env.OnActivity(ActStopFollowing, mock.Anything).Return(StopFollowingResult{Deleted: true, Branch: "other"}, nil)
 	h.mockHappyPath()
 
-	in := ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture", StopFollowing: true}
+	in := compiled("fylgja-fixture")
+	in.StopFollowing = true
 	res := h.run(in)
 
 	calls := h.calls()
@@ -479,7 +434,9 @@ func TestProvisionStopStepNotScheduled(t *testing.T) {
 		refused.Findings = rejection(findings.StepHostCheck, findings.RuleHostLabPresent)
 		h.env.OnActivity(wire.ActCheckHost, mock.Anything, mock.Anything).Return(refused, nil)
 		h.mockHappyPath()
-		res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture", StopFollowing: true})
+		in := compiled("fylgja-fixture")
+		in.StopFollowing = true
+		res := h.run(in)
 		if res.Outcome != OutcomeRejected || h.ran(ActStopFollowing) {
 			t.Errorf("outcome %q, activities %v; want rejected with following untouched", res.Outcome, h.calls())
 		}
@@ -487,7 +444,7 @@ func TestProvisionStopStepNotScheduled(t *testing.T) {
 	t.Run("stop not asked", func(t *testing.T) {
 		h := newHarness(t)
 		h.mockHappyPath()
-		if res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"}); res.Outcome != OutcomeReady || h.ran(ActStopFollowing) {
+		if res := h.run(compiled("fylgja-fixture")); res.Outcome != OutcomeReady || h.ran(ActStopFollowing) {
 			t.Errorf("outcome %q, activities %v; want ready with no stop", res.Outcome, h.calls())
 		}
 	})
@@ -501,7 +458,9 @@ func TestProvisionStopStepFails(t *testing.T) {
 		temporal.NewNonRetryableApplicationError("permission denied", "schedule", nil))
 	h.mockHappyPath()
 
-	res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture", StopFollowing: true})
+	in := compiled("fylgja-fixture")
+	in.StopFollowing = true
+	res := h.run(in)
 
 	if res.Outcome != OutcomeError || res.Step != findings.StepFollow {
 		t.Errorf("outcome %q at %q, want error at follow", res.Outcome, res.Step)
@@ -546,7 +505,7 @@ func TestProvisionPushesEachNodeItsArtifact(t *testing.T) {
 		})
 	h.mockHappyPath()
 
-	res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"})
+	res := h.run(compiled("fylgja-fixture"))
 	if res.Outcome != OutcomeReady {
 		t.Fatalf("outcome %q with %+v, want ready", res.Outcome, res.Findings)
 	}
@@ -598,7 +557,7 @@ func TestProvisionPushesBothMechanismsInOneRun(t *testing.T) {
 		})
 	h.mockHappyPath()
 
-	res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "mixed-fixture"})
+	res := h.run(compiled("mixed-fixture"))
 	if res.Outcome != OutcomeReady {
 		t.Fatalf("outcome %q with %+v, want ready", res.Outcome, res.Findings)
 	}
@@ -654,7 +613,7 @@ func TestACreateGivesTheRecordNoDeviceDiff(t *testing.T) {
 		})
 	h.mockHappyPath()
 
-	res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "mixed-fixture"})
+	res := h.run(compiled("mixed-fixture"))
 	if res.Outcome != OutcomeReady {
 		t.Fatalf("outcome %q with %+v, want ready", res.Outcome, res.Findings)
 	}
@@ -732,7 +691,7 @@ func TestProvisionPushFailureFailsTheRun(t *testing.T) {
 			h.mockHappyPath()
 			h.mockCleanup()
 
-			res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"})
+			res := h.run(compiled("fylgja-fixture"))
 
 			if res.Outcome != OutcomeFailed || res.Step != findings.StepPush || res.Twin != nil {
 				t.Fatalf("outcome %q at %q, twin %v; want failed at push with no twin", res.Outcome, res.Step, res.Twin)
@@ -788,7 +747,7 @@ func TestAPushFailureTheActivityNeverWordedNamesTheArtifact(t *testing.T) {
 	h.mockHappyPath()
 	h.mockCleanup()
 
-	res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"})
+	res := h.run(compiled("fylgja-fixture"))
 
 	if res.Outcome != OutcomeFailed || res.Step != findings.StepPush {
 		t.Fatalf("outcome %q at %q, want failed at push", res.Outcome, res.Step)
@@ -844,11 +803,11 @@ func TestProvisionSchedulesPathsAndIdentitiesOnly(t *testing.T) {
 			}
 			h.mockHappyPath()
 			h.mockCleanup()
-			h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"})
+			h.run(compiled("fylgja-fixture"))
 
 			mu.Lock()
 			defer mu.Unlock()
-			want := []string{wire.ActReadIntent, wire.ActCompile, wire.ActCheckHost, wire.ActStageBundle,
+			want := []string{wire.ActCheckHost, wire.ActStageBundle,
 				wire.ActDeployLab, wire.ActAwaitReadiness, wire.ActPushConfig}
 			if refuse {
 				want = append(want, wire.ActDestroyLab)

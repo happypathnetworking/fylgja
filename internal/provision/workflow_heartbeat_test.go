@@ -38,7 +38,7 @@ func TestADeployCutShortByALostHeartbeatIsRetriedThenNamed(t *testing.T) {
 	h.mockHappyPath()
 	h.mockCleanup()
 
-	res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"})
+	res := h.run(compiled("fylgja-fixture"))
 
 	attempts := 0
 	for _, c := range h.calls() {

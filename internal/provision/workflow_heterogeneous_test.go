@@ -57,7 +57,7 @@ func TestHeterogeneousBundleWaitsPerPlatform(t *testing.T) {
 	h.mockHappyPath()
 	h.mockCleanup()
 
-	res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"})
+	res := h.run(compiled("fylgja-fixture"))
 
 	mu.Lock()
 	defer mu.Unlock()
@@ -110,7 +110,7 @@ func TestHeterogeneousBundlePushesPerPlatform(t *testing.T) {
 		})
 	h.mockHappyPath()
 
-	res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"})
+	res := h.run(compiled("fylgja-fixture"))
 	if res.Outcome != OutcomeReady {
 		t.Fatalf("outcome %q with %+v, want ready", res.Outcome, res.Findings)
 	}
@@ -254,7 +254,7 @@ func TestMixedBundleRunsEachNodeUnderItsOwnPackage(t *testing.T) {
 		})
 	h.mockHappyPath()
 
-	res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "mixed-fixture"})
+	res := h.run(compiled("mixed-fixture"))
 	if res.Outcome != OutcomeReady {
 		t.Fatalf("outcome %q with %+v, want ready", res.Outcome, res.Findings)
 	}

@@ -30,6 +30,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
+	snap "github.com/happypathnetworking/fylgja/internal/snapshot"
 	"github.com/happypathnetworking/fylgja/internal/stage"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
@@ -155,21 +156,21 @@ func (n *markerNode) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 // stepOf names an activity's step as the create's progress lines name it (contracts/cli.md).
 var stepOf = map[string]string{
-	wire.ActReadIntent: "read", wire.ActCompile: "compile", wire.ActCheckHost: "host check",
-	wire.ActStageBundle: "stage", wire.ActDeployLab: "deploy", wire.ActAwaitReadiness: "readiness",
-	wire.ActPushConfig: "push", wire.ActRecordTwin: "record",
+	wire.ActCheckHost: "host check", wire.ActStageBundle: "stage", wire.ActDeployLab: "deploy",
+	wire.ActAwaitReadiness: "readiness", wire.ActPushConfig: "push", wire.ActRecordTwin: "record",
 }
 
 // The artifact's bytes exist in the CTM, the bundle store, the staged bundle and on the
 // node, and nowhere else (Constitution VIII).
 //
-// A create is driven end to end without infrastructure: the Provision workflow on the
-// Temporal test suite, with the worker's own activities wherever they need no host —
-// Compile (stage.Compile and the bundle store), CheckHost (over a recorded containerlab),
-// StageBundle, AwaitReadiness (a prober that answers), PushConfig (to a JSON-RPC node over
-// TLS) and RecordTwin. The read stands in for Infrahub by writing the fixture CTM where a
-// read writes one, and the deploy answers as containerlab does. Then the dry run, the
-// create's own output in text and JSON, and twin show are run by the commands themselves.
+// A create is driven end to end without infrastructure: the fixture CTM compiled by
+// stage.Compile and filed in the bundle store, as the server compiles and files a create's
+// read, then the Provision workflow on the Temporal test suite, started with that bundle
+// and the snapshot's id as the server starts it, with the worker's own activities wherever
+// they need no host — CheckHost (over a recorded containerlab), StageBundle,
+// AwaitReadiness (a prober that answers), PushConfig (to a JSON-RPC node over TLS) and
+// RecordTwin. The deploy answers as containerlab does. Then the dry run, the create's own
+// output in text and JSON, and twin show are run by the commands themselves.
 //
 // The events are those the create's Follow would print from this run's history, made
 // from the activities the test suite saw start and complete: the test suite keeps no
@@ -200,11 +201,11 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 		t.Fatalf("%s does not carry %s; the fixture carries it in each artifact's header, the device's description "+
 			"in the template's platform line", fixture, marker)
 	}
-	snapshot, err := ctm.Load(fixture)
+	read, err := ctm.Load(fixture)
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, compiledID, list := stage.Compile(snapshot, reg)
+	files, compiledID, list := stage.Compile(read, reg)
 	if list.Rejected() {
 		t.Fatalf("the fixture does not compile: %v", list)
 	}
@@ -251,7 +252,11 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Filed as the server files a create's compiled bundle, before it starts the run.
 	store := bundle.NewDirStore(paths.Bundles)
+	if filed, err := bundle.PutFiles(context.Background(), store, files, paths.Bundles); err != nil || filed != compiledID {
+		t.Fatalf("filing the compiled bundle: %q, %v; want %s", filed, err, compiledID)
+	}
 	acts := &lab.Activities{
 		Clab:     &lab.Clab{Runner: &fakeClab{stdout: inspect}, Log: logger},
 		Store:    store,
@@ -265,25 +270,12 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 		Version: "0.1.0-test",
 		Log:     logger,
 	}
-	control := &provision.ControlActivities{Store: store, Paths: paths}
 
 	var suite testsuite.WorkflowTestSuite
 	suite.SetLogger(tlog.NewStructuredLogger(logger))
 	env := suite.NewTestWorkflowEnvironment()
 	env.RegisterWorkflow(provision.Provision)
-	for name, fn := range control.Names() {
-		env.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name})
-	}
 	hostActs := acts.Names()
-	hostActs[wire.ActReadIntent] = func(context.Context, provision.ReadIntentInput) (provision.ReadIntentResult, error) {
-		// Where a read leaves its CTM for the compile, which removes it.
-		path := filepath.Join(paths.Bundles, ".reads", "marker.ctm.json")
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return provision.ReadIntentResult{}, err
-		}
-		return provision.ReadIntentResult{CTMPath: path, ObservedAt: snapshot.Envelope.ObservedAt, Findings: findings.List{}},
-			os.WriteFile(path, raw, 0o644)
-	}
 	hostActs[wire.ActDeployLab] = func(_ context.Context, in wire.DeployInput) (wire.DeployResult, error) {
 		var res wire.DeployResult
 		for _, n := range in.Nodes {
@@ -349,16 +341,12 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 			e.Outcome, e.Message = provision.EventFailed, err.Error()
 			seen.add("activity error", err.Error())
 		}
-		if info.ActivityType.Name == wire.ActCompile {
-			var r provision.CompileResult
-			if json.Unmarshal(res, &r) == nil && r.BundleID != "" {
-				e.Detail = "bundle_id " + r.BundleID
-			}
-		}
 		events = append(events, e)
 	})
 
-	env.ExecuteWorkflow(provision.Provision, provision.ProvisionInput{Source: wire.SourceIntent, Branch: snapshot.Envelope.Branch})
+	env.ExecuteWorkflow(provision.Provision, provision.ProvisionInput{Source: wire.SourceIntent, Branch: read.Envelope.Branch,
+		BundleID: compiledID, BundlePath: store.Path(compiledID), ObservedAt: read.Envelope.ObservedAt,
+		SnapshotID: snap.Take(read).ID})
 	if !env.IsWorkflowCompleted() || env.GetWorkflowError() != nil {
 		t.Fatalf("the run did not complete: %v", env.GetWorkflowError())
 	}
@@ -402,7 +390,7 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 		var runErr error
 		stderr := captureStderr(t, func() {
 			seen.add("create output", captureStdout(t, func() {
-				runErr = runCreate(context.Background(), &options{asJSON: asJSON}, &createFlags{branch: snapshot.Envelope.Branch, noFollow: true})
+				runErr = runCreate(context.Background(), &options{asJSON: asJSON}, &createFlags{branch: read.Envelope.Branch, noFollow: true})
 			}))
 		})
 		seen.add("create output", stderr)

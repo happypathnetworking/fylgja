@@ -19,6 +19,21 @@ import (
 // testBundleID is the fixture bundle's identity.
 const testBundleID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
 
+// testSnapshotID and testObservedAt are the snapshot a compiled input names and the read
+// it was taken from.
+const (
+	testSnapshotID = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
+	testObservedAt = "2026-09-15T14:22:12.000000Z"
+)
+
+// compiled is a create from intent as the server starts it (018): read, taken and compiled
+// before the run, which starts at the host check with the bundle and the snapshot it is
+// given.
+func compiled(branch string) ProvisionInput {
+	return ProvisionInput{Source: wire.SourceIntent, Branch: branch, BundleID: testBundleID,
+		BundlePath: "/state/bundles/" + testBundleID, ObservedAt: testObservedAt, SnapshotID: testSnapshotID}
+}
+
 // dcimMapping is the mapping a twin.json 8 record's provenance names when the Infrahub
 // reader read the schema library's DCIM (017).
 var dcimMapping = wire.Mapping{Reader: "infrahub-dcim", Model: "opsmill/schema-library", Version: "26336e9"}
@@ -46,12 +61,6 @@ func newHarness(t *testing.T) *harness {
 	env.RegisterWorkflow(Provision)
 	env.RegisterWorkflow(Destroy)
 	stubs := map[string]any{
-		wire.ActReadIntent: func(context.Context, ReadIntentInput) (ReadIntentResult, error) {
-			return ReadIntentResult{}, errUnmocked
-		},
-		wire.ActCompile: func(context.Context, CompileInput) (CompileResult, error) {
-			return CompileResult{}, errUnmocked
-		},
 		wire.ActCheckHost: func(context.Context, wire.CheckHostInput) (wire.CheckHostResult, error) {
 			return wire.CheckHostResult{}, errUnmocked
 		},
@@ -106,16 +115,6 @@ func (h *harness) record(entry string) {
 // does. Call it after a test's own mocks: the first matching expectation answers.
 func (h *harness) mockHappyPath() {
 	env := h.env
-	env.OnActivity(wire.ActReadIntent, mock.Anything, mock.Anything).Return(ReadIntentResult{
-		CTMPath:    "/state/bundles/.reads/run.ctm.json",
-		ObservedAt: "2026-09-15T14:22:12.000000Z",
-		Findings:   findings.List{},
-	}, nil)
-	env.OnActivity(wire.ActCompile, mock.Anything, mock.Anything).Return(CompileResult{
-		BundleID:   testBundleID,
-		BundlePath: "/state/bundles/" + testBundleID,
-		Findings:   findings.List{},
-	}, nil)
 	env.OnActivity(wire.ActCheckHost, mock.Anything, mock.Anything).Return(h.plan, nil)
 	env.OnActivity(wire.ActStageBundle, mock.Anything, mock.Anything).Return(wire.StageResult{TwinDir: "/state/twin"}, nil)
 	env.OnActivity(wire.ActDeployLab, mock.Anything, mock.Anything).Return(wire.DeployResult{Nodes: labNodes(h.plan.Nodes)}, nil)

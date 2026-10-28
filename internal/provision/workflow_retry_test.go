@@ -27,7 +27,7 @@ func TestDeployRetryAfterPartialAttemptConverges(t *testing.T) {
 		})
 	h.mockHappyPath()
 
-	res := h.run(ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture"})
+	res := h.run(compiled("fylgja-fixture"))
 
 	if n := attempts.Load(); n != 2 {
 		t.Errorf("deploy attempts = %d, want 2", n)

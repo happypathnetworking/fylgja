@@ -1229,9 +1229,10 @@ Five added. No status, step or exit is new.
 | `snapshot.flags.conflict` | rejection, 2, `start` | the flag | `--snapshot` beside `--branch`, `--stage`, `--at` or `--scope`, the first found in that order; before any connection |
 
 `follow.flags.conflict` gains the `--snapshot` sentence. The inner CTM's faults keep
-`ctm.version.unsupported` and `data.required.missing`, the object prefixed `ctm.`;
-validation's rules refuse at compile as they do a bare CTM. Its `observed_at` is held at the
-file, before anything is filed, since the id leaves it out and an entry filed without it
+`ctm.version.unsupported`, its object the snapshot file, and `data.required.missing`, its
+object the field prefixed `ctm.`, at `twin compile --snapshot` (no step) and at `twin create
+--snapshot`'s `resolve`; validation's rules refuse at compile as they do a bare CTM. Its
+`observed_at` is held at the file, before anything is filed, since the id leaves it out and an entry filed without it
 could not be read back under the id every take of that intent hashes to: none recorded is
 `data.required.missing`, one not of the CTM's form `snapshot.invalid`, each at
 `ctm.envelope.observed_at`. The client's own refusal of a
@@ -1262,7 +1263,8 @@ connection; beside one, the guard answers.
 
 - `twin compile --snapshot` refuses a snapshot of another version, or declaring none,
   `snapshot.version.unsupported`, never reading it as a `1`; the inner CTM's version and
-  required fields as 017 refuses a bare CTM's, the object prefixed `ctm.`.
+  required fields as 017 refuses a bare CTM's, the version at the file and a missing field
+  at its name prefixed `ctm.`.
 - The bundle's CTM sidecar `<bundle_id>.ctm.json` is retired: no build writes one and the
   ones on disk are never read. `bundles/.reads/` stays, the reconcile's alone.
 - A `9` record reads with its snapshot; an `8` reads with none: `twin show` says `snapshot

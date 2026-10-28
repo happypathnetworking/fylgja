@@ -238,7 +238,7 @@
         "at_source": {"$ref": "#/$defs/at_source"},
         "branch": {"type": "string"},
         "at": {"type": "string"},
-        "snapshot_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "018: the stage's snapshot once its read was filed; null when the stage was refused at resolution or read"},
+        "snapshot_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "018: the stage's snapshot once its take filed it, also when its compile or its bundle's filing was then refused or failed; null when the stage was refused at resolution or read, or its take was refused or failed at compile (snapshot.id.mismatch, operation.failed)"},
         "bundle_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$", "description": "null when the stage was refused at resolution, read or compile"},
         "read": {"oneOf": [{"$ref": "#/$defs/read_counts"}, {"type": "null"}]},
         "findings": {

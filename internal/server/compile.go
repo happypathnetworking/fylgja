@@ -54,7 +54,8 @@ func runCompile(opts *options, f *compileFlags, files []api.File) error {
 	// as M1's operations carry none (R-03): a snapshot of another version, or a bare CTM,
 	// which declares none, is refused alone, before any package is loaded, since every other
 	// finding would be about a format this build does not read; the inner CTM's version and
-	// required fields as a bare CTM's were, the object prefixed ctm.
+	// required fields as a bare CTM's were, the version at the file and a missing field at its
+	// name prefixed ctm.
 	s, err := snapshot.Unmarshal(files[0].Data)
 	if err != nil {
 		if list, ok := snapshotRefusal(f.snapshotPath, err); ok {

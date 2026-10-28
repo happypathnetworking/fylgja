@@ -407,10 +407,11 @@ package's `platform.id`, and a version the Infrahub reader never writes), its po
 `mgmt_only`, `enabled`, `link`) and its artifact; a link is two ends, each a device and a
 port. The envelope carries `(branch, at?, observed_at, schema_hash, scope, mapping)` and
 the reader's fidelity list, every approximation and omission the mapping made, which the
-compiler copies into the manifest unchanged. `twin compile` refuses a CTM of another
-version, or declaring none (`ctm.version.unsupported`, naming both), and nothing converts a
-`1`; a file leaving out its fidelity list, its links or a device's interfaces is refused
-naming it, never read as `[]`. Two jobs
+compiler copies into the manifest unchanged. `twin compile --snapshot`, and `twin create
+--snapshot` at `resolve`, refuse a CTM of another version, or declaring none
+(`ctm.version.unsupported`, naming both, its object the snapshot file), and nothing converts
+a `1`; one leaving out its fidelity list, its links or a device's interfaces is refused
+naming the field, prefixed `ctm.` (`data.required.missing`), never read as `[]`. Two jobs
 justify it ([D-010](decisions.md#d-010)): **synthesized nodes** — boundary stubs, service
 mocks, later traffic generators are not in any source and cannot live in types generated
 from one — and **insulation** of the compiler from each source's model. Every
@@ -435,9 +436,10 @@ intent moves it. The bytes hashed are not the bytes stored, which carry the id a
 read strictly, its version first: one of another version, or declaring none, is
 `snapshot.version.unsupported`; an unknown key, a missing `ctm` or a non-empty `probes` is
 `snapshot.invalid`; a declared id the body does not hash to is `snapshot.id.mismatch`,
-naming both; and the inner CTM is refused under its own rules, its object prefixed
-`ctm.`, and for its `observed_at`, none recorded (`data.required.missing`) or one not of
-its form (`snapshot.invalid`), before anything is filed, since the id leaves `observed_at`
+naming both; and the inner CTM is refused under its own rules, `ctm.version.unsupported`
+at the file and `data.required.missing` at the field prefixed `ctm.`, and for its
+`observed_at`, none recorded (`data.required.missing`) or one not of its form
+(`snapshot.invalid`), before anything is filed, since the id leaves `observed_at`
 out and such an entry could not be read back. The server files each snapshot under its id in the **snapshot store**
 (`snapshots/<snapshot_id>.json`, [§4.5](#45-lab-host-containerlab-and-the-twin-directory)),
 behind an interface of the bundle store's shape that never overwrites: two takes of one

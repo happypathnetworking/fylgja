@@ -298,11 +298,11 @@ envelope carries the branch, the `at`, `observed_at`, the schema hash, the *scop
 `mapping` block (`{reader, model, version}`) and the reader's fidelity list of
 *approximations* and *omissions*. Each device names its package (`platform.package`, the
 package's id), its ports (each with its name, `mgmt_only`, `enabled` and link) and its
-*artifact*; no role, site, interface type, parent or address. `twin compile` refuses a CTM
-of another version, or declaring none, naming both (`ctm.version.unsupported`, the
-object prefixed `ctm.` inside a snapshot), and nothing
-converts a `1`; a file leaving out its fidelity list, its links or a device's interfaces is
-refused naming the field, never read as `[]`
+*artifact*; no role, site, interface type, parent or address. `twin compile --snapshot`,
+and `twin create --snapshot` at `resolve`, refuse a CTM of another version, or declaring
+none, naming both (`ctm.version.unsupported`, its object the snapshot file), and nothing
+converts a `1`; one leaving out its fidelity list, its links or a device's interfaces is
+refused naming the field, prefixed `ctm.` (`data.required.missing`), never read as `[]`
 ([§4.2](architecture.md#42-canonical-topology-model-ctm), [D-010](decisions.md#d-010)).
 
 **Cut** — M14's first half: this repository's first commit, of cleaned code and documents

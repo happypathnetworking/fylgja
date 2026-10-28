@@ -95,7 +95,7 @@
     "snapshot_id": {
       "type": "string",
       "pattern": "^[0-9a-f]{64}$",
-      "description": "twin.compile (status ok), intent.read (status ok), twin.create and its dry run (once the take completed), twin.step and its dry run (the target's): the snapshot's identity, beside bundle_id (018)."
+      "description": "twin.compile (status ok), intent.read (status ok), twin.create and its dry run (once the take filed the snapshot, or with --snapshot once resolve fetched or filed it, on every exit after), twin.step and its dry run (the target's): the snapshot's identity, beside bundle_id (018)."
     },
     "bundle_id": {
       "type": "string",

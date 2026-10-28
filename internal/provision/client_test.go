@@ -31,7 +31,6 @@ import (
 	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/mocks"
 	"go.temporal.io/sdk/temporal"
-	"google.golang.org/protobuf/types/known/timestamppb"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
@@ -476,12 +475,6 @@ func TestFirstTaskGuardTerminates(t *testing.T) {
 			withWorker(mc)
 			mc.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, "").
 				Return(nil, serviceerror.NewNotFound("workflow execution not found"))
-			handle := &mocks.ScheduleHandle{}
-			handle.On("Describe", mock.Anything).Return(nil, scheduleNotFound())
-			schedules := &mocks.ScheduleClient{}
-			schedules.On("GetHandle", mock.Anything, FollowScheduleID).Return(handle)
-			mc.On("ScheduleClient").Return(schedules)
-			mc.On("ListWorkflow", mock.Anything, mock.Anything).Return(&workflowservice.ListWorkflowExecutionsResponse{}, nil)
 			run := &mocks.WorkflowRun{}
 			run.On("GetRunID").Return("run-1")
 			mc.On("ExecuteWorkflow", mock.Anything, mock.Anything, mock.Anything, mock.Anything).Return(run, nil)
@@ -612,19 +605,18 @@ func mustValidateM5(t *testing.T, doc *findings.Document, label string) {
 
 // A check names its own steps; a provisioning or destroy run's are M2's.
 func TestStepNames(t *testing.T) {
-	const check = "fylgja-reconcile-2026-09-16T19:10:00Z"
 	for _, c := range []struct {
 		workflowID, activityType, step, findingStep string
 	}{
-		{check, wire.ActInspectTwin, "inspect", findings.StepInspect},
-		{check, wire.ActCheckHost, "host check", findings.StepHostCheck},
-		{check, "Destroy", "destroy", findings.StepDestroy},
-		{check, "Provision", "provision", findings.StepProvision},
+		{WorkflowStep, wire.ActInspectTwin, "inspect", findings.StepInspect},
+		{WorkflowProvision, wire.ActCheckHost, "host check", findings.StepHostCheck},
+		// 015: a rehearsal's children are its own steps.
+		{WorkflowRehearse, "Destroy", "destroy", findings.StepDestroy},
+		{WorkflowRehearse, "Provision", "provision", findings.StepProvision},
 		{WorkflowProvision, wire.ActDestroyLab, "cleanup teardown", findings.StepTeardown},
 		{WorkflowDestroy, wire.ActDestroyLab, "teardown", findings.StepTeardown},
-		// M5: the push is a step of a provisioning run, and of a check's provision child.
+		// M5: the push is a step of a provisioning run.
 		{WorkflowProvision, wire.ActPushConfig, "push", findings.StepPush},
-		{check, wire.ActPushConfig, "push", findings.StepPush},
 		// M12: the step's wait after its record.
 		{WorkflowStep, wire.ActVerifyTwin, "observe", findings.StepObserve},
 		{WorkflowStep, wire.ActRecordStep, "record", findings.StepRecord},
@@ -638,152 +630,7 @@ func TestStepNames(t *testing.T) {
 	}
 }
 
-// describedExecution is DescribeWorkflowExecution's answer for a run in status, started and
-// closed at the times given (zero: not set).
-func describedExecution(workflowID, runID string, status enumspb.WorkflowExecutionStatus, start, closed time.Time) *workflowservice.DescribeWorkflowExecutionResponse {
-	info := &workflowpb.WorkflowExecutionInfo{Execution: &commonpb.WorkflowExecution{WorkflowId: workflowID, RunId: runID}, Status: status}
-	if !start.IsZero() {
-		info.StartTime = timestamppb.New(start)
-	}
-	if !closed.IsZero() {
-		info.CloseTime = timestamppb.New(closed)
-	}
-	return &workflowservice.DescribeWorkflowExecutionResponse{WorkflowExecutionInfo: info}
-}
-
-// checkResult makes GetWorkflow(workflowID, runID) answer res.
-func checkResult(mc *mocks.Client, workflowID, runID string, res ReconcileResult) {
-	run := &mocks.WorkflowRun{}
-	run.On("Get", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
-		*args.Get(1).(*ReconcileResult) = res
-	}).Return(nil)
-	mc.On("GetWorkflow", mock.Anything, workflowID, runID).Return(run)
-}
-
-// Following reads the branch from the Schedule's action, the interval from its spec, and
-// the checks it started from its info.
-func TestFollowingDescribesTheSchedule(t *testing.T) {
-	due := time.Date(2026, 9, 16, 19, 15, 0, 0, time.UTC)
-	s := newScheduleService()
-	desc := describedSchedule(t, "fylgja-fixture", 5*time.Minute)
-	desc.Info = client.ScheduleInfo{
-		NextActionTimes: []time.Time{due},
-		RecentActions: []client.ScheduleActionResult{
-			{ScheduleTime: due.Add(-10 * time.Minute), StartWorkflowResult: &client.ScheduleWorkflowExecution{WorkflowID: "fylgja-reconcile-a", FirstExecutionRunID: "r-a"}},
-			{ScheduleTime: due.Add(-5 * time.Minute), StartWorkflowResult: &client.ScheduleWorkflowExecution{WorkflowID: "fylgja-reconcile-b", FirstExecutionRunID: "r-b"}},
-		},
-		RunningWorkflows: []client.ScheduleWorkflowExecution{{WorkflowID: "fylgja-reconcile-b", FirstExecutionRunID: "r-b"}},
-	}
-	s.describes(desc, nil)
-
-	got, err := (&Client{Client: s.mc}).Following(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got == nil || got.Branch != "fylgja-fixture" || got.IntervalS != 300 || !got.NextCheckAt.Equal(due) ||
-		len(got.RecentActions) != 2 || got.RecentActions[1].WorkflowID != "fylgja-reconcile-b" ||
-		len(got.Running) != 1 || !got.Running[0].ScheduledAt.Equal(due.Add(-5*time.Minute)) {
-		t.Errorf("following = %+v", got)
-	}
-
-	absent := newScheduleService()
-	absent.describes(nil, scheduleNotFound())
-	if got, err := (&Client{Client: absent.mc}).Following(context.Background()); got != nil || err != nil {
-		t.Errorf("no Schedule: %+v, %v; want nil, nil", got, err)
-	}
-}
-
-// With a Schedule, the last check is the newest of its recent actions that has closed.
-func TestLastCheckFromTheSchedule(t *testing.T) {
-	due := time.Date(2026, 9, 16, 19, 0, 0, 0, time.UTC)
-	mc := &mocks.Client{}
-	schedule := &FollowingState{
-		RecentActions: []ScheduledCheck{
-			{WorkflowID: "fylgja-reconcile-a", RunID: "r-a", ScheduledAt: due},
-			{WorkflowID: "fylgja-reconcile-b", RunID: "r-b", ScheduledAt: due.Add(5 * time.Minute)},
-			{WorkflowID: "fylgja-reconcile-c", RunID: "r-c", ScheduledAt: due.Add(10 * time.Minute)},
-		},
-		Running: []ScheduledCheck{{WorkflowID: "fylgja-reconcile-c", RunID: "r-c"}},
-	}
-	closed := due.Add(5*time.Minute + 3*time.Second)
-	mc.On("DescribeWorkflowExecution", mock.Anything, "fylgja-reconcile-b", "r-b").Return(
-		describedExecution("fylgja-reconcile-b", "r-b", enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED, due.Add(5*time.Minute), closed), nil)
-	checkResult(mc, "fylgja-reconcile-b", "r-b", ReconcileResult{Outcome: CheckUnchanged, Branch: "fylgja-fixture"})
-
-	got, err := (&Client{Client: mc}).LastCheck(context.Background(), schedule)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got == nil || got.WorkflowID != "fylgja-reconcile-b" || got.Result.Outcome != CheckUnchanged ||
-		!got.ClosedAt.Equal(closed) || !got.ScheduledAt.Equal(due.Add(5*time.Minute)) {
-		t.Errorf("last check = %+v, want fylgja-reconcile-b unchanged, the running c skipped", got)
-	}
-	if slices.Contains(called(mc), "ListWorkflow") {
-		t.Error("the service's list was read although the Schedule names its checks")
-	}
-}
-
-// Without a Schedule, the last check is the newest the service lists, chosen here, and only
-// while no provisioning or destroy run has started since it closed.
-func TestLastCheckWithoutASchedule(t *testing.T) {
-	base := time.Date(2026, 9, 16, 19, 0, 0, 0, time.UTC)
-	const older, newest = "fylgja-reconcile-2026-09-16T19:00:00Z", "fylgja-reconcile-2026-09-16T19:10:00Z"
-	closed := base.Add(12 * time.Minute)
-	script := func(t *testing.T, provisionStart, destroyStart time.Time) (*mocks.Client, *string) {
-		t.Helper()
-		mc := &mocks.Client{}
-		query := new(string)
-		mc.On("ListWorkflow", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
-			*query = args.Get(1).(*workflowservice.ListWorkflowExecutionsRequest).GetQuery()
-		}).Return(&workflowservice.ListWorkflowExecutionsResponse{Executions: []*workflowpb.WorkflowExecutionInfo{
-			// Unsorted, as a store that cannot ORDER BY may list them.
-			{Execution: &commonpb.WorkflowExecution{WorkflowId: older, RunId: "r-old"}, StartTime: timestamppb.New(base),
-				Status: enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED},
-			{Execution: &commonpb.WorkflowExecution{WorkflowId: newest, RunId: "r-new"}, StartTime: timestamppb.New(base.Add(10 * time.Minute)),
-				Status: enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED},
-			{Execution: &commonpb.WorkflowExecution{WorkflowId: "fylgja-reconcile-2026-09-16T19:05:00Z", RunId: "r-mid"},
-				StartTime: timestamppb.New(base.Add(5 * time.Minute)), Status: enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED},
-		}}, nil)
-		mc.On("DescribeWorkflowExecution", mock.Anything, newest, "r-new").Return(
-			describedExecution(newest, "r-new", enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED, base.Add(10*time.Minute), closed), nil)
-		checkResult(mc, newest, "r-new", ReconcileResult{Outcome: CheckRebuildFailed, Step: findings.StepProvision, FollowingStopped: true})
-		for id, start := range map[string]time.Time{WorkflowProvision: provisionStart, WorkflowDestroy: destroyStart} {
-			if start.IsZero() {
-				mc.On("DescribeWorkflowExecution", mock.Anything, id, "").Return(nil, serviceerror.NewNotFound("not found"))
-				continue
-			}
-			mc.On("DescribeWorkflowExecution", mock.Anything, id, "").Return(
-				describedExecution(id, "r-"+id, enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED, start, start.Add(time.Minute)), nil)
-		}
-		return mc, query
-	}
-
-	t.Run("the newest, not superseded", func(t *testing.T) {
-		// The rebuild's own destroy started before the check closed.
-		mc, query := script(t, time.Time{}, base.Add(10*time.Minute+time.Second))
-		got, err := (&Client{Client: mc}).LastCheck(context.Background(), nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got == nil || got.WorkflowID != newest || got.Result.Outcome != CheckRebuildFailed ||
-			!got.ScheduledAt.Equal(base.Add(10*time.Minute)) || !got.ClosedAt.Equal(closed) {
-			t.Errorf("last check = %+v, want %s rebuild_failed", got, newest)
-		}
-		if *query != "WorkflowType = 'Reconcile'" || strings.Contains(*query, "ORDER BY") {
-			t.Errorf("query %q, want every Reconcile and no ORDER BY", *query)
-		}
-	})
-
-	t.Run("superseded by a later provision", func(t *testing.T) {
-		mc, _ := script(t, closed.Add(time.Minute), base.Add(10*time.Minute+time.Second))
-		got, err := (&Client{Client: mc}).LastCheck(context.Background(), nil)
-		if err != nil || got != nil {
-			t.Errorf("last check = %+v, %v; want nil: a provision started after the check closed", got, err)
-		}
-	})
-}
-
-// childInitiated and childStarted are a check's child run in its history.
+// childInitiated and childStarted are a rehearsal's child run in its history.
 func childInitiated(id int64, workflowType string) *historypb.HistoryEvent {
 	return &historypb.HistoryEvent{EventId: id, EventType: enumspb.EVENT_TYPE_START_CHILD_WORKFLOW_EXECUTION_INITIATED,
 		Attributes: &historypb.HistoryEvent_StartChildWorkflowExecutionInitiatedEventAttributes{
@@ -818,13 +665,11 @@ func history(mc *mocks.Client, workflowID, runID string, events ...*historypb.Hi
 		})
 }
 
-// InFlight names each run in flight at the step its history has reached; a check's child is
-// named under the check, and not again as an operator's run.
+// InFlight names each run in flight at the step its history has reached, the operator's runs
+// alone: it lists nothing else and reads no Schedule (019).
 func TestInFlightNamesTheSteps(t *testing.T) {
-	const check = "fylgja-reconcile-2026-09-16T19:10:00Z"
 	t.Run("a provision and a destroy", func(t *testing.T) {
 		mc := &mocks.Client{}
-		mc.On("ListWorkflow", mock.Anything, mock.Anything).Return(&workflowservice.ListWorkflowExecutionsResponse{}, nil)
 		mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowProvision, "").Return(running(WorkflowProvision, "r-p"), nil)
 		mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowDestroy, "").Return(running(WorkflowDestroy, "r-d"), nil)
 		noStepRun(mc)
@@ -845,52 +690,19 @@ func TestInFlightNamesTheSteps(t *testing.T) {
 		if len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
 			t.Errorf("in flight = %+v, want %+v", got, want)
 		}
-	})
-
-	t.Run("a check rebuilding", func(t *testing.T) {
-		mc := &mocks.Client{}
-		mc.On("ListWorkflow", mock.Anything, mock.Anything).Return(&workflowservice.ListWorkflowExecutionsResponse{
-			Executions: []*workflowpb.WorkflowExecutionInfo{{Execution: &commonpb.WorkflowExecution{WorkflowId: check, RunId: "r-c"},
-				Status: enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING}}}, nil)
-		mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowProvision, "").Return(running(WorkflowProvision, "r-p"), nil)
-		mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowDestroy, "").Return(nil, serviceerror.NewNotFound("not found"))
-		noStepRun(mc)
-		history(mc, check, "r-c",
-			scheduledEvent(t, 5, wire.ActInspectTwin), completedEvent(5),
-			childInitiated(20, "Destroy"), childStarted(20, WorkflowDestroy, "r-d"), childCompleted(20),
-			childInitiated(30, "Provision"), childStarted(30, WorkflowProvision, "r-p"))
-		history(mc, WorkflowProvision, "r-p",
-			scheduledEvent(t, 5, wire.ActCheckHost), completedEvent(5),
-			scheduledEvent(t, 9, wire.ActDeployLab), completedEvent(9),
-			scheduledEvent(t, 11, wire.ActAwaitReadiness, wire.ReadinessInput{Node: "n1"}))
-
-		got, err := (&Client{Client: mc}).InFlight(context.Background())
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(got) != 1 || got[0].WorkflowID != check || got[0].Step != findings.StepProvision || got[0].Child == nil ||
-			*got[0].Child != (RunInFlight{WorkflowID: WorkflowProvision, RunID: "r-p", Step: findings.StepReadiness}) {
-			t.Errorf("in flight = %+v (child %+v), want the check at provision with its child at readiness, named once", got, got[0].Child)
-		}
+		mc.AssertNotCalled(t, "ListWorkflow", mock.Anything, mock.Anything)
+		mc.AssertNotCalled(t, "ScheduleClient")
 	})
 }
 
 // A read the service does not answer is the service unreachable, for twin show to report.
 func TestShowReadsUnreachable(t *testing.T) {
-	down := serviceerror.NewUnavailable("connection refused")
-	s := newScheduleService()
-	s.describes(nil, down)
-	s.mc.On("ListWorkflow", mock.Anything, mock.Anything).Return(nil, down)
-	c := &Client{Client: s.mc, Address: "localhost:7233"}
-
-	_, errFollowing := c.Following(context.Background())
-	_, errLast := c.LastCheck(context.Background(), nil)
-	_, errInFlight := c.InFlight(context.Background())
-	for name, err := range map[string]error{"Following": errFollowing, "LastCheck": errLast, "InFlight": errInFlight} {
-		var unreachable *UnreachableError
-		if !errors.As(err, &unreachable) || unreachable.Address != "localhost:7233" {
-			t.Errorf("%s: error %v, want an *UnreachableError at localhost:7233", name, err)
-		}
+	mc := &mocks.Client{}
+	mc.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, "").Return(nil, serviceerror.NewUnavailable("connection refused"))
+	_, err := (&Client{Client: mc, Address: "localhost:7233"}).InFlight(context.Background())
+	var unreachable *UnreachableError
+	if !errors.As(err, &unreachable) || unreachable.Address != "localhost:7233" {
+		t.Errorf("InFlight: error %v, want an *UnreachableError at localhost:7233", err)
 	}
 }
 
@@ -1074,25 +886,38 @@ func startedEvent(t *testing.T, input any) *historypb.HistoryEvent {
 			WorkflowExecutionStartedEventAttributes: &historypb.WorkflowExecutionStartedEventAttributes{Input: payloads}}}
 }
 
-// InFlight names a step run at the step its history has reached, and the stage its input
-// steps towards, <branch>/<label> (014), which twin show's kind line reads.
+// InFlight names a step run at the step its history has reached, and the side its input
+// steps towards as wire.StepSide.Name() names it, stage <branch>/<label> (014) or snapshot
+// <short> (019), which twin show's kind line reads.
 func TestInFlightNamesAStepAndItsTarget(t *testing.T) {
-	mc := &mocks.Client{}
-	mc.On("ListWorkflow", mock.Anything, mock.Anything).Return(&workflowservice.ListWorkflowExecutionsResponse{}, nil)
-	mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowStep, "").Return(running(WorkflowStep, "run-s"), nil)
-	mc.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, "").Return(nil, serviceerror.NewNotFound("not found"))
-	history(mc, WorkflowStep, "run-s", startedEvent(t, stepInput()),
-		scheduledEvent(t, 5, wire.ActInspectTwin), completedEvent(5),
-		scheduledEvent(t, 7, wire.ActStageStep, wire.StageStepInput{}), completedEvent(7),
-		scheduledEvent(t, 9, wire.ActReconcileLab, wire.ReconcileInput{}))
+	toSnapshot := stepInput()
+	toSnapshot.To = wire.StepSide{SnapshotID: strings.Repeat("9c2d01e7", 8), BundleID: toSnapshot.To.BundleID, At: toSnapshot.To.At}
+	for _, c := range []struct {
+		name    string
+		in      StepInput
+		towards string
+	}{
+		{"to a stage", stepInput(), "stage change-1/live"},
+		{"to a snapshot", toSnapshot, "snapshot 9c2d01e7…"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			mc := &mocks.Client{}
+			mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowStep, "").Return(running(WorkflowStep, "run-s"), nil)
+			mc.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, "").Return(nil, serviceerror.NewNotFound("not found"))
+			history(mc, WorkflowStep, "run-s", startedEvent(t, c.in),
+				scheduledEvent(t, 5, wire.ActInspectTwin), completedEvent(5),
+				scheduledEvent(t, 7, wire.ActStageStep, wire.StageStepInput{}), completedEvent(7),
+				scheduledEvent(t, 9, wire.ActReconcileLab, wire.ReconcileInput{}))
 
-	got, err := (&Client{Client: mc}).InFlight(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := RunInFlight{WorkflowID: WorkflowStep, RunID: "run-s", Step: findings.StepReconcile, Towards: "change-1/live"}
-	if len(got) != 1 || got[0] != want {
-		t.Errorf("in flight = %+v, want %+v", got, want)
+			got, err := (&Client{Client: mc}).InFlight(context.Background())
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := RunInFlight{WorkflowID: WorkflowStep, RunID: "run-s", Step: findings.StepReconcile, Towards: c.towards}
+			if len(got) != 1 || got[0] != want {
+				t.Errorf("in flight = %+v, want %+v", got, want)
+			}
+		})
 	}
 }
 
@@ -1635,13 +1460,13 @@ func TestInFlightNamesARehearsalAndItsChild(t *testing.T) {
 				scheduledEvent(t, 5, wire.ActInspectTwin), completedEvent(5),
 				scheduledEvent(t, 9, wire.ActPushConfig, wire.PushInput{Node: "s1"})}},
 			RunInFlight{WorkflowID: WorkflowRehearse, RunID: "r-r", Step: "step"},
-			&RunInFlight{WorkflowID: WorkflowStep, RunID: "r-s", Step: findings.StepPush, Towards: "change-1/live"}},
+			&RunInFlight{WorkflowID: WorkflowStep, RunID: "r-s", Step: findings.StepPush, Towards: "stage change-1/live"}},
 		{"at the baseline", map[string]string{WorkflowRehearse: "r-r", WorkflowProvision: "r-p"},
 			[]*historypb.HistoryEvent{startedEvent(t, rehearseInput()), childInitiated(10, "Provision"), childStarted(10, WorkflowProvision, "r-p")},
 			map[string][]*historypb.HistoryEvent{"r-p": {startedEvent(t, baseline),
 				scheduledEvent(t, 5, wire.ActCheckHost), completedEvent(5), scheduledEvent(t, 9, wire.ActDeployLab)}},
 			RunInFlight{WorkflowID: WorkflowRehearse, RunID: "r-r", Step: findings.StepProvision},
-			&RunInFlight{WorkflowID: WorkflowProvision, RunID: "r-p", Step: findings.StepDeploy, Towards: "change-1/cabled"}},
+			&RunInFlight{WorkflowID: WorkflowProvision, RunID: "r-p", Step: findings.StepDeploy, Towards: "stage change-1/cabled"}},
 		{"at the baseline's wait", map[string]string{WorkflowRehearse: "r-r"},
 			append(slices.Clone(built), scheduledEvent(t, 12, wire.ActVerifyTwin, wire.VerifyInput{})),
 			nil,
@@ -1649,7 +1474,6 @@ func TestInFlightNamesARehearsalAndItsChild(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			mc := &mocks.Client{}
-			mc.On("ListWorkflow", mock.Anything, mock.Anything).Return(&workflowservice.ListWorkflowExecutionsResponse{}, nil)
 			mc.On("DescribeWorkflowExecution", mock.Anything, mock.Anything, "").Return(
 				func(_ context.Context, workflowID, _ string) (*workflowservice.DescribeWorkflowExecutionResponse, error) {
 					if runID, ok := c.describe[workflowID]; ok {
@@ -1686,41 +1510,4 @@ func TestInFlightNamesARehearsalAndItsChild(t *testing.T) {
 			}
 		})
 	}
-}
-
-// scheduleNotFound is the workflow service's answer for a Schedule that does not exist.
-func scheduleNotFound() error { return serviceerror.NewNotFound("schedule not found") }
-
-// describedSchedule is Describe's answer for Schedule fylgja-follow checking branch every
-// interval, with the action's args as the service returns them: payloads.
-func describedSchedule(t *testing.T, branch string, interval time.Duration) *client.ScheduleDescription {
-	t.Helper()
-	arg, err := converter.GetDefaultDataConverter().ToPayload(ReconcileInput{Branch: branch, Version: "0.1.0-dev"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	return &client.ScheduleDescription{Schedule: client.Schedule{
-		Spec:   &client.ScheduleSpec{Intervals: []client.ScheduleIntervalSpec{{Every: interval}}},
-		Action: &client.ScheduleWorkflowAction{ID: WorkflowReconcile, Workflow: "Reconcile", Args: []any{arg}, TaskQueue: TaskQueue},
-	}}
-}
-
-// scheduleService is a mocks.Client whose ScheduleClient hands back one handle for
-// fylgja-follow, recording its describes in order. Nothing deletes one (019).
-type scheduleService struct {
-	mc     *mocks.Client
-	sc     *mocks.ScheduleClient
-	handle *mocks.ScheduleHandle
-	seq    []string
-}
-
-func newScheduleService() *scheduleService {
-	s := &scheduleService{mc: &mocks.Client{}, sc: &mocks.ScheduleClient{}, handle: &mocks.ScheduleHandle{}}
-	s.mc.On("ScheduleClient").Return(s.sc)
-	s.sc.On("GetHandle", mock.Anything, FollowScheduleID).Return(s.handle)
-	return s
-}
-
-func (s *scheduleService) describes(desc *client.ScheduleDescription, err error) {
-	s.handle.On("Describe", mock.Anything).Run(func(mock.Arguments) { s.seq = append(s.seq, "describe") }).Return(desc, err)
 }

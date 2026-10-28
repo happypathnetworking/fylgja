@@ -462,13 +462,13 @@ type DryRunHost struct {
 	TwinDirPresent bool `json:"twin_dir_present"`
 }
 
-// Kinds of twin twin show reports.
+// Kinds of twin twin show reports. 019 put snapshot in place of M4's pinned, frozen and
+// following: a twin is frozen at its snapshot, and nothing rebuilds it but the operator
+// (D-062).
 const (
 	ShowKindNone       = "none"
-	ShowKindPinned     = "pinned"
-	ShowKindFrozen     = "frozen"
+	ShowKindSnapshot   = "snapshot" // a twin from intent or a snapshot: its snapshot, or none for a record naming none
 	ShowKindFromBundle = "from_bundle"
-	ShowKindFollowing  = "following"
 
 	// M11: a twin whose last step failed or was cancelled after the host was touched.
 	ShowKindDiverged = "diverged"
@@ -480,21 +480,18 @@ const (
 	ShowServiceUnreachable = "unreachable"
 )
 
-// ShowBlock is what twin show says about the twin: the host, the record, the kind, the
-// following and the runs in flight, from containerlab, twin.json and the workflow service.
+// ShowBlock is what twin show says about the twin: the host, the record, the kind and the
+// runs in flight, from containerlab, twin.json and the workflow service. 019 removed M4's
+// following and last check.
 // One struct renders both the text and the
 // JSON, so the two cannot disagree.
 type ShowBlock struct {
-	Host      ShowHost       `json:"host"`
-	Record    *ShowRecord    `json:"record,omitempty"`
-	Kind      string         `json:"kind"`
-	Following *ShowFollowing `json:"following,omitempty"`
-	// LastCheck is the check that stopped following after a failed rebuild, reported while
-	// no Schedule exists and no run has started since it closed.
-	LastCheck *ShowCheck `json:"last_check,omitempty"`
-	InFlight  []ShowRun  `json:"in_flight"`
-	Service   string     `json:"service"`
-	Notes     []string   `json:"notes"`
+	Host     ShowHost    `json:"host"`
+	Record   *ShowRecord `json:"record,omitempty"`
+	Kind     string      `json:"kind"`
+	InFlight []ShowRun   `json:"in_flight"`
+	Service  string      `json:"service"`
+	Notes    []string    `json:"notes"`
 }
 
 // MarshalJSON writes empty InFlight and Notes as [] rather than null: the contract
@@ -726,40 +723,8 @@ type ShowRef struct {
 	RunID      string `json:"run_id"`
 }
 
-// ShowFollowing is Schedule fylgja-follow, whatever the twin.
-type ShowFollowing struct {
-	Branch      string     `json:"branch"`
-	IntervalS   int        `json:"interval_s"`
-	ScheduleID  string     `json:"schedule_id"`
-	NextCheckAt string     `json:"next_check_at,omitempty"`
-	LastCheck   *ShowCheck `json:"last_check,omitempty"`
-}
-
-// ShowCheck is one closed check and what it found.
-type ShowCheck struct {
-	WorkflowID   string        `json:"workflow_id"`
-	RunID        string        `json:"run_id"`
-	ScheduledAt  string        `json:"scheduled_at"`
-	ClosedAt     string        `json:"closed_at,omitempty"`
-	Outcome      string        `json:"outcome"`
-	Step         string        `json:"step,omitempty"`
-	TwinBundleID string        `json:"twin_bundle_id,omitempty"`
-	BundleID     string        `json:"bundle_id,omitempty"`
-	Findings     List          `json:"findings"`
-	Cleanup      *CleanupBlock `json:"cleanup,omitempty"`
-}
-
-// MarshalJSON writes no findings as [] rather than null: the contract requires the list.
-func (c ShowCheck) MarshalJSON() ([]byte, error) {
-	type plain ShowCheck
-	if c.Findings == nil {
-		c.Findings = List{}
-	}
-	return json.Marshal(plain(c))
-}
-
-// ShowRun is a run in flight and the step its history has reached. A check's child run in
-// flight is its Child, which has none of its own.
+// ShowRun is a run in flight and the step its history has reached. A rehearsal's child run
+// in flight is its Child, which has none of its own.
 type ShowRun struct {
 	WorkflowID string   `json:"workflow_id"`
 	RunID      string   `json:"run_id"`

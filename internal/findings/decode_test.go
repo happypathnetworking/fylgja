@@ -145,7 +145,7 @@ func TestShowRecordCarriesTheRecordsProvenance(t *testing.T) {
 			RecordedAt: "2026-10-25T09:01:02Z", Nodes: 3, State: "ready"}
 		change(r)
 		doc := NewDocument(OpTwinShow, nil, nil)
-		doc.Show = &ShowBlock{Kind: ShowKindFrozen, Service: ShowServiceOK, Record: r,
+		doc.Show = &ShowBlock{Kind: ShowKindSnapshot, Service: ShowServiceOK, Record: r,
 			Host: ShowHost{LabPresent: true, TwinDirPresent: true, Phrase: "the twin of branch fylgja-fixture"}}
 		return doc
 	}

@@ -26,11 +26,25 @@ const (
 	showBundleID = "893b6392da4f1de868e74e418d90f3d5982ecc06ffa1dc39a391d717a81997ad"
 	showRunID    = "01a0a698-fc78-7cb5-b0f1-a31c8f06d7e9"
 	showObserved = "2026-09-16T19:00:00.000000Z"
-	showCheckID  = "fylgja-reconcile-2026-09-16T19:10:00Z"
+	// showSnapshotID is the snapshot twinOf's record names, as every create of 018 or later
+	// writes one: the live fixture's (CLAUDE.md).
+	showSnapshotID = "576933ec51da1866cdb7344a1f60ec2468c7d04aafbee42eacd171e352bd7482"
+	// noSnapshotNote is what twin show says of a record naming no snapshot (019).
+	noSnapshotNote = "the twin's record names no snapshot, so fylgja twin step refuses it; fylgja twin destroy clears it"
 )
 
+// showKind is the kind line of a twin of fylgja-fixture from intent or a snapshot (019,
+// contracts/cli.md): the snapshot, short, or "none", and in brackets the branch and at, or
+// the time twinOf's record was read when at is "".
+func showKind(snapshot, at string) string {
+	if at != "" {
+		return "snapshot " + snapshot + " (branch fylgja-fixture at " + at + ")"
+	}
+	return "snapshot " + snapshot + " (branch fylgja-fixture, read at " + showObserved + ")"
+}
+
 // twinOf is the record of a three-node twin of fylgja-fixture from intent, read at
-// showObserved; change adjusts it before it is built.
+// showObserved and naming snapshot showSnapshotID; change adjusts it before it is built.
 // dcimMapping is the mapping a twin.json 8 record's provenance names when the Infrahub
 // reader read the schema library's DCIM (017).
 var dcimMapping = wire.Mapping{Reader: "infrahub-dcim", Model: "opsmill/schema-library", Version: "26336e9"}
@@ -78,6 +92,7 @@ func twinOf(t *testing.T, change func(*lab.RecordFields)) wire.TwinRecord {
 	observed := showObserved
 	f := lab.RecordFields{
 		BundleID:   showBundleID,
+		SnapshotID: showSnapshotID,
 		Provenance: wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "41349c3a9c582e5dd44e55d6771f79c2", Scope: "tag:fylgja", Mapping: dcimMapping},
 		ObservedAt: &observed,
 		Source:     wire.SourceIntent,
@@ -192,14 +207,24 @@ func showDialled(t *testing.T, paths lab.Paths, recording string) showOutput {
 		t.Errorf("--json printed on stdout:\n%s", jsonOut)
 	}
 	_, out.doc = exitOf(t, err)
-	// A record naming a stage (014's record.stage) or a state (twin.json 4, M11's
-	// record.state and record.step) is the newest contract's to validate; every other
-	// document — no record, or one written before M11 — is held to M7's contract, which it
-	// still satisfies.
-	if r := out.doc.Show.Record; r != nil && (r.Stage != nil || r.State != "") {
-		validateM10Document(t, out.doc)
-	} else {
+	// Every show document is the current contract's (019's kinds), and 018's and 017's as
+	// validateM10Document holds them; one whose record names no stage, no state (twin.json
+	// 4, M11's record.state and record.step) and no snapshot is held to M7's contract too,
+	// which it still satisfies with its kind as M7 wrote it.
+	validateM10Document(t, out.doc)
+	if r := out.doc.Show.Record; (r == nil || (r.Stage == nil && r.State == "")) && !namesSnapshot(t, out.doc) {
 		validateM7Document(t, out.doc)
+	}
+	// No kind line says pinned, frozen or following (019, SC-005), and no note does.
+	for _, line := range append(strings.Split(out.stdout, "\n"), out.doc.Show.Notes...) {
+		if !strings.HasPrefix(line, "kind: ") && !slices.Contains(out.doc.Show.Notes, line) {
+			continue
+		}
+		for _, word := range []string{"pinned", "frozen", "following"} {
+			if strings.Contains(line, word) {
+				t.Errorf("a kind line or note says %q: %q", word, line)
+			}
+		}
 	}
 	b, jerr := json.Marshal(out.doc)
 	if jerr != nil {
@@ -232,7 +257,7 @@ const threeBareNodes = "twin: lab fylgja present (3 nodes); twin directory prese
 	"  n2  clab-fylgja-n2  running  172.20.20.3\n" +
 	"  n3  clab-fylgja-n3  running  172.20.20.4\n"
 
-const recordLine = "record: branch fylgja-fixture, snapshot none, bundle_id " + showBundleID + ", schema 41349c3a9c582e5dd44e55d6771f79c2, " + showRead + "\n"
+const recordLine = "record: branch fylgja-fixture, snapshot " + showSnapshotID + ", bundle_id " + showBundleID + ", schema 41349c3a9c582e5dd44e55d6771f79c2, " + showRead + "\n"
 
 const provisionedLine = "  provisioned by run fylgja-provision " + showRunID + " (source intent), worker 0.1.0-dev, recorded 2026-09-16T19:01:02Z, 3 nodes\n"
 
@@ -251,13 +276,13 @@ func wantShow(t *testing.T, out showOutput, stdout, kind string, notes ...string
 	}
 }
 
-// Scenario 1: no lab, no twin directory, no following.
+// Scenario 1: no lab, no twin directory.
 func TestShowNoTwin(t *testing.T) {
 	paths := useStateRoot(t)
 	out := showWith(t, paths, "inspect-empty.json", &fakeService{})
 	wantShow(t, out, lines("twin: none: no lab fylgja, no twin directory", "kind: none", "in flight: none"),
 		findings.ShowKindNone, "no twin")
-	if s := out.doc.Show; s.Record != nil || s.Following != nil || s.LastCheck != nil || s.Service != findings.ShowServiceOK ||
+	if s := out.doc.Show; s.Record != nil || s.Service != findings.ShowServiceOK ||
 		s.Host.LabPresent || s.Host.TwinDirPresent || s.Host.Phrase != "" {
 		t.Errorf("show %+v, want nothing but the empty host", s)
 	}
@@ -266,37 +291,20 @@ func TestShowNoTwin(t *testing.T) {
 	}
 }
 
-// followingState is Schedule fylgja-follow of branch, every five minutes, next due at 19:15.
-func followingState(branch string) *provision.FollowingState {
-	return &provision.FollowingState{Branch: branch, IntervalS: 300, NextCheckAt: time.Date(2026, 9, 16, 19, 15, 0, 0, time.UTC)}
-}
-
-// Scenario 2: a following twin, with its last check and the next.
-func TestShowFollowing(t *testing.T) {
+// US5 scenario 1: a twin from --branch with no --at is kind snapshot, its line naming the
+// snapshot its record names and, in brackets, its branch and the time it was read, with
+// the best-effort note; twin show asks the workflow service for the runs in flight alone.
+func TestShowSnapshotReadAt(t *testing.T) {
 	paths := useStateRoot(t)
 	writeTwin(t, paths, twinOf(t, nil))
-	svc := &fakeService{following: followingState("fylgja-fixture"), lastCheck: &provision.CheckRecord{
-		WorkflowID: showCheckID, RunID: "r-c", ScheduledAt: time.Date(2026, 9, 16, 19, 10, 0, 0, time.UTC),
-		ClosedAt: time.Date(2026, 9, 16, 19, 10, 3, 0, time.UTC),
-		Result:   provision.ReconcileResult{Outcome: provision.CheckUnchanged, Branch: "fylgja-fixture", TwinBundleID: showBundleID, BundleID: showBundleID},
-	}}
+	svc := &fakeService{}
 	out := showWith(t, paths, "inspect-three.json", svc)
 	wantShow(t, out, threeNodes+recordLine+
 		"  intent read at "+showObserved+"; reproducing it with --at that instant is best-effort\n"+
-		provisionedLine+lines(
-		"kind: following branch fylgja-fixture, checked every 5m0s",
-		"  last check: "+showCheckID+" at 19:10:03Z, unchanged",
-		"  next check: 2026-09-16T19:15:00Z",
-		"  a rebuild discards the twin's runtime state",
-		"in flight: none"),
-		findings.ShowKindFollowing, "a rebuild discards the twin's runtime state", bestEffortNote)
-	f := out.doc.Show.Following
-	if f == nil || f.Branch != "fylgja-fixture" || f.IntervalS != 300 || f.NextCheckAt != "2026-09-16T19:15:00Z" ||
-		f.LastCheck == nil || f.LastCheck.Outcome != provision.CheckUnchanged || f.LastCheck.ClosedAt != "2026-09-16T19:10:03Z" {
-		t.Errorf("following %+v (last check %+v)", f, f.LastCheck)
-	}
+		provisionedLine+lines("kind: snapshot 576933ec… (branch fylgja-fixture, read at "+showObserved+")", "in flight: none"),
+		findings.ShowKindSnapshot, bestEffortNote)
 	if r := out.doc.Show.Record; r == nil || r.BundleID != showBundleID || r.ObservedAt == nil || *r.ObservedAt != showObserved ||
-		r.Run.RunID != showRunID || r.Nodes != 3 || r.WorkerVersion != "0.1.0-dev" {
+		r.SnapshotID == nil || *r.SnapshotID != showSnapshotID || r.Run.RunID != showRunID || r.Nodes != 3 || r.WorkerVersion != "0.1.0-dev" {
 		t.Errorf("record %+v", r)
 	}
 	n := out.doc.Show.Host.Nodes
@@ -305,33 +313,35 @@ func TestShowFollowing(t *testing.T) {
 		t.Errorf("nodes %+v, want n1 first with the artifact its record names", n)
 	}
 	if out.stderr != "" {
-		t.Errorf("stderr:\n%s\nwant nothing: the last check was unchanged", out.stderr)
+		t.Errorf("stderr:\n%s\nwant nothing", out.stderr)
 	}
-	if want := []string{"Following", "LastCheck", "InFlight", "Following", "LastCheck", "InFlight"}; !slices.Equal(svc.reads, want) {
-		t.Errorf("reads %v, want each read once per run, text then JSON", svc.reads)
+	if want := []string{"InFlight", "InFlight"}; !slices.Equal(svc.reads, want) {
+		t.Errorf("reads %v, want the runs in flight once per run, text then JSON", svc.reads)
 	}
 }
 
-// Scenario 3: pinned at T, verbatim, with no best-effort statement.
-func TestShowPinned(t *testing.T) {
+// US5 scenario 2: a twin from --branch --at is kind snapshot, its line naming the snapshot
+// and, in brackets, its branch at T, verbatim, with no best-effort statement.
+func TestShowSnapshotAt(t *testing.T) {
 	const at = "2026-09-16T14:00:00Z"
 	paths := useStateRoot(t)
 	writeTwin(t, paths, twinOf(t, func(f *lab.RecordFields) { f.Provenance.At = at }))
 	out := showWith(t, paths, "inspect-three.json", &fakeService{})
 	wantShow(t, out, threeNodes+
-		"record: branch fylgja-fixture at "+at+", snapshot none, bundle_id "+showBundleID+", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead+"\n"+
-		"  intent read at "+showObserved+"\n"+provisionedLine+lines("kind: pinned at "+at+"; not following", "in flight: none"),
-		findings.ShowKindPinned, "pinned at "+at+"; not following")
+		"record: branch fylgja-fixture at "+at+", snapshot "+showSnapshotID+", bundle_id "+showBundleID+", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead+"\n"+
+		"  intent read at "+showObserved+"\n"+provisionedLine+lines("kind: "+showKind("576933ec…", at), "in flight: none"),
+		findings.ShowKindSnapshot)
 	if r := out.doc.Show.Record; r == nil || r.At != at {
 		t.Errorf("record %+v, want at %s verbatim", r, at)
 	}
 }
 
-// A twin created from a stage is pinned and says which stage named its reference, on the
-// record line, the kind line and in the note, and the JSON record carries it; a record
-// naming none, written by 014 as an explicit null or by an earlier worker with no key,
-// shows exactly as M7 shows it (contracts/cli.md, specs/014-proposed-change-stages).
-func TestShowPinnedFromAStage(t *testing.T) {
+// US5 scenario 2: a twin created from a stage is kind snapshot at the stage's at and keeps
+// ", stage <ref>" after the bracket, and its record line names the stage, and the JSON
+// record carries it; a record naming none, written by 014 as an explicit null or by an
+// earlier worker with no key, shows as TestShowSnapshotAt, or, naming no snapshot, as
+// snapshot none (contracts/cli.md, specs/014-proposed-change-stages).
+func TestShowSnapshotOfAStage(t *testing.T) {
 	const at = "2026-09-20T10:00:00.123456+00:00"
 	paths := useStateRoot(t)
 	writeTwin(t, paths, twinOf(t, func(f *lab.RecordFields) {
@@ -340,23 +350,24 @@ func TestShowPinnedFromAStage(t *testing.T) {
 			Description: "the leaf cabled", AtSource: "written"}
 	}))
 	out := showWith(t, paths, "inspect-three.json", &fakeService{})
-	kind := "pinned at " + at + ", stage fylgja-fixture/cabled; not following"
+	kind := showKind("576933ec…", at) + ", stage fylgja-fixture/cabled"
 	wantShow(t, out, threeNodes+
-		"record: branch fylgja-fixture at "+at+" (stage fylgja-fixture/cabled, at written), snapshot none, bundle_id "+showBundleID+
+		"record: branch fylgja-fixture at "+at+" (stage fylgja-fixture/cabled, at written), snapshot "+showSnapshotID+", bundle_id "+showBundleID+
 		", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead+"\n"+
 		"  intent read at "+showObserved+"\n"+provisionedLine+lines("kind: "+kind, "in flight: none"),
-		findings.ShowKindPinned, kind)
+		findings.ShowKindSnapshot)
 	want := findings.ShowStage{ProposedChange: findings.StageChangeRef{ID: "pc-1", Branch: "fylgja-fixture"}, Label: "cabled",
 		Description: "the leaf cabled", AtSource: "written"}
 	if r := out.doc.Show.Record; r == nil || r.At != at || r.Stage == nil || *r.Stage != want {
 		t.Errorf("record %+v, want at %s and stage %+v", r, at, want)
 	}
 
-	// The same pinned twin with no stage, from a version 6 record and from a version 2
-	// one, is TestShowPinned's, line for line.
+	// The same twin with no stage, from a record of this build's version and from a version
+	// 2 one, which names no snapshot, is TestShowSnapshotAt's, line for line, or its
+	// snapshot none.
 	const pinnedAt = "2026-09-16T14:00:00Z"
 	for label, record := range map[string]func() []byte{
-		"version 8, stage null": func() []byte {
+		"this version, stage null": func() []byte {
 			b, err := json.Marshal(twinOf(t, func(f *lab.RecordFields) { f.Provenance.At = pinnedAt }))
 			if err != nil {
 				t.Fatal(err)
@@ -392,14 +403,15 @@ func TestShowPinnedFromAStage(t *testing.T) {
 				t.Fatal(err)
 			}
 			out := showWith(t, paths, "inspect-three.json", &fakeService{})
-			read, snapshot := showRead, noSnapshot(lab.TwinVersion)
+			read, snapshot, kind, notes := showRead, "snapshot "+showSnapshotID, lines("kind: "+showKind("576933ec…", pinnedAt)), []string(nil)
 			if label == "version 2" {
 				read, snapshot = unknownScope("2"), noSnapshot("2")
+				kind, notes = lines("kind: "+showKind("none", pinnedAt), "  "+noSnapshotNote), []string{noSnapshotNote}
 			}
 			wantShow(t, out, threeNodes+
 				"record: branch fylgja-fixture at "+pinnedAt+", "+snapshot+", bundle_id "+showBundleID+", schema 41349c3a9c582e5dd44e55d6771f79c2, "+read+"\n"+
-				"  intent read at "+showObserved+"\n"+provisionedLine+lines("kind: pinned at "+pinnedAt+"; not following", "in flight: none"),
-				findings.ShowKindPinned, "pinned at "+pinnedAt+"; not following")
+				"  intent read at "+showObserved+"\n"+provisionedLine+kind+lines("in flight: none"),
+				findings.ShowKindSnapshot, notes...)
 			if b, err := json.Marshal(out.doc); err != nil || strings.Contains(string(b), `"stage":{`) {
 				t.Errorf("a record naming no stage shows one (%v): %s", err, b)
 			}
@@ -419,7 +431,11 @@ func TestShowRecordNamesItsScope(t *testing.T) {
 		f.Rehearsal = &wire.RehearsalRef{WorkflowID: wire.RehearseWorkflowID, RunID: "r0"}
 	})
 	head := func(version string) string {
-		return "record: branch fylgja-fixture at " + stepFromAt + " (stage fylgja-fixture/seeded, at given), " + noSnapshot(version) +
+		snapshot := "snapshot " + showSnapshotID
+		if version != lab.TwinVersion {
+			snapshot = noSnapshot(version)
+		}
+		return "record: branch fylgja-fixture at " + stepFromAt + " (stage fylgja-fixture/seeded, at given), " + snapshot +
 			", bundle_id " + showBundleID + ", schema 41349c3a9c582e5dd44e55d6771f79c2, "
 	}
 	for _, c := range []struct {
@@ -495,8 +511,8 @@ func TestShowTreatsAnUnreadableScopeAsUnknown(t *testing.T) {
 		f.Provenance.At = stepFromAt
 		f.Stage = showStage("seeded")
 	})
-	head := "record: branch fylgja-fixture at " + stepFromAt + " (stage fylgja-fixture/seeded, at given), snapshot none, bundle_id " +
-		showBundleID + ", schema 41349c3a9c582e5dd44e55d6771f79c2, "
+	head := "record: branch fylgja-fixture at " + stepFromAt + " (stage fylgja-fixture/seeded, at given), snapshot " + showSnapshotID +
+		", bundle_id " + showBundleID + ", schema 41349c3a9c582e5dd44e55d6771f79c2, "
 	// An edit sets the provenance's scope, or a field of its mapping, to value.
 	type edit struct{ field, value string }
 	type unreadable struct {
@@ -578,8 +594,8 @@ func TestShowNamesEachNodesOwnPackage(t *testing.T) {
 		"  n2  clab-fylgja-n2  running  172.20.20.3  arista_eos  ", 1)
 	wantShow(t, out, mixed+recordLine+
 		"  intent read at "+showObserved+"; reproducing it with --at that instant is best-effort\n"+
-		provisionedLine+lines("kind: frozen; not following", "in flight: none"),
-		findings.ShowKindFrozen, "not following", bestEffortNote)
+		provisionedLine+lines("kind: "+showKind("576933ec…", ""), "in flight: none"),
+		findings.ShowKindSnapshot, bestEffortNote)
 	var got []string
 	for _, n := range out.doc.Show.Host.Nodes {
 		if n.PSP == nil {
@@ -592,29 +608,19 @@ func TestShowNamesEachNodesOwnPackage(t *testing.T) {
 	}
 }
 
-// Scenario 4: frozen (--no-follow), with the best-effort statement.
-func TestShowFrozen(t *testing.T) {
-	paths := useStateRoot(t)
-	writeTwin(t, paths, twinOf(t, nil))
-	out := showWith(t, paths, "inspect-three.json", &fakeService{})
-	wantShow(t, out, threeNodes+recordLine+
-		"  intent read at "+showObserved+"; reproducing it with --at that instant is best-effort\n"+
-		provisionedLine+lines("kind: frozen; not following", "in flight: none"),
-		findings.ShowKindFrozen, "not following", bestEffortNote)
-}
-
-// Scenario 5: from a bundle, with the read time unknown.
+// US5 scenario 6: from a bundle, with the read time unknown and snapshot none on the record
+// line, as before 019.
 func TestShowFromBundle(t *testing.T) {
 	paths := useStateRoot(t)
-	writeTwin(t, paths, twinOf(t, func(f *lab.RecordFields) { f.Source, f.ObservedAt = wire.SourceBundle, nil }))
+	writeTwin(t, paths, twinOf(t, func(f *lab.RecordFields) { f.Source, f.ObservedAt, f.SnapshotID = wire.SourceBundle, nil, "" }))
 	out := showWith(t, paths, "inspect-three.json", &fakeService{})
-	wantShow(t, out, threeNodes+recordLine+
+	wantShow(t, out, threeNodes+strings.Replace(recordLine, "snapshot "+showSnapshotID, "snapshot none", 1)+
 		// contracts/cli.md's words, literal: built from lab.ObservedAtUnknown this line once
 		// agreed with a show that printed "unknown:" twice.
 		"  intent read: unknown: provisioned from an existing bundle; no read took place\n"+
 		strings.Replace(provisionedLine, "source intent", "source bundle", 1)+
-		lines("kind: from a bundle; not following", "in flight: none"),
-		findings.ShowKindFromBundle, "provisioned from a bundle; read time unknown; not following")
+		lines("kind: from a bundle", "in flight: none"),
+		findings.ShowKindFromBundle, "provisioned from a bundle; read time unknown")
 	b, err := json.Marshal(out.doc.Show.Record)
 	if err != nil {
 		t.Fatal(err)
@@ -703,76 +709,10 @@ func TestShowRecordWithoutLab(t *testing.T) {
 		check(t, out)
 	})
 
-	t.Run("with a Schedule", func(t *testing.T) {
-		const schedule = "following of branch fylgja-fixture exists, and a check finds nothing to compare against"
-		paths := useStateRoot(t)
-		writeTwin(t, paths, twinOf(t, nil))
-		out := showWith(t, paths, "inspect-empty.json", &fakeService{following: followingState("fylgja-fixture")})
-		wantShow(t, out, host+record+lines("kind: none; "+schedule, "in flight: none"),
-			findings.ShowKindNone, phrase+"; fylgja twin destroy clears it", schedule)
-		check(t, out)
-		if out.doc.Show.Following == nil {
-			t.Errorf("following %+v, want the Schedule reported", out.doc.Show.Following)
-		}
-	})
-
-	// A rebuild whose destroy removed the lab but whose unstage never answered leaves this host,
-	// and following stopped: the failed check is reported as it is with no record.
-	const stopped = "following of branch fylgja-fixture stopped: the check " + showCheckID +
-		" at 2026-09-16T19:12:00Z ended rebuild_failed at step destroy; cleanup teardown done, unstage failed; fylgja twin create starts again"
-
-	t.Run("after a failed rebuild stopped following", func(t *testing.T) {
-		paths := useStateRoot(t)
-		writeTwin(t, paths, twinOf(t, nil))
-		out := showWith(t, paths, "inspect-empty.json", &fakeService{lastCheck: unstageFailedCheck()})
-		wantShow(t, out, host+record+lines("kind: none; "+stopped, "in flight: none"),
-			findings.ShowKindNone, phrase+"; fylgja twin destroy clears it", stopped)
-		s := out.doc.Show
-		if s.Host.Phrase != phrase || s.Record == nil || s.Record.BundleID != showBundleID || s.Following != nil {
-			t.Errorf("show %+v, want the phrase, the record and no Schedule", s)
-		}
-		c := s.LastCheck
-		if c == nil || c.Outcome != provision.CheckRebuildFailed || c.Step != findings.StepDestroy || c.Cleanup == nil ||
-			c.Cleanup.Teardown != provision.CleanupDone || c.Cleanup.Unstage != provision.CleanupFailed ||
-			!slices.Equal(c.Cleanup.Remaining, []string{"twin directory"}) || len(c.Findings) != 3 {
-			t.Errorf("last check %+v, want the failed rebuild at destroy with its cleanup and findings", c)
-		}
-		for _, text := range []string{out.stdout, strings.Join(s.Notes, "\n")} {
-			if strings.Contains(text, "runtime state") {
-				t.Errorf("says %q for a record without its lab:\n%s", "runtime state", text)
-			}
-		}
-		for _, line := range []string{
-			"rejection cleanup.incomplete [step unstage] twin directory: activity StartToClose timeout",
-			"rejection rebuild.failed [step destroy] r-cd: the rebuild's destroy r-cd ended unclean",
-			"warning follow.stopped [step follow] fylgja-follow: following of branch fylgja-fixture stopped",
-		} {
-			if !strings.Contains(out.stderr, line) {
-				t.Errorf("stderr does not carry %q:\n%s", line, out.stderr)
-			}
-		}
-		if len(out.doc.Findings) != 0 {
-			t.Errorf("document findings %+v, want none: the check's are in its block", out.doc.Findings)
-		}
-	})
-
-	t.Run("after a failed rebuild, with a Schedule", func(t *testing.T) {
-		const schedule = "following of branch fylgja-fixture exists, and a check finds nothing to compare against"
-		paths := useStateRoot(t)
-		writeTwin(t, paths, twinOf(t, nil))
-		out := showWith(t, paths, "inspect-empty.json",
-			&fakeService{following: followingState("fylgja-fixture"), lastCheck: unstageFailedCheck()})
-		wantShow(t, out, host+record+lines("kind: none; "+schedule, "in flight: none"),
-			findings.ShowKindNone, phrase+"; fylgja twin destroy clears it", schedule)
-		check(t, out)
-		if out.doc.Show.LastCheck != nil {
-			t.Errorf("last check %+v, want none beside a Schedule", out.doc.Show.LastCheck)
-		}
-	})
 }
 
 // A stage's record whose lab is gone is M3's shape b, unchanged: kind none with M3's
-// phrase and remedy, and no pinned kind line. The record still names its stage, on the
+// phrase and remedy, and no snapshot kind line. The record still names its stage, on the
 // record line and in the JSON, which 014's show.schema.json validates.
 func TestShowStageRecordWithoutLab(t *testing.T) {
 	const at = "2026-09-20T10:00:00.123456+00:00"
@@ -786,7 +726,7 @@ func TestShowStageRecordWithoutLab(t *testing.T) {
 	}))
 	out := showWith(t, paths, "inspect-empty.json", &fakeService{})
 	wantShow(t, out, lines("twin: lab fylgja absent; twin directory present; "+phrase+"; fylgja twin destroy clears it")+
-		"record: branch fylgja-fixture at "+at+" (stage fylgja-fixture/cabled, at written), snapshot none, bundle_id "+showBundleID+
+		"record: branch fylgja-fixture at "+at+" (stage fylgja-fixture/cabled, at written), snapshot "+showSnapshotID+", bundle_id "+showBundleID+
 		", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead+"\n"+
 		"  intent read at "+showObserved+"\n"+provisionedLine+lines("kind: none", "in flight: none"),
 		findings.ShowKindNone, phrase+"; fylgja twin destroy clears it")
@@ -801,7 +741,7 @@ func TestShowStageRecordWithoutLab(t *testing.T) {
 		t.Errorf("record %+v, want at %s and stage %+v", r, at, want)
 	}
 	for _, text := range []string{out.stdout, strings.Join(s.Notes, "\n")} {
-		for _, not := range []string{"pinned", "fylgja twin create", "runtime state"} {
+		for _, not := range []string{"snapshot 576933ec…", "fylgja twin create", "runtime state"} {
 			if strings.Contains(text, not) {
 				t.Errorf("says %q for a stage's record without its lab:\n%s", not, text)
 			}
@@ -809,122 +749,25 @@ func TestShowStageRecordWithoutLab(t *testing.T) {
 	}
 }
 
-// unstageFailedCheck is a check whose rebuild's destroy tore the lab down but whose unstage
-// never answered, so twin.json remains and following stopped.
-func unstageFailedCheck() *provision.CheckRecord {
-	failed := findings.List{
-		{Severity: findings.Rejection, Rule: findings.RuleCleanupIncomplete, Object: "twin directory", Step: findings.StepUnstage,
-			Message: "activity StartToClose timeout; the twin directory may remain: run fylgja twin destroy again once a worker is serving task queue " + provision.TaskQueue},
-		{Severity: findings.Rejection, Rule: findings.RuleRebuildFailed, Object: "r-cd", Step: findings.StepDestroy,
-			Message: "the rebuild's destroy r-cd ended unclean at step unstage; cleanup teardown done, unstage failed; remaining: twin directory; following stopped"},
-		{Severity: findings.Warning, Rule: findings.RuleFollowStopped, Object: provision.FollowScheduleID, Step: findings.StepFollow,
-			Message: "following of branch fylgja-fixture stopped after a failed rebuild; fylgja twin create starts again"},
-	}
-	return &provision.CheckRecord{
-		WorkflowID: showCheckID, RunID: "r-c", ScheduledAt: time.Date(2026, 9, 16, 19, 10, 0, 0, time.UTC),
-		ClosedAt: time.Date(2026, 9, 16, 19, 12, 0, 0, time.UTC),
-		Result: provision.ReconcileResult{
-			Outcome: provision.CheckRebuildFailed, Step: findings.StepDestroy, Branch: "fylgja-fixture", Findings: failed,
-			TwinBundleID: showBundleID, BundleID: "c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00c0ffee00",
-			Destroy: &provision.DestroyResult{Findings: failed[:1], Cleanup: provision.CleanupResult{Teardown: provision.CleanupDone,
-				Unstage: provision.CleanupFailed, Removed: []string{"lab fylgja (3 containers)"}, Remaining: []string{"twin directory"}}},
-			FollowingStopped: true,
-		},
-	}
-}
-
-// Scenario 7: runs in flight, each with its step; a check with its child's.
+// Scenario 7: runs in flight, each with its step: the operator's runs alone (019).
 func TestShowRunsInFlight(t *testing.T) {
 	paths := useStateRoot(t)
 	svc := &fakeService{inFlight: []provision.RunInFlight{
 		{WorkflowID: provision.WorkflowProvision, RunID: "r-p", Step: findings.StepDeploy},
 		{WorkflowID: provision.WorkflowDestroy, RunID: "r-d", Step: findings.StepTeardown},
-		{WorkflowID: showCheckID, RunID: "r-c", Step: findings.StepProvision,
-			Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "r-cp", Step: findings.StepReadiness}},
 	}}
 	out := showWith(t, paths, "inspect-empty.json", svc)
-	// No Schedule and a check rebuilding: twin destroy stopped following and is cancelling it.
-	const rebuilding = "check " + showCheckID + " is rebuilding the twin at step provision; following has stopped"
-	wantShow(t, out, lines("twin: none: no lab fylgja, no twin directory", "kind: none; "+rebuilding,
+	// The provisioning run at deploy holds the host (TestShowProvisionInFlight).
+	const holds = "run fylgja-provision r-p is at step deploy, and the host holds its work"
+	wantShow(t, out, lines("twin: none: no lab fylgja, no twin directory", "kind: none; "+holds,
 		"in flight:",
 		"  run fylgja-provision r-p at step deploy",
-		"  run fylgja-destroy r-d at step teardown",
-		"  check "+showCheckID+" at step provision (run fylgja-provision r-cp at step readiness)"),
-		findings.ShowKindNone, rebuilding)
+		"  run fylgja-destroy r-d at step teardown"),
+		findings.ShowKindNone, holds)
 	f := out.doc.Show.InFlight
-	if len(f) != 3 || f[2].Child == nil || f[2].Child.Step != findings.StepReadiness || f[0].Step != findings.StepDeploy {
+	if len(f) != 2 || f[0].Step != findings.StepDeploy || f[1].Step != findings.StepTeardown {
 		t.Errorf("in flight %+v", f)
 	}
-}
-
-// A check rebuilding the twin: whatever the host holds is the rebuild's own work, so twin show
-// names the rebuild, and neither calls the host an orphan with its remedy nor advises a create
-// that would be refused as run.in_flight.
-func TestShowRebuildInFlight(t *testing.T) {
-	t.Run("at destroy, with no twin", func(t *testing.T) {
-		paths := useStateRoot(t)
-		svc := &fakeService{following: followingState("fylgja-fixture"), inFlight: []provision.RunInFlight{
-			{WorkflowID: showCheckID, RunID: "r-c", Step: findings.StepDestroy,
-				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowDestroy, RunID: "r-cd", Step: findings.StepUnstage}},
-		}}
-		out := showWith(t, paths, "inspect-empty.json", svc)
-		const rebuilding = "following of branch fylgja-fixture is rebuilding the twin: check " + showCheckID + " at step destroy"
-		wantShow(t, out, lines("twin: none: no lab fylgja, no twin directory",
-			"kind: "+rebuilding,
-			"  next check: 2026-09-16T19:15:00Z",
-			"in flight: check "+showCheckID+" at step destroy (run fylgja-destroy r-cd at step unstage)"),
-			findings.ShowKindFollowing, rebuilding)
-		if s := out.doc.Show; s.Following == nil || s.Record != nil || len(s.InFlight) != 1 {
-			t.Errorf("show %+v, want following, no record, the check in flight", s)
-		}
-	})
-
-	t.Run("at provision, its child at deploy", func(t *testing.T) {
-		const phrase = "an orphan: no twin.json records it; deployed from /tmp/scratchpad/orphan/topology.clab.yml"
-		paths := useStateRoot(t)
-		svc := &fakeService{following: followingState("fylgja-fixture"), inFlight: []provision.RunInFlight{
-			{WorkflowID: showCheckID, RunID: "r-c", Step: findings.StepProvision,
-				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "r-cp", Step: findings.StepDeploy}},
-		}}
-		out := showWith(t, paths, "inspect-one-orphan.json", svc)
-		const rebuilding = "following of branch fylgja-fixture is rebuilding the twin: check " + showCheckID + " at step provision"
-		wantShow(t, out, lines(
-			"twin: lab fylgja present (1 node); twin directory absent",
-			"  n1  clab-fylgja-n1  running  172.20.20.2",
-			"kind: "+rebuilding,
-			"  next check: 2026-09-16T19:15:00Z",
-			"in flight: check "+showCheckID+" at step provision (run fylgja-provision r-cp at step deploy)"),
-			findings.ShowKindFollowing, rebuilding)
-		// The block's host is M3's inspection as it stands; only the text's reading of it changes.
-		if s := out.doc.Show; s.Host.Phrase != phrase || !s.Host.LabPresent {
-			t.Errorf("host %+v, want what containerlab says, phrase included", s.Host)
-		}
-		for _, text := range []string{out.stdout, strings.Join(out.doc.Show.Notes, "\n")} {
-			for _, advice := range []string{"orphan", "fylgja twin destroy clears it", "fylgja twin create"} {
-				if strings.Contains(text, advice) {
-					t.Errorf("advises %q during a rebuild:\n%s", advice, text)
-				}
-			}
-		}
-	})
-
-	// M5: the rebuild's provision pushing its nodes is named as any other of its steps.
-	t.Run("at provision, its child at push", func(t *testing.T) {
-		paths := useStateRoot(t)
-		svc := &fakeService{following: followingState("fylgja-fixture"), inFlight: []provision.RunInFlight{
-			{WorkflowID: showCheckID, RunID: "r-c", Step: findings.StepProvision,
-				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "r-cp", Step: findings.StepPush}},
-		}}
-		out := showWith(t, paths, "inspect-one-orphan.json", svc)
-		const rebuilding = "following of branch fylgja-fixture is rebuilding the twin: check " + showCheckID + " at step provision"
-		wantShow(t, out, lines(
-			"twin: lab fylgja present (1 node); twin directory absent",
-			"  n1  clab-fylgja-n1  running  172.20.20.2",
-			"kind: "+rebuilding,
-			"  next check: 2026-09-16T19:15:00Z",
-			"in flight: check "+showCheckID+" at step provision (run fylgja-provision r-cp at step push)"),
-			findings.ShowKindFollowing, rebuilding)
-	})
 }
 
 // An operator's create or provision that has reached the host: the lab and twin directory with
@@ -965,7 +808,7 @@ func TestShowProvisionInFlight(t *testing.T) {
 		quiet(t, out)
 		// The block's host is M3's inspection as it stands; only the text's reading of it changes.
 		if s := out.doc.Show; s.Host.Phrase != deployPhrase || !s.Host.LabPresent || !s.Host.TwinDirPresent || s.Record != nil ||
-			len(s.InFlight) != 1 || s.InFlight[0].Step != findings.StepDeploy || s.LastCheck != nil {
+			len(s.InFlight) != 1 || s.InFlight[0].Step != findings.StepDeploy {
 			t.Errorf("show %+v, want M3's phrase in the host block, no record, the run in flight", s)
 		}
 		if out.stderr != "" {
@@ -973,35 +816,14 @@ func TestShowProvisionInFlight(t *testing.T) {
 		}
 	})
 
-	// A create that lands between a rebuild's destroy and its provision: the check
-	// ended rebuild_failed and stopped following while the create runs, so no create advice.
-	t.Run("at deploy, after a failed rebuild stopped following", func(t *testing.T) {
-		const stopped = "following of branch fylgja-fixture stopped: the check " + showCheckID +
-			" at 2026-09-16T19:12:00Z ended rebuild_failed at step provision; cleanup teardown done, unstage done"
-		paths := useStateRoot(t)
-		twinDir(t, paths)
-		out := showWith(t, paths, "inspect-three.json", &fakeService{lastCheck: stoppedCheck(), inFlight: inFlight(findings.StepDeploy)})
-		wantShow(t, out, threeBareNodes+lines("kind: none; "+holds+"; "+stopped, "in flight: run fylgja-provision r-p at step deploy"),
-			findings.ShowKindNone, holds, stopped)
-		quiet(t, out)
-		if c := out.doc.Show.LastCheck; c == nil || c.Outcome != provision.CheckRebuildFailed || len(c.Findings) != 3 {
-			t.Errorf("last check %+v, want the failed rebuild reported", c)
-		}
-	})
-
-	t.Run("at readiness, with a Schedule", func(t *testing.T) {
+	t.Run("at readiness", func(t *testing.T) {
 		const holds = "run fylgja-provision r-p is at step readiness, and the host holds its work"
-		const schedule = "following of branch fylgja-fixture exists, and a check finds nothing to compare against"
 		paths := useStateRoot(t)
 		twinDir(t, paths)
-		out := showWith(t, paths, "inspect-three.json",
-			&fakeService{following: followingState("fylgja-fixture"), inFlight: inFlight(findings.StepReadiness)})
-		wantShow(t, out, threeBareNodes+lines("kind: none; "+holds+"; "+schedule, "in flight: run fylgja-provision r-p at step readiness"),
-			findings.ShowKindNone, holds, schedule)
+		out := showWith(t, paths, "inspect-three.json", &fakeService{inFlight: inFlight(findings.StepReadiness)})
+		wantShow(t, out, threeBareNodes+lines("kind: none; "+holds, "in flight: run fylgja-provision r-p at step readiness"),
+			findings.ShowKindNone, holds)
 		quiet(t, out)
-		if out.doc.Show.Following == nil {
-			t.Error("following not reported, want the Schedule")
-		}
 	})
 
 	// M5: the push step touches the host as deploy and readiness do.
@@ -1039,78 +861,20 @@ func TestShowProvisionInFlight(t *testing.T) {
 	})
 }
 
-// stoppedCheck is a check whose rebuild's provision failed at deploy, so following stopped.
-func stoppedCheck() *provision.CheckRecord {
-	failed := findings.List{
-		{Severity: findings.Rejection, Rule: findings.RuleDeployFailed, Object: "lab fylgja", Step: findings.StepDeploy, Message: "clab deploy exited 1"},
-		{Severity: findings.Rejection, Rule: findings.RuleRebuildFailed, Object: "r-cp", Step: findings.StepProvision,
-			Message: "the rebuild's provision r-cp ended failed at step deploy; cleanup teardown done, unstage done; following stopped"},
-		{Severity: findings.Warning, Rule: findings.RuleFollowStopped, Object: provision.FollowScheduleID, Step: findings.StepFollow,
-			Message: "following of branch fylgja-fixture stopped after a failed rebuild; fylgja twin create starts again"},
-	}
-	return &provision.CheckRecord{
-		WorkflowID: showCheckID, RunID: "r-c", ScheduledAt: time.Date(2026, 9, 16, 19, 10, 0, 0, time.UTC),
-		ClosedAt: time.Date(2026, 9, 16, 19, 12, 0, 0, time.UTC),
-		Result: provision.ReconcileResult{
-			Outcome: provision.CheckRebuildFailed, Step: findings.StepProvision, Branch: "fylgja-fixture", Findings: failed,
-			Provision: &provision.ProvisionResult{Outcome: provision.OutcomeFailed, Findings: failed[:1],
-				Cleanup: provision.CleanupResult{Teardown: provision.CleanupDone, Unstage: provision.CleanupDone}},
-			FollowingStopped: true,
-		},
-	}
-}
-
-// Scenario 8: following stopped by a failed rebuild, and no twin.
-func TestShowFollowingStopped(t *testing.T) {
-	const stopped = "following of branch fylgja-fixture stopped: the check " + showCheckID +
-		" at 2026-09-16T19:12:00Z ended rebuild_failed at step provision; cleanup teardown done, unstage done; fylgja twin create starts again"
-	paths := useStateRoot(t)
-	out := showWith(t, paths, "inspect-empty.json", &fakeService{lastCheck: stoppedCheck()})
-	wantShow(t, out, lines("twin: none: no lab fylgja, no twin directory", "kind: none; "+stopped, "in flight: none"),
-		findings.ShowKindNone, "no twin", stopped)
-	c := out.doc.Show.LastCheck
-	if c == nil || c.Outcome != provision.CheckRebuildFailed || c.Cleanup == nil || c.Cleanup.Teardown != provision.CleanupDone ||
-		len(c.Findings) != 3 || out.doc.Show.Following != nil {
-		t.Errorf("last check %+v, following %+v", c, out.doc.Show.Following)
-	}
-	for _, line := range []string{
-		"rejection rebuild.failed [step provision] r-cp: the rebuild's provision r-cp ended failed",
-		"warning follow.stopped [step follow] fylgja-follow: following of branch fylgja-fixture stopped",
-	} {
-		if !strings.Contains(out.stderr, line) {
-			t.Errorf("stderr does not carry %q:\n%s", line, out.stderr)
-		}
-	}
-	if len(out.doc.Findings) != 0 {
-		t.Errorf("document findings %+v, want none: the check's are in its block", out.doc.Findings)
-	}
-}
-
-// Scenario 8a: the failed rebuild superseded by a later run (LastCheck answers nil) is an
-// empty host, with no stopped sentence.
-func TestShowFollowingStoppedSuperseded(t *testing.T) {
-	paths := useStateRoot(t)
-	out := showWith(t, paths, "inspect-empty.json", &fakeService{})
-	wantShow(t, out, lines("twin: none: no lab fylgja, no twin directory", "kind: none", "in flight: none"),
-		findings.ShowKindNone, "no twin")
-	if out.doc.Show.LastCheck != nil || out.stderr != "" {
-		t.Errorf("last check %+v, stderr %q; want neither", out.doc.Show.LastCheck, out.stderr)
-	}
-}
-
-// Scenario 9: the service unreachable: the host and the record, following and runs in flight
-// unknown, exit 0 with the warning — whether the dial or a read fails.
+// US5 scenario 5: the service unreachable: the host and the record, the runs in flight
+// unknown, nothing of following, exit 0 with the warning — whether the dial or the read
+// fails.
 func TestShowServiceUnreachable(t *testing.T) {
-	const want = "workflow service unreachable at localhost:7233 (connection refused); " +
-		"whether the twin is following and whether a run is in flight are unknown"
+	const want = "the workflow service at localhost:7233 did not answer within 5s: whether a run is in flight is unknown"
+	const unknown = "in flight: unknown (workflow service unreachable at localhost:7233)"
 	check := func(t *testing.T, out showOutput) {
 		t.Helper()
 		wantShow(t, out, threeNodes+recordLine+
 			"  intent read at "+showObserved+"; reproducing it with --at that instant is best-effort\n"+
-			provisionedLine+lines("kind: frozen; following: unknown (workflow service unreachable at localhost:7233)", "in flight: unknown"),
-			findings.ShowKindFrozen, bestEffortNote, "following: unknown (workflow service unreachable at localhost:7233)")
-		if s := out.doc.Show; s.Service != findings.ShowServiceUnreachable || s.Following != nil || s.InFlight != nil {
-			t.Errorf("show %+v, want service unreachable and no following or runs", s)
+			provisionedLine+lines("kind: "+showKind("576933ec…", "")+"; "+unknown, "in flight: unknown"),
+			findings.ShowKindSnapshot, bestEffortNote, unknown)
+		if s := out.doc.Show; s.Service != findings.ShowServiceUnreachable || s.InFlight != nil || s.Record == nil {
+			t.Errorf("show %+v, want service unreachable, the record and no runs", s)
 		}
 		wantFinding := findings.Finding{Severity: findings.Warning, Rule: findings.RuleShowServiceUnreachable, Object: "localhost:7233", Message: want}
 		if len(out.doc.Findings) != 1 || out.doc.Findings[0] != wantFinding {
@@ -1119,24 +883,27 @@ func TestShowServiceUnreachable(t *testing.T) {
 		if !strings.Contains(out.stderr, "warning show.service.unreachable localhost:7233: "+want) {
 			t.Errorf("stderr:\n%s\nwant the warning", out.stderr)
 		}
+		b, err := json.Marshal(out.doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, text := range []string{out.stdout, out.stderr, string(b)} {
+			if strings.Contains(text, "follow") {
+				t.Errorf("says something of following:\n%s", text)
+			}
+		}
 	}
 	refused := &provision.UnreachableError{Address: "localhost:7233", Err: errors.New("connection refused")}
 
-	t.Run("a read", func(t *testing.T) {
+	t.Run("the read", func(t *testing.T) {
 		paths := useStateRoot(t)
 		writeTwin(t, paths, twinOf(t, nil))
 		check(t, showWith(t, paths, "inspect-three.json", &fakeService{readErr: refused}))
 	})
-	t.Run("the last check, after following answered", func(t *testing.T) {
+	t.Run("the runs in flight, failing after some were listed", func(t *testing.T) {
 		paths := useStateRoot(t)
 		writeTwin(t, paths, twinOf(t, nil))
-		check(t, showWith(t, paths, "inspect-three.json", &fakeService{following: followingState("fylgja-fixture"),
-			lastCheck: &provision.CheckRecord{WorkflowID: showCheckID}, failRead: "LastCheck", failReadErr: refused}))
-	})
-	t.Run("the runs in flight, after the others answered", func(t *testing.T) {
-		paths := useStateRoot(t)
-		writeTwin(t, paths, twinOf(t, nil))
-		check(t, showWith(t, paths, "inspect-three.json", &fakeService{following: followingState("fylgja-fixture"),
+		check(t, showWith(t, paths, "inspect-three.json", &fakeService{
 			inFlight: []provision.RunInFlight{{WorkflowID: provision.WorkflowProvision, RunID: "r-p", Step: "deploy"}},
 			failRead: "InFlight", failReadErr: refused}))
 	})
@@ -1147,76 +914,6 @@ func TestShowServiceUnreachable(t *testing.T) {
 		t.Cleanup(func() { dialService = saved })
 		dialService = func(context.Context) (provision.Service, error) { return nil, refused }
 		check(t, showDialled(t, paths, "inspect-three.json"))
-	})
-}
-
-// Scenario 10: following of another branch: the twin is frozen, and checks skip.
-func TestShowFollowingOtherBranch(t *testing.T) {
-	const other = "following of branch other exists, but the twin is of branch fylgja-fixture: checks skip"
-	paths := useStateRoot(t)
-	writeTwin(t, paths, twinOf(t, nil))
-	out := showWith(t, paths, "inspect-three.json", &fakeService{following: followingState("other")})
-	wantShow(t, out, threeNodes+recordLine+
-		"  intent read at "+showObserved+"; reproducing it with --at that instant is best-effort\n"+
-		provisionedLine+lines("kind: frozen; "+other, "in flight: none"),
-		findings.ShowKindFrozen, other, bestEffortNote)
-	if f := out.doc.Show.Following; f == nil || f.Branch != "other" {
-		t.Errorf("following %+v, want the Schedule reported whatever the twin", f)
-	}
-}
-
-// Scenario 11: a Schedule with no twin.
-func TestShowScheduleWithoutTwin(t *testing.T) {
-	const s = "following of branch fylgja-fixture exists, and a check finds nothing to compare against; fylgja twin create replaces it"
-	paths := useStateRoot(t)
-	out := showWith(t, paths, "inspect-empty.json", &fakeService{following: followingState("fylgja-fixture")})
-	wantShow(t, out, lines("twin: none: no lab fylgja, no twin directory", "kind: none; "+s, "in flight: none"),
-		findings.ShowKindNone, "no twin", s)
-}
-
-// A Schedule beside an orphan, or beside a twin directory whose twin.json cannot be read, gets
-// no create advice: a create would be refused as host.lab.present or host.twin.present, as for
-// a record whose lab is absent.
-func TestShowOrphanWithSchedule(t *testing.T) {
-	const schedule = "following of branch fylgja-fixture exists, and a check finds nothing to compare against"
-	check := func(t *testing.T, out showOutput, phrase, twinLine string) {
-		t.Helper()
-		wantShow(t, out, twinLine+lines("kind: none; "+schedule, "in flight: none"),
-			findings.ShowKindNone, phrase+"; fylgja twin destroy clears it", schedule)
-		s := out.doc.Show
-		if s.Record != nil || s.Following == nil || s.Following.Branch != "fylgja-fixture" {
-			t.Errorf("show %+v, want no record and the Schedule reported", s)
-		}
-		for _, text := range []string{out.stdout, strings.Join(s.Notes, "\n")} {
-			if strings.Contains(text, "fylgja twin create") {
-				t.Errorf("advises a create that host check would refuse:\n%s", text)
-			}
-		}
-	}
-
-	t.Run("an orphan", func(t *testing.T) {
-		const phrase = "an orphan: no twin.json records it; deployed from /tmp/scratchpad/orphan/topology.clab.yml"
-		paths := useStateRoot(t)
-		out := showWith(t, paths, "inspect-one-orphan.json", &fakeService{following: followingState("fylgja-fixture")})
-		check(t, out, phrase, lines(
-			"twin: lab fylgja present (1 node); twin directory absent; "+phrase+"; fylgja twin destroy clears it",
-			"  n1  clab-fylgja-n1  running  172.20.20.2"))
-	})
-
-	t.Run("an unparseable twin.json", func(t *testing.T) {
-		paths := useStateRoot(t)
-		if err := os.MkdirAll(paths.Twin, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(paths.TwinJSON, []byte("{not json"), 0o644); err != nil {
-			t.Fatal(err)
-		}
-		out := showWith(t, paths, "inspect-empty.json", &fakeService{following: followingState("fylgja-fixture")})
-		phrase := out.doc.Show.Host.Phrase
-		if !strings.HasPrefix(phrase, "a leftover twin directory: twin.json could not be read (") {
-			t.Fatalf("phrase %q, want M3's unreadable-record shape", phrase)
-		}
-		check(t, out, phrase, lines("twin: lab fylgja absent; twin directory present; "+phrase+"; fylgja twin destroy clears it"))
 	})
 }
 
@@ -1267,8 +964,7 @@ func TestShowServiceBudget(t *testing.T) {
 		t.Errorf("twin show took %s against a 50ms budget, twice", elapsed)
 	}
 	if s := out.doc.Show; s.Service != findings.ShowServiceUnreachable || len(out.doc.Findings) != 1 ||
-		out.doc.Findings[0].Message != "workflow service unreachable at localhost:7233 (no answer within 50ms); "+
-			"whether the twin is following and whether a run is in flight are unknown" {
+		out.doc.Findings[0].Message != "the workflow service at localhost:7233 did not answer within 50ms: whether a run is in flight is unknown" {
 		t.Errorf("show %+v, findings %+v; want unreachable after no answer within 50ms", s, out.doc.Findings)
 	}
 }
@@ -1285,6 +981,9 @@ const (
 )
 
 var stepToID = strings.Repeat("ee291b0f", 8)
+
+// stepToSnapshotID is the snapshot fylgja-fixture/cabled's bundle was compiled from.
+var stepToSnapshotID = strings.Repeat("9c2d01e7", 8)
 
 // stepAfter is each node's artifact checksum at fylgja-fixture/cabled: n3's does not move.
 var stepAfter = map[string]string{"n1": "9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3", "n2": "7a9b03de7a9b03de7a9b03de7a9b03de", "n3": fixtureArtifacts["n3"]}
@@ -1328,8 +1027,8 @@ func steppedTwin(t *testing.T, change func(f *lab.StepFields)) wire.TwinRecord {
 	staged, nodes := showStepTarget(stepToID, stepToAt, stepAfter)
 	f := lab.StepFields{
 		Outcome:    wire.StepStepped,
-		From:       wire.StepSide{Stage: showStage("seeded"), BundleID: showBundleID, At: stepFromAt},
-		To:         wire.StepSide{Stage: showStage("cabled"), BundleID: stepToID, At: stepToAt},
+		From:       wire.StepSide{Stage: showStage("seeded"), SnapshotID: showSnapshotID, BundleID: showBundleID, At: stepFromAt},
+		To:         wire.StepSide{Stage: showStage("cabled"), SnapshotID: stepToSnapshotID, BundleID: stepToID, At: stepToAt},
 		ObservedAt: "2026-10-02T09:14:01.000000Z", RunID: stepShowRunID, Version: "0.1.0-dev",
 		Plan: wire.ReconcilePlan{Restarted: []string{"n1"}, LinksAdded: []string{"n1:e1-3 -- n2:e1-3"},
 			Reasons: map[string]string{"n1": "added link"}},
@@ -1368,14 +1067,15 @@ func divergeAtPush(f *lab.StepFields) {
 // ended_at (71s), and both clocks.
 func steppedShowStep() findings.ShowStep {
 	took := func(s float64) *float64 { return &s }
-	side := func(label, id, at string) findings.StepSideBlock {
+	side := func(label, snapshot, id, at string) findings.StepSideBlock {
 		return findings.StepSideBlock{Stage: &findings.ShowStage{ProposedChange: findings.StageChangeRef{ID: "pc-1",
-			Branch: "fylgja-fixture"}, Label: label, Description: "the " + label + " stage", AtSource: "given"}, BundleID: id, At: at}
+			Branch: "fylgja-fixture"}, Label: label, Description: "the " + label + " stage", AtSource: "given"},
+			SnapshotID: snapshot, BundleID: id, At: at}
 	}
 	return findings.ShowStep{
 		Outcome:   wire.StepStepped,
-		From:      side("seeded", showBundleID, stepFromAt),
-		To:        side("cabled", stepToID, stepToAt),
+		From:      side("seeded", showSnapshotID, showBundleID, stepFromAt),
+		To:        side("cabled", stepToSnapshotID, stepToID, stepToAt),
 		Run:       findings.ShowRef{WorkflowID: "fylgja-step", RunID: stepShowRunID},
 		Restarted: []string{"n1"},
 		Pushed: []findings.StepPushedEntry{
@@ -1410,22 +1110,22 @@ func wantShowStep(t *testing.T, r *findings.ShowRecord, want findings.ShowStep) 
 	}
 }
 
-// A stepped twin keeps kind pinned, at the target's at and stage, and says which step
-// took it there; the record block gains the step's line; every node shows the artifact of
+// US5 scenario 3: a stepped twin is kind snapshot, naming the target's snapshot, at and
+// stage, and says which step took it there; the record block gains the step's line; every node shows the artifact of
 // the bundle it holds, the target's; and the JSON record carries state and step
 // (contracts/cli.md, twin show).
 func TestShowSteppedRecord(t *testing.T) {
 	paths := useStateRoot(t)
 	writeM11Twin(t, paths, steppedTwin(t, nil))
 	out := showWith(t, paths, "inspect-three.json", &fakeService{})
-	kind := "pinned at " + stepToAt + ", stage fylgja-fixture/cabled (stepped from fylgja-fixture/seeded by run fylgja-step " + stepShowRunID +
-		", ended " + stepEnded + "); not following"
+	kind := "snapshot 9c2d01e7… (branch fylgja-fixture at " + stepToAt + "), stage fylgja-fixture/cabled (stepped from " +
+		"fylgja-fixture/seeded by run fylgja-step " + stepShowRunID + ", ended " + stepEnded + ")"
 	wantShow(t, out, lines(
 		"twin: lab fylgja present (3 nodes); twin directory present",
 		"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux  device-config "+stepAfter["n1"],
 		"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config "+stepAfter["n2"],
 		"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config "+stepAfter["n3"],
-		"record: branch fylgja-fixture at "+stepToAt+" (stage fylgja-fixture/cabled, at given), snapshot none, bundle_id "+stepToID+
+		"record: branch fylgja-fixture at "+stepToAt+" (stage fylgja-fixture/cabled, at given), snapshot "+stepToSnapshotID+", bundle_id "+stepToID+
 			", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead,
 		"  intent read at 2026-10-02T09:14:01.000000Z",
 		"  provisioned by run fylgja-provision "+showRunID+" (source intent), worker 0.1.0-dev, recorded 2026-10-02T09:15:41Z, 3 nodes",
@@ -1433,7 +1133,7 @@ func TestShowSteppedRecord(t *testing.T) {
 			"; reconcile 3.9s (restart n1); readiness n1 54.8s; push n1 1.6s, n2 2.4s; wait not run",
 		"kind: "+kind,
 		"in flight: none"),
-		findings.ShowKindPinned, kind)
+		findings.ShowKindSnapshot)
 	r := out.doc.Show.Record
 	if r == nil || r.State != wire.StateReady || r.Step == nil || r.Step.Outcome != wire.StepStepped || r.BundleID != stepToID ||
 		!slices.Equal(r.Step.Restarted, []string{"n1"}) || r.Step.Phase != "" || r.Step.Run.RunID != stepShowRunID ||
@@ -1453,7 +1153,7 @@ func TestShowSteppedRecord(t *testing.T) {
 	out = showWith(t, paths, "inspect-three.json", &fakeService{})
 	if want := "  stepped from fylgja-fixture/seeded by run fylgja-step " + stepShowRunID + ", ended " + stepEnded +
 		"; unchanged: nothing reconciled, awaited or pushed; wait not run\n"; !strings.Contains(out.stdout, want) ||
-		out.doc.Show.Kind != findings.ShowKindPinned || out.doc.Show.Record.Step.Outcome != wire.StepUnchanged {
+		out.doc.Show.Kind != findings.ShowKindSnapshot || out.doc.Show.Record.Step.Outcome != wire.StepUnchanged {
 		t.Errorf("an unchanged step:\n%s", out.stdout)
 	}
 }
@@ -1467,15 +1167,15 @@ func TestShowTwiceSteppedRecord(t *testing.T) {
 		thirdAt = "2026-09-28T15:41:07.500000+00:00"
 		endedB  = "2026-10-02T09:26:50Z"
 	)
-	thirdID := strings.Repeat("6b1d07c2", 8)
+	thirdID, thirdSnapshot := strings.Repeat("6b1d07c2", 8), strings.Repeat("2b7e90c1", 8)
 	// Each node's artifact checksum at fylgja-fixture/third-link: n1's does not move from fylgja-fixture/cabled.
 	later := map[string]string{"n1": stepAfter["n1"], "n2": "2d3c5e8a2d3c5e8a2d3c5e8a2d3c5e8a", "n3": "3b8f61c03b8f61c03b8f61c03b8f61c0"}
 	took := func(s float64) *float64 { return &s }
 	staged, nodes := showStepTarget(thirdID, thirdAt, later)
 	rec, err := lab.NewStepRecord(steppedTwin(t, nil), lab.StepFields{
 		Outcome:    wire.StepStepped,
-		From:       wire.StepSide{Stage: showStage("cabled"), BundleID: stepToID, At: stepToAt},
-		To:         wire.StepSide{Stage: showStage("third-link"), BundleID: thirdID, At: thirdAt},
+		From:       wire.StepSide{Stage: showStage("cabled"), SnapshotID: stepToSnapshotID, BundleID: stepToID, At: stepToAt},
+		To:         wire.StepSide{Stage: showStage("third-link"), SnapshotID: thirdSnapshot, BundleID: thirdID, At: thirdAt},
 		ObservedAt: "2026-10-02T09:25:30.000000Z", RunID: runB, Version: "0.1.0-dev", AllowRestart: true,
 		Plan: wire.ReconcilePlan{Restarted: []string{"n2"}, LinksAdded: []string{"n2:e1-4 -- n3:e1-4"},
 			Reasons: map[string]string{"n2": "added link"}},
@@ -1495,14 +1195,14 @@ func TestShowTwiceSteppedRecord(t *testing.T) {
 	paths := useStateRoot(t)
 	writeM11Twin(t, paths, rec)
 	out := showWith(t, paths, "inspect-three.json", &fakeService{})
-	kind := "pinned at " + thirdAt + ", stage fylgja-fixture/third-link (stepped from fylgja-fixture/cabled by run fylgja-step " + runB +
-		", ended " + endedB + "); not following"
+	kind := "snapshot 2b7e90c1… (branch fylgja-fixture at " + thirdAt + "), stage fylgja-fixture/third-link (stepped from " +
+		"fylgja-fixture/cabled by run fylgja-step " + runB + ", ended " + endedB + ")"
 	wantShow(t, out, lines(
 		"twin: lab fylgja present (3 nodes); twin directory present",
 		"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux  device-config "+later["n1"],
 		"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config "+later["n2"],
 		"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config "+later["n3"],
-		"record: branch fylgja-fixture at "+thirdAt+" (stage fylgja-fixture/third-link, at given), snapshot none, bundle_id "+thirdID+
+		"record: branch fylgja-fixture at "+thirdAt+" (stage fylgja-fixture/third-link, at given), snapshot "+thirdSnapshot+", bundle_id "+thirdID+
 			", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead,
 		"  intent read at 2026-10-02T09:25:30.000000Z",
 		"  provisioned by run fylgja-provision "+showRunID+" (source intent), worker 0.1.0-dev, recorded "+endedB+", 3 nodes",
@@ -1510,7 +1210,7 @@ func TestShowTwiceSteppedRecord(t *testing.T) {
 			"; reconcile 4.2s (restart n2); readiness n2 50.1s; push n2 1.1s, n3 0.8s; wait not run",
 		"kind: "+kind,
 		"in flight: none"),
-		findings.ShowKindPinned, kind)
+		findings.ShowKindSnapshot)
 	if strings.Contains(out.stdout+out.stderr, stepShowRunID) {
 		t.Errorf("twin show names the first step's run %s:\n%s", stepShowRunID, out.stdout)
 	}
@@ -1535,8 +1235,8 @@ func TestShowStepThatRecreatesAndCreates(t *testing.T) {
 	staged, nodes := showStepTarget(stepToID, stepToAt, stepAfter)
 	rec, err := lab.NewStepRecord(prev, lab.StepFields{
 		Outcome:    wire.StepStepped,
-		From:       wire.StepSide{Stage: showStage("seeded"), BundleID: showBundleID, At: stepFromAt},
-		To:         wire.StepSide{Stage: showStage("cabled"), BundleID: stepToID, At: stepToAt},
+		From:       wire.StepSide{Stage: showStage("seeded"), SnapshotID: showSnapshotID, BundleID: showBundleID, At: stepFromAt},
+		To:         wire.StepSide{Stage: showStage("cabled"), SnapshotID: stepToSnapshotID, BundleID: stepToID, At: stepToAt},
 		ObservedAt: "2026-10-02T09:14:01.000000Z", RunID: stepShowRunID, Version: "0.1.0-dev", AllowRestart: true,
 		Plan: wire.ReconcilePlan{Recreated: []string{"n2"}, Added: []string{"n3"}, LinksAdded: []string{"n1:e1-3 -- n3:e1-3"},
 			Reasons: map[string]string{"n2": "image changed"}},
@@ -1557,14 +1257,14 @@ func TestShowStepThatRecreatesAndCreates(t *testing.T) {
 	paths := useStateRoot(t)
 	writeM11Twin(t, paths, rec)
 	out := showWith(t, paths, "inspect-three.json", &fakeService{})
-	kind := "pinned at " + stepToAt + ", stage fylgja-fixture/cabled (stepped from fylgja-fixture/seeded by run fylgja-step " + stepShowRunID +
-		", ended " + stepEnded + "); not following"
+	kind := "snapshot 9c2d01e7… (branch fylgja-fixture at " + stepToAt + "), stage fylgja-fixture/cabled (stepped from " +
+		"fylgja-fixture/seeded by run fylgja-step " + stepShowRunID + ", ended " + stepEnded + ")"
 	wantShow(t, out, lines(
 		"twin: lab fylgja present (3 nodes); twin directory present",
 		"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux  device-config "+stepAfter["n1"],
 		"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config "+stepAfter["n2"],
 		"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config "+stepAfter["n3"],
-		"record: branch fylgja-fixture at "+stepToAt+" (stage fylgja-fixture/cabled, at given), snapshot none, bundle_id "+stepToID+
+		"record: branch fylgja-fixture at "+stepToAt+" (stage fylgja-fixture/cabled, at given), snapshot "+stepToSnapshotID+", bundle_id "+stepToID+
 			", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead,
 		"  intent read at 2026-10-02T09:14:01.000000Z",
 		"  provisioned by run fylgja-provision "+showRunID+" (source intent), worker 0.1.0-dev, recorded 2026-10-02T09:15:41Z, 3 nodes",
@@ -1572,7 +1272,7 @@ func TestShowStepThatRecreatesAndCreates(t *testing.T) {
 			"; reconcile 20.3s (recreate n2, create n3); readiness n2 14.1s, n3 31.3s; push n1 0.9s, n2 1.6s, n3 1.2s; wait not run",
 		"kind: "+kind,
 		"in flight: none"),
-		findings.ShowKindPinned, kind)
+		findings.ShowKindSnapshot)
 	if r := out.doc.Show.Record; r == nil || r.Step == nil || !slices.Equal(r.Step.Restarted, []string{"n2", "n3"}) {
 		t.Errorf("record %+v; want step.restarted [n2 n3], the recreated node and the created one", r)
 	}
@@ -1586,7 +1286,7 @@ func TestShowStepThatRecreatesAndCreates(t *testing.T) {
 func TestShowDivergedRecord(t *testing.T) {
 	paths := useStateRoot(t)
 	writeM11Twin(t, paths, steppedTwin(t, divergeAtPush))
-	out := showWith(t, paths, "inspect-three.json", &fakeService{following: followingState("fylgja-fixture")})
+	out := showWith(t, paths, "inspect-three.json", &fakeService{})
 	kind := "diverged towards stage fylgja-fixture/cabled (bundle ee291b0f…): run fylgja-step " + stepShowRunID +
 		" stopped at phase push; landed: n2; not landed: n1 (push.refused); the twin is at stage fylgja-fixture/seeded (bundle 893b6392…); " +
 		"fylgja twin destroy clears it"
@@ -1595,7 +1295,7 @@ func TestShowDivergedRecord(t *testing.T) {
 		"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux",
 		"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config "+stepAfter["n2"],
 		"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config "+fixtureArtifacts["n3"],
-		"record: branch fylgja-fixture at "+stepFromAt+" (stage fylgja-fixture/seeded, at given), snapshot none, bundle_id "+showBundleID+
+		"record: branch fylgja-fixture at "+stepFromAt+" (stage fylgja-fixture/seeded, at given), snapshot "+showSnapshotID+", bundle_id "+showBundleID+
 			", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead,
 		"  intent read at "+showObserved,
 		"  provisioned by run fylgja-provision "+showRunID+" (source intent), worker 0.1.0-dev, recorded 2026-10-02T09:15:41Z, 3 nodes",
@@ -1605,7 +1305,7 @@ func TestShowDivergedRecord(t *testing.T) {
 		"in flight: none"),
 		findings.ShowKindDiverged, kind)
 	if strings.Contains(out.stdout, "twin create") || strings.Contains(out.stdout, "following") {
-		t.Errorf("a diverged twin is given create advice or a following line:\n%s", out.stdout)
+		t.Errorf("a diverged twin is given create advice or names following:\n%s", out.stdout)
 	}
 	r := out.doc.Show.Record
 	if r == nil || r.State != wire.StateDiverged || r.Step == nil || r.Step.Phase != findings.StepPush || r.BundleID != showBundleID {
@@ -1698,7 +1398,7 @@ func TestShowEveryDivergedShape(t *testing.T) {
 			wantShow(t, out, lines(
 				"twin: lab fylgja present (3 nodes); twin directory present",
 				node("n1", 0), node("n2", 1), node("n3", 2),
-				"record: branch fylgja-fixture at "+stepFromAt+" (stage fylgja-fixture/seeded, at given), snapshot none, bundle_id "+showBundleID+
+				"record: branch fylgja-fixture at "+stepFromAt+" (stage fylgja-fixture/seeded, at given), snapshot "+showSnapshotID+", bundle_id "+showBundleID+
 					", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead,
 				"  intent read at "+showObserved,
 				"  provisioned by run fylgja-provision "+showRunID+" (source intent), worker 0.1.0-dev, recorded 2026-10-02T09:15:41Z, 3 nodes",
@@ -1723,39 +1423,41 @@ func TestShowEveryDivergedShape(t *testing.T) {
 }
 
 // A step run that has reached the host (its stage through its record) is named after the
-// kind line, as M4 names a rebuild, with the stage it steps towards; before its stage it
-// is only listed in flight (contracts/cli.md).
+// kind line with the side it steps towards, by its name (019): stage <ref> or snapshot
+// <short>; before its stage it is only listed in flight (contracts/cli.md).
 func TestShowStepInFlight(t *testing.T) {
-	const pinned = "pinned at " + stepFromAt + ", stage fylgja-fixture/seeded; not following"
+	kind := showKind("576933ec…", stepFromAt) + ", stage fylgja-fixture/seeded"
 	// Before its stage (start, inspect, host_check, and compare, the plan's second lock) a
 	// step run has touched nothing on the host, and is listed under in flight: alone.
 	// So is one at observe, its wait after the record: the record is already written, so the
 	// kind line needs no clause.
 	before := []string{findings.StepStart, findings.StepInspect, findings.StepHostCheck, findings.StepCompare,
 		findings.StepObserve}
-	for _, step := range []string{findings.StepStage, findings.StepReconcile, findings.StepReadiness, findings.StepPush,
-		findings.StepRecord, findings.StepStart, findings.StepInspect, findings.StepHostCheck, findings.StepCompare,
-		findings.StepObserve} {
-		t.Run(step, func(t *testing.T) {
-			paths := useStateRoot(t)
-			writeTwin(t, paths, seededTwin(t))
-			svc := &fakeService{inFlight: []provision.RunInFlight{
-				{WorkflowID: "fylgja-step", RunID: stepShowRunID, Step: step, Towards: "fylgja-fixture/cabled"}}}
-			out := showWith(t, paths, "inspect-three.json", svc)
-			running := "run fylgja-step " + stepShowRunID + " is at step " + step + ", stepping towards stage fylgja-fixture/cabled"
-			kind, notes := pinned+"; "+running, []string{pinned, running}
-			if slices.Contains(before, step) {
-				kind, notes = pinned, []string{pinned}
-			}
-			want := "kind: " + kind + "\nin flight: run fylgja-step " + stepShowRunID + " at step " + step + "\n"
-			if !strings.HasSuffix(out.stdout, want) {
-				t.Errorf("stdout:\n%s\nwant it to end:\n%s", out.stdout, want)
-			}
-			if s := out.doc.Show; s.Kind != findings.ShowKindPinned || !slices.Equal(s.Notes, notes) ||
-				len(s.InFlight) != 1 || s.InFlight[0].WorkflowID != "fylgja-step" || s.InFlight[0].Step != step {
-				t.Errorf("show %+v", s)
-			}
-		})
+	for _, towards := range []string{"stage fylgja-fixture/cabled", "snapshot 9c2d01e7…"} {
+		for _, step := range []string{findings.StepStage, findings.StepReconcile, findings.StepReadiness, findings.StepPush,
+			findings.StepRecord, findings.StepStart, findings.StepInspect, findings.StepHostCheck, findings.StepCompare,
+			findings.StepObserve} {
+			t.Run(towards+" "+step, func(t *testing.T) {
+				paths := useStateRoot(t)
+				writeTwin(t, paths, seededTwin(t))
+				svc := &fakeService{inFlight: []provision.RunInFlight{
+					{WorkflowID: "fylgja-step", RunID: stepShowRunID, Step: step, Towards: towards}}}
+				out := showWith(t, paths, "inspect-three.json", svc)
+				running := "run fylgja-step " + stepShowRunID + " is at step " + step + ", stepping towards " + towards
+				line, notes := kind+"; "+running, []string{running}
+				if slices.Contains(before, step) {
+					line, notes = kind, nil
+				}
+				want := "kind: " + line + "\nin flight: run fylgja-step " + stepShowRunID + " at step " + step + "\n"
+				if !strings.HasSuffix(out.stdout, want) {
+					t.Errorf("stdout:\n%s\nwant it to end:\n%s", out.stdout, want)
+				}
+				if s := out.doc.Show; s.Kind != findings.ShowKindSnapshot || !slices.Equal(s.Notes, notes) ||
+					len(s.InFlight) != 1 || s.InFlight[0].WorkflowID != "fylgja-step" || s.InFlight[0].Step != step {
+					t.Errorf("show %+v", s)
+				}
+			})
+		}
 	}
 	// A step run whose target the service could not read from its input (Towards "") is
 	// still named at the host, without the clause naming where it steps.
@@ -1766,32 +1468,32 @@ func TestShowStepInFlight(t *testing.T) {
 			{WorkflowID: "fylgja-step", RunID: stepShowRunID, Step: findings.StepReconcile}}}
 		out := showWith(t, paths, "inspect-three.json", svc)
 		running := "run fylgja-step " + stepShowRunID + " is at step " + findings.StepReconcile
-		want := "kind: " + pinned + "; " + running + "\nin flight: run fylgja-step " + stepShowRunID + " at step " +
+		want := "kind: " + kind + "; " + running + "\nin flight: run fylgja-step " + stepShowRunID + " at step " +
 			findings.StepReconcile + "\n"
 		if !strings.HasSuffix(out.stdout, want) || strings.Contains(out.stdout, "stepping towards") {
 			t.Errorf("stdout:\n%s\nwant it to end:\n%s", out.stdout, want)
 		}
-		if s := out.doc.Show; s.Kind != findings.ShowKindPinned || !slices.Equal(s.Notes, []string{pinned, running}) {
-			t.Errorf("show %+v; want kind pinned, notes %q", s, []string{pinned, running})
+		if s := out.doc.Show; s.Kind != findings.ShowKindSnapshot || !slices.Equal(s.Notes, []string{running}) {
+			t.Errorf("show %+v; want kind snapshot, notes %q", s, []string{running})
 		}
 	})
 }
 
 // A record written before 014 that named M10's waypoint — version 3, written before M11,
 // and versions 4 and 5 that have not stepped — reads with no stage (lab.ReadRecord), so it
-// is shown as a pinned twin naming none, line for line, and its JSON carries no stage; only
+// is shown as a twin naming no stage and no snapshot, line for line, and its JSON carries no stage; only
 // the 4 and 5 records' JSON carries their state (014, research R-11). A version 5 record
 // that stepped, or diverged, names each stage of its step as the waypoint it was, as twin
 // step's refusal of such a record says, never "none": the step line's sides and a diverged
-// twin's kind line, its target and where the twin is. One that stepped shows pinned with no
-// stage, and the JSON's stages stay null.
+// twin's kind line, its target and where the twin is. One that stepped shows snapshot none
+// with no stage and no step on its kind line, and the JSON's stages stay null.
 func TestShowRecordsBeforeStages(t *testing.T) {
-	const kind = "pinned at " + stepFromAt + "; not following"
+	kind := showKind("none", stepFromAt)
 	for _, version := range []string{"3", "4", "5"} {
 		want := threeNodes +
 			"record: branch fylgja-fixture at " + stepFromAt + ", " + noSnapshot(version) + ", bundle_id " + showBundleID +
 			", schema 41349c3a9c582e5dd44e55d6771f79c2, " + unknownScope(version) + "\n" +
-			"  intent read at " + showObserved + "\n" + provisionedLine + lines("kind: "+kind, "in flight: none")
+			"  intent read at " + showObserved + "\n" + provisionedLine + lines("kind: "+kind, "  "+noSnapshotNote, "in flight: none")
 		t.Run("version "+version, func(t *testing.T) {
 			paths := useStateRoot(t)
 			raw, err := json.Marshal(seededTwin(t))
@@ -1829,7 +1531,7 @@ func TestShowRecordsBeforeStages(t *testing.T) {
 				t.Fatal(err)
 			}
 			out := showWith(t, paths, "inspect-three.json", &fakeService{})
-			wantShow(t, out, want, findings.ShowKindPinned, kind)
+			wantShow(t, out, want, findings.ShowKindSnapshot, noSnapshotNote)
 			b, err := json.Marshal(out.doc)
 			if err != nil {
 				t.Fatal(err)
@@ -1866,9 +1568,10 @@ func TestShowRecordsBeforeStages(t *testing.T) {
 			provisioned,
 			"  stepped from "+waypoint5+" by run fylgja-step "+stepShowRunID+", ended "+stepEnded+
 				"; reconcile 3.9s (restart n1); readiness n1 54.8s; push n1 1.6s, n2 2.4s; wait not run",
-			"kind: pinned at "+stepToAt+"; not following",
+			"kind: "+showKind("none", stepToAt),
+			"  "+noSnapshotNote,
 			"in flight: none"),
-			kind: "pinned at " + stepToAt + "; not following", as: findings.ShowKindPinned},
+			kind: noSnapshotNote, as: findings.ShowKindSnapshot},
 		{name: "version 5, diverged", change: divergeAtPush, stdout: lines(
 			"twin: lab fylgja present (3 nodes); twin directory present",
 			"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux",
@@ -2153,7 +1856,7 @@ func dig(m map[string]any, keys ...string) map[string]any {
 }
 
 // A twin of each kind of stage — a mark written, a mark given, the branch point, read on
-// main, and the head — is shown pinned at its at and naming its stage, on the record line
+// main, and the head — is shown at its at and naming its stage, on the record line
 // and the kind line, and the show block's record.stage is what twin.json 6 records, key for
 // key. The contract refuses a record.stage in M10's waypoint shape, one lacking its
 // proposed change, and one whose at came from nowhere it names.
@@ -2174,12 +1877,12 @@ func TestShowNamesTheStageAsRecorded(t *testing.T) {
 					Description: c.description, AtSource: c.source}
 			}))
 			out := showWith(t, paths, "inspect-three.json", &fakeService{})
-			kind := "pinned at " + c.at + ", stage change-1/" + c.label + "; not following"
+			kind := "snapshot 576933ec… (branch " + c.branch + " at " + c.at + "), stage change-1/" + c.label
 			wantShow(t, out, threeNodes+
-				"record: branch "+c.branch+" at "+c.at+" (stage change-1/"+c.label+", at "+c.source+"), snapshot none, bundle_id "+showBundleID+
+				"record: branch "+c.branch+" at "+c.at+" (stage change-1/"+c.label+", at "+c.source+"), snapshot "+showSnapshotID+", bundle_id "+showBundleID+
 				", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead+"\n"+
 				"  intent read at "+showObserved+"\n"+provisionedLine+lines("kind: "+kind, "in flight: none"),
-				findings.ShowKindPinned, kind)
+				findings.ShowKindSnapshot)
 			if got, want := compactJSON(t, out.doc.Show.Record.Stage), recordedJSON(t, paths.TwinJSON, "stage"); got != want {
 				t.Errorf("show.record.stage %s\nwant twin.json's %s", got, want)
 			}
@@ -2222,10 +1925,10 @@ func TestShowNamesTheStepsStagesAsRecorded(t *testing.T) {
 	paths = useStateRoot(t)
 	writeTwin(t, paths, seededTwin(t))
 	out = showWith(t, paths, "inspect-three.json", &fakeService{inFlight: []provision.RunInFlight{
-		{WorkflowID: "fylgja-step", RunID: stepShowRunID, Step: findings.StepPush, Towards: "fylgja-fixture/cabled"}}})
+		{WorkflowID: "fylgja-step", RunID: stepShowRunID, Step: findings.StepPush, Towards: "stage fylgja-fixture/cabled"}}})
 	running := "run fylgja-step " + stepShowRunID + " is at step push, stepping towards stage fylgja-fixture/cabled"
 	if s := out.doc.Show; !slices.Contains(s.Notes, running) ||
-		!strings.Contains(out.stdout, "kind: pinned at "+stepFromAt+", stage fylgja-fixture/seeded; not following; "+running+"\n") {
+		!strings.Contains(out.stdout, "kind: "+showKind("576933ec…", stepFromAt)+", stage fylgja-fixture/seeded; "+running+"\n") {
 		t.Errorf("notes %q, stdout:\n%s\nwant the kind line naming the stage it steps towards", s.Notes, out.stdout)
 	}
 }
@@ -2268,7 +1971,11 @@ func TestShowRecordNamesItsSnapshot(t *testing.T) {
 	}{
 		{"a 9 naming its snapshot", func(paths lab.Paths) { writeTwin(t, paths, named) },
 			head + "snapshot " + fromSnapshot + ", bundle_id " + showBundleID, named.SnapshotID},
-		{"a 9 naming none", func(paths lab.Paths) { writeTwin(t, paths, seededTwin(t)) },
+		{"a 9 naming none", func(paths lab.Paths) {
+			writeTwin(t, paths, twinOf(t, func(f *lab.RecordFields) {
+				f.Provenance.At, f.Stage, f.SnapshotID = stepFromAt, showStage("seeded"), ""
+			}))
+		},
 			head + "snapshot none, bundle_id " + showBundleID, nil},
 		{"an 8", func(paths lab.Paths) {
 			if err := os.MkdirAll(paths.Twin, 0o755); err != nil {
@@ -2320,4 +2027,103 @@ func TestShowRecordNamesItsSnapshot(t *testing.T) {
 		t.Errorf("stdout:\n%s\nwant the target's snapshot on the record line", out.stdout)
 	}
 	validateM10Document(t, out.doc)
+}
+
+// A twin whose record names no snapshot, an earlier build's rebuild or a record of 8, is
+// kind snapshot none, its line in brackets naming its branch and its at, or the time it was
+// read, followed by the note that twin step refuses it and the remedy (019, R-10).
+func TestShowSnapshotNone(t *testing.T) {
+	const at = "2026-09-16T14:00:00Z"
+	for _, c := range []struct {
+		name, at, read string
+		notes          []string
+	}{
+		{"read at", "", "  intent read at " + showObserved + "; reproducing it with --at that instant is best-effort\n",
+			[]string{noSnapshotNote, bestEffortNote}},
+		{"at", at, "  intent read at " + showObserved + "\n", []string{noSnapshotNote}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			paths := useStateRoot(t)
+			writeTwin(t, paths, twinOf(t, func(f *lab.RecordFields) { f.SnapshotID, f.Provenance.At = "", c.at }))
+			out := showWith(t, paths, "inspect-three.json", &fakeService{})
+			ref := "fylgja-fixture"
+			if c.at != "" {
+				ref += " at " + c.at
+			}
+			wantShow(t, out, threeNodes+
+				"record: branch "+ref+", snapshot none, bundle_id "+showBundleID+", schema 41349c3a9c582e5dd44e55d6771f79c2, "+showRead+"\n"+
+				c.read+provisionedLine+lines("kind: "+showKind("none", c.at), "  "+noSnapshotNote, "in flight: none"),
+				findings.ShowKindSnapshot, c.notes...)
+			if r := out.doc.Show.Record; r == nil || r.SnapshotID != nil {
+				t.Errorf("record %+v, want snapshot_id null", r)
+			}
+		})
+	}
+}
+
+// US5 scenario 3: a twin stepped from one snapshot to another, neither a stage, is kind
+// snapshot, naming the new snapshot and its read time, and says it stepped from the old one
+// by its short id; the record block's step line names both sides so.
+func TestShowSteppedFromASnapshot(t *testing.T) {
+	staged, nodes := showStepTarget(stepToID, "", stepAfter)
+	f := lab.StepFields{
+		Outcome:    wire.StepUnchanged,
+		From:       wire.StepSide{SnapshotID: showSnapshotID, BundleID: showBundleID},
+		To:         wire.StepSide{SnapshotID: stepToSnapshotID, BundleID: stepToID},
+		ObservedAt: "2026-10-02T09:14:01.000000Z", RunID: stepShowRunID, Version: "0.1.0-dev",
+		Declared:  map[string]string{"n1": "live", "n2": "live", "n3": "live"},
+		StartedAt: "2026-10-02T09:14:30Z", EndedAt: stepEnded, RecordedAt: time.Date(2026, 10, 2, 9, 15, 41, 0, time.UTC),
+		Nodes: nodes, Staged: staged,
+	}
+	rec, err := lab.NewStepRecord(twinOf(t, nil), f)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := useStateRoot(t)
+	writeTwin(t, paths, rec)
+	out := showWith(t, paths, "inspect-three.json", &fakeService{})
+	kind := "snapshot 9c2d01e7… (branch fylgja-fixture, read at 2026-10-02T09:14:01.000000Z) (stepped from snapshot 576933ec… by run " +
+		"fylgja-step " + stepShowRunID + ", ended " + stepEnded + ")"
+	if !strings.Contains(out.stdout, "\nkind: "+kind+"\n") {
+		t.Errorf("stdout:\n%s\nwant the kind line %q", out.stdout, kind)
+	}
+	step := "  stepped from snapshot 576933ec… by run fylgja-step " + stepShowRunID + ", ended " + stepEnded +
+		"; unchanged: nothing reconciled, awaited or pushed; wait not run\n"
+	if !strings.Contains(out.stdout, step) || strings.Contains(out.stdout, "none by run") {
+		t.Errorf("stdout:\n%s\nwant the step line %q", out.stdout, step)
+	}
+	if s := out.doc.Show; s.Kind != findings.ShowKindSnapshot || s.Record == nil || s.Record.SnapshotID == nil ||
+		*s.Record.SnapshotID != stepToSnapshotID || s.Record.Stage != nil {
+		t.Errorf("show %+v; want kind snapshot naming %s and no stage", s, stepToSnapshotID)
+	}
+}
+
+// SC-005: no kind line twin show prints, of any shape, says pinned, frozen or following
+// (showDialled checks every line and note of every case), and each JSON kind is one of the
+// four: snapshot for a twin from intent or a snapshot, from_bundle for a provisioned one.
+func TestNoKindLineNamesFollowing(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		change func(*lab.RecordFields)
+		kind   string
+	}{
+		{"from --branch", nil, findings.ShowKindSnapshot},
+		{"from --branch --at", func(f *lab.RecordFields) { f.Provenance.At = stepFromAt }, findings.ShowKindSnapshot},
+		{"from a stage", func(f *lab.RecordFields) { f.Provenance.At, f.Stage = stepFromAt, showStage("seeded") }, findings.ShowKindSnapshot},
+		{"from --snapshot", func(f *lab.RecordFields) { f.Source = wire.SourceSnapshot }, findings.ShowKindSnapshot},
+		{"naming no snapshot", func(f *lab.RecordFields) { f.SnapshotID = "" }, findings.ShowKindSnapshot},
+		{"from a bundle", func(f *lab.RecordFields) { f.Source, f.ObservedAt, f.SnapshotID = wire.SourceBundle, nil, "" }, findings.ShowKindFromBundle},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			paths := useStateRoot(t)
+			writeTwin(t, paths, twinOf(t, c.change))
+			out := showWith(t, paths, "inspect-three.json", &fakeService{})
+			if out.doc.Show.Kind != c.kind {
+				t.Errorf("kind %s, want %s", out.doc.Show.Kind, c.kind)
+			}
+			if !strings.Contains(out.stdout, "\nkind: ") {
+				t.Errorf("stdout:\n%s\nwant a kind line", out.stdout)
+			}
+		})
+	}
 }

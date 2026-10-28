@@ -529,10 +529,9 @@ func TestStatusConstantsMatchTheContract(t *testing.T) {
 }
 
 // The kinds twin show reports and show.schema.json's enum are one list (M11 adds
-// diverged).
+// diverged; 019 puts snapshot in place of pinned, frozen and following).
 func TestShowKindConstantsMatchTheContract(t *testing.T) {
-	all := []string{ShowKindNone, ShowKindPinned, ShowKindFrozen, ShowKindFromBundle,
-		ShowKindFollowing, ShowKindDiverged}
+	all := []string{ShowKindNone, ShowKindSnapshot, ShowKindFromBundle, ShowKindDiverged}
 	sort.Strings(all)
 	enum := enumOf(t, "show.schema.json", "properties", "kind")
 	if strings.Join(all, ",") != strings.Join(enum, ",") {
@@ -803,7 +802,7 @@ func TestM4DocumentsSatisfySchema(t *testing.T) {
 	}
 	for _, c := range m4FollowingDocuments() {
 		t.Run(c.label, func(t *testing.T) {
-			mustValidateBytes(t, schema, asEarlier(t, c.doc, dropM6DryRunCounts, dropM7ShowPSP, c.restore), c.label)
+			mustValidateBytes(t, schema, asEarlier(t, c.doc, dropM5ShowArtifacts, dropM6DryRunCounts, dropM7ShowPSP, c.restore), c.label)
 		})
 	}
 	for _, c := range m2Documents() {
@@ -843,6 +842,7 @@ func asEarlier(t *testing.T, doc *Document, drops ...func(doc map[string]any)) [
 	if err := json.Unmarshal(b, &generic); err != nil {
 		t.Fatal(err)
 	}
+	restore018Kind(generic)
 	for _, drop := range append(drops, drop018Snapshots, drop017ShowProvenance) {
 		drop(generic)
 	}
@@ -935,7 +935,6 @@ func dropM6DryRunCounts(doc map[string]any) {
 // that a later milestone's schema can be held to every earlier shape. The shapes that carry
 // following, which 019 removed from Document, are m4FollowingDocuments.
 func m4Documents() []labelledDocument {
-	id := strings.Repeat("89", 32)
 	twinID := strings.Repeat("b5", 32)
 	observed := "2026-09-16T19:00:00.000000Z"
 
@@ -956,49 +955,33 @@ func m4Documents() []labelledDocument {
 		d.Show = &block
 		return d
 	}
-	var rebuildFailed List
-	rebuildFailed.AddStep(Rejection, StepReadiness, "readiness.timeout", "n2", "n2 did not answer")
-	rebuildFailed.AddStep(Rejection, StepProvision, RuleRebuildFailed, "run-9",
-		"the rebuild's provision run-9 ended failed at step readiness; cleanup teardown done, unstage done; following stopped")
-	rebuildFailed.AddStep(Warning, StepFollow, RuleFollowStopped, "fylgja-follow",
-		"following of branch fylgja-fixture stopped after a failed rebuild; fylgja twin create starts again")
 	var unreachable List
 	unreachable.Add(Warning, RuleShowServiceUnreachable, "localhost:7233",
-		"workflow service unreachable at localhost:7233 (connection refused); whether the twin is following and whether a run is in flight are unknown")
+		"the workflow service at localhost:7233 did not answer within 5s: whether a run is in flight is unknown")
 
+	// 019 put kind snapshot in place of M4's pinned and frozen (restore018Kind gives an
+	// earlier contract the kind that build wrote), and the shows of a following twin and of
+	// a following stopped are m4FollowingDocuments.
 	docs := []labelledDocument{
 		{"show none", show(ShowBlock{Kind: ShowKindNone, Service: ShowServiceOK}, nil)},
-		{"show pinned", show(ShowBlock{Host: host, Record: record("2026-09-16T14:00:00Z", &observed, "intent"),
-			Kind: ShowKindPinned, Service: ShowServiceOK, Notes: []string{"pinned at 2026-09-16T14:00:00Z; not following"}}, nil)},
-		{"show frozen", show(ShowBlock{Host: host, Record: record("", &observed, "intent"),
-			Kind: ShowKindFrozen, Service: ShowServiceOK, Notes: []string{"not following"}}, nil)},
+		{"show a snapshot, at", show(ShowBlock{Host: host, Record: record("2026-09-16T14:00:00Z", &observed, "intent"),
+			Kind: ShowKindSnapshot, Service: ShowServiceOK}, nil)},
+		{"show a snapshot, read at", show(ShowBlock{Host: host, Record: record("", &observed, "intent"),
+			Kind: ShowKindSnapshot, Service: ShowServiceOK, Notes: []string{"reproducing the twin with --at " + observed + " is best-effort"}}, nil)},
 		{"show from a bundle", show(ShowBlock{Host: host, Record: record("", nil, "bundle"),
 			Kind: ShowKindFromBundle, Service: ShowServiceOK}, nil)},
-		{"show following", show(ShowBlock{Host: host, Record: record("", &observed, "intent"), Kind: ShowKindFollowing,
-			Following: &ShowFollowing{Branch: "fylgja-fixture", IntervalS: 300, ScheduleID: "fylgja-follow",
-				NextCheckAt: "2026-09-16T19:15:00Z",
-				LastCheck: &ShowCheck{WorkflowID: "fylgja-reconcile-2026-09-16T19:10:00Z", RunID: "run-c",
-					ScheduledAt: "2026-09-16T19:10:00Z", ClosedAt: "2026-09-16T19:11:30Z", Outcome: "rebuilt",
-					TwinBundleID: twinID, BundleID: id, Findings: rebuildFailed[:1],
-					Cleanup: &CleanupBlock{Teardown: "done", Unstage: "done"}}},
-			InFlight: []ShowRun{{WorkflowID: "fylgja-reconcile-2026-09-16T19:15:00Z", RunID: "run-d", Step: StepProvision,
-				Child: &ShowRun{WorkflowID: "fylgja-provision", RunID: "run-e", Step: StepReadiness}}},
-			Service: ShowServiceOK}, nil)},
-		{"show none, following stopped", show(ShowBlock{Kind: ShowKindNone, Service: ShowServiceOK,
-			LastCheck: &ShowCheck{WorkflowID: "fylgja-reconcile-2026-09-16T19:10:00Z", RunID: "run-c",
-				ScheduledAt: "2026-09-16T19:10:00Z", Outcome: "rebuild_failed", Step: StepProvision,
-				Findings: rebuildFailed, Cleanup: &CleanupBlock{Teardown: "done", Unstage: "done"}},
-			Notes: []string{"fylgja twin create starts again"}}, nil)},
 		{"show service unreachable", show(ShowBlock{Host: host, Record: record("", &observed, "intent"),
-			Kind: ShowKindFrozen, Service: ShowServiceUnreachable}, unreachable)},
+			Kind: ShowKindSnapshot, Service: ShowServiceUnreachable}, unreachable)},
 	}
 	return docs
 }
 
 // earlierDocument is a document an earlier build wrote that this build's Document can no
 // longer hold: doc is what this build writes in its place, and restore puts back, in the
-// document as a generic object, what 019 removed from the type, M4's following block and
-// dry_run.follow (D-062). Each contract that defined them, up to 018's, is held to it.
+// document as a generic object, what 019 removed from the type, M4's following block,
+// dry_run.follow, the show kinds pinned, frozen and following, the show's following and
+// last check, and following's rules (D-062). Each contract that defined them, up to 018's,
+// is held to it.
 type earlierDocument struct {
 	label   string
 	doc     *Document
@@ -1006,8 +989,10 @@ type earlierDocument struct {
 }
 
 // m4FollowingDocuments are the shapes M4 added that carry following: a create that began
-// following and one that could not, with its warning, a destroy that stopped it, and a dry
-// run of each answer M4 gave.
+// following and one that could not, with its warning, a destroy that stopped it, a dry run
+// of each answer M4 gave, and twin show's: a twin pinned, one frozen, one following with
+// its last check and a check rebuilding it, and no twin after a failed rebuild stopped
+// following.
 func m4FollowingDocuments() []earlierDocument {
 	id := strings.Repeat("89", 32)
 	observed := "2026-09-16T19:00:00.000000Z"
@@ -1028,6 +1013,14 @@ func m4FollowingDocuments() []earlierDocument {
 	destroyed := NewDocument(OpTwinDestroy, &Subject{RunID: "run-4"}, nil)
 	destroyed.Cleanup = &CleanupBlock{Teardown: "done", Unstage: "done"}
 
+	twinID := strings.Repeat("b5", 32)
+	shown := map[string]*Document{}
+	for _, c := range m4Documents() {
+		shown[c.label] = c.doc
+	}
+	readinessTimeout := map[string]any{"severity": "rejection", "rule": "readiness.timeout", "object": "n2", "step": "readiness",
+		"message": "n2 did not answer"}
+
 	return []earlierDocument{
 		{"create following, started", created, following(map[string]any{"branch": "fylgja-fixture", "interval_s": 300,
 			"schedule_id": "fylgja-follow", "state": "started"})},
@@ -1040,6 +1033,46 @@ func m4FollowingDocuments() []earlierDocument {
 		followingDryRun("dry run pinned", OpTwinCreate, map[string]any{"enabled": false, "reason": "pinned"}),
 		followingDryRun("dry run no follow", OpTwinCreate, map[string]any{"enabled": false, "reason": "no_follow"}),
 		followingDryRun("dry run bundle", OpTwinProvision, map[string]any{"enabled": false, "reason": "bundle"}),
+		{"show pinned", shown["show a snapshot, at"], showKindWas("pinned", "pinned at 2026-09-16T14:00:00Z; not following")},
+		{"show frozen", shown["show a snapshot, read at"], showKindWas("frozen", "not following")},
+		{"show following", shown["show a snapshot, read at"], func(doc map[string]any) {
+			showKindWas("following", "a rebuild discards the twin's runtime state")(doc)
+			show := doc["show"].(map[string]any)
+			show["following"] = map[string]any{"branch": "fylgja-fixture", "interval_s": 300, "schedule_id": "fylgja-follow",
+				"next_check_at": "2026-09-16T19:15:00Z", "last_check": map[string]any{
+					"workflow_id": "fylgja-reconcile-2026-09-16T19:10:00Z", "run_id": "run-c",
+					"scheduled_at": "2026-09-16T19:10:00Z", "closed_at": "2026-09-16T19:11:30Z", "outcome": "rebuilt",
+					"twin_bundle_id": twinID, "bundle_id": id, "findings": []any{readinessTimeout},
+					"cleanup": map[string]any{"teardown": "done", "unstage": "done", "remaining": []any{}}}}
+			show["in_flight"] = []any{map[string]any{"workflow_id": "fylgja-reconcile-2026-09-16T19:15:00Z", "run_id": "run-d",
+				"step": "provision", "child": map[string]any{"workflow_id": "fylgja-provision", "run_id": "run-e", "step": "readiness"}}}
+		}},
+		{"show none, following stopped", shown["show none"], func(doc map[string]any) {
+			show := doc["show"].(map[string]any)
+			show["last_check"] = map[string]any{"workflow_id": "fylgja-reconcile-2026-09-16T19:10:00Z", "run_id": "run-c",
+				"scheduled_at": "2026-09-16T19:10:00Z", "outcome": "rebuild_failed", "step": "provision",
+				"findings": []any{readinessTimeout,
+					map[string]any{"severity": "rejection", "rule": "rebuild.failed", "object": "run-9", "step": "provision",
+						"message": "the rebuild's provision run-9 ended failed at step readiness; cleanup teardown done, unstage done; following stopped"},
+					map[string]any{"severity": "warning", "rule": "follow.stopped", "object": "fylgja-follow", "step": "follow",
+						"message": "following of branch fylgja-fixture stopped after a failed rebuild; fylgja twin create starts again"}},
+				"cleanup": map[string]any{"teardown": "done", "unstage": "done", "remaining": []any{}}}
+			show["notes"] = []any{"fylgja twin create starts again"}
+		}},
+	}
+}
+
+// showKindWas restores a show block's kind and notes as an earlier build wrote them for
+// the twin this build shows with kind snapshot.
+func showKindWas(kind string, notes ...string) func(map[string]any) {
+	return func(doc map[string]any) {
+		show := doc["show"].(map[string]any)
+		show["kind"] = kind
+		var n []any
+		for _, s := range notes {
+			n = append(n, s)
+		}
+		show["notes"] = n
 	}
 }
 
@@ -1302,7 +1335,7 @@ func m5Documents() []labelledDocument {
 			{Name: "n2", Container: "clab-fylgja-n2", State: "running", MgmtIPv4: "172.20.20.3"},
 		}}
 	shown := NewDocument(OpTwinShow, nil, nil)
-	shown.Show = &ShowBlock{Host: host, Kind: ShowKindFrozen, Service: ShowServiceOK,
+	shown.Show = &ShowBlock{Host: host, Kind: ShowKindSnapshot, Service: ShowServiceOK,
 		Record: &ShowRecord{Branch: "fylgja-fixture", BundleID: twinID, SchemaHash: "41349c3a",
 			Scope: "tag:fylgja", Mapping: dcimMapping, ObservedAt: &observed, Source: "intent",
 			Run:           ShowRef{WorkflowID: "fylgja-provision", RunID: "run-1"},

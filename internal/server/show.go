@@ -8,7 +8,6 @@ import (
 	"slices"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
@@ -18,11 +17,10 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
-// serviceReads is what twin show learned from the workflow service.
+// serviceReads is what twin show learned from the workflow service: the runs in flight, the
+// one thing it asks since nothing follows a branch (019).
 type serviceReads struct {
-	following *provision.FollowingState
-	lastCheck *provision.CheckRecord
-	inFlight  []provision.RunInFlight
+	inFlight []provision.RunInFlight
 }
 
 // runShow reports the twin. The host is inspected in this process, as the dry
@@ -54,11 +52,12 @@ func runShow(ctx context.Context, opts *options) error {
 	reads, err := readService(ctx, opts)
 	unreachableAt := ""
 	if err != nil {
-		var cause error
-		unreachableAt, cause = serviceAddress(opts, err)
+		// The message is the same whatever the cause (019): the service did not answer within
+		// the budget the read is given, so what is in flight is unknown.
+		unreachableAt, _ = serviceAddress(opts, err)
 		list.Add(findings.Warning, findings.RuleShowServiceUnreachable, unreachableAt,
-			fmt.Sprintf("workflow service unreachable at %s (%v); whether the twin is following and whether a run is in flight are unknown",
-				unreachableAt, cause))
+			fmt.Sprintf("the workflow service at %s did not answer within %s: whether a run is in flight is unknown",
+				unreachableAt, opts.c.s.ServiceBudget))
 	}
 
 	block, text := decideShow(host, reads, unreachableAt)
@@ -69,8 +68,8 @@ func runShow(ctx context.Context, opts *options) error {
 	return &result{doc: doc}
 }
 
-// readService dials the workflow service and makes twin show's three reads, all within the
-// server's ServiceBudget. The reads run beside the budget, so a service that never answers
+// readService dials the workflow service and reads the runs in flight, within the server's
+// ServiceBudget. The reads run beside the budget, so a service that never answers
 // costs the budget and no more.
 func readService(ctx context.Context, opts *options) (serviceReads, error) {
 	budget := opts.c.s.ServiceBudget
@@ -93,18 +92,11 @@ func readService(ctx context.Context, opts *options) (serviceReads, error) {
 			return
 		}
 		defer svc.Close()
-		if a.reads.following, a.err = svc.Following(ctx); a.err != nil {
-			return
-		}
-		if a.reads.lastCheck, a.err = svc.LastCheck(ctx, a.reads.following); a.err != nil {
-			return
-		}
 		a.reads.inFlight, a.err = svc.InFlight(ctx)
 	}()
 	select {
 	case a := <-done:
-		// A read that failed leaves every read unknown, the ones made before it included:
-		// a following reported beside "following: unknown" would contradict it.
+		// A read that failed leaves the runs in flight unknown, whatever it listed first.
 		if a.err != nil && ctx.Err() != nil {
 			return serviceReads{}, fmt.Errorf("no answer within %s", budget)
 		}
@@ -143,13 +135,13 @@ type showText struct {
 	record string
 	// step is the record block's line for a record that has stepped, or "".
 	step string
-	// towards is the stage each run in flight is for, by run id (towardsOf), which the in
+	// towards is the side each run in flight is for, by run id (towardsOf), which the in
 	// flight: line names beside a rehearsal's child (015).
 	towards map[string]string
 }
 
 // decideShow builds the show block and its text from what the host holds and what the
-// service said (the kind table). unreachableAt is the service's address when
+// service said (the kind table, 019's research R-10). unreachableAt is the service's address when
 // it did not answer, and "" when it did.
 func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (findings.ShowBlock, showText) {
 	block := findings.ShowBlock{
@@ -221,44 +213,11 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 	if rec != nil && rec.Step != nil {
 		text.step = stepLine(rec, waitRecorded(rec))
 	}
-	following := reads.following
-	if following != nil {
-		block.Following = &findings.ShowFollowing{Branch: following.Branch, IntervalS: following.IntervalS,
-			ScheduleID: provision.FollowScheduleID, NextCheckAt: timeString(following.NextCheckAt), LastCheck: showCheck(reads.lastCheck)}
-	}
 	block.InFlight = showRuns(reads.inFlight)
 
 	note := func(s string) { block.Notes = append(block.Notes, s) }
-	bestEffort := func() {
-		if rec.ObservedAt != nil {
-			note(fmt.Sprintf("reproducing the twin with --at %s is best-effort", *rec.ObservedAt))
-		}
-	}
 	provisioning := provisionAtHost(block.InFlight)
-	switch rebuild := rebuildInFlight(block.InFlight); {
-	case rebuild != nil:
-		// The host is mid-rebuild: an empty host or a lab without a record is the rebuild's own
-		// work, not an orphan, and a create would be refused as run.in_flight.
-		// The twin: line still says what the host holds.
-		text.hostHeld = true
-		if following != nil {
-			block.Kind = findings.ShowKindFollowing
-			text.kind = fmt.Sprintf("following of branch %s is rebuilding the twin: check %s at step %s",
-				following.Branch, rebuild.WorkflowID, rebuild.Step)
-			if c := block.Following.LastCheck; c != nil {
-				text.details = append(text.details, fmt.Sprintf("last check: %s at %s, %s", c.WorkflowID, checkTime(c), c.Outcome))
-			}
-			if next := block.Following.NextCheckAt; next != "" {
-				text.details = append(text.details, "next check: "+next)
-			}
-			note(text.kind)
-			break
-		}
-		// Following was stopped under the check, as twin destroy does before cancelling it.
-		block.Kind = findings.ShowKindNone
-		s := fmt.Sprintf("check %s is rebuilding the twin at step %s; following has stopped", rebuild.WorkflowID, rebuild.Step)
-		text.kind = "none; " + s
-		note(s)
+	switch {
 	case rec == nil && provisioning != nil:
 		// An operator's create or provision has reached the host: a lab or twin directory with
 		// no twin.json is that run's work, or its cleanup's, not a run cut short, and a destroy
@@ -268,15 +227,6 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 		s := fmt.Sprintf("run %s %s is at step %s, and the host holds its work", provisioning.WorkflowID, provisioning.RunID, provisioning.Step)
 		text.kind = "none; " + s
 		note(s)
-		if following != nil {
-			s := scheduleWithoutTwin(following.Branch)
-			note(s)
-			text.kind += "; " + s
-		} else if c, s := followingStopped(reads.lastCheck); c != nil {
-			block.LastCheck = c
-			note(s)
-			text.kind += "; " + s
-		}
 	case rec == nil:
 		block.Kind = findings.ShowKindNone
 		text.kind = "none"
@@ -285,40 +235,13 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 		} else {
 			note(block.Host.Phrase + "; fylgja twin destroy clears it")
 		}
-		if following != nil {
-			s := scheduleWithoutTwin(following.Branch)
-			// A create replaces the Schedule only on an empty host: beside an orphan or an
-			// unreadable twin.json it is refused as host.lab.present or host.twin.present.
-			if block.Host.Phrase == "" {
-				s += "; fylgja twin create replaces it"
-			}
-			note(s)
-			text.kind += "; " + s
-		} else if c, s := followingStopped(reads.lastCheck); c != nil {
-			block.LastCheck = c
-			s += createStartsAgain
-			note(s)
-			text.kind += "; " + s
-		}
 	case !host.Lab.Present:
 		// A record whose lab is gone (M3's shape b) is no twin: whether the twin exists is what
-		// containerlab says (D-014). A check skips it as nothing to compare against, and a
-		// create is refused as host.twin.present, so no create is advised. A rebuild whose
-		// destroy removed the lab but not twin.json leaves this host too, and its failed check
-		// is reported as it is with no record.
+		// containerlab says (D-014). A create is refused as host.twin.present, so no create is
+		// advised.
 		block.Kind = findings.ShowKindNone
 		text.kind = "none"
 		note(block.Host.Phrase + "; fylgja twin destroy clears it")
-		if following != nil {
-			s := scheduleWithoutTwin(following.Branch)
-			note(s)
-			text.kind += "; " + s
-		} else if c, s := followingStopped(reads.lastCheck); c != nil {
-			block.LastCheck = c
-			s += createStartsAgain
-			note(s)
-			text.kind += "; " + s
-		}
 	case rec.State == wire.StateDiverged && rec.Step != nil:
 		// A step failed or was cancelled after the host was touched: the twin is up, where
 		// the record's top level says, and only a destroy clears it. No create
@@ -326,75 +249,24 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 		block.Kind = findings.ShowKindDiverged
 		text.kind = divergedKind(rec)
 		note(text.kind)
-	case rec.Source == wire.SourceSnapshot:
-		// A twin built from a snapshot is of what its envelope says, pinned or frozen, and
-		// never following, by rule: its reference is a document, which does not move, so the
-		// following branch of the table is not taken whatever Schedule exists (R-08; FR-017).
-		// Otherwise the existing rules stand: a frozen twin's read time is noted as any is.
-		built := "built from a snapshot"
-		if id := rec.SnapshotID; id != nil {
-			built = "built from snapshot " + shortID(*id)
-		}
-		if at := rec.Provenance.At; at != "" {
-			block.Kind = findings.ShowKindPinned
-			text.kind = fmt.Sprintf("pinned at %s; not following; %s", at, built)
-			note(fmt.Sprintf("pinned at %s; not following", at))
-		} else {
-			block.Kind = findings.ShowKindFrozen
-			text.kind = "frozen; not following; " + built
-			note("not following")
-			bestEffort()
-		}
-		if id := rec.SnapshotID; id != nil {
-			note("built from snapshot " + *id)
-		}
-	case rec.Provenance.At != "":
-		block.Kind = findings.ShowKindPinned
-		text.kind = fmt.Sprintf("pinned at %s; not following", rec.Provenance.At)
-		if st := rec.Stage; st != nil {
-			text.kind = fmt.Sprintf("pinned at %s, stage %s%s; not following", rec.Provenance.At, st.Name(), ofRehearsal(rec))
-			if step := rec.Step; step != nil {
-				text.kind = fmt.Sprintf("pinned at %s, stage %s (stepped from %s by run %s %s, ended %s)%s; not following",
-					rec.Provenance.At, st.Name(), step.From.Stage.Name(), step.Run.WorkflowID, step.Run.RunID, step.EndedAt,
-					ofRehearsal(rec))
-			}
-		}
-		note(text.kind)
 	case rec.Source == wire.SourceBundle:
 		block.Kind = findings.ShowKindFromBundle
-		text.kind = "from a bundle; not following"
-		note("provisioned from a bundle; read time unknown; not following")
-	case reachable && following != nil && following.Branch == rec.Provenance.Branch:
-		block.Kind = findings.ShowKindFollowing
-		text.kind = fmt.Sprintf("following branch %s, checked every %s", following.Branch, time.Duration(following.IntervalS)*time.Second)
-		if c := block.Following.LastCheck; c != nil {
-			line := fmt.Sprintf("last check: %s at %s, %s", c.WorkflowID, checkTime(c), c.Outcome)
-			if c.Outcome != provision.CheckUnchanged && c.Step != "" {
-				line += " at step " + c.Step
-			}
-			text.details = append(text.details, line)
-		}
-		if next := block.Following.NextCheckAt; next != "" {
-			text.details = append(text.details, "next check: "+next)
-		}
-		const discards = "a rebuild discards the twin's runtime state"
-		text.details = append(text.details, discards)
-		note(discards)
-		bestEffort()
-	case reachable && following != nil:
-		block.Kind = findings.ShowKindFrozen
-		s := fmt.Sprintf("following of branch %s exists, but the twin is of branch %s: checks skip", following.Branch, rec.Provenance.Branch)
-		text.kind = "frozen; " + s
-		note(s)
-		bestEffort()
+		text.kind = "from a bundle"
+		note("provisioned from a bundle; read time unknown")
 	default:
-		block.Kind = findings.ShowKindFrozen
-		text.kind = "frozen"
-		if reachable {
-			text.kind += "; not following"
-			note("not following")
+		// A twin from intent or a snapshot is frozen at the snapshot its record names, and
+		// changes only when the operator steps it (D-062): its line names that snapshot and
+		// what it was read from. A record naming none, an earlier build's rebuild's or a
+		// record of 8 or earlier, cannot be stepped, and says so.
+		block.Kind = findings.ShowKindSnapshot
+		text.kind = snapshotKind(rec)
+		if rec.SnapshotID == nil {
+			text.details = append(text.details, noSnapshotNote)
+			note(noSnapshotNote)
 		}
-		bestEffort()
+		if rec.Provenance.At == "" && rec.ObservedAt != nil {
+			note(fmt.Sprintf("reproducing the twin with --at %s is best-effort", *rec.ObservedAt))
+		}
 	}
 	// A rehearsal in flight holds the host from its start to its destroy's end, whatever its
 	// children have reached, and is named after the kind with where it is (015).
@@ -410,13 +282,13 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 		text.hostHeld = true
 		s := fmt.Sprintf("run %s %s is at step %s", r.WorkflowID, r.RunID, r.Step)
 		if towards := stepTowards(reads.inFlight, r.RunID); towards != "" {
-			s += ", stepping towards stage " + towards
+			s += ", stepping towards " + towards
 		}
 		text.kind += "; " + s
 		note(s)
 	}
 	if !reachable {
-		s := fmt.Sprintf("following: unknown (workflow service unreachable at %s)", unreachableAt)
+		s := fmt.Sprintf("in flight: unknown (workflow service unreachable at %s)", unreachableAt)
 		text.kind += "; " + s
 		note(s)
 	}
@@ -573,14 +445,71 @@ func lifecycleNodes(r wire.StepReconcile) []string {
 	return slices.Compact(out)
 }
 
-// divergedKind is the kind line of a diverged twin (contracts/cli.md, twin show). Each stage
-// is named as wire.TwinRecord.SideStage names it, a record of twin.json 5 or earlier's too.
+// divergedKind is the kind line of a diverged twin (contracts/cli.md, twin show). Its target
+// is named by stepSideName and where the twin is by wire.TwinRecord.Position() (019): a
+// stage as SideStage names it, a record of twin.json 5 or earlier's too, and a side naming
+// no stage by its snapshot or bundle.
 func divergedKind(rec *wire.TwinRecord) string {
 	st := rec.Step
 	return fmt.Sprintf("diverged towards %s (bundle %s): run %s %s stopped at phase %s; landed: %s; not landed: %s; "+
 		"the twin is at %s (bundle %s)%s; fylgja twin destroy clears it",
-		rec.SideStage(st.To.Stage), shortID(st.To.BundleID), st.Run.WorkflowID, st.Run.RunID, phaseOf(st),
-		orNone(landed(st)), orNone(notLanded(st)), rec.SideStage(rec.Stage), shortID(rec.BundleID), ofRehearsal(rec))
+		stepSideName(rec, st.To), shortID(st.To.BundleID), st.Run.WorkflowID, st.Run.RunID, phaseOf(st),
+		orNone(landed(st)), orNone(notLanded(st)), rec.Position(), shortID(rec.BundleID), ofRehearsal(rec))
+}
+
+// noSnapshotNote is what twin show says of a twin whose record names no snapshot (019): an
+// earlier build's rebuild, or a record of 8 or earlier, which twin step refuses.
+const noSnapshotNote = "the twin's record names no snapshot, so fylgja twin step refuses it; fylgja twin destroy clears it"
+
+// snapshotKind is the kind line of a twin built from intent or a snapshot (contracts/cli.md,
+// 019): the snapshot its record names, short, or none; in brackets its branch and its at, or
+// the time it was read when it has none; then, as before 019, the stage it names, the step
+// that took it there and the rehearsal it is the twin of. A record of 5 or earlier that names
+// M10's waypoint names no stage and, as before 019, no step on this line: its step line names
+// the waypoint.
+//
+//	snapshot 9c2d01e7… (branch change-1 at …), stage change-1/third-link (stepped from change-1/seeded by run fylgja-step 0a1b…, ended …)
+func snapshotKind(rec *wire.TwinRecord) string {
+	id := "none"
+	if rec.SnapshotID != nil {
+		id = shortID(*rec.SnapshotID)
+	}
+	ref := "branch " + rec.Provenance.Branch
+	switch {
+	case rec.Provenance.At != "":
+		ref += " at " + rec.Provenance.At
+	case rec.ObservedAt != nil:
+		ref += ", read at " + *rec.ObservedAt
+	}
+	line := fmt.Sprintf("snapshot %s (%s)", id, ref)
+	if st := rec.Stage; st != nil {
+		line += ", stage " + st.Name()
+	}
+	if st := rec.Step; st != nil && !rec.Superseded {
+		line += fmt.Sprintf(" (stepped from %s by run %s %s, ended %s)", stepSideRef(rec, st.From), st.Run.WorkflowID,
+			st.Run.RunID, st.EndedAt)
+	}
+	return line + ofRehearsal(rec)
+}
+
+// stepSideRef names a step's side as twin show's lines name the side a step went from or
+// towards (contracts/cli.md, 019): a stage by its reference alone, <branch>/<label>, as M11
+// named it, and a superseded record's waypoint as SideName words it; any other side by
+// wire.StepSide.Name(), snapshot <short>… or bundle <short>….
+func stepSideRef(rec *wire.TwinRecord, s wire.StepSide) string {
+	if s.Stage != nil || rec.Superseded {
+		return rec.SideName(s.Stage)
+	}
+	return s.Name()
+}
+
+// stepSideName is stepSideRef with a stage's word, as the diverged kind line names its
+// target: stage <branch>/<label>, a superseded record's waypoint, or the side's Name().
+func stepSideName(rec *wire.TwinRecord, s wire.StepSide) string {
+	if s.Stage != nil || rec.Superseded {
+		return rec.SideStage(s.Stage)
+	}
+	return s.Name()
 }
 
 // ofRehearsal names the rehearsal a version 7 record is the twin of, as the kind line and
@@ -594,8 +523,8 @@ func ofRehearsal(rec *wire.TwinRecord) string {
 
 // stepLine is the record block's line for a record that has stepped: how the step went, or
 // where it stopped (contracts/cli.md, twin show). A version 5 record's line ends with how
-// the step's wait ended. Each side is named as wire.TwinRecord.SideName names it, a record
-// of version 5 or earlier's too.
+// the step's wait ended. Each side is named by stepSideRef, a record of version 5 or
+// earlier's too.
 func stepLine(rec *wire.TwinRecord, waitKnown bool) string {
 	line := m11StepLine(rec)
 	if !waitKnown {
@@ -624,10 +553,10 @@ func m11StepLine(rec *wire.TwinRecord) string {
 	st := rec.Step
 	if st.Outcome == wire.StepDiverged {
 		return fmt.Sprintf("diverged: step run %s %s towards %s (bundle %s) stopped at phase %s, ended %s; landed %s; not landed %s",
-			st.Run.WorkflowID, st.Run.RunID, rec.SideName(st.To.Stage), shortID(st.To.BundleID), phaseOf(st), st.EndedAt,
+			st.Run.WorkflowID, st.Run.RunID, stepSideRef(rec, st.To), shortID(st.To.BundleID), phaseOf(st), st.EndedAt,
 			orNone(landed(st)), orNone(notLanded(st)))
 	}
-	line := fmt.Sprintf("stepped from %s by run %s %s, ended %s", rec.SideName(st.From.Stage), st.Run.WorkflowID,
+	line := fmt.Sprintf("stepped from %s by run %s %s, ended %s", stepSideRef(rec, st.From), st.Run.WorkflowID,
 		st.Run.RunID, st.EndedAt)
 	if st.Outcome == wire.StepUnchanged {
 		return line + "; unchanged: nothing reconciled, awaited or pushed"
@@ -732,8 +661,8 @@ func stepAtHost(runs []findings.ShowRun) *findings.ShowRun {
 	return nil
 }
 
-// stepTowards is the stage the step run runID is stepping towards, as the service read
-// it, or "".
+// stepTowards is the side the step run runID is stepping towards, as the service read it
+// from the run's input and wire.StepSide.Name() names it, or "".
 func stepTowards(runs []provision.RunInFlight, runID string) string {
 	for _, r := range runs {
 		if r.WorkflowID == wire.StepWorkflowID && r.RunID == runID {
@@ -743,85 +672,8 @@ func stepTowards(runs []provision.RunInFlight, runID string) string {
 	return ""
 }
 
-// scheduleWithoutTwin is the statement of a Schedule beside a host that holds no twin.
-func scheduleWithoutTwin(branch string) string {
-	return fmt.Sprintf("following of branch %s exists, and a check finds nothing to compare against", branch)
-}
-
-// createStartsAgain ends the "following of branch B stopped: …" sentence, where no run in
-// flight holds the host.
-const createStartsAgain = "; fylgja twin create starts again"
-
-// followingStopped is a last check that ended rebuild_failed and stopped following, as the show
-// block carries it, with that sentence up to createStartsAgain; nil for any other check.
-// Only a host with no Schedule asks.
-func followingStopped(last *provision.CheckRecord) (*findings.ShowCheck, string) {
-	if last == nil || last.Result.Outcome != provision.CheckRebuildFailed || !last.Result.FollowingStopped {
-		return nil, ""
-	}
-	c := showCheck(last)
-	cleanup := ""
-	if c.Cleanup != nil {
-		cleanup = fmt.Sprintf("; cleanup teardown %s, unstage %s", c.Cleanup.Teardown, c.Cleanup.Unstage)
-	}
-	return c, fmt.Sprintf("following of branch %s stopped: the check %s at %s ended %s at step %s%s",
-		last.Result.Branch, last.WorkflowID, timeString(last.ClosedAt), last.Result.Outcome, last.Result.Step, cleanup)
-}
-
-// showCheck is a closed check as the show block carries it.
-func showCheck(rec *provision.CheckRecord) *findings.ShowCheck {
-	if rec == nil {
-		return nil
-	}
-	r := rec.Result
-	c := &findings.ShowCheck{
-		WorkflowID: rec.WorkflowID, RunID: rec.RunID, ScheduledAt: timeString(rec.ScheduledAt), ClosedAt: timeString(rec.ClosedAt),
-		Outcome: r.Outcome, Step: r.Step, TwinBundleID: r.TwinBundleID, BundleID: r.BundleID, Findings: r.Findings,
-	}
-	var cleanup *provision.CleanupResult
-	switch {
-	case r.Provision != nil:
-		cleanup = &r.Provision.Cleanup
-	case r.Destroy != nil:
-		cleanup = &r.Destroy.Cleanup
-	}
-	if cleanup != nil {
-		c.Cleanup = &findings.CleanupBlock{Teardown: orSkipped(cleanup.Teardown), Unstage: orSkipped(cleanup.Unstage),
-			Removed: cleanup.Removed, Remaining: cleanup.Remaining}
-	}
-	return c
-}
-
-func orSkipped(status string) string {
-	if status == "" {
-		return provision.CleanupSkipped
-	}
-	return status
-}
-
-// timeString is t in RFC 3339, UTC, or "" for no time.
-func timeString(t time.Time) string {
-	if t.IsZero() {
-		return ""
-	}
-	return t.UTC().Format(time.RFC3339)
-}
-
-// checkTime is when a check closed, as the last check: line says it, or when it was due.
-func checkTime(c *findings.ShowCheck) string {
-	at := c.ClosedAt
-	if at == "" {
-		at = c.ScheduledAt
-	}
-	if t, err := time.Parse(time.RFC3339, at); err == nil {
-		return t.Format("15:04:05Z07:00")
-	}
-	return at
-}
-
 // printShow writes twin show's text layout (contracts/cli.md): the host, the record, the kind
-// and the runs in flight. A last check that was not unchanged has its findings written on
-// stderr, under the check's identifiers, as a run's would be.
+// and the runs in flight.
 func printShow(opts *options, block findings.ShowBlock, text showText) {
 	h := block.Host
 	if !h.LabPresent && !h.TwinDirPresent {
@@ -875,21 +727,9 @@ func printShow(opts *options, block findings.ShowBlock, text showText) {
 	}
 
 	printInFlight(opts, block.Service, block.InFlight, text.towards)
-
-	if opts.asJSON {
-		return
-	}
-	last := block.LastCheck
-	if block.Following != nil {
-		last = block.Following.LastCheck
-	}
-	if last != nil && last.Outcome != provision.CheckUnchanged && len(last.Findings) > 0 {
-		_, _ = fmt.Fprintf(opts.stderr(), "check %s %s ended %s:\n", last.WorkflowID, last.RunID, last.Outcome)
-		_ = (&findings.Document{Findings: last.Findings}).WriteText(opts.stderr())
-	}
 }
 
-// showRuns are the runs in flight as the show block carries them; a check carries its
+// showRuns are the runs in flight as the show block carries them; a rehearsal carries its
 // child's.
 func showRuns(runs []provision.RunInFlight) []findings.ShowRun {
 	var out []findings.ShowRun
@@ -905,7 +745,7 @@ func showRuns(runs []provision.RunInFlight) []findings.ShowRun {
 
 // printInFlight writes the in flight: line, or lines (contracts/cli.md, twin show): unknown
 // when the service did not answer, none, the one run, or each run under it. twin verify
-// prints it as twin show does. towards is the stage each run is for, by run id.
+// prints it as twin show does. towards is the side each run is for, by run id.
 func printInFlight(opts *options, service string, runs []findings.ShowRun, towards map[string]string) {
 	switch {
 	case service == findings.ShowServiceUnreachable:
@@ -922,21 +762,9 @@ func printInFlight(opts *options, service string, runs []findings.ShowRun, towar
 	}
 }
 
-// rebuildInFlight is the check in flight at its destroy or provision step, or nil: while it
-// is, the host holds whatever the rebuild has reached.
-func rebuildInFlight(runs []findings.ShowRun) *findings.ShowRun {
-	for i, r := range runs {
-		if strings.HasPrefix(r.WorkflowID, provision.WorkflowReconcile+"-") &&
-			(r.Step == findings.StepDestroy || r.Step == findings.StepProvision) {
-			return &runs[i]
-		}
-	}
-	return nil
-}
-
 // provisionAtHost is the operator's provisioning run in flight at a step that has touched the
 // host (stage through record, the push among them since M5, or its cleanup), or a
-// rehearsal's building its baseline (015), or nil. A check's child is never listed as the
+// rehearsal's building its baseline (015), or nil. A rehearsal's child is never listed as the
 // operator's run (provision.Client.InFlight).
 func provisionAtHost(runs []findings.ShowRun) *findings.ShowRun {
 	for i, r := range runs {
@@ -978,7 +806,7 @@ func rehearsalAt(r provision.RunInFlight, rec *wire.TwinRecord) string {
 	case c != nil && c.WorkflowID == provision.WorkflowDestroy:
 		return fmt.Sprintf("%s is destroying the twin, step %s", s, c.Step)
 	case c != nil && c.Towards != "":
-		return fmt.Sprintf("%s is at stage %s, step %s", s, c.Towards, c.Step)
+		return fmt.Sprintf("%s is at %s, step %s", s, c.Towards, c.Step)
 	case c != nil:
 		return fmt.Sprintf("%s is at step %s", s, c.Step)
 	case rec != nil && rec.Stage != nil:
@@ -987,8 +815,8 @@ func rehearsalAt(r provision.RunInFlight, rec *wire.TwinRecord) string {
 	return fmt.Sprintf("%s is at step %s", s, r.Step)
 }
 
-// towardsOf is the stage each run in flight is for, by run id, a rehearsal's child's
-// included: the stage a step run steps towards, and the baseline a rehearsal's
+// towardsOf is the side each run in flight is for, by run id, a rehearsal's child's
+// included: the side a step run steps towards, and the baseline a rehearsal's
 // provisioning child builds (provision.RunInFlight.Towards).
 func towardsOf(runs []provision.RunInFlight) map[string]string {
 	out := map[string]string{}
@@ -1003,8 +831,8 @@ func towardsOf(runs []provision.RunInFlight) map[string]string {
 	return out
 }
 
-// runInFlight names a run in flight and its step; a check carries its child's, and a
-// rehearsal its child's with the stage that child is for (015):
+// runInFlight names a run in flight and its step; a rehearsal carries its child's with the
+// side that child is for (015):
 //
 //	run fylgja-rehearse 01a1… at step step (run fylgja-step 03c3… at step push), stepping towards stage change-1/third-link
 func runInFlight(r findings.ShowRun, towards map[string]string) string {
@@ -1015,24 +843,17 @@ func runInFlight(r findings.ShowRun, towards map[string]string) string {
 			return s
 		}
 		s += fmt.Sprintf(" (run %s %s at step %s)", c.WorkflowID, c.RunID, c.Step)
-		switch stage := towards[c.RunID]; {
+		switch side := towards[c.RunID]; {
 		case c.WorkflowID == provision.WorkflowDestroy:
 			s += ", destroying the twin"
-		case stage != "" && c.WorkflowID == provision.WorkflowStep:
-			s += ", stepping towards stage " + stage
-		case stage != "":
-			s += ", creating the twin at stage " + stage
+		case side != "" && c.WorkflowID == provision.WorkflowStep:
+			s += ", stepping towards " + side
+		case side != "":
+			s += ", creating the twin at " + side
 		}
 		return s
 	}
-	if !strings.HasPrefix(r.WorkflowID, provision.WorkflowReconcile+"-") {
-		return fmt.Sprintf("run %s %s at step %s", r.WorkflowID, r.RunID, r.Step)
-	}
-	s := fmt.Sprintf("check %s at step %s", r.WorkflowID, r.Step)
-	if c := r.Child; c != nil {
-		s += fmt.Sprintf(" (run %s %s at step %s)", c.WorkflowID, c.RunID, c.Step)
-	}
-	return s
+	return fmt.Sprintf("run %s %s at step %s", r.WorkflowID, r.RunID, r.Step)
 }
 
 // plural is n and noun, with an s unless n is one.

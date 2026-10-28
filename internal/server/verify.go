@@ -226,13 +226,10 @@ func twinAbsent(host lab.HostState, paths lab.Paths, runs []findings.ShowRun) (o
 	return object, message
 }
 
-// hostHolder is the run in flight whose work the host holds, or nil: a check's rebuild,
-// an operator's provisioning run from its stage through its cleanup, or a step from its
+// hostHolder is the run in flight whose work the host holds, or nil: an operator's
+// provisioning run, or a rehearsal's, from its stage through its cleanup, or a step from its
 // stage through its record.
 func hostHolder(runs []findings.ShowRun) *findings.ShowRun {
-	if r := rebuildInFlight(runs); r != nil {
-		return r
-	}
 	if r := provisionAtHost(runs); r != nil {
 		return r
 	}

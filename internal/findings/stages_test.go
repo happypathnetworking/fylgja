@@ -153,7 +153,7 @@ func stageDocuments() []labelledDocument {
 
 	shown := func(branch, at string, stage *ShowStage) *Document {
 		doc := NewDocument(OpTwinShow, nil, nil)
-		doc.Show = &ShowBlock{Kind: ShowKindPinned, Service: ShowServiceOK,
+		doc.Show = &ShowBlock{Kind: ShowKindSnapshot, Service: ShowServiceOK,
 			Host: ShowHost{LabPresent: true, TwinDirPresent: true, Phrase: "the twin of branch " + branch + " at " + at,
 				Nodes: []ShowNode{{Name: "n1", Container: "clab-fylgja-n1", State: "running", MgmtIPv4: "172.20.20.2",
 					Artifact: &ShowArtifact{Name: "device-config", Checksum: m5Checksum}}}},

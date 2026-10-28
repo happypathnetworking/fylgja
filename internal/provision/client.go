@@ -12,8 +12,6 @@ import (
 	commonpb "go.temporal.io/api/common/v1"
 	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/api/serviceerror"
-	workflowpb "go.temporal.io/api/workflow/v1"
-	"go.temporal.io/api/workflowservice/v1"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/converter"
 	tlog "go.temporal.io/sdk/log"
@@ -81,18 +79,11 @@ type Service interface {
 	// flight is a *StartError carrying run.in_flight, naming the run, with nothing
 	// cancelled or started. A destroy run in flight is attached to.
 	StartReclaim(ctx context.Context, onEvent func(Event)) (DestroyRun, error)
-	// Following describes Schedule fylgja-follow, or returns nil when there is none. twin
-	// show's reads (Following, LastCheck, InFlight) change nothing and need no worker; a
-	// service that does not answer them is an *UnreachableError.
-	Following(ctx context.Context) (*FollowingState, error)
-	// LastCheck is the newest closed check: of schedule's recent actions when a Schedule
-	// exists, and otherwise the newest the service lists, unless a provisioning or destroy
-	// run has started since it closed. nil when there is none.
-	LastCheck(ctx context.Context, schedule *FollowingState) (*CheckRecord, error)
-	// InFlight names the rehearsal, the provisioning run, the destroy run, the step run and
-	// the check in flight, each with the step its history has reached; a rehearsal's or a
-	// check's child run is its Child, named once, and a step run, as either kind of run or as
-	// a rehearsal's child, names the stage it steps towards.
+	// InFlight names the rehearsal, the provisioning run, the destroy run and the step run in
+	// flight, the operator's runs alone, each with the step its history has reached; a
+	// rehearsal's child run is its Child, named once, and a step run, on its own or as a
+	// rehearsal's child, names the side it steps towards. It changes nothing and needs no
+	// worker; a service that does not answer is an *UnreachableError.
 	InFlight(ctx context.Context) ([]RunInFlight, error)
 	// StartStep starts the one step run and returns its run id once a worker has taken it
 	// (M11). A rehearsal, provisioning, destroy or step run in
@@ -111,41 +102,17 @@ type Service interface {
 	Close()
 }
 
-// ScheduledCheck is one check the Schedule started: its identity and when it was due.
-type ScheduledCheck struct {
-	WorkflowID  string
-	RunID       string
-	ScheduledAt time.Time
-}
-
-// FollowingState is Schedule fylgja-follow as twin show reads it.
-type FollowingState struct {
-	Branch        string
-	IntervalS     int
-	NextCheckAt   time.Time        // zero when the service names no next check
-	RecentActions []ScheduledCheck // the checks it started recently, newest last
-	Running       []ScheduledCheck // the check it started that is still running
-}
-
-// CheckRecord is one closed check and its result.
-type CheckRecord struct {
-	WorkflowID  string
-	RunID       string
-	ScheduledAt time.Time
-	ClosedAt    time.Time
-	Result      ReconcileResult
-}
-
 // RunInFlight is a run that has not closed, and the step its history has reached, as
-// findings name steps. A check's child run in flight is its Child.
+// findings name steps. A rehearsal's child run in flight is its Child.
 type RunInFlight struct {
 	WorkflowID string
 	RunID      string
 	Step       string
 	Child      *RunInFlight
-	// Towards is the stage a fylgja-step run is stepping towards, <branch>/<label>, from
-	// its input, and, for a rehearsal's provisioning child, the baseline it builds (015); ""
-	// for every other run.
+	// Towards is the side a fylgja-step run is stepping towards, named by
+	// wire.StepSide.Name() from its input (stage <branch>/<label> or snapshot <short>, 019),
+	// and, for a rehearsal's provisioning child, the baseline it builds, stage
+	// <branch>/<label> (015); "" for every other run.
 	Towards string
 }
 
@@ -688,37 +655,8 @@ func (c *Client) destroy(ctx context.Context, onEvent func(Event)) (DestroyRun, 
 	return out, nil
 }
 
-// reconcileWorkflowType is the name an earlier build's worker registered a check's
-// workflow under, which its Schedule's action started by. This build registers none, and
-// reads it to find a check an earlier build left (019).
-const reconcileWorkflowType = "Reconcile"
-
-// followedBranch is the branch a Schedule's action checks, decoded from the action's first
-// arg, which Describe returns as a payload. "" when it cannot be
-// read.
-func followedBranch(desc *client.ScheduleDescription) string {
-	action, ok := desc.Schedule.Action.(*client.ScheduleWorkflowAction)
-	if !ok || len(action.Args) == 0 {
-		return ""
-	}
-	var in ReconcileInput
-	switch arg := action.Args[0].(type) {
-	case *commonpb.Payload:
-		if converter.GetDefaultDataConverter().FromPayload(arg, &in) != nil {
-			return ""
-		}
-	case ReconcileInput:
-		in = arg
-	}
-	return in.Branch
-}
-
-// runningChecksQuery finds a check in flight. No ORDER BY: the dev server's visibility
-// store refuses it.
-const runningChecksQuery = "WorkflowType = '" + reconcileWorkflowType + "' AND ExecutionStatus = 'Running'"
-
 // unreachable reports a read twin show made that the service did not answer. Whatever the
-// cause, twin show can say only that following and runs in flight are unknown.
+// cause, twin show can say only that the runs in flight are unknown.
 func (c *Client) unreachable(err error) error {
 	var already *UnreachableError
 	if errors.As(err, &already) {
@@ -727,160 +665,11 @@ func (c *Client) unreachable(err error) error {
 	return &UnreachableError{Address: c.Address, Err: err}
 }
 
-// Following implements Service.
-func (c *Client) Following(ctx context.Context) (*FollowingState, error) {
-	desc, err := c.ScheduleClient().GetHandle(ctx, FollowScheduleID).Describe(ctx)
-	var notFound *serviceerror.NotFound
-	if errors.As(err, &notFound) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, c.unreachable(err)
-	}
-	st := &FollowingState{Branch: followedBranch(desc)}
-	if spec := desc.Schedule.Spec; spec != nil && len(spec.Intervals) > 0 {
-		st.IntervalS = int(spec.Intervals[0].Every / time.Second)
-	}
-	if next := desc.Info.NextActionTimes; len(next) > 0 {
-		st.NextCheckAt = next[0].UTC()
-	}
-	scheduledAt := map[string]time.Time{}
-	for _, a := range desc.Info.RecentActions {
-		if w := a.StartWorkflowResult; w != nil {
-			st.RecentActions = append(st.RecentActions, ScheduledCheck{WorkflowID: w.WorkflowID, RunID: w.FirstExecutionRunID,
-				ScheduledAt: a.ScheduleTime.UTC()})
-			scheduledAt[w.WorkflowID] = a.ScheduleTime.UTC()
-		}
-	}
-	for _, w := range desc.Info.RunningWorkflows {
-		st.Running = append(st.Running, ScheduledCheck{WorkflowID: w.WorkflowID, RunID: w.FirstExecutionRunID,
-			ScheduledAt: scheduledAt[w.WorkflowID]})
-	}
-	return st, nil
-}
-
-// allChecksQuery lists every check the service still holds. No ORDER BY: the dev server's
-// visibility store refuses it, so the newest is chosen here.
-const allChecksQuery = "WorkflowType = '" + reconcileWorkflowType + "'"
-
-// LastCheck implements Service. A check still running is not the last check: its result is
-// not known, and InFlight names it.
-func (c *Client) LastCheck(ctx context.Context, schedule *FollowingState) (*CheckRecord, error) {
-	if schedule != nil {
-		running := map[string]bool{}
-		for _, r := range schedule.Running {
-			running[r.WorkflowID] = true
-		}
-		for i := len(schedule.RecentActions) - 1; i >= 0; i-- {
-			a := schedule.RecentActions[i]
-			if running[a.WorkflowID] {
-				continue
-			}
-			rec, err := c.closedCheck(ctx, a.WorkflowID, a.RunID, a.ScheduledAt)
-			if err != nil || rec != nil {
-				return rec, err
-			}
-		}
-		return nil, nil
-	}
-
-	resp, err := c.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{Namespace: c.Namespace, Query: allChecksQuery})
-	if err != nil {
-		return nil, c.unreachable(err)
-	}
-	var newest *workflowpb.WorkflowExecutionInfo
-	for _, info := range resp.GetExecutions() {
-		if newest == nil || info.GetStartTime().AsTime().After(newest.GetStartTime().AsTime()) {
-			newest = info
-		}
-	}
-	if newest == nil || newest.GetStatus() == enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING {
-		return nil, nil
-	}
-	id := newest.GetExecution().GetWorkflowId()
-	rec, err := c.closedCheck(ctx, id, newest.GetExecution().GetRunId(), checkScheduledAt(id, newest.GetStartTime().AsTime()))
-	if err != nil || rec == nil {
-		return nil, err
-	}
-	// A provisioning or destroy run started after the check closed supersedes it: the failed
-	// rebuild is history, and the host is reported as it is. The rebuild's own
-	// children started before the check closed.
-	for _, workflowID := range []string{WorkflowProvision, WorkflowDestroy} {
-		desc, err := c.DescribeWorkflowExecution(ctx, workflowID, "")
-		var notFound *serviceerror.NotFound
-		if errors.As(err, &notFound) {
-			continue
-		}
-		if err != nil {
-			return nil, c.unreachable(err)
-		}
-		if desc.GetWorkflowExecutionInfo().GetStartTime().AsTime().After(rec.ClosedAt) {
-			return nil, nil
-		}
-	}
-	return rec, nil
-}
-
-// closedCheck is the check's record when it has closed with a result, and nil when it is
-// still running or closed without one (terminated, timed out).
-func (c *Client) closedCheck(ctx context.Context, workflowID, runID string, scheduledAt time.Time) (*CheckRecord, error) {
-	desc, err := c.DescribeWorkflowExecution(ctx, workflowID, runID)
-	if err != nil {
-		return nil, c.unreachable(err)
-	}
-	info := desc.GetWorkflowExecutionInfo()
-	if info.GetStatus() == enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING {
-		return nil, nil
-	}
-	rec := &CheckRecord{WorkflowID: workflowID, RunID: runID, ScheduledAt: scheduledAt, ClosedAt: info.GetCloseTime().AsTime().UTC()}
-	err = c.GetWorkflow(ctx, workflowID, runID).Get(ctx, &rec.Result)
-	var closedWithout *temporal.WorkflowExecutionError
-	if errors.As(err, &closedWithout) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, c.unreachable(err)
-	}
-	return rec, nil
-}
-
-// checkScheduledAt is when a check was due: the time the service appended to its
-// id,
-// or its start when the id carries none.
-func checkScheduledAt(workflowID string, started time.Time) time.Time {
-	if at, err := time.Parse(time.RFC3339, strings.TrimPrefix(workflowID, WorkflowReconcile+"-")); err == nil {
-		return at.UTC()
-	}
-	return started.UTC()
-}
-
-// InFlight implements Service. A rebuild's provision or destroy is named once, as the
-// check's child, not again as an operator's run, and a rehearsal's child likewise, as the
-// rehearsal's (015). A step run is named with its target, and a rehearsal's provisioning
-// child with the baseline it builds.
+// InFlight implements Service. A rehearsal's child is named once, as the rehearsal's (015),
+// not again as an operator's run. A step run is named with its target, and a rehearsal's
+// provisioning child with the baseline it builds.
 func (c *Client) InFlight(ctx context.Context) ([]RunInFlight, error) {
-	resp, err := c.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{Namespace: c.Namespace, Query: runningChecksQuery})
-	if err != nil {
-		return nil, c.unreachable(err)
-	}
-	var checks []RunInFlight
 	children := map[string]bool{}
-	for _, info := range resp.GetExecutions() {
-		run := RunInFlight{WorkflowID: info.GetExecution().GetWorkflowId(), RunID: info.GetExecution().GetRunId()}
-		var child *commonpb.WorkflowExecution
-		if run.Step, child, err = c.historyStep(ctx, run.WorkflowID, run.RunID); err != nil {
-			return nil, err
-		}
-		if child != nil {
-			run.Child = &RunInFlight{WorkflowID: child.GetWorkflowId(), RunID: child.GetRunId()}
-			if run.Child.Step, _, err = c.historyStep(ctx, run.Child.WorkflowID, run.Child.RunID); err != nil {
-				return nil, err
-			}
-			children[run.Child.WorkflowID+"/"+run.Child.RunID] = true
-		}
-		checks = append(checks, run)
-	}
-
 	var runs []RunInFlight
 	rehearsing, err := c.runningRun(ctx, WorkflowRehearse)
 	if err != nil {
@@ -923,13 +712,14 @@ func (c *Client) InFlight(ctx context.Context) ([]RunInFlight, error) {
 		}
 		runs = append(runs, run)
 	}
-	return append(runs, checks...), nil
+	return runs, nil
 }
 
-// towards is the stage a run's input names, <branch>/<label>, read from the input its
-// history starts with: the stage a step run steps towards, or the one a provisioning run
-// builds (a rehearsal's baseline, 015). "" when that input names none, and for any other
-// run.
+// towards is the side a run's input names, read from the input its history starts with:
+// the side a step run steps towards, named by wire.StepSide.Name() (stage <branch>/<label>,
+// snapshot <short>…), or the stage a provisioning run builds (a rehearsal's baseline, 015),
+// stage <branch>/<label>. "" when a step's input cannot be read or a provisioning run's
+// names no stage, and for any other run.
 func (c *Client) towards(ctx context.Context, workflowID, runID string) (string, error) {
 	if workflowID != WorkflowStep && workflowID != WorkflowProvision {
 		return "", nil
@@ -947,22 +737,18 @@ func (c *Client) towards(ctx context.Context, workflowID, runID string) (string,
 		return "", nil
 	}
 	dc := converter.GetDefaultDataConverter()
-	var stage *wire.StageRef
 	if workflowID == WorkflowStep {
 		var in StepInput
-		if dc.FromPayloads(attrs.GetInput(), &in) == nil {
-			stage = in.To.Stage
+		if dc.FromPayloads(attrs.GetInput(), &in) != nil {
+			return "", nil
 		}
-	} else {
-		var in ProvisionInput
-		if dc.FromPayloads(attrs.GetInput(), &in) == nil {
-			stage = in.Stage
-		}
+		return in.To.Name(), nil
 	}
-	if stage == nil {
+	var in ProvisionInput
+	if dc.FromPayloads(attrs.GetInput(), &in) != nil || in.Stage == nil {
 		return "", nil
 	}
-	return stage.Name(), nil
+	return "stage " + in.Stage.Name(), nil
 }
 
 // historyStep reads a run's history once, without waiting for more, and returns the step
@@ -1081,28 +867,21 @@ type Event struct {
 	// Notice is a line about a run rather than a step: the run being followed, one being
 	// cancelled or attached to. When it is set, the other fields are empty.
 	Notice string
-	// Of is the run whose child this event's run is, when it was followed as one: a check's
-	// rebuild, or a rehearsal's provision, step and destroy (015), so a destroy that follows a
+	// Of is the run whose child this event's run is, when it was followed as one: a
+	// rehearsal's provision, step and destroy (015), so a destroy that follows a
 	// rehearsal's own destroy first tells it from its own. "" for a run followed on its own.
 	Of string
 }
 
-// isCheck reports whether workflowID is a check: the workflow service appends the scheduled
-// time to the action id.
-func isCheck(workflowID string) bool {
-	return strings.HasPrefix(workflowID, WorkflowReconcile+"-")
-}
-
-// Workflow type names, as a check's or a rehearsal's history names its children.
+// Workflow type names, as a rehearsal's history names its children.
 const (
 	destroyWorkflowType   = "Destroy"
 	provisionWorkflowType = "Provision"
 	stepWorkflowType      = "Step"
 )
 
-// findingStep is the step, as findings name it, an activity or a check's child belongs to.
-// PlanTeardown budgets the teardown, so it is part of it; a check's two inspections are its
-// inspect step.
+// findingStep is the step, as findings name it, an activity or a rehearsal's child belongs
+// to. PlanTeardown budgets the teardown, so it is part of it.
 func findingStep(activityType string) string {
 	switch activityType {
 	case wire.ActInspectTwin:
@@ -1211,9 +990,9 @@ func (c *Client) Follow(ctx context.Context, workflowID, runID string, onEvent f
 			s, d := ended(a.GetScheduledEventId(), at)
 			emit(s.activityType, Event{Step: s.step, End: true, Outcome: EventCancelled, Duration: d})
 
-		// A check's children: its rebuild's destroy and provision. Each is a step of the check,
-		// and its own steps are followed where it starts, so a destroy that cancels a check
-		// shows the child's cleanup too.
+		// A rehearsal's children: its provision, its steps and its destroy (015). Each is a
+		// step of the rehearsal, and its own steps are followed where it starts, so a destroy
+		// that cancels a rehearsal shows the child's cleanup too.
 		case enumspb.EVENT_TYPE_START_CHILD_WORKFLOW_EXECUTION_INITIATED:
 			a := ev.GetStartChildWorkflowExecutionInitiatedEventAttributes()
 			name := a.GetWorkflowType().GetName()
@@ -1269,10 +1048,9 @@ func childEvents(parent string, onEvent func(Event)) func(Event) {
 }
 
 // stepName is the step an activity performs, named as contracts/cli.md names it. Teardown and
-// unstage are a provisioning run's cleanup, and the whole of a destroy run. A check names
-// its two inspections, its stop and its children as its own steps (contracts/cli.md,
-// Progress lines), a step run its inspection and its four activities (M11), and a rehearsal
-// its three kinds of child (015: "at step step" while a step child runs).
+// unstage are a provisioning run's cleanup, and the whole of a destroy run. A step run names
+// its inspection and its four activities (M11), and a rehearsal its three kinds of child
+// (015: "at step step" while a step child runs).
 func stepName(workflowID, activityType string) string {
 	if workflowID == WorkflowRehearse {
 		switch activityType {
@@ -1282,16 +1060,6 @@ func stepName(workflowID, activityType string) string {
 			return "step"
 		case destroyWorkflowType:
 			return "destroy"
-		}
-	}
-	if isCheck(workflowID) {
-		switch activityType {
-		case wire.ActInspectTwin:
-			return "inspect"
-		case destroyWorkflowType:
-			return "destroy"
-		case provisionWorkflowType:
-			return "provision"
 		}
 	}
 	if workflowID == WorkflowStep && activityType == wire.ActInspectTwin {

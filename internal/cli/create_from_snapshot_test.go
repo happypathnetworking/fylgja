@@ -372,12 +372,12 @@ func TestEmptySnapshotIsTheClients(t *testing.T) {
 }
 
 // US3 scenario 6 and FR-017: twin show describes a twin built from a snapshot by its
-// envelope, pinned at its at or frozen, never following, whatever Schedule exists, with the
-// note naming the snapshot in full; the record line names it, and its source is snapshot.
+// envelope, as any twin of a snapshot (019): kind snapshot, its line naming the snapshot and
+// its branch at its at, or its read time; the record line names it in full, and its source
+// is snapshot.
 func TestShowSnapshotTwin(t *testing.T) {
 	const at = "2026-09-08T12:00:00Z"
 	id := fixtureSnapshotID
-	built := "built from snapshot " + id
 	provisioned := "  provisioned by run fylgja-provision " + showRunID + " (source snapshot), worker 0.1.0-dev, recorded 2026-09-16T19:01:02Z, 3 nodes\n"
 	record := func(at string) string {
 		ref := "fylgja-fixture"
@@ -395,20 +395,19 @@ func TestShowSnapshotTwin(t *testing.T) {
 		notes  []string
 	}{
 		{"with an at", at, threeNodes + record(at) + "  intent read at " + showObserved + "\n" + provisioned +
-			lines("kind: pinned at "+at+"; not following; built from snapshot 6a8a77fc…", "in flight: none"),
-			findings.ShowKindPinned, []string{"pinned at " + at + "; not following", built}},
+			lines("kind: snapshot 6a8a77fc… (branch fylgja-fixture at "+at+")", "in flight: none"),
+			findings.ShowKindSnapshot, nil},
 		{"without", "", threeNodes + record("") +
 			"  intent read at " + showObserved + "; reproducing it with --at that instant is best-effort\n" + provisioned +
-			lines("kind: frozen; not following; built from snapshot 6a8a77fc…", "in flight: none"),
-			findings.ShowKindFrozen, []string{"not following", bestEffortNote, built}},
+			lines("kind: snapshot 6a8a77fc… (branch fylgja-fixture, read at "+showObserved+")", "in flight: none"),
+			findings.ShowKindSnapshot, []string{bestEffortNote}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			paths := useStateRoot(t)
 			writeTwin(t, paths, twinOf(t, func(f *lab.RecordFields) {
 				f.Source, f.SnapshotID, f.Provenance.At = wire.SourceSnapshot, id, c.at
 			}))
-			// A Schedule of the twin's own branch, which a following twin would be read by.
-			out := showWith(t, paths, "inspect-three.json", &fakeService{following: followingState("fylgja-fixture")})
+			out := showWith(t, paths, "inspect-three.json", &fakeService{})
 			wantShow(t, out, c.stdout, c.kind, c.notes...)
 			if r := out.doc.Show.Record; r == nil || r.Source != wire.SourceSnapshot || r.SnapshotID == nil || *r.SnapshotID != id {
 				t.Errorf("record %+v; want source snapshot naming %s", r, id)

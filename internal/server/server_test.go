@@ -1303,7 +1303,9 @@ func TestTheClientSpeaksToTheServer(t *testing.T) {
 // rehearsalTwin is the record a rehearsal's baseline wrote (twin.json 8): change-1/seeded,
 // of rehearsal run r1; nil rehearsal for the hand twin of the same stage.
 func rehearsalTwin(rehearsal *wire.RehearsalRef) *wire.TwinRecord {
-	return &wire.TwinRecord{TwinVersion: "8", Lab: wire.LabName, BundleID: "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777",
+	snapshot := strings.Repeat("35aea06f", 8)
+	return &wire.TwinRecord{TwinVersion: lab.TwinVersion, Lab: wire.LabName, SnapshotID: &snapshot,
+		BundleID:   "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777",
 		Provenance: wire.Provenance{Branch: "change-1", At: "2026-10-16T17:25:30.118244+00:00", Scope: "tag:fylgja", Mapping: dcimMapping},
 		Source:     wire.SourceIntent,
 		Run:        wire.RunRef{WorkflowID: provision.WorkflowProvision, RunID: "p1"},
@@ -1321,7 +1323,7 @@ func TestShowNamesARehearsalAndWhereItIs(t *testing.T) {
 	of := &wire.RehearsalRef{WorkflowID: provision.WorkflowRehearse, RunID: "r1"}
 	lab3 := lab.LabState{Present: true, Nodes: []wire.LabNode{{Name: "n1", Container: "clab-fylgja-n1", State: "running"}}}
 	at := "2026-10-16T17:25:30.118244+00:00"
-	pinned := "pinned at " + at + ", stage change-1/seeded, of rehearsal run fylgja-rehearse r1; not following"
+	pinned := "snapshot 35aea06f… (branch change-1 at " + at + "), stage change-1/seeded, of rehearsal run fylgja-rehearse r1"
 
 	stepped := rehearsalTwin(of)
 	stepped.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "third-link", AtSource: "given"}
@@ -1338,13 +1340,13 @@ func TestShowNamesARehearsalAndWhereItIs(t *testing.T) {
 	}{
 		{"a rehearsal's twin", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)}, nil, pinned, "in flight: none"},
 		{"a hand twin", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(nil)}, nil,
-			"pinned at " + at + ", stage change-1/seeded; not following", "in flight: none"},
+			"snapshot 35aea06f… (branch change-1 at " + at + "), stage change-1/seeded", "in flight: none"},
 		{"a rehearsal's twin stepped", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: stepped}, nil,
-			"pinned at " + at + ", stage change-1/third-link (stepped from change-1/seeded by run fylgja-step s1, ended " +
-				"2026-10-19T10:02:00Z), of rehearsal run fylgja-rehearse r1; not following", "in flight: none"},
+			"snapshot 35aea06f… (branch change-1 at " + at + "), stage change-1/third-link (stepped from change-1/seeded by run " +
+				"fylgja-step s1, ended 2026-10-19T10:02:00Z), of rehearsal run fylgja-rehearse r1", "in flight: none"},
 		{"stepping", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)},
 			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "step",
-				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowStep, RunID: "s1", Step: "push", Towards: "change-1/third-link"}}},
+				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowStep, RunID: "s1", Step: "push", Towards: "stage change-1/third-link"}}},
 			pinned + "; rehearsal run fylgja-rehearse r1 is at stage change-1/third-link, step push",
 			"in flight: run fylgja-rehearse r1 at step step (run fylgja-step s1 at step push), stepping towards stage change-1/third-link"},
 		{"at the baseline's wait", lab.HostState{Lab: lab3, TwinDirPresent: true, Twin: rehearsalTwin(of)},
@@ -1358,7 +1360,7 @@ func TestShowNamesARehearsalAndWhereItIs(t *testing.T) {
 			"in flight: run fylgja-rehearse r1 at step destroy (run fylgja-destroy d1 at step teardown), destroying the twin"},
 		{"building the baseline", lab.HostState{Lab: lab3, TwinDirPresent: true},
 			[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "provision",
-				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy", Towards: "change-1/seeded"}}},
+				Child: &provision.RunInFlight{WorkflowID: provision.WorkflowProvision, RunID: "p1", Step: "deploy", Towards: "stage change-1/seeded"}}},
 			"none; run fylgja-provision p1 is at step deploy, and the host holds its work; " +
 				"rehearsal run fylgja-rehearse r1 is at stage change-1/seeded, step deploy",
 			"in flight: run fylgja-rehearse r1 at step provision (run fylgja-provision p1 at step deploy), creating the twin at stage change-1/seeded"},

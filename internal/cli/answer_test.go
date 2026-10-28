@@ -414,22 +414,6 @@ func answerCases() []answerCase {
 			return answerWant{kinds: []string{api.KindDocument}, status: findings.StatusOK,
 				stdout: lines("twin: none: no lab fylgja, no twin directory", "kind: none", "in flight: none")}
 		}},
-		{"twin show, following stopped (TestShowFollowingStopped)", findings.OpTwinShow, func(t *testing.T) answerWant {
-			useStateRoot(t)
-			check := stoppedCheck()
-			useService(t, &fakeService{readOnly: t, lastCheck: check})
-			useClab(t, "inspect-empty.json")
-			t.Setenv("FYLGJA_TEMPORAL_ADDRESS", "")
-			const stopped = "following of branch fylgja-fixture stopped: the check " + showCheckID +
-				" at 2026-09-16T19:12:00Z ended rebuild_failed at step provision; cleanup teardown done, unstage done; fylgja twin create starts again"
-			var text bytes.Buffer
-			if err := (&findings.Document{Findings: check.Result.Findings}).WriteText(&text); err != nil {
-				t.Fatal(err)
-			}
-			return answerWant{kinds: []string{api.KindDocument}, status: findings.StatusOK,
-				stdout: lines("twin: none: no lab fylgja, no twin directory", "kind: none; "+stopped, "in flight: none"),
-				stderr: "check " + showCheckID + " r-c ended rebuild_failed:\n" + text.String()}
-		}},
 		{"twin verify (TestVerifyConformingThreeNode)", findings.OpTwinVerify, func(t *testing.T) answerWant {
 			h := verifyHost(t, "three-node", nil, nil)
 			useVerifyClock(t)

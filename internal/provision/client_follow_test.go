@@ -124,61 +124,9 @@ func TestEveryActivityHasAFindingStep(t *testing.T) {
 	}
 }
 
-// A check's children are steps of the check, and each child's own steps are followed where
-// it starts, under its own run: a destroy that cancels a check shows the child's cleanup.
-func TestFollowFollowsACheckChild(t *testing.T) {
-	const check = "fylgja-reconcile-2026-09-16T19:10:00Z"
-	initiated := &historypb.HistoryEvent{EventId: 11, EventType: enumspb.EVENT_TYPE_START_CHILD_WORKFLOW_EXECUTION_INITIATED,
-		Attributes: &historypb.HistoryEvent_StartChildWorkflowExecutionInitiatedEventAttributes{
-			StartChildWorkflowExecutionInitiatedEventAttributes: &historypb.StartChildWorkflowExecutionInitiatedEventAttributes{
-				WorkflowId: WorkflowProvision, WorkflowType: &commonpb.WorkflowType{Name: "Provision"},
-			}}}
-	started := &historypb.HistoryEvent{EventId: 12, EventType: enumspb.EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_STARTED,
-		Attributes: &historypb.HistoryEvent_ChildWorkflowExecutionStartedEventAttributes{
-			ChildWorkflowExecutionStartedEventAttributes: &historypb.ChildWorkflowExecutionStartedEventAttributes{
-				InitiatedEventId:  11,
-				WorkflowExecution: &commonpb.WorkflowExecution{WorkflowId: WorkflowProvision, RunId: "run-p"},
-			}}}
-	cancelled := &historypb.HistoryEvent{EventId: 13, EventType: enumspb.EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_CANCELED,
-		Attributes: &historypb.HistoryEvent_ChildWorkflowExecutionCanceledEventAttributes{
-			ChildWorkflowExecutionCanceledEventAttributes: &historypb.ChildWorkflowExecutionCanceledEventAttributes{InitiatedEventId: 11},
-		}}
-
-	mc := &mocks.Client{}
-	histories := map[string][]*historypb.HistoryEvent{
-		check: {scheduledEvent(t, 5, wire.ActInspectTwin), initiated, started, cancelled,
-			historyEvent(enumspb.EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED)},
-		WorkflowProvision: {scheduledEvent(t, 5, wire.ActDestroyLab, wire.DestroyLabInput{}),
-			historyEvent(enumspb.EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED)},
-	}
-	mc.On("GetWorkflowHistory", mock.Anything, mock.Anything, mock.Anything, true, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT).Return(
-		func(ctx context.Context, workflowID, _ string, _ bool, _ enumspb.HistoryEventFilterType) client.HistoryEventIterator {
-			return &sliceHistory{ctx: ctx, events: histories[workflowID]}
-		})
-
-	type seen struct{ step, workflowID, findingStep, outcome, notice string }
-	var got []seen
-	err := (&Client{Client: mc}).Follow(context.Background(), check, "run-c", func(e Event) {
-		got = append(got, seen{e.Step, e.WorkflowID, e.FindingStep, e.Outcome, e.Notice})
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []seen{
-		{"inspect", check, findings.StepInspect, "", ""},
-		{"provision", check, findings.StepProvision, "", ""},
-		{"", "", "", "", "run fylgja-provision run-p"},
-		{"cleanup teardown", WorkflowProvision, findings.StepTeardown, "", ""},
-		{"provision", check, findings.StepProvision, EventCancelled, ""},
-	}
-	if !slices.Equal(got, want) {
-		t.Errorf("events\n  %+v\nwant\n  %+v", got, want)
-	}
-}
-
 // A rehearsal's progress names its three kinds of child as its own steps, provision, step and
 // destroy, and its baseline's wait as observe with how it ended; each child is announced
-// and followed where it starts, under its own run, as a check's are (015, R-12). A step
+// and followed where it starts, under its own run (015, R-12). A step
 // child has no step of the findings schema's, so it carries none.
 func TestFollowFollowsARehearsalsChildren(t *testing.T) {
 	mc := &mocks.Client{}

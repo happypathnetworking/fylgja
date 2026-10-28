@@ -499,22 +499,14 @@ func (r *rehearsing) host(ctx context.Context, svc provision.Service, baseline r
 }
 
 // holdingRun is the run in flight that refuses a rehearsal (contracts/rehearse-command.md,
-// step 4): a rehearsal, a provisioning, step or destroy run, an operator's or a check's
-// child; nil when none is running.
+// step 4): a rehearsal, or a provisioning, step or destroy run of the operator's; nil when
+// none is running. A rehearsal's child is listed under the rehearsal, which holds the host
+// first.
 func holdingRun(runs []provision.RunInFlight) *provision.RunInFlight {
-	holds := func(r provision.RunInFlight) bool {
+	for i, r := range runs {
 		switch r.WorkflowID {
 		case provision.WorkflowRehearse, provision.WorkflowProvision, provision.WorkflowStep, provision.WorkflowDestroy:
-			return true
-		}
-		return false
-	}
-	for i, r := range runs {
-		if holds(r) {
 			return &runs[i]
-		}
-		if c := r.Child; c != nil && holds(*c) {
-			return c
 		}
 	}
 	return nil

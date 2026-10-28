@@ -160,7 +160,7 @@ func showStepDocuments() []labelledDocument {
 			Notes: []string{"the kind line"}}
 		return doc
 	}
-	stepped := show(ShowKindPinned, record("ready", &ShowStep{Outcome: "stepped",
+	stepped := show(ShowKindSnapshot, record("ready", &ShowStep{Outcome: "stepped",
 		From: side(cabled, stepFromID, "2026-10-16T17:25:30.118244+00:00"), To: side(live, stepToID, "2026-10-16T17:30:00.000000+00:00"),
 		Run: ShowRef{WorkflowID: "fylgja-step", RunID: stepRunID}, Restarted: []string{"e1"},
 		Pushed: []StepPushedEntry{{Node: "e1", Reasons: []string{"artifact", "restarted"}, Outcome: "landed", TookS: f64(1.6)}},
@@ -172,7 +172,7 @@ func showStepDocuments() []labelledDocument {
 		Run: ShowRef{WorkflowID: "fylgja-step", RunID: stepRunID}, Phase: "push",
 		Pushed:    []StepPushedEntry{{Node: "e1", Reasons: []string{"artifact"}, Outcome: "refused", Rule: RulePushRefused}},
 		StartedAt: "2026-10-02T10:00:00Z", EndedAt: "2026-10-02T10:00:09Z"}))
-	unstepped := show(ShowKindPinned, record("ready", nil))
+	unstepped := show(ShowKindSnapshot, record("ready", nil))
 	return []labelledDocument{
 		{"show of a stepped record", stepped},
 		{"show of a diverged record", diverged},

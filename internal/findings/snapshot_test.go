@@ -28,11 +28,32 @@ func compile017FindingsSchema(t *testing.T) *jsonschema.Schema {
 }
 
 // as017 marshals a document as 017's contract is asked to validate it: with the snapshot
-// ids 018 writes as null taken out (drop018Snapshots), and nothing else, since 017's is the
-// contract that put the record's scope and mapping in place of contract_version.
+// ids 018 writes as null taken out (drop018Snapshots) and the show kind as 017 wrote it
+// (restore018Kind), and nothing else, since 017's is the contract that put the record's
+// scope and mapping in place of contract_version.
 func as017(t *testing.T, doc *Document) []byte {
 	t.Helper()
-	return mutated(t, doc, drop018Snapshots)
+	return mutated(t, doc, func(doc map[string]any) {
+		restore018Kind(doc)
+		drop018Snapshots(doc)
+	})
+}
+
+// restore018Kind gives a show block of kind snapshot (019) the kind every build before 019
+// wrote for the same twin, not following: pinned when its record names an at, and frozen
+// otherwise. Every other block is left as it is, so an earlier contract is still asked
+// about everything else 019 writes.
+func restore018Kind(doc map[string]any) {
+	show, ok := doc["show"].(map[string]any)
+	if !ok || show["kind"] != ShowKindSnapshot {
+		return
+	}
+	show["kind"] = "frozen"
+	if record, ok := show["record"].(map[string]any); ok {
+		if at, _ := record["at"].(string); at != "" {
+			show["kind"] = "pinned"
+		}
+	}
 }
 
 // mutated is doc marshalled, changed as a generic object by change, and marshalled again.
@@ -106,7 +127,7 @@ func TestAn018DocumentIsUnchanged(t *testing.T) {
 	v018 := compileFeatureFindingsSchema(t, contract018, currentResources...)
 	for _, c := range append(noSnapshotDocuments(), snapshotDocuments()...) {
 		t.Run(c.label, func(t *testing.T) {
-			mustValidateBytes(t, v018, mustMarshal(t, c.doc), c.label+" against 018's contract")
+			mustValidateBytes(t, v018, mutated(t, c.doc, restore018Kind), c.label+" against 018's contract")
 		})
 	}
 	for _, c := range followingDocuments() {
@@ -116,10 +137,11 @@ func TestAn018DocumentIsUnchanged(t *testing.T) {
 	}
 }
 
-// 019 removed the following block and dry_run.follow from the contract (formats.md §2): the
-// current findings.schema.json refuses every document an earlier build wrote with either,
-// which 018's copy accepts (TestAn018DocumentIsUnchanged), and accepts each as this build
-// writes it in its place.
+// 019 removed the following block and dry_run.follow from the contract (formats.md §2), and
+// the show kinds pinned, frozen and following with the show's following and last check
+// (§3): the current findings.schema.json refuses every document an earlier build wrote with
+// any of them, which 018's copy accepts (TestAn018DocumentIsUnchanged), and accepts each as
+// this build writes it in its place.
 func TestFollowingLeftTheContract(t *testing.T) {
 	current := compileCurrentFindingsSchema(t)
 	for _, c := range followingDocuments() {

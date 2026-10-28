@@ -514,22 +514,20 @@ func TestResultOfTheRunIsTheReportsResult(t *testing.T) {
 }
 
 // The runs that hold the host against a rehearsal (contracts/rehearse-command.md, step 4):
-// a rehearsal, a provisioning, step or destroy run, an operator's or a check's child; a
-// check at its own step holds nothing the host check does not refuse.
-func TestHoldingRunNamesTheFourAndAChecksChild(t *testing.T) {
-	check := provision.RunInFlight{WorkflowID: provision.WorkflowReconcile + "-2026-10-19T10:00:00Z", RunID: "c1", Step: "inspect"}
+// a rehearsal, or a provisioning, step or destroy run; a rehearsal's child is named under the
+// rehearsal, which is the run named.
+func TestHoldingRunNamesTheFour(t *testing.T) {
 	for _, c := range []struct {
 		runs []provision.RunInFlight
 		want string
 	}{
 		{nil, ""},
-		{[]provision.RunInFlight{check}, ""},
 		{[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1"}}, "r1"},
 		{[]provision.RunInFlight{{WorkflowID: provision.WorkflowProvision, RunID: "p1"}}, "p1"},
 		{[]provision.RunInFlight{{WorkflowID: provision.WorkflowStep, RunID: "s1"}}, "s1"},
 		{[]provision.RunInFlight{{WorkflowID: provision.WorkflowDestroy, RunID: "d1"}}, "d1"},
-		{[]provision.RunInFlight{{WorkflowID: check.WorkflowID, RunID: "c1", Step: "destroy",
-			Child: &provision.RunInFlight{WorkflowID: provision.WorkflowDestroy, RunID: "d2"}}}, "d2"},
+		{[]provision.RunInFlight{{WorkflowID: provision.WorkflowRehearse, RunID: "r1", Step: "destroy",
+			Child: &provision.RunInFlight{WorkflowID: provision.WorkflowDestroy, RunID: "d2"}}}, "r1"},
 	} {
 		got := holdingRun(c.runs)
 		if c.want == "" && got != nil || c.want != "" && (got == nil || got.RunID != c.want) {

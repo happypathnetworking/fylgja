@@ -85,14 +85,13 @@ type fakeService struct {
 	// every event, where the run's history ends.
 	resultErr   error
 	afterFollow func()
-	// following, lastCheck and inFlight answer twin show's reads, with readErr beside each;
-	// readBlocks holds every read until its context is done, as a service that never answers.
-	following  *provision.FollowingState
-	lastCheck  *provision.CheckRecord
+	// inFlight answers twin show's one read, with readErr beside it; readBlocks holds the
+	// read until its context is done, as a service that never answers.
 	inFlight   []provision.RunInFlight
 	readErr    error
 	readBlocks bool
-	// failRead, when set, names the one read that fails with failReadErr; the others answer.
+	// failRead, when set, names the read that fails with failReadErr, whatever it would
+	// have answered.
 	failRead    string
 	failReadErr error
 	// readOnly, when set, fails the test it names if a method that changes something is
@@ -140,20 +139,6 @@ func (f *fakeService) read(ctx context.Context, name string) error {
 		return f.failReadErr
 	}
 	return f.readErr
-}
-
-func (f *fakeService) Following(ctx context.Context) (*provision.FollowingState, error) {
-	if err := f.read(ctx, "Following"); err != nil {
-		return nil, err
-	}
-	return f.following, nil
-}
-
-func (f *fakeService) LastCheck(ctx context.Context, _ *provision.FollowingState) (*provision.CheckRecord, error) {
-	if err := f.read(ctx, "LastCheck"); err != nil {
-		return nil, err
-	}
-	return f.lastCheck, nil
 }
 
 func (f *fakeService) InFlight(ctx context.Context) ([]provision.RunInFlight, error) {
@@ -652,6 +637,7 @@ func asEarlierContract(t *testing.T, doc *findings.Document) []byte {
 		t.Fatal(err)
 	}
 	dropNullSnapshots(generic)
+	restore018Kind(generic)
 	if subject, ok := generic["subject"].(map[string]any); ok {
 		delete(subject, "scope")
 	}
@@ -706,8 +692,9 @@ func validateM7Document(t *testing.T, doc *findings.Document) {
 // 018 is additive: a document that names no snapshot is 017's too, so it is also validated
 // against 017's frozen copy, the null snapshot ids taken out (as017Contract).
 //
-// 019 removes following: a document of this build is 018's too, as built, so it is also
-// validated against 018's frozen copy.
+// 019 removes following and puts kind snapshot in place of pinned and frozen: a document of
+// this build is 018's too, its kind as 018 wrote it (as018Contract), so it is also validated
+// against 018's frozen copy.
 func validateM10Document(t *testing.T, doc *findings.Document) {
 	t.Helper()
 	validateWithShow(t, currentContract, "M13", doc)
@@ -761,8 +748,44 @@ func dropNullSnapshots(generic map[string]any) {
 	}
 }
 
+// restore018Kind gives a show block of kind snapshot (019) the kind every build before 019
+// wrote for the same twin, not following: pinned when its record names an at, and frozen
+// otherwise. Every other block is left as it is, so an earlier contract is still asked about
+// everything else 019 writes.
+func restore018Kind(generic map[string]any) {
+	show, ok := generic["show"].(map[string]any)
+	if !ok || show["kind"] != findings.ShowKindSnapshot {
+		return
+	}
+	show["kind"] = "frozen"
+	if record, ok := show["record"].(map[string]any); ok {
+		if at, _ := record["at"].(string); at != "" {
+			show["kind"] = "pinned"
+		}
+	}
+}
+
+// as018Contract is doc as 018's contract reads it, marshalled: the show kind as 018 wrote it
+// (restore018Kind), and nothing else.
+func as018Contract(t *testing.T, doc *findings.Document) []byte {
+	t.Helper()
+	b, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var generic map[string]any
+	if err := json.Unmarshal(b, &generic); err != nil {
+		t.Fatal(err)
+	}
+	restore018Kind(generic)
+	if b, err = json.Marshal(generic); err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
 // as017Contract is doc as 017's contract reads it, marshalled: the null snapshot ids taken
-// out, and nothing else.
+// out and the show kind as 017 wrote it, and nothing else.
 func as017Contract(t *testing.T, doc *findings.Document) []byte {
 	t.Helper()
 	b, err := json.Marshal(doc)
@@ -774,6 +797,7 @@ func as017Contract(t *testing.T, doc *findings.Document) []byte {
 		t.Fatal(err)
 	}
 	dropNullSnapshots(generic)
+	restore018Kind(generic)
 	if b, err = json.Marshal(generic); err != nil {
 		t.Fatal(err)
 	}
@@ -789,7 +813,9 @@ func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Doc
 	switch feature {
 	case contract017:
 		b = as017Contract(t, doc)
-	case currentContract, contract018:
+	case contract018:
+		b = as018Contract(t, doc)
+	case currentContract:
 		var err error
 		if b, err = json.Marshal(doc); err != nil {
 			t.Fatal(err)

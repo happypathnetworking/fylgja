@@ -17,13 +17,6 @@ const (
 	WorkflowDestroy   = "fylgja-destroy"
 	TaskQueue         = "fylgja"
 
-	// FollowScheduleID is the one following: the Schedule that starts a check on an
-	// interval.
-	FollowScheduleID = "fylgja-follow"
-	// WorkflowReconcile is a check's action id. The workflow service appends the scheduled
-	// time, so a check is fylgja-reconcile-<time>; one at a time is the Schedule's overlap
-	// policy, not the id.
-	WorkflowReconcile = "fylgja-reconcile"
 	// WorkflowStep is the one step run: a
 	// third short workflow with a fixed id, D-007's kind, so a step is serialised with
 	// itself by the id and refused beside a provisioning or destroy run.
@@ -33,18 +26,6 @@ const (
 	// under their own fixed ids, so a rehearsal is serialised with itself by its id and with
 	// the operator's runs by its children's, and is refused beside any of them.
 	WorkflowRehearse = wire.RehearseWorkflowID // "fylgja-rehearse"
-)
-
-// Outcomes of a check. Reconcile returns one in
-// every case rather than failing.
-const (
-	CheckUnchanged     = "unchanged"      // the ids are equal; nothing was touched
-	CheckRebuilt       = "rebuilt"        // the ids differ; the destroy and the provision ended ready
-	CheckRejected      = "rejected"       // the read, the compile or the host check refused; nothing was touched
-	CheckError         = "error"          // a step before the destroy could not run; the next check tries again
-	CheckRebuildFailed = "rebuild_failed" // the destroy left something or the provision did not end ready; following stops
-	CheckSkipped       = "skipped"        // nothing to compare against, a twin that does not follow, or a run in flight
-	CheckCancelled     = "cancelled"      // twin destroy cancelled the check; the cancelled child's cleanup ran
 )
 
 // Outcomes of a provisioning run. The run returns one of these in every
@@ -81,14 +62,14 @@ const (
 // absolute and no bytes cross the queue.
 type ProvisionInput struct {
 	Source     string `json:"source"`      // wire.SourceIntent, wire.SourceSnapshot or wire.SourceBundle
-	Branch     string `json:"branch"`      // intent: the branch the server read, or the snapshot's; provenance, which the following's checks read (a run recorded before 018 reads it)
+	Branch     string `json:"branch"`      // intent: the branch the server read, or the snapshot's; provenance (a run recorded before 018 reads it)
 	At         string `json:"at"`          // intent: --at verbatim or the stage's; snapshot: the envelope's; empty when none
-	BundlePath string `json:"bundle_path"` // the stored bundle's absolute path, set by twin provision, every create and a rebuild; empty in a history recorded before 018 whose run compiled
+	BundlePath string `json:"bundle_path"` // the stored bundle's absolute path, set by twin provision, every create and an earlier build's rebuild; empty in a history recorded before 018 whose run compiled
 	BundleID   string `json:"bundle_id"`   // its identity, set wherever BundlePath is
 	Version    string `json:"version"`     // the starting binary's version, kept in history only
 	// ObservedAt is the read that produced BundleID, set with it by every create, a
-	// snapshot's being its stored take (018), and by a rebuild, the check's read (M4);
-	// empty for twin provision.
+	// snapshot's being its stored take (018), and by an earlier build's rebuild, its check's
+	// read (M4); empty for twin provision.
 	ObservedAt string `json:"observed_at,omitempty"`
 	// Stage is the stage the server resolved Branch and At from (014), which the record
 	// step writes into twin.json. The run branches on nothing of it. Nil in every input
@@ -99,15 +80,15 @@ type ProvisionInput struct {
 	// recorded history of a run a rehearsal did not start, and omitted when nil.
 	Rehearsal *wire.RehearsalRef `json:"rehearsal,omitempty"`
 	// Scope is the scope the server's read was made under, tag:<name>, as the server
-	// resolved it (017), or the snapshot's: provenance, which the following's checks read
-	// under, and the read's scope only in a history recorded before 018, whose run reads.
+	// resolved it (017), or the snapshot's: provenance, and the read's scope only in a
+	// history recorded before 018, whose run reads.
 	// The run branches on nothing of it.
 	// Empty in every recorded history before 017, and omitted when empty, so they replay.
 	Scope string `json:"scope,omitempty"`
 	// SnapshotID is the snapshot BundleID was compiled from, as the server took or fetched
 	// it (018), which the record step writes into twin.json. The run branches on nothing of
-	// it. Empty in every recorded history before 018, and on a rebuild's and a twin
-	// provision's input, and omitted when empty, so they replay.
+	// it. Empty in every recorded history before 018, and on an earlier build's rebuild's and
+	// a twin provision's input, and omitted when empty, so they replay.
 	SnapshotID string `json:"snapshot_id,omitempty"`
 }
 
@@ -130,31 +111,6 @@ type ProvisionResult struct {
 	// Twin is the record RecordTwin wrote, on ready. One record type: wire.TwinRecord.
 	Twin    *wire.TwinRecord `json:"twin,omitempty"`
 	Cleanup CleanupResult    `json:"cleanup"`
-}
-
-// ReconcileInput is a check's input: the Schedule's action args, fixed when following
-// began. Version is the creating binary's, kept in history only.
-type ReconcileInput struct {
-	Branch  string `json:"branch"`
-	Version string `json:"version"`
-	// Scope is the following twin's, from its run's ProvisionInput.Scope: every read the
-	// check makes, and the rebuild's record, are under it (017). Omitted when empty.
-	Scope string `json:"scope,omitempty"`
-}
-
-// ReconcileResult is how a check ended. One shape
-// in every case, so twin show reads one.
-type ReconcileResult struct {
-	Outcome          string           `json:"outcome"`
-	Step             string           `json:"step,omitempty"` // where the check ended, when not unchanged or rebuilt
-	Branch           string           `json:"branch"`
-	TwinBundleID     string           `json:"twin_bundle_id,omitempty"` // what twin.json recorded
-	BundleID         string           `json:"bundle_id,omitempty"`      // what the check compiled
-	ObservedAt       string           `json:"observed_at,omitempty"`    // the check's read
-	Findings         findings.List    `json:"findings"`
-	Destroy          *DestroyResult   `json:"destroy,omitempty"`   // the rebuild's destroy, when one ran
-	Provision        *ProvisionResult `json:"provision,omitempty"` // the rebuild's provision, when one ran
-	FollowingStopped bool             `json:"following_stopped,omitempty"`
 }
 
 // CleanupResult is what teardown and unstage did, and what is left on the host.

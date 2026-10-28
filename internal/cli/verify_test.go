@@ -732,12 +732,6 @@ func TestVerifyRefusesBeforeAnyRead(t *testing.T) {
 			func(lab.Paths) findings.Finding {
 				return absent("lab fylgja", orphan+"; nothing to verify; run fylgja-provision r-p is at step deploy")
 			}},
-		{"an empty host a check is rebuilding", inspectEmpty, nil,
-			[]provision.RunInFlight{{WorkflowID: "fylgja-reconcile-2026-10-03T10:00:00Z", RunID: "r-c", Step: findings.StepProvision}},
-			func(lab.Paths) findings.Finding {
-				return absent("lab fylgja", "no twin: no lab fylgja and no twin directory; nothing to verify; "+
-					"run fylgja-reconcile-2026-10-03T10:00:00Z r-c is at step provision")
-			}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h := verifyHost(t, "three-node", nil, nil)

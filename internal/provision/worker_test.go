@@ -519,8 +519,8 @@ func TestWorkerRegistersEveryScheduledActivity(t *testing.T) {
 	// The check an earlier build's Schedule started, by the type name Reconcile, is not
 	// served: the SDK takes a first registration under that name.
 	check := func(workflow.Context) error { return nil }
-	if msg := panics(func() { w.RegisterWorkflowWithOptions(check, workflow.RegisterOptions{Name: reconcileWorkflowType}) }); msg != "" {
-		t.Errorf("registering a workflow as %q: %q; want it taken, since NewWorker registers no check", reconcileWorkflowType, msg)
+	if msg := panics(func() { w.RegisterWorkflowWithOptions(check, workflow.RegisterOptions{Name: "Reconcile"}) }); msg != "" {
+		t.Errorf("registering a workflow as Reconcile: %q; want it taken, since NewWorker registers no check", msg)
 	}
 }
 

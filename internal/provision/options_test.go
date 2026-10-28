@@ -186,8 +186,9 @@ func TestPushConstants(t *testing.T) {
 	}
 }
 
-// Following's mechanism constants.
-func TestFollowingConstants(t *testing.T) {
+// The mechanism constants of the reads that change nothing: twin show's and a step's
+// inspection.
+func TestReadOnlyConstants(t *testing.T) {
 	for _, c := range []struct {
 		label     string
 		got, want time.Duration
@@ -199,9 +200,6 @@ func TestFollowingConstants(t *testing.T) {
 		if c.got != c.want {
 			t.Errorf("%s = %s, want %s", c.label, c.got, c.want)
 		}
-	}
-	if FollowScheduleID != "fylgja-follow" || WorkflowReconcile != "fylgja-reconcile" {
-		t.Errorf("identities %q, %q; want fylgja-follow, fylgja-reconcile", FollowScheduleID, WorkflowReconcile)
 	}
 	o := InspectTwinOptions()
 	if !o.WaitForCancellation {

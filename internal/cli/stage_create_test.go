@@ -401,7 +401,7 @@ func TestCreateFromAStage(t *testing.T) {
 			}
 			got := svc.started[0]
 			want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture", At: c.block.At, Version: version,
-				StopFollowing: true, Scope: defaultScope, Stage: &provision.StageInput{
+				Scope: defaultScope, Stage: &provision.StageInput{
 					ProposedChange: wire.StageChange{ID: demoChange, Branch: "fylgja-fixture"},
 					Label:          c.block.Label, Description: c.block.Description, AtSource: c.block.AtSource},
 				BundlePath: filepath.Join(paths.Bundles, got.BundleID), BundleID: got.BundleID, ObservedAt: got.ObservedAt,
@@ -741,7 +741,7 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 			// Compiled on the server (018): the plan's bundle, and the snapshot taken of the read.
 			started := svc.started[0]
 			want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: c.branch, At: c.at, Version: version,
-				StopFollowing: true, Scope: defaultScope, Stage: &stage, BundlePath: filepath.Join(paths.Bundles, id), BundleID: id,
+				Scope: defaultScope, Stage: &stage, BundlePath: filepath.Join(paths.Bundles, id), BundleID: id,
 				ObservedAt: started.ObservedAt, SnapshotID: started.SnapshotID}
 			if code != findings.ExitOK || !reflect.DeepEqual(started, want) || !bundleIDRE.MatchString(started.SnapshotID) {
 				t.Fatalf("exit %d, started %+v; want 0 and one run of %+v", code, svc.started, want)
@@ -759,8 +759,8 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 				t.Errorf("the run deployed %s and recorded\n%s\nwant %s, twin_version 9, provenance %s at %s under %s, stage %+v, step null",
 					res.BundleID, record, id, c.branch, c.at, defaultScope, stage)
 			}
-			if res.FollowingStopped != nil || res.Following != nil {
-				t.Errorf("the run's following %+v, stopped %+v; a stage twin never follows", res.Following, res.FollowingStopped)
+			if res.Following != nil {
+				t.Errorf("the run's following %+v; a stage twin never follows", res.Following)
 			}
 			mustCarryNoToken(t, c.label, created, svc.started)
 
@@ -972,7 +972,7 @@ func TestCreateAlongMainAfterAStageTwin(t *testing.T) {
 		observedAt = svc.started[0].ObservedAt
 	}
 	// Compiled on the server (018): the dry run's bundle and snapshot, the same intent.
-	want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: "main", At: mainAt, Version: version, StopFollowing: true,
+	want := provision.ProvisionInput{Source: wire.SourceIntent, Branch: "main", At: mainAt, Version: version,
 		Scope: defaultScope, BundlePath: filepath.Join(paths.Bundles, dry.BundleID), BundleID: dry.BundleID, ObservedAt: observedAt,
 		SnapshotID: dry.SnapshotID}
 	if code != findings.ExitOK || len(svc.started) != 1 || !reflect.DeepEqual(svc.started[0], want) || dry.SnapshotID == "" ||

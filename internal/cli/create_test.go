@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -977,8 +976,7 @@ func executeCreate(t *testing.T, args ...string) (int, *findings.Document) {
 	return code, &doc
 }
 
-// A create without --at follows its branch at the interval given, or every five minutes; its
-// run stops any following itself, so the command stops none.
+// A create without --at follows its branch at the interval given, or every five minutes.
 func TestCreateFollowsByDefault(t *testing.T) {
 	useFixtureRead(t)
 	for _, c := range []struct {
@@ -1002,11 +1000,8 @@ func TestCreateFollowsByDefault(t *testing.T) {
 				t.Fatalf("started %+v, want one run", svc.started)
 			}
 			in := svc.started[0]
-			if in.Follow == nil || in.Follow.IntervalS != c.intervalS || !in.StopFollowing {
-				t.Errorf("input follow %+v, stop_following %v; want interval %d and stop_following", in.Follow, in.StopFollowing, c.intervalS)
-			}
-			if slices.Contains(svc.calls, "StopFollowing") {
-				t.Errorf("calls %v: create stopped following itself, which its run does", svc.calls)
+			if in.Follow == nil || in.Follow.IntervalS != c.intervalS {
+				t.Errorf("input follow %+v; want interval %d", in.Follow, c.intervalS)
 			}
 			want := "twin directory /abs/local/twin\nfollowing branch fylgja-fixture, checked every " + c.every + " (schedule fylgja-follow)\n"
 			if !strings.HasSuffix(out, want) {
@@ -1025,31 +1020,6 @@ func TestCreateFollowsByDefault(t *testing.T) {
 			}
 			validateM10Document(t, doc)
 		})
-	}
-}
-
-// A create whose run replaced another following says so before its success lines.
-func TestCreateReplacesFollowing(t *testing.T) {
-	useFixtureRead(t)
-	res := followingResult(300)
-	res.FollowingStopped = &provision.StopFollowingResult{Deleted: true, Branch: "other"}
-	svc := &fakeService{runID: "run-1", result: res}
-	useService(t, svc)
-	useInterrupts(t)
-
-	var err error
-	out := captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
-	})
-	if code, doc := exitOf(t, err); code != findings.ExitOK {
-		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
-	}
-	notice, ready := strings.Index(out, "following of branch other stopped\n"), strings.Index(out, "twin ready:")
-	if notice < 0 || ready < notice {
-		t.Errorf("stdout:\n%s\nwant the notice before the success lines", out)
-	}
-	if slices.Contains(svc.calls, "StopFollowing") {
-		t.Errorf("calls %v: the command stopped following itself", svc.calls)
 	}
 }
 
@@ -1082,37 +1052,6 @@ func TestCreateFollowStartFailed(t *testing.T) {
 	want := findings.FollowingBlock{Branch: "fylgja-fixture", IntervalS: 60, State: findings.FollowingNotStarted}
 	if doc.Following == nil || *doc.Following != want || !carriesRule(doc.Findings, findings.RuleFollowStartFailed) {
 		t.Errorf("following %+v, findings %+v; want %+v and the warning", doc.Following, doc.Findings, want)
-	}
-	validateM10Document(t, doc)
-}
-
-// A run that could not stop following ended at step follow with the host untouched: exit 2,
-// as any run ended before the host was touched, and the command stopped nothing itself.
-func TestCreateFollowStopFailed(t *testing.T) {
-	paths := useFixtureRead(t)
-	res := provision.ProvisionResult{
-		Outcome: provision.OutcomeError, Step: findings.StepFollow, BundleID: fixtureBundleID,
-		Findings: findings.List{{Severity: findings.Rejection, Rule: findings.RuleFollowStopFailed, Object: provision.FollowScheduleID,
-			Step: findings.StepFollow, Message: "deleting schedule fylgja-follow failed (permission denied); nothing was staged, because a check could otherwise rebuild the twin"}},
-		Cleanup: provision.CleanupResult{Teardown: provision.CleanupSkipped, Unstage: provision.CleanupSkipped},
-	}
-	svc := &fakeService{runID: "run-1", result: res}
-	useService(t, svc)
-	useInterrupts(t)
-
-	var err error
-	out := captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
-	})
-	code, doc := exitOf(t, err)
-	if code != findings.ExitError || !carriesRule(doc.Findings, findings.RuleFollowStopFailed) {
-		t.Errorf("exit %d, findings %+v; want 2 with follow.stop.failed", code, doc.Findings)
-	}
-	if want := strings.Join(append(storedLines(paths, headSnapshotID, headBundleID), "run fylgja-provision run-1"), "\n") + "\n"; out != want {
-		t.Errorf("stdout:\n%s\nwant only the stored lines and the run line: nothing was touched, nothing removed", out)
-	}
-	if slices.Contains(svc.calls, "StopFollowing") {
-		t.Errorf("calls %v: the command stopped following itself", svc.calls)
 	}
 	validateM10Document(t, doc)
 }
@@ -1187,8 +1126,8 @@ func TestCreateCarriesItsScope(t *testing.T) {
 	}
 }
 
-// A --no-follow create starts M3's run: its input is M3's for the same flags but for
-// stop_following, which every run the CLI starts carries, and nothing follows.
+// A --no-follow create starts M3's run: its input is M3's for the same flags, and nothing
+// follows. It stops nothing either (019): the input names no stop.
 func TestCreateNoFollow(t *testing.T) {
 	paths := useFixtureRead(t)
 	svc := &fakeService{runID: "run-1", result: readyResult()}
@@ -1212,15 +1151,12 @@ func TestCreateNoFollow(t *testing.T) {
 	// Compiled on the server (018): the bundle and the snapshot by id, and the read's time.
 	want := `{"source":"intent","branch":"fylgja-fixture","at":"","bundle_path":"` + filepath.Join(paths.Bundles, headBundleID) +
 		`","bundle_id":"` + headBundleID + `","version":"` + version + `","observed_at":"` + svc.started[0].ObservedAt +
-		`","stop_following":true,"scope":"tag:fylgja","snapshot_id":"` + headSnapshotID + `"}`
+		`","scope":"tag:fylgja","snapshot_id":"` + headSnapshotID + `"}`
 	if string(b) != want || svc.started[0].ObservedAt == "" {
-		t.Errorf("input\n  %s\nwant M3's with stop_following, 017's scope, the server's default, and 018's compiled input\n  %s", b, want)
+		t.Errorf("input\n  %s\nwant M3's with 017's scope, the server's default, and 018's compiled input\n  %s", b, want)
 	}
 	if want := "twin directory /abs/local/twin\nnot following\n"; !strings.HasSuffix(out, want) {
 		t.Errorf("stdout:\n%s\nwant it to end:\n%s", out, want)
-	}
-	if slices.Contains(svc.calls, "StopFollowing") {
-		t.Errorf("calls %v: the command stopped following itself", svc.calls)
 	}
 
 	err = nil
@@ -1253,8 +1189,8 @@ func TestCreatePinnedNotFollowing(t *testing.T) {
 			if code, doc := exitOf(t, err); code != findings.ExitOK {
 				t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
 			}
-			if len(svc.started) != 1 || svc.started[0].Follow != nil || !svc.started[0].StopFollowing {
-				t.Errorf("started %+v, want one run with no follow and stop_following", svc.started)
+			if len(svc.started) != 1 || svc.started[0].Follow != nil {
+				t.Errorf("started %+v, want one run with no follow", svc.started)
 			}
 			if want := "twin directory /abs/local/twin\npinned at " + at + ", not following\n"; !strings.HasSuffix(out, want) {
 				t.Errorf("stdout:\n%s\nwant it to end:\n%s", out, want)

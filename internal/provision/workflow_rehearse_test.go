@@ -821,9 +821,10 @@ func TestRehearseOneStage(t *testing.T) {
 }
 
 // The baseline's provision child is the server's input, already compiled, with this run
-// named as its rehearsal and following stopped, so its record names the run (from twin.json 7);
-// its wait reads from the record's time, under the stage's budget, as this run, which the
-// record does not name, so the wait is written into no record (R-07).
+// named as its rehearsal and nothing else added: it stops nothing first (019). Its record
+// names the run (from twin.json 7); its wait reads from the record's time, under the
+// stage's budget, as this run, which the record does not name, so the wait is written into
+// no record (R-07).
 func TestRehearseRecordNamesTheRun(t *testing.T) {
 	h := newRehearseHarness(t)
 	in := fixtureRehearsal()
@@ -838,7 +839,6 @@ func TestRehearseRecordNamesTheRun(t *testing.T) {
 	self := h.parentRuns[0]
 	want := *in.Stages[1].Provision
 	want.Rehearsal = &wire.RehearsalRef{WorkflowID: WorkflowRehearse, RunID: self}
-	want.StopFollowing = true
 	if got := h.provisions[0]; !reflect.DeepEqual(got, want) {
 		t.Errorf("the provision child was given %+v\nwant the server's input naming this run: %+v", got, want)
 	}

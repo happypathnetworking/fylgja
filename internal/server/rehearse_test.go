@@ -316,7 +316,7 @@ func TestRehearseStagesAreTheStepChain(t *testing.T) {
 	}
 	if p := base.Provision; p == nil || p.Source != want.Source || p.Branch != want.Branch || p.At != want.At ||
 		p.BundlePath != want.BundlePath || p.BundleID != want.BundleID || p.ObservedAt != want.ObservedAt || p.SnapshotID != want.SnapshotID ||
-		*p.Stage != *want.Stage || p.Version != want.Version || p.Scope != want.Scope || p.Rehearsal != nil || p.StopFollowing ||
+		*p.Stage != *want.Stage || p.Version != want.Version || p.Scope != want.Scope || p.Rehearsal != nil ||
 		p.Follow != nil {
 		t.Errorf("the baseline's provision %+v, want %+v", base.Provision, want)
 	}

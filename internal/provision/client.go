@@ -1506,10 +1506,7 @@ func provisionStatus(res ProvisionResult) findings.Status {
 }
 
 // cancelledFinding is run.cancelled for a cancelled run: before the host check cleared
-// nothing was touched; after, the cleanup block says what teardown and unstage did. The
-// stop step is the exception: it runs after the host check cleared and before staging, so
-// it too touched nothing, and it is the only step follow whose cleanup is skipped (the
-// follow step after the record always runs cleanup).
+// nothing was touched; after, the cleanup block says what teardown and unstage did.
 func cancelledFinding(subject *findings.Subject, res ProvisionResult) findings.Finding {
 	runID := ""
 	if subject != nil {
@@ -1519,10 +1516,6 @@ func cancelledFinding(subject *findings.Subject, res ProvisionResult) findings.F
 	if orSkipped(res.Cleanup.Teardown) == CleanupSkipped {
 		msg = fmt.Sprintf("run %s was cancelled at step %s, before the host check cleared; nothing on the host was touched",
 			runID, res.Step)
-		if res.Step == findings.StepFollow {
-			msg = fmt.Sprintf("run %s was cancelled at step %s, after the host check cleared and before anything was staged; "+
-				"nothing on the host was touched", runID, res.Step)
-		}
 	}
 	return findings.Finding{
 		Severity: findings.Rejection,

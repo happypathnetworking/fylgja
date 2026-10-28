@@ -93,9 +93,6 @@ type ProvisionInput struct {
 	// Follow, when set, begins following the branch once the twin is recorded. Nil is no
 	// following step; M2's inputs decode to nil (M4).
 	Follow *FollowInput `json:"follow,omitempty"`
-	// StopFollowing stops any following once the host check has passed: true on every run
-	// the CLI starts, false on a rebuild's child and on M2's inputs (M4).
-	StopFollowing bool `json:"stop_following,omitempty"`
 	// Stage is the stage the server resolved Branch and At from (014), which the record
 	// step writes into twin.json. The run branches on nothing of it. Nil in every input
 	// and recorded history of a run not created from a stage, and omitted when nil.
@@ -143,8 +140,6 @@ type ProvisionResult struct {
 	Cleanup CleanupResult    `json:"cleanup"`
 	// Following is the following the run began, when its input asked for one (M4).
 	Following *FollowingResult `json:"following,omitempty"`
-	// FollowingStopped is what the run's stop step did, when one ran (M4).
-	FollowingStopped *StopFollowingResult `json:"following_stopped,omitempty"`
 }
 
 // FollowingResult is a following that began.
@@ -177,12 +172,6 @@ type ReconcileResult struct {
 	Destroy          *DestroyResult   `json:"destroy,omitempty"`   // the rebuild's destroy, when one ran
 	Provision        *ProvisionResult `json:"provision,omitempty"` // the rebuild's provision, when one ran
 	FollowingStopped bool             `json:"following_stopped,omitempty"`
-}
-
-// StopFollowingResult says whether a Schedule was deleted, and the branch it followed.
-type StopFollowingResult struct {
-	Deleted bool   `json:"deleted"`
-	Branch  string `json:"branch,omitempty"`
 }
 
 // CleanupResult is what teardown and unstage did, and what is left on the host.
@@ -341,7 +330,7 @@ type RehearseStage struct {
 	// (stages.schema.json, $defs/step); absent on the first.
 	Diff json.RawMessage `json:"diff,omitempty"`
 	// Provision is the baseline's provision, already compiled, with its stage; the run adds
-	// its own reference and StopFollowing.
+	// its own reference.
 	Provision *ProvisionInput `json:"provision,omitempty"`
 	// Step is a rehearsed stage's step from the previous compiled stage, with restarts
 	// allowed and the default wait.

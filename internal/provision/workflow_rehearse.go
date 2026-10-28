@@ -22,9 +22,9 @@ import (
 // fixed id, so each is refused beside any other run and keeps its own locks and cleanup:
 //
 //  1. deadline: a timer on the run's clock whose firing cancels the children's context;
-//  2. baseline: a child fylgja-provision, already compiled, which stops following and whose
-//     record names this run, then its wait, VerifyTwin on the children's context, written
-//     into no record; the wait's failing assertions are the baseline findings;
+//  2. baseline: a child fylgja-provision, already compiled, whose record names this run,
+//     then its wait, VerifyTwin on the children's context, written into no record; the
+//     wait's failing assertions are the baseline findings;
 //  3. each rehearsed stage in order: a child fylgja-step, whose own wait is its verify,
 //     classified by rehearsal.Classify against the baseline findings. The run stops at the
 //     first stage whose verdict rehearsal.Stop says stops it, and every later stage is not
@@ -175,7 +175,6 @@ func (r *rehearsing) baselineStage(s RehearseStage) RehearsedStage {
 	self := workflow.GetInfo(r.ctx).WorkflowExecution
 	in := *s.Provision
 	in.Rehearsal = &wire.RehearsalRef{WorkflowID: self.ID, RunID: self.RunID}
-	in.StopFollowing = true
 	child := workflow.ExecuteChildWorkflow(workflow.WithChildOptions(r.children, ChildOptions(WorkflowProvision)),
 		provisionWorkflowType, in)
 	if st.Run = r.started(child, WorkflowProvision, findings.StepProvision); st.Run == nil {

@@ -27,9 +27,6 @@ func runProvision(ctx context.Context, opts *options, op string, subject *findin
 		return startFailure(op, subject, findings.StepStart, err)
 	}
 	defer svc.Close()
-	// Every run the CLI starts stops any following once its host check has passed, so a
-	// twin it builds never inherits another's.
-	in.StopFollowing = true
 
 	interrupts, err := opts.c.startFrame(provision.WorkflowProvision)
 	if err != nil {
@@ -162,13 +159,10 @@ func (f *followedStep) get() string {
 // that stopped short of ready, and returns the run's document, whose status carries the
 // exit code.
 //
-// Following is reported last: the following the run replaced, before anything else; and on
-// a ready twin, the following it began, or that it could not begin (contracts/cli.md).
+// Following is reported last on a ready twin: the following it began, or that it could not
+// begin (contracts/cli.md).
 func provisionReport(opts *options, op string, subject *findings.Subject, in provision.ProvisionInput, res provision.ProvisionResult) error {
 	doc := provision.ProvisionDocument(op, subject, res)
-	if stopped := res.FollowingStopped; stopped != nil && stopped.Deleted {
-		opts.note("following of branch %s stopped", stopped.Branch)
-	}
 	if doc.Status == findings.StatusOK && res.Twin != nil {
 		opts.note("twin ready: bundle_id %s", res.BundleID)
 		for _, n := range res.Twin.Nodes {

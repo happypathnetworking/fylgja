@@ -383,8 +383,7 @@ func entriesOf(t *testing.T, dir string) []string {
 	return names
 }
 
-// A provisioned twin never follows: its run stops any following inside itself, the command
-// stops none, and a run that could not stop it is exit 2 (contracts/cli.md, twin provision).
+// A provisioned twin never follows, and its run stops nothing first (019).
 func TestProvisionNotFollowing(t *testing.T) {
 	t.Run("ready", func(t *testing.T) {
 		useStateRoot(t)
@@ -401,11 +400,8 @@ func TestProvisionNotFollowing(t *testing.T) {
 		if code, doc := exitOf(t, err); code != findings.ExitOK {
 			t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
 		}
-		if len(svc.started) != 1 || svc.started[0].Follow != nil || !svc.started[0].StopFollowing {
-			t.Errorf("started %+v, want one run with no follow and stop_following", svc.started)
-		}
-		if slices.Contains(svc.calls, "StopFollowing") {
-			t.Errorf("calls %v: the command stopped following itself", svc.calls)
+		if len(svc.started) != 1 || svc.started[0].Follow != nil {
+			t.Errorf("started %+v, want one run with no follow", svc.started)
 		}
 		// The record line is twin create's and twin show's (018): a bundle's twin names no
 		// snapshot.
@@ -413,27 +409,6 @@ func TestProvisionNotFollowing(t *testing.T) {
 			"twin directory /abs/local/twin\nnot following (provisioned from a bundle)\n"; !strings.HasSuffix(out, want) {
 			t.Errorf("stdout:\n%s\nwant it to end:\n%s", out, want)
 		}
-	})
-
-	t.Run("follow.stop.failed", func(t *testing.T) {
-		useStateRoot(t)
-		svc := &fakeService{runID: "run-1", result: provision.ProvisionResult{
-			Outcome: provision.OutcomeError, Step: findings.StepFollow, BundleID: fixtureBundleID,
-			Findings: findings.List{{Severity: findings.Rejection, Rule: findings.RuleFollowStopFailed, Object: provision.FollowScheduleID,
-				Step: findings.StepFollow, Message: "deleting schedule fylgja-follow failed (permission denied); nothing was staged, because a check could otherwise rebuild the twin"}},
-			Cleanup: provision.CleanupResult{Teardown: provision.CleanupSkipped, Unstage: provision.CleanupSkipped},
-		}}
-		useService(t, svc)
-		useInterrupts(t)
-
-		code, doc := exitOf(t, runTwinProvision(context.Background(), &options{asJSON: true}, &provisionFlags{}, copyGoldenBundle(t, "b")))
-		if code != findings.ExitError || !carriesRule(doc.Findings, findings.RuleFollowStopFailed) {
-			t.Errorf("exit %d, findings %+v; want 2 with follow.stop.failed", code, doc.Findings)
-		}
-		if slices.Contains(svc.calls, "StopFollowing") {
-			t.Errorf("calls %v: the command stopped following itself", svc.calls)
-		}
-		validateM4Document(t, doc)
 	})
 }
 

@@ -11,7 +11,8 @@ its snapshot. What the old brief decided and the roadmap kept is under
 there too. **A probe is the first input to the core that is not intent**: a declaration
 the operator writes beside intent, carried in the snapshot, compiled into synthesized
 hosts, and measured across a step. The session verified nothing live; the plan verifies
-each point before relying on it. Re-read against 019's close before specifying. Specify
+each point before relying on it. Re-read against 019's close on 2026-10-28, at
+feature-open, where the operator settled its four open questions. Specify
 what the operator gets, not a new design.
 
 The prompt:
@@ -49,7 +50,8 @@ SPECIFY_FEATURE_DIRECTORY=specs/016-probes GIT_BRANCH_NAME=016-probes. 0.3, the 
   only and no other synthesized node type; the declaration a file first, one input to the
   snapshot, and the Infrahub kind one source of that file; the declaration carrying the
   host's address and its gateway, since the CTM carries no address. This brief differs
-  from the F-014 paragraph in one place, owed back to it ([Exit](#exit)): the paragraph's
+  from the F-014 paragraph in one place, owed back to it by the chain
+  ([What changes](#what-changes) item 12): the paragraph's
   first generator runs "ping and iperf3", and the re-shape below it says `ping` only;
   the re-shape wins.
 - **[018's hand-off](../018-snapshots/brief.md#hand-off)**: the probe set is part of the
@@ -57,7 +59,8 @@ SPECIFY_FEATURE_DIRECTORY=specs/016-probes GIT_BRANCH_NAME=016-probes. 0.3, the 
   it is hashed by the snapshot id and reaches the bundle through the synthesized nodes
   and the manifest; `intent read` gains the way to put a declaration file into the
   snapshot. **[019's hand-off](../019-following-removed/brief.md#hand-off)**: loss across a
-  step is the step's, and 018's one question for this feature stands ([Open](#open)).
+  step is the step's, and 018's one question for this feature is answered under
+  [Decided](#decided): one probe list per request.
 - **[D-057](../../docs/decisions.md#d-057)**: the CTM is the contract and a reader maps one
   source onto it, reading nothing the mapping does not name. The Infrahub reader does not
   read `ip_addresses`, and this feature does not make it: the device side of a probe is
@@ -112,8 +115,8 @@ SPECIFY_FEATURE_DIRECTORY=specs/016-probes GIT_BRANCH_NAME=016-probes. 0.3, the 
    `--stage`, `twin step --stage`, `stage plan` and the rehearsal's takes gain
    `--probes <file>`; with no file, the probes read from `FylgjaProbe` on `main`,
    unpinned, as stages are; with neither, none. `twin create --snapshot` and `twin step
-   --snapshot` take whatever the snapshot carries and no flag. Which takes of one twin
-   share one list is [Open](#open).
+   --snapshot` take whatever the snapshot carries and no flag. A request reads its list
+   once, and every snapshot it takes carries it ([Decided](#decided)).
 4. **Synthesized hosts, in the compile.** Each endpoint becomes a containerlab `linux`
    node, its address set and a route via the gateway, on a synthesized link to the device
    interface. Node, link and the port it takes carry provenance `synthesized` and are in
@@ -182,7 +185,8 @@ SPECIFY_FEATURE_DIRECTORY=specs/016-probes GIT_BRANCH_NAME=016-probes. 0.3, the 
       readiness probe's word, and the two must be told apart.
     - **[docs/development.md](../../docs/development.md), [README.md](../../README.md)**'s
       walk-through, **[docs/verified-facts.md](../../docs/verified-facts.md)**, the
-      roadmap ([Exit](#exit)) and **`CLAUDE.md`**'s Formats, State and the fixture's ids.
+      roadmap (F-014's paragraph: "ping and iperf3" to `ping` only, D-032 to D-045's
+      pattern, and the entry built; [Exit](#exit)) and **`CLAUDE.md`**'s Formats, State and the fixture's ids.
     - **[docs/brief.md](../../docs/brief.md):** Scope and Pipeline, one sentence each.
 
 <a id="decided"></a>
@@ -221,6 +225,41 @@ Each was settled with the operator on 2026-10-25 through the roadmap's re-shape,
   road Constitution IV allows.
 - **The compiler refuses a probe it cannot place; a proposed change that cables a probe's
   port fails `fylgja-step` at that stage** (2026-10-16, kept, less the prefix refusal).
+- **One probe list per request** (the operator, 2026-10-28, at feature-open). A request
+  reads its probes once, from `--probes <file>` or `FylgjaProbe` on `main`, and every
+  snapshot it takes carries that list, so a rehearsal's stages share one; a later create
+  or step reads them afresh. The server keeps nothing between requests and the snapshot
+  stays the one input ([D-061](../../docs/decisions.md#d-061), [D-062](../../docs/decisions.md#d-062)),
+  while a probe edited mid-rehearsal cannot move its hosts between stages. Transient loss
+  is measured for the probes in both the twin's snapshot and the target's; a host the step
+  adds gets the verify burst alone, and what a step does with a host the target drops is
+  the plan's. *Not chosen*: one list for the twin's life, carried in its record into
+  every later take (the old brief's, before snapshots), which would override or refuse a
+  `twin step --snapshot` carrying another; and every take afresh, a rehearsal's stages
+  included, which lets a mid-rehearsal edit move hosts between stages.
+- **A `--probes <file>` replaces the kind's probes, and a take with neither has none,
+  with no warning** (the operator, 2026-10-28, at feature-open). One source per take
+  keeps the snapshot's list exactly what was declared, as the file-first re-shape and
+  F-025's file-alone reader have it; and the empty list already says "no probes", as
+  every snapshot says today. *Not chosen*: the file added to the kind's probes, a name in
+  both refused, which makes a take's provenance two sources; and a warning on a take with
+  no probes, which would sound on nearly every take.
+- **The rate and the burst's N are the `ping` package's alone** (the operator,
+  2026-10-28, at feature-open). A probe declares its name, its format and its two
+  endpoints and nothing else, so the file, the kind and the snapshot's hash stay small;
+  the package override directory changes them host-wide, as it does a PSP's timeouts; and
+  per-flow rates belong to F-020's element shape, not `ping`'s. *Not chosen*: each
+  probe's own, the format's as the default, which adds two optional fields to the
+  declaration, the kind and the contract, and moves a snapshot id for a rate alone.
+- **A stage that removes a probe's device or deletes its interface is refused at the
+  compile, and so fails `fylgja-step` at that stage** (the operator, 2026-10-28, at
+  feature-open), as a stage that cables a probe's port is. The compiler keeps one rule, a
+  probe it cannot place is refused, and a probe never vanishes from a stage, hiding the
+  loss it was declared to show; the remedy is the declaration's, in the file or in
+  `FylgjaProbe` on `main`. A probe kept in Infrahub therefore blocks a change that
+  decommissions its device until it is deleted on `main`. *Not chosen*: the probe dropped
+  from that stage with a finding and the stage going on, which leaves the compiled hosts
+  short of the snapshot's declaration and gives the compiler a third outcome.
 - **One decision entry, D-064, superseding nothing.** *Settled by the brief's author*, on
   D-061's pattern (D-063 is the feature chain's, 2026-10-28).
 - **Out of this feature:**
@@ -234,21 +273,7 @@ Each was settled with the operator on 2026-10-25 through the roadmap's re-shape,
 <a id="open"></a>
 ## Open, for clarify
 
-1. **One probe list for a twin's life, or one per take.** 018's and 019's question. A
-   rehearsal takes one snapshot per stage, and a step to a stage takes one too. Either
-   the server carries the twin's list, the one its first take had, into every later take
-   for that twin, so a probe written after create is missing until the next create and
-   the twin's hosts never change under a step; or each take reads the probes afresh, so a
-   step may add or remove a host. The old brief chose the first ("read once, constant
-   across a twin's life"), before snapshots; the roadmap chose neither.
-2. **`--probes <file>` beside objects in Infrahub.** Whether a file given replaces the
-   kind's probes or adds to them, and whether a take with no file and no objects simply
-   has none, with no warning.
-3. **The rate and the burst's N**: fixed in the `ping` format, or the probe's own, with
-   the format's as the default.
-4. **A probe whose device a stage removes, or whose interface it deletes**: the compile
-   refuses that stage, as it does a cabled interface, or the probe drops out of it with a
-   finding and the stage goes on without its host.
+none
 
 <a id="left-to-the-plan"></a>
 ## Left to the plan
@@ -287,7 +312,7 @@ Each was settled with the operator on 2026-10-25 through the roadmap's re-shape,
   not in the scope. `-objects` for the object file the README shows, `-transforms` for the
   template.
 - **The Constitution Check.** Whether a probe package format is a fourth blessed layer in
-  the Check's gate adjustments, a MINOR amendment citing D-063, or falls under II and the
+  the Check's gate adjustments, a MINOR amendment citing D-064, or falls under II and the
   PSP's blessing with no amendment. The author leans to the amendment, since the gate
   names the layers it will not flag and a second package kind is one.
 - **The assertion kind's name and rule id**, in `verify.Derive`'s style
@@ -296,6 +321,31 @@ Each was settled with the operator on 2026-10-25 through the roadmap's re-shape,
   `fylgja-twin`'s `timeout` of 4260.
 - **The estimate.** The roadmap's 5–7 hours was set before snapshots and before the
   template change; the plan re-estimates.
+
+<a id="operator-steps"></a>
+## Operator steps
+
+- [x] Push `main` to `origin` before the chain (`git push origin main`): 019's merge and the
+  feature chain's commits, twelve ahead. Done 2026-10-28; `origin/main` is `7a1a180`. A push
+  during the chain would stop the loop at `contract`.
+
+Waiting for the chain, each the route's `[operator]` task with its reason:
+
+- **Load `FylgjaProbe` on `main`**, since the plan settles the kind's shape and writes its
+  schema file: `.venv/bin/infrahubctl schema check --branch main <file>`, then `schema
+  load`, from the repository root with `local/.env` loaded, Infrahub up and no twin, as
+  014's T003 loaded the stage kind. It is a lasting write to `main`'s schema on an install
+  that is not throwaway, and it moves `main`'s hash. After the plan, before tier 2.
+- **Push the template and import it**, since the import waits on the pushed tree: once
+  `device_config.gql` and `.j2` render the addresses, merge into `main` and push `origin`'s
+  `main`, then `InfrahubReadOnlyRepositoryImportLastCommit(data: {id})` on `main` for the
+  registration `fylgja`, and read both task workers' `commits/` (`CLAUDE.md`, Environment),
+  as 017's T057 did. Before tier 2's artifact proof, the fixture's re-seed and tier 3.
+- **The review, the merge and the push**, because they are the operator's at every
+  feature's close, with `make command-log` once the session is closed.
+
+The fixture's re-seed and the `linux` image's pull are the live sessions': a write to a
+branch and to the host, not to `main`.
 
 <a id="hand-off"></a>
 ## Hand-off
@@ -339,13 +389,15 @@ labelled as the container's, and a flow that has not recovered fails the stage.
     at that stage on the new assertion kind, and the thread's table carries the `loss`
     column.
   - Nine cases still, unless the plan adds a tenth for the probes alone.
-- **Owed before the work starts:**
-  - 019 built and closed, and this brief re-read against its close.
-  - The roadmap's F-014 paragraph reconciled with this brief (its "ping and iperf3" and
-    its D-032 citation), its table row and its decisions bullet, and Release 0.3's item 4
-    linked here.
-  - The operator's: the estimate revisited, and the roadmap's edits and this brief
-    committed, as 018's and 019's were.
+- **Owed before the work starts**, all done on 2026-10-28 at feature-open:
+  - 019 built, closed, merged and pushed, and this brief re-read against its close and
+    its [Hand-off](../019-following-removed/brief.md#hand-off).
+  - The roadmap: Release 0.3's item 4 links here, and F-014's table row and its decisions
+    bullet say `ping` only. The F-014 paragraph's "ping and iperf3" and its D-032 citation
+    are the chain's, under [What changes](#what-changes) item 12, by the operator's choice;
+    the re-shape wins until then.
+  - The estimate is the plan's ([Left to the plan](#left-to-the-plan)), by the operator's
+    choice; this brief committed.
 
 <a id="references"></a>
 ## References

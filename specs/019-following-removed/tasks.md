@@ -990,13 +990,24 @@ SC-008).
 
 **Purpose**: every record true, the feature closed (research §4; quickstart §6).
 
-- [ ] T052 [P] `docs/verified-facts.md`, research §4, each with the version and the date:
+- [X] T052 [P] `docs/verified-facts.md`, research §4, each with the version and the date:
   - under Temporal, a host of this build makes no Schedule, read by `temporal schedule list` after T051;
   - under the step, a step to a snapshot sends no request to Infrahub, by T036's counters.
+  - *Note (Run 16, 2026-10-28)*: both added (`e8a55e8`).
+    - Under "Temporal Server 1.32 / Go SDK 1.49": **a host of this build makes no Schedule**. `temporal schedule list --address localhost:7233` printed its header alone after T051's whole tier 3 and after T049's hand step, and again in this run before the record was written. Over the hand step, `temporal workflow list` listed the operator's four runs alone. *(Server 1.32.0, CLI 1.9.1, 10-28.)*
+    - **A step to a snapshot sends Infrahub nothing**, by T036's counting proxy: 33 requests for the plan, 24 for the read, 0 for each target. The file has no step section, so this fact goes under a new sub-heading of the Infrahub 1.11.2 section, "The step (019)", beside 014's and 015's. *(10-28.)*
 
-- [ ] T053 [P] `docs/roadmap.md`: F-026 marked built (its table row and paragraph, Release 0.3's item 3) with the closing date and its measured effort beside R-25's estimate of 8–11 hours.
+- [X] T053 [P] `docs/roadmap.md`: F-026 marked built (its table row and paragraph, Release 0.3's item 3) with the closing date and its measured effort beside R-25's estimate of 8–11 hours.
+  - *Note (Run 16)*: done (`41f5165`), as 018's close (`09adef2`) did for F-024.
+    - **Release 0.3's item 3**: **Built** on 2026-10-28, under D-062, with the constitution unamended at 2.2.0. The marker **the next spec** moves to item 4, F-014. Item 4's brief parenthetical now says the brief was rewritten on 2026-10-28 against 017, 018 and 019 (`691632c`), and so does F-014's paragraph, which had said it would be re-read against 017's close.
+    - **The Backlog's built sentence** names F-026 as `019-following-removed`.
+    - **The table row** ends `Built as 019-following-removed on 2026-10-28, in about 6.2 hours of sessions against R-25's 8–11`.
+    - **The paragraph** gains its **Built** summary, which links R-25.
+    - **"Decisions the order needs"**: "Taken as D-062, with the constitution unamended".
+    - **The measured effort**: 019's command log (`specs/019-following-removed/commands/runs.jsonl`, published at 18:12) holds 19 commands, from `specify` at 02:23 UTC through Run 15 ending at 18:12. They took 22,304 s active (6.2 h) and 22,640 s wall. Run 15's 4,647 s, with both tiers' 3,903 s (65 min), are among them, which leaves about 5.1 h without the tiers. This run, T056's review and `converge` are not counted.
+    - R-25 estimated 8–11 hours of sessions plus the tiers. The table's Hours column keeps the 3–5 set before the inventory, and the paragraph names both.
 
-- [ ] T054 `CLAUDE.md` (research §4):
+- [X] T054 `CLAUDE.md` (research §4):
   - the worker's counts (four workflows and fifteen activities) and its verification (the environment names carry both logins; `INFRAHUB_*` no longer needed);
   - the M4 line ("Walking": stepping);
   - Formats (`twin.json` `10`);
@@ -1004,8 +1015,24 @@ SC-008).
   - State: 019 closed, rewritten as the release's closes are, with **Next** F-014 probes (`016-probes`).
 
   Check every number against T050's and T051's notes, never estimates.
+  - *Note (Run 16)*: done (`41f5165`). Each number is T050's or T051's, or this run's tier 1 (T055).
+    - **The worker**: its check is the environment naming both logins and the report naming both packages. It inherits `INFRAHUB_*` from `local/.env` and reads neither (R-22). It serves four workflows (provision, destroy, step and the rehearsal), each started with a snapshot id and a bundle id, and fifteen activities.
+    - **M4**: "following removed by 019 (D-062), so a twin walks by stepping".
+    - **Formats**: `twin.json` `10` (a pinned stage beside any source but a bundle). The API takes `snapshot` on `twin.step`, and `interval` and `no_follow` are gone without a version move. `--interval` and `--no-follow` join the retired.
+    - **Build and test**:
+      - tier 1 43.8–45.0 s in three runs on 10-28, `internal/cli` 39.2–40.5 s of it, about a second of headroom;
+      - tier 2 about 33 minutes: 2,009 s with `TestStepTargetFromASnapshot` and without `TestFollowingDetection`, `internal/stages` 1,690.6 s (109 s under `-timeout 30m`), `internal/checks` 310.0 s;
+      - tier 3 about 31.5 minutes, 1,894.1 s, with case 5's frozen wait and its steps by file and by id;
+      - the narrowed run's 1,156.1 s of 10-27 is kept, since T051 dropped it for 019.
+    - **State**:
+      - 019's entry, in 017's and 018's form;
+      - Release 0.3's line on the 016 brief, rewritten on 10-28;
+      - **Next**: F-014 probes (`016-probes`);
+      - **Open, the operator's**: 019's command log, review, merge and push, and R-08's literal reach (T034's note);
+      - **Open, for a session**: T025's gap, the tier durations in `docs/development.md` and `README.md`, and the README's `12 interfaces` (Runs 13–15). T025's gap is that `verify.schema.json`'s `twin.source` lacks `snapshot`, so a verify of a `--snapshot` twin writes a source its contract refuses.
+    - **Other lines**: the remaining `follow`, `schedule`, `reconcile` and `interval` hits in `CLAUDE.md` are history, containerlab's reconcile, a run's events, or plain English (`followed straight away`, of the server's report).
 
-- [ ] T055 The closing gates and greps. Gates:
+- [X] T055 The closing gates and greps. Gates:
   - `make build`, statically linked;
   - `GOFLAGS=-count=1 make test` under 45 s wall (SC-009; note the load average);
   - `make lint`; `go vet -tags contract,fixture,e2e ./...`; `shellcheck scripts/bring-up.sh scripts/e2e.sh`; `make linkcheck`;
@@ -1020,10 +1047,62 @@ SC-008).
   - quickstart §6's over `docs/architecture.md` and `docs/glossary.md`;
   - over `infrahub/`, recorded and not edited;
   - the credential greps over the tree, every commit on `main..HEAD` and their messages, counts and file names only, as 018's T063 ran them.
+  - *Note (Run 16, 2026-10-28)*: every gate passes, with the records edited, before the notes.
+    - **`make build`**: exit 0, `statically linked`.
+    - **`GOFLAGS=-count=1 make test`**: exit 0 in **44.2 s** wall, under 45 s (SC-009). The load average was 1.06 before and 2.27 after; `internal/cli` took 39.7 s.
+    - **The other gates**:
+      - `make lint`: `0 issues`;
+      - `go vet -tags contract,fixture,e2e ./...`: clean;
+      - `shellcheck scripts/bring-up.sh scripts/e2e.sh`: clean;
+      - `make linkcheck`: `94 files, 2186 relative links checked, 42 external skipped, 0 broken`, with the roadmap's new link to R-25 among them.
+    - **The goldens**: `git diff --stat main -- testdata/golden` is empty. `go test -count=1 ./internal/compiler` passes with no `-update`, and its golden tests pin `43d91715…`, `4213b3cf…` and `ecb665f5…` (SC-007).
+    - **The tests the task names**:
+      - `go test ./internal/provision -run Replay -v` lists seven, all passing: `CancelDuringRecordCleansUp`, `CancelDuringHostCheckTouchesNothing`, `CancelDuringPushCleansUp`, `PushAfterCancelStillCancels`, `DivergedStepRecordsEachPush`, `CancelledStepRecordsDiverged` and `StepWaitCancelledEndsStepped`.
+      - `TestFrozenContractCopiesAgree` passes at `frozenContractCopies = 56`, T007's count, and 56 files lie under `internal/*/testdata/contracts/`.
+      - `TestClientReachesTheCoreThroughTheAPIAlone` (`internal/compiler`) passes.
+    - **SC-002**: quickstart §1's grep (`-rniE`, so `\.reads` and `RunsInFlight` also match unrelated names) finds no current following. Outside the 34 frozen copies, each hit is one of:
+      - `scripts/e2e.sh`'s leak check: `FOLLOW_SCHEDULE`, lines 108, 190, 510 and 700;
+      - a comment or contract description that cites 019's removal: `internal/server/handlers.go:26` and the 019 sentences of `contracts/findings.schema.json` and `contracts/api.schema.json`;
+      - a test that pins the removal: `--interval` and `--no-follow` unknown on every command (`internal/cli/create_test.go:976–1003`, `twin_step_test.go:1622–1626`), `twin.create` refusing `interval` and `no_follow` (`internal/server/server_test.go:441–443`, `internal/api/wire_test.go:210–212`), and a start frame naming `fylgja-follow` refused (`wire_test.go:342`);
+      - the 018-shaped documents held to their frozen copy (`internal/findings/finding_test.go`'s `m4FollowingDocuments`, 1046–1094);
+      - a bundle store test that a leftover `.reads/` beside an entry changes neither its hash nor `Has` (`internal/bundle/store_test.go:156–159`), which a host of an earlier build may hold;
+      - a run's events followed: the context-cancel name `stopFollowing` in `internal/server/follow.go:224–287` and `destroy.go:44–56`, the meaning that stays (this file's seventh decision);
+      - false matches: the step wait's `Reads` count (`internal/verify`, `internal/lab`, `internal/provision`, `internal/server`, `internal/rehearsal`, `scripts/e2e.sh:1631–1634`), fakes' `reads` logs (`internal/cli`, `internal/stages`, `internal/conformance`), `ReadSlice` (`internal/api/client.go:378`), and the in-flight tests `TestShowRunsInFlight`, `TestVerifyRunsInFlight` and `useNoRunsInFlight`.
+    - **The eight retired rules** (T026, T033: following's seven and `step.target.foreign`) are in no product code but the comments that record their retirement (`internal/findings/finding.go:95–97` and `174`, `internal/stages/target.go:42`) and `contracts/findings.schema.json`'s 019 sentence. The step enum has no `follow`. In tests they appear in the retirement tests (`finding_test.go:244–250`, `272–275`), the 018-shaped documents, and two comments (`internal/cli/twin_step_test.go:2611`, `internal/stages/target_test.go:166`). No frozen copy names any of them.
+    - **Quickstart §6**: 81 hits in `docs/architecture.md` and 54 in `docs/glossary.md`, as T047 counted. Neither file has changed since `867e032`, so T047's classification holds. A stricter grep (`follows the branch`, `following twin`, `--interval`, `no-follow`, `fylgja-follow`, a following, frozen or pinned kind, `reconcile workflow`) finds only history: `architecture.md:715–720` and `glossary.md:195–200`, each "until 019" or naming D-062.
+    - **`infrahub/`**, recorded and not edited: no hit names following, a Schedule, `.reads` or a deadline's sum. The hits are Python's `frozenset` (`fylgja_twin.py:58`) and `frozen=True` (`fylgja_api.py:146`), httpx's `follow_redirects` (`fylgja_api.py:300–358`), and the template's plain-English "follows from the device" (`device_config.j2:7`). The git-ignored `__pycache__/` matches as binary.
+    - **The credential greps**: `/usr/bin/grep -F`, counts and file names only, over the tree (`.git`, `local/`, `.venv/` and `bin/` aside), every diff on `main..HEAD` and its messages, with the values loaded in a subshell. They ran on 48 commits and again on 50, once the records' two commits were made.
+      - The Infrahub token, the API's token, the admin token, the admin password, the agent token and the secret key are in no file, no diff line and no message.
+      - The SR Linux login's password, the image's published default, is in `scripts/bring-up.sh`, `scripts/e2e.sh`, `internal/rehearsal/report_test.go` and `internal/findings/finding_test.go`, and in no diff line or message.
+      - The EOS login and the SR Linux login name are one five-letter word, a published default, in 182 files as prose. Its 7 diff lines, read with the word masked, are prose ("<word> state", "<word>-state", `clab_<word>s`), plus one unchanged context line of an existing test that sets the login name.
 
 - [ ] T056 [operator] The operator's review of the feature, the commits by hand that the runs left uncommitted, and `make command-log` once the session is closed. Record the review's outcome in this task's note, including the merge and the push, which are the operator's.
 
 **Checkpoint**: every record true; the feature closed.
+
+  *Run 16's checkpoint, 2026-10-28 (T052–T055)*:
+  - **Commits**:
+    - `e8a55e8`: `docs/verified-facts.md` (T052);
+    - `41f5165`: `CLAUDE.md` and `docs/roadmap.md` (T053, T054);
+    - then this note with the ticks.
+
+    No code, script or golden moved, so there is no re-baseline commit. `testdata/golden/` equals `main`'s.
+  - **Gates**:
+    - `make build` is statically linked.
+    - On the records alone, T055's `GOFLAGS=-count=1 make test` took 44.2 s.
+    - On the tree with the notes, two more uncached runs took **45.0 s** (load 1.72, then 3.79; `internal/cli` 40.5 s) and **43.8 s** (load 3.43, then 4.85; `internal/cli` 39.2 s). The load is Infrahub's own containers (RabbitMQ, its server, Neo4j).
+    - `make lint` reports 0 issues.
+    - After `CLAUDE.md`'s last correction (`41f5165`), the final gates: `make build` statically linked; `make test` uncached **43.1 s** (load 3.08, then 3.50; `internal/cli` 38.7 s); `make lint` 0 issues; `make linkcheck` 0 broken.
+    - Every other gate is T055's, all clean.
+  - **Tier 2 and tier 3**: not run, since no task here names one. Nothing was written to Infrahub.
+  - **The host**: no process started or stopped. The gates' `make build` on the dirtied tree replaced the binary, so the worker (480763) and the server (480765), started from `3794d62`, read `(deleted)`. Both are restarted from this run's commit once it is made. There is no twin and no Schedule.
+  - **For T056 and after**:
+    - **The tier-1 budget**: three uncached runs in one hour read 43.8–45.0 s against the 45 s bound, with `internal/cli` at 39–40.5 s, so SC-009 holds by about a second and the next tier-1 test may cross it. No task raises the bound or splits `internal/cli`.
+    - **R-08's literal reach** (T034) is still the operator's to confirm.
+    - **T025's gap** still needs a task: `verify.schema.json`'s `twin.source` lacks `snapshot`, so a verify of a `--snapshot` twin writes a source its contract refuses.
+    - **The tier durations** in `docs/development.md` and `README.md`, and the README's `12 interfaces`, are still unnamed by any task.
+
+    `CLAUDE.md`'s State lists the last three, and its Build and test line gives tier 1's three runs and their headroom.
 
 ---
 

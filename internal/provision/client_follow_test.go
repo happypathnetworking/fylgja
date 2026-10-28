@@ -107,7 +107,9 @@ func TestEveryActivityHasAFindingStep(t *testing.T) {
 		// M11's.
 		findings.StepReconcile,
 		// M12's.
-		findings.StepObserve}
+		findings.StepObserve,
+		// 016's, which StartFlows and ReadFlows join at T028.
+		findings.StepFlows}
 	var names []string
 	for name := range (&lab.Activities{}).Names() {
 		names = append(names, name)

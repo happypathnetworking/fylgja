@@ -90,12 +90,13 @@ const (
 type ProvisionInput struct {
 	Source     string `json:"source"`      // wire.SourceIntent, wire.SourceSnapshot or wire.SourceBundle
 	Branch     string `json:"branch"`      // intent: the branch the server read, or the snapshot's; provenance, which the following's checks read (a run recorded before 018 reads it)
-	At         string `json:"at"`          // intent: --at verbatim, empty when not given
-	BundlePath string `json:"bundle_path"` // bundle: the stored copy's absolute path
-	BundleID   string `json:"bundle_id"`   // bundle: its identity
+	At         string `json:"at"`          // intent: --at verbatim or the stage's; snapshot: the envelope's; empty when none
+	BundlePath string `json:"bundle_path"` // the stored bundle's absolute path, set by twin provision, every create and a rebuild; empty in a history recorded before 018 whose run compiled
+	BundleID   string `json:"bundle_id"`   // its identity, set wherever BundlePath is
 	Version    string `json:"version"`     // the starting binary's version, kept in history only
-	// ObservedAt is, with Source intent and BundleID set, the read that produced BundleID: a
-	// rebuild's provision is already compiled, and records the check's read (M4).
+	// ObservedAt is the read that produced BundleID, set with it by every create, a
+	// snapshot's being its stored take (018), and by a rebuild, the check's read (M4);
+	// empty for twin provision.
 	ObservedAt string `json:"observed_at,omitempty"`
 	// Follow, when set, begins following the branch once the twin is recorded. Nil is no
 	// following step; M2's inputs decode to nil (M4).

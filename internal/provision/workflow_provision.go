@@ -54,7 +54,8 @@ func Provision(ctx workflow.Context, in ProvisionInput) (ProvisionResult, error)
 	switch {
 	case in.Source == wire.SourceBundle:
 	case in.BundleID != "":
-		// Already compiled: the read that produced the bundle was the check's.
+		// Already compiled: every create since 018, by the server from its read or a
+		// snapshot's stored take, and a following check's rebuild, from the check's read.
 		res.ObservedAt = in.ObservedAt
 		observedAt = &in.ObservedAt
 	default:

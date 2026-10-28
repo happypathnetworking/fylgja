@@ -1,6 +1,7 @@
 // Package stage holds the read and compile stages as pure-Go pipelines, shared by the
-// stage commands (`intent read`, `twin compile`), the provisioning activities that run
-// them inside a run, and the dry run. One implementation means a create that stops at
+// server's stage commands (`intent read`, `twin compile`), its create and dry run, `stage
+// plan`, `twin step` and `twin rehearse` (018), and the provisioning activities that run
+// them inside a following check's run. One implementation means a create that stops at
 // read or compile reports exactly what the stage command would, under the same
 // identifiers (Constitution V).
 //

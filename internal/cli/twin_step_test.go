@@ -798,6 +798,39 @@ func TestStepDryRun(t *testing.T) {
 			carriesMarker(t, "the target's changed artifacts", files)
 		})
 	}
+	// FR-017: a step to a snapshot keeps --allow-restart (019). The same target by its
+	// snapshot id is refused step.restart.required naming e1 without the flag, and is clear
+	// with it.
+	target, toID := targetSnapshot(t, h, "linked")
+	for _, c := range []struct {
+		name    string
+		args    []string
+		code    int
+		verdict string
+	}{
+		{"to a snapshot, refused", []string{"--dry-run"}, findings.ExitRejected, findings.VerdictRefused},
+		{"to a snapshot, clear", []string{"--dry-run", "--allow-restart"}, findings.ExitOK, findings.VerdictClear},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			out := runStepCmd(t, append(c.args, "--snapshot", target.ID)...)
+			if out.code != c.code {
+				t.Fatalf("exit %d, want %d; findings %+v", out.code, c.code, out.doc.Findings)
+			}
+			refused := c.code == findings.ExitRejected
+			doc := out.doc
+			if refused != slices.Contains(doc.Findings, restartRequired) {
+				t.Errorf("findings %+v; want %+v exactly when refused", doc.Findings, restartRequired)
+			}
+			if d := doc.DryRun; d == nil || d.Verdict != c.verdict {
+				t.Errorf("dry_run %+v; want %s", d, c.verdict)
+			}
+			if st := doc.Step; doc.SnapshotID != target.ID || doc.BundleID != toID || st == nil || st.StepRunBlock != nil ||
+				st.AllowRestart != !refused || st.To.SnapshotID != target.ID || !slices.Equal(st.Reconcile.Restarted, []string{"e1"}) {
+				t.Errorf("snapshot %s, bundle %s, step block %+v; want the target's, e1 restarted, and no run", doc.SnapshotID,
+					doc.BundleID, st)
+			}
+		})
+	}
 	if got := sha256Of(t, h.paths.TwinJSON); got != record {
 		t.Errorf("twin.json changed under a dry run")
 	}
@@ -2193,25 +2226,35 @@ func TestStepInterrupt(t *testing.T) {
 
 // --wait sets the budget of the step's wait after its record, in seconds, a part of a second
 // counting as a whole one; left out, it is verify.DefaultBudget's 120. --wait 0 reads once.
+// A step to a snapshot takes it as a step to a stage does (FR-017).
 func TestStepWaitFlag(t *testing.T) {
 	for _, c := range []struct {
-		name  string
-		args  []string
-		waitS int
+		name     string
+		args     []string
+		waitS    int
+		snapshot bool
 	}{
-		{"left out", nil, 120},
-		{"30s", []string{"--wait", "30s"}, 30},
-		{"0", []string{"--wait=0"}, 0},
-		{"2m", []string{"--wait", "2m"}, 120},
-		{"a part of a second", []string{"--wait", "1500ms"}, 2},
+		{"left out", nil, 120, false},
+		{"30s", []string{"--wait", "30s"}, 30, false},
+		{"0", []string{"--wait=0"}, 0, false},
+		{"2m", []string{"--wait", "2m"}, 120, false},
+		{"a part of a second", []string{"--wait", "1500ms"}, 2, false},
+		{"30s to a snapshot", []string{"--wait", "30s"}, 30, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			stepHost(t, "plan-link-added.json", nil)
+			h := stepHost(t, "plan-link-added.json", nil)
+			args := append([]string{"--allow-restart"}, c.args...)
+			var target string
+			if c.snapshot {
+				s, _ := targetSnapshot(t, h, "linked")
+				target = s.ID
+				args = append(args, "--snapshot", target)
+			}
 			svc := &fakeService{runID: stepRunID, events: stepEvents(), stepResult: provision.StepResult{Outcome: provision.StepStepped,
 				Findings: findings.List{}, Record: &wire.TwinRecord{State: wire.StateReady}}}
 			useService(t, svc)
 			useInterrupts(t)
-			out := runStepCmd(t, append([]string{"--allow-restart"}, c.args...)...)
+			out := runStepCmd(t, args...)
 			if out.code != findings.ExitOK || len(svc.stepped) != 2 {
 				t.Fatalf("exit %d, %d runs started; want 0, one per run of the command; findings %+v", out.code, len(svc.stepped),
 					out.doc.Findings)
@@ -2219,6 +2262,9 @@ func TestStepWaitFlag(t *testing.T) {
 			for _, in := range svc.stepped {
 				if in.WaitS != c.waitS {
 					t.Errorf("the run's input carries wait_s %d, want %d", in.WaitS, c.waitS)
+				}
+				if c.snapshot && in.To.SnapshotID != target {
+					t.Errorf("the run steps to snapshot %q, want %s", in.To.SnapshotID, target)
 				}
 			}
 		})

@@ -57,6 +57,28 @@ export ([F-013](../../docs/roadmap.md#f-013)), any change to the CTM, the reader
 mapping or the schema library's files, the NetBox reader (F-025), the orchestrator, and
 any read of a node's running configuration are out of this feature.
 
+## Clarifications
+
+### Session 2026-10-28
+
+- No question was asked. The brief's [Open](brief.md#open) section is empty, the operator
+  having settled its four questions at feature-open, and the coverage scan found every
+  category Clear or deliberately the plan's: functional scope, actors and the out-of-scope
+  list (Clear); the entities, the probe's identity and the snapshot's hash (Clear; the
+  kind's exact shape the plan's, by the brief); the journeys, the empty list and every
+  refusal (Clear); security, in that no credential or management address enters a
+  declaration (Clear); performance, the burst's budget inside the wait's and the check's
+  timeout (the plan's, by the brief); the external dependencies, Infrahub's template and
+  containerlab's `linux` kind, each verified by the plan before it is relied on (the
+  plan's, by the brief); the formats and versions that move (Clear; the frozen copies the
+  plan's); the negative flows (Clear; a dropped host, a cancelled step's flows and a flow
+  that fails to start the plan's, by the brief); the constraints and the rejected
+  alternatives (Clear, in the brief's Decided list); terminology (Clear; the readiness
+  probe and this probe told apart in the glossary); and the completion signals (Clear).
+  Two sentences the scan found deciding more than the brief does were reworded to leave
+  the point to the plan: when a step without `--wait` reads its flows (US2 scenario 6),
+  and whether two hosts with one address are refused (FR-003 and its edge case).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A declared probe becomes a host on the twin (Priority: P1)
@@ -153,8 +175,8 @@ is stepped to one that restarts a device on the path, and the lost count is non-
    recorded with a stable identifier, and the step's document says which probe was not
    measured and why; whether that is a phase or a finding under `record` is the plan's.
 6. **Given** a step without `--wait`, **When** the operator reads the step's document,
-   **Then** the loss figures are read at the wait's end as today's wait block is, and the
-   dry run carries none.
+   **Then** the flows were read when the step closed, where the plan places that read in
+   the step's phases, and the dry run carries none.
 
 ---
 
@@ -418,9 +440,9 @@ decision log; `make linkcheck` clean.
   refused at the compile as a cabled interface is, naming the first probe.
 - **Two probes with one name**: refused when the declaration is read, naming the name; a
   probe's name is unique in its list, and `FylgjaProbe`'s uniqueness constraint says so.
-- **Two hosts with one address**: refused when the declaration is read, naming both
-  probes; an address inside no declared prefix of its interface is not refused, since the
-  CTM holds no address.
+- **Two hosts with one address**: whether the declaration's read refuses it is the plan's;
+  an address outside its interface's prefix is not refused, since the CTM holds no
+  address.
 - **A probe on a port a lossy package would have shared**: placed, and recorded under
   `fidelity.lossy` with the sharers; the port is the probe's.
 - **A `--probes` file that is empty, or whose declaration lists no probe**: a take with an
@@ -480,8 +502,9 @@ decision log; `make linkcheck` clean.
   source of the declaration, not the declaration.
 - **FR-003**: A malformed declaration MUST be refused when it is read, naming the file or
   the object, the probe and the field: a name repeated, a format no package declares, an
-  address or gateway that is not one, an address with no prefix length, or two hosts with
-  one address. An address outside its interface's prefix MUST NOT be refused.
+  address or gateway that is not one, or an address with no prefix length. An address
+  outside its interface's prefix MUST NOT be refused; whether two hosts with one address
+  are refused is the plan's.
 
 **The snapshot and the takes**
 

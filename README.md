@@ -247,7 +247,7 @@ replace, and no container restarts:
 
 ```console
 $ bin/fylgja intent read --branch fylgja-test-readme --out local/readme-1.json
-wrote local/readme-1.json: 3 devices (nokia_srlinux 3), 12 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports (branch fylgja-test-readme, scope tag:fylgja, schema 4d5b37aa0a894aec4cdca69fdb9fe455); snapshot …, stored at /var/tmp/fylgja/snapshots/….json
+wrote local/readme-1.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports (branch fylgja-test-readme, scope tag:fylgja, schema 7c413536d67ef86321c629c076a0d3a4); snapshot …, stored at /var/tmp/fylgja/snapshots/….json
 $ bin/fylgja twin step --snapshot local/readme-1.json
 twin: snapshot … (bundle 777e9899…), branch fylgja-test-readme, read at 2026-10-06T19:13:21.796364Z; 3 nodes
 target: snapshot … (branch fylgja-test-readme, read at …)
@@ -293,7 +293,7 @@ container, and n1 and n3 are pushed their new artifacts:
 $ go run -tags fixture ./cmd/fylgja-fixture -branch fylgja-test-readme -add-link
 link n1:ethernet-1/3 <-> n3:ethernet-1/3 added on fylgja-test-readme
 $ bin/fylgja intent read --branch fylgja-test-readme --out local/readme-2.json
-wrote local/readme-2.json: 3 devices (nokia_srlinux 3), 14 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports (branch fylgja-test-readme, scope tag:fylgja, schema 4d5b37aa0a894aec4cdca69fdb9fe455); snapshot …, stored at /var/tmp/fylgja/snapshots/….json
+wrote local/readme-2.json: 3 devices (nokia_srlinux 3), 11 interfaces, 4 links, 3 artifacts, 0 lossy mappings, 0 shared ports (branch fylgja-test-readme, scope tag:fylgja, schema 7c413536d67ef86321c629c076a0d3a4); snapshot …, stored at /var/tmp/fylgja/snapshots/….json
 $ bin/fylgja twin step --snapshot …
 twin: snapshot … (bundle e26f042a…), branch fylgja-test-readme, read at …; 3 nodes
 target: snapshot … (branch fylgja-test-readme, read at …)

@@ -598,5 +598,4 @@ Rewritten whole at each release's close, never appended to.
   artifact validator a branch with no change from `main` never gets (D-054's window);
   bound with `timeout` there, as the release's demo did. The tier
   durations in `docs/development.md` and `README.md` predate 019's measured 2,009 s and
-  1,894.1 s, and the README's walk-through counts `12 interfaces` where the three-node read
-  now counts 9 (019's T049 note).
+  1,894.1 s.

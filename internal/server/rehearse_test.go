@@ -401,8 +401,8 @@ func jsonEqual(t *testing.T, a, b any) bool {
 
 // The deadline is summed from each compiled stage's node plans as the host check plans them
 // from the store's copy, and never from the host: the fixture's case, the branch point
-// refused and three SR Linux stages, is 1,980 s (research R-09), and the node plans are
-// lab.CheckHost's own.
+// refused and three SR Linux stages, is 1,950 s (research R-09; 30 s less since 019's R-15),
+// and the node plans are lab.CheckHost's own.
 func TestRehearsalDeadlineFromTheStore(t *testing.T) {
 	plan := rehearsePlan(t)
 	three := goldenBundle(t, "three-node")
@@ -422,8 +422,8 @@ func TestRehearsalDeadlineFromTheStore(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if deadline != 1980*time.Second || len(nodes) != 3 {
-		t.Errorf("deadline %s over %d stages, want 33m0s over 3", deadline, len(nodes))
+	if deadline != 1950*time.Second || len(nodes) != 3 {
+		t.Errorf("deadline %s over %d stages, want 32m30s over 3", deadline, len(nodes))
 	}
 	t.Setenv("FYLGJA_SRLINUX_USERNAME", "admin")
 	t.Setenv("FYLGJA_SRLINUX_PASSWORD", "not-the-real-one")

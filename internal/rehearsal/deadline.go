@@ -48,9 +48,6 @@ type Mechanism struct {
 	VerifyMargin    time.Duration
 	// Wait is a wait's budget: verify's default, which every stage of a rehearsal waits.
 	Wait time.Duration
-	// Follow bounds the baseline's stop-following activity: the rehearsal's provision stops
-	// any following before it builds, as a stage create does.
-	Follow time.Duration
 }
 
 // DeadlineStage is one compiled stage as the deadline sums it: the role the rehearsal gives
@@ -64,7 +61,7 @@ type DeadlineStage struct {
 // Deadline is the time a rehearsal of stages is bounded by: each stage's budgets summed,
 // the largest of each over the stage's nodes, and the destroy once (data-model §4):
 //
-//	baseline  = CheckHost + Follow + Stage + deploy + (readiness + ReadinessMargin) + (push + PushMargin) + Record + (Wait + VerifyMargin)
+//	baseline  = CheckHost + Stage + deploy + (readiness + ReadinessMargin) + (push + PushMargin) + Record + (Wait + VerifyMargin)
 //	rehearsed = InspectTwin + 2 CheckHost + Stage + deploy + (readiness + ReadinessMargin) + (push + PushMargin) + Record + (Wait + VerifyMargin)
 //	destroy   = PlanTeardown + destroy + Unstage
 //
@@ -79,7 +76,7 @@ func Deadline(m Mechanism, stages []DeadlineStage) time.Duration {
 			seconds(b.push) + m.PushMargin + m.Record + m.Wait + m.VerifyMargin
 		switch s.Role {
 		case RoleBaseline:
-			total += m.CheckHost + m.Follow + build
+			total += m.CheckHost + build
 		case RoleRehearsed:
 			total += m.InspectTwin + 2*m.CheckHost + build
 		default:

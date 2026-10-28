@@ -61,8 +61,6 @@ const (
 	MinInterval = 10 * time.Second
 	// InspectTwinBudget bounds InspectTwin, which only reads.
 	InspectTwinBudget = 30 * time.Second
-	// FollowBudget bounds StartFollowing and StopFollowing: a delete and a create.
-	FollowBudget = 30 * time.Second
 	// ShowServiceBudget bounds twin show's whole conversation with the workflow service;
 	// past it the service is reported unreachable.
 	ShowServiceBudget = 5 * time.Second
@@ -282,6 +280,5 @@ func DeadlineMechanism() rehearsal.Mechanism {
 		PushMargin:      PushMargin,
 		VerifyMargin:    VerifyMargin,
 		Wait:            verify.DefaultBudget,
-		Follow:          FollowBudget,
 	}
 }

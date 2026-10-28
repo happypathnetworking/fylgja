@@ -157,7 +157,7 @@ SPECIFY_FEATURE_DIRECTORY=specs/016-probes GIT_BRANCH_NAME=016-probes. 0.3, the 
     beside `ethernet-1/1`, `ethernet-1/2` and `mgmt0`, whose six ethernet ports are all
     cabled today. Its snapshot id, its compiled id and its artifacts move, and
     `testdata/ctm/three-node.json` follows if it is to stay the fixture's CTM.
-11. **The decision entry**, one, D-063: a probe is a declaration outside intent, a file
+11. **The decision entry**, one, D-064: a probe is a declaration outside intent, a file
     first and a kind second on D-045's pattern, carried by the snapshot and compiled into
     synthesized hosts; a probe package is a mechanism keyed by a format value beside the
     PSP; and the declaration carries its own gateway. It stands beside D-057, D-061 and
@@ -221,8 +221,8 @@ Each was settled with the operator on 2026-10-25 through the roadmap's re-shape,
   road Constitution IV allows.
 - **The compiler refuses a probe it cannot place; a proposed change that cables a probe's
   port fails `fylgja-step` at that stage** (2026-10-16, kept, less the prefix refusal).
-- **One decision entry, D-063, superseding nothing.** *Settled by the brief's author*, on
-  D-061's pattern.
+- **One decision entry, D-064, superseding nothing.** *Settled by the brief's author*, on
+  D-061's pattern (D-063 is the feature chain's, 2026-10-28).
 - **Out of this feature:**
   - any second format, and any node type but the `ping` host;
   - loss as a graph or an export ([F-013](../../docs/roadmap.md#f-013)); the report's

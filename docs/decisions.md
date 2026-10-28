@@ -3936,3 +3936,88 @@ needs them is planned. Each becomes an entry when that scope is planned.
   fixed lab name, and no resources named per twin). Running both drivers, containerlab on
   the development host and clabernetes remote, is the fallback, at the cost of a second
   end-to-end tier.
+
+---
+
+<a id="d-063"></a>
+## D-063 — The feature chain: the script runs every Spec Kit stage, the operator's work precedes `specify`, and the route's lanes run at once in worktrees merged back mechanically
+
+**Status:** Accepted 2026-10-28, by the operator, in the review of the workflow after
+019's close. Supersedes development.md's rejection of worktree isolation (2026-10-17, "a
+merge is a judgement"). Beside [D-056](#d-056), which stands: Spec Kit's own files stay
+installed and untracked, and this repository's templates sit beside them. Built the same
+day, outside any feature's spec.
+
+### Context
+
+Three features (017, 018, 019; 98 logged sessions, about 32 active hours) ran through the
+workflow as it stood: `specify` to `analyze` by hand with `/clear` and `/model`, then
+`scripts/converge-loop.sh` for the implement runs and the convergence passes. The records
+showed four things. The operator's decisions leaked into the run: 017 carried 12
+`[operator]` tasks and raised 11 mid-loop questions, and the review sat before converge in
+every route and was deferred every time. Only half the chain was driven, and the models
+drifted from development.md's table twice. The house style of `tasks.md` and of a dozen
+other documents lived nowhere but the previous feature, since the tasks prompt was empty
+each time and Spec Kit's template is git-ignored. Nothing guided the split into runs: they
+were contiguous id ranges along user story and phase, which gave one run of five packages
+at 524k context and one of nine record tasks that exhausted its budget, and the route was
+strictly serial. The attended session also woke only when its Monitor expired, since its
+filter took a question, a pause or a stop and nothing else, and the command log kept the
+operator's typed answers verbatim.
+
+### Options considered
+
+- **Keep the chain by hand and codify the formats alone.** Rejected: the model drift and
+  the operator questions mid-run are the chain's shape, not a document's.
+- **An agent that directs the chain by judgement.** Rejected, as ideas.md's assessment of
+  2026-10-04 rejected it: a model directing a long run fills its context and drifts; the
+  script owns the order, the gates and the commits, and the session converses and relays.
+- **Lanes with a merge the attended session judges.** Rejected: the loop's value is that
+  nothing in it judges.
+- **Lanes with a mechanical merge.** Chosen: git merges the branches, `tasks.md` by a
+  driver that resolves ticks and notes and nothing else, and a merge that would need a
+  judgement stops the loop for the operator.
+
+### Decision
+
+- The operator's work precedes the chain. A feature's `brief.md`, written to its template,
+  settles every decision in `/feature-open`, so `clarify` has nothing to ask; an
+  `[operator]` task sits in the route only where it could not precede the chain (the
+  review, a push, an import that waits on the pushed tree), kept to a minimum, with its
+  reason on its line.
+- `scripts/converge-loop.sh` runs every stage from the one `--from` names, each as a
+  headless session on the model and effort of a table the script alone holds, each gated
+  on the tree before the next and its artifacts committed by the script; a stage that
+  would ask the operator ends its report with a wait marker, which attended is a text
+  question answered through `reply-<n>` and unattended the `operator` stop. Every event
+  is a line in the run's `events.jsonl`, which the attended session watches whole and
+  relays, every session's report verbatim.
+- The tasks template is this repository's, tracked under `.specify/templates/overrides/`;
+  a run is the tasks that share one context, with the files to read first on its line, and
+  a lane mark names the run it may run beside. Runs that mark each other run at once, up
+  to `--lanes`, each in its own worktree seeded with Spec Kit's ignored files, and merge
+  back in route order; a lane is never live and never names tier 2.
+- The command log records a command's own prompt and every segment's metrics, never a
+  follow-up's text.
+- The other documents Spec Kit has no template for have section lists under
+  `docs/templates/`, and the forms inferred from neighbours until now (commits, task notes,
+  schema histories, the code forms) are development.md's "Conventions".
+- The model table: specify, clarify, plan, tasks, analyze and converge on Fable 5.1 (plan at
+  `--plan-effort`, xhigh for new design), planned implement runs on Opus 5.5 at
+  `--implement-effort`, high by default, live and converge-appended runs at xhigh. 016
+  measures high against 017–019's per-task figures, and the flag flips the default if xhigh
+  wins.
+
+### Consequences
+
+- development.md's "Spec Kit workflow" is rewritten around the chain; its model table is
+  the script's; `CLAUDE.md`'s Workflow says the same in three bullets; the three ideas.md
+  entries (a directing agent, a feature open and close skill, templates) are closed.
+- A merge that stops the loop is the operator's to make by hand, with the lane's worktree
+  and branch kept under `local/lanes/`.
+- Converge's stopping rule and its tags are unchanged, by the operator's choice, though
+  the records show convergence took about a third of each feature's time and never ended
+  by the rule; a later entry may take that up.
+- Revisit if a lane's merge stops the loop often, if the attended session's relay of every
+  report proves too much for the operator's chat, or when 016's measurement decides the
+  implement effort.

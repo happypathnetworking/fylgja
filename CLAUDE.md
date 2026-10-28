@@ -22,31 +22,45 @@ and is not cited here; a bare milestone marker (`M7`) is resolved by the table b
 
 ## Workflow
 
-- **Spec Kit**: `/speckit-specify` → `clarify` → `plan` → `tasks` → `analyze` →
-  `implement` → `converge` (repeat until nothing is added). **Each command runs in a
-  fresh context** (`/clear`, `/model` per the table in `docs/development.md`, then the
-  command), **except `clarify`, which runs in `specify`'s context**. `specify` creates the
-  feature's branch first, by the git extension's hook, named by `GIT_BRANCH_NAME=<NNN-slug>`
-  in the prompt (`docs/development.md`, "Spec Kit workflow"). Every command reads
-  its inputs from disk. A feature's `brief.md` carries its full reading list, so the
-  specify prompt is one line. `.specify/feature.json` (git-ignored) names the current
-  feature's directory.
+- **Spec Kit, as one chain**: `/speckit-specify` → `clarify` → `plan` → `tasks` →
+  `analyze` → `implement` → `converge` (repeat until nothing is added), run by
+  `scripts/converge-loop.sh` from the stage asked for (`docs/development.md`, "The feature
+  chain"). **Before the chain, the operator's work is done**: the feature's `brief.md`,
+  written to `docs/templates/brief-template.md`, settles every decision in `/feature-open`,
+  so `clarify` has nothing to ask and an `[operator]` task sits in the route only where it
+  could not precede the chain (the review, a push, an import), with its reason. Then
+  `/converge-loop --from specify --feature specs/NNN-slug` runs every command as a headless
+  session on its row's model and effort, gated on the tree before the next, and the
+  attended session shows each session's report and carries the questions. **Each command
+  runs in a fresh context, except `clarify`, which runs in `specify`'s** (by `--resume`).
+  `specify` creates the feature's branch, by the git extension's hook, named by
+  `GIT_BRANCH_NAME=<NNN-slug>` in the brief's prompt, which also names the directory with
+  `SPECIFY_FEATURE_DIRECTORY=`. Every command reads its inputs from disk; `tasks` reads the
+  tracked `.specify/templates/overrides/tasks-template.md`, whose route groups runs by
+  shared context and marks the lanes the loop runs at once. `.specify/feature.json`
+  (git-ignored) names the current feature's directory.
 - **Commands are logged automatically** by the Claude Code hooks in `.claude/settings.json`
-  (`.claude/hooks/command-log.py`): prompt, report, model, effort, time, context and
-  tokens, kept in `local/command-log/pending.jsonl` so no turn dirties the tree.
-  `make command-log` publishes them into `commands/` or `specs/NNN-slug/commands/`, which
-  are **git-ignored here**: it commits nothing. Run it after a hand session, once the
-  session is closed or cleared. Do not write the log files by hand. The loop's stopping
-  rule reads `tasks.md`'s tags, never the log.
-- **Commit manually** with a conventional-commit message whose body says *why*. Never
-  commit `local/`. The one exception is `scripts/converge-loop.sh`, which commits as it
-  goes and never pushes (`docs/development.md`, "The converge loop"). Its sessions get
-  Infrahub's address and token from `local/.env` and run tier 2, never the node logins;
-  tier 3, twins, the worker and the hand scenarios stay the operator's. Boot no twin while
-  it runs. **Attended** (`/converge-loop`; "The attended loop"), its live sessions get the
-  logins and run tier 3, the worker and the hand scenarios, and what would stop it is a
-  question put to the operator by the session that started it; that session writes the
-  answer into the tree only while the loop says it is paused, or once it has stopped.
+  (`.claude/hooks/command-log.py`): the command's prompt, report, model, effort, time,
+  context and tokens, kept in `local/command-log/pending.jsonl` so no turn dirties the
+  tree; **never a follow-up's text**, which is the operator's answer. `make command-log`
+  publishes them into `commands/` or `specs/NNN-slug/commands/`, which are **git-ignored
+  here**: it commits nothing. Run it after a hand session, once the session is closed or
+  cleared. Do not write the log files by hand. The loop's stopping rule reads `tasks.md`'s
+  tags, never the log.
+- **Commit manually** with a conventional-commit message whose body says *why*
+  (`docs/development.md`, "Conventions"). Never commit `local/`. The one exception is
+  `scripts/converge-loop.sh`, which commits as it goes (each stage's artifacts, each run's
+  work, each lane's merge, each convergence phase) and never pushes
+  (`docs/development.md`, "The converge loop"). Its sessions get Infrahub's address and
+  token from `local/.env` and run tier 2, never the node logins; tier 3, twins, the worker
+  and the hand scenarios stay the operator's. Boot no twin while it runs. Two runs the route
+  marks `[∥]` run at once in worktrees under `local/lanes/` and merge back mechanically;
+  one that will not stops the loop at `merge` with the worktree kept. **Attended**
+  (`/converge-loop`; "The attended loop"), its live sessions get the logins and run tier 3,
+  the worker and the hand scenarios, every session's report reaches the operator's chat as
+  it lands, and what would stop it is a question put to the operator by the session that
+  started it; that session writes the answer into the tree only while the loop says it is
+  paused, or once it has stopped, and a chain stage's answer through `reply-<n>`.
 - **A session never pushes.** `origin` is pushed by the operator; a moved remote-tracking
   ref stops the converge loop at `contract`.
 - **A changed decision** is a new entry in `docs/decisions.md` that supersedes the old one

@@ -11,7 +11,11 @@ and what would have to be checked before building it.
 ## A directing agent over the Spec Kit workflow
 
 **Raised** 2026-10-04 by the operator. **When**: after Fylgja is launched (M14).
-**Status**: open.
+**Status**: closed on 2026-10-28, built as the feature chain ([D-063](decisions.md#d-063);
+development.md, "The feature chain"): the script drives every stage from `specify`, the
+attended session converses and relays, and questions bubble up mid-run as this entry asked.
+One adjustment below was reversed: the gain is unattended hours *and* parallelism, since
+the route's lanes run at once in worktrees and merge back mechanically.
 
 ### The idea
 
@@ -61,7 +65,10 @@ Four adjustments to the idea as stated:
 ## A skill that opens and closes a feature
 
 **Raised** 2026-10-17 by the operator, as 015 was opened by hand. **When**: not planned;
-cheap enough to take up between features. **Status**: open.
+cheap enough to take up between features. **Status**: closed on 2026-10-28: the open verb is
+`/feature-open` (`.claude/skills/feature-open/`, its checks in `check.py`), which settles
+the brief with the operator and hands over to the chain; the close stays the operator's, as
+the route's last `[operator]` task.
 
 ### The idea
 
@@ -109,7 +116,11 @@ every time, and both are where a step is forgotten.
 ## Templates for the governance documents
 
 **Raised** 2026-10-17 by the operator. **When**: not planned; each template is an hour,
-best written as its document is next added to. **Status**: open.
+best written as its document is next added to. **Status**: closed on 2026-10-28: the tasks
+template is tracked under `.specify/templates/overrides/`, which Spec Kit's resolver
+prefers; the brief, the decision entry, research.md, quickstart.md, data-model.md and a
+contract's feature section have section lists under `docs/templates/`; the commit grammar,
+task notes, schema histories and the code forms are development.md's "Conventions".
 
 ### The idea
 

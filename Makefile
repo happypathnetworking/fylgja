@@ -58,11 +58,16 @@ lint:
 linkcheck:
 	python3 -I scripts/linkcheck.py
 
-# Publishes the Spec Kit command log the hooks keep in local/command-log/ and commits each
-# commands/ directory it touches (docs/development.md). The hooks write no tracked file, so
-# a session leaves the tree clean; this is when its log reaches git.
+# Publishes the Spec Kit command log the hooks keep in local/command-log/ into each
+# commands/ directory (docs/development.md). The directories are git-ignored, so nothing is
+# committed; the hooks write no tracked file, so a session leaves the tree clean.
 command-log:
 	python3 .claude/hooks/command-log.py flush --commit
+
+# The Python scripts' tests: the loop's planner, the tasks.md merge driver, the command-log
+# hook (scripts/tests/). A hand tool; not a CI step.
+test-scripts:
+	python3 -I -m unittest discover -s scripts/tests -p 'test_*.py'
 
 # Fetches the GraphQL SDL from a live Infrahub. The SDL is committed
 # so the build never needs Infrahub; only regeneration does. From the default branch:

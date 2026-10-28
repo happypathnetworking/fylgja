@@ -23,8 +23,8 @@ roadmap's edits, the decision entry, the operator steps ticked in the brief).
 
 **Tags**: `[operator]` marks a task that needs the operator and could not be done before
 the chain: the review, a push, an import that waits on the pushed tree. Keep them to a
-minimum; each carries its reason in one clause on its line, and sits at the latest point
-its dependents allow. Everything an operator could settle before `specify` is the brief's,
+minimum; each carries its reason in one clause on its line, "since …" or "because …",
+which the chain's tasks gate greps, and sits at the latest point its dependents allow. Everything an operator could settle before `specify` is the brief's,
 not a task. `[live]` marks a task that needs the development host's server or worker
 restarted from this tree, a twin, a hand scenario, the whole contract tier beside the
 server on the bridge, or the end-to-end tier. A single tier-2 test a task names is not

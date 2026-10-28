@@ -377,16 +377,20 @@ scripts/infrahub/      docker-compose.override.yml, copied beside Infrahub's pub
 scripts/e2e.sh         the body of `make test-e2e`
 scripts/diagrams.sh    writes the import graph below and docs/diagrams/topologies.md; run by `make diagrams`
 scripts/linkcheck.py   checks every relative link and anchor in the tracked Markdown; run by `make linkcheck`, by hand
-scripts/converge-loop.sh  the converge loop (Spec Kit workflow, below)
+scripts/converge-loop.sh  the feature chain and the converge loop (Spec Kit workflow, below)
+scripts/converge-plan.py  the loop's route planner: tasks.md's Recommended route as the runs still to implement, with each run's lane partner
+scripts/merge-tasks.py  git's merge driver for specs/*/tasks.md (.gitattributes), which resolves a lane's ticks and notes and nothing else
+scripts/tests/         the Python scripts' tests (the planner, the merge driver, the command-log hook): `python3 -I -m unittest discover -s scripts/tests`
 docs/                  brief, architecture, decisions, roadmap, glossary, development, verified-facts, ideas, and how-it-was-built, the one-page write-up of how Fylgja was built
 docs/recording/        session.cast, the README's recorded session (stage list, then twin rehearse: a proposed change's stages rehearsed on one twin; recorded at v0.1.0 with waypoints and remade at v0.2.0), session.gif, rendered from it, and four screenshots of what the checks post in Infrahub
 docs/c4/               workspace.dsl, the C4 model, and its five views exported as .puml and .svg
 docs/diagrams/         the fixture topologies (generated) and the schema's entity diagram
+docs/templates/        section lists for the documents Spec Kit has no template for: a feature's brief, a decision entry, research.md, quickstart.md, data-model.md and a contract's feature section (Spec Kit workflow, below)
 specs/                 Spec Kit features (NNN-slug), created by the first feature here
 commands/              git-ignored: the command log the hooks publish (see below)
-local/                 git-ignored, the default state root: .env, temporal.db, bundles/ (its .reads/, a following twin's check's CTMs, written by nothing since 019), snapshots/, twin/, command-log/; infrahub/, the Compose project's two files; the three processes' and the bring-up script's logs
-.specify/              the constitution (memory/constitution.md, amended only by citing a decision-log entry), the amended plan template and extensions.yml; Spec Kit's own scripts, templates and install metadata are installed per host and git-ignored (Spec Kit workflow, below)
-.claude/               Claude Code: the project settings, the command-log hook and the converge-loop skill; the speckit-* skills are installed per host and git-ignored
+local/                 git-ignored, the default state root: .env, temporal.db, bundles/ (its .reads/, a following twin's check's CTMs, written by nothing since 019), snapshots/, twin/, command-log/; infrahub/, the Compose project's two files; converge-loop/, one directory per loop run (its summary, events, reports and gate logs); lanes/, a lane's worktree while it runs or when its merge stopped the loop; the three processes' and the bring-up script's logs
+.specify/              the constitution (memory/constitution.md, amended only by citing a decision-log entry), the amended plan template, templates/overrides/ (this repository's tasks template, which Spec Kit's resolver prefers to its own) and extensions.yml; Spec Kit's own scripts, templates and install metadata are installed per host and git-ignored (Spec Kit workflow, below)
+.claude/               Claude Code: the project settings, the command-log hook, and the two project skills, feature-open and converge-loop; the speckit-* skills are installed per host and git-ignored
 .github/workflows/     ci.yml (the lint and unit jobs; the contract job on pushes to main), pull-requests.yml (comments the Contributing sentence on a pull request and closes it) and release.yml (a tag's draft release); Test architecture, below
 ```
 
@@ -1114,14 +1118,22 @@ and the log as every other request does, rather than `net/http`'s own `200`.
 Each [roadmap](roadmap.md) feature (`F-NNN`) is one or more specs, each a directory
 `specs/NNN-<slug>/` whose number Spec Kit assigns and which is not the feature's. The
 sequence is `/speckit-specify` → `clarify` → `plan` → `tasks` →
-`analyze` → `implement` → `converge`, repeating `converge` until nothing is added.
+`analyze` → `implement` → `converge`, repeating `converge` until nothing is added. From
+2026-10-28 it runs as **one chain** (below): the operator writes the feature's `brief.md`
+to its template and settles everything it leaves open in `/feature-open`, then
+`/converge-loop --from specify --feature specs/NNN-slug` runs every command as a headless
+session, each on its row's model and effort and gated on the tree before the next, and the
+attended session shows the operator each session's report as it lands and carries the
+questions. Before that, 013 to 019 were run command by command with `/clear` and `/model`.
 `specify` begins by creating the feature's branch, through the one extension hook
 registered in `.specify/extensions.yml` (the git extension's `speckit.git.feature`, from
 2026-10-25; 014 and 015 were built on `main`): the prompt names the branch with
 `GIT_BRANCH_NAME=<NNN-slug>`, the spec directory's own name, since left to itself the
-script would number the branch past the directory the brief already made. The hook fetches
-`origin` once, which is a read. Auto-commit hooks stay off; commit with a
-conventional-commit message whose body says *why*.
+script would number the branch past the directory the brief already made, and the feature's
+directory with `SPECIFY_FEATURE_DIRECTORY=specs/<NNN-slug>`, which the command writes to
+`.specify/feature.json`. The hook fetches `origin` once, which is a read. Auto-commit hooks
+stay off; the loop commits each stage's artifacts and each run's work, and a hand session
+commits with a conventional-commit message whose body says *why* (Conventions, below).
 
 **Spec Kit's own files are installed, not tracked.** The `speckit-*` skills under
 `.claude/skills/`, the scripts under `.specify/scripts/`, Spec Kit's templates and its
@@ -1133,14 +1145,21 @@ sh`, which writes the current release's files, then `specify extension add git`,
 installs the branch hook's extension under `.specify/extensions/` (git-ignored, with the
 `.specify/.gitignore` the CLI writes) and rewrites `.specify/extensions.yml` with every
 hook the extension offers, auto-commits among them: restore the tracked copy with `git
-checkout -- .specify/extensions.yml`, which registers the branch hook alone. The files this project was built with came
-from Spec Kit 0.14.4.dev0, installed 2026-09-12; the ten commands, `converge` included,
-are still upstream, and the prompt text a newer release writes differs in detail. What
-this repository keeps is its own: the constitution, `.specify/templates/plan-template.md`
-(Spec Kit's plan template with the Constitution Check amended here, under
-`.specify/LICENSE.spec-kit`) and `.specify/extensions.yml`. Without the installed files,
-the command-log hook runs and records no feature directory, and `scripts/converge-loop.sh`
-stops at its first line.
+checkout -- .specify/extensions.yml`, which registers the branch hook alone. This project
+was built with Spec Kit 0.14.4.dev0, installed 2026-09-12, and runs the release
+`.specify/init-options.json` records (1.1.2 on 2026-10-28); the ten commands, `converge`
+included, are still upstream, and the prompt text a newer release writes differs in
+detail. What this repository keeps is its own: the constitution,
+`.specify/templates/plan-template.md` (Spec Kit's plan template with the Constitution
+Check amended here, under `.specify/LICENSE.spec-kit`),
+`.specify/templates/overrides/tasks-template.md` (this repository's tasks template, which
+Spec Kit's resolver prefers to its installed one, so a reinstall clobbers nothing) and
+`.specify/extensions.yml`. The documents Spec Kit has no template for have section lists
+under `docs/templates/`: a feature's brief, a decision entry, `research.md`,
+`quickstart.md`, `data-model.md` and a contract's feature section; each is one line per
+section on what belongs there, never a form to fill, so a document is as long as its
+content. Without the installed files, the command-log hook runs and records no feature
+directory, and `scripts/converge-loop.sh` stops at its first line.
 
 **The specify prompt carries decisions, not restatement.** Every command starts from
 `CLAUDE.md`'s reading list — brief, architecture, decision log, roadmap, this document —
@@ -1182,63 +1201,117 @@ wait in `local/` until then, and are never lost by waiting.
 session.
 
 A run is split into segments at each prompt the operator types: segment 0 is the command,
-each later prompt a follow-up. Every segment keeps its prompt verbatim, report, models,
-effort, active time, context before and after, and tokens (de-duplicated by request;
-subagents apart). The record sums them three ways: `command` (segment 0, the number for
-estimates and model comparisons), `follow_ups`, and `total`; time spent waiting on the
-operator is in none of them. For `/speckit-clarify` the operator's answers are follow-ups,
-so use `total` there. The run also records tool calls and errors, files edited, `HEAD`
-before and after, and the tasks checked and added. `log.md` carries the command's metrics,
-one follow-up summary line, and every prompt, not the reports. The pending entry is
-rewritten after each turn until the next `/speckit-*` command, and a publish replaces the
-published one in place. `command-log.py replay <transcript> --out <dir>` runs the same
-logic over a saved transcript. The transcript format is Claude Code's and undocumented
-(verified on 2.1.272); a missing field is reported as a problem, shown in the session,
-never written as zero.
+each later prompt a follow-up. Segment 0 keeps the command's own prompt verbatim; **a
+follow-up's text is never recorded**, since it is the operator's answer (2026-10-28), only
+its report, models, effort, active time, context before and after, and tokens
+(de-duplicated by request; subagents apart). The record sums them three ways: `command`
+(segment 0, the number for estimates and model comparisons), `follow_ups`, and `total`;
+time spent waiting on the operator is in none of them. For `/speckit-clarify` the operator's
+answers are follow-ups, so use `total` there. The run also records tool calls and errors,
+files edited, `HEAD` before and after, and the tasks checked and added. `log.md` carries the
+command's metrics, one follow-up summary line, the command's prompt and a placeholder per
+follow-up, not the reports. The pending entry is rewritten after each turn until the next
+`/speckit-*` command, and a publish replaces the published one in place.
+`command-log.py replay <transcript> --out <dir>` runs the same logic over a saved
+transcript; `command-log.py scrub` rewrote the records published before the rule, once, on
+the development host. The transcript format is Claude Code's and undocumented (verified on
+2.1.272); a missing field is reported as a problem, shown in the session, never written as
+zero. The hook's tests are under `scripts/tests/`.
 
-**Model and effort per command.** Every command but `clarify` runs in a fresh context:
-`/clear`, then `/model` when the row changes the model or the effort, then the command.
-`clarify` runs in `specify`'s context, on the same model, because its input is the spec
-that context just wrote and staying warm skips the re-read. Each command reads its inputs
-from disk and the command log keeps the prompts, so nothing in the transcript is needed by
-the next command, and a switch on an empty context costs nothing. Switching mid-session
-re-reads the whole context uncached under the new model, because prompt caches are
-model-scoped; the same is true of an effort change. Both models write at about the same
-rate, so a command takes the same time on either; the choice is price against judgment.
+**Model and effort per command.** Every command but `clarify` runs in a fresh context, and
+`clarify` runs in `specify`'s, because its input is the spec that context just wrote and
+staying warm skips the re-read. The table is **set by the script** (`scripts/converge-loop.sh`'s
+`MODEL` and `EFFORT`), so a chain run cannot drift from it; a hand session matches a row
+with `/clear`, then `/model`. Each command reads its inputs from disk and the command log
+keeps the prompts, so nothing in the transcript is needed by the next command, and a
+switch on an empty context costs nothing. Switching mid-session re-reads the whole context
+uncached under the new model, because prompt caches are model-scoped; the same is true of
+an effort change. Both models write at about the same rate, so a command takes the same
+time on either; the choice is price against judgement. Fable 5.1 costs 2.5 times Opus 5.5
+per input and output token ($10/$50 against $4/$20 per million) and 1.25 times per cache
+read ($0.25 against $0.20), and a long session's cost is mostly cache reads, so the ratio
+of a session is nearer 1.5 than 2.5. The rows were settled on 2026-10-28 from the logs of
+013 to 019 (98 sessions of 017 to 019 alone), with the figures that decided each change.
 
 | Command | Model | Effort | Why |
 |---|---|---|---|
-| specify | Fable 5.1 | high | the spec is what every later command reads |
-| clarify | the model specify used, in specify's context | high | most of its time is the operator's answers; staying warm skips a re-read |
-| plan | Fable 5.1 | high for a port; xhigh for new design | the largest single command; live verification and the Constitution Check happen here |
-| tasks | Opus 5.5 | high | its follow-ups are where the plan's conflicts surface; answer them in the same context |
-| analyze | Fable 5.1 | high | read-only, then the fixes are applied as follow-ups; a second pass is short |
-| checklist | Sonnet 5 | medium | optional |
-| implement, planned and converge-appended runs | Opus 5.5 | xhigh | Fable costs 2.5 times as much per token for no gain in speed; a converge-appended run is one or two tasks, so xhigh costs little |
-| converge | Opus 5.5 | xhigh | every pass, the last included, as the converge loop runs it; the stopping rule below bounds the tail |
-| `/converge-loop` (the attended session) | Opus 5.5, the settings default | high | it implements nothing: the loop's own sessions are fixed by the script at Opus 5.5, xhigh. Its judgement is a reading — the `continue` or `hold` verdict, and where an answer belongs — not a design |
+| specify | Fable 5.1 | high | the spec is what every later command reads; one session of about 8 minutes |
+| clarify | the model specify used, in specify's context, by `--resume` | high | staying warm skips a re-read; headless, it ends `CLARIFY-DONE` or asks through the attended session |
+| plan | Fable 5.1 | `--plan-effort`: xhigh for new design (default), high for a port | the largest single command (18–46 minutes, 600–760k context at xhigh); live verification and the Constitution Check happen here; 7% of a feature's cost |
+| tasks | Fable 5.1 | high | was Opus high: the route now carries the grouping, the read lists and the lanes, and `tasks.md` was the weakest artifact of 017, 018 and 019 (runs of five packages, a records run that exhausted its budget); once per feature, about +$6 |
+| analyze | Fable 5.1 | high | read-only, then the fixes it can settle are applied; headless, it ends `ANALYZE-DONE` or asks |
+| checklist | Sonnet 5 | medium | optional, by hand |
+| implement, planned runs | Opus 5.5 | `--implement-effort`, high by default | was xhigh: 139 of 142 logged implement sessions ran at xhigh and none comparable at high, so nothing measured the difference; 017–019 at xhigh ran 7.3, 6.0 and 5.2 minutes a task, 23k, 18k and 21k output tokens a task, 0.7–0.9 tool errors a run, and xhigh prevented none of the 26 behaviour gaps converge found. 016 measures high against those figures, and the flag flips the default if xhigh wins |
+| implement, live runs and converge-appended runs | Opus 5.5 | xhigh | a live run debugs the host and the tiers (017's Run 19 took four attempts); an appended run is one or two tasks, so xhigh costs little |
+| converge | Fable 5.1 | high | was Opus xhigh: a review whose judgement varied pass to pass (018 skipped FR-024's mismatch in pass 1 and raised it in pass 4); about +$5 a pass |
+| `/feature-open` and `/converge-loop` (the attended session) | Opus 5.5, the settings default | high | neither implements anything: the loop's own sessions are the table's. Their judgement is a reading — which option to recommend, the `continue` or `hold` verdict, where an answer belongs — not a design |
 
 Project settings that back this (`.claude/settings.json`): `model: "opus"` (an alias, Opus
 5.5), `effortLevel: "high"` (Opus 5.5's own default is `medium`, so the setting matters),
 `promptCacheTtl: "1h"` so the cached governance documents survive a review pause between
-commands. The settings are the `tasks` row; every other row is a `/model` after `/clear`,
-except `clarify`, which stays in `specify`'s session. Effort follows the row, not the
-session.
+commands. The settings are the attended session's row; the chain's rows are the script's.
 
 **Stopping rule for converge.** Convergence ends after two consecutive passes that
 change no behaviour — passes whose every appended task is a test, a doc line or a named
 constant with the code under test unchanged — or after a pass that appends nothing,
-whichever comes first. Implement what the last pass appended, run the tiers, and stop:
-the tiers verify those tasks, not another pass. A pass that changes behaviour resets the
-count.
+whichever comes first. Implement what the last pass appended, run the pure gates, and
+stop: the gates verify those tasks, not another pass, and the live tiers are the close's. A
+pass that changes behaviour resets the count.
+
+**The feature chain** (`scripts/converge-loop.sh --from specify --feature specs/NNN-slug`,
+started by `/converge-loop` after `/feature-open`). The script runs the five commands before
+the implement runs as headless sessions too, one stage each, every stage gated on the tree
+before the next starts, its artifacts (the feature directory alone, which is the one place a
+stage may write) committed by the script as `docs(NNN): <stage>`:
+
+- **specify**: its prompt is the brief's fenced line, with "ask nothing; the brief settles
+  every decision". The git extension's hook creates the branch inside the session, the one
+  remote fetch the loop allows; afterwards the branch must be the feature's and
+  `.specify/feature.json` must name it. Gate: `spec.md` exists with no `[NEEDS
+  CLARIFICATION]` and no checklist under `checklists/` has an open box.
+- **clarify**: the same session, by `--resume`. It cannot ask, so it ends its report with
+  `CLARIFY-DONE`, or with `CLARIFY-WAIT` above every question it would have asked, each with
+  options and its recommendation. Attended, that is one **text question**: the attended
+  session puts the questions to the operator and writes the reply verbatim to
+  `reply-<n>` (or `skip-<n>`: "take your recommendations"), and the script resumes the
+  session with it; unattended it is the `operator` stop. A brief finished in
+  `/feature-open` ends `CLARIFY-DONE` first time.
+- **plan**: a fresh session at `--plan-effort`, told to write `research.md`,
+  `data-model.md` and `quickstart.md` to their section lists under `docs/templates/`.
+  Gate: `plan.md` and `research.md` exist, every Constitution Check row has a Status, no
+  `NEEDS CLARIFICATION`, and `research.md` has the template's numbered sections.
+- **tasks**: told the template's rules. Gate: the planner (`scripts/converge-plan.py`) lists
+  at least one run and the route names every unchecked task; every route line that is not
+  an `[operator]` or `[live]` run says what to read first; every `[operator]` task carries
+  its reason ("since …" or "because …"); the lane marks parse.
+- **analyze**: writes its read-only report, applies every fix the artifacts settle, judges
+  each `[operator]` task, and ends `ANALYZE-DONE` or `ANALYZE-WAIT` like clarify; the tasks
+  gate runs again.
+
+`--to` stops after a stage (`done`, exit 0); `--from` picks up at any stage, `implement` by
+default, so the loop below is the chain's tail. The dry run (`--dry-run`) stands a stub in
+for every session, so the chain's mechanics run on a throwaway spec with no model; both
+were exercised on 2026-10-28, and the real chain to clarify and a real lane pair after it.
 
 **The converge loop** (`scripts/converge-loop.sh`) runs a feature from its tasks to
 convergence unattended, in two stages.
 
-1. **The planned runs.** The runs come from `tasks.md`'s "Recommended route", and each line
-   is its run's prompt, as when it was typed. After them comes each phase's unchecked tasks
-   the route does not name. A run whose tasks are all `[X]` is skipped, so a stopped loop
-   resumes where it stopped.
+1. **The planned runs.** The runs come from `tasks.md`'s "Recommended route"
+   (`scripts/converge-plan.py` reads it before every session), and each line is its run's
+   prompt, as when it was typed, less its lane mark. After them comes each phase's unchecked
+   tasks the route does not name. A run whose tasks are all `[X]` is skipped, so a stopped
+   loop resumes where it stopped. **Lanes**: two runs that mark each other `[∥ Run M]` run
+   at once, up to `--lanes` (2), each as a headless session in its own worktree under
+   `local/lanes/` on a branch `lane/<run>`, seeded with the git-ignored files Spec Kit needs
+   (directories by symlink, files by copy, since git refuses a symlinked `.gitignore`), with
+   `local/.env` and the command log's two directories linked so the hook writes the pending
+   file this tree shares. A lane is told to run the tests of the packages it touched, not
+   the whole tier, since two `make test` at once trip tier 1's wall bound; the merged tree
+   runs the whole tier once. The script merges the lanes back in route order (`tasks.md` by
+   `scripts/merge-tasks.py`, named in `.gitattributes`, which resolves a conflict made of
+   ticks and notes alone and leaves anything else), removes each worktree and branch, and
+   settles the merged tree once. Only pure runs are laned: never a live one, nor one that
+   names tier 2, which shares one Infrahub.
 2. **Convergence.** Converge tags every task it appends `[behaviour]`, `[pin]` or
    `[operator]` (attended, also `[live]`), and the stopping rule is applied from the tags.
 
@@ -1246,29 +1319,39 @@ Each command is a headless `claude -p` session on its row's model and effort, so
 fresh-context rule holds. **The loop commits and never pushes**, the one exception to
 committing by hand:
 
-- Each implement session commits its own work, split as the repository splits it.
-- The script commits converge's phase, and publishes each session's command-log entry,
-  which commits nothing here.
+- Each implement session commits its own work, as Conventions says.
+- The script commits each chain stage's artifacts, converge's phase and each lane's merge,
+  and publishes each session's command-log entry, which commits nothing here.
 
-After each implement the pure gates run: build, static, `make test` and `make lint`. The loop
-stops, and hands back, at the first of these:
+After each implement, or each merged group of lanes, the pure gates run: build, static,
+`make test` and `make lint`. Every session's end, gate, merge, pass, stage, question, pause
+and stop is one JSON line in the run's `events.jsonl`, which the attended session watches.
+The loop stops, and hands back, at the first of these:
 
+- the stages `--to` asked for ran (`done`);
 - the rule is met, or a pass appends nothing;
 - a run the operator owns (attended, below, each of these is a question instead):
-  - its line names tier 3, the hand checks or a quiet host (or tier 2, when the sessions
+  - its line names tier 3, the hand scenarios or a quiet host (or tier 2, when the sessions
     have no Infrahub credentials);
-  - it carries an `[operator]` tag;
+  - it carries an `[operator]` tag, or (unattended) a `[live]` one;
   - or implement left one of its tasks unchecked;
+  - or a chain stage would have asked the operator;
 - a run that moved `testdata/golden/`, the golden-diff split point: review that commit, then
   run the loop again;
+- a lane whose branch does not merge back mechanically (`merge`): its worktree and branch
+  are kept under `local/lanes/` for the operator to merge by hand, commit, remove, and run
+  the loop again;
 - a session that broke its contract:
-  - converge writing outside `tasks.md`;
+  - converge writing outside `tasks.md`, or above its new phase;
+  - a chain stage writing outside the feature directory, or specify leaving the tree off
+    the feature's branch;
   - implement ticking another run's task;
-  - uncommitted changes left behind;
+  - uncommitted changes left behind, in this tree or a lane's;
   - a change of branch;
   - a moved remote-tracking ref;
   - a commit, the session's or the script's, that would carry the Infrahub token's value;
 - a failed gate, which is never retried;
+- a session that exited non-zero, its budget reached among the causes (`error`);
 - `--max-passes` (7).
 
 Unattended, it never runs tier 3, a twin or the worker, because no one is watching a
@@ -1330,9 +1413,20 @@ flag, so either side can be read with `ls` and `cat` and nothing is in memory al
 
 - `questions.jsonl`: one line per question, appended by the script: `id`, `kind`
   (`unchecked`: an implement session left these tasks; `operator-tagged`: a convergence pass
-  appended `[operator]` tasks), the run or pass, the task ids, the report path, the sentence
-  the unattended stop would have given, and the time. The three hard stops stay hard
-  (`gate`, `contract`, `golden`): each needs a review of the tree.
+  appended `[operator]` tasks; `clarify` and `analyze`: a chain stage would have asked), the
+  run, pass or stage, the task ids, the report path, the sentence the unattended stop would
+  have given, and the time. The four hard stops stay hard (`gate`, `contract`, `golden`,
+  `merge`): each needs a review of the tree.
+- `events.jsonl`, beside the summary: one JSON line per event the script writes (`session`
+  with its stage, run, model, effort, exit and report path; `stage`, `gates`, `merge`,
+  `pass`, `question`, `paused`, `resumed`, `stopped`). It is what the attended session
+  watches, whole, so it wakes on every session's end and shows the operator the report
+  verbatim; before 2026-10-28 it tailed the summary for a question, a pause or a stop, and
+  woke on nothing else but its Monitor's expiry.
+- `reply-<id>`: the operator's reply to a `clarify` or `analyze` question, verbatim, written
+  by the attended session; the script resumes the stage's session with it. `skip-<id>` in
+  its place means "take your own recommendations". No verdict and no handshake: the stage's
+  session is still the one party writing the tree.
 - `verdict-<id>`: `continue`, `hold` or `stop`, written by the attended session **before**
   it asks the operator, within a minute. `continue`: the script plans the next run with the
   question's tasks excluded and goes on. `hold`: the script waits for the answer. `stop`: the
@@ -1386,46 +1480,68 @@ inside a run proceed as they always have, around the blocked sibling.
 
 *The skill* (`.claude/skills/converge-loop/SKILL.md`, beside the Spec Kit ones, with
 `state.py`, which reads the run's state from disk) tells the attended session to refuse a
-dirty tree, a branch other than the feature's, a held lock, a missing login or Infrahub
-variable, or the wrong
-model; start the script detached with `--attended` and the carried skips; watch the summary
-and the questions file with `Monitor`, and on every wake read `state.py` before acting, so a
-question that arrived while nothing watched still gets its verdict; on a question, read the
-report, write the verdict, then ask in plain text and end the turn (the report's options plus
-`skip these tasks` and `stop the loop`), never with `AskUserQuestion`, which blocks the
-session while the loop goes on; on an answer, show the operator any wording or value they did
-not give before landing it, then pause, wait for `paused` in the background, apply it where
-the repository's rules put it (a decision entry, a spec or plan edit, a note under the task, a
+dirty tree, a branch other than the feature's (or than `main`, from `specify`), a held lock,
+a missing login or Infrahub variable, or the wrong model; start the script detached with
+`--attended`, the stage asked for and the carried skips; watch the run's `events.jsonl`
+with `Monitor`, and on every wake read `state.py` before acting, so a question that arrived
+while nothing watched still gets its verdict and a report not yet shown is shown; on a
+session's end, show the operator its report verbatim; on a question, read the report, write
+the verdict, then ask in plain text and end the turn (the report's options plus `skip these
+tasks` and `stop the loop`), never with `AskUserQuestion`, which blocks the session while
+the loop goes on, or, for a stage's text question, put its questions and write the reply to
+`reply-<id>`; on an answer, show the operator any wording or value they did not give before
+landing it, then pause, wait for `paused` in the background, apply it where the
+repository's rules put it (a decision entry, a spec or plan edit, a note under the task, a
 tick), commit by hand, write `answer-<id>` or `skip-<id>` and `resume`; and on `## Stopped`
-report the outcome, the commits and what is still open, and offer a restart. `/converge-loop
-stop` touches the stop flag. A `claude -p` started from inside an interactive session, its
-`CLAUDE_*` variables inherited, runs and writes its transcript under the project as any
-session does. `Monitor` wakes a session reliably over hours while the session takes turns;
-it expires every 30 minutes, an expiry during a blocked tool call goes unseen, and it dies
-with the editor's process (observed 2026-10-17), which is why the skill reconciles on every
-wake rather than trusting the event stream.
+report the outcome, the commits and what is still open, and offer a restart from the stage
+the stop left. `/converge-loop stop` touches the stop flag. A `claude -p` started from
+inside an interactive session, its `CLAUDE_*` variables inherited, runs and writes its
+transcript under the project as any session does. `Monitor` wakes a session reliably over
+hours while the session takes turns; it expires every 30 minutes, an expiry during a
+blocked tool call goes unseen, and it dies with the editor's process (observed
+2026-10-17), which is why the skill reconciles on every wake rather than trusting the
+event stream.
 
 *What it does not change.* Nothing is pushed, and the attended session boots nothing. The
 command log stays one entry per headless session; the attended session itself is logged
 like any hand session, and `/converge-loop` is not a `/speckit-*` prompt, so the hook keeps
-no command record for it. Two agents in one tree, and worktree isolation with a merge
-after, were considered and rejected: the loop's value is that nothing in it judges, and a
-merge is a judgement.
+no command record for it. Two agents in one tree were considered and rejected: the loop's
+value is that nothing in it judges. Worktree isolation with a merge after was rejected on
+2026-10-17 on the same ground, that a merge is a judgement, and taken up on 2026-10-28
+([D-063](decisions.md#d-063)) once the merge was made mechanical: the lanes' branches
+merge back by git, `tasks.md` by a driver that resolves ticks and notes and nothing else,
+and a merge that would need a judgement stops the loop for the operator instead of making
+one.
 
-**Split `implement` runs.** When a feature's `tasks.md` would outgrow one context, or has
-stops that need the operator (a golden diff to review, a first run against real
-infrastructure, a live check), `implement` runs as several fresh-context runs split at
-those stops. Each run reads its progress from the `[X]` marks on disk and takes its task
-range as the command's argument. Every run's prompt says three things, so the run does
-not drift past its range:
+**The runs, and their lanes** (`.specify/templates/overrides/tasks-template.md`, which
+`tasks` reads and whose rules it follows). `implement` runs as several fresh-context runs,
+and `tasks.md`'s "Recommended route" lists them, one line each, which is the run's prompt:
 
-1. **Only T0xx–T0yy.**
-2. **Stop at the checkpoint and report**; do not start the next group.
-3. **Who commits**: a hand run leaves its work for the operator to commit; a loop run
-   commits its own, as the loop's prompt says.
+```
+N. **Run N** [∥ Run M] — <what the run builds> (T0xx–T0yy, T0zz). Read first: path/a.go, path/b_test.go. Only these; stop and report.
+```
 
-The command log records each range. `tasks.md`'s "Recommended route" lists the ranges and
-their checkpoints; `converge` follows the last run.
+- **The grouping rule.** A run is the tasks that share one context: one package with its
+  tests, or one document set. Its ids need not be contiguous. It names at most eight files
+  under `Read first:`, and a records run at most four documents; a run that would exceed
+  either is split. Until 2026-10-28 runs were contiguous id ranges cut along user story and
+  phase, which gave 019 a run of five packages at 524k context and 017 a run of nine record
+  tasks that exhausted its budget.
+- **The lane rule.** `[∥ Run M]` after `**Run N**` says Run N may run beside Run M. It is
+  earned when the two runs edit disjoint files and read disjoint `Read first:` sets, no edge
+  in Dependencies joins them, neither names tier 2, tier 3, a hand scenario or the host, and
+  neither carries `[operator]` or `[live]`. `analyze` checks each mark; the planner lanes a
+  pair only when both are still pending and neither is live.
+- **The operator rule.** Operator work that can precede the chain is the brief's
+  (`/feature-open`). An `[operator]` task is allowed in the route only where it could not: the
+  review, a push, an import that waits on the pushed tree. It is kept to a minimum, carries
+  its reason on its line ("since …" or "because …", which the tasks gate greps), and sits at
+  the latest point its dependents allow.
+- **Every run's prompt says three things**, so the run does not drift: only its tasks; stop
+  at the checkpoint and report, do not start the next group; who commits (a hand run leaves
+  its work for the operator, a loop run commits its own).
+
+The command log records each run. `converge` follows the last run.
 
 **Constitution gates.** Every plan's Constitution Check cites the principle number
 for each gate it passes or justifies; the plan template carries the checklist. The default simplicity gate
@@ -1460,3 +1576,38 @@ it names, and add a new one in the same change that relies on it.
   `docs/c4/workspace.dsl` beside the prose it illustrates, then `make diagrams`.
 - Documents cite decisions by their `D-NNN` anchor. Entries are append-only once
   ratified, and the log begins at this repository's first commit.
+
+### Conventions
+
+The forms the documents and the code follow, written down on 2026-10-28 so that a session
+reads the rule once instead of inferring it from the neighbours. Where a document has its
+own template under `docs/templates/`, the template is the rule.
+
+- **Commits.** A conventional commit, `type(scope)!: subject`: `feat`, `fix`, `test`,
+  `refactor`, `docs`, `chore`; the scope a package directory (`fix(server)`,
+  `test(stages)`), a spec number (`docs(019)`) or a document (`docs(c4)`, `docs(roadmap)`);
+  `!` when a contract breaks. The body says *why*, in prose, wrapped at about 72 columns,
+  and ends with the one trailer the session reminder gives. A loop run's commit of its
+  ticks is `docs(NNN): Run N, Txxx–Tyyy done`, its body the run's report; a chain stage's
+  is `docs(NNN): <stage>`; a lane's merge is `merge(NNN): Run N`. A golden re-baseline is a
+  commit of its own. Nothing under `local/` is ever committed.
+- **A note under a task** in `tasks.md`: an indented bullet, `- 2026-10-28: <who said what,
+  or what the run found>`, under the task's line; the merge driver carries it through a
+  lane's merge. A task is ticked `[X]`.
+- **A schema's version history** is its `description`: each feature prefixes what it moved
+  as `NNN: <what moved>; …`, so the field reads newest first, and the file's `title` names
+  the current version.
+- **A verified fact** is one bullet under its dependency's heading in
+  [verified-facts.md](verified-facts.md), bold lead, the date in italics at its end,
+  as that file's preamble says; **a glossary term** is `**Term** — definition` with links,
+  as [the glossary](glossary.md)'s preamble says.
+- **Code.** A package's doc comment names what the package holds, the decision it rests on
+  and what it may import; a test's name is a sentence (`TestARefusedCompileNamesTheSnapshotInText`);
+  a finding's rule id is dotted lowercase, `noun.noun.verb` (`step.twin.unsteppable`); a
+  tier-3 case begins `# --- case N: <what it shows> ---`; a CLI command's `Short` is one
+  sentence naming what the operator gets.
+- **The register.** Every document says what runs, in the present tense, and names the
+  decision or date behind a change rather than the session that made it; a sentence
+  carries one claim; a list is for parallel items; a number stands on its own line or in a
+  table; a term is the glossary's; and a rejected alternative is named where the choice is,
+  never left implicit.

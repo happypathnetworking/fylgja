@@ -256,8 +256,9 @@ const (
 	// 018, snapshots, the core's one input (D-061;
 	// specs/018-snapshots/contracts/snapshot-commands.md, "Identifiers"). Each comment
 	// gives the severity, the exit, the step, the object and when it fires. A snapshot's
-	// inner CTM keeps its own rules, ctm.version.unsupported and data.required.missing,
-	// the object prefixed ctm.; --interval beside --snapshot is follow.flags.conflict.
+	// inner CTM keeps its own rules, ctm.version.unsupported at the snapshot file and
+	// data.required.missing at the field prefixed ctm.; --interval beside --snapshot is
+	// follow.flags.conflict.
 	// No status, step or exit is new.
 	RuleSnapshotInvalid            = "snapshot.invalid"             // rejection, exit 1, no step (twin compile) or resolve (twin create --snapshot <file>): the field, or the file; the outer shape is not version 1's: an unknown key, ctm absent or not an object, probes absent, null or not empty, snapshot_id not 64 lowercase hex characters, observed_at not of the CTM's form or not the inner CTM's; or the inner CTM's observed_at not of that form, at ctm.envelope.observed_at
 	RuleSnapshotVersionUnsupported = "snapshot.version.unsupported" // rejection, exit 1, no step or resolve: the file; snapshot_version is not "1", or absent, naming the version read, or that none was, and "1"

@@ -16,6 +16,10 @@ import (
 // under, as git log names the feature that last wrote each.
 const snapshotFeature = "017-dcim-reader"
 
+// contract018 is the directory 018's copies of the findings contract and the show block, the
+// two 019 moves, are frozen under.
+const contract018 = "018-snapshots"
+
 // compile017FindingsSchema is 017's findings contract, with the four blocks 018 moves frozen
 // beside it and verify.schema.json, which 018 does not move, read from contracts/.
 func compile017FindingsSchema(t *testing.T) *jsonschema.Schema {
@@ -80,6 +84,19 @@ func TestA017DocumentIsUnchanged(t *testing.T) {
 			}
 			mustValidateBytes(t, v017, as017(t, c.doc), c.label+" against 017's contract")
 			mustValidateBytes(t, current, b, c.label+" against the current contract")
+		})
+	}
+}
+
+// Every document this package builds is 018's, the ones that name a snapshot and the ones
+// that name none, and 018's contract accepts each as built. 018's copies stay as 018 left
+// them when 019 moves the findings and show contracts on: the claim is that the older
+// contract still accepts these documents.
+func TestAn018DocumentIsUnchanged(t *testing.T) {
+	v018 := compileFeatureFindingsSchema(t, contract018, currentResources...)
+	for _, c := range append(noSnapshotDocuments(), snapshotDocuments()...) {
+		t.Run(c.label, func(t *testing.T) {
+			mustValidateBytes(t, v018, mustMarshal(t, c.doc), c.label+" against 018's contract")
 		})
 	}
 }

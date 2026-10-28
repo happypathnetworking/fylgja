@@ -723,9 +723,13 @@ func validateM7Document(t *testing.T, doc *findings.Document) {
 //
 // 018 is additive: a document that names no snapshot is 017's too, so it is also validated
 // against 017's frozen copy, the null snapshot ids taken out (as017Contract).
+//
+// 019 removes following: a document of this build is 018's too, as built, so it is also
+// validated against 018's frozen copy.
 func validateM10Document(t *testing.T, doc *findings.Document) {
 	t.Helper()
 	validateWithShow(t, currentContract, "M13", doc)
+	validateWithShow(t, contract018, "018", doc)
 	if !namesSnapshot(t, doc) {
 		validateWithShow(t, contract017, "017", doc)
 	}
@@ -734,6 +738,10 @@ func validateM10Document(t *testing.T, doc *findings.Document) {
 // contract017 is the feature argument that names 017's copies of the findings contract and
 // the four blocks 018 moves, frozen under testdata/contracts/017-dcim-reader/.
 const contract017 = "017-dcim-reader"
+
+// contract018 is the feature argument that names 018's copies of the findings contract and
+// the show block, the two 019 moves, frozen under testdata/contracts/018-snapshots/.
+const contract018 = "018-snapshots"
 
 // namesSnapshot says whether doc names a snapshot anywhere 018 puts one: such a document is
 // 018's, which no earlier contract accepts.
@@ -799,7 +807,7 @@ func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Doc
 	switch feature {
 	case contract017:
 		b = as017Contract(t, doc)
-	case currentContract:
+	case currentContract, contract018:
 		var err error
 		if b, err = json.Marshal(doc); err != nil {
 			t.Fatal(err)
@@ -867,7 +875,8 @@ func findingsContract(t *testing.T, feature string) *jsonschema.Schema {
 		path := contractPath(feature, name)
 		if _, err := os.Stat(path); err != nil {
 			// A block the feature's contract refers to but its directory does not hold had not
-			// moved since the feature: 017's verify.schema.json, which 018 does not move.
+			// moved since the feature: 017's verify.schema.json, which 018 does not move, and
+			// 018's stages, step, verify and rehearsal blocks, which 019 does not freeze.
 			if feature == currentContract || !strings.Contains(string(refers), "/schemas/"+name) {
 				continue
 			}

@@ -1,0 +1,580 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/contracts/findings/v1",
+  "title": "Fylgja findings document v1 (--json) — M12 extension",
+  "description": "Additive to M1's findings format: every M1 document still validates. Added: operations twin.create, twin.provision, twin.destroy; statuses failed (exit 3) and unclean (exit 4); subject.bundle and subject.run_id; blocks twin (success of create/provision), cleanup (failure of create/provision, and destroy), dry_run. findings_version stays \"1\". M4: operation twin.show; the `show` block (show.schema.json); the `following` block on twin.create and twin.destroy; `dry_run.follow`. findings_version stays \"1\": every M1–M3 document still validates. M5: the step enum gains push; dry_run.nodes[] gains artifact (what would be pushed, by name, content type, checksum and size); twin.nodes[] may carry artifact {name, checksum} and pushed_in_s. findings_version stays 1: additive. No artifact content anywhere. M6: dry_run gains lossy_mappings and shared_ports; nothing else changes. M7: the step enum and every block are unchanged; twin show’s host.nodes[] gains psp (show.schema.json); the summary counts and the dry run’s read line are text. New warning artifact.interface.unrepresented and rejection host.image.absent are ordinary findings. M10: operations waypoint.list and waypoint.plan; subject.waypoint (the reference as supplied on --waypoint); the step enum gains resolve, the CLI-side step between the flag guards and the run, as verify is twin.provision's; dry_run.follow.reason gains waypoint; the `waypoint` block (the resolved reference, on twin.create, twin.create --dry-run and intent.read with --waypoint), the `waypoints` block (waypoint.list) and the `plan` block (waypoint.plan), each defined in waypoints.schema.json under its $id; verified.waypoints on schema.check. findings_version stays 1: additive. No artifact or bootstrap content anywhere. M11: operation twin.step; status diverged (exit 4: a step that failed or was cancelled after the host was touched; the twin is up and twin destroy clears it); the step enum gains reconcile; the `step` block (step.schema.json under its $id) on twin.step and its dry run: the two sides, M10's step, containerlab's plan with the packages' declarations, the push plan, and once a run closed its outcome, phase, pushes and timings; dry_run on twin.step --dry-run carries no follow. findings_version stays 1: additive. No device diff, artifact or bootstrap content anywhere. M12: operation twin.verify; status nonconforming (exit 5: every node was read and an assertion or a record claim failed; nothing acts on it); the step enum gains observe, the step at which verify reads the twin and at which the step run's wait reports; the `verify` block (verify.schema.json under its $id) on twin.verify; the `step` block gains wait on twin.step. findings_version stays 1: additive. No configuration line, device diff, artifact or bootstrap content, token or login anywhere. 014: operations stage.list and stage.plan replace waypoint.list and waypoint.plan; subject.stage (the reference as supplied on --stage, <branch>/<label>) replaces subject.waypoint; the `stage` block (the resolved stage, on twin.create, its dry run, intent.read with --stage and twin.step once its target resolved), the `stages` block (stage.list) and the `plan` block (stage.plan), each defined in stages.schema.json under its $id, replace the waypoint blocks; verified.stages replaces verified.waypoints; dry_run.follow.reason has stage for waypoint. findings_version stays 1 (FR-022): the shape of every other operation's document is unchanged. 015: operation twin.rehearse; the `rehearsal` block (rehearsal.schema.json under its $id) on twin.rehearse: the proposed change rehearsed, the deadline and the time used, the reclaim, the run, the baseline's findings, one entry per stage with its role and verdict, the destroy and the commands that reproduce a failure; show.record.rehearsal and verify.twin.rehearsal name the rehearsal a twin.json 7 names. findings_version stays 1: additive, and no status, step or exit is new. 017: subject.scope, the scope a read was made under (tag:<name>, the request's or the server's default); verified is {model, version, kinds: [{kind, fields}], stages}, contract_version and generics gone (removals: both blocks are read by this build's schema check and twin show alone); the identifiers 017 adds (scope.*, schema.kind.missing and the other schema.* conformance rules, platform.missing, platform.unmatched, omit.cable.*, ctm.version.unsupported, psp.matches.*) are ordinary findings under the rule pattern. findings_version stays 1: subject.scope is additive, the two removals are accepted for that reason (specs/017-dcim-reader/contracts/formats.md), and no status, step or exit is new. 018: snapshot_id, the snapshot's identity, beside bundle_id (twin.compile, intent.read, twin.create and its dry run, twin.step and its dry run, the target's); subject.snapshot, --snapshot as given, an id or a path; dry_run.follow.reason gains snapshot; the identifiers 018 adds (snapshot.invalid, snapshot.version.unsupported, snapshot.id.mismatch, snapshot.unknown, snapshot.flags.conflict) are ordinary findings under the rule pattern; the blocks that move are each schema's own: show.record (show.schema.json), plan.stages[] (stages.schema.json), step.from and step.to (step.schema.json) and rehearsal.stages[] (rehearsal.schema.json) name their snapshot beside their bundle. findings_version stays 1: additive, and no status, step or exit is new. No configuration line, device diff, artifact or bootstrap content, token or login anywhere.",
+  "type": "object",
+  "required": [
+    "findings_version",
+    "operation",
+    "status",
+    "findings"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "findings_version": {
+      "const": "1"
+    },
+    "operation": {
+      "enum": [
+        "intent.read",
+        "twin.compile",
+        "schema.check",
+        "psp.validate",
+        "twin.create",
+        "twin.provision",
+        "twin.destroy",
+        "twin.show",
+        "stage.list",
+        "stage.plan",
+        "twin.step",
+        "twin.verify",
+        "twin.rehearse"
+      ]
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "rejected",
+        "error",
+        "failed",
+        "unclean",
+        "diverged",
+        "nonconforming"
+      ],
+      "description": "ok→0, rejected→1 (before the host was touched), error→2 (operational), failed→3 (after the host was touched; cleanup complete), unclean→4 (something remains). See cli.md. diverged→4 (M11): a step failed or was cancelled after the host was touched; nothing torn down. nonconforming→5 (M12): twin verify read every node and intent is not met on the twin, or the record claims a node holds another bundle; advisory, nothing acts on it."
+    },
+    "subject": {
+      "type": "object",
+      "description": "What was operated on.",
+      "additionalProperties": false,
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "at": {
+          "type": "string",
+          "description": "As supplied on --at; absent otherwise"
+        },
+        "ctm": {
+          "type": "string"
+        },
+        "files": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "out": {
+          "type": "string"
+        },
+        "bundle": {
+          "type": "string",
+          "description": "The bundle directory given to twin.provision, as given"
+        },
+        "run_id": {
+          "type": "string",
+          "description": "The Temporal run id of the provisioning, destroy or (M11) step run this document reports on, once one was started (or attached to)"
+        },
+        "stage": {
+          "type": "string",
+          "pattern": "^[^/\\s]+/[^/\\s]+$",
+          "description": "014: as supplied on --stage (twin.create, intent.read), <branch>/<label>; branch and at then carry the resolved reference. On twin.step, the target, given or chosen, once known. Absent otherwise"
+        },
+        "scope": {
+          "type": "string",
+          "pattern": "^tag:\\S+$",
+          "description": "017: the scope a read was made under, tag:<name>: the request's, or the server's FYLGJA_DEFAULT_SCOPE when the request named none (twin.create, twin.rehearse, intent.read, stage.plan, stage.list); on twin.step, the record's. Named once the scope is resolved, before the packages load; absent on an operation that reads under none, and on a request refused before its scope was resolved"
+        },
+        "snapshot": {
+          "type": "string",
+          "description": "018: --snapshot as given, a snapshot id or the path of the file the request carried (twin.compile, twin.create --snapshot). Absent otherwise"
+        }
+      }
+    },
+    "snapshot_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "twin.compile (status ok), intent.read (status ok), twin.create and its dry run (once the take filed the snapshot, or with --snapshot once resolve fetched or filed it, on every exit after), twin.step and its dry run (the target's): the snapshot's identity, beside bundle_id (018)."
+    },
+    "bundle_id": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$",
+      "description": "twin.compile (status ok), twin.create and twin.provision (any status once compile completed): the bundle's identity (D-024)."
+    },
+    "verified": {
+      "type": "object",
+      "description": "schema.check (status ok): what conformance verified. 017: the model and the commit the mapping's table was written against, and each kind the mapping reads with the fields of it the branch holds as that commit has them, in the table's order; contract_version and generics are gone with the generics contract",
+      "required": [
+        "model",
+        "version",
+        "kinds"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "description": "the model the mapping reads: opsmill/schema-library for the Infrahub reader"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "the model's version the mapping's table was written against: for the schema library, the commit (26336e9)"
+        },
+        "kinds": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": [
+              "kind",
+              "fields"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "kind": {
+                "type": "string",
+                "minLength": 1
+              },
+              "fields": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              }
+            }
+          }
+        },
+        "stages": {
+          "type": "object",
+          "description": "014: whether the default branch's schema carries the stage kind with every attribute this build reads, and CoreProposedChange the extension fylgja_stages. Information beside the conformance answer; never a finding",
+          "required": [
+            "kind",
+            "present",
+            "missing",
+            "extension",
+            "file"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "const": "FylgjaStage"
+            },
+            "present": {
+              "type": "boolean"
+            },
+            "missing": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "the attributes and the relationship the kind lacks; empty when present, or when the kind itself is absent"
+            },
+            "extension": {
+              "type": "boolean",
+              "description": "whether CoreProposedChange carries fylgja_stages, the extension the file adds"
+            },
+            "file": {
+              "const": "schema/fylgja-stage.yaml"
+            }
+          }
+        }
+      }
+    },
+    "twin": {
+      "type": "object",
+      "description": "twin.create / twin.provision, status ok: the twin that was built. Mirrors twin.json's nodes.",
+      "required": [
+        "lab",
+        "dir",
+        "run_id",
+        "observed_at",
+        "nodes"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "lab": {
+          "const": "fylgja"
+        },
+        "dir": {
+          "type": "string",
+          "description": "Absolute twin directory path, as the worker reported it"
+        },
+        "run_id": {
+          "type": "string"
+        },
+        "observed_at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "As twin.json: null when no read took place"
+        },
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "mgmt_ipv4",
+              "ready_after_s"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "mgmt_ipv4": {
+                "type": "string"
+              },
+              "ready_after_s": {
+                "type": "number",
+                "minimum": 0
+              },
+              "artifact": {
+                "type": "object",
+                "description": "M5: the artifact pushed, by name and checksum.",
+                "required": [
+                  "name",
+                  "checksum"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "checksum": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{32}$"
+                  }
+                }
+              },
+              "pushed_in_s": {
+                "type": "number",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "cleanup": {
+      "type": "object",
+      "description": "twin.create / twin.provision with status failed or unclean, and twin.destroy: what teardown and unstage did.",
+      "required": [
+        "teardown",
+        "unstage",
+        "remaining"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "teardown": {
+          "enum": [
+            "done",
+            "nothing",
+            "failed",
+            "skipped"
+          ],
+          "description": "done: lab fylgja removed. nothing: no lab was present. failed: see cleanup.incomplete. skipped: not attempted (the CLI stopped waiting)"
+        },
+        "unstage": {
+          "enum": [
+            "done",
+            "nothing",
+            "failed",
+            "skipped"
+          ]
+        },
+        "removed": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What was removed, e.g. \"lab fylgja (3 containers)\", \"twin directory /…/twin\""
+        },
+        "remaining": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "What is still on the host. Empty for status ok and failed; non-empty for unclean"
+        }
+      }
+    },
+    "dry_run": {
+      "type": "object",
+      "description": "twin.create --dry-run / twin.provision --dry-run: what a real run would do. M6: `lossy_mappings` and `shared_ports` count what the bundle’s manifest records, so the operator sees a lossy twin before creating it.",
+      "required": [
+        "nodes",
+        "memory_sum_mb",
+        "host_budget_mb",
+        "host",
+        "verdict",
+        "lossy_mappings",
+        "shared_ports"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "nodes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "image",
+              "psp",
+              "memory_mb",
+              "artifact"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "image": {
+                "type": "string"
+              },
+              "psp": {
+                "type": "string",
+                "description": "psp id"
+              },
+              "memory_mb": {
+                "type": "integer"
+              },
+              "artifact": {
+                "type": "object",
+                "description": "M5: the artifact that would be pushed to this node, as the bundle’s manifest names it.",
+                "required": [
+                  "name",
+                  "content_type",
+                  "checksum",
+                  "size"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string"
+                  },
+                  "content_type": {
+                    "type": "string"
+                  },
+                  "checksum": {
+                    "type": "string",
+                    "pattern": "^[0-9a-f]{32}$"
+                  },
+                  "size": {
+                    "type": "integer",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        "memory_sum_mb": {
+          "type": "integer"
+        },
+        "host_budget_mb": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "description": "FYLGJA_HOST_MEMORY_MB, or null when unset"
+        },
+        "host": {
+          "type": "object",
+          "required": [
+            "lab_present",
+            "twin_dir_present"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "lab_present": {
+              "type": "boolean"
+            },
+            "twin_dir_present": {
+              "type": "boolean"
+            }
+          }
+        },
+        "verdict": {
+          "enum": [
+            "clear",
+            "refused"
+          ],
+          "description": "refused: the findings carry the identifier the real create would refuse with"
+        },
+        "follow": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "enabled"
+          ],
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "interval_s": {
+              "type": "integer",
+              "minimum": 10
+            },
+            "reason": {
+              "type": "string",
+              "enum": [
+                "pinned",
+                "no_follow",
+                "bundle",
+                "stage",
+                "snapshot"
+              ]
+            }
+          }
+        },
+        "lossy_mappings": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "the number of entries in the manifest’s fidelity.lossy (0 when absent)"
+        },
+        "shared_ports": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "the number of distinct (node, port) pairs more than one interface renders to"
+        }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "severity",
+          "rule",
+          "object",
+          "message"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "severity": {
+            "enum": [
+              "rejection",
+              "warning",
+              "info"
+            ]
+          },
+          "rule": {
+            "type": "string",
+            "pattern": "^[a-z]+(\\.[a-z_]+)+$"
+          },
+          "object": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "step": {
+            "enum": [
+              "verify",
+              "start",
+              "read",
+              "compile",
+              "host_check",
+              "stage",
+              "deploy",
+              "readiness",
+              "record",
+              "teardown",
+              "unstage",
+              "inspect",
+              "compare",
+              "destroy",
+              "provision",
+              "follow",
+              "push",
+              "resolve",
+              "reconcile",
+              "observe"
+            ],
+            "description": "New at M2: the step the finding belongs to. Absent on M1 operations; resolve (M10): the server's resolution of a reference before a run, a stage's since 014; reconcile (M11): the step's stage and reconcile phase"
+          },
+          "location": {
+            "type": "object",
+            "required": [
+              "file"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "file": {
+                "type": "string"
+              },
+              "line": {
+                "type": "integer"
+              }
+            }
+          }
+        }
+      }
+    },
+    "following": {
+      "description": "twin.create: the following the run began (state started) or could not begin (not_started); twin.destroy: the following stopped. Absent when the twin does not follow and none was stopped.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "branch"
+      ],
+      "properties": {
+        "branch": {
+          "type": "string"
+        },
+        "interval_s": {
+          "type": "integer",
+          "minimum": 10
+        },
+        "schedule_id": {
+          "type": "string",
+          "const": "fylgja-follow"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "started",
+            "not_started"
+          ]
+        },
+        "stopped": {
+          "type": "boolean"
+        }
+      }
+    },
+    "show": {
+      "description": "twin.show: see show.schema.json. Referenced by its $id: a relative reference would resolve against this schema's $id to https://github.com/happypathnetworking/fylgja/contracts/findings/show.schema.json, which nothing defines",
+      "$ref": "https://github.com/happypathnetworking/fylgja/schemas/show.schema.json"
+    },
+    "stage": {
+      "description": "014: the resolved stage, present on twin.create (with or without --dry-run) and intent.read when --stage was given and the resolution succeeded, and on twin.step (with or without --dry-run) once its target resolved. Defined in stages.schema.json by its $id",
+      "$ref": "https://github.com/happypathnetworking/fylgja/schemas/stages.schema.json#/$defs/resolved"
+    },
+    "stages": {
+      "description": "014: stage.list's block",
+      "$ref": "https://github.com/happypathnetworking/fylgja/schemas/stages.schema.json#/$defs/list"
+    },
+    "plan": {
+      "description": "014: stage.plan's block",
+      "$ref": "https://github.com/happypathnetworking/fylgja/schemas/stages.schema.json#/$defs/plan"
+    },
+    "step": {
+      "description": "M11: twin.step's block, on the dry run and the run. Defined in step.schema.json by its $id",
+      "$ref": "https://github.com/happypathnetworking/fylgja/schemas/step.schema.json#/$defs/step"
+    },
+    "verify": {
+      "description": "M12: twin.verify's block: the twin, every assertion's outcome by node and by link, the record's claims, the ports skipped, the counts, the runs in flight and, with --wait, the wait. Defined in verify.schema.json by its $id",
+      "$ref": "https://github.com/happypathnetworking/fylgja/schemas/verify.schema.json#/$defs/verify"
+    },
+    "rehearsal": {
+      "description": "015: twin.rehearse's block, present once the proposed change was found and its stages resolved, a refusal before any run included: the proposed change, the deadline, the reclaim, the run, the baseline, each stage with its role and verdict, the destroy and the reproduce commands. Defined in rehearsal.schema.json by its $id",
+      "$ref": "https://github.com/happypathnetworking/fylgja/schemas/rehearsal.schema.json#/$defs/rehearsal"
+    }
+  }
+}

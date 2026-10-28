@@ -33,7 +33,8 @@ var currentResources = []string{"show.schema.json", "stages.schema.json", "step.
 // refers to a block cannot compile without it, so a caller names every block its
 // feature's copy refers to: currentResources for the current contract. A block the
 // feature's directory does not hold had not moved since that feature, so the current one
-// is read in its place: verify.schema.json beside 017's copy, which 018 does not move.
+// is read in its place: verify.schema.json beside 017's copy, which 018 does not move, and
+// the stages, step, verify and rehearsal blocks beside 018's, which 019 does not freeze.
 func compileFeatureFindingsSchema(t *testing.T, feature string, resources ...string) *jsonschema.Schema {
 	t.Helper()
 	load := func(name string) any {

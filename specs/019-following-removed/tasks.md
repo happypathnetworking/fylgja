@@ -1339,3 +1339,14 @@ only up to the next heading.
   - **The host**: the worker (pid 533258) and the server (pid 533282) read `(deleted)`. Neither was restarted. Until the server is restarted from this build, it gives the old order: a stage-less twin that no target can step is told to give a target. `bin/fylgja` is rebuilt at this note's commit.
   - **Seen, not tasked**: `README.md:172` and `:193`, the walk-through's two `twin show` samples, still name schema `4d5b37aa0a894aec4cdca69fdb9fe455`, the 24.04 install's from before 017, beside a recorded bundle `777e9899…`. T060 named only the two read lines, so they were left.
   - **Next**: convergence pass 2. T056 is still the operator's.
+
+---
+
+## Phase 17: Convergence
+
+- [ ] T062 [pin] Make the walk-through's `twin create` and `twin show` samples name the schema that the walk-through's own reads of the same branch print. Change no code. `README.md:172` (the create's `record:` line) and `README.md:193` (`twin show`'s) give `schema 4d5b37aa0a894aec4cdca69fdb9fe455`, the 24.04 install's hash from before 017. That hash sits beside `read by infrahub-dcim from opsmill/schema-library@26336e9`, a mapping no install with that hash had. T060 moved the two reads of `fylgja-test-readme` (`:250`, `:296`) to `schema 7c413536d67ef86321c629c076a0d3a4`, so one walk-through now gives one branch two schemas. Run 18's checkpoint saw this ("Seen, not tasked") but did not task it.
+  - **The edit**: on both lines, `4d5b37aa0a894aec4cdca69fdb9fe455` becomes `7c413536d67ef86321c629c076a0d3a4`. Every other id stays, as in T060: the recorded bundle `777e9899…`, the run ids and the 2026-10-06 times. `snapshot …` stays where this host never printed one. Check each line's other fields against this build's `recordLine`, `snapshotClause` and `provenanceClause` (`internal/server/show.go`), and against the closing text `provisionReport` prints for a ready create. They already match, so nothing else moves.
+  - **Left alone**: the `read:` lines in the `stage plan` and rehearsal recordings (`:403`, `:411`, `:416`, `:607`). These are v0.2.0 recordings, left for the next recording, as T060 and T049 say.
+  - **Afterwards**: `/usr/bin/grep -n 4d5b37aa README.md` finds nothing, and `make linkcheck` reports 0 broken.
+
+  per FR-025 (partial)

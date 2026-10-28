@@ -468,9 +468,10 @@
               "push",
               "resolve",
               "reconcile",
-              "observe"
+              "observe",
+              "flows"
             ],
-            "description": "New at M2: the step the finding belongs to. Absent on M1 operations; resolve (M10): the server's resolution of a reference before a run, a stage's since 014; reconcile (M11): the step's stage and reconcile phase"
+            "description": "New at M2: the step the finding belongs to. Absent on M1 operations; resolve (M10): the server's resolution of a reference before a run, a stage's since 014; reconcile (M11): the step's stage and reconcile phase; flows (016): the step's probe flows, started after its stage and read after its wait"
           },
           "location": {
             "type": "object",

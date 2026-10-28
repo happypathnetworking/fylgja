@@ -1,7 +1,7 @@
 ---
 name: "converge-loop"
-description: "Run the feature's converge loop attended: start scripts/converge-loop.sh --attended, carry each question it raises to the operator, land the answer between sessions, and keep it going. `stop` ends a running loop."
-argument-hint: "[stop] [--max-passes N] [--budget-usd D] [--live-budget-usd D] [--no-converge] [--no-planned]"
+description: "Run the feature chain attended: start scripts/converge-loop.sh --attended from the stage asked for (specify through converge), show the operator each session's report as it lands, carry each question to the operator and the answer back, and keep it going. `stop` ends a running loop."
+argument-hint: "[stop] [--from STAGE] [--to STAGE] [--feature specs/NNN-slug] [--lanes N] [--plan-effort high|xhigh] [--implement-effort high|xhigh] [--max-passes N] [--budget-usd D] [--live-budget-usd D] [--no-converge] [--no-planned]"
 compatibility: "Requires scripts/converge-loop.sh and an interactive session the operator replies to; never under claude -p"
 metadata:
   author: "fylgja"
@@ -29,10 +29,14 @@ operator **in plain text and end your turn**, never with `AskUserQuestion` while
 runs; you wait in the background, never in a foreground loop. A question you leave without a
 verdict for `--verdict-timeout` (900s) is taken as `hold`: the loop stalls until you land it.
 
+**Show the work.** Every session the loop runs ends in a report, and the operator reads it
+here, from you, as it lands: never make them wait for a Monitor's expiry or open a file.
+
 `state.py` (beside this file) reads where everything stands from disk:
-`python3 -I .claude/skills/converge-loop/state.py`. It names the run directory (`RUN`, and
-`ATT=$RUN/attended`), whether the loop process lives, whether it is running, paused or
-stopped, and for each question its verdict and what it still needs.
+`python3 -I .claude/skills/converge-loop/state.py [--feature specs/NNN-slug]`. It names the
+run directory (`RUN`, and `ATT=$RUN/attended`), whether the loop process lives, whether it is
+running, paused or stopped, the last session of each run with its report, any lane worktree
+kept, and for each question its verdict or reply and what it still needs.
 
 ## Stop
 
@@ -41,19 +45,25 @@ it reports `stopped` (within a minute) go to **Report**. Nothing else.
 
 ## Start
 
-1. **Preconditions.** Refuse, saying why, if any fails:
+1. **Which stage.** `--from` names the first stage (default `implement`): `specify`, `clarify`,
+   `plan`, `tasks`, `analyze`, `implement` or `converge`; `--to` the last (default
+   `converge`). From `specify`, `--feature specs/NNN-slug` is required, since
+   `.specify/feature.json` still names the previous feature; `/feature-open` hands over here.
+2. **Preconditions.** Refuse, saying why, if any fails:
    - the tree is dirty (`git status --porcelain`);
-   - the branch is not the feature's: `git symbolic-ref --short HEAD` must equal the last
-     path element of `.specify/feature.json`'s `feature_directory`;
+   - from `specify`: the branch is `main`, `specs/NNN-slug/brief.md` exists, its "Open, for
+     clarify" section reads `none`, its "Operator steps" has no open box, and no branch
+     `NNN-slug` exists; from any later stage: the branch is the feature's, the last path
+     element of `.specify/feature.json`'s `feature_directory` (or of `--feature`);
    - another loop holds `local/converge-loop.lock` (`flock -n local/converge-loop.lock true`);
    - `local/.env` lacks either node login, `INFRAHUB_ADDRESS` or `INFRAHUB_API_TOKEN`
      (`--attended` refuses too, but say it first; check the names, never print a value);
    - this session is not on the model `docs/development.md`'s table gives `/converge-loop`
      (ask the operator to `/model` it first).
-2. **Carry the skips.** `python3 -I .claude/skills/converge-loop/state.py --carry` prints the
+3. **Carry the skips.** `python3 -I .claude/skills/converge-loop/state.py --carry` prints the
    tasks the feature's last run skipped that are still unchecked. Pass them as
    `--skip "<ids>"`, so a task the operator kept for themself is not run again.
-3. **Start the script** detached, passing the arguments through:
+4. **Start the script** detached, passing the arguments through:
 
    ```bash
    SKIP=$(python3 -I .claude/skills/converge-loop/state.py --carry)
@@ -63,36 +73,61 @@ it reports `stopped` (within a minute) go to **Report**. Nothing else.
    Within ten seconds `state.py` names the new run. If the script exits instead, report
    `local/converge-loop.out` and stop. `setsid` forks, so the pid you have is not the loop's:
    the files are what you watch.
-4. **Tell the operator** in one line: the summary's path, the tasks carried as skipped, and
-   that `/converge-loop stop` ends it.
+5. **Tell the operator** in one line: the stages, the summary's path, the tasks carried as
+   skipped, and that `/converge-loop stop` ends it.
 
 ## Watch
 
-Arm one `Monitor` over the questions file and the summary, filtered to what needs you:
+Arm one `Monitor` over the run's events file, every line an event, for the longest it allows
+(`timeout_ms` 1800000), and re-arm it on every expiry:
 
 ```bash
-tail -n 0 -F $RUN/summary.md $ATT/questions.jsonl 2>/dev/null | grep --line-buffered -E '^\{|^- paused|^## Stopped'
+tail -n 0 -F $RUN/events.jsonl
 ```
 
-- a JSON line: a **question**; go to **Answer**;
-- `- paused ...`: the script waits for you; go to **Land**;
-- `## Stopped: <outcome>`: go to **Report**.
+Each line is JSON with a `kind`:
+
+- `session`: a session ended; go to **Relay**;
+- `stage`, `gates`, `merge`, `pass`: one line to the operator each (below);
+- `question`: a question; go to **Answer**;
+- `paused`, `resumed`: the handshake's bookkeeping; say nothing;
+- `stopped`: go to **Report**.
 
 **On every wake, reconcile first.** Whatever woke you (a Monitor event, its expiry or kill, a
 notice that tasks did not finish before the previous session ended, a background task, the
 operator's message), run `state.py` before anything else, and act on what it lists, not on the
-event alone: a question with `NO VERDICT` gets its verdict now; `stopped` goes to **Report**;
+event alone: a question with `NO VERDICT` or `NO REPLY` gets its verdict or its question to
+the operator now; a session report not yet shown is shown; `stopped` goes to **Report**;
 `PAUSED` goes to **Land**. Then re-arm the Monitor if it expired, was killed or did not
 survive a restart. When no Monitor is running, none is watching, so re-arm whenever unsure.
 
-Monitor events are not the operator's replies; never treat one as an answer. Say nothing to the
-operator about an event that needs nothing from them.
+Monitor events are not the operator's replies; never treat one as an answer.
+
+## Relay a session's report
+
+On a `session` event, read the file its `report` names, the headless session's final message,
+and show it to the operator **verbatim**, under one line naming the stage or run (`label`),
+the model and effort, the exit status and the tasks (`tasks`); cut it at about 4 KB and name
+the path when it is longer. Then one line for what follows it, as the events arrive: the
+stage's gate (`stage`: passed, or the loop stopped), the gates (`gates`: pass, or the log's
+path), a lane's merge (`merge`: merged at a commit, or the conflict's log), a convergence
+pass (`pass`: the tasks appended with their tags, or nothing). Say nothing more: the report
+is the session's own account, and the operator reads it as written.
 
 ## Answer a question
 
-A question carries `id`, `kind` (`unchecked`: an implement session left these tasks;
-`operator-tagged`: a convergence pass appended `[operator]` tasks), `run`, `tasks`, `report`
-and `sentence`. Do the first two **within a minute**.
+A question carries `id`, `kind`, `run`, `tasks`, `report` and `sentence`. Its kind decides
+the path:
+
+- **`unchecked`** (an implement session left these tasks) and **`operator-tagged`** (a
+  convergence pass appended `[operator]` tasks): the verdict path below.
+- **`clarify`** and **`analyze`** (a chain stage would have asked the operator): the text path
+  below. There is no verdict and no handshake, since the stage's session is still open and
+  nothing but it writes the tree.
+
+### The verdict path
+
+Do the first two **within a minute**.
 
 1. **Read the report** at `report` and the tasks' lines in `tasks.md`. Find what each task
    needs: a decision, a changed artifact, a host, or something else.
@@ -113,6 +148,19 @@ and `sentence`. Do the first two **within a minute**.
    "Reply `1a 2skip`". Several questions open at once are asked together.
 5. **When the operator replies**, go to **Land**. A `stop the loop` reply: touch `$ATT/stop`
    and go to **Report**.
+
+### The text path
+
+1. **Read the report** at `report`: its `## Questions` (clarify) or `## For the operator`
+   (analyze), each with options and the session's recommendation.
+2. **Put them to the operator in plain text, then end your turn**: the questions as the report
+   asks them, numbered, with the recommendation first among each one's options, then
+   `take your recommendations` and `stop the loop`. End with the reply's form.
+3. **When the operator replies**, write the reply **verbatim** to `$ATT/reply-<id>`, one file,
+   nothing added: the script hands it to the session that asked, which records it where the
+   command records an answer, and the stage's commit carries it. A `take your recommendations`
+   reply: touch `$ATT/skip-<id>` instead. A `stop the loop` reply: touch `$ATT/stop` and go to
+   **Report**. No pause and no commit: you touched nothing in the tree.
 
 ## Land an answer
 
@@ -149,15 +197,18 @@ Several answers ready together land under one pause.
 
 When the loop stops, read the summary's tail and `state.py`, and tell the operator: the outcome
 and its sentence; the commits (`git log --oneline <start>..HEAD` from the summary's last
-line); every question still open or skipped and what each needs; and, for `gate`, `contract`
-or `golden`, what to look at before starting again. Put any open question to them as in
-**Answer**, step 4.
+line); every question still open or skipped and what each needs; and, for `gate`, `contract`,
+`golden` or `merge`, what to look at before starting again: for `merge`, the lane's worktree
+under `local/lanes/` and its branch `lane/<run>`, which the operator merges by hand
+(`git merge lane/<run>`), commits, and removes (`git worktree remove`, `git branch -d`). Put
+any open question to them as in **Answer**.
 
 **Restart.** After `operator`, `cap` or a stop that left questions open, once their answers
-have landed, offer to start the loop again; on the operator's yes, go to **Start** (its
-preconditions and carried skips included). After `gate`, `contract` or `golden`, offer it only
-once the operator says the tree has been reviewed. After `converged` or `rule`, the feature's
-close is the operator's.
+have landed, offer to start the loop again, from the stage the stop left (`--from`); on the
+operator's yes, go to **Start** (its preconditions and carried skips included). After `gate`,
+`contract`, `golden` or `merge`, offer it only once the operator says the tree has been
+reviewed. After `done`, `converged` or `rule`, what follows is the operator's: the next stage,
+or the feature's close.
 
 ## Never
 
@@ -165,4 +216,5 @@ close is the operator's.
   `make test-e2e`, a twin or the worker: the live sessions do that, with the logins.
 - Block: `AskUserQuestion` while the loop runs, or a foreground wait.
 - Treat a Monitor event as the operator's reply, or a question's absence as consent.
+- Paraphrase a session's report, or an operator's reply on its way to `reply-<id>`.
 - Push, or print, log or commit the Infrahub token or either node login.

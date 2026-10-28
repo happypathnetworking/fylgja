@@ -1,15 +1,19 @@
 """Where the attended loop stands, read from disk alone (docs/development.md, "The attended loop").
 
-python3 -I .claude/skills/converge-loop/state.py           the current run: its state, every
-                                                            question and what each still needs
+python3 -I .claude/skills/converge-loop/state.py           the current run: its state, each run's
+                                                            last session and report, any lane
+                                                            worktree kept, every question and what
+                                                            each still needs
 python3 -I .claude/skills/converge-loop/state.py --carry   the task IDs the feature's latest
                                                             run skipped that are still unchecked,
                                                             for scripts/converge-loop.sh --skip
---run local/converge-loop/<started> reads that run instead of the newest.
+--feature specs/NNN-slug names the feature in place of .specify/feature.json (a chain started
+at specify, before the pointer moved). --run local/converge-loop/<started> reads that run
+instead of the newest.
 
 The run is the newest directory under local/converge-loop/ with an attended/ whose summary
-names the current feature (.specify/feature.json, or --feature specs/NNN-slug). Reads only; writes nothing but the lock
-file's inode when it is absent, as flock does.
+names the feature. Reads only; writes nothing but the lock file's inode when it is absent,
+as flock does.
 """
 
 import datetime
@@ -21,8 +25,10 @@ import sys
 
 ROOT = pathlib.Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True,
                                    text=True, check=True).stdout.strip())
-FEATURE = (sys.argv[sys.argv.index("--feature") + 1] if "--feature" in sys.argv
-           else json.loads((ROOT / ".specify/feature.json").read_text())["feature_directory"])
+if "--feature" in sys.argv:
+    FEATURE = sys.argv[sys.argv.index("--feature") + 1].rstrip("/")
+else:
+    FEATURE = json.loads((ROOT / ".specify/feature.json").read_text())["feature_directory"]
 TASKS = ROOT / FEATURE / "tasks.md"
 
 
@@ -37,9 +43,16 @@ def runs():
     return out
 
 
+def jsonl(path):
+    return [json.loads(l) for l in path.read_text().splitlines() if l.strip()] if path.exists() else []
+
+
 def questions(run):
-    f = run / "attended/questions.jsonl"
-    return [json.loads(l) for l in f.read_text().splitlines() if l.strip()] if f.exists() else []
+    return jsonl(run / "attended/questions.jsonl")
+
+
+def events(run):
+    return jsonl(run / "events.jsonl")
 
 
 def unchecked():
@@ -54,7 +67,7 @@ def skipped(run):
         ids += m.group(1).split()
     att = run / "attended"
     for q in questions(run):
-        if (att / f"skipped-{q['id']}").exists() or (att / f"skip-{q['id']}").exists():
+        if q.get("tasks") and ((att / f"skipped-{q['id']}").exists() or (att / f"skip-{q['id']}").exists()):
             ids += q["tasks"].split()
     return list(dict.fromkeys(ids))
 
@@ -81,7 +94,7 @@ def main():
     summary = (run / "summary.md").read_text()
     stopped = re.search(r"^## Stopped: (\S+)\n\n(.*)$", summary, re.M)
     running = loop_running()
-    print(f"run: {rel}  (ATT={rel}/attended)")
+    print(f"run: {rel}  (ATT={rel}/attended; events {rel}/events.jsonl)")
     print(f"loop process: {'running (holds local/converge-loop.lock)' if running else 'not running'}")
     if stopped:
         state = f"stopped: {stopped.group(1)}: {stopped.group(2)}"
@@ -94,17 +107,36 @@ def main():
     else:
         state = "running"
     print(f"state: {state}")
+
+    # Each run's or stage's last session, with its report, so a report not yet shown can be.
+    last = {}
+    for e in events(run):
+        if e.get("kind") == "session":
+            last[e.get("label") or e.get("stage")] = e
+    for label, e in last.items():
+        print(f"  session {label}: {e.get('model')} {e.get('effort')}, exit {e.get('exit')}, report {e.get('report')}")
+    kept = sorted(p for p in (ROOT / "local/lanes").glob("*/") if p.is_dir()) if (ROOT / "local/lanes").exists() else []
+    for p in kept:
+        print(f"  lane worktree kept: {p.relative_to(ROOT)} (branch lane/{p.name}; merge by hand, then remove)")
+
     now = datetime.datetime.now(datetime.timezone.utc)
     for q in questions(run):
         n = q["id"]
+        text = q.get("kind") in ("clarify", "analyze")
         v = att / f"verdict-{n}"
         verdict = v.read_text().strip() if v.exists() and v.read_text().strip() else None
         if (att / f"answered-{n}").exists():
-            fate = "answered"
+            fate = "answered" if not text else "replied"
         elif (att / f"skipped-{n}").exists():
             fate = "skipped"
         elif (att / f"answer-{n}").exists() or (att / f"skip-{n}").exists():
             fate = "answer flagged, awaiting resume"
+        elif text:
+            if stopped or not running:
+                fate = "UNREPLIED at the stop: the stage must run again"
+            else:
+                age = int((now - datetime.datetime.fromisoformat(q["asked_at"].replace("Z", "+00:00"))).total_seconds())
+                fate = f"NO REPLY ({age}s since asked): put the report's questions to the operator, then write {flag}/reply-{n} (or touch skip-{n})"
         elif stopped or not running:
             fate = "UNANSWERED at the stop: put it to the operator, land it without the handshake"
         elif re.search(rf"^  no verdict {n} after \d+s, taken as hold$", summary, re.M):
@@ -114,7 +146,7 @@ def main():
             fate = f"NO VERDICT ({age}s since asked): write {flag}/verdict-{n} now"
         else:
             fate = f"open: put it to the operator unless already asked; land the reply, then {flag}/answer-{n} or skip-{n}"
-        print(f"  question {n} {q['kind']} {q['run']} [{q['tasks']}] verdict={verdict or '-'}: {fate}; report {q['report']}")
+        print(f"  question {n} {q['kind']} {q['run']} [{q.get('tasks', '')}] verdict={verdict or '-'}: {fate}; report {q['report']}")
     if not questions(run):
         print("  no questions")
     tail = [l for l in summary.splitlines() if l.strip()][-1]

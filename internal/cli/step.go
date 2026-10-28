@@ -36,13 +36,13 @@ func newTwinStepCmd(opts *options) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "step",
 		Short: "Take the running twin to another stage or a snapshot, without a rebuild",
-		Long: "Take the running twin to another stage of its proposed change, the next one or the one\n" +
-			"--stage names, or to a snapshot of any branch, the one --snapshot names. The API's\n" +
-			"server resolves the target, reads it, takes the snapshot of what it read, compiles it\n" +
-			"and files the snapshot and the bundle, as stage plan builds a stage; --snapshot\n" +
-			"<id|file> names one its store holds by its id, or a snapshot file sent from here, which\n" +
-			"it files, and it compiles that and files the bundle, reading no branch. The step\n" +
-			"between the two bundles is printed, the host is checked for the twin after the step,\n" +
+		Long: "Take the running twin to a stage of any proposed change, the one --stage names or, left\n" +
+			"out, the next stage of its own, or to a snapshot of any branch, the one --snapshot names.\n" +
+			"The API's server resolves the target, reads it, takes the snapshot of what it read,\n" +
+			"compiles it and files the snapshot and the bundle, as stage plan builds a stage;\n" +
+			"--snapshot <id|file> names one its store holds by its id, or a snapshot file sent from\n" +
+			"here, which it files, and it compiles that and files the bundle, reading no branch. The\n" +
+			"step between the two bundles is printed, the host is checked for the twin after the step,\n" +
 			"and containerlab's own plan for the lab is read. Then one run with the fixed identity\n" +
 			"fylgja-step stages the target, lets containerlab reconcile the lab, waits for every\n" +
 			"node it restarted, recreated or created, pushes every node whose configuration changed\n" +
@@ -61,7 +61,8 @@ func newTwinStepCmd(opts *options) *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&f.stage, "stage", "",
-		"the stage to step to, <branch>/<label>, of the twin's own proposed change; the next one when left out")
+		"the stage to step to, <branch>/<label>, of any proposed change; left out, the next stage of the twin's own "+
+			"proposed change, so a twin whose record names no stage needs --stage or --snapshot")
 	cmd.Flags().StringVar(&f.snapshot, "snapshot", "",
 		"the snapshot to step to, <id|file>, a snapshot of any branch: a snapshot id (64 lowercase hex characters) the "+
 			"server's store holds, or a snapshot file, which is read here and sent; no branch is read")

@@ -411,8 +411,8 @@ func TestWorkHelpTextsNameTheServer(t *testing.T) {
 			[]string{"The API's server reads them, and needs Infrahub and nothing else for it."}},
 		{newStagePlanCmd(opts), []string{"Needs Infrahub and the bundle store"},
 			[]string{"The server needs Infrahub and its two stores for it"}},
-		{newTwinStepCmd(opts), []string{"compiled and filed here"},
-			[]string{"The API's server resolves the target, reads it,"}},
+		{newTwinStepCmd(opts), []string{"compiled and filed here", "another stage of its proposed change"},
+			[]string{"The API's server resolves the target, reads it,", "any proposed change"}},
 		{newTwinShowCmd(opts), []string{"Runs on the lab host"},
 			[]string{"The API's server reports it from the lab host, needs no worker, and changes nothing."}},
 	} {
@@ -427,5 +427,14 @@ func TestWorkHelpTextsNameTheServer(t *testing.T) {
 				t.Errorf("%s's help does not say %q:\n%s", c.cmd.Name(), said, c.cmd.Long)
 			}
 		}
+	}
+	// Since 019 --stage names a stage of any proposed change, and left out means the
+	// next stage of the twin's own only when the record names one.
+	usage := newTwinStepCmd(opts).Flags().Lookup("stage").Usage
+	if !strings.Contains(usage, "any proposed change") {
+		t.Errorf("twin step's --stage usage does not say %q: %s", "any proposed change", usage)
+	}
+	if gone := "of the twin's own proposed change; the next one when left out"; strings.Contains(usage, gone) {
+		t.Errorf("twin step's --stage usage still says %q: %s", gone, usage)
 	}
 }

@@ -1073,7 +1073,7 @@ identity. Behind an interface of the bundle store's shape (`Put`, `Has`, `Path`,
 A twin built by `twin create --snapshot`, by its id or from a file of a later take, records
 the stored first take's `observed_at`; a `twin create --branch` or `--stage` whose take is
 the second records its own read's time. An entry that does not
-hash to its name is `snapshot.id.mismatch`. Made by the first snapshot filed, never at
+hash to its name, or declares another id, is `snapshot.id.mismatch`. Made by the first snapshot filed, never at
 start. `twin create --snapshot <id>` reads it; an id it does not hold is
 `snapshot.unknown`.
 

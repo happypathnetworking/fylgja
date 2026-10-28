@@ -191,6 +191,60 @@ func TestPutRefusesACorruptEntry(t *testing.T) {
 	}
 }
 
+// An entry whose body hashes to the id it is filed under but which declares another
+// snapshot_id is corrupt too: Put and Fetch name what it declares beside what its body
+// hashes to, where TestPutRefusesACorruptEntry's entries keep "hashes to <got>, not <id>".
+// Has says false, and Put keeps the entry for the operator to read.
+func TestACorruptEntryDeclaringAnotherID(t *testing.T) {
+	ctx := context.Background()
+	s, other := Take(fixture(t, "three-node")), Take(fixture(t, "lossy"))
+	store := NewDirStore(filepath.Join(t.TempDir(), "snapshots"))
+	id, err := store.Put(ctx, s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := store.Path(id)
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	declares := []byte(`"snapshot_id": "` + id + `"`)
+	if !bytes.Contains(b, declares) {
+		t.Fatalf("the entry does not declare its id as %s", declares)
+	}
+	corrupted := bytes.Replace(b, declares, []byte(`"snapshot_id": "`+other.ID+`"`), 1)
+	if err := os.WriteFile(path, corrupted, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	want := path + " declares snapshot_id " + other.ID + ", but its body hashes to " + id
+	for _, call := range []struct {
+		name string
+		do   func() error
+	}{
+		{"Put", func() error { _, err := store.Put(ctx, s); return err }},
+		{"Fetch", func() error { _, err := store.Fetch(ctx, id); return err }},
+	} {
+		err := call.do()
+		var mismatch *ErrIDMismatch
+		if !errors.As(err, &mismatch) {
+			t.Fatalf("%s over the entry = %T %v, want *ErrIDMismatch", call.name, err, err)
+		}
+		if *mismatch != (ErrIDMismatch{Path: path, Want: id, Got: id, Declared: other.ID}) {
+			t.Errorf("%s: %+v, want the entry's path, %s twice and the declared %s", call.name, *mismatch, id, other.ID)
+		}
+		if err.Error() != want {
+			t.Errorf("%s: message %q, want %q", call.name, err, want)
+		}
+	}
+	if has, err := store.Has(ctx, id); has || err != nil {
+		t.Errorf("Has = %v, %v; want false, since the entry is corrupt", has, err)
+	}
+	if after, _ := os.ReadFile(path); !bytes.Equal(after, corrupted) {
+		t.Error("Put rewrote the corrupt entry; it must keep it for the operator to read")
+	}
+}
+
 // An id the store does not hold is fs.ErrNotExist, which the server files as
 // snapshot.unknown; a store not yet made holds none.
 func TestFetchUnknownIsNotExist(t *testing.T) {

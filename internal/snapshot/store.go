@@ -30,13 +30,20 @@ type Store interface {
 	Fetch(ctx context.Context, id string) (*Snapshot, error)
 }
 
-// ErrIDMismatch reports an entry at Path whose body hashes to Got where Want was claimed:
-// a corrupt store entry.
+// ErrIDMismatch reports an entry at Path whose body hashes to Got where Want was claimed,
+// or, when Declared is set, whose body hashes to Want but which declares snapshot_id
+// Declared: a corrupt store entry either way.
 type ErrIDMismatch struct {
 	Path, Want, Got string
+	// Declared is the snapshot_id the entry declares when its body hashes to Want and the
+	// entry declares another; empty when the body hashes to another id.
+	Declared string
 }
 
 func (e *ErrIDMismatch) Error() string {
+	if e.Declared != "" {
+		return fmt.Sprintf("%s declares snapshot_id %s, but its body hashes to %s", e.Path, e.Declared, e.Got)
+	}
 	return fmt.Sprintf("%s hashes to %s, not %s", e.Path, e.Got, e.Want)
 }
 
@@ -120,8 +127,8 @@ func (s *DirStore) Fetch(_ context.Context, id string) (*Snapshot, error) {
 }
 
 // verifyEntry reads the entry for id, reporting whether it exists, an *ErrIDMismatch
-// naming its path when its body hashes to anything else, and an *entryError when it is no
-// snapshot at all.
+// naming its path when its body hashes to anything else or declares another id, and an
+// *entryError when it is no snapshot at all.
 func (s *DirStore) verifyEntry(id string) (*Snapshot, bool, error) {
 	// An id is the only name an entry has: anything else is never joined to the root.
 	if !IsID(id) {
@@ -138,6 +145,8 @@ func (s *DirStore) verifyEntry(id string) (*Snapshot, bool, error) {
 	snap, err := Unmarshal(data)
 	var declared *IDMismatchError
 	switch {
+	case errors.As(err, &declared) && declared.Computed == id:
+		return nil, false, &ErrIDMismatch{Path: path, Want: id, Got: id, Declared: declared.Declared}
 	case errors.As(err, &declared):
 		return nil, false, &ErrIDMismatch{Path: path, Want: id, Got: declared.Computed}
 	case err != nil:

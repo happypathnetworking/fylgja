@@ -1224,7 +1224,7 @@ Five added. No status, step or exit is new.
 |---|---|---|---|
 | `snapshot.invalid` | rejection, 1, none (`twin compile`) or `resolve` (`twin create --snapshot <file>`) | the field, or the file | the outer shape is not version 1's: an unknown key, `ctm` absent or not an object, `probes` absent, null or not empty, `snapshot_id` not 64 lowercase hex characters, `observed_at` not of the CTM's form or not the inner CTM's; or the inner CTM's `observed_at` not of that form, at `ctm.envelope.observed_at` |
 | `snapshot.version.unsupported` | rejection, 1, none or `resolve` | the file | `snapshot_version` is not `"1"`, or absent; names the version read, or that none was, and `"1"` |
-| `snapshot.id.mismatch` | rejection, 1, none or `resolve`; `compile` for the store | the file, or the store path | a declared `snapshot_id` is not what the body hashes to, naming both; or an entry under the id hashes to another, naming the path and both |
+| `snapshot.id.mismatch` | rejection, 1, none or `resolve`; `compile` for the store | the file, or the store path | a declared `snapshot_id` is not what the body hashes to, naming both; or an entry under the id hashes to another, or hashes to it and declares another, naming the path and both |
 | `snapshot.unknown` | rejection, 1, `resolve` | the id | `twin create --snapshot <id>` names an id the store does not hold; names the store's directory |
 | `snapshot.flags.conflict` | rejection, 2, `start` | the flag | `--snapshot` beside `--branch`, `--stage`, `--at` or `--scope`, the first found in that order; before any connection |
 

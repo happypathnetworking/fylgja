@@ -22,8 +22,8 @@ import (
 //
 // The store never overwrites: a second take of the same intent keeps the first take's
 // entry, and its observed_at, and returns the snapshot as taken now. An entry already
-// under the id that hashes to another is snapshot.id.mismatch at step, naming the store
-// path and both ids, the one finding it returns, with no snapshot, since none was filed;
+// under the id that hashes to another, or declares another, is snapshot.id.mismatch at
+// step, naming the store path and both ids, the one finding it returns, with no snapshot, since none was filed;
 // any other failure is an error the caller reports as operation.failed.
 func takeSnapshot(ctx context.Context, paths lab.Paths, step string, c *ctm.CTM) (*snapshot.Snapshot, string, findings.List, error) {
 	s := snapshot.Take(c)
@@ -42,10 +42,10 @@ func takeSnapshot(ctx context.Context, paths lab.Paths, step string, c *ctm.CTM)
 }
 
 // corruptEntry is snapshot.id.mismatch's message for a store entry that hashes to another id
-// than the one it is filed under, worded as the bundle store's: the snapshot cannot be done
-// what the caller was doing to it.
+// than the one it is filed under, or hashes to it and declares another, worded as the bundle
+// store's: the snapshot cannot be done what the caller was doing to it.
 func corruptEntry(m *snapshot.ErrIDMismatch, done string) string {
-	return fmt.Sprintf("store entry %s hashes to %s, not %s, so snapshot %s cannot be %s", m.Path, m.Got, m.Want, m.Want, done)
+	return fmt.Sprintf("store entry %v, so snapshot %s cannot be %s", m, m.Want, done)
 }
 
 // snapshotFiles holds a create's files to the one shape the API gives them (contracts/api.md,

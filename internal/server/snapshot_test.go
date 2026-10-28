@@ -304,6 +304,25 @@ func TestResolveSnapshotByID(t *testing.T) {
 	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != want {
 		t.Errorf("exit %d, findings %+v; want 1 with %+v", code, doc.Findings, want)
 	}
+
+	// The three-node's own body under its id, declaring the lossy's id: the message names
+	// what the entry declares beside what its body hashes to.
+	b, err := snapshot.Marshal(stored)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b = bytes.Replace(b, []byte(`"snapshot_id": "`+fixtureSnapshotID+`"`), []byte(`"snapshot_id": "`+other.ID+`"`), 1)
+	if err := os.WriteFile(path, b, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, _, err = resolveSnapshot(ctx, paths, findings.OpTwinCreate, subject, fixtureSnapshotID, nil)
+	code, doc = exitOf(t, err)
+	want = findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSnapshotIDMismatch, Step: findings.StepResolve,
+		Object: path, Message: "store entry " + path + " declares snapshot_id " + other.ID + ", but its body hashes to " +
+			fixtureSnapshotID + ", so snapshot " + fixtureSnapshotID + " cannot be read"}
+	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0] != want {
+		t.Errorf("exit %d, findings %+v; want 1 with %+v", code, doc.Findings, want)
+	}
 }
 
 // A file is filed under the id its body hashes to, computed when it declares none; one of a

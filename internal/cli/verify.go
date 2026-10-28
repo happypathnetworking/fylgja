@@ -13,7 +13,7 @@ type verifyFlags struct {
 	// waitGiven.
 	wait string
 	// waitGiven is whether --wait was given at all, apart from its value: an explicit empty
-	// one is refused, not left out (M4's --interval= rule).
+	// one is refused, not left out (M4's --interval= rule, a flag twin create had until 019).
 	waitGiven bool
 	// args are the positional arguments, which only a bare --wait leaves behind.
 	args []string

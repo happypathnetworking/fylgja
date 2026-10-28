@@ -68,7 +68,7 @@ func TestTwoCreatesAtOnce(t *testing.T) {
 	svc := &inFlightService{fakeService: &fakeService{runID: "run-1", result: readyResult()},
 		entered: make(chan struct{}), release: make(chan struct{})}
 	useService(t, svc)
-	flags := func() *createFlags { return &createFlags{branch: "fylgja-fixture", noFollow: true} }
+	flags := func() *createFlags { return &createFlags{branch: "fylgja-fixture"} }
 
 	first := make(chan error, 1)
 	go func() { first <- runCreate(context.Background(), &options{asJSON: true}, flags()) }()

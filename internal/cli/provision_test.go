@@ -383,8 +383,8 @@ func entriesOf(t *testing.T, dir string) []string {
 	return names
 }
 
-// A provisioned twin never follows, and its run stops nothing first (019).
-func TestProvisionNotFollowing(t *testing.T) {
+// A provisioned twin's success lines end at its twin directory: nothing of following (019).
+func TestProvisionReadyEndsAtTheTwinDirectory(t *testing.T) {
 	t.Run("ready", func(t *testing.T) {
 		useStateRoot(t)
 		res := readyResult()
@@ -400,13 +400,13 @@ func TestProvisionNotFollowing(t *testing.T) {
 		if code, doc := exitOf(t, err); code != findings.ExitOK {
 			t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
 		}
-		if len(svc.started) != 1 || svc.started[0].Follow != nil {
-			t.Errorf("started %+v, want one run with no follow", svc.started)
+		if len(svc.started) != 1 {
+			t.Errorf("started %+v, want one run", svc.started)
 		}
 		// The record line is twin create's and twin show's (018): a bundle's twin names no
 		// snapshot.
 		if want := "record: branch fylgja-fixture, snapshot none, bundle_id " + fixtureBundleID + ", schema abc, " + showRead + "\n" +
-			"twin directory /abs/local/twin\nnot following (provisioned from a bundle)\n"; !strings.HasSuffix(out, want) {
+			"twin directory /abs/local/twin\n"; !strings.HasSuffix(out, want) {
 			t.Errorf("stdout:\n%s\nwant it to end:\n%s", out, want)
 		}
 	})

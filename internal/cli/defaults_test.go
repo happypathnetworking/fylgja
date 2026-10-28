@@ -3,17 +3,15 @@ package cli
 import (
 	"testing"
 
-	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
-// The defaults and floors the client's help names are the core's, written as literals since
-// the client links neither package (create.go); each is held to the constant it stands for,
-// and the flags carry them as M12's did.
+// The default the client's help names is the core's, written as a literal since the client
+// does not link the package (create.go); it is held to the constant it stands for, and the
+// flag carries it as M12's did. The follow interval and its floor went with --interval
+// (019).
 func TestFlagDefaultsAreTheCoresOwn(t *testing.T) {
 	for _, c := range []struct{ name, got, want string }{
-		{"the follow interval", defaultInterval, provision.DefaultInterval.String()},
-		{"its floor", minInterval, provision.MinInterval.String()},
 		{"verify's budget", defaultBudget, verify.DefaultBudget.String()},
 	} {
 		if c.got != c.want {
@@ -25,7 +23,6 @@ func TestFlagDefaultsAreTheCoresOwn(t *testing.T) {
 		path               []string
 		flag, value, noOpt string
 	}{
-		{[]string{"create"}, "interval", provision.DefaultInterval.String(), ""},
 		{[]string{"verify"}, "wait", "", verify.DefaultBudget.String()},
 	} {
 		cmd, _, err := twin.Find(c.path)

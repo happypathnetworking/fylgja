@@ -156,9 +156,9 @@ func stageRefInvalid(given string) string {
 // and Infrahub never asked; neither flag given is M1's usage failure with the message both
 // commands share (contracts/cli.md). An explicitly empty --stage= is a reference that is
 // not the form, alone or beside --branch, and on the dry run too: never the flag left out,
-// which beside --branch would start a following create. The conflict names the first of
-// --branch, --at and --interval in that order, whatever order they are given in (US4
-// scenario 2).
+// which beside --branch would start a create from the branch head. The conflict names the
+// first of --branch and --at in that order, whatever order they are given in (US4 scenario
+// 2; --interval, a third until 019, is no flag).
 func TestCreateStageRefusedBeforeAnyConnection(t *testing.T) {
 	const whole = "a stage is a whole pinned reference (branch and at)"
 	emptyRef := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStageRefInvalid, Object: "", Step: findings.StepStart,
@@ -189,11 +189,7 @@ func TestCreateStageRefusedBeforeAnyConnection(t *testing.T) {
 		{"--stage= beside --branch, dry run", []string{"--branch", "fylgja-fixture", "--stage=", "--dry-run"}, emptyRef},
 		{"--branch", []string{"--stage", sealed, "--branch", "change-1"}, conflict("--branch", whole)},
 		{"--at", []string{"--stage", sealed, "--at", fixtureAt}, conflict("--at", whole)},
-		{"--interval", []string{"--stage", sealed, "--interval", "1m"}, conflict("--interval", "a stage twin is pinned and never follows")},
-		{"--interval empty", []string{"--stage", sealed, "--interval="}, conflict("--interval", "a stage twin is pinned and never follows")},
-		{"the first found", []string{"--stage", sealed, "--interval", "1m", "--at", fixtureAt, "--branch", "change-1"},
-			conflict("--branch", whole)},
-		{"--at before --interval", []string{"--stage", sealed, "--interval", "1m", "--at", fixtureAt}, conflict("--at", whole)},
+		{"the first found", []string{"--stage", sealed, "--at", fixtureAt, "--branch", "change-1"}, conflict("--branch", whole)},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			useStateRoot(t)
@@ -365,8 +361,8 @@ func TestCreateStageResolutionCannotRun(t *testing.T) {
 }
 
 // A resolved create starts M2–M7's pinned run for the reference the stage resolves to,
-// with the stage as data and no following: the input carries branch and at as resolved and
-// the stage, never Follow; --no-follow beside it changes nothing. The document names the
+// with the stage as data: the input carries branch and at as resolved and the stage. The
+// document names the
 // stage in its subject and its block. Since 018 the server reads the branch's intent at the
 // resolved at, takes and files its snapshot and compiles before the run, so the input
 // carries the bundle and the snapshot by id beside the stage, and the record will name all
@@ -381,8 +377,6 @@ func TestCreateFromAStage(t *testing.T) {
 			demoBlock("sealed", fixtureAt, findings.AtSourceGiven, "after the first cut-over")},
 		{"written", []string{"--stage", "fylgja-fixture/cabled"},
 			demoBlock("cabled", demoWrittenAt, findings.AtSourceWritten, "before the change")},
-		{"--no-follow", []string{"--stage", "fylgja-fixture/sealed", "--no-follow"},
-			demoBlock("sealed", fixtureAt, findings.AtSourceGiven, "after the first cut-over")},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			paths := useStateRoot(t)
@@ -429,9 +423,6 @@ func TestCreateFromAStage(t *testing.T) {
 			if doc.Subject == nil || !reflect.DeepEqual(*doc.Subject, wantSubject) {
 				t.Errorf("subject %+v, want %+v", doc.Subject, wantSubject)
 			}
-			if doc.Following != nil {
-				t.Errorf("a stage twin carries a following block %+v", doc.Following)
-			}
 			readsAtAlone(t, c.name, f, c.block.At)
 			mustCarryNoToken(t, c.name, doc, svc.started)
 			validateM10Document(t, doc)
@@ -441,8 +432,7 @@ func TestCreateFromAStage(t *testing.T) {
 
 // A resolved create whose run refuses reports what the run reports, word for word what the
 // create of the reference the stage resolves to would say, with the stage beside it: M3's
-// host refusals and M1's read refusals are the run's, unchanged. No following block
-// appears.
+// host refusals and M1's read refusals are the run's, unchanged.
 func TestCreateFromAStageWhoseRunRefuses(t *testing.T) {
 	const twinDir = "/abs/local/twin"
 	skipped := provision.CleanupResult{Teardown: provision.CleanupSkipped, Unstage: provision.CleanupSkipped}
@@ -490,10 +480,7 @@ func TestCreateFromAStageWhoseRunRefuses(t *testing.T) {
 			if doc.Subject == nil || !reflect.DeepEqual(*doc.Subject, wantSubject) {
 				t.Errorf("subject %+v, want the --branch --at create's with the stage, %+v", doc.Subject, wantSubject)
 			}
-			if doc.Following != nil {
-				t.Errorf("a stage twin's refusal carries a following block %+v", doc.Following)
-			}
-			if len(svc.started) != 1 || svc.started[0].Follow != nil || svc.started[0].Stage == nil {
+			if len(svc.started) != 1 || svc.started[0].Stage == nil {
 				t.Errorf("started %+v; want one pinned run carrying the stage", svc.started)
 			}
 			mustCarryNoToken(t, c.name, doc, svc.started)
@@ -551,8 +538,8 @@ func TestCreateFromAStageReportsTheReference(t *testing.T) {
 // TestConfigurationBytesGoToTheNodeAndNowhereElse drives a create: the read and the compile
 // against the fake Infrahub the test started, the host check over a recorded empty host,
 // the stage, the readiness, the push to a node that commits whatever it is sent, and the
-// record. Only the deploy answers as containerlab would, and the stop of a following finds
-// none. It returns the run's result and twin.json as the run wrote it.
+// record. Only the deploy answers as containerlab would. It returns the run's result and
+// twin.json as the run wrote it.
 func provisionOnSuite(t *testing.T, paths lab.Paths, in provision.ProvisionInput) (provision.ProvisionResult, []byte) {
 	t.Helper()
 	reg, err := psp.Load("")
@@ -671,13 +658,12 @@ func decodeRecord(t *testing.T, record []byte) writtenRecord {
 
 // Scenario 1 and SC-002: a twin from each kind of stage — a mark written and one given, the
 // branch point on a main that carries the contract, and the head — deploys the bundle id
-// stage plan printed for that stage, is pinned at the stage's at and never follows, and
-// twin.json 6 names its proposed change by id and branch, its label, its description and
-// where its at came from, with provenance.at the resolved at and provenance.branch the
-// branch read: main for the branch point. The branch point's dry run, read on another
-// branch than its proposed change's, says the same id and that the twin would not follow,
-// because of the stage; which kind of stage it is changes neither. The text's closing line
-// names the stage: pinned at <at>, stage <branch>/<label>; not following.
+// stage plan printed for that stage, is pinned at the stage's at, and twin.json 6 names its
+// proposed change by id and branch, its label, its description and where its at came from,
+// with provenance.at the resolved at and provenance.branch the branch read: main for the
+// branch point. The branch point's dry run, read on another branch than its proposed
+// change's, says the same id; which kind of stage it is changes neither. The text's closing
+// line is the twin directory's, and nothing of following (019).
 func TestCreateFromEachKindOfStage(t *testing.T) {
 	useStateRoot(t)
 	useService(t, nil)
@@ -722,11 +708,9 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 
 			if c.source == findings.AtSourceBranchPoint {
 				code, dry := executeTwin(t, "twin", "create", "--stage", ref, "--dry-run")
-				if code != findings.ExitOK || dry.BundleID != id || dry.DryRun == nil || dry.DryRun.Follow == nil ||
-					dry.DryRun.Follow.Enabled || dry.DryRun.Follow.Reason != findings.FollowReasonStage ||
-					dry.Stage == nil || *dry.Stage != block {
-					t.Errorf("dry run exit %d, bundle_id %s, dry_run %+v, stage %+v; want 0, the plan's %s, not following "+
-						"(reason stage), and %+v", code, dry.BundleID, dry.DryRun, dry.Stage, id, block)
+				if code != findings.ExitOK || dry.BundleID != id || dry.DryRun == nil || dry.Stage == nil || *dry.Stage != block {
+					t.Errorf("dry run exit %d, bundle_id %s, dry_run %+v, stage %+v; want 0, the plan's %s, and %+v",
+						code, dry.BundleID, dry.DryRun, dry.Stage, id, block)
 				}
 				mustCarryNoToken(t, "the dry run", dry)
 			}
@@ -746,8 +730,8 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 			if code != findings.ExitOK || !reflect.DeepEqual(started, want) || !bundleIDRE.MatchString(started.SnapshotID) {
 				t.Fatalf("exit %d, started %+v; want 0 and one run of %+v", code, svc.started, want)
 			}
-			if created.Stage == nil || *created.Stage != block || created.Following != nil {
-				t.Errorf("stage block %+v, following %+v; want %+v and none", created.Stage, created.Following, block)
+			if created.Stage == nil || *created.Stage != block {
+				t.Errorf("stage block %+v; want %+v", created.Stage, block)
 			}
 
 			res, record := provisionOnSuite(t, paths, svc.started[0])
@@ -759,21 +743,18 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 				t.Errorf("the run deployed %s and recorded\n%s\nwant %s, twin_version 9, provenance %s at %s under %s, stage %+v, step null",
 					res.BundleID, record, id, c.branch, c.at, defaultScope, stage)
 			}
-			if res.Following != nil {
-				t.Errorf("the run's following %+v; a stage twin never follows", res.Following)
-			}
 			mustCarryNoToken(t, c.label, created, svc.started)
 
-			// In text, the closing line names the stage, as twin show's kind line does.
+			// In text, the closing line is the twin directory's.
 			useService(t, &fakeService{runID: "run-2", result: readyResult()})
 			var err error
 			out := captureStdout(t, func() {
 				err = runCreate(context.Background(), &options{}, &createFlags{stage: ref})
 			})
-			if code, _ := exitOf(t, err); code != findings.ExitOK ||
-				!strings.HasSuffix(out, "\npinned at "+c.at+", stage "+ref+"; not following\n") {
-				t.Errorf("the text create: exit %d, stdout:\n%s\nwant it to end \"pinned at %s, stage %s; not following\"",
-					code, out, c.at, ref)
+			if code, _ := exitOf(t, err); code != findings.ExitOK || !strings.HasSuffix(out, "\ntwin directory /abs/local/twin\n") ||
+				strings.Contains(out, "following") {
+				t.Errorf("the text create: exit %d, stdout:\n%s\nwant it to end at the twin directory, naming no following",
+					code, out)
 			}
 		})
 	}
@@ -915,8 +896,8 @@ func TestCreateFromARefusedStageStartsNothing(t *testing.T) {
 // Scenario 7: after a twin built from a stage is destroyed, a story along main's own
 // history still works as before and names no stage. A proposed change cannot have main as
 // its source, so main has no stage to name; the create of main at a time is M3's pinned
-// create, its run's input carrying no stage, its dry run not following because of the at,
-// and twin.json 6 recording stage null.
+// create, its run's input and its dry run carrying no stage, and twin.json 6 recording
+// stage null.
 func TestCreateAlongMainAfterAStageTwin(t *testing.T) {
 	const mainAt = "2026-10-16T07:30:00.000000+00:00"
 	paths := useStateRoot(t)
@@ -958,10 +939,9 @@ func TestCreateAlongMainAfterAStageTwin(t *testing.T) {
 	}
 
 	code, dry := executeTwin(t, "twin", "create", "--branch", "main", "--at", mainAt, "--dry-run")
-	if code != findings.ExitOK || dry.Stage != nil || dry.DryRun == nil || dry.DryRun.Follow == nil ||
-		dry.DryRun.Follow.Reason != findings.FollowReasonPinned || dry.Subject.Stage != "" {
-		t.Errorf("the dry run along main: exit %d, stage %+v, dry_run %+v, subject %+v; want 0, no stage, not following "+
-			"(reason pinned)", code, dry.Stage, dry.DryRun, dry.Subject)
+	if code != findings.ExitOK || dry.Stage != nil || dry.DryRun == nil || dry.Subject.Stage != "" {
+		t.Errorf("the dry run along main: exit %d, stage %+v, dry_run %+v, subject %+v; want 0 and no stage",
+			code, dry.Stage, dry.DryRun, dry.Subject)
 	}
 
 	svc = &fakeService{runID: "run-2", result: readyResult()}

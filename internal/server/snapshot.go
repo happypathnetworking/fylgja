@@ -72,9 +72,8 @@ func snapshotFiles(op string, subject *findings.Subject, f *createFlags, files [
 
 // snapshotGuards refuses what a snapshot makes meaningless, before any connection (R-07):
 // --branch, --stage, --at or --scope beside --snapshot, the first found in that order, is
-// snapshot.flags.conflict, since a snapshot carries its own branch, at and scope; --interval
-// is follow.flags.conflict, since a twin built from a snapshot never follows. Each is exit 2
-// at start. --no-follow and --dry-run are accepted.
+// snapshot.flags.conflict, since a snapshot carries its own branch, at and scope, exit 2 at
+// start. --dry-run is accepted.
 func snapshotGuards(op string, subject *findings.Subject, f *createFlags) error {
 	for _, c := range []struct {
 		given bool
@@ -92,7 +91,7 @@ func snapshotGuards(op string, subject *findings.Subject, f *createFlags) error 
 			return &result{doc: doc}
 		}
 	}
-	return followFlagsConflict(op, subject, f)
+	return nil
 }
 
 // resolveSnapshot resolves --snapshot to the stored snapshot a create builds from, at

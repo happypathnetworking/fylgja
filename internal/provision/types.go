@@ -90,9 +90,6 @@ type ProvisionInput struct {
 	// snapshot's being its stored take (018), and by a rebuild, the check's read (M4);
 	// empty for twin provision.
 	ObservedAt string `json:"observed_at,omitempty"`
-	// Follow, when set, begins following the branch once the twin is recorded. Nil is no
-	// following step; M2's inputs decode to nil (M4).
-	Follow *FollowInput `json:"follow,omitempty"`
 	// Stage is the stage the server resolved Branch and At from (014), which the record
 	// step writes into twin.json. The run branches on nothing of it. Nil in every input
 	// and recorded history of a run not created from a stage, and omitted when nil.
@@ -120,11 +117,6 @@ type ProvisionInput struct {
 // workflow.
 type StageInput = wire.StageRef
 
-// FollowInput is how often a following twin is checked.
-type FollowInput struct {
-	IntervalS int `json:"interval_s"`
-}
-
 // ProvisionResult is how a provisioning run ended.
 type ProvisionResult struct {
 	Outcome    string `json:"outcome"`
@@ -138,15 +130,6 @@ type ProvisionResult struct {
 	// Twin is the record RecordTwin wrote, on ready. One record type: wire.TwinRecord.
 	Twin    *wire.TwinRecord `json:"twin,omitempty"`
 	Cleanup CleanupResult    `json:"cleanup"`
-	// Following is the following the run began, when its input asked for one (M4).
-	Following *FollowingResult `json:"following,omitempty"`
-}
-
-// FollowingResult is a following that began.
-type FollowingResult struct {
-	Branch     string `json:"branch"`
-	IntervalS  int    `json:"interval_s"`
-	ScheduleID string `json:"schedule_id"`
 }
 
 // ReconcileInput is a check's input: the Schedule's action args, fixed when following

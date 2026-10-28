@@ -26,8 +26,9 @@ type readFlags struct {
 	// stage is --stage as given, <branch>/<label>: a moment of a proposed change, resolved
 	// to a pinned reference in place of --branch and --at (014).
 	stage string
-	// stageGiven is whether --stage was given at all, apart from its value: an explicit
-	// empty one is a reference refused, not one left out (M4's --interval= precedent).
+	// stageGiven is whether --stage was given at all, apart from its value: an explicit empty
+	// one is a reference refused, not one left out (M4's --interval= precedent, a flag twin
+	// create had until 019).
 	stageGiven bool
 	out        string
 	// scope is --scope as given, read only when scopeGiven: not given, the server's default

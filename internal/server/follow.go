@@ -48,7 +48,7 @@ func runProvision(ctx context.Context, opts *options, op string, subject *findin
 	if err != nil {
 		return err
 	}
-	return provisionReport(opts, op, subject, in, res)
+	return provisionReport(opts, op, subject, res)
 }
 
 // startRun starts workflowID's run through start and answers an interrupt that arrives
@@ -157,11 +157,8 @@ func (f *followedStep) get() string {
 
 // provisionReport prints a ready twin's success lines, or what cleanup removed for a run
 // that stopped short of ready, and returns the run's document, whose status carries the
-// exit code.
-//
-// Following is reported last on a ready twin: the following it began, or that it could not
-// begin (contracts/cli.md).
-func provisionReport(opts *options, op string, subject *findings.Subject, in provision.ProvisionInput, res provision.ProvisionResult) error {
+// exit code. A ready twin's lines end at its twin directory: it follows nothing (019).
+func provisionReport(opts *options, op string, subject *findings.Subject, res provision.ProvisionResult) error {
 	doc := provision.ProvisionDocument(op, subject, res)
 	if doc.Status == findings.StatusOK && res.Twin != nil {
 		opts.note("twin ready: bundle_id %s", res.BundleID)
@@ -172,23 +169,6 @@ func provisionReport(opts *options, op string, subject *findings.Subject, in pro
 		// bundle, the schema, and the scope and the mapping the read was made under (017).
 		opts.note("%s", recordLine(res.Twin))
 		opts.note("twin directory %s", res.TwinDir)
-		switch {
-		case in.Source == wire.SourceBundle:
-			opts.note("not following (provisioned from a bundle)")
-		case in.Follow == nil && in.At != "" && in.Stage != nil:
-			// A stage twin's line names its stage, as twin show's kind line does.
-			opts.note("pinned at %s, stage %s; not following", in.At, in.Stage.Name())
-		case in.Follow == nil && in.At != "":
-			opts.note("pinned at %s, not following", in.At)
-		case in.Follow == nil:
-			opts.note("not following")
-		case res.Following != nil:
-			opts.note("following branch %s, checked every %s (schedule %s)",
-				res.Following.Branch, time.Duration(res.Following.IntervalS)*time.Second, res.Following.ScheduleID)
-		case in.Follow != nil && carriesRule(res.Findings, findings.RuleFollowStartFailed):
-			opts.note("not following: %s (see findings); destroy and create again", findings.RuleFollowStartFailed)
-			doc.Following = &findings.FollowingBlock{Branch: in.Branch, IntervalS: in.Follow.IntervalS, State: findings.FollowingNotStarted}
-		}
 		return &result{doc: doc}
 	}
 	// A run stopped after the host check cleared has cleaned up. What that removed is

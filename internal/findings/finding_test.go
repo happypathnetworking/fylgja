@@ -801,6 +801,11 @@ func TestM4DocumentsSatisfySchema(t *testing.T) {
 			mustValidateBytes(t, schema, asEarlier(t, c.doc, dropM5ShowArtifacts, dropM6DryRunCounts, dropM7ShowPSP), c.label)
 		})
 	}
+	for _, c := range m4FollowingDocuments() {
+		t.Run(c.label, func(t *testing.T) {
+			mustValidateBytes(t, schema, asEarlier(t, c.doc, dropM6DryRunCounts, dropM7ShowPSP, c.restore), c.label)
+		})
+	}
 	for _, c := range m2Documents() {
 		t.Run("M2 "+c.label, func(t *testing.T) {
 			mustValidateBytes(t, schema, asEarlier(t, c.doc, dropM6DryRunCounts, dropM7ShowPSP), c.label)
@@ -927,35 +932,12 @@ func dropM6DryRunCounts(doc map[string]any) {
 }
 
 // m4Documents are the document shapes M4 adds, as m2Documents are M2's: a fixture, so
-// that a later milestone's schema can be held to every earlier shape.
+// that a later milestone's schema can be held to every earlier shape. The shapes that carry
+// following, which 019 removed from Document, are m4FollowingDocuments.
 func m4Documents() []labelledDocument {
 	id := strings.Repeat("89", 32)
 	twinID := strings.Repeat("b5", 32)
 	observed := "2026-09-16T19:00:00.000000Z"
-
-	createFollowing := NewDocument(OpTwinCreate, &Subject{Branch: "fylgja-fixture", RunID: "run-1"}, nil)
-	createFollowing.BundleID = id
-	createFollowing.Twin = &TwinBlock{Lab: "fylgja", Dir: "/abs/twin", RunID: "run-1", ObservedAt: &observed,
-		Nodes: []TwinNode{{Name: "n1", MgmtIPv4: "172.20.20.2", ReadyAfterS: 0.9}}}
-	createFollowing.Following = &FollowingBlock{Branch: "fylgja-fixture", IntervalS: 300,
-		ScheduleID: "fylgja-follow", State: FollowingStarted}
-
-	var startFailed List
-	startFailed.AddStep(Warning, StepFollow, RuleFollowStartFailed, "fylgja-follow",
-		"the twin is ready but following could not begin: creating schedule fylgja-follow failed (boom); "+
-			"the twin is frozen; fylgja twin destroy and create again to follow")
-	createNotStarted := NewDocument(OpTwinCreate, &Subject{Branch: "fylgja-fixture", RunID: "run-1"}, startFailed)
-	createNotStarted.Following = &FollowingBlock{Branch: "fylgja-fixture", IntervalS: 300, State: FollowingNotStarted}
-
-	destroyStopped := NewDocument(OpTwinDestroy, &Subject{RunID: "run-4"}, nil)
-	destroyStopped.Cleanup = &CleanupBlock{Teardown: "done", Unstage: "done"}
-	destroyStopped.Following = &FollowingBlock{Branch: "fylgja-fixture", Stopped: true}
-
-	dry := func(op string, follow DryRunFollow) *Document {
-		d := NewDocument(op, &Subject{Branch: "fylgja-fixture"}, nil)
-		d.DryRun = &DryRunBlock{Nodes: []DryRunNode{}, Host: DryRunHost{}, Verdict: VerdictClear, Follow: &follow}
-		return d
-	}
 
 	host := ShowHost{LabPresent: true, TwinDirPresent: true, Phrase: "the twin of branch fylgja-fixture",
 		Nodes: []ShowNode{{Name: "n1", Container: "clab-fylgja-n1", State: "running", MgmtIPv4: "172.20.20.2"}}}
@@ -985,13 +967,6 @@ func m4Documents() []labelledDocument {
 		"workflow service unreachable at localhost:7233 (connection refused); whether the twin is following and whether a run is in flight are unknown")
 
 	docs := []labelledDocument{
-		{"create following, started", createFollowing},
-		{"create following, not started", createNotStarted},
-		{"destroy stopped following", destroyStopped},
-		{"dry run follows", dry(OpTwinCreate, DryRunFollow{Enabled: true, IntervalS: 300})},
-		{"dry run pinned", dry(OpTwinCreate, DryRunFollow{Reason: FollowReasonPinned})},
-		{"dry run no follow", dry(OpTwinCreate, DryRunFollow{Reason: FollowReasonNoFollow})},
-		{"dry run bundle", dry(OpTwinProvision, DryRunFollow{Reason: FollowReasonBundle})},
 		{"show none", show(ShowBlock{Kind: ShowKindNone, Service: ShowServiceOK}, nil)},
 		{"show pinned", show(ShowBlock{Host: host, Record: record("2026-09-16T14:00:00Z", &observed, "intent"),
 			Kind: ShowKindPinned, Service: ShowServiceOK, Notes: []string{"pinned at 2026-09-16T14:00:00Z; not following"}}, nil)},
@@ -1018,6 +993,63 @@ func m4Documents() []labelledDocument {
 			Kind: ShowKindFrozen, Service: ShowServiceUnreachable}, unreachable)},
 	}
 	return docs
+}
+
+// earlierDocument is a document an earlier build wrote that this build's Document can no
+// longer hold: doc is what this build writes in its place, and restore puts back, in the
+// document as a generic object, what 019 removed from the type, M4's following block and
+// dry_run.follow (D-062). Each contract that defined them, up to 018's, is held to it.
+type earlierDocument struct {
+	label   string
+	doc     *Document
+	restore func(doc map[string]any)
+}
+
+// m4FollowingDocuments are the shapes M4 added that carry following: a create that began
+// following and one that could not, a destroy that stopped it, and a dry run of each answer
+// M4 gave.
+func m4FollowingDocuments() []earlierDocument {
+	id := strings.Repeat("89", 32)
+	observed := "2026-09-16T19:00:00.000000Z"
+	following := func(block map[string]any) func(map[string]any) {
+		return func(doc map[string]any) { doc["following"] = block }
+	}
+
+	created := NewDocument(OpTwinCreate, &Subject{Branch: "fylgja-fixture", RunID: "run-1"}, nil)
+	created.BundleID = id
+	created.Twin = &TwinBlock{Lab: "fylgja", Dir: "/abs/twin", RunID: "run-1", ObservedAt: &observed,
+		Nodes: []TwinNode{{Name: "n1", MgmtIPv4: "172.20.20.2", ReadyAfterS: 0.9}}}
+
+	var startFailed List
+	startFailed.AddStep(Warning, StepFollow, RuleFollowStartFailed, "fylgja-follow",
+		"the twin is ready but following could not begin: creating schedule fylgja-follow failed (boom); "+
+			"the twin is frozen; fylgja twin destroy and create again to follow")
+	notStarted := NewDocument(OpTwinCreate, &Subject{Branch: "fylgja-fixture", RunID: "run-1"}, startFailed)
+
+	destroyed := NewDocument(OpTwinDestroy, &Subject{RunID: "run-4"}, nil)
+	destroyed.Cleanup = &CleanupBlock{Teardown: "done", Unstage: "done"}
+
+	return []earlierDocument{
+		{"create following, started", created, following(map[string]any{"branch": "fylgja-fixture", "interval_s": 300,
+			"schedule_id": "fylgja-follow", "state": "started"})},
+		{"create following, not started", notStarted, following(map[string]any{"branch": "fylgja-fixture", "interval_s": 300,
+			"state": "not_started"})},
+		{"destroy stopped following", destroyed, following(map[string]any{"branch": "fylgja-fixture", "stopped": true})},
+		followingDryRun("dry run follows", OpTwinCreate, map[string]any{"enabled": true, "interval_s": 300}),
+		followingDryRun("dry run pinned", OpTwinCreate, map[string]any{"enabled": false, "reason": "pinned"}),
+		followingDryRun("dry run no follow", OpTwinCreate, map[string]any{"enabled": false, "reason": "no_follow"}),
+		followingDryRun("dry run bundle", OpTwinProvision, map[string]any{"enabled": false, "reason": "bundle"}),
+	}
+}
+
+// followingDryRun is a dry run of op that names no node, as an earlier build wrote it with
+// dry_run.follow.
+func followingDryRun(label, op string, follow map[string]any) earlierDocument {
+	doc := NewDocument(op, &Subject{Branch: "fylgja-fixture"}, nil)
+	doc.DryRun = &DryRunBlock{Nodes: []DryRunNode{}, Host: DryRunHost{}, Verdict: VerdictClear}
+	return earlierDocument{label, doc, func(doc map[string]any) {
+		doc["dry_run"].(map[string]any)["follow"] = follow
+	}}
 }
 
 // declaredSteps reads the Step* constants out of finding.go's syntax tree, as
@@ -1197,6 +1229,12 @@ func TestM5DocumentsSatisfySchema(t *testing.T) {
 			mustCarryNoContent(t, doc, c.label)
 		})
 	}
+	for _, c := range m4FollowingDocuments() {
+		t.Run("earlier "+c.label, func(t *testing.T) {
+			mustValidateBytes(t, schema, asEarlier(t, c.doc, dropM6DryRunCounts, dropM7ShowPSP, c.restore), c.label)
+			mustCarryNoContent(t, c.doc, c.label)
+		})
+	}
 
 	// A node the record does not name carries an explicit null, not a missing key: the
 	// contract promises `{name, checksum}` or `null`, and the schema alone
@@ -1347,7 +1385,6 @@ func TestM6DocumentsSatisfySchema(t *testing.T) {
 			Artifact: &DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: m5Checksum, Size: 245}}},
 		MemorySumMB: 2048, HostBudgetMB: &budget, Host: DryRunHost{}, Verdict: VerdictClear,
 		LossyMappings: 9, SharedPorts: 3,
-		Follow: &DryRunFollow{Reason: FollowReasonBundle},
 	}
 	mustValidate(t, schema, lossy, "dry run of a lossy bundle")
 	b, err := json.Marshal(lossy)
@@ -1383,6 +1420,11 @@ func TestM6DocumentsSatisfySchema(t *testing.T) {
 			if !strings.Contains(string(b), `"lossy_mappings":0,"shared_ports":0`) {
 				t.Errorf("a dry run with nothing lossy must say 0 and 0, not leave the counts out: %s", b)
 			}
+		})
+	}
+	for _, c := range m4FollowingDocuments() {
+		t.Run("earlier "+c.label, func(t *testing.T) {
+			mustValidateBytes(t, schema, asEarlier(t, c.doc, dropM7ShowPSP, c.restore), c.label)
 		})
 	}
 }

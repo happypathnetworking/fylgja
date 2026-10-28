@@ -438,6 +438,9 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 		{findings.OpStageList, `{"args":{"series":"demo"}}`, `stage.list takes no argument "series"`},
 		// 018: twin.compile's ctm is renamed snapshot.
 		{findings.OpCompile, `{"args":{"ctm":"ctm.json","out":"out"}}`, `twin.compile takes no argument "ctm"`},
+		// 019: a twin follows nothing, so twin.create takes neither the interval nor no_follow.
+		{findings.OpTwinCreate, `{"args":{"branch":"b","interval":"30s"}}`, `twin.create takes no argument "interval"`},
+		{findings.OpTwinCreate, `{"args":{"branch":"b","no_follow":true}}`, `twin.create takes no argument "no_follow"`},
 		{findings.OpTwinCreate, `{"args":{"branch":true}}`, `twin.create's argument "branch" is not a string`},
 		{findings.OpTwinCreate, `{"args":{"dry_run":"yes"}}`, `twin.create's argument "dry_run" is not a boolean`},
 		{findings.OpTwinVerify, `{"args":{"args":"x"}}`, `twin.verify's argument "args" is not an array of strings`},

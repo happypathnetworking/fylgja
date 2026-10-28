@@ -22,10 +22,11 @@ const (
 // and the kind of its value. An argument that is absent is a flag that was
 // not given; one that is present was given, whatever its value. From 018 twin.compile takes
 // snapshot in place of ctm, and a request carrying ctm is refused as any argument not taken,
-// pre-1.0, as 014 renamed series to stage.
+// pre-1.0, as 014 renamed series to stage. From 019 twin.create takes neither interval nor
+// no_follow, which are refused the same way: a twin follows nothing.
 var operationArgs = map[string]map[string]string{
-	findings.OpTwinCreate: {"branch": argString, "at": argString, "stage": argString, "interval": argString,
-		"no_follow": argBool, "dry_run": argBool, "scope": argString, "snapshot": argString},
+	findings.OpTwinCreate: {"branch": argString, "at": argString, "stage": argString, "dry_run": argBool,
+		"scope": argString, "snapshot": argString},
 	findings.OpTwinProvision: {"bundle": argString, "dry_run": argBool},
 	findings.OpTwinStep:      {"stage": argString, "allow_restart": argBool, "dry_run": argBool, "wait": argString},
 	findings.OpTwinDestroy:   {},
@@ -124,9 +125,7 @@ var handlers = map[string]func(*call) error{
 		return runCreate(c.ctx, c.options(), &createFlags{
 			branch: a.string("branch"), at: a.string("at"),
 			stage: a.string("stage"), stageGiven: a.given("stage"),
-			interval: a.string("interval"), intervalGiven: a.given("interval"),
-			noFollow: a.bool("no_follow"), dryRun: a.bool("dry_run"),
-			scope: a.string("scope"), scopeGiven: a.given("scope"),
+			dryRun: a.bool("dry_run"), scope: a.string("scope"), scopeGiven: a.given("scope"),
 			snapshot: a.string("snapshot"), snapshotGiven: a.given("snapshot"),
 		}, c.req.Files)
 	},

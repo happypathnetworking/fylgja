@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
 	"go.temporal.io/sdk/temporal"
 
@@ -40,10 +39,9 @@ type readSummary struct {
 //
 // snap is the snapshot the dry run filed before the bundle, nil when it took none (twin
 // provision). read is nil when no read took place (twin provision). prior holds the read's
-// and the compile's findings, reported with the host check's. follow is whether the twin
-// would follow its branch (M4); the dry run schedules nothing either way.
+// and the compile's findings, reported with the host check's.
 func dryRunReport(ctx context.Context, opts *options, op string, subject *findings.Subject, reg *psp.Registry,
-	paths lab.Paths, snap *filedSnapshot, bundlePath, id string, read *readSummary, prior findings.List, follow findings.DryRunFollow) error {
+	paths lab.Paths, snap *filedSnapshot, bundlePath, id string, read *readSummary, prior findings.List) error {
 	// A host check that cannot run leaves what was filed before it filed, so the answer names
 	// it as the success does, the input above the output (R-09), and as a create's run that
 	// fails at the host check names it: the stored lines on stdout, and the ids and the
@@ -79,7 +77,6 @@ func dryRunReport(ctx context.Context, opts *options, op string, subject *findin
 	}
 
 	block, verdict := dryRunBlock(plan, artifacts, lossy, plan.Findings)
-	block.Follow = &follow
 
 	opts.note("dry run: no lab, container, twin directory or run is created")
 	if read != nil {
@@ -100,7 +97,6 @@ func dryRunReport(ctx context.Context, opts *options, op string, subject *findin
 	}
 	opts.note("mapping: %d lossy mappings, %d shared ports", lossy.LossyMappings, lossy.SharedPorts)
 	printDryRunHost(opts, plan)
-	opts.note("follow: %s", followLine(subject.Branch, follow))
 	opts.note("verdict: %s", verdict)
 
 	list := append(append(findings.List{}, prior...), plan.Findings...)
@@ -125,7 +121,7 @@ func dryRunActivities(opts *options, reg *psp.Registry, paths lab.Paths) *lab.Ac
 // dryRunBlock is the dry_run block over the host check's plan: each node with what it would
 // be pushed, the memory against the budget, what the host holds, the lossy counts, and the
 // verdict, refused by every rejection in refusals, each rule named once in the order found.
-// The second value is the verdict as the verdict: line prints it. Follow is the caller's.
+// The second value is the verdict as the verdict: line prints it.
 func dryRunBlock(plan wire.CheckHostResult, artifacts map[string]*findings.DryRunArtifact, lossy compiler.SurveyCounts,
 	refusals findings.List) (*findings.DryRunBlock, string) {
 	block := &findings.DryRunBlock{
@@ -203,21 +199,6 @@ func readCounts(n intent.Counts, packages []intent.PackageCount, lossy compiler.
 	}
 	return fmt.Sprintf("%s, %d interfaces, %d links, %d artifacts, %d lossy mappings, %d shared ports",
 		devices, n.Interfaces, n.Links, n.Artifacts, lossy.LossyMappings, lossy.SharedPorts)
-}
-
-// followLine is the dry run's follow: line (contracts/cli.md).
-func followLine(branch string, follow findings.DryRunFollow) string {
-	if follow.Enabled {
-		return fmt.Sprintf("would follow branch %s, checked every %s", branch, time.Duration(follow.IntervalS)*time.Second)
-	}
-	why := map[string]string{
-		findings.FollowReasonPinned:   "--at given",
-		findings.FollowReasonNoFollow: "--no-follow given",
-		findings.FollowReasonBundle:   "a bundle never follows",
-		findings.FollowReasonStage:    "--stage given: a stage is pinned",
-		findings.FollowReasonSnapshot: "--snapshot given: a twin built from a snapshot never follows",
-	}[follow.Reason]
-	return "would not follow (" + why + ")"
 }
 
 func presence(what string, present bool) string {

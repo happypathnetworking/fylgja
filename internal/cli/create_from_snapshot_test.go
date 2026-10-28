@@ -67,15 +67,14 @@ func snapshotFile(t *testing.T, edit func(doc map[string]any)) string {
 }
 
 // wantSnapshotRun holds in to the input a create from the fixture's snapshot starts its run with: the
-// envelope's branch, at and scope, the stored document's observed_at, both ids, and no
-// following or stage.
+// envelope's branch, at and scope, the stored document's observed_at, both ids, and no stage.
 func wantSnapshotRun(t *testing.T, paths lab.Paths, in provision.ProvisionInput, observedAt string) {
 	t.Helper()
 	if in.Source != wire.SourceSnapshot || in.SnapshotID != fixtureSnapshotID || in.BundleID != fixtureBundleID ||
 		in.BundlePath != filepath.Join(paths.Bundles, fixtureBundleID) || in.Branch != "fylgja-fixture" || in.At != fixtureAt ||
-		in.Scope != "tag:fylgja" || in.ObservedAt != observedAt || in.Follow != nil || in.Stage != nil {
+		in.Scope != "tag:fylgja" || in.ObservedAt != observedAt || in.Stage != nil {
 		t.Errorf("the run was started with %+v; want source snapshot, snapshot %s, bundle %s, branch fylgja-fixture at %s, "+
-			"scope tag:fylgja, observed at %s, no follow and no stage", in, fixtureSnapshotID, fixtureBundleID, fixtureAt, observedAt)
+			"scope tag:fylgja, observed at %s, and no stage", in, fixtureSnapshotID, fixtureBundleID, fixtureAt, observedAt)
 	}
 }
 
@@ -228,9 +227,9 @@ func TestCreateFromAFileOfAStoredSnapshotKeepsTheFirstTake(t *testing.T) {
 
 // A dry run from a snapshot reads nothing: it files the bundle, reports as a create's dry
 // run does, with the snapshot's stored line above the bundle's and no read: line, and says
-// the twin would not follow; --no-follow beside it is accepted and changes nothing.
+// nothing of following (019).
 func TestCreateDryRunFromASnapshot(t *testing.T) {
-	for _, args := range [][]string{{"--dry-run"}, {"--dry-run", "--no-follow"}} {
+	for _, args := range [][]string{{"--dry-run"}} {
 		t.Run(strings.Join(args, " "), func(t *testing.T) {
 			paths := useStateRoot(t)
 			useService(t, nil)
@@ -241,7 +240,7 @@ func TestCreateDryRunFromASnapshot(t *testing.T) {
 			storeFixtureSnapshot(t, paths)
 
 			var err error
-			f := &createFlags{snapshot: fixtureSnapshotID, snapshotGiven: true, dryRun: true, noFollow: len(args) > 1}
+			f := &createFlags{snapshot: fixtureSnapshotID, snapshotGiven: true, dryRun: true}
 			out := captureStdout(t, func() { err = runCreate(context.Background(), &options{}, f) })
 			if code, doc := exitOf(t, err); code != findings.ExitOK {
 				t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
@@ -251,14 +250,13 @@ func TestCreateDryRunFromASnapshot(t *testing.T) {
 			if !strings.HasPrefix(out, want) {
 				t.Errorf("stdout:\n%s\nwant it to begin:\n%s", out, want)
 			}
-			if line := "follow: would not follow (--snapshot given: a twin built from a snapshot never follows)\n"; !strings.Contains(out, line) {
-				t.Errorf("stdout:\n%s\nwant %q", out, line)
+			if strings.Contains(out, "\nfollow:") {
+				t.Errorf("stdout:\n%s\nwant no follow: line", out)
 			}
 
 			code, doc := executeTwin(t, append([]string{"twin", "create", "--snapshot", fixtureSnapshotID}, args...)...)
-			if code != findings.ExitOK || doc.SnapshotID != fixtureSnapshotID || doc.BundleID != fixtureBundleID || doc.DryRun == nil ||
-				doc.DryRun.Follow == nil || doc.DryRun.Follow.Reason != findings.FollowReasonSnapshot {
-				t.Errorf("exit %d, document %+v; want 0 naming both ids and follow reason snapshot", code, doc)
+			if code != findings.ExitOK || doc.SnapshotID != fixtureSnapshotID || doc.BundleID != fixtureBundleID || doc.DryRun == nil {
+				t.Errorf("exit %d, document %+v; want 0 naming both ids", code, doc)
 			}
 			validateM10Document(t, doc)
 			if n := len(infra.requests()); n != 0 {
@@ -269,8 +267,8 @@ func TestCreateDryRunFromASnapshot(t *testing.T) {
 }
 
 // US3 scenario 5 and FR-016, FR-018: --snapshot beside --branch, --stage, --at or --scope is
-// snapshot.flags.conflict naming the first found in that order, and --interval beside it is
-// follow.flags.conflict, each exit 2 at start, the server's refusal before any connection:
+// snapshot.flags.conflict naming the first found in that order, exit 2 at start, the
+// server's refusal before any connection:
 // neither the workflow service dialled nor Infrahub asked, whether --snapshot is an id, a
 // file, a file that is not there or given empty. The client reads no file beside such a
 // flag, so the guard answers whatever the file (T078).
@@ -294,12 +292,6 @@ func TestSnapshotFlagConflicts(t *testing.T) {
 		{"--scope and --at", []string{"--scope", "tag:fylgja", "--at", "2026-09-16T14:00:00Z"},
 			refusal(findings.RuleSnapshotFlagsConflict, "--at", "--at"+conflict)},
 		{"--stage and --branch", []string{"--stage", "change-1/cabled", "--branch", "change-1"},
-			refusal(findings.RuleSnapshotFlagsConflict, "--branch", "--branch"+conflict)},
-		{"--interval", []string{"--interval", "1m"},
-			refusal(findings.RuleFollowFlagsConflict, "--interval", "--interval is meaningless with --snapshot: a twin built from a snapshot never follows")},
-		{"--interval and --no-follow", []string{"--interval", "1m", "--no-follow"},
-			refusal(findings.RuleFollowFlagsConflict, "--interval", "--interval is meaningless with --snapshot: a twin built from a snapshot never follows")},
-		{"--interval and --branch", []string{"--interval", "1m", "--branch", "fylgja-fixture"},
 			refusal(findings.RuleSnapshotFlagsConflict, "--branch", "--branch"+conflict)},
 	} {
 		for _, g := range []struct{ name, arg string }{
@@ -473,7 +465,7 @@ func TestCreateHelpNamesTheServersTake(t *testing.T) {
 		"The API's server resolves the stage, reads the branch, takes the snapshot of what it read, compiles it " +
 			"and files the snapshot and the bundle, before any run.",
 		"--snapshot <id|file> builds the twin from a snapshot instead",
-		"no branch is read, and the twin never follows.",
+		"which the server files: no branch is read.",
 		"one run with the fixed identity fylgja-provision, from the host check on,",
 		"--snapshot string",
 		"read, take and file the snapshot, compile and file the bundle, and check the host; start no run " +

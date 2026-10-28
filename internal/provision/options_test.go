@@ -192,8 +192,6 @@ func TestFollowingConstants(t *testing.T) {
 		label     string
 		got, want time.Duration
 	}{
-		{"DefaultInterval", DefaultInterval, 5 * time.Minute},
-		{"MinInterval", MinInterval, 10 * time.Second},
 		{"InspectTwinBudget", InspectTwinBudget, 30 * time.Second},
 		{"ShowServiceBudget", ShowServiceBudget, 5 * time.Second},
 		{"InspectTwinOptions", InspectTwinOptions().StartToCloseTimeout, 30 * time.Second},

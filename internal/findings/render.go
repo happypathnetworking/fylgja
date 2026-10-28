@@ -433,8 +433,6 @@ type DryRunBlock struct {
 	// an answer, and a bundle that records nothing lossy says so by those zeros.
 	LossyMappings int `json:"lossy_mappings"`
 	SharedPorts   int `json:"shared_ports"`
-	// Follow is whether the twin would follow its branch (M4).
-	Follow *DryRunFollow `json:"follow,omitempty"`
 }
 
 // DryRunNode is one node a real run would deploy.
@@ -462,40 +460,6 @@ type DryRunArtifact struct {
 type DryRunHost struct {
 	LabPresent     bool `json:"lab_present"`
 	TwinDirPresent bool `json:"twin_dir_present"`
-}
-
-// Following states on twin create's following block.
-const (
-	FollowingStarted    = "started"     // the run ended ready and schedule fylgja-follow was created
-	FollowingNotStarted = "not_started" // the run ended ready but the schedule could not be created
-)
-
-// FollowingBlock is the following a twin create began, or could not begin, and the
-// following a twin destroy stopped. Create sets State;
-// destroy sets Stopped.
-type FollowingBlock struct {
-	Branch     string `json:"branch"`
-	IntervalS  int    `json:"interval_s,omitempty"`
-	ScheduleID string `json:"schedule_id,omitempty"`
-	State      string `json:"state,omitempty"`
-	Stopped    bool   `json:"stopped,omitempty"`
-}
-
-// Reasons a dry run reports a twin would not follow.
-const (
-	FollowReasonPinned   = "pinned"    // --at given
-	FollowReasonNoFollow = "no_follow" // --no-follow given
-	FollowReasonBundle   = "bundle"    // twin provision: a bundle never follows
-	FollowReasonStage    = "stage"     // --stage given: a stage is pinned (014)
-	FollowReasonSnapshot = "snapshot"  // --snapshot given: a twin built from a snapshot never follows (018)
-)
-
-// DryRunFollow is whether the twin a real run would build follows its branch, and how
-// often it would be checked, or why it would not.
-type DryRunFollow struct {
-	Enabled   bool   `json:"enabled"`
-	IntervalS int    `json:"interval_s,omitempty"`
-	Reason    string `json:"reason,omitempty"`
 }
 
 // Kinds of twin twin show reports.
@@ -806,7 +770,8 @@ type ShowRun struct {
 // Document is the machine-readable result of one operation. M1's operations conform to
 // M1's findings contract; M2's twin create, provision and destroy to M2's, which is
 // additive, so every M1 document satisfies both. M4's operations — following on create
-// and destroy, dry_run.follow, and twin show — conform to M4's, additive again. M5's
+// and destroy, dry_run.follow, and twin show — conform to M4's, additive again; 019
+// removed the following block and dry_run.follow, pre-1.0, under the same version. M5's
 // operations — the artifact on a dry run's, a twin's and a shown host's nodes,
 // `pushed_in_s`, and the step `push` — conform to M5's, with show.schema.json added as a
 // resource under its $id. 014's — subject.stage, the stage block, record.stage in the show
@@ -816,18 +781,17 @@ type ShowRun struct {
 // milestone's copy is kept under testdata/contracts/, and the current contract is
 // contracts/findings.schema.json. No field of any block carries a byte of artifact content.
 type Document struct {
-	FindingsVersion string          `json:"findings_version"`
-	Operation       string          `json:"operation"`
-	Status          Status          `json:"status"`
-	Subject         *Subject        `json:"subject,omitempty"`
-	SnapshotID      string          `json:"snapshot_id,omitempty"` // 018: the snapshot taken, read or stepped to, beside the bundle
-	BundleID        string          `json:"bundle_id,omitempty"`
-	Verified        *Verified       `json:"verified,omitempty"`
-	Twin            *TwinBlock      `json:"twin,omitempty"`
-	Cleanup         *CleanupBlock   `json:"cleanup,omitempty"`
-	DryRun          *DryRunBlock    `json:"dry_run,omitempty"`
-	Following       *FollowingBlock `json:"following,omitempty"`
-	Show            *ShowBlock      `json:"show,omitempty"`
+	FindingsVersion string        `json:"findings_version"`
+	Operation       string        `json:"operation"`
+	Status          Status        `json:"status"`
+	Subject         *Subject      `json:"subject,omitempty"`
+	SnapshotID      string        `json:"snapshot_id,omitempty"` // 018: the snapshot taken, read or stepped to, beside the bundle
+	BundleID        string        `json:"bundle_id,omitempty"`
+	Verified        *Verified     `json:"verified,omitempty"`
+	Twin            *TwinBlock    `json:"twin,omitempty"`
+	Cleanup         *CleanupBlock `json:"cleanup,omitempty"`
+	DryRun          *DryRunBlock  `json:"dry_run,omitempty"`
+	Show            *ShowBlock    `json:"show,omitempty"`
 	// Stage is the reference --stage resolved to (014), present once it resolved.
 	Stage *StageBlock `json:"stage,omitempty"`
 	// Stages is stage list's block, Plan stage plan's (014).

@@ -390,7 +390,7 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 		var runErr error
 		stderr := captureStderr(t, func() {
 			seen.add("create output", captureStdout(t, func() {
-				runErr = runCreate(context.Background(), &options{asJSON: asJSON}, &createFlags{branch: read.Envelope.Branch, noFollow: true})
+				runErr = runCreate(context.Background(), &options{asJSON: asJSON}, &createFlags{branch: read.Envelope.Branch})
 			}))
 		})
 		seen.add("create output", stderr)

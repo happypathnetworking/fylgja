@@ -3,7 +3,6 @@ package server
 import (
 	"context"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/api"
@@ -24,14 +23,11 @@ type createFlags struct {
 	// stage is --stage as given, <branch>/<label>: a moment of a proposed change, resolved
 	// to a pinned reference in place of --branch and --at (014).
 	stage string
-	// stageGiven is whether --stage was given at all, apart from its value: an explicit
-	// empty one is a reference refused, not one left out (M4's --interval= precedent).
+	// stageGiven is whether --stage was given at all, apart from its value: an explicit empty
+	// one is a reference refused, not one left out (M4's --interval= precedent, a flag twin
+	// create had until 019).
 	stageGiven bool
 	dryRun     bool
-	// interval is --interval's value, read only when intervalGiven; not given, the default stands.
-	interval      string
-	intervalGiven bool
-	noFollow      bool
 	// scope is --scope as given, read only when scopeGiven: not given, the server's default
 	// stands (017).
 	scope      string
@@ -78,38 +74,23 @@ func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.F
 		return runCreateFromSnapshot(ctx, opts, op, subject, f, files)
 	}
 	var ref stages.Ref
-	var follow findings.DryRunFollow
 	if f.fromStage() {
-		// A stage is a whole pinned reference: its guards stand in for --at's and
-		// --interval's, before any connection. --no-follow beside it changes nothing.
+		// A stage is a whole pinned reference: its guards stand in for --at's, before any
+		// connection.
 		var refused error
 		ref, refused = stageGuards(op, subject, findings.StepStart, f.stage, []flagConflict{
 			{f.branch != "", "--branch", wholeReference},
 			{f.at != "", "--at", wholeReference},
-			{f.intervalGiven, "--interval", neverFollows},
 		})
 		if refused != nil {
 			return refused
 		}
-		// A stage twin never follows, so no interval is read.
-		follow = createFollow(f, 0)
-	} else {
+	} else if msg := intent.CheckAtPrecision(f.at); msg != "" {
 		// M1's precision guard, before any connection.
-		if msg := intent.CheckAtPrecision(f.at); msg != "" {
-			return &result{doc: findings.RuleErrorDocument(op, subject, findings.RuleAtPrecision, f.at, msg)}
-		}
-		// The following guards, before any connection (contracts/cli.md, create step 1).
-		interval, err := followInterval(op, subject, f)
-		if err != nil {
-			return err
-		}
-		if refused := followFlagsConflict(op, subject, f); refused != nil {
-			return refused
-		}
-		follow = createFollow(f, interval)
+		return &result{doc: findings.RuleErrorDocument(op, subject, findings.RuleAtPrecision, f.at, msg)}
 	}
-	// The scope, after the reference's and the following's guards and before the packages
-	// load: the stage's resolution, the read and the run's are made under it.
+	// The scope, after the reference's guards and before the packages load: the stage's
+	// resolution, the read and the run's are made under it.
 	scope, err := scopeOf(opts, op, subject, f.scope, f.scopeGiven)
 	if err != nil {
 		return err
@@ -137,7 +118,7 @@ func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.F
 		opts.note("%s", resolved.block.Line())
 	}
 	if f.dryRun {
-		return withStage(runCreateDryRun(ctx, opts, op, subject, stage.Read, branch, at, scope, reg, follow), resolved)
+		return withStage(runCreateDryRun(ctx, opts, op, subject, stage.Read, branch, at, scope, reg), resolved)
 	}
 
 	// The server reads, takes the snapshot, compiles and files before any run starts, so
@@ -151,8 +132,8 @@ func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.F
 	opts.note("%s", snapshotStoredLine(compiled.snapshot.id, compiled.snapshot.path))
 	opts.note("%s", bundleStoredLine(compiled.bundleID, compiled.bundlePath))
 
-	// Compiled already, as a check's rebuild is: the run takes the bundle and the snapshot
-	// by id and starts at the host check.
+	// Compiled already: the run takes the bundle and the snapshot by id and starts at the
+	// host check. It follows nothing, whatever the reference (019).
 	in := provision.ProvisionInput{
 		Source:     wire.SourceIntent,
 		Branch:     branch,
@@ -164,10 +145,6 @@ func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.F
 		Version:    opts.version(),
 		Scope:      scope,
 	}
-	// A twin built from the branch head follows it unless --no-follow; a pinned one never does.
-	if follow.Enabled {
-		in.Follow = &provision.FollowInput{IntervalS: follow.IntervalS}
-	}
 	// The run records the stage as data, and branches on nothing of it.
 	if resolved != nil {
 		in.Stage = resolved.record
@@ -178,14 +155,10 @@ func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.F
 // runCreateFromSnapshot is twin create --snapshot (R-12), once runCreate has run its guards
 // and held its files to their shape, before any connection: the snapshot resolved, an id from the store or the request's file read and
 // filed; the compile and the bundle's filing, on the create's path; then the run, or the dry
-// run's report. The twin is frozen by rule: its reference is a document, which does not
-// move, so it never follows, whatever the envelope's at says. No request reaches Infrahub:
-// nothing on this path builds an intent client, and the run, handed the bundle compiled,
-// reads nothing.
+// run's report. No request reaches Infrahub: nothing on this path builds an intent client,
+// and the run, handed the bundle compiled, reads nothing.
 func runCreateFromSnapshot(ctx context.Context, opts *options, op string, subject *findings.Subject, f *createFlags,
 	files []api.File) error {
-	// A twin built from a snapshot never follows, so no interval is read.
-	follow := createFollow(f, 0)
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -217,14 +190,14 @@ func runCreateFromSnapshot(ctx context.Context, opts *options, op string, subjec
 	}
 	if f.dryRun {
 		// No read took place, so the report has no read: line.
-		return dryRunReport(ctx, opts, op, subject, reg, paths, &cr.snapshot, cr.bundlePath, cr.bundleID, nil, cr.findings, follow)
+		return dryRunReport(ctx, opts, op, subject, reg, paths, &cr.snapshot, cr.bundlePath, cr.bundleID, nil, cr.findings)
 	}
 	opts.note("%s", snapshotStoredLine(cr.snapshot.id, cr.snapshot.path))
 	opts.note("%s", bundleStoredLine(cr.bundleID, cr.bundlePath))
 
 	// Compiled already: the run takes the bundle and the snapshot by id and starts at the
 	// host check. The branch, the at and the scope are the envelope's, which the record's
-	// provenance reads from the staged manifest as every record's does. No Follow, no Stage.
+	// provenance reads from the staged manifest as every record's does. No Stage.
 	in := provision.ProvisionInput{
 		Source:     wire.SourceSnapshot,
 		Branch:     env.Branch,
@@ -239,69 +212,6 @@ func runCreateFromSnapshot(ctx context.Context, opts *options, op string, subjec
 	return cr.carried(runProvision(ctx, opts, op, subject, in))
 }
 
-// followFlagsConflict refuses --interval given with --snapshot, --at or --no-follow as
-// follow.flags.conflict, before any connection: the twin would not follow, so the interval
-// would mean nothing (contracts/cli.md, create step 1). --at with --no-follow is accepted,
-// and so is --snapshot with --no-follow.
-func followFlagsConflict(op string, subject *findings.Subject, f *createFlags) error {
-	if !f.intervalGiven {
-		return nil
-	}
-	var message string
-	switch {
-	case f.fromSnapshot():
-		message = "--interval is meaningless with --snapshot: a twin built from a snapshot never follows"
-	case f.at != "":
-		message = "--interval is meaningless with --at: a pinned twin never follows"
-	case f.noFollow:
-		message = "--interval is meaningless with --no-follow: the twin will not follow"
-	default:
-		return nil
-	}
-	doc := findings.RuleErrorDocument(op, subject, findings.RuleFollowFlagsConflict, "--interval", message)
-	doc.Findings[0].Step = findings.StepStart
-	return &result{doc: doc}
-}
-
-// createFollow is whether the twin a create builds follows its branch, and how often it is
-// checked, or why it does not: what the run is started with and what a dry run reports.
-func createFollow(f *createFlags, interval time.Duration) findings.DryRunFollow {
-	switch {
-	case f.fromSnapshot():
-		return findings.DryRunFollow{Reason: findings.FollowReasonSnapshot}
-	case f.fromStage():
-		return findings.DryRunFollow{Reason: findings.FollowReasonStage}
-	case f.at != "":
-		return findings.DryRunFollow{Reason: findings.FollowReasonPinned}
-	case f.noFollow:
-		return findings.DryRunFollow{Reason: findings.FollowReasonNoFollow}
-	}
-	return findings.DryRunFollow{Enabled: true, IntervalS: int(interval / time.Second)}
-}
-
-// followInterval parses --interval, not given being the default, and refuses one that is not
-// a duration, an empty one included, or is below the floor as follow.interval.invalid
-// (contracts/cli.md).
-func followInterval(op string, subject *findings.Subject, f *createFlags) (time.Duration, error) {
-	if !f.intervalGiven {
-		return provision.DefaultInterval, nil
-	}
-	value := f.interval
-	refuse := func(message string) error {
-		doc := findings.RuleErrorDocument(op, subject, findings.RuleFollowIntervalInvalid, value, message)
-		doc.Findings[0].Step = findings.StepStart
-		return &result{doc: doc}
-	}
-	d, err := time.ParseDuration(value)
-	if err != nil {
-		return 0, refuse(fmt.Sprintf("--interval %s is not a duration: %v", value, err))
-	}
-	if d < provision.MinInterval {
-		return 0, refuse(fmt.Sprintf("--interval %s is below the floor %s", value, provision.MinInterval))
-	}
-	return d, nil
-}
-
 // runCreateDryRun reads, takes the snapshot, compiles and files the bundle in this
 // process, as the create does, then reports what a real create would do; it never dials
 // the workflow service. Read and compile are the stage commands' own pipelines, so a dry
@@ -309,13 +219,13 @@ func followInterval(op string, subject *findings.Subject, f *createFlags) (time.
 // identifiers. The snapshot and the bundle are filed as the create files them, so the
 // report's snapshot and bundle are there to inspect (FR-014).
 func runCreateDryRun(ctx context.Context, opts *options, op string, subject *findings.Subject, read readFunc, branch, at, scope string,
-	reg *psp.Registry, follow findings.DryRunFollow) error {
+	reg *psp.Registry) error {
 	compiled, err := readTakeCompile(ctx, opts, op, subject, read, branch, at, scope, reg)
 	if err != nil {
 		return err
 	}
 	return dryRunReport(ctx, opts, op, subject, reg, compiled.paths, &compiled.snapshot, compiled.bundlePath, compiled.bundleID,
-		compiled.read, compiled.findings, follow)
+		compiled.read, compiled.findings)
 }
 
 // readFunc is stage.Read's shape: what a create reads its intent through. The create

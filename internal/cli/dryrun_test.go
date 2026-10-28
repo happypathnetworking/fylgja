@@ -234,7 +234,6 @@ func TestProvisionDryRunTextReport(t *testing.T) {
 		"mapping: 0 lossy mappings, 0 shared ports",
 		"memory: sum 6144 MiB; host budget unset",
 		"host: lab fylgja absent; twin directory absent",
-		"follow: would not follow (a bundle never follows)",
 		"verdict: clear",
 	}, "\n") + "\n"
 	if out != want {
@@ -520,8 +519,8 @@ func TestCreateDryRunFromAStage(t *testing.T) {
 			t.Errorf("stdout line %d is not %q:\n%s", i+1, want, out)
 		}
 	}
-	if !strings.Contains(out, "\nfollow: would not follow (--stage given: a stage is pinned)\nverdict: clear\n") {
-		t.Errorf("stdout:\n%s\nwant the stage's follow line before the verdict", out)
+	if strings.Contains(out, "\nfollow:") || !strings.Contains(out, "\nverdict: clear\n") {
+		t.Errorf("stdout:\n%s\nwant the verdict and no follow: line", out)
 	}
 	// Every request of the read names the resolved at, verbatim, as --at would. The
 	// resolution's own reads of a branch's latest stamps, the head's and main's, are unpinned
@@ -542,9 +541,9 @@ func TestCreateDryRunFromAStage(t *testing.T) {
 		ProposedChange: findings.StageChange{ID: "pc-1", Name: "change pc-1", Branch: "fylgja-fixture"},
 		At:             fixtureAt, AtSource: findings.AtSourceGiven, Description: "the leaf cabled"}
 	if code != findings.ExitOK || doc.BundleID != readID || doc.SnapshotID != fixtureSnapshotID || doc.Stage == nil || *doc.Stage != want ||
-		doc.DryRun == nil || doc.DryRun.Follow == nil || doc.DryRun.Follow.Reason != findings.FollowReasonStage ||
+		doc.DryRun == nil ||
 		doc.Subject.Stage != "fylgja-fixture/cabled" || doc.Subject.Branch != "fylgja-fixture" || doc.Subject.At != fixtureAt {
-		t.Errorf("exit %d, document %+v; want 0 naming the golden bundle, the stage and the reason stage", code, doc)
+		t.Errorf("exit %d, document %+v; want 0 naming the golden bundle and the stage", code, doc)
 	}
 	mustCarryNoToken(t, "dry run", doc)
 	mustNotCarryContent(t, out)
@@ -577,29 +576,6 @@ func mustNotCarryContent(t *testing.T, out string) {
 			t.Errorf("output quotes artifact content (%q):\n%s", marker, out)
 		}
 	}
-}
-
-// A provision dry run says a bundle never follows, through the command itself.
-func TestDryRunFollowProvision(t *testing.T) {
-	useStateRoot(t)
-	useService(t, nil)
-	dryRunEnv(t)
-	useClab(t, "inspect-empty.json")
-	dir := copyGoldenBundle(t, "b")
-
-	var err error
-	out := captureStdout(t, func() {
-		err = runTwinProvision(context.Background(), &options{}, &provisionFlags{dryRun: true}, dir)
-	})
-	if code, _ := exitOf(t, err); code != findings.ExitOK || !strings.Contains(out, "\nfollow: would not follow (a bundle never follows)\n") {
-		t.Errorf("exit %d, stdout:\n%s\nwant the bundle's follow: line", code, out)
-	}
-	_, doc := exitOf(t, runTwinProvision(context.Background(), &options{asJSON: true}, &provisionFlags{dryRun: true}, dir))
-	want := findings.DryRunFollow{Reason: findings.FollowReasonBundle}
-	if doc.DryRun == nil || doc.DryRun.Follow == nil || *doc.DryRun.Follow != want {
-		t.Errorf("dry_run %+v, want follow %+v", doc.DryRun, want)
-	}
-	validateM6Document(t, doc)
 }
 
 // A login variable the second platform names, unset on this worker, refuses the dry run

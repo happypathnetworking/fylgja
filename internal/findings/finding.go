@@ -159,7 +159,7 @@ const (
 	// listing's two warnings at none, stage.twin.moved on twin step too. stage.failed above
 	// is M2's staging step, not a stage.
 	RuleStageRefInvalid          = "stage.ref.invalid"            // rejection, exit 2, start: the text given; --stage is not <branch>/<label>, or stage list's or stage plan's --branch is not a branch
-	RuleStageFlagsConflict       = "stage.flags.conflict"         // rejection, exit 2, start: the conflicting flag; --stage beside --branch, --at or --interval, the first found in that order
+	RuleStageFlagsConflict       = "stage.flags.conflict"         // rejection, exit 2, start: the conflicting flag; --stage beside --branch or --at, the first found in that order
 	RuleStageKindAbsent          = "stage.kind.absent"            // rejection, exit 1, resolve: FylgjaStage; the default branch's schema lacks the kind, an attribute or the relationship this build reads, or CoreProposedChange lacks the extension, naming schema/fylgja-stage.yaml
 	RuleStageUnknown             = "stage.unknown"                // rejection, exit 1, resolve: the branch or <branch>/<label>; no open proposed change has the source branch, naming the branches with one; the branch is gone (in stage list a warning, the stages still listed); or the proposed change has no stage of the label, naming its stages
 	RuleStageDuplicate           = "stage.duplicate"              // rejection, exit 1, resolve: <branch>/<label>; two or more marks of one proposed change share the label, naming every id and choosing none

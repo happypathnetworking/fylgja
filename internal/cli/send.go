@@ -71,7 +71,7 @@ type progress struct {
 
 // send is a command's one request and what it prints. args are the flags
 // that were given, at their values as given, so an absent key is a flag not given and
-// "interval": "" is --interval=; every guard is the server's. The rendering is the one
+// "stage": "" is --stage=; every guard is the server's. The rendering is the one
 // --json or --markdown selects. Each out frame is printed to stdout and each err frame to
 // stderr as it arrives, but under --markdown, whose stdout is the markdown alone, the out
 // frames go to stderr too; the document ends the command, as a result report prints.

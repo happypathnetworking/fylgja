@@ -49,7 +49,6 @@ func TestCreateDryRunTakesTheSnapshot(t *testing.T) {
 	dryRunEnv(t)
 	useClab(t, "inspect-empty.json")
 	reg := shippedPackages(t)
-	follow := findings.DryRunFollow{Reason: findings.FollowReasonPinned}
 	reads := 0
 	read := fakeRead(t, "three-node.json", nil, &reads)
 
@@ -57,7 +56,7 @@ func TestCreateDryRunTakesTheSnapshot(t *testing.T) {
 	subject := &findings.Subject{Branch: "fylgja-fixture", At: "2026-09-08T12:00:00Z"}
 	out := captureStdout(t, func() {
 		err = runCreateDryRun(context.Background(), testOptions(t, false), findings.OpTwinCreate, subject, read,
-			subject.Branch, subject.At, "tag:fylgja", reg, follow)
+			subject.Branch, subject.At, "tag:fylgja", reg)
 	})
 	if code, doc := exitOf(t, err); code != findings.ExitOK {
 		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
@@ -78,7 +77,7 @@ func TestCreateDryRunTakesTheSnapshot(t *testing.T) {
 	}
 
 	_, doc := exitOf(t, runCreateDryRun(context.Background(), testOptions(t, true), findings.OpTwinCreate, subject, read,
-		subject.Branch, subject.At, "tag:fylgja", reg, follow))
+		subject.Branch, subject.At, "tag:fylgja", reg))
 	if doc.SnapshotID != fixtureSnapshotID || doc.BundleID != fixtureBundleID || doc.DryRun == nil {
 		t.Errorf("document names snapshot %q, bundle %q, dry_run %+v; want %s, %s and the report", doc.SnapshotID, doc.BundleID,
 			doc.DryRun, fixtureSnapshotID, fixtureBundleID)
@@ -104,8 +103,7 @@ func TestNoSidecarIsWritten(t *testing.T) {
 	reads := 0
 	subject := &findings.Subject{Branch: "fylgja-fixture", At: "2026-09-08T12:00:00Z"}
 	err := runCreateDryRun(context.Background(), testOptions(t, true), findings.OpTwinCreate, subject,
-		fakeRead(t, "three-node.json", nil, &reads), subject.Branch, subject.At, "tag:fylgja", shippedPackages(t),
-		findings.DryRunFollow{Reason: findings.FollowReasonPinned})
+		fakeRead(t, "three-node.json", nil, &reads), subject.Branch, subject.At, "tag:fylgja", shippedPackages(t))
 	if code, doc := exitOf(t, err); code != findings.ExitOK || doc.BundleID != fixtureBundleID {
 		t.Fatalf("exit %d, document %+v; want 0 filing the fixture's bundle", code, doc)
 	}
@@ -280,7 +278,7 @@ func TestADryRunWhoseHostCheckCannotRunNamesWhatItFiled(t *testing.T) {
 			}
 			subject := &findings.Subject{Branch: "fylgja-fixture"}
 			return runCreateDryRun(context.Background(), opts, findings.OpTwinCreate, subject, read, subject.Branch, "",
-				"tag:fylgja", shippedPackages(t), findings.DryRunFollow{Reason: findings.FollowReasonNoFollow})
+				"tag:fylgja", shippedPackages(t))
 		}, true},
 		{"--snapshot <file> --dry-run", func(t *testing.T, opts *options) error {
 			return runCreate(context.Background(), opts, &createFlags{snapshot: "snap.json", snapshotGiven: true, dryRun: true},
@@ -333,7 +331,7 @@ func TestADryRunWhoseHostCheckCannotRunNamesWhatItFiled(t *testing.T) {
 		dir := copyGoldenBundle(t, fixtureBundleID)
 		report := func(opts *options) error {
 			return dryRunReport(context.Background(), opts, findings.OpTwinProvision, &findings.Subject{Bundle: "bundle"},
-				shippedPackages(t), paths, nil, dir, fixtureBundleID, nil, nil, findings.DryRunFollow{Reason: findings.FollowReasonBundle})
+				shippedPackages(t), paths, nil, dir, fixtureBundleID, nil, nil)
 		}
 
 		var err error

@@ -187,19 +187,19 @@ func TestSendAsksForTheRenderingJSONSelects(t *testing.T) {
 }
 
 // args carry the flags given and nothing else, each at its value as given: an empty
-// --interval= is present as "", a flag not given is absent, and a command with none sends
-// no args at all.
+// --stage= is present as "", a flag not given is absent, and a command with none sends no
+// args at all.
 func TestSendCarriesTheGivenFlagsAlone(t *testing.T) {
 	fake := newAPIFake(t, func(w *fakeAnswer, op string, _ api.Request) { w.document(okDocument(op), "") })
 	printedBy(t, func() {
 		_ = send(context.Background(), &options{}, findings.OpTwinCreate,
-			map[string]any{"branch": "fylgja-fixture", "interval": "", "no_follow": true}, nil, handlers{})
+			map[string]any{"branch": "fylgja-fixture", "stage": "", "dry_run": true}, nil, handlers{})
 		_ = send(context.Background(), &options{}, findings.OpTwinShow, nil, nil, handlers{})
 	})
 	seen := fake.seen()
 	args := seen[0].req.Args
-	if len(args) != 3 || string(args["branch"]) != `"fylgja-fixture"` || string(args["interval"]) != `""` ||
-		string(args["no_follow"]) != `true` {
+	if len(args) != 3 || string(args["branch"]) != `"fylgja-fixture"` || string(args["stage"]) != `""` ||
+		string(args["dry_run"]) != `true` {
 		t.Errorf("args %s", seen[0].body)
 	}
 	if _, ok := args["at"]; ok {

@@ -31,13 +31,13 @@ func TestInterruptsBeforeTheStartReachNoServer(t *testing.T) {
 		run  func(t *testing.T) error
 		want findings.Finding
 	}{
-		{"twin create --interval=", func(t *testing.T) error {
+		{"twin create --stage=", func(t *testing.T) error {
 			useStateRoot(t)
 			useService(t, nil)
-			return runCreate(context.Background(), &options{asJSON: true},
-				&createFlags{branch: "fylgja-fixture", interval: "", intervalGiven: true})
-		}, findings.Finding{Severity: findings.Rejection, Rule: findings.RuleFollowIntervalInvalid, Object: "", Step: findings.StepStart,
-			Message: `--interval  is not a duration: time: invalid duration ""`}},
+			return runCreate(context.Background(), &options{asJSON: true}, &createFlags{stageGiven: true})
+		}, findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStageRefInvalid, Object: "", Step: findings.StepStart,
+			Message: `--stage "" is not a stage reference: expected <branch>/<label>, a branch with no "/" and no whitespace ` +
+				`and a label with neither`}},
 		{"twin create, the workflow service unreachable", func(t *testing.T) error {
 			useFixtureRead(t)
 			startRefusals()[0].use(t)

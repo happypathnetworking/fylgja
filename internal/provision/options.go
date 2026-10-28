@@ -51,14 +51,8 @@ const (
 	// and records it rather than being timed out itself.
 	VerifyMargin = 30 * time.Second
 
-	// Following.
+	// Reads that change nothing.
 
-	// DefaultInterval is how often a following twin is checked when --interval is not
-	// given.
-	DefaultInterval = 5 * time.Minute
-	// MinInterval is the floor: below it a check is due again before its own read has been
-	// filed.
-	MinInterval = 10 * time.Second
 	// InspectTwinBudget bounds InspectTwin, which only reads.
 	InspectTwinBudget = 30 * time.Second
 	// ShowServiceBudget bounds twin show's whole conversation with the workflow service;

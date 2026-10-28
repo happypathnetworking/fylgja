@@ -1464,10 +1464,6 @@ func ProvisionDocument(op string, subject *findings.Subject, res ProvisionResult
 	}
 	if res.Outcome == OutcomeReady && res.Twin != nil {
 		doc.Twin = twinBlock(res)
-		if f := res.Following; f != nil {
-			doc.Following = &findings.FollowingBlock{Branch: f.Branch, IntervalS: f.IntervalS, ScheduleID: f.ScheduleID,
-				State: findings.FollowingStarted}
-		}
 		return doc
 	}
 	doc.Cleanup = CleanupBlockOf(res.Cleanup)

@@ -20,15 +20,12 @@ type flagConflict struct {
 	why   string
 }
 
-// Why each flag is meaningless beside --stage.
-const (
-	wholeReference = "a stage is a whole pinned reference (branch and at)"
-	neverFollows   = "a stage twin is pinned and never follows"
-)
+// Why --branch and --at are meaningless beside --stage.
+const wholeReference = "a stage is a whole pinned reference (branch and at)"
 
 // stageGuards reads --stage and refuses what a stage makes meaningless, before any
 // connection: a value that is not <branch>/<label> is stage.ref.invalid, and the first
-// conflicting flag found, in the order given (--branch, --at, --interval), is
+// conflicting flag found, in the order given (--branch, --at), is
 // stage.flags.conflict, each exit 2 at step. A reference that parses is named in the
 // subject, so every document after it says which stage it was about.
 func stageGuards(op string, subject *findings.Subject, step, given string, conflicts []flagConflict) (stages.Ref, error) {

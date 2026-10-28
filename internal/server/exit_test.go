@@ -86,7 +86,7 @@ func provisionDoc(t *testing.T, res provision.ProvisionResult) func() *findings.
 		t.Helper()
 		var out *result
 		err := provisionReport(testOptions(t, true), findings.OpTwinCreate,
-			&findings.Subject{Branch: "fylgja-fixture", RunID: "run-1"}, provision.ProvisionInput{}, res)
+			&findings.Subject{Branch: "fylgja-fixture", RunID: "run-1"}, res)
 		if !asResult(err, &out) {
 			t.Fatalf("provisionReport returned %v, want a findings result", err)
 		}

@@ -24,7 +24,8 @@ func newStageCmd(opts *options) *cobra.Command {
 type stageFlags struct {
 	branch string
 	// branchGiven is whether --branch was given at all, apart from its value: an explicit
-	// empty one is a branch refused, not one left out (M4's --interval= precedent).
+	// empty one is a branch refused, not one left out (M4's --interval= precedent, a flag twin
+	// create had until 019).
 	branchGiven bool
 	// scope is --scope as given, sent only when scopeGiven: not given, the server's default
 	// stands, and an explicit empty one is the server's to refuse (017).

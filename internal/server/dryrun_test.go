@@ -2,88 +2,68 @@ package server
 
 import (
 	"context"
+	"encoding/json"
 	"strings"
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
-// A create dry run says whether the twin would follow its branch, in its follow: line and in
-// dry_run.follow, and schedules nothing (contracts/cli.md). No fake Infrahub answers
-// a read in tier 1, so the create is taken in its two halves: createFollow, which runCreate
-// derives from the flags and hands the report, and the report itself for each answer.
-func TestDryRunFollowCreate(t *testing.T) {
+// A dry run says nothing of following (019; US1 scenario 1): a create's from the branch
+// head, with no --at, and twin provision's print no follow: line, the verdict straight after
+// the host: line, and their documents carry no dry_run.follow. No fake Infrahub answers a
+// read in tier 1, so the create is taken from its read on, through a read of the fixture.
+// The provision's names no snapshot, so M6's contract, which never required the block,
+// still accepts it.
+func TestDryRunSaysNothingOfFollowing(t *testing.T) {
 	for _, c := range []struct {
-		name  string
-		flags createFlags
-		want  findings.DryRunFollow
-		line  string
+		name string
+		run  func(t *testing.T, opts *options, paths lab.Paths) error
+		m6   bool
 	}{
-		{"no flag", createFlags{branch: "fylgja-fixture"}, findings.DryRunFollow{Enabled: true, IntervalS: 300},
-			"follow: would follow branch fylgja-fixture, checked every 5m0s"},
-		{"--interval 90s", createFlags{branch: "fylgja-fixture", interval: "90s", intervalGiven: true}, findings.DryRunFollow{Enabled: true, IntervalS: 90},
-			"follow: would follow branch fylgja-fixture, checked every 1m30s"},
-		{"--at", createFlags{branch: "fylgja-fixture", at: "2026-09-16T14:00:00Z"},
-			findings.DryRunFollow{Reason: findings.FollowReasonPinned}, "follow: would not follow (--at given)"},
-		{"--no-follow", createFlags{branch: "fylgja-fixture", noFollow: true},
-			findings.DryRunFollow{Reason: findings.FollowReasonNoFollow}, "follow: would not follow (--no-follow given)"},
-		{"--at --no-follow", createFlags{branch: "fylgja-fixture", at: "2026-09-16T14:00:00Z", noFollow: true},
-			findings.DryRunFollow{Reason: findings.FollowReasonPinned}, "follow: would not follow (--at given)"},
-		// 014: a stage is pinned, and says so rather than "--at given".
-		{"--stage", createFlags{stage: "change-1/cabled"},
-			findings.DryRunFollow{Reason: findings.FollowReasonStage}, "follow: would not follow (--stage given: a stage is pinned)"},
-		{"--stage --no-follow", createFlags{stage: "change-1/cabled", noFollow: true},
-			findings.DryRunFollow{Reason: findings.FollowReasonStage}, "follow: would not follow (--stage given: a stage is pinned)"},
-		// 018: a twin built from a snapshot never follows, by rule, and says so.
-		{"--snapshot", createFlags{snapshot: fixtureSnapshotID}, findings.DryRunFollow{Reason: findings.FollowReasonSnapshot},
-			"follow: would not follow (--snapshot given: a twin built from a snapshot never follows)"},
-		{"--snapshot --no-follow", createFlags{snapshot: "snap.json", noFollow: true}, findings.DryRunFollow{Reason: findings.FollowReasonSnapshot},
-			"follow: would not follow (--snapshot given: a twin built from a snapshot never follows)"},
+		{"twin create --branch --dry-run", func(t *testing.T, opts *options, _ lab.Paths) error {
+			reads := 0
+			subject := &findings.Subject{Branch: "fylgja-fixture"}
+			return runCreateDryRun(context.Background(), opts, findings.OpTwinCreate, subject,
+				fakeRead(t, "three-node.json", nil, &reads), subject.Branch, "", "tag:fylgja", shippedPackages(t))
+		}, false},
+		{"twin provision --dry-run", func(t *testing.T, opts *options, paths lab.Paths) error {
+			return dryRunReport(context.Background(), opts, findings.OpTwinProvision, &findings.Subject{Bundle: "bundle"},
+				shippedPackages(t), paths, nil, copyGoldenBundle(t, fixtureBundleID), fixtureBundleID, nil, nil)
+		}, true},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			interval, err := followInterval(findings.OpTwinCreate, &findings.Subject{}, &c.flags)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if got := createFollow(&c.flags, interval); got != c.want {
-				t.Fatalf("createFollow = %+v, want %+v", got, c.want)
-			}
-
 			paths := useStateRoot(t)
 			useService(t, nil)
 			dryRunEnv(t)
 			useClab(t, "inspect-empty.json")
-			dir := copyGoldenBundle(t, "b")
-			reg, err := psp.Load("")
+
+			var err error
+			out := captureStdout(t, func() { err = c.run(t, testOptions(t, false), paths) })
+			if code, doc := exitOf(t, err); code != findings.ExitOK {
+				t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
+			}
+			if strings.Contains(out, "\nfollow:") || !strings.Contains(out, "; twin directory absent\nverdict: clear\n") {
+				t.Errorf("stdout:\n%s\nwant no follow: line, and the verdict straight after the host: line", out)
+			}
+
+			code, doc := exitOf(t, c.run(t, testOptions(t, true), paths))
+			if code != findings.ExitOK || doc.DryRun == nil {
+				t.Fatalf("exit %d, dry_run %+v; want 0 and the report", code, doc.DryRun)
+			}
+			b, err := json.Marshal(doc)
 			if err != nil {
 				t.Fatal(err)
 			}
-			subject := &findings.Subject{Branch: c.flags.branch, At: c.flags.at}
-
-			var runErr error
-			out := captureStdout(t, func() {
-				runErr = dryRunReport(context.Background(), testOptions(t, false), findings.OpTwinCreate, subject, reg, paths, nil, dir, fixtureBundleID,
-					nil, nil, c.want)
-			})
-			if code, _ := exitOf(t, runErr); code != findings.ExitOK || !strings.Contains(out, "\n"+c.line+"\nverdict: clear\n") {
-				t.Errorf("exit %d, stdout:\n%s\nwant %q after host: and before verdict:", code, out, c.line)
+			if strings.Contains(string(b), `"follow`) {
+				t.Errorf("the dry run's document names following: %s", b)
 			}
-			_, doc := exitOf(t, dryRunReport(context.Background(), testOptions(t, true), findings.OpTwinCreate, subject, reg, paths,
-				nil, dir, fixtureBundleID, nil, nil, c.want))
-			if doc.DryRun == nil || doc.DryRun.Follow == nil || *doc.DryRun.Follow != c.want {
-				t.Errorf("dry_run %+v, want follow %+v", doc.DryRun, c.want)
-			}
-			// The reason stage is the current enum's from 014, and snapshot from 018; every other
-			// document is M6's.
-			switch c.want.Reason {
-			case findings.FollowReasonSnapshot:
-				validateWithShow(t, currentContract, "018", doc)
-			case findings.FollowReasonStage:
-				validateM10Document(t, doc)
-			default:
+			validateWithShow(t, currentContract, "018", doc)
+			if c.m6 {
 				validateM6Document(t, doc)
 			}
 		})
@@ -117,10 +97,9 @@ func TestDryRunCountsTheLossyRecord(t *testing.T) {
 		t.Fatal(err)
 	}
 	read := &readSummary{counts: intent.Summarize(c), packages: intent.DevicesByPackage(c, reg), envelope: c.Envelope}
-	follow := findings.DryRunFollow{Reason: findings.FollowReasonPinned}
 	out = captureStdout(t, func() {
 		err = dryRunReport(context.Background(), testOptions(t, false), findings.OpTwinCreate, &findings.Subject{Branch: c.Envelope.Branch},
-			reg, paths, nil, dir, lossyID, read, nil, follow)
+			reg, paths, nil, dir, lossyID, read, nil)
 	})
 	want := "read: 3 devices (chassisos 2, nokia_srlinux 1), 16 interfaces, 3 links, 3 artifacts, " +
 		"9 lossy mappings, 3 shared ports (branch lossy-fixture, at 2026-09-19T12:00:00Z, schema fixture)\n"

@@ -141,7 +141,6 @@ func stageDocuments() []labelledDocument {
 		Nodes: []DryRunNode{{Name: "n1", Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: "nokia_srlinux", MemoryMB: 2048,
 			Artifact: &DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: m5Checksum, Size: 861}}},
 		MemorySumMB: 2048, HostBudgetMB: &budget, Verdict: VerdictClear,
-		Follow: &DryRunFollow{Reason: FollowReasonStage},
 	}
 
 	read := NewDocument(OpIntentRead, &Subject{Branch: cabled.Branch, At: cabled.At, Stage: cabled.Ref, Out: "ctm.json"}, nil)
@@ -203,7 +202,7 @@ func TestStageDocumentsSatisfySchema(t *testing.T) {
 		{docs[1].doc, []string{`"branch":"main","label":"branch-point",`, `"at_source":"branch_point","description":""}`}},
 		{docs[2].doc, []string{`"label":"head",`, `"at_source":"head","description":""}`}},
 		{docs[3].doc, []string{`"at_source":"given","description":"after its configuration is live"}`}},
-		{docs[4].doc, []string{`"follow":{"enabled":false,"reason":"stage"}`}},
+		{docs[4].doc, []string{`"dry_run":{"nodes":[{"name":"n1",`, `"stage":{"ref":"change-1/cabled","branch":"change-1","label":"cabled",`}},
 		{docs[6].doc, []string{`"subject":{"stage":"change-1/seven"}`, `"rule":"stage.unknown"`, `"step":"resolve"`}},
 		{docs[8].doc, []string{`"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"branch-point","description":"","at_source":"branch_point"}`}},
 	} {

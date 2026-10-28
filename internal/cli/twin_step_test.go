@@ -716,9 +716,9 @@ func TestStepDryRun(t *testing.T) {
 			if refused {
 				wantVerdict = findings.VerdictRefused
 			}
-			if d == nil || d.Verdict != wantVerdict || d.Follow != nil || len(d.Nodes) != 3 || d.MemorySumMB != 5120 ||
+			if d == nil || d.Verdict != wantVerdict || len(d.Nodes) != 3 || d.MemorySumMB != 5120 ||
 				!d.Host.LabPresent || !d.Host.TwinDirPresent {
-				t.Errorf("dry_run %+v; want %s over the target's three nodes, no follow, the twin present", d, wantVerdict)
+				t.Errorf("dry_run %+v; want %s over the target's three nodes, the twin present", d, wantVerdict)
 			}
 			st := doc.Step
 			if st == nil || st.StepRunBlock != nil || st.AllowRestart != !refused || st.From.BundleID != h.fromID ||

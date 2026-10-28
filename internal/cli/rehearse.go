@@ -10,7 +10,8 @@ import (
 
 // rehearseFlags are twin rehearse's flags (015): the proposed change's source branch, and
 // whether --branch was given at all, apart from its value: an explicit empty one is a
-// branch refused by the server, not one left out (M4's --interval= precedent).
+// branch refused by the server, not one left out (M4's --interval= precedent, a flag twin
+// create had until 019).
 type rehearseFlags struct {
 	branch      string
 	branchGiven bool

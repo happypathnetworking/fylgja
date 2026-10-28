@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -15,8 +15,8 @@ import (
 	"github.com/santhosh-tekuri/jsonschema/v6"
 	"github.com/spf13/cobra"
 
+	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
@@ -912,185 +912,6 @@ func TestFindingsContractCachedStillValidates(t *testing.T) {
 	}
 }
 
-// followingResult is readyResult with following begun at interval seconds.
-func followingResult(intervalS int) provision.ProvisionResult {
-	res := readyResult()
-	res.Following = &provision.FollowingResult{Branch: "fylgja-fixture", IntervalS: intervalS, ScheduleID: provision.FollowScheduleID}
-	return res
-}
-
-// --interval that is not a duration, or is below the floor, is refused before anything is
-// dialled (contracts/cli.md, create step 1). One given empty is not a duration either, and is
-// refused before the conflict guard as any other is.
-func TestCreateIntervalRefusals(t *testing.T) {
-	for _, c := range []struct {
-		args           []string
-		value, message string
-	}{
-		{[]string{"--interval", "banana"}, "banana", `--interval banana is not a duration: time: invalid duration "banana"`},
-		{[]string{"--interval", "5s"}, "5s", "--interval 5s is below the floor 10s"},
-		{[]string{"--interval="}, "", `--interval  is not a duration: time: invalid duration ""`},
-		{[]string{"--at", "2026-09-16T14:00:00Z", "--interval="}, "", `--interval  is not a duration: time: invalid duration ""`},
-	} {
-		t.Run(strings.Join(c.args, " "), func(t *testing.T) {
-			useStateRoot(t)
-			useInterrupts(t)
-			svc := &fakeService{runID: "run-1", result: readyResult()}
-			dialled := false
-			saved := dialService
-			t.Cleanup(func() { dialService = saved })
-			dialService = func(context.Context) (provision.Service, error) { dialled = true; return svc, nil }
-
-			code, doc := executeCreate(t, c.args...)
-			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleFollowIntervalInvalid, Object: c.value,
-				Step: findings.StepStart, Message: c.message}
-			if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != want {
-				t.Errorf("exit %d, findings %+v; want 2 with %+v", code, doc.Findings, want)
-			}
-			if dialled || len(svc.calls) != 0 {
-				t.Errorf("dialled %v, calls %v; want nothing", dialled, svc.calls)
-			}
-			validateM4Document(t, doc)
-		})
-	}
-}
-
-// executeCreate runs `fylgja twin create --branch fylgja-fixture --json` with args through the
-// command line, as an operator would, and returns its exit status and findings document.
-func executeCreate(t *testing.T, args ...string) (int, *findings.Document) {
-	t.Helper()
-	opts := &options{asJSON: true}
-	root := &cobra.Command{Use: "fylgja", SilenceUsage: true, SilenceErrors: true}
-	root.PersistentFlags().BoolVar(&opts.asJSON, "json", false, "")
-	root.AddCommand(newTwinCmd(opts))
-	root.SetArgs(append([]string{"twin", "create", "--branch", "fylgja-fixture", "--json"}, args...))
-	var code int
-	out := captureStdout(t, func() {
-		cmd, err := root.ExecuteC()
-		code = report(opts, cmd, err)
-	})
-	var doc findings.Document
-	if err := json.Unmarshal([]byte(out), &doc); err != nil {
-		t.Fatalf("%v: stdout is not one findings document: %v\n%s", args, err, out)
-	}
-	return code, &doc
-}
-
-// A create without --at follows its branch at the interval given, or every five minutes.
-func TestCreateFollowsByDefault(t *testing.T) {
-	useFixtureRead(t)
-	for _, c := range []struct {
-		interval  string
-		intervalS int
-		every     string
-	}{{"", 300, "5m0s"}, {"15s", 15, "15s"}} {
-		t.Run("interval "+c.every, func(t *testing.T) {
-			svc := &fakeService{runID: "run-1", result: followingResult(c.intervalS)}
-			useService(t, svc)
-			useInterrupts(t)
-
-			var err error
-			out := captureStdout(t, func() {
-				err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture", interval: c.interval, intervalGiven: c.interval != ""})
-			})
-			if code, doc := exitOf(t, err); code != findings.ExitOK {
-				t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
-			}
-			if len(svc.started) != 1 {
-				t.Fatalf("started %+v, want one run", svc.started)
-			}
-			in := svc.started[0]
-			if in.Follow == nil || in.Follow.IntervalS != c.intervalS {
-				t.Errorf("input follow %+v; want interval %d", in.Follow, c.intervalS)
-			}
-			want := "twin directory /abs/local/twin\nfollowing branch fylgja-fixture, checked every " + c.every + " (schedule fylgja-follow)\n"
-			if !strings.HasSuffix(out, want) {
-				t.Errorf("stdout:\n%s\nwant it to end:\n%s", out, want)
-			}
-
-			err = nil
-			captureStdout(t, func() {
-				err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture", interval: c.interval, intervalGiven: c.interval != ""})
-			})
-			_, doc := exitOf(t, err)
-			wantBlock := findings.FollowingBlock{Branch: "fylgja-fixture", IntervalS: c.intervalS, ScheduleID: provision.FollowScheduleID,
-				State: findings.FollowingStarted}
-			if doc.Following == nil || *doc.Following != wantBlock {
-				t.Errorf("following block %+v, want %+v", doc.Following, wantBlock)
-			}
-			validateM10Document(t, doc)
-		})
-	}
-}
-
-// A ready run whose following could not begin: exit 0, the warning, and a not_started block.
-func TestCreateFollowStartFailed(t *testing.T) {
-	useFixtureRead(t)
-	res := readyResult()
-	res.Findings = findings.List{{Severity: findings.Warning, Rule: findings.RuleFollowStartFailed, Object: provision.FollowScheduleID,
-		Step: findings.StepFollow, Message: "the twin is ready but following could not begin: " +
-			"creating schedule fylgja-follow failed (namespace unavailable); the twin is frozen; fylgja twin destroy and create again to follow"}}
-	useService(t, &fakeService{runID: "run-1", result: res})
-	useInterrupts(t)
-
-	var err error
-	out := captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture", interval: "1m", intervalGiven: true})
-	})
-	if code, doc := exitOf(t, err); code != findings.ExitOK {
-		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
-	}
-	if want := "twin directory /abs/local/twin\nnot following: follow.start.failed (see findings); destroy and create again\n"; !strings.HasSuffix(out, want) {
-		t.Errorf("stdout:\n%s\nwant it to end:\n%s", out, want)
-	}
-
-	err = nil
-	captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture", interval: "1m", intervalGiven: true})
-	})
-	_, doc := exitOf(t, err)
-	want := findings.FollowingBlock{Branch: "fylgja-fixture", IntervalS: 60, State: findings.FollowingNotStarted}
-	if doc.Following == nil || *doc.Following != want || !carriesRule(doc.Findings, findings.RuleFollowStartFailed) {
-		t.Errorf("following %+v, findings %+v; want %+v and the warning", doc.Following, doc.Findings, want)
-	}
-	validateM10Document(t, doc)
-}
-
-// --interval given with --at or with --no-follow is refused before anything is dialled:
-// the twin would not follow, so the interval would mean nothing (contracts/cli.md).
-func TestCreateFlagsConflict(t *testing.T) {
-	for _, c := range []struct {
-		name    string
-		flags   createFlags
-		message string
-	}{
-		{"with --at", createFlags{branch: "fylgja-fixture", at: "2026-09-16T14:00:00Z", interval: "1m", intervalGiven: true},
-			"--interval is meaningless with --at: a pinned twin never follows"},
-		{"with --no-follow", createFlags{branch: "fylgja-fixture", noFollow: true, interval: "1m", intervalGiven: true},
-			"--interval is meaningless with --no-follow: the twin will not follow"},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			svc := &fakeService{runID: "run-1", result: readyResult()}
-			dialled := false
-			saved := dialService
-			t.Cleanup(func() { dialService = saved })
-			dialService = func(context.Context) (provision.Service, error) { dialled = true; return svc, nil }
-
-			flags := c.flags
-			code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &flags))
-			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleFollowFlagsConflict, Object: "--interval",
-				Step: findings.StepStart, Message: c.message}
-			if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != want {
-				t.Errorf("exit %d, findings %+v; want 2 with %+v", code, doc.Findings, want)
-			}
-			if dialled || len(svc.calls) != 0 {
-				t.Errorf("dialled %v, calls %v; want nothing", dialled, svc.calls)
-			}
-			validateM4Document(t, doc)
-		})
-	}
-}
-
 // The scope a create names is its run's and its document's, over the server's default; with
 // none, the default is (017).
 func TestCreateCarriesItsScope(t *testing.T) {
@@ -1099,8 +920,8 @@ func TestCreateCarriesItsScope(t *testing.T) {
 		flags createFlags
 		want  string
 	}{
-		{"given", createFlags{branch: "fylgja-fixture", noFollow: true, scope: "tag:lab-b", scopeGiven: true}, "tag:lab-b"},
-		{"the default", createFlags{branch: "fylgja-fixture", noFollow: true}, defaultScope},
+		{"given", createFlags{branch: "fylgja-fixture", scope: "tag:lab-b", scopeGiven: true}, "tag:lab-b"},
+		{"the default", createFlags{branch: "fylgja-fixture"}, defaultScope},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			// The server reads under the scope before the run (018): the fake tags the
@@ -1126,9 +947,75 @@ func TestCreateCarriesItsScope(t *testing.T) {
 	}
 }
 
-// A --no-follow create starts M3's run: its input is M3's for the same flags, and nothing
-// follows. It stops nothing either (019): the input names no stop.
-func TestCreateNoFollow(t *testing.T) {
+// --interval and --no-follow are no flags of any command (019, FR-003): through the command
+// line, as an operator would type them, each is cobra's unknown flag, exit 2, refused before
+// any request, so the harness's server logs none. twin create is asked from the branch head,
+// where the flags meant something; every other command of the client's tree beside it.
+func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
+	root := &cobra.Command{Use: "fylgja"}
+	AddCommands(root, build)
+	var commands [][]string
+	var walk func(cmd *cobra.Command)
+	walk = func(cmd *cobra.Command) {
+		if cmd.Runnable() && cmd != root {
+			commands = append(commands, strings.Fields(cmd.CommandPath())[1:])
+		}
+		for _, sub := range cmd.Commands() {
+			walk(sub)
+		}
+	}
+	walk(root)
+	var ops []string
+	for _, path := range commands {
+		ops = append(ops, strings.Join(path, "."))
+	}
+	if !slices.Equal(slices.Sorted(slices.Values(ops)), slices.Sorted(slices.Values(api.Operations))) {
+		t.Fatalf("the walk found %v; want the API's operations %v", ops, api.Operations)
+	}
+
+	for _, path := range commands {
+		for _, flag := range [][]string{{"--interval", "30s"}, {"--no-follow"}} {
+			args := append(append([]string{}, path...), flag...)
+			if strings.Join(path, " ") == "twin create" {
+				args = append([]string{"twin", "create", "--branch", "b"}, flag...)
+			}
+			t.Run(strings.Join(args, " "), func(t *testing.T) {
+				awaitIdle(t)
+				before := requestsLogged()
+				opts := &options{}
+				root := &cobra.Command{Use: "fylgja", SilenceUsage: true, SilenceErrors: true}
+				root.PersistentFlags().BoolVar(&opts.asJSON, "json", false, "")
+				for _, cmd := range []*cobra.Command{newIntentCmd(opts), newTwinCmd(opts), newStageCmd(opts),
+					newSchemaCmd(opts), newPSPCmd(opts)} {
+					root.AddCommand(cmd)
+				}
+				// --json comes first: cobra stops reading flags at the unknown one.
+				root.SetArgs(append([]string{"--json"}, args...))
+				var code int
+				out := captureStdout(t, func() {
+					cmd, err := root.ExecuteC()
+					code = report(opts, cmd, err)
+				})
+				var doc findings.Document
+				if err := json.Unmarshal([]byte(out), &doc); err != nil {
+					t.Fatalf("stdout is not one findings document: %v\n%s", err, out)
+				}
+				if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0].Message != "unknown flag: "+flag[0] {
+					t.Errorf("exit %d, findings %+v; want 2, cobra's unknown flag %s", code, doc.Findings, flag[0])
+				}
+				awaitIdle(t)
+				if got := requestsLogged(); got != before {
+					t.Errorf("the server logged %d requests, want none", got-before)
+				}
+			})
+		}
+	}
+}
+
+// A create from the branch head follows nothing (019; US1 scenario 1): its run's input is
+// M3's for the same flags, compiled on the server, with no follow; its text ends at the twin
+// directory; and its document carries no following key.
+func TestCreateFollowsNothing(t *testing.T) {
 	paths := useFixtureRead(t)
 	svc := &fakeService{runID: "run-1", result: readyResult()}
 	useService(t, svc)
@@ -1136,7 +1023,7 @@ func TestCreateNoFollow(t *testing.T) {
 
 	var err error
 	out := captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture", noFollow: true})
+		err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
 	})
 	if code, doc := exitOf(t, err); code != findings.ExitOK {
 		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
@@ -1155,69 +1042,17 @@ func TestCreateNoFollow(t *testing.T) {
 	if string(b) != want || svc.started[0].ObservedAt == "" {
 		t.Errorf("input\n  %s\nwant M3's with 017's scope, the server's default, and 018's compiled input\n  %s", b, want)
 	}
-	if want := "twin directory /abs/local/twin\nnot following\n"; !strings.HasSuffix(out, want) {
-		t.Errorf("stdout:\n%s\nwant it to end:\n%s", out, want)
+	if want := "\ntwin directory /abs/local/twin\n"; !strings.HasSuffix(out, want) || strings.Contains(out, "follow") {
+		t.Errorf("stdout:\n%s\nwant it to end at the twin directory, naming no following", out)
 	}
 
 	err = nil
 	captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture", noFollow: true})
+		err = runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"})
 	})
 	_, doc := exitOf(t, err)
-	if doc.Following != nil {
-		t.Errorf("following block %+v, want none", doc.Following)
+	if raw, err := json.Marshal(doc); err != nil || bytes.Contains(raw, []byte(`"following"`)) {
+		t.Errorf("the document carries a following key (%v): %s", err, raw)
 	}
 	validateM10Document(t, doc)
-}
-
-// A pinned create never follows, with or without --no-follow, and says it is pinned.
-func TestCreatePinnedNotFollowing(t *testing.T) {
-	useFixtureRead(t)
-	const at = "2026-09-16T14:00:00Z"
-	for _, noFollow := range []bool{false, true} {
-		t.Run(fmt.Sprintf("no-follow %v", noFollow), func(t *testing.T) {
-			res := readyResult()
-			res.Twin.Provenance.At = at
-			svc := &fakeService{runID: "run-1", result: res}
-			useService(t, svc)
-			useInterrupts(t)
-
-			var err error
-			out := captureStdout(t, func() {
-				err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture", at: at, noFollow: noFollow})
-			})
-			if code, doc := exitOf(t, err); code != findings.ExitOK {
-				t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
-			}
-			if len(svc.started) != 1 || svc.started[0].Follow != nil {
-				t.Errorf("started %+v, want one run with no follow", svc.started)
-			}
-			if want := "twin directory /abs/local/twin\npinned at " + at + ", not following\n"; !strings.HasSuffix(out, want) {
-				t.Errorf("stdout:\n%s\nwant it to end:\n%s", out, want)
-			}
-		})
-	}
-}
-
-// Through the command line, only an --interval the operator gave conflicts: the flag's
-// default, shown in the help, does not make --at or --no-follow a conflict.
-func TestCreateIntervalDefaultIsNotGiven(t *testing.T) {
-	useStateRoot(t)
-	useService(t, nil)
-	t.Setenv(intent.EnvAddress, unreachable)
-	t.Setenv(intent.EnvToken, "any-token")
-	for _, c := range []struct {
-		args []string
-		rule string
-	}{
-		{[]string{"--at", "2026-09-16T14:00:00Z"}, findings.RuleOperationFailed},
-		{[]string{"--no-follow"}, findings.RuleOperationFailed},
-		{[]string{"--no-follow", "--interval", "5m0s"}, findings.RuleFollowFlagsConflict},
-	} {
-		// A dry run whose read cannot reach Infrahub stops there, dialling nothing.
-		code, doc := executeCreate(t, append([]string{"--dry-run"}, c.args...)...)
-		if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0].Rule != c.rule {
-			t.Errorf("%v: exit %d, findings %+v; want 2 with %s", c.args, code, doc.Findings, c.rule)
-		}
-	}
 }

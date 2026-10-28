@@ -249,7 +249,7 @@ func (g *goneService) Result(ctx context.Context, w, r string) (provision.Provis
 // start; a start already waiting for a worker finishes, with the server stopped too;
 // it stops following, and never cancels the run.
 func TestAClientGoneDuringARun(t *testing.T) {
-	create := map[string]any{"branch": "fylgja-fixture", "no_follow": true}
+	create := map[string]any{"branch": "fylgja-fixture"}
 
 	t.Run("before start", func(t *testing.T) {
 		useFixtureRead(t) // the create reads on the server before its dial (018)
@@ -383,7 +383,7 @@ func TestAClientGoneAfterItsInterrupt(t *testing.T) {
 	n, panics := len(requestOutcomes(findings.OpTwinCreate)), strings.Count(harness.log.String(), "outcome=panic")
 	delivered := len(requestOutcomes(logInterrupt))
 
-	cutAnswerOn(t, harness.http.URL, findings.OpTwinCreate, map[string]any{"branch": "fylgja-fixture", "no_follow": true},
+	cutAnswerOn(t, harness.http.URL, findings.OpTwinCreate, map[string]any{"branch": "fylgja-fixture"},
 		svc.reached, func(stream string) {
 			if code := postInterrupt(t, stream); code != http.StatusNoContent {
 				t.Fatalf("the interrupt was answered %d, want 204", code)

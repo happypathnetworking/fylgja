@@ -27,15 +27,16 @@ type stepFlags struct {
 	// stage is --stage as given, <branch>/<label>: the target, in place of the next stage
 	// of the twin's proposed change.
 	stage string
-	// stageGiven is whether --stage was given at all, apart from its value: an explicit
-	// empty one is a reference refused, not one left out (M4's --interval= precedent).
+	// stageGiven is whether --stage was given at all, apart from its value: an explicit empty
+	// one is a reference refused, not one left out (M4's --interval= precedent, a flag twin
+	// create had until 019).
 	stageGiven   bool
 	allowRestart bool
 	dryRun       bool
 	// wait is --wait as given: the budget of the step's wait after its record.
 	wait string
 	// waitGiven is whether --wait was given at all, apart from its value: an explicit empty
-	// one is refused, not left out (M4's --interval= rule).
+	// one is refused, not left out (M4's --interval= rule, a flag twin create had until 019).
 	waitGiven bool
 	// waitS is the budget in seconds, verify.DefaultBudget's when --wait is left out.
 	waitS int
@@ -424,7 +425,7 @@ func stepWait(op string, subject *findings.Subject, f *stepFlags) (int, error) {
 
 // stepDryRun is the step's dry run: M2's memory: and host: lines from the host check,
 // and the verdict over the host check's refusals and the rules'; the document carries
-// dry_run over the target's nodes, with no follow, and the step block with no run fields.
+// dry_run over the target's nodes, and the step block with no run fields.
 func stepDryRun(opts *options, op string, subject *findings.Subject, in provision.StepInput, lifecycle wire.ReconcilePlan,
 	plan wire.CheckHostResult, toPath string, list findings.List) error {
 	artifacts, lossy, err := manifestSummary(toPath)

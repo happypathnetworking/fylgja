@@ -9,15 +9,10 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 )
 
-// The defaults and floors a client's help names, which are the core's: provision's
-// DefaultInterval and MinInterval, and verify's DefaultBudget. The client links neither
-// package, so they are written here, and a test holds each to the core's own
-// (TestFlagDefaultsAreTheCoresOwn).
-const (
-	defaultInterval = "5m0s"
-	minInterval     = "10s"
-	defaultBudget   = "2m0s"
-)
+// The default a client's help names, which is the core's: verify's DefaultBudget. The
+// client does not link the package, so it is written here, and a test holds it to the
+// core's own (TestFlagDefaultsAreTheCoresOwn).
+const defaultBudget = "2m0s"
 
 type createFlags struct {
 	branch string
@@ -26,13 +21,10 @@ type createFlags struct {
 	// by the server to a pinned reference in place of --branch and --at (014).
 	stage string
 	// stageGiven is whether --stage was given at all, apart from its value: an explicit
-	// empty one is a reference refused, not one left out (M4's --interval= precedent).
+	// empty one is a reference refused, not one left out (M4's --interval= precedent, a
+	// flag twin create had until 019).
 	stageGiven bool
 	dryRun     bool
-	// interval is --interval's value, read only when intervalGiven; not given, the default stands.
-	interval      string
-	intervalGiven bool
-	noFollow      bool
 	// scope is --scope as given, sent only when scopeGiven: not given, the server's default
 	// stands, and an explicit empty one is the server's to refuse (017).
 	scope      string
@@ -52,18 +44,14 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 			"The API's server resolves the stage, reads the branch, takes the snapshot of what it\n" +
 			"read, compiles it and files the snapshot and the bundle, before any run. --snapshot\n" +
 			"<id|file> builds the twin from a snapshot instead, one the server's store holds by its\n" +
-			"id or a snapshot file sent from here, which the server files: no branch is read, and\n" +
-			"the twin never follows. Then one run with the fixed identity fylgja-provision, from\n" +
-			"the host check on, provisions the twin through the lab host's worker. Prints a line\n" +
-			"as each step begins and ends, and blocks until every node answers its readiness probe\n" +
-			"or the run has cleaned up after itself. Interrupt once to cancel the run and wait for\n" +
-			"its cleanup; a second time to stop waiting.",
+			"id or a snapshot file sent from here, which the server files: no branch is read. Then\n" +
+			"one run with the fixed identity fylgja-provision, from the host check on, provisions\n" +
+			"the twin through the lab host's worker. Prints a line as each step begins and ends,\n" +
+			"and blocks until every node answers its readiness probe or the run has cleaned up\n" +
+			"after itself. Interrupt once to cancel the run and wait for its cleanup; a second time\n" +
+			"to stop waiting.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// Whether --interval was given is kept apart from its value, so a given value is
-			// parsed whatever it is, even empty, and the conflict guard sees only a flag the
-			// operator gave; the flag's default is shown in the help alone.
-			f.intervalGiven = cmd.Flags().Changed("interval")
 			f.stageGiven = cmd.Flags().Changed("stage")
 			f.scopeGiven = cmd.Flags().Changed("scope")
 			f.snapshotGiven = cmd.Flags().Changed("snapshot")
@@ -74,18 +62,14 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 	cmd.Flags().StringVar(&f.at, "at", "",
 		"point in time to read at, passed verbatim; omitted entirely when not given")
 	cmd.Flags().StringVar(&f.stage, "stage", "",
-		"stage to build the twin from, <branch>/<label>: the pinned branch and at a proposed change's stage resolves to, never followed")
-	cmd.Flags().StringVar(&f.interval, "interval", defaultInterval,
-		"how often a following twin is checked, as a Go duration (5m, 90s); floor "+minInterval)
-	cmd.Flags().BoolVar(&f.noFollow, "no-follow", false,
-		"build the twin from the branch head and never check it: a frozen twin")
+		"stage to build the twin from, <branch>/<label>: the pinned branch and at a proposed change's stage resolves to")
 	cmd.Flags().BoolVar(&f.dryRun, "dry-run", false,
 		"read, take and file the snapshot, compile and file the bundle, and check the host; start no run "+
 			"(with --snapshot, nothing is read)")
 	cmd.Flags().StringVar(&f.scope, "scope", "", scopeUsage)
 	cmd.Flags().StringVar(&f.snapshot, "snapshot", "",
 		"snapshot to build the twin from, <id|file>: a snapshot id (64 lowercase hex characters) the server's store holds, "+
-			"or a snapshot file, which is read here and sent; no branch is read, and the twin never follows")
+			"or a snapshot file, which is read here and sent; no branch is read")
 	return cmd
 }
 
@@ -102,8 +86,7 @@ func (f *createFlags) fromSnapshot() bool {
 }
 
 // runCreate is twin create as one request: the flags given, and the server's answer printed
-// as it comes. Every guard, the stage's, the snapshot's and the following's among them,
-// is the server's. A --snapshot that is no id is a file, read here and sent as the
+// as it comes. Every guard, the stage's and the snapshot's among them, is the server's. A --snapshot that is no id is a file, read here and sent as the
 // request's one file under that path; one the client cannot read is its own failure,
 // before any connection (R-07). The file is read only when no flag beside --snapshot would
 // be refused by the snapshot's guards, so those refusals come first, whatever the file, as
@@ -116,10 +99,6 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	if f.fromStage() {
 		a["stage"] = f.stage
 	}
-	if f.intervalGiven {
-		a["interval"] = f.interval
-	}
-	a.bool("no_follow", f.noFollow)
 	a.bool("dry_run", f.dryRun)
 	a.scope(f.scope, f.scopeGiven)
 	var files []api.File
@@ -142,10 +121,10 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 }
 
 // snapshotConflicts is whether a flag is given beside --snapshot that the server's snapshot
-// guards refuse: --branch, --stage, --at, --scope or --interval, as the server's
-// snapshotGuards reads them. The request then carries no file, and the guard answers.
+// guards refuse: --branch, --stage, --at or --scope, as the server's snapshotGuards reads
+// them. The request then carries no file, and the guard answers.
 func (f *createFlags) snapshotConflicts() bool {
-	return f.branch != "" || f.fromStage() || f.at != "" || f.scopeGiven || f.intervalGiven
+	return f.branch != "" || f.fromStage() || f.at != "" || f.scopeGiven
 }
 
 // isSnapshotID is whether --snapshot's value is a snapshot id, 64 lowercase hex characters,

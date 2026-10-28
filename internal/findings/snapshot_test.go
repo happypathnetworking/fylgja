@@ -86,12 +86,22 @@ func TestA017DocumentIsUnchanged(t *testing.T) {
 			mustValidateBytes(t, current, b, c.label+" against the current contract")
 		})
 	}
+	// M4's following blocks, which 019 removed, as 017 wrote them.
+	for _, c := range m4FollowingDocuments() {
+		t.Run(c.label, func(t *testing.T) {
+			mustValidateBytes(t, v017, mutated(t, c.doc, func(doc map[string]any) {
+				drop018Snapshots(doc)
+				c.restore(doc)
+			}), c.label+" against 017's contract")
+		})
+	}
 }
 
 // Every document this package builds is 018's, the ones that name a snapshot and the ones
 // that name none, and 018's contract accepts each as built. 018's copies stay as 018 left
 // them when 019 moves the findings and show contracts on: the claim is that the older
-// contract still accepts these documents.
+// contract still accepts these documents. So does it the documents 018 wrote with following
+// (followingDocuments), which this build no longer writes.
 func TestAn018DocumentIsUnchanged(t *testing.T) {
 	v018 := compileFeatureFindingsSchema(t, contract018, currentResources...)
 	for _, c := range append(noSnapshotDocuments(), snapshotDocuments()...) {
@@ -99,6 +109,24 @@ func TestAn018DocumentIsUnchanged(t *testing.T) {
 			mustValidateBytes(t, v018, mustMarshal(t, c.doc), c.label+" against 018's contract")
 		})
 	}
+	for _, c := range followingDocuments() {
+		t.Run(c.label, func(t *testing.T) {
+			mustValidateBytes(t, v018, mutated(t, c.doc, c.restore), c.label+" against 018's contract")
+		})
+	}
+}
+
+// followingDocuments are every shape an earlier build wrote with following: M4's
+// (m4FollowingDocuments), and the dry runs of the two reasons added after it, a stage's
+// (014) and a snapshot's (018).
+func followingDocuments() []earlierDocument {
+	stage := followingDryRun("dry run of a stage", OpTwinCreate, map[string]any{"enabled": false, "reason": "stage"})
+	stage.doc.Subject = &Subject{Branch: "change-1", At: "2026-10-16T17:30:00Z", Stage: "change-1/cabled"}
+	fromSnapshot := followingDryRun("dry run of a snapshot", OpTwinCreate, map[string]any{"enabled": false, "reason": "snapshot"})
+	fromSnapshot.doc.Subject = &Subject{Snapshot: snapshotID}
+	fromSnapshot.doc.SnapshotID = snapshotID
+	fromSnapshot.doc.BundleID = strings.Repeat("43", 32)
+	return append(m4FollowingDocuments(), stage, fromSnapshot)
 }
 
 // snapshotID and stepSnapshotID are two snapshots' ids: the first the fixture's
@@ -120,8 +148,7 @@ func snapshotDocuments() []labelledDocument {
 	dry := NewDocument(OpTwinCreate, &Subject{Snapshot: snapshotID}, nil)
 	dry.SnapshotID = snapshotID
 	dry.BundleID = strings.Repeat("43", 32)
-	dry.DryRun = &DryRunBlock{Nodes: []DryRunNode{}, Host: DryRunHost{}, Verdict: VerdictClear,
-		Follow: &DryRunFollow{Reason: FollowReasonSnapshot}}
+	dry.DryRun = &DryRunBlock{Nodes: []DryRunNode{}, Host: DryRunHost{}, Verdict: VerdictClear}
 
 	planned := listAndPlanDocuments()[7].doc
 	for i := range planned.Plan.Stages {
@@ -194,7 +221,7 @@ func TestSnapshotBlocksSatisfyTheContract(t *testing.T) {
 		{snapshotDocuments()[3].doc, []string{`"snapshot_id":"` + stepSnapshotID + `","bundle_id":`,
 			`"from":{"stage":{`, `"snapshot_id":"` + snapshotID + `","bundle_id":"` + stepFromID + `"`}},
 		{snapshotDocuments()[0].doc, []string{`"subject":{"out":"/tmp/b","snapshot":"snapshot.json"},"snapshot_id":"` + snapshotID + `","bundle_id":`}},
-		{snapshotDocuments()[1].doc, []string{`"follow":{"enabled":false,"reason":"snapshot"}`}},
+		{snapshotDocuments()[1].doc, []string{`"subject":{"snapshot":"` + snapshotID + `"},"snapshot_id":"` + snapshotID + `","bundle_id":`}},
 	} {
 		if b := string(mustMarshal(t, c.doc)); !containsAll(b, c.keys) {
 			t.Errorf("%s does not carry every one of %q: %s", c.doc.Operation, c.keys, b)
@@ -233,9 +260,6 @@ func TestSnapshotBlocksSatisfyTheContract(t *testing.T) {
 		}},
 		{"rehearsal stage not an id", snapshotDocuments()[4].doc, func(d map[string]any) {
 			d["rehearsal"].(map[string]any)["stages"].([]any)[0].(map[string]any)["snapshot_id"] = "x"
-		}},
-		{"a follow reason the contract does not name", snapshotDocuments()[1].doc, func(d map[string]any) {
-			d["dry_run"].(map[string]any)["follow"].(map[string]any)["reason"] = "snapshots"
 		}},
 	}
 	for _, c := range refusals {

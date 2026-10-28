@@ -65,7 +65,7 @@ func TestCreateTakesTheSnapshotBeforeTheRun(t *testing.T) {
 
 	var err error
 	out := captureStdout(t, func() {
-		err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture", noFollow: true})
+		err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture"})
 	})
 	if code, doc := exitOf(t, err); code != findings.ExitOK {
 		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
@@ -91,7 +91,7 @@ func TestCreateTakesTheSnapshotBeforeTheRun(t *testing.T) {
 		t.Errorf("bundles/ holds %v, want the one bundle", got)
 	}
 
-	_, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture", noFollow: true}))
+	_, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"}))
 	if doc.SnapshotID != headSnapshotID {
 		t.Errorf("the document names snapshot %q, want %s", doc.SnapshotID, headSnapshotID)
 	}
@@ -184,7 +184,7 @@ func TestARefusedCompileNamesTheSnapshotInText(t *testing.T) {
 	}{
 		{"--branch", func(t *testing.T, paths lab.Paths) []string {
 			corruptEntry(t, paths)
-			return []string{"--branch", "fylgja-fixture", "--no-follow"}
+			return []string{"--branch", "fylgja-fixture"}
 		}, findings.RuleBundleIDMismatch, findings.StepCompile},
 		{"--branch --dry-run", func(t *testing.T, paths lab.Paths) []string {
 			corruptEntry(t, paths)
@@ -306,7 +306,7 @@ func TestCreateTwiceFilesOneSnapshot(t *testing.T) {
 
 	var first []byte
 	for i := range 2 {
-		if code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture", noFollow: true})); code != findings.ExitOK {
+		if code, doc := exitOf(t, runCreate(context.Background(), &options{asJSON: true}, &createFlags{branch: "fylgja-fixture"})); code != findings.ExitOK {
 			t.Fatalf("create %d: exit %d, findings %+v", i+1, code, doc.Findings)
 		}
 		b, err := os.ReadFile(entry)

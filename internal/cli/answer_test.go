@@ -377,7 +377,6 @@ func answerCases() []answerCase {
 					"mapping: 0 lossy mappings, 0 shared ports",
 					"memory: sum 6144 MiB; host budget unset",
 					"host: lab fylgja absent; twin directory absent",
-					"follow: would not follow (a bundle never follows)",
 					"verdict: clear")}
 		}},
 		{"twin step, a run (TestStepRuns)", findings.OpTwinStep, func(t *testing.T) answerWant {

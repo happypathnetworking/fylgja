@@ -1859,6 +1859,48 @@ func TestIneligibleWording(t *testing.T) {
 	}
 }
 
+// The run's texts name each side as twin step's lines do (019, research R-05): a stage as
+// stage <branch>/<label>, as before, and a side naming no stage by its snapshot, so a step
+// towards a snapshot, or from a twin built from one, says where it went and where the twin
+// is: step.diverged, step.twin.diverged and the second lock at inspect.
+func TestStepTextsNameASnapshotSide(t *testing.T) {
+	fromSnap, toSnap := strings.Repeat("576933ec", 8), strings.Repeat("9c2d01e7", 8)
+	cabled := stageCabled
+	in := StepInput{From: wire.StepSide{Stage: &cabled, SnapshotID: fromSnap, BundleID: stepFrom},
+		To: wire.StepSide{SnapshotID: toSnap, BundleID: stepTo}}
+	pushes := []wire.StepPush{{Node: "s1", Outcome: wire.PushLanded}, {Node: "e1", Outcome: wire.PushRefused, Rule: findings.RulePushRefused}}
+	if got, want := divergedFinding("r1", in, findings.StepPush, pushes, true).Message,
+		"step run r1 towards snapshot 9c2d01e7… (bundle eeeeeeee…) stopped at phase push: landed s1; not landed e1 (push.refused); "+
+			"the twin is up and diverged at stage change-1/cabled (bundle 34343434…), its record says so, and it accepts only "+
+			"fylgja twin destroy"; got != want {
+		t.Errorf("step.diverged towards a snapshot:\n got %q\nwant %q", got, want)
+	}
+	in.From.Stage = nil
+	if got, want := divergedFinding("r1", in, findings.StepPush, pushes, true).Message,
+		"step run r1 towards snapshot 9c2d01e7… (bundle eeeeeeee…) stopped at phase push: landed s1; not landed e1 (push.refused); "+
+			"the twin is up and diverged at snapshot 576933ec… (bundle 34343434…), its record says so, and it accepts only "+
+			"fylgja twin destroy"; got != want {
+		t.Errorf("step.diverged from a snapshot:\n got %q\nwant %q", got, want)
+	}
+
+	phase := findings.StepPush
+	rec := &wire.TwinRecord{TwinVersion: "10", BundleID: stepFrom, SnapshotID: &fromSnap, State: wire.StateDiverged,
+		Step: &wire.StepRecord{Outcome: wire.StepDiverged, Phase: &phase, Run: wire.RunRef{WorkflowID: WorkflowStep, RunID: "01a1"},
+			To: wire.StepSide{SnapshotID: toSnap, BundleID: stepTo}, Pushed: pushes}}
+	if got, want := divergedTwin(rec), "the twin is diverged: step run fylgja-step 01a1 towards snapshot 9c2d01e7… stopped at "+
+		"phase push (landed: s1; not landed: e1 (push.refused)); it accepts only fylgja twin destroy"; got != want {
+		t.Errorf("step.twin.diverged towards a snapshot:\n got %q\nwant %q", got, want)
+	}
+
+	rec = &wire.TwinRecord{TwinVersion: "10", BundleID: stepTo, SnapshotID: &toSnap, State: wire.StateReady}
+	f := notPlannedFrom(rec, wire.StepSide{SnapshotID: fromSnap, BundleID: stepFrom})
+	if want := "the twin is at snapshot 9c2d01e7… (bundle eeeeeeee…), not at snapshot 576933ec… (bundle 34343434…) the step " +
+		"was planned from: the host changed after the command looked; nothing was touched; run fylgja twin step again"; f == nil ||
+		f.Message != want {
+		t.Errorf("the second lock between two snapshots: %+v\nwant %q", f, want)
+	}
+}
+
 // ChangesOf names what only a lifecycle applies: an image, platform or psp change, and a
 // node added; a bootstrap or mapping change is the push's.
 func TestChangesOf(t *testing.T) {

@@ -549,19 +549,19 @@ func cancelledAfterStage(runID, at, phase string, written bool) findings.Finding
 
 // divergedFinding is step.diverged (contracts/cli.md): the run, the target, the phase, the
 // nodes that landed and those that did not, where the twin is, and twin destroy as the
-// remedy. A record that could not be written still says the twin is ready where it was,
-// and the sentence says so rather than claiming the record does.
+// remedy, each side named by its Name() (019, research R-05). A record that could not be
+// written still says the twin is ready where it was, and the sentence says so rather than
+// claiming the record does.
 func divergedFinding(runID string, in StepInput, phase string, pushes []wire.StepPush, written bool) findings.Finding {
-	where := fmt.Sprintf("the twin is up and diverged at stage %s (bundle %s), ", in.From.Stage.Name(),
-		shortBundle(in.From.BundleID))
+	where := fmt.Sprintf("the twin is up and diverged at %s (bundle %s), ", in.From.Name(), shortBundle(in.From.BundleID))
 	if written {
 		where += "its record says so, and it accepts only fylgja twin destroy"
 	} else {
 		where += "but its record could not be written and still says it is ready there; fylgja twin destroy clears it"
 	}
 	return findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepDiverged, Object: runID, Step: phase,
-		Message: fmt.Sprintf("step run %s towards stage %s (bundle %s) stopped at phase %s: %s; %s",
-			runID, in.To.Stage.Name(), shortBundle(in.To.BundleID), phase, Landed(pushes, " "), where)}
+		Message: fmt.Sprintf("step run %s towards %s (bundle %s) stopped at phase %s: %s; %s",
+			runID, in.To.Name(), shortBundle(in.To.BundleID), phase, Landed(pushes, " "), where)}
 }
 
 // stepTimings is each phase's duration the run reached, and the whole: as the
@@ -710,7 +710,8 @@ func withoutPresence(list findings.List) findings.List {
 }
 
 // divergedTwin is step.twin.diverged's message: the step that left the twin diverged,
-// towards the waypoint it was on a record of twin.json 5 or earlier.
+// towards the side its to side's Name() names (019, research R-05), or towards the waypoint
+// it was on a record of twin.json 5 or earlier.
 func divergedTwin(rec *wire.TwinRecord) string {
 	st := rec.Step
 	if st == nil {
@@ -720,22 +721,28 @@ func divergedTwin(rec *wire.TwinRecord) string {
 	if st.Phase != nil {
 		phase = *st.Phase
 	}
+	towards := st.To.Name()
+	if st.To.Stage == nil && rec.Superseded {
+		towards = rec.SupersededWaypoint()
+	}
 	return fmt.Sprintf("the twin is diverged: step run %s %s towards %s stopped at phase %s (%s); it accepts only fylgja twin destroy",
-		st.Run.WorkflowID, st.Run.RunID, rec.SideStage(st.To.Stage), phase, Landed(st.Pushed, ": "))
+		st.Run.WorkflowID, st.Run.RunID, towards, phase, Landed(st.Pushed, ": "))
 }
 
 // notPlannedFrom is the run's second lock at inspect: the host's record
 // must still name the bundle and stage the server planned from. Either moving between the
-// CLI's look and the run's means the host changed, and nothing is touched.
+// CLI's look and the run's means the host changed, and nothing is touched. Where the twin is
+// is named by the record's Position() and where the step was planned from by the from side's
+// Name() (019, research R-05).
 func notPlannedFrom(rec *wire.TwinRecord, from wire.StepSide) *findings.Finding {
 	if rec.BundleID == from.BundleID && sameStage(rec.Stage, from.Stage) {
 		return nil
 	}
 	return &findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: rec.BundleID,
 		Step: findings.StepInspect, Message: fmt.Sprintf(
-			"the twin is at stage %s (bundle %s), not at stage %s (bundle %s) the step was planned from: the host changed "+
+			"the twin is at %s (bundle %s), not at %s (bundle %s) the step was planned from: the host changed "+
 				"after the command looked; nothing was touched; run fylgja twin step again",
-			rec.Stage.Name(), shortBundle(rec.BundleID), from.Stage.Name(), shortBundle(from.BundleID))}
+			rec.Position(), shortBundle(rec.BundleID), from.Name(), shortBundle(from.BundleID))}
 }
 
 // sameStage says whether two records name the same stage, nil included.

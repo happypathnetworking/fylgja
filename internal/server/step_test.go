@@ -85,6 +85,39 @@ func TestStepClosingCarriesTheWaitOnEveryOutcome(t *testing.T) {
 	}
 }
 
+// The closing line names each side by its Name() (019, research R-05): a step towards a
+// snapshot says so where a stage step names its stage, and a twin that names no stage is up
+// at its snapshot.
+func TestStepClosingNamesASnapshotSide(t *testing.T) {
+	const (
+		fromID = "348fd9340000000000000000000000000000000000000000000000000000abcd"
+		toID   = "ee291b0f0000000000000000000000000000000000000000000000000000abcd"
+	)
+	in := provision.StepInput{
+		From: wire.StepSide{SnapshotID: strings.Repeat("576933ec", 8), BundleID: fromID},
+		To:   wire.StepSide{SnapshotID: strings.Repeat("9c2d01e7", 8), BundleID: toID},
+	}
+	took := 2.4
+	for _, c := range []struct {
+		res  provision.StepResult
+		want string
+	}{
+		{provision.StepResult{Outcome: provision.StepStepped, Timings: wire.StepTimings{WholeS: 41, Push: map[string]float64{"s1": 2.4}},
+			PushPlan: []wire.StepPush{{Node: "s1", Outcome: wire.PushLanded, TookS: &took}}},
+			"stepped to snapshot 9c2d01e7… (bundle ee291b0f…) in 41.0s: push s1 2.4s"},
+		{provision.StepResult{Outcome: provision.StepUnchanged, Timings: wire.StepTimings{WholeS: 1.8}},
+			"unchanged; the record moves to snapshot 9c2d01e7… (bundle ee291b0f…) in 1.8s"},
+		{provision.StepResult{Outcome: provision.StepDiverged, Phase: findings.StepPush,
+			PushPlan: []wire.StepPush{{Node: "s1", Outcome: wire.PushRefused, Rule: findings.RulePushRefused}}},
+			"diverged towards snapshot 9c2d01e7… (bundle ee291b0f…) at phase push: landed none; not landed s1 (push.refused); " +
+				"the twin is up at snapshot 576933ec… (bundle 348fd934…); fylgja twin destroy clears it"},
+	} {
+		if got := stepClosing(in, c.res); got != c.want {
+			t.Errorf("%s:\n got %q\nwant %q", c.res.Outcome, got, c.want)
+		}
+	}
+}
+
 // rehearsingService is a workflow service with a rehearsal in flight: a destroy follows the
 // rehearsal's own destroy, a fylgja-destroy run of the rehearsal's, to its end before its
 // own, and a create or a step is refused naming the rehearsal.

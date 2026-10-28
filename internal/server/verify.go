@@ -308,8 +308,8 @@ func verifyStatus(r verify.Report) findings.Status {
 
 // verifyTwinLine is the twin: line (contracts/cli.md): the record's reference as twin show
 // names it, the snapshot and the bundle the record says the twin is at (019: "snapshot
-// none" for a record naming no snapshot), its state, a diverged twin's step, and the node
-// count.
+// none" for a record naming no snapshot), its state, a diverged twin's step, its target named
+// as twin show names it (stepSideRef), and the node count.
 func verifyTwinLine(rec *wire.TwinRecord) string {
 	ref := "branch " + rec.Provenance.Branch
 	if rec.Stage != nil {
@@ -324,7 +324,7 @@ func verifyTwinLine(rec *wire.TwinRecord) string {
 	state := "ready"
 	switch st := rec.Step; {
 	case rec.State == wire.StateDiverged && st != nil:
-		state = fmt.Sprintf("diverged towards %s (bundle %s) at phase %s by run %s %s", rec.SideName(st.To.Stage),
+		state = fmt.Sprintf("diverged towards %s (bundle %s) at phase %s by run %s %s", stepSideRef(rec, st.To),
 			shortID(st.To.BundleID), phaseOf(st), st.Run.WorkflowID, st.Run.RunID)
 	case rec.Stage != nil && rec.Provenance.At != "":
 		state += ", pinned at " + rec.Provenance.At

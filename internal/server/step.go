@@ -164,7 +164,46 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 		}
 		return &result{doc: doc}
 	}
-	return withStage(stepTo(ctx, opts, f, op, subject, reg, paths, acts, rec, built, list), resolved)
+	return withStage(stepTo(ctx, opts, f, op, subject, reg, paths, acts, rec, stageTarget(built), list), resolved)
+}
+
+// stepTarget is what a step goes to, however it was chosen (019, research R-04;
+// data-model §2): the side's name as step.Between names it (R-05), the stage, nil for a
+// snapshot, the snapshot, the compiled and filed bundle, the branch and the at it was read
+// at, verbatim, "" when unpinned, and when its intent was observed. stepTo and stepInput
+// read it alone, so the run, the record and the document are one code whatever the target.
+type stepTarget struct {
+	name       string
+	stage      *wire.StageRef
+	snapshotID string
+	bundle     step.Bundle
+	at, branch string
+	observedAt string
+}
+
+// stageTarget is the target a stage step goes to, from stage plan's build of the stage,
+// compiled and filed, and its resolution: named by its reference, <branch>/<label>, as stage
+// plan names it.
+func stageTarget(built stages.PlanStage) stepTarget {
+	r := built.Resolved
+	return stepTarget{name: built.Ref.String(), stage: r.StageRef(), snapshotID: built.SnapshotID, bundle: *built.Bundle,
+		at: r.At, branch: r.Branch, observedAt: built.ObservedAt}
+}
+
+// recordSide is the step's from side, the record's own: its stage, its snapshot, none when
+// the record names none, its bundle and its at.
+func recordSide(rec *wire.TwinRecord) wire.StepSide {
+	return wire.StepSide{Stage: rec.Stage, SnapshotID: recordSnapshot(rec), BundleID: rec.BundleID, At: rec.Provenance.At}
+}
+
+// betweenName is a side as step.Between names it (R-05): a stage by its reference alone,
+// <branch>/<label>, as stage plan names it, and any other side by its Name(), snapshot
+// <short>….
+func betweenName(s wire.StepSide) string {
+	if s.Stage != nil {
+		return s.Stage.Name()
+	}
+	return s.Name()
 }
 
 // shortSnapshot is the record's snapshot as the step's twin line names it (018; R-09): its
@@ -272,7 +311,7 @@ func stepStageless(rec *wire.TwinRecord) *findings.Finding {
 // built from list (finish's, the dry run's report, the run's) by construction, and a
 // failure's, built fresh, through withFound.
 func stepTo(ctx context.Context, opts *options, f *stepFlags, op string, subject *findings.Subject, reg *psp.Registry,
-	paths lab.Paths, acts *lab.Activities, rec *wire.TwinRecord, built stages.PlanStage, list findings.List) error {
+	paths lab.Paths, acts *lab.Activities, rec *wire.TwinRecord, target stepTarget, list findings.List) error {
 	// list as it stands when the failure is met, not as it was passed.
 	failed := func(err error) error { return withFound(err, list) }
 
@@ -295,11 +334,11 @@ func stepTo(ctx context.Context, opts *options, f *stepFlags, op string, subject
 	from := step.Bundle{ID: rec.BundleID, Files: files}
 
 	// The step, as stage plan prints it.
-	s, err := step.Diff(from, *built.Bundle)
+	s, err := step.Diff(from, target.bundle)
 	if err != nil {
 		return failed(failAt(op, subject, findings.StepCompare, rec.BundleID, "%v", err))
 	}
-	pair := step.Between(rec.Stage.Name(), built.Ref.String(), s)
+	pair := step.Between(betweenName(recordSide(rec)), target.name, s)
 	opts.note("%s", pair.Text())
 	diff, err := json.Marshal(pair)
 	if err != nil {
@@ -308,8 +347,8 @@ func stepTo(ctx context.Context, opts *options, f *stepFlags, op string, subject
 
 	// The host for the twin after the step, without the two refusals that name the twin
 	// itself (M4's withoutPresence), as the run's step 2 checks it.
-	toPath := store.Path(built.Bundle.ID)
-	plan, err := lab.CheckHost(ctx, acts, wire.CheckHostInput{BundlePath: toPath, BundleID: built.Bundle.ID})
+	toPath := store.Path(target.bundle.ID)
+	plan, err := lab.CheckHost(ctx, acts, wire.CheckHostInput{BundlePath: toPath, BundleID: target.bundle.ID})
 	if err != nil {
 		return failed(failAt(op, subject, findings.StepHostCheck, findings.StepHostCheck, "host check: %s", activityMessage(err)))
 	}
@@ -326,7 +365,7 @@ func stepTo(ctx context.Context, opts *options, f *stepFlags, op string, subject
 		return failed(failAt(op, subject, findings.StepCompare, "lab "+wire.LabName, "containerlab's plan: %v", err))
 	}
 
-	in, packages, err := stepInput(f, rec, from, built, toPath, s, diff, plan, lifecycle, reg, opts.version())
+	in, packages, err := stepInput(f, rec, from, target, toPath, s, diff, plan, lifecycle, reg, opts.version())
 	if err != nil {
 		return failed(failAt(op, subject, findings.StepCompare, rec.BundleID, "%v", err))
 	}
@@ -397,10 +436,10 @@ type stepPackages struct {
 // bundle's from its manifest, each node's package looked up in the registry by its id, since
 // a merge package on either side refuses the step. Declared is each target node's
 // package's fidelity.link_change, which the host check's plan does not carry. Each side
-// names its snapshot (018; R-13): the from side the record's, none when the record names
-// none (a record of 8), and the to side the one the target's build took; the run copies
-// both into the record it writes.
-func stepInput(f *stepFlags, rec *wire.TwinRecord, from step.Bundle, built stages.PlanStage, toPath string, s step.Step, diff []byte,
+// names its snapshot (018; R-13): the from side the record's, and the to side the target's;
+// the run copies both into the record it writes. The to side names the target's stage, none
+// for a snapshot (019).
+func stepInput(f *stepFlags, rec *wire.TwinRecord, from step.Bundle, target stepTarget, toPath string, s step.Step, diff []byte,
 	plan wire.CheckHostResult, lifecycle wire.ReconcilePlan, reg *psp.Registry, version string) (provision.StepInput, stepPackages, error) {
 	var packages stepPackages
 	declared := map[string]string{}
@@ -430,11 +469,11 @@ func stepInput(f *stepFlags, rec *wire.TwinRecord, from step.Bundle, built stage
 		pushes = step.PushPlan(s, step.Lifecycle{Restarted: lifecycle.Restarted, Recreated: lifecycle.Recreated,
 			Created: lifecycle.Added, Removed: lifecycle.Deleted})
 	}
-	r := built.Resolved
 	return provision.StepInput{
-		From:         wire.StepSide{Stage: rec.Stage, SnapshotID: recordSnapshot(rec), BundleID: rec.BundleID, At: rec.Provenance.At},
-		To:           wire.StepSide{Stage: r.StageRef(), SnapshotID: built.SnapshotID, BundleID: built.Bundle.ID, At: r.At, Branch: r.Branch},
-		ObservedAt:   built.ObservedAt,
+		From: recordSide(rec),
+		To: wire.StepSide{Stage: target.stage, SnapshotID: target.snapshotID, BundleID: target.bundle.ID, At: target.at,
+			Branch: target.branch},
+		ObservedAt:   target.observedAt,
 		ToBundlePath: toPath,
 		Diff:         diff,
 		Unchanged:    s.Unchanged,
@@ -640,19 +679,20 @@ func waitClause(w wire.StepWait) string {
 	return "wait could not complete"
 }
 
-// m11Closing is M11's closing line, unchanged by the wait.
+// m11Closing is M11's closing line, unchanged by the wait. Each side is named by its Name()
+// (019, research R-05): stage <branch>/<label> as M11 named it, else snapshot <short>….
 func m11Closing(in provision.StepInput, res provision.StepResult) string {
-	to, from := in.To.Stage.Name(), in.From.Stage.Name()
+	to, from := in.To.Name(), in.From.Name()
 	switch {
 	case res.Phase != "":
-		return fmt.Sprintf("diverged towards stage %s (bundle %s) at phase %s: %s; the twin is up at stage %s (bundle %s); "+
+		return fmt.Sprintf("diverged towards %s (bundle %s) at phase %s: %s; the twin is up at %s (bundle %s); "+
 			"fylgja twin destroy clears it", to, shortID(in.To.BundleID), res.Phase, provision.Landed(res.PushPlan, " "),
 			from, shortID(in.From.BundleID))
 	case res.Outcome == provision.StepUnchanged:
-		return fmt.Sprintf("unchanged; the record moves to stage %s (bundle %s) in %s", to, shortID(in.To.BundleID),
+		return fmt.Sprintf("unchanged; the record moves to %s (bundle %s) in %s", to, shortID(in.To.BundleID),
 			seconds(res.Timings.WholeS))
 	case res.Outcome == provision.StepStepped:
-		line := fmt.Sprintf("stepped to stage %s (bundle %s) in %s", to, shortID(in.To.BundleID), seconds(res.Timings.WholeS))
+		line := fmt.Sprintf("stepped to %s (bundle %s) in %s", to, shortID(in.To.BundleID), seconds(res.Timings.WholeS))
 		var parts []string
 		if t := res.Timings.ReconcileS; t != nil {
 			parts = append(parts, "reconcile "+seconds(*t))

@@ -4021,3 +4021,75 @@ operator's typed answers verbatim.
 - Revisit if a lane's merge stops the loop often, if the attended session's relay of every
   report proves too much for the operator's chat, or when 016's measurement decides the
   implement effort.
+
+---
+
+<a id="d-064"></a>
+## D-064 — A probe is a declaration outside intent: a file first, an Infrahub kind second, carried by the snapshot and compiled into synthesized hosts by a probe package keyed by its format
+
+**Status:** Accepted 2026-10-28, by the operator, at `016-probes`'s `analyze`. Beside
+[D-010](#d-010) (the CTM, whose `synthesized` provenance it fills), [D-031](#d-031) (a
+mechanism is code keyed by a format value, which the probe package is a second instance
+of), [D-038](#d-038) (an assertion kind added as data), [D-045](#d-045) (the kind's pattern),
+[D-057](#d-057), [D-061](#d-061) and [D-062](#d-062), which stand. Supersedes nothing.
+D-010's "everything is `intent` today" is history from this entry. To be built by
+`016-probes`.
+
+### Context
+
+Since 018 the snapshot carries `probes`, a list required and empty; since 019 a twin is
+frozen at its snapshot, so loss across a step is the step's. The roadmap's F-014, re-shaped
+on 2026-10-25, names the headline demo, loss during a change applied to a running twin,
+and the production shape names a declaration outside intent as the third seam 0.3 proves.
+The CTM carries no address (D-057), so a host's address must come from somewhere intent
+does not own; the reader must not read addresses (D-057); and Infrahub renders every
+device's configuration (D-028, Constitution IV).
+
+### Options considered
+
+- **The kind primary, the file `twin compile`'s input** (the 2026-10-16 brief). Rejected
+  by the operator on 2026-10-25: F-025's NetBox reader takes a file alone, and the snapshot
+  is the core's one input.
+- **Probes derived from the topology.** Rejected: Fylgja guessing at intent.
+- **The declaration a file first, the kind one source of it, carried by the snapshot,
+  with the host's address and gateway in the declaration.** Chosen.
+- **A generator type per probe, in code.** Rejected: D-031's branch on what a thing is.
+- **The probe package a facet of the PSP.** Rejected: a host is of no platform.
+
+### Decision
+
+- A probe declaration is a document of its own (`contracts/probes.schema.json`, version
+  `1`): each probe a name, a format and two endpoints, each a device, an interface, the
+  address its host takes with its prefix length, and its gateway, the device interface's
+  address. It carries nothing else; the rate and the burst count are the package's.
+- The declaration lives in a file the operator writes, and in Infrahub as `FylgjaProbe`,
+  one object per probe on the default branch, branch-agnostic, on D-045's pattern, written
+  by the operator and only read by Fylgja. The kind is one source of the file, not the
+  declaration: the NetBox reader takes the file alone.
+- A request reads its probes once, from `--probes <file>`, else the kind, else none, with
+  no warning, and every snapshot it takes carries that list. The snapshot, version `2`,
+  carries the declarations beside the CTM and hashes them; a `1` reads as a `2` with none.
+- The compile adds one synthesized `linux` host per endpoint to the CTM it compiles, on a
+  synthesized link to the device interface, configured from the declaration alone, and
+  refuses a probe it cannot place; the manifest marks every synthesized node, link and
+  port. The device side is intent's: Infrahub's template renders the interface's address.
+- A probe package is a mechanism keyed by a format value beside the PSP (`probes/`):
+  image, acquisition, how a host is configured, how a flow runs and is read, how a burst
+  runs, rate, count, resources, timeouts; `ping` is the first format.
+- Transient loss across a step is measured and reported, labelled the container's, never
+  asserted; unrecovered loss is a verify assertion kind, `burst`, under D-038, which fails
+  a stage through D-052's gate unchanged.
+
+### Consequences
+
+- Bundle `6`, snapshot `2`, `twin.json` `11`; the step, verify and rehearsal documents
+  carry loss and the burst; the goldens move twice. The worker serves four workflows and
+  seventeen activities, which amends D-062's count.
+- Constitution II is expanded and the Check's gate blesses the probe package (2.3.0).
+- The reference transform renders addresses and no routing: a probe across two devices
+  needs routing intent renders, which the user's own transform does; the fixture's probe
+  lies across one device.
+- A probe kept on `main` blocks a change that decommissions its device until it is
+  deleted; the remedy is the declaration's.
+- Revisit at F-020 (a second format and element shape), when the reference transform
+  gains routing, or if a probe needs a rate of its own.

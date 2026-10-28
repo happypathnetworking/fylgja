@@ -12,7 +12,7 @@ Read in this order, then the current feature under `specs/`:
 `docs/archive/`) · `docs/development.md` (conventions).
 Terms are in `docs/glossary.md`. What has been verified about a dependency is in
 `docs/verified-facts.md`, read when a task touches that dependency. The constitution at
-`.specify/memory/constitution.md` (2.2.0) binds every plan's Constitution Check. The schema
+`.specify/memory/constitution.md` (2.3.0) binds every plan's Constitution Check. The schema
 Fylgja reads is the OpsMill schema library's DCIM at a pinned commit, by one documented
 mapping ([D-057](docs/decisions.md#d-057)); `schema/README.md` says which kinds and fields.
 

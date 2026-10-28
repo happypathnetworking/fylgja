@@ -60,7 +60,9 @@ In order, each refusal ending the command before any run:
 1. **Guards at start** (no connection): `--stage` beside `--snapshot` →
    `snapshot.flags.conflict`; `--snapshot=` empty; the files' shape; `--wait`'s.
 2. **No target** (no connection; a file read, R-08): neither flag, and a readable record
-   naming no stage → `step.target.unknown`.
+   naming no stage → `step.target.unknown`. *Amended 2026-10-28 (R-08, T058):* that record
+   is first held to the refusals it alone decides, in 4–6's order (`Ineligible`'s diverged
+   and waypoint cases, `stepScopeUnknown`, `stepUnsourced`), each given in its own words.
 3. `rehearsalHolds` → `run.in_flight` (dials the workflow service, not in a dry run).
 4. `provision.Ineligible` (also the run's inspect): no twin, orphan or unreadable record,
    diverged, a record of 5 or earlier naming a waypoint. **Its `Stage == nil` case and

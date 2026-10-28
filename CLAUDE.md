@@ -586,10 +586,8 @@ Rewritten whole at each release's close, never appended to.
   [brief](specs/016-probes/brief.md), rewritten on 2026-10-28, is re-read against 019's
   close before specifying.
 - **Open, the operator's**: 017's, 018's and 019's command logs (`make command-log`, once
-  each session is closed); 019's review, merge and push (T056), and whether R-08's
-  refusal reaches as far as T034 applied it: every readable record naming no stage, given
-  no target, is refused `step.target.unknown`, a bundle twin's included, before its own
-  refusal once given one (019's `tasks.md`, T034); file 014's upstream request for named points in time
+  each session is closed); 019's review, merge and push (T056); file 014's upstream
+  request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left
   padding) and a zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read

@@ -1396,7 +1396,8 @@ twin show [--json]
   `--stage` or `--snapshot`:
   - `--stage <b>/<label>` names a stage of **any** proposed change, resolved, judged and
     read under the record's scope. Left out, it means the next stage of the twin's own
-    proposed change; for a twin whose record names no stage, a target is required.
+    proposed change; for a twin whose record names no stage, a target is required,
+    unless its record refuses the step for itself, which is then given first.
   - `--snapshot <id|file>` takes the forms `twin create --snapshot` takes: an id the
     server's store holds, or a file read here and sent, which the server files under its
     id. No request reaches Infrahub for it. A snapshot of any branch. The server resolves
@@ -1474,7 +1475,7 @@ The dry run of `twin create` has no `follow:` line. A rehearsal's deadline is 30
 | Identifier | Severity, exit, step | When |
 |---|---|---|
 | `snapshot.flags.conflict` | rejection, 2, start | gains: `--stage` beside `--snapshot` on `twin step`, object `--stage` |
-| `step.target.unknown` | rejection, 1, resolve | gains: no `--stage` and no `--snapshot` for a twin whose record names no stage, object the record's `bundle_id`, read before any connection |
+| `step.target.unknown` | rejection, 1, resolve | gains: no `--stage` and no `--snapshot` for a twin whose record names no stage, object the record's `bundle_id`, read before any connection, after the record's own refusals |
 | `step.twin.unsteppable` | rejection, 1, resolve | reworded: a bundle twin, a record of 8, a record naming no snapshot; and a target whose scope or mapping differs from the record's, object the target, naming both |
 | `stage.flags.conflict` | rejection, 2, start | `--branch` or `--at` beside `--stage` (no `--interval`) |
 | `show.service.unreachable` | warning | `whether a run is in flight is unknown` |
@@ -1492,6 +1493,15 @@ The wordings, in shape:
   inside the proposed change the twin was built from: a `--stage` of another is the
   target, refused `step.target.unknown` naming that proposed change's stages when it has
   no such label.
+- The order with no target, for a twin whose record names no stage, on the record the file
+  read gives, before any connection: a diverged twin is refused `step.twin.diverged`; then
+  a record naming M10's waypoint, one of 7 or earlier, or one whose scope or mapping no
+  step can read under, `step.twin.unsteppable`; then one naming no snapshot, a bundle
+  twin's among them, `step.twin.unsteppable`; and `step.target.unknown` only for a record
+  none of them refuses. Each is the refusal the step gives that record once given a
+  target, in the same words. A twin whose lab is gone meets `step.target.unknown` first,
+  since finding that needs the host's inspection; an orphan, whose record is absent or
+  unreadable, is refused as one at the inspection, as before.
 - `step.twin.unsteppable`, judged after 017's refusal of a record naming no scope, a bundle
   twin's first: `the twin was provisioned from a bundle, which names no snapshot; only a
   twin whose record names a snapshot steps; fylgja twin destroy clears it`; `the twin was

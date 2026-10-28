@@ -1149,7 +1149,8 @@ naming no snapshot do not (`step.twin.unsteppable`). Its target is a stage, `--s
 <branch>/<label>` of any *proposed change*, forward or back, the *head* included once it
 has moved, or, left out, the next stage of the twin's own; or a snapshot of any branch,
 `--snapshot <id|file>`, for which no request reaches Infrahub. A twin whose record names
-no stage needs one or the other (`step.target.unknown`). A `--stage` of another proposed
+no stage needs one or the other (`step.target.unknown`), unless its record refuses the
+step for itself, which is then said first. A `--stage` of another proposed
 change is the target, where until 019 it was refused (`step.target.foreign`), and is
 refused `step.target.unknown`, naming that proposed change's stages, when it has no such
 label. A target whose *scope* or *mapping* is not the record's is refused

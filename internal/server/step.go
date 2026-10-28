@@ -64,8 +64,9 @@ func (f *stepFlags) fromSnapshot() bool {
 // --snapshot that is a path, and none otherwise. Everything up to the run is decided here,
 // each refusal ending the command with its document: --stage beside --snapshot, then the
 // files' shape, before any connection; --stage as given; the packages; no target for a
-// twin whose record names no stage, read from the twin directory before any connection
-// (019, research R-08); a rehearsal in flight, asked of the workflow service before
+// twin whose record names no stage, read from the twin directory before any connection,
+// after the refusals that record alone decides (019, research R-08 as amended); a
+// rehearsal in flight, asked of the workflow service before
 // anything else is read, since the twin and the host are its own (015; T080); the host,
 // whose twin must name a snapshot and not be diverged. Then the target: --snapshot's,
 // resolved, compiled and filed as twin create --snapshot builds one, with no request to
@@ -458,17 +459,33 @@ func stepUnsourced(rec *wire.TwinRecord) *findings.Finding {
 // a branch or a snapshot, or stepped to a snapshot, has no next stage, so a target is
 // required. The record is read from the twin directory, a file read, before rehearsalHolds
 // dials the workflow service and before the host is inspected, so the refusal reaches
-// nothing (FR-014). An absent or unreadable record, or one naming a stage, is nil, and the
-// step goes on as before 019: a rehearsal's host, holding no record during its baseline's
-// provision and a staged record after, still meets run.in_flight first, since a rehearsal's
-// records always name a stage.
+// nothing (FR-014). A record no target can step is refused for itself first, in the order
+// the step gives its refusals once the host is inspected (R-08 as amended; FR-012):
+// Ineligible's two record cases (a diverged twin, a record naming M10's waypoint), then
+// stepScopeUnknown, then stepUnsourced. A twin whose lab is gone still meets the no-target
+// refusal first, since finding that needs the host's inspection. An absent or unreadable
+// record, an orphan's, or one naming a stage, is nil, and the step goes on as before 019: a
+// rehearsal's host, holding no record during its baseline's provision and a staged record
+// after, still meets run.in_flight first, since a rehearsal's records always name a stage.
 func stepNoTarget(f *stepFlags, paths lab.Paths) *findings.Finding {
 	if f.fromStage() || f.fromSnapshot() {
 		return nil
 	}
 	rec, err := lab.ReadRecord(paths.TwinJSON)
-	if err != nil {
+	if err != nil || rec.Stage != nil {
 		return nil
+	}
+	// Ineligible over a host whose lab and twin directory are both present gives its record
+	// cases alone, in its own words.
+	present := wire.HostReport{LabPresent: true, TwinDirPresent: true, Twin: &rec}
+	if refused := provision.Ineligible(present, findings.StepResolve, paths.Twin); refused != nil {
+		return refused
+	}
+	if refused := stepScopeUnknown(&rec); refused != nil {
+		return refused
+	}
+	if refused := stepUnsourced(&rec); refused != nil {
+		return refused
 	}
 	return noTarget(&rec)
 }

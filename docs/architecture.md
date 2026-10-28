@@ -809,7 +809,9 @@ record's, found in its proposed change's order by the record's label; or the sta
 moved since the record; or the snapshot `--snapshot <id|file>` names, one the store holds
 or a file sent, for which no request reaches Infrahub. A twin whose record names no stage
 has no next stage: without a target it is refused `step.target.unknown` before any
-connection. Nothing after the record's stage, its label gone, its proposed change closed
+connection, once its record has passed the refusals that record alone decides (a
+diverged twin, M10's waypoint, a scope or mapping no step reads under, no snapshot), each
+given first in its own words. Nothing after the record's stage, its label gone, its proposed change closed
 and another opened on its branch, or a given label the proposed change lacks, is
 `step.target.unknown`; a stage
 that resolves to the record's own `(branch, at)` is `step.target.current`; and within the

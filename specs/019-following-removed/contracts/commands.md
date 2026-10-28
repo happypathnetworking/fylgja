@@ -28,7 +28,9 @@ twin show [--json]
   `--stage` or `--snapshot`:
   - `--stage <b>/<label>` names a stage of **any** proposed change, resolved, judged and
     read under the record's scope. Left out, it means the next stage of the twin's own
-    proposed change; for a twin whose record names no stage, a target is required.
+    proposed change; for a twin whose record names no stage, a target is required,
+    unless its record refuses the step for itself, which is then given first (R-08 as
+    amended, 2026-10-28).
   - `--snapshot <id|file>` takes the forms `twin create --snapshot` takes: an id the
     server's store holds, or a file read here and sent, which the server files under its
     id. No request reaches Infrahub for it. A snapshot of any branch.

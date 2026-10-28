@@ -1359,3 +1359,22 @@ only up to the next heading.
   - **Not run, and why**: tier 3, twins and the worker are not this run's, and T062 needed none.
   - **The host**: the worker (pid 533258) and the server (pid 533282) still read `(deleted)`, as Run 18 left them, and were not restarted; the server keeps the old refusal order its checkpoint names until it is. `bin/fylgja` is rebuilt at this note's commit.
   - **Next**: `converge` again. T056 is still the operator's.
+
+---
+
+## Phase 18: Convergence
+
+- [ ] T063 [pin] Make `twin step`'s help say what 019's `--stage` means. The step logic is unchanged; only the command's help strings and one existing test move.
+  - **Today**: `internal/cli/step.go:39` opens the long text with "Take the running twin to another stage of its proposed change, the next one or the one --stage names". `:64`, the `--stage` usage, reads "the stage to step to, <branch>/<label>, of the twin's own proposed change; the next one when left out". Since 019, `--stage` names a stage of any proposed change (US3 scenario 3). Left out, it means the next stage of the twin's own proposed change only when the record names a stage. For a twin whose record names none, a target is required (US3 scenario 1). `contracts/cli.md:1396–1400` says so. T018 reworded the help of `create`, `show` and `destroy`, but this text predates 019 and was left.
+  - **The edit**: reword both strings in `contracts/cli.md`'s 019 terms. The long text's first sentence names a stage of any proposed change, the one `--stage` names or, with it left out, the next stage of the twin's own; or a snapshot of any branch, the one `--snapshot` names. The `--stage` usage says "of any proposed change". It says that left out it means the next stage of the twin's own proposed change, and that a twin whose record names no stage needs `--stage` or `--snapshot`. The rest of the long text stays.
+  - **The pin**: in `internal/cli/stage_test.go`'s `TestWorkHelpTextsNameTheServer`, the `newTwinStepCmd` row gains `gone` "another stage of its proposed change" and `said` "any proposed change". The test also asserts that `cmd.Flags().Lookup("stage").Usage` names "any proposed change" and no longer says "of the twin's own proposed change; the next one when left out". No new test function, since tier 1 has about a second of headroom. Record `GOFLAGS=-count=1 make test`'s wall time against SC-009's 45 s.
+
+  per FR-014, US3/AC1–AC3 (contradicts)
+- [ ] T064 [pin] Drop "following" from F-021's list of what the documents carry: `docs/roadmap.md:495–496` reads "Its content is what the JSON already carries: `twin show`, following, stages and plans, verify reports, steps and observation". No document carries a following block since 019 (FR-004, FR-009). Keep every other item, then run `make linkcheck`.
+
+  per FR-025 (partial)
+- [ ] T065 [pin] Reword two comments that state a superseded shape as current. No code changes.
+  - `internal/bundle/store_test.go:140–142` (`TestSidecarsDoNotAffectEntries`) calls `.reads/run-1.ctm.json` "a read's transient CTM", as if a build still wrote one. Say instead that it is a following check's read under `.reads/`, which builds wrote until 019 (FR-007) and an upgraded host's store may still hold. The test body stays: it still holds an earlier build's leftovers off every entry's id.
+  - `scripts/e2e.sh:1706`, case 8's create, says "a 7 record of no rehearsal that has not stepped", but the assertion at `:1714` is `twin_version=="10"`. Say "a 10 record". Then `bash -n scripts/e2e.sh` and `shellcheck scripts/bring-up.sh scripts/e2e.sh` stay clean.
+
+  per FR-007, FR-022 (partial)

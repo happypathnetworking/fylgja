@@ -73,10 +73,11 @@ func (f *stepFlags) fromSnapshot() bool {
 // reference's branch, or with none given the next stage of the record's own (014: research
 // R-16; 019, research R-07), with stage list's stage.twin.moved beside it when the record's
 // stage of that proposed change has moved, and the target's resolution, read, compile and
-// filing on stage plan's path. Then the from bundle out of the store; the step between the
-// two; the host check on the target and containerlab's plan for the lab, both in this
-// process as a dry run reads them; and the rules on that plan. Then the dry run reports, or
-// the run starts. Once the target is chosen, every document the command ends with carries
+// filing on stage plan's path. Either target names the record's scope and mapping, or is
+// refused before any run (targetUnheld). Then the from bundle out of the store; the step
+// between the two; the host check on the target and containerlab's plan for the lab, both in
+// this process as a dry run reads them; and the rules on that plan. Then the dry run reports,
+// or the run starts. Once the target is chosen, every document the command ends with carries
 // what it had found by then, a failure's included.
 func runTwinStep(ctx context.Context, opts *options, f *stepFlags, files []api.File) error {
 	const op = findings.OpTwinStep
@@ -225,7 +226,43 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags, files []api.F
 		}
 		return &result{doc: doc}
 	}
+	// The stage's scope and mapping are its bundle's, its snapshot's envelope copied into the
+	// manifest: resolved and read under the record's scope, it differs only by a mapping that
+	// moved since the twin was created (a build whose reader moved).
+	var m compiler.Manifest
+	if err := json.Unmarshal(built.Bundle.Files[compiler.ManifestFile], &m); err != nil {
+		return withStage(withFound(failAt(op, subject, findings.StepResolve, built.Bundle.ID,
+			"reading bundle %s's manifest: %v", built.Bundle.ID, err), list), resolved)
+	}
+	if refused := targetUnheld(rec, m.Provenance.Scope, wire.Mapping(m.Provenance.Mapping), target.String(),
+		"stage "+target.String()); refused != nil {
+		return withStage(finish(op, subject, append(list, *refused)), resolved)
+	}
 	return withStage(stepTo(ctx, opts, f, op, subject, reg, paths, acts, rec, stageTarget(built), list), resolved)
+}
+
+// targetUnheld is the refusal of a step whose target names another scope than the record's
+// provenance, or a mapping any field of which differs from the record's, or nil (019,
+// research R-06; FR-015): a twin's scope and mapping are fixed when it is created, since a
+// step that diverges keeps the record's provenance in the record it writes, and a target read
+// under another would leave a twin whose nodes no read of its record's could give.
+// step.twin.unsteppable, rejection at resolve, its object the target as the command names
+// it, the snapshot's id or the stage's reference; name is the target's side name, snapshot
+// <short>… or stage <branch>/<label>. Both are named, the record's first, each mapping as
+// reader, model and version. A snapshot target's is judged on its envelope before its
+// compile, so its bundle is never filed; a stage target's on its bundle's manifest, after
+// stages.Build and before the host check. The branch is not the twin's for life: a target
+// of any branch steps (FR-016).
+func targetUnheld(rec *wire.TwinRecord, scope string, mapping wire.Mapping, object, name string) *findings.Finding {
+	held := rec.Provenance
+	if scope == held.Scope && mapping == held.Mapping {
+		return nil
+	}
+	words := func(m wire.Mapping) string { return m.Reader + " " + m.Model + " " + m.Version }
+	return &findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: object,
+		Step: findings.StepResolve, Message: fmt.Sprintf("the twin's record names scope %s and mapping %s; %s names scope %s "+
+			"and mapping %s; a twin's scope and mapping are fixed when it is created; fylgja twin destroy and create again "+
+			"to change them", held.Scope, words(held.Mapping), name, scope, words(mapping))}
 }
 
 // stepTarget is what a step goes to, however it was chosen (019, research R-04;
@@ -250,7 +287,8 @@ type stepTarget struct {
 // refusal at compile as there; then the step, as a stage's, its target named by its snapshot
 // and carrying the envelope's branch and at, verbatim, and the stored document's
 // observed_at, the first take's. No request reaches Infrahub: nothing here builds an intent
-// client, and a snapshot of any branch is a target.
+// client, and a snapshot of any branch is a target, but of the record's scope and mapping
+// alone (targetUnheld), judged before the compile.
 func stepToSnapshot(ctx context.Context, opts *options, f *stepFlags, op string, subject *findings.Subject, reg *psp.Registry,
 	paths lab.Paths, acts *lab.Activities, rec *wire.TwinRecord, files []api.File) error {
 	s, path, err := resolveSnapshot(ctx, paths, op, subject, f.snapshot, files)
@@ -264,10 +302,16 @@ func stepToSnapshot(ctx context.Context, opts *options, f *stepFlags, op string,
 	opts.note("target: snapshot %s (%s)", shortID(s.ID), branchRef(env.Branch, env.At, s.ObservedAt))
 
 	cr := &compiledRead{paths: paths, snapshot: filedSnapshot{id: s.ID, path: path}, observedAt: s.ObservedAt}
+	// Its scope and mapping, on the envelope before the compile: a refused target's bundle is
+	// never filed. The snapshot stays filed, named as a refused compile names it.
+	name := wire.StepSide{SnapshotID: s.ID}.Name()
+	if refused := targetUnheld(rec, env.Scope, wire.Mapping(env.Mapping), s.ID, name); refused != nil {
+		return cr.refused(opts, finish(op, subject, findings.List{*refused}))
+	}
 	if err := cr.compileAndFile(ctx, opts, op, subject, s.CTM, reg, nil); err != nil {
 		return err
 	}
-	target := stepTarget{name: wire.StepSide{SnapshotID: s.ID}.Name(), snapshotID: s.ID,
+	target := stepTarget{name: name, snapshotID: s.ID,
 		bundle: step.Bundle{ID: cr.bundleID, Files: cr.files}, at: env.At, branch: env.Branch, observedAt: s.ObservedAt}
 	return stepTo(ctx, opts, f, op, subject, reg, paths, acts, rec, target, cr.findings)
 }

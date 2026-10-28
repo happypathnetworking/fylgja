@@ -336,7 +336,9 @@ func (cr *compiledRead) compileAndFile(ctx context.Context, opts *options, op st
 // snapshot was filed: the text answer prints the snapshot's stored line, as the create's
 // success prints it above the bundle's, so it names the snapshot the document names and the
 // path of its entry, left to inspect (FR-010, FR-014). A refused read, a refused take and a
-// snapshot refused at resolve never reach here: none leaves one filed.
+// snapshot refused at resolve by its own rules never reach here: none leaves one filed. A
+// step's snapshot target refused for its scope or mapping does (targetUnheld, 019): it was
+// filed before it was judged.
 func (cr *compiledRead) refused(opts *options, err error) error {
 	opts.note("%s", snapshotStoredLine(cr.snapshot.id, cr.snapshot.path))
 	return cr.carried(err)

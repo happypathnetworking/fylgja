@@ -257,6 +257,45 @@ func TestStepRefusesARecordThatNamesNoSnapshot(t *testing.T) {
 	}
 }
 
+// A twin's scope and mapping are fixed when it is created (019, research R-06): targetUnheld
+// passes a target naming both as the record does, whatever its branch, and refuses one
+// naming another scope or a mapping any field of which differs, step.twin.unsteppable at
+// resolve on the target, naming both in R-06's words.
+func TestTargetUnheldNamesBoth(t *testing.T) {
+	const snapshotID = "576933ec51da1866cdb7344a1f60ec2468c7d04aafbee42eacd171e352bd7482"
+	dcim := wire.Mapping{Reader: "infrahub-dcim", Model: "opsmill/schema-library", Version: "26336e9"}
+	rec := &wire.TwinRecord{TwinVersion: "10", Provenance: wire.Provenance{Branch: "change-1", Scope: "tag:fylgja", Mapping: dcim}}
+	name := wire.StepSide{SnapshotID: snapshotID}.Name()
+	if f := targetUnheld(rec, "tag:fylgja", dcim, snapshotID, name); f != nil {
+		t.Errorf("a target of the record's scope and mapping is refused: %+v", f)
+	}
+	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: snapshotID,
+		Step: findings.StepResolve, Message: "the twin's record names scope tag:fylgja and mapping infrahub-dcim " +
+			"opsmill/schema-library 26336e9; snapshot 576933ec… names scope tag:other and mapping infrahub-dcim " +
+			"opsmill/schema-library 26336e9; a twin's scope and mapping are fixed when it is created; fylgja twin destroy " +
+			"and create again to change them"}
+	if f := targetUnheld(rec, "tag:other", dcim, snapshotID, name); f == nil || *f != want {
+		t.Errorf("another scope: %+v\nwant %+v", f, want)
+	}
+	for _, c := range []struct {
+		field string
+		edit  func(m *wire.Mapping)
+		words string
+	}{
+		{"reader", func(m *wire.Mapping) { m.Reader = "netbox-dcim" }, "netbox-dcim opsmill/schema-library 26336e9"},
+		{"model", func(m *wire.Mapping) { m.Model = "opsmill/other" }, "infrahub-dcim opsmill/other 26336e9"},
+		{"version", func(m *wire.Mapping) { m.Version = "0f0f0f0" }, "infrahub-dcim opsmill/schema-library 0f0f0f0"},
+	} {
+		m := dcim
+		c.edit(&m)
+		f := targetUnheld(rec, "tag:fylgja", m, "change-2/linked", "stage change-2/linked")
+		if f == nil || f.Object != "change-2/linked" || !strings.Contains(f.Message,
+			"; stage change-2/linked names scope tag:fylgja and mapping "+c.words+"; ") {
+			t.Errorf("another %s: %+v; want refused on change-2/linked naming mapping %s", c.field, f, c.words)
+		}
+	}
+}
+
 // A stage twin whose record is of twin.json 7 or earlier names no scope, so twin step refuses
 // it naming the version, step.twin.unsteppable at resolve, its object the record's bundle
 // (017); a record of 8 or later naming a scope and a mapping passes on to the step's other

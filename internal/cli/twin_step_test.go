@@ -3656,6 +3656,119 @@ func TestStepToASnapshotRefused(t *testing.T) {
 	}
 }
 
+// US4 scenarios 1, 2 and 4 (FR-015; research R-06): a twin's scope and mapping are fixed
+// when it is created. A snapshot target whose envelope names another scope, or another
+// mapping version, is refused step.twin.unsteppable before any run, its object the
+// snapshot's id, naming the record's and the target's, by a file and then by the id it was
+// filed under, the dry run's included: the snapshot stays filed and is named, no bundle is
+// filed, Infrahub is asked nothing and twin.json is unchanged. A stage target is judged on its
+// bundle's manifest after its build: against a record whose mapping version differs it is
+// refused the same way, its object the stage's reference, before the host check and
+// containerlab's plan; and a stage or a snapshot under the record's scope and mapping passes
+// without a word.
+func TestStepTargetKeepsScopeAndMapping(t *testing.T) {
+	const dcim = "infrahub-dcim opsmill/schema-library 26336e9"
+	const fixed = "; a twin's scope and mapping are fixed when it is created; fylgja twin destroy and create again to change them"
+	unheld := func(object, record, target string) findings.Finding {
+		return findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Step: findings.StepResolve,
+			Object: object, Message: "the twin's record names " + record + "; " + target + fixed}
+	}
+	for _, c := range []struct {
+		name string
+		edit func(env map[string]any)
+		// target is what the refusal says the snapshot names, after its name.
+		target string
+	}{
+		{"a snapshot of another scope", func(env map[string]any) { env["scope"] = "tag:other" },
+			"names scope tag:other and mapping " + dcim},
+		{"a snapshot of another mapping version", func(env map[string]any) { env["mapping"].(map[string]any)["version"] = "0f0f0f0" },
+			"names scope tag:fylgja and mapping infrahub-dcim opsmill/schema-library 0f0f0f0"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := stepHost(t, "plan-link-added.json", nil)
+			target, _ := targetSnapshot(t, h, "linked")
+			file := targetFile(t, h, target.ID, func(d map[string]any) {
+				delete(d, "snapshot_id")
+				c.edit(envelopeOf(d))
+			})
+			record := sha256Of(t, h.paths.TwinJSON)
+			bundles := storedBundles(t, h.paths.Bundles)
+			var id string
+			for _, args := range [][]string{{"--allow-restart"}, {"--dry-run"}, {"--allow-restart"}} {
+				arg := file
+				if id != "" {
+					arg = id
+				}
+				out := runStepCmd(t, append([]string{"--snapshot", arg}, args...)...)
+				id = out.doc.SnapshotID
+				if id == "" || id == target.ID {
+					t.Fatalf("%v: the document names snapshot %q; want the edited file's own id", args, id)
+				}
+				want := unheld(id, "scope tag:fylgja and mapping "+dcim, "snapshot "+short(id)+" "+c.target)
+				if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want || out.doc.Step != nil {
+					t.Errorf("%s %v: exit %d, refusal %+v, step %+v\nwant 1, %+v and no step", arg, args, out.code, got, out.doc.Step, want)
+				}
+				if !strings.Contains(out.stdout, storedLines(h.paths, id, "")[0]+"\n") {
+					t.Errorf("%v: stdout does not name the filed snapshot:\n%s", args, out.stdout)
+				}
+			}
+			if !slices.Contains(filedSnapshots(t, h.paths), id+".json") {
+				t.Errorf("snapshots/ holds %v; want the target filed under %s", filedSnapshots(t, h.paths), id)
+			}
+			if got := storedBundles(t, h.paths.Bundles); !slices.Equal(got, bundles) {
+				t.Errorf("bundles/ holds %v, held %v; a refused target's bundle is never filed", got, bundles)
+			}
+			if len(h.svc.stepped) != 0 || len(h.infra.requests()) != h.before || len(h.clab.asked("clab", "deploy")) != 0 {
+				t.Errorf("%d runs started, Infrahub asked %+v, containerlab's plan read %v; want none", len(h.svc.stepped),
+					h.infra.requests()[h.before:], h.clab.asked("clab", "deploy"))
+			}
+			if sha256Of(t, h.paths.TwinJSON) != record {
+				t.Errorf("twin.json changed under a refused step")
+			}
+		})
+	}
+	t.Run("a stage under another mapping version", func(t *testing.T) {
+		h := stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Provenance.Mapping.Version = "0f0f0f0" })
+		record := sha256Of(t, h.paths.TwinJSON)
+		want := unheld("change-1/linked", "scope tag:fylgja and mapping infrahub-dcim opsmill/schema-library 0f0f0f0",
+			"stage change-1/linked names scope tag:fylgja and mapping "+dcim)
+		for _, args := range [][]string{{"--allow-restart"}, {"--dry-run"}} {
+			out := runStepCmd(t, append([]string{"--stage", "change-1/linked"}, args...)...)
+			if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want || out.doc.Step != nil ||
+				out.doc.Stage == nil || out.doc.Stage.Ref != "change-1/linked" {
+				t.Errorf("%v: exit %d, refusal %+v, step %+v, stage %+v\nwant 1, %+v, no step and the resolved stage", args,
+					out.code, got, out.doc.Step, out.doc.Stage, want)
+			}
+		}
+		if len(h.svc.stepped) != 0 || len(h.clab.asked("clab", "deploy")) != 0 {
+			t.Errorf("%d runs started, containerlab's plan read %v; want neither", len(h.svc.stepped), h.clab.asked("clab", "deploy"))
+		}
+		if sha256Of(t, h.paths.TwinJSON) != record {
+			t.Errorf("twin.json changed under a refused step")
+		}
+	})
+	for _, c := range []struct {
+		name string
+		args func(t *testing.T, h *stepHostFixture) []string
+	}{
+		{"a stage under the record's scope and mapping", func(*testing.T, *stepHostFixture) []string {
+			return []string{"--stage", "change-1/linked"}
+		}},
+		{"a snapshot under the record's scope and mapping", func(t *testing.T, h *stepHostFixture) []string {
+			target, _ := targetSnapshot(t, h, "linked")
+			return []string{"--snapshot", target.ID}
+		}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := stepHost(t, "plan-link-added.json", nil)
+			out := runStepCmd(t, append(c.args(t, h), "--dry-run", "--allow-restart")...)
+			if out.code != findings.ExitOK || out.doc.Findings.Rejected() || carriesRule(out.doc.Findings, findings.RuleStepTwinUnsteppable) {
+				t.Errorf("exit %d, findings %+v; want 0 and no step.twin.unsteppable", out.code, out.doc.Findings)
+			}
+		})
+	}
+}
+
 // The edges of a snapshot target (US2 scenario 6, US4 scenario 3, FR-017): the twin's own
 // snapshot compiles to the twin's bundle, and the step is unchanged; a snapshot of another
 // branch under the same scope steps, and the record names that branch; a file declaring no

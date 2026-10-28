@@ -1006,8 +1006,8 @@ type earlierDocument struct {
 }
 
 // m4FollowingDocuments are the shapes M4 added that carry following: a create that began
-// following and one that could not, a destroy that stopped it, and a dry run of each answer
-// M4 gave.
+// following and one that could not, with its warning, a destroy that stopped it, and a dry
+// run of each answer M4 gave.
 func m4FollowingDocuments() []earlierDocument {
 	id := strings.Repeat("89", 32)
 	observed := "2026-09-16T19:00:00.000000Z"
@@ -1020,11 +1020,10 @@ func m4FollowingDocuments() []earlierDocument {
 	created.Twin = &TwinBlock{Lab: "fylgja", Dir: "/abs/twin", RunID: "run-1", ObservedAt: &observed,
 		Nodes: []TwinNode{{Name: "n1", MgmtIPv4: "172.20.20.2", ReadyAfterS: 0.9}}}
 
-	var startFailed List
-	startFailed.AddStep(Warning, StepFollow, RuleFollowStartFailed, "fylgja-follow",
-		"the twin is ready but following could not begin: creating schedule fylgja-follow failed (boom); "+
-			"the twin is frozen; fylgja twin destroy and create again to follow")
-	notStarted := NewDocument(OpTwinCreate, &Subject{Branch: "fylgja-fixture", RunID: "run-1"}, startFailed)
+	notStarted := NewDocument(OpTwinCreate, &Subject{Branch: "fylgja-fixture", RunID: "run-1"}, nil)
+	startFailed := map[string]any{"severity": "warning", "rule": "follow.start.failed", "object": "fylgja-follow", "step": "follow",
+		"message": "the twin is ready but following could not begin: creating schedule fylgja-follow failed (boom); " +
+			"the twin is frozen; fylgja twin destroy and create again to follow"}
 
 	destroyed := NewDocument(OpTwinDestroy, &Subject{RunID: "run-4"}, nil)
 	destroyed.Cleanup = &CleanupBlock{Teardown: "done", Unstage: "done"}
@@ -1032,8 +1031,10 @@ func m4FollowingDocuments() []earlierDocument {
 	return []earlierDocument{
 		{"create following, started", created, following(map[string]any{"branch": "fylgja-fixture", "interval_s": 300,
 			"schedule_id": "fylgja-follow", "state": "started"})},
-		{"create following, not started", notStarted, following(map[string]any{"branch": "fylgja-fixture", "interval_s": 300,
-			"state": "not_started"})},
+		{"create following, not started", notStarted, func(doc map[string]any) {
+			following(map[string]any{"branch": "fylgja-fixture", "interval_s": 300, "state": "not_started"})(doc)
+			doc["findings"] = []any{startFailed}
+		}},
 		{"destroy stopped following", destroyed, following(map[string]any{"branch": "fylgja-fixture", "stopped": true})},
 		followingDryRun("dry run follows", OpTwinCreate, map[string]any{"enabled": true, "interval_s": 300}),
 		followingDryRun("dry run pinned", OpTwinCreate, map[string]any{"enabled": false, "reason": "pinned"}),

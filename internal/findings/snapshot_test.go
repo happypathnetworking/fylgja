@@ -116,6 +116,23 @@ func TestAn018DocumentIsUnchanged(t *testing.T) {
 	}
 }
 
+// 019 removed the following block and dry_run.follow from the contract (formats.md §2): the
+// current findings.schema.json refuses every document an earlier build wrote with either,
+// which 018's copy accepts (TestAn018DocumentIsUnchanged), and accepts each as this build
+// writes it in its place.
+func TestFollowingLeftTheContract(t *testing.T) {
+	current := compileCurrentFindingsSchema(t)
+	for _, c := range followingDocuments() {
+		t.Run(c.label, func(t *testing.T) {
+			b := mutated(t, c.doc, c.restore)
+			if err := current.Validate(mustAny(t, b)); err == nil {
+				t.Errorf("the current contract accepts a document carrying following: %s", b)
+			}
+			mustValidateBytes(t, current, mustMarshal(t, c.doc), c.label+" as this build writes it")
+		})
+	}
+}
+
 // followingDocuments are every shape an earlier build wrote with following: M4's
 // (m4FollowingDocuments), and the dry runs of the two reasons added after it, a stage's
 // (014) and a snapshot's (018).

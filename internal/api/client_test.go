@@ -296,7 +296,7 @@ func TestTheRequestCarriesWhatTheServerReads(t *testing.T) {
 
 	var build string
 	ans, err := c.Do(context.Background(), findings.OpTwinCreate,
-		Request{Render: RenderText, Args: map[string]json.RawMessage{"interval": json.RawMessage(`""`)}},
+		Request{Render: RenderText, Args: map[string]json.RawMessage{"stage": json.RawMessage(`""`)}},
 		"00112233445566778899aabbccddeeff", func(b string) { build = b })
 	if err != nil {
 		t.Fatal(err)
@@ -314,7 +314,7 @@ func TestTheRequestCarriesWhatTheServerReads(t *testing.T) {
 	if s.stream != "00112233445566778899aabbccddeeff" || s.expect != "" {
 		t.Errorf("stream %q, Expect %q", s.stream, s.expect)
 	}
-	if s.req.Render != RenderText || string(s.req.Args["interval"]) != `""` || len(s.req.Args) != 1 {
+	if s.req.Render != RenderText || string(s.req.Args["stage"]) != `""` || len(s.req.Args) != 1 {
 		t.Errorf("request %+v", s.req)
 	}
 	for _, want := range []string{KindOut, KindDocument} {

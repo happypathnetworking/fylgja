@@ -141,10 +141,10 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 		files []File
 	}{
 		{"twin.create", map[string]json.RawMessage{"branch": str("fylgja-fixture"), "at": str("2026-09-14T12:00:00Z"),
-			"stage": str("change-1/cabled"), "interval": str(""), "no_follow": yes, "dry_run": yes, "scope": str("tag:fylgja")}, nil},
+			"stage": str("change-1/cabled"), "dry_run": yes, "scope": str("tag:fylgja")}, nil},
 		// 018: --snapshot as a file, the one file the request carries under its path; as an id,
 		// none. The case above is an earlier client's, which never sends it.
-		{"twin.create", map[string]json.RawMessage{"snapshot": str("snap.json"), "no_follow": yes, "dry_run": yes},
+		{"twin.create", map[string]json.RawMessage{"snapshot": str("snap.json"), "dry_run": yes},
 			[]File{{Path: "snap.json", Data: []byte(`{"snapshot_version":"1"}`)}}},
 		{"twin.create", map[string]json.RawMessage{"snapshot": str(strings.Repeat("6a", 32))}, nil},
 		{"twin.provision", map[string]json.RawMessage{"bundle": str("./b9d53ebc"), "dry_run": yes},
@@ -207,6 +207,9 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 	invalid(t, apiSchema(t, "args/$defs/stage.list"), `{"series":"demo"}`, "stage.list with a series")
 	// 018: twin.compile's ctm is gone, renamed snapshot.
 	invalid(t, apiSchema(t, "args/$defs/twin.compile"), `{"ctm":"ctm.json","out":"out"}`, "twin.compile with a ctm")
+	// 019: a twin follows nothing, so twin.create takes neither the interval nor no_follow.
+	invalid(t, apiSchema(t, "args/$defs/twin.create"), `{"branch":"b","interval":"30s"}`, "twin.create with an interval")
+	invalid(t, apiSchema(t, "args/$defs/twin.create"), `{"branch":"b","no_follow":true}`, "twin.create with no_follow")
 	invalid(t, apiSchema(t, "args/$defs/twin.provision"), `{"dry_run":true}`, "twin.provision without a bundle")
 	invalid(t, apiSchema(t, "args/$defs/twin.verify"), `{"args":["30s"]}`, "twin.verify's args without wait")
 	// 015: twin.rehearse takes the branch alone: no stage, no flag of twin step's, no dry run.
@@ -256,11 +259,11 @@ func TestDecodeRequestIsStrict(t *testing.T) {
 			t.Errorf("%s: %s gave %+v, %v; want %q", c.label, c.raw, req, err, want)
 		}
 	}
-	req, err := DecodeRequest(strings.NewReader(`{"args":{"interval":"","anything":{"x":1},"BRANCH":"b"}}` + "\n"))
+	req, err := DecodeRequest(strings.NewReader(`{"args":{"stage":"","anything":{"x":1},"BRANCH":"b"}}` + "\n"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(req.Args["interval"]) != `""` || string(req.Args["anything"]) != `{"x":1}` || string(req.Args["BRANCH"]) != `"b"` {
+	if string(req.Args["stage"]) != `""` || string(req.Args["anything"]) != `{"x":1}` || string(req.Args["BRANCH"]) != `"b"` {
 		t.Errorf("args are left raw for the handler, got %v", req.Args)
 	}
 	// A key spelled with an escape is the key it spells.

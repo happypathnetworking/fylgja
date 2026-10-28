@@ -1045,7 +1045,7 @@ twin and Infrahub as the contract tier leaves it.
     - `TestFrozenContractCopiesAgree` passes, with 49 copies under `internal/*/testdata/contracts/`.
     - `make build` rewrote `bin/fylgja`, so the worker (`1494754`) and the server (`1494776`) read `(deleted)`; neither was restarted (this run may not stop the worker, and nothing here needs the server again).
 
-- [ ] T064 [operator] The operator's review of the feature, the commits by hand that the runs left uncommitted, and `make command-log` once the session is closed. Record the review's outcome in this task's note.
+- [X] T064 [operator] The operator's review of the feature, the commits by hand that the runs left uncommitted, and `make command-log` once the session is closed. Record the review's outcome in this task's note.
 
   - *2026-10-27 21:58Z, at `3518b4e`, Run 17 of the converge loop (live): left unchecked.* The review is the operator's, and a session cannot run the command log for a session that is still open. Nothing was merged, pushed or fetched. What is ready:
     - **The feature's diff**: `git diff 168fd63 3518b4e`, from `main` as it stood before 018's specify. It is 56 commits (19 `feat`, 1 `refactor`, 11 `test`, 25 `docs`) over 177 files, +19,998 and −1,373 lines. The code is 37 Go files (+1,733 −367) and their tests 77 (+5,726 −629). The 16 contract copies frozen under `internal/*/testdata/contracts/017-dcim-reader/` add 6,793 lines, and the feature's 11 files under `specs/018-snapshots/` 3,968.
@@ -1065,6 +1065,7 @@ twin and Infrahub as the contract tier leaves it.
     - **Commits by hand**: none are owed. Each run committed its own work, and the tree was clean at `3518b4e` before this note.
     - **The command log**: `local/command-log/` holds no `pending.jsonl`. The loop publishes each session's entry when the session exits: 20 are in `specs/018-snapshots/commands/runs.jsonl` (`specify`, `clarify`, `plan`, `tasks`, `analyze`, and Runs 1 and 3–16), and this session's follows when it exits. `make command-log`, run after the attended session closes, publishes whatever that session kept.
   - *2026-10-27 22:10Z, the operator's answer to the attended loop's question 1: "1a".* T064 is left for the operator at the feature's close: the review covers the whole branch once the loop has stopped, with any commits a later convergence pass adds, and the outcome is recorded here then. The operator stopped the loop and had Infrahub's containers restarted to win back the memory the host note above describes.
+  - *2026-10-28 02:15Z, at `7fdb888`: the operator marked the review complete.* The second loop's seven convergence passes (T065–T085, with T074 and T082 answered by the operator) stopped at their cap; both live tiers were then re-run on `7fdb888` from the attended session, after Infrahub's restart: the contract tier whole, exit 0, in 1,913 s (`internal/stages` 1,611 s, `internal/checks` 293 s), and tier 3 `E2E-OK` in about 29 minutes (01:40–02:09Z), with `WORKER_LOG` set and about 20 GiB available at its start; the host was left with no lab, no twin directory, and Infrahub holding `main` and `fylgja-fixture` alone. No commits by hand were owed. `make command-log` is run once the attended session is closed; the merge and the push are the operator's.
 
 **Checkpoint**: every record true; the feature closed.
 

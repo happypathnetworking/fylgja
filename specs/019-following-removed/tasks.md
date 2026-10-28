@@ -1077,7 +1077,7 @@ SC-008).
       - The SR Linux login's password, the image's published default, is in `scripts/bring-up.sh`, `scripts/e2e.sh`, `internal/rehearsal/report_test.go` and `internal/findings/finding_test.go`, and in no diff line or message.
       - The EOS login and the SR Linux login name are one five-letter word, a published default, in 182 files as prose. Its 7 diff lines, read with the word masked, are prose ("<word> state", "<word>-state", `clab_<word>s`), plus one unchanged context line of an existing test that sets the login name.
 
-- [ ] T056 [operator] The operator's review of the feature, the commits by hand that the runs left uncommitted, and `make command-log` once the session is closed. Record the review's outcome in this task's note, including the merge and the push, which are the operator's.
+- [X] T056 [operator] The operator's review of the feature, the commits by hand that the runs left uncommitted, and `make command-log` once the session is closed. Record the review's outcome in this task's note, including the merge and the push, which are the operator's.
 
   - *2026-10-28 18:31Z, at `b2dd673`, Run 17 of the converge loop (live): left unchecked.* The review is the operator's, and a session cannot run the command log for a session that is still open. Nothing was merged, pushed or fetched. What is ready:
     - **The feature's diff**: `git diff c8d46c7 b2dd673`, from `main` as it stands, the branch's base.

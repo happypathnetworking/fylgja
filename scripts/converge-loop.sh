@@ -315,6 +315,13 @@ fi
 mkdir -p local
 exec 9> local/converge-loop.lock
 flock -n 9 || { echo "converge-loop: another loop holds local/converge-loop.lock" >&2; exit 2; }
+# No child inherits the lock's descriptor: one that outlives the loop (a detached git gc,
+# a live session's detached tier 3) would hold the lock after the loop exits (seen
+# 2026-10-28: three loops refused in a row by a holder that had minutes to live).
+git() { command git "$@" 9>&-; }
+claude() { command claude "$@" 9>&-; }
+python3() { command python3 "$@" 9>&-; }
+make() { command make "$@" 9>&-; }
 
 # A lane left from a stop (merge, error, contract) is the operator's to merge or discard
 # before another loop seeds the same path and branch.
@@ -480,7 +487,7 @@ dry_run_session() { # <out file> <prompt>
 		ticked="$ticked $id"
 	done
 	printf 'Dry run of %s: ticked%s; the rest stays unchecked.\n' "$RUN_LABEL" "${ticked:- nothing}" > "$out"
-	if grep -qE "DRY-ADD-ALL" "$tasks" && [ -n "$ticked" ]; then git add -A; else git add -A -- "$FEATURE_REL"; fi
+	if [ -n "$ticked" ] && grep -qE "^\s*- \[X\] ($(echo $ticked | tr ' ' '|'))\b.*DRY-ADD-ALL" "$tasks"; then git add -A; else git add -A -- "$FEATURE_REL"; fi
 	git diff --cached --quiet || git commit -q -m "chore($SCOPE): dry run, $RUN_LABEL" -m "A stand-in for a session, by scripts/converge-loop.sh --dry-run." -m "$(trailer_for "${MODEL[implement]}")"
 }
 

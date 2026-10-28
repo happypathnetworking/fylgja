@@ -64,9 +64,11 @@ cut along, in five specs, in this order:
    input, which the Infrahub reader produces and the server takes: the core and
    orchestrator seam itself. **Built** on 2026-10-27, under [D-061](decisions.md#d-061)
    and Constitution 2.2.0.
-3. **[F-026](#f-026)**, following removed from the core, **the next spec**: a twin is
-   frozen at its snapshot and nothing rebuilds it but the operator; added on 2026-10-27
-   so that probes are specified against a twin that cannot rebuild itself.
+3. **[F-026](#f-026)**, following removed from the core, **the next spec**, as
+   `019-following-removed` ([brief](../specs/019-following-removed/brief.md), written
+   2026-10-27): a twin is frozen at its snapshot and nothing rebuilds it but the operator;
+   added on 2026-10-27 so that probes are specified against a twin that cannot rebuild
+   itself.
 4. **[F-014](#f-014)**, probes, `ping` only, as `016-probes`
    ([brief](../specs/016-probes/brief.md), re-read against 017's and 018's close): a node
    declared outside intent, the explicit-instruction input to the core.
@@ -157,7 +159,7 @@ are each one spec, with one contract boundary and one new kind of infrastructure
 | F-010 | *Generic transform*, folded into [F-011](#f-011) | the shipped template queried `FylgjaDevice`, so a DCIM device rendered through it; what was left, the template documented as a reference transform, is a paragraph in [F-011](#f-011)'s README | — | — | Overtaken: Infrahub rendered from the generics already, and renders from the library's kinds since [F-011](#f-011). |
 | F-011 | **The Infrahub reader reads the schema library's DCIM** | the generics retired and the CTM the contract; the library vendored at a pinned commit and loaded on `main`; the reader's mapping documented and its approximations in the manifest; packages matching platforms by name; the fixtures re-seeded in the library's kinds | nothing new | 6–10 | The strongest OpsMill signal, and the first reader written as an adapter. Probed live on 2026-10-16; its [brief](../specs/017-dcim-reader/brief.md) written 2026-10-25. Opens 0.3. Built as `017-dcim-reader` on 2026-10-26. |
 | F-024 | **Snapshots** | the CTM, which carries each node's configuration, wrapped in one content-addressed document with a slot for the probe declarations; the core's one input, taken by the server and stored beside the bundles; `twin create` and `twin compile` from one | [F-011](#f-011) | 3–5 | The core and orchestrator seam, proved before anything is split. Its [brief](../specs/018-snapshots/brief.md) written 2026-10-27. Built as `018-snapshots` on 2026-10-27. |
-| F-026 | **Following removed from the core** | D-012's following, D-026 and D-027 superseded; the reconcile workflow, its Schedule, `--interval` and `--no-follow` gone; a twin frozen at its snapshot; `twin step --snapshot` | [F-024](#f-024) | 3–5 | A snapshot-fed core does not read a branch on a timer; the production shape's orchestrator may bring following back as take, compare, rebuild. Added 2026-10-27. |
+| F-026 | **Following removed from the core** | D-012's following, D-026 and D-027 superseded; the reconcile workflow, its Schedule, `--interval` and `--no-follow` gone; a twin frozen at its snapshot; any twin with a snapshot stepping to a stage or a snapshot, `twin step --snapshot`; walking as stepping | [F-024](#f-024) | 3–5 | A snapshot-fed core does not read a branch on a timer; the production shape's orchestrator may bring following back as take, compare, step. Added 2026-10-27; its [brief](../specs/019-following-removed/brief.md) written the same day. |
 | F-022 | *`infrahub-sync` into the DCIM*, superseded by [F-025](#f-025) | a sync mapping from NetBox onto [F-011](#f-011)'s schema | — | — | The operator wants NetBox read directly, not synced into Infrahub. |
 | F-025 | **The NetBox reader** | NetBox with its branching plugin on the development host; a reader producing snapshots from a branch, with `render-config` as the configuration; a stage taken as a snapshot; a twin of a NetBox branch | [F-024](#f-024), a NetBox instance | 8–12 | The reader seam against a second source of truth, and the first that cannot replay time. |
 | F-012 | **Agent surface** | `fylgja-rehearsing-changes`, a skill in OpsMill's format over the CLI's JSON, with a findings catalogue generated from the code; an MCP server deferred | verify, the API, the rehearsal | 2–5 | Cheap once there is something to ask. Left 0.3 on 2026-10-25: it bolts on later and touches no core. |
@@ -262,19 +264,28 @@ both tiers passed on the development host.
 
 <a id="f-026"></a>
 **F-026. Following removed from the core.** Added on 2026-10-27, the third spec of
-[Release 0.3](#release-03), placed before [F-014](#f-014) so that probes are specified
-against a twin that cannot rebuild itself. A core fed snapshots does not read a branch on
-a timer: [D-012](decisions.md#d-012) is superseded in the part that says an unpinned twin
-follows its branch, and [D-026](decisions.md#d-026) and [D-027](decisions.md#d-027) whole.
-The reconcile workflow, the Schedule `fylgja-follow` and its two activities go, with
-`ReadIntent` and `bundles/.reads/`, the worker's last reader of a branch; `--interval` and
-`--no-follow` go; `twin show`'s pinned, frozen or following becomes the snapshot the twin
-was built from; `twin step --snapshot` arrives, with `step.twin.unsteppable` relaxed so
-that a twin steps to any snapshot; tier 3's case 5 and the Schedule assertions beside it
-go. Following leaves the core, not Fylgja: the production shape's orchestrator may bring
-it back as take, compare, rebuild, and the push-based follow once planned for
-[F-025](#f-025) is its to plan. One exit criterion: a twin is frozen at its snapshot and
-nothing rebuilds it but the operator. The constitution does not mention following.
+[Release 0.3](#release-03), as `019-following-removed`
+([brief](../specs/019-following-removed/brief.md), 2026-10-27, which holds the shape;
+this paragraph is the summary). It is placed before [F-014](#f-014) so that probes are
+specified against a twin that cannot rebuild itself. A core fed snapshots does not read a
+branch on a timer: [D-012](decisions.md#d-012) is superseded in the part that says an
+unpinned twin follows its branch, [D-026](decisions.md#d-026) and
+[D-027](decisions.md#d-027) whole, and [D-007](decisions.md#d-007) and
+[D-014](decisions.md#d-014) in their Reconcile and Schedule. The reconcile workflow, the
+Schedule `fylgja-follow` and the five control activities go, with `bundles/.reads/`, the
+worker's last reader of a branch, so the worker serves four workflows and fifteen
+activities; `--interval` and `--no-follow` go outright; `twin show`'s pinned, frozen or
+following becomes `snapshot <id>` and what the snapshot holds. `step.twin.unsteppable` is
+relaxed: any twin whose record names a snapshot steps, to a stage of any proposed change or
+to `twin step --snapshot`'s snapshot of any branch, but never to another scope or mapping,
+and a twin built from a bundle directory still does not step. A walking twin walks by
+stepping, and the name is kept. Tier 3's case 5 becomes a step to a snapshot, showing the
+exit criterion live and keeping its artifact-only and topology changes and verify 5a; the
+Schedule assertions go. Following leaves the core, not Fylgja: the production shape's
+orchestrator may bring it back as take, compare, step, and the push-based follow once
+planned for [F-025](#f-025) is its to plan. One exit criterion: a twin is frozen at its
+snapshot and nothing rebuilds it but the operator. The constitution does not mention
+following, and is not amended.
 
 <a id="f-022"></a>
 **F-022. `infrahub-sync` from NetBox into the DCIM, superseded by [F-025](#f-025) on
@@ -503,9 +514,11 @@ show beyond a status line. It is a second client of the same API.
   Constitution VI amended, a minor bump, with its sentence on what addresses intent when
   the source of truth cannot replay time. Its [brief](../specs/018-snapshots/brief.md)
   settles the shape. Taken as [D-061](decisions.md#d-061), with Constitution 2.2.0.
-- At [F-026](#f-026): [D-012](decisions.md#d-012) superseded in its following, and
-  [D-026](decisions.md#d-026) and [D-027](decisions.md#d-027) whole; following leaves the
-  core and the orchestrator may bring it back.
+- At [F-026](#f-026) (019): [D-012](decisions.md#d-012) superseded in its following,
+  [D-026](decisions.md#d-026) and [D-027](decisions.md#d-027) whole, and
+  [D-007](decisions.md#d-007) and [D-014](decisions.md#d-014) in their Reconcile and
+  Schedule; following leaves the core and the orchestrator may bring it back. Its
+  [brief](../specs/019-following-removed/brief.md) settles the shape.
 - At [F-014](#f-014) (016): the probe declaration as a file first and an Infrahub kind
   second, on [D-045](decisions.md#d-045)'s pattern for the kind; what a probe package is
   beside a platform package; and the declaration carrying its own gateway address.

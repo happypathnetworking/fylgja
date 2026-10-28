@@ -109,7 +109,6 @@ var dataModelRules = []string{
 	// run.in_flight, so it is not here.
 	"step.twin.unsteppable",
 	"step.twin.diverged",
-	"step.target.foreign",
 	"step.target.unknown",
 	"step.target.current",
 	"step.bundle.missing",
@@ -266,6 +265,19 @@ func TestTheFollowingRulesAreRetired(t *testing.T) {
 	}
 	if name, ok := declaredSteps(t)["follow"]; ok {
 		t.Errorf("%s = \"follow\" is declared; 019 retired the step with following", name)
+	}
+}
+
+// None of following's seven is declared or in the rule table, and neither is
+// step.target.foreign, retired beside them at 019 once a step's --stage named a stage of
+// any proposed change (research R-07): a document of this build names none of the eight.
+func TestTheForeignTargetIsRetired(t *testing.T) {
+	const rule = "step.target.foreign"
+	if name, ok := declaredRules(t)[rule]; ok {
+		t.Errorf("%s = %q is declared; 019 retired it", name, rule)
+	}
+	if slices.Contains(dataModelRules, rule) {
+		t.Errorf("the rule table still names %q; 019 retired it", rule)
 	}
 }
 

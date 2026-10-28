@@ -565,6 +565,42 @@ func TestStageListTwinMoved(t *testing.T) {
 	}
 }
 
+// US3 scenario 5 (FR-014; 019, research R-07): a twin whose record names no stage, built from
+// --branch or --snapshot, has no stage to have moved: stage list files no stage.twin.moved
+// for it, marks no row and reports no record, though the stage at the record's own (branch,
+// at) has had its as_of edited and its proposed change is then closed.
+func TestStageListStagelessTwinMovesNothing(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		source string
+		change func(f *fakeInfrahub)
+	}{
+		{"a branch twin, its at's mark edited", wire.SourceIntent, func(f *fakeInfrahub) { f.changes[0].Stages[1].At = "2026-10-16T08:35:00.000000+00:00" }},
+		{"a snapshot twin, the proposed change closed", wire.SourceSnapshot, func(f *fakeInfrahub) { f.changes[0].State = "closed" }},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			paths := useStateRoot(t)
+			useService(t, nil)
+			f := planInfrahub(t, twoMarks()...)
+			c.change(f)
+			f.start()
+			writeTwin(t, paths, stepRecordOf(t, fixtureBundleID, func(r *lab.RecordFields) {
+				r.Provenance.Branch, r.Provenance.At, r.Stage, r.Source, r.SnapshotID = lessLink, cabledAt, nil, c.source, showSnapshotID
+			}))
+			code, doc, raw := stageDoc(t, "list")
+			for _, r := range doc.Stages.Rows {
+				if r.Twin {
+					t.Errorf("row %s is marked the twin's; the record names no stage", r.Ref)
+				}
+			}
+			if code != findings.ExitOK || carriesRule(doc.Findings, findings.RuleStageTwinMoved) || doc.Stages.Record != nil {
+				t.Errorf("exit %d, findings %+v, record %+v; want 0, no stage.twin.moved and no record\n%s", code, doc.Findings,
+					doc.Stages.Record, raw)
+			}
+		})
+	}
+}
+
 // The twin's head is judged under the scope its record names, as twin step judges it, and
 // never the listing's (017): over a fake whose devices carry other alone, a twin recorded
 // at the head under tag:other is listed under the default tag:fylgja, whose head has no

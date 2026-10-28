@@ -463,7 +463,9 @@ func TestListJudgesTheRecordsHeadUnderItsScope(t *testing.T) {
 // Moved over the proposed change as Find reads it, as twin step files it beside its target's
 // findings: nothing for a record whose stage still resolves to the record's (branch, at),
 // and stage.twin.moved, in the listing's words and object, for a head written since, a
-// mark's as_of edited, a mark deleted and a proposed change no longer open.
+// mark's as_of edited, a mark deleted and a proposed change no longer open. A proposed
+// change found that is not the record's is the target's (019, research R-07), of another
+// branch or opened on the record's since: nothing is said of the record's stage.
 func TestMovedOfTheFoundChange(t *testing.T) {
 	const suffix = "; the twin is pinned to what it was built from"
 	built := func(rec RecordView) string {
@@ -478,7 +480,8 @@ func TestMovedOfTheFoundChange(t *testing.T) {
 	for _, c := range []struct {
 		name    string
 		pcs     []intent.ProposedChange
-		none    bool // no open proposed change was read: the caller passes nil
+		none    bool   // no open proposed change was read: the caller passes nil
+		on      string // the branch the proposed change is found on, change-1 when empty
 		record  RecordView
 		message string // the one stage.twin.moved expected, or none
 	}{
@@ -494,15 +497,20 @@ func TestMovedOfTheFoundChange(t *testing.T) {
 			message: built(cabled) + "change-1/cabled now resolves to branch change-1, at 2026-10-16T17:26:00.000000+00:00 (given)" + suffix},
 		{name: "the mark deleted", record: cabled, pcs: []intent.ProposedChange{change1(live)},
 			message: built(cabled) + "change-1/cabled no longer exists" + suffix},
-		{name: "another proposed change opened on the branch", record: cabled, pcs: []intent.ProposedChange{reopened},
-			message: built(cabled) + "proposed change pc-1 is no longer open, so change-1/cabled is gone" + suffix},
+		{name: "another proposed change opened on the branch, the target's", record: cabled, pcs: []intent.ProposedChange{reopened}},
+		{name: "another branch's proposed change, the target's", record: cabled, on: "change-2"},
+		{name: "another branch's, the record's head moved", record: movedHead, on: "change-2"},
 		{name: "no open proposed change", record: cabled, none: true,
 			message: built(cabled) + "proposed change pc-1 is no longer open, so change-1/cabled is gone" + suffix},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			var ch *Change
 			if !c.none {
-				ch = targetChange(t, c.pcs...)
+				on := c.on
+				if on == "" {
+					on = "change-1"
+				}
+				ch = foundChange(t, on, c.pcs...)
 			}
 			var want findings.List
 			if c.message != "" {

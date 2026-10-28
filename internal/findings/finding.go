@@ -170,11 +170,13 @@ const (
 	// comment gives the severity, the exit, the step, the object and when it fires. The
 	// CLI's refusals before any run are at resolve (the twin, the target, the from
 	// bundle) and compare (the plan's rules); the run's second locks reword them at
-	// inspect and compare. A run in flight is M2's run.in_flight, not a new rule.
+	// inspect and compare. A run in flight is M2's run.in_flight, not a new rule. 019
+	// retired step.target.foreign: twin step's --stage names a stage of any proposed change
+	// (D-062; research R-07), so its two cases, another branch and another proposed change
+	// opened on the record's, are targets.
 	RuleStepTwinUnsteppable   = "step.twin.unsteppable"   // rejection, exit 1, resolve (inspect from the run's second lock): lab fylgja, M3's object, or the record's bundle_id; no twin, an orphan, an unreadable record, a record without its lab, a record of twin.json 5 or earlier, or a record naming no stage; from 017, a record of 7 or earlier, or one of 8 or later naming a scope that is not tag:<name> or a mapping twin.json 8 cannot hold; from 019, the command alone, a record naming no snapshot: a bundle twin's, an 8, or a 9 or 10 naming none
 	RuleStepTwinDiverged      = "step.twin.diverged"      // rejection, exit 1, resolve (inspect): the record's bundle_id; the record's state is diverged, which only twin destroy clears
-	RuleStepTargetForeign     = "step.target.foreign"     // rejection, exit 1, resolve: the given reference; --stage names another branch than the record's, or another proposed change on it
-	RuleStepTargetUnknown     = "step.target.unknown"     // rejection, exit 1, resolve: the record's stage or the reference; the record's label is gone, no stage follows it, or the proposed change has not the one given
+	RuleStepTargetUnknown     = "step.target.unknown"     // rejection, exit 1, resolve: the record's stage or the reference; the record's label is gone, no stage follows it, or the proposed change has not the one given; from 019, the record's bundle_id: no --stage and no --snapshot for a record naming no stage, before any connection
 	RuleStepTargetCurrent     = "step.target.current"     // rejection, exit 1, resolve: the reference; the target resolves to the record's own (branch, at)
 	RuleStepBundleMissing     = "step.bundle.missing"     // rejection, exit 1, resolve: the record's bundle_id; the store does not hold the bundle the twin was built from
 	RuleStepPackageMerge      = "step.package.merge"      // rejection, exit 1, compare: the package id; a node of either bundle runs a package whose mode is merge, which has no reset

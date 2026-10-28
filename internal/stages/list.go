@@ -235,11 +235,15 @@ func warning(f findings.Finding) findings.Finding {
 
 // Moved is stage.twin.moved when the record's stage is gone, its proposed change no longer
 // open, or no longer resolves to the branch and at the record holds; nothing when it still
-// does. ch is the record's proposed change as Find or the listing read it, nil when no open
-// proposed change was read on the record's source branch; one of another id is a proposed
-// change opened there since, the record's no longer open. stage list files it beside the
-// record's row and twin step beside its target's findings, in the same words: a warning
-// that refuses nothing, since a twin steps from the bundle its record holds.
+// does. ch is the proposed change the listing read as the record's, nil when no open
+// proposed change of the record's was read on its source branch, or the one twin step
+// found its target in. stage list files it beside the record's row and twin step beside
+// its target's findings, in the same words: a warning that refuses nothing, since a twin
+// steps from the bundle its record holds. It applies only when ch is the record's own
+// proposed change (019, research R-07): a target found in another, of another branch or
+// opened on the record's since, is a step out of the record's proposed change, whose
+// stage the step does not read, and nothing is said of it. A record naming no stage has
+// no view, and nothing to have moved.
 func Moved(ch *Change, rec RecordView) findings.List {
 	ref := rec.Ref()
 	built := fmt.Sprintf("the twin was built from stage %s at branch %s, at %s (%s)", ref, rec.Branch, rec.At, rec.AtSource)
@@ -247,8 +251,11 @@ func Moved(ch *Change, rec RecordView) findings.List {
 		return findings.List{{Severity: findings.Warning, Rule: findings.RuleStageTwinMoved, Object: ref.String(),
 			Message: fmt.Sprintf("%s; %s; the twin is pinned to what it was built from", built, what)}}
 	}
-	if ch == nil || ch.ProposedChange.ID != rec.ProposedChange.ID {
+	if ch == nil {
 		return warn(fmt.Sprintf("proposed change %s is no longer open, so %s is gone", rec.ProposedChange.ID, ref))
+	}
+	if ch.ProposedChange.ID != rec.ProposedChange.ID {
+		return nil
 	}
 	var now []Stage
 	for _, st := range ch.Stages {

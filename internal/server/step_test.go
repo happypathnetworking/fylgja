@@ -196,9 +196,9 @@ func TestACreateAndAStepBesideARehearsalNameIt(t *testing.T) {
 // Only a twin whose record names a snapshot steps (019, research R-03): a bundle twin, a
 // record of 8 and a 9 or a 10 naming none are each refused naming why, step.twin.unsteppable
 // at resolve, its object the record's bundle, the bundle twin first whatever its version; a 9
-// or a 10 naming one passes, whatever it was created from. A twin naming a snapshot and no
-// stage is then refused by stepStageless until the step takes a snapshot or a stage of any
-// proposed change as its target (T031, T034); a stage twin passes it.
+// or a 10 naming one passes, whatever it was created from. Given no target, a twin naming a
+// snapshot and no stage is then refused by noTarget, step.target.unknown, since it has no
+// next stage (research R-08); a stage twin passes it.
 func TestStepRefusesARecordThatNamesNoSnapshot(t *testing.T) {
 	const bundleID = "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777"
 	const only = "; only a twin whose record names a snapshot steps; fylgja twin destroy clears it"
@@ -227,30 +227,32 @@ func TestStepRefusesARecordThatNamesNoSnapshot(t *testing.T) {
 			t.Errorf("%s: refused %+v, want %+v", c.name, f, want)
 		}
 	}
+	noTargetGiven := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTargetUnknown, Object: bundleID,
+		Step: findings.StepResolve, Message: "the twin names no stage, so there is no next stage to step to; " +
+			"give --stage <branch>/<label> or --snapshot <id|file>"}
 	for _, c := range []struct {
-		name      string
-		rec       wire.TwinRecord
-		stageless string
+		name string
+		rec  wire.TwinRecord
+		// stageless is whether noTarget refuses it.
+		stageless bool
 	}{
-		{"a stage twin of 9", wire.TwinRecord{TwinVersion: "9", Source: wire.SourceIntent, Stage: stage, SnapshotID: &id}, ""},
-		{"a stage twin of 10", wire.TwinRecord{TwinVersion: "10", Source: wire.SourceIntent, Stage: stage, SnapshotID: &id}, ""},
+		{"a stage twin of 9", wire.TwinRecord{TwinVersion: "9", Source: wire.SourceIntent, Stage: stage, SnapshotID: &id}, false},
+		{"a stage twin of 10", wire.TwinRecord{TwinVersion: "10", Source: wire.SourceIntent, Stage: stage, SnapshotID: &id}, false},
 		{"a branch twin of 10", wire.TwinRecord{TwinVersion: "10", Source: wire.SourceIntent, SnapshotID: &id,
-			Provenance: wire.Provenance{Branch: "change-1"}}, "the twin was created from branch change-1, not from a stage"},
+			Provenance: wire.Provenance{Branch: "change-1"}}, true},
 		{"a snapshot twin of 10", wire.TwinRecord{TwinVersion: "10", Source: wire.SourceSnapshot, SnapshotID: &id,
-			Provenance: wire.Provenance{Branch: "change-1", At: "2026-10-28T09:00:00Z"}},
-			"the twin was created from branch change-1 at 2026-10-28T09:00:00Z, not from a stage"},
+			Provenance: wire.Provenance{Branch: "change-1", At: "2026-10-28T09:00:00Z"}}, true},
 	} {
 		c.rec.BundleID = bundleID
 		if f := stepUnsourced(&c.rec); f != nil {
 			t.Errorf("%s: refused %+v, want it to pass", c.name, f)
 		}
-		f := stepStageless(&c.rec)
+		f := noTarget(&c.rec)
 		switch {
-		case c.stageless == "" && f != nil:
-			t.Errorf("%s: stepStageless refused %+v, want it to pass", c.name, f)
-		case c.stageless != "" && (f == nil || f.Rule != findings.RuleStepTwinUnsteppable || f.Object != bundleID ||
-			!strings.HasPrefix(f.Message, c.stageless)):
-			t.Errorf("%s: stepStageless refused %+v, want step.twin.unsteppable on %s beginning %q", c.name, f, bundleID, c.stageless)
+		case !c.stageless && f != nil:
+			t.Errorf("%s: noTarget refused %+v, want it to pass", c.name, f)
+		case c.stageless && (f == nil || *f != noTargetGiven):
+			t.Errorf("%s: noTarget refused %+v, want %+v", c.name, f, noTargetGiven)
 		}
 	}
 }

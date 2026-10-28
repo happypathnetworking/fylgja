@@ -28,16 +28,19 @@ func wrappedPath(name string) string {
 }
 
 // testdata/snapshot/ holds the three fixture CTMs wrapped, or is rewritten under -update
-// (R-15; FR-021). Each file is a fresh take of its testdata/ctm/ file, byte for byte; it
-// loads strictly; its inner CTM is that file as ctm.Marshal writes it; and its snapshot_id
-// is its body's hash. internal/stage compiles each to its golden.
+// (R-15; FR-021). Each file is a fresh take of its testdata/ctm/ file, byte for byte, as
+// 018 wrote it, a 1: the files stay 1 until the fixtures follow the seed's probe-ready
+// ports, which moves two of the ids anyway, and a 1 reads as a 2 with no probes and the
+// same id (R-05). It loads strictly; its inner CTM is that file as ctm.Marshal writes it;
+// and its snapshot_id is its body's hash. internal/stage compiles each to its golden.
 func TestWrappedFixtures(t *testing.T) {
 	for _, f := range wrappedFixtures {
 		t.Run(f.name, func(t *testing.T) {
-			want, err := Marshal(Take(fixture(t, f.name)))
+			stored, err := Marshal(Take(fixture(t, f.name), nil))
 			if err != nil {
 				t.Fatal(err)
 			}
+			want := asVersion1(t, stored)
 			path := wrappedPath(f.name)
 
 			if *update {

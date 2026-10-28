@@ -118,7 +118,7 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 		if list.Rejected() {
 			t.Fatalf("reading %s at %q was rejected: %v", branch, at, list)
 		}
-		taken := snapshot.Take(got)
+		taken := snapshot.Take(got, nil)
 		files, id, list := Compile(taken.CTM, reg)
 		if list.Rejected() {
 			t.Fatalf("compiling %s at %q was rejected: %v", branch, at, list)

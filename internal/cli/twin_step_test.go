@@ -365,7 +365,7 @@ func compileStage(t *testing.T, paths lab.Paths, label string) compiledStage {
 		t.Fatalf("change-1's proposed change was not found: %v %+v", err, list)
 	}
 	take := func(ctx context.Context, c *ctm.CTM) (string, findings.List, error) {
-		built.snapshot = snap.Take(c)
+		built.snapshot = snap.Take(c, nil)
 		_, err := snap.NewDirStore(paths.Snapshots).Put(ctx, built.snapshot)
 		return built.snapshot.ID, nil, err
 	}
@@ -3666,13 +3666,13 @@ func TestStepToASnapshotRefused(t *testing.T) {
 					"; leave snapshot_id out to have it computed"
 			}},
 		{name: "a file of another snapshot version", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
-			return targetFile(t, h, target.ID, func(d map[string]any) { d["snapshot_version"] = "2" })
+			return targetFile(t, h, target.ID, func(d map[string]any) { d["snapshot_version"] = "3" })
 		}, want: refusal(findings.RuleSnapshotVersionUnsupported, findings.StepResolve, "",
-			`the snapshot declares snapshot_version "2"; this build reads "1", and nothing converts one`),
+			`the snapshot declares snapshot_version "3"; this build reads "1" and "2", and nothing converts one`),
 			fill: func(_ *stepHostFixture, _ *snap.Snapshot, arg string, f *findings.Finding) { f.Object = arg }},
-		{name: "a file with a probe", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
+		{name: "a file with a probe not the contract's", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
 			return targetFile(t, h, target.ID, func(d map[string]any) { d["probes"] = []any{map[string]any{}} })
-		}, want: refusal(findings.RuleSnapshotInvalid, findings.StepResolve, "probes", "")},
+		}, want: refusal(findings.RuleSnapshotInvalid, findings.StepResolve, "probes[0].name", "")},
 		{name: "a file breaking the CTM's own rules", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
 			return targetFile(t, h, target.ID, func(d map[string]any) {
 				delete(d, "snapshot_id")

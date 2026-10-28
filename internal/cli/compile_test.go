@@ -419,7 +419,7 @@ func TestCompileReadsASnapshotByItsRules(t *testing.T) {
 		name, path, rule, message string
 	}{
 		{"a bare CTM", bare, findings.RuleSnapshotVersionUnsupported,
-			`the snapshot declares no snapshot_version; this build reads "1", and nothing converts one`},
+			`the snapshot declares no snapshot_version; this build reads "1" and "2", and nothing converts one`},
 		{"a wrapped CTM 1", versionOne, findings.RuleCTMVersionUnsupported,
 			`the CTM declares ctm_version "1"; this build reads "2", and nothing converts one`},
 	} {

@@ -9,9 +9,11 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 )
 
 // fixturePath is a CTM fixture under the module root's testdata/ctm/.
@@ -44,10 +46,16 @@ func raw(t *testing.T, name string) *ctm.CTM {
 	return &c
 }
 
-// idOf is the id of c's take, which Take sets and ID recomputes.
+// idOf is the id of c's take with no probes, which Take sets and ID recomputes.
 func idOf(t *testing.T, c *ctm.CTM) string {
 	t.Helper()
-	s := Take(c)
+	return idWith(t, c, nil)
+}
+
+// idWith is the id of c's take with probes, which Take sets and ID recomputes.
+func idWith(t *testing.T, c *ctm.CTM, probes []probe.Probe) string {
+	t.Helper()
+	s := Take(c, probes)
 	id, err := ID(s)
 	if err != nil {
 		t.Fatal(err)
@@ -100,15 +108,20 @@ func TestHashedCTMMirrorsTheCTM(t *testing.T) {
 		map[string]reflect.Type{"Envelope": reflect.TypeFor[hashedEnvelope]()})
 }
 
-// Take is pure: the caller's CTM is neither normalised nor shared, so a caller can take a
-// snapshot of a CTM and go on to use it as it was.
+// Take is pure: the caller's CTM is neither normalised nor shared, nor its list of probes,
+// so a caller can take a snapshot of a CTM and go on to use both as they were.
 func TestTakeLeavesItsInputAlone(t *testing.T) {
 	c := raw(t, "three-node.shuffled")
 	before, err := json.Marshal(c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	s := Take(c)
+	probes := declared(t, "n1-loop", "n2-loop")
+	probesBefore, err := json.Marshal(probes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := Take(c, probes)
 	after, err := json.Marshal(c)
 	if err != nil {
 		t.Fatal(err)
@@ -138,17 +151,70 @@ func TestTakeLeavesItsInputAlone(t *testing.T) {
 	if again, _ := json.Marshal(c); !bytes.Equal(before, again) {
 		t.Error("the take shares a list or a pointer with the CTM it was given")
 	}
+	if got, _ := json.Marshal(s.Probes); !bytes.Equal(got, probesBefore) {
+		t.Errorf("the take's probes are not the list given, in its order:\n%s", got)
+	}
+	s.Probes[0].Name = "changed"
+	s.Probes[1].Endpoints[0].Address = "changed"
+	if again, _ := json.Marshal(probes); !bytes.Equal(probesBefore, again) {
+		t.Error("the take shares its probes with the list it was given")
+	}
 
-	if s.Version != Version || s.ObservedAt != c.Envelope.ObservedAt || s.Probes == nil || len(s.Probes) != 0 {
-		t.Errorf("Take = version %q, observed_at %q, probes %v; want %q, the CTM's %q, []",
-			s.Version, s.ObservedAt, s.Probes, Version, c.Envelope.ObservedAt)
+	if s.Version != Version || s.ObservedAt != c.Envelope.ObservedAt {
+		t.Errorf("Take = version %q, observed_at %q; want %q, the CTM's %q",
+			s.Version, s.ObservedAt, Version, c.Envelope.ObservedAt)
+	}
+	if none := Take(c, nil); none.Probes == nil || len(none.Probes) != 0 {
+		t.Errorf("Take with no probes = %v, want []", none.Probes)
+	}
+}
+
+// The probes are hashed: two declarations that differ in one probe take two ids, and the
+// same declaration taken twice takes one, as an empty list and none do (FR-012).
+func TestProbesMoveTheID(t *testing.T) {
+	c := fixture(t, "three-node")
+	none := idOf(t, c)
+	if empty := idWith(t, c, []probe.Probe{}); empty != none {
+		t.Errorf("an empty list %s and none %s take two ids", empty, none)
+	}
+
+	both := declared(t, "n1-loop", "n2-loop")
+	id := idWith(t, c, both)
+	if id == none {
+		t.Fatalf("two probes taken and the id stayed %s", none)
+	}
+	if again := idWith(t, c, declared(t, "n1-loop", "n2-loop")); again != id {
+		t.Errorf("one declaration taken twice: %s and %s", id, again)
+	}
+	if one := idWith(t, c, declared(t, "n1-loop")); one == id || one == none {
+		t.Errorf("one probe dropped and the id is %s (two probes %s, none %s)", one, id, none)
+	}
+
+	for _, tc := range []struct {
+		field  string
+		change func(p *probe.Probe)
+	}{
+		{"name", func(p *probe.Probe) { p.Name = "n2-loop-b" }},
+		{"format", func(p *probe.Probe) { p.Format = "another" }},
+		{"endpoint b's device", func(p *probe.Probe) { p.Endpoints[1].Device = "n3" }},
+		{"endpoint a's interface", func(p *probe.Probe) { p.Endpoints[0].Interface = "ethernet-1/12" }},
+		{"endpoint a's address", func(p *probe.Probe) { p.Endpoints[0].Address = "10.2.10.3/24" }},
+		{"endpoint b's gateway", func(p *probe.Probe) { p.Endpoints[1].Gateway = "10.2.11.254" }},
+	} {
+		t.Run(tc.field, func(t *testing.T) {
+			changed := declared(t, "n1-loop", "n2-loop")
+			tc.change(&changed[1])
+			if got := idWith(t, c, changed); got == id {
+				t.Errorf("probe n2-loop's %s changed and the id stayed %s", tc.field, id)
+			}
+		})
 	}
 }
 
 // observed_at is not hashed: two reads of one intent, six days apart, are one snapshot,
 // while the stored documents keep each read's time (R-01; US2 scenario 1).
 func TestObservedAtIsNotHashed(t *testing.T) {
-	first, later := Take(fixture(t, "three-node")), Take(fixture(t, "observed-later"))
+	first, later := Take(fixture(t, "three-node"), nil), Take(fixture(t, "observed-later"), nil)
 	if first.ID != later.ID {
 		t.Fatalf("three-node %s and observed-later %s: observed_at moved the id", first.ID, later.ID)
 	}
@@ -241,11 +307,21 @@ func TestEnvelopeFieldsMoveTheID(t *testing.T) {
 // The id the store names is the hash of the stored body less observed_at, computed here
 // without Hashed or any of its types: the stored document read as ordered JSON, the
 // recipe's four keys deleted, the rest written back in the file's order with two-space
-// indent and a trailing newline, as jq --indent 2 'del(…)' writes it (R-01; FR-004).
+// indent and a trailing newline, as jq --indent 2 'del(…)' writes it (R-01; FR-004), with
+// no probes and with two.
 func TestStoredIDIsTheBodysHash(t *testing.T) {
-	for _, name := range []string{"three-node", "lossy", "mixed"} {
-		t.Run(name, func(t *testing.T) {
-			s := Take(fixture(t, name))
+	for _, tc := range []struct {
+		name   string
+		probes []probe.Probe
+	}{
+		{"three-node", nil},
+		{"lossy", nil},
+		{"mixed", nil},
+		{"three-node", declared(t, "n1-loop", "n2-loop")},
+	} {
+		name := tc.name
+		t.Run(name+"/"+strconv.Itoa(len(tc.probes)), func(t *testing.T) {
+			s := Take(fixture(t, name), tc.probes)
 			stored, err := Marshal(s)
 			if err != nil {
 				t.Fatal(err)

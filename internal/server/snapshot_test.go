@@ -160,9 +160,9 @@ func fileRefusals(t *testing.T) []fileRefusal {
 	t.Helper()
 	ctmOf := func(doc map[string]any) map[string]any { return doc["ctm"].(map[string]any) }
 	return []fileRefusal{
-		{"another version", fixtureFile(t, func(d map[string]any) { d["snapshot_version"] = "2" }), findings.ExitRejected,
+		{"another version", fixtureFile(t, func(d map[string]any) { d["snapshot_version"] = "3" }), findings.ExitRejected,
 			findings.RuleSnapshotVersionUnsupported, "snap.json",
-			`the snapshot declares snapshot_version "2"; this build reads "1", and nothing converts one`, false},
+			`the snapshot declares snapshot_version "3"; this build reads "1" and "2", and nothing converts one`, false},
 		{"a bare CTM", func() []api.File {
 			raw, err := os.ReadFile(repoPath("testdata", "ctm", "three-node.json"))
 			if err != nil {
@@ -170,7 +170,7 @@ func fileRefusals(t *testing.T) []fileRefusal {
 			}
 			return []api.File{{Path: "snap.json", Data: raw}}
 		}(), findings.ExitRejected, findings.RuleSnapshotVersionUnsupported, "snap.json",
-			`the snapshot declares no snapshot_version; this build reads "1", and nothing converts one`, false},
+			`the snapshot declares no snapshot_version; this build reads "1" and "2", and nothing converts one`, false},
 		{"a probe", fixtureFile(t, func(d map[string]any) { d["probes"] = []any{map[string]any{}} }), findings.ExitRejected,
 			findings.RuleSnapshotInvalid, "probes", "probes holds 1 entry", true},
 		{"an inner CTM of version 1", fixtureFile(t, func(d map[string]any) { ctmOf(d)["ctm_version"] = "1" }), findings.ExitRejected,

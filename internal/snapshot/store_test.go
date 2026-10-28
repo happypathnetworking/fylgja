@@ -30,7 +30,7 @@ func TestPutFilesUnderTheID(t *testing.T) {
 	ctx := context.Background()
 	root := filepath.Join(t.TempDir(), "snapshots")
 	store := NewDirStore(root)
-	s := Take(fixture(t, "three-node"))
+	s := Take(fixture(t, "three-node"), nil)
 
 	if _, err := os.Stat(root); !errors.Is(err, fs.ErrNotExist) {
 		t.Fatalf("the store exists before its first Put: %v", err)
@@ -85,7 +85,7 @@ func TestPutKeepsTheFirstTake(t *testing.T) {
 	ctx := context.Background()
 	root := filepath.Join(t.TempDir(), "snapshots")
 	store := NewDirStore(root)
-	first, later := Take(fixture(t, "three-node")), Take(fixture(t, "observed-later"))
+	first, later := Take(fixture(t, "three-node"), nil), Take(fixture(t, "observed-later"), nil)
 
 	id, err := store.Put(ctx, first)
 	if err != nil {
@@ -129,7 +129,7 @@ func TestPutKeepsTheFirstTake(t *testing.T) {
 // and the server files the refusal as snapshot.id.mismatch naming the path.
 func TestPutRefusesACorruptEntry(t *testing.T) {
 	ctx := context.Background()
-	s, other := Take(fixture(t, "three-node")), Take(fixture(t, "lossy"))
+	s, other := Take(fixture(t, "three-node"), nil), Take(fixture(t, "lossy"), nil)
 
 	for _, tc := range []struct {
 		name    string
@@ -197,7 +197,7 @@ func TestPutRefusesACorruptEntry(t *testing.T) {
 // Has says false, and Put keeps the entry for the operator to read.
 func TestACorruptEntryDeclaringAnotherID(t *testing.T) {
 	ctx := context.Background()
-	s, other := Take(fixture(t, "three-node")), Take(fixture(t, "lossy"))
+	s, other := Take(fixture(t, "three-node"), nil), Take(fixture(t, "lossy"), nil)
 	store := NewDirStore(filepath.Join(t.TempDir(), "snapshots"))
 	id, err := store.Put(ctx, s)
 	if err != nil {
@@ -250,11 +250,11 @@ func TestACorruptEntryDeclaringAnotherID(t *testing.T) {
 func TestFetchUnknownIsNotExist(t *testing.T) {
 	ctx := context.Background()
 	store := NewDirStore(filepath.Join(t.TempDir(), "snapshots"))
-	id := Take(fixture(t, "three-node")).ID
+	id := Take(fixture(t, "three-node"), nil).ID
 	if _, err := store.Fetch(ctx, id); !errors.Is(err, fs.ErrNotExist) {
 		t.Errorf("Fetch from a store not yet made = %v, want fs.ErrNotExist", err)
 	}
-	if _, err := store.Put(ctx, Take(fixture(t, "lossy"))); err != nil {
+	if _, err := store.Put(ctx, Take(fixture(t, "lossy"), nil)); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := store.Fetch(ctx, id); !errors.Is(err, fs.ErrNotExist) {
@@ -271,7 +271,7 @@ func TestHasIsFalseForACorruptEntry(t *testing.T) {
 	ctx := context.Background()
 	for name, body := range map[string][]byte{
 		"another snapshot": func() []byte {
-			b, err := Marshal(Take(fixture(t, "mixed")))
+			b, err := Marshal(Take(fixture(t, "mixed"), nil))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -282,7 +282,7 @@ func TestHasIsFalseForACorruptEntry(t *testing.T) {
 	} {
 		t.Run(name, func(t *testing.T) {
 			store := NewDirStore(filepath.Join(t.TempDir(), "snapshots"))
-			id, err := store.Put(ctx, Take(fixture(t, "three-node")))
+			id, err := store.Put(ctx, Take(fixture(t, "three-node"), nil))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -292,7 +292,7 @@ func TestHasIsFalseForACorruptEntry(t *testing.T) {
 			if has, err := store.Has(ctx, id); err != nil || has {
 				t.Errorf("Has = %v, %v; want false, nil", has, err)
 			}
-			if _, err := store.Put(ctx, Take(fixture(t, "three-node"))); err == nil {
+			if _, err := store.Put(ctx, Take(fixture(t, "three-node"), nil)); err == nil {
 				t.Error("Put kept a corrupt entry as if it were the snapshot")
 			}
 		})

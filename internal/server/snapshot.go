@@ -16,7 +16,8 @@ import (
 )
 
 // takeSnapshot wraps a CTM a read produced as a snapshot and files it in the store under
-// the state root, returning the snapshot and its store path (data-model §4; R-05). Where
+// the state root, returning the snapshot and its store path (data-model §4; R-05). It
+// takes no probes yet: a request's list reaches the take with --probes (016, R-06). Where
 // the server takes a snapshot is here alone, so the create, its dry run, intent read and
 // the stages' pipeline take and file alike (D-011's one code path). Called after a clean
 // read and before the compile: a refused read files nothing, and a compile refused after
@@ -28,7 +29,7 @@ import (
 // step, naming the store path and both ids, the one finding it returns, with no snapshot, since none was filed;
 // any other failure is an error the caller reports as operation.failed.
 func takeSnapshot(ctx context.Context, paths lab.Paths, step string, c *ctm.CTM) (*snapshot.Snapshot, string, findings.List, error) {
-	s := snapshot.Take(c)
+	s := snapshot.Take(c, nil)
 	store := snapshot.NewDirStore(paths.Snapshots)
 	_, err := store.Put(ctx, s)
 	var mismatch *snapshot.ErrIDMismatch

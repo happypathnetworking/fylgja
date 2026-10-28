@@ -176,7 +176,7 @@ func filing(t *testing.T) (Pipeline, map[string]*ctm.CTM) {
 	compiled := map[string]*ctm.CTM{}
 	filed := map[string]*ctm.CTM{}
 	take := func(ctx context.Context, c *ctm.CTM) (string, findings.List, error) {
-		s := snapshot.Take(c)
+		s := snapshot.Take(c, nil)
 		_, err := snapshots.Put(ctx, s)
 		return s.ID, nil, err
 	}

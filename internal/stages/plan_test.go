@@ -84,7 +84,7 @@ func (f *fakePipeline) pipeline() Pipeline {
 			if f.takeErr != nil || f.takeRefusals != nil {
 				return "", f.takeRefusals, f.takeErr
 			}
-			id := snapshot.Take(c).ID
+			id := snapshot.Take(c, nil).ID
 			f.taken = append(f.taken, id)
 			return id, nil, nil
 		},

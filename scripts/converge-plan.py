@@ -5,7 +5,8 @@
 
 Prints the runs still to implement, one per line, as TSV: the label (`Run N` or `Phase N`),
 1 if the run needs the host (live), its unchecked task ids, its lane partner's label (or
-nothing), and its line, which is the run's prompt.
+`-`: no field is ever empty, since bash's `read` collapses consecutive tabs), and its line,
+which is the run's prompt.
 
 The runs come from tasks.md's "Recommended route", read up to the next heading:
 
@@ -89,7 +90,7 @@ def main():
 
     by_label = {r["label"]: r for r in listed}
     for r in listed:
-        r["lane"] = ""
+        r["lane"] = "-"
     for r in listed:
         p = by_label.get(r["mark"]) if r["mark"] else None
         if p and r["laneable"] and p["laneable"]:

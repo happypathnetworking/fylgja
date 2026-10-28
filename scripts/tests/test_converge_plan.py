@@ -56,7 +56,9 @@ def plan(text, tier2="1", excluded="", only=""):
     finally:
         os.unlink(f.name)
     rows = [line.split("\t") for line in out.splitlines()]
-    return {r[0]: {"live": r[1], "ids": r[2].split(), "lane": r[3], "line": r[4]} for r in rows}
+    for r in rows:
+        assert len(r) == 5 and all(r), f"every field is filled, so bash's read keeps them apart: {r}"
+    return {r[0]: {"live": r[1], "ids": r[2].split(), "lane": "" if r[3] == "-" else r[3], "line": r[4]} for r in rows}
 
 
 class RouteParsing(unittest.TestCase):

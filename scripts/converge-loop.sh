@@ -712,13 +712,13 @@ lane_group() { # <head row> [<ids>]
 	local -a rows=("$1")
 	local partner prow r
 	IFS=$'\t' read -r _ _ _ partner _ <<< "$1"
-	while [ -n "$partner" ] && [ "${#rows[@]}" -lt "$LANES" ]; do
+	while [ "$partner" != - ] && [ "${#rows[@]}" -lt "$LANES" ]; do
 		prow=$(planned_runs "${2:-}" | awk -F'\t' -v l="$partner" '$1 == l')
 		[ -n "$prow" ] || break
 		rows+=("$prow")
 		IFS=$'\t' read -r _ _ _ partner _ <<< "$prow"
 		for r in "${rows[@]}"; do
-			[ "${r%%$'\t'*}" != "$partner" ] || partner=""
+			[ "${r%%$'\t'*}" != "$partner" ] || partner=-
 		done
 	done
 	printf '%s\n' "${rows[@]}"
@@ -777,7 +777,7 @@ run_planned() { # [<ids>]
 			else
 				finish operator 2 "$label is the operator's (live infrastructure, or tagged [operator]): ${line%.}. Do it by hand, tick its tasks, commit, and run the loop again."
 			fi
-		elif [ -n "$lane" ] && [ "$LANES" -gt 1 ]; then
+		elif [ "$lane" != - ] && [ "$LANES" -gt 1 ]; then
 			mapfile -t group < <(lane_group "$run" "$only")
 			if [ "${#group[@]}" -gt 1 ]; then
 				implement_lanes "${group[@]}"

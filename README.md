@@ -169,7 +169,7 @@ twin ready: bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd
   n1  172.20.20.3
   n2  172.20.20.4
   n3  172.20.20.2
-record: branch fylgja-test-readme, snapshot …, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 4d5b37aa0a894aec4cdca69fdb9fe455, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
+record: branch fylgja-test-readme, snapshot …, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 7c413536d67ef86321c629c076a0d3a4, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
 twin directory /var/tmp/fylgja/twin
 warning host.memory.unbudgeted [step host_check] host: sum 6144 MiB (n1 2048, n2 2048, n3 2048) is not checked against a host budget: FYLGJA_HOST_MEMORY_MB is unset
 1 finding(s): 0 rejection, 1 warning, 0 info
@@ -190,7 +190,7 @@ twin: lab fylgja present (3 nodes); twin directory present
   n1  clab-fylgja-n1  running  172.20.20.3  nokia_srlinux  device-config f05634801639578ed97c10f9d0265546
   n2  clab-fylgja-n2  running  172.20.20.4  nokia_srlinux  device-config 36667eef6c8a92923957b9549784273b
   n3  clab-fylgja-n3  running  172.20.20.2  nokia_srlinux  device-config 7efd0c0d5f40e5119d75b8b8d31d3e57
-record: branch fylgja-test-readme, snapshot …, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 4d5b37aa0a894aec4cdca69fdb9fe455, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
+record: branch fylgja-test-readme, snapshot …, bundle_id 777e9899213110875f41da982d2a19f9ba683331da223dd2b418f169dd534bee, schema 7c413536d67ef86321c629c076a0d3a4, scope tag:fylgja, read by infrahub-dcim from opsmill/schema-library@26336e9
   intent read at 2026-10-06T19:13:21.796364Z; reproducing it with --at that instant is best-effort
   provisioned by run fylgja-provision 01a112a2-7ee6-7772-a701-af726d528abc (source intent), worker 0.1.0-dev, recorded 2026-10-06T19:14:09.579682296Z, 3 nodes
 kind: snapshot … (branch fylgja-test-readme, read at 2026-10-06T19:13:21.796364Z)

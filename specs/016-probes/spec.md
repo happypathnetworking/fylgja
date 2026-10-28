@@ -94,6 +94,12 @@ any read of a node's running configuration are out of this feature.
     cross-device probe needs routing intent renders, which the user's own transform does.
   - **A snapshot `1` on disk is read as a `2` with no probes** (R-05): the version is not
     hashed, so the two bodies share one id; US7 scenario 1's first alternative.
+  - **Confirmed at `analyze` (2026-10-28, headless, the operator answering "take your own
+    recommendations")**: two probe-ready ports per fixture device and tier 3's probe across
+    one device; FR-024, US1's scenarios 1 and 4 and US6's scenario 5 now say so. D-064 is
+    appended as research §3.1 drafts it and the constitution amended to 2.3.0 as §3.2
+    drafts it, both by T002, the operator's, since a chain stage writes inside this
+    directory alone.
   - The kind is flat, eight text attributes for the two endpoints (R-07); a flow that
     fails to start is an entry of the loss list, not a phase, and the phase `flows` names
     the activities' own failure (R-13); a host the target drops is read first, then torn
@@ -107,7 +113,7 @@ any read of a node's running configuration are out of this feature.
 ### User Story 1 - A declared probe becomes a host on the twin (Priority: P1)
 
 The operator writes a probe declaration file: one probe, `ping`, from an uncabled
-interface of one device to an uncabled interface of another, each endpoint carrying the
+interface of one device to an uncabled interface of the same device or of another, each endpoint carrying the
 address its host takes with its prefix length and its gateway, the device interface's
 address, which intent holds and Infrahub renders. They run `fylgja twin create --branch
 <b> --probes <file>`. The server reads the branch, reads the file, takes a snapshot of
@@ -134,8 +140,9 @@ the far host's address is answered.
 
 **Acceptance Scenarios**:
 
-1. **Given** a branch whose devices hold an uncabled, addressed interface each and a
-   declaration file naming one `ping` probe between two of them, **When** the operator
+1. **Given** a branch whose devices hold two uncabled, addressed interfaces each and a
+   declaration file naming one `ping` probe between two of them, of one device or of two,
+   **When** the operator
    runs `twin create --branch <b> --probes <file>`, **Then** the server files a snapshot of
    version `2` whose `probes` list equals the file's content, compiles it, and the twin
    boots with one host per endpoint, each addressed and routed via its gateway.
@@ -146,8 +153,10 @@ the far host's address is answered.
    the same branch, **Then** the two snapshots have two ids, and the same file taken twice
    has one.
 4. **Given** the ready twin, **When** a ping is sent from one host to the far host's
-   address, **Then** it is answered through the two devices, and `twin show` names the
-   snapshot as it does for any twin.
+   address, **Then** it is answered through the device, or the devices, on its path, which
+   must route between the two prefixes (the reference fixture's does across one device,
+   by connected routes, since the reference template renders no routing), and `twin show`
+   names the snapshot as it does for any twin.
 5. **Given** a snapshot of version `2` with an empty `probes` list, **When** it is
    compiled, **Then** the bundle equals the one the same intent compiled to under bundle
    `5`, in everything but the version.
@@ -365,9 +374,9 @@ host check refuses a run whose probe image is absent on the host as it refuses a
 whose image is absent. The device side of a probe is intent's: Infrahub's template renders
 each physical interface's addresses on both platforms, so a probe's device interface comes
 up addressed from the artifact, and the reader reads no address. The fixture's three
-devices each gain one probe-ready interface, uncabled and addressed, beside the ports they
-have, so the fixture's artifacts, its compiled id and its snapshot id move once the
-template is imported.
+devices each gain two probe-ready interfaces, uncabled and addressed, beside the ports they
+have, so that a probe lies across one device by connected routes, and the fixture's
+artifacts, its compiled id and its snapshot id move once the template is imported.
 
 **Why this priority**: the package is how `ping` is a mechanism keyed by a format value
 and not a platform branch (D-031), and the template is the only road the device side can
@@ -398,8 +407,9 @@ up addressed from its artifact, and the SR Linux one from its own.
    for the device's platform, SR Linux's under its subinterface and EOS's as a routed
    port, and a device with no addressed interface renders what it did.
 5. **Given** the fixture branch re-seeded, **When** it is read, **Then** each of its three
-   devices holds one uncabled, addressed interface beside `ethernet-1/1`, `ethernet-1/2`
-   and `mgmt0`, and its snapshot, compiled and artifact ids are the ones recorded.
+   devices holds two uncabled, addressed interfaces (`ethernet-1/10` and `ethernet-1/11`)
+   beside `ethernet-1/1`, `ethernet-1/2` and `mgmt0`, and its snapshot, compiled and
+   artifact ids are the ones recorded.
 6. **Given** the compiler with a `linux` host in a bundle, **When**
    `TestCompilerNamesNoPlatform` runs, **Then** it passes: the host is reached by the
    package's format value, never by a branch on what it is.
@@ -634,8 +644,9 @@ decision log; `make linkcheck` clean.
   the device side of a probe reaches the node from its artifact; the reader, the mapping
   and CTM `2` MUST NOT change, and the reference transform's README MUST say what the
   template renders. The change MUST reach Infrahub only by the operator's push and import.
-- **FR-024**: The fixture's three devices MUST each gain one probe-ready interface,
-  uncabled and addressed, beside the ports they have, written by the seed; its snapshot
+- **FR-024**: The fixture's three devices MUST each gain two probe-ready interfaces,
+  uncabled and addressed, beside the ports they have, written by the seed, so that a probe
+  lies across one device by connected routes; its snapshot
   id, compiled id and artifact checksums MUST be re-recorded, and
   `testdata/ctm/three-node.json` and the wrapped fixture under `testdata/snapshot/` MUST
   follow if they are to stay the fixture's; the fixture tool MUST gain what the tests and

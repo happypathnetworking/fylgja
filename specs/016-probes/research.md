@@ -386,6 +386,11 @@ container and a plain one share a running lab, is owed (§4.1). *(2026-10-28)*
   address are refused (R-20); the kind `burst` and the rule `verify.burst` (R-15); a probe
   image is verified present whatever its acquisition (R-12). The operator may overturn any
   at `analyze`; the first is the one the plan flags as a choice the brief did not make.
+  **At `analyze` (2026-10-28)** the operator answered "take your own recommendations":
+  the first is confirmed and the spec's FR-024, US1 scenarios 1 and 4 and US6 scenario 5
+  amended to two ports and a probe across one device or two; the rest stand as recorded;
+  D-064 (§3.1, dated 2026-10-28) and the 2.3.0 amendment (§3.2) are to be appended as
+  drafted by T002, since a chain stage writes inside the feature directory alone.
 
 ## 3. Drafted for the operator
 

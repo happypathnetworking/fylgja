@@ -26,7 +26,8 @@ names 016 and the rule, as the 017–019 paragraphs do.
 | `step.schema.json`, `verify.schema.json`, `rehearsal.schema.json`, `findings.schema.json` | `internal/findings/testdata/contracts/019-following-removed/`, and `internal/cli`'s and `internal/server`'s where each validates a document of the 019 shape |
 | `twin.schema.json` (`10`) | `internal/lab/testdata/contracts/019-following-removed/` |
 
-**The goldens** (`internal/compiler/testdata/golden/`): `three-node`, `lossy`, `mixed`
+**The goldens** (`testdata/golden/`, at the repository root, with their ids in
+`internal/compiler/golden_test.go`'s `golden*ID` constants): `three-node`, `lossy`, `mixed`
 re-baselined for bundle `6` on a commit of their own; `three-node-probed` added from
 `testdata/snapshot/three-node-probed.json`; `three-node`, `mixed` and `three-node-probed`
 re-baselined again, on a second commit of their own, when the fixture's ports land

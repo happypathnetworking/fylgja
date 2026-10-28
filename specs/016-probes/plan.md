@@ -58,7 +58,7 @@ verification failures` (R-17). Infrahub's reference template renders each physic
 addresses on both platforms, and the fixture's devices each gain **two** uncabled addressed
 ports, since the reference transform renders no routing and a probe that needs only
 connected routes lies across one device (R-18, R-19): the demo probe of tier 3 is
-same-device, and the plan records that choice for the operator at `analyze` (R-30).
+same-device, a choice confirmed at `analyze` on 2026-10-28 and written into the spec (R-30).
 
 Verified at this plan (research §1): busybox `ping` and `ip` as the mechanism needs them,
 on the host's Docker; containerlab 0.79.0's dry run of a `linux` node with `exec` beside SR
@@ -172,7 +172,7 @@ timer, signal or queue is added.
 **Post-design re-check (after Phase 1)**: unchanged. The design adds one package kind,
 one Infrahub kind, two activities, one assertion kind and one new input to the compile; it
 violates no gate. The Governance question (a fourth blessed layer) is answered by the
-amendment drafted, for the operator at `analyze`.
+amendment drafted, taken at `analyze` on 2026-10-28 and appended by T002 with D-064.
 
 ## Project Structure
 

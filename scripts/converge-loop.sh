@@ -316,6 +316,13 @@ mkdir -p local
 exec 9> local/converge-loop.lock
 flock -n 9 || { echo "converge-loop: another loop holds local/converge-loop.lock" >&2; exit 2; }
 
+# A lane left from a stop (merge, error, contract) is the operator's to merge or discard
+# before another loop seeds the same path and branch.
+if git worktree list --porcelain | grep -q "^worktree $PWD/local/lanes/" || [ -n "$(git branch --list 'lane/*')" ]; then
+	echo "converge-loop: a lane is left from an earlier run: $(git worktree list --porcelain | sed -n "s|^worktree $PWD/||p" | grep '^local/lanes/' | tr '\n' ' ')$(git branch --list 'lane/*' | tr -d ' ' | tr '\n' ' '). Merge it by hand (git merge lane/<run>), commit, then git worktree remove local/lanes/<run> and git branch -d lane/<run>; or discard both." >&2
+	exit 2
+fi
+
 # Absolute, since a lane's session runs with its worktree as the working directory.
 RUN_DIR="$PWD/local/converge-loop/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$RUN_DIR"
@@ -429,7 +436,16 @@ dry_run_session() { # <out file> <prompt>
 		printf 'Dry run: spec.md and its checklist written on branch %s.\n' "$FEATURE_NAME" > "$out"
 		return 0 ;;
 	/speckit-clarify*)
-		printf 'Dry run: nothing to ask.\n\nCLARIFY-DONE\n' > "$out"
+		# A brief saying DRY-WAIT asks once; the resumed prompt (the reply) is echoed into
+		# the report, so a test can see exactly what the session was handed.
+		if grep -q DRY-WAIT "$FEATURE_REL/brief.md" 2> /dev/null; then
+			printf 'Dry run: one question.\n\n## Questions\n\n1. Which? A) this (recommended) B) that\n\nCLARIFY-WAIT\n' > "$out"
+		else
+			printf 'Dry run: nothing to ask.\n\nCLARIFY-DONE\n' > "$out"
+		fi
+		return 0 ;;
+	"The operator's answers"*)
+		printf 'Dry run: the prompt received follows, verbatim.\n---\n%s\n---\n\nCLARIFY-DONE\nANALYZE-DONE\n' "$prompt" > "$out"
 		return 0 ;;
 	/speckit-plan*)
 		printf '# Implementation Plan: dry run\n\n## Constitution Check\n\n| # | Gate | Status |\n|---|---|---|\n' > "$FEATURE_REL/plan.md"
@@ -450,6 +466,11 @@ dry_run_session() { # <out file> <prompt>
 	esac
 	mkdir -p "$FEATURE_REL/notes"
 	for id in $RUN_IDS; do
+		# DRY-EXIT1: the session itself fails; DRY-ADD-ALL: it commits with git add -A.
+		if grep -qE "^\s*- \[ \] $id\b.*DRY-EXIT1" "$tasks"; then
+			printf 'Dry run of %s: the session failed.\n' "$RUN_LABEL" > "$out"
+			return 1
+		fi
 		grep -qE "^\s*- \[ \] $id\b.*DRY-FAIL" "$tasks" && continue
 		printf 'dry run %s by %s\n' "$id" "$RUN_LABEL" > "$FEATURE_REL/notes/$id.md"
 		if grep -qE "^\s*- \[ \] $id\b.*DRY-CONFLICT" "$tasks"; then
@@ -459,7 +480,7 @@ dry_run_session() { # <out file> <prompt>
 		ticked="$ticked $id"
 	done
 	printf 'Dry run of %s: ticked%s; the rest stays unchecked.\n' "$RUN_LABEL" "${ticked:- nothing}" > "$out"
-	git add -A -- "$FEATURE_REL"
+	if grep -qE "DRY-ADD-ALL" "$tasks" && [ -n "$ticked" ]; then git add -A; else git add -A -- "$FEATURE_REL"; fi
 	git diff --cached --quiet || git commit -q -m "chore($SCOPE): dry run, $RUN_LABEL" -m "A stand-in for a session, by scripts/converge-loop.sh --dry-run." -m "$(trailer_for "${MODEL[implement]}")"
 }
 
@@ -637,10 +658,13 @@ answered_unchecked() {
 # packages it touched rather than the whole tier, since two lanes' `make test` at once would
 # trip tier 1's wall-time bound; the merged tree runs the whole tier once in the gates.
 implement_prompt() { # <route line> <ids> <live clause> [lane]
-	local tests="make build, make test and make lint"
-	[ -z "${4:-}" ] || tests="make build and make lint, then go test of the packages you touched (the merged tree runs the whole tier)"
+	local tests="make build, make test and make lint" adding="commit your work"
+	if [ -n "${4:-}" ]; then
+		tests="make build and make lint, then go test of the packages you touched (the merged tree runs the whole tier)"
+		adding="commit your work, adding the files you edited by name and never with git add -A or git add . (this worktree holds symlinks to the main tree's ignored files, which must not be committed)"
+	fi
 	echo "/speckit-implement $1
-Loop run (scripts/converge-loop.sh). Only $(echo $2 | sed 's/ /, /g'); stop at the run's checkpoint and report, and do not start another run. $3, or a decision you cannot take from spec.md, plan.md, research.md or docs/decisions.md, stays unchecked and your report says what it needs. End with $tests. Then commit your work, the ticks in tasks.md included, on the current branch as conventional commits whose bodies say why, as docs/development.md's Conventions say (a golden re-baseline in a commit of its own). Never push."
+Loop run (scripts/converge-loop.sh). Only $(echo $2 | sed 's/ /, /g'); stop at the run's checkpoint and report, and do not start another run. $3, or a decision you cannot take from spec.md, plan.md, research.md or docs/decisions.md, stays unchecked and your report says what it needs. End with $tests. Then $adding, the ticks in tasks.md included, on the current branch as conventional commits whose bodies say why, as docs/development.md's Conventions say (a golden re-baseline in a commit of its own). Never push."
 }
 
 # The pure gates, into <log>; returns their status.
@@ -749,10 +773,16 @@ sys.stdout.write("\0".join(keep))' |
 # that does not resolve mechanically (tasks.md's driver settles ticks and notes alone) is
 # aborted and stops the loop at "merge", the worktree and branch kept for the operator.
 merge_lane() { # <label> <worktree> <branch> <seeded list file>
-	local label="$1" wt="$2" branch="$3" seeded="$4" dirty log="$RUN_DIR/${2##*/}.merge.log"
+	local label="$1" wt="$2" branch="$3" seeded="$4" dirty committed log="$RUN_DIR/${2##*/}.merge.log"
 	dirty=$(git -C "$wt" status --porcelain --untracked-files=all | grep -vxF -f <(sed 's/^/?? /' "$seeded") || true)
 	if [ "$ALLOW_DIRTY" = 0 ] && [ -n "$dirty" ]; then
 		finish contract 2 "Lane $label left uncommitted changes in $wt: $(echo "$dirty" | tr '\n' ' ')"
+	fi
+	# A seeded symlink committed by the lane (a `git add -A`) would, merged, replace this
+	# tree's ignored directories with links to themselves.
+	committed=$(git diff --name-only "$SESSION_HEAD..$branch" | grep -xF -f "$seeded" || true)
+	if [ -n "$committed" ]; then
+		finish contract 2 "Lane $label committed a seeded path: $(echo "$committed" | tr '\n' ' '). Its worktree $wt and branch $branch are kept: drop those paths from its commits (or discard the lane), then run the loop again."
 	fi
 	if git merge --no-ff -q -m "merge($SCOPE): $label" \
 		-m "Lane $label, built in its own worktree on branch $branch and merged back by scripts/converge-loop.sh in route order; tasks.md by scripts/merge-tasks.py, ticks and notes alone." \
@@ -809,14 +839,20 @@ implement_lanes() { # <row>...
 	for i in "${!pids[@]}"; do
 		wait "${pids[$i]}" || true
 	done
+	# The lanes that succeeded merge back first, in route order, so nothing a lane built is
+	# stranded on its branch; then a failed lane stops the loop, its worktree kept.
+	local failed=""
 	for i in "${!labels[@]}"; do
 		publish_log "${labels[$i]}"
 		status=$(cat "${outs[$i]}.status" 2> /dev/null || echo 1)
-		[ "$status" = 0 ] || finish error 1 "The implement session of ${labels[$i]} failed (exit $status); its report is ${outs[$i]}, and its worktree ${wts[$i]} is kept."
+		if [ "$status" = 0 ]; then
+			merge_lane "${labels[$i]}" "${wts[$i]}" "${branches[$i]}" "$RUN_DIR/${wts[$i]##*/}.seeded"
+		else
+			say "  ${labels[$i]} failed (exit $status); its worktree ${wts[$i]} and branch ${branches[$i]} are kept"
+			failed="$failed ${labels[$i]} (exit $status, report ${outs[$i]}, worktree ${wts[$i]}, branch ${branches[$i]});"
+		fi
 	done
-	for i in "${!labels[@]}"; do
-		merge_lane "${labels[$i]}" "${wts[$i]}" "${branches[$i]}" "$RUN_DIR/${wts[$i]##*/}.seeded"
-	done
+	[ -z "$failed" ] || finish error 1 "An implement session of a lane failed:${failed%;}. The other lanes are merged. Discard or finish the kept lane by hand, remove its worktree and branch, then run the loop again."
 	settle "lanes ${labels[*]}" "$(echo $all_ids)" "${outs[0]}" "$before_checked" "$before_tree"
 	for i in "${!labels[@]}"; do
 		ask_unchecked "${labels[$i]}" "${idss[$i]}" "${outs[$i]}"
@@ -943,7 +979,9 @@ stage_writes() { # <stage>
 # A question whose answer is text: clarify's and analyze's. Attended, the attended session
 # puts the report's questions to the operator and writes the reply to reply-<n>; a
 # skip-<n> means "take your own recommendations". Unattended it is the operator stop.
-# Prints the reply.
+# Leaves the reply in REPLY_TEXT (not on stdout: `say` writes there too, and a `finish`
+# inside a command substitution would end the subshell alone).
+REPLY_TEXT=""
 ask_text() { # <kind> <label> <report> <sentence>
 	local kind="$1" label="$2" report="$3" sentence="$4"
 	[ "$ATTENDED" = 1 ] || finish operator 2 "$sentence"
@@ -960,18 +998,18 @@ ask_text() { # <kind> <label> <report> <sentence>
 	if [ -e "$ATT/skip-$QN" ]; then
 		mv "$ATT/skip-$QN" "$ATT/skipped-$QN"
 		say "  question $QN skipped: the session takes its own recommendations"
-		echo "No answer from the operator: take your own recommendations and go on."
+		REPLY_TEXT="No answer from the operator: take your own recommendations and go on."
 	else
 		say "  reply $QN received"
 		cp "$ATT/reply-$QN" "$ATT/answered-$QN"
-		cat "$ATT/reply-$QN"
+		REPLY_TEXT=$(cat "$ATT/reply-$QN")
 	fi
 }
 
 # A stage that may end asking (clarify, analyze): run it, and while its report ends with
 # <wait marker>, put the questions to the operator and resume the session with the reply.
 stage_dialogue() { # <stage> <first prompt> <wait marker> <done marker>
-	local stage="$1" prompt="$2" wait="$3" done_="$4" n=0 out reply
+	local stage="$1" prompt="$2" wait="$3" done_="$4" n=0 out
 	RUN_LABEL="$stage"
 	RUN_IDS=""
 	while :; do
@@ -982,11 +1020,11 @@ stage_dialogue() { # <stage> <first prompt> <wait marker> <done marker>
 		if grep -q "^$done_" "$out"; then
 			return 0
 		elif grep -q "^$wait" "$out"; then
-			reply=$(ask_text "$stage" "$stage $n" "$out" "/speckit-$stage asks the operator; its report ($out) holds the questions and its recommendations.")
+			ask_text "$stage" "$stage $n" "$out" "/speckit-$stage asks the operator; its report ($out) holds the questions and its recommendations."
 			RESUME_SID="$LAST_SID"
 			prompt="The operator's answers to your questions follow. Record each where /speckit-$stage records an answer, then end your turn with the line $done_, or with $wait above any question still open.
 
-$reply"
+$REPLY_TEXT"
 		else
 			finish contract 2 "/speckit-$stage ended with neither $done_ nor $wait; its report is $out."
 		fi
@@ -1063,6 +1101,10 @@ tasks_gate() { # <after what>
 	[ -n "$rows" ] || finish gate 1 "$FEATURE_REL/tasks.md has no run to implement after $1."
 	phases=$(awk -F'\t' '$1 ~ /^Phase/ {print $1 ": " $3}' <<< "$rows")
 	[ -z "$phases" ] || finish gate 1 "$FEATURE_REL/tasks.md's route does not name every unchecked task after $1: $(echo "$phases" | tr '\n' ';')"
+	# A task outside every phase (under Notes, say) reaches no run at all.
+	local strays
+	strays=$(comm -23 <(grep -oE '^\s*- \[ \] T[0-9]+' "$TASKS" | grep -oE 'T[0-9]+' | sort -u) <(awk -F'\t' '{print $3}' <<< "$rows" | tr ' ' '\n' | sort -u) | tr '\n' ' ')
+	[ -z "$(echo $strays)" ] || finish gate 1 "$FEATURE_REL/tasks.md has unchecked tasks no run reaches after $1 (outside every phase and the route): $(echo $strays)."
 	noread=$(grep -E '^\s*[0-9]+\.\s+\*\*Run [0-9]+\*\*' "$TASKS" | grep -vE '\[(operator|live)\]' | grep -v 'Read first:' | grep -oE 'Run [0-9]+' || true)
 	[ -z "$noread" ] || finish gate 1 "Route lines without 'Read first:' after $1: $(echo $noread | sed 's/ /, /g')."
 	bare=$(grep -E '^\s*- \[ \] T[0-9]+ \[operator\]' "$TASKS" | grep -vE '\b(since|because)\b' | grep -oE 'T[0-9]+' || true)
@@ -1088,7 +1130,7 @@ stage_tasks() {
 stage_analyze() {
 	say ""
 	say "## analyze"
-	stage_dialogue analyze "/speckit-analyze Headless (scripts/converge-loop.sh): you cannot ask interactively. Write the read-only report first; then apply every fix that spec.md, plan.md, research.md, the brief and docs/decisions.md settle, judging each [operator] task (drop or re-tag one the artifacts already settle; keep one that is necessary, with its reason on its line); list what needs the operator under '## For the operator', each with its options and your recommendation, and end your turn with the line ANALYZE-WAIT; with nothing for the operator, end with the line ANALYZE-DONE. Do not commit." ANALYZE-WAIT ANALYZE-DONE
+	stage_dialogue analyze "/speckit-analyze Headless (scripts/converge-loop.sh): you cannot ask interactively. Write the read-only report first; then apply every fix that spec.md, plan.md, research.md, the brief and docs/decisions.md settle, judging each [operator] task (drop or re-tag one the artifacts already settle; keep one that is necessary, with its reason on its line) and each lane mark [∥ Run M] in the route against the template's lane rule (.specify/templates/overrides/tasks-template.md: disjoint files edited and read, no dependency between the two runs, neither live nor naming tier 2; remove a mark the pair does not earn); list what needs the operator under '## For the operator', each with its options and your recommendation, and end your turn with the line ANALYZE-WAIT; with nothing for the operator, end with the line ANALYZE-DONE. Do not commit." ANALYZE-WAIT ANALYZE-DONE
 	check_session
 	tasks_gate analyze
 	stage_writes analyze

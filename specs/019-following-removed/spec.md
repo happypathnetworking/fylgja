@@ -417,9 +417,10 @@ remaining history.
   and `kind: snapshot <short> (branch B, read at T)` when it does not, keeping the stage,
   the `(stepped from …)` and the rehearsal notes as they are today and dropping "; not
   following". A twin from intent whose record names no snapshot (an earlier build's
-  rebuild) MUST read `kind: snapshot none (branch B, read at T)`, with a note that it names
-  no snapshot, so `twin step` refuses it and `twin destroy` clears it. `from a bundle`,
-  `diverged` and `none` MUST stay.
+  rebuild, or a record of 8) MUST read `kind: snapshot none (branch B at T)` when the
+  record carries an `at` and `kind: snapshot none (branch B, read at T)` when it does not,
+  with a note that it names no snapshot, so `twin step` refuses it and `twin destroy`
+  clears it (analyzed 2026-10-28). `from a bundle`, `diverged` and `none` MUST stay.
 - **FR-009**: The show document's kind MUST be one of `none`, `snapshot`, `from_bundle` and
   `diverged`, losing `pinned`, `frozen` and `following`; its following block and last check
   MUST go; runs in flight MUST stay, since the service

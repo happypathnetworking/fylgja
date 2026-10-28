@@ -1,8 +1,8 @@
 #!/bin/bash
 # Tier 3: nine cases in one run, making nine twins, through the workflow service and the
 # operator's worker, leaving the host as it found it. Run by `make test-e2e` from the
-# repository root. Never runs in CI and never gates a PR. M3's four cases create with
-# --no-follow, so nothing checks their twins.
+# repository root. Never runs in CI and never gates a PR. No case makes a Schedule: a twin is
+# frozen at its snapshot, and moves only when a step takes it (019).
 #
 # Every fylgja command but worker run goes through the API (M13): the script starts a server
 # of its own from the tree, on a port of its own, with a token it makes for the run, and
@@ -13,16 +13,16 @@
 # no command of the script's: the check fylgja-twin asks them from inside Infrahub's task
 # workers, of the operator's server on the host's Docker bridge (015).
 #
-# After every create and every rebuild: each node's first cabled interface reads,
-# over the gNMI its own package declares, the description its staged artifact sets (bootstrap
-# sets none), n1's ethernet-1/2 admin-state is what the artifact says, and twin.json's
-# checksums are Infrahub's. Every node is ready inside its own package's readiness budget,
-# which differs per platform. Every artifact carries a marker in its header, where the
-# template writes the device's description (017); it is found in no output, record,
-# document, history or worker log. Every create files the snapshot the server took under
-# snapshots/, names it in twin.json, and writes no CTM sidecar (018). No token or password is
-# found there either, nor in the bundle store or the snapshot store, which hold the marker
-# by design.
+# After every create and every step that changes a node: each node's first cabled interface
+# reads, over the gNMI its own package declares, the description its staged artifact sets
+# (bootstrap sets none), n1's ethernet-1/2 admin-state is what the artifact says, and
+# twin.json's checksums are Infrahub's. Every node is ready inside its own package's
+# readiness budget, which differs per platform. Every artifact carries a marker in its
+# header, where the template writes the device's description (017); it is found in no
+# output, record, document, history or worker log. Every create files the snapshot the
+# server took under snapshots/, names it in twin.json, and writes no CTM sidecar (018). No
+# token or password is found there either, nor in the bundle store or the snapshot store,
+# which hold the marker by design.
 #
 #   1. create from fylgja-fixture; the conformance suite's boot half reads that twin (M6:
 #      host name, every cabled port enabled, discovering and seeing the far end the bundle's
@@ -35,13 +35,14 @@
 #      of the script's own names it an orphan at start, a dry-run create is refused naming
 #      it, and destroy clears it
 #   4. create --at T again: case 2's snapshot and bundle_id; destroy
-#   5. a throwaway branch seeded; create following it every 15s, under --scope tag:fylgja
-#      named (017); a check leaves the twin
-#      untouched; an artifact-only change (n1:ethernet-1/2 disabled, then generated) rebuilds
-#      the twin with no command and the node reads disable, and twin verify skips that port
-#      and its link (M12); the branch's topology changed; the twin rebuilt again; twin show
-#      says so, naming no snapshot for a rebuilt twin (018); destroy stops following; the
-#      branch deleted
+#   5. a throwaway branch seeded; create from it, under --scope tag:fylgja named (017), and
+#      twin show names the snapshot it was built from; an artifact-only change
+#      (n1:ethernet-1/2 disabled, then generated) leaves the twin frozen (019): over five
+#      minutes and a half no run starts, and twin.json, the containers and twin show's kind
+#      line do not move; a step to a snapshot of the changed branch, by file, and the node
+#      reads disable, and twin verify skips that port and its link (M12) and names the
+#      snapshot; the branch's topology changed, and a step to its snapshot by id; twin show
+#      names it, stepped from the first; destroy; the branch deleted
 #   6. a throwaway branch seeded with the mixed fixture (M7): one twin of two platforms,
 #      s1 on SR Linux and e1, e2 on EOS, each node read back over its own package's gNMI;
 #      the boot half reads this twin too, and twin verify reads each node over its own
@@ -76,12 +77,13 @@
 #      change the threads, their comments and the validators
 #
 # Needs, all running from this directory: `make temporal-dev`, `make worker` (restarted
-# after every rebuild, since case 1's refusal is worded by the worker and case 5's checks
-# run on it), Docker, containerlab, the SR Linux image, the imported cEOS image (never
-# pulled; docs/development.md says how to import it), go (cases 1 and 6 run the boot half as
-# go test; cases 5 to 9 seed their branches with cmd/fylgja-fixture), and Infrahub with
-# fylgja-fixture seeded (local/.env, which must set FYLGJA_DEFAULT_SCOPE="tag:fylgja", the
-# scope every case's fixtures are tagged into, for the script's server to read under; 017).
+# after every rebuild, since case 1's refusal is worded by the worker and the steps of cases
+# 5, 7 and 8 run on it), Docker, containerlab, the SR Linux image, the imported cEOS image
+# (never pulled; docs/development.md says how to import it), go (cases 1 and 6 run the boot
+# half as go test; cases 5 to 9 seed their branches with cmd/fylgja-fixture), and Infrahub
+# with fylgja-fixture seeded (local/.env, which must set FYLGJA_DEFAULT_SCOPE="tag:fylgja",
+# the scope every case's fixtures are tagged into, for the script's server to read under;
+# 017).
 # Every command goes to the script's own server, whose
 # port is one the system chooses. Case 9 needs two things more, checked before anything
 # starts: the operator's server from this tree, listening on the Docker bridge with
@@ -95,7 +97,8 @@
 # each account-gated image it needs is present, and is skipped, saying why, otherwise. Unset
 # or empty, every case runs and every package's image is required first. A name no package
 # has, or a list that selects no case, is refused before anything starts.
-# It takes minutes; run it on a quiet host (docs/development.md).
+# It takes about 32 to 33 minutes, case 5's frozen wait among them; run it on a quiet host
+# (docs/development.md).
 #
 # Exit 0 prints E2E-OK when every case ran, or, when PLATFORMS skipped one, E2E-PARTIAL naming
 # the list, the cases that ran and each case skipped with its reason. Any failed check exits 1
@@ -103,6 +106,8 @@
 # and its deletion of the throwaway branches of cases 5 to 9 (7's, 8's and 9's with their
 # stages and proposed changes, 9's threads and validators going with its proposed change); a
 # lab, a twin directory or Schedule fylgja-follow left behind after that destroy exits 99.
+# This build makes no such Schedule; the check catches one kept by a host upgraded with a
+# following twin up (019).
 set -euo pipefail
 
 fail() {
@@ -176,11 +181,13 @@ API_TOKEN=$(head -c 24 /dev/urandom | base64)
 API_ADDRESS=""
 SERVER_LISTEN_WAIT_S=15
 
-# Case 5's interval: the floor is 10s (provision.MinInterval), and three intervals bound the
-# wait for an unchanged check.
-FOLLOW_INTERVAL_S=15
+# Case 5's frozen wait (019): counted from the moment its branch's change is visible to a
+# read, five minutes and a half, longer than the 5-minute default interval of the check a
+# following build ran.
+FROZEN_WAIT_S=330
+# The Schedule a following build made and this build never makes, read by the trap's leak
+# check alone.
 FOLLOW_SCHEDULE=fylgja-follow
-export FOLLOW_INTERVAL_S
 
 # The short-lived worker's host line is on stdout about 0.22s after exec;
 # the bound only stops a worker that never reports from holding the run.
@@ -501,7 +508,7 @@ verify_twin() {
 
 # schedule_state: present or absent as the workflow service answers for Schedule
 # fylgja-follow, or unknown when it gave no answer. describe exits 1 on an absent Schedule
-# and says "not found".
+# and says "not found". Read by the trap's leak check alone (019).
 schedule_state() {
   if temporal schedule describe --address "$TEMPORAL_ADDRESS" --schedule-id "$FOLLOW_SCHEDULE" > /dev/null 2> "$OUT/schedule-describe.err"; then
     echo present
@@ -630,7 +637,7 @@ create_twin() {
 }
 
 # destroy_twin CASE TEARDOWN UNSTAGE: twin destroy reports TEARDOWN and UNSTAGE, in under
-# 60s, leaving no lab, no twin directory and the bundle store as it was.
+# 60s, leaving no lab, no twin directory and the bundle store as it was; sets DESTROY_TOOK.
 destroy_twin() {
   local case=$1 teardown=$2 unstage=$3
   local before start status=0 took
@@ -638,6 +645,7 @@ destroy_twin() {
   start=$(now_ns)
   fylgja twin destroy --json > "$OUT/destroy-$case.json" 2> "$OUT/destroy-$case.err" || status=$?
   took=$(since "$start")
+  DESTROY_TOOK=$took
   echo "e2e: case $case: destroy took ${took}s (exit $status)"
   expect "$OUT/destroy-$case.json" ".status==\"ok\" and .cleanup.teardown==\"$teardown\" and .cleanup.unstage==\"$unstage\" and (.cleanup.remaining|length)==0"
   [ "${took%.*}" -lt 60 ] || fail "case $case: destroy took ${took}s, over 60s"
@@ -655,8 +663,8 @@ cleanup() {
     kill -TERM "$WORKER_PID" 2> /dev/null || true
     wait "$WORKER_PID" 2> /dev/null || true
   fi
-  # Destroy stops following first, so no check rebuilds what it removes. It is a request to
-  # the script's server, which the success path has already stopped once nothing was left.
+  # A request to the script's server, which the success path has already stopped once nothing
+  # was left.
   if [ -n "${SERVER_PID:-}" ]; then
     fylgja twin destroy --json > "$OUT/trap-destroy.json" 2> "$OUT/trap-destroy.err" || true
   fi
@@ -689,6 +697,9 @@ cleanup() {
     echo "e2e: LEAK: $TWIN still present" >&2
     exit 99
   fi
+  # No command of this build makes Schedule fylgja-follow (019), so one present was kept by a
+  # host upgraded with a following twin up, which starts a workflow no worker of this build
+  # serves.
   case "$(schedule_state)" in
     present)
       echo "e2e: LEAK: Schedule $FOLLOW_SCHEDULE still present" >&2
@@ -875,7 +886,7 @@ trap cleanup EXIT
 # --- case 1: a second create is refused naming the twin ------------------------
 if case_runs 1; then
 
-create_twin 1 --no-follow
+create_twin 1
 SID1=$SID BID1=$BID RUN1=$RUN_ID
 export SID1 BID1 RUN1
 expect "$TWIN/twin.json" '.provenance.branch==env.BRANCH and (.provenance | has("at") | not)
@@ -918,7 +929,7 @@ clab inspect --all --format json > "$OUT/inspect-1a.json"
 twin_before=$(sha256sum < "$TWIN/twin.json")
 start=$(now_ns)
 refused_status=0
-fylgja twin create --branch "$BRANCH" --no-follow --json > "$OUT/refused-1.json" 2> "$OUT/refused-1.err" || refused_status=$?
+fylgja twin create --branch "$BRANCH" --json > "$OUT/refused-1.json" 2> "$OUT/refused-1.err" || refused_status=$?
 echo "e2e: case 1: second create refused after $(since "$start")s (exit $refused_status)"
 clab inspect --all --format json > "$OUT/inspect-1b.json"
 [ "$refused_status" -eq 1 ] || fail "case 1: the second create exited $refused_status, not 1; see $OUT/refused-1.json"
@@ -1019,7 +1030,7 @@ not
   $expected_line"
 
 dry_orphan_status=0
-fylgja twin create --branch "$BRANCH" --no-follow --dry-run --json > "$OUT/dry-orphan.json" 2> "$OUT/dry-orphan.err" || dry_orphan_status=$?
+fylgja twin create --branch "$BRANCH" --dry-run --json > "$OUT/dry-orphan.json" 2> "$OUT/dry-orphan.err" || dry_orphan_status=$?
 [ "$dry_orphan_status" -eq 1 ] || fail "case 3: the dry run beside the orphan exited $dry_orphan_status, not 1; see $OUT/dry-orphan.json"
 export ORPHAN_REFUSAL="lab fylgja is present (1 node), an orphan: no twin.json records it; deployed from $ORPHAN_TOPO; one twin exists at a time, and fylgja twin destroy clears it"
 expect "$OUT/dry-orphan.json" '.status=="rejected" and .dry_run.verdict=="refused"
@@ -1049,7 +1060,7 @@ else
   skip_case 4
 fi
 
-# --- case 5: an unpinned twin follows its branch (M4) --------------------------
+# --- case 5: a twin from a branch is frozen at its snapshot, and stepped (019) ---
 if case_runs 5; then
 
 # A throwaway branch: fylgja-fixture is never changed. Set before seeding, so the
@@ -1071,174 +1082,156 @@ echo "e2e: case 5: seeding $FB took ${SEED_TOOK}s (exit $seed_status)"
 [ "${SEED_TOOK%.*}" -lt 150 ] || fail "case 5: seeding $FB took ${SEED_TOOK}s, over 150s"
 
 BRANCH=$FB
-# The scope named, the server's default: the follow's checks read under the record's.
-create_twin 5 --interval "${FOLLOW_INTERVAL_S}s" --scope tag:fylgja
+# The scope named, the server's default (017). The create follows nothing (019): its
+# document carries no following block.
+create_twin 5 --scope tag:fylgja
 SID5=$SID BID5=$BID RUN5=$RUN_ID
 export SID5 BID5 RUN5
-expect "$OUT/create-5.json" '.following.branch==env.FB and .following.interval_s==(env.FOLLOW_INTERVAL_S|tonumber)
-  and .following.schedule_id=="fylgja-follow" and .following.state=="started"'
-expect "$TWIN/twin.json" '.provenance.branch==env.FB and .provenance.scope=="tag:fylgja"'
+expect "$OUT/create-5.json" 'has("following") | not'
+expect "$TWIN/twin.json" '.provenance.branch==env.FB and (.provenance | has("at") | not) and .provenance.scope=="tag:fylgja"'
 
+# twin show names the snapshot the twin was built from, and its kind line says so, read at
+# the create's read since the reference names no at (019). The line is kept: it must not
+# move while the twin is frozen.
 fylgja twin show --json > "$OUT/show-5-created.json" 2> "$OUT/show-5-created.err" ||
   fail "case 5: twin show exited non-zero after the create; see $OUT/show-5-created.err"
-expect "$OUT/show-5-created.json" '.show.kind=="following" and .show.record.snapshot_id==env.SID5 and .show.record.bundle_id==env.BID5
-  and .show.following.interval_s==(env.FOLLOW_INTERVAL_S|tonumber)'
+expect "$OUT/show-5-created.json" '.show.kind=="snapshot" and .show.record.snapshot_id==env.SID5 and .show.record.bundle_id==env.BID5'
+fylgja twin show > "$OUT/show-5-created.out" 2> "$OUT/show-5-created.err" ||
+  fail "case 5: twin show exited non-zero after the create; see $OUT/show-5-created.err"
+printf 'kind: snapshot %s… (branch %s, read at %s)\n' "${SID5:0:8}" "$FB" "$(jq -r .observed_at "$TWIN/twin.json")" > "$OUT/kind-5.txt"
+grep '^kind: ' "$OUT/show-5-created.out" | cmp -s "$OUT/kind-5.txt" - ||
+  fail "case 5: twin show's kind line is not $(cat "$OUT/kind-5.txt"); see $OUT/show-5-created.out"
 
-# An unchanged check touches nothing: twin.json and the lab's containers are the
-# same after a check has compared and found the branch unchanged. The containers are found
-# by containerlab's own label, containerlab=fylgja.
+# What a following build's check would have rebuilt, taken now: twin.json, the lab's
+# containers, found by containerlab's own label containerlab=fylgja, and the instant after
+# which no run of any type may start. UTC to the nanosecond, a form the workflow service's
+# list query takes.
 twin_before=$(sha256sum < "$TWIN/twin.json")
 containers_before=$(docker ps -q --no-trunc --filter label=containerlab=fylgja | LC_ALL=C sort)
 [ "$(grep -c . <<< "$containers_before")" -eq 3 ] || fail "case 5: docker lists $(grep -c . <<< "$containers_before") containers of lab fylgja, not 3"
-wait_s=$(( 3 * FOLLOW_INTERVAL_S ))
-start=$(now_ns)
-while :; do
-  fylgja twin show --json > "$OUT/show-5-unchanged.json" 2> "$OUT/show-5-unchanged.err" || true
-  jq -e '.show.following.last_check.outcome=="unchanged" and .show.following.last_check.twin_bundle_id==env.BID5' \
-    "$OUT/show-5-unchanged.json" > /dev/null 2>&1 && break
-  [ "$(( ($(now_ns) - start) / 1000000000 ))" -lt "$wait_s" ] ||
-    fail "case 5: no check ended unchanged within ${wait_s}s of the create; see $OUT/show-5-unchanged.json"
-  sleep 5
-done
-echo "e2e: case 5: a check ended unchanged $(since "$start")s after the first show"
-[ "$twin_before" = "$(sha256sum < "$TWIN/twin.json")" ] || fail "case 5: an unchanged check changed twin.json"
-[ "$containers_before" = "$(docker ps -q --no-trunc --filter label=containerlab=fylgja | LC_ALL=C sort)" ] ||
-  fail "case 5: an unchanged check changed lab fylgja's containers"
+CREATED5=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
 
-# await_rebuild CASE PREV_RUN: the twin rebuilt with no command, to COMPILED_ID: twin.json
-# records it under a run other than PREV_RUN, and three nodes run. Polled every second,
-# not every five: the check that rebuilt stays twin show's last check only until the next
-# check closes, which can be a few seconds after it at a 15s interval. Sets REBUILD_TOOK,
-# from CHANGED.
-await_rebuild() {
-  local case=$1
-  export PREV_RUN=$2
-  # A rebuild is a destroy and a whole create, so this bound is the create's; M4 measured
-  # 69.4s and M5 58.7-65.0s, and this host has taken 557s for one create.
-  local rebuild_wait_s=$(( FOLLOW_INTERVAL_S + 600 ))
-  until jq -e '.bundle_id==env.COMPILED_ID and .run.run_id!=env.PREV_RUN' "$TWIN/twin.json" > /dev/null 2>&1 &&
-    clab inspect --all --format json 2> /dev/null | jq -e '(.fylgja // []) | length==3 and all(.state=="running")' > /dev/null; do
-    [ "$(( ($(now_ns) - CHANGED) / 1000000000 ))" -lt "$rebuild_wait_s" ] ||
-      fail "case $case: the twin was not rebuilt to $COMPILED_ID within ${rebuild_wait_s}s of the change"
-    sleep 1
-  done
-  REBUILD_TOOK=$(since "$CHANGED")
-  echo "e2e: case $case: rebuilt ${REBUILD_TOOK}s after the change"
-  cp "$TWIN/twin.json" "$OUT/twin-$case.json"
-}
-
-# The artifact-only change: n1's ethernet-1/2 disabled, which the compiler
-# does not see, then generated. Only the artifact moves, and bootstrap's enable is
-# overridden by it on the node.
+# The artifact-only change: n1's ethernet-1/2 disabled, which the compiler does not see,
+# then generated. Once the checksum has moved the change is visible to a read, where a
+# following build's next check could first have seen it; FROZEN_WAIT_S from there, nothing
+# has moved and nothing has started.
 artifacts_of "$FB" "$OUT/artifacts-5a-before.json" 2> "$OUT/artifacts-5a-before.err" ||
   fail "case 5: reading $FB's artifacts failed; see $OUT/artifacts-5a-before.err"
 fixture -branch "$FB" -disable-port n1:ethernet-1/2 -generate > "$OUT/disable-port-5.out" 2> "$OUT/disable-port-5.err" ||
   fail "case 5: -disable-port n1:ethernet-1/2 -generate on $FB failed; see $OUT/disable-port-5.err"
-CHANGED=$(now_ns)
 await_checksums_moved 5a "$FB" "$OUT/artifacts-5a-before.json" n1
+MOVED5=$(now_ns)
+echo "e2e: case 5: the twin frozen, waiting ${FROZEN_WAIT_S}s from the change"
+sleep "$FROZEN_WAIT_S"
+FROZEN5_TOOK=$(since "$MOVED5")
+[ "$twin_before" = "$(sha256sum < "$TWIN/twin.json")" ] || fail "case 5: twin.json changed while the twin was frozen"
+[ "$containers_before" = "$(docker ps -q --no-trunc --filter label=containerlab=fylgja | LC_ALL=C sort)" ] ||
+  fail "case 5: lab fylgja's containers changed while the twin was frozen"
+fylgja twin show > "$OUT/show-5-frozen.out" 2> "$OUT/show-5-frozen.err" ||
+  fail "case 5: twin show exited non-zero after the frozen wait; see $OUT/show-5-frozen.err"
+grep '^kind: ' "$OUT/show-5-frozen.out" | cmp -s "$OUT/kind-5.txt" - ||
+  fail "case 5: twin show's kind line moved while the twin was frozen; compare $OUT/kind-5.txt with $OUT/show-5-frozen.out"
+temporal workflow list --address "$TEMPORAL_ADDRESS" --query "StartTime > '$CREATED5'" -o json \
+  > "$OUT/runs-5-frozen.json" 2> "$OUT/runs-5-frozen.err" || fail "case 5: temporal workflow list failed; see $OUT/runs-5-frozen.err"
+expect "$OUT/runs-5-frozen.json" 'length == 0'
+echo "e2e: case 5: ${FROZEN5_TOOK}s after the change, twin.json, the containers and the kind line had not moved, and no run had started since $CREATED5"
+
+# A step to a snapshot of the changed branch, by file (019): intent read --out writes it,
+# and twin compile names its bundle, which the step deploys with nothing read from Infrahub.
+# The record then names that snapshot and bundle, still no stage, and keeps its source.
 compiled_id 5a
-export COMPILED_ID
-[ "$COMPILED_ID" != "$BID5" ] || fail "case 5: the artifact-only change left the compiled bundle_id at $BID5"
-echo "e2e: case 5: n1:ethernet-1/2 disabled on $FB; it compiles to $COMPILED_ID"
-await_rebuild 5a "$RUN5"
-REBUILD_ARTIFACT_TOOK=$REBUILD_TOOK
-BID5A=$COMPILED_ID RUN5A=$(jq -r .run.run_id "$TWIN/twin.json")
-export BID5A
+SID5A=$COMPILED_SNAPSHOT BID5A=$COMPILED_ID
+export SID5A BID5A
+[ "$BID5A" != "$BID5" ] || fail "case 5: the artifact-only change left the compiled bundle_id at $BID5"
+echo "e2e: case 5: n1:ethernet-1/2 disabled on $FB; snapshot $SID5A compiles to $BID5A"
+start=$(now_ns)
+step5a_status=0
+fylgja twin step --snapshot "$OUT/snapshot-5a.json" --json > "$OUT/step-5a.json" 2> "$OUT/step-5a.err" || step5a_status=$?
+STEP5A_TOOK=$(since "$start")
+echo "e2e: case 5: step to snapshot ${SID5A:0:8}… by file took ${STEP5A_TOOK}s (exit $step5a_status)"
+[ "$step5a_status" -eq 0 ] || fail "case 5: twin step --snapshot exited $step5a_status; see $OUT/step-5a.json and $OUT/step-5a.err"
+expect "$OUT/step-5a.json" '.status=="ok" and .operation=="twin.step" and .snapshot_id==env.SID5A and .bundle_id==env.BID5A
+  and .step.outcome=="stepped" and .step.state=="ready" and .step.run.workflow_id=="fylgja-step"
+  and .step.from.stage==null and .step.from.snapshot_id==env.SID5 and .step.from.bundle_id==env.BID5
+  and .step.to.stage==null and .step.to.snapshot_id==env.SID5A and .step.to.bundle_id==env.BID5A
+  and any(.step.pushed[]; .node=="n1") and all(.step.pushed[]; .outcome=="landed")'
+RUN5A=$(jq -r .subject.run_id "$OUT/step-5a.json")
+export RUN5A
+expect "$TWIN/twin.json" '.twin_version=="10" and .rehearsal==null and .state=="ready" and .source=="intent" and .stage==null
+  and .snapshot_id==env.SID5A and .bundle_id==env.BID5A
+  and .provenance.branch==env.FB and (.provenance | has("at") | not) and .provenance.scope=="tag:fylgja"
+  and .step.outcome=="stepped" and .step.run.run_id==env.RUN5A and .step.phase==null
+  and .step.from.stage==null and .step.from.snapshot_id==env.SID5 and .step.from.bundle_id==env.BID5
+  and .step.to.stage==null and .step.to.snapshot_id==env.SID5A and .step.to.bundle_id==env.BID5A
+  and all(.nodes[]; .holds==env.BID5A)'
+cp "$TWIN/twin.json" "$OUT/twin-5a.json"
+no_credential "the artifact marker" "$MARKER" "$TWIN/twin.json"
 jq -e --slurpfile a "$OUT/artifacts-5a.json" '(.nodes[] | select(.name=="n1") | .artifact.checksum) == $a[0].n1.checksum' "$TWIN/twin.json" > /dev/null ||
   fail "case 5: twin.json does not carry n1's new checksum $(jq -r .n1.checksum "$OUT/artifacts-5a.json")"
 readback 5a "$FB" disable
+history_of step-5a fylgja-step "$RUN5A"
 
-# twin verify on the rebuilt twin: intent disables n1:ethernet-1/2, so
-# that port and its link's two ends are skipped, each named with its reason, and nothing is
-# found. The bundle's mapping row carries enabled false; the node reads disable.
+# twin verify on the stepped twin: intent disables n1:ethernet-1/2, so that port and its
+# link's two ends are skipped, each named with its reason, and nothing is found. The
+# bundle's mapping row carries enabled false; the node reads disable. The twin is named by
+# the snapshot its staged bundle was compiled from (019).
 verify_twin 5a
 VERIFY5_TOOK=$VERIFY_TOOK
 expect "$OUT/verify-5a.json" '.verify.counts.port_enabled.skipped==1 and .verify.counts.neighbor.skipped==2
   and ([.verify.skipped[] | "\(.node):\(.port) \(.link)"] | sort)
     == ["n1:ethernet-1/2 n1:ethernet-1/2|n3:ethernet-1/2", "n1:ethernet-1/2 null", "n3:ethernet-1/2 n1:ethernet-1/2|n3:ethernet-1/2"]
-  and .verify.twin.bundle_id==env.BID5A'
+  and .verify.twin.snapshot_id==env.SID5A and .verify.twin.bundle_id==env.BID5A'
 
 # The topology change: a third link, which moves n1's and n3's artifacts too; the
-# fixture tool generates after it. The bundle it moves to is what the stage commands
-# compile from the changed branch once both artifacts are rewritten, never a literal.
+# fixture tool generates after it. The step to it names the snapshot by the id intent read
+# --out filed it under: the link re-cabled live on n1 and n3, as case 7's.
 cp "$OUT/artifacts-5a.json" "$OUT/artifacts-5b-before.json"
 fixture -branch "$FB" -add-link > "$OUT/add-link-5.out" 2> "$OUT/add-link-5.err" ||
   fail "case 5: -add-link on $FB failed; see $OUT/add-link-5.err"
-CHANGED=$(now_ns)
 await_checksums_moved 5b "$FB" "$OUT/artifacts-5b-before.json" n1 n3
 compiled_id 5b
-export COMPILED_ID
-[ "$COMPILED_ID" != "$BID5A" ] || fail "case 5: the branch change left the compiled bundle_id at $BID5A"
-echo "e2e: case 5: $FB changed; it compiles to $COMPILED_ID"
-await_rebuild 5b "$RUN5A"
+SID5B=$COMPILED_SNAPSHOT BID5B=$COMPILED_ID
+export SID5B BID5B
+[ "$BID5B" != "$BID5A" ] || fail "case 5: the branch change left the compiled bundle_id at $BID5A"
+[ -f "$FYLGJA_STATE_ROOT/snapshots/$SID5B.json" ] || fail "case 5: intent read --out filed no snapshot $SID5B in the store"
+echo "e2e: case 5: $FB changed; snapshot $SID5B compiles to $BID5B"
+start=$(now_ns)
+step5b_status=0
+fylgja twin step --snapshot "$SID5B" --json > "$OUT/step-5b.json" 2> "$OUT/step-5b.err" || step5b_status=$?
+STEP5B_TOOK=$(since "$start")
+echo "e2e: case 5: step to snapshot ${SID5B:0:8}… by id took ${STEP5B_TOOK}s (exit $step5b_status)"
+[ "$step5b_status" -eq 0 ] || fail "case 5: twin step --snapshot $SID5B exited $step5b_status; see $OUT/step-5b.json and $OUT/step-5b.err"
+expect "$OUT/step-5b.json" '.status=="ok" and .operation=="twin.step" and .snapshot_id==env.SID5B and .bundle_id==env.BID5B
+  and .subject.snapshot==env.SID5B and .step.outcome=="stepped" and .step.state=="ready"
+  and .step.from.stage==null and .step.from.snapshot_id==env.SID5A and .step.from.bundle_id==env.BID5A
+  and .step.to.stage==null and .step.to.snapshot_id==env.SID5B and .step.to.bundle_id==env.BID5B
+  and (.step.reconcile.links_added | length) == 1 and all(.step.pushed[]; .outcome=="landed")'
+RUN5B=$(jq -r .subject.run_id "$OUT/step-5b.json")
+export RUN5B
+expect "$TWIN/twin.json" '.state=="ready" and .source=="intent" and .stage==null
+  and .snapshot_id==env.SID5B and .bundle_id==env.BID5B and .provenance.branch==env.FB
+  and .step.outcome=="stepped" and .step.run.run_id==env.RUN5B
+  and .step.from.snapshot_id==env.SID5A and .step.to.snapshot_id==env.SID5B
+  and all(.nodes[]; .holds==env.BID5B)'
+cp "$TWIN/twin.json" "$OUT/twin-5b.json"
+no_credential "the artifact marker" "$MARKER" "$TWIN/twin.json"
 readback 5b "$FB" disable
+history_of step-5b fylgja-step "$RUN5B"
 
-# twin show names the new twin and the check that rebuilt it. A check that closes after the
-# rebuild's, having compared the new twin, is shown instead once it closes; then the rebuild
-# is confirmed from the service's own record of the checks on $FB.
-start=$(now_ns)
-while :; do
-  fylgja twin show --json > "$OUT/show-5-rebuilt.json" 2> "$OUT/show-5-rebuilt.err" || true
-  jq -e '.show.kind=="following" and .show.record.bundle_id==env.COMPILED_ID
-    and .show.following.last_check.bundle_id==env.COMPILED_ID' "$OUT/show-5-rebuilt.json" > /dev/null 2>&1 && break
-  # 90s, raised from 30s as a precaution rather than on a failure: the rebuild has already
-  # happened by here, so what is waited on is the check closing and being reported, and a
-  # loaded host has stretched every other such wait in this script.
-  [ "$(( ($(now_ns) - start) / 1000000000 ))" -lt 90 ] ||
-    fail "case 5: twin show did not name the rebuilt twin and its check within 90s; see $OUT/show-5-rebuilt.json"
-  sleep 1
-done
-REBUILT_CHECK=""
-if jq -e '.show.following.last_check.outcome=="rebuilt"' "$OUT/show-5-rebuilt.json" > /dev/null; then
-  REBUILT_CHECK=$(jq -r '.show.following.last_check | "\(.workflow_id) \(.run_id)"' "$OUT/show-5-rebuilt.json")
-  echo "e2e: case 5: twin show's last check rebuilt the twin"
-else
-  expect "$OUT/show-5-rebuilt.json" '.show.following.last_check.outcome=="unchanged" and .show.following.last_check.twin_bundle_id==env.COMPILED_ID'
-  temporal workflow list --address "$TEMPORAL_ADDRESS" --query "WorkflowType='Reconcile' AND ExecutionStatus='Completed'" -o json \
-    > "$OUT/checks-5.json" 2> "$OUT/checks-5.err" || fail "case 5: temporal workflow list failed; see $OUT/checks-5.err"
-  n=0
-  while read -r wid rid; do
-    n=$(( n + 1 ))
-    temporal workflow result --address "$TEMPORAL_ADDRESS" -w "$wid" -r "$rid" -o json > "$OUT/check-5-result-$n.json" 2> /dev/null || continue
-    if jq -e '.result.branch==env.FB and .result.outcome=="rebuilt" and .result.bundle_id==env.COMPILED_ID' "$OUT/check-5-result-$n.json" > /dev/null; then
-      REBUILT_CHECK="$wid $rid"
-      break
-    fi
-  done < <(jq -r '.[].execution | "\(.workflowId) \(.runId)"' "$OUT/checks-5.json")
-  [ -n "$REBUILT_CHECK" ] || fail "case 5: no check on $FB is recorded as rebuilt to $COMPILED_ID; see $OUT/checks-5.json"
-  echo "e2e: case 5: a later check closed first; the service records ${REBUILT_CHECK% *} as the rebuild"
-fi
-# A twin a check's rebuild made names no snapshot: the check read and compiled in the worker,
-# and took none (018).
-expect "$OUT/show-5-rebuilt.json" '.show.record | has("snapshot_id") and .snapshot_id==null'
-fylgja twin show > "$OUT/show-5-rebuilt.out" 2> "$OUT/show-5-rebuilt.err" ||
-  fail "case 5: twin show exited non-zero after the rebuild; see $OUT/show-5-rebuilt.err"
-grep -qF "snapshot none, bundle_id $COMPILED_ID" "$OUT/show-5-rebuilt.out" ||
-  fail "case 5: twin show names no snapshot none, bundle_id $COMPILED_ID for the rebuilt twin; see $OUT/show-5-rebuilt.out"
-# shellcheck disable=SC2086
-history_of check-rebuilt $REBUILT_CHECK
+# twin show names the snapshot the twin was stepped to, read at that snapshot's read, and
+# the step from 5a's (019).
+fylgja twin show --json > "$OUT/show-5-stepped.json" 2> "$OUT/show-5-stepped.err" ||
+  fail "case 5: twin show exited non-zero after the steps; see $OUT/show-5-stepped.err"
+expect "$OUT/show-5-stepped.json" '.show.kind=="snapshot" and .show.record.snapshot_id==env.SID5B and .show.record.bundle_id==env.BID5B
+  and .show.record.step.outcome=="stepped"'
+fylgja twin show > "$OUT/show-5-stepped.out" 2> "$OUT/show-5-stepped.err" ||
+  fail "case 5: twin show exited non-zero after the steps; see $OUT/show-5-stepped.err"
+KIND5B="kind: snapshot ${SID5B:0:8}… (branch $FB, read at $(jq -r .observed_at "$TWIN/twin.json")) (stepped from snapshot ${SID5A:0:8}… by run fylgja-step $RUN5B, ended "
+grep -qF -- "$KIND5B" "$OUT/show-5-stepped.out" ||
+  fail "case 5: twin show's kind line does not begin $KIND5B; see $OUT/show-5-stepped.out"
 
-# Destroy stops following: no Schedule is left to rebuild what it removed.
-start=$(now_ns)
-destroy_status=0
-fylgja twin destroy --json > "$OUT/destroy-5.json" 2> "$OUT/destroy-5.err" || destroy_status=$?
-DESTROY5_TOOK=$(since "$start")
-echo "e2e: case 5: destroy took ${DESTROY5_TOOK}s (exit $destroy_status)"
-# The bundle store is not compared across this destroy, as destroy_twin does: a check in
-# flight reads into bundles/.reads/ until the destroy cancels it. That directory is the
-# reconcile's alone: since 018 a create's read is the server's, filed under snapshots/.
-expect "$OUT/destroy-5.json" '.status=="ok" and .following.stopped==true and .following.branch==env.FB
-  and .cleanup.teardown=="done" and .cleanup.unstage=="done" and (.cleanup.remaining|length)==0'
-[ "${DESTROY5_TOOK%.*}" -lt 60 ] || fail "case 5: destroy took ${DESTROY5_TOOK}s, over 60s"
-[ "$(clab inspect --all --format json)" = "{}" ] || fail "case 5: containerlab still reports a lab after destroy"
-[ ! -e "$TWIN" ] || fail "case 5: $TWIN is still present after destroy"
-[ "$(schedule_state)" = absent ] || fail "case 5: Schedule $FOLLOW_SCHEDULE is not reported absent after destroy; see $OUT/schedule-describe.err"
-
-# The last check, whatever it was (the destroy may have cancelled it), for the greps below.
-temporal workflow list --address "$TEMPORAL_ADDRESS" --query "WorkflowType='Reconcile'" -o json > "$OUT/checks-5-all.json" 2> "$OUT/checks-5-all.err" ||
-  fail "case 5: temporal workflow list failed; see $OUT/checks-5-all.err"
-# shellcheck disable=SC2046
-history_of check-last $(jq -r 'sort_by(.startTime) | last | .execution | "\(.workflowId) \(.runId)"' "$OUT/checks-5-all.json")
+destroy_twin 5 "done" "done"
+DESTROY5_TOOK=$DESTROY_TOOK
 
 if fixture -branch "$FB" -delete > "$OUT/delete-branch-5.out" 2>&1; then
   unset FB
@@ -1269,7 +1262,7 @@ echo "e2e: case 6: seeding $FM took ${SEED6_TOOK}s (exit $seed_status)"
 # readback_mixed, which reads each node the way its own package says to.
 BRANCH=$FM
 READBACK=
-create_twin 6 --no-follow
+create_twin 6
 READBACK=readback
 BID6=$BID RUN6=$RUN_ID
 export BID6 RUN6
@@ -1420,7 +1413,7 @@ expect "$OUT/list-7-before.json" '.status=="ok" and .stages.branch==env.FP and .
         {ref: (env.FP + "/head"), branch: env.FP, at: env.AT7H, at_source: "head", twin: false}]
   and all(.stages.rows[]; .proposed_change.id==env.PC7)'
 
-# The twin from the first mark: the plan's id, pinned at its at, never following, and the
+# The twin from the first mark: the plan's id, pinned at its at, and the
 # record naming the stage and its proposed change, and no rehearsal (twin.json 10). It is
 # read back against what Infrahub held when the mark was made, since -add-link has moved
 # n1's and n3's artifacts since.
@@ -1435,16 +1428,14 @@ CREATE7_TOOK=$CREATE_TOOK
 expect "$OUT/create-7.json" '.subject.stage==(env.FP + "/seeded") and .subject.branch==env.FP and .subject.at==env.AT7S
   and .stage == {ref: (env.FP + "/seeded"), branch: env.FP, label: "seeded",
     proposed_change: {id: env.PC7, name: env.FP, branch: env.FP, draft: true},
-    at: env.AT7S, at_source: "written", description: "seeded"}
-  and (has("following") | not)'
+    at: env.AT7S, at_source: "written", description: "seeded"}'
 expect "$TWIN/twin.json" '.twin_version=="10" and .rehearsal==null and .provenance.branch==env.FP and .provenance.at==env.AT7S and .step==null
   and .stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "seeded", description: "seeded", at_source: "written"}'
-[ "$(schedule_state)" = absent ] || fail "case 7: Schedule $FOLLOW_SCHEDULE is not reported absent beside a stage's twin; see $OUT/schedule-describe.err"
 readback 7 "$FP" enable "$OUT/artifacts-7-sealed-1.json"
 
 fylgja twin show --json > "$OUT/show-7.json" 2> "$OUT/show-7.err" ||
   fail "case 7: twin show exited non-zero; see $OUT/show-7.err"
-expect "$OUT/show-7.json" '.show.kind=="pinned" and .show.record.bundle_id==env.PLAN7S and .show.record.at==env.AT7S
+expect "$OUT/show-7.json" '.show.kind=="snapshot" and .show.record.snapshot_id==env.SNAP7S and .show.record.bundle_id==env.PLAN7S and .show.record.at==env.AT7S
   and .show.record.stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "seeded", description: "seeded", at_source: "written"}'
 
 fylgja stage list --branch "$FP" --json > "$OUT/list-7.json" 2> "$OUT/list-7.err" ||
@@ -1809,7 +1800,7 @@ history_of step-8a fylgja-step "$RUN8A"
 
 fylgja twin show --json > "$OUT/show-8a.json" 2> "$OUT/show-8a.err" ||
   fail "case 8: twin show exited non-zero after the step; see $OUT/show-8a.err"
-expect "$OUT/show-8a.json" '.show.kind=="pinned" and .show.record.bundle_id==env.P2
+expect "$OUT/show-8a.json" '.show.kind=="snapshot" and .show.record.bundle_id==env.P2
   and .show.record.state=="ready" and .show.record.step.outcome=="stepped"'
 fylgja stage list --branch "$FS" --json > "$OUT/list-8a.json" 2> "$OUT/list-8a.err" ||
   fail "case 8: stage list exited non-zero beside the stepped twin; see $OUT/list-8a.json and $OUT/list-8a.err"
@@ -2173,10 +2164,12 @@ stop_server
 [ "$SERVER_STATUS" -eq 0 ] || fail "the API's server exited $SERVER_STATUS on SIGTERM, not 0; see $OUT/server.log"
 
 # $OUT holds the short-lived worker's stdout and stderr, the orphan's deploy output, every
-# twin show document, the checks' histories with their payloads decoded too, both boot
-# halves' output (boot-half.out, boot-half-6.out), the plan and list documents of cases 7
-# and 8 (plan-*.json, list-*.json), and their step documents, record copies and step
-# histories, decoded (step-7*.json, step-8*.json, twin-7*.json, twin-8*.json, history-step-*),
+# twin show document, every create's provision history, decoded, both boot halves' output
+# (boot-half.out, boot-half-6.out), the plan and list documents of cases 7 and 8 (plan-*.json,
+# list-*.json), the step documents, record copies and step histories of cases 5, 7 and 8,
+# decoded (step-5*.json, step-7*.json, step-8*.json, twin-5*.json, twin-7*.json, twin-8*.json,
+# history-step-*), the workflow service's list of runs over case 5's frozen wait
+# (runs-5-frozen.json),
 # every twin verify document (verify-*.json), case 9's checks with their messages
 # (checks-9*.json), its proposed change's comments (comments-9*.json, comment-9*.md) and its
 # two rehearsals' histories and each of their children's, its provision, its steps and its
@@ -2249,7 +2242,7 @@ done
 # would refuse. Cases 1 and 5 need nokia_srlinux alone, which every list that selects a case
 # names, so they run whenever any case does.
 if ran 5; then
-  echo "e2e: case 5: seed ${SEED_TOOK}s, artifact-only rebuild ${REBUILD_ARTIFACT_TOOK}s and topology rebuild ${REBUILD_TOOK}s from the change, destroy ${DESTROY5_TOOK}s"
+  echo "e2e: case 5: seed ${SEED_TOOK}s, frozen wait ${FROZEN5_TOOK}s from the change, step 5a ${STEP5A_TOOK}s and step 5b ${STEP5B_TOOK}s, destroy ${DESTROY5_TOOK}s"
 fi
 if ran 6; then
   echo "e2e: case 6: seed ${SEED6_TOOK}s, mixed twin $BID6 under run $RUN6"

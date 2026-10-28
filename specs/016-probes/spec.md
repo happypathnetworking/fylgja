@@ -79,6 +79,29 @@ any read of a node's running configuration are out of this feature.
   the point to the plan: when a step without `--wait` reads its flows (US2 scenario 6),
   and whether two hosts with one address are refused (FR-003 and its edge case).
 
+### Session 2026-10-28 (plan)
+
+- No question was asked (headless). The plan settled what the spec left to it and, in two
+  places, chose otherwise than the spec's words, each recorded in `research.md` R-30 for
+  the operator at `analyze`:
+  - **Two probe-ready ports per fixture device, and tier 3's probe across one device**
+    (R-18, R-19). The reference transform renders each port's addresses and no routing,
+    so two devices do not route between their probe prefixes; a probe that needs only
+    connected routes lies across one device's two ports. FR-024's "one" reads as two;
+    US1's scenarios 1 and 4 read "between two uncabled interfaces, of one device or of
+    two" and "answered through the device, or the devices, on its path, which must route
+    between the two prefixes: the reference fixture's does across one device". A
+    cross-device probe needs routing intent renders, which the user's own transform does.
+  - **A snapshot `1` on disk is read as a `2` with no probes** (R-05): the version is not
+    hashed, so the two bodies share one id; US7 scenario 1's first alternative.
+  - The kind is flat, eight text attributes for the two endpoints (R-07); a flow that
+    fails to start is an entry of the loss list, not a phase, and the phase `flows` names
+    the activities' own failure (R-13); a host the target drops is read first, then torn
+    down (R-21); two hosts with one address are refused when the declaration is read
+    (R-20); the assertion kind is `burst`, its rule `verify.burst` (R-15); a probe image
+    is verified present whatever its acquisition (R-12); the probe package's override is
+    the PSP override directory's `probes/` subdirectory (R-08).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A declared probe becomes a host on the twin (Priority: P1)

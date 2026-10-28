@@ -695,9 +695,13 @@ func validateM7Document(t *testing.T, doc *findings.Document) {
 // 019 removes following and puts kind snapshot in place of pinned and frozen: a document of
 // this build is 018's too, its kind as 018 wrote it (as018Contract), so it is also validated
 // against 018's frozen copy.
+//
+// 016 moves the step, verify, rehearsal and findings contracts on: a document of this build
+// is 019's as built, so it is also validated against 019's frozen copy.
 func validateM10Document(t *testing.T, doc *findings.Document) {
 	t.Helper()
 	validateWithShow(t, currentContract, "M13", doc)
+	validateWithShow(t, contract019, "019", doc)
 	validateWithShow(t, contract018, "018", doc)
 	if !namesSnapshot(t, doc) {
 		validateWithShow(t, contract017, "017", doc)
@@ -711,6 +715,11 @@ const contract017 = "017-dcim-reader"
 // contract018 is the feature argument that names 018's copies of the findings contract and
 // the show block, the two 019 moves, frozen under testdata/contracts/018-snapshots/.
 const contract018 = "018-snapshots"
+
+// contract019 is the feature argument that names 019's copies of the findings contract and
+// the step, verify and rehearsal blocks, the four 016 moves, frozen under
+// testdata/contracts/019-following-removed/.
+const contract019 = "019-following-removed"
 
 // namesSnapshot says whether doc names a snapshot anywhere 018 puts one: such a document is
 // 018's, which no earlier contract accepts.
@@ -815,7 +824,7 @@ func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Doc
 		b = as017Contract(t, doc)
 	case contract018:
 		b = as018Contract(t, doc)
-	case currentContract:
+	case currentContract, contract019:
 		var err error
 		if b, err = json.Marshal(doc); err != nil {
 			t.Fatal(err)
@@ -876,15 +885,13 @@ func findingsContract(t *testing.T, feature string) *jsonschema.Schema {
 		t.Fatal(err)
 	}
 	c := jsonschema.NewCompiler()
-	if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/show.schema.json", load(contractPath(feature, "show.schema.json"))); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
+	for _, name := range []string{"show.schema.json", "stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
 		path := contractPath(feature, name)
 		if _, err := os.Stat(path); err != nil {
 			// A block the feature's contract refers to but its directory does not hold had not
 			// moved since the feature: 017's verify.schema.json, which 018 does not move, and
-			// 018's stages, step, verify and rehearsal blocks, which 019 does not freeze.
+			// 018's stages, step, verify and rehearsal blocks, which 019 does not freeze, and
+			// 019's show and stages blocks, which 016 does not move.
 			if feature == currentContract || !strings.Contains(string(refers), "/schemas/"+name) {
 				continue
 			}

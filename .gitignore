@@ -35,11 +35,14 @@ specs/*/commands/
 
 # Spec Kit's own files, installed on each host by `specify init --here --integration claude
 # --script sh` and not redistributed here (MIT, GitHub, Inc.; D-056). The constitution, the
-# amended plan template and extensions.yml are this repository's and stay tracked.
+# amended plan template, the overrides directory (this repository's templates, which Spec
+# Kit's resolver prefers to its own) and extensions.yml are this repository's and stay
+# tracked.
 .claude/skills/speckit-*/
 .specify/scripts/
 .specify/templates/*
 !.specify/templates/plan-template.md
+!.specify/templates/overrides/
 .specify/integrations/
 .specify/workflows/
 .specify/init-options.json

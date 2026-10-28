@@ -307,8 +307,9 @@ func verifyStatus(r verify.Report) findings.Status {
 }
 
 // verifyTwinLine is the twin: line (contracts/cli.md): the record's reference as twin show
-// names it, the bundle the record says the twin is at, its state, a diverged twin's step,
-// and the node count.
+// names it, the snapshot and the bundle the record says the twin is at (019: "snapshot
+// none" for a record naming no snapshot), its state, a diverged twin's step, and the node
+// count.
 func verifyTwinLine(rec *wire.TwinRecord) string {
 	ref := "branch " + rec.Provenance.Branch
 	if rec.Stage != nil {
@@ -328,7 +329,12 @@ func verifyTwinLine(rec *wire.TwinRecord) string {
 	case rec.Stage != nil && rec.Provenance.At != "":
 		state += ", pinned at " + rec.Provenance.At
 	}
-	return fmt.Sprintf("twin: %s (bundle %s), %s; %s", ref, shortID(rec.BundleID), state, plural(len(rec.Nodes), "node"))
+	snapshot := "none"
+	if id := rec.SnapshotID; id != nil {
+		snapshot = shortID(*id)
+	}
+	return fmt.Sprintf("twin: %s (snapshot %s, bundle %s), %s; %s", ref, snapshot, shortID(rec.BundleID), state,
+		plural(len(rec.Nodes), "node"))
 }
 
 // printVerify writes one line per node, the skips, the runs in flight, the nodes the bundle

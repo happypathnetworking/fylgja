@@ -593,7 +593,7 @@ func wantOnly(t *testing.T, out verifyOutput, exit int, want findings.Finding) {
 func threeNodeLines(id string) []string {
 	s := short(id)
 	return []string{
-		"twin: branch fylgja-fixture (bundle " + s + "), ready; 3 nodes",
+		"twin: branch fylgja-fixture (snapshot none, bundle " + s + "), ready; 3 nodes",
 		"staged: bundle " + s + "; 15 assertions over 3 nodes, 0 skipped",
 		"n1 (172.20.20.2:57400, nokia_srlinux): host name n1; ethernet-1/1, ethernet-1/2 enabled; neighbours n2 ethernet-1/1, n3 ethernet-1/2; record: holds " + s,
 		"n2 (172.20.20.3:57400, nokia_srlinux): host name n2; ethernet-1/1, ethernet-1/2 enabled; neighbours n1 ethernet-1/1, n3 ethernet-1/1; record: holds " + s,
@@ -868,7 +868,7 @@ func TestVerifyConformingMixed(t *testing.T) {
 	}
 	s := short(h.staged)
 	want := lines(
-		"twin: branch fylgja-fixture (bundle "+s+"), ready; 3 nodes",
+		"twin: branch fylgja-fixture (snapshot none, bundle "+s+"), ready; 3 nodes",
 		"staged: bundle "+s+"; 15 assertions over 3 nodes, 0 skipped",
 		"e1 (172.20.20.2:6030, arista_eos): host name e1; Ethernet1, Ethernet2/1 enabled; neighbours s1 ethernet-1/1, e2 Ethernet1; record: holds "+s,
 		"e2 (172.20.20.3:6030, arista_eos): host name e2; Ethernet1, Ethernet3/1/1 enabled; neighbours e1 Ethernet2/1, s1 ethernet-1/2; record: holds "+s,
@@ -978,7 +978,7 @@ func verifyDiverged(t *testing.T, version, prev, runID string) {
 	p := prev
 	rec.Nodes[0].Holds = &p
 	rec.Nodes[1].Holds = nil
-	twin := "twin: stage change-1/seeded (bundle 348fd934…), diverged towards change-1/cabled (bundle " + short(h.staged) +
+	twin := "twin: stage change-1/seeded (snapshot none, bundle 348fd934…), diverged towards change-1/cabled (bundle " + short(h.staged) +
 		") at phase push by run fylgja-step " + runID + "; 3 nodes"
 	if version == "5" {
 		// Drawn by hand as the 6 one is, with what verify reads, so not held to the contract.
@@ -987,7 +987,7 @@ func verifyDiverged(t *testing.T, version, prev, runID string) {
 		if rec.Provenance.At != "" {
 			ref += " at " + rec.Provenance.At
 		}
-		twin = "twin: " + ref + " (bundle 348fd934…), diverged towards " + waypoint5 + " (bundle " + short(h.staged) +
+		twin = "twin: " + ref + " (snapshot none, bundle 348fd934…), diverged towards " + waypoint5 + " (bundle " + short(h.staged) +
 			") at phase push by run fylgja-step " + runID + "; 3 nodes"
 	} else {
 		writeTwin(t, h.paths, rec)
@@ -1299,7 +1299,7 @@ func TestVerifyNodeTheRecordDoesNotName(t *testing.T) {
 	}
 	s := short(h.staged)
 	for _, line := range []string{
-		"twin: branch fylgja-fixture (bundle " + s + "), ready; 2 nodes",
+		"twin: branch fylgja-fixture (snapshot none, bundle " + s + "), ready; 2 nodes",
 		"n3 (172.20.20.4:57400, nokia_srlinux): host name n3; ethernet-1/1, ethernet-1/2 enabled; neighbours n2 ethernet-1/2, n1 ethernet-1/2; " +
 			"record: does not name it (verify.record.holds)",
 		"held: 3 host names, 6 ports, 6 link ends, 2 record claims (the record's, not read); failed: 1 record claim; unread: none",
@@ -1397,11 +1397,11 @@ func TestVerifyTwinLine(t *testing.T) {
 		line   string // %s is the bundle
 	}{
 		{"a branch twin pinned at T", func(rec *wire.TwinRecord) { rec.Provenance.At = at },
-			"twin: branch fylgja-fixture at " + at + " (bundle %s), ready; 3 nodes"},
+			"twin: branch fylgja-fixture at " + at + " (snapshot none, bundle %s), ready; 3 nodes"},
 		{"a ready stage twin", func(rec *wire.TwinRecord) {
 			rec.Provenance.At = at
 			rec.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled", AtSource: "given"}
-		}, "twin: stage change-1/cabled (bundle %s), ready, pinned at " + at + "; 3 nodes"},
+		}, "twin: stage change-1/cabled (snapshot none, bundle %s), ready, pinned at " + at + "; 3 nodes"},
 		{"a stage twin that has stepped and is ready", func(rec *wire.TwinRecord) {
 			rec.Provenance.At = at
 			rec.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled", AtSource: "given"}
@@ -1410,10 +1410,10 @@ func TestVerifyTwinLine(t *testing.T) {
 					BundleID: "348fd9340000000000000000000000000000000000000000000000000000abcd"},
 				To:  wire.StepSide{Stage: rec.Stage, BundleID: rec.BundleID, At: at},
 				Run: wire.RunRef{WorkflowID: wire.StepWorkflowID, RunID: stepRunID}}
-		}, "twin: stage change-1/cabled (bundle %s), ready, pinned at " + at + "; 3 nodes"},
+		}, "twin: stage change-1/cabled (snapshot none, bundle %s), ready, pinned at " + at + "; 3 nodes"},
 		{"a bundle twin", func(rec *wire.TwinRecord) {
 			rec.Source, rec.ObservedAt, rec.Provenance.At = wire.SourceBundle, nil, "2026-09-08T12:00:00Z"
-		}, "twin: branch fylgja-fixture at 2026-09-08T12:00:00Z (bundle %s), ready; 3 nodes"},
+		}, "twin: branch fylgja-fixture at 2026-09-08T12:00:00Z (snapshot none, bundle %s), ready; 3 nodes"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			h := verifyHost(t, "three-node", nil, c.change)
@@ -1560,7 +1560,7 @@ func TestVerifyNamesTheStageAsRecorded(t *testing.T) {
 				rec.Stage = stage(c.label, c.source)
 			})
 			out := runVerify(t, h.paths.Root, func() *fakeNodes { return h.healthy(t) })
-			if want := "twin: stage change-1/" + c.label + " (bundle " + short(h.staged) + "), ready, pinned at " + c.at + "; 3 nodes"; out.code != findings.ExitOK ||
+			if want := "twin: stage change-1/" + c.label + " (snapshot none, bundle " + short(h.staged) + "), ready, pinned at " + c.at + "; 3 nodes"; out.code != findings.ExitOK ||
 				lines2(out.stdout)[0] != want {
 				t.Errorf("exit %d, first line %q; want 0, %q", out.code, lines2(out.stdout)[0], want)
 			}
@@ -1594,7 +1594,7 @@ func TestVerifyNamesTheStageAsRecorded(t *testing.T) {
 		writeTwin(t, h.paths, rec)
 
 		out := runVerify(t, h.paths.Root, func() *fakeNodes { return h.healthy(t) })
-		want := "twin: stage change-1/branch-point (bundle 348fd934…), diverged towards change-1/head (bundle " + short(h.staged) +
+		want := "twin: stage change-1/branch-point (snapshot none, bundle 348fd934…), diverged towards change-1/head (bundle " + short(h.staged) +
 			") at phase push by run fylgja-step " + runID + "; 3 nodes"
 		if got := lines2(out.stdout)[0]; got != want {
 			t.Errorf("first line %q\nwant %q", got, want)
@@ -1613,4 +1613,80 @@ func TestVerifyNamesTheStageAsRecorded(t *testing.T) {
 			delete(dig(m, "verify", "twin", "diverged", "towards", "stage"), "label")
 		})
 	})
+}
+
+// US5 scenario 7 (019, R-11): twin verify names the snapshot beside the bundle. The first
+// line names the record's snapshot beside the record's bundle, or none; the block's twin
+// names the snapshot of the staged bundle: the record's when the staged bundle is the
+// record's, the step's target's when it is the step's (a diverged twin), and null
+// otherwise. Each document is the contract's (runVerify validates it).
+func TestVerifyNamesTheSnapshot(t *testing.T) {
+	const (
+		prev  = "348fd9340000000000000000000000000000000000000000000000000000abcd"
+		runID = "01a3c0de-0000-7000-8000-000000000003"
+	)
+	from, to := strings.Repeat("576933ec", 8), strings.Repeat("9c2d01e7", 8)
+	for _, c := range []struct {
+		name    string
+		change  func(h *verifyTwinHost, rec *wire.TwinRecord)
+		code    int
+		first   func(h *verifyTwinHost) string
+		staged  *string
+		jsonKey string
+	}{
+		{"the record's, staged", func(_ *verifyTwinHost, rec *wire.TwinRecord) { rec.SnapshotID = &from }, findings.ExitOK,
+			func(h *verifyTwinHost) string {
+				return "twin: branch fylgja-fixture (snapshot 576933ec…, bundle " + short(h.staged) + "), ready; 3 nodes"
+			}, &from, `"snapshot_id":"` + from + `","bundle_id":`},
+		{"the step's target, staged", func(h *verifyTwinHost, rec *wire.TwinRecord) {
+			phase := findings.StepPush
+			// A step's sides name stages until 019's step to a snapshot (T029–T031).
+			stage := func(label string) *wire.StageRef {
+				return &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: label, AtSource: "given"}
+			}
+			rec.SnapshotID, rec.BundleID, rec.State, rec.Stage = &from, prev, wire.StateDiverged, stage("seeded")
+			rec.Step = &wire.StepRecord{Outcome: wire.StepDiverged, Phase: &phase,
+				From: wire.StepSide{Stage: rec.Stage, SnapshotID: from, BundleID: prev},
+				To:   wire.StepSide{Stage: stage("cabled"), SnapshotID: to, BundleID: h.staged},
+				Run:  wire.RunRef{WorkflowID: wire.StepWorkflowID, RunID: runID}}
+			p := prev
+			rec.Nodes[0].Holds = &p
+		}, findings.ExitNonconforming, func(h *verifyTwinHost) string {
+			return "twin: stage change-1/seeded (snapshot 576933ec…, bundle 348fd934…), diverged towards change-1/cabled (bundle " +
+				short(h.staged) + ") at phase push by run fylgja-step " + runID + "; 3 nodes"
+		}, &to, `"snapshot_id":"` + to + `","bundle_id":`},
+		{"none", nil, findings.ExitOK, func(h *verifyTwinHost) string {
+			return "twin: branch fylgja-fixture (snapshot none, bundle " + short(h.staged) + "), ready; 3 nodes"
+		}, nil, `"snapshot_id":null,"bundle_id":`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := verifyHost(t, "three-node", nil, nil)
+			if c.change != nil {
+				rec, err := lab.ReadRecord(h.paths.TwinJSON)
+				if err != nil {
+					t.Fatal(err)
+				}
+				c.change(h, &rec)
+				writeTwin(t, h.paths, rec)
+			}
+			out := runVerify(t, h.paths.Root, func() *fakeNodes { return h.healthy(t) })
+			if out.code != c.code {
+				t.Errorf("exit %d, want %d (findings %+v)", out.code, c.code, out.doc.Findings)
+			}
+			if got, want := lines2(out.stdout)[0], c.first(h); got != want {
+				t.Errorf("first line %q\nwant %q", got, want)
+			}
+			got := out.doc.Verify.Twin.SnapshotID
+			if (got == nil) != (c.staged == nil) || got != nil && *got != *c.staged {
+				t.Errorf("twin.snapshot_id %v, want %v", got, c.staged)
+			}
+			b, err := json.Marshal(out.doc.Verify.Twin)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(string(b), c.jsonKey) {
+				t.Errorf("twin %s, want %s", b, c.jsonKey)
+			}
+		})
+	}
 }

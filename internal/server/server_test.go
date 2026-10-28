@@ -1393,7 +1393,7 @@ func TestShowNamesARehearsalAndWhereItIs(t *testing.T) {
 func TestVerifyNamesARehearsal(t *testing.T) {
 	of := &wire.RehearsalRef{WorkflowID: provision.WorkflowRehearse, RunID: "r1"}
 	if got, want := verifyTwinLine(rehearsalTwin(of)), "twin: stage change-1/seeded of rehearsal run fylgja-rehearse r1 "+
-		"(bundle 5c6c1d96…), ready, pinned at 2026-10-16T17:25:30.118244+00:00; 3 nodes"; got != want {
+		"(snapshot 35aea06f…, bundle 5c6c1d96…), ready, pinned at 2026-10-16T17:25:30.118244+00:00; 3 nodes"; got != want {
 		t.Errorf("%q, want %q", got, want)
 	}
 	if got := verifyTwinLine(rehearsalTwin(nil)); strings.Contains(got, "rehearsal") {

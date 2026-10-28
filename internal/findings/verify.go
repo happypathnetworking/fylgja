@@ -46,8 +46,12 @@ func orEmpty[T any](l []T) []T {
 // VerifyTwin is the twin as its record names it, and the staged bundle the assertions were
 // derived from.
 type VerifyTwin struct {
-	BundleID string     `json:"bundle_id"` // the staged bundle's
-	Stage    *ShowStage `json:"stage"`
+	// SnapshotID is the snapshot of the staged bundle (019): the record's when the staged
+	// bundle is the record's, the step's target's when it is the step's (a diverged twin),
+	// and nil, written as null, otherwise.
+	SnapshotID *string    `json:"snapshot_id"`
+	BundleID   string     `json:"bundle_id"` // the staged bundle's
+	Stage      *ShowStage `json:"stage"`
 	// Rehearsal is the rehearsal run whose baseline the twin is, as a version 7 record names
 	// it (015); nil, written as null, when it names none and for an earlier record.
 	Rehearsal *ShowRef        `json:"rehearsal"`

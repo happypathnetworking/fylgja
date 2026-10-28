@@ -682,6 +682,45 @@ func TestFindingsOrder(t *testing.T) {
 // The block of a read: every node with its host name and its ports, every link with both
 // ends, the claims, the skips port first, the counts, and the document it sits in valid
 // against the current contracts with verify.schema.json loaded.
+// The verify block's twin names the snapshot of the staged bundle beside it (019, R-11): the
+// record's when the staged bundle is the record's, the step's target's when it is the step's
+// (a diverged twin), and none otherwise: a record naming none, a target naming none, or a
+// staged bundle that is neither.
+func TestTwinOfNamesTheStagedSnapshot(t *testing.T) {
+	from, to := strings.Repeat("35aea06f", 8), strings.Repeat("9c2d01e7", 8)
+	fromBundle, toBundle, other := strings.Repeat("aa", 32), strings.Repeat("bb", 32), strings.Repeat("cc", 32)
+	record := func(snapshot *string, toSnapshot string) wire.TwinRecord {
+		return wire.TwinRecord{BundleID: fromBundle, SnapshotID: snapshot, State: wire.StateDiverged,
+			Step: &wire.StepRecord{Outcome: wire.StepDiverged, To: wire.StepSide{SnapshotID: toSnapshot, BundleID: toBundle}}}
+	}
+	for _, c := range []struct {
+		name   string
+		rec    wire.TwinRecord
+		staged string
+		want   *string
+	}{
+		{"the record's bundle staged", record(&from, to), fromBundle, &from},
+		{"the record's bundle staged, the record naming none", record(nil, to), fromBundle, nil},
+		{"the step's target staged", record(&from, to), toBundle, &to},
+		{"the step's target staged, the target naming none", record(&from, ""), toBundle, nil},
+		{"neither staged", record(&from, to), other, nil},
+		{"a ready record that never stepped", wire.TwinRecord{BundleID: fromBundle, SnapshotID: &from}, fromBundle, &from},
+	} {
+		got := TwinOf(c.rec, c.staged).SnapshotID
+		if (got == nil) != (c.want == nil) || got != nil && *got != *c.want {
+			t.Errorf("%s: snapshot %v, want %v", c.name, deref(got), deref(c.want))
+		}
+	}
+}
+
+// deref is *s, or "null" for nil.
+func deref(s *string) string {
+	if s == nil {
+		return "null"
+	}
+	return *s
+}
+
 func TestBlock(t *testing.T) {
 	schema := compileFindingsSchema(t)
 	inFlight := []findings.ShowRun{{WorkflowID: "fylgja-step", RunID: "01a4", Step: "observe"}}
@@ -718,7 +757,7 @@ func TestBlock(t *testing.T) {
 			t.Errorf("link %s\nwant %s", link, want)
 		}
 		twin := jsonOf(t, v["twin"])
-		want = `{"bundle_id":"` + in.StagedID + `","stage":null,"rehearsal":null,"state":"ready","source":"intent","nodes":3}`
+		want = `{"snapshot_id":null,"bundle_id":"` + in.StagedID + `","stage":null,"rehearsal":null,"state":"ready","source":"intent","nodes":3}`
 		if twin != canon(t, want) {
 			t.Errorf("twin %s\nwant %s", twin, want)
 		}
@@ -779,9 +818,12 @@ func TestBlock(t *testing.T) {
 		prev := previousID
 		in.Record.State = wire.StateDiverged
 		in.Record.BundleID = previousID
+		fromSnapshot, toSnapshot := strings.Repeat("35aea06f", 8), strings.Repeat("9c2d01e7", 8)
+		in.Record.SnapshotID = &fromSnapshot
 		in.Record.Stage = &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled", Description: "first", AtSource: "given"}
 		in.Record.Step = &wire.StepRecord{Outcome: wire.StepDiverged, Phase: &phase,
-			To:  wire.StepSide{Stage: &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "live", Description: "second", AtSource: "written"}, BundleID: target},
+			To: wire.StepSide{Stage: &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "live", Description: "second", AtSource: "written"},
+				SnapshotID: toSnapshot, BundleID: target},
 			Run: wire.RunRef{WorkflowID: wire.StepWorkflowID, RunID: "01a3"}}
 		in.Record.Nodes[0].Holds = &prev // e1 refused its push and holds change-1/cabled
 		// A rehearsal's twin (015): the record names the run whose baseline it is.
@@ -790,7 +832,8 @@ func TestBlock(t *testing.T) {
 		wait := &findings.VerifyWait{BudgetS: 20, Reads: 3, Outcome: "settled", AfterS: 2.1}
 		doc := document(t, schema, r, r.Block(TwinOf(in.Record, in.StagedID), nil, findings.ShowServiceOK, wait), findings.StatusNonconforming)
 		v := doc["verify"].(map[string]any)
-		want := `{"bundle_id":"` + target + `","stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"cabled","description":"first","at_source":"given"},` +
+		// The staged bundle is the step's target, so the snapshot named is the target's.
+		want := `{"snapshot_id":"` + toSnapshot + `","bundle_id":"` + target + `","stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"cabled","description":"first","at_source":"given"},` +
 			`"rehearsal":{"workflow_id":"fylgja-rehearse","run_id":"01a1"},"state":"diverged","source":"intent","nodes":3,"diverged":{"towards":{"stage":{"proposed_change":{"id":"pc-1","branch":"change-1"},"label":"live","description":"second","at_source":"written"},` +
 			`"bundle_id":"` + target + `"},"run":{"workflow_id":"fylgja-step","run_id":"01a3"},"phase":"push"}}`
 		if got := jsonOf(t, v["twin"]); got != canon(t, want) {

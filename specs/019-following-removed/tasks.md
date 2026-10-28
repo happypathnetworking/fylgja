@@ -615,15 +615,31 @@ with no second Infrahub request (SC-004, SC-008; R-17).
 **Independent Test**: `TestStepTargetFromASnapshot` passes alone against the real
 Infrahub.
 
-- [ ] T036 [US2] Add `TestStepTargetFromASnapshot` to `internal/server/snapshot_contract_test.go` (build tag `contract`; R-17). It runs on a `fylgja-test-*` branch it seeds through `testsupport`:
+- [X] T036 [US2] Add `TestStepTargetFromASnapshot` to `internal/server/snapshot_contract_test.go` (build tag `contract`; R-17). It runs on a `fylgja-test-*` branch it seeds through `testsupport`:
   - it takes a snapshot through `intent read --out`'s server path;
   - it builds the step's snapshot target (T031's resolve, T035's check and the compile) from the file and from the id;
   - each files the same snapshot and compiles to the bundle that `stage plan`'s path compiles from the same read;
   - the stamper's and the reader's counters, as the other contract tests count them, show no Infrahub request on the snapshot path.
 
   No twin boots. The test deletes its branch at the end, as every contract test does. Run it alone: `set -a; . local/.env; set +a; go test -count=1 -tags contract ./internal/server -run '^TestStepTargetFromASnapshot$' -v`. Record its time and result in this task's note. No twin while it runs.
+  - *Note (Run 11, 2026-10-28)*: **passed alone in 194.98 s** (201.7 s wall with the build), with no twin up and about 20.8 GiB available. The seed took 60 s, and the draft's pipeline concluded after 101 s. The test follows `TestStageTakenTwiceHasOneSnapshot` beside it: `seededBranch` (`fylgja-test-rh-…`), a draft proposed change and one mark, `seeded`. Then:
+    - **The bundle stage plan compiles from the same read**: `stage plan` on the branch compiles the mark (snapshot `009ce0b4…`, bundle `696db406…`, at `2026-10-28T16:00:57.507059+00:00`). `intent read --out --stage <branch>/seeded` (`runRead`, its frames recorded) reads the same pinned reference, names the plan's snapshot, and sends a file whose envelope names the branch, that at and `tag:fylgja`. Reading the mark by `--stage` is how this test gets the same read; R-17 names no reference.
+    - **The target**: the step's snapshot target is built from the file and then from the id, for a record naming `tag:fylgja` and the reader's mapping (`ctm.ReaderInfrahubDCIM`, `ModelSchemaLibrary`, `ModelVersion`), under a state root of its own. Each names the plan's snapshot and compiles to its bundle, with the branch, the at and the file's `observed_at` verbatim, and no stage. After each, the store holds the file alone, byte for byte, and the bundle store holds the plan's bundle alone.
+    - **The counters**: no contract test counted requests before this one. `countedInfrahub` puts a reverse proxy in front of the Infrahub `INFRAHUB_ADDRESS` names and points that variable at it. Every reader and stamper the server builds reads the address when it is built (`intent.FromEnv`, `StageReaderFromEnv`), so the proxy counts their requests together. The plan sent 33 requests and the read 24; each target sent 0. A zero count before the targets fails the test, since it would prove nothing.
+    - **The code**: so the test runs the step's own code and not a copy of it, `stepToSnapshot`'s first half became `snapshotTarget(ctx, opts, op, subject, reg, paths, rec, arg, files) (stepTarget, findings.List, error)`. That half is the resolve, the target line, `targetUnheld` and `compileAndFile`. `stepToSnapshot` calls it, then `stepTo`. Behaviour is unchanged: tier 1's step tests pass as they stand.
+    - **Afterwards**: the cleanup deleted 1 stage, 1 proposed change and the branch. `Branch` lists `main` and `fylgja-fixture` alone, and `CoreProposedChange`, `FylgjaStage`, `CoreChangeThread` and `CoreUserValidator` each count 0.
 
 **Checkpoint**: the test passes alone.
+
+  *Run 11's checkpoint, 2026-10-28 (T036)*:
+  - **Commits**: one commit, T036's test with the `snapshotTarget` split it calls, then this note. No golden moved (`git diff --stat main -- testdata/golden` is empty), so there is no re-baseline commit.
+  - **Gates**, on the tree with the change:
+    - `make build` is statically linked.
+    - `make test` uncached (`GOFLAGS=-count=1`) passes. The first run after the edit took 51.0 s wall (load 2.91, then 3.10), over the 45 s budget. The second took 43.3 s with the build cache warm (load 2.78, then 3.51), `internal/cli` 38.8 s of it. Run 10 saw the same pattern, 53.6 s and then 44.2 s. This run adds no tier-1 test.
+    - `make lint` reports 0 issues, and `go vet -tags contract,fixture,e2e ./...` is clean.
+  - **Tier 2**: `TestStepTargetFromASnapshot` alone, as above. Infrahub is left as the tier leaves it.
+  - **The host**: no process started or stopped. The worker (2012205) and the server (2012228) still run a binary that reads `(deleted)`. T048 restarts both.
+  - **For later tasks**: T050's whole tier 2 runs this test, about 3¼ minutes, three times the plan's estimate of about a minute: most of it is the draft's pipeline (101 s) and the seed (60 s).
 
 ---
 

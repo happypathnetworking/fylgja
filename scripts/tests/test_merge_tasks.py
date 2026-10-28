@@ -57,6 +57,14 @@ class TickMerge(unittest.TestCase):
         self.assertEqual(code, 0, out)
         self.assertIn("- [X] T001 a\n  - 2026-10-28: done\n- [X] T002 b", out)
 
+    def test_a_tick_one_side_removed_stays_removed(self):
+        base = BASE.replace("- [ ] T001", "- [X] T001")
+        ours = base.replace("- [X] T001", "- [ ] T001")      # one lane unticks T001
+        theirs = base.replace("- [ ] T002", "- [X] T002")    # the other ticks the next line
+        code, out = merge(base, ours, theirs)
+        self.assertEqual(code, 0, out)
+        self.assertIn("- [ ] T001 a\n- [X] T002 b", out, "the side that changed a tick wins; the other side's unchanged tick does not re-tick it")
+
     def test_a_conflict_that_is_not_ticks_is_left_with_markers(self):
         ours = BASE.replace("- [ ] T002 b", "- [ ] T002 b, reworded by one lane")
         theirs = BASE.replace("- [ ] T002 b", "- [X] T002 b")

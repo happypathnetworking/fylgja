@@ -52,7 +52,9 @@ def resolve(base, ours, theirs):
         for side in (eo, et):
             if side[4][:len(eb[4])] != eb[4]:
                 return None  # a note removed or reordered: not a mechanical merge
-        ticked = eo[3] or et[3]
+        # The side that changed the tick wins; a side that left it as the base had it says
+        # nothing, so a tick one lane removed is not put back by the other's unchanged line.
+        ticked = eo[3] if eo[3] != eb[3] else et[3]
         notes = eb[4] + eo[4][len(eb[4]):] + et[4][len(eb[4]):]
         merged.append(eb[2].replace("[ ]", "[X]" if ticked else "[ ]", 1))
         merged += notes

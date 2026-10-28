@@ -452,7 +452,7 @@ dry_run_session() { # <out file> <prompt>
 		fi
 		return 0 ;;
 	"The operator's answers"*)
-		printf 'Dry run: the prompt received follows, verbatim.\n---\n%s\n---\n\nCLARIFY-DONE\nANALYZE-DONE\n' "$prompt" > "$out"
+		printf 'Dry run: the prompt received follows, verbatim.\n---\n%s\n---\n\n%s\n' "$prompt" "$(grep -oE '(CLARIFY|ANALYZE)-DONE' <<< "$prompt" | head -1)" > "$out"
 		return 0 ;;
 	/speckit-plan*)
 		printf '# Implementation Plan: dry run\n\n## Constitution Check\n\n| # | Gate | Status |\n|---|---|---|\n' > "$FEATURE_REL/plan.md"
@@ -1013,10 +1013,16 @@ ask_text() { # <kind> <label> <report> <sentence>
 	fi
 }
 
+# The marker a stage's report ends with: its last non-empty line, so a report that quotes a
+# marker above its end is read by its end alone.
+report_marker() { # <report file>
+	grep -v '^[[:space:]]*$' "$1" | tail -1
+}
+
 # A stage that may end asking (clarify, analyze): run it, and while its report ends with
 # <wait marker>, put the questions to the operator and resume the session with the reply.
 stage_dialogue() { # <stage> <first prompt> <wait marker> <done marker>
-	local stage="$1" prompt="$2" wait="$3" done_="$4" n=0 out
+	local stage="$1" prompt="$2" wait="$3" done_="$4" n=0 out marker
 	RUN_LABEL="$stage"
 	RUN_IDS=""
 	while :; do
@@ -1024,9 +1030,10 @@ stage_dialogue() { # <stage> <first prompt> <wait marker> <done marker>
 		out="$RUN_DIR/$stage-$n.md"
 		run_claude "$stage" "$out" "$prompt" || { publish_log "$stage"; finish error 1 "The $stage session failed; its report is $out."; }
 		publish_log "$stage"
-		if grep -q "^$done_" "$out"; then
+		marker=$(report_marker "$out")
+		if [ "$marker" = "$done_" ]; then
 			return 0
-		elif grep -q "^$wait" "$out"; then
+		elif [ "$marker" = "$wait" ]; then
 			ask_text "$stage" "$stage $n" "$out" "/speckit-$stage asks the operator; its report ($out) holds the questions and its recommendations."
 			RESUME_SID="$LAST_SID"
 			prompt="The operator's answers to your questions follow. Record each where /speckit-$stage records an answer, then end your turn with the line $done_, or with $wait above any question still open.

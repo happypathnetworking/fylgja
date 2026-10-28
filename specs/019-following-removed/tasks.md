@@ -506,7 +506,7 @@ no stage, and `stage.twin.moved` is given only within the record's own proposed 
 **Independent Test**: US3's six scenarios in tier 1, the no-target refusal with nothing
 dialled.
 
-- [ ] T033 [US3] `stages.Target` and `stages.Moved` (R-07). In `internal/stages/target.go`, `Target(ch *Change, view *RecordView, recordBranch, recordAt string, given *Ref)`. Let `same` be "the view names a stage of the found proposed change":
+- [X] T033 [US3] `stages.Target` and `stages.Moved` (R-07). In `internal/stages/target.go`, `Target(ch *Change, view *RecordView, recordBranch, recordAt string, given *Ref)`. Let `same` be "the view names a stage of the found proposed change":
   - with a given reference and not `same`, the target is the given label, refused `step.target.unknown` naming the proposed change's stages when it lacks it, and no `step.stage.skipped` warning;
   - with `same`, today's rules 3–6 hold;
   - rule 5, `step.target.current`, judges every target against the record's `(branch, at)`, stage or not;
@@ -519,8 +519,19 @@ dialled.
   - `Moved` silent for another proposed change.
 
   Callers in `internal/server` are adapted to the new signature, with behaviour moved in T034.
+  - *Note (Run 10, 2026-10-28)*: `Target(ch, view, recordBranch, recordAt, given)`. `same` is `view != nil` and the view's proposed change is the one found. A given reference is the target in the found proposed change, refused `step.target.unknown` naming its stages when it lacks the label (rule 4's words, now for any proposed change). With `same`, rules 3–6 hold as before; rule 5 compares against `recordBranch` and `recordAt`; rule 6 (skipped) applies only when `same`. With none given, a nil view is refused `step.target.unknown` with R-08's message, now `stages.NoTargetMessage`, its object the record's branch. The server refuses that case first, naming the bundle (T034), so this one is defensive. Choices for review:
+    - **Rule 2's message is reworded.** It ended "a step stays inside the proposed change the twin was built from", which 019 makes false. It now ends `…is pc-9), so the twin has no next stage; give --stage <branch>/<label> or --snapshot <id|file>`. `contracts/cli.md`'s rows (its `step.target.foreign` row at about line 438, and the rule-2 wording) are T038's prose.
+    - **`step.target.foreign` is retired.** Its constant goes, and `finding.go`'s M11 block comment says why. Its `dataModelRules` row goes, and the new `TestTheForeignTargetIsRetired` asserts neither is back. `findings.schema.json`'s 019 sentence names it beside the step `follow`. Its emitter in `target.go` goes. The grep now finds it only in comments citing history and in frozen copies.
+    - **`Moved`**: a found proposed change of another id now returns nothing. That is a target outside the record's proposed change. A nil change still gives the listing's "no longer open" warning. The listing never passes one of another id. Its doc comment says so.
 
-- [ ] T034 [US3] The server's stage path (R-07, R-08).
+    Tests: `TestTargetByPosition` loses its two foreign cases and takes rule 2's new words. The new `TestTargetOfAnyProposedChange` has eleven cases:
+    - another branch's proposed change, its label present and absent;
+    - another proposed change on the record's branch, across a mark with nothing skipped, a label absent, and a stage at the record's own reference (`current`);
+    - a nil view: a given stage, one of another branch, one absent, one at the record's own (branch, at) (`current`), an unpinned record, and none given.
+
+    `TestMovedOfTheFoundChange`'s reopened case is now silent. It gains another branch's proposed change, also with the record's head moved. `foundChange(t, branch, …)` generalises `targetChange`.
+
+- [X] T034 [US3] The server's stage path (R-07, R-08).
   - **Which proposed change**: `stages.Find` reads the given reference's branch when `--stage` is given, else the record's stage's branch.
   - **No target**: with neither `--stage` nor `--snapshot`, the server reads the twin directory's record (`lab.ReadRecord`, no connection) before `rehearsalHolds` dials the workflow service. A readable record naming no stage is refused `step.target.unknown` (rejection, exit 1, resolve, object the record's `bundle_id`): `the twin names no stage, so there is no next stage to step to; give --stage <branch>/<label> or --snapshot <id|file>`. An absent or unreadable record, or one that names a stage, goes on as today.
   - **The warning**: `stage.twin.moved` only when `same`.
@@ -534,6 +545,18 @@ dialled.
   - no `stage.twin.moved` for a stage-less twin on `stage list` or `twin step --stage` (beside `TestStageListTwinMoved`);
   - a rehearsal's host, with no record or a staged one, still meets `run.in_flight` first;
   - after a `--snapshot` step, `twin step` with no target is refused.
+  - *Note (Run 10)*: `stages.Find` reads `given.Branch`, else the record's stage's branch. **No target**: `stepNoTarget` runs after the packages and the state root, before the dry-run branch and `rehearsalHolds`. With neither flag it reads `lab.ReadRecord(paths.TwinJSON)`. A readable record naming no stage gets `noTarget`'s refusal: `step.target.unknown`, at resolve, exit 1, its object the record's bundle, with `stages.NoTargetMessage`. `noTarget` is applied again to the record as inspected, so a record written between the two reads cannot reach `rec.Stage` nil on the stage path. `stepStageless` goes. `Moved` is filed only when the record has a view. Choices for review:
+    - **R-08 is applied as written.** Every readable record naming no stage, given no target, is refused `step.target.unknown`. That includes a bundle twin, a record naming no snapshot, a record of 5 or earlier with or without a waypoint, and a diverged stage-less record. Each meets its own refusal once given a target. The operator of such a twin is first told to give a target, then refused for the twin itself. I kept R-08's words, which FR-014 echoes, and changed nothing beyond them. Exempting the twins no target can step is the operator's call.
+
+    Tests (`internal/cli`):
+    - `TestStepWithNoTargetNamesNoStage`: a `--branch` and a `--snapshot` twin, and a stage twin after its step to a snapshot (via `recordOnHost`). Each is refused with no target, with `--dry-run` and with `--allow-restart --wait 1m`. Each refusal names the bundle. The service is installed nil, so any dial fails the test. Infrahub's counter and containerlab's calls do not move, and twin.json is unchanged (US3 scenario 1).
+    - `TestStepStagelessTwinToAStage`: a `--branch` and a `--snapshot` twin step to `change-1/linked`. The dry run's twin line is the stage-less form, followed by the resolution line and `step snapshot <short>… → change-1/linked (`. No `stage.twin.moved` and no `step.stage.skipped`. The run's input has no from stage. The record names the stage beside its kept source, `intent` or `snapshot`, and is valid against twin.json 10. A stage at the twin's own (branch, at) is `step.target.current` (scenarios 2 and 5; SC-004's third reference).
+    - `TestStepToAStageOfAnotherProposedChange` (was `…IsForeign`): a stage twin of pc-1 steps to pc-2's `linked`, on `change-2` (versioned like change-1) and on `change-1` with pc-1 closed. The resolution and step lines are pinned, with no skipped or moved warning. The run's to side and the record name pc-2's stage and branch (scenario 3).
+    - `TestStageListStagelessTwinMovesNothing` (`stage_list_test.go`): a branch twin whose at's mark was edited, and a snapshot twin whose proposed change closed. Neither gets `stage.twin.moved`, a marked row or a record (scenario 5).
+    - `TestStepWithNoTargetGoesToTheNextStage` and `TestStepBesideARehearsalNamesItBeforeAnyRead` are unchanged and pass. The latter covers a host with no record and one with a staged, diverged record (scenario 4, the rehearsal).
+    - `TestStepRefusedBeforeAnyConnection`: the two `noStage` cases are now the no-target refusal. The stage-less cases that test a later refusal pass `--stage change-1/linked` (`aStage`): the bundle twins of 10, 8 and 7, the branch twin naming no snapshot, and the three records of 5. "another branch" is now `stage.unknown` naming the branches with an open proposed change. Rule 2's case takes its new words.
+
+    `internal/server`: `TestStepRefusesARecordThatNamesNoSnapshot` checks `noTarget` in place of `stepStageless`. T033 and T034 are one commit (`dbe0585`): either half alone steps a twin to the wrong proposed change's stage.
 
 **Checkpoint**: `make test`, `make lint`.
 
@@ -546,7 +569,7 @@ branch moves with the step (FR-015, FR-016; R-06).
 
 **Independent Test**: US4's four scenarios in tier 1.
 
-- [ ] T035 [US4] `targetUnheld(rec, scope, mapping, object)` in `internal/server/step.go` (R-06). It returns `step.twin.unsteppable` (rejection, resolve, object the target: the snapshot id or the stage reference) when the target's scope or any field of its mapping differs from the record's provenance. The message, verbatim in shape: `the twin's record names scope tag:fylgja and mapping infrahub-dcim opsmill/schema-library 26336e9; snapshot 576933ec… names scope tag:other and mapping infrahub-dcim opsmill/schema-library 26336e9; a twin's scope and mapping are fixed when it is created; fylgja twin destroy and create again to change them`. Where it runs:
+- [X] T035 [US4] `targetUnheld(rec, scope, mapping, object)` in `internal/server/step.go` (R-06). It returns `step.twin.unsteppable` (rejection, resolve, object the target: the snapshot id or the stage reference) when the target's scope or any field of its mapping differs from the record's provenance. The message, verbatim in shape: `the twin's record names scope tag:fylgja and mapping infrahub-dcim opsmill/schema-library 26336e9; snapshot 576933ec… names scope tag:other and mapping infrahub-dcim opsmill/schema-library 26336e9; a twin's scope and mapping are fixed when it is created; fylgja twin destroy and create again to change them`. Where it runs:
   - for a `--snapshot` target, on the envelope after the resolve and before the compile, so a refused target's bundle is never filed;
   - for a `--stage` target, after `stages.Build`, on the compiled bundle's manifest provenance, before the host check.
 
@@ -555,8 +578,32 @@ branch moves with the step (FR-015, FR-016; R-06).
   - another mapping version refused naming both mappings (scenario 2);
   - a stage target under the record's scope passes with no finding (scenario 4);
   - a stage target whose mapping differs is refused like a snapshot's.
+  - *Note (Run 10)*: `targetUnheld(rec, scope, mapping, object, name)`: the task's four parameters plus `name`, the target's side name in the message (`snapshot <short>…` by `StepSide.Name()`, or `stage <branch>/<label>`). The object is the full snapshot id or the bare reference. Its message is R-06's, verbatim, each mapping written as reader, model and version. The two call sites:
+    - **A `--snapshot` target**: after `resolveSnapshot` and the target line, before `compileAndFile`, on the envelope (`wire.Mapping(env.Mapping)`). A file target is filed by then, so the refusal goes through `compiledRead.refused`, as a refused compile does: the document names the snapshot, and the text prints its stored line. That comment is updated.
+    - **A `--stage` target**: after `stages.Build`, on its bundle manifest's provenance, before `stepTo`'s host check. The document carries the resolved stage block, as the other stage refusals do. A manifest that does not parse is `operation.failed` at resolve; nothing builds one.
+
+    Tests:
+    - `TestStepTargetKeepsScopeAndMapping` (`internal/cli`), five subtests:
+      - a file whose envelope names `tag:other`, and one naming mapping version `0f0f0f0`, each stepped by file, then dry-run, then by the id it was filed under. Each is refused naming both, with the snapshot filed and named on stdout, no bundle filed, no run, no Infrahub request, no containerlab plan, and twin.json unchanged (US4 scenarios 1–2);
+      - a stage twin whose record names version `0f0f0f0`, stepped to `change-1/linked` with and without `--dry-run`, refused naming both on `change-1/linked` with the stage block, before containerlab's plan and any run;
+      - a stage and a snapshot under the record's scope and mapping, passing with no `step.twin.unsteppable` (scenario 4).
+    - `TestTargetUnheldNamesBoth` (`internal/server`): R-06's message verbatim, and each mapping field (reader, model, version) refused alone. Commit `dfbd8e6`.
 
 **Checkpoint**: `make test`, `make lint`; every tier-1 case of quickstart §1 present.
+
+  *Run 10's checkpoint, 2026-10-28 (T033–T035)*:
+  - **Commits**: `dbe0585` (T033 and T034, one change), `dfbd8e6` (T035), then this note. No golden moved (`git diff --stat main -- testdata/golden` is empty), so there is no re-baseline commit.
+  - **Gates**, on the committed tree:
+    - `make build` is statically linked.
+    - `make test` uncached (`GOFLAGS=-count=1`) passes in 44.2 s wall with the build cache warm, at a load average of 3.85 before and 3.77 after. **That is 0.8 s under the 45 s budget.** `internal/cli` took 39.5 s, up from 37.6 s at Run 9, and this run's tests add about 2 s. The first uncached run after the build took 53.6 s (load 2.90, then 4.55); Runs 3–9 saw 46–50 s.
+    - `make lint` reports 0 issues, and `go vet -tags contract,fixture,e2e ./...` is clean.
+  - **Tier 2**: none run, since no task here names a tier-2 test. The one tagged caller of `Moved` (`internal/stages/stages_contract_test.go`) passes the record's own proposed change, whose result is unchanged. Nothing was written to Infrahub. Read afterwards: `Branch` lists `main` and `fylgja-fixture` alone, and `CoreProposedChange`, `FylgjaStage` and `CoreChangeThread` each count 0.
+  - **The host**: no process started or stopped. The worker (2012205) and the server (2012228) still run a binary that reads `(deleted)`. T048 restarts both.
+  - **Quickstart §1**: every tier-1 case it lists is now present (Runs 4–10).
+  - **For later tasks**:
+    - **T038**: rule 2's new words. `step.target.foreign`'s row and the "stays inside" sentences in `contracts/cli.md`, `docs/architecture.md:837` and `docs/glossary.md:1166` are prose for T038, T040 and T041.
+    - **R-08's literal reach** (T034's note) is the operator's to confirm.
+    - **The test budget**: with `internal/cli` near 40 s, the next run that adds tier-1 cases may cross 45 s.
 
 ---
 

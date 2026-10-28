@@ -651,7 +651,7 @@ contracts say what is now true (FR-022, FR-024, FR-026; R-18, R-21).
 **Independent Test**: `bash -n` and `shellcheck` clean; each changed `jq` filter checked
 offline against recorded outputs; the 019 sections present.
 
-- [ ] T037 [US6] `scripts/e2e.sh` (R-18):
+- [X] T037 [US6] `scripts/e2e.sh` (R-18):
   - **Case 5**, its branch, seed, two changes and verify 5a kept:
     1. `create_twin 5 --scope tag:fylgja` with no `--interval`. Assert no `following` key, `twin show --json`'s `.show.kind=="snapshot"` naming `SID5` and `BID5`, and the text kind line `kind: snapshot ${SID5:0:8}… (branch $FB, read at …)`, kept in `kind-5.txt`.
     2. Hash `twin.json` and the three container ids; note `CREATED5` (UTC, after the create's answer).
@@ -663,12 +663,89 @@ offline against recorded outputs; the 019 sections present.
   - **The rest of the script**: the four `--no-follow` go, with the header's sentences on them; `FOLLOW_INTERVAL_S` goes. `schedule_state` and `FOLLOW_SCHEDULE` stay for the trap's leak check alone, whose comment says it catches a Schedule kept by a host upgraded with a following twin up. The closing timing line names case 5's `frozen wait`, `step 5a` and `step 5b` in place of its rebuilds. The header's duration is about 32–33 minutes.
 
   Check offline: `bash -n scripts/e2e.sh`; `shellcheck scripts/bring-up.sh scripts/e2e.sh`. Run each new or changed `jq` filter against the recorded outputs under `local/e2e-*.outputs` where one exists, else against a document from a tier-1 test of T031–T032, and record each check in this task's note.
+  - *Note (Run 12, 2026-10-28)*: rewritten as the task lists, with these choices:
+    - **Case 5.** The create asserts `has("following") | not`, and its record names no `at`. The kind line is checked exactly: `printf 'kind: snapshot %s… (branch %s, read at %s)'` from twin.json's `observed_at`, which `twin show` prints verbatim, is `cmp`'d with `grep '^kind: '` and kept as `kind-5.txt`. `CREATED5` is `date -u +%Y-%m-%dT%H:%M:%S.%NZ`, noted after the create's answer and its readback. The 330 s (`FROZEN_WAIT_S`) are counted from `await_checksums_moved`'s return (`MOVED5`) by one `sleep`. Then the twin.json hash, the containers, the kind line and the run list are checked.
+    - **Step 5a**, by `$OUT/snapshot-5a.json`: the task's assertions, with `.step.from` naming case 5's snapshot and bundle and no stage, n1 among the pushes, and every push landed. The record also asserts `twin_version` 10, no rehearsal, `provenance` with no `at` and scope `tag:fylgja`, the step's run and `all(.nodes[]; .holds)`. Then n1's checksum, `readback 5a … disable`, the step's history (for the greps) and verify 5a with `.verify.twin.snapshot_id`.
+    - **Step 5b**, by the id: asserts the snapshot is in the store first. It checks `.subject.snapshot` is the id, the from side is 5a's, one link added and every push landed. Then the record, `readback 5b`, the history and `twin show`. The show's JSON is kind `snapshot` naming 5b's snapshot and bundle and a stepped step. Its text holds `kind: snapshot <5b>… (branch $FB, read at <observed_at>) (stepped from snapshot <5a>… by run fylgja-step <run>, ended `.
+    - **Elsewhere**: `destroy_twin 5 done done`, whose store check holds again. `destroy_twin` now sets `DESTROY_TOOK`, so the closing line keeps the destroy: `seed …, frozen wait … from the change, step 5a … and step 5b …, destroy …`. Cases 7 and 8: as listed, and case 7's show also asserts `.show.record.snapshot_id==env.SNAP7S`.
+    - **The header and comments**: no `--no-follow`, and `FOLLOW_INTERVAL_S` is gone. The header's case 5, the readback paragraph ("every step that changes a node"), the worker's need ("the steps of cases 5, 7 and 8") and the duration ("about 32 to 33 minutes") are rewritten. The trap's leak check comment names the upgraded host. The hygiene comment names case 5's step documents and histories and `runs-5-frozen.json`.
 
-- [ ] T038 [P] [US6] The contracts' prose. Append [contracts/commands.md](contracts/commands.md)'s two sections as `contracts/cli.md`'s "019: following removed" (with the upgrade sentence of R-21 under "Upgrading", verbatim: `Destroy a following twin before upgrading a host of an earlier build: a Schedule fylgja-follow left behind starts a workflow no worker of this build serves, and this build carries no code to clear it`) and `contracts/api.md`'s. Its `twin.destroy` answer loses its following events and "its `start` comes once following has stopped". Each earlier section that states following as current behaviour gains a one-line pointer to the 019 section and no other edit (`/usr/bin/grep -n -i 'follow\|interval\|schedule' contracts/cli.md contracts/api.md`). `contracts/step.schema.json`'s description gains formats.md §5's sentence. `contracts/cli.md`'s Environment table: the worker reads `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN` no longer (R-22).
+    Checked offline:
+    - `bash -n` and `shellcheck scripts/bring-up.sh scripts/e2e.sh` are clean, and `TestE2EScriptExpectsTheRecordsVersion` passes (five `.twin_version=="10"`).
+    - Each new or changed `expect` filter was pulled from the script by its line and run with `jq -e`, under the env it names:
+      - **Tier-1 documents.** A throwaway helper, removed afterwards with the four test files reverted, dumped them from `TestCreateFollowsNothing`, `TestShowSnapshotReadAt`, `TestShowSteppedFromASnapshot`, `TestStepToASnapshot` (from `--branch`, by file and by id, with the record `recordOnHost` wrote) and `TestVerifyNamesTheSnapshot`.
+      - **018's live run**: `/tmp/fylgja-e2e.1cdKB4`, the second attempt of 018's tier 3.
+    - Each filter passed where it should and failed where it should:
+      - The create filter passes on 019's document and fails on 018's `create-5.json`, which carries `following`. The created-record filter passes on both.
+      - The created show filter passes on 019's and fails on 018's (kind `following`).
+      - The run-list filter passes on the CLI's own `[` `]` for an empty list and fails on a list of one.
+      - 5a's step filter passes, with n1 read as the mixed fixture's s1, and fails as written on that fixture.
+      - 5a's record filter passes once `provenance.at` is dropped, since the tier-1 target is pinned and an unpinned record omits it (`at,omitempty`).
+      - Verify 5a: the snapshot clause on 019's document, and the skipped clauses on 018's `verify-5a.json` with its twin given the id.
+      - 5b's step and record filters pass, with `.subject.snapshot` the id.
+      - The stepped show filter passes, its outcome read as `stepped` (the tier-1 record is unchanged).
+      - Cases 7 and 8: 018's `show-7.json` and `show-8a.json` pass with the kind read as `snapshot` and fail as written (`pinned`).
+      - Both kind-line checks pass against tier 1's text, and a moved line fails the `cmp`.
+    - **The query** (step 3), checked read-only against the dev server (Temporal CLI 1.9.1, Server 1.32.0) rather than left wholly to T048:
+      - `--query "StartTime > '<t>'" -o json` takes `<t>` with whole seconds, six fractional digits or nine (`%N`).
+      - It lists a run started after `<t>`, and none at or after a run's own start time.
+      - An empty list prints `[` and `]`, which `length == 0` reads.
 
-- [ ] T039 [P] [US6] The code comments that say following's change (data-model §11; R-26). Reword, changing no code, no flag and no data: `internal/intent/errors.go` (`ErrBranchNotFound` names no consumer outside the reader; this file's fourth decision), `internal/compiler/manifest.go` (about line 146), `cmd/fylgja-fixture/main.go` (about lines 5 and 356), `internal/testsupport/seed.go` (about lines 470–471), and any other comment `/usr/bin/grep -rn -i 'following\|reconcile check\|follow check\|\.reads' internal cmd --include='*.go'` finds stating following as current (comments citing history stay). Not under `infrahub/`.
+      T048 still runs its hand check before T051.
+
+- [X] T038 [P] [US6] The contracts' prose. Append [contracts/commands.md](contracts/commands.md)'s two sections as `contracts/cli.md`'s "019: following removed" (with the upgrade sentence of R-21 under "Upgrading", verbatim: `Destroy a following twin before upgrading a host of an earlier build: a Schedule fylgja-follow left behind starts a workflow no worker of this build serves, and this build carries no code to clear it`) and `contracts/api.md`'s. Its `twin.destroy` answer loses its following events and "its `start` comes once following has stopped". Each earlier section that states following as current behaviour gains a one-line pointer to the 019 section and no other edit (`/usr/bin/grep -n -i 'follow\|interval\|schedule' contracts/cli.md contracts/api.md`). `contracts/step.schema.json`'s description gains formats.md §5's sentence. `contracts/cli.md`'s Environment table: the worker reads `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN` no longer (R-22).
+  - *Note (Run 12)*: the changes, by file:
+    - **`contracts/cli.md`.** The title and introduction name 019 last, and the versions sentence gains `twin.json` `10`. M13's sections are kept current in place, as 014–018 kept them:
+      - the client's bullet: `--interval=` is "an unknown flag since 019";
+      - Formats: "since 019 `twin.json` `10`";
+      - Workflows: "019 removes `Reconcile`, the Schedule and five activities";
+      - the Environment table's `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` row reads `no (yes until 019)` for the worker (R-22);
+      - Tier 3: "case 5 moved from following to a frozen twin and two steps at 019".
+    - **Pointers.** Eighteen one-line pointers, each `Moved at 019: …` naming "019: following removed", head each earlier subsection that states following, or a step rule 019 moves, as current:
+      - 014's commands, `--stage`, `twin step`, show and verify, Identifiers, and Formats;
+      - 015's `twin rehearse` (its 1,980 s samples), the rehearsal's show and destroy, and Workflows;
+      - 017's scope and Workflows;
+      - 018's introduction, commands, text, Identifiers, Formats, Workflows and Tier 3.
+
+      No other edit to them.
+    - **cli.md's "019: following removed"** is commands.md's section, its links made relative to `contracts/`, with the upgrade sentence under "Upgrading" verbatim. Added from what Runs 4–11 built:
+      - a ready create's text ending at `twin directory …`;
+      - `stage.twin.moved` only within the record's own proposed change;
+      - the show notes, the snapshot-none and from-a-bundle notes, 018's `built from snapshot` note gone, and `show.service.unreachable`'s message verbatim;
+      - the rehearsal sample's `32m30s` and `1950s`;
+      - the wordings of `snapshot.flags.conflict`, `step.target.unknown` (no target, and rule 2's new words, T033), `step.twin.unsteppable` (R-03's three, the reworded no-twin and orphan endings, R-06's scope and mapping message) and the end of "a step stays inside" (T033);
+      - a Formats table for `twin.json` 10, findings, show, verify (`twin.snapshot_id`, T025), stages (`$defs/side_name`, T031), step, the API and the unmoved formats, with the frozen copies under `018-snapshots/`;
+      - the provision with no bundle id and the seven replays under Workflows;
+      - case 5's frozen wait and the run list under Tier 3.
+    - **`contracts/api.md`.** The title and introduction name 019. M13's operations table loses `interval` and `no_follow` on `twin.create` and gains `snapshot` on `twin.step`, with its file, and a `Moved at 019` sentence follows 018's. The argument example is `"stage": ""`. The answer's `twin.destroy` loses "its following's `event`s", and "A run" loses "comes once following has stopped" and the cut while following stops; one sentence says a destroy did both until 019. 018's section gains a pointer. "019: following removed" is commands.md's, with a table in the 018 section's form, and adds `stage` beside `snapshot` refused before the files are held, and the checks reading nothing removed (`infrahub/checks/` names none of it).
+    - **`contracts/step.schema.json`**: its description gains formats.md §5's sentence, verbatim.
+    - **Checks**: every link resolves (`make linkcheck` finds only the five known in this feature's `brief.md`, T047's), and no test reads the Markdown. T025's gap, `verify.schema.json`'s `twin.source` lacking `snapshot`, is not this task's and stays open.
+
+
+- [X] T039 [P] [US6] The code comments that say following's change (data-model §11; R-26). Reword, changing no code, no flag and no data: `internal/intent/errors.go` (`ErrBranchNotFound` names no consumer outside the reader; this file's fourth decision), `internal/compiler/manifest.go` (about line 146), `cmd/fylgja-fixture/main.go` (about lines 5 and 356), `internal/testsupport/seed.go` (about lines 470–471), and any other comment `/usr/bin/grep -rn -i 'following\|reconcile check\|follow check\|\.reads' internal cmd --include='*.go'` finds stating following as current (comments citing history stay). Not under `infrahub/`.
+  - *Note (Run 12)*: reworded, no code, flag or data moved:
+    - The task's five: `internal/intent/errors.go` (`ErrBranchNotFound`: the mark, no caller outside the reader since 019, the reader still marking it); `internal/compiler/manifest.go` (M6's history: no golden moved and no twin then following its branch was rebuilt); `cmd/fylgja-fixture/main.go` (the package comment's "tier 3's branch changes", and `addThirdLink`'s cases 5 and 7 stepping to it and case 9 rehearsing it); `internal/testsupport/seed.go` (`SeedThirdLink`: tier 2's stage and check tests, tier 3's steps and rehearsal).
+    - `internal/stage/stage.go`'s `Read` comment, T021's leftover. Nothing reaches the scope refusal now, since the server refuses a request's scope at start and a step whose record names no `tag:<name>` scope before any read. The error keeps its words from before 019: changing them would change a message, and no task moves it.
+    - Beyond the task's list, from the grep and its neighbours: `internal/lab/wire/types.go` (`SourceIntent` and `SnapshotID`: "until 019, a following check's rebuild"), and `internal/server/show.go` (`snapshotClause`: "a 9 or 10 naming none … an earlier build's following rebuild (until 019)"; "as M4 named a rebuild in flight until 019").
+    - Test comments: `internal/intent/errors_test.go`, `internal/stage/read_test.go`, `internal/compiler/contract_test.go`, and `internal/cli/failures_test.go`'s cut destroy answer, now "an earlier build's server … until 019". Its subtest name and frames are code, and are kept.
+    - What the grep still finds: a run's following (`interrupt.go`, `client.go`'s `Event`, `follow.go`, `destroy.go`, `step.go`, `finding.go`'s "Starting and following a run"), a symlink's (`hostcheck.go`), and comments that cite 019 as history (`render.go`, `finding.go`, the lines above). `infrahub/` has no hit.
+
 
 **Checkpoint**: `make test`, `make lint`, `shellcheck` clean.
+
+  *Run 12's checkpoint, 2026-10-28 (T037–T039)*:
+  - **Commits**: `b284134` (T037, the script), `7ddbb23` (T038, the contracts), `45e802a` (T039, the comments), then this note. No golden moved (`git diff --stat main -- testdata/golden` is empty), so there is no re-baseline commit.
+  - **Gates**, on the tree with the three changes:
+    - `make build` is statically linked.
+    - `make test` uncached (`GOFLAGS=-count=1`) passes. The first run after the build took 52.8 s wall (load 2.95, then 3.99), as Runs 3–11 saw. The second took 44.2 s with the build cache warm (load 3.75, then 5.33), under the 45 s budget, `internal/cli` 39.4 s of it. This run adds no test.
+    - `make lint` reports 0 issues; `go vet -tags contract,fixture,e2e ./...` is clean; `bash -n scripts/e2e.sh` and `shellcheck scripts/bring-up.sh scripts/e2e.sh` are clean.
+  - **Tier 2**: none run, since no task here names a tier-2 test. Nothing was written to Infrahub. Read afterwards: `Branch` lists `main` and `fylgja-fixture` alone, and `CoreProposedChange`, `FylgjaStage` and `CoreChangeThread` each count 0.
+  - **Tier 3**: not run (the operator's, T051). The script's filters were checked offline (T037's note). The Temporal query's form was read from the dev server, which this run neither started nor stopped.
+  - **The host**: no process started or stopped. The worker (2012205) and the server (2012228) still run a binary that reads `(deleted)`. T048 restarts both.
+  - **For later tasks**:
+    - T047's `make linkcheck` still finds the five broken links in this feature's `brief.md`, and nothing else.
+    - T025's contract gap (`verify.schema.json`'s `twin.source` lacks `snapshot`) still needs a task.
+    - R-08's literal reach (Run 10) is still the operator's to confirm.
 
 ---
 

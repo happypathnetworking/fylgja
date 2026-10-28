@@ -483,6 +483,7 @@ graph LR
     internal_provision --> internal_lab_wire
     internal_provision --> internal_psp
     internal_provision --> internal_rehearsal
+    internal_provision --> internal_snapshot
     internal_provision --> internal_stage
     internal_provision --> internal_step
     internal_provision --> internal_verify
@@ -507,6 +508,7 @@ graph LR
     internal_server --> internal_stages
     internal_server --> internal_step
     internal_server --> internal_tree
+    internal_server --> internal_validate
     internal_server --> internal_verify
     internal_snapshot --> internal_ctm
     internal_stage --> internal_bundle

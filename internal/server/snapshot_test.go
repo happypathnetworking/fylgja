@@ -223,6 +223,84 @@ func TestResolveSnapshotRefusesAFileByItsRules(t *testing.T) {
 	}
 }
 
+// A file whose CTM breaks a rule validation applies without the packages is refused before
+// it is filed, under the rules and objects the compile would give it, at compile, and leaves
+// the store as it was; one whose fault needs the packages, a platform no package matches, is
+// filed, and the compile refuses it afterwards, as a read's take is (018, T082).
+func TestResolveSnapshotHoldsAFilesCTMBeforeFilingIt(t *testing.T) {
+	envelope := func(d map[string]any) map[string]any { return d["ctm"].(map[string]any)["envelope"].(map[string]any) }
+	// An edited body hashes to another id: the fixture's declared one goes, to be computed.
+	edited := func(edit func(map[string]any)) func(map[string]any) {
+		return func(d map[string]any) {
+			delete(d, "snapshot_id")
+			edit(d)
+		}
+	}
+	missing := func(object, message string) findings.Finding {
+		return findings.Finding{Severity: findings.Rejection, Rule: findings.RuleRequiredMissing, Step: findings.StepCompile,
+			Object: object, Message: message}
+	}
+	for _, c := range []struct {
+		name string
+		edit func(map[string]any)
+		want []findings.Finding
+	}{
+		{"no branch", func(d map[string]any) { envelope(d)["branch"] = "" },
+			[]findings.Finding{missing("envelope.branch", "the branch intent was read from is not recorded")}},
+		{"no scope", func(d map[string]any) { envelope(d)["scope"] = "" },
+			[]findings.Finding{missing("envelope.scope", "the scope intent was read under is not recorded")}},
+		{"no mapping", func(d map[string]any) { envelope(d)["mapping"] = map[string]any{} },
+			[]findings.Finding{
+				missing("envelope.mapping.reader", "the reader that mapped intent is not recorded"),
+				missing("envelope.mapping.model", "the model the reader read is not recorded"),
+				missing("envelope.mapping.version", "the version of the model the reader read is not recorded"),
+			}},
+		{"no devices", func(d map[string]any) {
+			d["ctm"].(map[string]any)["devices"] = []any{}
+			d["ctm"].(map[string]any)["links"] = []any{}
+		}, []findings.Finding{{Severity: findings.Rejection, Rule: findings.RuleDevicesEmpty, Step: findings.StepCompile,
+			Object: "fylgja-fixture@2026-09-08T12:00:00Z", Message: `no devices in intent for branch "fylgja-fixture" at ` +
+				"2026-09-08T12:00:00Z; a twin of nothing cannot be built and has no fidelity to report"}}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			paths := useStateRoot(t)
+			_, _, err := resolveSnapshot(context.Background(), paths, findings.OpTwinCreate, &findings.Subject{Snapshot: "snap.json"},
+				"snap.json", fixtureFile(t, edited(c.edit)))
+			code, doc := exitOf(t, err)
+			if code != findings.ExitRejected || len(doc.Findings) != len(c.want) {
+				t.Fatalf("exit %d, findings %+v; want 1 with %+v", code, doc.Findings, c.want)
+			}
+			for i, f := range doc.Findings {
+				if f != c.want[i] {
+					t.Errorf("finding %d: %+v; want %+v", i, f, c.want[i])
+				}
+			}
+			if doc.SnapshotID != "" {
+				t.Errorf("the refusal names snapshot %s, which nothing filed", doc.SnapshotID)
+			}
+			if _, err := os.Stat(paths.Snapshots); !os.IsNotExist(err) {
+				t.Errorf("snapshots/ exists after a refused file (%v)", err)
+			}
+			validateWithShow(t, currentContract, "018", doc)
+		})
+	}
+
+	t.Run("a platform no package matches", func(t *testing.T) {
+		paths := useStateRoot(t)
+		files := fixtureFile(t, edited(func(d map[string]any) {
+			d["ctm"].(map[string]any)["devices"].([]any)[0].(map[string]any)["platform"].(map[string]any)["package"] = "nosuch"
+		}))
+		s, path, err := resolveSnapshot(context.Background(), paths, findings.OpTwinCreate, &findings.Subject{Snapshot: "snap.json"},
+			"snap.json", files)
+		if err != nil {
+			t.Fatalf("resolveSnapshot = %v; want the file filed, for the compile to refuse", err)
+		}
+		if _, err := os.Stat(path); err != nil || path != filepath.Join(paths.Snapshots, s.ID+".json") {
+			t.Errorf("the file is not filed under its id at %s (%v)", path, err)
+		}
+	})
+}
+
 // A file whose inner CTM records no observed_at, or one not of its form, hashes to the id
 // every valid take of its intent does, since the id leaves observed_at out. It is refused
 // before anything is filed, so a later take of the same intent, read with a proper

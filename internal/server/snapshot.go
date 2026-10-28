@@ -11,6 +11,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/snapshot"
+	"github.com/happypathnetworking/fylgja/internal/validate"
 )
 
 // takeSnapshot wraps a CTM a read produced as a snapshot and files it in the store under
@@ -99,7 +100,9 @@ func snapshotGuards(op string, subject *findings.Subject, f *createFlags) error 
 // is looked up in the store: absent is snapshot.unknown, naming the store's directory, and a
 // corrupt entry snapshot.id.mismatch at its path. Anything else is the path of the file the
 // request carries, which snapshotFiles has held to that path: it is read by
-// snapshot.Unmarshal's rules, each refusal under its own identifier, and filed under its id.
+// snapshot.Unmarshal's rules, each refusal under its own identifier; its CTM is held to the
+// rules validation applies that read no package (validate.Intrinsic), each refusal at
+// compile as the compile words it, with nothing filed; and it is filed under its id.
 // The store keeps an entry already there, so what is returned is always the stored document,
 // read back after the filing: the twin records the first take's observed_at (US3 scenario
 // 8). Nothing here reaches Infrahub.
@@ -134,6 +137,12 @@ func resolveSnapshot(ctx context.Context, paths lab.Paths, op string, subject *f
 			}
 			// A file that is not JSON was never validated: nothing to report findings about.
 			return nil, "", failAt(op, subject, findings.StepResolve, arg, "%v", err)
+		}
+		// The CTM's own rules before the filing: a file they refuse is filed nowhere, and is
+		// refused as the compile would refuse it, at compile. What needs the packages is the
+		// compile's, by which time the file is filed, as a read's take is.
+		if list := validate.Intrinsic(s.CTM); list.Rejected() {
+			return nil, "", finish(op, subject, list.AtStep(findings.StepCompile))
 		}
 		if _, err := store.Put(ctx, s); err != nil {
 			return nil, "", refused(s.ID, err, "filed")

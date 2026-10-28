@@ -440,7 +440,12 @@ naming both; and the inner CTM is refused under its own rules, `ctm.version.unsu
 at the file and `data.required.missing` at the field prefixed `ctm.`, and for its
 `observed_at`, none recorded (`data.required.missing`) or one not of its form
 (`snapshot.invalid`), before anything is filed, since the id leaves `observed_at`
-out and such an entry could not be read back. The server files each snapshot under its id in the **snapshot store**
+out and such an entry could not be read back. A file `twin create --snapshot` sends is
+then held, still before it is filed, to the rules validation applies that read no
+package: the envelope's, the device list's, each device's and interface's name and the
+links'. Each refusal is at `compile`, under the rule and object the compile gives it, and
+a file they refuse is filed nowhere. A refusal that needs the server's packages, such as a
+platform no package matches, comes at the compile after the filing, as a read's does. The server files each snapshot under its id in the **snapshot store**
 (`snapshots/<snapshot_id>.json`, [§4.5](#45-lab-host-containerlab-and-the-twin-directory)),
 behind an interface of the bundle store's shape that never overwrites: two takes of one
 intent keep one document, the first. `fylgja intent read --out` writes the read as a
@@ -757,7 +762,8 @@ same cleanup status.
 
 **A create, end to end.** The server makes the command's refusals, resolves a stage,
 reads, takes and files the snapshot, compiles and files the bundle (or, for `--snapshot`,
-fetches the snapshot from the store or files the one sent, with no read), and starts
+fetches the snapshot from the store or files the one sent once its CTM passes the rules
+that read no package, with no read), and starts
 `fylgja-provision` with the two ids; the worker runs every step from the host check. A
 read or compile refusal is the server's document before any run, and an Infrahub that
 fails during the read is `operation.failed` at once, with no retry of the worker's. After each step the workflow
@@ -1317,7 +1323,8 @@ a client run the core.
   which reads with `internal/intent`, validates with `internal/validate`, compiles with
   `internal/compiler` and files with `internal/bundle`. The handlers take, validate and
   file each snapshot with `internal/snapshot`, which imports the CTM and nothing else of
-  the module. `internal/stages` resolves, lists
+  the module, and hold a sent snapshot's CTM to `validate`'s rules that read no package
+  before they file it. `internal/stages` resolves, lists
   and plans: it reads the proposed changes, their stages, the branch point and the stamps
   with `intent`, reads and compiles each stage through `stage`, takes each stage's
   snapshot through the function the handlers hand it, diffs each pair with

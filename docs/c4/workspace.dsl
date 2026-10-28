@@ -89,6 +89,7 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.server.handlers -> fylgja.server.step "Diffs; plans the push"
         fylgja.server.handlers -> fylgja.server.bundle "Verifies and files bundles"
         fylgja.server.handlers -> fylgja.server.snapshot "Takes, validates and files snapshots"
+        fylgja.server.handlers -> fylgja.server.validate "Holds a sent snapshot's CTM to the rules that read no package"
         fylgja.server.handlers -> fylgja.server.compiler "Reads manifests"
         fylgja.server.handlers -> fylgja.server.lab "Host check, inspect, dry run"
         fylgja.server.handlers -> fylgja.server.verify "Reads the twin"

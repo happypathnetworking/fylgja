@@ -106,17 +106,9 @@ func checkDevicesPresent(c *ctm.CTM, list *findings.List) {
 func checkDevices(c *ctm.CTM, reg *psp.Registry, list *findings.List) {
 	seen := map[string]bool{}
 	for _, d := range c.Devices {
-		if d.Name == "" {
-			list.Add(findings.Rejection, findings.RuleRequiredMissing, "device",
-				"a device has no name")
+		if !checkDeviceName(d, seen, list) {
 			continue
 		}
-		if seen[d.Name] {
-			list.Add(findings.Rejection, findings.RuleDeviceNameDuplicate, d.Name,
-				"two devices share this name; a node name must be unique")
-			continue
-		}
-		seen[d.Name] = true
 
 		p, ok := reg.LookupID(d.Platform.Package)
 		if !ok {
@@ -134,6 +126,30 @@ func checkDevices(c *ctm.CTM, reg *psp.Registry, list *findings.List) {
 		}
 		checkInterfaces(d, prof, p.Platform.ID, list)
 	}
+}
+
+// checkDeviceName refuses a device with no name and a second device of a name, the two
+// faults of a device's name, and reports whether d has a name of its own to check further
+// by. seen holds the names met so far.
+func checkDeviceName(d ctm.Device, seen map[string]bool, list *findings.List) bool {
+	if d.Name == "" {
+		list.Add(findings.Rejection, findings.RuleRequiredMissing, "device",
+			"a device has no name")
+		return false
+	}
+	if seen[d.Name] {
+		list.Add(findings.Rejection, findings.RuleDeviceNameDuplicate, d.Name,
+			"two devices share this name; a node name must be unique")
+		return false
+	}
+	seen[d.Name] = true
+	return true
+}
+
+// addNamelessInterface refuses an interface of device with no name, naming the device.
+func addNamelessInterface(device string, list *findings.List) {
+	list.Add(findings.Rejection, findings.RuleRequiredMissing, device,
+		"an interface has no name")
 }
 
 // checkInterfaces validates one device's interfaces.
@@ -171,8 +187,7 @@ func checkInterfaces(d ctm.Device, prof *psp.Profile, pspID string, list *findin
 	for _, in := range d.Interfaces {
 		object := d.Name + ":" + in.Name
 		if in.Name == "" {
-			list.Add(findings.Rejection, findings.RuleRequiredMissing, d.Name,
-				"an interface has no name")
+			addNamelessInterface(d.Name, list)
 			continue
 		}
 		*list = append(*list, refusals[object]...)

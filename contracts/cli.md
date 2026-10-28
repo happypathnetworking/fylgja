@@ -1122,10 +1122,14 @@ fylgja twin rehearse --branch <b> …                                           
 - **`twin create --snapshot <arg>`**: `<arg>` of 64 lowercase hex characters is a
   snapshot id, looked up in the store; anything else is a file the client reads and
   sends. An id the store does not hold is `snapshot.unknown` at `resolve`, exit 1,
-  before any run; a file is read as [snapshot.schema.json](snapshot.schema.json) says and
+  before any run; a file is read as [snapshot.schema.json](snapshot.schema.json) says,
+  its CTM held to the rules validation applies that read no package (the envelope's, the
+  device list's, each device's and interface's name, the links'), each refusal at
+  `compile` under the rule and object the compile gives it, with nothing filed, and then
   filed under its id (an entry already there is kept, and the twin records the stored
   document's `observed_at`, the first take's); then the compile, the filing and the run as
-  above. No request reaches Infrahub. Such a twin is **frozen by rule**: its reference is
+  above, where a refusal that needs the server's packages (a platform no package matches)
+  leaves the file filed, as a read's take is. No request reaches Infrahub. Such a twin is **frozen by rule**: its reference is
   a document, which does not move. `--interval` beside it is `follow.flags.conflict`,
   exit 2, `--interval is meaningless with --snapshot: a twin built from a snapshot never
   follows`; `--no-follow` is accepted and changes nothing; no Schedule is made whatever

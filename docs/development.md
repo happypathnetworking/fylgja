@@ -1288,8 +1288,10 @@ stage may write) committed by the script as `docs(NNN): <stage>`:
   each `[operator]` task, and ends `ANALYZE-DONE` or `ANALYZE-WAIT` like clarify; the tasks
   gate runs again.
 
-`--to` stops after a stage (`done`, exit 0); `--from` picks up at any stage, `implement` by
-default, so the loop below is the chain's tail. The dry run (`--dry-run`) stands a stub in
+`--to` stops after a stage (`done`, exit 0; after the implement runs, `planned`); `--from`
+picks up at any stage, `implement` by default, so the loop below is the chain's tail.
+`--from clarify` without `specify` in the same run starts a fresh session, since there is
+none to resume. The dry run (`--dry-run`) stands a stub in
 for every session, so the chain's mechanics run on a throwaway spec with no model; both
 were exercised on 2026-10-28, and the real chain to clarify and a real lane pair after it.
 
@@ -1307,11 +1309,15 @@ convergence unattended, in two stages.
    `local/.env` and the command log's two directories linked so the hook writes the pending
    file this tree shares. A lane is told to run the tests of the packages it touched, not
    the whole tier, since two `make test` at once trip tier 1's wall bound; the merged tree
-   runs the whole tier once. The script merges the lanes back in route order (`tasks.md` by
-   `scripts/merge-tasks.py`, named in `.gitattributes`, which resolves a conflict made of
-   ticks and notes alone and leaves anything else), removes each worktree and branch, and
-   settles the merged tree once. Only pure runs are laned: never a live one, nor one that
-   names tier 2, which shares one Infrahub.
+   runs the whole tier once, and to add the files it edited by name, never `git add -A`,
+   since the seeded symlinks must not be committed. The script merges the lanes that
+   succeeded back in route order (`tasks.md` by `scripts/merge-tasks.py`, named in
+   `.gitattributes`, which resolves a conflict made of ticks and notes alone and leaves
+   anything else), removes each worktree and branch, and settles the merged tree once; a
+   lane whose session failed stops the loop afterwards, its worktree kept, so nothing a
+   sibling built is stranded. A loop refuses to start while a lane's worktree or branch is
+   left from an earlier stop: the operator merges or discards it first. Only pure runs are
+   laned: never a live one, nor one that names tier 2, which shares one Infrahub.
 2. **Convergence.** Converge tags every task it appends `[behaviour]`, `[pin]` or
    `[operator]` (attended, also `[live]`), and the stopping rule is applied from the tags.
 
@@ -1346,6 +1352,7 @@ The loop stops, and hands back, at the first of these:
   - a chain stage writing outside the feature directory, or specify leaving the tree off
     the feature's branch;
   - implement ticking another run's task;
+  - a lane committing a seeded path (a symlink to this tree's ignored Spec Kit files);
   - uncommitted changes left behind, in this tree or a lane's;
   - a change of branch;
   - a moved remote-tracking ref;

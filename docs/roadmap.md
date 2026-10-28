@@ -493,9 +493,9 @@ for the development host.
 **F-021. The WebUI.** Constitution I is where a UI bites: a JavaScript front end is a second
 runtime. Either serve Go templates with htmx from the same static binary, with the assets
 embedded as the packages are, which keeps the principle, or write a decision entry
-exempting the UI. Its content is what the JSON already carries: `twin show`, following,
-stages and plans, verify reports, steps and observation. Last, so it has something to
-show beyond a status line. It is a second client of the same API.
+exempting the UI. Its content is what the JSON already carries: `twin show`, stages and
+plans, verify reports, steps and observation. Last, so it has something to show beyond a
+status line. It is a second client of the same API.
 
 ## Decisions the order needs
 

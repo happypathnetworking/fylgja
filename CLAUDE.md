@@ -596,6 +596,4 @@ Rewritten whole at each release's close, never appended to.
   Arista's own checksum for the cEOS tar at the next download.
 - **Open, for a session**: the fixture tool's `-propose` waits its 6 minutes for an
   artifact validator a branch with no change from `main` never gets (D-054's window);
-  bound with `timeout` there, as the release's demo did. The tier
-  durations in `docs/development.md` and `README.md` predate 019's measured 2,009 s and
-  1,894.1 s.
+  bound with `timeout` there, as the release's demo did.

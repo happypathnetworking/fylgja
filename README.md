@@ -846,10 +846,10 @@ the dev server and a worker running from the repository root (the script leaves 
 Docker, containerlab, Infrahub and both images, and for case 9 the two checks imported and
 the API's server from the same tree on the Docker bridge, as [A proposed change,
 rehearsed](#a-proposed-change-rehearsed) starts it; it refuses before any case without
-them. It takes about 32 to 33 minutes, among them case 5's five and a half minutes of
-watching a twin that must not move. Without the cEOS image it refuses before any case too;
-`PLATFORMS` narrows it to the packages you name, and on an SR Linux-only host it ends on a
-partial pass, exit 0:
+them. It takes about 31.5 minutes (1,894.1 s on 2026-10-28), among them case 5's five and
+a half minutes of watching a twin that must not move. Without the cEOS image it refuses
+before any case too; `PLATFORMS` narrows it to the packages you name, and on an SR
+Linux-only host it ends on a partial pass, exit 0:
 
 ```console
 $ PLATFORMS=nokia_srlinux make test-e2e

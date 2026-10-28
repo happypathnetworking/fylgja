@@ -319,9 +319,10 @@ flock -n 9 || { echo "converge-loop: another loop holds local/converge-loop.lock
 # a live session's detached tier 3) would hold the lock after the loop exits (seen
 # 2026-10-28: three loops refused in a row by a holder that had minutes to live).
 git() { command git "$@" 9>&-; }
-claude() { command claude "$@" 9>&-; }
 python3() { command python3 "$@" 9>&-; }
 make() { command make "$@" 9>&-; }
+# A claude session starts through env (run_claude), which bypasses a shell function, so
+# that call closes the descriptor itself.
 
 # A lane left from a stop (merge, error, contract) is the operator's to merge or discard
 # before another loop seeds the same path and branch.
@@ -408,7 +409,7 @@ run_claude() { # <stage> <out file> <prompt> [live]
 		env "${strip[@]}" \
 			claude -p "${session[@]}" --model "$model" --effort "$effort" \
 			--permission-mode auto --max-budget-usd "$budget" "$prompt" \
-			< /dev/null > "$out" 2>&1 || status=$?
+			< /dev/null > "$out" 2>&1 9>&- || status=$?
 		# From the working directory, a lane's worktree included: the hook then reads that
 		# tree's tasks.md for the task delta and writes the pending file this tree shares.
 		transcript=$(ls "$HOME"/.claude/projects/*/"$sid".jsonl 2>/dev/null | head -1 || true)

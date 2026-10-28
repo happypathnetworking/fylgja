@@ -128,7 +128,7 @@ func fileBundle(ctx context.Context, op string, subject *findings.Subject, store
 	case errors.As(err, &mismatch):
 		var list findings.List
 		list.AddStep(findings.Rejection, findings.StepVerify, findings.RuleBundleIDMismatch, mismatch.Path,
-			provision.StoreMismatchMessage(mismatch, id))
+			storeMismatchMessage(mismatch, id))
 		return finish(op, subject, list)
 	case err != nil:
 		return failAt(op, subject, findings.StepVerify, dir, "filing %s in the bundle store: %s", dir, namedAsGiven(err, src, dir))

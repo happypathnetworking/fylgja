@@ -411,6 +411,42 @@ func (r *TwinRecord) SideStage(s *StageRef) string {
 	return "stage " + s.Name()
 }
 
+// Position is where the twin is, as a step side's Name words a side, over the record's top
+// level: its stage, else its snapshot, else its bundle (019, research R-05). A record of
+// twin.json 5 or earlier that names M10's waypoint (Superseded) is named as SideStage names
+// it.
+func (r *TwinRecord) Position() string {
+	if r.Stage == nil && r.Superseded {
+		return r.SupersededWaypoint()
+	}
+	snapshot := ""
+	if r.SnapshotID != nil {
+		snapshot = *r.SnapshotID
+	}
+	return sideName(r.Stage, snapshot, r.BundleID)
+}
+
+// sideName is "stage <branch>/<label>" when stage is set, else "snapshot <short>" when
+// snapshotID is, else "bundle <short>": a side of a record of twin.json 8 that stepped,
+// which names neither.
+func sideName(stage *StageRef, snapshotID, bundleID string) string {
+	switch {
+	case stage != nil:
+		return "stage " + stage.Name()
+	case snapshotID != "":
+		return "snapshot " + shortID(snapshotID)
+	}
+	return "bundle " + shortID(bundleID)
+}
+
+// shortID is an id's first eight characters and an ellipsis, as every line names one.
+func shortID(id string) string {
+	if len(id) > 8 {
+		return id[:8] + "…"
+	}
+	return id
+}
+
 // SupersededWaypoint is what a record of twin.json 5 or earlier was created from or stepped
 // along, M10's pinned reference, which this build no longer reads: "a waypoint of a record
 // version this build no longer reads (twin.json 5)".
@@ -673,6 +709,13 @@ type StepSide struct {
 	BundleID   string    `json:"bundle_id"`
 	At         string    `json:"at"`
 	Branch     string    `json:"branch,omitempty"`
+}
+
+// Name is the side as a step's lines name it (019, research R-05): "stage <branch>/<label>"
+// when it names a stage, else "snapshot <first 8 of snapshot_id>…" when it names a
+// snapshot, else "bundle <first 8 of bundle_id>…".
+func (s StepSide) Name() string {
+	return sideName(s.Stage, s.SnapshotID, s.BundleID)
 }
 
 // RecordStepInput is everything a step's record holds that the lab host cannot read for

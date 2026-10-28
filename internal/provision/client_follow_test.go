@@ -100,8 +100,8 @@ func TestEveryActivityHasAFindingStep(t *testing.T) {
 	schemaSteps := []string{findings.StepVerify, findings.StepStart, findings.StepRead, findings.StepCompile,
 		findings.StepHostCheck, findings.StepStage, findings.StepDeploy, findings.StepReadiness, findings.StepRecord,
 		findings.StepTeardown, findings.StepUnstage,
-		// M4's additions to the step enum.
-		findings.StepInspect, findings.StepCompare, findings.StepDestroy, findings.StepProvision, findings.StepFollow,
+		// M4's additions to the step enum, but follow, which 019 retired.
+		findings.StepInspect, findings.StepCompare, findings.StepDestroy, findings.StepProvision,
 		// M5's.
 		findings.StepPush,
 		// M11's.

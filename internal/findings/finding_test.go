@@ -71,14 +71,8 @@ var dataModelRules = []string{
 	"record.failed",
 	"cleanup.incomplete",
 
-	// M4's rules.
-	"follow.interval.invalid",
-	"follow.flags.conflict",
-	"follow.start.failed",
-	"follow.stop.failed",
-	"check.skipped",
-	"rebuild.failed",
-	"follow.stopped",
+	// M4's rules: following's seven, which 019 retired (retiredWithFollowing), and this
+	// one.
 	"show.service.unreachable",
 
 	// M5's rules. Appended, as M2's and M4's were.
@@ -193,7 +187,8 @@ var dataModelRules = []string{
 	"psp.matches.duplicate",
 
 	// 018's rules (research R-03, R-07). Appended; the inner CTM's faults keep their
-	// identifiers, and --interval beside --snapshot is follow.flags.conflict.
+	// identifiers (018 also had --interval beside --snapshot refused as follow.flags.conflict,
+	// which 019 retired).
 	"snapshot.invalid",
 	"snapshot.version.unsupported",
 	"snapshot.id.mismatch",
@@ -242,6 +237,36 @@ func declaredRules(t *testing.T) map[string]string {
 		}
 	}
 	return out
+}
+
+// retiredWithFollowing are following's seven identifiers, removed with it at 019 (D-062;
+// research R-12), beside the step follow.
+var retiredWithFollowing = []string{
+	"follow.interval.invalid",
+	"follow.flags.conflict",
+	"follow.start.failed",
+	"follow.stop.failed",
+	"check.skipped",
+	"rebuild.failed",
+	"follow.stopped",
+}
+
+// None of following's seven is declared or in the rule table, and no step constant is
+// follow: a document of this build names none of them, and the contract's step enum has no
+// follow (TestStepConstantsMatchTheContractEnum).
+func TestTheFollowingRulesAreRetired(t *testing.T) {
+	declared := declaredRules(t)
+	for _, rule := range retiredWithFollowing {
+		if name, ok := declared[rule]; ok {
+			t.Errorf("%s = %q is declared; 019 retired it with following", name, rule)
+		}
+		if slices.Contains(dataModelRules, rule) {
+			t.Errorf("the rule table still names %q; 019 retired it with following", rule)
+		}
+	}
+	if name, ok := declaredSteps(t)["follow"]; ok {
+		t.Errorf("%s = \"follow\" is declared; 019 retired the step with following", name)
+	}
 }
 
 // retiredWithTheGenerics are the eight identifiers that existed only for the generics

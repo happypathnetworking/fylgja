@@ -92,17 +92,12 @@ const (
 	RuleRecordFailed      = "record.failed"      // record: twin.json could not be written
 	RuleCleanupIncomplete = "cleanup.incomplete" // teardown or unstage: something remains; names it and the command that clears it
 
-	// M4, following (contracts/cli.md). Each comment
-	// gives the step the finding belongs to and when it fires.
+	// M4 (contracts/cli.md). 019 retired following's seven, follow.interval.invalid,
+	// follow.flags.conflict, follow.start.failed, follow.stop.failed, check.skipped,
+	// rebuild.failed and follow.stopped, with the step follow (D-062); an earlier build's
+	// document that names one is held to the contract frozen under 018-snapshots/.
 
-	RuleFollowIntervalInvalid  = "follow.interval.invalid"  // start: --interval unparseable or below the floor, before any connection (exit 2)
-	RuleFollowFlagsConflict    = "follow.flags.conflict"    // start: --interval given with --at or --no-follow, or (018) with --snapshot, since a twin built from a snapshot never follows (exit 2)
-	RuleFollowStartFailed      = "follow.start.failed"      // follow: a warning; the run ended ready but schedule fylgja-follow could not be created
-	RuleFollowStopFailed       = "follow.stop.failed"       // follow: schedule fylgja-follow could not be deleted; a destroy or a run's stop step refuses to go on
-	RuleCheckSkipped           = "check.skipped"            // inspect: a warning; nothing to compare against, another branch, a twin that does not follow, or a run in flight
-	RuleRebuildFailed          = "rebuild.failed"           // destroy or provision: a rebuild's child did not end clean or ready; following stops
-	RuleFollowStopped          = "follow.stopped"           // follow: a warning; following stopped after a failed rebuild
-	RuleShowServiceUnreachable = "show.service.unreachable" // no step: a warning; twin show could not reach the workflow service (exit 0)
+	RuleShowServiceUnreachable = "show.service.unreachable" // no step: a warning; twin show or twin verify could not reach the workflow service, so whether a run is in flight is unknown (exit 0)
 
 	// M5, configuration (contracts/cli.md). Each
 	// comment gives the step the finding belongs to, the object it names, and when it fires.
@@ -257,8 +252,7 @@ const (
 	// specs/018-snapshots/contracts/snapshot-commands.md, "Identifiers"). Each comment
 	// gives the severity, the exit, the step, the object and when it fires. A snapshot's
 	// inner CTM keeps its own rules, ctm.version.unsupported at the snapshot file and
-	// data.required.missing at the field prefixed ctm.; --interval beside --snapshot is
-	// follow.flags.conflict.
+	// data.required.missing at the field prefixed ctm.
 	// No status, step or exit is new.
 	RuleSnapshotInvalid            = "snapshot.invalid"             // rejection, exit 1, no step (twin compile) or resolve (twin create --snapshot <file>): the field, or the file; the outer shape is not version 1's: an unknown key, ctm absent or not an object, probes absent, null or not empty, snapshot_id not 64 lowercase hex characters, observed_at not of the CTM's form or not the inner CTM's; or the inner CTM's observed_at not of that form, at ctm.envelope.observed_at
 	RuleSnapshotVersionUnsupported = "snapshot.version.unsupported" // rejection, exit 1, no step or resolve: the file; snapshot_version is not "1", or absent, naming the version read, or that none was, and "1"
@@ -282,12 +276,13 @@ const (
 	StepTeardown  = "teardown"
 	StepUnstage   = "unstage"
 
-	// M4: a check's own steps, and the step following begins or stops at.
+	// M4: an earlier build's check's own steps. Inspect is a step run's too (M11), and
+	// destroy and provision a rehearsal's children's (015). 019 retired M4's follow, the
+	// step following began or stopped at.
 	StepInspect   = "inspect"
 	StepCompare   = "compare"
 	StepDestroy   = "destroy"
 	StepProvision = "provision"
-	StepFollow    = "follow"
 
 	// M5: the push, between readiness and the record.
 	StepPush = "push"

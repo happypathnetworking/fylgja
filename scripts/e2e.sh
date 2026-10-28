@@ -841,7 +841,8 @@ echo "e2e: the API's server listens on $API_ADDRESS, after $(since "$start")s"
 grep -qx 'fylgja serve: default scope: tag:fylgja' "$OUT/server.log" ||
   fail "the API's server reads under no default scope tag:fylgja (see $OUT/server.log): add FYLGJA_DEFAULT_SCOPE=\"tag:fylgja\" to local/.env"
 
-# The dry run touches nothing but the bundle store. Refused means the host
+# The dry run touches nothing but the snapshot store and the bundle store, filing the
+# snapshot it takes and the bundle it compiles. Refused means the host
 # already holds a twin this script did not make: say so rather than destroy it.
 dry_status=0
 fylgja twin create --branch "$BRANCH" --dry-run --json > "$OUT/dry.json" 2> "$OUT/dry.err" || dry_status=$?

@@ -1049,7 +1049,7 @@ there. Infrahub's task workers run this repository's two checks on every propose
 and each reaches the server as a client does, over the host's Docker bridge with the API's
 token ([§4.6](#46-operator-surface)).
 
-![Fylgja's containers: the client, the server, the worker, the workflow service, the bundle store, the twin directory and containerlab, with Infrahub and the twin's nodes](c4/structurizr-Containers.svg)
+![Fylgja's containers: the client, the server, the worker, the workflow service, the bundle store, the snapshot store, the twin directory and containerlab, with Infrahub and the twin's nodes](c4/structurizr-Containers.svg)
 
 *Fylgja's containers, derived from [`c4/workspace.dsl`](c4/workspace.dsl) by `make diagrams`.*
 

@@ -696,10 +696,12 @@ Following the branch is the default. The other twins never rebuild:
   `--stage`, `--at`, `--scope` and `--interval` are refused beside it.
 - `twin provision <bundle-dir>` boots a bundle you already have, with no read at all.
 
-`--dry-run` on `create` and `provision` reads, takes and files the snapshot, compiles and
-files the bundle and checks the host, then stops before starting a run. The same intent
-read twice has one snapshot id while the branch's history stands: a rebase moves it
-([D-061](docs/decisions.md#d-061)).
+`--dry-run` stops before starting a run. On `create` it reads, takes and files the
+snapshot, compiles and files the bundle and checks the host; with `--snapshot` it reads
+and takes nothing, files the snapshot a file carries, and compiles, files and checks as
+before. On `provision` it reads, takes and compiles nothing: it verifies the bundle, files
+it and checks the host. The same intent read twice has one snapshot id while the branch's
+history stands: a rebase moves it ([D-061](docs/decisions.md#d-061)).
 
 ## Two vendors, one twin
 
@@ -766,8 +768,8 @@ host's stores.
 
 `fylgja` only ever reads from Infrahub (the fixture tool is the one thing that writes). Every refusal is reported in one pass, each as a
 finding with a stable rule name (`device.name.duplicate`, `host.image.absent`, …), and
-a refused read or compile writes nothing. Every command takes `--json` for one
-machine-readable findings document. Exit statuses:
+a refused read writes nothing; a refused compile leaves only the snapshot it took. Every
+command takes `--json` for one machine-readable findings document. Exit statuses:
 
 | Code | Meaning |
 |---|---|

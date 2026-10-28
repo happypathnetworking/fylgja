@@ -3610,3 +3610,187 @@ func TestStepToASnapshotEdges(t *testing.T) {
 		}
 	})
 }
+
+// The dry run of a step to a snapshot (US2 scenario 8; contracts/commands.md, "The text"),
+// line for line: the twin line, a stage twin's as before and a stage-less twin's naming its
+// snapshot and what it is of, its branch at its at or read at its read; the target line in
+// place of a stage's resolution, pinned or read; the step between the two sides' names,
+// containerlab's plan, the push plan and the wait; then the host and the verdict. It files
+// the snapshot sent and the bundle, starts no run and dials no service, and changes nothing of
+// the twin; Infrahub is asked nothing.
+func TestStepToASnapshotDryRun(t *testing.T) {
+	for _, c := range []struct {
+		name   string
+		change func(*lab.RecordFields)
+		// twin is the twin line, from h.
+		twin func(h *stepHostFixture) string
+		// unpinned makes the target a snapshot read with no at.
+		unpinned bool
+	}{
+		{"from a stage twin", nil, func(h *stepHostFixture) string {
+			return "twin: stage change-1/sealed (snapshot " + short(h.fromSnapshot) + ", bundle " + short(h.fromID) + "), pinned at " +
+				stepMixedAt + "; 3 nodes"
+		}, false},
+		{"from a branch twin pinned", func(f *lab.RecordFields) { f.Stage = nil }, func(h *stepHostFixture) string {
+			return "twin: snapshot " + short(h.fromSnapshot) + " (bundle " + short(h.fromID) + "), branch change-1 at " + stepMixedAt +
+				"; 3 nodes"
+		}, false},
+		{"from a branch twin read", func(f *lab.RecordFields) { f.Stage, f.Provenance.At = nil, "" }, func(h *stepHostFixture) string {
+			return "twin: snapshot " + short(h.fromSnapshot) + " (bundle " + short(h.fromID) + "), branch change-1, read at " +
+				"2026-09-21T09:00:00.000000Z; 3 nodes"
+		}, false},
+		{"to a snapshot read with no at", nil, func(h *stepHostFixture) string {
+			return "twin: stage change-1/sealed (snapshot " + short(h.fromSnapshot) + ", bundle " + short(h.fromID) + "), pinned at " +
+				stepMixedAt + "; 3 nodes"
+		}, true},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := stepHost(t, "plan-link-added.json", c.change)
+			target, _ := targetSnapshot(t, h, "linked")
+			if target.CTM.Envelope.At != stepWrittenAt {
+				t.Fatalf("linked's snapshot is pinned at %s, want %s", target.CTM.Envelope.At, stepWrittenAt)
+			}
+			file := targetFile(t, h, target.ID, func(d map[string]any) {
+				if c.unpinned {
+					delete(d, "snapshot_id")
+					envelopeOf(d)["at"] = ""
+				}
+			})
+			record := sha256Of(t, h.paths.TwinJSON)
+			twinDir := stateRootListing(t, h.paths.Twin)
+
+			out := runStepCmd(t, "--dry-run", "--allow-restart", "--snapshot", file)
+			if out.code != findings.ExitOK || out.doc.DryRun == nil || out.doc.Step == nil || out.doc.Step.StepRunBlock != nil {
+				t.Fatalf("exit %d, dry_run %+v, step %+v, findings %+v; want 0 with a dry run and no run", out.code, out.doc.DryRun,
+					out.doc.Step, out.doc.Findings)
+			}
+			toSnapshot, toID := out.doc.SnapshotID, out.doc.BundleID
+			of := "branch change-1 at " + stepWrittenAt
+			if c.unpinned {
+				of = "branch change-1, read at " + target.ObservedAt
+			}
+			from := "change-1/sealed"
+			if c.change != nil {
+				from = "snapshot " + short(h.fromSnapshot)
+			}
+			want := stepDryRunLines(h, toID)
+			want[1] = c.twin(h)
+			want[2] = "target: snapshot " + short(toSnapshot) + " (" + of + ")"
+			want[3] = "step " + from + " → snapshot " + short(toSnapshot) + " (" + short(h.fromID) + " → " + short(toID) + "):"
+			want = append(want, "memory: sum 5120 MiB; host budget unset", "host: lab fylgja present; twin directory present",
+				"verdict: "+findings.VerdictClear)
+			if got := strings.Join(want, "\n") + "\n"; out.stdout != got {
+				t.Errorf("stdout:\n%s\nwant:\n%s", out.stdout, got)
+			}
+			noContent(t, "the dry run", out.stdout, out.stderr)
+			if !c.unpinned && toSnapshot != target.ID {
+				t.Errorf("the document names snapshot %s, want %s", toSnapshot, target.ID)
+			}
+			if got := filedSnapshots(t, h.paths); !slices.Contains(got, toSnapshot+".json") {
+				t.Errorf("snapshots/ holds %v; want the file filed", got)
+			}
+			if got := storedBundles(t, h.paths.Bundles); !slices.Contains(got, toID) {
+				t.Errorf("bundles/ holds %v; want the target's filed", got)
+			}
+			if len(h.svc.stepped) != 0 || len(h.infra.requests()) != h.before {
+				t.Errorf("%d runs started and Infrahub asked %+v; want neither", len(h.svc.stepped), h.infra.requests()[h.before:])
+			}
+			if sha256Of(t, h.paths.TwinJSON) != record || !slices.Equal(stateRootListing(t, h.paths.Twin), twinDir) {
+				t.Errorf("the twin directory changed under a dry run")
+			}
+		})
+	}
+}
+
+// A step to a snapshot closes as a step to a stage closes, the target named snapshot <short>
+// (contracts/commands.md, "The text"): stepped, unchanged, and diverged naming where the
+// twin is still up, its stage from a stage twin and its snapshot from a stage-less one. While
+// such a step runs, twin show names it stepping towards snapshot <short>, as the service reads
+// the run's input.
+func TestStepToASnapshotCloses(t *testing.T) {
+	diverged := provision.StepResult{Outcome: provision.StepDiverged, Phase: findings.StepPush, Step: findings.StepPush,
+		PushPlan: []wire.StepPush{
+			{Node: "e1", Reasons: []string{"artifact", "restarted"}, Outcome: wire.PushRefused, Rule: findings.RulePushRefused},
+			{Node: "s1", Reasons: []string{"artifact", "bootstrap"}, Outcome: wire.PushLanded}},
+		Timings: wire.StepTimings{WholeS: 71.2}, Record: &wire.TwinRecord{State: wire.StateDiverged},
+		Findings: findings.List{{Severity: findings.Rejection, Rule: findings.RulePushRefused, Object: "e1", Step: findings.StepPush,
+			Message: "node e1 refused artifact device-config (checksum fb3cbaf9…) at line 7: Invalid input"}}}
+	for _, c := range []struct {
+		name    string
+		change  func(*lab.RecordFields)
+		plan    string
+		own     bool // the target is the twin's own snapshot
+		res     *provision.StepResult
+		code    int
+		closing func(h *stepHostFixture, toSnapshot, toID string) string
+	}{
+		{name: "stepped", plan: "plan-link-added.json", code: findings.ExitOK,
+			closing: func(_ *stepHostFixture, toSnapshot, toID string) string {
+				return "stepped to snapshot " + short(toSnapshot) + " (bundle " + short(toID) + ") in 71.2s: reconcile 3.9s; " +
+					"readiness e1 54.8s; push e1 1.6s, s1 2.4s"
+			}},
+		{name: "unchanged", plan: "plan-nothing.json", own: true, res: &provision.StepResult{Outcome: provision.StepUnchanged,
+			PushPlan: []wire.StepPush{}, Timings: wire.StepTimings{WholeS: 1.8}, Record: &wire.TwinRecord{State: wire.StateReady}},
+			code: findings.ExitOK, closing: func(_ *stepHostFixture, toSnapshot, toID string) string {
+				return "unchanged; the record moves to snapshot " + short(toSnapshot) + " (bundle " + short(toID) + ") in 1.8s"
+			}},
+		{name: "diverged from a stage twin", plan: "plan-link-added.json", res: &diverged, code: findings.ExitUnclean,
+			closing: func(h *stepHostFixture, toSnapshot, toID string) string {
+				return "diverged towards snapshot " + short(toSnapshot) + " (bundle " + short(toID) + ") at phase push: landed s1; " +
+					"not landed e1 (push.refused); the twin is up at stage change-1/sealed (bundle " + short(h.fromID) + "); " +
+					"fylgja twin destroy clears it"
+			}},
+		{name: "diverged from a snapshot twin", change: func(f *lab.RecordFields) { f.Stage, f.Source = nil, wire.SourceSnapshot },
+			plan: "plan-link-added.json", res: &diverged, code: findings.ExitUnclean,
+			closing: func(h *stepHostFixture, toSnapshot, toID string) string {
+				return "diverged towards snapshot " + short(toSnapshot) + " (bundle " + short(toID) + ") at phase push: landed s1; " +
+					"not landed e1 (push.refused); the twin is up at snapshot " + short(h.fromSnapshot) + " (bundle " +
+					short(h.fromID) + "); fylgja twin destroy clears it"
+			}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := stepHost(t, c.plan, c.change)
+			arg := h.fromSnapshot
+			if !c.own {
+				target, _ := targetSnapshot(t, h, "linked")
+				arg = target.ID
+			}
+			svc := stepToSnapshotRun(t)
+			if c.res != nil {
+				res := *c.res
+				res.StartedAt, res.EndedAt = "2026-10-02T09:14:30Z", "2026-10-02T09:15:41Z"
+				if res.Findings == nil {
+					res.Findings = findings.List{}
+				}
+				svc.stepResult = res
+			}
+			if c.own {
+				svc.events = unchangedStepEvents()
+			}
+			out := runStepCmd(t, "--snapshot", arg, "--allow-restart")
+			if out.code != c.code || len(svc.stepped) != 2 {
+				t.Fatalf("exit %d, %d runs; want %d and one per run of the command: %+v", out.code, len(svc.stepped), c.code,
+					out.doc.Findings)
+			}
+			if want := c.closing(h, out.doc.SnapshotID, out.doc.BundleID); !strings.HasSuffix(out.stdout, "\n"+want+"\n") {
+				t.Errorf("stdout:\n%s\nwant it to end:\n%s", out.stdout, want)
+			}
+			if len(h.infra.requests()) != h.before {
+				t.Errorf("Infrahub was asked %+v", h.infra.requests()[h.before:])
+			}
+			if c.name != "stepped" {
+				return
+			}
+
+			// The run in flight, as the service names its target from the input the command
+			// started it with.
+			towards := svc.stepped[0].To.Name()
+			show := showWith(t, h.paths, "inspect-three.json", &fakeService{inFlight: []provision.RunInFlight{
+				{WorkflowID: provision.WorkflowStep, RunID: stepRunID, Step: findings.StepPush, Towards: towards}}})
+			want := "run fylgja-step " + stepRunID + " is at step push, stepping towards snapshot " + short(out.doc.SnapshotID)
+			if !strings.Contains(show.stdout, "; "+want+"\n") || !slices.Contains(show.doc.Show.Notes, want) {
+				t.Errorf("twin show:\n%s\nnotes %q; want the kind line and a note saying %q", show.stdout, show.doc.Show.Notes, want)
+			}
+		})
+	}
+}

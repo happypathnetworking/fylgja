@@ -706,7 +706,7 @@ func TestStepRejectedAtEachLock(t *testing.T) {
 		{"no twin", func(h *stepHarness, _ *StepInput) {
 			h.host = wire.HostReport{}
 		}, findings.StepInspect, findings.RuleStepTwinUnsteppable,
-			"no twin: no lab fylgja and no twin directory; only a twin built from a stage steps (fylgja twin create --stage)"},
+			"no twin: no lab fylgja and no twin directory; a twin built from a snapshot steps (fylgja twin create --branch, --stage or --snapshot)"},
 		{"the target does not fit the host", func(h *stepHarness, _ *StepInput) {
 			h.plan.Findings = findings.List{
 				{Severity: findings.Rejection, Rule: findings.RuleHostLabPresent, Object: "lab fylgja", Step: findings.StepHostCheck, Message: "lab"},
@@ -1791,7 +1791,9 @@ func TestPlanRulesUnappliedIsStepUnapplied(t *testing.T) {
 	}
 }
 
-// Every shape of an ineligible host, worded once for the CLI and the run.
+// Every shape of an ineligible host, worded once for the CLI and the run. A twin that names
+// no stage is not one (019, research R-03): a branch twin, pinned or not, a snapshot twin and
+// a bundle twin pass, since whether a record names a snapshot is the server's to judge.
 func TestIneligibleWording(t *testing.T) {
 	branch := func(at, source string) wire.HostReport {
 		h := stepTwinHost()
@@ -1812,18 +1814,13 @@ func TestIneligibleWording(t *testing.T) {
 		host         wire.HostReport
 		object, want string
 	}{
-		{"an orphan", orphan, "lab fylgja", orphan.Phrase + "; only a twin built from a stage steps; fylgja twin destroy clears it"},
-		{"a record whose lab is gone", gone, "/state/twin", gone.Phrase + "; only a twin built from a stage steps; fylgja twin destroy clears it"},
-		{"a leftover twin directory", leftover, "/state/twin", leftover.Phrase + "; only a twin built from a stage steps; fylgja twin destroy clears it"},
-		{"a branch twin", branch("", wire.SourceIntent), stepFrom, "the twin was created from branch change-1, not from a stage, " +
-			"so it names no proposed change to step along; only a twin built from a stage steps (fylgja twin create --stage)"},
-		{"a pinned twin", branch(stepFromAt, wire.SourceIntent), stepFrom, "the twin was created from branch change-1 at " + stepFromAt +
-			", not from a stage, so it names no proposed change to step along; only a twin built from a stage steps " +
-			"(fylgja twin create --stage)"},
-		{"a bundle twin", branch("", wire.SourceBundle), stepFrom, "the twin was created from a bundle, not from a stage, " +
-			"so it names no proposed change to step along; only a twin built from a stage steps (fylgja twin create --stage)"},
+		{"no twin", wire.HostReport{}, "lab fylgja", "no twin: no lab fylgja and no twin directory; a twin built from a snapshot " +
+			"steps (fylgja twin create --branch, --stage or --snapshot)"},
+		{"an orphan", orphan, "lab fylgja", orphan.Phrase + "; a twin built from a snapshot steps; fylgja twin destroy clears it"},
+		{"a record whose lab is gone", gone, "/state/twin", gone.Phrase + "; a twin built from a snapshot steps; fylgja twin destroy clears it"},
+		{"a leftover twin directory", leftover, "/state/twin", leftover.Phrase + "; a twin built from a snapshot steps; fylgja twin destroy clears it"},
 		{"a superseded twin", superseded, stepFrom, "the twin was created from a waypoint of a record version this build no " +
-			"longer reads (twin.json 5); only a twin built from a stage steps; fylgja twin destroy clears it"},
+			"longer reads (twin.json 5); a twin built from a snapshot steps; fylgja twin destroy clears it"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			f := Ineligible(c.host, findings.StepResolve, "/state/twin")
@@ -1838,13 +1835,25 @@ func TestIneligibleWording(t *testing.T) {
 	if f := Ineligible(stepTwinHost(), findings.StepResolve, ""); f != nil {
 		t.Errorf("a ready stage twin refused: %+v", *f)
 	}
+	for name, host := range map[string]wire.HostReport{
+		"a branch twin":   branch("", wire.SourceIntent),
+		"a pinned twin":   branch(stepFromAt, wire.SourceIntent),
+		"a snapshot twin": branch(stepFromAt, wire.SourceSnapshot),
+		"a bundle twin":   branch("", wire.SourceBundle),
+	} {
+		for _, at := range []string{findings.StepResolve, findings.StepInspect} {
+			if f := Ineligible(host, at, ""); f != nil {
+				t.Errorf("%s at %s refused: %+v; a twin naming no stage is the server's to judge", name, at, *f)
+			}
+		}
+	}
 	// The run's second lock at inspect knows no state root, so a host with no lab names the
 	// twin directory by what it is rather than by its path (contracts/cli.md, the run's
 	// second locks).
 	for _, host := range []wire.HostReport{gone, leftover} {
 		f := Ineligible(host, findings.StepInspect, "")
 		if f == nil || f.Rule != findings.RuleStepTwinUnsteppable || f.Step != findings.StepInspect || f.Object != "twin directory" ||
-			f.Message != host.Phrase+"; only a twin built from a stage steps; fylgja twin destroy clears it" {
+			f.Message != host.Phrase+"; a twin built from a snapshot steps; fylgja twin destroy clears it" {
 			t.Errorf("the run's refusal of %q: %+v; want %s at inspect on the twin directory", host.Phrase, f, findings.RuleStepTwinUnsteppable)
 		}
 	}

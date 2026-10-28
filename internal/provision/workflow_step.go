@@ -17,7 +17,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/step"
 )
 
-// Step is the step run, fylgja-step: it takes the running stage twin to the target the
+// Step is the step run, fylgja-step: it takes the running twin to the target the
 // server resolved, read, compiled and planned, without a rebuild. Its eight steps, every
 // activity by its wire.Act* name:
 //
@@ -656,11 +656,13 @@ func sortedSet[V any](m map[string]V) []string {
 
 // Ineligible is the refusal of a host whose twin cannot step, at step at, or
 // nil when its twin can: no twin; an orphan, an unreadable record or a record whose lab is
-// gone, in M3's phrase; a twin built from a branch or a bundle, which names no proposed
-// change to step along, or recorded by an earlier version, whose reference this build no
-// longer reads; or a diverged twin, which accepts only twin destroy. twinDir
-// is the twin directory's path when the caller knows it, the object of a directory found
-// without its lab; the run names it "twin directory".
+// gone, in M3's phrase; a diverged twin, which accepts only twin destroy; or a record of
+// twin.json 5 or earlier naming M10's waypoint, whose reference this build no longer reads.
+// A twin that names no stage is not refused here (019, research R-03): whether its record
+// names a snapshot, as a twin that steps must, is the server's to judge, since this is also
+// the run's second lock, which reads the records of its recorded histories, and those name
+// none. twinDir is the twin directory's path when the caller knows it, the object of a
+// directory found without its lab; the run names it "twin directory".
 func Ineligible(host wire.HostReport, at, twinDir string) *findings.Finding {
 	refuse := func(rule, object, message string) *findings.Finding {
 		return &findings.Finding{Severity: findings.Rejection, Rule: rule, Object: object, Step: at, Message: message}
@@ -669,7 +671,8 @@ func Ineligible(host wire.HostReport, at, twinDir string) *findings.Finding {
 	switch {
 	case !host.LabPresent && !host.TwinDirPresent:
 		return refuse(findings.RuleStepTwinUnsteppable, lab,
-			"no twin: no "+lab+" and no twin directory; only a twin built from a stage steps (fylgja twin create --stage)")
+			"no twin: no "+lab+" and no twin directory; a twin built from a snapshot steps "+
+				"(fylgja twin create --branch, --stage or --snapshot)")
 	case host.Twin == nil || !host.LabPresent:
 		object := lab
 		if !host.LabPresent {
@@ -679,16 +682,12 @@ func Ineligible(host wire.HostReport, at, twinDir string) *findings.Finding {
 			}
 		}
 		return refuse(findings.RuleStepTwinUnsteppable, object,
-			host.Phrase+"; only a twin built from a stage steps; fylgja twin destroy clears it")
+			host.Phrase+"; a twin built from a snapshot steps; fylgja twin destroy clears it")
 	case host.Twin.State == wire.StateDiverged:
 		return refuse(findings.RuleStepTwinDiverged, host.Twin.BundleID, divergedTwin(host.Twin))
 	case host.Twin.Stage == nil && host.Twin.Superseded:
 		return refuse(findings.RuleStepTwinUnsteppable, host.Twin.BundleID, "the twin was created from "+
-			host.Twin.SupersededWaypoint()+"; only a twin built from a stage steps; fylgja twin destroy clears it")
-	case host.Twin.Stage == nil:
-		return refuse(findings.RuleStepTwinUnsteppable, host.Twin.BundleID, "the twin was created "+origin(host.Twin)+
-			", not from a stage, so it names no proposed change to step along; only a twin built from a stage steps "+
-			"(fylgja twin create --stage)")
+			host.Twin.SupersededWaypoint()+"; a twin built from a snapshot steps; fylgja twin destroy clears it")
 	}
 	return nil
 }
@@ -708,17 +707,6 @@ func withoutPresence(list findings.List) findings.List {
 		}
 	}
 	return out
-}
-
-// origin says what a twin that names no stage was created from.
-func origin(rec *wire.TwinRecord) string {
-	switch {
-	case rec.Source == wire.SourceBundle:
-		return "from a bundle"
-	case rec.Provenance.At != "":
-		return "from branch " + rec.Provenance.Branch + " at " + rec.Provenance.At
-	}
-	return "from branch " + rec.Provenance.Branch
 }
 
 // divergedTwin is step.twin.diverged's message: the step that left the twin diverged,

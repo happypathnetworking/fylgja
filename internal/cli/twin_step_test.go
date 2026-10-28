@@ -1074,7 +1074,7 @@ func TestStepDryRunReconcileLifecycles(t *testing.T) {
 			if c.fromLess {
 				fromID := buildStage(t, h.paths, "less")
 				writeTwin(t, h.paths, stepRecordOf(t, fromID, func(f *lab.RecordFields) {
-					f.Provenance.At = stepLessAt
+					f.Provenance.At, f.SnapshotID = stepLessAt, snapshotOf(t, fromID)
 					f.Stage = stepStage("less", "e2 retired", "given")
 					f.Nodes = slices.DeleteFunc(f.Nodes, func(n wire.TwinNode) bool { return n.Name == "e2" })
 				}))
@@ -1098,12 +1098,16 @@ func TestStepDryRunReconcileLifecycles(t *testing.T) {
 // for the target alone (FR-018, SC-005).
 func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 	const orphanAt = "/tmp/scratchpad/twin3/bundle/topology.clab.yml"
-	// noStage ends step.twin.unsteppable's message for a twin that names no stage.
+	// noStage ends step.twin.unsteppable's message for a twin that names a snapshot and no
+	// stage, which this build does not step yet (stepStageless, until T031 and T034).
 	const noStage = ", not from a stage, so it names no proposed change to step along; only a twin built from a stage steps " +
 		"(fylgja twin create --stage)"
 	refusal := func(rule, step, object, message string) findings.Finding {
 		return findings.Finding{Severity: findings.Rejection, Rule: rule, Step: step, Object: object, Message: message}
 	}
+	// unsourced ends step.twin.unsteppable's message for a twin whose record names no
+	// snapshot (019, research R-03).
+	const unsourced = "; only a twin whose record names a snapshot steps; fylgja twin destroy clears it"
 	// misscoped is step.twin.unsteppable's message for an 8 whose scope is not tag:<name>.
 	misscoped := func(scope string) string {
 		return `the twin's record names scope "` + scope + `", which is not tag:<name>, and every read a step makes is ` +
@@ -1150,7 +1154,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			infra.start()
 			return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-empty.json", "")}
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "lab fylgja",
-			"no twin: no lab fylgja and no twin directory; only a twin built from a stage steps (fylgja twin create --stage)")},
+			"no twin: no lab fylgja and no twin directory; a twin built from a snapshot steps (fylgja twin create --branch, --stage or --snapshot)")},
 		{name: "an orphan", host: func(t *testing.T) *stepHostFixture {
 			paths := useStateRoot(t)
 			useNoRunsInFlight(t)
@@ -1158,7 +1162,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			infra.start()
 			return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-three.json", "")}
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "lab fylgja",
-			"an orphan: no twin.json records it; deployed from "+orphanAt+"; only a twin built from a stage steps; fylgja twin destroy clears it")},
+			"an orphan: no twin.json records it; deployed from "+orphanAt+"; a twin built from a snapshot steps; fylgja twin destroy clears it")},
 		{name: "a record that cannot be read", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
 			if err := os.WriteFile(h.paths.TwinJSON, []byte("{"), 0o644); err != nil {
@@ -1169,7 +1173,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			fill: func(h *stepHostFixture, f *findings.Finding) {
 				_, err := lab.ReadRecord(h.paths.TwinJSON)
 				f.Message = "treated as an orphan: twin.json could not be read (" + err.Error() + "); deployed from " + orphanAt +
-					"; only a twin built from a stage steps; fylgja twin destroy clears it"
+					"; a twin built from a snapshot steps; fylgja twin destroy clears it"
 			}},
 		{name: "a record whose lab is absent", host: func(t *testing.T) *stepHostFixture {
 			h := stepHost(t, "plan-link-added.json", nil)
@@ -1180,7 +1184,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 				f.Object = h.paths.Twin
 				f.Message = "the twin of branch change-1 at " + stepMixedAt + ", bundle_id " + h.fromID +
 					", provisioned by run fylgja-provision " + createRunID + ", 3 nodes recorded, but lab fylgja is absent; " +
-					"only a twin built from a stage steps; fylgja twin destroy clears it"
+					"a twin built from a snapshot steps; fylgja twin destroy clears it"
 			}},
 		{name: "a leftover twin directory", host: func(t *testing.T) *stepHostFixture {
 			paths := useStateRoot(t)
@@ -1192,7 +1196,7 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 			}
 			return &stepHostFixture{paths: paths, infra: infra, clab: useStepClab(t, "inspect-empty.json", "")}
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
-			"a leftover twin directory: no twin.json and no lab fylgja; only a twin built from a stage steps; fylgja twin destroy clears it"),
+			"a leftover twin directory: no twin.json and no lab fylgja; a twin built from a snapshot steps; fylgja twin destroy clears it"),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.paths.Twin }},
 		{name: "a twin of a branch", host: func(t *testing.T) *stepHostFixture {
 			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Stage, f.Provenance.At = nil, "" })
@@ -1204,12 +1208,68 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
 			"the twin was created from branch change-1 at "+stepMixedAt+noStage),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		// A twin whose record names no snapshot (019, research R-03): a bundle twin, a record of
+		// 8, and a 9 or a 10 naming none, an earlier build's rebuild, each refused naming why,
+		// after the record's version and scope are judged and before Infrahub is asked.
 		{name: "a twin of a bundle", host: func(t *testing.T) *stepHostFixture {
 			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) {
 				f.Stage, f.Source, f.ObservedAt, f.Provenance.At, f.SnapshotID = nil, wire.SourceBundle, nil, "", ""
 			})
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
-			"the twin was created from a bundle"+noStage),
+			"the twin was provisioned from a bundle, which names no snapshot"+unsourced),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		{name: "a twin of a bundle of twin.json 8", host: func(t *testing.T) *stepHostFixture {
+			return editedRecordHost(t, func(m map[string]any) {
+				m["twin_version"], m["source"], m["stage"], m["observed_at"] = "8", wire.SourceBundle, nil, nil
+				m["observed_at_note"] = lab.ObservedAtUnknown
+				unsnapshotted(m)
+			})
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
+			"the twin was provisioned from a bundle, which names no snapshot"+unsourced),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		// The stage twin of a record of 8 that stepped under 018 now refuses (the clarification).
+		{name: "a stage twin of twin.json 8", host: func(t *testing.T) *stepHostFixture {
+			return editedRecordHost(t, func(m map[string]any) {
+				m["twin_version"] = "8"
+				unsnapshotted(m)
+			})
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
+			"the twin was created from a record version that names no snapshot (twin.json 8)"+unsourced),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		{name: "a stage twin of twin.json 9 naming no snapshot", host: func(t *testing.T) *stepHostFixture {
+			return editedRecordHost(t, func(m map[string]any) { m["twin_version"], m["snapshot_id"] = "9", nil })
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
+			"the twin's record names no snapshot (an earlier build's rebuild made it)"+unsourced),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		{name: "a stage twin of twin.json 10 naming no snapshot", host: func(t *testing.T) *stepHostFixture {
+			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.SnapshotID = "" })
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
+			"the twin's record names no snapshot (an earlier build's rebuild made it)"+unsourced),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		{name: "a branch twin naming no snapshot", host: func(t *testing.T) *stepHostFixture {
+			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Stage, f.SnapshotID = nil, "" })
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
+			"the twin's record names no snapshot (an earlier build's rebuild made it)"+unsourced),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		// The order (R-03): the record's version and scope are judged before its snapshot, so a
+		// bundle twin of 7 is refused naming its version, and a 10 naming no snapshot and a
+		// scope that is not tag:<name> naming its scope.
+		{name: "a twin of a bundle of twin.json 7", host: func(t *testing.T) *stepHostFixture {
+			return editedRecordHost(t, func(m map[string]any) {
+				m["twin_version"], m["source"], m["stage"], m["observed_at"] = "7", wire.SourceBundle, nil, nil
+				m["observed_at_note"] = lab.ObservedAtUnknown
+				unsnapshotted(m)
+				contractProvenance(m)
+			})
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
+			"the twin was created from a record version this build no longer reads (twin.json 7); fylgja twin destroy clears it"),
+			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
+		{name: "a twin of twin.json 10 naming no snapshot and scope fylgja", host: func(t *testing.T) *stepHostFixture {
+			return editedRecordHost(t, func(m map[string]any) {
+				m["snapshot_id"] = nil
+				m["provenance"].(map[string]any)["scope"] = "fylgja"
+			})
+		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "", misscoped("fylgja")),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		// A record of twin.json 5 or earlier reads with no stage (R-11): one naming M10's
 		// waypoint is the superseded reference, one naming none the branch it was read from.
@@ -1218,12 +1278,12 @@ func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 				"description": "the mixed fixture as sealed", "at_source": "given"}, false)
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
 			"the twin was created from a waypoint of a record version this build no longer reads (twin.json 5); "+
-				"only a twin built from a stage steps; fylgja twin destroy clears it"),
+				"a twin built from a snapshot steps; fylgja twin destroy clears it"),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		{name: "a record of twin.json 5 naming no waypoint", host: func(t *testing.T) *stepHostFixture {
 			return supersededHost(t, nil, false)
 		}, code: findings.ExitRejected, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "",
-			"the twin was created from branch change-1 at "+stepMixedAt+noStage),
+			"the twin was created from a record version this build no longer reads (twin.json 5); fylgja twin destroy clears it"),
 			fill: func(h *stepHostFixture, f *findings.Finding) { f.Object = h.fromID }},
 		// A diverged one is refused as diverged, towards the waypoint it was.
 		{name: "a diverged record of twin.json 5", host: func(t *testing.T) *stepHostFixture {
@@ -2886,8 +2946,8 @@ func TestStepToAStaleStageIsRefused(t *testing.T) {
 // its from side and the one the target's build took on its to side, which the document names
 // beside the target's bundle; the record NewStepRecord builds from that input names the
 // target's at its top level once the step moves the twin, and both in its step, while a
-// diverged step keeps the record's own. From a record of 8, which names none, the twin line
-// says none and the from side carries no snapshot_id, and the document validates.
+// diverged step keeps the record's own. A record of 8, which names none and which 018 let
+// step, is refused before Infrahub is asked, the dry run's included (019, research R-03).
 func TestStepNamesEachSidesSnapshot(t *testing.T) {
 	t.Run("from a 9 record", func(t *testing.T) {
 		h := stepHost(t, "plan-nothing.json", nil)
@@ -2942,27 +3002,20 @@ func TestStepNamesEachSidesSnapshot(t *testing.T) {
 		}
 	})
 
-	t.Run("from an 8 record", func(t *testing.T) {
+	t.Run("from an 8 record, refused", func(t *testing.T) {
 		h := editedRecordHost(t, func(m map[string]any) {
 			m["twin_version"] = "8"
 			unsnapshotted(m)
 		})
 		out := runStepCmd(t, "--dry-run", "--allow-restart")
-		if want := "twin: stage change-1/sealed (snapshot none, bundle " + short(h.fromID) + "), pinned at " + stepMixedAt +
-			"; 3 nodes"; out.code != findings.ExitOK || lineOf(out.stdout, 2) != want {
-			t.Errorf("exit %d, the twin line %q; want 0 and %q", out.code, lineOf(out.stdout, 2), want)
+		want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Step: findings.StepResolve,
+			Object: h.fromID, Message: "the twin was created from a record version that names no snapshot (twin.json 8); only a " +
+				"twin whose record names a snapshot steps; fylgja twin destroy clears it"}
+		if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want || out.doc.Step != nil {
+			t.Errorf("exit %d, refusal %+v, step %+v; want 1 with %+v and no step", out.code, got, out.doc.Step, want)
 		}
-		st := out.doc.Step
-		if st == nil || st.From.SnapshotID != "" || !snap.IsID(st.To.SnapshotID) || out.doc.SnapshotID != st.To.SnapshotID {
-			t.Fatalf("the step %+v, the document's snapshot %q; want none on the from side, the target's on the to side", st,
-				out.doc.SnapshotID)
-		}
-		from, err := json.Marshal(st.From)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if strings.Contains(string(from), "snapshot_id") {
-			t.Errorf("the from side %s carries a snapshot_id; a record of 8 names none", from)
+		if len(h.infra.requests()) != h.before {
+			t.Errorf("Infrahub was asked %+v after the host was built", h.infra.requests()[h.before:])
 		}
 	})
 }

@@ -104,6 +104,12 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	if refused := stepScopeUnknown(rec); refused != nil {
 		return finish(op, subject, findings.List{*refused})
 	}
+	if refused := stepUnsourced(rec); refused != nil {
+		return finish(op, subject, findings.List{*refused})
+	}
+	if refused := stepStageless(rec); refused != nil {
+		return finish(op, subject, findings.List{*refused})
+	}
 	// Every read the step makes is under the scope the twin records, never the server's
 	// default (017; FR-020): the target's resolution, its staleness and its read, each of
 	// which the proposed change found under it carries.
@@ -210,6 +216,53 @@ func stepScopeUnknown(rec *wire.TwinRecord) *findings.Finding {
 			"diverges keeps the record's mapping in the record it writes; fylgja twin destroy clears it", strings.Join(named, ", ")))
 	}
 	return nil
+}
+
+// stepUnsourced is the refusal of a twin whose record names no snapshot, or nil for one that
+// names one (019, research R-03): a step goes from the snapshot the twin was built from or
+// last stepped to, so only a twin whose record names a snapshot steps, whatever it was
+// created from. A bundle twin's record names none, since twin provision took no snapshot; a
+// record of 8 has no key, written before 018; and a 9 or a 10 naming none was made by an
+// earlier build's rebuild. Each is refused naming why, step.twin.unsteppable at resolve, its
+// object the record's bundle. It runs after Ineligible and stepScopeUnknown, so a record of
+// 7 or earlier is refused naming its version, while a bundle twin, whose record carries its
+// manifest's scope and mapping, passes those and is refused here. It is the command's
+// refusal alone, as stepScopeUnknown is: the run's second lock reads the records of its
+// recorded histories, which name no snapshot and must replay unchanged.
+func stepUnsourced(rec *wire.TwinRecord) *findings.Finding {
+	const only = "; only a twin whose record names a snapshot steps; fylgja twin destroy clears it"
+	var why string
+	switch {
+	case rec.Source == wire.SourceBundle:
+		why = "the twin was provisioned from a bundle, which names no snapshot"
+	case !snapshotRecorded(rec):
+		why = "the twin was created from a record version that names no snapshot (twin.json " + rec.TwinVersion + ")"
+	case rec.SnapshotID == nil:
+		why = "the twin's record names no snapshot (an earlier build's rebuild made it)"
+	default:
+		return nil
+	}
+	return &findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: rec.BundleID,
+		Step: findings.StepResolve, Message: why + only}
+}
+
+// stepStageless is the refusal of a twin whose record names a snapshot and no stage, or nil
+// for a stage twin: this build steps a twin along its own proposed change alone, so a twin
+// built with --branch or --snapshot has no target yet. It stands until the step takes a
+// snapshot as its target and a stage of any proposed change (019, research R-04 and R-07),
+// which T031 and T034 build, so that no stage-less twin reaches the stage path, which reads
+// the record's stage. The command's refusal alone, as stepUnsourced is.
+func stepStageless(rec *wire.TwinRecord) *findings.Finding {
+	if rec.Stage != nil {
+		return nil
+	}
+	origin := "from branch " + rec.Provenance.Branch
+	if rec.Provenance.At != "" {
+		origin += " at " + rec.Provenance.At
+	}
+	return &findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: rec.BundleID,
+		Step: findings.StepResolve, Message: "the twin was created " + origin + ", not from a stage, so it names no proposed " +
+			"change to step along; only a twin built from a stage steps (fylgja twin create --stage)"}
 }
 
 // stepTo is the step once the target is compiled and filed: the from bundle, the step, the

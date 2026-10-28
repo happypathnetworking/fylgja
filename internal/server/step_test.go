@@ -160,6 +160,68 @@ func TestACreateAndAStepBesideARehearsalNameIt(t *testing.T) {
 	}
 }
 
+// Only a twin whose record names a snapshot steps (019, research R-03): a bundle twin, a
+// record of 8 and a 9 or a 10 naming none are each refused naming why, step.twin.unsteppable
+// at resolve, its object the record's bundle, the bundle twin first whatever its version; a 9
+// or a 10 naming one passes, whatever it was created from. A twin naming a snapshot and no
+// stage is then refused by stepStageless until the step takes a snapshot or a stage of any
+// proposed change as its target (T031, T034); a stage twin passes it.
+func TestStepRefusesARecordThatNamesNoSnapshot(t *testing.T) {
+	const bundleID = "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777"
+	const only = "; only a twin whose record names a snapshot steps; fylgja twin destroy clears it"
+	id := strings.Repeat("6a", 32)
+	stage := &wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled"}
+	for _, c := range []struct {
+		name string
+		rec  wire.TwinRecord
+		want string
+	}{
+		{"a bundle twin", wire.TwinRecord{TwinVersion: "10", Source: wire.SourceBundle},
+			"the twin was provisioned from a bundle, which names no snapshot" + only},
+		{"a bundle twin of 8", wire.TwinRecord{TwinVersion: "8", Source: wire.SourceBundle},
+			"the twin was provisioned from a bundle, which names no snapshot" + only},
+		{"a stage twin of 8", wire.TwinRecord{TwinVersion: "8", Source: wire.SourceIntent, Stage: stage},
+			"the twin was created from a record version that names no snapshot (twin.json 8)" + only},
+		{"a stage twin of 9 naming none", wire.TwinRecord{TwinVersion: "9", Source: wire.SourceIntent, Stage: stage},
+			"the twin's record names no snapshot (an earlier build's rebuild made it)" + only},
+		{"a branch twin of 10 naming none", wire.TwinRecord{TwinVersion: "10", Source: wire.SourceIntent},
+			"the twin's record names no snapshot (an earlier build's rebuild made it)" + only},
+	} {
+		c.rec.BundleID = bundleID
+		want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: bundleID,
+			Step: findings.StepResolve, Message: c.want}
+		if f := stepUnsourced(&c.rec); f == nil || *f != want {
+			t.Errorf("%s: refused %+v, want %+v", c.name, f, want)
+		}
+	}
+	for _, c := range []struct {
+		name      string
+		rec       wire.TwinRecord
+		stageless string
+	}{
+		{"a stage twin of 9", wire.TwinRecord{TwinVersion: "9", Source: wire.SourceIntent, Stage: stage, SnapshotID: &id}, ""},
+		{"a stage twin of 10", wire.TwinRecord{TwinVersion: "10", Source: wire.SourceIntent, Stage: stage, SnapshotID: &id}, ""},
+		{"a branch twin of 10", wire.TwinRecord{TwinVersion: "10", Source: wire.SourceIntent, SnapshotID: &id,
+			Provenance: wire.Provenance{Branch: "change-1"}}, "the twin was created from branch change-1, not from a stage"},
+		{"a snapshot twin of 10", wire.TwinRecord{TwinVersion: "10", Source: wire.SourceSnapshot, SnapshotID: &id,
+			Provenance: wire.Provenance{Branch: "change-1", At: "2026-10-28T09:00:00Z"}},
+			"the twin was created from branch change-1 at 2026-10-28T09:00:00Z, not from a stage"},
+	} {
+		c.rec.BundleID = bundleID
+		if f := stepUnsourced(&c.rec); f != nil {
+			t.Errorf("%s: refused %+v, want it to pass", c.name, f)
+		}
+		f := stepStageless(&c.rec)
+		switch {
+		case c.stageless == "" && f != nil:
+			t.Errorf("%s: stepStageless refused %+v, want it to pass", c.name, f)
+		case c.stageless != "" && (f == nil || f.Rule != findings.RuleStepTwinUnsteppable || f.Object != bundleID ||
+			!strings.HasPrefix(f.Message, c.stageless)):
+			t.Errorf("%s: stepStageless refused %+v, want step.twin.unsteppable on %s beginning %q", c.name, f, bundleID, c.stageless)
+		}
+	}
+}
+
 // A stage twin whose record is of twin.json 7 or earlier names no scope, so twin step refuses
 // it naming the version, step.twin.unsteppable at resolve, its object the record's bundle
 // (017); a record of 8 or later naming a scope and a mapping passes on to the step's other

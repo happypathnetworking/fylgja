@@ -17,12 +17,21 @@
   command-log.py replay TRANSCRIPT [--out DIR]
                           Run the stop logic over a saved transcript straight into DIR's
                           commands/ directories (testing, backfill).
+  command-log.py scrub [--out DIR]
+                          Rewrite every published record under DIR (specs/*/commands/ and
+                          commands/) and the pending file so that no follow-up's text is
+                          kept, and render each log.md again: the one-off for records
+                          published before that rule.
+
+What is recorded: the command's own prompt (the /speckit-* line's arguments), the
+report, and the metrics of every segment. A follow-up prompt, which is the operator's
+typed answer, is counted and timed and its text is never kept (`"prompt": null`).
 
 Stop fires after every turn, so a command that stops to ask the operator is rewritten
 in place until it ends; the entry keeps the location its first write chose. It writes no
-tracked file, so a turn that ends after a commit leaves the tree clean: the log reaches
-git when it is flushed (`make command-log`, or scripts/converge-loop.sh after each
-session and before it starts).
+tracked file, so a turn that ends after a commit leaves the tree clean: the log is
+published when it is flushed (`make command-log`, or scripts/converge-loop.sh after each
+session and before it starts), into directories this repository ignores.
 
 The transcript format is Claude Code's, undocumented (verified on 2.1.272). A field the
 record depends on that is missing is reported as a problem, never written as zero.
@@ -265,7 +274,9 @@ def build(cmd_row, span, subagents, start_snap, problems):
         m = measure([seg], subagents)
         if m is None:
             continue
-        prompt = (args.group(1) if args and args.group(1).strip() else None) if i == 0 else IDE_RE.sub("", user_text(seg[0]))
+        # Segment 0's prompt is the command's arguments; a later segment is the operator's
+        # typed answer, whose text is never kept.
+        prompt = (args.group(1) if args and args.group(1).strip() else None) if i == 0 else None
         per_segment.append({
             "index": i,
             "prompt": prompt,
@@ -289,8 +300,9 @@ def build(cmd_row, span, subagents, start_snap, problems):
         "git_head_before": (start_snap or {}).get("git_head"),
         "git_head_after": sh("git", "rev-parse", "--short", "HEAD").strip() or None,
         # command: segment 0 alone, the number for estimates and model comparisons.
-        # follow_ups: every later prompt the operator typed. total: the whole session.
-        # For /speckit-clarify the operator's answers are follow-ups; use total there.
+        # follow_ups: every later prompt the operator typed, counted and timed, their text
+        # not kept. total: the whole session. For /speckit-clarify the operator's answers
+        # are follow-ups; use total there.
         "command": command,
         "follow_ups": follow_ups,
         "total": total,
@@ -354,9 +366,9 @@ def log_entry(rec):
     for s in rec["segments"]:
         lines.append("")
         if s["index"] > 0:
-            lines.append(f"Follow-up {s['index']} ({s['started_at']}, {fmt_secs(s['active_seconds'])} active):")
-            lines.append("")
-        if s["prompt"]:
+            lines.append(f"Follow-up {s['index']} ({s['started_at']}, {fmt_secs(s['active_seconds'])} active): "
+                         "*(the operator's answer, not recorded)*")
+        elif s["prompt"]:
             lines += ["`````text", s["prompt"].rstrip("\n"), "`````"]
         else:
             lines.append("*(no prompt)*")
@@ -379,9 +391,9 @@ def upsert_jsonl(path, rec):
 def upsert_log(path, rec, title):
     entry = log_entry(rec)
     body = open(path, encoding="utf-8").read() if os.path.isfile(path) else (
-        f"# Command log — {title}\n\nSpec Kit commands, newest last: the prompt verbatim (fenced so it\n"
-        "can be copied whole) and what the run cost. The full record, report included, is\n"
-        "the matching line of `runs.jsonl`.\n")
+        f"# Command log — {title}\n\nSpec Kit commands, newest last: the command's prompt verbatim (fenced so\n"
+        "it can be copied whole), its follow-ups counted and never their text, and what the\n"
+        "run cost. The full record, report included, is the matching line of `runs.jsonl`.\n")
     pat = re.compile(rf"<!-- run:{re.escape(rec['id'])} -->.*?<!-- /run:{re.escape(rec['id'])} -->\n", re.S)
     body = pat.sub(lambda _: entry, body) if pat.search(body) else body.rstrip("\n") + "\n\n" + entry
     write_atomic(path, body)
@@ -485,6 +497,38 @@ def flush(commit, what, body):
     return status
 
 
+def scrub(out_root):
+    """Drop every follow-up's text from the published records under out_root and from the
+    pending file, and render each log.md again. Prints what it rewrote."""
+    def scrubbed(rec):
+        changed = False
+        for s in rec.get("segments") or []:
+            if s.get("index", 0) > 0 and s.get("prompt") is not None:
+                s["prompt"], changed = None, True
+        return changed
+
+    paths = glob.glob(os.path.join(out_root, "specs", "*", "commands", "runs.jsonl")) + [
+        os.path.join(out_root, "commands", "runs.jsonl")]
+    for path in paths:
+        if not os.path.isfile(path):
+            continue
+        recs = read_rows(path)
+        n = sum(1 for rec in recs if scrubbed(rec))
+        write_atomic(path, "".join(json.dumps(rec, ensure_ascii=False) + "\n" for rec in recs))
+        target = os.path.dirname(path)
+        fdir = os.path.dirname(target) if os.path.basename(os.path.dirname(os.path.dirname(target))) == "specs" else None
+        title = os.path.basename(fdir) if fdir else "project level"
+        for rec in recs:
+            upsert_log(os.path.join(target, "log.md"), rec, title)
+        print(f"{os.path.relpath(target, out_root)}: {len(recs)} records, {n} scrubbed, log.md rendered again")
+    if out_root == ROOT:
+        with pending_lock():
+            pending = read_pending()
+            n = sum(1 for p in pending.values() if scrubbed(p["rec"]))
+            write_pending(pending)
+        print(f"pending: {len(pending)} records, {n} scrubbed")
+
+
 # ---------------------------------------------------------------- entry points
 
 
@@ -544,6 +588,9 @@ def main():
         for rec, target in record_transcript(sys.argv[2], out, only_last=False):
             print(f"{rec['name']} {rec['started_at']} -> {os.path.relpath(target, out)}"
                   f"{'  PROBLEMS: ' + '; '.join(rec['problems']) if rec['problems'] else ''}")
+        return
+    if mode == "scrub":
+        scrub(sys.argv[sys.argv.index("--out") + 1] if "--out" in sys.argv else ROOT)
         return
     if mode == "flush":
         opt = lambda name, default: sys.argv[sys.argv.index(name) + 1] if name in sys.argv else default

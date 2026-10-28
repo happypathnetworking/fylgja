@@ -655,26 +655,18 @@ func (h *heldDestroy) StartDestroy(ctx context.Context, onEvent func(provision.E
 }
 
 // twin destroy's answer has a start frame and no run frame: the destroy is one request,
-// followed to its end, which takes no interrupt. The start,
-// fylgja-destroy's, comes after following has stopped and just before the destroy run is
-// started, so a cut from there says a run may have been started. Each event
-// of a step carries the workflow it belongs to, the cancelled check's, the cancelled
-// create's or the destroy's own; a notice carries its line alone; and the document's subject
-// names the destroy run. A client that names a stream on it anyway has nothing opened under
-// it: an interrupt for that stream, while the destroy runs, is 404.
+// followed to its end, which takes no interrupt. The start, fylgja-destroy's, comes first,
+// just before the destroy run is started, since nothing is stopped before it (019), so a cut
+// from there says a run may have been started. Each event of a step carries the workflow it
+// belongs to, the cancelled create's or the destroy's own; a notice carries its line alone;
+// and the document's subject names the destroy run. A client that names a stream on it
+// anyway has nothing opened under it: an interrupt for that stream, while the destroy runs,
+// is 404.
 func TestDestroyAnswersWithAStartAndNoRun(t *testing.T) {
-	const check = "fylgja-reconcile-2026-09-16T19:10:00Z"
-	stopEvents := []provision.Event{
-		{Notice: "cancelling check " + check + "; waiting for its cleanup"},
-		{WorkflowID: provision.WorkflowProvision, Step: "cleanup teardown", End: true, Outcome: provision.EventDone,
-			Duration: 2 * time.Second, FindingStep: findings.StepTeardown},
-		{Notice: "check " + check + " closed: cancelled"},
-	}
 	events := destroyCancellingACreate()
 	svc := &heldDestroy{fakeService: &fakeService{destroyRun: destroyedRun(provision.CleanupResult{
 		Teardown: provision.CleanupDone, Unstage: provision.CleanupDone, Removed: []string{"lab fylgja (3 containers)"}}, nil),
-		stopResult: provision.FollowStop{Stopped: true, Branch: "fylgja-fixture", CheckCancelled: check},
-		stopEvents: stopEvents, destroyEvents: events}, entered: make(chan struct{}), release: make(chan struct{})}
+		destroyEvents: events}, entered: make(chan struct{}), release: make(chan struct{})}
 	useService(t, svc)
 
 	// The destroy is asked under a stream of the test's own, and interrupted while held.
@@ -749,28 +741,23 @@ func TestDestroyAnswersWithAStartAndNoRun(t *testing.T) {
 		t.Errorf("the interrupt was logged %s, want stream_ended", got)
 	}
 	a := rawAnswer{frames: got.lines}
-	var want []string
-	for range stopEvents {
-		want = append(want, api.KindEvent)
-	}
-	want = append(want, api.KindStart)
+	want := []string{api.KindStart}
 	for range events {
 		want = append(want, api.KindEvent)
 	}
 	if kinds := a.kinds(); !slices.Equal(kinds, append(want, api.KindDocument)) {
-		t.Errorf("frames %v, want following's events, the start, the destroy's events and its document, and no run", kinds)
+		t.Errorf("frames %v, want the start, the destroy's events and its document, and no run", kinds)
 	}
 	for _, f := range a.frames {
 		if f.Start != nil && *f.Start != (api.RunRef{WorkflowID: provision.WorkflowDestroy}) {
 			t.Errorf("start %+v, want the destroy's, %s, with no run id", *f.Start, provision.WorkflowDestroy)
 		}
 	}
-	all := append(slices.Clone(stopEvents), events...)
 	for i, e := range a.events() {
-		if i == len(all) {
+		if i == len(events) {
 			break
 		}
-		w := all[i]
+		w := events[i]
 		switch {
 		case w.Notice != "":
 			if e.Notice != w.Notice || e.WorkflowID != "" || e.Step != "" {

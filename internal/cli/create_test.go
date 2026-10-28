@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -87,11 +86,6 @@ type fakeService struct {
 	// every event, where the run's history ends.
 	resultErr   error
 	afterFollow func()
-	// stopEvents, stopResult and stopErr answer StopFollowing, which only twin destroy
-	// calls; the zero value is no following.
-	stopEvents []provision.Event
-	stopResult provision.FollowStop
-	stopErr    error
 	// following, lastCheck and inFlight answer twin show's reads, with readErr beside each;
 	// readBlocks holds every read until its context is done, as a service that never answers.
 	following  *provision.FollowingState
@@ -115,7 +109,7 @@ type fakeService struct {
 	rehearseResult provision.RehearseResult
 
 	mu sync.Mutex
-	// calls logs StartProvision, StartDestroy and StopFollowing in the order they came.
+	// calls logs each method that starts a run, in the order they came.
 	calls     []string
 	reads     []string
 	started   []provision.ProvisionInput
@@ -247,17 +241,6 @@ func (f *fakeService) StartReclaim(_ context.Context, onEvent func(provision.Eve
 		onEvent(e)
 	}
 	return f.destroyRun, f.destroyErr
-}
-
-func (f *fakeService) StopFollowing(_ context.Context, onEvent func(provision.Event)) (provision.FollowStop, error) {
-	f.mutating("StopFollowing")
-	f.mu.Lock()
-	f.calls = append(f.calls, "StopFollowing")
-	f.mu.Unlock()
-	for _, e := range f.stopEvents {
-		onEvent(e)
-	}
-	return f.stopResult, f.stopErr
 }
 
 // StartStep and ResultOfStep answer with runID and startErr, and with stepResult and
@@ -1110,7 +1093,7 @@ func TestCreateFollowStopFailed(t *testing.T) {
 	res := provision.ProvisionResult{
 		Outcome: provision.OutcomeError, Step: findings.StepFollow, BundleID: fixtureBundleID,
 		Findings: findings.List{{Severity: findings.Rejection, Rule: findings.RuleFollowStopFailed, Object: provision.FollowScheduleID,
-			Step: findings.StepFollow, Message: provision.FollowStopFailedMessage(errors.New("permission denied"), "staged")}},
+			Step: findings.StepFollow, Message: "deleting schedule fylgja-follow failed (permission denied); nothing was staged, because a check could otherwise rebuild the twin"}},
 		Cleanup: provision.CleanupResult{Teardown: provision.CleanupSkipped, Unstage: provision.CleanupSkipped},
 	}
 	svc := &fakeService{runID: "run-1", result: res}

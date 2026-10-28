@@ -270,12 +270,6 @@ type destroyScript struct {
 	options client.StartWorkflowOptions
 	// runs answers each describe of a workflow id; an id it lacks has never run.
 	runs map[string]*workflowservice.DescribeWorkflowExecutionResponse
-	// described answers each describe of Schedule fylgja-follow in turn, nil being none; once
-	// it is used up there is none. deleteErr answers its delete, and checksErr the listing of
-	// checks in flight, of which there are none.
-	described []*client.ScheduleDescription
-	deleteErr error
-	checksErr error
 }
 
 func (s *destroyScript) note(entry string) {
@@ -286,7 +280,7 @@ func (s *destroyScript) note(entry string) {
 
 // scriptDestroy answers as a service where provisionRun and destroyRun are in flight when
 // not empty, starting the destroy run returns startedRunID, and that run ends with res.
-// There is no following unless the test sets described.
+// It answers nothing of a Schedule or a listing: a destroy stops nothing first (019).
 func scriptDestroy(provisionRun, destroyRun, startedRunID string, res DestroyResult) *destroyScript {
 	s := &destroyScript{mc: &mocks.Client{}, runs: map[string]*workflowservice.DescribeWorkflowExecutionResponse{}}
 	withWorker(s.mc)
@@ -303,35 +297,6 @@ func scriptDestroy(provisionRun, destroyRun, startedRunID string, res DestroyRes
 				return desc, nil
 			}
 			return nil, serviceerror.NewNotFound("workflow execution not found")
-		})
-
-	handle := &mocks.ScheduleHandle{}
-	handle.On("Describe", mock.Anything).Return(func(context.Context) (*client.ScheduleDescription, error) {
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		if len(s.described) == 0 {
-			return nil, scheduleNotFound()
-		}
-		desc := s.described[0]
-		s.described = s.described[1:]
-		if desc == nil {
-			return nil, scheduleNotFound()
-		}
-		return desc, nil
-	})
-	handle.On("Delete", mock.Anything).Return(func(context.Context) error {
-		s.note("delete")
-		return s.deleteErr
-	})
-	schedules := &mocks.ScheduleClient{}
-	schedules.On("GetHandle", mock.Anything, FollowScheduleID).Return(handle)
-	s.mc.On("ScheduleClient").Return(schedules)
-	s.mc.On("ListWorkflow", mock.Anything, mock.Anything).Return(
-		func(context.Context, *workflowservice.ListWorkflowExecutionsRequest) (*workflowservice.ListWorkflowExecutionsResponse, error) {
-			if s.checksErr != nil {
-				return nil, s.checksErr
-			}
-			return &workflowservice.ListWorkflowExecutionsResponse{}, nil
 		})
 
 	firstTaskTaken(s.mc)
@@ -421,111 +386,9 @@ func TestDestroyCancelsInFlightProvision(t *testing.T) {
 	if want := []string{"cancel provision", "provision closed", "start destroy"}; !slices.Equal(s.seq, want) {
 		t.Errorf("calls in order %v, want %v", s.seq, want)
 	}
-}
-
-// Following is stopped a second time once no provisioning run is in flight, before the
-// destroy run starts: a create that closed ready after the command's first stop has created
-// Schedule fylgja-follow, and its checks would outlive the twin (contracts/cli.md, twin
-// destroy step 2a).
-func TestDestroyStopsFollowingAgain(t *testing.T) {
-	fixture := func() []*client.ScheduleDescription {
-		return []*client.ScheduleDescription{describedSchedule(t, "fylgja-fixture", 5*time.Minute)}
-	}
-	closedReady := running(WorkflowProvision, "run-p")
-	closedReady.WorkflowExecutionInfo.Status = enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED
-
-	t.Run("a create that closed ready after the first stop", func(t *testing.T) {
-		s := scriptDestroy("", "", "run-d", nothingToRemove())
-		s.runs[WorkflowProvision] = closedReady
-		s.described = append([]*client.ScheduleDescription{nil}, fixture()...)
-		onEvent := func(e Event) {
-			if e.Notice != "" {
-				s.note("notice " + e.Notice)
-			}
-		}
-		c := &Client{Client: s.mc}
-
-		first, err := c.StopFollowing(context.Background(), onEvent)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if first.Stopped {
-			t.Fatalf("first stop = %+v, want no Schedule yet", first)
-		}
-		run, err := c.StartDestroy(context.Background(), onEvent)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if want := (FollowStop{Stopped: true, Branch: "fylgja-fixture"}); run.FollowingStopped != want {
-			t.Errorf("following stopped = %+v, want %+v", run.FollowingStopped, want)
-		}
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		want := []string{"delete", "notice following of branch fylgja-fixture stopped", "start destroy", "notice run fylgja-destroy run-d"}
-		if !slices.Equal(s.seq, want) {
-			t.Errorf("calls in order\n  %v\nwant\n  %v", s.seq, want)
-		}
-		s.mc.AssertNotCalled(t, "CancelWorkflow", mock.Anything, mock.Anything, mock.Anything)
-	})
-
-	t.Run("a provisioning run in flight", func(t *testing.T) {
-		s := scriptDestroy("run-p", "", "run-d", nothingToRemove())
-		s.described = fixture()
-		if _, err := (&Client{Client: s.mc}).StartDestroy(context.Background(), nil); err != nil {
-			t.Fatal(err)
-		}
-		s.mu.Lock()
-		defer s.mu.Unlock()
-		if want := []string{"cancel provision", "provision closed", "delete", "start destroy"}; !slices.Equal(s.seq, want) {
-			t.Errorf("calls in order %v, want %v", s.seq, want)
-		}
-	})
-
-	t.Run("a delete that fails", func(t *testing.T) {
-		s := scriptDestroy("", "", "run-d", nothingToRemove())
-		s.described = fixture()
-		s.deleteErr = errors.New("permission denied")
-		run, err := (&Client{Client: s.mc}).StartDestroy(context.Background(), nil)
-		var stopFailed *FollowStopError
-		if !errors.As(err, &stopFailed) {
-			t.Fatalf("error = %v, want a failure to stop following", err)
-		}
-		refused, ok := AsStartError(err)
-		if !ok {
-			t.Fatalf("error = %v, want a refusal", err)
-		}
-		f := refused.Finding
-		if refused.Status != findings.StatusError || f.Rule != findings.RuleFollowStopFailed ||
-			f.Step != findings.StepFollow || f.Object != FollowScheduleID {
-			t.Errorf("refusal = %+v, want follow.stop.failed, exit 2, at step follow on fylgja-follow", refused)
-		}
-		if want := "deleting schedule fylgja-follow failed (permission denied); nothing was removed, " +
-			"because a check could otherwise rebuild the twin"; f.Message != want {
-			t.Errorf("message\n  %q\nwant\n  %q", f.Message, want)
-		}
-		if run.FollowingStopped.Stopped {
-			t.Errorf("following stopped = %+v, want nothing stopped", run.FollowingStopped)
-		}
-		s.mc.AssertNotCalled(t, "ExecuteWorkflow", mock.Anything, mock.Anything, mock.Anything)
-	})
-
-	t.Run("a failure after the delete", func(t *testing.T) {
-		s := scriptDestroy("", "", "run-d", nothingToRemove())
-		s.described = fixture()
-		s.checksErr = errors.New("connection refused")
-		run, err := (&Client{Client: s.mc}).StartDestroy(context.Background(), nil)
-		var stopFailed *FollowStopError
-		if !errors.As(err, &stopFailed) || !strings.Contains(err.Error(), "connection refused") {
-			t.Fatalf("error = %v, want a failure to stop following naming the cause", err)
-		}
-		if _, ok := AsStartError(err); ok {
-			t.Errorf("error = %v, want a failure, not a refusal", err)
-		}
-		if want := (FollowStop{Stopped: true, Branch: "fylgja-fixture"}); run.FollowingStopped != want {
-			t.Errorf("following stopped = %+v, want %+v beside the failure", run.FollowingStopped, want)
-		}
-		s.mc.AssertNotCalled(t, "ExecuteWorkflow", mock.Anything, mock.Anything, mock.Anything)
-	})
+	// It stops nothing else first (019): no Schedule is looked at, and no check is listed.
+	s.mc.AssertNotCalled(t, "ScheduleClient")
+	s.mc.AssertNotCalled(t, "ListWorkflow", mock.Anything, mock.Anything)
 }
 
 // wantWorkerAbsent checks err is run.worker.absent: exit 2, at step start, on the queue.
@@ -745,133 +608,6 @@ func mustValidateM5(t *testing.T, doc *findings.Document, label string) {
 	if err := schema.Validate(v); err != nil {
 		t.Errorf("%s: document does not satisfy M5's findings.schema.json:\n%v\n%s", label, err, b)
 	}
-}
-
-// stopScript is a mocks.Client wired for stopping following: a Schedule that exists when
-// branch is not "", a check in flight when check is not "", recording the order of the
-// calls that must happen in order.
-type stopScript struct {
-	*scheduleService
-}
-
-func scriptStop(t *testing.T, branch, check string, deleteErr error) *stopScript {
-	t.Helper()
-	s := &stopScript{newScheduleService()}
-	withWorker(s.mc)
-	if branch == "" {
-		s.describes(nil, scheduleNotFound())
-	} else {
-		s.describes(describedSchedule(t, branch, 5*time.Minute), nil)
-	}
-	s.deletes(deleteErr)
-
-	var executions []*workflowpb.WorkflowExecutionInfo
-	if check != "" {
-		executions = append(executions, &workflowpb.WorkflowExecutionInfo{
-			Execution: &commonpb.WorkflowExecution{WorkflowId: check, RunId: "run-c"},
-			Status:    enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING,
-		})
-	}
-	s.mc.On("ListWorkflow", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
-		req := args.Get(1).(*workflowservice.ListWorkflowExecutionsRequest)
-		s.seq = append(s.seq, "list "+req.GetQuery())
-	}).Return(&workflowservice.ListWorkflowExecutionsResponse{Executions: executions}, nil)
-	s.mc.On("CancelWorkflow", mock.Anything, check, "run-c").
-		Run(func(mock.Arguments) { s.seq = append(s.seq, "cancel") }).Return(nil)
-	s.mc.On("GetWorkflowHistory", mock.Anything, check, "run-c", true, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT).Return(
-		func(ctx context.Context, _, _ string, _ bool, _ enumspb.HistoryEventFilterType) client.HistoryEventIterator {
-			s.seq = append(s.seq, "follow")
-			return &sliceHistory{ctx: ctx, events: []*historypb.HistoryEvent{
-				historyEvent(enumspb.EVENT_TYPE_WORKFLOW_EXECUTION_COMPLETED),
-			}}
-		})
-	checking := &mocks.WorkflowRun{}
-	checking.On("Get", mock.Anything, mock.Anything).Run(func(args mock.Arguments) {
-		*args.Get(1).(*ReconcileResult) = ReconcileResult{Outcome: CheckCancelled}
-		s.seq = append(s.seq, "closed")
-	}).Return(nil)
-	s.mc.On("GetWorkflow", mock.Anything, check, "run-c").Return(checking)
-	return s
-}
-
-// Stopping following deletes the Schedule before it looks for a check, so no new check can
-// start while the one in flight is cancelled; a check in flight is cancelled and waited for,
-// with a notice first.
-func TestStopFollowingOrder(t *testing.T) {
-	const check = "fylgja-reconcile-2026-09-16T19:10:00Z"
-	const query = "list WorkflowType = 'Reconcile' AND ExecutionStatus = 'Running'"
-
-	t.Run("a check in flight", func(t *testing.T) {
-		s := scriptStop(t, "fylgja-fixture", check, nil)
-		var notices []string
-		got, err := (&Client{Client: s.mc}).StopFollowing(context.Background(), func(e Event) {
-			if e.Notice != "" {
-				notices = append(notices, e.Notice)
-				s.seq = append(s.seq, "notice "+e.Notice)
-			}
-		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if want := (FollowStop{Stopped: true, Branch: "fylgja-fixture", CheckCancelled: check}); got != want {
-			t.Errorf("stop = %+v, want %+v", got, want)
-		}
-		want := []string{"describe", "delete", query,
-			"notice cancelling check " + check + "; waiting for its cleanup",
-			"cancel", "follow", "closed", "notice check " + check + " closed: cancelled"}
-		if !slices.Equal(s.seq, want) {
-			t.Errorf("calls in order\n  %v\nwant\n  %v", s.seq, want)
-		}
-		if strings.Contains(query, "ORDER BY") {
-			t.Error("the dev server refuses ORDER BY")
-		}
-	})
-
-	t.Run("neither a Schedule nor a check", func(t *testing.T) {
-		s := scriptStop(t, "", "", nil)
-		got, err := (&Client{Client: s.mc}).StopFollowing(context.Background(), nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if got != (FollowStop{}) {
-			t.Errorf("stop = %+v, want nothing stopped", got)
-		}
-		if slices.Contains(s.seq, "delete") || slices.Contains(s.seq, "cancel") {
-			t.Errorf("calls %v, want no delete and no cancel", s.seq)
-		}
-	})
-
-	t.Run("a delete that fails", func(t *testing.T) {
-		s := scriptStop(t, "fylgja-fixture", check, errors.New("permission denied"))
-		_, err := (&Client{Client: s.mc}).StopFollowing(context.Background(), nil)
-		refused, ok := AsStartError(err)
-		if !ok {
-			t.Fatalf("error = %v, want a refusal", err)
-		}
-		f := refused.Finding
-		if refused.Status != findings.StatusError || f.Rule != findings.RuleFollowStopFailed ||
-			f.Step != findings.StepFollow || f.Object != "fylgja-follow" {
-			t.Errorf("refusal = %+v, want follow.stop.failed, exit 2, at step follow on fylgja-follow", refused)
-		}
-		if want := "deleting schedule fylgja-follow failed (permission denied); nothing was removed, " +
-			"because a check could otherwise rebuild the twin"; f.Message != want {
-			t.Errorf("message\n  %q\nwant\n  %q", f.Message, want)
-		}
-		if want := []string{"describe", "delete"}; !slices.Equal(s.seq, want) {
-			t.Errorf("calls %v, want %v: no list and no cancel after a failed delete", s.seq, want)
-		}
-	})
-
-	t.Run("no worker", func(t *testing.T) {
-		mc := &mocks.Client{}
-		mc.On("DescribeTaskQueue", mock.Anything, TaskQueue, enumspb.TASK_QUEUE_TYPE_WORKFLOW).Return(
-			&workflowservice.DescribeTaskQueueResponse{}, nil)
-		_, err := (&Client{Client: mc}).StopFollowing(context.Background(), nil)
-		wantWorkerAbsent(t, err)
-		if slices.Contains(called(mc), "ScheduleClient") {
-			t.Error("following was touched with no worker to clean up after a cancelled check")
-		}
-	})
 }
 
 // A check names its own steps; a provisioning or destroy run's are M2's.
@@ -1787,11 +1523,10 @@ func TestDestroyCancelsInFlightRehearsal(t *testing.T) {
 }
 
 // The reclaim's destroy start (015, T091, FR-007) refuses beside a step run, a rehearsal
-// or a provisioning run in flight, naming the run, exit 1: nothing is cancelled, following
-// is not stopped though a Schedule exists, and no destroy run is started. The rehearsal is
-// asked first, since the other two may be its children. With none in flight it stops
-// following again and starts the destroy run, or attaches to one in flight, as StartDestroy
-// does.
+// or a provisioning run in flight, naming the run, exit 1: nothing is cancelled and no
+// destroy run is started. The rehearsal is asked first, since the other two may be its
+// children. With none in flight it starts the destroy run, or attaches to one in flight, as
+// StartDestroy does.
 func TestReclaimRefusesARunInFlight(t *testing.T) {
 	for _, c := range []struct {
 		name    string
@@ -1813,7 +1548,6 @@ func TestReclaimRefusesARunInFlight(t *testing.T) {
 			for workflowID, runID := range c.running {
 				s.runs[workflowID] = running(workflowID, runID)
 			}
-			s.described = []*client.ScheduleDescription{describedSchedule(t, "fylgja-fixture", 5*time.Minute)}
 			var notices []string
 
 			run, err := (&Client{Client: s.mc}).StartReclaim(context.Background(), func(e Event) {
@@ -1833,7 +1567,7 @@ func TestReclaimRefusesARunInFlight(t *testing.T) {
 			if doc.Status.ExitCode() != findings.ExitRejected {
 				t.Errorf("exit %d, want %d", doc.Status.ExitCode(), findings.ExitRejected)
 			}
-			if run.RunID != "" || run.FollowingStopped.Stopped || len(notices) != 0 {
+			if run.RunID != "" || len(notices) != 0 {
 				t.Errorf("run %+v, notices %v; want nothing done", run, notices)
 			}
 			s.mu.Lock()
@@ -1848,19 +1582,18 @@ func TestReclaimRefusesARunInFlight(t *testing.T) {
 		})
 	}
 
-	t.Run("none: following stopped, the destroy run started", func(t *testing.T) {
+	t.Run("none: the destroy run started", func(t *testing.T) {
 		s := scriptDestroy("", "", "run-d", nothingToRemove())
-		s.described = []*client.ScheduleDescription{describedSchedule(t, "fylgja-fixture", 5*time.Minute)}
 		run, err := (&Client{Client: s.mc}).StartReclaim(context.Background(), nil)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if run.RunID != "run-d" || run.Attached || !run.FollowingStopped.Stopped {
-			t.Errorf("run %+v, want a fresh run-d after following stopped", run)
+		if run.RunID != "run-d" || run.Attached {
+			t.Errorf("run %+v, want a fresh run-d", run)
 		}
 		s.mu.Lock()
 		defer s.mu.Unlock()
-		if want := []string{"delete", "start destroy"}; !slices.Equal(s.seq, want) {
+		if want := []string{"start destroy"}; !slices.Equal(s.seq, want) {
 			t.Errorf("calls in order %v, want %v", s.seq, want)
 		}
 		s.mc.AssertNotCalled(t, "CancelWorkflow", mock.Anything, mock.Anything, mock.Anything)
@@ -1973,7 +1706,7 @@ func describedSchedule(t *testing.T, branch string, interval time.Duration) *cli
 }
 
 // scheduleService is a mocks.Client whose ScheduleClient hands back one handle for
-// fylgja-follow, recording in order the calls that change something.
+// fylgja-follow, recording its describes in order. Nothing deletes one (019).
 type scheduleService struct {
 	mc     *mocks.Client
 	sc     *mocks.ScheduleClient
@@ -1990,8 +1723,4 @@ func newScheduleService() *scheduleService {
 
 func (s *scheduleService) describes(desc *client.ScheduleDescription, err error) {
 	s.handle.On("Describe", mock.Anything).Run(func(mock.Arguments) { s.seq = append(s.seq, "describe") }).Return(desc, err)
-}
-
-func (s *scheduleService) deletes(err error) {
-	s.handle.On("Delete", mock.Anything).Run(func(mock.Arguments) { s.seq = append(s.seq, "delete") }).Return(err)
 }

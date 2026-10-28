@@ -52,11 +52,11 @@ func TestExitStatusForEveryOutcome(t *testing.T) {
 			append(finding(findings.StepReadiness, findings.RuleReadinessTimeout), finding(findings.StepTeardown, findings.RuleCleanupIncomplete)...))),
 			findings.ExitUnclean, findings.StatusUnclean},
 		{"destroy, nothing remains", func() *findings.Document {
-			return provision.DestroyDocument(subject(), provision.DestroyResult{Cleanup: clean, Findings: findings.List{}}, provision.FollowStop{})
+			return provision.DestroyDocument(subject(), provision.DestroyResult{Cleanup: clean, Findings: findings.List{}})
 		}, findings.ExitOK, findings.StatusOK},
 		{"destroy, something remains", func() *findings.Document {
 			return provision.DestroyDocument(subject(), provision.DestroyResult{Cleanup: unclean,
-				Findings: finding(findings.StepTeardown, findings.RuleCleanupIncomplete)}, provision.FollowStop{})
+				Findings: finding(findings.StepTeardown, findings.RuleCleanupIncomplete)})
 		}, findings.ExitUnclean, findings.StatusUnclean},
 	} {
 		t.Run(c.name, func(t *testing.T) {

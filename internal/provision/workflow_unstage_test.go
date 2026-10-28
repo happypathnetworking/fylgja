@@ -56,7 +56,7 @@ func TestAnUnstageThatNeverAnsweredSaysHowToClear(t *testing.T) {
 		if f := unstageFinding(t, res.Findings); !strings.Contains(f.Message, clearing) {
 			t.Errorf("finding %+v, want how to clear it", f)
 		}
-		doc := DestroyDocument(&findings.Subject{RunID: "run-d"}, res, FollowStop{})
+		doc := DestroyDocument(&findings.Subject{RunID: "run-d"}, res)
 		if code := doc.Status.ExitCode(); code != findings.ExitUnclean {
 			t.Errorf("exit %d, want %d", code, findings.ExitUnclean)
 		}

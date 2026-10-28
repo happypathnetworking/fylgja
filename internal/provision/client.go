@@ -71,26 +71,16 @@ type Service interface {
 	// StartDestroy destroys the twin through the destroy run and returns once that run has
 	// closed. A rehearsal in flight is cancelled and followed to its end first, its own
 	// destroy included (015); then a provisioning run in flight is cancelled and waited for,
-	// and a step run in flight; following is
-	// then stopped again, as StopFollowing does, since a create that closed ready in the
-	// meantime has begun it; a destroy run in flight is attached to rather than doubled.
-	// onEvent receives every run's progress, and a Notice for each thing done to a run or a
-	// Schedule rather than by a step. No worker to take the run is a *StartError carrying
-	// run.worker.absent; stopping following failing is a *FollowStopError. What that second
-	// stop did is the result's FollowingStopped, beside an error too.
+	// and a step run in flight; a destroy run in flight is attached to rather than doubled.
+	// It stops nothing else: nothing follows a branch (019). onEvent receives every run's
+	// progress, and a Notice for each thing done to a run rather than by a step. No worker
+	// to take the run is a *StartError carrying run.worker.absent.
 	StartDestroy(ctx context.Context, onEvent func(Event)) (DestroyRun, error)
 	// StartReclaim destroys the twin a rehearsal no longer running left, as StartDestroy
 	// does, but cancels nothing (015, FR-007): a rehearsal, provisioning or step run in
 	// flight is a *StartError carrying run.in_flight, naming the run, with nothing
-	// cancelled, stopped or started. A destroy run in flight is attached to.
+	// cancelled or started. A destroy run in flight is attached to.
 	StartReclaim(ctx context.Context, onEvent func(Event)) (DestroyRun, error)
-	// StopFollowing deletes Schedule fylgja-follow, then cancels a check in flight and waits
-	// for it to close, passing its progress and its child's to onEvent. twin destroy runs it
-	// before anything else, and StartDestroy again once no provisioning run is in flight;
-	// create and provision stop following inside their run instead. A Schedule that cannot
-	// be deleted is a *StartError carrying follow.stop.failed, worded for a destroy, with
-	// nothing cancelled. No worker is one carrying run.worker.absent, with nothing done.
-	StopFollowing(ctx context.Context, onEvent func(Event)) (FollowStop, error)
 	// Following describes Schedule fylgja-follow, or returns nil when there is none. twin
 	// show's reads (Following, LastCheck, InFlight) change nothing and need no worker; a
 	// service that does not answer them is an *UnreachableError.
@@ -158,25 +148,6 @@ type RunInFlight struct {
 	// for every other run.
 	Towards string
 }
-
-// FollowStop is what stopping following did: whether a Schedule was deleted, the branch it
-// followed, and the check in flight it cancelled, by workflow id, or "".
-type FollowStop struct {
-	Stopped        bool
-	Branch         string
-	CheckCancelled string
-}
-
-// FollowStopError is StartDestroy's second stop of following failing (contracts/cli.md,
-// twin destroy step 2a): a failure at step follow, as the command's first stop is, with no
-// destroy run started. A Schedule that cannot be deleted is a *StartError inside it.
-type FollowStopError struct {
-	Err error
-}
-
-func (e *FollowStopError) Error() string { return e.Err.Error() }
-
-func (e *FollowStopError) Unwrap() error { return e.Err }
 
 var _ Service = (*Client)(nil)
 
@@ -569,10 +540,8 @@ func (c *Client) ResultOfRehearse(ctx context.Context, runID string) (RehearseRe
 // R-12). A provisioning run in flight is cancelled and waited for next: its own cleanup removes
 // what it made, and the destroy run follows so that nothing it missed remains. A step run in
 // flight is cancelled and waited for next, until its record is
-// written. No signal: cancellation is the service's own request. Following is then
-// stopped a second time, before anything is removed (contracts/cli.md, step 2a). Whether a
-// destroy run was already in flight is asked before starting, so the attach can be
-// reported. Nothing is cancelled or started while no worker polls the queue, and a
+// written. No signal: cancellation is the service's own request. Whether a destroy run was
+// already in flight is asked before starting, so the attach can be reported. Nothing is cancelled or started while no worker polls the queue, and a
 // destroy run no worker takes within the first-task guard is terminated.
 func (c *Client) StartDestroy(ctx context.Context, onEvent func(Event)) (DestroyRun, error) {
 	if onEvent == nil {
@@ -690,35 +659,21 @@ func (c *Client) StartReclaim(ctx context.Context, onEvent func(Event)) (Destroy
 }
 
 // destroy is StartDestroy and StartReclaim once no rehearsal, provisioning or step run is in
-// flight: following stopped again, then the destroy run started, or attached to, and
-// followed to its close.
+// flight: the destroy run started, or attached to, and followed to its close.
 func (c *Client) destroy(ctx context.Context, onEvent func(Event)) (DestroyRun, error) {
 	notice := func(format string, args ...any) { onEvent(Event{Notice: fmt.Sprintf(format, args...)}) }
 
-	// Following is looked at again (contracts/cli.md, step 2a). A create that closed ready
-	// between the command's stop and the look above was neither stopped nor cancelled, and its
-	// follow step has created a Schedule whose checks would outlive the twin.
-	// What the look stopped is returned beside any failure: the Schedule may already be gone.
-	stop, err := c.stopFollowing(ctx, onEvent)
-	stopped := DestroyRun{FollowingStopped: stop}
-	if stop.Stopped {
-		notice("following of branch %s stopped", stop.Branch)
-	}
-	if err != nil {
-		return stopped, &FollowStopError{Err: err}
-	}
-
 	inFlight, err := c.runningRun(ctx, WorkflowDestroy)
 	if err != nil {
-		return stopped, err
+		return DestroyRun{}, err
 	}
 	run, err := c.ExecuteWorkflow(ctx, destroyStartOptions(), Destroy)
 	if err != nil {
-		return stopped, fmt.Errorf("starting %s: %w", WorkflowDestroy, err)
+		return DestroyRun{}, fmt.Errorf("starting %s: %w", WorkflowDestroy, err)
 	}
-	out := DestroyRun{RunID: run.GetRunID(), FollowingStopped: stop}
+	out := DestroyRun{RunID: run.GetRunID()}
 	if err := c.awaitFirstTask(ctx, WorkflowDestroy, out.RunID); err != nil {
-		return stopped, err
+		return DestroyRun{}, err
 	}
 	out.Attached = inFlight != "" && inFlight == out.RunID
 	if out.Attached {
@@ -728,16 +683,9 @@ func (c *Client) destroy(ctx context.Context, onEvent func(Event)) (DestroyRun, 
 	}
 	_ = c.Follow(ctx, WorkflowDestroy, out.RunID, onEvent)
 	if err := run.Get(ctx, &out.Result); err != nil {
-		return stopped, fmt.Errorf("waiting for destroy run %s: %w", out.RunID, err)
+		return DestroyRun{}, fmt.Errorf("waiting for destroy run %s: %w", out.RunID, err)
 	}
 	return out, nil
-}
-
-// FollowStopFailedMessage is follow.stop.failed's message (contracts/cli.md): what is
-// "removed" for a destroy, which refuses to go on, and "staged" for a run's stop step.
-func FollowStopFailedMessage(err error, what string) string {
-	return fmt.Sprintf("deleting schedule %s failed (%v); nothing was %s, because a check could otherwise rebuild the twin",
-		FollowScheduleID, err, what)
 }
 
 // reconcileWorkflowType is the name an earlier build's worker registered a check's
@@ -768,77 +716,6 @@ func followedBranch(desc *client.ScheduleDescription) string {
 // runningChecksQuery finds a check in flight. No ORDER BY: the dev server's visibility
 // store refuses it.
 const runningChecksQuery = "WorkflowType = '" + reconcileWorkflowType + "' AND ExecutionStatus = 'Running'"
-
-// StopFollowing implements Service. Deleting the Schedule leaves a check it started
-// running, so a check in flight is then cancelled and waited for: its child's
-// own cleanup runs first. The Schedule goes first, so no new check can
-// start while the one in flight is cancelled.
-func (c *Client) StopFollowing(ctx context.Context, onEvent func(Event)) (FollowStop, error) {
-	if onEvent == nil {
-		onEvent = func(Event) {}
-	}
-	if err := c.requireWorker(ctx); err != nil {
-		return FollowStop{}, err
-	}
-	return c.stopFollowing(ctx, onEvent)
-}
-
-// stopFollowing is StopFollowing once a worker is known to poll the queue: twin destroy's
-// step 1a, and StartDestroy's step 2a.
-func (c *Client) stopFollowing(ctx context.Context, onEvent func(Event)) (FollowStop, error) {
-	notice := func(format string, args ...any) { onEvent(Event{Notice: fmt.Sprintf(format, args...)}) }
-
-	var out FollowStop
-	stopFailed := func(err error) error {
-		return &StartError{Status: findings.StatusError, Finding: findings.Finding{
-			Severity: findings.Rejection,
-			Rule:     findings.RuleFollowStopFailed,
-			Object:   FollowScheduleID,
-			Step:     findings.StepFollow,
-			Message:  FollowStopFailedMessage(err, "removed"),
-		}}
-	}
-	handle := c.ScheduleClient().GetHandle(ctx, FollowScheduleID)
-	desc, err := handle.Describe(ctx)
-	var notFound *serviceerror.NotFound
-	switch {
-	case errors.As(err, &notFound):
-	case err != nil:
-		return FollowStop{}, stopFailed(err)
-	default:
-		if err := handle.Delete(ctx); err != nil && !errors.As(err, &notFound) {
-			return FollowStop{}, stopFailed(err)
-		}
-		out.Stopped, out.Branch = true, followedBranch(desc)
-	}
-
-	resp, err := c.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{Namespace: c.Namespace, Query: runningChecksQuery})
-	if err != nil {
-		return out, fmt.Errorf("listing checks in flight: %w", err)
-	}
-	for _, info := range resp.GetExecutions() {
-		id, runID := info.GetExecution().GetWorkflowId(), info.GetExecution().GetRunId()
-		notice("cancelling check %s; waiting for its cleanup", id)
-		if err := c.CancelWorkflow(ctx, id, runID); err != nil {
-			return out, fmt.Errorf("cancelling check %s: %w", id, err)
-		}
-		// Progress is best effort; the close is what destroy waits for.
-		_ = c.Follow(ctx, id, runID, onEvent)
-		var res ReconcileResult
-		err := c.GetWorkflow(ctx, id, runID).Get(ctx, &res)
-		var closedWithout *temporal.WorkflowExecutionError
-		switch {
-		case errors.As(err, &closedWithout):
-			notice("check %s closed without a result: %v", id, err)
-		case err != nil:
-			return out, fmt.Errorf("waiting for check %s to close: %w", id, err)
-		default:
-			notice("check %s closed: %s", id, res.Outcome)
-		}
-		out.CheckCancelled = id
-	}
-	return out, nil
-}
 
 // unreachable reports a read twin show made that the service did not answer. Whatever the
 // cause, twin show can say only that following and runs in flight are unknown.
@@ -1598,18 +1475,14 @@ func ProvisionDocument(op string, subject *findings.Subject, res ProvisionResult
 }
 
 // DestroyDocument reports a destroy run as twin.destroy's findings document: ok when
-// nothing remains on the host, unclean when something does (contracts/cli.md). The following
-// the destroy stopped first, when there was one, is its following block.
-func DestroyDocument(subject *findings.Subject, res DestroyResult, stop FollowStop) *findings.Document {
+// nothing remains on the host, unclean when something does (contracts/cli.md).
+func DestroyDocument(subject *findings.Subject, res DestroyResult) *findings.Document {
 	doc := findings.NewDocument(findings.OpTwinDestroy, subject, res.Findings)
 	doc.Status = findings.StatusOK
 	if len(res.Cleanup.Remaining) > 0 {
 		doc.Status = findings.StatusUnclean
 	}
 	doc.Cleanup = CleanupBlockOf(res.Cleanup)
-	if stop.Stopped {
-		doc.Following = &findings.FollowingBlock{Branch: stop.Branch, Stopped: true}
-	}
 	return doc
 }
 

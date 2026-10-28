@@ -476,10 +476,7 @@ func TestAClientGoneDuringADestroysStart(t *testing.T) {
 // (contracts/cli.md, "Runs"). Once the server has begun to start the destroy run, its answer
 // carries fylgja-destroy's start frame, so the client says a run may have been started and
 // was not cancelled, and the start finishes and the run goes on: only the operator's
-// interrupt abandons a start. Stopped while following stops, before that frame, the client
-// says nothing of a run, and the server starts none: a start frame is written only to a
-// request still open.
-// Each mode has a server of its own, since the first is stopped.
+// interrupt abandons a start. Each mode has a server of its own, since the first is stopped.
 func TestAServerStoppedDuringADestroy(t *testing.T) {
 	destroyCmd := func(opts *options) error { return runDestroy(context.Background(), opts) }
 	// stopped runs the destroy in one mode against a server of its own over svc, which it
@@ -533,42 +530,6 @@ func TestAServerStoppedDuringADestroy(t *testing.T) {
 		}
 		wantStopped(t, runs, addresses, "; a run may have been started and was not cancelled: fylgja twin show names it")
 	})
-
-	t.Run("while following stops", func(t *testing.T) {
-		var runs [2]clientRun
-		var addresses [2]string
-		for i, asJSON := range []bool{false, true} {
-			useStateRoot(t)
-			svc := &stopHeld{fakeService: &fakeService{destroyRun: destroyedRun(provision.CleanupResult{
-				Teardown: provision.CleanupNothing, Unstage: provision.CleanupNothing}, nil)}, reached: make(chan struct{})}
-			useService(t, svc)
-			runs[i], addresses[i] = stopped(t, asJSON, svc.reached)
-			svc.mu.Lock()
-			if want := []string{"StopFollowing"}; !slices.Equal(svc.calls, want) {
-				t.Errorf("the service was asked %v, want %v: no destroy run is started for a request that has ended", svc.calls, want)
-			}
-			svc.mu.Unlock()
-		}
-		wantStopped(t, runs, addresses, "")
-	})
-}
-
-// stopHeld is the harness's fake service with following's stop held until the request's
-// context has ended, as a check's cleanup holds it. The stop then answers as one that
-// completed, so that only the server's own look at the request decides whether the destroy
-// run is started.
-type stopHeld struct {
-	*fakeService
-	reached chan struct{}
-}
-
-func (s *stopHeld) StopFollowing(ctx context.Context, onEvent func(provision.Event)) (provision.FollowStop, error) {
-	close(s.reached)
-	select {
-	case <-ctx.Done():
-	case <-time.After(goneBound):
-	}
-	return s.fakeService.StopFollowing(context.WithoutCancel(ctx), onEvent)
 }
 
 // startService holds a start until the request's context has ended, the request's as its dial

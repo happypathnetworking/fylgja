@@ -155,320 +155,68 @@ func TestDestroyJSONDocumentCarriesTheCleanup(t *testing.T) {
 	validateM2Document(t, doc)
 }
 
-// Destroy stops following before it starts its run, says so before M2's lines, and reports
-// the following it stopped (contracts/cli.md, step 1a).
-func TestDestroyStopsFollowing(t *testing.T) {
+// A destroy is the destroy run alone (019, US1 scenario 4): it stops nothing first, so its
+// events are the destroy run's own, its text says nothing of following, and its document
+// carries no following key.
+func TestDestroyStopsNothingFirst(t *testing.T) {
 	cleanup := provision.CleanupResult{Teardown: provision.CleanupDone, Unstage: provision.CleanupDone,
 		Removed: []string{"lab fylgja (3 containers)", "twin directory /abs/local/twin"}}
-	stop := provision.FollowStop{Stopped: true, Branch: "fylgja-fixture"}
+	events := []provision.Event{
+		{Notice: "run fylgja-destroy run-d"},
+		{WorkflowID: provision.WorkflowDestroy, Step: "plan teardown", End: true, Outcome: provision.EventDone,
+			Duration: 100 * time.Millisecond, FindingStep: findings.StepTeardown},
+		{WorkflowID: provision.WorkflowDestroy, Step: "unstage", End: true, Outcome: provision.EventDone,
+			Duration: 100 * time.Millisecond, FindingStep: findings.StepUnstage},
+	}
 
 	t.Run("text", func(t *testing.T) {
-		svc := &fakeService{destroyRun: destroyedRun(cleanup, nil), stopResult: stop}
+		svc := &fakeService{destroyRun: destroyedRun(cleanup, nil), destroyEvents: events}
 		useService(t, svc)
 		var err error
 		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}) })
 		if code, _ := exitOf(t, err); code != findings.ExitOK {
 			t.Fatalf("exit %d, want 0", code)
 		}
-		if want := []string{"StopFollowing", "StartDestroy"}; !slices.Equal(svc.calls, want) {
-			t.Errorf("calls %v, want %v", svc.calls, want)
+		if want := []string{"StartDestroy"}; !slices.Equal(svc.calls, want) {
+			t.Errorf("calls %v, want %v: the destroy run alone", svc.calls, want)
 		}
-		want := "following of branch fylgja-fixture stopped\nremoved lab fylgja (3 containers)\nremoved twin directory /abs/local/twin\n"
+		want := strings.Join([]string{
+			"run fylgja-destroy run-d",
+			"step plan teardown: done in 0.1s",
+			"step unstage: done in 0.1s",
+			"removed lab fylgja (3 containers)",
+			"removed twin directory /abs/local/twin",
+		}, "\n") + "\n"
 		if out != want {
 			t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
 		}
 	})
 
 	t.Run("json", func(t *testing.T) {
-		useService(t, &fakeService{destroyRun: destroyedRun(cleanup, nil), stopResult: stop})
-		var err error
-		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{asJSON: true}) })
-		if out != "" {
-			t.Errorf("--json printed lines on stdout:\n%s", out)
-		}
-		code, doc := exitOf(t, err)
-		if code != findings.ExitOK || doc.Following == nil || !doc.Following.Stopped || doc.Following.Branch != "fylgja-fixture" {
-			t.Fatalf("exit %d, following %+v; want 0 with following of fylgja-fixture stopped", code, doc.Following)
-		}
-		validateM4Document(t, doc)
-	})
-}
-
-// With no following, destroy says nothing about it and its document carries no block.
-func TestDestroyNoFollowing(t *testing.T) {
-	cleanup := provision.CleanupResult{Teardown: provision.CleanupNothing, Unstage: provision.CleanupNothing}
-	for _, asJSON := range []bool{false, true} {
-		svc := &fakeService{destroyRun: destroyedRun(cleanup, nil)}
-		useService(t, svc)
-		var err error
-		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{asJSON: asJSON}) })
-		code, doc := exitOf(t, err)
-		if code != findings.ExitOK || doc.Following != nil {
-			t.Errorf("json %v: exit %d, following %+v; want 0 and no following block", asJSON, code, doc.Following)
-		}
-		if strings.Contains(out, "following") {
-			t.Errorf("json %v: stdout mentions following:\n%s", asJSON, out)
-		}
-		if want := []string{"StopFollowing", "StartDestroy"}; !slices.Equal(svc.calls, want) {
-			t.Errorf("json %v: calls %v, want %v", asJSON, svc.calls, want)
-		}
-	}
-}
-
-// A check in flight is cancelled and its cleanup waited for; its notice and its child's
-// cleanup lines are printed as they come, before the destroy's own.
-func TestDestroyCancelsCheck(t *testing.T) {
-	const check = "fylgja-reconcile-2026-09-16T19:10:00Z"
-	svc := &fakeService{
-		destroyRun: destroyedRun(provision.CleanupResult{Teardown: provision.CleanupNothing, Unstage: provision.CleanupNothing}, nil),
-		stopResult: provision.FollowStop{Stopped: true, Branch: "fylgja-fixture", CheckCancelled: check},
-		stopEvents: []provision.Event{
-			{Notice: "cancelling check " + check + "; waiting for its cleanup"},
-			{Notice: "run fylgja-provision run-p"},
-			{Step: "cleanup teardown", End: true, Outcome: provision.EventDone, Duration: 2 * time.Second},
-			{Step: "cleanup unstage", End: true, Outcome: provision.EventDone, Duration: time.Second},
-			{Notice: "check " + check + " closed: cancelled"},
-		},
-	}
-	useService(t, svc)
-
-	var err error
-	out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}) })
-	if code, _ := exitOf(t, err); code != findings.ExitOK {
-		t.Fatalf("exit %d, want 0", code)
-	}
-	want := "cancelling check " + check + "; waiting for its cleanup\n" +
-		"run fylgja-provision run-p\n" +
-		"cleanup teardown: done in 2.0s\n" +
-		"cleanup unstage: done in 1.0s\n" +
-		"check " + check + " closed: cancelled\n" +
-		"following of branch fylgja-fixture stopped\n" +
-		"nothing to remove: no lab fylgja, no twin directory\n"
-	if out != want {
-		t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
-	}
-}
-
-// A Schedule that cannot be deleted refuses the destroy: exit 2, follow.stop.failed saying
-// nothing was removed, and no destroy run started.
-func TestDestroyFollowStopFailed(t *testing.T) {
-	refusal := &provision.StartError{Status: findings.StatusError, Finding: findings.Finding{
-		Severity: findings.Rejection, Rule: findings.RuleFollowStopFailed, Object: provision.FollowScheduleID,
-		Step:    findings.StepFollow,
-		Message: provision.FollowStopFailedMessage(errors.New("connection refused"), "removed"),
-	}}
-	svc := &fakeService{stopErr: refusal}
-	useService(t, svc)
-
-	var err error
-	out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{asJSON: true}) })
-	if out != "" {
-		t.Errorf("--json printed lines on stdout:\n%s", out)
-	}
-	code, doc := exitOf(t, err)
-	if code != findings.ExitError || doc.Operation != findings.OpTwinDestroy {
-		t.Fatalf("exit %d, document %+v; want 2 from twin.destroy", code, doc)
-	}
-	if len(doc.Findings) != 1 {
-		t.Fatalf("findings %+v, want follow.stop.failed alone", doc.Findings)
-	}
-	f := doc.Findings[0]
-	wantMsg := "deleting schedule fylgja-follow failed (connection refused); nothing was removed, because a check could otherwise rebuild the twin"
-	if f.Rule != findings.RuleFollowStopFailed || f.Step != findings.StepFollow || f.Object != provision.FollowScheduleID || f.Message != wantMsg {
-		t.Errorf("finding %+v\nwant follow.stop.failed at follow on fylgja-follow: %q", f, wantMsg)
-	}
-	if svc.destroys != 0 || slices.Contains(svc.calls, "StartDestroy") {
-		t.Errorf("calls %v, want no destroy run", svc.calls)
-	}
-	validateM4Document(t, doc)
-}
-
-// Following that stopped before a later part of the stop failed is still reported: the
-// Schedule is gone, so a second destroy would have none to name. The destroy is not
-// started, and the failure is operation.failed at step follow, exit 2.
-func TestDestroyStopThenFails(t *testing.T) {
-	stop := provision.FollowStop{Stopped: true, Branch: "fylgja-fixture"}
-	stopErr := errors.New("listing checks in flight: connection refused")
-	wantFailure := func(t *testing.T, err error, svc *fakeService) *findings.Document {
-		t.Helper()
-		code, doc := exitOf(t, err)
-		if code != findings.ExitError || doc.Operation != findings.OpTwinDestroy || len(doc.Findings) != 1 {
-			t.Fatalf("exit %d, document %+v; want 2 from twin.destroy with one finding", code, doc)
-		}
-		if f := doc.Findings[0]; f.Rule != findings.RuleOperationFailed || f.Step != findings.StepFollow ||
-			!strings.Contains(f.Message, "connection refused") {
-			t.Errorf("finding %+v, want operation.failed at follow naming the error", f)
-		}
-		if want := []string{"StopFollowing"}; !slices.Equal(svc.calls, want) {
-			t.Errorf("calls %v, want %v: no destroy run", svc.calls, want)
-		}
-		return doc
-	}
-
-	t.Run("text", func(t *testing.T) {
-		svc := &fakeService{stopResult: stop, stopErr: stopErr}
-		useService(t, svc)
-		var err error
-		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}) })
-		wantFailure(t, err, svc)
-		if want := "following of branch fylgja-fixture stopped\n"; out != want {
-			t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
-		}
-	})
-
-	t.Run("json", func(t *testing.T) {
-		svc := &fakeService{stopResult: stop, stopErr: stopErr}
+		svc := &fakeService{destroyRun: destroyedRun(cleanup, nil), destroyEvents: events}
 		useService(t, svc)
 		var err error
 		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{asJSON: true}) })
 		if out != "" {
 			t.Errorf("--json printed lines on stdout:\n%s", out)
 		}
-		doc := wantFailure(t, err, svc)
-		if doc.Following == nil || !doc.Following.Stopped || doc.Following.Branch != "fylgja-fixture" {
-			t.Errorf("following %+v, want following of fylgja-fixture stopped", doc.Following)
-		}
-		validateM4Document(t, doc)
-	})
-}
-
-// Following that a create began after destroy's first stop is stopped by the second, once no
-// provisioning run is in flight: its line is printed once, as it comes and before the destroy
-// run's, and the document's following block names it, the later branch when both stopped one
-// (contracts/cli.md, step 2a).
-func TestDestroyStopsFollowingAgain(t *testing.T) {
-	cleanup := provision.CleanupResult{Teardown: provision.CleanupDone, Unstage: provision.CleanupDone,
-		Removed: []string{"lab fylgja (3 containers)", "twin directory /abs/local/twin"}}
-	secondStop := func(branch string) *fakeService {
-		run := destroyedRun(cleanup, nil)
-		run.FollowingStopped = provision.FollowStop{Stopped: true, Branch: branch}
-		return &fakeService{destroyRun: run, destroyEvents: []provision.Event{
-			{Notice: "following of branch " + branch + " stopped"},
-			{Notice: "run fylgja-destroy run-d"},
-		}}
-	}
-
-	t.Run("text", func(t *testing.T) {
-		svc := secondStop("fylgja-fixture")
-		useService(t, svc)
-		var err error
-		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}) })
-		if code, _ := exitOf(t, err); code != findings.ExitOK {
-			t.Fatalf("exit %d, want 0", code)
-		}
-		if want := []string{"StopFollowing", "StartDestroy"}; !slices.Equal(svc.calls, want) {
-			t.Errorf("calls %v, want %v", svc.calls, want)
-		}
-		if n := strings.Count(out, "following of branch fylgja-fixture stopped"); n != 1 {
-			t.Errorf("the stop is printed %d times, want once:\n%s", n, out)
-		}
-		want := "following of branch fylgja-fixture stopped\nrun fylgja-destroy run-d\n" +
-			"removed lab fylgja (3 containers)\nremoved twin directory /abs/local/twin\n"
-		if out != want {
-			t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
-		}
-	})
-
-	t.Run("json", func(t *testing.T) {
-		for _, c := range []struct {
-			name  string
-			first provision.FollowStop
-		}{
-			{"the second stop alone", provision.FollowStop{}},
-			{"both stops", provision.FollowStop{Stopped: true, Branch: "fylgja-old"}},
-		} {
-			t.Run(c.name, func(t *testing.T) {
-				svc := secondStop("fylgja-fixture")
-				svc.stopResult = c.first
-				useService(t, svc)
-				var err error
-				out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{asJSON: true}) })
-				if out != "" {
-					t.Errorf("--json printed lines on stdout:\n%s", out)
-				}
-				code, doc := exitOf(t, err)
-				if code != findings.ExitOK || doc.Following == nil || !doc.Following.Stopped || doc.Following.Branch != "fylgja-fixture" {
-					t.Fatalf("exit %d, following %+v; want 0 with following of fylgja-fixture stopped", code, doc.Following)
-				}
-				validateM4Document(t, doc)
-			})
-		}
-	})
-}
-
-// A second stop that fails is a failure at step follow with no destroy run, as the first
-// stop's is: a Schedule it cannot delete is follow.stop.failed, and a failure after it deleted
-// one still names that following. A Schedule the first stop deleted is named beside any later
-// failure to start, since a second destroy would find none.
-func TestDestroySecondStopFails(t *testing.T) {
-	stopped := provision.FollowStop{Stopped: true, Branch: "fylgja-fixture"}
-
-	t.Run("a Schedule that cannot be deleted", func(t *testing.T) {
-		refusal := &provision.StartError{Status: findings.StatusError, Finding: findings.Finding{
-			Severity: findings.Rejection, Rule: findings.RuleFollowStopFailed, Object: provision.FollowScheduleID,
-			Step:    findings.StepFollow,
-			Message: provision.FollowStopFailedMessage(errors.New("connection refused"), "removed"),
-		}}
-		useService(t, &fakeService{destroyErr: &provision.FollowStopError{Err: refusal}})
-		var err error
-		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{asJSON: true}) })
-		if out != "" {
-			t.Errorf("--json printed lines on stdout:\n%s", out)
-		}
 		code, doc := exitOf(t, err)
-		if code != findings.ExitError || len(doc.Findings) != 1 {
-			t.Fatalf("exit %d, findings %+v; want 2 with follow.stop.failed alone", code, doc.Findings)
+		if code != findings.ExitOK || doc.Subject == nil || doc.Subject.RunID != "run-d" {
+			t.Fatalf("exit %d, document %+v; want 0 naming the destroy run run-d", code, doc)
 		}
-		wantMsg := "deleting schedule fylgja-follow failed (connection refused); nothing was removed, because a check could otherwise rebuild the twin"
-		if f := doc.Findings[0]; f.Rule != findings.RuleFollowStopFailed || f.Step != findings.StepFollow || f.Message != wantMsg {
-			t.Errorf("finding %+v\nwant follow.stop.failed at follow: %q", f, wantMsg)
+		b, err := json.Marshal(doc)
+		if err != nil {
+			t.Fatal(err)
 		}
-		if doc.Following != nil {
-			t.Errorf("following %+v, want none: nothing was stopped", doc.Following)
+		var keys map[string]json.RawMessage
+		if err := json.Unmarshal(b, &keys); err != nil {
+			t.Fatal(err)
 		}
-		validateM4Document(t, doc)
+		if _, ok := keys["following"]; ok {
+			t.Errorf("document %s carries a following key; want none", b)
+		}
+		validateM2Document(t, doc)
 	})
-
-	for _, c := range []struct {
-		name     string
-		first    provision.FollowStop
-		second   provision.FollowStop
-		events   []provision.Event
-		err      error
-		wantStep string
-		wantOut  string
-	}{
-		{"a failure after the second stop deleted one", provision.FollowStop{}, stopped,
-			[]provision.Event{{Notice: "following of branch fylgja-fixture stopped"}},
-			&provision.FollowStopError{Err: errors.New("listing checks in flight: connection refused")},
-			findings.StepFollow, "following of branch fylgja-fixture stopped\n"},
-		{"a failure to start after the first stop deleted one", stopped, provision.FollowStop{}, nil,
-			errors.New("cancelling provisioning run run-p: connection refused"),
-			findings.StepStart, "following of branch fylgja-fixture stopped\n"},
-	} {
-		t.Run(c.name, func(t *testing.T) {
-			svc := &fakeService{stopResult: c.first, destroyRun: provision.DestroyRun{FollowingStopped: c.second},
-				destroyEvents: c.events, destroyErr: c.err}
-			useService(t, svc)
-			var err error
-			out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}) })
-			if out != c.wantOut {
-				t.Errorf("stdout:\n%s\nwant:\n%s", out, c.wantOut)
-			}
-			code, doc := exitOf(t, err)
-			if code != findings.ExitError || len(doc.Findings) != 1 {
-				t.Fatalf("exit %d, findings %+v; want 2 with one finding", code, doc.Findings)
-			}
-			if f := doc.Findings[0]; f.Rule != findings.RuleOperationFailed || f.Step != c.wantStep ||
-				!strings.Contains(f.Message, "connection refused") {
-				t.Errorf("finding %+v, want operation.failed at %s naming the error", f, c.wantStep)
-			}
-			if doc.Following == nil || !doc.Following.Stopped || doc.Following.Branch != "fylgja-fixture" {
-				t.Errorf("following %+v, want following of fylgja-fixture stopped", doc.Following)
-			}
-			validateM4Document(t, doc)
-		})
-	}
 }
 
 // A step run in flight is cancelled after any provisioning run, and the destroy waits for its

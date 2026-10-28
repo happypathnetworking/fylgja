@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -421,7 +420,7 @@ func TestProvisionNotFollowing(t *testing.T) {
 		svc := &fakeService{runID: "run-1", result: provision.ProvisionResult{
 			Outcome: provision.OutcomeError, Step: findings.StepFollow, BundleID: fixtureBundleID,
 			Findings: findings.List{{Severity: findings.Rejection, Rule: findings.RuleFollowStopFailed, Object: provision.FollowScheduleID,
-				Step: findings.StepFollow, Message: provision.FollowStopFailedMessage(errors.New("permission denied"), "staged")}},
+				Step: findings.StepFollow, Message: "deleting schedule fylgja-follow failed (permission denied); nothing was staged, because a check could otherwise rebuild the twin"}},
 			Cleanup: provision.CleanupResult{Teardown: provision.CleanupSkipped, Unstage: provision.CleanupSkipped},
 		}}
 		useService(t, svc)

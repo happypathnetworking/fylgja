@@ -57,7 +57,7 @@ func TestDestroyEveryState(t *testing.T) {
 			if !slices.Equal(res.Cleanup.Removed, c.removed) || len(res.Cleanup.Remaining) != 0 {
 				t.Errorf("removed %v, remaining %v; want removed %v and nothing remaining", res.Cleanup.Removed, res.Cleanup.Remaining, c.removed)
 			}
-			doc := DestroyDocument(&findings.Subject{RunID: "run-d"}, res, FollowStop{})
+			doc := DestroyDocument(&findings.Subject{RunID: "run-d"}, res)
 			if doc.Status != findings.StatusOK {
 				t.Errorf("status %q, want ok", doc.Status)
 			}
@@ -131,7 +131,7 @@ func TestDestroyCleanupIncomplete(t *testing.T) {
 	if !carries(res.Findings, findings.RuleCleanupIncomplete, findings.StepTeardown) {
 		t.Errorf("findings %+v, want cleanup.incomplete at teardown", res.Findings)
 	}
-	doc := DestroyDocument(&findings.Subject{RunID: "run-d"}, res, FollowStop{})
+	doc := DestroyDocument(&findings.Subject{RunID: "run-d"}, res)
 	if code := doc.Status.ExitCode(); code != findings.ExitUnclean {
 		t.Errorf("exit %d, want %d", code, findings.ExitUnclean)
 	}
@@ -209,7 +209,7 @@ func TestDestroyCancelIsHonouredOnlyBetweenTeardownAndUnstage(t *testing.T) {
 			case !strings.Contains(cancelled.Message, "fylgja twin destroy"):
 				t.Errorf("run.cancelled says %q, want it to say to destroy again", cancelled.Message)
 			}
-			doc := DestroyDocument(&findings.Subject{RunID: id}, res, FollowStop{})
+			doc := DestroyDocument(&findings.Subject{RunID: id}, res)
 			if doc.Status != findings.StatusUnclean || doc.Status.ExitCode() != findings.ExitUnclean {
 				t.Errorf("status %q (exit %d), want unclean (exit %d)", doc.Status, doc.Status.ExitCode(), findings.ExitUnclean)
 			}
@@ -258,7 +258,7 @@ func TestDestroyPlanFailureTakesTheDefaultBudget(t *testing.T) {
 	if len(res.Findings) != 0 {
 		t.Errorf("findings %+v, want none: the plan's failure is logged, not reported", res.Findings)
 	}
-	doc := DestroyDocument(&findings.Subject{RunID: "run-d"}, res, FollowStop{})
+	doc := DestroyDocument(&findings.Subject{RunID: "run-d"}, res)
 	if doc.Status != findings.StatusOK {
 		t.Errorf("status %q, want ok", doc.Status)
 	}

@@ -94,10 +94,6 @@ type rehearsingService struct {
 	own bool
 }
 
-func (s *rehearsingService) StopFollowing(context.Context, func(provision.Event)) (provision.FollowStop, error) {
-	return provision.FollowStop{}, nil
-}
-
 func (s *rehearsingService) StartDestroy(_ context.Context, onEvent func(provision.Event)) (provision.DestroyRun, error) {
 	onEvent(provision.Event{Notice: "cancelling rehearsal run r1; waiting for its destroy"})
 	onEvent(provision.Event{Notice: "run fylgja-destroy d1"})

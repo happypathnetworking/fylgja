@@ -205,9 +205,6 @@ type DestroyRun struct {
 	RunID    string
 	Attached bool
 	Result   DestroyResult
-	// FollowingStopped is what stopping following again, once no provisioning run was in
-	// flight, did (contracts/cli.md, twin destroy step 2a).
-	FollowingStopped FollowStop
 }
 
 // StepInput starts a step run: everything the CLI

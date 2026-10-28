@@ -191,7 +191,7 @@ func recordSnapshot(rec *wire.TwinRecord) string {
 // stage. Each field of the mapping it fails is named, in twin show's order (mappingUnheld).
 // It is the command's refusal alone, before any Infrahub read and any run: the run's second
 // lock reads records of 4 and 5 in its recorded histories, which must replay unchanged, and
-// a worker of this build writes 9.
+// a worker of this build writes 10.
 func stepScopeUnknown(rec *wire.TwinRecord) *findings.Finding {
 	refuse := func(message string) *findings.Finding {
 		return &findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Object: rec.BundleID,

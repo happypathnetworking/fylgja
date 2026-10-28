@@ -336,7 +336,7 @@ func readyResult() provision.ProvisionResult {
 		TwinDir:    "/abs/local/twin",
 		Findings:   findings.List{},
 		Twin: &wire.TwinRecord{
-			TwinVersion: "9", Lab: "fylgja", BundleID: fixtureBundleID,
+			TwinVersion: "10", Lab: "fylgja", BundleID: fixtureBundleID,
 			Provenance: wire.Provenance{Branch: "fylgja-fixture", SchemaHash: "abc", Scope: "tag:fylgja", Mapping: dcimMapping},
 			ObservedAt: &observed, Source: wire.SourceIntent,
 			Run:           wire.RunRef{WorkflowID: provision.WorkflowProvision, RunID: "run-1"},

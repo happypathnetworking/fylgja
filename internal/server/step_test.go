@@ -169,7 +169,7 @@ func TestACreateAndAStepBesideARehearsalNameIt(t *testing.T) {
 func TestStepRefusesARecordThatNamesNoScope(t *testing.T) {
 	const bundleID = "5c6c1d96aaaabbbbccccddddeeeeffff00001111222233334444555566667777"
 	mapping := wire.Mapping{Reader: ctm.ReaderInfrahubDCIM, Model: ctm.ModelSchemaLibrary, Version: ctm.ModelVersion}
-	for _, version := range []string{"8", "9"} {
+	for _, version := range []string{"8", "9", "10"} {
 		rec := &wire.TwinRecord{TwinVersion: version, BundleID: bundleID, Provenance: wire.Provenance{Scope: "tag:fylgja", Mapping: mapping}}
 		if f := stepScopeUnknown(rec); f != nil {
 			t.Errorf("twin.json %s: refused %+v, want it to pass", version, f)

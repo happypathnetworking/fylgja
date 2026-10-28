@@ -28,8 +28,10 @@ import (
 // provenance is bundle 5's, naming the scope and the mapping in place of the generics
 // contract's version (017); version 9 names the snapshot the twin was built from or last
 // stepped to, or null, each step side's snapshot when it is known, and a third source,
-// snapshot (018).
-const TwinVersion = "9"
+// snapshot (018); version 10 lets a stage stand beside any source, since source says how the
+// twin was created and a step keeps it, so a twin created from a snapshot and stepped to a
+// stage names both (019).
+const TwinVersion = "10"
 
 // ObservedAtUnknown is what twin.json says when no read took place, so a null
 // observed_at is an explicit statement rather than a missing value (Constitution VI).
@@ -44,7 +46,7 @@ type RecordFields struct {
 	Source     string  // wire.SourceIntent, wire.SourceBundle or wire.SourceSnapshot
 	// SnapshotID is the snapshot the run's bundle was compiled from (018): required on a
 	// snapshot twin, refused on a bundle twin, and "" on an intent twin whose run names
-	// none, a following check's rebuild.
+	// none, as an earlier build's rebuild did.
 	SnapshotID string
 	RunID      string
 	Version    string // the worker binary's --version
@@ -60,9 +62,9 @@ type RecordFields struct {
 // and a twin provisioned from a bundle never did, so its observed_at is null and the
 // note says why. A twin created from a snapshot records the snapshot's stored take as its
 // observed_at and names the snapshot; a bundle twin names none, and an intent twin names
-// the one its run was given, if any (018). A stage is recorded only on a pinned twin
-// created from intent (014): a bundle and a snapshot carry no stage, and a stage always
-// resolves to an at. A rehearsal is recorded only as the rehearsal workflow's run, by its
+// the one its run was given, if any (018). A stage is recorded only on a pinned twin (014),
+// since a stage always resolves to an at, and never on a bundle twin, which carries none;
+// a snapshot twin may name one, as a snapshot twin stepped to a stage does (019). A rehearsal is recorded only as the rehearsal workflow's run, by its
 // id (015). The provenance names the scope and the mapping, as every bundle 5 manifest
 // does (017).
 func NewRecord(f RecordFields) (wire.TwinRecord, error) {
@@ -77,9 +79,6 @@ func NewRecord(f RecordFields) (wire.TwinRecord, error) {
 		}
 		if f.SnapshotID == "" {
 			return wire.TwinRecord{}, fmt.Errorf("a twin created from a snapshot must name the snapshot")
-		}
-		if st := f.Stage; st != nil {
-			return wire.TwinRecord{}, fmt.Errorf("a twin created from a snapshot cannot record stage %s: a snapshot carries no stage", st.Name())
 		}
 	case wire.SourceBundle:
 		if f.ObservedAt != nil {
@@ -333,7 +332,7 @@ type StagedTarget struct {
 }
 
 // NewStepRecord builds the record a step leaves (contracts/twin.schema.json
-// version 9) from the record the step started from, and refuses what the contract would
+// version 10) from the record the step started from, and refuses what the contract would
 // not accept, or what would claim more than the step did:
 //
 //   - a previous record that is not the step's from side (another bundle or stage), or

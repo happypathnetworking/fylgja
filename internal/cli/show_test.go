@@ -523,17 +523,17 @@ func TestShowTreatsAnUnreadableScopeAsUnknown(t *testing.T) {
 	var cases []unreadable
 	for _, scope := range []string{"", "fylgja", "tag:"} {
 		cases = append(cases, unreadable{fmt.Sprintf("scope %q", scope), []edit{{"scope", scope}},
-			`scope unknown (record 9 names scope "` + scope + `", not tag:<name>)`})
+			`scope unknown (record 10 names scope "` + scope + `", not tag:<name>)`})
 	}
 	cases = append(cases, []unreadable{
 		{"mapping reader \"Infrahub DCIM\"", []edit{{"reader", "Infrahub DCIM"}},
-			`scope tag:fylgja, read by an unknown reader (record 9 names mapping reader "Infrahub DCIM")`},
+			`scope tag:fylgja, read by an unknown reader (record 10 names mapping reader "Infrahub DCIM")`},
 		{"an empty mapping model", []edit{{"model", ""}},
-			`scope tag:fylgja, read by an unknown reader (record 9 names mapping model "")`},
+			`scope tag:fylgja, read by an unknown reader (record 10 names mapping model "")`},
 		{"an empty mapping version", []edit{{"version", ""}},
-			`scope tag:fylgja, read by an unknown reader (record 9 names mapping version "")`},
+			`scope tag:fylgja, read by an unknown reader (record 10 names mapping version "")`},
 		{"a reader and a model", []edit{{"reader", "-dcim"}, {"model", ""}},
-			`scope tag:fylgja, read by an unknown reader (record 9 names mapping reader "-dcim", model "")`},
+			`scope tag:fylgja, read by an unknown reader (record 10 names mapping reader "-dcim", model "")`},
 	}...)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -1725,8 +1725,8 @@ func TestShowStepWait(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			paths := useStateRoot(t)
 			rec := steppedTwin(t, c.change)
-			if rec.TwinVersion != "9" {
-				t.Fatalf("lab.NewStepRecord wrote version %q, want 9", rec.TwinVersion)
+			if rec.TwinVersion != "10" {
+				t.Fatalf("lab.NewStepRecord wrote version %q, want 10", rec.TwinVersion)
 			}
 			rec.Step.Wait = c.wait
 			writeTwin(t, paths, rec)
@@ -1758,17 +1758,17 @@ func TestShowStepWait(t *testing.T) {
 	}
 }
 
-// A version 9 record written by a create (step: null) is shown exactly as the same record
+// A version 10 record written by a create (step: null) is shown exactly as the same record
 // written with M11's step shape: no step line and no step key.
-func TestShowCreatedVersion9RecordAsM11(t *testing.T) {
+func TestShowCreatedVersion10RecordAsM11(t *testing.T) {
 	show := func(write func(*testing.T, lab.Paths, wire.TwinRecord)) showOutput {
 		paths := useStateRoot(t)
 		write(t, paths, seededTwin(t))
 		return showWith(t, paths, "inspect-three.json", &fakeService{})
 	}
 	five, four := show(writeTwin), show(writeM11Twin)
-	if seededTwin(t).TwinVersion != "9" {
-		t.Fatalf("a create's record is version %q, want 9", seededTwin(t).TwinVersion)
+	if seededTwin(t).TwinVersion != "10" {
+		t.Fatalf("a create's record is version %q, want 10", seededTwin(t).TwinVersion)
 	}
 	if five.stdout != four.stdout {
 		t.Errorf("version 5 stdout:\n%s\nversion 4:\n%s", five.stdout, four.stdout)

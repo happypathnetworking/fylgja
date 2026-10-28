@@ -1274,3 +1274,51 @@ only up to the next heading.
 - **SC-004's "a stage of its own and of another proposed change" from a `--snapshot`
   twin**: settled at `analyze` (2026-10-28). T034 adds the `--snapshot` twin's case
   unconditionally, since SC-004 names it and the record's shape is T027's.
+
+---
+
+## Phase 16: Convergence
+
+- [ ] T057 [pin] Admit `source: snapshot` in `twin verify`'s twin block, so that verifying a twin `twin create --snapshot` built answers with a document its own contract accepts. The code is unchanged. `contracts/verify.schema.json:186`, `$defs/verify/properties/twin/properties/source`, is `{ "enum": ["intent", "bundle"] }`. `verify.TwinOf` (`internal/verify/report.go:428`) copies the record's `source`, and `twinBlock` (`:616`) writes it. `contracts/twin.schema.json:110` and `contracts/show.schema.json:179` have admitted `snapshot` since 018. Since 019 such a twin steps (US2 scenario 3, SC-004) and keeps `source: snapshot` across every step (twin.schema.json's 019 sentence). Today `twin verify` on it, and on every twin stepped from it, writes a `findings` document that `contracts/verify.schema.json` refuses. No test verifies such a twin: T025's note found the gap, and `/usr/bin/grep -n SourceSnapshot internal/cli/verify_test.go` finds nothing. The fix:
+  - Add `"snapshot"` to the enum, with one clause in the file's 019 description. The change is additive: every earlier document still validates. The 017 and 018 frozen findings copies read the current `verify.schema.json` (T007's note), so no frozen copy moves, and `frozenContractCopies` stays 56.
+  - Pin it in `internal/cli/verify_test.go`, beside `TestVerifyNamesTheSnapshot`, with two twins: a ready twin whose record has `source: snapshot`, and that twin stepped to a stage (source kept). Verify each in text and in JSON. Assert `.verify.twin.source == "snapshot"`, and that each document is valid against `contracts/` (`validateM10Document`).
+  - Name the clause in `contracts/cli.md`'s 019 Formats row for verify, beside `twin.snapshot_id`.
+  - Strike T025's gap from `CLAUDE.md`'s "Open, for a session" list.
+
+  per FR-010, FR-019, SC-004 (partial)
+- [ ] T058 [operator] Settle R-08's literal reach. T034's note, T056's note and `CLAUDE.md`'s "Open, the operator's" all leave it to the operator, and the spec's own requirements pull two ways on it.
+  - **Today**: `stepNoTarget` (`internal/server/step.go:465–474`) runs before `Ineligible`, `stepScopeUnknown` and `stepUnsourced` (lines 146–155). Given neither `--stage` nor `--snapshot`, it refuses every readable record that names no stage with `step.target.unknown` ("the twin names no stage, so there is no next stage to step to; give --stage <branch>/<label> or --snapshot <id|file>"). So a bundle twin, a 9 or 10 naming no snapshot, a record of 8 and a record of 7 or earlier are first told to give a target, though no target can step them. Only once given one are they refused `step.twin.unsteppable`.
+  - **What the spec says**: FR-012 says such a twin "MUST be refused by `step.twin.unsteppable` in words that say it names no snapshot". The edge case "A record naming no snapshot that is not a bundle twin" says `twin step` "refuses it as unsteppable, in words that say so". `twin show`'s note for that record promises that `fylgja twin step refuses it`. On the other side, FR-014 and R-08 say a twin naming no stage needs a target, and its absence is refused before any connection.
+  - **Choose one**:
+    - (a) Keep R-08 as T034 applied it, and say so in the spec's edge case and in `contracts/cli.md`'s 019 section.
+    - (b) Recommended: in `stepNoTarget`, run the refusals that read the record alone (`stepScopeUnknown` and `stepUnsourced`, on the file already read) before `noTarget`. An unsteppable record is then refused `step.twin.unsteppable`, still before any connection, and only a steppable stage-less twin is asked for a target. That meets FR-012, FR-014 and the edge case together. It becomes a `[behaviour]` task for implement:
+      - `TestStepRefusedBeforeAnyConnection`'s cases that pass `aStage` only to reach a later refusal, and `TestStepWithNoTargetNamesNoStage`, move with it;
+      - `contracts/cli.md`'s 019 section says which refusal comes first.
+
+  Record the answer in this task's note.
+
+  per FR-012, FR-014, Edge Cases (contradicts)
+- [ ] T059 [pin] Pin FR-017's `--allow-restart` and `--wait` for a `--snapshot` target in tier 1. The code is unchanged: the snapshot path hands over to the stage step's `stepTo`.
+  - **The gap**: every `--snapshot` step test in `internal/cli/twin_step_test.go` passes `--allow-restart` over `plan-link-added.json`, whose plan restarts e1, and none passes `--wait`: `TestStepToASnapshot` (line 3470) and its `…Refused`, `…Edges`, `…DryRun` and `…Closes` siblings. Tier 3's two snapshot steps (`scripts/e2e.sh:1149`, `:1200`) pass neither flag. So no test shows a step to a snapshot refused `step.restart.required` without `--allow-restart`, or its `--wait` reaching the run's `WaitS`. The spec's edge case names both ("A step's `--wait`, `--allow-restart` and phases: unchanged for a snapshot target"), and T031's edges covered only `run.in_flight` and `step.twin.diverged`.
+  - **The cases**: tier 1 has about a second of headroom (43.9 s uncached on this pass, `internal/cli` 39.3 s of it), so add `--snapshot` cases to the stage step's own tests rather than new tests:
+    - In `TestStepDryRun`'s refused and clear pair (line 676), a dry run to a snapshot by id, reusing `TestStepToASnapshot`'s target. Without `--allow-restart` it is refused `step.restart.required` naming e1, equal to `restartRequired`. With the flag it is clear.
+    - In `TestStepWaitFlag` (line 2196), `--snapshot <id>` with `--wait 30s`, the run's input carrying `wait_s` 30.
+  - **Afterwards**: re-measure `GOFLAGS=-count=1 make test` and record the wall time, with the load average, against SC-009's 45 s.
+
+  per FR-017, SC-009 (partial)
+- [ ] T060 [pin] Make the walk-through's two `intent read --out` samples print what this build prints. 019 wrote both lines, `README.md:250` and `:296`.
+  - **Today**: they print `12 interfaces` and `14 interfaces`, and schema `4d5b37aa0a894aec4cdca69fdb9fe455`, the 24.04 install's hash from before 017.
+  - **What this build prints**, read from tier 3's outputs under `local/e2e-019-full.outputs/`: the three-node read is `3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports (…, scope tag:fylgja, schema 7c413536d67ef86321c629c076a0d3a4)`, and after `-add-link` it is `11 interfaces, 4 links`.
+  - **The edit**: set both lines' counts and their schema to those. The samples' other ids stay as they are, `…` where this host never printed them.
+  - **Left alone**: the `read:` lines of `stage plan`'s and the rehearsal's recorded outputs (`:403`, `:411`, `:416`, `:607`). They are v0.2.0 recordings with their own ids and dates, left for the next recording, as T049's note says.
+  - **Afterwards**: strike the README's `12 interfaces` from `CLAUDE.md`'s "Open, for a session" list, and run `make linkcheck`.
+
+  per FR-025 (partial)
+- [ ] T061 [pin] Replace the tier durations in `docs/development.md` and `README.md` with T050's and T051's measured figures, dated 2026-10-28. `CLAUDE.md` already carries these figures.
+  - **The tier-2 row** (`docs/development.md:584`) names `TestStepTargetFromASnapshot`, but gives "about 30 minutes (1,814.4 s on 2026-10-27 …)", with `internal/stages` at 1,514.6 s and `internal/checks` at 291.7 s. Those were measured before that test existed, and with `TestFollowingDetection`. T050 measured:
+    - 2,009 s whole: `internal/stages` 1,690.6 s (109 s under `-timeout 30m`), `internal/server` 1,182.9 s, `internal/stage` 736.3 s, `internal/intent` 666.5 s and `internal/checks` 310.0 s;
+    - `internal/intent` again alone in 220.3 s, after a seed's 1m30s artifact wait lapsed under the tier's own load.
+  - **Tier 3**: `docs/development.md:637–638` and `:815–816`, and `README.md:849`, give "about 32 to 33 minutes", the script's estimate. T051 measured 1,894.1 s, about 31.5 minutes, case 5's 330 s frozen wait among them.
+  - **The edit**: keep the earlier figures as history where each paragraph already keeps them. Strike the durations item from `CLAUDE.md`'s "Open, for a session" list, and run `make linkcheck`.
+
+  per FR-025 (partial)

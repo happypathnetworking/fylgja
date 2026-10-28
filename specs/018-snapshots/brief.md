@@ -180,7 +180,8 @@ but in the bundle itself.
    following's removal, where a twin is frozen at its snapshot and the guard's reason goes.
 5. **The rehearsal takes every stage's snapshot in its plan**, up front, as it already
    compiles every stage up front, so a refused stage is found before the first boot. The
-   step-to-nowhere rule (`rehearsal.steps.none`) stays on bundle equality.
+   step-to-nowhere rule (`rehearsal.steps.none`) is unchanged: it judges as 015 defined
+   it, by whether one stage alone compiled.
 6. **The records**, by one rule: wherever a bundle id appears, the snapshot id sits beside
    it, except in the bundle.
    - `twin.json` `8` to `9`: the record names its snapshot id, and the step block's two
@@ -257,8 +258,10 @@ Each settled with the operator on 2026-10-27.
   steps to any snapshot would give the step record a stage-less side, the checks that read
   a stage on both sides a rule for none, and a `--branch` twin its first step. The
   operator chose to keep the guard on 2026-10-27 and hand `--snapshot` on step to F-026.
-- **The step-to-nowhere rule stays on bundle equality.** The snapshot column lets the
-  reader see why two stages are the same; the rule's judgement is still right.
+- **The step-to-nowhere rule is unchanged.** It judges as 015 defined it, by whether one
+  stage alone compiled, not by bundle equality as this brief first said. The snapshot
+  column lets the reader see why two stages are the same; the rule's judgement is still
+  right.
 - **`probes` is reserved, empty and required, in version 1.** 016 fills it with a version
   bump and no change to how a snapshot is taken, stored or handed to a workflow.
 - **Following leaves Fylgja's core in its own spec, straight after this one and before

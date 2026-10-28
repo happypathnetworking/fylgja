@@ -832,7 +832,7 @@ snapshot by hand (quickstart §2–§3).
 **Independent Test**: quickstart §2 and §3's expected outcomes, each recorded in its task's
 note.
 
-- [ ] T048 [live] [US1] Restart the worker and the server from this tree's `bin/fylgja` (`make build` first), as `CLAUDE.md` prescribes, and verify both:
+- [X] T048 [live] [US1] Restart the worker and the server from this tree's `bin/fylgja` (`make build` first), as `CLAUDE.md` prescribes, and verify both:
   - `/proc/<pid>/exe` is not `(deleted)`;
   - the server's environment carries `INFRAHUB_*`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`;
   - the worker's carries both logins and `FYLGJA_STATE_ROOT`; it still inherits `INFRAHUB_*` from `local/.env` but reads neither (R-22);
@@ -843,8 +843,15 @@ note.
   - case 5's query form (T037 step 3): `~/.temporalio/bin/temporal workflow list --address localhost:7233 --query "StartTime > '<UTC time>'" -o json` with a time before a known run lists it and with one after it lists nothing; record the form that answers and the time's format, and correct `scripts/e2e.sh` where it differs, before T051.
 
   Restart the dev server if it is down. Record pids and lines, never a token.
+  - *Note (Run 14, 2026-10-28)*: `make build` at `18a1b20` (`vcs.modified=false`); no workflow was running, so the old worker (2012205) and server (2012228), both `(deleted)`, were stopped with `kill` and started at 16:45:16 by `CLAUDE.md`'s two lines, without `sg docker` (`id -nG` lists `docker` and `clab_admins`). The dev server was up (pid 1039393) and was left alone.
+    - **The worker**, pid 86408, and **the server**, pid 86430 (`serve --listen 127.0.0.1:7650 --listen 172.17.0.1:7650`): each `/proc/<pid>/exe` reads `bin/fylgja`, not `(deleted)`. Both environments carry the same names from `local/.env`: `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN`, both logins, `FYLGJA_STATE_ROOT`, `FYLGJA_API_TOKEN` and `FYLGJA_DEFAULT_SCOPE`, among others. The worker inherits `INFRAHUB_*` but reads neither: only `internal/server` and `internal/stage` call `intent.FromEnv`, and its start-up report names no Infrahub (R-22).
+    - **The worker's report**: `serving task queue fylgja at localhost:7233 (namespace default)`; the state root line names `bundles:`, `snapshots:` and `twin:`; `host memory budget: 22873 MiB`; both probe logins `set`; `arista_eos (embedded): image ceos:4.32.0.2F (account_gated, present on this host), push eapi replace over https:443 …` and `nokia_srlinux (embedded): image ghcr.io/nokia/srlinux:24.7.1, push json_rpc replace over https:443 …`; `host: lab fylgja absent; twin directory absent`.
+    - **The server's report**, in order: `listening on 127.0.0.1:7650 (API version 1, build 0.1.0-dev)`, `listening on 172.17.0.1:7650 (API version 1, build 0.1.0-dev)`, `172.17.0.1:7650 is not a loopback address: the API's token is sent unencrypted on it`; the state root line with `bundles:`, `snapshots:` and `twin:`; `default scope: tag:fylgja`; `the workflow service (localhost:7233, namespace default) and Infrahub are dialled when a request needs them`; the memory budget; both packages with their logins `set`.
+    - **From inside each task worker** (`fylgja-infrahub-task-worker-1` and `-2`), `POST http://$FYLGJA_API_ADDRESS/v1/twin/show` with the container's token answers `200 1 0.1.0-dev` with a 240-byte body, and `401` without it. From the host, the bridge address without a token answers `401`.
+    - **`temporal schedule list --address localhost:7233`** prints its header alone (`ScheduleId  Action  Paused  NextRunTime  LastRunTime`), exit 0.
+    - **Case 5's query form** answers as `scripts/e2e.sh:1134` writes it. `temporal workflow list --address localhost:7233 --query "StartTime > '2026-10-28T02:08:40.000000000Z'" -o json` lists one run, the destroy started at `02:08:46.831421Z`. With `date -u +%Y-%m-%dT%H:%M:%S.%NZ` taken at 16:46:03 (`…T16:46:03.992744685Z`, nine fractional digits, the script's `CREATED5` format) it prints `[` and `]`, which `jq -e 'length == 0'` reads as true. The script finds the CLI by adding `$HOME/.temporalio/bin` to its `PATH` (line 740). `scripts/e2e.sh` is unchanged.
 
-- [ ] T049 [live] [US2] The hand step, quickstart §3, on a throwaway `fylgja-test-qs-<pid>` branch, never `fylgja-fixture`. No tier 2 runs at the same time; read `free -m` first and restart Infrahub's containers if it reads well below `CLAUDE.md`'s figure. Run each line of §3 and record each output's key line:
+- [X] T049 [live] [US2] The hand step, quickstart §3, on a throwaway `fylgja-test-qs-<pid>` branch, never `fylgja-fixture`. No tier 2 runs at the same time; read `free -m` first and restart Infrahub's containers if it reads well below `CLAUDE.md`'s figure. Run each line of §3 and record each output's key line:
   - the kind line before and after the branch edit, which is the same;
   - the dry run's `twin:`, `target:`, step, `reconcile:` and `push:` lines, with no run started;
   - `stepped to snapshot …`, then the kind line naming the new snapshot with `(stepped from snapshot …)`;
@@ -854,8 +861,38 @@ note.
   - the destroy with no following line.
 
   Afterwards `temporal workflow list` shows no run but the create, the steps and the destroy. Delete the branch and `local/qs-1.json`. Leave no twin up.
+  - *Note (Run 14, 2026-10-28)*: run on `fylgja-test-qs-89454`, with the T048 processes. Before it, `free -m` read 20,602 MiB available, with Infrahub's containers at about 6.3 GiB (server 1.77 GiB, Neo4j 2.55 GiB, up 19 hours). That is not well below `CLAUDE.md`'s figure, so Infrahub was not restarted. No tier 2 was running: `pgrep` showed only the attended loop and this session.
+    - **Seed**: `schema loaded on …`, then `three-node fixture seeded on …, with every artifact rendered and Ready`, in 25.8 s.
+    - **Create** (`--branch`, no `--interval`), 53.0 s: snapshot `cde2507e…`, bundle `1c454919…`, `run fylgja-provision 01a18368-…`, deploy 47.3 s, three pushes, `twin ready`. The record line names the branch, the snapshot, the bundle, schema `7c413536…`, `scope tag:fylgja` and the reader. Its 29 lines hold no "follow".
+    - **The kind line**, before and after `-disable-port n1:ethernet-1/2 -generate`: `kind: snapshot cde2507e… (branch fylgja-test-qs-89454, read at 2026-10-28T16:47:05.492670Z)`. The two `twin show` outputs are byte-identical, `in flight: none`. n1's checksum had moved in Infrahub (`47402a77…` → `d582ada0…`) before the read.
+    - **`intent read --out local/qs-1.json`**: `wrote local/qs-1.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports (…, scope tag:fylgja, schema 7c413536…); snapshot c015fc77…, stored at …/local/snapshots/c015fc77….json`. The file's keys are `ctm`, `observed_at`, `probes`, `snapshot_id` and `snapshot_version` (`1`).
+    - **The dry run** prints `dry run: no lab, container, twin directory or run is changed`, then:
+      - `twin: snapshot cde2507e… (bundle 1c454919…), branch fylgja-test-qs-89454, read at 2026-10-28T16:47:05.492670Z; 3 nodes`
+      - `target: snapshot c015fc77… (branch fylgja-test-qs-89454, read at 2026-10-28T16:49:03.434022Z)`
+      - `step snapshot cde2507e… → snapshot c015fc77… (1c454919… → 329314cc…):`, with nodes and links `unchanged` and `artifacts: n1 device-config 47402a77… → d582ada0…`
+      - `reconcile: nothing to apply`
+      - `push: n1 (artifact); n2, n3 untouched`
+      - the wait, memory, host and `verdict: clear` lines.
+
+      `temporal workflow list --query "StartTime > '<before the dry run>'"` then lists 0 runs.
+    - **The step** by file, 8.0 s: the same plan lines, `run fylgja-step 01a1836a-70cb-…`, then inspect, host check, plan reconcile `(nothing to apply)`, stage, push n1 2.7 s, record, and observe `settled after 3.1s (1 read)`. It ends `stepped to snapshot c015fc77… (bundle 329314cc…) in 3.9s: push n1 2.6s; settled after 3.1s`.
+    - **`twin show`** after the step: n1's `device-config d582ada0…`, the record naming snapshot `c015fc77…` and bundle `329314cc…`, `stepped from snapshot cde2507e… by run fylgja-step 01a1836a-70cb-…`. The kind line: `kind: snapshot c015fc77… (branch fylgja-test-qs-89454, read at 2026-10-28T16:49:03.434022Z) (stepped from snapshot cde2507e… by run fylgja-step 01a1836a-70cb-…, ended 2026-10-28T16:49:17.347175574Z)`.
+    - **`twin verify`**, exit 0, 3.1 s: `twin: branch fylgja-test-qs-89454 (snapshot c015fc77…, bundle 329314cc…), ready; 3 nodes`, then `15 assertions over 3 nodes, 3 skipped`, then `skipped: n1:ethernet-1/2 (intent disables it); link n1:ethernet-1/2|n3:ethernet-1/2 at both ends (intent disables n1:ethernet-1/2)`, then `held: 3 host names, 5 ports, 4 link ends, 3 record claims …; failed: none; unread: none`.
+    - **The record**: `jq '.stage, .source, .snapshot_id, .twin_version'` reads `null`, `"intent"`, `"c015fc77…d832"` and `"10"`. `has("following")` is `false`.
+    - **`twin step` with no target**, exit 1, answered in 4 ms by the server's log: `rejection step.target.unknown [step resolve] 329314cc…: the twin names no stage, so there is no next stage to step to; give --stage <branch>/<label> or --snapshot <id|file>`.
+    - **The step to the record's own snapshot** by id: `step snapshot c015fc77… → snapshot c015fc77… (329314cc… → 329314cc…): unchanged; the two are one bundle`, `reconcile: nothing to apply`, `push: nobody`, a run `fylgja-step 01a1836a-ce18-…` with no push, ending `unchanged; the record moves to snapshot c015fc77… (bundle 329314cc…) in 1.1s; settled after 3.4s`. That is `contracts/cli.md:1436`'s form.
+    - **Destroy**, 2.3 s: `run fylgja-destroy 01a1836a-f6f9-…`, plan teardown, teardown (3 containers), unstage, `removed lab fylgja (3 containers)`, `removed twin directory …/local/twin`. No line says "follow".
+    - **Afterwards**: `temporal workflow list --query "StartTime > '<before the seed>'"` lists exactly four runs, all completed: the provision, the two steps and the destroy. `schedule list` prints its header alone. `-delete` reports `deleted 0 stages, 0 proposed changes, branch fylgja-test-qs-89454`. `Branch` lists `main` and `fylgja-fixture`. `local/qs-1.json` and `local/twin` are gone, and `clab inspect --all` is `{}`. Both snapshots stay in the store, which never deletes.
+    - **The README's samples** (Run 13's "for later tasks"): the step's lines in `README.md`'s walk-through have the live form, line for line, from `twin:` to `stepped to snapshot … (bundle …) in …: push n1 …; settled after …`. So do verify's skipped and held lines. One figure was kept from v0.2.0 rather than shaped: `intent read --out`'s `12 interfaces` (and the second read's `14`). The live three-node read now counts 9, three ports a device since 017. Since `main`'s README has the same `12 interfaces` in its recorded create, this is the walk-through's v0.2.0 vintage, not a 019 error. No task names it.
 
 **Checkpoint**: the host runs this tree; the step proven by hand.
+
+  *Run 14's checkpoint, 2026-10-28 (T048–T049)*:
+  - **Commits**: one, this run's notes and ticks. No code, script or golden moved, so there is no re-baseline commit.
+  - **Gates**, on the tree with the notes: `make build` is statically linked. `make test` uncached (`GOFLAGS=-count=1`) passes in 44.9 s wall, under the 45 s bound, at a load of 1.9–2.3, with `internal/cli` taking 39.9 s. `make lint` reports 0 issues.
+  - **The host**: the hand step ran on the worker (86408) and the server (86430) started from `18a1b20`, verified as T048's note says. The gates' `make build` on the dirtied tree replaced the binary (the VCS stamp), so both are restarted from this run's commit once it is made, and verified the same way. The dev server (1039393) was up throughout. At the end there is no twin, no `local/twin` and no Schedule, `clab inspect --all` is `{}`, and no `fylgja-test-*` branch is left.
+  - **Tier 2 and tier 3**: not run. They are T050's and T051's, and this run was T048–T049 only. Case 5's query needed no correction, so T051 can start from `scripts/e2e.sh` as it stands.
+  - **For later tasks**: the README's `12 interfaces` and `14 interfaces` (T049's note) are left for whoever next records the walk-through. T025's contract gap and R-08's literal reach are still open, as Run 13 left them.
 
 ---
 

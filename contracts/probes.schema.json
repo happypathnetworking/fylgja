@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/contracts/probes/v1",
+  "title": "Fylgja probe declaration v1",
+  "description": "A probe declaration (016, D-064): the file an operator writes and --probes sends on intent read, twin create, twin step, stage plan and twin rehearse, the objects of the kind FylgjaProbe (schema/fylgja-probe.yaml) mapped to the same elements, and, element by element, the list a snapshot 2 carries beside its CTM (snapshot.schema.json's probes items $ref this file's $defs/probe). A probe is a pair of synthesized hosts, a and b, each cabled to an uncabled port of the intent that is not mgmt_only, which the compiler places under provenance synthesized; it is not intent and never enters the CTM. probes_version is \"1\", the one version; probes is required and may be empty. Every object's keys are required, matched exactly, and no other is held (probes.invalid at the file or at probes[<i>].<field>; probes.version.unsupported for another version or none). name is lowercase, at most 24 characters, unique in the list (probe.name.invalid, probe.name.duplicate), and names the hosts <name>-a and <name>-b; format names the probe package that runs the hosts, ping the one shipped (probe.format.unknown, naming the formats loaded); endpoints are exactly two, a then b, each a device and its interface by the intent's names, the host's address with its prefix length (probe.address.invalid) and the gateway its route to the far host goes through, an address with none (probe.gateway.invalid). Four rules read across fields, which this schema cannot say and the reader holds (probe.Validate): a gateway within its address's prefix (probe.gateway.outside), one probe's four addresses of one family (probe.family.mixed), no two endpoints of the list on one host address, naming both probes (probe.address.duplicate, R-20), and the name's uniqueness. The placement's rules read the CTM and are the compiler's: the device and the interface known, the interface uncabled, not mgmt_only and not taken by an earlier probe, the host's name free (probe.device.unknown, probe.interface.unknown, probe.interface.cabled, probe.interface.mgmt_only, probe.port.taken, probe.host.collision). A declaration holds addresses and names, never a login or a configuration.",
+  "type": "object",
+  "required": [
+    "probes_version",
+    "probes"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "probes_version": {
+      "const": "1"
+    },
+    "probes": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/probe"
+      }
+    }
+  },
+  "$defs": {
+    "probe": {
+      "type": "object",
+      "required": [
+        "name",
+        "format",
+        "endpoints"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]{0,23}$",
+          "description": "Unique in the list; the hosts are <name>-a and <name>-b."
+        },
+        "format": {
+          "enum": [
+            "ping"
+          ],
+          "description": "The probe package that runs the hosts (probes/<format>.yaml); ping is the one shipped."
+        },
+        "endpoints": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 2,
+          "items": {
+            "$ref": "#/$defs/endpoint"
+          },
+          "description": "a, then b."
+        }
+      }
+    },
+    "endpoint": {
+      "type": "object",
+      "required": [
+        "device",
+        "interface",
+        "address",
+        "gateway"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "device": {
+          "type": "string",
+          "description": "The intent's device, by name; one the CTM lacks is the compiler's probe.device.unknown."
+        },
+        "interface": {
+          "type": "string",
+          "description": "The device's interface, by its production name: uncabled and not mgmt_only."
+        },
+        "address": {
+          "type": "string",
+          "pattern": "^(((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/([0-9]|[12][0-9]|3[0-2])|[0-9A-Fa-f]{0,4}(:[0-9A-Fa-f]{0,4}){2,7}/([0-9]|[1-9][0-9]|1[01][0-9]|12[0-8]))$",
+          "description": "The host's address with its prefix length, as 10.1.10.2/24."
+        },
+        "gateway": {
+          "type": "string",
+          "pattern": "^(((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])|[0-9A-Fa-f]{0,4}(:[0-9A-Fa-f]{0,4}){2,7})$",
+          "description": "The address the host's route to the far host goes through, with no prefix length, within the address's prefix."
+        }
+      }
+    }
+  }
+}

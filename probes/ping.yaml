@@ -1,0 +1,52 @@
+# ping — the one shipped probe format (016, D-064): two Alpine hosts, each cabled to an
+# uncabled port of the intent, that ping each other through the twin. Every value is read
+# by the lab, the host check, the compiler and verify from here, never from a constant
+# (Constitution II); the format value keys the mechanism (D-031).
+probe_version: "0.1"
+format: ping
+
+image:
+  clab_kind: linux
+  ref: alpine:3.24.2                  # busybox 1.37.0's ping and ip (research §1.2); about 8 MB
+  acquisition: public_registry        # pulled under the deploy budget, as a public PSP image is
+  resources:
+    cpu: 0.1
+    memory_mb: 32                     # a shell and one ping; re-measured live (research §4.1)
+  deploy_timeout_s: 60
+  destroy_timeout_s: 30
+
+host:
+  interface: eth1                     # the host's one data port; eth0 is containerlab's management
+  # The topology's exec lines, run by containerlab once the container starts: the host's
+  # address on its port, then a host route to the far host through the device.
+  address: ["ip", "addr", "add", "{address}", "dev", "{interface}"]
+  route: ["ip", "route", "add", "{far_address}/32", "via", "{gateway}", "dev", "{interface}"]
+
+readiness:
+  probe: exec                         # run inside the container; no login
+  command: ["ip", "-4", "-o", "addr", "show", "dev", "{interface}"]
+  expect: "{address}"                 # ready once the exec line's address is on the port
+  timeout_s: 30
+
+flow:
+  # Started after a step's stage, read after its wait: an interrupt ends ping and prints
+  # its counters (research §1.2, R-14).
+  interval_s: 0.2
+  command: ["ping", "-i", "{interval}", "{far_address}"]
+  start_timeout_s: 30
+  read_timeout_s: 30
+
+burst:
+  # verify's fourth kind: count echoes, held when every one is answered (R-15).
+  count: 5
+  wait_s: 2
+  command: ["ping", "-c", "{count}", "-i", "{interval}", "-W", "{wait}", "{far_address}"]
+
+fidelity:
+  forwarding: software
+  timing: container
+  approximations:
+    - "The hosts forward in their container's kernel and the twin's devices in theirs: a loss figure is the container's, never a hardware forwarder's."
+    - "Timing is the container's: the interval, a reply's time and a gap are measured on the lab host's scheduler, under its load."
+    - "A host speaks no discovery protocol, so the device port's neighbour is never asserted on a synthesized link."
+    - "Format 0.1 is IPv4: ping and ip are run without -6."

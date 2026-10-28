@@ -1,0 +1,241 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/happypathnetworking/fylgja/probes/v0.1",
+  "title": "Fylgja probe package v0.1",
+  "description": "A probe package (016, D-064): everything Fylgja needs to know about one probe format's hosts, as data, beside the platform support packages (psp/) and in their shape where they share a field. format is the value a declaration's probe names and the key the lab's mechanisms are chosen by (D-031); no two packages of one origin declare one (probe.package.format.duplicate), and an override under <psp-dir>/probes/ shadows an embedded package of its format. image is the PSP's: the containerlab kind and image of a host, how it is obtained, its budget and its two timeouts; the host check verifies the image whatever its acquisition (host.image.absent). host is the host's data port and the two exec lines the topology runs, its address and its route to the far host; readiness the command run inside the container, ready when its output holds expect; flow how a step's transient flow is started and read, with its interval and two budgets; burst verify's echoes, count and wait; fidelity what the hosts cannot reproduce. Each command is a list, one argument an element, its placeholders rendered from the host: {address} (with its prefix length), {gateway}, {far_address} and {interface} in every template, {interval} in flow's and burst's, {count} and {wait} in burst's; a placeholder no field renders is probe.package.template. A package of another probe_version is probe.package.version.unknown, any other fault of shape probe.package.schema naming the field. Nothing of a package but its format, clab_kind, image and host templates enters a bundle, so a budget change moves no bundle_id.",
+  "type": "object",
+  "required": [
+    "probe_version",
+    "format",
+    "image",
+    "host",
+    "readiness",
+    "flow",
+    "burst",
+    "fidelity"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "probe_version": {
+      "const": "0.1"
+    },
+    "format": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9_-]*$",
+      "description": "The probe format: what a declaration names and what keys the mechanism."
+    },
+    "image": {
+      "type": "object",
+      "required": [
+        "clab_kind",
+        "ref",
+        "acquisition",
+        "resources",
+        "deploy_timeout_s",
+        "destroy_timeout_s"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "clab_kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1
+        },
+        "acquisition": {
+          "enum": [
+            "public_registry",
+            "account_gated",
+            "licensed"
+          ],
+          "description": "As a PSP's: public_registry may be pulled under the deploy budget; any other is verified present under exactly ref and never pulled."
+        },
+        "resources": {
+          "type": "object",
+          "required": [
+            "cpu",
+            "memory_mb"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "cpu": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "memory_mb": {
+              "type": "integer",
+              "minimum": 8,
+              "description": "Per-host steady-state memory budget in MiB, summed by the host check with the devices'."
+            }
+          }
+        },
+        "deploy_timeout_s": {
+          "type": "integer",
+          "minimum": 10
+        },
+        "destroy_timeout_s": {
+          "type": "integer",
+          "minimum": 5
+        }
+      }
+    },
+    "host": {
+      "type": "object",
+      "required": [
+        "interface",
+        "address",
+        "route"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "interface": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The host's data port, cabled to the device's interface; {interface} renders it."
+        },
+        "address": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "The exec line that puts the host's address on its port."
+        },
+        "route": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "description": "The exec line that routes the far host's address through the gateway."
+        }
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "required": [
+        "probe",
+        "command",
+        "expect",
+        "timeout_s"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "probe": {
+          "enum": [
+            "exec"
+          ],
+          "description": "Run inside the container through the lab's runner; no login."
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "expect": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Ready once the command's output contains this, rendered."
+        },
+        "timeout_s": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "flow": {
+      "type": "object",
+      "required": [
+        "interval_s",
+        "command",
+        "start_timeout_s",
+        "read_timeout_s"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "interval_s": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "Seconds between two echoes; {interval} renders it, and a gap is counted in it."
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "start_timeout_s": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "read_timeout_s": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "burst": {
+      "type": "object",
+      "required": [
+        "count",
+        "wait_s",
+        "command"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Echoes sent; the burst holds when every one is answered."
+        },
+        "wait_s": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Seconds to wait for a reply after the last echo; {wait} renders it."
+        },
+        "command": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "fidelity": {
+      "type": "object",
+      "required": [
+        "forwarding",
+        "timing",
+        "approximations"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "forwarding": {
+          "enum": [
+            "software"
+          ]
+        },
+        "timing": {
+          "const": "container"
+        },
+        "approximations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

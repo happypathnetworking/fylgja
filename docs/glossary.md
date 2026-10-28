@@ -367,8 +367,11 @@ does not say it holds that bundle is a failed *record claim*
 
 **Dry run** — `--dry-run` on `twin create`, `twin provision` and `twin step`: every
 refusal the run would make, and what it would do, with no run started and no lab,
-container or twin directory touched. Like a plan, it files the *snapshot* it took in the
-*snapshot store* and the bundle in the *bundle store*. The *server* makes it on the lab
+container or twin directory touched. Like a plan, `twin create`'s and `twin step`'s file
+the *snapshot* they took in the *snapshot store* and the bundle in the *bundle store*.
+`twin create --snapshot`'s takes none: it files the snapshot a file carries, or reads the
+stored one, then compiles and files the bundle. `twin provision`'s reads, takes and
+compiles nothing: it verifies the bundle it was given and files it. The *server* makes it on the lab
 host, so it needs `docker` and `containerlab` on the server's `PATH`.
 
 **Feature (`F-NNN`)** — One row of the roadmap's backlog, with an anchor

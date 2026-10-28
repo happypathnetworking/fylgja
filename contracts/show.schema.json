@@ -129,7 +129,7 @@
             "null"
           ],
           "pattern": "^[0-9a-f]{64}$",
-          "description": "018: the snapshot the record names, as twin.json 9's snapshot_id; null for a 9 naming none and for a record of 8 or earlier, whose record line says (record 8)"
+          "description": "018: the snapshot the record names, as twin.json 9's snapshot_id; null for a 9 naming none and for a record of 8 or earlier, whose record line says (record <version>), (record 8) for an 8"
         },
         "bundle_id": {
           "type": "string",

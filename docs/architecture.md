@@ -747,7 +747,8 @@ and proceeds. The budget is never derived from the host's free memory.
 
 **How a run ends.** A provisioning run always completes, including when provisioning did
 not. It returns an outcome — `ready`; `rejected`, refused before the host was touched
-(read or compile findings, the host check, a bundle that fails verification); `failed`,
+(the host check, a bundle that fails verification, and read or compile findings only in a
+run recorded before 018, which read and compiled itself); `failed`,
 after it; `cancelled`; or `error`, a step that could not run — together with every
 finding and the cleanup's status: teardown and unstage each `done`, `nothing`, `failed`
 or `skipped`, and anything that remains. Temporal records the run as completed, and the
@@ -1190,8 +1191,8 @@ built from a bundle or a following twin's check rebuilt, neither of which takes 
 time: a create's own read, the stored first take for a twin from a snapshot, a check's
 read for a rebuild. A step's record names the target's snapshot at its top level, and
 each side of its `step` block names its own. A record of `8` or earlier reads with no
-snapshot: `twin show` says `snapshot none (record 8)`, `twin step` steps it with a from
-side naming none, and `twin destroy` clears it.
+snapshot: `twin show` says `snapshot none (record <version>)`, `(record 8)` for an `8`,
+`twin step` steps it with a from side naming none, and `twin destroy` clears it.
 
 **What `twin verify` reads** ([D-038](decisions.md#d-038)). It reads containerlab, the
 record and the staged manifest, and writes nothing. Its assertions are derived from the
@@ -1407,7 +1408,8 @@ the host check reads them, then the workflow service, best-effort under a five-s
 budget. With the service unreachable it still reports the host and the record, says
 following and runs in flight are unknown, and exits 0. Its record line names the snapshot
 the twin was built from beside its bundle, `snapshot none` for a twin `twin provision`
-built or a following rebuild made, and `snapshot none (record 8)` for an older record. A
+built or a following rebuild made, and `snapshot none (record <version>)` for a record of
+`8` or earlier, naming its version. A
 twin built from a snapshot is `pinned at <at>` or `frozen` as its envelope says, never
 following, and its kind line ends `built from snapshot <id>`.
 

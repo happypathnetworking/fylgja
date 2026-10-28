@@ -490,8 +490,8 @@ func recordLine(rec *wire.TwinRecord) string {
 
 // snapshotClause is the record line's snapshot (018): "snapshot <id>", the full id, as the
 // bundle's is printed; "snapshot none" for a 9 naming none, a twin twin provision built or a
-// following rebuild made; and "snapshot none (record 8)" for a record of 8 or earlier,
-// which names none.
+// following rebuild made; and "snapshot none (record <version>)" for a record of 8 or
+// earlier, which names none, "(record 8)" for an 8.
 func snapshotClause(rec *wire.TwinRecord) string {
 	switch {
 	case rec.SnapshotID != nil:

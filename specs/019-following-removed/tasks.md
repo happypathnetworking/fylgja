@@ -757,7 +757,7 @@ data-model §11).
 **Independent Test**: quickstart §6's greps find following only as history; `make
 linkcheck` clean.
 
-- [ ] T040 [P] [US6] `docs/architecture.md`, at the lines data-model §11 lists:
+- [X] T040 [P] [US6] `docs/architecture.md`, at the lines data-model §11 lists:
   - §1: "A walking twin walks" rewritten for stepping.
   - §2: the operate row.
   - §3.
@@ -768,16 +768,19 @@ linkcheck` clean.
   - §6 and §7.
 
   Then `/usr/bin/grep -n -i -e follow -e reconcile -e schedule -e interval -e frozen -e pinned docs/architecture.md`. Every hit is made true, or is history (a superseded decision named as such), "reconcile" containerlab's phase, or "pinned" a reference with an `at`.
+  - *Note (Run 13, 2026-10-28)*: every listed section rewritten; no heading changed, so no anchor moved. §1 "A walking twin walks by stepping" (frozen at its snapshot, D-062; following M4–019 one history sentence). §2's drawing `twin.json 10` and a `twin step --snapshot: no read` edge; the operate row loses the reconcile. §3's scope, snapshot and step rules. §4.4: the workflow list, state diagram and run drawing lose the reconcile, the rebuild and Start/StopFollowing; "Inside the worker" four workflows, fifteen activities, no source of truth; "Following" and the seven outcomes become one history paragraph with the upgrade note; stepping rewritten (any snapshot-naming twin, a stage of any proposed change or `--snapshot`, no target refused before any connection, rule 2's new words, `step.target.foreign` retired, scope and mapping for life); the rehearsal 1,950 s. §4.5: the worker reads no source of truth (R-22), the table, the state tree (`twin.json` 10, no `.reads/`), a paragraph on `twin.json` 10's rule. §4.6: the command block, show's four kinds, the step's target line. §4.7, §6 ("A twin does not follow its branch", 1,950 s), §7 (question 3 moot since D-062). Beyond §11's lines, for the grep: §4.3's drift signal, "How a run ends" (the pre-018 branch until 019), §5's D-026 citation, the worker image's alt text. `workspace.dsl` read, not edited.
 
-- [ ] T041 [P] [US6] `docs/glossary.md` (FR-025):
+- [X] T041 [P] [US6] `docs/glossary.md` (FR-025):
   - **Removed**: Following, Frozen twin, Interval, `reconcile` (workflow), Schedule (Temporal).
   - **Reworded**: Kind (the four kinds); Pinned (a reference with an `at`, never a kind); Rebuild (what following's check did until D-062, and why a record an earlier build's rebuild made names no snapshot); Check (following's check until D-062; "check" now means Infrahub's); Walking twin (walks by stepping).
   - **Touched**: `bundle_id`, Reconcile (its contrast with the workflow), Scope, Snapshot, Step (of a run), Step (of a twin) (its target, a stage or a snapshot), Workflow (four).
   - **The two meanings of "follow"** separated: following a run's events stays; following a branch is gone.
+  - *Note (Run 13)*: Following, Frozen twin, Interval, `reconcile` (workflow) and Schedule (Temporal) removed (no file links a glossary anchor). Kind (four, `snapshot none` noted), Pinned (a reference with an `at`, never a kind), Rebuild (M4 until 019, why such a record names no snapshot), Check ("check" alone is Infrahub's; following's as history), Walking twin (walks by stepping; the two meanings of "follow" separated there, since §11 adds no entry) reworded; `bundle_id`, Reconcile, Scope, Snapshot, Step (of a run), Step (of a twin) (a stage of any proposed change or a snapshot; rule 2's new words; scope and mapping for life) and Workflow (four) touched. Also made true: Bundle store (`.reads/`), Check (Infrahub), Deadline (1,950 s), Diverged, Dry run, Intent reference, `provision` (workflow), Snapshot store, Stage, Stepped, `twin.json` (10).
 
-- [ ] T042 [P] [US6] `docs/brief.md`: Scope (about lines 26–30 and 36–38), Pipeline (about line 73) and the CLI (about lines 92–95) say a twin is frozen at its snapshot and walks by stepping; no `--interval` or `--no-follow`.
+- [X] T042 [P] [US6] `docs/brief.md`: Scope (about lines 26–30 and 36–38), Pipeline (about line 73) and the CLI (about lines 92–95) say a twin is frozen at its snapshot and walks by stepping; no `--interval` or `--no-follow`.
+  - *Note (Run 13)*: Scope: a reference, not a twin, is pinned; a twin built from a snapshot steps to a stage of any proposed change or a snapshot of any branch; four workflows, read and compiled by the server first, no Schedule; "A twin is frozen at its snapshot" in place of following, with D-062. Pipeline: the operate column loses `reconcile`; `step` is how a twin walks. CLI: no `--no-follow` or `--interval`; `twin step` takes `--stage | --snapshot`.
 
-- [ ] T043 [P] [US6] `docs/development.md` at data-model §11's lines:
+- [X] T043 [P] [US6] `docs/development.md` at data-model §11's lines:
   - the environment table (about line 164): the worker reads no `INFRAHUB_*` (R-22);
   - the layout (about lines 362–363 and 387): `internal/stage` serves the server alone, and `internal/provision` holds no following;
   - the tier 1 and tier 2 rows (about lines 583–584): no reconcile check, no `TestFollowingDetection`, seven histories, `TestStepTargetFromASnapshot`;
@@ -785,8 +788,9 @@ linkcheck` clean.
   - conformance (about line 773), "Following is a Schedule" (about lines 916–931) removed, about line 1042, and the naming table (about lines 1061–1062).
 
   Also `.env.example`: `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN` are read by the server, never the worker. Re-read `SECURITY.md` and change only a sentence that says the worker holds an Infrahub token.
+  - *Note (Run 13)*: `docs/development.md`: the environment rows (`INFRAHUB_*` the server's alone; `FYLGJA_DEFAULT_SCOPE`), the layout (`internal/stage` the server's, `internal/provision` four workflows, `.reads/` written by nothing), `make worker`, the frozen copies (56, `frozenContractCopies`), tier 1 (seven histories, 4 and 15, the step-to-snapshot tests; the compile activity's line gone with its test), tier 2 (`TestStepTargetFromASnapshot`, no `TestFollowingDetection`), tier 3 (case 1 and conformance without `--no-follow`, case 5 "A frozen twin, stepped" as `scripts/e2e.sh` runs it, cases 7 and 8 kind `snapshot` and `twin.json` 10, the leak check's Schedule a following build's), "Following is a Schedule" removed (its `InspectTwinBudget` and `ShowServiceBudget` facts moved beside the step's and the API's constants; `FollowBudget` and the interval constants gone), the rehearsal a fourth workflow, the naming table's two rows gone. Tier 3's durations: the measured figures stay dated "before 019", beside the script's estimate of 32–33 minutes; T051's times replace them, and no task names `docs/development.md` for that (T054 is `CLAUDE.md`'s). `.env.example`: `INFRAHUB_*` read by the server alone. `SECURITY.md`: one sentence, the worker no longer reads Infrahub's token though `local/.env` hands it one.
 
-- [ ] T044 [P] [US6] `README.md` (R-23):
+- [X] T044 [P] [US6] `README.md` (R-23):
   - The intro (about line 10).
   - "A walking twin, start to finish" keeps `fylgja-test-readme`, its seed and its two changes. Create from `--branch`, the kind line naming the snapshot; disable a port and generate; `twin show` unchanged; `intent read --branch fylgja-test-readme --out local/readme-1.json`, then `twin step --snapshot local/readme-1.json`, the node reading the port disabled; the link added and stepped to by id, from the id the read printed.
   - One paragraph under the walk-through says what the kind line's bracket tells: an `at` or a read time, and so whether the snapshot can be taken again.
@@ -794,14 +798,29 @@ linkcheck` clean.
   - "Pinned and frozen twins" (about lines 684–696) goes.
 
   Samples keep the shapes of [contracts/commands.md](contracts/commands.md) "The text", with ids this host never printed written `…`.
+  - *Note (Run 13)*: the intro, the walk-through as R-23 says (create from `--branch` with no `--interval`, the kind line naming the snapshot; the port disabled and `twin show` unchanged; `intent read --out local/readme-1.json` and `twin step --snapshot` by file; the link added and stepped to by id; destroy with no following line), the paragraph "What the kind line says", "A stepping twin" without rebuilding or "never follows" (and `step.target.foreign`'s sentence now a stage of another proposed change or a snapshot of any branch), the rehearsal's `1950s` and `32m30s`, "Pinned and frozen twins" removed (its one in-file link fixed; `#a-stepping-twin`, linked from `schema/README.md`, kept), tier 3's 32–33 minutes. The step samples are no recording: shaped from the code, the tier-1 tests and `contracts/cli.md`'s 019 text, with v0.2.0's bundle ids kept where the intent is the same (`bundle_id` excludes `observed_at`) and every snapshot id `…`.
 
-- [ ] T045 [P] [US6] `docs/ideas.md`'s webhook entry (about lines 182–200): its latency argument is moot; reword it as an orchestrator's trigger for a take and a step (D-062's consequences).
+- [X] T045 [P] [US6] `docs/ideas.md`'s webhook entry (about lines 182–200): its latency argument is moot; reword it as an orchestrator's trigger for a take and a step (D-062's consequences).
+  - *Note (Run 13)*: retitled "A webhook that starts a take and a step" (no inbound link); the latency argument kept as what was raised and called moot since D-062; the idea is now an orchestrator's trigger: take a snapshot (`intent read --out`), compare its id with the record's, `twin step --snapshot` when they differ.
 
-- [ ] T046 [P] [US6] `docs/roadmap.md`, Release 0.3 section: add an "Upgrading a 0.2 host" list with R-21's sentence, which 0.3's release notes copy at the release's close. `.github/workflows/release.yml` is not edited. F-026's "built" mark is T053's.
+- [X] T046 [P] [US6] `docs/roadmap.md`, Release 0.3 section: add an "Upgrading a 0.2 host" list with R-21's sentence, which 0.3's release notes copy at the release's close. `.github/workflows/release.yml` is not edited. F-026's "built" mark is T053's.
+  - *Note (Run 13)*: "Upgrading a 0.2 host" added at the end of Release 0.3's section, one item, `contracts/cli.md`'s 019 sentence verbatim with F-026 and D-062; `release.yml` not edited.
 
-- [ ] T047 [US6] After T040–T046: `make linkcheck` clean. If any of them touched `docs/c4/workspace.dsl`, run `make diagrams` again and commit the views. Run quickstart §6's grep over `docs/architecture.md` and `docs/glossary.md`, and record each remaining hit and why it stays in this task's note.
+- [X] T047 [US6] After T040–T046: `make linkcheck` clean. If any of them touched `docs/c4/workspace.dsl`, run `make diagrams` again and commit the views. Run quickstart §6's grep over `docs/architecture.md` and `docs/glossary.md`, and record each remaining hit and why it stays in this task's note.
+  - *Note (Run 13)*: `make linkcheck`: 94 files, 2,098 links, 0 broken, once the five links in this feature's `brief.md` to files Run 4 deleted were made code spans, its sense unchanged. No task touched `docs/c4/workspace.dsl`, so no `make diagrams`. Quickstart §6's grep finds 81 hits in `docs/architecture.md` and 54 in `docs/glossary.md`, each one of: "pinned" of a reference with an `at` (or the library's pinned commit, or a test's pin); containerlab's reconcile; following a run's events; history naming D-062 or "until 019" (`--no-follow`, the Schedule and the kinds `following`, `pinned`, `frozen` appear only so, e.g. architecture 715 and the glossary's Check, 195–200); D-062's own "frozen at its snapshot"; a frozen copy of a contract; plain English ("cleanup follows"). None states following as current.
 
 **Checkpoint**: `make test`, `make lint`, `make linkcheck`.
+
+  *Run 13's checkpoint, 2026-10-28 (T040–T047)*:
+  - **Commits**: the documents (T040–T046) in one, then this note with the feature brief's code spans. No golden moved (`git diff --stat main -- testdata/golden` is empty), so there is no re-baseline commit.
+  - **Gates**, on the tree with the changes: `make build` statically linked; `make test` uncached (`GOFLAGS=-count=1`) passes in 43.4 s wall (load 1.37, then 3.06), `internal/cli` 39.3 s; an earlier uncached run this session took 44.7 s. `make lint` 0 issues; `go vet -tags contract,fixture,e2e ./...` clean; `make linkcheck` 0 broken.
+  - **Tier 2**: none run, since no task here names one; nothing was written to Infrahub.
+  - **The host**: no process started or stopped. The worker (2012205) and the server (2012228) still run a binary that reads `(deleted)`. T048 restarts both.
+  - **How**: T040, T041, T043 and T044 were written by four parallel sub-sessions under one set of rules (the code and `contracts/cli.md`'s 019 section as the truth, history marked "until 019"), each reporting its remaining grep hits; T042, T045–T047 by this session.
+  - **For later tasks**:
+    - `docs/development.md`'s and `README.md`'s tier-3 durations are the script's estimate beside the dated pre-019 figures; T051's measured times should replace them, and no task names those two files for it (T054 is `CLAUDE.md`'s).
+    - The README's two steps to a snapshot are shaped, not recorded; T049's hand step can confirm their lines.
+    - T025's contract gap (`verify.schema.json`'s `twin.source` lacks `snapshot`) and R-08's literal reach are still open.
 
 ---
 

@@ -20,7 +20,7 @@ SPECIFY_FEATURE_DIRECTORY=specs/019-following-removed GIT_BRANCH_NAME=019-follow
 - **The reconcile is the core's last reader of a branch.** Since 018, every workflow the
   core runs but the reconcile starts with a snapshot id and a bundle id
   ([D-061](../../docs/decisions.md#d-061)). `ReadIntent`, `Compile` and `RunsInFlight` have
-  no caller but [provision/workflow_reconcile.go](../../internal/provision/workflow_reconcile.go);
+  no caller but `provision/workflow_reconcile.go`;
   `bundles/.reads/` is theirs alone; and provision's own read-and-compile branch is dead,
   since all four of the server's `ProvisionInput`s set a bundle id and none of the nine
   recorded histories schedules either activity (018 research R-10). Until the reconcile
@@ -73,7 +73,7 @@ SPECIFY_FEATURE_DIRECTORY=specs/019-following-removed GIT_BRANCH_NAME=019-follow
 ## What changes, and nothing else
 
 1. **The reconcile goes.**
-   - [provision/workflow_reconcile.go](../../internal/provision/workflow_reconcile.go) goes,
+   - `provision/workflow_reconcile.go` goes,
      with the Schedule `fylgja-follow`, the workflow type `Reconcile` and the id prefix
      `fylgja-reconcile-`.
    - Three of its helpers are used elsewhere and move first: `withoutPresence` (the step,
@@ -165,10 +165,8 @@ SPECIFY_FEATURE_DIRECTORY=specs/019-following-removed GIT_BRANCH_NAME=019-follow
      create, the orphan's dry run and case 6's create, plus the header comment.
    - **Tier 3 keeps nine cases.**
 8. **Tests that go whole:**
-   - [workflow_reconcile_test.go](../../internal/provision/workflow_reconcile_test.go) and
-     [activities_test.go](../../internal/provision/activities_test.go).
-   - [internal/stage/following_contract_test.go](../../internal/stage/following_contract_test.go),
-     tier 2's `TestFollowingDetection`.
+   - `workflow_reconcile_test.go` and `activities_test.go`.
+   - `internal/stage/following_contract_test.go`, tier 2's `TestFollowingDetection`.
    - The histories `cancel-during-follow` and `cancel-during-stop-following`, with their
      replay cases.
    - The following functions in cli, server and provision, about 1,300 lines by the

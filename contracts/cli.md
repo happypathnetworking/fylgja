@@ -1,11 +1,12 @@
-# CLI contract: M13 — API; 014 — the stage surface; 015 — the rehearsal; 017 — the scope and the DCIM reader; 018 — snapshots
+# CLI contract: M13 — API; 014 — the stage surface; 015 — the rehearsal; 017 — the scope and the DCIM reader; 018 — snapshots; 019 — following removed
 
 Extends the CLI as M2–M12 built it, and 014 moves it once more: the section "014: the
 stage surface" at the end says what moved. 015 adds to it, and the section "015: the
 rehearsal" after that says what was added. 017 moves it again, and the section "017: the
 scope and the DCIM reader" says what moved. 018 makes the snapshot the core's one input,
-and the section "018: snapshots", last, says what moved. **Everything not named here is as
-M12 left it**:
+and the section "018: snapshots" says what moved. 019 removes following from the core, and
+the section "019: following removed", last, says what moved. **Everything not named here is
+as M12 left it**:
 every command's text on stdout and stderr, its `--json` document, each identifier, step,
 object and message, and each exit status. Identifiers, exit statuses and the JSON
 documents are the contract; text is illustrative except where a sentence is quoted. The
@@ -15,7 +16,8 @@ findings blocks, `twin.json` to `6` and the schemas that carry the record's stag
 moved `twin.json` to `7` and added the rehearsal's block; 017 moved the CTM to `2`, the
 bundle manifest to `5`, `twin.json` to `8` and PSP to `0.7`, and retired the contract
 version; 018 added the snapshot `1`, moved `twin.json` to `9`, and retired `twin compile
---ctm` and the bundle's CTM sidecar.
+--ctm` and the bundle's CTM sidecar; 019 moved `twin.json` to `10` and removed the following
+blocks from the findings document and the `show` block.
 
 ## `fylgja serve [--listen <host:port>]... [--psp-dir <dir>]`
 
@@ -99,7 +101,7 @@ request to the API and prints what comes back.
   state of the host, Infrahub and the workflow service.
 - **Every refusal with a rule identifier is the server's**, those M2–M12 made "before
   any connection" included: a missing `--branch`, a flag conflict, an empty
-  `--interval=`, `--wait=` or `--waypoint=` (moved at 014: `--stage=`), and since 017 an
+  `--interval=` (an unknown flag since 019), `--wait=` or `--waypoint=` (moved at 014: `--stage=`), and since 017 an
   empty `--scope=`. "Before any connection" now means before the
   server connects to Infrahub or the workflow service.
 - **The client's own errors are its argument parser's**: an unknown flag, a wrong
@@ -257,14 +259,16 @@ exit status changes. `serve`'s refusals to start and the build line have no iden
 |---|---|---|
 | the API | `1` | new: [api.md](api.md), [api.schema.json](api.schema.json) |
 | findings | `1` | none; the four identifiers match its `rule` pattern |
-| bundle manifest, `twin.json`, PSP, CTM, contract | `4`, `5`, `0.6`, `1`, `0.2` | none (`twin.json` `6` since 014, `7` since 015; since 017 the bundle manifest `5`, `twin.json` `8`, PSP `0.7` and CTM `2`, and the contract version retired; since 018 `twin.json` `9`, and the snapshot `1` new) |
+| bundle manifest, `twin.json`, PSP, CTM, contract | `4`, `5`, `0.6`, `1`, `0.2` | none (`twin.json` `6` since 014, `7` since 015; since 017 the bundle manifest `5`, `twin.json` `8`, PSP `0.7` and CTM `2`, and the contract version retired; since 018 `twin.json` `9`, and the snapshot `1` new; since 019 `twin.json` `10`) |
 
 ## Workflows and activities
 
 None is added, removed or changed. `fylgja-provision`, `fylgja-destroy`, `fylgja-step`,
 `Reconcile`, the Schedule, all twenty activities and every wire type are M12's, and the
 nine recorded histories replay. 015 adds one workflow, `fylgja-rehearse`, below; 017 adds
-none, its scope riding the runs' inputs; 018 adds none, its snapshot id riding them too. The server starts, follows and cancels runs through
+none, its scope riding the runs' inputs; 018 adds none, its snapshot id riding them too; 019
+removes `Reconcile`, the Schedule and five activities ("019: following removed", below). The
+server starts, follows and cancels runs through
 `provision.Service`, as the CLI did. `worker run` is M12's, with `--psp-dir` now its own
 flag.
 
@@ -276,7 +280,7 @@ Who reads each variable from M13:
 |---|---|---|---|
 | `FYLGJA_API_ADDRESS` | yes | no (`--listen`) | no |
 | `FYLGJA_API_TOKEN` | yes | yes | no |
-| `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` | no | yes | yes |
+| `INFRAHUB_ADDRESS`, `INFRAHUB_API_TOKEN` | no | yes | no (yes until 019) |
 | `FYLGJA_TEMPORAL_ADDRESS`, `_NAMESPACE` | no | yes | yes |
 | `FYLGJA_STATE_ROOT` | no | yes | yes |
 | `FYLGJA_HOST_MEMORY_MB` | no | yes | yes |
@@ -291,8 +295,9 @@ two checks of 015, inside Infrahub's task workers, are clients too, and read
 ## Tier 3 (`scripts/e2e.sh`)
 
 Eight cases, M12's, unchanged in what they assert (cases 7 and 8 moved to stages at 014,
-and case 9 added at 015, every case moved to the library's kinds at 017, and the records'
-assertions moved to the snapshot at 018, below). The
+and case 9 added at 015, every case moved to the library's kinds at 017, the records'
+assertions moved to the snapshot at 018, and case 5 moved from following to a frozen twin
+and two steps at 019, below). The
 script starts a server of its own
 from the tree, with a token it makes for the run, and stops it in its trap. Every
 `fylgja` command runs with `PATH`, `HOME`, `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN`
@@ -311,6 +316,9 @@ operator writes between them as `FylgjaStage` objects ([schema/README.md](../sch
 documents are the contract; text is illustrative except where a sentence is quoted.
 
 ### The commands
+
+Moved at 019: nothing follows, and `twin step` takes a stage of any proposed change or a
+snapshot ("019: following removed", below).
 
 ```
 fylgja stage list  [--branch <b>]             # every open proposed change's stages, or one's; marks the twin's
@@ -399,6 +407,9 @@ snapshots").
 
 ### `--stage` on `twin create` and `intent read`
 
+Moved at 019: `--interval`, `dry_run.follow` and the closing line's `; not following` are
+gone ("019: following removed", below).
+
 The resolved line first, before the run or the read:
 
 ```
@@ -416,6 +427,9 @@ closing line names the stage, as `twin show`'s kind line does (below): `pinned a
 change-1/cabled; not following`.
 
 ### `twin step [--stage <branch>/<label>]`
+
+Moved at 019: a step takes a stage of any proposed change or a snapshot, and its refusals
+move ("019: following removed", below).
 
 The first lines:
 
@@ -454,6 +468,9 @@ plan, the run's start).
 
 ### `twin show`, `twin verify`, `schema check`
 
+Moved at 019: the kind line names the snapshot, and so does `twin verify`'s first line
+("019: following removed", below).
+
 `twin show`'s kind line is `pinned at …, stage change-1/cabled; not following`, and after a
 step `pinned at …, stage change-1/live (stepped from change-1/cabled by run fylgja-step …,
 ended …); not following`; `in_flight` names `stepping towards stage change-1/live`. `twin
@@ -476,6 +493,9 @@ and the document's `verified.stages` carries `kind`, `present`, `missing`, `exte
 `file`.
 
 ### Identifiers
+
+Moved at 019: `stage.flags.conflict` names no `--interval`, `step.target.foreign` is retired
+and `step.twin.unsteppable` is reworded ("019: following removed", below).
 
 Twelve `stage.*` rules, seven of them moved at 014 from the waypoint's and five new; one M11
 rule renamed; `waypoint.time.reversed` dropped, since marks are ordered by their `at`. The
@@ -503,6 +523,8 @@ step `stage` and the rule `stage.failed` are the staging step's, as before. A re
 status, step or operation is new beyond `stage.list` and `stage.plan`.
 
 ### Formats and versions
+
+Moved at 019: `dry_run.follow` is gone ("019: following removed", below).
 
 | Format | Version | Change |
 |---|---|---|
@@ -542,6 +564,9 @@ is [api.md](api.md), "015: the rehearsal"; the block is
 [rehearsal.schema.json](rehearsal.schema.json).
 
 ### `twin rehearse --branch <b> [--markdown] [--json]`
+
+Moved at 019: every deadline is 30 s shorter, since the baseline's provision stops nothing
+("019: following removed", below).
 
 A client's command and a run command: one request, the frames printed, the exit by the
 document. It needs everything `twin create`, `twin step`, `twin verify` and `twin destroy`
@@ -712,6 +737,9 @@ Nine, each `rehearsal.*`. `run.cancelled`, `run.in_flight`, `run.worker.absent`,
 
 ### `twin show`, `twin verify`, `twin destroy`, `stage list` beside a rehearsal
 
+Moved at 019: the kind line names the snapshot, and no line says `not following` ("019:
+following removed", below).
+
 - `twin show`'s kind line for a rehearsal's twin is `pinned at …, stage change-1/seeded, of
   rehearsal run fylgja-rehearse 01a1…; not following`, and while the run is in flight it ends
   `; rehearsal run fylgja-rehearse 01a1… is at stage change-1/third-link, step push`;
@@ -828,6 +856,9 @@ block of an operation it does not run.
 
 ### Workflows and activities
 
+Moved at 019: the worker serves four workflows, `Reconcile` gone ("019: following removed",
+below).
+
 One workflow is added, `fylgja-rehearse` ([D-051](../docs/decisions.md#d-051)), with a
 fixed id, its children `fylgja-provision`, `fylgja-step` and `fylgja-destroy` under theirs;
 the worker serves five. No activity, budget or version marker is added or changed, and the
@@ -868,6 +899,9 @@ exit statuses and the JSON documents are the contract; text is illustrative exce
 sentence is quoted. The wire is [api.md](api.md), "017: the scope and the DCIM reader".
 
 ### The scope
+
+Moved at 019: nothing follows, so no check reads under a twin's scope ("019: following
+removed", below).
 
 `tag:<name>`: the literal `tag:` and one shell word (`^tag:\S+$`). It names the devices a
 twin is of: every `DcimDevice` on the branch carrying the `BuiltinTag` of that name,
@@ -1059,6 +1093,9 @@ otherwise. `platform.unsupported` stays, for a CTM naming a package this build l
 
 ### Workflows and activities
 
+Moved at 019: `StartFollowingInput`, `ReconcileInput` and `ReadIntentInput` are gone with
+the reconcile ("019: following removed", below).
+
 None is added, removed or changed: no workflow decision, activity, budget or version
 marker. `ProvisionInput`, `StartFollowingInput`, `ReconcileInput` and `ReadIntentInput`
 carry `scope`, omitted when empty, so the nine recorded histories replay; the runs branch
@@ -1092,7 +1129,13 @@ and a bundle id and never a branch. **Everything not named here is as 017 left i
 Identifiers, exit statuses and the JSON documents are the contract; text is illustrative
 except where a sentence is quoted. The wire is [api.md](api.md), "018: snapshots".
 
+Moved at 019: the reconcile is gone, so every workflow takes a snapshot id and a bundle id
+("019: following removed", below).
+
 ### The commands
+
+Moved at 019: nothing follows, `--interval` and `--no-follow` are unknown flags, and a
+`--snapshot` twin steps ("019: following removed", below).
 
 ```
 fylgja twin create   --branch <b> [--at <t>] [--scope tag:<name>] [--interval <d> | --no-follow] [--dry-run]   # as before: the server reads, takes, files, compiles and starts
@@ -1157,6 +1200,9 @@ fylgja twin rehearse --branch <b> …                                           
   the directory at start; the first snapshot filed does.
 
 ### The text
+
+Moved at 019: the dry run has no `follow:` line, and the kind line is `snapshot …` ("019:
+following removed", below).
 
 - `twin create` and its dry run print, before the run's `start` (or the dry run's
   report):
@@ -1223,6 +1269,8 @@ fylgja twin rehearse --branch <b> …                                           
 
 ### Identifiers
 
+Moved at 019: `follow.flags.conflict` is retired ("019: following removed", below).
+
 Five added. No status, step or exit is new.
 
 | Rule | Severity, exit, step | Object | When |
@@ -1253,6 +1301,9 @@ those beside it names no file and is the client's own `operation.failed`, exit 2
 connection; beside one, the guard answers.
 
 ### Formats and versions
+
+Moved at 019: `twin.json` `10`, and the following blocks and kinds are gone ("019: following
+removed", below).
 
 | Format | Version | Change |
 |---|---|---|
@@ -1287,6 +1338,9 @@ connection; beside one, the guard answers.
 
 ### Workflows and activities
 
+Moved at 019: the reconcile and the provision's read-and-compile branch are gone, with two
+histories ("019: following removed", below).
+
 None is added, removed or changed: no workflow decision, activity, budget or version
 marker. `ProvisionInput`, `RecordInput`, `StepSide` and `RehearseStage` carry
 `snapshot_id`, omitted when empty, so the nine recorded histories replay; the runs branch
@@ -1296,6 +1350,8 @@ the provision workflow keeps its read-and-compile branch for the recorded histor
 the reconcile keeps both activities. The `Compile` activity files no sidecar.
 
 ### Tier 3 (`scripts/e2e.sh`)
+
+Moved at 019: case 5 steps where it rebuilt ("019: following removed", below).
 
 The nine cases, unchanged in what they assert but the records': the read-then-compile
 helper reads with `--out`, a snapshot, and compiles with `--snapshot`, and cases 1 and 2
@@ -1310,3 +1366,199 @@ three snapshot ids, the branch point's null, the create takes the plan's for `se
 each step's sides name the plan's snapshots, the target's in `twin.json` too. The marker
 grep passes over a read's snapshot (`snapshot-*.json`) where it passed over its CTM. No case
 is added.
+
+## 019: following removed
+
+A twin is frozen at its snapshot, and nothing rebuilds it but the operator
+([D-062](../docs/decisions.md#d-062)). No command makes a Schedule; the worker serves four
+workflows and fifteen activities, and reads no source of truth. **Everything not named
+here is as 018 left it.** Identifiers, exit statuses and the JSON documents are the
+contract; text is illustrative except where a sentence is quoted. The wire is
+[api.md](api.md), "019: following removed".
+
+### The commands
+
+```text
+twin create --branch <b> [--at <t>] [--scope tag:<name>] [--dry-run]
+twin create --stage <b>/<label> [--scope tag:<name>] [--dry-run]
+twin create --snapshot <id|file> [--dry-run]
+twin step [--stage <b>/<label> | --snapshot <id|file>] [--allow-restart] [--wait <d>] [--dry-run]
+twin destroy
+twin show [--json]
+```
+
+- `--interval` and `--no-follow` are unknown flags on every command: cobra's `unknown flag:
+  --interval`, exit 2, before any request.
+- **`twin create`** follows nothing, from any reference: its document has no `following`
+  key, its dry run no `follow:` line and no `dry_run.follow`, and a ready twin's text ends
+  at `twin directory …`, since the record line before it names the stage and the `at`.
+- **`twin step`** steps any twin whose record names a snapshot, built by `--branch`,
+  `--stage` or `--snapshot`:
+  - `--stage <b>/<label>` names a stage of **any** proposed change, resolved, judged and
+    read under the record's scope. Left out, it means the next stage of the twin's own
+    proposed change; for a twin whose record names no stage, a target is required.
+  - `--snapshot <id|file>` takes the forms `twin create --snapshot` takes: an id the
+    server's store holds, or a file read here and sent, which the server files under its
+    id. No request reaches Infrahub for it. A snapshot of any branch. The server resolves
+    it as a create does, compiles it and files its bundle, each refusal at `resolve` or
+    `compile` before any run, and the twin untouched.
+  - The record afterwards names the target's branch, `at`, snapshot and bundle, and its
+    stage, or none for a snapshot target, and keeps its `source`. Scope and mapping are the
+    twin's for life: a target of another scope or mapping is refused before any run, and
+    a snapshot target's bundle is then never filed.
+  - A twin `twin provision` built, a record of `8` or earlier, and a record naming no
+    snapshot do not step.
+  - `stage.twin.moved` is given only for a target in the record's own proposed change;
+    `stage list` gives none beside a twin whose record names no stage.
+- **`twin destroy`** is the destroy workflow alone; it stops nothing first.
+
+### The text
+
+The twin line of a step, for a twin that names no stage:
+
+```text
+twin: snapshot 576933ec… (bundle f764e1fa…), branch fylgja-test-readme, read at 2026-10-28T09:14:02.118Z; 3 nodes
+```
+
+A snapshot target's line, in place of a stage's resolution line, and the step:
+
+```text
+target: snapshot 9c2d01e7… (branch fylgja-test-readme, read at 2026-10-28T09:21:40.007Z)
+step snapshot 576933ec… → snapshot 9c2d01e7… (f764e1fa… → 2b7e90c1…):
+  artifacts: n1 device-config 43e8fd0c… → 9a0177b2…
+```
+
+A stage side is named `<branch>/<label>` in the step's line and `stage <branch>/<label>`
+elsewhere; a snapshot side `snapshot <8>…` everywhere. The closing lines:
+
+```text
+stepped to snapshot 9c2d01e7… (bundle 2b7e90c1…) in 41s: push n1 6s; settled after 4s
+unchanged; the record moves to snapshot 9c2d01e7… (bundle f764e1fa…) in 3s
+diverged towards snapshot 9c2d01e7… (bundle 2b7e90c1…) at phase push: …; the twin is up at stage change-1/seeded (bundle 35aea06f…); fylgja twin destroy clears it
+```
+
+`twin show`'s kind line:
+
+```text
+kind: snapshot 576933ec… (branch fylgja-test-readme, read at 2026-10-28T09:14:02.118Z)
+kind: snapshot 35aea06f… (branch change-1 at 2026-10-28T09:01:00.000001Z), stage change-1/seeded
+kind: snapshot 9c2d01e7… (branch change-1 at …), stage change-1/third-link (stepped from change-1/seeded by run fylgja-step 0a1b…, ended …)
+kind: snapshot 9c2d01e7… (branch fylgja-test-readme, read at …) (stepped from snapshot 576933ec… by run fylgja-step 0a1b…, ended …)
+kind: snapshot none (branch fylgja-test-readme, read at …)
+kind: from a bundle
+kind: none
+```
+
+- The `snapshot none` line is followed by the note `the twin's record names no snapshot, so
+  fylgja twin step refuses it; fylgja twin destroy clears it`. A twin with no `at` keeps
+  the best-effort note; `from a bundle` notes `provisioned from a bundle; read time
+  unknown`; 018's note `built from snapshot <id>` is gone, since the kind line and the
+  record line name the snapshot.
+- "; not following" is gone from every line, and so are the last check and the next.
+- A step in flight: `…; run fylgja-step <run> is at step push, stepping towards snapshot
+  9c2d01e7…`, or `stepping towards stage <branch>/<label>`.
+- An unreachable workflow service: the warning `show.service.unreachable`, `the workflow
+  service at localhost:7233 did not answer within 5s: whether a run is in flight is
+  unknown`, whatever the cause, and the line `in flight: unknown (workflow service
+  unreachable at localhost:7233)`; the host and the record are reported, exit 0.
+
+`twin verify`'s first line names the snapshot of the staged bundle beside it: `twin: branch
+fylgja-test-readme (snapshot 9c2d01e7…, bundle 2b7e90c1…), ready; …`, `snapshot none`
+when the record names none.
+
+The dry run of `twin create` has no `follow:` line. A rehearsal's deadline is 30 s shorter:
+015's sample reads `deadline 32m30s` and `of the 1950s deadline`.
+
+### Identifiers
+
+| Identifier | Severity, exit, step | When |
+|---|---|---|
+| `snapshot.flags.conflict` | rejection, 2, start | gains: `--stage` beside `--snapshot` on `twin step`, object `--stage` |
+| `step.target.unknown` | rejection, 1, resolve | gains: no `--stage` and no `--snapshot` for a twin whose record names no stage, object the record's `bundle_id`, read before any connection |
+| `step.twin.unsteppable` | rejection, 1, resolve | reworded: a bundle twin, a record of 8, a record naming no snapshot; and a target whose scope or mapping differs from the record's, object the target, naming both |
+| `stage.flags.conflict` | rejection, 2, start | `--branch` or `--at` beside `--stage` (no `--interval`) |
+| `show.service.unreachable` | warning | `whether a run is in flight is unknown` |
+| `snapshot.unknown`, `snapshot.id.mismatch`, `snapshot.invalid`, `snapshot.version.unsupported` | as on create | on `twin step --snapshot`, at resolve |
+
+The wordings, in shape:
+
+- `snapshot.flags.conflict`: `--stage is meaningless with --snapshot: the snapshot is the
+  target`.
+- `step.target.unknown` with no target: `the twin names no stage, so there is no next stage
+  to step to; give --stage <branch>/<label> or --snapshot <id|file>`; with the record's
+  proposed change closed: `proposed change <id> on branch change-1, the twin's, is no
+  longer open (the open proposed change on change-1 is pc-9), so the twin has no next
+  stage; give --stage <branch>/<label> or --snapshot <id|file>`. A step no longer stays
+  inside the proposed change the twin was built from: a `--stage` of another is the
+  target, refused `step.target.unknown` naming that proposed change's stages when it has
+  no such label.
+- `step.twin.unsteppable`, judged after 017's refusal of a record naming no scope, a bundle
+  twin's first: `the twin was provisioned from a bundle, which names no snapshot; only a
+  twin whose record names a snapshot steps; fylgja twin destroy clears it`; `the twin was
+  created from a record version that names no snapshot (twin.json 8); only a twin whose
+  record names a snapshot steps; fylgja twin destroy clears it`; `the twin's record names
+  no snapshot (an earlier build's rebuild made it); only a twin whose record names a
+  snapshot steps; fylgja twin destroy clears it`. No twin ends `…; a twin built from a
+  snapshot steps (fylgja twin create --branch, --stage or --snapshot)`, and an orphan, an
+  unreadable record, a lab gone and a leftover end `…; a twin built from a snapshot steps;
+  fylgja twin destroy clears it`, where each said a twin built from a stage steps. A
+  target held to the record: `the twin's record names scope tag:fylgja and mapping infrahub-dcim
+  opsmill/schema-library 26336e9; snapshot 576933ec… names scope tag:other and mapping
+  infrahub-dcim opsmill/schema-library 26336e9; a twin's scope and mapping are fixed when
+  it is created; fylgja twin destroy and create again to change them`.
+
+**Retired**: `follow.interval.invalid`, `follow.flags.conflict`, `follow.start.failed`,
+`follow.stop.failed`, `follow.stopped`, `check.skipped`, `rebuild.failed`,
+`step.target.foreign`; the step `follow`.
+
+### Formats and versions
+
+| Format | Version | Change |
+|---|---|---|
+| `twin.json` | `10` | [twin.schema.json](twin.schema.json), `$id` `…/contracts/twin/v10`: a stage needs `provenance.at` alone, so a `--snapshot` twin stepped to a stage names it beside `source: snapshot`; a step keeps `source`; `snapshot_id` null names an earlier build's rebuild, not a check's |
+| findings | `1` | [findings.schema.json](findings.schema.json): `following` and `dry_run.follow` removed; the step `follow` and the eight identifiers retired |
+| the `show` block | `1` | [show.schema.json](show.schema.json): `kind` one of `none`, `snapshot`, `from_bundle` and `diverged`; `following`, `last_check` and `$defs/check` removed |
+| the `verify` block | `1` | [verify.schema.json](verify.schema.json): `twin.snapshot_id`, required, the staged bundle's snapshot (the record's, or the step's target's for a diverged twin), or null |
+| the `stages` block | `1` | [stages.schema.json](stages.schema.json): `$defs/side_name`, a step's side named `<branch>/<label>` or `snapshot <8 hex>…`; additive |
+| the `step` block | `1` | [step.schema.json](step.schema.json): unchanged in shape; its description says a side names no stage when the step's target was a snapshot, or when the twin was built from one and has not stepped to a stage |
+| the API | `1` | [api.schema.json](api.schema.json): `twin.create` takes neither `interval` nor `no_follow`; `twin.step` takes `snapshot`, with one file beside a path |
+| bundle manifest, CTM, snapshot, PSP | `5`, `2`, `1`, `0.7` | none: the goldens stand |
+
+- The versions of the findings document and of the API did not move: the removals are
+  accepted pre-1.0, as the API's version `1` accepted 014's, 015's, 017's and 018's
+  changes.
+- A record of `9` reads as 018 wrote it. The earlier contracts are frozen where tests read
+  them, under each of `internal/lab`, `internal/findings`, `internal/server` and
+  `internal/cli`'s `testdata/contracts/018-snapshots/` (`twin.json` `9`, and the findings
+  and `show` contracts with their following blocks), so a document an earlier build wrote
+  still validates under 018's contract.
+
+### Workflows and activities
+
+`Provision`, `Destroy`, `Step`, `Rehearse`, and the lab's fifteen activities. `Reconcile`,
+the Schedule `fylgja-follow`, `ReadIntent`, `Compile`, `RunsInFlight`, `StartFollowing`
+and `StopFollowing` are gone, and `bundles/.reads/` is written by nothing. A provision
+with no bundle id ends `operation.failed` at `host_check` and schedules no activity. Seven
+recorded histories replay; the two of a cancelled following went with it. The rehearsal's
+baseline provision stops nothing, so every rehearsal's `deadline_s` is 30 s shorter.
+
+### Environment
+
+The worker reads `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN` no longer.
+
+### Upgrading
+
+Destroy a following twin before upgrading a host of an earlier build: a Schedule
+`fylgja-follow` left behind starts a workflow no worker of this build serves, and this
+build carries no code to clear it.
+
+### Tier 3 (`scripts/e2e.sh`)
+
+Nine cases. Case 5 creates from `--branch`, edits the branch and shows, over 330 s from
+the moment the change is visible to a read, that no run starts (the workflow service lists
+none since the create's answer) and that the record, the containers and the kind line do
+not move; then steps to a snapshot by file (an artifact-only change, the readback and
+verify 5a, which names the snapshot) and by id (a topology change), and `twin show` names
+the step from the first. Cases 7 and 8 read the kind `snapshot` where they read `pinned`.
+No case passes `--no-follow` or `--interval`, and none makes a Schedule; the trap still
+refuses a stray `fylgja-follow`.

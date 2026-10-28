@@ -1,11 +1,12 @@
-# API contract: M13, version 1; 014's stage surface; 015's rehearsal; 017's scope; 018's snapshots
+# API contract: M13, version 1; 014's stage surface; 015's rehearsal; 017's scope; 018's snapshots; 019's following removed
 
 What crosses between a client and `fylgja serve`. The shapes are
 [api.schema.json](api.schema.json); the documents are M12's
 ([findings.schema.json](findings.schema.json) and the blocks beside it), as 014 moved them
 ("014: the stage surface", at the end) and 015 added to them ("015: the rehearsal", after
 it), and 017 moved them again ("017: the scope and the DCIM reader"), and 018 added the
-snapshot ("018: snapshots", last). The addresses, the statuses, the frame kinds and the
+snapshot ("018: snapshots"), and 019 removed following from them ("019: following removed",
+last). The addresses, the statuses, the frame kinds and the
 document are the contract; a sentence is contract only where it is quoted.
 
 ## Transport
@@ -49,9 +50,9 @@ frames. A dry run is its operation with `dry_run` set.
 
 | Operation | Path | `args` | Files in | Files out | Takes an interrupt |
 |---|---|---|---|---|---|
-| `twin.create` | `/v1/twin/create` | `branch`, `at`, `stage`, `interval`, `no_follow`, `dry_run`, `scope`, `snapshot` | the snapshot, when `snapshot` is a path | | from `start` |
+| `twin.create` | `/v1/twin/create` | `branch`, `at`, `stage`, `dry_run`, `scope`, `snapshot` | the snapshot, when `snapshot` is a path | | from `start` |
 | `twin.provision` | `/v1/twin/provision` | `bundle`, `dry_run` | the bundle's regular files | | from `start` |
-| `twin.step` | `/v1/twin/step` | `stage`, `allow_restart`, `dry_run`, `wait` | | | from `start` |
+| `twin.step` | `/v1/twin/step` | `stage`, `snapshot`, `allow_restart`, `dry_run`, `wait` | the snapshot, when `snapshot` is a path | | from `start` |
 | `twin.destroy` | `/v1/twin/destroy` | | | | no |
 | `twin.show` | `/v1/twin/show` | | | | no |
 | `twin.verify` | `/v1/twin/verify` | `wait`, `args` | | | no |
@@ -71,10 +72,12 @@ runs or to fetch a filed bundle. Moved at 014: `waypoint.list` and `waypoint.pla
 `twin.create`, `twin.rehearse`, `intent.read`, `stage.list` and `stage.plan`. Moved at 018:
 `twin.compile` takes `snapshot` and the snapshot where it took `ctm` and the CTM,
 `intent.read` answers with a snapshot where it answered with the CTM, and `twin.create`
-takes the argument `snapshot`, with the snapshot's file when it is a path.
+takes the argument `snapshot`, with the snapshot's file when it is a path. Moved at 019:
+`twin.create` takes neither `interval` nor `no_follow`, and `twin.step` takes `snapshot` as
+`twin.create` does.
 
 **Arguments are as given.** An absent key is a flag that was not given; a present key is
-one that was, whatever its value (`"interval": ""` is `--interval=`). Every guard is the
+one that was, whatever its value (`"stage": ""` is `--stage=`). Every guard is the
 server's, under M12's identifier, wording and exit status, and each is made before the
 server connects to Infrahub or the workflow service where M2–M12 said "before any
 connection". A path in `args` is used for wording and the document's subject alone: the
@@ -131,8 +134,8 @@ no bytes.
 
 With `render` absent, a command that is one answer is its `document` frame alone, but for
 `intent.read` and `twin.compile`, whose `files` frame comes first. A run is its `start`,
-its `run`, its `event`s and its `document`, and `twin.destroy` its following's `event`s,
-its `start`, the destroy's `event`s and its `document`, with no `run`.
+its `run`, its `event`s and its `document`, and `twin.destroy` its `start`, the destroy's
+`event`s and its `document`, with no `run`.
 
 **The document** is the one the command printed under `--json` at M12:
 `findings_version` `1`, the same operation, status, subject, blocks and findings. Its
@@ -160,10 +163,10 @@ own fault, with a body of [`$defs/problem`](api.schema.json).
 
 `twin.create`, `twin.provision` and `twin.step` start a run and stay open as its
 progress, and so does `twin.rehearse` (015). `twin.destroy` is followed the same way and takes no interrupt. Its `start`
-comes once following has stopped, just before the destroy run is started, and opens no
-stream; its answer has no `run` frame, and the document's `subject.run_id` names the
-destroy run. An answer cut after its `start` says a run may have been started and was not
-cancelled, and one cut while following stops says nothing of a run.
+comes just before the destroy run is started, and opens no stream; its answer has no `run`
+frame, and the document's `subject.run_id` names the destroy run. An answer cut after its
+`start` says a run may have been started and was not cancelled. Until 019 a destroy first
+stopped following, and its answer carried that stop's events before its `start`.
 
 ```text
 POST /v1/twin/create        Fylgja-Stream: 5f1c9a…
@@ -407,6 +410,9 @@ The core's one input is the snapshot ([D-061](../docs/decisions.md#d-061);
 transport, the token, the frames, the statuses and the files are as 017 left them, but for
 these.
 
+Moved at 019: `interval` and `no_follow` are no longer arguments of `twin.create` ("019:
+following removed", below).
+
 | | Operation | `args` | Files in | Files out |
 |---|---|---|---|---|
 | argument added | `twin.create` | `snapshot` | the snapshot, when `snapshot` is a path | |
@@ -451,3 +457,33 @@ these.
 - **The checks** `fylgja-step` and `fylgja-twin` send nothing new: the plan's and the
   rehearsal's documents gain a key per stage, which neither reads, and the report's table
   gains a column.
+
+## 019: following removed
+
+A twin is frozen at its snapshot, and nothing rebuilds it but the operator
+([D-062](../docs/decisions.md#d-062); [cli.md](cli.md), "019: following removed", says what
+each command does). The API's version stays `1`, pre-1.0 as at 014, 015, 017 and 018.
+Every operation, the transport, the token, the frames, the statuses and the files are as
+018 left them, but for these.
+
+| | Operation | `args` | Files in | Files out |
+|---|---|---|---|---|
+| arguments removed | `twin.create` | `interval`, `no_follow` | | |
+| argument added | `twin.step` | `snapshot` | the snapshot, when `snapshot` is a path | |
+
+- `twin.create` takes `branch`, `at`, `stage`, `dry_run`, `scope`, `snapshot`. A request
+  carrying `interval` or `no_follow` is refused as any argument not taken: `400`, `the
+  request is not one: twin.create takes no argument "interval"`, under version `1`,
+  pre-1.0 as at 014, 015, 017 and 018.
+- `twin.step` takes `stage`, `snapshot`, `allow_restart`, `dry_run`, `wait`, and its
+  request carries one file, under the `snapshot` path, when `snapshot` is not an id, and
+  none otherwise; any other is `operation.failed`, exit 2, as on `twin.create` (`twin
+  step` for `twin create` in its sentence). `stage` beside `snapshot` is
+  `snapshot.flags.conflict` at `start`, exit 2, object `--stage`, before the request's
+  files are held to their shape; the client then reads and sends no file.
+- `twin.destroy`'s answer carries no following event, and its `start` is the destroy run's
+  own.
+- The documents lose `following`, `dry_run.follow`, `last_check` and the show kinds
+  `pinned`, `frozen` and `following`, which become `snapshot`; the verify block's twin
+  gains `snapshot_id`; the identifiers retired and moved are cli.md's.
+- The checks `fylgja-step` and `fylgja-twin` send nothing new and read nothing removed.

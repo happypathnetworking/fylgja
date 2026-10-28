@@ -1078,6 +1078,46 @@ SC-008).
 
 - [ ] T056 [operator] The operator's review of the feature, the commits by hand that the runs left uncommitted, and `make command-log` once the session is closed. Record the review's outcome in this task's note, including the merge and the push, which are the operator's.
 
+  - *2026-10-28 18:31Z, at `b2dd673`, Run 17 of the converge loop (live): left unchecked.* The review is the operator's, and a session cannot run the command log for a session that is still open. Nothing was merged, pushed or fetched. What is ready:
+    - **The feature's diff**: `git diff c8d46c7 b2dd673`, from `main` as it stands, the branch's base.
+      - 51 commits (27 `docs`, 10 `refactor`, 8 `feat`, 6 `test`) over 170 files, +14,996 and −10,447 lines.
+      - The code is 49 Go files (+1,083 −2,508) and their tests 70 (+3,400 −5,075). Seven files go whole: the reconcile workflow, the control activities, their two tests, two replay histories and `internal/stage/following_contract_test.go`.
+      - The seven contract copies frozen under `internal/*/testdata/contracts/018-snapshots/` add 5,036 lines, and the feature's 10 files under `specs/019-following-removed/` 3,785.
+      - One commit is not 019's: `691632c`, 016's brief rewritten against 017–019, which merges with it.
+    - **`origin`**: its `main` is `0e82037`, read with `git ls-remote` at 18:29Z, which moves no remote-tracking ref. It is an ancestor of the branch, and local `main` (`c8d46c7`) is one `docs` commit past it. No CI run has seen 019's code.
+      - 019 changes nothing under `infrahub/`, `.infrahub.yml`, `schema/`, `testdata/`, `.github/`, `go.mod`, the `Makefile` or `scripts/bring-up.sh`, and the checks send neither `interval` nor `no_follow`. So no import into Infrahub is owed, and no task here waits on a push.
+      - The merge and the push are the operator's, once the review is done; CI's contract job runs on that push.
+    - **To read on their own**:
+      - D-062, with the spec and the plan (`a5e8b2d`). The constitution is unamended at 2.2.0.
+      - The deletion, `1386dd8` (27 files, −5,119): the worker's four workflows and fifteen activities. Its C4 redraw is `b458f1c`.
+      - The breaking commits, pre-1.0 with no version move but `twin.json`'s: `818c231` (`--interval`, `--no-follow` and the API's `interval` and `no_follow` gone), `680eae4` (the findings and API schemas), `48b1f77` (`twin show`'s four kinds), `b263874` (following's seven rules and the step `follow` retired) and `008e40f` (`twin.json` 10).
+      - The step's new reach: `0936f8f` (only a twin whose record names a snapshot steps), `e86ec20` (`--snapshot`), `dbe0585` (a stage of any proposed change, and the no-target refusal) and `dfbd8e6` (the twin's scope and mapping held).
+      - The frozen copies, `9393bca`. There is no golden re-baseline: `testdata/` equals `main`'s.
+    - **What a session decided where the documents left it open**, each in its task's note:
+      - **R-08's literal reach** (T034, Run 10), still the operator's to confirm. Every readable record naming no stage, given no target, is refused `step.target.unknown`. That includes a bundle twin, a record naming no snapshot, a record of 5 or earlier and a diverged stage-less one, each of which meets its own refusal once given a target. Exempting the twins no target can step would change R-08's words, which FR-014 echoes.
+      - Run 6 (T018–T019): one commit, since neither half passes alone. A ready twin's text ends at its twin directory. The 018-shaped documents are held to their frozen copies by `m4FollowingDocuments()`.
+      - Run 7 (T021–T024): one commit. T025 put `snapshot_id` in `verify.schema.json`'s twin, required.
+      - Runs 9 and 10: T030 with T031, and T033 with T034, each one commit, since either half alone steps a twin wrongly.
+      - Run 12 (T037): case 5's checks as its note lists, with their `jq` filters checked offline against tier-1 documents and 018's live outputs, and the Temporal query's form read from the dev server.
+      - Run 13 (T040–T046): written by four parallel sub-sessions under one set of rules. The feature brief's five links to deleted files became code spans.
+    - **Open beyond the feature's tasks**: no task names these, and `CLAUDE.md`'s State lists them.
+      - **T025's gap**, 018's: `contracts/verify.schema.json`'s `twin.source` is `["intent", "bundle"]` (line 186), so a verify of a twin `twin create --snapshot` built writes `source: snapshot`, which the contract refuses. No test verifies such a twin.
+      - **The tier-1 budget**: the last four uncached runs (Run 16) read 43.1–45.0 s against the 45 s bound, `internal/cli` 38.7–40.5 s of it.
+      - **`internal/stages`' tier-2 headroom**: 1,690.6 s against `make test-contract`'s `-timeout 30m`, so 109 s.
+      - **The tier durations** in `docs/development.md` and `README.md`, which T051's 1,894.1 s can replace, and the README's `12 interfaces` and `14 interfaces` (T049's note).
+    - **The live tiers**: tier 2 green whole (2,009 s, `internal/intent` re-run alone) and tier 3 `E2E-OK` (1,894.1 s), both in Run 15. Since `5dd67fb`, only `CLAUDE.md`, `docs/roadmap.md`, `docs/verified-facts.md`, `specs/016-probes/brief.md` and this file have changed, so they hold for the code as it stands. Neither was re-run here.
+    - **This run's gates**, on the tree with this note: `make build` is statically linked; `GOFLAGS=-count=1 make test` passes in 43.3 s wall (load 1.98, then 2.80), `internal/cli` 38.7 s of it; `make lint` reports 0 issues.
+    - **The host**:
+      - The dev server (1039393) is up. There is no twin, no `local/twin` and no Schedule, and `clab inspect --all` is `{}`.
+      - Infrahub's `Branch` lists `main` and `fylgja-fixture` alone, and `CoreProposedChange`, `FylgjaStage` and `CoreChangeThread` each count 0.
+      - `free -m` reads 19,296 MiB available. Infrahub's eight containers hold about 7.2 GiB (Neo4j 2.8 GiB, its server 2.1 GiB), 20 hours after the operator's restart.
+      - The worker (480763) and the server (480765), started from `3794d62`, read `(deleted)`. Both are restarted from this run's commit once it is made, and verified as `CLAUDE.md` says.
+    - **Commits by hand**: none are owed. Each run committed its own work, and the tree was clean at `b2dd673` before this note.
+    - **The command log**: `local/command-log/` holds no `pending.jsonl`.
+      - `specs/019-following-removed/commands/runs.jsonl`, which is git-ignored, holds 20 entries: `specify`, `clarify`, `plan`, `tasks`, `analyze`, Run 1 and Runs 3–16.
+      - By their totals, follow-ups included, they took 23,218 s active and 23,554 s wall. T053's 22,304 s and 22,640 s are the first nineteen's, so the roadmap's figure holds.
+      - This session's entry follows when it exits. `make command-log`, run once the session that closes the feature has ended, publishes whatever that session kept.
+
 **Checkpoint**: every record true; the feature closed.
 
   *Run 16's checkpoint, 2026-10-28 (T052–T055)*:

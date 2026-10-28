@@ -1,0 +1,540 @@
+# Tasks: Probes
+
+**Input**: the design documents under `specs/016-probes/`: [plan.md](plan.md),
+[spec.md](spec.md) (clarified 2026-10-28; the plan's settlements appended),
+[research.md](research.md) (§1 verified at plan, §2 decisions R-01…R-30, §3 D-064 and the
+constitution amendment drafted, §4 owed at implement), [data-model.md](data-model.md) (§1–§13),
+[contracts/](contracts/) (`commands.md`, `formats.md`), [quickstart.md](quickstart.md); the
+[brief](brief.md); Constitution 2.2.0, amended to 2.3.0 by the operator at T002;
+[D-010](../../docs/decisions.md#d-010), [D-031](../../docs/decisions.md#d-031),
+[D-038](../../docs/decisions.md#d-038), [D-045](../../docs/decisions.md#d-045),
+[D-057](../../docs/decisions.md#d-057), [D-061](../../docs/decisions.md#d-061),
+[D-062](../../docs/decisions.md#d-062), and D-064, drafted in research §3.1 and appended by
+the operator at T002.
+
+**Tests**: requested. The brief's Exit, the spec's SC-001–SC-010 and quickstart §1, §6 and
+§7 name each tier's cases, and each is a task below. Every format test validates against
+the contract file under `contracts/`, and every earlier format against its frozen copy under
+`testdata/contracts/019-following-removed/`. **What must not move**: CTM `2`
+(`contracts/ctm.schema.json`, `internal/ctm`), PSP `0.7` and both shipped packages, the
+mapping and the reader (`internal/intent/mapping.go`, `project.go`, the two intent queries),
+the schema library's files under `schema/dcim/`, the API at `1` and findings at `1`,
+`fylgja-twin`'s `timeout` 4260 in `.infrahub.yml`, the seven replay histories under
+`internal/provision/testdata/`, and 015's gate (`internal/rehearsal/verdict.go`'s rule). **The
+goldens move exactly twice**, each on a commit of its own (FR-026, SC-009): once for bundle
+`6` (T016: the version, `probes: []` and `fidelity.synthesized: []` alone), once when the
+fixture's ports land (T035: `three-node`, `mixed` and `three-node-probed`; `lossy` not
+again). Any other run that changes `testdata/golden/` has broken the feature, and the loop
+will stop.
+
+**Organization**: the plan's "Order of the work". Phase 2 lands what every later phase
+stands on: the 019 shapes frozen, the new package `internal/probe` (the declaration, the
+package, the pure reading of `ping`), the `ping` package under `probes/`, the identifiers
+and the kind's schema file. Then the compile with snapshot `2` (US1 and US5, Phase 3), the
+kind's read and the takes (US1 and US4, Phase 4), the host (US1 and US6, Phase 5), the
+flows (US2, Phase 6), the burst and the report (US3, Phase 7), the fixture and the template
+(US6, Phase 8), tier 3's script and the contracts' prose (Phase 9), the documents (US7,
+Phase 10), the operator's import (Phase 11), the host, live (Phases 12–13), and the records
+(Phase 14). The loop runs the pure gates after every implement run, so every run must
+leave the tree green: `make build`, static, `make test`, `make lint` (with tags
+`contract,fixture,e2e`, so every tagged test must compile after every run). Story labels
+mark which story each task builds or proves.
+
+**Already done before this file** (brief, Operator steps; plan; research §3): `main` pushed
+to `origin` before the chain (`origin/main` at `7a1a180`, 2026-10-28); the roadmap's
+Release 0.3 item 4 and F-014's table row and decisions bullet say `ping` only; D-064 and the
+2.3.0 amendment drafted (research §3), not yet appended; R-30's settlements recorded in the
+spec's Clarifications. No operator task is owed before Phase 2 but T002, at `analyze`.
+
+**Decisions this file takes, against or beyond the plan's text** (each for `analyze` to
+settle at T002):
+
+- **Snapshot `2` lands with the compile (Phase 3, T010), before the takes.** The plan's
+  order puts it in item 3, but the fourth golden and the compile's tests read wrapped
+  fixtures through `internal/snapshot`, which refuses a non-empty `probes` list until it
+  moves. The takes (Phase 4) stay where the plan has them.
+- **The probed fixture's CTM carries the two probe-ready ports from Phase 3, by hand.**
+  The three-node fixture has no uncabled port today (research §1.4: six ethernet ports, all
+  cabled), so `testdata/snapshot/three-node-probed.json` (T016) is the three-node CTM plus
+  `ethernet-1/10` and `ethernet-1/11` on each device, uncabled, R-19's names, wrapped with
+  `testdata/probes/n1-loop.json`'s probe. Phase 8 (T035) makes `testdata/ctm/three-node.json`
+  match it once the seed writes the ports, which is the goldens' second move.
+- **The kind's load (T017) sits between its schema file (T009) and its reader (T018).**
+  genqlient generates `internal/intent/generated.go` against `schema/infrahub.graphql`,
+  which `make sdl` fetches from `main`, so the reader's query cannot be generated until the
+  operator has loaded the kind. The brief's "after the plan, before tier 2" holds; this
+  file puts it at the latest point its dependents allow, mid-implement.
+- **`testsupport.WriteProbes` and `DeleteProbes` land with the tier-2 test (T021)**, before
+  the fixture tool's flags (T033), which reuse them.
+- **Frozen copies go into two packages that have no `testdata/contracts` today**
+  (`internal/snapshot`, `internal/compiler`), as new directories. 019's T007 found that the
+  step, verify and rehearsal loaders read a block a frozen directory lacks from
+  `contracts/`, so a copy of those three is kept only where a test validates a 019-shaped
+  document; T003 records the count and any copy not made.
+- **The template is proved before the operator's import** (T034) by rendering it locally
+  against a throwaway branch seeded with addressed ports (`infrahubctl render`, which runs
+  the tree's Jinja2 against a live branch's query); the import's own proof stays tier 2's
+  (T044) and the fixture's re-seed (T042).
+- **Four runs are laned**: the declaration run beside the frozen-copies run, the contracts'
+  prose beside tier 3's script, and two of the three document runs. `make diagrams` runs in
+  a laned run (Run 23): it reaches the host's Docker for two pinned images and nothing of
+  the server, the worker or a twin.
+
+**Tags**: `[operator]` marks a task that needs the operator and could not be done before the
+chain, with its reason on its line; `[live]` marks a task that needs the development host's
+server or worker restarted from this tree, a twin, a hand scenario, the whole contract tier
+beside the server on the bridge, or the end-to-end tier. A single tier-2 test a task names
+(T021, T034's render) is not `[live]`. A loop run commits its own work; a hand run leaves it
+for the operator to commit. A session never pushes.
+
+## Format: `[ID] [tag?] [P?] [Story] Description`
+
+- **[tag]**: `[operator]` or `[live]`, as above; converge adds `[behaviour]` and `[pin]`.
+- **[P]**: can run in parallel (different files, no dependency on an incomplete task).
+- **[Story]**: US1–US7, from spec.md.
+- Every task names the files it edits or reads, so the route's `Read first:` and lanes can
+  be derived from the tasks.
+
+---
+
+## Phase 1: Setup (the baseline and the decisions)
+
+**Purpose**: confirm the tree's gates pass on this branch before anything changes, so any
+later failure is this feature's own; read, writing nothing, what the host and Infrahub hold;
+then settle this file's decisions at `analyze`.
+
+- [ ] T001 Run the pure gates from the repository root and confirm each passes: `make build`; `file bin/fylgja` reports a statically linked executable; `make test` uncached (`GOFLAGS=-count=1`; note the wall time against the 45 s budget and the load average before and after, `internal/cli`'s share); `make lint`; `go vet -tags contract,fixture,e2e ./...`; `git diff --stat main -- testdata/golden` is empty. Then read, writing nothing, and report each in this task's note:
+  - `git status`: clean on `016-probes`.
+  - `find internal/*/testdata/contracts -type f | wc -l` (expected 56, `frozenContractCopies` in `internal/findings/frozen_contracts_test.go`).
+  - The counts `TestWorkerRegistersEveryScheduledActivity` (`internal/provision/worker_test.go`) and `TestEveryActivityHasAFindingStep` (`internal/provision/client_follow_test.go`) assert today (expected 4 workflows, 15 activities), and `go test ./internal/provision -run Replay -v -count=1 2>&1 | /usr/bin/grep -c '^=== RUN'` (expected 7).
+  - `docker image inspect alpine:3.24.2` (expected absent, research §1.1); `docker images ghcr.io/nokia/srlinux:24.7.1 ceos:4.32.0.2F` (both present).
+  - `curl -s -H "X-INFRAHUB-KEY: $INFRAHUB_API_TOKEN" "$INFRAHUB_ADDRESS/api/schema/summary"` answers `200`, and `GET /api/schema?branch=main` lists `FylgjaStage` and no `FylgjaProbe`; the schema hash reads `7c413536…`.
+  - `pgrep -x fylgja`: the worker and the server, each `/proc/<pid>/exe`, told apart by `/proc/<pid>/cmdline`; `free -m`.
+
+- [ ] T002 [operator] Settle at `analyze`, since D-064, the amendment and R-30's settlements exist only once the plan is written, and only the operator appends the decision log and amends the constitution: (1) append D-064 to `docs/decisions.md` from research §3.1, with its date, and grep `docs/architecture.md` for D-010's "everything is `intent` today" (quickstart §8's grep); (2) amend `.specify/memory/constitution.md` to 2.3.0 from research §3.2, with its Sync Impact Report and `.specify/templates/plan-template.md`'s row II, or record that the layer passes under II with no amendment and strike the plan's "with the amendment drafted"; (3) confirm or overturn R-30's settlements, the same-device demo probe and two probe-ready ports per device first (R-18, R-19: a different answer changes T033–T036 and `testdata/probes/n1-loop.json`); (4) settle this file's seven decisions above (a different first answer changes T010's place; the second, T016; the third, T017–T018's order; the sixth, T034; the seventh, the lane marks). Amend `spec.md`, `plan.md` or `research.md` where an answer changes their text, and record the answers in this task's note.
+
+**Checkpoint**: baseline green; D-064 appended; the constitution's answer in the tree; this
+file's decisions settled.
+
+---
+
+## Phase 2: Foundational — the frozen copies, `internal/probe`, the `ping` package, the identifiers, the kind's file
+
+**Purpose**: everything later phases stand on and that must exist before a schema moves or a
+package reads a probe: the 019 shapes frozen (formats.md), the one definition of a probe
+that the compiler, the snapshot, the server and the lab share (plan, Structure Decision),
+the second package kind (R-08), the pure reading of `ping`'s output (R-14), the rule ids
+(data-model §12) and the kind's schema file (R-07).
+
+- [ ] T003 Freeze the 019 shapes before any schema moves (formats.md, "Frozen copies"). Copy byte for byte, from `contracts/` as it stands at `2b441d6`:
+  - `snapshot.schema.json` (`1`) to `internal/snapshot/testdata/contracts/019-following-removed/` (a new directory);
+  - `manifest.schema.json` (`5`) to `internal/compiler/testdata/contracts/019-following-removed/` (new) and `internal/bundle/testdata/contracts/019-following-removed/`;
+  - `step.schema.json`, `verify.schema.json`, `rehearsal.schema.json` and `findings.schema.json` to `internal/findings/testdata/contracts/019-following-removed/`, and to `internal/cli/`'s and `internal/server/`'s where a test there validates, or will validate in T029–T032, a document of the 019 shape (`contract018` in `internal/cli/create_test.go` and `internal/server/helpers_test.go`, `internal/findings/snapshot_test.go`);
+  - `twin.schema.json` (`10`) to `internal/lab/testdata/contracts/019-following-removed/` (read by T024's version case, as `twin_test.go` reads `twinSchemaOf(t, "018-snapshots")`).
+
+  Add a `contract019 = "019-following-removed"` constant beside each `contract018`, and a loader where the package has none (`internal/snapshot`, `internal/compiler`). Move `frozenContractCopies` (56) by the number kept. `TestFrozenContractCopiesAgree` passes. Record the count and any copy not made, with why, in this task's note.
+
+- [ ] T004 [P] The declaration, in the new package `internal/probe` (`decl.go`, `decl_test.go`, `imports_test.go`): `Declaration{Version "1"; Probes []Probe}`, `Probe{Name, Format string; Endpoints [2]Endpoint}`, `Endpoint{Device, Interface, Address, Gateway string}` (data-model §1); `Parse(data []byte, path string) (*Declaration, findings.List)` decoding strictly (`DisallowUnknownFields`), and `Validate(probes []Probe, formats []string, object func(i int) string) findings.List`, the rules that read no CTM, each quoted from data-model §1 and §12 with its severity and exit: `probes.version.unsupported` (not `"1"`, or none), `probes.invalid` (not an object, an unknown key, a missing field, other than two endpoints), `probe.name.invalid` (not `^[a-z0-9][a-z0-9-]{0,23}$`), `probe.name.duplicate`, `probe.format.unknown` (applied only when `formats` is given, naming the formats loaded), `probe.address.invalid` (not an address with a prefix length, `netip.ParsePrefix`), `probe.gateway.invalid` (not an address, or carrying a prefix length), `probe.gateway.outside` (not within the address's prefix), `probe.family.mixed` (the four addresses of one probe not of one family), `probe.address.duplicate` (two endpoints of the whole list with one host address, naming both probes, R-20). The object is the file or `probes[<i>].<field>` for the document's shape, `<probe>` or `<probe>/<a|b>.<field>` for a probe's. Tests: one case per rule naming the probe, the endpoint and the field; the fixtures of T005 parse; `TestProbeImportsFindingsAndTheStandardLibraryAlone` (the import test, as `internal/snapshot/imports_test.go`). The rule ids come from T008.
+
+- [ ] T005 [P] `contracts/probes.schema.json`, version `1` (formats.md's first row): `$id` under this repository's URL (`…/contracts/probes/v1`, D-055), `probes_version` const `"1"`, `probes[]` items `{name (pattern ^[a-z0-9][a-z0-9-]{0,23}$), format (enum ping), endpoints (exactly 2 items: device, interface, address (pattern a/l), gateway (pattern a))}`, `additionalProperties: false` throughout, a `description` naming the file, the kind, the snapshot's element and data-model §1's rules in the 017–019 paragraphs' shape. The declarations tier 1 reads, under `testdata/probes/`: `n1-loop.json` (`n1:ethernet-1/10`, host `10.1.10.2/24`, gateway `10.1.10.1` → `n1:ethernet-1/11`, `10.1.11.2/24`, `10.1.11.1`; R-19), `n2-loop.json` (the same on `n2`, `10.2.*`), `e1-loop.json` (`e1:Ethernet10` → `e1:Ethernet11`, `10.2.*`), and under `testdata/probes/invalid/` one file per rule of T004. A contract test in `internal/probe` (`contract_test.go`, as `internal/snapshot/contract_test.go`) validates the three good files and refuses each invalid one under the schema, and holds `Validate`'s refusals and the schema's to one verdict per file.
+
+- [ ] T006 [P] The `ping` probe package and its registry (R-08, data-model §6). Files: `probes/ping.yaml` (every value of data-model §6: `probe_version "0.1"`, `format ping`, `image {clab_kind linux, ref alpine:3.24.2, acquisition public_registry, resources {cpu 0.1, memory_mb 32}, deploy_timeout_s 60, destroy_timeout_s 30}`, `host {interface eth1, address [...], route [...]}`, `readiness {probe exec, command [...], expect "{address}", timeout_s 30}`, `flow {interval_s 0.2, command [...], start_timeout_s 30, read_timeout_s 30}`, `burst {count 5, wait_s 2, command [...]}`, `fidelity {forwarding software, timing container, approximations [...]}`); `probes/probe.schema.json` (formats.md's second row, `$id …/probes/v0.1`, every list required); `embed.go`'s directive gains `probes/*.yaml probes/*.json`. In `internal/probe` (`package.go`, `registry.go`, `package_test.go`): `Package` decoded strictly, `Registry{byFormat}` with `Lookup(format)`, `Formats()`, `Load(overrideDir string)` reading the embedded `probes/*.yaml` then `<overrideDir>/probes/*.yaml` (R-08: the PSP override directory's subdirectory, which `psp.Load` already skips, since `internal/psp/load.go:238` globs `*.yaml` of the directory alone; research §4.3, record it), an override shadowing by format, `Origin` embedded or override; `Validate` under the schema: `probe.package.schema` (naming the field), `probe.package.version.unknown`, `probe.package.format.duplicate`, `probe.package.template` (a placeholder no field renders); `Render(template []string, values map[string]string) ([]string, error)` for `{address}`, `{gateway}`, `{far_address}`, `{interface}`, `{interval}`, `{count}`, `{wait}`. Tests: the shipped package validates and loads; a package missing each required field (the format, the image, each mechanism block, each timeout) is refused naming it; an override shadows the embedded `ping`; two files declaring one format are refused; every placeholder renders and an unknown one is refused.
+
+- [ ] T007 [P] `probe.ParsePing(output []byte, interval float64) (PingSummary, error)` in `internal/probe/ping.go`, pure (R-14): `Sent` and `Received` from the summary's `transmitted` and `received` lines, `Lost = Sent − Received`, `LongestGapS` the longest run of unanswered sequence numbers (`seq=` busybox, `icmp_seq=` iputils), from the start or to the end when the first or last were lost, times the interval, `0` when nothing was lost; an output with no summary is an error naming what was read. Tests in `ping_test.go` with the outputs research §1.2 recorded (busybox `seq=`, three of three; six after `SIGINT`), an iputils form, a gap in the middle, at the start, at the end, nothing lost, every packet lost, and empty output.
+
+- [ ] T008 [P] The identifiers, in `internal/findings/finding.go` and `finding_test.go` (data-model §12), each with its severity, exit and step as the table gives them: `probes.version.unsupported`, `probes.invalid`, the seven `probe.*` rules of the read, the seven of the compile (`probe.format.unknown`, `probe.device.unknown`, `probe.interface.unknown`, `probe.interface.cabled`, `probe.interface.mgmt_only`, `probe.port.taken`, `probe.host.collision`), `probe.kind.absent`, the four `probe.package.*` rules (exit 1, and 2 at `serve` and `worker run` start as `psp.*`'s are), `host.probe_package.missing`, `flow.start.failed` and `flow.read.failed` (warnings, exit 0, step `flows`), `verify.burst` (rejection, exit 5, step `observe`); the step constant `StepFlows = "flows"`, in the step order after `StepStage`; `snapshot.flags.conflict`'s wording gains `--probes` beside `--snapshot`; `snapshot.invalid` and `snapshot.version.unsupported` reworded for `2` and the elements. None retires (R-27). `TestEveryActivityHasAFindingStep`'s list gains `StepFlows` (the activities join in T028). The findings schema's `step.phase` enum gains `flows` in T029.
+
+- [ ] T009 [P] [US4] `schema/fylgja-probe.yaml` (R-07, data-model §2), in `schema/fylgja-stage.yaml`'s shape: `version "1.0"`, node `Probe`, namespace `Fylgja`, `branch: agnostic`, `include_in_menu: true`, icon `mdi:radar`, `human_friendly_id: [name__value]`, `display_label: "{{ name__value }}"`, `order_by: [name__value]`, `uniqueness_constraints: [[name__value]]`, a description ≤128 characters; attributes `name` (Text, required, regex `^[a-z0-9][a-z0-9-]{0,23}$`, order_weight 1000), `format` (Dropdown, choices `ping`, default `ping`, 1100), `a_device`, `a_interface`, `a_address` (regex: an address with a prefix length), `a_gateway` (regex: an address with none), `b_device`, `b_interface`, `b_address`, `b_gateway` (Text, required, 1200–1530), `description` (Text, optional, 1600); no relationship, no extension. The `infrahub:infrahub-managing-schemas` skill is read first (`CLAUDE.md`: its branch-first rule does not apply, the kind loads on `main` on purpose, D-028). Checked and loaded by the operator at T017 (`schema check` is its first line); the fixture tool's `-prepare-main` learns it at T033.
+
+**Checkpoint**: `make test`, `make lint`; the tree compiles with a package nothing calls yet,
+and nothing user-visible has changed.
+
+---
+
+## Phase 3: User Story 1 and User Story 5 — snapshot `2` and the compile (Priority: P1, P2) 🎯 MVP
+
+**Goal**: a snapshot `2` with probes compiles to a bundle `6` whose hosts, links and ports
+are all under provenance `synthesized` and all in the manifest; the same snapshot with no
+probes compiles to the former bundle but for the version; a probe that cannot be placed is
+refused, naming the probe, the endpoint and the cause (SC-003, SC-004, SC-008).
+
+**Independent Test**: tier 1. `go test ./internal/compiler ./internal/snapshot
+./internal/bundle ./internal/validate`: the four goldens with no `-update`,
+`TestCompilerNamesNoPlatform`, `TestCompilerIsPure`, one case per placement refusal, two ids
+for two declarations (quickstart §1's first four bullets).
+
+- [ ] T010 [US1] Snapshot `2` (R-05, data-model §3) in `internal/snapshot/snapshot.go`, `json.go`, `snapshot_test.go`, `id_test.go`, `fixtures_test.go`, `contract_test.go`: `Version = "2"`; `Snapshot.Probes []probe.Probe`, written `[]` and never null; `Take(c, probes)`; `Hashed` unchanged in shape (`{"ctm": …, "probes": […]}`, the elements in the declaration's order, the version not hashed); `readVersion` accepts `"1"` and `"2"`, a `"1"` read as a `2` with no probes, any other `snapshot.version.unsupported` naming `1` and `2`; `readProbes` decodes each element strictly and holds it to `probe.Validate` (`snapshot.invalid` at `probes[<i>].<field>`); `check` holds a written document to `2`. `contracts/snapshot.schema.json` → `2` (formats.md's row: `$id …/snapshot/v2`, `snapshot_version` const `"2"`, `probes` items `$ref` the declaration's probe, `maxItems` gone, the description's 016 paragraph). Tests: two declarations differing in one probe take two ids and the same one twice takes one (FR-012); a `1` on disk reads as a `2` with the same id (the frozen `1` copy of T003 and the three `testdata/snapshot/*.json`, still `1`, until T035); a `2` with a non-contract element is `snapshot.invalid` at the element's field; a written `2` validates under `contracts/snapshot.schema.json`; `Take`'s callers (`internal/server/snapshot.go`'s `takeSnapshot`, `internal/stages/plan.go`'s pipeline) pass `nil` for now and T019 passes the request's list.
+
+- [ ] T011 [US1] `PlaceProbes(c *ctm.CTM, decls []probe.Probe, probes *probe.Registry) (placed *ctm.CTM, hosts map[string]Host, list findings.List)` in a new `internal/compiler/synthesize.go` (R-01, R-02, R-03, data-model §4): pure; the input CTM never mutated; for each probe in name order and each endpoint in order, a device `{Name: <probe>-<a|b>, Platform: {Package: <format>}, Interfaces: [{Name: eth1, Link: <id>, Provenance: synthesized}], Provenance: synthesized}` and a link `{ID: CanonicalLinkID(host:eth1, device:interface), Provenance: synthesized}`, the device interface's `Link` set; `Host{Node, Probe, Endpoint, Device, Interface, Port, Address, Gateway, FarAddress string; Package *probe.Package}`. Tests in `synthesize_test.go`: the placement on the three-node CTM with two uncabled ports added in the test (and on T016's wrapped fixture once it exists), a same-device probe, a two-device probe, the provenance on the host, its interface, the link and the device interface's link, the input unchanged, determinism over a shuffled declaration.
+
+- [ ] T012 [US5] The placement refusals (R-09, data-model §12's compile rows), every refusal in one pass and then nothing placed, each naming the probe, the endpoint and the cause, in `synthesize.go` with one tier-1 case each in `synthesize_test.go`: `probe.device.unknown`, `probe.interface.unknown`, `probe.interface.cabled` (naming the link, contracts/commands.md's refusal line), `probe.interface.mgmt_only`, `probe.port.taken` (naming the first probe), `probe.format.unknown` (naming the formats loaded), `probe.host.collision`. `internal/validate/validate.go`'s `Validate` calls `PlaceProbes` and carries its findings, and `internal/compiler/refusal_parity_test.go` holds validation's and `Compile`'s wording of each to one text. A probe on a port a lossy package would have shared is recorded under `fidelity.lossy` by the existing survey and not refused (FR-010; a case on `testdata/ctm/lossy.json` with a probe on one of its shared ports' peers, in `lossy_test.go`).
+
+- [ ] T013 [US1] `Compile(c *ctm.CTM, decls []probe.Probe, reg *psp.Registry, probes *probe.Registry)` in `internal/compiler/compile.go` (R-01, R-10, R-11; data-model §5): `PlaceProbes` first, then the survey as today; a device whose provenance is `synthesized` takes its package from the probe registry by its `Platform.Package`, has no artifact to refuse and no bootstrap; `topology.go` writes a host node as `kind: <package clab_kind>`, `image: <package ref>`, `exec:` the package's `host.address` and `host.route` rendered (`ip addr add 10.1.10.2/24 dev eth1`; `ip route add 10.1.11.2/32 via 10.1.10.1 dev eth1`), no `startup-config`, its link as any cabled link; `manifest.go`: `BundleVersion = "6"`, `ManifestNode.Provenance` (`omitempty`, written only when `synthesized`) and `Probe *ManifestProbe{Name, Endpoint, Format, Package ManifestPSP}`, `Platform`, `PSP`, `Artifact`, `Bootstrap` written `null` for a host (the two value fields become pointers), `Image` the package's, `ManagementPort eth0`; `MappingRow.Provenance` and `CabledLink.Provenance` (`omitempty`; the host's `eth1` row and the device port's row carry `synthesized`); `Manifest.Probes []ManifestProbeEntry{Name, Format, Package, Hosts [2]{Endpoint, Node, Device, Interface, Port, Address, Gateway}, Fidelity {Forwarding, Timing}}` sorted by name, `[]` when none; `Fidelity.Synthesized []string` sorted, `[]` when none; no configs file for a host. The callers: `internal/stage/stage.go`'s `Compile`, `internal/stages/plan.go`'s pipeline, `internal/server/compile.go` and the dry run, each passing the snapshot's `Probes` and the server's probe registry (`internal/server/options.go` loads it beside the PSP registry; the worker's in T022). Tests: `mapping_test.go`, `fidelity_test.go`, `determinism_test.go` extended for a host; a probe-less compile's manifest differs from the frozen `5` golden in `bundle_version`, `probes` and `fidelity.synthesized` alone (a structural diff in `golden_test.go`, SC-003).
+
+- [ ] T014 [US1] `contracts/manifest.schema.json` → `6` (formats.md's row: `$id …/bundle-manifest/v6`, `bundle_version` const `"6"`, `nodes[]` `provenance` (enum, default `intent`), `probe`, `platform`/`psp`/`artifact`/`bootstrap` nullable with `if probe then` they are null, `mapping[]` and `links[]` `provenance`, `probes[]` and `fidelity.synthesized[]` required and `[]`, the description's 016 paragraph); `internal/compiler/contract_test.go` validates every compiled manifest under it. `internal/bundle/verify.go` accepts `6` alone and refuses a `5` as `bundle.version.unsupported` naming both (US7 scenario 2), with its test in `verify_test.go` against the frozen `5` copy; `internal/step/diff_test.go`'s older-version case still holds.
+
+- [ ] T015 [US1] The purity and the platform grep (FR-011, SC-008): `internal/compiler/purity_test.go`'s `TestCompilerIsPure` admits `internal/probe` among the compiler's imports and nothing else new; `TestCompilerNamesNoPlatform`'s grep gains `linux`, `alpine` and `"ping"`, and passes (quickstart §1's grep: `/usr/bin/grep -rn 'linux\|alpine\|"ping"' --include='*.go' internal/compiler | grep -v _test` matches nothing). `internal/stage/imports_test.go` and `internal/snapshot/imports_test.go` admit `internal/probe`. `make test` and `make lint` on the whole tree.
+
+- [ ] T016 [US1] The goldens, in two commits of their own (FR-026, SC-009, US7 scenario 3): first `go test ./internal/compiler -update` re-baselines `testdata/golden/three-node`, `lossy` and `mixed` for bundle `6`, and the commit (`test(compiler): re-baseline the goldens for bundle 6`) holds that alone, its note here listing the diff: `bundle_version`, `probes: []` and `fidelity.synthesized: []` and nothing else in each `manifest.json`, `topology.clab.yml` and `configs/` unchanged. Then the fourth golden: `testdata/snapshot/three-node-probed.json` (this file's second decision: the three-node CTM with `ethernet-1/10` and `ethernet-1/11` on each device, uncabled, not `mgmt_only`, the role and status of its `ethernet-1/1`, wrapped as a snapshot `2` with `testdata/probes/n1-loop.json`'s probe), `golden_test.go`'s table gains `three-node-probed`, and `-update` writes `testdata/golden/three-node-probed/` on a second commit; its manifest names `n1-loop-a` and `n1-loop-b`, their link and both rows under `synthesized`, `probes[]` one entry, `fidelity.synthesized` two names, and its topology two `linux` nodes with their `exec` lines (quickstart §1's first bullet). `git diff --stat main -- testdata/golden` then shows these two commits' changes and no other run moves it until T035.
+
+**Checkpoint**: the four goldens, `TestCompilerNamesNoPlatform`, `TestCompilerIsPure` and the
+refusal cases pass; `make test`, `make lint`. The MVP's compile stands: a declaration becomes
+hosts in a bundle, in tier 1.
+
+---
+
+## Phase 4: User Story 4 and User Story 1 — the kind's read and the takes (Priority: P2, P1)
+
+**Goal**: `--probes <file>` on the five commands and the API; with no file the kind on
+`main`, unpinned; with neither none; one list per request (FR-005–FR-007, SC-005, SC-006).
+
+**Independent Test**: tier 1, the handler tests per operation and a three-stage plan carrying
+one list; tier 2, `TestProbesFromTheKind` and `TestIntentReadFilesASnapshot2`, each run alone.
+
+- [ ] T017 [operator] Load `FylgjaProbe` on `main`, since the plan settles the kind's shape and writes its schema file (T009), and the load is a lasting write to `main`'s schema on an install that is not throwaway, which moves `main`'s hash: from the repository root with `local/.env` loaded, Infrahub up and no twin, `.venv/bin/infrahubctl schema check --branch main schema/fylgja-probe.yaml`, then `schema load --branch main schema/fylgja-probe.yaml`, then poll `GET /api/schema/summary` until the hash settles; record the new hash in this task's note and in research §5 (research §4.2); then `.venv/bin/infrahubctl object create FylgjaProbe --set name=qs-probe --set a_device=n1 --set a_interface=ethernet-1/10 --set a_address=10.1.10.2/24 --set a_gateway=10.1.10.1 --set b_device=n1 --set b_interface=ethernet-1/11 --set b_address=10.1.11.2/24 --set b_gateway=10.1.11.1`, read it back with `object get FylgjaProbe` and confirm every field round-trips byte for byte (R-07's `Text` choice), and delete it, so `FylgjaProbe` counts 0. Before T018.
+
+- [ ] T018 [US4] The kind's read (R-06, data-model §2): `make sdl` refreshes `schema/infrahub.graphql` from `main` with the kind (its header kept by hand); `internal/intent/queries.graphql` gains `query Probes($limit: Int!, $offset: Int!)` over `FylgjaProbe` in name order with its ten attributes; `make generate` regenerates `generated.go`; a new `internal/intent/probes.go` with `ProbeReader` on `StageReader`'s pattern (`stages.go`: the unnamed endpoints, the default branch): `Check(ctx)` holds the kind and its ten attributes against `GET /api/schema` (absent: `probe.kind.absent` naming `schema/fylgja-probe.yaml`), `Probes(ctx) ([]probe.Probe, error)` paged by 100, each object mapped to the file's element `{name, format, endpoints: [{a_*}, {b_*}]}`; `readonly_test.go`'s owned roots gain `FylgjaProbe` with its reason (Constitution III). Tests in `probes_test.go` against the harness's recorded Infrahub (`infrahub_test.go`): a page of two, the mapping of every field, the kind absent, an empty list.
+
+- [ ] T019 [US4] The server reads one list per request (R-06, FR-005–FR-007; contracts/commands.md's api.md section): a new `internal/server/probes.go` with `probesFiles(op, subject, given, arg, files)` (one file beside the path, as `snapshotFiles` in `snapshot.go`; a request naming `probes` with no file, or a file under another path, is `400 … the request is not one`) and `readProbes(ctx, opts, op, subject, arg, files) ([]probe.Probe, error)`: the file parsed and held to `probe.Validate` with the registry's formats at `start`, else `intent.ProbeReader` on `main` (`Check` then `Probes`), else `[]`, once per request after the guards and before any read of intent; `takeSnapshot(ctx, paths, step, c, probes)` and `stages.NewPipeline`'s take carry the list, so `read.go` (`intent read --out`), `create.go` (`--branch`, `--stage`, the dry run), `step.go` (`--stage`, and the record's next stage with no target), `stages.go` (`stage plan`) and `rehearse.go` hand one list to every take; `twin create --snapshot` and `twin step --snapshot` take the document's list and read nothing; `--probes` beside `--snapshot` is `snapshot.flags.conflict` at `--probes` in `snapshotGuards`; `handlers.go` and `contracts/api.schema.json` take `probes` (a path) on `intent.read`, `twin.create`, `twin.step`, `stage.plan` and `twin.rehearse`, with the 016 paragraph in the schema's description. Tests in `probes_test.go`, `read_test.go`, `create_test.go`, `step_test.go`, `rehearse_test.go` (a fake `ProbeReader` behind an interface): per operation the file, the kind, neither (an empty list, no warning); a malformed file refused at `start` naming the file, the probe and the field; a three-stage `stage plan` and rehearsal plan whose every stage's snapshot carries the one list read at the start (US4 scenario 4); the conflict; the kind absent `probe.kind.absent`; `TestClientReachesTheCoreThroughTheAPIAlone` unchanged (`internal/cli`).
+
+- [ ] T020 [US1] The client's flag (contracts/commands.md's cli.md section): `--probes <file>` on `intent read` (`internal/cli/read.go`), `twin create` (`create.go`), `twin step` (`step.go`), `stage plan` (`stages.go`) and `twin rehearse` (`rehearse.go`), the file read and sent as the one file beside the path as `snapshotSent` sends a snapshot (`files.go`: `readProbes(path) (api.File, error)`); beside `--snapshot` on create and step the conflict is refused before any connection by the path `--branch` beside `--snapshot` takes today (`createFlags.snapshotConflicts`, step's guard); an unreadable file is the client's own refusal. Tests: `intent_test.go`, `create_test.go`, `twin_step_test.go`, `stage_plan_test.go`, `twin_rehearse_test.go` send the file and the argument; `--probes` on `twin compile` and `twin provision` is an unknown flag, exit 2 (`compile_test.go`, `provision_test.go`); the conflict before any connection (`connect_test.go`'s pattern); the help text names the kind as the default source. The document tests validate against `contracts/findings.schema.json` as before.
+
+- [ ] T021 [US4] Tier 2, written and each run alone (`go test -count=1 -tags contract -run <name> ./internal/<pkg>`), with the kind on `main` (T017) and no twin up: `internal/testsupport/infrahub.go` gains `WriteProbes(decl *probe.Declaration) error` (each probe an object of `FylgjaProbe` on the default branch) and `DeleteProbes() (int, error)` (every object there); `TestProbesFromTheKind` in `internal/server/probes_contract_test.go` (SC-005, US4's independent test): writes `n2-loop` on `main`, seeds a `fylgja-test-*` branch, takes an `intent.read` with no `probes` and reads `n2-loop` in the snapshot's list, takes one with the `n1-loop` file and reads it alone, deletes the probe and takes one with neither and reads `[]` with no warning, then deletes the branch; afterwards `FylgjaProbe` counts 0. `TestIntentReadFilesASnapshot2` in `internal/cli/infrahub_test.go` (SC-006): `intent read --branch <b> --probes testdata/probes/n1-loop.json --out` writes a `2` with one probe, whose compile through `twin create --snapshot <file> --dry-run` is refused at `probe.interface.unknown` on a branch seeded without the ports (until T033), and compiles once T033's seed writes them (the test's branch is seeded by this tree's seed, so the expectation follows the seed; write it against T033's ports and mark it skipped with the reason until T033 lands, or land it after T033 at `converge`). Record each test's time.
+
+**Checkpoint**: the five commands take the flag; the kind is one source; tier 1 green, the two
+tier-2 tests green alone.
+
+---
+
+## Phase 5: User Story 1 and User Story 6 — the host (Priority: P1, P2)
+
+**Goal**: the host check, the node plans, the exec readiness, the record and the start-up
+report know a host (FR-015, US6 scenarios 1–3, `twin.json` `11`).
+
+**Independent Test**: tier 1, `go test ./internal/lab ./internal/conformance ./cmd/fylgja`:
+the host check's cases, a host node's plan, the record's version case, the report.
+
+- [ ] T022 [US6] The node plans and the host check (R-12, data-model §7): `internal/lab/wire/types.go` gains `NodePlan.Probe *ProbePlan{Format string; Package PSPRef; Readiness ExecProbe{Command []string; Expect string; TimeoutS int}; Flow FlowSpec{IntervalS float64; Command []string; StartTimeoutS, ReadTimeoutS int}; Burst BurstSpec{Count, WaitS int; Command []string}}`, `DeployTimeoutS`, `DestroyTimeoutS` and `MemoryMB` from the package; `internal/lab/hostcheck.go`'s `NodePlans(bundlePath, reg, probes)` reads a host's package by the manifest's `probe.package.id` (`host.probe_package.missing` when absent) and `nodePlan` builds a host's plan from it; `noteImage` verifies a probe image present under exactly its reference whatever its acquisition, never pulling, under `host.image.absent` with the remedy by acquisition (`docker pull <ref>` for `public_registry`, `acquisitionClause`); memory sums as a platform's does; `unsetLogins` skips a host. `lab.Activities` and the server's options hold the probe registry; `cmd/fylgja/serve.go`'s `serveReport` and `cmd/fylgja/worker.go`'s report name the probe packages beside the platform packages (`ping (embedded): image alpine:3.24.2 (public_registry, present on this host), flow ping every 0.2s, burst 5`), and a package refused at load exits 2 as a PSP's does. Tests: `hostcheck_test.go` refuses an absent `alpine:3.24.2` naming the pull; a host node's plan from the probe registry; a bundle whose probe package the worker lacks; `cmd/fylgja/serve_test.go` and `worker_test.go` read the line.
+
+- [ ] T023 [US6] The exec readiness (data-model §7): `internal/lab/readiness.go`'s `AwaitReadiness` keyed by `readiness.probe: exec`: the plan's command rendered through the `Runner` (`docker exec <container> <command>`), ready when its output contains `expect`, under `timeout_s`, heartbeating, no login, `describeProbe` naming it; `push.go`'s `PushConfig` schedules nothing for a host (no artifact, no bootstrap) and `stepping.go`'s plan treats a host as a node containerlab configures. Tests in `readiness_test.go` with a recorded Runner: ready on the second read, timed out, a failed exec; `push_test.go`: a host untouched.
+
+- [ ] T024 [US1] `twin.json` `11` (R-22, data-model §11): `internal/lab/twin.go`'s `TwinVersion = "11"`; `wire.TwinNode` admits a host (`probe {name, endpoint, format, package}`, `psp` null, `artifact` null, `holds` the staged bundle when containerlab created or recreated it, `stepNodes`); `wire.StepRecord.Loss *Loss` (`null` until T027 writes it; the type lands in T026, so this task adds the field as `*json.RawMessage` or lands after T026, the run's choice, recorded); a record of `10` or earlier reads with `loss` null; `contracts/twin.schema.json` → `11` (formats.md's row, `$id …/contracts/twin/v11`, `step.loss`, `nodes[]` host shape, the description's 016 paragraph). `internal/server/show.go` lists a host among the nodes (`n1-loop-a (ping host) … probe n1-loop a`) and `dryrun.go` prints `nodes: n1, n2, n3 (nokia_srlinux); n1-loop-a, n1-loop-b (ping host)` and the memory with the hosts' 32 MiB each (contracts/commands.md's text). Tests: `twin_test.go` gains the `11` case beside 6–9 against the frozen `10` and the new schema; `show_test.go` and `dryrun_test.go` the lines; `internal/cli/show_test.go` the document against `contracts/findings.schema.json`.
+
+- [ ] T025 [US6] The conformance suite's pure half (R-08): `internal/conformance/pure.go` gains `CheckProbes(pkgs []*probe.Package) []Failure` (every shipped probe package validates and renders its templates with nothing unrendered), listed with the six checks and run by `pure_test.go` over the embedded packages; `docs/development.md`'s tier list follows in T038.
+
+**Checkpoint**: `make test`, `make lint`; a probed bundle passes the host check with the
+image present and is refused without it; the record names a host.
+
+---
+
+## Phase 6: User Story 2 — transient loss across a step (Priority: P1)
+
+**Goal**: the step starts every flow before its first change and reads each after the wait;
+the loss per probe is in the record and the document, labelled container timing, never
+asserted; the worker serves four workflows and seventeen activities (FR-016–FR-018, SC-001).
+
+**Independent Test**: tier 1, `go test ./internal/provision ./internal/lab ./internal/server
+./internal/findings`: counts 4/17, the seven replays, a step document with loss validating,
+the `not_started` and `interrupted` cases, the dry run with none.
+
+- [ ] T026 [US2] The wire (data-model §8) in `internal/lab/wire/types.go`: `ActStartFlows = "StartFlows"`, `ActReadFlows = "ReadFlows"`; `FlowPlan{Probe, From, To, Far string; Flow FlowSpec}`, `FlowsInput{TwinDir string; Flows []FlowPlan}`, `FlowsResult{Flows []FlowOutcome}`, `FlowOutcome{Probe string; Outcome string; Rule, Message string}`, `Loss{Basis string /* container */; Probes []ProbeLoss; Added, Dropped []string}`, `ProbeLoss{Probe, From, To, Outcome string; Sent, Lost int; LongestGapS float64; Rule, Message string}`; `StepInput.Flows []FlowPlan`, `Added`, `Dropped []string`; `StepResult.Loss *Loss`; `StepRecord.Loss *Loss`. `wire/imports_test.go` (`TestWireImportsNoIO`) and `plan_test.go` pass.
+
+- [ ] T027 [US2] The two activities (R-13, R-14) in a new `internal/lab/flows.go`, through the `Runner` the lab drives Docker with, heartbeating, under the plan's `start_timeout_s` and `read_timeout_s`: `StartFlows` runs in each `From` container `docker exec -d <from> sh -c 'pkill -x ping; exec <flow.command rendered> > /run/flow.log 2>&1'`, idempotent (a stray flow killed first), a host whose exec fails `not_started` under `flow.start.failed`, the activity returning; `ReadFlows` runs `docker exec <from> sh -c 'pkill -INT -x ping; <wait up to 5 s>; cat /run/flow.log'`, parses with `probe.ParsePing`, a failed read `not_read` under `flow.read.failed`, a flow never started carried as it was, and writes `step.loss` into `twin.json` as `recordWait` in `verify.go` writes `step.wait` (`Basis: "container"`, `Added`, `Dropped` from the input); `Activities.Names()` gains both. Tests in `flows_test.go` with a recorded Runner: both started; one exec failing; a read parsed to sent, lost and gap; a read failing; the record written; the two commands never log a token or configuration.
+
+- [ ] T028 [US2] The step's phases and the worker (R-13, R-16; data-model §8): `internal/provision/workflow_step.go` runs `StartFlows` after `StageStep` and before `ReconcileLab`, and `ReadFlows` after `VerifyTwin`, both under `workflow.GetVersion(FlowsVersionID /* "flows" */, workflow.DefaultVersion, 1)`; an activity error or cancellation at either is the phase `flows`, diverged as any failure after the stage; a step cancelled or failed after the stage runs `ReadFlows` on the record's disconnected context with every outcome `interrupted`; the dry run starts nothing and carries `loss: null`; `options.go`'s activity options for both (the package budgets plus the margin, as `VerifyTwin`'s), `DeadlineMechanism` and `rehearsal.Mechanism.FlowsMargin` (`internal/rehearsal/deadline.go`: a rehearsed stage's deadline adds the two budgets; `deadline_test.go`'s fixture figure moves from 1,950 s to about 2,010 s, under 3,600 s; `TestTheTwinCheckOutlastsItsRehearsal` still holds 4,260). `worker.go` and `worker_test.go`: four workflows, **seventeen** activities (`len(all) != 17`); `client_follow_test.go`'s step list; `workflow_replay_test.go`: the seven histories replay without the marker; `workflow_step_test.go`: the order, the `interrupted` read on cancel, `not_started` carried, the dry run, a step with no probes starting nothing (US2 scenario 3). `docs/decisions.md`'s D-062 count is amended by D-064 (T002), not edited.
+
+- [ ] T029 [US2] The server's step and the document (R-21; contracts/commands.md's text; formats.md's step row): `internal/server/step.go` builds `StepInput.Flows` from the two manifests' `probes[]` (the probes both carry, `From`/`To` the containers `clab-fylgja-<host>`, `Far` the far address), `Added` and `Dropped` (a host only the target carries; one only the twin's snapshot carries, torn down by the reconcile as a node intent removes is), and prints `step flows: n1-loop started` (or `n1-loop not started: <reason>`) after `step stage:`, `step loss: n1-loop 0/312 lost, longest gap 0.0s (container timing)` after `step observe:`, and `; loss n1-loop 0/312` on the closing line; `internal/findings/render.go`'s `StepBlock.Loss` (`$defs/loss` in `contracts/step.schema.json`: `basis` const `container`, `probes[]`, `added[]`, `dropped[]`; `step.loss` object or null; `step.phase` enum gains `flows`; the description), `contracts/findings.schema.json` by `$ref`; the frozen 019 copies still load. Tests: `step_test.go` (server) the flows built from two manifests, the added and dropped hosts, the lines; `internal/findings/step_test.go` a step document with loss per probe, `not_started` and `interrupted` outcomes, validating under the contract and refused under the frozen 019 copy where its loss is set; `internal/cli/twin_step_test.go` the text; the dry run `loss: null`.
+
+**Checkpoint**: 4 workflows, 17 activities, seven replays; a step document with loss
+validates; `make test`, `make lint`.
+
+---
+
+## Phase 7: User Story 3 — unrecovered loss fails the stage; the report's `loss` column (Priority: P1)
+
+**Goal**: verify's fourth kind, `burst`, one per probe, read by the worker in the wait and by
+the server in `twin verify`, failing a stage through 015's unchanged gate; the report's
+`loss` column and the footer's caveat (FR-019–FR-022, SC-002).
+
+**Independent Test**: tier 1, `go test ./internal/verify ./internal/lab ./internal/server
+./internal/rehearsal ./internal/findings`: the derivation on `three-node-probed`'s manifest,
+a burst read `4 of 5` failing with exit 5, the counts, the table for a stepped, a created and
+a refused stage.
+
+- [ ] T030 [US3] The derivation and the reader (R-15, data-model §9) in `internal/verify/assert.go`, `read.go`, `report.go`, `wait.go`: `KindBurst = "burst"`; `Derive` appends, after the three kinds, one assertion per `manifest.probes[]` in name order, `{Kind: burst, Node: <from host>, Probe, FarNode, FarAddress, Expected: "<count> replies"}`, the count from the package at read; a host node derives no other assertion; a synthesized link's two `neighbor` assertions are `skipped` with the reason `link <id> is synthesized: <host> speaks no discovery protocol`, the device port's `port_enabled` stands; `Burster` interface (`Burst(ctx, container string, command []string) (sent, received int, err error)`); `Input.Burster` and `Input.Probes *probe.Registry`; outcomes held (`received == count`), failed (`verify.burst`, object the probe, message `probe <name>: <received> of <count> replies from <to> at <far address>`, exit 5), unread (the exec failed); `VerifyCounts` gains `burst`; the wait runs every burst on each read. Tests in `assert_test.go`, `wait_test.go`, `report_test.go` with a fake burster beside the fake gNMI reader: the derivation on `testdata/golden/three-node-probed/manifest.json`, one per probe after the three kinds, the skipped neighbors; `5 of 5` held; `4 of 5` failed, exit 5; an exec error unread; a manifest with no probes derives none.
+
+- [ ] T031 [US3] The burster, the worker's wait and the server's verify: a new `internal/lab/burst.go` with `DockerBurster` (`docker exec <from> <burst.command rendered>` through the Runner, the summary parsed by `probe.ParsePing`); `internal/lab/verify.go`'s `VerifyTwin` passes the burster and the probe registry, `counts` and `failing` carry `burst`; `internal/server/verify.go`'s `runTwinVerify` the same, `verifyPackages` reads a host's package from the probe registry and refuses nothing of it, `nodeLine` for a host `n1-loop-a (ping host, 172.20.20.5): burst n1-loop 5 of 5 replies from n1-loop-b at 10.1.11.2 held`, the counts line `burst 1 held`; `internal/findings/verify.go`'s block gains `counts.burst`, `nodes[].bursts[]` and a host node (`psp` null, `probe` named, no `host_name`, `ports []`); `contracts/verify.schema.json` (formats.md's row: `$defs/burst`, `nodes[].psp` nullable, `nodes[].probe`, `nodes[].bursts[]`, `host_name` optional on a host, `counts.burst`, `twin.diverged.phase` gains `flows`), `contracts/step.schema.json`'s `wait_counts.burst`. Tests: `burst_test.go` with a recorded Runner; `lab/verify_test.go` the wait with a burst; `server` the lines and a verify document validating; `internal/findings/verified_test.go` the block; `internal/rehearsal/verdict_test.go`: a stage whose wait expired on `verify.burst` alone is failed by the gate's existing rule, with no change to `verdict.go` (SC-002: every burst-failed case fails the stage).
+
+- [ ] T032 [US3] The report (R-17, data-model §10; formats.md's rehearsal row): `internal/rehearsal/markdown.go`'s `table` reads `| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |`, a `lossCell` of `<probe> <lost>/<sent>, gap <s>s` per probe joined by `; `, or `—` for a created, refused or not-reached stage and for every row with no probes; the shortening rules keep the column; `Caveat` gains the sentence *"…; a loss figure is the container's, never a hardware forwarder's."*; `report.go` and `internal/findings/render.go`'s `RehearsalStage.Loss` (the step's block, or null, required); `contracts/rehearsal.schema.json` (`stages[].loss`, `stages[].verify.burst`, `stages[].step.phase` gains `flows`, the description); `internal/server/rehearse.go` fills each stage's loss from its step. Tests: `markdown_test.go` the table for a rehearsal of three stages, created, stepped and refused (US3 scenario 4), a rehearsal with no probes `—` in every row (scenario 5), the footer's caveat, the shortened forms; `report_test.go`; `internal/findings/rehearsal_test.go` the document under the contract; `internal/cli/twin_rehearse_test.go`'s `Caveat` suffix and column.
+
+**Checkpoint**: the derivation, the gate and the report tests pass; `make test`, `make lint`.
+The feature's one criterion stands in tier 1: a failed burst fails the stage.
+
+---
+
+## Phase 8: User Story 6 — the fixture and the template (Priority: P2)
+
+**Goal**: each fixture device holds two probe-ready, addressed ports; the fixture tool writes
+and deletes probes and loads the kind; Infrahub's template renders each physical port's
+addresses on both platforms; the test CTMs and wrapped fixtures follow, and the goldens move
+the second time (FR-023, FR-024, SC-007).
+
+**Independent Test**: tier 1 (`go test ./internal/testsupport ./internal/compiler
+./internal/snapshot`, the goldens); the template rendered on a throwaway branch (T034); the
+artifacts' lines and the fixture's ids are tier 2's and the re-seed's (T042, T044).
+
+- [ ] T033 [US6] The seed and the fixture tool (R-19, R-26): `internal/testsupport/seed.go`'s `SeedThreeNode` writes `ethernet-1/10` and `ethernet-1/11` on each device (the role and status of its `ethernet-1/1`, uncabled), each with one `IpamIPAddress` `10.<d>.10.1/24` and `10.<d>.11.1/24` (`n1` 1, `n2` 2, `n3` 3) in the default namespace with `interface` the port's id (research §4.5: verify on a throwaway `fylgja-test-*` branch that a create with no `ip_namespace` lands in the default namespace on 1.11.2, and record it in research §5; `SeedMixed` writes `Ethernet10` and `Ethernet11` on `s1`, `e1`, `e2` (`s1` 1, `e1` 2, `e2` 3); `SeedFourthNode`, `SeedThirdLink` and `SeedMixedLink` still create `ethernet-1/3` and refuse a branch holding it. `cmd/fylgja-fixture/main.go` gains `-probes <file>` (each probe of a declaration written into `FylgjaProbe` on the default branch through `testsupport.WriteProbes`), `-delete-probes` (`DeleteProbes`), and `-prepare-main` loads `schema/fylgja-probe.yaml` when the kind is absent (as it loads the stage kind), each refused beside `-branch fylgja-fixture` as `-stage` is. Tests: `internal/testsupport/library_test.go`'s counts; a seed on a throwaway branch read back by the reader counts 15 interfaces and 3 links for three-node (the tier-2 reads that count 9 follow: `internal/intent/read_contract_test.go`, `internal/stage/*_contract_test.go`, `internal/cli`'s, `scripts/e2e.sh`'s `9 interfaces` lines in T036); the branch deleted after.
+
+- [ ] T034 [US6] The template (R-18; FR-023), after the `infrahub:infrahub-managing-transforms` skill is read (its union-fragment rule for the `InterfaceLayer3` selection, and the hook's path trigger for `infrahub/templates/` and `infrahub/queries/`): `infrahub/queries/device_config.gql` selects, inside `... on InterfacePhysical`, `ip_addresses { edges { node { address { value } } } }`; `infrahub/templates/device_config.j2` renders each address in value order, SR Linux `set / interface <port> subinterface 0 ipv4 admin-state enable` and `set / interface <port> subinterface 0 ipv4 address <a/l>`, EOS `no switchport` and `ip address <a/l>` under the interface and `ip routing` once after the hostname when any port is addressed; nothing else, and a device with no addressed port renders byte for byte what it did. Prove it before the operator's import on a throwaway `fylgja-test-*` branch seeded by T033's seed: `.venv/bin/infrahubctl render device_config device=n1 --branch <b>` (the tree's template against the live query; the command's exact form the run verifies and records) for `n1` and, on a mixed branch, `e1`, and for a device of a branch seeded by `main`'s seed (`fylgja-fixture`, read-only), whose render equals its stored artifact; record each render's address lines in research §5; delete the branches. `schema/README.md`'s template section is T040's. The lines on the images are the live session's (T042, research §4.4).
+
+- [ ] T035 [US6] The test CTMs and the wrapped fixtures follow the seed, and the goldens move the second time (R-19, FR-024, FR-026): `testdata/ctm/three-node.json` and `three-node.shuffled.json` gain `ethernet-1/10` and `ethernet-1/11` on each device (as the reader would read T033's seed: uncabled, the role and status, no address, since the reader reads none); `mixed.json` and `mixed.shuffled.json` `Ethernet10` and `Ethernet11`; `testdata/snapshot/three-node.json` and `mixed.json` re-wrapped (version `2`, `probes: []`, new ids; `lossy.json` re-wrapped as `2` with its id unchanged, since the version is not hashed); `three-node-probed.json`'s CTM now equals `three-node.json`'s; every tier-1 test that pins an interface count or a snapshot id moves (`internal/snapshot/fixtures_test.go`, `internal/compiler`, `internal/cli`'s samples, `internal/stage/wrapped_test.go`); then `go test ./internal/compiler -update` re-baselines `three-node`, `mixed` and `three-node-probed`, **on a commit of its own**, its note listing the diff (new mapping rows and `fidelity` entries for the ports; `lossy` untouched); `CLAUDE.md`'s golden ids are T048's. `git diff --stat main -- testdata/golden` then shows T016's two commits and this one.
+
+**Checkpoint**: `make test`, `make lint`; the template renders the addresses on a live
+branch; the fixture tool writes a probe; the goldens are at their final ids.
+
+---
+
+## Phase 9: User Story 3 and User Story 7 — tier 3's script and the contracts' prose (Priority: P1, P3)
+
+**Goal**: `scripts/e2e.sh` shows the criterion in cases 5, 8 and 9; `cli.md` and `api.md`
+carry their 016 sections (FR-029, FR-025).
+
+**Independent Test**: `shellcheck scripts/e2e.sh`; the script's new `jq` checks run offline
+against `local/e2e-019-full.outputs/` where a 019 output has the shape, and the rest by
+reading; `make linkcheck` at T040.
+
+- [ ] T036 [US3] `scripts/e2e.sh` (R-24; FR-029), nine cases: the precheck names `alpine:3.24.2` present and the kind on `main` (each checked before any case, as the images are); **case 5** creates with `--probes testdata/probes/n1-loop.json`, reads the dry run's `nodes:` line with the two hosts, `twin verify`'s burst held (`burst 1 held`), then steps as today and requires `.step.loss.basis == "container"`, one probe with `sent > 0` in the document and in `twin.json`, both steps; **case 8** writes `e1-loop` into `FylgjaProbe` on `main` through `fixture -probes testdata/probes/e1-loop.json`, creates with no flag and reads the probe in the snapshot, steps to `mixed-link` (which restarts `e1`) and requires `lost > 0` and the burst held after the wait, then `fixture -delete-probes` and `FylgjaProbe` counting 0; **case 9**'s proposed change gains a stage `probe-port-down` after `third-link`, disabling `n1:ethernet-1/10` (`fixture -disable-port n1:ethernet-1/10 -generate`), at which `fylgja-twin` fails on `verify.burst`, the two earlier stages passed with their loss figures, and the thread's table carries `loss` between `verify` and `new verification failures`; the trap's leak check adds `clab-fylgja-*-a` and `*-b` containers after every destroy; the credential grep's targets gain nothing, since the flows' and bursts' output never reaches `$OUT` but as figures; the `9 interfaces` expectations move to 15 (T033). `shellcheck scripts/e2e.sh` clean; each new `jq` check run by hand against a document of the right shape from `local/e2e-019-full.outputs/` or built from tier 1's fixtures; the case-to-package table and `PLATFORMS=` skip logic unchanged (cases 5 and 9 SR Linux alone, case 8 both). The run itself is T045's.
+
+- [ ] T037 [P] [US7] The contracts' prose: `contracts/cli.md` and `contracts/api.md` each gain a "016: probes" section in the shape of their 018 and 019 sections, from [contracts/commands.md](contracts/commands.md) (the commands, the text, the identifiers of data-model §12 with severity, exit and step, the formats and versions, the workflows and activities 4/17, tier 3's cases, upgrading: a `1` read as a `2`, a `5` refused, a `10` record steps with `loss` null); the descriptions of `contracts/findings.schema.json` and `contracts/api.schema.json` carry their 016 paragraphs if T019 and T029 left any out. `make linkcheck` is T040's.
+
+**Checkpoint**: the script and the contracts say what the tree does; `make test`, `make lint`,
+`shellcheck`.
+
+---
+
+## Phase 10: User Story 7 — the documents (Priority: P3)
+
+**Goal**: every document says what is now true (FR-028, US7 scenario 6, quickstart §8's greps).
+
+**Independent Test**: `make diagrams` changes only what the C4 edit implies; `make linkcheck`
+clean; the greps of quickstart §8.
+
+- [ ] T038 [P] [US7] `docs/architecture.md`: §4.2 (provenance no longer all `intent`, D-010's sentence read as history; the snapshot's `probes`), §4.3 (`PlaceProbes`, bundle `6`, the manifest's `probes[]` and `fidelity.synthesized`), §4.4 (the step's `StartFlows` and `ReadFlows`, the phase `flows`, four workflows and seventeen activities), §4.5 (the hosts in lab `fylgja`, `twin.json` `11`, the exec readiness), §4.6 (`--probes`, `twin verify`'s burst, the report's column), §4.7 (the probe package beside the PSP, `probes/`, the override subdirectory), §6 (container timing, software forwarding; a cross-device probe needs routing intent renders); `docs/c4/workspace.dsl` (R-28: `probe` a component of the server and of the worker, Docker reached by both `lab` components for the hosts' flows and bursts, `probes/` beside `psp/` in the containers' description), then `make diagrams` and the regenerated `docs/c4/*.puml`, `*.svg` and `docs/development.md`'s import graph committed; `docs/development.md`: the layout (`internal/probe`, `probes/`, `testdata/probes/`), the tiers' cases (tier 1's probe cases, the contract tier's two tests, the end-to-end tier's probes in cases 5, 8 and 9), the conformance suite's `probes` check.
+
+- [ ] T039 [P] [US7] `docs/glossary.md` (research §4.8: **Probe**, this feature's, told apart from the readiness probe, whose entry is reworded to say so; **Probe declaration**, **Probe package**, **Flow**, **Transient loss**, **Burst**; **Synthesized node** reworded for the hosts), `docs/brief.md` (Scope and Pipeline, one sentence each), `README.md` (the walk-through's probe step: `twin create --branch … --probes`, the dry run's hosts, `twin step`'s `step loss:` line, `twin verify`'s burst line, in the live forms T043 records; the `12 interfaces` vintage noted in 019's T049 may be corrected here if the live read is at hand), `docs/roadmap.md` (F-014's paragraph: "ping and iperf3" to `ping` only, D-032 to D-045's pattern, the hosts named; the entry is marked built in T047). Quickstart §8's grep `/usr/bin/grep -rn 'ping and iperf3' docs README.md CLAUDE.md` then matches the archive and the decision log alone.
+
+- [ ] T040 [US7] `schema/README.md` (the kind's section, in the stage kind's shape: how a probe is written by object file (`kind: Object`, `spec.kind: FylgjaProbe`, one entry per probe, written after the `infrahub:infrahub-managing-objects` skill is read), the UI and `.venv/bin/infrahubctl object create FylgjaProbe --set …`; the template's section: each physical port's addresses rendered on both platforms and **no routing**, so two addressed ports of one device reach each other and two devices do not, R-18), a new `probes/README.md` (format `0.1`, its fields, the `ping` package's measured values from research §1.2 and §5, the override directory's `probes/` subdirectory, what of a package enters a bundle and what does not), `psp/README.md` (one paragraph pointing at `probes/`); then `make linkcheck` clean and quickstart §8's greps: `/usr/bin/grep -n 'Everything is .intent. today' docs/architecture.md` matches nothing (T002's D-064 and T038), `/usr/bin/grep -rn 'ping and iperf3' docs README.md CLAUDE.md` matches the archive and the decision log alone. Record each grep's output.
+
+**Checkpoint**: the documents true; `make linkcheck` clean; `make test`, `make lint`.
+
+---
+
+## Phase 11: The operator's import
+
+**Purpose**: the template reaches Infrahub by the only road there is (FR-023; `CLAUDE.md`,
+Environment).
+
+- [ ] T041 [operator] Push the template and import it, since the import waits on the pushed tree: the registration `fylgja` tracks `origin`'s `main`, which only the operator pushes (a session never pushes). Once T034's `device_config.gql` and `device_config.j2` are in the tree, put their change on `origin`'s `main` (merged or cherry-picked, the operator's choice; it moves `origin/main`, which the loop's `contract` stage reads, so do it while the loop is paused at this run), then `InfrahubReadOnlyRepositoryImportLastCommit(data: {id})` on `main` for the registration, wait for the import's flow and read both task workers' `commits/` about 15 s after it (`docs/verified-facts.md`, 10-27; a fetch that fails is never retried), as 017's T057 did; record the commit imported and both workers' checkouts in this task's note. Before T042's re-seed and tier 2's artifact proof.
+
+---
+
+## Phase 12: User Stories 1–5, live — the host and the hand scenarios (Priority: P1)
+
+**Goal**: the processes from this tree on the development host, the image present, the
+fixture re-seeded with addressed ports, research §4's host facts verified, and quickstart
+§3–§5 run by hand.
+
+**Independent Test**: quickstart §2–§5's expected outcomes, each recorded in its task's note.
+
+- [ ] T042 [live] [US6] The host after the rebuild (quickstart §2; research §4.1, §4.4): `docker pull alpine:3.24.2` and `docker image inspect --format '{{.Id}} {{.RepoDigests}}' alpine:3.24.2`, the digest recorded in research §5; `make build`; restart the worker and the server from this tree's `bin/fylgja` as `CLAUDE.md` prescribes and verify both (`/proc/<pid>/exe` not `(deleted)`; the environments; the server's report line by line; **both start-up reports name the two platform packages and the `ping` probe package**; from inside each Infrahub task worker `POST /v1/twin/show` answers `200` with the token and `401` without; restart the dev server if it is down); then, after T041's import, `make infrahub-clean && make infrahub-seed` re-seeds `fylgja-fixture` with the two ports per device and reads back: each device's artifact carries its two addressed ports' lines (SR Linux's subinterface lines) and the three checksums, the fixture's compiled id and its snapshot id (`intent read --branch fylgja-fixture --out`, then `twin compile --snapshot`), each recorded for T048; and on the first twin of T043 the facts research §4.1 owes: a `linux` host boots beside a privileged SR Linux node in lab `fylgja`, runs its two `exec` lines (`docker exec clab-fylgja-n1-loop-a ip -4 -o addr show dev eth1`, `ip route`), reaches the far host through the device, whether containerlab fails a deploy or logs it when an `exec` line fails (try one on a throwaway topology under `CLAB_LABDIR_BASE` at a scratch directory, destroyed after), and `docker exec -d` leaving the flow running with `pkill -INT` printing its summary inside a containerlab-run container; and SR Linux accepting the two subinterface lines in the replace, cEOS accepting `ip routing`, `no switchport` and `ip address` (on T043's mixed read or a throwaway mixed twin, if the host has room). Each lands in research §5 now and in `docs/verified-facts.md` at T046. Record pids and lines, never a token.
+
+- [ ] T043 [live] [US1] The hand scenarios, on throwaway `fylgja-test-qs-<pid>` branches, never `fylgja-fixture`, no tier 2 at the same time, `free -m` read first and Infrahub's containers restarted if it reads well below `CLAUDE.md`'s figure: **quickstart §3** (US1, US5: the dry run's `nodes:` and memory lines, the create, `jq` on the snapshot `"2"` and `1` probe, the manifest's synthesized nodes and `probes[0].name`, the hosts' address and route and the three answered pings through `n1`, `twin verify`'s burst held and `burst 1 held`, `twin show`'s hosts, the cabled refusal `probe.interface.cabled n1-loop/b`, the conflict `snapshot.flags.conflict --probes`; afterwards `twin.json` `11`, `source intent`, five nodes, the hosts' `psp` null); **§4** (US2, US3: the step with a flow `started`, `settled`, `loss n1-loop 0/N, gap 0.0s (container timing)`, `.step.loss` in the record; the step to the port disabled ending `stepped` with the wait expired on `verify.burst n1-loop 0 of 5 replies`, `twin verify` exit 5 on the burst alone; the step back with `lost > 0` and the burst held; destroy with the hosts removed; the branch deleted); **§5** (US4: `fixture -probes testdata/probes/n1-loop.json`, `infrahubctl object get FylgjaProbe`, `intent read --branch fylgja-fixture --out` reading `n1-loop` from the kind, the file replacing it, `-delete-probes`, then `[]` with no warning). Record each key output line, the step's and the verify's times, and the burst's cost; `temporal workflow list` shows only the creates, steps and destroys; leave no twin, no `local/qs-*.json`, no `fylgja-test-*` branch, `FylgjaProbe` at 0.
+
+**Checkpoint**: the host runs this tree; the criterion proven by hand: a change applied to a
+running twin reported its loss, labelled, and a flow that had not recovered failed the
+verify.
+
+---
+
+## Phase 13: Live — tier 2 and tier 3
+
+**Goal**: the contract tier whole and the end-to-end tier whole (SC-005–SC-007, SC-010).
+
+**Independent Test**: quickstart §6 and §7's expected outcomes.
+
+- [ ] T044 [live] [US4] `make test-contract` whole (quickstart §6), beside the server on the bridge from this tree (T042), the kind on `main`, the template imported, no twin up and none booted while it runs. Expected: `TestProbesFromTheKind` and `TestIntentReadFilesASnapshot2` pass; the fixture's three artifacts carry each addressed port's lines and the ids T042 recorded (SC-007); `internal/stages` and `internal/checks` pass with `TestChecksInsideInfrahub` not skipped; afterwards Infrahub is left as the tier leaves it, `FylgjaProbe` 0, `main` holding the kind beside `FylgjaStage`, `Branch` listing `main` and `fylgja-fixture` alone. Record each package's time, the whole against the 34-minute estimate (R-25) and `internal/stages` against its `-timeout 30m`, and any re-run with its cause.
+
+- [ ] T045 [live] [US3] Tier 3 (quickstart §7), on a quiet host after T044, from a commit, so the build's VCS stamp matches the running binaries (compare `vcs.revision` with `HEAD` before starting; restart both processes if a commit replaced the binary): read `free -m` and restart Infrahub's containers if it reads well below `CLAUDE.md`'s figure; start `make test-e2e` detached with its exit status in a file and wait in foreground calls under ten minutes. Expected: `E2E-OK`, nine cases; case 5's create with `--probes`, its verify's burst held, its steps' `loss` per probe in the document and the record; case 8's probe from the kind on `e1`, `lost > 0` across `e1`'s restart and the burst held after the wait, the probe deleted; case 9's third stage `probe-port-down` failed on `verify.burst`, the two earlier passed with their loss figures, the thread's table carrying `loss`; no `clab-fylgja-*-a` or `*-b` container after any destroy; the trap's leak check and credential grep silent. Record its time against R-25's 34 minutes, each case's figures and any attempt lost to the host with its cause; keep the outputs under `local/e2e-016-full.outputs/` (git-ignored).
+
+**Checkpoint**: tiers 2 and 3 green.
+
+---
+
+## Phase 14: The records at the close
+
+**Purpose**: every record true, the feature closed (research §4; quickstart §8).
+
+- [ ] T046 [P] `docs/verified-facts.md`, each with the version and the date, from research §5: under containerlab, a new heading "The `ping` host" (T042's facts: the `linux` kind beside SR Linux, the `exec` lines, a failed `exec`'s effect, `docker exec -d` and `pkill -INT` inside a containerlab-run container, the image's digest); under Infrahub 1.11.2, the kind's load and `main`'s hash (T017), `IpamIPAddress`'s default namespace (T033), the template's lines on both images and the artifacts' change for an addressed port alone (T042, T044); under the step, the flows' cost and a burst's cost (T043); the busybox facts of research §1.2.
+
+- [ ] T047 [P] `docs/roadmap.md`: F-014 marked built (its table row and paragraph, Release 0.3's item 4, the Backlog's built sentence, "Decisions the order needs" taken as D-064 with the constitution at 2.3.0 or as T002 settled it) with the closing date and the measured effort from this feature's command log (`specs/016-probes/commands/`, once published) beside R-29's 14–20 hours; the marker **the next spec** moves to item 5, F-025.
+
+- [ ] T048 `CLAUDE.md` (research §4.7): the Environment's `main` paragraph (the kind `FylgjaProbe` loaded on `main` with the date, the new hash; the template imported at its commit; the fixture's two ports per device, its new compiled id, snapshot id and artifact count), Formats (`probes 1`, probe package `0.1`, snapshot `2`, bundle `6`, `twin.json` `11`, PSP `0.7` unmoved, the four goldens' ids, the fixture's ids), the worker's counts (four workflows and **seventeen** activities) in its paragraph and the start-up report naming the probe package, Build and test (tier 1's time if the budget moves, tier 2's and tier 3's times from T044–T045, tier 3's cases 5, 8 and 9), the M-lines if any reads otherwise, State (Release 0.3's 016 entry, in 017–019's shape; **Next**: F-025; **Open** moved as the close leaves it).
+
+- [ ] T049 The closing gates and greps, on the final tree: `make build` static; `make test` uncached under 45 s or the budget raised with the figure in `CLAUDE.md` and `docs/development.md` (SC-009); `make lint`; `go vet -tags contract,fixture,e2e ./...`; `make linkcheck`; `git diff --stat main -- testdata/golden` names T016's and T035's three commits' files alone; quickstart §8's greps; `find internal/*/testdata/contracts -type f | wc -l` equals `frozenContractCopies`; the credential grep over the tree and the hand scenarios' outputs (`/usr/bin/grep`, not the ugrep wrapper), nothing found; `pgrep -x fylgja` both from the final commit (restart if the gates' `make build` replaced the binary). Record each in this task's note.
+
+- [ ] T050 [operator] The review, the merge and the push, because they are the operator's at every feature's close: review this directory and the diff against `main`; `make command-log` once the session is closed; merge `016-probes` into `main` and push `origin`; `converge` follows.
+
+---
+
+## Dependencies & Execution Order
+
+### Phase dependencies
+
+- **Setup (Phase 1)**: T001 first. T002 is the operator's, at `analyze`; its answers may
+  change T010, T016, T017–T018, T033–T036 and the lane marks.
+- **Foundational (Phase 2)**: after T001. T004–T009 in parallel with each other and beside
+  T003; T008 before T004's rule ids are used (one run); T003 before any task that moves a
+  schema under `contracts/` (T010, T014, T024, T029, T031, T032).
+- **US1/US5 compile (Phase 3)**: after Phase 2. T010 → T011 → T012 → T013 → T014 → T015 →
+  T016 (two commits of its own).
+- **US4/US1 takes (Phase 4)**: after Phase 3. T017 (operator) → T018 → T019 → T020 → T021;
+  T021 needs T017 and, for `TestIntentReadFilesASnapshot2`'s compile, T033.
+- **US1/US6 host (Phase 5)**: after Phase 3; T022 → T023; T024 after T022 (and T026 for the
+  loss type, or its placeholder); T025 any time after T006.
+- **US2 flows (Phase 6)**: after Phases 4–5. T026 → T027 → T028 → T029.
+- **US3 burst and report (Phase 7)**: after Phase 6. T030 → T031 → T032.
+- **US6 fixture and template (Phase 8)**: after Phase 4 (T021's helpers) and Phase 3 (the
+  goldens' first move). T033 → T034 → T035.
+- **Tier 3's script and the contracts (Phase 9)**: after Phases 7–8. T036 and T037 beside
+  each other.
+- **Documents (Phase 10)**: after Phase 9. T038 and T039 beside each other; T040 last
+  (`make linkcheck`).
+- **The import (Phase 11)**: T041 after T034, before T042's re-seed and T044.
+- **Live (Phases 12–13)**: after Phases 10–11, from a commit. T042 → T043 → T044 → T045;
+  T044 never beside a twin, and T045 never beside T044.
+- **Records (Phase 14)**: after Phase 13. T046 and T047 together; T048 after them; T049
+  after T048; T050 last.
+
+### Within a phase
+
+Pure code is gated in tier 1 before its tier-2 or live proof. A story's test names the
+scenario it proves. A defect a test finds is fixed in that phase, in the package that holds
+the behaviour, before the checkpoint. A live task's defect gets a tier-1 test that pins it.
+`T010 → T011 → … → T016; T022 → T023, T025 any time; T026 → T027 → T028 → T029;
+T030 → T031 → T032; T033 → T034 → T035; T046, T047 → T048 → T049 → T050`.
+
+### Parallel opportunities
+
+- Phase 2: T004–T009 (one package, one run) beside T003 (the frozen copies) — Run 4 ∥ Run 3.
+- Phase 9: T037 beside T036 — Run 22 ∥ Run 21.
+- Phase 10: T039 beside T038 — Run 24 ∥ Run 23; T040 after both.
+- Phase 14: T046 and T047 together, in one run.
+
+### Parallel example: the foundation
+
+```text
+Run 3   internal/*/testdata/contracts/019-following-removed/, the contract019 constants   (T003)
+Run 4   internal/probe/, probes/, contracts/probes.schema.json, testdata/probes/,
+        embed.go, internal/findings/finding.go, schema/fylgja-probe.yaml             (T004–T009)
+→ then Run 5, snapshot 2, which reads both
+```
+
+### Parallel example: the documents
+
+```text
+Run 23  docs/architecture.md, docs/c4/workspace.dsl (+ make diagrams), docs/development.md   (T038)
+Run 24  docs/glossary.md, docs/brief.md, README.md, docs/roadmap.md                           (T039)
+→ Run 25  schema/README.md, probes/README.md, psp/README.md, make linkcheck, the greps        (T040)
+```
+
+---
+
+## Implementation Strategy
+
+**MVP**: Phases 1–3. After Phase 3 a snapshot `2` with probes compiles to a bundle `6` with
+its hosts, links and ports under `synthesized`, the probe-less snapshot to the former bundle
+but for the version, and every placement refusal names its cause, all in tier 1. Phase 12
+proves it live on a twin, and Phase 13 in nine cases.
+
+**Incremental delivery**: the frozen copies, the declaration and the package → snapshot `2`
+and the compile (MVP) → the kind's read and the takes → the host → the flows → the burst
+and the report → the fixture and the template → tier 3's script and the contracts → the
+documents → the operator's import → the host, live → the tiers → the records. Every
+checkpoint leaves the tree green, and the goldens move on exactly three commits (T016's two,
+T035's one).
+
+### Recommended route
+
+Each line is one implement run's prompt. Every run: only the tasks it names; stop at its
+checkpoint and report; a hand run leaves its work for the operator to commit, a loop run
+commits its own.
+
+1. **Run 1** — the baseline: the pure gates and the tree's state read (T001). Read first: Makefile. Only this; stop and report.
+2. **Run 2** — [operator] D-064 appended, the constitution's answer, R-30's settlements and this file's decisions settled at analyze (T002). Stop and report.
+3. **Run 3** — the 019 shapes frozen and the contract019 constants (T003). Read first: internal/findings/frozen_contracts_test.go, internal/server/helpers_test.go, internal/cli/create_test.go, internal/findings/snapshot_test.go, internal/lab/twin_test.go, specs/016-probes/contracts/formats.md. Only this; stop and report.
+4. **Run 4** [∥ Run 3] — internal/probe: the declaration, the probes contract and fixtures, the ping package and its registry, ParsePing, the identifiers, and the kind's schema file (T004–T009). Read first: internal/psp/load.go, internal/psp/types.go, psp/psp.schema.json, psp/nokia_srlinux.yaml, embed.go, internal/findings/finding.go, schema/fylgja-stage.yaml, specs/016-probes/data-model.md. Only these; stop and report.
+5. **Run 5** — snapshot 2: the elements, a 1 read as a 2, the schema (T010). Read first: internal/snapshot/snapshot.go, internal/snapshot/json.go, internal/snapshot/snapshot_test.go, internal/snapshot/contract_test.go, contracts/snapshot.schema.json, internal/probe/decl.go, specs/016-probes/contracts/formats.md. Only this; stop and report.
+6. **Run 6** — the compile: PlaceProbes, the placement refusals, Compile with the body, the topology's exec, manifest 6 and its schema, bundle.Verify, the purity and platform tests, the callers (T011–T015). Read first: internal/compiler/compile.go, internal/compiler/topology.go, internal/compiler/manifest.go, internal/compiler/mapping.go, internal/compiler/purity_test.go, internal/validate/validate.go, internal/stage/stage.go, internal/stages/plan.go. Only these; stop and report.
+7. **Run 7** — the goldens re-baselined for bundle 6 on a commit of their own, then the probed fixture and the fourth golden on a second (T016). Read first: internal/compiler/golden_test.go, testdata/snapshot/three-node.json, testdata/probes/n1-loop.json, testdata/golden/three-node/manifest.json. Only this; stop and report.
+8. **Run 8** — [operator] FylgjaProbe checked and loaded on main, the hash recorded, a round trip of every field (T017). Stop and report.
+9. **Run 9** — the kind's read: make sdl, the Probes query, ProbeReader, the read-only test's roots (T018). Read first: internal/intent/stages.go, internal/intent/queries.graphql, internal/intent/readonly_test.go, internal/intent/schemainfo.go, internal/intent/genqlient.yaml, internal/intent/stages_test.go. Only this; stop and report.
+10. **Run 10** — the server reads one list per request, the files and the conflict, the API's argument, and the client's --probes on five commands (T019–T020). Read first: internal/server/snapshot.go, internal/server/create.go, internal/server/read.go, internal/server/step.go, internal/server/stages.go, internal/server/rehearse.go, internal/cli/create.go, internal/cli/step.go. Only these; stop and report.
+11. **Run 11** — the testsupport helpers and the two tier-2 tests, each run alone (T021). Read first: internal/testsupport/infrahub.go, internal/testsupport/proposed.go, internal/server/snapshot_contract_test.go, internal/cli/infrahub_test.go. Only this; stop and report.
+12. **Run 12** — the host: the node plans and the host check, the start-up reports, the exec readiness, the conformance check (T022, T023, T025). Read first: internal/lab/hostcheck.go, internal/lab/readiness.go, internal/lab/wire/types.go, internal/lab/push.go, cmd/fylgja/serve.go, cmd/fylgja/worker.go, internal/conformance/pure.go, internal/lab/hostcheck_test.go. Only these; stop and report.
+13. **Run 13** — twin.json 11, a host in the record, twin show's and the dry run's host lines (T024). Read first: internal/lab/twin.go, internal/lab/twin_test.go, internal/lab/wire/types.go, contracts/twin.schema.json, internal/server/show.go, internal/server/dryrun.go. Only this; stop and report.
+14. **Run 14** — the flows: the wire types, StartFlows and ReadFlows, the step's phases under the flows marker, the worker's 4/17, the seven replays, the deadline (T026–T028). Read first: internal/lab/wire/types.go, internal/lab/activities.go, internal/lab/verify.go, internal/provision/workflow_step.go, internal/provision/options.go, internal/provision/worker.go, internal/rehearsal/deadline.go, internal/probe/ping.go. Only these; stop and report.
+15. **Run 15** — the server's step with the flows built from two manifests, the loss in the step document and its schema, the text (T029). Read first: internal/server/step.go, internal/findings/render.go, contracts/step.schema.json, contracts/findings.schema.json, internal/cli/step.go, internal/findings/step_test.go. Only this; stop and report.
+16. **Run 16** — the burst: KindBurst and the derivation, the Burster, DockerBurster, the worker's wait and the server's verify, the verify schema and counts, the gate unchanged (T030–T031). Read first: internal/verify/assert.go, internal/verify/read.go, internal/verify/report.go, internal/verify/wait.go, internal/lab/verify.go, internal/server/verify.go, contracts/verify.schema.json, internal/findings/verify.go. Only these; stop and report.
+17. **Run 17** — the report's loss column, the caveat, the rehearsal document and schema (T032). Read first: internal/rehearsal/markdown.go, internal/rehearsal/report.go, internal/findings/render.go, contracts/rehearsal.schema.json, internal/rehearsal/markdown_test.go, internal/server/rehearse.go. Only this; stop and report.
+18. **Run 18** — the fixture: the seed's two addressed ports per device, the namespace verified, the fixture tool's -probes, -delete-probes and -prepare-main (T033). Read first: internal/testsupport/seed.go, cmd/fylgja-fixture/main.go, schema/dcim/ipam.yml, schema/dcim/dcim.yml, internal/testsupport/infrahub.go. Only this; stop and report.
+19. **Run 19** — the template's addresses on both platforms, rendered on a throwaway branch (T034). Read first: infrahub/queries/device_config.gql, infrahub/templates/device_config.j2, .infrahub.yml, schema/dcim/dcim.yml, specs/016-probes/research.md. Only this; stop and report.
+20. **Run 20** — the test CTMs and the wrapped fixtures follow the seed, the pinned counts and ids, and the goldens re-baselined a second time on a commit of their own (T035). Read first: testdata/ctm/three-node.json, testdata/ctm/mixed.json, testdata/snapshot/three-node.json, internal/compiler/golden_test.go, internal/snapshot/fixtures_test.go. Only this; stop and report.
+21. **Run 21** — scripts/e2e.sh: the precheck, probes in cases 5, 8 and 9, the leak check, checked offline (T036). Read first: scripts/e2e.sh, specs/016-probes/research.md. Only this; stop and report.
+22. **Run 22** [∥ Run 21] — the contracts' 016 sections (T037). Read first: contracts/cli.md, contracts/api.md, specs/016-probes/contracts/commands.md. Only this; stop and report.
+23. **Run 23** — architecture, the C4 model and make diagrams, development.md (T038). Read first: docs/architecture.md, docs/c4/workspace.dsl, docs/development.md. Only this; stop and report.
+24. **Run 24** [∥ Run 23] — the glossary, the brief, the README's walk-through, the roadmap's F-014 paragraph (T039). Read first: docs/glossary.md, docs/brief.md, README.md, docs/roadmap.md. Only this; stop and report.
+25. **Run 25** — schema/README.md's kind and template sections, probes/README.md, psp/README.md, then linkcheck and the greps (T040). Read first: schema/README.md, probes/README.md, psp/README.md, specs/016-probes/quickstart.md. Only this; stop and report.
+26. **Run 26** — [operator] the template on origin's main, imported, both task workers' checkouts read (T041). Stop and report.
+27. **Run 27** — [live] the image pulled, the worker and the server restarted from this tree and verified, the fixture re-seeded and its ids read, the host facts, then the hand scenarios of quickstart §3–§5 (T042–T043). Stop and report.
+28. **Run 28** — [live] the contract tier whole beside the server on the bridge, then tier 3 whole on a quiet host (T044–T045). Stop and report.
+29. **Run 29** — the records: verified-facts.md, the roadmap's F-014 built, CLAUDE.md, then the closing gates and greps (T046–T049). Read first: docs/verified-facts.md, docs/roadmap.md, CLAUDE.md, specs/016-probes/quickstart.md. Only these; stop and report.
+30. **Run 30** — [operator] the operator's review, merge, push and the command log (T050). Stop and report.
+
+`converge` follows Run 30.
+
+## Notes
+
+The heading above closes the route: `scripts/converge-loop.sh` reads "Recommended route"
+only up to the next heading.
+
+**For `analyze` to settle**, beside T002's list:
+
+- **Run 6's size.** Five tasks across `internal/compiler`, `internal/bundle`, `internal/validate`
+  and the three callers; one run because the tree compiles only once `Compile`'s new
+  signature and its callers agree. T014 (the schema and `bundle.Verify`) may be split off
+  if a session finds it too large, since it compiles against T013 alone.
+- **T024's `StepRecord.Loss` before T026's type.** Run 13 lands the record's `loss` field
+  before Run 14 defines `wire.Loss`; the run adds the field as the wire type if it chooses
+  to define `Loss` early in `wire/types.go` (then T026 keeps it), or as a raw message it
+  replaces in T026. Either way the frozen `10` copy and the `11` schema hold.
+- **T021's `TestIntentReadFilesASnapshot2`** expects a compile that needs T033's ports.
+  The task writes it against the ports and skips it with the reason until T033; `converge`
+  removes the skip. Alternatively Run 11 may follow Run 18, which `analyze` may reorder.
+- **T034's render command.** `infrahubctl render` runs the tree's Jinja2 transform against
+  a live branch's query without an import; the run verifies the exact form on 1.23.2
+  (`.venv/bin/infrahubctl render device_config device=n1 --branch <b>`) and records it. If
+  the SDK renders only an imported transform, the proof falls to T042 after T041, and
+  T034's task note says so.
+- **T041 moves `origin/main` mid-chain.** A moved remote-tracking ref stops the converge
+  loop at `contract`; the operator does the push and the import while the loop is paused at
+  Run 26, as 017's T057 did, and the loop's next gate reads the moved ref with the operator
+  in the chat.
+- **The lanes.** Run 4 ∥ Run 3 edits disjoint files and reads disjoint sets; Run 22 ∥ Run
+  21 and Run 24 ∥ Run 23 the same. Run 23 runs `make diagrams`, which reaches the host's
+  Docker for two pinned images and nothing of the server, the worker or a twin; if `analyze`
+  reads the lane rule's "the host" as any Docker use, the mark on Run 24 comes off.
+- **R-29's estimate** (14–20 hours of sessions plus the tiers) stands against thirty runs,
+  two of them live and four the operator's; T047 records the measured effort beside it.
+- **What no run may do**: boot a twin while tier 2 runs; run tier 2 or tier 3 outside Run
+  28; push; write to `main` but T017's and T021's probes and T033's namespace read; re-make
+  `local/.env`; echo a token.

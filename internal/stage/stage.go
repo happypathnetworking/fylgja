@@ -1,9 +1,8 @@
-// Package stage holds the read and compile stages as pure-Go pipelines, shared by the
-// server's stage commands (`intent read`, `twin compile`), its create and dry run, `stage
-// plan`, `twin step` and `twin rehearse` (018), and the provisioning activities that run
-// them inside a following check's run. One implementation means a create that stops at
-// read or compile reports exactly what the stage command would, under the same
-// identifiers (Constitution V).
+// Package stage holds the read and compile stages as pure-Go pipelines, which serve the
+// server alone: its stage commands (`intent read`, `twin compile`), its create and dry run,
+// `stage plan`, `twin step` and `twin rehearse` (018). No provisioning activity reads or
+// compiles (019). One implementation means a create that stops at read or compile reports
+// exactly what the stage command would, under the same identifiers (Constitution V).
 //
 // It knows nothing of Temporal, and nothing here writes a file: callers decide where a
 // CTM or a bundle goes.

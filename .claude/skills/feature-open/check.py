@@ -28,7 +28,7 @@ def run(*args):
 
 
 def section(text, heading):
-    m = re.search(rf"^## {re.escape(heading)}\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+    m = re.search(rf"^## {re.escape(heading)}\n(.*?)(?=^## |^<a id=|\Z)", text, re.M | re.S)
     return m.group(1) if m else None
 
 

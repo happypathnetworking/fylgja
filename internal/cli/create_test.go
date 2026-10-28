@@ -1075,7 +1075,8 @@ func TestCreateFollowStartFailed(t *testing.T) {
 	useFixtureRead(t)
 	res := readyResult()
 	res.Findings = findings.List{{Severity: findings.Warning, Rule: findings.RuleFollowStartFailed, Object: provision.FollowScheduleID,
-		Step: findings.StepFollow, Message: provision.FollowStartFailedMessage("namespace unavailable")}}
+		Step: findings.StepFollow, Message: "the twin is ready but following could not begin: " +
+			"creating schedule fylgja-follow failed (namespace unavailable); the twin is frozen; fylgja twin destroy and create again to follow"}}
 	useService(t, &fakeService{runID: "run-1", result: res})
 	useInterrupts(t)
 

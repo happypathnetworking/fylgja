@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"io"
 	"log/slog"
-	"maps"
 	"net"
 	"net/http/httptest"
 	"net/url"
@@ -583,11 +582,7 @@ func provisionOnSuite(t *testing.T, paths lab.Paths, in provision.ProvisionInput
 		},
 		Version: version, Log: logger,
 	}
-	activities := (&provision.ControlActivities{Store: store, Paths: paths}).Names()
-	maps.Copy(activities, acts.Names())
-	activities[provision.ActStopFollowing] = func(context.Context) (provision.StopFollowingResult, error) {
-		return provision.StopFollowingResult{}, nil
-	}
+	activities := acts.Names()
 	activities[wire.ActDeployLab] = func(_ context.Context, in wire.DeployInput) (wire.DeployResult, error) {
 		var res wire.DeployResult
 		for _, n := range in.Nodes {

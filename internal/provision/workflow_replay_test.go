@@ -26,11 +26,9 @@ import (
 // with no error. Each history was recorded by a scratch program against the dev server: the
 // real Provision, fake activities, the activity under test asking for its own run's cancellation
 // and completing two seconds later without heartbeating. The worker's sticky queue name had
-// the host's name in it, replaced by r11e-worker; replay does not read it. The follow and stop
-// histories were recorded the same way, from intent with BundleID set, and the host's name
-// replaced by t063-worker. The push histories were
-// recorded the same way, one node, from intent with BundleID set, and the host's name replaced
-// by t032-worker.
+// the host's name in it, replaced by r11e-worker; replay does not read it. The push histories
+// were recorded the same way, one node, from intent with BundleID set, and the host's name
+// replaced by t032-worker.
 //
 // The four histories recorded before M5 carry no push version marker: they replay at
 // DefaultVersion, which skips the push step, and stand unchanged.
@@ -158,70 +156,6 @@ func TestReplayCancelDuringHostCheckTouchesNothing(t *testing.T) {
 	doc := ProvisionDocument(findings.OpTwinProvision, &findings.Subject{RunID: "run-1"}, res)
 	if !carries(doc.Findings, findings.RuleRunCancelled, findings.StepHostCheck) {
 		t.Errorf("findings %+v, want run.cancelled at host_check", doc.Findings)
-	}
-	if code := doc.Status.ExitCode(); code != findings.ExitError {
-		t.Errorf("exit %d, want %d", code, findings.ExitError)
-	}
-}
-
-// A cancellation that arrives while the follow step's StartFollowing runs: it completes after
-// it, having created the Schedule (events 36, 42). The run stops the following it began, then
-// tears down and unstages (events 46, 52, 58), so it leaves no Schedule checking a twin that is
-// gone. Without WaitForCancellation on FollowOptions the future settled at once, DestroyLab was
-// scheduled at event 41 and the run ended before the Schedule was created.
-func TestReplayCancelDuringFollowStopsTheFollowing(t *testing.T) {
-	res := replayProvision(t, "cancel-during-follow.history.json")
-
-	if res.Outcome != OutcomeCancelled || res.Step != findings.StepFollow {
-		t.Errorf("outcome %q at %q, want cancelled at %q", res.Outcome, res.Step, findings.StepFollow)
-	}
-	if res.Twin != nil || res.Following != nil {
-		t.Errorf("a cancelled run reported a twin %+v or a following %+v", res.Twin, res.Following)
-	}
-	if res.Cleanup.Teardown != CleanupDone || res.Cleanup.Unstage != CleanupDone || len(res.Cleanup.Remaining) != 0 {
-		t.Errorf("cleanup %+v, want teardown and unstage done, nothing remaining", res.Cleanup)
-	}
-	if carries(res.Findings, findings.RuleFollowStopFailed, findings.StepFollow) {
-		t.Errorf("findings %+v: the stop succeeded", res.Findings)
-	}
-	doc := ProvisionDocument(findings.OpTwinCreate, &findings.Subject{RunID: "run-1"}, res)
-	if !carries(doc.Findings, findings.RuleRunCancelled, findings.StepFollow) {
-		t.Errorf("findings %+v, want run.cancelled at follow", doc.Findings)
-	}
-	if code := doc.Status.ExitCode(); code != findings.ExitFailed {
-		t.Errorf("exit %d, want %d", code, findings.ExitFailed)
-	}
-}
-
-// A cancellation that arrives while the stop step's StopFollowing runs: it completes after it,
-// having deleted the Schedule (events 12, 18). The run ends cancelled with the host untouched,
-// and its result names the following it stopped, so the CLI says so. Without
-// WaitForCancellation on FollowOptions the run ended at event 17, before the delete, with
-// FollowingStopped nil (contracts/cli.md step 5a).
-func TestReplayCancelDuringStopFollowingNamesTheStop(t *testing.T) {
-	res := replayProvision(t, "cancel-during-stop-following.history.json")
-
-	if res.Outcome != OutcomeCancelled || res.Step != findings.StepFollow {
-		t.Errorf("outcome %q at %q, want cancelled at %q", res.Outcome, res.Step, findings.StepFollow)
-	}
-	if res.FollowingStopped == nil || !res.FollowingStopped.Deleted || res.FollowingStopped.Branch != "fylgja-fixture" {
-		t.Errorf("following stopped %+v, want deleted, branch fylgja-fixture", res.FollowingStopped)
-	}
-	if res.Cleanup.Teardown != CleanupSkipped || res.Cleanup.Unstage != CleanupSkipped {
-		t.Errorf("cleanup %+v, want both skipped", res.Cleanup)
-	}
-	doc := ProvisionDocument(findings.OpTwinCreate, &findings.Subject{RunID: "run-1"}, res)
-	if !carries(doc.Findings, findings.RuleRunCancelled, findings.StepFollow) {
-		t.Errorf("findings %+v, want run.cancelled at follow", doc.Findings)
-	}
-	// The stop step runs after the host check cleared, so M2's pre-host-check wording would
-	// contradict the step it names.
-	const want = "run run-1 was cancelled at step follow, after the host check cleared and before anything was staged; " +
-		"nothing on the host was touched"
-	for _, f := range doc.Findings {
-		if f.Rule == findings.RuleRunCancelled && f.Message != want {
-			t.Errorf("run.cancelled message %q, want %q", f.Message, want)
-		}
 	}
 	if code := doc.Status.ExitCode(); code != findings.ExitError {
 		t.Errorf("exit %d, want %d", code, findings.ExitError)

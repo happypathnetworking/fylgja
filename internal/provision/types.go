@@ -28,19 +28,11 @@ const (
 	// third short workflow with a fixed id, D-007's kind, so a step is serialised with
 	// itself by the id and refused beside a provisioning or destroy run.
 	WorkflowStep = wire.StepWorkflowID // "fylgja-step"
-	// WorkflowRehearse is the one rehearsal run (015, D-051): a fifth short workflow with a
+	// WorkflowRehearse is the one rehearsal run (015, D-051): a short workflow with a
 	// fixed id, which runs a provision, a step per later stage and a destroy as its children
 	// under their own fixed ids, so a rehearsal is serialised with itself by its id and with
 	// the operator's runs by its children's, and is refused beside any of them.
 	WorkflowRehearse = wire.RehearseWorkflowID // "fylgja-rehearse"
-)
-
-// The following activities' names. They live here, not in wire, because they need the
-// workflow service and nothing on the host.
-const (
-	ActRunsInFlight   = "RunsInFlight"
-	ActStartFollowing = "StartFollowing"
-	ActStopFollowing  = "StopFollowing"
 )
 
 // Outcomes of a check. Reconcile returns one in
@@ -187,22 +179,6 @@ type ReconcileResult struct {
 	FollowingStopped bool             `json:"following_stopped,omitempty"`
 }
 
-// RunsInFlightResult names the operator's runs in flight, by run id; "" is none running.
-type RunsInFlightResult struct {
-	Provision string `json:"provision"`
-	Destroy   string `json:"destroy"`
-}
-
-// StartFollowingInput is the following to begin.
-type StartFollowingInput struct {
-	Branch    string `json:"branch"`
-	IntervalS int    `json:"interval_s"`
-	Version   string `json:"version"`
-	// Scope is the twin's, which the Schedule's ReconcileInput carries to every check (017).
-	// Omitted when empty.
-	Scope string `json:"scope,omitempty"`
-}
-
 // StopFollowingResult says whether a Schedule was deleted, and the branch it followed.
 type StopFollowingResult struct {
 	Deleted bool   `json:"deleted"`
@@ -232,36 +208,6 @@ type DestroyRun struct {
 	// FollowingStopped is what stopping following again, once no provisioning run was in
 	// flight, did (contracts/cli.md, twin destroy step 2a).
 	FollowingStopped FollowStop
-}
-
-// ReadIntentInput is the intent reference to read. The CTM is named by the run's id,
-// which the activity takes from its own context.
-type ReadIntentInput struct {
-	Branch string `json:"branch"`
-	At     string `json:"at"`
-	// Scope is the read's, tag:<name> (017). Omitted when empty.
-	Scope string `json:"scope,omitempty"`
-}
-
-// ReadIntentResult is where the read's CTM was written, when the read began, and its
-// findings; rejections are findings here, not errors.
-type ReadIntentResult struct {
-	CTMPath    string        `json:"ctm_path"`
-	ObservedAt string        `json:"observed_at"`
-	Findings   findings.List `json:"findings"`
-}
-
-// CompileInput names the CTM to compile.
-type CompileInput struct {
-	CTMPath string `json:"ctm_path"`
-}
-
-// CompileResult is the stored bundle's identity and absolute path, and the compile's
-// findings.
-type CompileResult struct {
-	BundleID   string        `json:"bundle_id"`
-	BundlePath string        `json:"bundle_path"`
-	Findings   findings.List `json:"findings"`
 }
 
 // StepInput starts a step run: everything the CLI

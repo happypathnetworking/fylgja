@@ -740,6 +740,31 @@ func FollowStopFailedMessage(err error, what string) string {
 		FollowScheduleID, err, what)
 }
 
+// reconcileWorkflowType is the name an earlier build's worker registered a check's
+// workflow under, which its Schedule's action started by. This build registers none, and
+// reads it to find a check an earlier build left (019).
+const reconcileWorkflowType = "Reconcile"
+
+// followedBranch is the branch a Schedule's action checks, decoded from the action's first
+// arg, which Describe returns as a payload. "" when it cannot be
+// read.
+func followedBranch(desc *client.ScheduleDescription) string {
+	action, ok := desc.Schedule.Action.(*client.ScheduleWorkflowAction)
+	if !ok || len(action.Args) == 0 {
+		return ""
+	}
+	var in ReconcileInput
+	switch arg := action.Args[0].(type) {
+	case *commonpb.Payload:
+		if converter.GetDefaultDataConverter().FromPayload(arg, &in) != nil {
+			return ""
+		}
+	case ReconcileInput:
+		in = arg
+	}
+	return in.Branch
+}
+
 // runningChecksQuery finds a check in flight. No ORDER BY: the dev server's visibility
 // store refuses it.
 const runningChecksQuery = "WorkflowType = '" + reconcileWorkflowType + "' AND ExecutionStatus = 'Running'"
@@ -1167,7 +1192,7 @@ type Event struct {
 	End      bool          // false: the step began
 	Outcome  string        // on End: EventDone, EventFailed, EventTimedOut or EventCancelled
 	Duration time.Duration // on End: from scheduled to closed
-	Detail   string        // on EventDone, when the result says something: "bundle_id <hex>", "3 nodes"
+	Detail   string        // on EventDone, when the result says something: "3 nodes", "no lab"
 	Rule     string        // on EventFailed: the failure's type, which is its rule identifier
 	Message  string        // on EventFailed and EventTimedOut
 	// WorkflowID is the run the step belongs to: a destroy follows a provisioning run it
@@ -1203,18 +1228,12 @@ const (
 // inspect step.
 func findingStep(activityType string) string {
 	switch activityType {
-	case wire.ActInspectTwin, ActRunsInFlight:
+	case wire.ActInspectTwin:
 		return findings.StepInspect
-	case ActStartFollowing, ActStopFollowing:
-		return findings.StepFollow
 	case destroyWorkflowType:
 		return findings.StepDestroy
 	case provisionWorkflowType:
 		return findings.StepProvision
-	case wire.ActReadIntent:
-		return findings.StepRead
-	case wire.ActCompile:
-		return findings.StepCompile
 	case wire.ActCheckHost:
 		return findings.StepHostCheck
 	case wire.ActStageBundle:
@@ -1390,7 +1409,7 @@ func stepName(workflowID, activityType string) string {
 	}
 	if isCheck(workflowID) {
 		switch activityType {
-		case wire.ActInspectTwin, ActRunsInFlight:
+		case wire.ActInspectTwin:
 			return "inspect"
 		case destroyWorkflowType:
 			return "destroy"
@@ -1414,12 +1433,6 @@ func stepName(workflowID, activityType string) string {
 	// M12: the step's wait after its record.
 	case wire.ActVerifyTwin:
 		return "observe"
-	case ActStartFollowing, ActStopFollowing:
-		return "follow"
-	case wire.ActReadIntent:
-		return "read"
-	case wire.ActCompile:
-		return "compile"
 	case wire.ActCheckHost:
 		return "host check"
 	case wire.ActStageBundle:
@@ -1451,11 +1464,6 @@ func stepName(workflowID, activityType string) string {
 // completedDetail is what a completed step's result says worth printing.
 func completedDetail(dc converter.DataConverter, activityType string, result *commonpb.Payloads) string {
 	switch activityType {
-	case wire.ActCompile:
-		var r CompileResult
-		if dc.FromPayloads(result, &r) == nil && r.BundleID != "" {
-			return "bundle_id " + r.BundleID
-		}
 	case wire.ActDeployLab:
 		var r wire.DeployResult
 		if dc.FromPayloads(result, &r) == nil {

@@ -34,8 +34,6 @@ const (
 	RetryBackoffCoefficient = 2.0
 
 	// Fixed bounds of the steps no platform affects.
-	ReadBudget         = 5 * time.Minute // M1's read bound (stage.ReadTimeout)
-	CompileBudget      = 60 * time.Second
 	CheckHostBudget    = 30 * time.Second
 	StageBudget        = 60 * time.Second
 	RecordBudget       = 30 * time.Second
@@ -61,15 +59,8 @@ const (
 	// MinInterval is the floor: below it a check is due again before its own read has been
 	// filed.
 	MinInterval = 10 * time.Second
-	// FollowCatchupWindow keeps a workflow service outage from replaying missed
-	// intervals.
-	FollowCatchupWindow = time.Minute
-	// FollowJitter is zero: the interval is the interval.
-	FollowJitter = time.Duration(0)
 	// InspectTwinBudget bounds InspectTwin, which only reads.
 	InspectTwinBudget = 30 * time.Second
-	// RunsInFlightBudget bounds RunsInFlight: two describes.
-	RunsInFlightBudget = 30 * time.Second
 	// FollowBudget bounds StartFollowing and StopFollowing: a delete and a create.
 	FollowBudget = 30 * time.Second
 	// ShowServiceBudget bounds twin show's whole conversation with the workflow service;
@@ -102,14 +93,6 @@ func retryPolicy(maxAttempts int32) *temporal.RetryPolicy {
 	}
 }
 
-// controlOptions are for the activities that need Infrahub and the store, not the host.
-func controlOptions(startToClose time.Duration) workflow.ActivityOptions {
-	return workflow.ActivityOptions{
-		StartToCloseTimeout: startToClose,
-		RetryPolicy:         retryPolicy(RetryMaximumAttempts),
-	}
-}
-
 // hostBoundOptions are for internal/lab's activities. WaitForCancellation is on for
 // every one: without it a cancelled activity is reported stopped before it has, and
 // cleanup races a clab still acting on the host. Its absence is silent,
@@ -127,12 +110,6 @@ func hostBoundOptions(startToClose time.Duration, heartbeat bool) workflow.Activ
 }
 
 func seconds(s int) time.Duration { return time.Duration(s) * time.Second }
-
-// ReadOptions bound ReadIntent by M1's read bound.
-func ReadOptions() workflow.ActivityOptions { return controlOptions(ReadBudget) }
-
-// CompileOptions bound Compile: a pure function and a copy.
-func CompileOptions() workflow.ActivityOptions { return controlOptions(CompileBudget) }
 
 // CheckHostOptions bound CheckHost, which only reads.
 func CheckHostOptions() workflow.ActivityOptions { return hostBoundOptions(CheckHostBudget, false) }
@@ -238,24 +215,9 @@ func DestroyOptions(destroyTimeoutS int) workflow.ActivityOptions {
 // UnstageOptions bound UnstageTwin.
 func UnstageOptions() workflow.ActivityOptions { return hostBoundOptions(UnstageBudget, false) }
 
-// InspectTwinOptions bound InspectTwin, a check's host-bound read.
+// InspectTwinOptions bound InspectTwin, a step's host-bound read of the twin.
 func InspectTwinOptions() workflow.ActivityOptions {
 	return hostBoundOptions(InspectTwinBudget, false)
-}
-
-// RunsInFlightOptions bound RunsInFlight.
-func RunsInFlightOptions() workflow.ActivityOptions { return controlOptions(RunsInFlightBudget) }
-
-// FollowOptions bound StartFollowing and StopFollowing. WaitForCancellation is on: neither
-// heartbeats, so a cancelled run does not stop them, and without it the run settles the
-// future as cancelled at once and ends while the activity goes on to create or delete the
-// Schedule — a following with no twin, or a stop the run never names. With
-// it, the future settles with what the activity did. Its absence is silent, which is why a
-// test pins it.
-func FollowOptions() workflow.ActivityOptions {
-	o := controlOptions(FollowBudget)
-	o.WaitForCancellation = true
-	return o
 }
 
 // The step run's options. A step adds no
@@ -290,10 +252,10 @@ func VerifyOptions(budgetS int) workflow.ActivityOptions {
 	return o
 }
 
-// ChildOptions run a rebuild's destroy or provision as a child of the check, under its
-// fixed id. ABANDON keeps a child running to its own cleanup when the check is terminated;
-// WaitForCancellation makes a cancelled check wait for the child's cleanup before it
-// closes. Their absence is silent, which is why a test pins them.
+// ChildOptions run a rehearsal's provision, steps and destroy as its children, each under
+// its fixed id. ABANDON keeps a child running to its own cleanup when the rehearsal is
+// terminated; WaitForCancellation makes a cancelled rehearsal wait for the child's cleanup
+// before it closes. Their absence is silent, which is why a test pins them.
 func ChildOptions(workflowID string) workflow.ChildWorkflowOptions {
 	return workflow.ChildWorkflowOptions{
 		WorkflowID:          workflowID,

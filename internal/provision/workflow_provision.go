@@ -16,10 +16,11 @@ import (
 )
 
 // Provision is the provisioning run: check the host, stage, deploy, wait for every node,
-// push each its configuration, record. Its read and compile are the server's, or a
-// following check's, before it starts (018). Activities are scheduled by name with the
-// options their budgets give them, and everything the run needs to know about the host
-// arrives in activity results, never from disk.
+// push each its configuration, record. It is started compiled, with a bundle id, and reads
+// no source of truth: a create's read, take and compile are the server's, before it starts
+// (018, 019). Activities are scheduled by name with the options their budgets give them,
+// and everything the run needs to know about the host arrives in activity results, never
+// from disk.
 //
 // It returns a result in every case, never an error, so the CLI reads one shape. Up to and
 // including the host check nothing on the host has been touched: a refusal
@@ -28,48 +29,30 @@ import (
 // short of ready — a failure or a cancellation at any step — runs teardown and unstage to
 // completion first.
 //
-// A run from a stored bundle (twin provision) has no read and no compile: it starts at the
-// host check with the bundle it was given, and records that no read took place. A rebuild's
-// provision is already compiled: from intent with BundleID set, it
-// starts at the host check too, and records the check's read. So is a create whose server
-// read, took and compiled, or one from a snapshot (018): BundleID set, from intent or from
-// a snapshot, it starts at the host check and records the read's observed_at, or the
-// snapshot's stored take, and the snapshot its input names. An input from intent with no
-// BundleID, which no build of this tree starts, reads and compiles first, as a create's
-// run did before 018: the branch stays so that the histories recorded then replay.
-//
-// Following (M4) adds two steps, each taken only when the input asks, so M2's inputs run
-// and replay as they did. With StopFollowing, once the host check has cleared and before
-// anything is staged, any following is stopped: a refused run leaves following as it was,
-// and a stop that fails ends the run with the host untouched. With Follow, once the twin is
-// recorded, following of the branch begins; a failure to begin is a warning on a ready run.
+// Every run starts at the host check with the bundle it was given. A run from a stored
+// bundle (twin provision) records that no read took place. A create from intent or from a
+// snapshot records the read's observed_at, or the snapshot's stored take, and the snapshot
+// its input names. An input with no bundle id is a programming error: the run ends error at
+// the host check, operation.failed, with nothing scheduled.
 func Provision(ctx workflow.Context, in ProvisionInput) (ProvisionResult, error) {
 	res := ProvisionResult{
 		Findings: findings.List{},
 		Cleanup:  CleanupResult{Teardown: CleanupSkipped, Unstage: CleanupSkipped},
 	}
+	if in.BundleID == "" {
+		return untouched(ctx, res, findings.StepHostCheck, errors.New(NoBundleMessage)), nil
+	}
 
-	compiled := CompileResult{BundleID: in.BundleID, BundlePath: in.BundlePath}
 	var observedAt *string
-	switch {
-	case in.Source == wire.SourceBundle:
-	case in.BundleID != "":
-		// Already compiled: every create since 018, by the server from its read or a
-		// snapshot's stored take, and a following check's rebuild, from the check's read.
+	if in.Source != wire.SourceBundle {
 		res.ObservedAt = in.ObservedAt
 		observedAt = &in.ObservedAt
-	default:
-		read, ok := readAndCompile(ctx, in, &res, &compiled)
-		if !ok {
-			return res, nil
-		}
-		observedAt = &read.ObservedAt
 	}
-	res.BundleID = compiled.BundleID
+	res.BundleID = in.BundleID
 
 	var plan wire.CheckHostResult
 	if err := execute(ctx, CheckHostOptions(), wire.ActCheckHost, &plan,
-		wire.CheckHostInput{BundlePath: compiled.BundlePath, BundleID: compiled.BundleID}); err != nil {
+		wire.CheckHostInput{BundlePath: in.BundlePath, BundleID: in.BundleID}); err != nil {
 		return untouched(ctx, res, findings.StepHostCheck, err), nil
 	}
 	res.Findings = append(res.Findings, plan.Findings...)
@@ -83,90 +66,25 @@ func Provision(ctx workflow.Context, in ProvisionInput) (ProvisionResult, error)
 	if plan.Findings.Rejected() {
 		return rejected(res, findings.StepHostCheck), nil
 	}
-	if in.StopFollowing {
-		if ended, ok := stopFollowingBeforeStage(ctx, &res); !ok {
-			return ended, nil
-		}
-	}
 
-	if s := provisionHost(ctx, in, &res, observedAt, compiled, plan); s != nil {
+	if s := provisionHost(ctx, in, &res, observedAt, plan); s != nil {
 		return cleanUp(ctx, res, plan, s), nil
 	}
 	return res, nil
 }
 
-// stopFollowingBeforeStage is the run's stop step: it deletes any following, so no check
-// can rebuild over the twin this run is about to build. The host check found no lab and no
-// twin directory, so a check still in flight has nothing to compare against and needs no
-// cancelling. It reports false when the run ends here, with the result
-// that says how: nothing on the host has been touched.
-func stopFollowingBeforeStage(ctx workflow.Context, res *ProvisionResult) (ProvisionResult, bool) {
-	var stopped StopFollowingResult
-	if err := execute(ctx, FollowOptions(), ActStopFollowing, &stopped); err != nil {
-		if ctx.Err() != nil || temporal.IsCanceledError(err) {
-			return untouched(ctx, *res, findings.StepFollow, err), false
-		}
-		out := *res
-		out.Outcome, out.Step = OutcomeError, findings.StepFollow
-		out.Findings = append(out.Findings, findings.Finding{
-			Severity: findings.Rejection,
-			Rule:     findings.RuleFollowStopFailed,
-			Object:   FollowScheduleID,
-			Step:     findings.StepFollow,
-			Message:  FollowStopFailedMessage(errors.New(causeMessage(err)), "staged"),
-		})
-		return out, false
-	}
-	if stopped.Deleted {
-		res.FollowingStopped = &stopped
-	}
-	// StopFollowing never heartbeats, so a cancellation during it arrives here.
-	if ctx.Err() != nil {
-		return untouched(ctx, *res, findings.StepFollow, nil), false
-	}
-	return *res, true
-}
-
-// readAndCompile reads the branch and compiles it, filling res with their findings and
-// compiled with the stored bundle. It reports false when the run ends here, with res
-// already saying how: nothing on the host has been touched yet.
-func readAndCompile(ctx workflow.Context, in ProvisionInput, res *ProvisionResult, compiled *CompileResult) (ReadIntentResult, bool) {
-	var read ReadIntentResult
-	if err := execute(ctx, ReadOptions(), wire.ActReadIntent, &read,
-		ReadIntentInput{Branch: in.Branch, At: in.At, Scope: in.Scope}); err != nil {
-		*res = untouched(ctx, *res, findings.StepRead, err)
-		return read, false
-	}
-	res.ObservedAt = read.ObservedAt
-	res.Findings = append(res.Findings, read.Findings...)
-	if read.Findings.Rejected() {
-		*res = rejected(*res, findings.StepRead)
-		return read, false
-	}
-
-	if err := execute(ctx, CompileOptions(), wire.ActCompile, compiled,
-		CompileInput{CTMPath: read.CTMPath}); err != nil {
-		*res = untouched(ctx, *res, findings.StepCompile, err)
-		return read, false
-	}
-	res.BundleID = compiled.BundleID
-	res.Findings = append(res.Findings, compiled.Findings...)
-	if compiled.Findings.Rejected() {
-		*res = rejected(*res, findings.StepCompile)
-		return read, false
-	}
-	return read, true
-}
+// NoBundleMessage is operation.failed's message for a provision input that names no bundle.
+const NoBundleMessage = "the run was started with no bundle id; a provision starts compiled, from the bundle the server filed"
 
 // provisionHost stages, deploys, waits for every node and records the twin: every step
 // that touches the host. It fills res as it goes and, if a step stops it, says how.
 // observedAt is nil when no read took place.
 func provisionHost(ctx workflow.Context, in ProvisionInput, res *ProvisionResult,
-	observedAt *string, compiled CompileResult, plan wire.CheckHostResult) *stopped {
+	observedAt *string, plan wire.CheckHostResult) *stopped {
 	var staged wire.StageResult
 	if err := execute(ctx, StageOptions(), wire.ActStageBundle, &staged,
-		wire.StageInput{BundlePath: compiled.BundlePath, BundleID: compiled.BundleID}); err != nil {
-		return stopAt(ctx, findings.StepStage, compiled.BundlePath, err)
+		wire.StageInput{BundlePath: in.BundlePath, BundleID: in.BundleID}); err != nil {
+		return stopAt(ctx, findings.StepStage, in.BundlePath, err)
 	}
 	res.TwinDir = staged.TwinDir
 	if s := cancelledAfter(ctx, findings.StepStage); s != nil {
@@ -204,7 +122,7 @@ func provisionHost(ctx workflow.Context, in ProvisionInput, res *ProvisionResult
 	var recorded wire.RecordResult
 	if err := execute(ctx, RecordOptions(), wire.ActRecordTwin, &recorded, wire.RecordInput{
 		TwinDir:    staged.TwinDir,
-		BundleID:   compiled.BundleID,
+		BundleID:   in.BundleID,
 		Provenance: plan.Provenance,
 		ObservedAt: observedAt,
 		Source:     in.Source,
@@ -221,54 +139,9 @@ func provisionHost(ctx workflow.Context, in ProvisionInput, res *ProvisionResult
 	if s := cancelledAfter(ctx, findings.StepRecord); s != nil {
 		return s
 	}
-
-	if in.Follow != nil {
-		if s := startFollowing(ctx, in, res); s != nil {
-			return s
-		}
-	}
 	res.Outcome = OutcomeReady
 	res.Twin = &recorded.Record
 	return nil
-}
-
-// startFollowing is the run's follow step: the twin is ready and recorded, and following of
-// its branch begins. A failure to begin leaves a ready twin that is frozen, with the warning
-// follow.start.failed (contracts/cli.md). A cancellation that arrived meanwhile ends the run
-// cancelled with cleanup, as one during the record step does; a following that began in the
-// meantime is stopped again first, so the cleanup leaves no Schedule checking a twin that
-// is gone.
-func startFollowing(ctx workflow.Context, in ProvisionInput, res *ProvisionResult) *stopped {
-	var following FollowingResult
-	err := execute(ctx, FollowOptions(), ActStartFollowing, &following,
-		StartFollowingInput{Branch: in.Branch, IntervalS: in.Follow.IntervalS, Version: in.Version, Scope: in.Scope})
-	switch {
-	case err == nil:
-		res.Following = &following
-	case ctx.Err() == nil && !temporal.IsCanceledError(err):
-		res.Findings.AddStep(findings.Warning, findings.StepFollow, findings.RuleFollowStartFailed, FollowScheduleID,
-			FollowStartFailedMessage(causeMessage(err)))
-	}
-	if ctx.Err() == nil {
-		return nil
-	}
-	s := &stopped{step: findings.StepFollow, cancelled: true}
-	if res.Following != nil {
-		uninterrupted, _ := workflow.NewDisconnectedContext(ctx)
-		if err := execute(uninterrupted, FollowOptions(), ActStopFollowing, nil); err != nil {
-			s.findings = findings.List{{Severity: findings.Warning, Rule: findings.RuleFollowStopFailed, Object: FollowScheduleID,
-				Step: findings.StepFollow, Message: "deleting schedule " + FollowScheduleID + " failed (" + causeMessage(err) +
-					") after the run was cancelled; its checks find nothing to compare against; fylgja twin destroy stops it"}}
-		}
-		res.Following = nil
-	}
-	return s
-}
-
-// FollowStartFailedMessage is follow.start.failed's message (contracts/cli.md).
-func FollowStartFailedMessage(cause string) string {
-	return "the twin is ready but following could not begin: creating schedule " + FollowScheduleID +
-		" failed (" + cause + "); the twin is frozen; fylgja twin destroy and create again to follow"
 }
 
 // cancelledAfter stops the run at step when a cancellation arrived while step's activity

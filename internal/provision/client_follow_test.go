@@ -109,15 +109,12 @@ func TestEveryActivityHasAFindingStep(t *testing.T) {
 		// M12's.
 		findings.StepObserve}
 	var names []string
-	for name := range (&ControlActivities{}).Names() {
-		names = append(names, name)
-	}
 	for name := range (&lab.Activities{}).Names() {
 		names = append(names, name)
 	}
-	if len(names) != 20 {
-		t.Fatalf("%d activities registered, want M2's ten, M4's four (InspectTwin, RunsInFlight, StartFollowing, StopFollowing), "+
-			"M5's push, M11's four (PlanReconcile, StageStep, ReconcileLab, RecordStep) and M12's VerifyTwin",
+	if len(names) != 15 {
+		t.Fatalf("%d activities registered, want the lab's fifteen: M2's eight, M4's InspectTwin, M5's push, "+
+			"M11's four (PlanReconcile, StageStep, ReconcileLab, RecordStep) and M12's VerifyTwin",
 			len(names))
 	}
 	for _, name := range names {

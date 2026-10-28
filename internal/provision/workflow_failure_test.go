@@ -13,8 +13,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 )
 
-// injected is a failure retrying cannot help, as a host-bound or control activity reports
-// one.
+// injected is a failure retrying cannot help, as a host-bound activity reports one.
 func injected(step, rule, object string) error {
 	return lab.StepFailure(step, rule, object, rule+" injected at step "+step)
 }

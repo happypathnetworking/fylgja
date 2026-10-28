@@ -2,31 +2,24 @@ package cli
 
 import (
 	"context"
-	"errors"
 	"path/filepath"
 	"slices"
 	"testing"
 
-	"go.temporal.io/sdk/temporal"
-
-	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
-	"github.com/happypathnetworking/fylgja/internal/lab"
-	"github.com/happypathnetworking/fylgja/internal/provision"
-	"github.com/happypathnetworking/fylgja/internal/psp"
-	"github.com/happypathnetworking/fylgja/internal/stage"
+	"github.com/happypathnetworking/fylgja/internal/validate"
 )
 
 // A create that fails at compile reports exactly what `twin compile` would, under the
-// same identifiers. Asserted for the shared stage and for the
-// Compile activity a run executes, so neither the command's own pre-checks nor the
-// activity's filing can drift from the other.
+// same identifiers (D-011). Both compile a snapshot on stage.Compile: twin compile in its
+// own handler, a create in the server's compileAndFile, after the snapshot's resolve and
+// before any run, since no run compiles (019). Asserted for every defect CTM, sent to each
+// command as the same snapshot file, so neither twin compile's pre-checks nor the create's
+// resolve and filing can drift from the other. A snapshot whose CTM breaks a rule that reads
+// no package is refused at compile before it is filed (018), so that create reports those
+// rules alone, each one twin compile reports too. A create the compile refused starts no run.
 func TestCreateReportsM1Findings(t *testing.T) {
-	reg, err := psp.Load("")
-	if err != nil {
-		t.Fatal(err)
-	}
 	defects, err := filepath.Glob(repoPath("testdata", "ctm", "defects", "*.json"))
 	if err != nil || len(defects) == 0 {
 		t.Fatalf("no defect CTMs found (%v); the test would prove nothing", err)
@@ -34,51 +27,40 @@ func TestCreateReportsM1Findings(t *testing.T) {
 
 	for _, path := range defects {
 		t.Run(filepath.Base(path), func(t *testing.T) {
-			_, doc := docOf(t, runCompile(&options{asJSON: true},
-				&compileFlags{snapshotPath: wrappedCTM(t, path), out: filepath.Join(t.TempDir(), "bundle")}))
+			wrapped := wrappedCTM(t, path)
+			_, compiled := docOf(t, runCompile(&options{asJSON: true},
+				&compileFlags{snapshotPath: wrapped, out: filepath.Join(t.TempDir(), "bundle")}))
 			var want []string
-			for _, f := range doc.Findings {
+			for _, f := range compiled.Findings {
 				want = append(want, f.Rule)
 			}
 			slices.Sort(want)
-
-			root := t.TempDir()
-			paths := lab.PathsAt(root)
-			control := &provision.ControlActivities{Store: bundle.NewDirStore(paths.Bundles), Paths: paths}
-
-			c, loadErr := ctm.Load(path)
-			if loadErr != nil {
-				// Neither can read it: twin compile says operation.failed, and so does the run.
-				// A CTM of another version is twin compile's rejection, ctm.version.unsupported
-				// at the file (017); the run compiles only the CTM its own read wrote, so one it
-				// cannot read is its failure, operation.failed, as before.
-				wantCompile := findings.RuleOperationFailed
-				var other *ctm.VersionError
-				if errors.As(loadErr, &other) {
-					wantCompile = findings.RuleCTMVersionUnsupported
+			if c, err := ctm.Load(path); err == nil {
+				if intrinsic := validate.Intrinsic(c); intrinsic.Rejected() {
+					got := sortedRules(intrinsic)
+					for _, rule := range got {
+						if !slices.Contains(want, rule) {
+							t.Errorf("validate.Intrinsic refuses %s, which twin compile does not report (%v)", rule, want)
+						}
+					}
+					want = got
 				}
-				if !slices.Equal(want, []string{wantCompile}) {
-					t.Fatalf("ctm.Load failed (%v) but twin compile reported %v", loadErr, want)
-				}
-				_, err := control.Compile(context.Background(), provision.CompileInput{CTMPath: path})
-				var appErr *temporal.ApplicationError
-				if !errors.As(err, &appErr) || appErr.Type() != findings.RuleOperationFailed {
-					t.Errorf("Compile activity error = %v, want %s", err, findings.RuleOperationFailed)
-				}
-				return
 			}
 
-			_, _, list := stage.Compile(c, reg)
-			if got := sortedRules(list); !slices.Equal(got, want) {
-				t.Errorf("stage.Compile rules %v, twin compile rules %v", got, want)
+			useStateRoot(t)
+			useInterrupts(t)
+			svc := &fakeService{runID: "run-1", result: readyResult()}
+			useService(t, svc)
+			var createErr error
+			captureStdout(t, func() {
+				createErr = runCreate(context.Background(), &options{asJSON: true}, &createFlags{snapshot: wrapped, snapshotGiven: true})
+			})
+			_, created := exitOf(t, createErr)
+			if got := sortedRules(created.Findings); !slices.Equal(got, want) {
+				t.Errorf("twin create --snapshot rules %v, twin compile rules %v", got, want)
 			}
-
-			res, err := control.Compile(context.Background(), provision.CompileInput{CTMPath: path})
-			if err != nil {
-				t.Fatalf("Compile activity: %v", err)
-			}
-			if got := sortedRules(res.Findings); !slices.Equal(got, want) {
-				t.Errorf("Compile activity rules %v, twin compile rules %v", got, want)
+			if created.Findings.Rejected() && len(svc.started) != 0 {
+				t.Errorf("a create its compile refused started %+v", svc.started)
 			}
 		})
 	}

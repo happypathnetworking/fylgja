@@ -38,7 +38,7 @@ func newWorkerCmd(opts *options) *cobra.Command {
 	run := &cobra.Command{
 		Use:   "run",
 		Short: "Serve task queue fylgja on this host",
-		Long: "Serve task queue fylgja: both workflows and every activity, on the host where\n" +
+		Long: "Serve task queue fylgja: its four workflows and every activity, on the host where\n" +
 			"the containers run. Runs until interrupted. Produces no findings document;\n" +
 			"start-up lines go to stdout and logs to stderr.",
 		Args: cobra.NoArgs,
@@ -98,8 +98,7 @@ func runWorker(ctx context.Context, opts *options) error {
 		Version:  version,
 		Log:      logger,
 	}
-	control := &provision.ControlActivities{Store: store, Paths: paths, PSPDir: opts.pspDir, Client: c.Client}
-	w := provision.NewWorker(c.Client, acts, control)
+	w := provision.NewWorker(c.Client, acts)
 
 	// What the worker serves, where its state lives, and what the host already holds, before
 	// it takes any task (Constitution VII).

@@ -30,8 +30,8 @@ const (
 	rehearsalRecordedAt = "2026-10-17T14:03:00.000000Z"
 )
 
-// rehearseHarness is a workflow test environment for Rehearse, in workflow_reconcile_test.go's
-// style: the three children registered as stubs under the type names the worker registers
+// rehearseHarness is a workflow test environment for Rehearse: the three children
+// registered as stubs under the type names the worker registers
 // Provision, Step and Destroy by, so a rehearsal runs no real run, and VerifyTwin registered
 // by name and answered by the harness. It records, in order, each child started by its
 // workflow id and each VerifyTwin, and what each was given.

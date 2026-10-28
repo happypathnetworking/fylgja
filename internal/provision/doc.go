@@ -1,7 +1,7 @@
-// Package provision holds Fylgja's Temporal side: its five workflows (provision, destroy,
-// the following check, step, and the rehearsal that runs provision, step and destroy as its
-// children, D-051), the control activities that run the read and compile stages, the
-// CLI's client to the workflow service, and worker assembly.
+// Package provision holds Fylgja's Temporal side: its four workflows (provision, destroy,
+// step, and the rehearsal that runs provision, step and destroy as its children, D-051),
+// each started with a snapshot id and a bundle id and none reading a source of truth (019),
+// the client to the workflow service, and worker assembly.
 //
 // Workflow files (workflow_*.go and options.go) are deterministic: no I/O, network,
 // filesystem, environment, wall clock or randomness — workflow.Now and workflow.Sleep,

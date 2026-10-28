@@ -87,8 +87,7 @@ func TestCreateDryRunTakesTheSnapshot(t *testing.T) {
 }
 
 // A dry run's filing writes no CTM beside the bundle (FR-008): the sidecar is retired. One an
-// earlier build left, placed by hand before the filing, is neither read nor removed. The
-// Compile activity's half is internal/provision's test of this name.
+// earlier build left, placed by hand before the filing, is neither read nor removed.
 func TestNoSidecarIsWritten(t *testing.T) {
 	paths := useStateRoot(t)
 	useService(t, nil)

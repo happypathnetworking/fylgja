@@ -88,12 +88,6 @@ func newHarness(t *testing.T) *harness {
 		wire.ActUnstageTwin: func(context.Context) (wire.UnstageResult, error) {
 			return wire.UnstageResult{}, errUnmocked
 		},
-		ActStartFollowing: func(context.Context, StartFollowingInput) (FollowingResult, error) {
-			return FollowingResult{}, errUnmocked
-		},
-		ActStopFollowing: func(context.Context) (StopFollowingResult, error) {
-			return StopFollowingResult{}, errUnmocked
-		},
 	}
 	for name, fn := range stubs {
 		env.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name})

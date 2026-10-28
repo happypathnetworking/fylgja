@@ -881,15 +881,9 @@ func TestStepNames(t *testing.T) {
 		workflowID, activityType, step, findingStep string
 	}{
 		{check, wire.ActInspectTwin, "inspect", findings.StepInspect},
-		{check, ActRunsInFlight, "inspect", findings.StepInspect},
-		{check, wire.ActReadIntent, "read", findings.StepRead},
-		{check, wire.ActCompile, "compile", findings.StepCompile},
 		{check, wire.ActCheckHost, "host check", findings.StepHostCheck},
 		{check, "Destroy", "destroy", findings.StepDestroy},
 		{check, "Provision", "provision", findings.StepProvision},
-		{check, ActStopFollowing, "follow", findings.StepFollow},
-		{WorkflowProvision, ActStartFollowing, "follow", findings.StepFollow},
-		{WorkflowProvision, ActStopFollowing, "follow", findings.StepFollow},
 		{WorkflowProvision, wire.ActDestroyLab, "cleanup teardown", findings.StepTeardown},
 		{WorkflowDestroy, wire.ActDestroyLab, "teardown", findings.StepTeardown},
 		// M5: the push is a step of a provisioning run, and of a check's provision child.
@@ -1959,4 +1953,45 @@ func TestInFlightNamesARehearsalAndItsChild(t *testing.T) {
 			}
 		})
 	}
+}
+
+// scheduleNotFound is the workflow service's answer for a Schedule that does not exist.
+func scheduleNotFound() error { return serviceerror.NewNotFound("schedule not found") }
+
+// describedSchedule is Describe's answer for Schedule fylgja-follow checking branch every
+// interval, with the action's args as the service returns them: payloads.
+func describedSchedule(t *testing.T, branch string, interval time.Duration) *client.ScheduleDescription {
+	t.Helper()
+	arg, err := converter.GetDefaultDataConverter().ToPayload(ReconcileInput{Branch: branch, Version: "0.1.0-dev"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &client.ScheduleDescription{Schedule: client.Schedule{
+		Spec:   &client.ScheduleSpec{Intervals: []client.ScheduleIntervalSpec{{Every: interval}}},
+		Action: &client.ScheduleWorkflowAction{ID: WorkflowReconcile, Workflow: "Reconcile", Args: []any{arg}, TaskQueue: TaskQueue},
+	}}
+}
+
+// scheduleService is a mocks.Client whose ScheduleClient hands back one handle for
+// fylgja-follow, recording in order the calls that change something.
+type scheduleService struct {
+	mc     *mocks.Client
+	sc     *mocks.ScheduleClient
+	handle *mocks.ScheduleHandle
+	seq    []string
+}
+
+func newScheduleService() *scheduleService {
+	s := &scheduleService{mc: &mocks.Client{}, sc: &mocks.ScheduleClient{}, handle: &mocks.ScheduleHandle{}}
+	s.mc.On("ScheduleClient").Return(s.sc)
+	s.sc.On("GetHandle", mock.Anything, FollowScheduleID).Return(s.handle)
+	return s
+}
+
+func (s *scheduleService) describes(desc *client.ScheduleDescription, err error) {
+	s.handle.On("Describe", mock.Anything).Run(func(mock.Arguments) { s.seq = append(s.seq, "describe") }).Return(desc, err)
+}
+
+func (s *scheduleService) deletes(err error) {
+	s.handle.On("Delete", mock.Anything).Run(func(mock.Arguments) { s.seq = append(s.seq, "delete") }).Return(err)
 }

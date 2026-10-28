@@ -195,153 +195,49 @@ func TestAnInputWithNoStageSerialisesAsBefore(t *testing.T) {
 	}
 }
 
-// followInput is a create from intent that follows its branch every 300s.
-func followInput() ProvisionInput {
-	in := compiled("fylgja-fixture")
-	in.Version, in.Follow = "0.1.0-test", &FollowInput{IntervalS: 300}
-	return in
-}
-
-// mockStartFollowing answers StartFollowing as a created Schedule does, keeping its input.
-func (h *harness) mockStartFollowing(got *StartFollowingInput) {
-	h.env.OnActivity(ActStartFollowing, mock.Anything, mock.Anything).Return(
-		func(_ context.Context, in StartFollowingInput) (FollowingResult, error) {
-			*got = in
-			return FollowingResult{Branch: in.Branch, IntervalS: in.IntervalS, ScheduleID: FollowScheduleID}, nil
-		})
-}
-
-// A following twin's checks are scheduled under the scope the run's input carries (017).
-func TestProvisionFollowsUnderItsScope(t *testing.T) {
-	h := newHarness(t)
-	var following StartFollowingInput
-	h.mockStartFollowing(&following)
-	h.mockHappyPath()
-
-	in := followInput()
-	in.At, in.Scope = "", "tag:fylgja"
-	if res := h.run(in); res.Outcome != OutcomeReady {
-		t.Fatalf("outcome %q at %q, want ready", res.Outcome, res.Step)
-	}
-	if want := (StartFollowingInput{Branch: "fylgja-fixture", IntervalS: 300, Version: "0.1.0-test", Scope: "tag:fylgja"}); following != want {
-		t.Errorf("StartFollowing input %+v, want %+v", following, want)
-	}
-}
-
-// With Follow, following begins once the twin is recorded, and the result says so.
-func TestProvisionFollowBeginsAfterRecord(t *testing.T) {
-	h := newHarness(t)
-	var got StartFollowingInput
-	h.mockStartFollowing(&got)
-	h.mockHappyPath()
-
-	res := h.run(followInput())
-
-	calls := h.calls()
-	if n := len(calls); n < 2 || calls[n-2] != wire.ActRecordTwin || calls[n-1] != ActStartFollowing {
-		t.Errorf("activities %v, want RecordTwin then StartFollowing last", calls)
-	}
-	if want := (StartFollowingInput{Branch: "fylgja-fixture", IntervalS: 300, Version: "0.1.0-test"}); got != want {
-		t.Errorf("StartFollowing input %+v, want %+v", got, want)
-	}
-	if res.Outcome != OutcomeReady || res.Following == nil ||
-		*res.Following != (FollowingResult{Branch: "fylgja-fixture", IntervalS: 300, ScheduleID: FollowScheduleID}) {
-		t.Errorf("outcome %q, following %+v; want ready and the following begun", res.Outcome, res.Following)
-	}
-	if len(res.Findings) != 0 {
-		t.Errorf("findings %+v, want none", res.Findings)
-	}
-}
-
-// Without Follow — M2's inputs, --at, --no-follow, a bundle — nothing about following is
-// scheduled.
-func TestProvisionFollowNilSchedulesNothing(t *testing.T) {
+// A provision input that names no bundle is a programming error, since every build starts
+// a provision compiled: the run ends error at its first step, operation.failed, with no
+// activity scheduled and nothing to clean up (R-01).
+func TestProvisionWithNoBundleSchedulesNothing(t *testing.T) {
 	for _, in := range []ProvisionInput{
-		compiled("fylgja-fixture"),
-		{Source: wire.SourceBundle, BundlePath: "/state/bundles/" + testBundleID, BundleID: testBundleID},
+		{Source: wire.SourceIntent, Branch: "fylgja-fixture"},
+		{Source: wire.SourceSnapshot, SnapshotID: testSnapshotID},
+		{Source: wire.SourceBundle, BundlePath: "/state/bundles/" + testBundleID},
 	} {
 		t.Run(in.Source, func(t *testing.T) {
 			h := newHarness(t)
 			h.mockHappyPath()
+			h.mockCleanup()
+
 			res := h.run(in)
-			if res.Outcome != OutcomeReady || res.Following != nil || res.FollowingStopped != nil {
-				t.Errorf("result %+v, want ready with no following", res)
+
+			if calls := h.calls(); len(calls) != 0 {
+				t.Errorf("activities %v, want none scheduled", calls)
 			}
-			if h.ran(ActStartFollowing) || h.ran(ActStopFollowing) {
-				t.Errorf("activities %v, want no following activity", h.calls())
+			if res.Outcome != OutcomeError || res.Step != findings.StepHostCheck || res.Twin != nil {
+				t.Errorf("outcome %q at %q, twin %v; want error at the host check with no twin", res.Outcome, res.Step, res.Twin)
 			}
+			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleOperationFailed, Object: findings.StepHostCheck,
+				Step: findings.StepHostCheck, Message: NoBundleMessage}
+			if len(res.Findings) != 1 || res.Findings[0] != want {
+				t.Errorf("findings %+v\nwant [%+v]", res.Findings, want)
+			}
+			if res.Cleanup.Teardown != CleanupSkipped || res.Cleanup.Unstage != CleanupSkipped {
+				t.Errorf("cleanup %+v, want both skipped: nothing was touched", res.Cleanup)
+			}
+			doc := ProvisionDocument(findings.OpTwinCreate, &findings.Subject{Branch: "fylgja-fixture", RunID: "run-1"}, res)
+			if code := doc.Status.ExitCode(); code != findings.ExitError {
+				t.Errorf("exit %d, want %d", code, findings.ExitError)
+			}
+			mustValidateM2(t, doc, in.Source)
 		})
-	}
-}
-
-// Following that cannot begin leaves the twin ready and frozen, with the warning
-// follow.start.failed at step follow (contracts/cli.md).
-func TestProvisionFollowStartFailed(t *testing.T) {
-	h := newHarness(t)
-	h.env.OnActivity(ActStartFollowing, mock.Anything, mock.Anything).Return(FollowingResult{},
-		temporal.NewNonRetryableApplicationError("namespace unavailable", "schedule", nil))
-	h.mockHappyPath()
-
-	res := h.run(followInput())
-
-	if res.Outcome != OutcomeReady || res.Following != nil || res.Twin == nil {
-		t.Errorf("outcome %q, following %+v; want ready, the twin recorded, no following", res.Outcome, res.Following)
-	}
-	if len(res.Findings) != 1 {
-		t.Fatalf("findings %+v, want follow.start.failed alone", res.Findings)
-	}
-	want := findings.Finding{Severity: findings.Warning, Rule: findings.RuleFollowStartFailed, Object: FollowScheduleID,
-		Step: findings.StepFollow, Message: "the twin is ready but following could not begin: creating schedule fylgja-follow failed " +
-			"(namespace unavailable); the twin is frozen; fylgja twin destroy and create again to follow"}
-	if res.Findings[0] != want {
-		t.Errorf("finding %+v\nwant %+v", res.Findings[0], want)
-	}
-	if h.ran(wire.ActDestroyLab) || h.ran(wire.ActUnstageTwin) {
-		t.Errorf("activities %v cleaned up a ready twin", h.calls())
-	}
-	doc := ProvisionDocument(findings.OpTwinCreate, &findings.Subject{Branch: "fylgja-fixture", RunID: "run-1"}, res)
-	if doc.Status != findings.StatusOK || doc.Following != nil {
-		t.Errorf("document status %q, following %+v; want ok, and the block left to the command", doc.Status, doc.Following)
-	}
-}
-
-// A cancellation that reaches the follow step ends the run cancelled at follow, with teardown
-// and unstage run, as a cancellation during the record step does.
-func TestProvisionFollowCancelled(t *testing.T) {
-	h := newHarness(t)
-	c := newCanceller(h)
-	h.env.OnActivity(ActStartFollowing, mock.Anything, mock.Anything).Return(
-		func(ctx context.Context, _ StartFollowingInput) (FollowingResult, error) {
-			return FollowingResult{}, c.block(ctx)
-		})
-	h.mockHappyPath()
-	h.mockCleanup()
-
-	res := h.run(followInput())
-
-	if res.Outcome != OutcomeCancelled || res.Step != findings.StepFollow {
-		t.Errorf("outcome %q at %q, want cancelled at follow", res.Outcome, res.Step)
-	}
-	calls := h.calls()
-	reached := slices.Index(calls, "cancelled "+ActStartFollowing)
-	teardown, unstage := slices.Index(calls, wire.ActDestroyLab), slices.Index(calls, wire.ActUnstageTwin)
-	if reached < 0 || teardown < reached || unstage < teardown {
-		t.Errorf("order %v: want the cancellation to reach StartFollowing, then teardown, then unstage", calls)
-	}
-	if res.Following != nil || h.ran(ActStopFollowing) {
-		t.Errorf("following %+v, activities %v; a following that never began needs no stop", res.Following, calls)
-	}
-	doc := ProvisionDocument(findings.OpTwinCreate, &findings.Subject{Branch: "fylgja-fixture", RunID: "run-1"}, res)
-	if !carries(doc.Findings, findings.RuleRunCancelled, findings.StepFollow) || doc.Status.ExitCode() != findings.ExitFailed {
-		t.Errorf("document %+v, want run.cancelled at follow, exit 3", doc)
 	}
 }
 
 // Both creates the server starts from 018 are already compiled (SC-001): one from intent,
-// read, taken and compiled on the server, which stops any following, and one from a
-// snapshot. Neither schedules a read or a compile: each starts at the host check with the
-// bundle it was given, and its record step carries the snapshot the input names, the
-// read's observed_at and the input's source, as data.
+// read, taken and compiled on the server, and one from a snapshot. Each starts at the host
+// check with the bundle it was given, and its record step carries the snapshot the input
+// names, the read's observed_at and the input's source, as data.
 func TestProvisionCreatesCarryTheirSnapshot(t *testing.T) {
 	const observed = "2026-10-27T09:31:02.118842Z"
 	const snapshotID = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
@@ -351,7 +247,7 @@ func TestProvisionCreatesCarryTheirSnapshot(t *testing.T) {
 		in   ProvisionInput
 	}{
 		{"from intent", ProvisionInput{Source: wire.SourceIntent, Branch: "fylgja-fixture", BundleID: testBundleID, BundlePath: bundlePath,
-			ObservedAt: observed, SnapshotID: snapshotID, StopFollowing: true}},
+			ObservedAt: observed, SnapshotID: snapshotID}},
 		{"from a snapshot", ProvisionInput{Source: wire.SourceSnapshot, BundleID: testBundleID, BundlePath: bundlePath,
 			ObservedAt: observed, SnapshotID: snapshotID}},
 	} {
@@ -369,7 +265,6 @@ func TestProvisionCreatesCarryTheirSnapshot(t *testing.T) {
 					recorded = in
 					return wire.RecordResult{Path: in.TwinDir + "/twin.json", Record: recordFor(in)}, nil
 				})
-			h.env.OnActivity(ActStopFollowing, mock.Anything).Return(StopFollowingResult{}, nil)
 			h.mockHappyPath()
 
 			res := h.run(c.in)
@@ -388,97 +283,7 @@ func TestProvisionCreatesCarryTheirSnapshot(t *testing.T) {
 				t.Errorf("record input snapshot %q, source %q, bundle %s, observed_at %v; want %s, %s, %s and %s",
 					recorded.SnapshotID, recorded.Source, recorded.BundleID, recorded.ObservedAt, snapshotID, c.in.Source, testBundleID, observed)
 			}
-			if stopped := h.ran(ActStopFollowing); stopped != c.in.StopFollowing {
-				t.Errorf("following stopped %t, want %t", stopped, c.in.StopFollowing)
-			}
 		})
-	}
-}
-
-// With StopFollowing, following is stopped once the host check has cleared and before
-// anything is staged, and the result says what was stopped.
-func TestProvisionStopStepBeforeStage(t *testing.T) {
-	h := newHarness(t)
-	h.env.OnActivity(ActStopFollowing, mock.Anything).Return(StopFollowingResult{Deleted: true, Branch: "other"}, nil)
-	h.mockHappyPath()
-
-	in := compiled("fylgja-fixture")
-	in.StopFollowing = true
-	res := h.run(in)
-
-	calls := h.calls()
-	check, stop, stage := slices.Index(calls, wire.ActCheckHost), slices.Index(calls, ActStopFollowing), slices.Index(calls, wire.ActStageBundle)
-	if check < 0 || stop != check+1 || stage != stop+1 {
-		t.Errorf("activities %v, want CheckHost, StopFollowing, StageBundle in a row", calls)
-	}
-	if res.Outcome != OutcomeReady || res.FollowingStopped == nil || *res.FollowingStopped != (StopFollowingResult{Deleted: true, Branch: "other"}) {
-		t.Errorf("outcome %q, following stopped %+v; want ready and the stopped following of other", res.Outcome, res.FollowingStopped)
-	}
-
-	t.Run("nothing to stop", func(t *testing.T) {
-		h := newHarness(t)
-		h.env.OnActivity(ActStopFollowing, mock.Anything).Return(StopFollowingResult{}, nil)
-		h.mockHappyPath()
-		if res := h.run(in); res.Outcome != OutcomeReady || res.FollowingStopped != nil {
-			t.Errorf("outcome %q, following stopped %+v; want ready and nothing reported stopped", res.Outcome, res.FollowingStopped)
-		}
-	})
-}
-
-// A run the host check refuses leaves following as it was: the stop step is never reached.
-// Without StopFollowing, it is never scheduled.
-func TestProvisionStopStepNotScheduled(t *testing.T) {
-	t.Run("host check refuses", func(t *testing.T) {
-		h := newHarness(t)
-		refused := h.plan
-		refused.Findings = rejection(findings.StepHostCheck, findings.RuleHostLabPresent)
-		h.env.OnActivity(wire.ActCheckHost, mock.Anything, mock.Anything).Return(refused, nil)
-		h.mockHappyPath()
-		in := compiled("fylgja-fixture")
-		in.StopFollowing = true
-		res := h.run(in)
-		if res.Outcome != OutcomeRejected || h.ran(ActStopFollowing) {
-			t.Errorf("outcome %q, activities %v; want rejected with following untouched", res.Outcome, h.calls())
-		}
-	})
-	t.Run("stop not asked", func(t *testing.T) {
-		h := newHarness(t)
-		h.mockHappyPath()
-		if res := h.run(compiled("fylgja-fixture")); res.Outcome != OutcomeReady || h.ran(ActStopFollowing) {
-			t.Errorf("outcome %q, activities %v; want ready with no stop", res.Outcome, h.calls())
-		}
-	})
-}
-
-// A following that cannot be stopped ends the run at follow with the host untouched:
-// follow.stop.failed, nothing staged, nothing to clean up, exit 2 (contracts/cli.md 5a).
-func TestProvisionStopStepFails(t *testing.T) {
-	h := newHarness(t)
-	h.env.OnActivity(ActStopFollowing, mock.Anything).Return(StopFollowingResult{},
-		temporal.NewNonRetryableApplicationError("permission denied", "schedule", nil))
-	h.mockHappyPath()
-
-	in := compiled("fylgja-fixture")
-	in.StopFollowing = true
-	res := h.run(in)
-
-	if res.Outcome != OutcomeError || res.Step != findings.StepFollow {
-		t.Errorf("outcome %q at %q, want error at follow", res.Outcome, res.Step)
-	}
-	for _, a := range []string{wire.ActStageBundle, wire.ActDestroyLab, wire.ActUnstageTwin} {
-		if h.ran(a) {
-			t.Errorf("activities %v: %s ran after the stop failed", h.calls(), a)
-		}
-	}
-	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleFollowStopFailed, Object: FollowScheduleID,
-		Step: findings.StepFollow, Message: "deleting schedule fylgja-follow failed (permission denied); nothing was staged, " +
-			"because a check could otherwise rebuild the twin"}
-	if len(res.Findings) != 1 || res.Findings[0] != want {
-		t.Errorf("findings %+v\nwant [%+v]", res.Findings, want)
-	}
-	doc := ProvisionDocument(findings.OpTwinCreate, &findings.Subject{Branch: "fylgja-fixture", RunID: "run-1"}, res)
-	if code := doc.Status.ExitCode(); code != findings.ExitError || doc.Cleanup == nil || doc.Cleanup.Teardown != CleanupSkipped {
-		t.Errorf("exit %d, cleanup %+v; want 2 with cleanup skipped", code, doc.Cleanup)
 	}
 }
 

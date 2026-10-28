@@ -14,7 +14,6 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/rehearsal"
-	"github.com/happypathnetworking/fylgja/internal/stage"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
 
@@ -120,15 +119,6 @@ func TestDestroyWithNoBudgetUsesTheStatedDefault(t *testing.T) {
 	}
 }
 
-func TestFixedStepBounds(t *testing.T) {
-	if got := ReadOptions().StartToCloseTimeout; got != stage.ReadTimeout {
-		t.Errorf("read = %s, want M1's read bound %s", got, stage.ReadTimeout)
-	}
-	if got := CompileOptions().StartToCloseTimeout; got != 60*time.Second {
-		t.Errorf("compile = %s, want 60s", got)
-	}
-}
-
 // WaitForCancellation and the heartbeat timeout change nothing visible when absent,
 // until a cancelled deploy races its own teardown. Pinned for that
 // reason; do not weaken.
@@ -204,15 +194,10 @@ func TestFollowingConstants(t *testing.T) {
 	}{
 		{"DefaultInterval", DefaultInterval, 5 * time.Minute},
 		{"MinInterval", MinInterval, 10 * time.Second},
-		{"FollowCatchupWindow", FollowCatchupWindow, time.Minute},
-		{"FollowJitter", FollowJitter, 0},
 		{"InspectTwinBudget", InspectTwinBudget, 30 * time.Second},
-		{"RunsInFlightBudget", RunsInFlightBudget, 30 * time.Second},
 		{"FollowBudget", FollowBudget, 30 * time.Second},
 		{"ShowServiceBudget", ShowServiceBudget, 5 * time.Second},
 		{"InspectTwinOptions", InspectTwinOptions().StartToCloseTimeout, 30 * time.Second},
-		{"RunsInFlightOptions", RunsInFlightOptions().StartToCloseTimeout, 30 * time.Second},
-		{"FollowOptions", FollowOptions().StartToCloseTimeout, 30 * time.Second},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s = %s, want %s", c.label, c.got, c.want)
@@ -221,25 +206,18 @@ func TestFollowingConstants(t *testing.T) {
 	if FollowScheduleID != "fylgja-follow" || WorkflowReconcile != "fylgja-reconcile" {
 		t.Errorf("identities %q, %q; want fylgja-follow, fylgja-reconcile", FollowScheduleID, WorkflowReconcile)
 	}
-	if !InspectTwinOptions().WaitForCancellation {
+	o := InspectTwinOptions()
+	if !o.WaitForCancellation {
 		t.Error("InspectTwin is host-bound: WaitForCancellation is off")
 	}
-	// StartFollowing and StopFollowing never heartbeat: without it a cancelled run ends before
-	// the Schedule is created or deleted, and acts on neither.
-	if !FollowOptions().WaitForCancellation {
-		t.Error("follow: WaitForCancellation is off")
-	}
-	for name, o := range map[string]workflow.ActivityOptions{
-		"inspect twin": InspectTwinOptions(), "runs in flight": RunsInFlightOptions(), "follow": FollowOptions(),
-	} {
-		if o.RetryPolicy == nil || o.RetryPolicy.MaximumAttempts != RetryMaximumAttempts {
-			t.Errorf("%s: retry policy %+v, want M2's, %d attempts", name, o.RetryPolicy, RetryMaximumAttempts)
-		}
+	if o.RetryPolicy == nil || o.RetryPolicy.MaximumAttempts != RetryMaximumAttempts {
+		t.Errorf("inspect twin: retry policy %+v, want M2's, %d attempts", o.RetryPolicy, RetryMaximumAttempts)
 	}
 }
 
-// A rebuild's children: ABANDON and WaitForCancellation change nothing visible until a
-// check is terminated or cancelled mid-rebuild. Every field is pinned, for both children.
+// A rehearsal's children: ABANDON and WaitForCancellation change nothing visible until a
+// rehearsal is terminated or cancelled while a child runs. Every field is pinned, for the
+// destroy and the provision.
 func TestChildOptionsPinned(t *testing.T) {
 	for _, id := range []string{WorkflowDestroy, WorkflowProvision} {
 		want := workflow.ChildWorkflowOptions{
@@ -385,7 +363,6 @@ func TestDeadlineMechanismIsTheConstants(t *testing.T) {
 		{"Unstage as UnstageOptions", m.Unstage, UnstageOptions().StartToCloseTimeout},
 		{"InspectTwin as InspectTwinOptions", m.InspectTwin, InspectTwinOptions().StartToCloseTimeout},
 		{"Wait and VerifyMargin as VerifyOptions", m.Wait + m.VerifyMargin, VerifyOptions(int(verify.DefaultBudget / time.Second)).StartToCloseTimeout},
-		{"Follow as FollowOptions", m.Follow, FollowOptions().StartToCloseTimeout},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s = %s, want %s", c.field, c.got, c.want)

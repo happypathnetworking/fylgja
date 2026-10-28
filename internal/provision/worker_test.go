@@ -401,9 +401,8 @@ func wantLine(t *testing.T, lines []string, i int, want string) {
 }
 
 // The workflows schedule activities by the wire.Act* names and NewWorker registers them
-// from two tables, ControlActivities.Names and lab.Activities.Names; nothing joins the two
-// sides before a live run. The workflow tests register their own mocks by name, so a name
-// dropped from either table would pass every tier-1 and tier-2 test and fail at the first
+// from one table, lab.Activities.Names; nothing joins the two sides before a live run. The workflow tests register their own mocks by name, so a name
+// dropped from the table would pass every tier-1 and tier-2 test and fail at the first
 // live run with the SDK's "unable to find activityType", which only tier 3 — never run in
 // CI — would show. This pins the seam without a server.
 func TestWorkerRegistersEveryScheduledActivity(t *testing.T) {
@@ -411,8 +410,6 @@ func TestWorkerRegistersEveryScheduledActivity(t *testing.T) {
 	// be matched to its value. A new wire.Act* constant must be added here too, which the
 	// scheduled-names check below enforces.
 	constants := map[string]string{
-		"ActReadIntent":     wire.ActReadIntent,
-		"ActCompile":        wire.ActCompile,
 		"ActCheckHost":      wire.ActCheckHost,
 		"ActStageBundle":    wire.ActStageBundle,
 		"ActDeployLab":      wire.ActDeployLab,
@@ -422,10 +419,7 @@ func TestWorkerRegistersEveryScheduledActivity(t *testing.T) {
 		"ActDestroyLab":     wire.ActDestroyLab,
 		"ActUnstageTwin":    wire.ActUnstageTwin,
 		// M4.
-		"ActInspectTwin":    wire.ActInspectTwin,
-		"ActRunsInFlight":   ActRunsInFlight,
-		"ActStartFollowing": ActStartFollowing,
-		"ActStopFollowing":  ActStopFollowing,
+		"ActInspectTwin": wire.ActInspectTwin,
 		// M5.
 		"ActPushConfig": wire.ActPushConfig,
 		// M11: the step run's own.
@@ -437,25 +431,17 @@ func TestWorkerRegistersEveryScheduledActivity(t *testing.T) {
 		"ActVerifyTwin": wire.ActVerifyTwin,
 	}
 	all := slices.Sorted(maps.Values(constants))
-	if len(all) != 20 {
-		t.Fatalf("%d activity names, want the twenty: M2's ten, M4's four (InspectTwin, RunsInFlight, StartFollowing, "+
-			"StopFollowing), M5's push, M11's four (PlanReconcile, StageStep, ReconcileLab, RecordStep) and M12's "+
-			"VerifyTwin", len(all))
+	if len(all) != 15 {
+		t.Fatalf("%d activity names, want the fifteen: M2's eight host-bound, M4's InspectTwin, M5's push, "+
+			"M11's four (PlanReconcile, StageStep, ReconcileLab, RecordStep) and M12's VerifyTwin", len(all))
 	}
-	// The two tables, from zero-value receivers: registration needs the method values only.
-	control := (&ControlActivities{}).Names()
-	host := (&lab.Activities{}).Names()
+	// The table, from a zero-value receiver: registration needs the method values only.
 	registered := map[string]bool{}
-	for _, table := range []map[string]any{control, host} {
-		for name, method := range table {
-			if registered[name] {
-				t.Errorf("activity %q is in both registration tables; the worker would refuse to start", name)
-			}
-			if method == nil {
-				t.Errorf("activity %q is registered as nil", name)
-			}
-			registered[name] = true
+	for name, method := range (&lab.Activities{}).Names() {
+		if method == nil {
+			t.Errorf("activity %q is registered as nil", name)
 		}
+		registered[name] = true
 	}
 	if got := slices.Sorted(maps.Keys(registered)); !slices.Equal(got, all) {
 		t.Errorf("the worker registers %v\nwant every activity name: %v", got, all)
@@ -477,29 +463,23 @@ func TestWorkerRegistersEveryScheduledActivity(t *testing.T) {
 			t.Fatalf("parsing %s: %v", name, err)
 		}
 		ast.Inspect(f, func(n ast.Node) bool {
-			switch n := n.(type) {
-			case *ast.SelectorExpr:
-				// wire.Act*: the host-bound activities and the read and compile.
-				pkg, ok := n.X.(*ast.Ident)
-				if !ok || pkg.Name != "wire" || !strings.HasPrefix(n.Sel.Name, "Act") {
-					return true
-				}
-				value, known := constants[n.Sel.Name]
-				if !known {
-					t.Errorf("%s schedules wire.%s, which this test does not know; add it to constants",
-						fset.Position(n.Pos()), n.Sel.Name)
-					return true
-				}
-				scheduled[value] = true
-				// Do not visit the selector's Sel as a bare identifier below.
-				return false
-			case *ast.Ident:
-				// This package's own Act* names: the following activities (M4).
-				if value, known := constants[n.Name]; known && strings.HasPrefix(n.Name, "Act") {
-					scheduled[value] = true
-				}
+			// wire.Act*: every activity is host-bound since 019.
+			sel, ok := n.(*ast.SelectorExpr)
+			if !ok {
+				return true
 			}
-			return true
+			pkg, ok := sel.X.(*ast.Ident)
+			if !ok || pkg.Name != "wire" || !strings.HasPrefix(sel.Sel.Name, "Act") {
+				return true
+			}
+			value, known := constants[sel.Sel.Name]
+			if !known {
+				t.Errorf("%s schedules wire.%s, which this test does not know; add it to constants",
+					fset.Position(sel.Pos()), sel.Sel.Name)
+				return true
+			}
+			scheduled[value] = true
+			return false
 		})
 	}
 	if got := slices.Sorted(maps.Keys(scheduled)); !slices.Equal(got, all) {
@@ -507,12 +487,13 @@ func TestWorkerRegistersEveryScheduledActivity(t *testing.T) {
 	}
 	for name := range scheduled {
 		if !registered[name] {
-			t.Errorf("the workflows schedule %q, which no table registers", name)
+			t.Errorf("the workflows schedule %q, which the table does not register", name)
 		}
 	}
 
-	// The four workflows the server starts (M11 adds the step, 015 the rehearsal, which starts
-	// the first three as its children by these names). The SDK offers no listing, but it refuses to register a workflow name
+	// The four workflows the server starts, and no other (M11 adds the step, 015 the
+	// rehearsal, which starts the first three as its children by these names; 019 removes
+	// the check). The SDK offers no listing, but it refuses to register a workflow name
 	// twice (SDK v1.49.0, internal/internal_worker.go, RegisterWorkflowWithOptions: a
 	// present workflowFuncMap entry panics "workflow name ... is already registered"), so a
 	// refused second registration is its word that the first happened. A lazy client dials
@@ -522,32 +503,24 @@ func TestWorkerRegistersEveryScheduledActivity(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer c.Close()
-	w := NewWorker(c, &lab.Activities{}, &ControlActivities{})
+	w := NewWorker(c, &lab.Activities{})
 	for name, wf := range map[string]any{"Provision": Provision, "Destroy": Destroy, "Step": Step, "Rehearse": Rehearse} {
 		if msg := panics(func() { w.RegisterWorkflow(wf) }); !strings.Contains(msg, fmt.Sprintf("workflow name %q is already registered", name)) {
 			t.Errorf("registering %s again: %q; want the SDK to refuse it as already registered by NewWorker", name, msg)
 		}
 	}
-	// A rehearsal and a check start their children by type name, so each must be the name
-	// NewWorker registered it under.
+	// A rehearsal starts its children by type name, so each must be the name NewWorker
+	// registered it under.
 	for name, typeName := range map[string]string{"Provision": provisionWorkflowType, "Destroy": destroyWorkflowType, "Step": stepWorkflowType} {
 		if typeName != name {
 			t.Errorf("the children start %s as %q, which NewWorker does not register", name, typeName)
 		}
 	}
-	// A check is started by the Schedule, by the type name its action carries, so Reconcile
-	// must be registered under exactly that name; a mismatch fails only when a check is due.
-	action, ok := followScheduleOptions(StartFollowingInput{Branch: "b", IntervalS: 300}).Action.(*client.ScheduleWorkflowAction)
-	if !ok {
-		t.Fatal("the Schedule's action does not start a workflow")
-	}
-	typeName, ok := action.Workflow.(string)
-	if !ok {
-		t.Fatalf("the Schedule's action names its workflow as %T, want the type name", action.Workflow)
-	}
-	msg := panics(func() { w.RegisterWorkflowWithOptions(Reconcile, workflow.RegisterOptions{Name: typeName}) })
-	if !strings.Contains(msg, fmt.Sprintf("workflow name %q is already registered", typeName)) {
-		t.Errorf("registering Reconcile again as %q: %q; want the SDK to refuse it as already registered by NewWorker", typeName, msg)
+	// The check an earlier build's Schedule started, by the type name Reconcile, is not
+	// served: the SDK takes a first registration under that name.
+	check := func(workflow.Context) error { return nil }
+	if msg := panics(func() { w.RegisterWorkflowWithOptions(check, workflow.RegisterOptions{Name: reconcileWorkflowType}) }); msg != "" {
+		t.Errorf("registering a workflow as %q: %q; want it taken, since NewWorker registers no check", reconcileWorkflowType, msg)
 	}
 }
 

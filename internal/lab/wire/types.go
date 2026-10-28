@@ -11,8 +11,6 @@ import (
 // Activity names. Workflows schedule activities by these names, never by function
 // reference, so no workflow file needs internal/lab to compile.
 const (
-	ActReadIntent     = "ReadIntent"
-	ActCompile        = "Compile"
 	ActCheckHost      = "CheckHost"
 	ActStageBundle    = "StageBundle"
 	ActDeployLab      = "DeployLab"
@@ -47,7 +45,7 @@ const ProvisionWorkflowID = "fylgja-provision"
 // needs it without importing internal/provision.
 const StepWorkflowID = "fylgja-step"
 
-// RehearseWorkflowID is the rehearsal workflow's fixed identity: a fifth short workflow
+// RehearseWorkflowID is the rehearsal workflow's fixed identity: the fourth short workflow
 // (D-051). The record's rehearsal names it, so the lab host needs it without importing
 // internal/provision.
 const RehearseWorkflowID = "fylgja-rehearse"

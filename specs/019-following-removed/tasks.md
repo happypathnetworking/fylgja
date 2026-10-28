@@ -1117,6 +1117,7 @@ SC-008).
       - `specs/019-following-removed/commands/runs.jsonl`, which is git-ignored, holds 20 entries: `specify`, `clarify`, `plan`, `tasks`, `analyze`, Run 1 and Runs 3–16.
       - By their totals, follow-ups included, they took 23,218 s active and 23,554 s wall. T053's 22,304 s and 22,640 s are the first nineteen's, so the roadmap's figure holds.
       - This session's entry follows when it exits. `make command-log`, run once the session that closes the feature has ended, publishes whatever that session kept.
+  - *Note (operator, 2026-10-28)*: skipped in the attended loop (question 1) and left for the operator: the review, the merge and the push are the operator's, and `make command-log` waits for the loop's sessions to close. The loop goes on to its convergence passes without it; the review follows them.
 
 **Checkpoint**: every record true; the feature closed.
 

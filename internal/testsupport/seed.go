@@ -468,9 +468,10 @@ func (c *Client) SeedFourthNode(branch, peer string) error {
 
 // SeedThirdLink changes a branch seeded by SeedThreeNode without adding a node: port
 // ethernet-1/3 on n1 and on n3, and a cable n1:ethernet-1/3 <-> n3:ethernet-1/3. It is the
-// change following detects in tier 2 and rebuilds in tier 3, chosen because it moves every
-// file a bundle has — two bootstrap lines, the manifest and the topology — so a rebuild
-// deploys a different lab. The change is made once per branch: a branch whose n1 already
+// change tier 2's stage and check tests mark a stage after, and tier 3 steps a twin to and
+// rehearses (until 019, the change following detected and rebuilt on), chosen because it
+// moves every file a bundle has — two bootstrap lines, the manifest and the topology — so
+// the twin it reaches is a different lab. The change is made once per branch: a branch whose n1 already
 // has ethernet-1/3 is refused.
 func (c *Client) SeedThirdLink(branch string) error {
 	n1, err := c.deviceID(branch, "n1")

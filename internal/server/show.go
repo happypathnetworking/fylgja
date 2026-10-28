@@ -276,8 +276,8 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 		text.kind += "; " + s
 		note(s)
 	}
-	// A step run that has touched the host is named after the kind, as M4 names a rebuild
-	// in flight: the record still says where the twin was.
+	// A step run that has touched the host is named after the kind, as M4 named a rebuild
+	// in flight until 019: the record still says where the twin was.
 	if r := stepAtHost(block.InFlight); r != nil && rec != nil {
 		text.hostHeld = true
 		s := fmt.Sprintf("run %s %s is at step %s", r.WorkflowID, r.RunID, r.Step)
@@ -361,9 +361,10 @@ func recordLine(rec *wire.TwinRecord) string {
 }
 
 // snapshotClause is the record line's snapshot (018): "snapshot <id>", the full id, as the
-// bundle's is printed; "snapshot none" for a 9 naming none, a twin twin provision built or a
-// following rebuild made; and "snapshot none (record <version>)" for a record of 8 or
-// earlier, which names none, "(record 8)" for an 8.
+// bundle's is printed; "snapshot none" for a 9 or 10 naming none, a twin twin provision
+// built or an earlier build's following rebuild made (until 019); and "snapshot none
+// (record <version>)" for a record of 8 or earlier, which names none, "(record 8)" for an
+// 8.
 func snapshotClause(rec *wire.TwinRecord) string {
 	switch {
 	case rec.SnapshotID != nil:

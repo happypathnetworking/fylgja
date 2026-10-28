@@ -39,11 +39,12 @@ const ObservedAtFormat = "2006-01-02T15:04:05.000000Z"
 // intent client is given. observedAt is stamped by the caller before this is called, so it
 // is never later than anything the read could have seen.
 //
-// A scope that is not tag:<name> is refused before any connection, as an error: the
-// server refuses a request's scope at start, so only a following twin created before 017
-// reaches here with one, its Schedule's ReconcileInput naming none. Read under "", the
-// device query would filter by an empty tag and the envelope would record tag:, which the
-// contracts refuse; like a step from a record of 7, the twin can only be destroyed.
+// A scope that is not tag:<name> is refused before any connection, as an error: the server
+// refuses a request's scope at start, and a step whose record names no tag:<name> scope
+// before any read. Until 019 a following twin created before 017 reached here with one, its
+// Schedule's ReconcileInput naming none, and the error keeps the words it was given then.
+// Read under "", the device query would filter by an empty tag and the envelope would
+// record tag:, which the contracts refuse.
 func Read(ctx context.Context, branch, at, scope string, reg *psp.Registry, observedAt string) (*ctm.CTM, findings.List, error) {
 	if !ctm.ValidScope(scope) {
 		return nil, nil, fmt.Errorf("the read names scope %q, which is not tag:<name>: a twin created before 017 follows "+

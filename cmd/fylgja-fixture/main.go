@@ -2,7 +2,7 @@
 
 // Command fylgja-fixture prepares a local Infrahub for development: it loads the
 // schema library and the stage kind onto a branch and seeds the three-node fixture
-// or the mixed one, or makes following's branch change on a throwaway branch, or opens,
+// or the mixed one, or makes tier 3's branch changes on a throwaway branch, or opens,
 // marks, readies, checks and closes a throwaway branch's proposed change (D-045), or prepares main:
 // the schema, the group and this repository's read-only registration (D-044), or opens and
 // closes a demo's window, the three-node baseline on main (D-054). Development tooling, not the product —
@@ -353,7 +353,8 @@ func writeSDL(branch, path string) error {
 	return nil
 }
 
-// addThirdLink makes the change tier 3's following case rebuilds on.
+// addThirdLink makes the topology change tier 3's cases 5 and 7 step a twin to and case 9
+// rehearses (until 019, the change case 5's following rebuilt on).
 // The durable fixture branch is never changed: every test and the twins
 // built from it rely on its bundle_id staying put.
 func addThirdLink(branch string) error {

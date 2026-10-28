@@ -26,7 +26,9 @@ func redact(err error, token string) error {
 // one never created, or deleted since (verified on 1.11.2). errors.Is finds it on the
 // error a read returns; the error's text is Infrahub's own
 // sentence, unchanged, so the stage commands still report operation.failed as M1 did.
-// A following check tells it from an unreachable Infrahub by this mark, never by the text.
+// The mark tells it from an unreachable Infrahub, never the text. No caller outside the
+// reader reads it since 019, which removed the following check that retried on the one and
+// gave up on the other; the reader keeps marking it.
 var ErrBranchNotFound = errors.New("branch not found")
 
 // branchMissing carries ErrBranchNotFound on a failure without changing what it says.

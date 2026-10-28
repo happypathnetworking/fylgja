@@ -136,8 +136,8 @@ func TestLossyGoldenManifestSatisfiesContract(t *testing.T) {
 
 // A bundle with nothing lossy in it carries both fields all the same, now that bundle
 // "3" has made them unconditional (D-025). M6 emitted them only with content, so
-// that such a bundle stayed byte-identical to M5's and no golden or following twin moved
-// for the upgrade; that exception was written to expire with the next bundle_version
+// that such a bundle stayed byte-identical to M5's, and no golden moved and no twin then
+// following its branch was rebuilt for the upgrade (following left the core at 019); that exception was written to expire with the next bundle_version
 // bump, and this is it. The schema now requires both, so an absence is refused rather
 // than read as "none". two-mgmt.json is the fixture with nothing lossy and a row with no
 // port, its second management port, since every interface of a CTM "2" is a port and the

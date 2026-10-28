@@ -141,10 +141,11 @@ type Fidelity struct {
 	// Lossy records every lossy mapping and every shared port: the places where
 	// the twin's ports are fewer than production's interfaces.
 	//
-	// Always present, [] when empty, like every other list here. M6 emitted it only
-	// with content, so that a bundle with nothing lossy in it stayed byte-identical to
-	// M5's and no golden or following twin moved for the upgrade; that exception was
-	// written to expire with the next bundle_version bump, and this is it (D-025).
+	// Always present, [] when empty, like every other list here. M6 emitted it only with
+	// content, so that a bundle with nothing lossy in it stayed byte-identical to M5's and
+	// no golden moved and no twin then following its branch was rebuilt for the upgrade
+	// (following left the core at 019); that exception was written to expire with the next
+	// bundle_version bump, and this is it (D-025).
 	Lossy []LossyMapping `json:"lossy"`
 	// Read is the reader's list of what its mapping approximated and omitted, the CTM
 	// envelope's fidelity copied verbatim from bundle "5": the compiler knows no row's

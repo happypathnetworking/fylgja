@@ -14,9 +14,9 @@ import (
 
 // A read under a scope that is not tag:<name> is refused before any connection, as an
 // operational failure naming the remedy (017; FR-020). The server refuses a request's
-// scope at start, so the one way here is a following twin created before 017, whose
-// Schedule's ReconcileInput names no scope and whose checks read under "": read, it would
-// filter by an empty tag and record tag: in the envelope. Infrahub is never asked.
+// scope at start, so until 019 the one way here was a following twin created before 017,
+// whose Schedule's ReconcileInput named no scope and whose checks read under "": read, it
+// would filter by an empty tag and record tag: in the envelope. Infrahub is never asked.
 func TestReadRefusesAScopeNotTagged(t *testing.T) {
 	var asked atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

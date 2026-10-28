@@ -273,8 +273,9 @@ func TestUnknownBranchSaysSoAndNamesTheBranch(t *testing.T) {
 	}
 }
 
-// A following check rejects a branch that does not exist and retries later when Infrahub
-// could not answer, so the mark must be on the one and not the other. Infrahub 1.11.2
+// The mark must be on a branch that does not exist and not on an Infrahub that could not
+// answer, which until 019 a following check told apart by it, rejecting the one and
+// retrying the other. Infrahub 1.11.2
 // answers a deleted branch as one never created: 400 from the
 // schema endpoint, 404 from GraphQL, both "Branch: <b> not found.".
 func TestOnlyAMissingBranchIsMarkedNotFound(t *testing.T) {

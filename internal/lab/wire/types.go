@@ -92,7 +92,7 @@ const DefaultDestroyTimeoutS = 60
 // Source says how a twin came to be provisioned.
 const (
 	// SourceIntent is a twin created by twin create --branch or --stage: the server read and
-	// compiled, or a check's rebuild did (018).
+	// compiled (018), or, until 019, a following check's rebuild did.
 	SourceIntent = "intent"
 	SourceBundle = "bundle" // twin provision: an existing bundle, no read
 	// SourceSnapshot is a twin created by twin create --snapshot from a stored or sent
@@ -353,8 +353,8 @@ type TwinRecord struct {
 	TwinVersion string `json:"twin_version"`
 	Lab         string `json:"lab"`
 	// SnapshotID names the snapshot the twin was built from or last stepped to, or is nil
-	// (018): a twin built by twin provision, one a following check's rebuild made, and a
-	// record of 8 or earlier, which has no key and reads as nil. No omitempty: version 9
+	// (018): a twin built by twin provision, one an earlier build's following check rebuilt
+	// (until 019), and a record of 8 or earlier, which has no key and reads as nil. No omitempty: version 9
 	// writes an explicit null for none, as stage does.
 	SnapshotID     *string       `json:"snapshot_id"`
 	BundleID       string        `json:"bundle_id"`

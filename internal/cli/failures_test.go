@@ -182,8 +182,9 @@ func TestTheClientsOwnFailures(t *testing.T) {
 	}
 
 	// A destroy's answer has fylgja-destroy's start and no run frame. Cut after the start, it
-	// says a run may have been started and was not cancelled; cut before it, while following
-	// stops, it says nothing of a run.
+	// says a run may have been started and was not cancelled; cut before it, as an earlier
+	// build's server could cut it while its destroy stopped following (until 019), it says
+	// nothing of a run.
 	for _, c := range []struct {
 		name   string
 		frames []api.Frame

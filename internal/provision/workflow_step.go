@@ -699,6 +699,17 @@ func Ineligible(host wire.HostReport, at, twinDir string) *findings.Finding {
 // withoutPresence, and twin step's own host check through this, so the two agree.
 func WithoutPresence(list findings.List) findings.List { return withoutPresence(list) }
 
+// withoutPresence drops the two refusals that name the running twin itself.
+func withoutPresence(list findings.List) findings.List {
+	out := findings.List{}
+	for _, f := range list {
+		if f.Rule != findings.RuleHostLabPresent && f.Rule != findings.RuleHostTwinPresent {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
 // origin says what a twin that names no stage was created from.
 func origin(rec *wire.TwinRecord) string {
 	switch {

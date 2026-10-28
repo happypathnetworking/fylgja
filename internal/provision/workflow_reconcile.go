@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"strings"
 
-	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
@@ -279,17 +278,6 @@ func withoutRepeatedHostCheck(child, recorded findings.List) findings.List {
 	return out
 }
 
-// withoutPresence drops the two refusals that name the running twin itself.
-func withoutPresence(list findings.List) findings.List {
-	out := findings.List{}
-	for _, f := range list {
-		if f.Rule != findings.RuleHostLabPresent && f.Rule != findings.RuleHostTwinPresent {
-			out = append(out, f)
-		}
-	}
-	return out
-}
-
 // checkEnded ends the check with outcome at step, its findings already in res.
 func checkEnded(res ReconcileResult, outcome, step string) ReconcileResult {
 	res.Outcome, res.Step = outcome, step
@@ -349,23 +337,6 @@ func childNotStarted(ctx workflow.Context, res ReconcileResult, workflowID strin
 		}
 	}
 	return checkSkipped(res, runID, inFlightMessage(workflowID, runID))
-}
-
-// alreadyStarted reports a child refused because a run holds its id. The workflow service
-// says so with a ChildWorkflowExecutionAlreadyStartedError; the SDK's test suite passes on
-// the service error itself, so both are recognised.
-func alreadyStarted(err error) bool {
-	var already *temporal.ChildWorkflowExecutionAlreadyStartedError
-	var duplicate *serviceerror.WorkflowExecutionAlreadyStarted
-	return errors.As(err, &already) || errors.As(err, &duplicate)
-}
-
-// childStartRefusal says why a child did not start.
-func childStartRefusal(err error) string {
-	if alreadyStarted(err) {
-		return "a run is already in flight under its id"
-	}
-	return causeMessage(err)
 }
 
 // rebuildEnded is rebuild.failed's message up to its last clause (contracts/cli.md).

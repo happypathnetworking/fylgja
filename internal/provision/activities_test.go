@@ -37,10 +37,6 @@ import (
 // fixtureBundleID is what testdata/ctm/three-node.json compiles to.
 const fixtureBundleID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
 
-func repoPath(parts ...string) string {
-	return filepath.Join(append([]string{"..", ".."}, parts...)...)
-}
-
 // newControl is the control activities over a fresh state root and the embedded packages.
 func newControl(t *testing.T) *ControlActivities {
 	t.Helper()

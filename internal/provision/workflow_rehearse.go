@@ -3,9 +3,12 @@ package provision
 // Deterministic: a workflow file. No I/O, clock or randomness (Constitution VIII).
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
+	"go.temporal.io/api/serviceerror"
+	"go.temporal.io/sdk/temporal"
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
@@ -276,6 +279,23 @@ func (r *rehearsing) started(child workflow.ChildWorkflowFuture, workflowID, ste
 		r.res.Findings = append(r.res.Findings, failureFinding(err, step, findings.RuleOperationFailed, workflowID))
 	}
 	return nil
+}
+
+// alreadyStarted reports a child refused because a run holds its id. The workflow service
+// says so with a ChildWorkflowExecutionAlreadyStartedError; the SDK's test suite passes on
+// the service error itself, so both are recognised.
+func alreadyStarted(err error) bool {
+	var already *temporal.ChildWorkflowExecutionAlreadyStartedError
+	var duplicate *serviceerror.WorkflowExecutionAlreadyStarted
+	return errors.As(err, &already) || errors.As(err, &duplicate)
+}
+
+// childStartRefusal says why a child did not start.
+func childStartRefusal(err error) string {
+	if alreadyStarted(err) {
+		return "a run is already in flight under its id"
+	}
+	return causeMessage(err)
 }
 
 // closedWithout files a child that closed without a result, terminated or failed, as

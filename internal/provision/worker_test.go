@@ -621,3 +621,7 @@ func TestPackageLineNamesAPushLoginOfItsOwn(t *testing.T) {
 		t.Errorf("package line = %q\nwant %q", got, want)
 	}
 }
+
+func repoPath(parts ...string) string {
+	return filepath.Join(append([]string{"..", ".."}, parts...)...)
+}

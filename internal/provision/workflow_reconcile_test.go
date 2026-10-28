@@ -180,18 +180,6 @@ func (h *reconcileHarness) run() ReconcileResult {
 	return res
 }
 
-// wantRules checks the findings' rules, in order, each at its step.
-func wantRules(t *testing.T, list findings.List, want ...[2]string) {
-	t.Helper()
-	got := make([][2]string, len(list))
-	for i, f := range list {
-		got[i] = [2]string{f.Rule, f.Step}
-	}
-	if !slices.Equal(got, want) {
-		t.Errorf("findings (rule, step) = %v, want %v\n%+v", got, want, list)
-	}
-}
-
 // finding is the finding under rule, failing the test when there is none.
 func finding(t *testing.T, list findings.List, rule string) findings.Finding {
 	t.Helper()

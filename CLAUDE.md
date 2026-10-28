@@ -246,8 +246,13 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
 - **Memory**: 32 GiB leaves tier 3 room. Still read `free -m` before tier 3. Infrahub
   idles at about 5.2 GiB, leaving about 24 GiB available with the three processes running,
   and its Neo4j is capped (above) because uncapped it once took the headroom a twin needs
-  and killed a tier-3 run. Do not boot a twin while the contract tier runs, and rest the
-  host between tier-3 runs.
+  and killed a tier-3 run. Infrahub grows with uptime: after 14 days its containers held
+  about 15.4 GiB (its server 7.97 GiB), leaving about 10.5 GiB, and a tier-3 attempt lost
+  a deploy to an SR Linux `sr_cli` segfault (2026-10-27). A Compose `restart` of its
+  containers brought it back to about 21.5 GiB available, keeping its volumes, both task
+  workers' repository checkouts and their reach to the server on the bridge; when `free
+  -m` reads well below the figure above, restart it before a live run. Do not boot a twin
+  while the contract tier runs, and rest the host between tier-3 runs.
 
 **The worker is yours to run.** Start, stop and restart `fylgja worker run` yourself
 whenever you need to — after every rebuild, before any live run, and whenever its binary
@@ -522,7 +527,7 @@ Rewritten whole at each release's close, never appended to.
     green whole, tier 2 included, on `origin`'s `main` at `7ddd157` (2026-10-27). Reviewed by
     the operator. `infrahubctl schema format` is never run on the vendored files (017
     research R-22).
-  - **018** (`018-snapshots`, F-024, closed 2026-10-27): the snapshot, the core's one
+  - **018** (`018-snapshots`, F-024, closed 2026-10-28): the snapshot, the core's one
     input ([D-061](docs/decisions.md#d-061); Constitution 2.2.0): CTM `2` wrapped
     unchanged in a document of version `1` with an empty probe list, its id the hash of
     the body without the read's `observed_at`, filed under the state root's `snapshots/`
@@ -540,10 +545,17 @@ Rewritten whole at each release's close, never appended to.
     the tier-1 harness's placeholder Infrahub; fixed (`1c0f97c`) and green alone in
     66.9 s. Tier 3 `E2E-OK` in 1,758.0 s on its second attempt, the first lost to an SR
     Linux `sr_cli` segfault under load, and `PLATFORMS=nokia_srlinux` `E2E-PARTIAL` in
-    1,156.1 s. The operator's review is T064's.
+    1,156.1 s. Then a second attended loop, seven convergence passes, T065–T085, the
+    last still finding work, so it stopped at its cap; the operator answered two
+    questions: `rehearsal.steps.none` judges as 015 defined it, by one stage alone
+    compiled, and FR-024, US5 and the brief say so (T074), and a sent snapshot's CTM is
+    held to the CTM contract's registry-independent rules, `validate.Intrinsic`, before
+    it is filed (T082). Tier 2 green whole again on `7fdb888` in 1,913 s and tier 3
+    `E2E-OK` in about 29 minutes (2026-10-28). Reviewed by the operator (T064), and
+    merged into `main` and pushed at `0e82037`.
 - **Next**: F-026 following removed from the core, Release 0.3's third spec.
 - **Open, the operator's**: 017's and 018's command logs (`make command-log`, once each
-  session is closed); 018's review (T064); file 014's upstream request for named points in time
+  session is closed); file 014's upstream request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left
   padding) and a zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read

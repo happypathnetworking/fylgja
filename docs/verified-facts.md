@@ -647,6 +647,17 @@ registration `fylgja`.
   validators and checks with it**, a validator stuck `in_progress` included, since each
   hangs on it by a cascading relationship. *(10-17, 10-20)*
 
+**The step (019)**
+
+- **A step to a snapshot sends Infrahub nothing.** With a counting reverse proxy in front
+  of the Infrahub `INFRAHUB_ADDRESS` names, through which every reader and stamper the
+  server builds sends its requests, `stage plan` on a throwaway branch sent 33 requests and
+  the `intent read --out --stage` that took the mark's snapshot sent 24. The step's
+  snapshot target, built by the server's own code from that file and then from its id
+  (resolved, its scope and mapping held to the record's, compiled and filed), sent 0 each,
+  named the plan's snapshot and compiled to its bundle. *(10-28;
+  `TestStepTargetFromASnapshot`, `specs/019-following-removed/tasks.md` T036)*
+
 **Artifacts and repositories**
 
 - Infrahub regenerates no artifact on its own: not on a data change, a group join or a
@@ -1016,6 +1027,13 @@ registration `fylgja`.
   `temporal workflow count` answers, so `twin show` and `twin verify` warn
   `show.service.unreachable`. Before tier 3 on a restarted dev server, wait for `workflow
   count` to stop falling. *(CLI 1.9.1, 10-16)*
+- **A host of this build makes no Schedule.** After 019's tier 3 whole (nine cases, nine
+  twins, `E2E-OK`), `temporal schedule list --address localhost:7233` printed its header
+  alone (`ScheduleId  Action  Paused  NextRunTime  LastRunTime`), exit 0, as it did after
+  the hand step and again before this record was written. An earlier build's create of a
+  following twin made the Schedule `fylgja-follow`. Over the hand step, `temporal workflow
+  list` listed exactly the operator's four runs: the provision, two steps and the destroy.
+  *(Server 1.32.0, CLI 1.9.1, 10-28; `specs/019-following-removed/tasks.md` T049, T051)*
 
 ---
 

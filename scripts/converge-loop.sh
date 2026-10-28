@@ -6,12 +6,21 @@
 # typed command. Everything it finishes is committed on the current branch; nothing is pushed.
 #
 # Stage 1, the planned runs. tasks.md's "Recommended route" lists them, one line each:
-# `N. **Run N** — <what> (T0xx–T0yy, T0zz)`. The line is the run's prompt, as it was when
-# typed, and the parenthesised IDs are its tasks. Without a route, each `## Phase` is a run.
-# A run whose tasks are all [X] is skipped, so a stopped loop resumes where it stopped. After
-# the route, each phase's unchecked tasks the route does not name are a run of their own (a
-# phase added after the route was written, a convergence task left open). The plan is read
-# again before every session, so a run left part-ticked is listed again with what is left.
+# `N. **Run N** [∥ Run M] — <what> (T0xx–T0yy, T0zz). Read first: …`. The line is the run's
+# prompt, as it was when typed, and the parenthesised IDs are its tasks, contiguous or not.
+# Without a route, each `## Phase` is a run. A run whose tasks are all [X] is skipped, so a
+# stopped loop resumes where it stopped. After the route, each phase's unchecked tasks the
+# route does not name are a run of their own (a phase added after the route was written, a
+# convergence task left open). The plan is read again before every session
+# (scripts/converge-plan.py), so a run left part-ticked is listed again with what is left.
+#
+# Lanes. Two runs that mark each other `[∥ Run M]` run at once, each as a headless session
+# in its own worktree under local/lanes/ on a branch lane/<run>, seeded with the git-ignored
+# files Spec Kit needs (symlinks to this tree's). Each lane commits on its branch; the script
+# merges the lanes back in route order (tasks.md by scripts/merge-tasks.py, which resolves
+# ticks and notes alone), then runs the checks and gates once on the merged tree. A merge
+# that needs a judgement stops the loop at "merge" with the worktrees kept. Only pure runs
+# are laned: never a live one, nor one that names tier 2, which shares one Infrahub.
 #
 # Stage 2, convergence. One pass: /speckit-converge, which tags each task it appends
 # [behaviour], [pin] or [operator] (and, attended, [live]); the script commits the phase;
@@ -21,8 +30,11 @@
 # answer is never left unbuilt.
 #
 # After every implement session: the session has committed its own work; the pure gates run
-# (make build, bin/fylgja static, make test, make lint); the command log is published and
-# committed (command-log.py flush --commit). Entries kept before the loop are committed first.
+# (make build, bin/fylgja static, make test, make lint); the command log is published
+# (command-log.py flush --commit, which commits nothing here: the log's directories are
+# git-ignored). Entries kept before the loop are published first. Every session's end, every
+# gate, merge, pass and stop is also one JSON line in local/converge-loop/<started>/events.jsonl,
+# which the attended session watches.
 #
 # The loop stops, and hands back to the operator, at the first of:
 #
@@ -38,6 +50,8 @@
 #   contract     a session wrote where it may not: converge outside tasks.md or above its
 #                phase, implement ticking another run's task, left uncommitted changes, moved
 #                off the branch, or pushed; or a commit would carry the Infrahub token
+#   merge        a lane's branch does not merge back mechanically; its worktree and branch
+#                are kept under local/lanes/ for the operator to merge by hand
 #   gate         a gate failed after implement; never retried, never handed back to a model
 #   cap          --max-passes convergence passes ran
 #   error        a claude session exited non-zero (including --max-budget-usd reached)
@@ -76,7 +90,7 @@
 # each session's report and the gate logs are in local/converge-loop/<started>/.
 #
 # Usage: scripts/converge-loop.sh [--max-passes N] [--budget-usd D] [--no-planned]
-#                                 [--no-converge] [--allow-dirty]
+#                                 [--no-converge] [--allow-dirty] [--lanes N] [--dry-run]
 #                                 [--attended [--live-budget-usd D] [--verdict-timeout S]
 #                                             [--skip IDS]]
 #   --max-passes       convergence passes before stopping at "cap" (default 7)
@@ -85,13 +99,17 @@
 #   --no-converge      stop after stage 1 ("planned", exit 0)
 #   --allow-dirty      start on a tree with uncommitted changes; they stay uncommitted, and
 #                      the uncommitted-changes check is off
+#   --lanes            runs that may run at once (default 2; 1 runs every run in this tree)
+#   --dry-run          no claude session: each run is a stub that ticks its tasks, writes
+#                      one file per task and commits, so the loop's mechanics can be
+#                      exercised on a throwaway spec (docs/development.md)
 #   --attended         an interactive session is watching (above)
 #   --live-budget-usd  ceiling for a live session (default twice --budget-usd)
 #   --verdict-timeout  seconds to wait for a verdict before taking it as hold (default 900)
 #   --skip             task IDs (T056 or "T056 T074", unchecked) skipped from the start
 #
-# Exit 0 for converged, rule and planned; 2 for operator, golden, contract and cap; 1 for
-# gate and error.
+# Exit 0 for converged, rule and planned; 2 for operator, golden, contract, merge and cap;
+# 1 for gate and error.
 set -euo pipefail
 
 cd "$(git rev-parse --show-toplevel)"
@@ -105,6 +123,8 @@ PLANNED=1
 CONVERGE=1
 ATTENDED=0
 SKIP_ARG=""
+LANES=2
+DRY_RUN=0
 while [ $# -gt 0 ]; do
 	case "$1" in
 	--max-passes) MAX_PASSES="$2"; shift 2 ;;
@@ -114,17 +134,24 @@ while [ $# -gt 0 ]; do
 	--no-planned) PLANNED=0; shift ;;
 	--no-converge) CONVERGE=0; shift ;;
 	--allow-dirty) ALLOW_DIRTY=1; shift ;;
+	--lanes) LANES="$2"; shift 2 ;;
+	--dry-run) DRY_RUN=1; shift ;;
 	--attended) ATTENDED=1; shift ;;
 	--skip) SKIP_ARG="$SKIP_ARG ${2//,/ }"; shift 2 ;;
 	*) echo "converge-loop: unknown argument $1" >&2; exit 2 ;;
 	esac
 done
 [ -n "$LIVE_BUDGET_USD" ] || LIVE_BUDGET_USD=$((BUDGET_USD * 2))
+[[ $LANES =~ ^[1-9][0-9]*$ ]] || { echo "converge-loop: --lanes takes a count, not '$LANES'" >&2; exit 2; }
 
 # The table rows (docs/development.md): converge and implement on Opus 5.5 at xhigh.
 CONVERGE_MODEL=claude-opus-5-5
 IMPLEMENT_MODEL=claude-opus-5-5
 EFFORT=xhigh
+
+# What a session was asked for, read by run_claude's event line and the dry-run stub.
+RUN_LABEL=""
+RUN_IDS=""
 
 # golangci-lint lives in $GOPATH/bin, which a non-login shell may not have.
 PATH="$PATH:$(go env GOPATH)/bin"
@@ -206,15 +233,37 @@ mkdir -p local
 exec 9> local/converge-loop.lock
 flock -n 9 || { echo "converge-loop: another loop holds local/converge-loop.lock" >&2; exit 2; }
 
-RUN_DIR="local/converge-loop/$(date -u +%Y%m%dT%H%M%SZ)"
+# Absolute, since a lane's session runs with its worktree as the working directory.
+RUN_DIR="$PWD/local/converge-loop/$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -p "$RUN_DIR"
 SUMMARY="$RUN_DIR/summary.md"
+EVENTS="$RUN_DIR/events.jsonl"
+: > "$EVENTS"
 TRAILER="Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>"
 ATT="$RUN_DIR/attended"
 QUESTIONS="$ATT/questions.jsonl"
 [ "$ATTENDED" = 0 ] || { mkdir -p "$ATT"; : > "$QUESTIONS"; }
 
+# tasks.md merges back from a lane by its ticks and notes alone (.gitattributes names the
+# driver `tasks`; scripts/merge-tasks.py is it). The config is this clone's, so every
+# worktree shares it; a clone without it meets a plain conflict, which is safe.
+git config --local merge.tasks.name "tasks.md: ticks and notes alone (scripts/merge-tasks.py)"
+git config --local merge.tasks.driver "python3 -I scripts/merge-tasks.py %O %A %B"
+
 say() { printf '%s\n' "$*" | tee -a "$SUMMARY"; }
+
+# One JSON line per event in $EVENTS, which the attended session watches (docs/development.md,
+# "The attended loop"): `event <kind> key=value ...`; every value is a string.
+event() {
+	local kind="$1"
+	shift
+	python3 -c 'import json, sys, datetime
+d = {"kind": sys.argv[1], "at": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
+for kv in sys.argv[2:]:
+    k, _, v = kv.partition("=")
+    d[k] = v
+print(json.dumps(d))' "$kind" "$@" >> "$EVENTS"
+}
 
 # A tree object of the working tree as it stands, untracked files included and ignored
 # files excluded, built in a throwaway index so neither the real index nor any ref moves.
@@ -246,18 +295,52 @@ run_claude() { # <model> <out file> <prompt> [live]
 	local budget="$BUDGET_USD"
 	if [ "$live" = live ]; then strip=(); budget="$LIVE_BUDGET_USD"; fi
 	sid=$(python3 -c 'import uuid; print(uuid.uuid4())')
+	LAST_SID="$sid"
 	SESSION_HEAD=$(git rev-parse HEAD)
-	env "${strip[@]}" \
-		claude -p --session-id "$sid" --model "$model" --effort "$EFFORT" \
-		--permission-mode auto --max-budget-usd "$budget" "$prompt" \
-		< /dev/null > "$out" 2>&1 || status=$?
-	transcript=$(ls "$HOME"/.claude/projects/*/"$sid".jsonl 2>/dev/null | head -1 || true)
-	if [ -n "$transcript" ]; then
-		printf '{"session_id":"%s","transcript_path":"%s"}' "$sid" "$transcript" |
-			CLAUDE_PROJECT_DIR="$PWD" python3 .claude/hooks/command-log.py stop > /dev/null || true
+	if [ "$DRY_RUN" = 1 ]; then
+		dry_run_session "$out" "$prompt" || status=$?
+	else
+		env "${strip[@]}" \
+			claude -p --session-id "$sid" --model "$model" --effort "$EFFORT" \
+			--permission-mode auto --max-budget-usd "$budget" "$prompt" \
+			< /dev/null > "$out" 2>&1 || status=$?
+		# From the working directory, a lane's worktree included: the hook then reads that
+		# tree's tasks.md for the task delta and writes the pending file this tree shares.
+		transcript=$(ls "$HOME"/.claude/projects/*/"$sid".jsonl 2>/dev/null | head -1 || true)
+		if [ -n "$transcript" ]; then
+			printf '{"session_id":"%s","transcript_path":"%s"}' "$sid" "$transcript" |
+				CLAUDE_PROJECT_DIR="$PWD" python3 .claude/hooks/command-log.py stop > /dev/null || true
+		fi
 	fi
 	say "  session $sid, $model${live:+ ($live, budget \$$budget)}, exit $status, report $out"
+	event session label="$RUN_LABEL" tasks="$RUN_IDS" sid="$sid" model="$model" live="${live:-}" exit="$status" report="$out" cwd="$PWD"
 	return "$status"
+}
+
+# --dry-run's stand-in for a session, so the loop's mechanics run on a throwaway spec with
+# no model: an implement run ticks its tasks (RUN_IDS), writes one note file per task and
+# commits, as a session would; a task whose text says DRY-FAIL stays unchecked, so the
+# question path runs, and one saying DRY-CONFLICT also rewrites the Notes heading, so two
+# lanes meet a conflict the merge driver may not resolve; a converge pass appends nothing.
+dry_run_session() { # <out file> <prompt>
+	local out="$1" prompt="$2" tasks="$FEATURE_REL/tasks.md" id ticked=""
+	if [[ $prompt == /speckit-converge* ]]; then
+		printf 'Dry run: convergence pass, nothing appended.\n' > "$out"
+		return 0
+	fi
+	mkdir -p "$FEATURE_REL/notes"
+	for id in $RUN_IDS; do
+		grep -qE "^\s*- \[ \] $id\b.*DRY-FAIL" "$tasks" && continue
+		printf 'dry run %s by %s\n' "$id" "$RUN_LABEL" > "$FEATURE_REL/notes/$id.md"
+		if grep -qE "^\s*- \[ \] $id\b.*DRY-CONFLICT" "$tasks"; then
+			sed -i "s/^## Notes.*/## Notes ($id)/" "$tasks"
+		fi
+		sed -i -E "s/^(\s*- )\[ \]( $id\b)/\1[X]\2/" "$tasks"
+		ticked="$ticked $id"
+	done
+	printf 'Dry run of %s: ticked%s; the rest stays unchecked.\n' "$RUN_LABEL" "${ticked:- nothing}" > "$out"
+	git add -A -- "$FEATURE_REL"
+	git diff --cached --quiet || git commit -q -m "chore($SCOPE): dry run, $RUN_LABEL" -m "A stand-in for a session, by scripts/converge-loop.sh --dry-run." -m "$TRAILER"
 }
 
 # Whether stdin carries the token's value. grep reads all of its input (no -q, whose early
@@ -271,10 +354,10 @@ carries_token() {
 	grep -F -f <(printf '%s\n' "$INFRAHUB_API_TOKEN") > /dev/null
 }
 
-# Publish and commit what the command-log hook kept for a session (command-log.py flush), and
-# nothing else: each commands/ directory it touched, as its own commit. flush refuses, exit 3,
-# a directory whose diff carries the token.
-commit_log() { # <what the session was>
+# Publish what the command-log hook kept for a session (command-log.py flush) into its
+# commands/ directory. The directories are git-ignored here, so the flush commits nothing;
+# it would refuse, exit 3, a tracked directory whose diff carries the token.
+publish_log() { # <what the session was>
 	local out status=0
 	out=$(CLAUDE_PROJECT_DIR="$PWD" python3 .claude/hooks/command-log.py flush --commit --what "$1" \
 		--body "Written by the command-log hook, whose stop mode scripts/converge-loop.sh runs once each headless session has exited: the hook's own Stop fires before the reply reaches the transcript.") || status=$?
@@ -297,6 +380,7 @@ check_session() {
 finish() { # <outcome> <exit status> <sentence>
 	local end open=""
 	end=$(snapshot)
+	event stopped outcome="$1" sentence="$3"
 	say ""
 	say "## Stopped: $1"
 	say ""
@@ -342,6 +426,7 @@ ask() { # <kind> <label> <ids> <report or -> <sentence>
 		"$(json_str "$report")" "$(json_str "$sentence")" "$(json_str "$(date -u +%FT%TZ)")" >> "$QUESTIONS"
 	say "- question $QN ($kind): $label, tasks $(echo $ids), report $report"
 	say "  $sentence"
+	event question id="$QN" kind="$kind" label="$label" tasks="$(echo $ids)" report="$report"
 	while [ ! -s "$ATT/verdict-$QN" ] && [ "$waited" -lt "$VERDICT_TIMEOUT" ]; do
 		stop_requested && finish operator 2 "The attended session asked the loop to stop while question $QN waited for a verdict."
 		sleep 2
@@ -388,6 +473,7 @@ pause_point() {
 	head=$(git rev-parse HEAD)
 	: > "$ATT/paused"
 	say "- paused for the attended session at $(git rev-parse --short "$head")"
+	event paused head="$(git rev-parse --short "$head")"
 	while [ ! -e "$ATT/resume" ]; do
 		stop_requested && finish operator 2 "The attended session asked the loop to stop while paused."
 		sleep 2
@@ -413,6 +499,7 @@ for l in open(sys.argv[1]):
 		esac
 	done
 	say "  resumed at $(git rev-parse --short HEAD)${answered:+; answered:$answered}${skipped:+; skipped:$skipped}"
+	event resumed head="$(git rev-parse --short HEAD)" answered="$(echo $answered)" skipped="$(echo $skipped)"
 }
 
 # The asked tasks whose question has been answered (neither open nor skipped) and that are
@@ -426,19 +513,26 @@ answered_unchecked() {
 	done | tr '\n' ' '
 }
 
-# Implement exactly <ids>, then check, gate and log it. Returns only when all is well, or
-# when a question about what was left has a `continue` or an answered `hold`.
-implement() { # <label> <ids> <prompt> <report file> [live]
-	local label="$1" ids="$2" line="$3" out="$4" live="${5:-}" before_checked before_tree after_tree stray gate_log open moved clause
-	before_checked=$(checked_ids)
-	before_tree=$(snapshot)
-	clause="$IMPLEMENT_LIVE"
-	[ "$live" != live ] || clause="$IMPLEMENT_LIVE_OK"
-	say "- implement $label${live:+ ($live)}: $(echo $ids)"
-	run_claude "$IMPLEMENT_MODEL" "$out" "/speckit-implement $line
-Loop run (scripts/converge-loop.sh). Only $(echo $ids | sed 's/ /, /g'); stop at the run's checkpoint and report, and do not start another run. $clause, or a decision you cannot take from spec.md, plan.md, research.md or docs/decisions.md, stays unchecked and your report says what it needs. End with make build, make test and make lint. Then commit your work, the ticks in tasks.md included, on the current branch as conventional commits whose bodies say why, split as this repository splits them (a golden re-baseline in a commit of its own). Never push." ${live:+"$live"} ||
-		{ commit_log "$label"; finish error 1 "The implement session failed; its report is $out."; }
-	commit_log "$label"
+# The prompt of an implement run. A lane (4th argument) is told to run the tests of the
+# packages it touched rather than the whole tier, since two lanes' `make test` at once would
+# trip tier 1's wall-time bound; the merged tree runs the whole tier once in the gates.
+implement_prompt() { # <route line> <ids> <live clause> [lane]
+	local tests="make build, make test and make lint"
+	[ -z "${4:-}" ] || tests="make build and make lint, then go test of the packages you touched (the merged tree runs the whole tier)"
+	echo "/speckit-implement $1
+Loop run (scripts/converge-loop.sh). Only $(echo $2 | sed 's/ /, /g'); stop at the run's checkpoint and report, and do not start another run. $3, or a decision you cannot take from spec.md, plan.md, research.md or docs/decisions.md, stays unchecked and your report says what it needs. End with $tests. Then commit your work, the ticks in tasks.md included, on the current branch as conventional commits whose bodies say why, as docs/development.md's Conventions say (a golden re-baseline in a commit of its own). Never push."
+}
+
+# The pure gates, into <log>; returns their status.
+gates() { # <log>
+	{ make build && [[ $(file bin/fylgja) == *'statically linked'* ]] && make test && make lint; } > "$1" 2>&1
+}
+
+# After a run (or a merged group of lanes) has committed: the session checks, the stray-tick
+# check against <ids>, the gates, the uncommitted-changes check, the diff and the golden
+# check. Stops the loop at the first failure.
+settle() { # <label> <ids> <report file> <checked before> <tree before>
+	local label="$1" ids="$2" out="$3" before_checked="$4" before_tree="$5" after_tree stray gate_log moved
 	check_session
 
 	stray=$(comm -13 <(echo "$before_checked" | sort) <(checked_ids | sort) | grep -vxF -f <(echo "$ids" | tr ' ' '\n') || true)
@@ -446,9 +540,9 @@ Loop run (scripts/converge-loop.sh). Only $(echo $ids | sed 's/ /, /g'); stop at
 
 	say "- gates"
 	gate_log="${out%.md}.gates.log"
-	{ make build && [[ $(file bin/fylgja) == *'statically linked'* ]] && make test && make lint; } > "$gate_log" 2>&1 ||
-		finish gate 1 "A gate failed after $label; see $gate_log."
+	gates "$gate_log" || { event gates label="$label" outcome=fail log="$gate_log"; finish gate 1 "A gate failed after $label; see $gate_log."; }
 	say "  build, static, test, lint: pass"
+	event gates label="$label" outcome=pass log="$gate_log"
 
 	if [ "$ALLOW_DIRTY" = 0 ] && [ -n "$(git status --porcelain)" ]; then
 		finish contract 2 "Implement of $label left uncommitted changes: $(git status --porcelain | tr '\n' ' ')"
@@ -461,71 +555,173 @@ Loop run (scripts/converge-loop.sh). Only $(echo $ids | sed 's/ /, /g'); stop at
 	if grep -q '^testdata/golden/' <<< "$moved"; then
 		finish golden 2 "$label moved testdata/golden/. Review its commit, then run the loop again to go on."
 	fi
-
-	open=""
-	for id in $ids; do
-		grep -qE "^\s*- \[[xX]\] $id\b" "$TASKS" || open="$open $id"
-	done
-	[ -z "$open" ] || ask unchecked "$label" "$open" "$out" "Implement of $label left$open unchecked; its report ($out) says why."
 }
 
-# The planned runs, as TSV: label, 1 if it needs the host (live), its unchecked IDs, its
-# line. Only runs with an unchecked task not under an open or skipped question are listed;
-# with <ids>, only those tasks, and an [operator] tag no longer makes a run live, since the
-# question that tag raised has been answered.
-planned_runs() { # [<ids>]
-	python3 - "$TASKS" "$TIER2" "$OPEN $SKIPPED" "${1:-}" <<'EOF'
-import re, sys
-text = open(sys.argv[1], encoding="utf-8").read()
-tasks = {m.group(2): (m.group(1) != " ", m.group(3))
-         for m in re.finditer(r"^\s*- \[([ xX])\] (T\d+)\b(.*)$", text, re.M)}
-excluded = set(sys.argv[3].split())
-only = set(sys.argv[4].split())
-LIVE = r"\[operator\]|\[live\]|tier 3|hand scenario|quiet host|test-e2e"
-if sys.argv[2] != "1":  # the sessions have no Infrahub credentials: tier 2 is the operator's
-    LIVE += r"|tier 2|test-contract"
-LIVE = re.compile(LIVE, re.I)
+# What a run left unchecked becomes a question (attended) or the operator stop.
+ask_unchecked() { # <label> <ids> <report file>
+	local open="" id
+	for id in $2; do
+		grep -qE "^\s*- \[[xX]\] $id\b" "$TASKS" || open="$open $id"
+	done
+	[ -z "$open" ] || ask unchecked "$1" "$open" "$3" "Implement of $1 left$open unchecked; its report ($3) says why."
+}
 
-def expand(s):
-    out = []
-    for a, b in re.findall(r"(T\d+)(?:\s*[–-]\s*(T\d+))?", s):
-        if b:
-            out += [f"T{i:0{len(a) - 1}d}" for i in range(int(a[1:]), int(b[1:]) + 1)]
-        else:
-            out.append(a)
-    return out
+# Implement exactly <ids>, then check, gate and log it. Returns only when all is well, or
+# when a question about what was left has a `continue` or an answered `hold`.
+implement() { # <label> <ids> <prompt> <report file> [live]
+	local label="$1" ids="$2" line="$3" out="$4" live="${5:-}" before_checked before_tree clause
+	before_checked=$(checked_ids)
+	before_tree=$(snapshot)
+	clause="$IMPLEMENT_LIVE"
+	[ "$live" != live ] || clause="$IMPLEMENT_LIVE_OK"
+	say "- implement $label${live:+ ($live)}: $(echo $ids)"
+	RUN_LABEL="$label"
+	RUN_IDS="$(echo $ids)"
+	run_claude "$IMPLEMENT_MODEL" "$out" "$(implement_prompt "$line" "$ids" "$clause")" ${live:+"$live"} ||
+		{ publish_log "$label"; finish error 1 "The implement session failed; its report is $out."; }
+	publish_log "$label"
+	settle "$label" "$ids" "$out" "$before_checked" "$before_tree"
+	ask_unchecked "$label" "$ids" "$out"
+}
 
-phases = []
-for m in re.finditer(r"^## (Phase \d+)[^\n]*\n(.*?)(?=^## |\Z)", text, re.M | re.S):
-    title = m.group(0).splitlines()[0][3:]
-    phases.append((m.group(1), title, re.findall(r"^\s*- \[[ xX]\] (T\d+)\b", m.group(2), re.M)))
+# --- Lanes -------------------------------------------------------------------------------
 
-# The route's runs, then each phase's tasks the route does not name (a phase added after
-# the route was written, a convergence phase). Without a route, each phase is a run.
-runs = []
-route = re.search(r"^### Recommended route[^\n]*\n(.*?)(?=^#)", text, re.M | re.S)
-if route:
-    for line in route.group(1).splitlines():
-        r = re.match(r"\s*\d+\.\s+\*\*(Run \d+)\*\*\s*[—-]\s*(.*)", line)
-        if r:
-            ids = [i for g in re.findall(r"\(([^)]*T\d+[^)]*)\)", r.group(2)) for i in expand(g)]
-            runs.append((r.group(1), f"{r.group(1)} — {r.group(2).strip()}", ids))
-covered = {i for _, _, ids in runs for i in ids}
-for label, title, ids in phases:
-    rest = [i for i in ids if i not in covered]
-    if rest:
-        runs.append((label, title, rest))
-        covered.update(rest)
-
-for label, line, ids in runs:
-    todo = list(dict.fromkeys(i for i in ids if i in tasks and not tasks[i][0] and i not in excluded
-                              and (not only or i in only)))
-    if not todo:
+# A worktree for one lane, on a new branch from HEAD, seeded with what Spec Kit needs and
+# this repository ignores: directories by symlink, files by copy (git refuses a symlinked
+# .gitignore), top-level entries only; local/ with the credentials file and the command
+# log's two directories linked, so the hook writes the pending file this tree reads; and
+# feature.json naming the feature. The seeded paths are listed in <seeded>, so the lane's
+# dirty check can leave them out: a symlink matches no ignore rule that ends in "/".
+seed_worktree() { # <worktree> <branch> <seeded list file>
+	local wt="$1" branch="$2" seeded="$3" p
+	git worktree add -q -b "$branch" "$wt" HEAD
+	: > "$seeded"
+	git ls-files -z --others --ignored --exclude-standard --directory -- .claude/skills .specify .venv |
+		python3 -c 'import sys
+ps = [p for p in sys.stdin.read().split("\0") if p]
+ps.sort(key=lambda p: (p.rstrip("/").count("/"), p))
+keep = []
+for p in ps:
+    if any(p.startswith(k) for k in keep if k.endswith("/")):
         continue
-    tag = r"\s*\[live\]" if only else r"\s*\[(operator|live)\]"
-    live = LIVE.search(line) or any(re.match(tag, tasks[i][1]) for i in todo)
-    print(f"{label}\t{1 if live else 0}\t{' '.join(todo)}\t{line}")
-EOF
+    keep.append(p)
+sys.stdout.write("\0".join(keep))' |
+		while IFS= read -r -d '' p; do
+			mkdir -p "$wt/$(dirname "$p")"
+			if [[ $p == */ ]]; then
+				ln -s "$PWD/${p%/}" "$wt/${p%/}"
+			else
+				cp "$PWD/$p" "$wt/$p"
+			fi
+			printf '%s\n' "${p%/}" >> "$seeded"
+		done
+	mkdir -p "$wt/local" local/.command-start local/command-log
+	[ ! -f local/.env ] || ln -s "$PWD/local/.env" "$wt/local/.env"
+	ln -s "$PWD/local/.command-start" "$wt/local/.command-start"
+	ln -s "$PWD/local/command-log" "$wt/local/command-log"
+	printf '{\n  "feature_directory": "%s"\n}\n' "$FEATURE_REL" > "$wt/.specify/feature.json"
+	grep -qx '.specify/feature.json' "$seeded" || echo '.specify/feature.json' >> "$seeded"
+}
+
+# Merge one lane's branch back, in this tree, and remove its worktree and branch. A merge
+# that does not resolve mechanically (tasks.md's driver settles ticks and notes alone) is
+# aborted and stops the loop at "merge", the worktree and branch kept for the operator.
+merge_lane() { # <label> <worktree> <branch> <seeded list file>
+	local label="$1" wt="$2" branch="$3" seeded="$4" dirty log="$RUN_DIR/${2##*/}.merge.log"
+	dirty=$(git -C "$wt" status --porcelain --untracked-files=all | grep -vxF -f <(sed 's/^/?? /' "$seeded") || true)
+	if [ "$ALLOW_DIRTY" = 0 ] && [ -n "$dirty" ]; then
+		finish contract 2 "Lane $label left uncommitted changes in $wt: $(echo "$dirty" | tr '\n' ' ')"
+	fi
+	if git merge --no-ff -q -m "merge($SCOPE): $label" \
+		-m "Lane $label, built in its own worktree on branch $branch and merged back by scripts/converge-loop.sh in route order; tasks.md by scripts/merge-tasks.py, ticks and notes alone." \
+		-m "$TRAILER" "$branch" > "$log" 2>&1; then
+		say "  merged $label at $(git rev-parse --short HEAD)"
+		event merge label="$label" outcome=merged head="$(git rev-parse --short HEAD)"
+		git worktree remove --force "$wt"
+		git branch -q -d "$branch"
+	else
+		git merge --abort 2> /dev/null || true
+		event merge label="$label" outcome=conflict log="$log"
+		finish merge 2 "Lane $label's branch $branch does not merge back mechanically (see $log). Its worktree $wt is kept: merge it by hand (git merge $branch), commit, remove the worktree and the branch, then run the loop again."
+	fi
+}
+
+# Implement a group of runs at once, one lane each, then merge them back in route order and
+# settle the merged tree once. Each argument is one planner row (label, live, ids, lane,
+# line, tab-separated). A lane's session runs in its worktree, so its `say` and `event` lines
+# land in this run's files by their absolute paths, and its command-log entry is kept by the
+# hook in the pending file this tree shares.
+implement_lanes() { # <row>...
+	local -a labels=() idss=() outs=() wts=() branches=() pids=()
+	local row label live ids lane line slug wt before_checked before_tree all_ids="" i status
+	before_checked=$(checked_ids)
+	before_tree=$(snapshot)
+	SESSION_HEAD=$(git rev-parse HEAD)
+	for row in "$@"; do
+		IFS=$'\t' read -r label live ids lane line <<< "$row"
+		slug=$(echo "$label" | tr 'A-Z ' 'a-z-')
+		wt="$PWD/local/lanes/$slug"
+		labels+=("$label")
+		idss+=("$(echo $ids)")
+		outs+=("$RUN_DIR/$slug.implement.md")
+		wts+=("$wt")
+		branches+=("lane/$slug")
+		all_ids="$all_ids $ids"
+		say "- lane $label: $(echo $ids), worktree $wt"
+		seed_worktree "$wt" "lane/$slug" "$RUN_DIR/$slug.seeded"
+	done
+	i=0
+	for row in "$@"; do
+		IFS=$'\t' read -r label live ids lane line <<< "$row"
+		(
+			cd "${wts[$i]}" || exit 1
+			RUN_LABEL="$label"
+			RUN_IDS="$(echo $ids)"
+			status=0
+			run_claude "$IMPLEMENT_MODEL" "${outs[$i]}" "$(implement_prompt "$line" "$ids" "$IMPLEMENT_LIVE" lane)" || status=$?
+			echo "$status" > "${outs[$i]}.status"
+		) &
+		pids+=($!)
+		i=$((i + 1))
+	done
+	for i in "${!pids[@]}"; do
+		wait "${pids[$i]}" || true
+	done
+	for i in "${!labels[@]}"; do
+		publish_log "${labels[$i]}"
+		status=$(cat "${outs[$i]}.status" 2> /dev/null || echo 1)
+		[ "$status" = 0 ] || finish error 1 "The implement session of ${labels[$i]} failed (exit $status); its report is ${outs[$i]}, and its worktree ${wts[$i]} is kept."
+	done
+	for i in "${!labels[@]}"; do
+		merge_lane "${labels[$i]}" "${wts[$i]}" "${branches[$i]}" "$RUN_DIR/${wts[$i]##*/}.seeded"
+	done
+	settle "lanes ${labels[*]}" "$(echo $all_ids)" "${outs[0]}" "$before_checked" "$before_tree"
+	for i in "${!labels[@]}"; do
+		ask_unchecked "${labels[$i]}" "${idss[$i]}" "${outs[$i]}"
+	done
+}
+
+# The planned runs, as TSV rows (scripts/converge-plan.py): label, 1 if the run needs the
+# host (live), its unchecked IDs, its lane partner's label or nothing, and its line.
+planned_runs() { # [<ids>]
+	python3 -I scripts/converge-plan.py "$TASKS" "$TIER2" "$OPEN $SKIPPED" "${1:-}"
+}
+
+# The head run's lane group: itself and the partners that name each other, up to --lanes.
+lane_group() { # <head row> [<ids>]
+	local -a rows=("$1")
+	local partner prow r
+	IFS=$'\t' read -r _ _ _ partner _ <<< "$1"
+	while [ -n "$partner" ] && [ "${#rows[@]}" -lt "$LANES" ]; do
+		prow=$(planned_runs "${2:-}" | awk -F'\t' -v l="$partner" '$1 == l')
+		[ -n "$prow" ] || break
+		rows+=("$prow")
+		IFS=$'\t' read -r _ _ _ partner _ <<< "$prow"
+		for r in "${rows[@]}"; do
+			[ "${r%%$'\t'*}" != "$partner" ] || partner=""
+		done
+	done
+	printf '%s\n' "${rows[@]}"
 }
 
 new_task_ids() { # <tasks.md before> <tasks.md after>: IDs of the appended tasks
@@ -571,7 +767,7 @@ run_planned() { # [<ids>]
 			break
 		fi
 		none=0
-		IFS=$'\t' read -r label live ids line <<< "$run"
+		IFS=$'\t' read -r label live ids lane line <<< "$run"
 		say ""
 		say "### $line"
 		slug=$(echo "$label" | tr 'A-Z ' 'a-z-')
@@ -580,6 +776,13 @@ run_planned() { # [<ids>]
 				implement "$label" "$ids" "$line" "$RUN_DIR/$slug.implement.md" live
 			else
 				finish operator 2 "$label is the operator's (live infrastructure, or tagged [operator]): ${line%.}. Do it by hand, tick its tasks, commit, and run the loop again."
+			fi
+		elif [ -n "$lane" ] && [ "$LANES" -gt 1 ]; then
+			mapfile -t group < <(lane_group "$run" "$only")
+			if [ "${#group[@]}" -gt 1 ]; then
+				implement_lanes "${group[@]}"
+			else
+				implement "$label" "$ids" "$line" "$RUN_DIR/$slug.implement.md"
 			fi
 		else
 			implement "$label" "$ids" "$line" "$RUN_DIR/$slug.implement.md"
@@ -619,8 +822,10 @@ for pass in $(seq 1 "$MAX_PASSES"); do
 	before_tree=$(snapshot)
 
 	say "- converge"
+	RUN_LABEL="pass $pass"
+	RUN_IDS=""
 	run_claude "$CONVERGE_MODEL" "$RUN_DIR/pass-$pass.converge.md" "/speckit-converge Loop pass $pass (scripts/converge-loop.sh). Tag every task you append directly after its ID with exactly one of: $CONVERGE_TAGS. The append contract is otherwise unchanged; do not commit." ||
-		{ commit_log "convergence pass $pass"; finish error 1 "The converge session failed; its report is $RUN_DIR/pass-$pass.converge.md."; }
+		{ publish_log "convergence pass $pass"; finish error 1 "The converge session failed; its report is $RUN_DIR/pass-$pass.converge.md."; }
 	check_session
 
 	after_tree=$(snapshot)
@@ -631,7 +836,8 @@ for pass in $(seq 1 "$MAX_PASSES"); do
 		finish contract 2 "Converge changed tasks.md above its new phase: diff $before_tasks $TASKS"
 
 	if cmp -s "$before_tasks" "$TASKS"; then
-		commit_log "convergence pass $pass"
+		publish_log "convergence pass $pass"
+		event pass pass="$pass" appended=""
 		finish converged 0 "Pass $pass appended nothing."
 	fi
 
@@ -662,10 +868,11 @@ for pass in $(seq 1 "$MAX_PASSES"); do
 		finish contract 2 "Pass $pass's phase carries the value of INFRAHUB_API_TOKEN, so it was not committed. Remove it from $TASKS before anything else."
 	fi
 	git commit -q -m "docs($SCOPE): convergence pass $pass appends $span" \
-		-m "Found by /speckit-converge, run unattended by scripts/converge-loop.sh against the tree at $(git rev-parse --short HEAD). The phase names each gap with its evidence; the tags decide the stopping rule and whether the loop may implement them:$tags" \
+		-m "Found by /speckit-converge, run $([ "$ATTENDED" = 1 ] && echo attended || echo unattended) by scripts/converge-loop.sh against the tree at $(git rev-parse --short HEAD). The phase names each gap with its evidence; the tags decide the stopping rule and whether the loop may implement them:$tags" \
 		-m "$TRAILER" -- "$TASKS"
 	say "  committed $(git rev-parse --short HEAD) (the phase)"
-	commit_log "convergence pass $pass"
+	event pass pass="$pass" appended="$(echo $ids)" tags="$(echo "$tags" | tr '\n' ' ')" head="$(git rev-parse --short HEAD)"
+	publish_log "convergence pass $pass"
 
 	asked=0
 	if [ -n "$operator" ]; then

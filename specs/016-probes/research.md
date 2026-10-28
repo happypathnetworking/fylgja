@@ -525,3 +525,15 @@ kind is one, as the brief's author leaned.
 ## 5. Verified at implement
 
 Appended by the runs.
+
+- **§4.3 The PSP loader and a `probes/` subdirectory** (Run 4, T006): `psp.Load` reads the
+  override directory's own entries alone: it globs `filepath.Join(dir, "*.yaml")`
+  (`internal/psp/load.go`, `Load` and `FromDir`), which never descends, so a directory
+  holding `probes/ping.yaml` loads the same platforms as the embedded set and `probe.Load`
+  of the same directory reads the probe package. Held in tier 1 by
+  `TestThePSPLoaderSkipsTheProbesSubdirectory` (`internal/probe/package_test.go`).
+  *(tree at `1506f79`, 2026-10-28)*
+- **`schema/fylgja-probe.yaml` checks valid on `main`** (Run 4, T009): `.venv/bin/infrahubctl
+  schema check --branch main schema/fylgja-probe.yaml` answers `Valid!` with a diff that adds
+  `FylgjaProbe` and changes and removes nothing. A check only: nothing loaded, `main`'s hash
+  unmoved; the load stays T017's. *(Infrahub 1.11.2, infrahub-sdk 1.23.2, 2026-10-28)*

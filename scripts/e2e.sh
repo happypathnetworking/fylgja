@@ -1703,7 +1703,7 @@ expect "$OUT/plan-8.json" '.plan.steps[1] | .computed and (.unchanged | not)
   and [.artifacts.changed[].node] == ["e1", "s1"]'
 echo "e2e: case 8: plan $FS/seeded $P1, $FS/mixed-link $P2; one link added between e1 and s1, both re-rendered"
 
-# The twin at seeded, pushed by replace: the plan's id, a 7 record of no rehearsal that has
+# The twin at seeded, pushed by replace: the plan's id, a 10 record of no rehearsal that has
 # not stepped, every node holding seeded's bundle.
 BRANCH=$FS
 READBACK=

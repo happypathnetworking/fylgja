@@ -138,9 +138,9 @@ func TestCorruptEntryRefused(t *testing.T) {
 	}
 }
 
-// A sidecar an earlier build left and a read's transient CTM live beside entries, never
-// inside one, so neither can move an id. No build writes a sidecar since 018; the host's
-// store still holds them.
+// A sidecar an earlier build left and a following check's read under .reads/ live beside
+// entries, never inside one, so neither can move an id. No build writes a sidecar since
+// 018, nor a read under .reads/ since 019; an upgraded host's store may still hold both.
 func TestSidecarsDoNotAffectEntries(t *testing.T) {
 	ctx := context.Background()
 	src, want := storeFixture(t)

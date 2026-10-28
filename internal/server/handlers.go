@@ -23,12 +23,13 @@ const (
 // not given; one that is present was given, whatever its value. From 018 twin.compile takes
 // snapshot in place of ctm, and a request carrying ctm is refused as any argument not taken,
 // pre-1.0, as 014 renamed series to stage. From 019 twin.create takes neither interval nor
-// no_follow, which are refused the same way: a twin follows nothing.
+// no_follow, which are refused the same way: a twin follows nothing; and twin.step takes
+// snapshot, a target as twin.create's snapshot is a source.
 var operationArgs = map[string]map[string]string{
 	findings.OpTwinCreate: {"branch": argString, "at": argString, "stage": argString, "dry_run": argBool,
 		"scope": argString, "snapshot": argString},
 	findings.OpTwinProvision: {"bundle": argString, "dry_run": argBool},
-	findings.OpTwinStep:      {"stage": argString, "allow_restart": argBool, "dry_run": argBool, "wait": argString},
+	findings.OpTwinStep:      {"stage": argString, "snapshot": argString, "allow_restart": argBool, "dry_run": argBool, "wait": argString},
 	findings.OpTwinDestroy:   {},
 	findings.OpTwinShow:      {},
 	findings.OpTwinVerify:    {"wait": argString, "args": argStrings},
@@ -137,9 +138,10 @@ var handlers = map[string]func(*call) error{
 		a := args(c.req.Args)
 		return runTwinStep(c.ctx, c.options(), &stepFlags{
 			stage: a.string("stage"), stageGiven: a.given("stage"),
+			snapshot: a.string("snapshot"), snapshotGiven: a.given("snapshot"),
 			allowRestart: a.bool("allow_restart"), dryRun: a.bool("dry_run"),
 			wait: a.string("wait"), waitGiven: a.given("wait"),
-		})
+		}, c.req.Files)
 	},
 	findings.OpTwinDestroy: func(c *call) error {
 		return runDestroy(c.ctx, c.options())
@@ -220,10 +222,11 @@ func checkRequired(op string, given map[string]json.RawMessage) error {
 }
 
 // takesFiles are the operations a request's files belong to. twin.create takes one, a
-// snapshot file beside --snapshot alone (018), which the create holds to that shape itself,
-// as twin compile holds its snapshot, so a request carrying another is its operation.failed
-// and not the transport's.
-var takesFiles = []string{findings.OpCompile, findings.OpTwinProvision, findings.OpPSPValidate, findings.OpTwinCreate}
+// snapshot file beside --snapshot alone (018), and twin.step the same (019), which each holds
+// to that shape itself (snapshotFiles), as twin compile holds its snapshot, so a request
+// carrying another is its operation.failed and not the transport's.
+var takesFiles = []string{findings.OpCompile, findings.OpTwinProvision, findings.OpPSPValidate, findings.OpTwinCreate,
+	findings.OpTwinStep}
 
 // checkFiles refuses files on an operation that takes none.
 func checkFiles(op string, n int) error {

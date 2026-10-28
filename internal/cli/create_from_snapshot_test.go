@@ -416,19 +416,16 @@ func TestShowSnapshotTwin(t *testing.T) {
 	}
 }
 
-// US3 scenario 7: a twin built from a snapshot names no stage, so twin step refuses it by the
-// existing guard, step.twin.unsteppable at resolve, naming the record's branch as for a twin
-// of a branch, before Infrahub is asked.
-func TestStepFromSnapshotTwinIsUnsteppable(t *testing.T) {
-	h := stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) {
-		f.Stage, f.Source, f.SnapshotID = nil, wire.SourceSnapshot, fixtureSnapshotID
-	})
-	out := runStepCmd(t)
-	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Step: findings.StepResolve,
-		Object: h.fromID, Message: "the twin was created from branch change-1 at " + stepMixedAt + ", not from a stage, so it names " +
-			"no proposed change to step along; only a twin built from a stage steps (fylgja twin create --stage)"}
-	if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want {
-		t.Errorf("exit %d, refusal %+v; want 1 with %+v", out.code, got, want)
+// US3 scenario 7, reversed by 019 (US2 scenario 3): a twin built from a snapshot names no
+// stage and steps to a snapshot all the same, the guard that only a twin built from a stage
+// steps gone. Its dry run goes from the snapshot the record names, and Infrahub is asked
+// nothing. TestStepToASnapshot steps it by id and by file.
+func TestStepFromSnapshotTwin(t *testing.T) {
+	h := stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Stage, f.Source = nil, wire.SourceSnapshot })
+	target, toID := targetSnapshot(t, h, "linked")
+	out := runStepCmd(t, "--snapshot", target.ID, "--dry-run", "--allow-restart")
+	if out.code != findings.ExitOK || out.doc.Step == nil || out.doc.Step.From.Stage != nil || out.doc.Step.To.BundleID != toID {
+		t.Errorf("exit %d, step %+v, findings %+v; want 0 from the record's snapshot to %s", out.code, out.doc.Step, out.doc.Findings, toID)
 	}
 	if len(h.infra.requests()) != h.before {
 		t.Errorf("Infrahub was asked %+v after the host was built", h.infra.requests()[h.before:])

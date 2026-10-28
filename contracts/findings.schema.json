@@ -88,7 +88,7 @@
         },
         "snapshot": {
           "type": "string",
-          "description": "018: --snapshot as given, a snapshot id or the path of the file the request carried (twin.compile, twin.create --snapshot). Absent otherwise"
+          "description": "018: --snapshot as given, a snapshot id or the path of the file the request carried (twin.compile, twin.create --snapshot; 019: twin.step --snapshot, the target). Absent otherwise"
         }
       }
     },

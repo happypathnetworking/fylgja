@@ -474,14 +474,11 @@ func snapshotKind(rec *wire.TwinRecord) string {
 	if rec.SnapshotID != nil {
 		id = shortID(*rec.SnapshotID)
 	}
-	ref := "branch " + rec.Provenance.Branch
-	switch {
-	case rec.Provenance.At != "":
-		ref += " at " + rec.Provenance.At
-	case rec.ObservedAt != nil:
-		ref += ", read at " + *rec.ObservedAt
+	observed := ""
+	if rec.ObservedAt != nil {
+		observed = *rec.ObservedAt
 	}
-	line := fmt.Sprintf("snapshot %s (%s)", id, ref)
+	line := fmt.Sprintf("snapshot %s (%s)", id, branchRef(rec.Provenance.Branch, rec.Provenance.At, observed))
 	if st := rec.Stage; st != nil {
 		line += ", stage " + st.Name()
 	}
@@ -490,6 +487,20 @@ func snapshotKind(rec *wire.TwinRecord) string {
 			st.Run.RunID, st.EndedAt)
 	}
 	return line + ofRehearsal(rec)
+}
+
+// branchRef is what a snapshot is of, as the kind line and a step's twin and target lines
+// name it (019): branch B at T when it is pinned, else branch B, read at the time it was
+// read, or the branch alone when that is unknown.
+func branchRef(branch, at, observedAt string) string {
+	ref := "branch " + branch
+	switch {
+	case at != "":
+		ref += " at " + at
+	case observedAt != "":
+		ref += ", read at " + observedAt
+	}
+	return ref
 }
 
 // stepSideRef names a step's side as twin show's lines name the side a step went from or

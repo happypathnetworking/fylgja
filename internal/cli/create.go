@@ -104,20 +104,34 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	var files []api.File
 	if f.fromSnapshot() {
 		a["snapshot"] = f.snapshot
-		if !isSnapshotID(f.snapshot) && !f.snapshotConflicts() {
+		if !f.snapshotConflicts() {
+			var err error
 			subject := &findings.Subject{Branch: f.branch, At: f.at, Snapshot: f.snapshot}
-			if f.snapshot == "" {
-				return fail(findings.OpTwinCreate, subject,
-					"--snapshot= is empty; give a snapshot id or the path of a snapshot file")
+			if files, err = snapshotSent(findings.OpTwinCreate, subject, f.snapshot); err != nil {
+				return err
 			}
-			file, err := readSnapshot(f.snapshot)
-			if err != nil {
-				return fail(findings.OpTwinCreate, subject, "%v", err)
-			}
-			files = []api.File{file}
 		}
 	}
 	return send(ctx, opts, findings.OpTwinCreate, a, files, handlers{})
+}
+
+// snapshotSent is the request's files for a --snapshot given as arg, which twin create and
+// twin step send alike (018; 019, research R-04): none for a snapshot id, which is sent as it
+// is, and otherwise the file at that path, read here, under it. A file the client cannot
+// read is its own failure, before any connection, as an explicit empty --snapshot= is, which
+// names no file.
+func snapshotSent(op string, subject *findings.Subject, arg string) ([]api.File, error) {
+	if isSnapshotID(arg) {
+		return nil, nil
+	}
+	if arg == "" {
+		return nil, fail(op, subject, "--snapshot= is empty; give a snapshot id or the path of a snapshot file")
+	}
+	file, err := readSnapshot(arg)
+	if err != nil {
+		return nil, fail(op, subject, "%v", err)
+	}
+	return []api.File{file}, nil
 }
 
 // snapshotConflicts is whether a flag is given beside --snapshot that the server's snapshot

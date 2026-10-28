@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/stages.schema.json",
   "title": "Fylgja stage blocks — 014",
-  "description": "The three stage blocks of the findings document, referenced from findings.schema.json by this $id: `resolved`, the reference one stage resolves to (the `stage` block on twin.create, twin.create --dry-run, intent.read with --stage and twin.step once its target resolved); `list`, stage.list's `stages` block; `plan`, stage.plan's `plan` block, whose steps are step.Diff's result. Replaces waypoints.schema.json (M10, M11): a stage is a moment of a proposed change (D-045), named <branch>/<label>, with two derived stages, branch-point and head, beside the operator's marks. Every fact the text prints and no more: artifacts by name and checksum, bootstraps as changed or not, never a line of either (Constitution X). Every list is sorted, so the same input gives the same document. 018: plan_stage.snapshot_id, required beside bundle_id, the stage's snapshot once its read was filed, or null.",
+  "description": "The three stage blocks of the findings document, referenced from findings.schema.json by this $id: `resolved`, the reference one stage resolves to (the `stage` block on twin.create, twin.create --dry-run, intent.read with --stage and twin.step once its target resolved); `list`, stage.list's `stages` block; `plan`, stage.plan's `plan` block, whose steps are step.Diff's result. Replaces waypoints.schema.json (M10, M11): a stage is a moment of a proposed change (D-045), named <branch>/<label>, with two derived stages, branch-point and head, beside the operator's marks. Every fact the text prints and no more: artifacts by name and checksum, bootstraps as changed or not, never a line of either (Constitution X). Every list is sorted, so the same input gives the same document. 018: plan_stage.snapshot_id, required beside bundle_id, the stage's snapshot once its read was filed, or null. 019: step's from and to are each a side's name (side_name): a stage's reference as before, or, on twin step's diff alone, snapshot <8 hex>… for a side that names no stage, a twin built from --branch or --snapshot or a twin step --snapshot target; stage.plan's steps still name stages alone.",
   "$defs": {
     "ref": {
       "type": "string",
@@ -12,6 +12,13 @@
     "label": {
       "type": "string",
       "pattern": "^[^/\\s]+$"
+    },
+    "side_name": {
+      "anyOf": [
+        {"$ref": "#/$defs/ref"},
+        {"type": "string", "pattern": "^snapshot [0-9a-f]{8}…$"}
+      ],
+      "description": "019: a step's side as step.Between names it: a stage by its reference, <branch>/<label>, or a side that names no stage by its snapshot, snapshot and the first eight hex characters of its id, then …"
     },
     "at_source": {
       "enum": ["given", "written", "branch_point", "head"],
@@ -153,8 +160,8 @@
       "required": ["from", "to", "from_bundle_id", "to_bundle_id", "computed"],
       "additionalProperties": false,
       "properties": {
-        "from": {"$ref": "#/$defs/ref"},
-        "to": {"$ref": "#/$defs/ref"},
+        "from": {"$ref": "#/$defs/side_name"},
+        "to": {"$ref": "#/$defs/side_name"},
         "from_bundle_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
         "to_bundle_id": {"type": ["string", "null"], "pattern": "^[0-9a-f]{64}$"},
         "computed": {"type": "boolean", "description": "false when either stage did not compile; not_computed then names it, and nothing else is present"},

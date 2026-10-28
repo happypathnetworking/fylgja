@@ -343,7 +343,8 @@ func TestStageHelpTextsNameTheServer(t *testing.T) {
 
 // stage plan, twin step and twin rehearse say that the API's server takes each stage's
 // snapshot and files it beside its bundle, as twin create's help does since T065, and stage
-// plan no longer files a CTM beside each bundle (018: FR-008, FR-011, FR-012, FR-014). The
+// plan no longer files a CTM beside each bundle (018: FR-008, FR-011, FR-012, FR-014); twin
+// step's names --snapshot, a snapshot of any branch, compiled with no read (019). The
 // whole help is read, flags included, its whitespace folded so no line break is pinned.
 func TestStageHelpsNameTheServersTake(t *testing.T) {
 	for _, c := range []struct {
@@ -360,7 +361,14 @@ func TestStageHelpsNameTheServersTake(t *testing.T) {
 				"files the snapshot and the bundle, as stage plan builds a stage;",
 			"resolve and read the target, take and file its snapshot, compile and file its bundle, check the host " +
 				"and read containerlab's plan; start no run",
-		}, []string{"resolves, reads, compiles and files the target", "resolve, read, compile and file the target"}},
+			// 019: --snapshot, a snapshot of any branch, which the server compiles with no read.
+			"or to a snapshot of any branch, the one --snapshot names.",
+			"--snapshot <id|file> names one its store holds by its id, or a snapshot file sent from here, which it files, " +
+				"and it compiles that and files the bundle, reading no branch.",
+			"--snapshot string the snapshot to step to, <id|file>, a snapshot of any branch:",
+			"start no run (with --snapshot, nothing is read)",
+		}, []string{"resolves, reads, compiles and files the target", "resolve, read, compile and file the target",
+			"Take the stage twin"}},
 		{[]string{"twin", "rehearse", "--help"}, []string{
 			"The API's server builds every stage first, as stage plan does: it resolves the stage, reads it, takes " +
 				"the snapshot of what it read, compiles it and files the snapshot and the bundle,",

@@ -20,7 +20,9 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/bundle"
+	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
@@ -1099,7 +1101,8 @@ func TestStepDryRunReconcileLifecycles(t *testing.T) {
 func TestStepRefusedBeforeAnyConnection(t *testing.T) {
 	const orphanAt = "/tmp/scratchpad/twin3/bundle/topology.clab.yml"
 	// noStage ends step.twin.unsteppable's message for a twin that names a snapshot and no
-	// stage, which this build does not step yet (stepStageless, until T031 and T034).
+	// stage, which this build steps to a snapshot alone, not yet to a stage (stepStageless,
+	// until T034).
 	const noStage = ", not from a stage, so it names no proposed change to step along; only a twin built from a stage steps " +
 		"(fylgja twin create --stage)"
 	refusal := func(rule, step, object, message string) findings.Finding {
@@ -3057,4 +3060,553 @@ func recordedStep(prev wire.TwinRecord, in provision.StepInput, outcome string) 
 		f.Staged.PSP[n.Name] = n.PSP
 	}
 	return f
+}
+
+// 019, US2: twin step --snapshot <id|file> steps any twin whose record names a snapshot to a
+// snapshot of any branch (research R-04). The client sends it as twin create sends one; the
+// server resolves it as create's --snapshot does, compiles and files its bundle, and steps
+// to it as to a stage, with no request to Infrahub for the target.
+
+// --stage beside --snapshot is the server's snapshot.flags.conflict at start, exit 2, naming
+// --stage: the snapshot is the target (US3 scenario 6). It is refused before any connection,
+// whether --snapshot is an id, a file, a file not there or given empty, and whatever --stage
+// says: the client reads no file beside --stage, so the guard answers whatever the file, and
+// nothing is filed, dialled, inspected or asked of Infrahub.
+func TestStepSnapshotBesideAStageIsRefused(t *testing.T) {
+	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSnapshotFlagsConflict, Step: findings.StepStart,
+		Object: "--stage", Message: "--stage is meaningless with --snapshot: the snapshot is the target"}
+	file := snapshotFile(t, nil)
+	missing := filepath.Join(t.TempDir(), "typo.json")
+	for _, stage := range []string{"--stage=change-1/linked", "--stage="} {
+		for _, g := range []struct{ name, arg string }{
+			{"an id", fixtureSnapshotID}, {"a file", file}, {"a file not there", missing}, {"--snapshot=", ""},
+		} {
+			t.Run(stage+" beside "+g.name, func(t *testing.T) {
+				h := stepHost(t, "plan-link-added.json", nil)
+				h.clab.calls = nil
+				snapshots := filedSnapshots(t, h.paths)
+				dials := countDials(t)
+				awaitIdle(t)
+				served := servedRequests(findings.OpTwinStep, string(findings.StatusError))
+
+				code, doc, raw := executeClient(t, "twin", "step", "--snapshot="+g.arg, stage)
+				if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != want || doc.Subject.Snapshot != g.arg {
+					t.Errorf("exit %d, findings %+v, subject %+v; want 2 with %+v alone", code, doc.Findings, doc.Subject, want)
+				}
+				if n := dials.Load(); n != 0 || len(h.infra.requests()) != h.before || len(h.clab.calls) != 0 {
+					t.Errorf("dialled %d times, asked Infrahub %+v and containerlab %v before the refusal", n,
+						h.infra.requests()[h.before:], h.clab.calls)
+				}
+				awaitIdle(t)
+				if got := servedRequests(findings.OpTwinStep, string(findings.StatusError)) - served; got != 1 {
+					t.Errorf("the server logged %d refused steps, want 1: the refusal is the server's", got)
+				}
+				if got := filedSnapshots(t, h.paths); !slices.Equal(got, snapshots) {
+					t.Errorf("snapshots/ holds %v after a refusal before any connection, held %v", got, snapshots)
+				}
+				validateM10Document(t, doc)
+				mustCarryNoToken(t, stage, raw)
+			})
+		}
+	}
+}
+
+// A --snapshot the client cannot send is its own operation.failed, exit 2, as on create, and
+// no request reaches the server: a file it cannot read, worded as the operating system words
+// it, and an explicit empty --snapshot= with no --stage beside it, which names no file.
+func TestStepSnapshotTheClientCannotSend(t *testing.T) {
+	missing := filepath.Join(t.TempDir(), "absent.json")
+	for _, c := range []struct {
+		name, arg, message string
+	}{
+		{"a file not there", missing, "reading snapshot: open " + missing + ": no such file or directory"},
+		{"--snapshot=", "", "--snapshot= is empty; give a snapshot id or the path of a snapshot file"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			useStateRoot(t)
+			dials := countDials(t)
+			awaitIdle(t)
+			before := strings.Count(harness.log.String(), "operation="+findings.OpTwinStep+" ")
+
+			code, doc, _ := executeClient(t, "twin", "step", "--snapshot="+c.arg, "--dry-run")
+			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleOperationFailed, Object: findings.OpTwinStep,
+				Message: c.message}
+			if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != want || doc.Subject.Snapshot != c.arg {
+				t.Errorf("exit %d, findings %+v, subject %+v; want 2 with %+v", code, doc.Findings, doc.Subject, want)
+			}
+			awaitIdle(t)
+			if after := strings.Count(harness.log.String(), "operation="+findings.OpTwinStep+" "); after != before || dials.Load() != 0 {
+				t.Errorf("the server logged %d steps and the service was dialled %d times; want none", after-before, dials.Load())
+			}
+			validateM10Document(t, doc)
+		})
+	}
+}
+
+// A step's files are one snapshot file beside a --snapshot that is a path, under that path,
+// or none, as a create's are (contracts/api.md, "019: following removed"): a raw twin.step
+// request carrying another is the server's operation.failed, exit 2, naming twin step, before
+// any connection, and nothing is filed.
+func TestAStepsFilesAreOneSnapshotFile(t *testing.T) {
+	one := []api.File{{Path: "snap.json", Data: []byte("{")}}
+	for _, c := range []struct {
+		name    string
+		args    given
+		files   []api.File
+		message string
+	}{
+		{"a file beside no --snapshot", given{"dry_run": true}, one,
+			"the request carries 1 file where twin step takes a snapshot file beside --snapshot alone"},
+		{"a file beside an id", given{"snapshot": fixtureSnapshotID}, one,
+			"the request carries 1 file where twin step takes a snapshot file beside --snapshot alone"},
+		{"two files", given{"snapshot": "snap.json"}, append(one, api.File{Path: "other.json"}),
+			"the request carries 2 files where twin step takes a snapshot file beside --snapshot alone"},
+		{"no file beside a path", given{"snapshot": "snap.json"}, nil,
+			"the request carries no file where twin step takes the snapshot file --snapshot names, under that path"},
+		{"a file under another path", given{"snapshot": "other.json"}, one,
+			"the request carries its snapshot file under another path than --snapshot gives, where twin step takes a " +
+				"snapshot file beside --snapshot alone, under that path"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h := stepHost(t, "plan-link-added.json", nil)
+			h.clab.calls = nil
+			snapshots := filedSnapshots(t, h.paths)
+			dials := countDials(t)
+			var err error
+			captureStdout(t, func() { err = send(context.Background(), &options{}, findings.OpTwinStep, c.args, c.files, handlers{}) })
+			code, doc := exitOf(t, err)
+			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleOperationFailed, Object: findings.OpTwinStep,
+				Message: c.message}
+			if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != want {
+				t.Errorf("exit %d, findings %+v; want 2 with %+v", code, doc.Findings, want)
+			}
+			if n := dials.Load(); n != 0 || len(h.infra.requests()) != h.before || len(h.clab.calls) != 0 {
+				t.Errorf("dialled %d times, asked Infrahub %+v and containerlab %v before the refusal", n,
+					h.infra.requests()[h.before:], h.clab.calls)
+			}
+			if got := filedSnapshots(t, h.paths); !slices.Equal(got, snapshots) {
+				t.Errorf("snapshots/ holds %v after the refusal, held %v", got, snapshots)
+			}
+		})
+	}
+}
+
+// targetSnapshot files change-1's stage label as a snapshot the operator holds, as a create,
+// a plan or intent read --out on this server files one, and returns it, with its bundle's id.
+// Infrahub's requests are counted again after it, so h.before is what the step must leave
+// unmoved: no request reaches Infrahub for a snapshot target.
+func targetSnapshot(t *testing.T, h *stepHostFixture, label string) (*snap.Snapshot, string) {
+	t.Helper()
+	bundleID := buildStage(t, h.paths, label)
+	s, err := snap.NewDirStore(h.paths.Snapshots).Fetch(context.Background(), snapshotOf(t, bundleID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.before = len(h.infra.requests())
+	return s, bundleID
+}
+
+// targetFile is the stored snapshot id written to a file of the test's own, edited by edit
+// as JSON, the file an operator holds; its entry leaves h's store, so the step files it.
+func targetFile(t *testing.T, h *stepHostFixture, id string, edit func(doc map[string]any)) string {
+	t.Helper()
+	entry := filepath.Join(h.paths.Snapshots, id+".json")
+	raw, err := os.ReadFile(entry)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(entry); err != nil {
+		t.Fatal(err)
+	}
+	if edit != nil {
+		var doc map[string]any
+		if err := json.Unmarshal(raw, &doc); err != nil {
+			t.Fatal(err)
+		}
+		edit(doc)
+		if raw, err = json.MarshalIndent(doc, "", "  "); err != nil {
+			t.Fatal(err)
+		}
+	}
+	path := filepath.Join(t.TempDir(), "target.json")
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// envelopeOf is a snapshot document's CTM envelope, as JSON, for an edit.
+func envelopeOf(doc map[string]any) map[string]any {
+	return doc["ctm"].(map[string]any)["envelope"].(map[string]any)
+}
+
+// recordOnHost is twin.json as the step's record activity writes it once the step of in has
+// moved the twin: the target's bundle staged in the twin directory, as the run's stage leaves
+// it, every node of the target running, and every push landed. It validates against the
+// current contract.
+func recordOnHost(t *testing.T, h *stepHostFixture, in provision.StepInput) *wire.TwinRecord {
+	t.Helper()
+	files, err := bundle.LoadFiles(in.ToBundlePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for p, b := range files {
+		dst := filepath.Join(h.paths.TwinBundle, filepath.FromSlash(p))
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dst, b, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var m compiler.Manifest
+	if err := json.Unmarshal(files[compiler.ManifestFile], &m); err != nil {
+		t.Fatal(err)
+	}
+	var nodes []wire.LabNode
+	for _, n := range m.Nodes {
+		nodes = append(nodes, wire.LabNode{Name: n.Name, Container: "clab-fylgja-" + n.Name, Image: n.Image, State: "running"})
+	}
+	pushed := []wire.StepPush{}
+	for _, p := range in.PushPlan {
+		pushed = append(pushed, wire.StepPush{Node: p.Node, Reasons: p.Reasons, Outcome: wire.PushLanded})
+	}
+	acts := &lab.Activities{Paths: h.paths, Version: version}
+	if _, err := acts.RecordStep(context.Background(), wire.RecordStepInput{TwinDir: h.paths.Twin, From: in.From, To: in.To,
+		Outcome: wire.StepStepped, RunID: stepRunID, ObservedAt: in.ObservedAt, PushPlan: pushed, Nodes: nodes,
+		StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:15:41Z"}); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(h.paths.TwinJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	validateTwinJSON(t, raw)
+	rec, err := lab.ReadRecord(h.paths.TwinJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &rec
+}
+
+// stepToSnapshotRun is the fake service a step to a snapshot runs on: it replays the step's
+// progress and ends stepped, as TestStepRuns' stepped run does.
+func stepToSnapshotRun(t *testing.T) *fakeService {
+	t.Helper()
+	reconcile := 3.9
+	e1Took, s1Took := 1.6, 2.4
+	svc := &fakeService{runID: stepRunID, events: stepEvents(), stepResult: provision.StepResult{Outcome: provision.StepStepped,
+		PushPlan: []wire.StepPush{
+			{Node: "e1", Reasons: []string{"artifact", "restarted"}, Outcome: wire.PushLanded, TookS: &e1Took},
+			{Node: "s1", Reasons: []string{"artifact", "bootstrap"}, Outcome: wire.PushLanded, TookS: &s1Took}},
+		Timings: wire.StepTimings{ReconcileS: &reconcile, Readiness: map[string]float64{"e1": 54.8},
+			Push: map[string]float64{"e1": 1.6, "s1": 2.4}, WholeS: 71.2},
+		Record: &wire.TwinRecord{State: wire.StateReady}, Findings: findings.List{},
+		StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:15:41Z"}}
+	useService(t, svc)
+	useInterrupts(t)
+	return svc
+}
+
+// stepFroms are the three twins a snapshot steps (US2 scenarios 1–3): one built from
+// --branch, unpinned; one from --stage, change-1/sealed; one from --snapshot, pinned. Each
+// names sealed's snapshot and bundle.
+var stepFroms = []struct {
+	name   string
+	change func(*lab.RecordFields)
+	source string
+}{
+	{"--branch", func(f *lab.RecordFields) { f.Stage, f.Provenance.At = nil, "" }, wire.SourceIntent},
+	{"--stage", nil, wire.SourceIntent},
+	{"--snapshot", func(f *lab.RecordFields) { f.Stage, f.Source = nil, wire.SourceSnapshot }, wire.SourceSnapshot},
+}
+
+// US2 scenarios 1–3 (FR-012, FR-013): a twin built by each of --branch, --stage and
+// --snapshot steps to a snapshot of change-1's stage linked, by its id and by a file. The
+// server compiles it and files its bundle, and starts the step run with a to side naming no
+// stage, the snapshot, its bundle and the envelope's branch and at, and the stored
+// document's observed_at; the fake Infrahub is asked nothing. A file is filed under its id.
+// The record the run then writes names the target's snapshot, bundle, branch and at and no
+// stage, keeps the twin's source, and validates against twin.json 10; its step block names
+// the from side's stage, from a stage twin, and none on its to side.
+func TestStepToASnapshot(t *testing.T) {
+	for _, from := range stepFroms {
+		for _, by := range []string{"id", "file"} {
+			t.Run("from "+from.name+" by "+by, func(t *testing.T) {
+				h := stepHost(t, "plan-link-added.json", from.change)
+				target, toID := targetSnapshot(t, h, "linked")
+				env := target.CTM.Envelope
+				arg := target.ID
+				if by == "file" {
+					arg = targetFile(t, h, target.ID, nil)
+				}
+				svc := stepToSnapshotRun(t)
+
+				out := runStepCmd(t, "--snapshot", arg, "--allow-restart")
+				if out.code != findings.ExitOK || len(svc.stepped) != 2 {
+					t.Fatalf("exit %d, %d runs started; want 0 and one per run of the command: %+v", out.code, len(svc.stepped),
+						out.doc.Findings)
+				}
+				if n := len(h.infra.requests()); n != h.before {
+					t.Errorf("Infrahub was asked %+v for a snapshot target", h.infra.requests()[h.before:])
+				}
+				if got := filedSnapshots(t, h.paths); !slices.Contains(got, target.ID+".json") {
+					t.Errorf("snapshots/ holds %v; want the target filed under its id", got)
+				}
+				prev, err := lab.ReadRecord(h.paths.TwinJSON)
+				if err != nil {
+					t.Fatal(err)
+				}
+				wantFrom := wire.StepSide{Stage: prev.Stage, SnapshotID: h.fromSnapshot, BundleID: h.fromID, At: prev.Provenance.At}
+				wantTo := wire.StepSide{SnapshotID: target.ID, BundleID: toID, At: env.At, Branch: env.Branch}
+				for i, in := range svc.stepped {
+					if !reflect.DeepEqual(in.From, wantFrom) || !reflect.DeepEqual(in.To, wantTo) ||
+						in.ObservedAt != target.ObservedAt || in.ToBundlePath != filepath.Join(h.paths.Bundles, toID) {
+						t.Errorf("run %d's input %+v → %+v, observed at %s; want %+v → %+v, observed at %s", i, in.From, in.To,
+							in.ObservedAt, wantFrom, wantTo, target.ObservedAt)
+					}
+				}
+				doc := out.doc
+				if doc.SnapshotID != target.ID || doc.BundleID != toID || doc.Stage != nil || doc.Subject.Snapshot != arg ||
+					doc.Subject.Branch != env.Branch || doc.Subject.At != env.At || doc.Subject.Stage != "" ||
+					doc.Subject.Scope != "tag:fylgja" {
+					t.Errorf("document names snapshot %s, bundle %s, stage %+v, subject %+v; want the target's, no stage, "+
+						"the snapshot as given", doc.SnapshotID, doc.BundleID, doc.Stage, doc.Subject)
+				}
+				if st := doc.Step; st == nil || (st.From.Stage != nil) != (prev.Stage != nil) || st.To.Stage != nil ||
+					st.To.SnapshotID != target.ID || st.From.SnapshotID != h.fromSnapshot {
+					t.Errorf("step block %+v; want the record's side and the target's, which names no stage", st)
+				}
+
+				rec := recordOnHost(t, h, svc.stepped[1])
+				if rec.SnapshotID == nil || *rec.SnapshotID != target.ID || rec.BundleID != toID || rec.Stage != nil ||
+					rec.Provenance.Branch != env.Branch || rec.Provenance.At != env.At || rec.Source != from.source ||
+					rec.State != wire.StateReady || rec.TwinVersion != lab.TwinVersion {
+					t.Errorf("the record after the step %+v; want snapshot %s, bundle %s, branch %s at %s, no stage, source %s",
+						rec, target.ID, toID, env.Branch, env.At, from.source)
+				}
+				if st := rec.Step; st == nil || st.To.Stage != nil || (st.From.Stage != nil) != (prev.Stage != nil) {
+					t.Errorf("the record's step %+v; want the from side's stage, if any, and none on the to side", st)
+				}
+			})
+		}
+	}
+}
+
+// US2 scenarios 4, 5 and 7, and the edges: each refusal of a snapshot target is the server's,
+// before any run, and touches neither the twin nor Infrahub. A bundle twin is refused naming
+// no snapshot; an id the store does not hold is snapshot.unknown naming the id; a file is
+// refused by its own rules as on create, snapshot.id.mismatch naming both ids among them, and
+// one breaking the CTM's own rules at compile, filed nowhere; a compile refused once the file
+// is filed, a platform no package matches, at compile, the snapshot left filed; and a diverged
+// twin as diverged, before the snapshot is read.
+func TestStepToASnapshotRefused(t *testing.T) {
+	refusal := func(rule, step, object, message string) findings.Finding {
+		return findings.Finding{Severity: findings.Rejection, Rule: rule, Step: step, Object: object, Message: message}
+	}
+	unknown := strings.Repeat("0", 64)
+	declared := strings.Repeat("1", 64)
+	for _, c := range []struct {
+		name string
+		host func(t *testing.T) *stepHostFixture
+		// arg is --snapshot's value, from the linked target and h; want's "" object or
+		// message is filled by fill.
+		arg  func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string
+		want findings.Finding
+		fill func(h *stepHostFixture, target *snap.Snapshot, arg string, f *findings.Finding)
+	}{
+		{name: "a twin of a bundle", host: func(t *testing.T) *stepHostFixture {
+			return stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) {
+				f.Stage, f.Source, f.ObservedAt, f.Provenance.At, f.SnapshotID = nil, wire.SourceBundle, nil, "", ""
+			})
+		}, want: refusal(findings.RuleStepTwinUnsteppable, findings.StepResolve, "", "the twin was provisioned from a bundle, "+
+			"which names no snapshot; only a twin whose record names a snapshot steps; fylgja twin destroy clears it"),
+			fill: func(h *stepHostFixture, _ *snap.Snapshot, _ string, f *findings.Finding) { f.Object = h.fromID }},
+		{name: "a diverged twin", host: divergedStepHost, want: divergedRefusal(""),
+			fill: func(h *stepHostFixture, _ *snap.Snapshot, _ string, f *findings.Finding) { f.Object = h.fromID }},
+		{name: "an id the store does not hold",
+			arg:  func(*testing.T, *stepHostFixture, *snap.Snapshot) string { return unknown },
+			want: refusal(findings.RuleSnapshotUnknown, findings.StepResolve, unknown, ""),
+			fill: func(h *stepHostFixture, _ *snap.Snapshot, _ string, f *findings.Finding) {
+				f.Message = "the store under " + h.paths.Snapshots + " holds no snapshot " + unknown + "; a snapshot id comes " +
+					"from a create, a dry run, a plan or intent read --out on this server"
+			}},
+		{name: "a file declaring another id", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
+			return targetFile(t, h, target.ID, func(d map[string]any) { d["snapshot_id"] = declared })
+		}, want: refusal(findings.RuleSnapshotIDMismatch, findings.StepResolve, "", ""),
+			fill: func(_ *stepHostFixture, target *snap.Snapshot, arg string, f *findings.Finding) {
+				f.Object = arg
+				f.Message = arg + " declares snapshot_id " + declared + ", but its body hashes to " + target.ID +
+					"; leave snapshot_id out to have it computed"
+			}},
+		{name: "a file of another snapshot version", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
+			return targetFile(t, h, target.ID, func(d map[string]any) { d["snapshot_version"] = "2" })
+		}, want: refusal(findings.RuleSnapshotVersionUnsupported, findings.StepResolve, "",
+			`the snapshot declares snapshot_version "2"; this build reads "1", and nothing converts one`),
+			fill: func(_ *stepHostFixture, _ *snap.Snapshot, arg string, f *findings.Finding) { f.Object = arg }},
+		{name: "a file with a probe", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
+			return targetFile(t, h, target.ID, func(d map[string]any) { d["probes"] = []any{map[string]any{}} })
+		}, want: refusal(findings.RuleSnapshotInvalid, findings.StepResolve, "probes", "")},
+		{name: "a file breaking the CTM's own rules", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
+			return targetFile(t, h, target.ID, func(d map[string]any) {
+				delete(d, "snapshot_id")
+				envelopeOf(d)["branch"] = ""
+			})
+		}, want: refusal(findings.RuleRequiredMissing, findings.StepCompile, "envelope.branch",
+			"the branch intent was read from is not recorded")},
+		{name: "a compile refused", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
+			return targetFile(t, h, target.ID, func(d map[string]any) {
+				delete(d, "snapshot_id")
+				d["ctm"].(map[string]any)["devices"].([]any)[0].(map[string]any)["platform"].(map[string]any)["package"] = "nosuch"
+			})
+		}, want: refusal(findings.RulePlatformUnsupported, findings.StepCompile, "", "")},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			host := c.host
+			if host == nil {
+				host = func(t *testing.T) *stepHostFixture { return stepHost(t, "plan-link-added.json", nil) }
+			}
+			h := host(t)
+			target, _ := targetSnapshot(t, h, "linked")
+			arg := target.ID
+			if c.arg != nil {
+				arg = c.arg(t, h, target)
+			}
+			record := sha256Of(t, h.paths.TwinJSON)
+			snapshots := filedSnapshots(t, h.paths)
+			want := c.want
+			if c.fill != nil {
+				c.fill(h, target, arg, &want)
+			}
+
+			out := runStepCmd(t, "--snapshot", arg, "--allow-restart")
+			got := refusalOf(t, out.doc)
+			if want.Message == "" {
+				want.Message = got.Message
+			}
+			if want.Object == "" {
+				want.Object = got.Object
+			}
+			if out.code != findings.ExitRejected || got != want {
+				t.Errorf("exit %d, refusal %+v\nwant exit 1, %+v", out.code, got, want)
+			}
+			if len(h.svc.stepped) != 0 || len(h.infra.requests()) != h.before {
+				t.Errorf("%d runs started and Infrahub asked %+v; want neither", len(h.svc.stepped), h.infra.requests()[h.before:])
+			}
+			if plans := h.clab.asked("clab", "deploy"); len(plans) != 0 {
+				t.Errorf("containerlab's plan was read: %v", plans)
+			}
+			if sha256Of(t, h.paths.TwinJSON) != record {
+				t.Errorf("twin.json changed under a refusal")
+			}
+			// The store keeps every entry it held, and gains the file's only once the file's own
+			// rules and the CTM's passed: a compile refused after that leaves it filed and names
+			// it, in the document and by its stored line.
+			filed := slices.DeleteFunc(filedSnapshots(t, h.paths), func(e string) bool { return slices.Contains(snapshots, e) })
+			if c.name != "a compile refused" {
+				if len(filed) != 0 || out.doc.SnapshotID != "" {
+					t.Errorf("snapshots/ gained %v and the document names snapshot %q; want neither", filed, out.doc.SnapshotID)
+				}
+				return
+			}
+			if len(filed) != 1 || out.doc.SnapshotID+".json" != filed[0] ||
+				!strings.Contains(out.stdout, storedLines(h.paths, out.doc.SnapshotID, "")[0]+"\n") {
+				t.Errorf("snapshots/ gained %v, the document names snapshot %q, stdout:\n%s\nwant the file's snapshot filed and named",
+					filed, out.doc.SnapshotID, out.stdout)
+			}
+		})
+	}
+}
+
+// The edges of a snapshot target (US2 scenario 6, US4 scenario 3, FR-017): the twin's own
+// snapshot compiles to the twin's bundle, and the step is unchanged; a snapshot of another
+// branch under the same scope steps, and the record names that branch; a file declaring no
+// id is filed under the id its body hashes to; and a run in flight refuses the start with
+// run.in_flight, as for a stage. None asks Infrahub anything.
+func TestStepToASnapshotEdges(t *testing.T) {
+	t.Run("the twin's own snapshot, unchanged", func(t *testing.T) {
+		h := stepHost(t, "plan-nothing.json", nil)
+		svc := &fakeService{runID: stepRunID, events: unchangedStepEvents(), stepResult: provision.StepResult{
+			Outcome: provision.StepUnchanged, PushPlan: []wire.StepPush{}, Timings: wire.StepTimings{WholeS: 1.8},
+			Record: &wire.TwinRecord{State: wire.StateReady}, Findings: findings.List{},
+			StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:14:32Z"}}
+		useService(t, svc)
+		useInterrupts(t)
+		out := runStepCmd(t, "--snapshot", h.fromSnapshot)
+		if out.code != findings.ExitOK || len(svc.stepped) != 2 {
+			t.Fatalf("exit %d, %d runs; want 0 and one per run of the command: %+v", out.code, len(svc.stepped), out.doc.Findings)
+		}
+		var diff struct{ Unchanged bool }
+		if out.doc.Step != nil {
+			if err := json.Unmarshal(out.doc.Step.Diff, &diff); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if in := svc.stepped[0]; !in.Unchanged || in.To.BundleID != h.fromID || in.To.SnapshotID != h.fromSnapshot ||
+			len(in.PushPlan) != 0 || !diff.Unchanged {
+			t.Errorf("the run's input %+v, step %+v; want an unchanged step to the twin's own bundle", in, out.doc.Step)
+		}
+		if len(h.infra.requests()) != h.before {
+			t.Errorf("Infrahub was asked %+v", h.infra.requests()[h.before:])
+		}
+	})
+
+	t.Run("a snapshot of another branch", func(t *testing.T) {
+		h := stepHost(t, "plan-link-added.json", nil)
+		target, _ := targetSnapshot(t, h, "linked")
+		file := targetFile(t, h, target.ID, func(d map[string]any) {
+			delete(d, "snapshot_id")
+			envelopeOf(d)["branch"] = "other"
+		})
+		svc := stepToSnapshotRun(t)
+		out := runStepCmd(t, "--snapshot", file, "--allow-restart")
+		if out.code != findings.ExitOK || len(svc.stepped) != 2 {
+			t.Fatalf("exit %d, %d runs; want 0 and one per run of the command: %+v", out.code, len(svc.stepped), out.doc.Findings)
+		}
+		in := svc.stepped[1]
+		if in.To.Branch != "other" || in.To.SnapshotID == target.ID || out.doc.Subject.Branch != "other" ||
+			out.doc.Subject.Scope != "tag:fylgja" {
+			t.Errorf("the run's to side %+v, subject %+v; want branch other, under the record's scope", in.To, out.doc.Subject)
+		}
+		if rec := recordOnHost(t, h, in); rec.Provenance.Branch != "other" || rec.Provenance.Scope != "tag:fylgja" ||
+			rec.SnapshotID == nil || *rec.SnapshotID != in.To.SnapshotID {
+			t.Errorf("the record after the step names %+v and snapshot %v; want branch other under tag:fylgja", rec.Provenance,
+				rec.SnapshotID)
+		}
+		if len(h.infra.requests()) != h.before {
+			t.Errorf("Infrahub was asked %+v", h.infra.requests()[h.before:])
+		}
+	})
+
+	t.Run("a file declaring no id", func(t *testing.T) {
+		h := stepHost(t, "plan-link-added.json", nil)
+		target, toID := targetSnapshot(t, h, "linked")
+		file := targetFile(t, h, target.ID, func(d map[string]any) { delete(d, "snapshot_id") })
+		out := runStepCmd(t, "--snapshot", file, "--dry-run", "--allow-restart")
+		if out.code != findings.ExitOK || out.doc.SnapshotID != target.ID || out.doc.BundleID != toID {
+			t.Errorf("exit %d, snapshot %s, bundle %s; want 0 naming %s and %s", out.code, out.doc.SnapshotID, out.doc.BundleID,
+				target.ID, toID)
+		}
+		if got := filedSnapshots(t, h.paths); !slices.Contains(got, target.ID+".json") {
+			t.Errorf("snapshots/ holds %v; want the file filed under the id its body hashes to", got)
+		}
+	})
+
+	t.Run("a run in flight", func(t *testing.T) {
+		h := stepHost(t, "plan-link-added.json", nil)
+		target, _ := targetSnapshot(t, h, "linked")
+		want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleRunInFlight, Object: provision.WorkflowStep,
+			Step: findings.StepStart, Message: "step run 01a1 is already in flight; wait for it to finish, or run fylgja twin " +
+				"destroy to cancel it"}
+		svc := &fakeService{startErr: &provision.StartError{Status: findings.StatusRejected, Finding: want}}
+		useService(t, svc)
+		useInterrupts(t)
+		out := runStepCmd(t, "--snapshot", target.ID, "--allow-restart")
+		if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want {
+			t.Errorf("exit %d, %+v; want 1, %+v", out.code, got, want)
+		}
+		if len(h.infra.requests()) != h.before {
+			t.Errorf("Infrahub was asked %+v", h.infra.requests()[h.before:])
+		}
+	})
 }

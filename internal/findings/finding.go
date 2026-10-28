@@ -258,7 +258,7 @@ const (
 	RuleSnapshotVersionUnsupported = "snapshot.version.unsupported" // rejection, exit 1, no step or resolve: the file; snapshot_version is not "1", or absent, naming the version read, or that none was, and "1"
 	RuleSnapshotIDMismatch         = "snapshot.id.mismatch"         // rejection, exit 1, no step or resolve, compile for the store: the file, or the store path; a declared snapshot_id is not what the body hashes to, naming both, or an entry under the id hashes to another, or hashes to it and declares another, naming the path and both
 	RuleSnapshotUnknown            = "snapshot.unknown"             // rejection, exit 1, resolve: the id; twin create --snapshot <id> names an id the store does not hold, naming the store's directory
-	RuleSnapshotFlagsConflict      = "snapshot.flags.conflict"      // rejection, exit 2, start: the flag; --snapshot beside --branch, --stage, --at or --scope, the first found in that order, before any connection
+	RuleSnapshotFlagsConflict      = "snapshot.flags.conflict"      // rejection, exit 2, start: the flag; --snapshot beside --branch, --stage, --at or --scope, the first found in that order, before any connection; and on twin step (019), --stage beside --snapshot, the snapshot being the target
 )
 
 // Steps a finding can belong to, as contracts/findings.schema.json enumerates them. New

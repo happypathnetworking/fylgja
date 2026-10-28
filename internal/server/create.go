@@ -64,7 +64,7 @@ func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.F
 			return refused
 		}
 	}
-	if refused := snapshotFiles(op, subject, f, files); refused != nil {
+	if refused := snapshotFiles(op, subject, f.fromSnapshot(), f.snapshot, files); refused != nil {
 		return refused
 	}
 	if f.branch == "" && !f.fromStage() && !f.fromSnapshot() {
@@ -244,6 +244,8 @@ type compiledRead struct {
 	snapshot   filedSnapshot
 	bundleID   string
 	bundlePath string
+	// files are the bundle's, as the compile produced them: a step's target (019).
+	files map[string][]byte
 	// observedAt is the read's time, which the twin records.
 	observedAt string
 	read       *readSummary
@@ -325,7 +327,7 @@ func (cr *compiledRead) compileAndFile(ctx context.Context, opts *options, op st
 		return cr.refused(opts, finish(op, subject, append(list, filed...)))
 	}
 
-	cr.bundleID, cr.bundlePath = id, store.Path(id)
+	cr.bundleID, cr.bundlePath, cr.files = id, store.Path(id), files
 	cr.findings = list
 	return nil
 }

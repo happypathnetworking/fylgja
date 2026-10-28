@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/findings"
@@ -30,9 +31,14 @@ type stepFlags struct {
 	// stageGiven is whether --stage was given at all, apart from its value: an explicit empty
 	// one is a reference refused, not one left out (M4's --interval= precedent, a flag twin
 	// create had until 019).
-	stageGiven   bool
-	allowRestart bool
-	dryRun       bool
+	stageGiven bool
+	// snapshot is --snapshot as given (019): the target, a snapshot id the store holds, or the
+	// path of the file the request carries. snapshotGiven is whether it was given at all, as
+	// stageGiven is.
+	snapshot      string
+	snapshotGiven bool
+	allowRestart  bool
+	dryRun        bool
 	// wait is --wait as given: the budget of the step's wait after its record.
 	wait string
 	// waitGiven is whether --wait was given at all, apart from its value: an explicit empty
@@ -42,23 +48,51 @@ type stepFlags struct {
 	waitS int
 }
 
-// runTwinStep steps the stage twin. Everything up to the run is decided here, each refusal
-// ending the command with its document: --stage as given; the packages; a rehearsal in
+// fromStage is whether the step names a stage: --stage given, whatever its value, or a value
+// set without the flag, as a caller building the flags sets it.
+func (f *stepFlags) fromStage() bool {
+	return f.stageGiven || f.stage != ""
+}
+
+// fromSnapshot is whether the step names a snapshot, as fromStage is whether it names a
+// stage.
+func (f *stepFlags) fromSnapshot() bool {
+	return f.snapshotGiven || f.snapshot != ""
+}
+
+// runTwinStep steps the running twin. files are the request's: a snapshot file beside a
+// --snapshot that is a path, and none otherwise. Everything up to the run is decided here,
+// each refusal ending the command with its document: --stage beside --snapshot, then the
+// files' shape, before any connection; --stage as given; the packages; a rehearsal in
 // flight, asked of the workflow service before anything else is read, since the twin and the
-// host are its own (015; T080); the host, whose twin must be a stage twin that is not
-// diverged; the record's proposed change and the target (014: research R-16), with stage
-// list's stage.twin.moved beside it when the record's stage has moved; the target's
-// resolution, read, compile and filing on stage plan's path; the from bundle out of the
+// host are its own (015; T080); the host, whose twin must name a snapshot and not be
+// diverged. Then the target: --snapshot's, resolved, compiled and filed as twin create
+// --snapshot builds one, with no request to Infrahub (019, research R-04); or a stage of the
+// record's proposed change and the target (014: research R-16), with stage list's
+// stage.twin.moved beside it when the record's stage has moved, and the target's
+// resolution, read, compile and filing on stage plan's path. Then the from bundle out of the
 // store; the step between the two; the host check on the target and containerlab's plan
 // for the lab, both in this process as a dry run reads them; and the rules on that plan.
 // Then the dry run reports, or the run starts. Once the target is chosen, every document
 // the command ends with carries what it had found by then, a failure's included.
-func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
+func runTwinStep(ctx context.Context, opts *options, f *stepFlags, files []api.File) error {
 	const op = findings.OpTwinStep
-	subject := &findings.Subject{}
+	subject := &findings.Subject{Snapshot: f.snapshot}
 
+	// A snapshot is the target, so --stage beside it is meaningless: the server's refusal at
+	// start, exit 2, as create's snapshot guards are (019, research R-04), and before the
+	// files' shape, since a client sends no file beside it.
+	if f.fromSnapshot() && f.fromStage() {
+		doc := findings.RuleErrorDocument(op, subject, findings.RuleSnapshotFlagsConflict, "--stage",
+			"--stage is meaningless with --snapshot: the snapshot is the target")
+		doc.Findings[0].Step = findings.StepStart
+		return &result{doc: doc}
+	}
+	if refused := snapshotFiles(op, subject, f.fromSnapshot(), f.snapshot, files); refused != nil {
+		return refused
+	}
 	var given *stages.Ref
-	if f.stageGiven || f.stage != "" {
+	if f.fromStage() {
 		ref, refused := stageGuards(op, subject, findings.StepStart, f.stage, nil)
 		if refused != nil {
 			return refused
@@ -74,10 +108,15 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 		ctx = context.Background()
 	}
 	// An override package psp validate rejects is refused under its own findings before
-	// anything is read, as a create refuses it.
+	// anything is read, as a create refuses it: at read, or at compile for a snapshot, whose
+	// step reads no intent, as twin create --snapshot places it.
 	reg, err := psp.Load(opts.pspDir)
 	if err != nil {
-		return loadFailureAt(op, subject, findings.StepRead, err)
+		at := findings.StepRead
+		if f.fromSnapshot() {
+			at = findings.StepCompile
+		}
+		return loadFailureAt(op, subject, at, err)
 	}
 	paths, err := opts.paths()
 	if err != nil {
@@ -107,16 +146,20 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	if refused := stepUnsourced(rec); refused != nil {
 		return finish(op, subject, findings.List{*refused})
 	}
-	if refused := stepStageless(rec); refused != nil {
-		return finish(op, subject, findings.List{*refused})
+	if !f.fromSnapshot() {
+		if refused := stepStageless(rec); refused != nil {
+			return finish(op, subject, findings.List{*refused})
+		}
 	}
 	// Every read the step makes is under the scope the twin records, never the server's
 	// default (017; FR-020): the target's resolution, its staleness and its read, each of
-	// which the proposed change found under it carries.
+	// which the proposed change found under it carries. A snapshot's is read nowhere.
 	scope := rec.Provenance.Scope
 	subject.Scope = scope
-	opts.note("twin: stage %s (snapshot %s, bundle %s), pinned at %s; %s", rec.Stage.Name(), shortSnapshot(rec),
-		shortID(rec.BundleID), rec.Provenance.At, plural(len(rec.Nodes), "node"))
+	opts.note("%s", stepTwinLine(rec))
+	if f.fromSnapshot() {
+		return stepToSnapshot(ctx, opts, f, op, subject, reg, paths, acts, rec, files)
+	}
 
 	// The record's proposed change, found once by its source branch (steps 1–3 and the
 	// head's at), and the target chosen among its stages; then the target resolved
@@ -179,6 +222,57 @@ type stepTarget struct {
 	bundle     step.Bundle
 	at, branch string
 	observedAt string
+}
+
+// stepToSnapshot is the step to the snapshot --snapshot names (019, research R-04;
+// data-model §2), once the twin is judged and its line printed: the snapshot resolved as twin
+// create --snapshot resolves it (resolveSnapshot), an id out of the store or the request's
+// file read, held to the CTM's own rules and filed, each refusal create's own at resolve; its
+// target line; its CTM compiled and its bundle filed on create's path (compileAndFile), each
+// refusal at compile as there; then the step, as a stage's, its target named by its snapshot
+// and carrying the envelope's branch and at, verbatim, and the stored document's
+// observed_at, the first take's. No request reaches Infrahub: nothing here builds an intent
+// client, and a snapshot of any branch is a target.
+func stepToSnapshot(ctx context.Context, opts *options, f *stepFlags, op string, subject *findings.Subject, reg *psp.Registry,
+	paths lab.Paths, acts *lab.Activities, rec *wire.TwinRecord, files []api.File) error {
+	s, path, err := resolveSnapshot(ctx, paths, op, subject, f.snapshot, files)
+	if err != nil {
+		return err
+	}
+	// The document names what the snapshot is of from here on, as a stage step's names the
+	// reference its target resolved to.
+	env := s.CTM.Envelope
+	subject.Branch, subject.At = env.Branch, env.At
+	opts.note("target: snapshot %s (%s)", shortID(s.ID), branchRef(env.Branch, env.At, s.ObservedAt))
+
+	cr := &compiledRead{paths: paths, snapshot: filedSnapshot{id: s.ID, path: path}, observedAt: s.ObservedAt}
+	if err := cr.compileAndFile(ctx, opts, op, subject, s.CTM, reg, nil); err != nil {
+		return err
+	}
+	target := stepTarget{name: wire.StepSide{SnapshotID: s.ID}.Name(), snapshotID: s.ID,
+		bundle: step.Bundle{ID: cr.bundleID, Files: cr.files}, at: env.At, branch: env.Branch, observedAt: s.ObservedAt}
+	return stepTo(ctx, opts, f, op, subject, reg, paths, acts, rec, target, cr.findings)
+}
+
+// stepTwinLine is the twin a step goes from, the line after the dry run's (contracts/cli.md;
+// 019, research R-05): a stage twin by its stage, pinned at its at, as since 014; a twin that
+// names no stage by its snapshot, its branch and its at, or the time it was read when it has
+// none, as twin show's kind line names it.
+//
+//	twin: stage change-1/sealed (snapshot 576933ec…, bundle f764e1fa…), pinned at …; 3 nodes
+//	twin: snapshot 576933ec… (bundle f764e1fa…), branch fylgja-test-readme, read at …; 3 nodes
+func stepTwinLine(rec *wire.TwinRecord) string {
+	nodes := plural(len(rec.Nodes), "node")
+	if rec.Stage != nil {
+		return fmt.Sprintf("twin: stage %s (snapshot %s, bundle %s), pinned at %s; %s", rec.Stage.Name(), shortSnapshot(rec),
+			shortID(rec.BundleID), rec.Provenance.At, nodes)
+	}
+	observed := ""
+	if rec.ObservedAt != nil {
+		observed = *rec.ObservedAt
+	}
+	return fmt.Sprintf("twin: snapshot %s (bundle %s), %s; %s", shortSnapshot(rec), shortID(rec.BundleID),
+		branchRef(rec.Provenance.Branch, rec.Provenance.At, observed), nodes)
 }
 
 // stageTarget is the target a stage step goes to, from stage plan's build of the stage,
@@ -286,11 +380,12 @@ func stepUnsourced(rec *wire.TwinRecord) *findings.Finding {
 }
 
 // stepStageless is the refusal of a twin whose record names a snapshot and no stage, or nil
-// for a stage twin: this build steps a twin along its own proposed change alone, so a twin
-// built with --branch or --snapshot has no target yet. It stands until the step takes a
-// snapshot as its target and a stage of any proposed change (019, research R-04 and R-07),
-// which T031 and T034 build, so that no stage-less twin reaches the stage path, which reads
-// the record's stage. The command's refusal alone, as stepUnsourced is.
+// for a stage twin, on the stage path alone: a --snapshot target steps such a twin (019,
+// research R-04), but this build steps a twin to a stage of its own proposed change alone, so
+// a twin built with --branch or --snapshot has no stage target yet. It stands until the step
+// takes a stage of any proposed change (research R-07 and R-08), which T034 builds, so that
+// no stage-less twin reaches the stage path, which reads the record's stage. The command's
+// refusal alone, as stepUnsourced is.
 func stepStageless(rec *wire.TwinRecord) *findings.Finding {
 	if rec.Stage != nil {
 		return nil

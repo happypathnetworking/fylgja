@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"strings"
 
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
@@ -49,23 +50,25 @@ func corruptEntry(m *snapshot.ErrIDMismatch, done string) string {
 	return fmt.Sprintf("store entry %v, so snapshot %s cannot be %s", m, m.Want, done)
 }
 
-// snapshotFiles holds a create's files to the one shape the API gives them (contracts/api.md,
-// "018: snapshots"): one file, beside a --snapshot that is a path and under that path, and
-// none otherwise. Any other is refused before anything is parsed, operation.failed, as twin
-// compile's are. No client's command sends another, and the sentence names nothing of a
-// file.
-func snapshotFiles(op string, subject *findings.Subject, f *createFlags, files []api.File) error {
-	file := f.fromSnapshot() && !snapshot.IsID(f.snapshot)
+// snapshotFiles holds the files of op, a create or a step, to the one shape the API gives
+// them (contracts/api.md, "018: snapshots" and "019: following removed"): one file, beside a
+// --snapshot that is a path and under that path, and none otherwise. given is whether
+// --snapshot was given, and arg its value. Any other is refused before anything is parsed,
+// operation.failed, as twin compile's are. No client's command sends another, and the
+// sentence names the command and nothing of a file.
+func snapshotFiles(op string, subject *findings.Subject, given bool, arg string, files []api.File) error {
+	file := given && !snapshot.IsID(arg)
+	command := strings.ReplaceAll(op, ".", " ")
 	switch {
 	case len(files) > 1 || len(files) == 1 && !file:
-		return fail(op, subject, "the request carries %s where twin create takes a snapshot file beside --snapshot alone",
-			plural(len(files), "file"))
+		return fail(op, subject, "the request carries %s where %s takes a snapshot file beside --snapshot alone",
+			plural(len(files), "file"), command)
 	case file && len(files) == 0:
-		return fail(op, subject, "the request carries no file where twin create takes the snapshot file --snapshot names, "+
-			"under that path")
-	case file && files[0].Path != f.snapshot:
-		return fail(op, subject, "the request carries its snapshot file under another path than --snapshot gives, where twin "+
-			"create takes a snapshot file beside --snapshot alone, under that path")
+		return fail(op, subject, "the request carries no file where %s takes the snapshot file --snapshot names, "+
+			"under that path", command)
+	case file && files[0].Path != arg:
+		return fail(op, subject, "the request carries its snapshot file under another path than --snapshot gives, where "+
+			"%s takes a snapshot file beside --snapshot alone, under that path", command)
 	}
 	return nil
 }

@@ -56,11 +56,18 @@ func (f *createFlags) fromSnapshot() bool {
 }
 
 // runCreate is twin create. files are the request's: a snapshot file beside a --snapshot
-// that is a path, and none otherwise.
+// that is a path, and none otherwise. A snapshot's guards come before its files are held to
+// that shape, since a client sends no file beside a flag they refuse: the guard's refusal is
+// the answer, whatever the file.
 func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.File) error {
 	const op = findings.OpTwinCreate
 	subject := &findings.Subject{Branch: f.branch, At: f.at, Snapshot: f.snapshot}
 
+	if f.fromSnapshot() {
+		if refused := snapshotGuards(op, subject, f); refused != nil {
+			return refused
+		}
+	}
 	if refused := snapshotFiles(op, subject, f, files); refused != nil {
 		return refused
 	}
@@ -168,8 +175,8 @@ func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.F
 	return withStage(compiled.carried(runProvision(ctx, opts, op, subject, in)), resolved)
 }
 
-// runCreateFromSnapshot is twin create --snapshot (R-12): the guards, before any
-// connection; the snapshot resolved, an id from the store or the request's file read and
+// runCreateFromSnapshot is twin create --snapshot (R-12), once runCreate has run its guards
+// and held its files to their shape, before any connection: the snapshot resolved, an id from the store or the request's file read and
 // filed; the compile and the bundle's filing, on the create's path; then the run, or the dry
 // run's report. The twin is frozen by rule: its reference is a document, which does not
 // move, so it never follows, whatever the envelope's at says. No request reaches Infrahub:
@@ -177,9 +184,6 @@ func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.F
 // reads nothing.
 func runCreateFromSnapshot(ctx context.Context, opts *options, op string, subject *findings.Subject, f *createFlags,
 	files []api.File) error {
-	if refused := snapshotGuards(op, subject, f); refused != nil {
-		return refused
-	}
 	// A twin built from a snapshot never follows, so no interval is read.
 	follow := createFollow(f, 0)
 	if ctx == nil {

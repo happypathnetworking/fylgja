@@ -1236,7 +1236,15 @@ could not be read back under the id every take of that intent hashes to: none re
 `data.required.missing`, one not of the CTM's form `snapshot.invalid`, each at
 `ctm.envelope.observed_at`. The client's own refusal of a
 snapshot file it cannot read is `operation.failed`, exit 2, `reading snapshot: open
-<path>: …`, before any connection, as for a CTM at M13.
+<path>: …`, before any connection, as for a CTM at M13. The client reads the file only
+when none of `--branch`, `--stage`, `--at`, `--scope` and `--interval` is given beside
+`--snapshot`, as `twin compile` holds its read back for the server's refusals: when one
+is, it sends `snapshot` with no file, and the server's guard answers
+(`snapshot.flags.conflict` or `follow.flags.conflict`), whatever the file, before the
+request's files are held to their shape. An explicit empty `--snapshot=` with none of
+those beside it names no file and is the client's own `operation.failed`, exit 2,
+`--snapshot= is empty; give a snapshot id or the path of a snapshot file`, before any
+connection; beside one, the guard answers.
 
 ### Formats and versions
 

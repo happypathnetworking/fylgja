@@ -271,14 +271,16 @@ func TestCreateDryRunFromASnapshot(t *testing.T) {
 // US3 scenario 5 and FR-016, FR-018: --snapshot beside --branch, --stage, --at or --scope is
 // snapshot.flags.conflict naming the first found in that order, and --interval beside it is
 // follow.flags.conflict, each exit 2 at start, the server's refusal before any connection:
-// neither the workflow service dialled nor Infrahub asked, whether --snapshot is an id or a
-// file.
+// neither the workflow service dialled nor Infrahub asked, whether --snapshot is an id, a
+// file, a file that is not there or given empty. The client reads no file beside such a
+// flag, so the guard answers whatever the file (T078).
 func TestSnapshotFlagConflicts(t *testing.T) {
 	const conflict = " is meaningless with --snapshot: a snapshot carries its own branch, at and scope"
 	refusal := func(rule, object, message string) findings.Finding {
 		return findings.Finding{Severity: findings.Rejection, Rule: rule, Step: findings.StepStart, Object: object, Message: message}
 	}
 	file := snapshotFile(t, nil)
+	missing := filepath.Join(t.TempDir(), "typo.json")
 	for _, c := range []struct {
 		name string
 		args []string
@@ -300,8 +302,11 @@ func TestSnapshotFlagConflicts(t *testing.T) {
 		{"--interval and --branch", []string{"--interval", "1m", "--branch", "fylgja-fixture"},
 			refusal(findings.RuleSnapshotFlagsConflict, "--branch", "--branch"+conflict)},
 	} {
-		for _, given := range []string{fixtureSnapshotID, file} {
-			t.Run(c.name+" beside "+filepath.Base(given), func(t *testing.T) {
+		for _, g := range []struct{ name, arg string }{
+			{"an id", fixtureSnapshotID}, {"a file", file}, {"a file not there", missing}, {"--snapshot=", ""},
+		} {
+			given := g.arg
+			t.Run(c.name+" beside "+g.name, func(t *testing.T) {
 				paths := useStateRoot(t)
 				dials := countDials(t)
 				infra := newFakeInfrahub(t)
@@ -344,6 +349,28 @@ func TestUnreadableSnapshotFileIsTheClients(t *testing.T) {
 		Message: "reading snapshot: open " + missing + ": no such file or directory"}
 	if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != want || doc.Subject.Snapshot != missing {
 		t.Errorf("exit %d, findings %+v, subject %+v; want 2 with %+v", code, doc.Findings, doc.Subject, want)
+	}
+	awaitIdle(t)
+	if after := strings.Count(harness.log.String(), "operation="+findings.OpTwinCreate+" "); after != before || dials.Load() != 0 {
+		t.Errorf("the server logged %d creates and the service was dialled %d times; want none", after-before, dials.Load())
+	}
+	validateM10Document(t, doc)
+}
+
+// The Edge Case's "neither a readable file nor an id", given empty: an explicit --snapshot=
+// with no flag beside it the guards refuse names no file, and is the client's own
+// operation.failed, exit 2, naming --snapshot, before any connection (T078).
+func TestEmptySnapshotIsTheClients(t *testing.T) {
+	useStateRoot(t)
+	dials := countDials(t)
+	awaitIdle(t)
+	before := strings.Count(harness.log.String(), "operation="+findings.OpTwinCreate+" ")
+
+	code, doc, _ := executeClient(t, "twin", "create", "--snapshot=", "--dry-run")
+	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleOperationFailed, Object: findings.OpTwinCreate,
+		Message: "--snapshot= is empty; give a snapshot id or the path of a snapshot file"}
+	if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != want {
+		t.Errorf("exit %d, findings %+v; want 2 with %+v", code, doc.Findings, want)
 	}
 	awaitIdle(t)
 	if after := strings.Count(harness.log.String(), "operation="+findings.OpTwinCreate+" "); after != before || dials.Load() != 0 {

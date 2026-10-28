@@ -105,7 +105,10 @@ func (f *createFlags) fromSnapshot() bool {
 // as it comes. Every guard, the stage's, the snapshot's and the following's among them,
 // is the server's. A --snapshot that is no id is a file, read here and sent as the
 // request's one file under that path; one the client cannot read is its own failure,
-// before any connection (R-07).
+// before any connection (R-07). The file is read only when no flag beside --snapshot would
+// be refused by the snapshot's guards, so those refusals come first, whatever the file, as
+// twin compile holds its read back for the server's; an explicit empty --snapshot= with
+// none beside it names no file, and is the client's own refusal.
 func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	a := given{}
 	a.string("branch", f.branch)
@@ -122,15 +125,27 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	var files []api.File
 	if f.fromSnapshot() {
 		a["snapshot"] = f.snapshot
-		if !isSnapshotID(f.snapshot) {
+		if !isSnapshotID(f.snapshot) && !f.snapshotConflicts() {
+			subject := &findings.Subject{Branch: f.branch, At: f.at, Snapshot: f.snapshot}
+			if f.snapshot == "" {
+				return fail(findings.OpTwinCreate, subject,
+					"--snapshot= is empty; give a snapshot id or the path of a snapshot file")
+			}
 			file, err := readSnapshot(f.snapshot)
 			if err != nil {
-				return fail(findings.OpTwinCreate, &findings.Subject{Branch: f.branch, At: f.at, Snapshot: f.snapshot}, "%v", err)
+				return fail(findings.OpTwinCreate, subject, "%v", err)
 			}
 			files = []api.File{file}
 		}
 	}
 	return send(ctx, opts, findings.OpTwinCreate, a, files, handlers{})
+}
+
+// snapshotConflicts is whether a flag is given beside --snapshot that the server's snapshot
+// guards refuse: --branch, --stage, --at, --scope or --interval, as the server's
+// snapshotGuards reads them. The request then carries no file, and the guard answers.
+func (f *createFlags) snapshotConflicts() bool {
+	return f.branch != "" || f.fromStage() || f.at != "" || f.scopeGiven || f.intervalGiven
 }
 
 // isSnapshotID is whether --snapshot's value is a snapshot id, 64 lowercase hex characters,

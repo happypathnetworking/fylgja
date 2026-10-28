@@ -415,11 +415,12 @@ these.
 
 - **`snapshot`** on `twin.create` is `--snapshot` as given: 64 lowercase hex characters
   name a snapshot the store holds, and the request carries no file; anything else is the
-  path of a file the client read, and the request carries that one file under that path.
-  The guards are the server's, before any connection: `snapshot` beside `branch`, `stage`,
-  `at` or `scope` is `snapshot.flags.conflict` at `start`, exit 2, naming the first
-  found; beside `interval`, `follow.flags.conflict`; `no_follow` and `dry_run` are
-  accepted. A request carrying a file beside no `snapshot`, two files, or one under
+  path of a file the client read, and the request carries that one file under that path,
+  or none when a flag the guards refuse is beside it, since the client then reads nothing.
+  The guards are the server's, before any connection and before the request's files are
+  held to their shape: `snapshot` beside `branch`, `stage`, `at` or `scope` is
+  `snapshot.flags.conflict` at `start`, exit 2, naming the first found; beside `interval`,
+  `follow.flags.conflict`; `no_follow` and `dry_run` are accepted. A request carrying a file beside no `snapshot`, two files, or one under
   another path than `snapshot` gives, is refused before anything is parsed,
   `operation.failed`, exit 2, as `twin.compile`'s are (`the request carries 1 file where
   twin create takes a snapshot file beside --snapshot alone`). An id the store does not

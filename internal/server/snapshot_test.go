@@ -338,6 +338,25 @@ func TestResolveSnapshotFilesAFile(t *testing.T) {
 	}
 }
 
+// A snapshot's guards come before its files are held to their shape: a request naming a
+// snapshot file's path beside --branch, which the client sends with no file, is the guard's
+// snapshot.flags.conflict at start, exit 2, not "carries no file", and nothing is dialled or
+// filed (T078).
+func TestSnapshotGuardsComeBeforeItsFiles(t *testing.T) {
+	paths := useStateRoot(t)
+	useService(t, nil)
+	f := createFlags{snapshot: "snap.json", snapshotGiven: true, branch: "b"}
+	code, doc := exitOf(t, runCreate(context.Background(), testOptions(t, true), &f, nil))
+	want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleSnapshotFlagsConflict, Step: findings.StepStart,
+		Object: "--branch", Message: "--branch is meaningless with --snapshot: a snapshot carries its own branch, at and scope"}
+	if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0] != want {
+		t.Errorf("exit %d, findings %+v; want 2 with %+v", code, doc.Findings, want)
+	}
+	if entries, err := os.ReadDir(paths.Root); err == nil && len(entries) != 0 {
+		t.Errorf("the state root holds %v after the refusal", entries)
+	}
+}
+
 // A create's files are one snapshot file beside a --snapshot that is a path, under that
 // path, or none: any other is refused before anything is parsed, operation.failed, exit 2,
 // as twin compile's are, and nothing is dialled or filed (contracts/api.md, "018:

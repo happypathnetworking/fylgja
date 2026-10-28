@@ -265,10 +265,12 @@ set -a; . local/.env; set +a; setsid nohup env FYLGJA_STATE_ROOT="$PWD/local" bi
 ```
 
 Then verify what you started, never assume it: `/proc/<pid>/exe` is not `(deleted)`, the
-environment names carry `INFRAHUB_*` and both logins, and the start-up report names both
-packages. A rebuild does not always replace the binary, so read `/proc/<pid>/exe` rather
-than assuming either way. The worker serves five workflows (provision, destroy, the
-following check, step and the rehearsal) and twenty activities; a worker on an older binary than the
+environment names carry both logins, and the start-up report names both packages. The
+worker reads no source of truth since 019, so it needs no `INFRAHUB_*`, which it still
+inherits from `local/.env` and never reads. A rebuild does not always replace the binary,
+so read `/proc/<pid>/exe` rather than assuming either way. The worker serves four
+workflows (provision, destroy, step and the rehearsal), each started with a snapshot id
+and a bundle id, and fifteen activities; a worker on an older binary than the
 tree may lack one and fail a run at it. The start-up report names
 packages, never workflows or activities. A stopped worker lingers as a poller for about
 five minutes — harmless, and not a second worker. The dev server is the same: restart it
@@ -314,9 +316,11 @@ the contract's: contract `0.2` is retired, [D-057](docs/decisions.md#d-057)), PS
 (each package's `platform.matches`, matched exactly; both shipped packages on `mode:
 replace`), snapshot `1` (CTM `2` wrapped, its id the hash of the body without the read's
 `observed_at`, filed under `snapshots/`, [D-061](docs/decisions.md#d-061)), `twin.json`
-`9`, findings `1`, the API `1` (`contracts/api.md`, the version in every path; `scope` an
-optional argument; `snapshot` on `twin.create` and `twin.compile`). `twin compile --ctm`
-and the bundle's CTM sidecar are retired. The three goldens are three-node
+`10` (a pinned stage beside any source but a bundle, [D-062](docs/decisions.md#d-062)), findings
+`1`, the API `1` (`contracts/api.md`, the version in every path; `scope` an optional
+argument; `snapshot` on `twin.create`, `twin.compile` and `twin.step`; `interval` and
+`no_follow` gone, pre-1.0, without a version move). `twin compile --ctm`, the bundle's CTM
+sidecar, `--interval` and `--no-follow` are retired. The three goldens are three-node
 **`43d91715…`**, lossy **`4213b3cf…`** and mixed **`ecb665f5…`**, their wrapped fixtures
 under `testdata/snapshot/` compiling to each, and the live fixture compiles to `f764e1fa…`
 on this install, from snapshot `576933ec…`. The current contracts are in `contracts/`; a test of an
@@ -395,7 +399,7 @@ Re-verify on any upgrade.
 M1 — Read and compile: the intent reader, the CTM and the pure compiler to a content-addressed bundle.
 M2 — Provision and destroy: the provision and destroy workflows, the worker, the containerlab driver, readiness; one SR Linux twin.
 M3 — Operate: refusal while a twin exists, orphan detection, a pinned `at` that reproduces its bundle.
-M4 — Walking: following a branch by a scheduled read and compare, `--no-follow`, `twin show`.
+M4 — Walking: following a branch by a scheduled read and compare, `--no-follow`, `twin show`; following removed by 019 ([D-062](docs/decisions.md#d-062)), so a twin walks by stepping.
 M5 — Configuration: each device's artifact as Infrahub renders it, in the bundle and pushed after readiness.
 M6 — PSP format and lossy mapping: the mapping profile and the conformance suite.
 M7 — EOS: the second vendor as data, the account-gated image path, a mixed twin.
@@ -417,14 +421,17 @@ the operator's) · `make build` → `bin/fylgja` (CGO disabled; must stay static
 build VERSION=…` stamps `--version`) · `make test` (tier 1, no infrastructure; under 45s
 wall uncached, raised from 35s on 2026-10-17 when 014's close measured 35.3–38.7s under a
 load average of 2–5, `internal/cli` about 26s of it; 40.6s on 2026-10-27 at a load of
-1.5–2.6, `internal/cli` 36.2s of it, since 018's tests; CI's unit job on every push and pull request, beside its lint job, which
+1.5–2.6, `internal/cli` 36.2s of it, since 018's tests; 43.8–45.0s in three runs on
+2026-10-28 at a load of 1.1–4.9, `internal/cli` 39.2–40.5s of it, since 019's, so about a
+second of headroom; CI's unit job on every push and pull request, beside its lint job, which
 runs golangci-lint and `shellcheck scripts/bring-up.sh scripts/e2e.sh`) · `make
 test-contract` (tier 2, real
 Infrahub, never cached; needs `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN`; CI's contract
 job on every push to `main`, against an Infrahub the script brings up on the runner, with
-no secret; about 30 minutes (1,814.4 s on 2026-10-27, 1,714.7 s on 2026-10-26, beside the
-imported checks), `internal/stages` the longest package at 1,514.6 s, under the `-timeout
-30m` it sets, then `internal/checks` alone in a second `go test` (291.7 s), whose `TestChecksInsideInfrahub`
+no secret; about 33 minutes (2,009 s on 2026-10-28 with 019's `TestStepTargetFromASnapshot`
+and without `TestFollowingDetection`, 1,814.4 s on 2026-10-27, beside the imported checks),
+`internal/stages` the longest package at 1,690.6 s, 109 s under the `-timeout 30m` it
+sets, then `internal/checks` alone in a second `go test` (310.0 s), whose `TestChecksInsideInfrahub`
 runs the tree's checks inside Infrahub's pipeline under a registration of its own, needs
 the server on the bridge from this tree here, and skips, saying why, where the task workers
 reach none, as in CI) · `make lint` (runs with build
@@ -441,14 +448,14 @@ infrahub-clean` (the fixture branch) · `make sdl` · `make diagrams` (needs Doc
 needs it) · **every command but `worker run` and `serve` needs a running server**, the
 pipeline's stage commands and `stage list` and `stage plan` included (`psp validate` and
 `twin compile` need neither Infrahub nor the workflow service, but they need the server) ·
-`make test-e2e` (tier 3, `scripts/e2e.sh`: nine cases, nine twins, `twin verify` on three of them and on the steps' waits, every
+`make test-e2e` (tier 3, `scripts/e2e.sh`: nine cases, nine twins, `twin verify` on three of them and on the steps' waits, case 5 a twin left 330 s with nothing rebuilding it and then stepped to a snapshot by file and by id, every
 command through a server the script starts itself with a token it makes, but case 9, a
 proposed change rehearsed twice by `fylgja-twin` inside Infrahub, through the operator's
 server on the bridge; needs the dev
 server and a worker running from the repository root, Docker, containerlab, **both**
 images and Infrahub, and for case 9 the server on the bridge from this tree and both
-checks imported on `main`, each checked before any case; about 29.5 minutes (1,758.0 s on
-2026-10-27, 1,769.0 s on 2026-10-26); `WORKER_LOG=<file>`
+checks imported on `main`, each checked before any case; about 31.5 minutes (1,894.1 s on
+2026-10-28 with case 5's frozen wait, 1,758.0 s on 2026-10-27); `WORKER_LOG=<file>`
 adds the worker's log to its credential greps; `PLATFORMS=nokia_srlinux` narrows it to
 the seven cases SR Linux alone runs, about 19 minutes (1,156.1 s on 2026-10-27), ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
 never `E2E-OK`; never in CI). A command that runs longer than one tool call (tier 3)
@@ -508,8 +515,8 @@ Rewritten whole at each release's close, never appended to.
 - **Release 0.3**, set on 2026-10-25 as exploratory coding toward the production
   refactor ([roadmap](docs/roadmap.md#release-03)), five specs in order: F-011, F-024
   snapshots, F-026 following removed from the core, F-014 probes (`016-probes`, its
-  [brief](specs/016-probes/brief.md) re-read against 017's and 018's close), F-025 the
-  NetBox reader; and the follow of a rehearsal terminated
+  [brief](specs/016-probes/brief.md) rewritten on 2026-10-28 against 017, 018 and 019),
+  F-025 the NetBox reader; and the follow of a rehearsal terminated
   outside Fylgja (015's research §5.2). What they explore toward is the roadmap's
   [production shape](docs/roadmap.md#the-production-shape), a direction and not a
   decision. F-012 and F-022 left the release.
@@ -553,13 +560,46 @@ Rewritten whole at each release's close, never appended to.
     it is filed (T082). Tier 2 green whole again on `7fdb888` in 1,913 s and tier 3
     `E2E-OK` in about 29 minutes (2026-10-28). Reviewed by the operator (T064), and
     merged into `main` and pushed at `0e82037`.
-- **Next**: F-026 following removed from the core, Release 0.3's third spec.
-- **Open, the operator's**: 017's and 018's command logs (`make command-log`, once each
-  session is closed); file 014's upstream request for named points in time
+  - **019** (`019-following-removed`, F-026, closed 2026-10-28): following removed from
+    the core ([D-062](docs/decisions.md#d-062), superseding D-012 in its following, D-026
+    and D-027 whole, and D-007 and D-014 in their Reconcile and Schedule; Constitution
+    2.2.0 unamended): a twin is frozen at its snapshot and nothing rebuilds it but the
+    operator. The reconcile workflow, the Schedule `fylgja-follow`, the five control
+    activities and `bundles/.reads/` gone, so the worker serves four workflows and fifteen
+    activities and reads no source of truth; `--interval` and `--no-follow` gone from the
+    client and the API; destroy and a provision stop nothing first; every rehearsal's
+    deadline 30 s shorter, `fylgja-twin`'s `timeout` unmoved; `twin show`'s kinds `none`,
+    `snapshot`, `from_bundle` and `diverged`, and `twin verify` naming the staged bundle's
+    snapshot; `twin step --snapshot <id|file>` and a step to a stage of any proposed
+    change, from any twin whose record names a snapshot, never to another scope or
+    mapping; `twin.json` `10`; seven following rules, the step `follow` and
+    `step.target.foreign` retired; two replay histories deleted, seven left; the 018
+    shapes frozen under `018-snapshots/` (56 copies); bundle `5` and the goldens unmoved.
+    Built by the attended converge loop's implement runs, T001–T055, the operator's T002
+    at `analyze`. Tier 2 green whole on 2026-10-28 in 2,009 s once `internal/intent` was
+    re-run alone (220.3 s), a seed's 1m30s artifact wait having lapsed under the tier's
+    own load; tier 3 `E2E-OK` in 1,894.1 s, its first start refused by case 9's precheck
+    because a commit's VCS stamp had replaced the bridge server's binary; `PLATFORMS=nokia_srlinux`
+    not run, by the operator's choice, since the whole run covers its cases. The
+    operator's review (T056) and `converge` follow.
+- **Next**: F-014 probes (`016-probes`), Release 0.3's fourth spec; its
+  [brief](specs/016-probes/brief.md), rewritten on 2026-10-28, is re-read against 019's
+  close before specifying.
+- **Open, the operator's**: 017's, 018's and 019's command logs (`make command-log`, once
+  each session is closed); 019's review, merge and push (T056), and whether R-08's
+  refusal reaches as far as T034 applied it: every readable record naming no stage, given
+  no target, is refused `step.target.unknown`, a bundle twin's included, before its own
+  refusal once given one (019's `tasks.md`, T034); file 014's upstream request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left
   padding) and a zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read
   Arista's own checksum for the cEOS tar at the next download.
 - **Open, for a session**: the fixture tool's `-propose` waits its 6 minutes for an
   artifact validator a branch with no change from `main` never gets (D-054's window);
-  bound with `timeout` there, as the release's demo did.
+  bound with `timeout` there, as the release's demo did. `contracts/verify.schema.json`'s
+  `twin.source` admits `intent` and `bundle`, so a verify of a twin `twin create
+  --snapshot` built writes a `source: snapshot` its contract refuses: 018's gap, found at
+  019's T025, which no test meets and no task fixes. The tier
+  durations in `docs/development.md` and `README.md` predate 019's measured 2,009 s and
+  1,894.1 s, and the README's walk-through counts `12 interfaces` where the three-node read
+  now counts 9 (019's T049 note).

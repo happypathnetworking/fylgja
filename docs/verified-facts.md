@@ -153,9 +153,10 @@ development host up again there, or on a fresh 26.04 VM before it.
   2 'del(.snapshot_version, .snapshot_id, .observed_at, .ctm.envelope.observed_at)' |
   sha256sum`, give the id Go's encoding gives: `576933ec…` for the fixture's two reads and
   its stored snapshot, and `6a8a77fc…`, `91f06cd6…` and `37d7378a…` for the three wrapped
-  fixtures. Exact only while no string holds `<`, `>` or `&`, which Go's encoder escapes
-  and `jq` does not; no fixture artifact does. *(10-27; `specs/018-snapshots/research.md`
-  §1.3)*
+  fixtures. Exact only while no string holds `<`, `>`, `&`, U+2028 or U+2029, which Go's
+  encoder escapes and `jq` writes raw, or DEL (U+007F), which `jq` writes `\u007f` and Go
+  raw; no fixture artifact holds any. *(10-27; the last three 10-28;
+  `specs/018-snapshots/research.md` §1.3)*
 - **A read pinned before a kind's load answers as if the kind had no node then.** A query
   pinned at an `at` is checked against the branch's current GraphQL schema.
   - On `main`, pinned at `2026-10-26T12:00:00Z`, before the schema library's load at

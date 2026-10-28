@@ -114,7 +114,9 @@ type hashedBody struct {
 // normalised (in place, as ctm.Marshal normalises) and its envelope written without
 // observed_at, encoded as ctm.Marshal encodes a CTM: struct field order, two-space indent,
 // LF, a trailing newline, Go's default escaping. They differ from the stored bytes and are
-// never stored. By hand, over a stored snapshot, exact when no string holds <, > or &:
+// never stored. By hand, over a stored snapshot, exact when no string holds <, >, &, U+2028
+// or U+2029, which Go escapes and jq writes raw, or DEL (U+007F), which jq escapes and Go
+// writes raw:
 //
 //	jq --indent 2 'del(.snapshot_version, .snapshot_id, .observed_at, .ctm.envelope.observed_at)' snapshots/<id>.json | sha256sum
 func Hashed(s *Snapshot) ([]byte, error) {

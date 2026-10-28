@@ -66,7 +66,10 @@ The hand recipe `jq --indent 2 '{ctm: del(.envelope.observed_at), probes: []}' <
 sha256sum` gave the same three ids (`576933ec…`, `6a8a77fc…`, `37d7378a…`): `jq` keeps
 the file's key order, indents as Go does, writes `[]` for an empty list and ends with a
 newline, and none of the fixture artifacts holds `<`, `>` or `&`, the characters Go's
-encoder writes as `<`, `>` and `&`. The implementation's tests re-derive
+encoder writes as `<`, `>` and `&`. (At convergence pass 7, 2026-10-28,
+jq 1.8.1 on this host was seen to write U+2028 and U+2029 raw, which Go writes `\u2028` and
+`\u2029`, and DEL as `\u007f`, which Go writes raw: a string holding any of the three
+breaks the recipe too, T085.) The implementation's tests re-derive
 every id; `CLAUDE.md` records the fixture's as implement computes it with the shipped
 code, which equals `576933ec…` if R-01 is built as written.
 

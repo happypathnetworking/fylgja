@@ -280,20 +280,32 @@ type stepTarget struct {
 }
 
 // stepToSnapshot is the step to the snapshot --snapshot names (019, research R-04;
-// data-model §2), once the twin is judged and its line printed: the snapshot resolved as twin
-// create --snapshot resolves it (resolveSnapshot), an id out of the store or the request's
-// file read, held to the CTM's own rules and filed, each refusal create's own at resolve; its
-// target line; its CTM compiled and its bundle filed on create's path (compileAndFile), each
-// refusal at compile as there; then the step, as a stage's, its target named by its snapshot
-// and carrying the envelope's branch and at, verbatim, and the stored document's
-// observed_at, the first take's. No request reaches Infrahub: nothing here builds an intent
-// client, and a snapshot of any branch is a target, but of the record's scope and mapping
-// alone (targetUnheld), judged before the compile.
+// data-model §2), once the twin is judged and its line printed: its target built
+// (snapshotTarget), then the step, as a stage's.
 func stepToSnapshot(ctx context.Context, opts *options, f *stepFlags, op string, subject *findings.Subject, reg *psp.Registry,
 	paths lab.Paths, acts *lab.Activities, rec *wire.TwinRecord, files []api.File) error {
-	s, path, err := resolveSnapshot(ctx, paths, op, subject, f.snapshot, files)
+	target, list, err := snapshotTarget(ctx, opts, op, subject, reg, paths, rec, f.snapshot, files)
 	if err != nil {
 		return err
+	}
+	return stepTo(ctx, opts, f, op, subject, reg, paths, acts, rec, target, list)
+}
+
+// snapshotTarget is the target of a step to the snapshot arg names, with the compile's
+// findings: the snapshot resolved as twin create --snapshot resolves it (resolveSnapshot), an
+// id out of the store or the request's file read, held to the CTM's own rules and filed, each
+// refusal create's own at resolve; its target line; its CTM compiled and its bundle filed on
+// create's path (compileAndFile), each refusal at compile as there; the target named by its
+// snapshot and carrying the envelope's branch and at, verbatim, and the stored document's
+// observed_at, the first take's. Each refusal is the command's document, returned as the
+// error. No request reaches Infrahub: nothing here builds an intent client, and a snapshot of
+// any branch is a target, but of the record's scope and mapping alone (targetUnheld), judged
+// before the compile.
+func snapshotTarget(ctx context.Context, opts *options, op string, subject *findings.Subject, reg *psp.Registry,
+	paths lab.Paths, rec *wire.TwinRecord, arg string, files []api.File) (stepTarget, findings.List, error) {
+	s, path, err := resolveSnapshot(ctx, paths, op, subject, arg, files)
+	if err != nil {
+		return stepTarget{}, nil, err
 	}
 	// The document names what the snapshot is of from here on, as a stage step's names the
 	// reference its target resolved to.
@@ -306,14 +318,14 @@ func stepToSnapshot(ctx context.Context, opts *options, f *stepFlags, op string,
 	// never filed. The snapshot stays filed, named as a refused compile names it.
 	name := wire.StepSide{SnapshotID: s.ID}.Name()
 	if refused := targetUnheld(rec, env.Scope, wire.Mapping(env.Mapping), s.ID, name); refused != nil {
-		return cr.refused(opts, finish(op, subject, findings.List{*refused}))
+		return stepTarget{}, nil, cr.refused(opts, finish(op, subject, findings.List{*refused}))
 	}
 	if err := cr.compileAndFile(ctx, opts, op, subject, s.CTM, reg, nil); err != nil {
-		return err
+		return stepTarget{}, nil, err
 	}
 	target := stepTarget{name: name, snapshotID: s.ID,
 		bundle: step.Bundle{ID: cr.bundleID, Files: cr.files}, at: env.At, branch: env.Branch, observedAt: s.ObservedAt}
-	return stepTo(ctx, opts, f, op, subject, reg, paths, acts, rec, target, cr.findings)
+	return target, cr.findings, nil
 }
 
 // stepTwinLine is the twin a step goes from, the line after the dry run's (contracts/cli.md;

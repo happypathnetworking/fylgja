@@ -88,6 +88,7 @@ next one.
 | [D-059](#d-059) | Infrahub's own account is the one that writes the template query's groups, read from Infrahub | Intent |
 | [D-060](#d-060) | Infrahub's own account is the one that created the template query's groups | Intent |
 | [D-061](#d-061) | The snapshot is the core's one input: a content-addressed wrap of the CTM, stored beside the bundles; the bundle's CTM sidecar retired | Contract |
+| [D-062](#d-062) | Following leaves the core: a twin is frozen at its snapshot and changes only when the operator steps it | Orchestration |
 
 ---
 
@@ -339,7 +340,8 @@ Temporal, self-hosted. `temporal server start-dev`, file-backed, until the host 
 <a id="d-007"></a>
 ## D-007 — Short workflows with fixed ids; no lifecycle workflow
 
-**Status:** Accepted 2026-09-14
+**Status:** Accepted 2026-09-14; superseded by [D-062](#d-062) on 2026-10-28 in its `Reconcile`,
+its Schedule `fylgja-follow` and its count of workflows and activities.
 
 ### Context
 
@@ -554,7 +556,8 @@ the bundle's canonical bytes (D-024).
 <a id="d-012"></a>
 ## D-012 — The intent reference is `(branch, at?)`; an unpinned reference is recorded, not pinned, and its twin follows the branch
 
-**Status:** Accepted 2026-09-14
+**Status:** Accepted 2026-09-14; superseded by [D-062](#d-062) on 2026-10-28 in the part that says
+an unpinned twin follows its branch.
 
 ### Context
 
@@ -657,7 +660,8 @@ One twin at a time.
 <a id="d-014"></a>
 ## D-014 — State lives in containerlab, files and Temporal; no database
 
-**Status:** Accepted 2026-09-14
+**Status:** Accepted 2026-09-14; superseded by [D-062](#d-062) on 2026-10-28 in "Temporal holds …
+the Schedule `fylgja-follow`".
 
 ### Context
 
@@ -1216,7 +1220,7 @@ node carries a `bootstrap` entry (`file`, `via`).
 <a id="d-026"></a>
 ## D-026 — A following twin detects change by a scheduled read and compare, and nothing else
 
-**Status:** Accepted 2026-09-16
+**Status:** Accepted 2026-09-16; superseded by [D-062](#d-062) on 2026-10-28.
 
 ### Context
 
@@ -1283,7 +1287,7 @@ starts one sooner than the interval.
 <a id="d-027"></a>
 ## D-027 — `--no-follow`, not `--pin`, is the opt-out from following
 
-**Status:** Accepted 2026-09-16
+**Status:** Accepted 2026-09-16; superseded by [D-062](#d-062) on 2026-10-28.
 
 ### Context
 
@@ -3786,6 +3790,79 @@ are never read. The reconcile workflow is untouched until F-026.
   path (D-011); the CTM stays the reader's contract (D-057).
 - A snapshot holds configuration, as the CTM does: it lives in the store and crosses as
   a file, never in a finding, a log line or a document.
+
+---
+
+<a id="d-062"></a>
+## D-062 — Following leaves the core: a twin is frozen at its snapshot and changes only when the operator steps it
+
+**Status:** Accepted 2026-10-28, by the operator, at `019-following-removed`'s plan.
+Supersedes [D-012](#d-012) in the part that says an unpinned twin follows its branch,
+[D-026](#d-026) and [D-027](#d-027) whole, [D-007](#d-007) in its `Reconcile`, its Schedule
+`fylgja-follow` and its count of workflows and activities, and [D-014](#d-014) in "Temporal
+holds … the Schedule `fylgja-follow`". Beside [D-061](#d-061), whose sentences on the
+reconcile and on a snapshot twin frozen by rule it makes universal. To be built by
+`019-following-removed`.
+
+### Context
+
+Since D-061 every workflow the core runs but one starts with a snapshot id and a bundle id
+and never reads a branch. The one left is following: a twin built from a branch with no
+`at` and no `--no-follow` is checked every interval by the `Reconcile` workflow, which a
+Temporal Schedule starts, reads and compiles the branch in the worker, and rebuilds the
+twin when its bundle id has moved (D-012, D-026, D-027). It is the core's last reader of a
+branch, and the production shape's core knows none. A twin that may tear itself down
+between two measurements is also the wrong ground for probes (F-014), which measure loss
+across a step. Entries that cite following stand as history: D-011, D-017, D-023, D-024,
+D-025, D-028, D-032, D-039, D-048, D-049, D-053.
+
+### Options considered
+
+- **Keep following, fed by snapshots**: the Schedule's check takes a snapshot instead of a
+  CTM. The core would still hold a timer and a branch, and probes would still measure a twin
+  that rebuilds itself.
+- **Keep following as an opt-in flag**: the same, behind a choice nobody defaults to.
+- **Remove following from the core**, and keep the step: a twin is frozen at its snapshot
+  and changes only by `twin step` or `twin destroy`; any twin whose record names a snapshot
+  steps to a stage of any proposed change or to a snapshot of any branch, but never to
+  another scope or mapping; the orchestrator of the production shape may bring following
+  back outside the core as take, compare, step.
+
+### Decision
+
+Following leaves the core, and not Fylgja. The `Reconcile` workflow, the Schedule
+`fylgja-follow`, the five control activities (`ReadIntent`, `Compile`, `RunsInFlight`,
+`StartFollowing`, `StopFollowing`), `bundles/.reads/`, `--interval` and `--no-follow` go;
+the worker serves four workflows (provision, destroy, step, rehearse) and the lab's fifteen
+activities, and reads no source of truth. A twin is frozen at its snapshot, and nothing
+rebuilds it but the operator. **Walking means stepping**: a twin walks when the operator
+steps it from one snapshot to another, through a proposed change's stages or to any
+snapshot the operator takes; following was the way of walking the operator did not drive.
+`twin step` steps any twin whose record names a snapshot, to `--stage <branch>/<label>` of
+any proposed change or to `--snapshot <id|file>` of any branch; a twin's scope and mapping
+are fixed for its life, and its branch is not. `twin show` names the snapshot a twin was
+built from in place of pinned, frozen or following; "pinned" remains a word for a
+reference with an `at`. Short workflows with fixed ids stand (D-007), and Temporal holds
+run history alone (D-014).
+
+### Consequences
+
+- The core's surface is create from a snapshot, step to one, destroy, show and verify, with
+  no timer of its own; an orchestrator that follows a branch calls the step.
+- A twin of a 0.2 build left following across an upgrade keeps a Schedule that starts a
+  workflow no worker serves: the release notes say to destroy it first, and the build
+  carries no code to clear it.
+- The rehearsal's baseline stops nothing, so every rehearsal's deadline is 30 s shorter.
+- A twin whose record names no snapshot does not step: one built from a bundle directory,
+  one whose record is of `twin.json` 8 or earlier (018's allowance for an 8 that names a
+  stage is retired), and one an earlier build's rebuild made. `twin destroy` clears each.
+- The constitution is not amended: no principle names following, a reconcile, a Schedule
+  or an interval. VI, VIII and IX cite D-012, D-007 and D-014, each superseded here in part;
+  as when D-060 superseded D-059 (cited by III) in part, Governance's sentence on a changed
+  cited decision is read as a change to what a principle relies on, and none does.
+- D-061's sentences that waited for this feature ("every workflow the core runs but the
+  reconcile", "the reconcile workflow is untouched until F-026") now hold without the
+  exception; D-061 is not superseded.
 
 ---
 

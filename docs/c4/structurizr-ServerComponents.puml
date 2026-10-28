@@ -25,7 +25,7 @@ System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
   Container_Boundary("Fylgja.fylgjaserve_boundary", "fylgja serve", $tags="Container") {
     Component(Fylgja.fylgjaserve.server, "server", $techn="internal/server", $descr="The handlers: each command's logic behind POST /v1/<noun>/<verb>.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.api, "api", $techn="internal/api", $descr="The wire: paths, frames, requests, problems, bounds. The client's side links it too.", $tags="Component", $link="")
-    Component(Fylgja.fylgjaserve.stage, "stage", $techn="internal/stage", $descr="The read and compile pipelines, shared with the worker.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.stage, "stage", $techn="internal/stage", $descr="The read and compile pipelines, the server's alone.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.stages, "stages", $techn="internal/stages", $descr="A proposed change's stages: references, resolution, staleness, list, plan and the step's target.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.provision, "provision", $techn="internal/provision", $descr="Starts, follows and cancels runs on the workflow service.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.lab, "lab", $techn="internal/lab", $descr="Host-bound code: containerlab, the host check, the dry run, twin.json.", $tags="Component", $link="")
@@ -43,7 +43,6 @@ System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
 
 }
 
-Rel(Fylgja.fylgjaserve.intent, Fylgja.fylgjaserve.psp, "Finds each device's package by its manufacturer and platform", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.api, "Decodes requests; writes frames", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.findings, "Words every refusal; writes the document", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.psp, "Loads the packages", $techn="", $tags="Relationship", $link="")
@@ -78,6 +77,7 @@ Rel(Fylgja.fylgjaserve.step, Fylgja.fylgjaserve.compiler, "Compares two manifest
 Rel(Fylgja.fylgjaserve.rehearsal, Fylgja.fylgjaserve.findings, "Builds the report's block and words its findings", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.rehearsal, Fylgja.fylgjaserve.step, "Draws what each step changed", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.compiler, Fylgja.fylgjaserve.psp, "Applies the mapping profile", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.intent, Fylgja.fylgjaserve.psp, "Finds each device's package by its manufacturer and platform", $techn="", $tags="Relationship", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

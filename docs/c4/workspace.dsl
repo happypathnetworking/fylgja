@@ -21,7 +21,7 @@ workspace "Fylgja" "A walking twin of network intent." {
             server = container "fylgja serve" "The API's server, on the lab host. Reads Infrahub, takes and files each read's snapshot, compiles, checks the host, starts and follows runs, reads the twin." "Go, the same binary; HTTP on 127.0.0.1:7650 and on the Docker bridge" {
                 handlers = component "server" "The handlers: each command's logic behind POST /v1/<noun>/<verb>." "internal/server"
                 api = component "api" "The wire: paths, frames, requests, problems, bounds. The client's side links it too." "internal/api"
-                stage = component "stage" "The read and compile pipelines, shared with the worker." "internal/stage"
+                stage = component "stage" "The read and compile pipelines, the server's alone." "internal/stage"
                 stages = component "stages" "A proposed change's stages: references, resolution, staleness, list, plan and the step's target." "internal/stages"
                 provisionClient = component "provision" "Starts, follows and cancels runs on the workflow service." "internal/provision"
                 lab = component "lab" "Host-bound code: containerlab, the host check, the dry run, twin.json." "internal/lab"
@@ -37,14 +37,13 @@ workspace "Fylgja" "A walking twin of network intent." {
                 findings = component "findings" "Findings, rules, the findings document, exit codes. The client's side links it too." "internal/findings"
             }
             worker = container "fylgja worker run" "The lab-host worker: runs the workflows and the host-bound activities." "Go, the same binary" {
-                workflows = component "provision" "The five workflows, the rehearsal running the provision, step and destroy as its children; their control activities; the worker's registration. The provision, step and rehearsal take a snapshot id and a bundle id; the reconcile alone reads." "internal/provision"
+                workflows = component "provision" "The four workflows, the rehearsal running the provision, step and destroy as its children, and the worker's registration. The provision, step and rehearsal take a snapshot id and a bundle id the server compiled; none reads a source of truth." "internal/provision"
                 wlab = component "lab" "The host-bound activities: deploy, readiness, push, reconcile, record, the wait." "internal/lab"
-                wstage = component "stage" "The read and compile pipelines." "internal/stage"
                 wverify = component "verify" "The readers and the wait." "internal/verify"
                 wire = component "lab/wire" "Activity names and the payloads crossing the task queue." "internal/lab/wire"
                 wrehearsal = component "rehearsal" "A rehearsal's pure rules and renderings: the deadline, the verdict, the report and its markdown." "internal/rehearsal"
             }
-            temporal = container "Workflow service" "Durable execution: run history, Schedule fylgja-follow." "Temporal"
+            temporal = container "Workflow service" "Durable execution: run history." "Temporal"
             store = container "Bundle store" "<state root>/bundles/<bundle_id>/: every bundle compiled or provisioned." "Files" "Files"
             snapshotStore = container "Snapshot store" "<state root>/snapshots/<snapshot_id>.json: every snapshot taken, each kept as first filed." "Files" "Files"
             twindir = container "Twin directory" "<state root>/twin/: the staged bundle, containerlab's directory, twin.json." "Files" "Files"
@@ -72,8 +71,6 @@ workspace "Fylgja" "A walking twin of network intent." {
         fylgja.server -> fylgja.clab "Inspects; dry runs"
         fylgja.server -> twin.node "Reads for verify" "gNMI"
         fylgja.worker -> fylgja.temporal "Polls task queue fylgja" "gRPC"
-        fylgja.worker -> infrahub "Reads a followed branch's intent and artifacts" "GraphQL, REST"
-        fylgja.worker -> infrahub.iserver "Reads a followed branch's intent and artifacts" "GraphQL, REST"
         fylgja.worker -> fylgja.store "Files and reads bundles"
         fylgja.worker -> fylgja.twindir "Stages, records"
         fylgja.worker -> fylgja.clab "Deploys, reconciles, destroys"
@@ -118,7 +115,6 @@ workspace "Fylgja" "A walking twin of network intent." {
 
         fylgja.worker.workflows -> fylgja.worker.wire "Schedules activities by name"
         fylgja.worker.workflows -> fylgja.worker.wlab "Registers the host-bound activities"
-        fylgja.worker.workflows -> fylgja.worker.wstage "ReadIntent, Compile: a following check's"
         fylgja.worker.workflows -> fylgja.worker.wrehearsal "Classifies each stage"
         fylgja.worker.workflows -> fylgja.worker.wverify "Takes the wait's default budget for the deadline"
         fylgja.worker.wlab -> fylgja.worker.wire "Takes and returns the payloads"
@@ -134,7 +130,7 @@ workspace "Fylgja" "A walking twin of network intent." {
                 deploymentNode "fylgja serve" "127.0.0.1:7650, and 172.17.0.1:7650 on docker0, the Docker bridge, in plaintext; FYLGJA_API_TOKEN, INFRAHUB_API_TOKEN, both node logins" "process" {
                     containerInstance fylgja.server
                 }
-                deploymentNode "fylgja worker run" "INFRAHUB_API_TOKEN, both node logins; no API token" "process" {
+                deploymentNode "fylgja worker run" "both node logins; no API token" "process" {
                     containerInstance fylgja.worker
                 }
                 deploymentNode "temporal server start-dev" ":7233; UI :8233" "process" {

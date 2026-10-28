@@ -476,15 +476,12 @@ graph LR
     internal_lab --> internal_verify
     internal_lab_wire --> internal_findings
     internal_provision --> internal_bundle
-    internal_provision --> internal_ctm
     internal_provision --> internal_findings
-    internal_provision --> internal_intent
     internal_provision --> internal_lab
     internal_provision --> internal_lab_wire
     internal_provision --> internal_psp
     internal_provision --> internal_rehearsal
     internal_provision --> internal_snapshot
-    internal_provision --> internal_stage
     internal_provision --> internal_step
     internal_provision --> internal_verify
     internal_psp --> fylgja

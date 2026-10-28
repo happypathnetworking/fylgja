@@ -532,7 +532,7 @@ note.
 
 ## Phase 14: User Story 1 and 2, live — tier 2 and tier 3 (Priority: P1)
 
-**Goal**: the contract tier whole and the end-to-end tier whole and narrowed (SC-001,
+**Goal**: the contract tier whole and the end-to-end tier whole (SC-001,
 SC-008).
 
 **Independent Test**: quickstart §4 and §5's expected outcomes.
@@ -544,9 +544,9 @@ SC-008).
   2. Start `make test-e2e` detached, its exit status in a file, and wait in foreground calls under ten minutes.
   3. Expected: `E2E-OK`, nine cases. Case 5's log shows the 330 s frozen wait with no run started and the record, the containers and the kind line unchanged, then `stepped to snapshot …` twice (by file, then by id), the readback, and verify 5a's skipped port and link.
   4. Afterwards `temporal schedule list` is empty and the trap's leak check is silent.
-  5. Rest the host, then run `PLATFORMS=nokia_srlinux make test-e2e` the same way, which ends `E2E-PARTIAL`, exit 0.
 
-  Record both times against the 32–33 minute estimate (R-18), and any attempt lost to the host with its cause.
+  Record its time against the 32–33 minute estimate (R-18), and any attempt lost to the host with its cause.
+  - *Note (operator, 2026-10-28)*: the narrowed run (`PLATFORMS=nokia_srlinux make test-e2e`) is dropped for 019: on the same host and binary the whole run covers every case it runs, and 019 changes neither `scripts/e2e.sh`'s case-to-package table nor its skip logic, so it would prove nothing the whole run does not.
 
 **Checkpoint**: tiers 2 and 3 green.
 
@@ -697,7 +697,7 @@ commits its own.
 12. **Run 12** — scripts/e2e.sh's case 5 repurposed and cases 7 and 8 moved, checked offline; the contracts' 019 sections; the code comments (T037–T039). Only these; stop and report.
 13. **Run 13** — the documents: architecture, glossary, brief, development.md with .env.example and SECURITY.md, README, ideas, the roadmap's upgrade list, then linkcheck and the greps (T040–T047). Only these; stop and report.
 14. **Run 14** — [live] the worker and the server restarted from this tree and verified, and the hand step to a snapshot of quickstart §3 (T048–T049). Stop and report.
-15. **Run 15** — [live] the contract tier whole beside the server on the bridge, then tier 3 whole and narrowed on a quiet host (T050–T051). Stop and report.
+15. **Run 15** — [live] the contract tier whole beside the server on the bridge, then tier 3 whole on a quiet host (T050–T051). Stop and report.
 16. **Run 16** — the records: verified-facts.md, the roadmap's F-026 built, CLAUDE.md, then the closing gates and greps (T052–T055). Only these; stop and report.
 17. **Run 17** — [operator] the operator's review, commits and the command log (T056). Stop and report.
 

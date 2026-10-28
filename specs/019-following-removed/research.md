@@ -603,8 +603,8 @@ its test 1,243, `client.go` and its tests about 1,000, the show, create, destroy
 dry-run halves and their tests about 900, the two histories), and about 900 arrive (the
 step's snapshot path, `Target`'s rewrite, the side names, `twin.json` 10, and their
 tests). Converge-loop time, by 017's and 018's: **8 to 11 hours of sessions**, plus tier 2
-(about 29 minutes, less `TestFollowingDetection`) and tier 3 (about 33 minutes) whole and
-narrowed. The roadmap's 3–5 was set before the inventory; the operator revisits it (brief,
+(about 29 minutes, less `TestFollowingDetection`) and tier 3 (about 33 minutes) whole.
+The roadmap's 3–5 was set before the inventory; the operator revisits it (brief,
 Exit).
 
 ### R-26 No Infrahub skill
@@ -723,8 +723,7 @@ Reconcile and Schedule`, `in its Schedule`), and nothing else. The index gains D
 - **Live, the session's**: the worker and the server restarted from the rebuilt binary and
   verified as `CLAUDE.md` prescribes (with R-22's change to the worker's check); `temporal
   schedule list` empty again before tier 3; `twin step --snapshot` by hand on a fixture
-  twin by file, by id and by dry run (quickstart §3); tier 2 whole; tier 3 whole and
-  narrowed.
+  twin by file, by id and by dry run (quickstart §3); tier 2 whole; tier 3 whole.
 - **The records at the close**: `docs/verified-facts.md` gains, under Temporal, that a host
   of this build makes no Schedule (read by `temporal schedule list` after tier 3) and, under
   the step, that a step to a snapshot sends no request to Infrahub (tier 2's counters);

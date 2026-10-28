@@ -116,7 +116,6 @@ it (`CLAUDE.md`, Stages).
 ```sh
 free -m
 nohup make test-e2e > local/e2e-019.log 2>&1; echo $? > local/e2e-019.status &   # detached, as CLAUDE.md says
-PLATFORMS=nokia_srlinux make test-e2e    # afterwards, rested: E2E-PARTIAL
 ```
 
 True afterwards: `E2E-OK`, nine cases; case 5's log shows the 330 s frozen wait with no run

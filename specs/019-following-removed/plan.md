@@ -242,7 +242,7 @@ component and its two relationships to Infrahub, Temporal its Schedule (R-24).
    file, the C4 model; `make diagrams`, `make linkcheck`.
 6. **The host, live** (quickstart §2–§3): rebuild, restart and verify the worker and the
    server; the hand step. The session's.
-7. **Tier 2** (§4), then **tier 3** whole and narrowed (§5). The session's.
+7. **Tier 2** (§4), then **tier 3** whole (§5). The session's.
 8. **The records at the close** (research §4): `docs/verified-facts.md`, the roadmap (F-026
    built), `CLAUDE.md`.
 

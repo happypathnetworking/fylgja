@@ -33,12 +33,16 @@ func loadFixture(t *testing.T, path string) *ctm.CTM {
 // A bundle format moves all three, once and reviewed: M7's "3", M12's "4", which
 // wrote enabled on every mapping row, and 016's "6", which wrote the version, probes: []
 // and fidelity.synthesized: [] in each manifest and nothing else. The probed one is 016's
-// three-node snapshot with n1-loop's probe placed, baselined once with bundle "6".
+// three-node snapshot with n1-loop's probe placed, baselined once with bundle "6". A
+// fixture's intent moves its own golden, once and reviewed: 016's probe-ready ports, the
+// seed's ethernet-1/10 and -1/11 (Ethernet10 and 11 on an EOS device), uncabled and
+// addressed, moved three-node and mixed by their mapping rows and every device's artifact,
+// which renders the ports and their addresses, and the probed one by its artifacts alone.
 const (
-	goldenThreeNodeID       = "1b352957aa74ff6e6f944a1b5ccb3b678248c895601f7a3aa66a4f9166d3909a"
+	goldenThreeNodeID       = "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
 	goldenLossyID           = "10099944520a548145d2d8dc45eb9a2ddec950a0ec2c9be48c572bb66fc48c31"
-	goldenMixedID           = "7b994ecf500d86431f82ca5c08eee4e32ac77b1b6625d1c7ad3f582edb8c81b9"
-	goldenThreeNodeProbedID = "43f7c9e86599711a9d9d37608377379b2caea85466e1fa555313d9edf8ccb19d"
+	goldenMixedID           = "44ac283f65333103a5f4c6557e648c7c0bccd9e023f1babf55b1541577f33834"
+	goldenThreeNodeProbedID = "5222063bac574cf7ba031a0cb7a04dc0ae8b40cca84403215bf5356c50dfcde9"
 )
 
 // compileFixture compiles a fixture and fails on any rejection: the fixtures under

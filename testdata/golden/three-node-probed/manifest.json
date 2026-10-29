@@ -24,8 +24,8 @@
       "artifact": {
         "name": "device-config",
         "content_type": "text/plain",
-        "checksum": "597f6263eb7e0b539679b3956270876f",
-        "size": 707,
+        "checksum": "28881d3d0d61d3fe5acf1f1ee0e31a60",
+        "size": 1327,
         "file": "configs/n1.device-config"
       },
       "bootstrap": {
@@ -83,8 +83,8 @@
       "artifact": {
         "name": "device-config",
         "content_type": "text/plain",
-        "checksum": "5ac21560015ad6bb1e881358115d0b7a",
-        "size": 707,
+        "checksum": "092ca9f62fe2887add0ae679de0a7076",
+        "size": 1327,
         "file": "configs/n2.device-config"
       },
       "bootstrap": {
@@ -104,8 +104,8 @@
       "artifact": {
         "name": "device-config",
         "content_type": "text/plain",
-        "checksum": "e93df96400ddbada7daa1a0777d9d3e3",
-        "size": 707,
+        "checksum": "95a3a91788e63626cdb9b4ecdf56eb58",
+        "size": 1327,
         "file": "configs/n3.device-config"
       },
       "bootstrap": {

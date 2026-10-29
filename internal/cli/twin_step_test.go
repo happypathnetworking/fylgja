@@ -590,6 +590,12 @@ func sha256Of(t *testing.T, path string) string {
 // short is an id as the step's lines print it.
 func short(id string) string { return id[:8] + "…" }
 
+// side is a step side as the run's closing line names it since twin.json 12: its snapshot and
+// its bundle (020, research R-06).
+func side(snapshotID, bundleID string) string {
+	return "snapshot " + short(snapshotID) + " (bundle " + short(bundleID) + ")"
+}
+
 // samePlan says two of containerlab's plans name the same lifecycles, links and reasons, an
 // empty list and none alike.
 func samePlan(a, b wire.ReconcilePlan) bool {
@@ -981,16 +987,17 @@ func TestStepBesideARehearsalNamesItBeforeAnyRead(t *testing.T) {
 	}
 }
 
-// Two warnings leave the exit as it is: a step that skips stages of its proposed change, and
-// a package whose declared link change containerlab's plan contradicts.
+// A warning leaves the exit as it is: a package whose declared link change containerlab's
+// plan contradicts. A step past stages of a proposed change warns of none since twin.json 12,
+// whose record names no stage to count them from (020, research R-06).
 func TestStepWarnings(t *testing.T) {
-	t.Run("skipped", func(t *testing.T) {
+	t.Run("no stage skipped", func(t *testing.T) {
 		stepHost(t, "plan-nothing.json", nil)
 		out := runStepCmd(t, "--stage", "change-1/again", "--dry-run")
-		want := findings.Finding{Severity: findings.Warning, Rule: findings.RuleStepStageSkipped, Object: "change-1/again",
-			Step: findings.StepResolve, Message: "the step from change-1/sealed to change-1/again skips stage linked; the step is between the two bundles either way"}
-		if out.code != findings.ExitOK || !slices.Contains(out.doc.Findings, want) {
-			t.Errorf("exit %d, findings %+v; want 0 beside %+v", out.code, out.doc.Findings, want)
+		if out.code != findings.ExitOK || slices.ContainsFunc(out.doc.Findings, func(f findings.Finding) bool {
+			return f.Rule == findings.RuleStepStageSkipped
+		}) {
+			t.Errorf("exit %d, findings %+v; want 0 and no %s", out.code, out.doc.Findings, findings.RuleStepStageSkipped)
 		}
 		for _, line := range []string{"reconcile: nothing to apply\n", "push: nobody\n", "verdict: clear\n",
 			": unchanged; the ids differ by provenance alone\n"} {
@@ -1735,13 +1742,15 @@ func TestStepRuns(t *testing.T) {
 			Message: "step run " + stepRunID + " towards stage change-1/linked stopped at phase " + phase + "; …"}
 	}
 	for _, c := range []struct {
-		name    string
-		args    []string
-		plan    string
-		res     provision.StepResult
-		code    int
-		status  findings.Status
-		closing func(fromID, toID string) string
+		name   string
+		args   []string
+		plan   string
+		res    provision.StepResult
+		code   int
+		status findings.Status
+		// closing is the run's last line, given each side as the line names it, snapshot <s>…
+		// (bundle <b>…).
+		closing func(from, to string) string
 		// events are the run's progress the fake service replays; nil is stepEvents().
 		events []provision.Event
 	}{
@@ -1749,15 +1758,15 @@ func TestStepRuns(t *testing.T) {
 			res: provision.StepResult{Outcome: provision.StepStepped, PushPlan: pushed(wire.PushLanded, ""), Timings: timings,
 				Record: &wire.TwinRecord{State: wire.StateReady}},
 			code: findings.ExitOK, status: findings.StatusOK,
-			closing: func(_, toID string) string {
-				return "stepped to stage change-1/linked (bundle " + short(toID) + ") in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s"
+			closing: func(_, to string) string {
+				return "stepped to " + to + " in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s"
 			}},
 		{name: "unchanged", args: []string{"--stage", "change-1/again"}, plan: "plan-nothing.json",
 			res: provision.StepResult{Outcome: provision.StepUnchanged, PushPlan: []wire.StepPush{},
 				Timings: wire.StepTimings{WholeS: 1.8}, Record: &wire.TwinRecord{State: wire.StateReady}},
 			code: findings.ExitOK, status: findings.StatusOK,
-			closing: func(_, toID string) string {
-				return "unchanged; the record moves to stage change-1/again (bundle " + short(toID) + ") in 1.8s"
+			closing: func(_, to string) string {
+				return "unchanged; the record moves to " + to + " in 1.8s"
 			}, events: unchangedStepEvents()},
 		{name: "diverged at push", args: []string{"--allow-restart"}, plan: "plan-link-added.json",
 			res: provision.StepResult{Outcome: provision.StepDiverged, Phase: findings.StepPush, Step: findings.StepPush,
@@ -1768,9 +1777,9 @@ func TestStepRuns(t *testing.T) {
 						Message: "node e1 refused artifact device-config (checksum cbc8c75d…) at line 7: Invalid input"},
 					diverged(findings.StepPush)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
-			closing: func(fromID, toID string) string {
-				return "diverged towards stage change-1/linked (bundle " + short(toID) + ") at phase push: landed s1; not landed e1 (push.refused); " +
-					"the twin is up at stage change-1/sealed (bundle " + short(fromID) + "); fylgja twin destroy clears it"
+			closing: func(from, to string) string {
+				return "diverged towards " + to + " at phase push: landed s1; not landed e1 (push.refused); " +
+					"the twin is up at " + from + "; fylgja twin destroy clears it"
 			}},
 		// The wait's clause follows M11's line on an unchanged and a diverged result too, as
 		// contracts/cli.md quotes them.
@@ -1779,8 +1788,8 @@ func TestStepRuns(t *testing.T) {
 				Timings: wire.StepTimings{WholeS: 1.8}, Record: &wire.TwinRecord{State: wire.StateReady},
 				Wait: &wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 1, AfterS: 1.1, Failing: []wire.StepFinding{}}},
 			code: findings.ExitOK, status: findings.StatusOK,
-			closing: func(_, toID string) string {
-				return "unchanged; the record moves to stage change-1/again (bundle " + short(toID) + ") in 1.8s; settled after 1.1s"
+			closing: func(_, to string) string {
+				return "unchanged; the record moves to " + to + " in 1.8s; settled after 1.1s"
 			}, events: unchangedStepEvents()},
 		{name: "diverged at push, the wait settled", args: []string{"--allow-restart"}, plan: "plan-link-added.json",
 			res: provision.StepResult{Outcome: provision.StepDiverged, Phase: findings.StepPush, Step: findings.StepPush,
@@ -1792,9 +1801,9 @@ func TestStepRuns(t *testing.T) {
 						Message: "node e1 refused artifact device-config (checksum cbc8c75d…) at line 7: Invalid input"},
 					diverged(findings.StepPush)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
-			closing: func(fromID, toID string) string {
-				return "diverged towards stage change-1/linked (bundle " + short(toID) + ") at phase push: landed s1; not landed e1 (push.refused); " +
-					"the twin is up at stage change-1/sealed (bundle " + short(fromID) + "); fylgja twin destroy clears it; settled after 1.9s"
+			closing: func(from, to string) string {
+				return "diverged towards " + to + " at phase push: landed s1; not landed e1 (push.refused); " +
+					"the twin is up at " + from + "; fylgja twin destroy clears it; settled after 1.9s"
 			}},
 		{name: "cancelled before the stage", args: []string{"--allow-restart"}, plan: "plan-link-added.json",
 			res: provision.StepResult{Outcome: provision.OutcomeCancelled, Step: findings.StepCompare,
@@ -1813,9 +1822,9 @@ func TestStepRuns(t *testing.T) {
 						Message: "run " + stepRunID + " was cancelled at step readiness; the record was written diverged and nothing was torn down"},
 					diverged(findings.StepReadiness)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
-			closing: func(fromID, toID string) string {
-				return "diverged towards stage change-1/linked (bundle " + short(toID) + ") at phase readiness: landed none; not landed e1, s1; " +
-					"the twin is up at stage change-1/sealed (bundle " + short(fromID) + "); fylgja twin destroy clears it"
+			closing: func(from, to string) string {
+				return "diverged towards " + to + " at phase readiness: landed none; not landed e1, s1; " +
+					"the twin is up at " + from + "; fylgja twin destroy clears it"
 			}},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -1875,7 +1884,7 @@ func TestStepRuns(t *testing.T) {
 					}
 				}
 			}
-			if closing := c.closing(h.fromID, toID); closing != "" {
+			if closing := c.closing(side(h.fromSnapshot, h.fromID), side(out.doc.SnapshotID, toID)); closing != "" {
 				wantTail = append(wantTail, closing)
 			}
 			if !strings.HasSuffix(out.stdout, "\n"+strings.Join(wantTail, "\n")+"\n") {
@@ -2082,9 +2091,9 @@ func TestStepInterrupt(t *testing.T) {
 				t.Errorf("findings %+v lack the run's %+v", doc.Findings, f)
 			}
 		}
-		tail := "\nstep readiness e1: begins\n" + waiting + "\ndiverged towards stage change-1/linked (bundle " + short(doc.BundleID) +
-			") at phase readiness: landed none; not landed e1, s1; the twin is up at stage change-1/sealed (bundle " + short(h.fromID) +
-			"); fylgja twin destroy clears it\n"
+		tail := "\nstep readiness e1: begins\n" + waiting + "\ndiverged towards " + side(doc.SnapshotID, doc.BundleID) +
+			" at phase readiness: landed none; not landed e1, s1; the twin is up at " + side(h.fromSnapshot, h.fromID) +
+			"; fylgja twin destroy clears it\n"
 		if !strings.HasSuffix(stdout, tail) {
 			t.Errorf("stdout:\n%s\nwant it to end:%s", stdout, tail)
 		}
@@ -2264,7 +2273,7 @@ func TestStepDryRunWait(t *testing.T) {
 // carries the wait's last read counted by kind beside the wait when the wait read, and no
 // key otherwise (015).
 func TestStepRunReportsTheWait(t *testing.T) {
-	const m11 = "stepped to stage change-1/linked (bundle %s) in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s"
+	const m11 = "stepped to %s in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s"
 	reconcile := 3.9
 	e1Took, s1Took := 1.6, 2.4
 	neighbor := func(object string) wire.StepFinding {
@@ -2340,7 +2349,7 @@ func TestStepRunReportsTheWait(t *testing.T) {
 			if c.progress != "" {
 				tail = append(tail, c.progress)
 			}
-			tail = append(tail, fmt.Sprintf(m11, short(out.doc.BundleID))+c.clause)
+			tail = append(tail, fmt.Sprintf(m11, side(out.doc.SnapshotID, out.doc.BundleID))+c.clause)
 			if !strings.HasSuffix(out.stdout, "\n"+strings.Join(tail, "\n")+"\n") {
 				t.Errorf("stdout:\n%s\nwant it to end:\n%s", out.stdout, strings.Join(tail, "\n"))
 			}
@@ -2413,7 +2422,7 @@ func TestStepRunReportsTheLoss(t *testing.T) {
 	}
 	tail := []string{"step observe: settled after 2.4s (2 reads)",
 		"step loss: n1-loop 0/312 lost, longest gap 0.0s (container timing)",
-		"stepped to stage change-1/linked (bundle " + short(out.doc.BundleID) + ") in 71.2s: reconcile 3.9s; readiness e1 54.8s; " +
+		"stepped to " + side(out.doc.SnapshotID, out.doc.BundleID) + " in 71.2s: reconcile 3.9s; readiness e1 54.8s; " +
 			"push e1 1.6s, s1 2.4s; settled after 2.4s; loss n1-loop 0/312"}
 	if !strings.HasSuffix(out.stdout, "\n"+strings.Join(tail, "\n")+"\n") {
 		t.Errorf("stdout:\n%s\nwant it to end:\n%s", out.stdout, strings.Join(tail, "\n"))
@@ -2446,11 +2455,11 @@ func TestStepRunReportsTheLoss(t *testing.T) {
 // last version's stamp.
 const stepHeadAt = "2026-10-16T11:30:00.000001+00:00"
 
-// stepTwin is a twin of change-1's stage label as its create records it, at at on branch,
-// from bundle id; retired drops e2, as less and the head retired it.
+// stepTwin is a twin built from bundle id, read at at on branch, as its create records it;
+// retired drops e2, as less and the head retired it.
 type stepTwin struct {
-	id, label, description, atSource, branch, at string
-	retired                                      bool
+	id, branch, at string
+	retired        bool
 }
 
 // twinAt rewrites stepHost's record as the twin of w, which then steps from w's snapshot and
@@ -2512,8 +2521,7 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 	h := stepHost(t, "plan-nothing.json", nil)
 	sealedID := h.fromID
 	linkedID := buildStage(t, h.paths, "linked")
-	twinAt(t, h, stepTwin{id: linkedID, label: "linked", description: "a link between e1 and s1", atSource: "written",
-		branch: "change-1", at: stepWrittenAt})
+	twinAt(t, h, stepTwin{id: linkedID, branch: "change-1", at: stepWrittenAt})
 	h.clab.plan = []byte(`{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": [], "deleted-nodes": [],
 		"recreated-nodes": [], "started-nodes": [], "added-links": [], "deleted-endpoints": ["e1:eth3", "s1:e1-3"],
 		"restarted-nodes": ["e1"], "node-change-reasons": {"e1": "deleted endpoint"}}`)
@@ -2521,7 +2529,7 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 		"twin: snapshot " + short(h.fromSnapshot) + " (bundle " + short(linkedID) + "), branch change-1 at " +
 			stepWrittenAt + "; 3 nodes",
 		`stage change-1/sealed: branch change-1 at ` + stepMixedAt + ` (given), "the mixed fixture as sealed"`,
-		"step change-1/linked → change-1/sealed (" + short(linkedID) + " → " + short(sealedID) + "):",
+		"step snapshot " + short(h.fromSnapshot) + " → change-1/sealed (" + short(linkedID) + " → " + short(sealedID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
 		"  links: -e1:eth3 — s1:e1-3",
 		"  artifacts: e1 device-config cbc8c75d… → b1431710…; s1 device-config 8e15691e… → fdf83f15…",
@@ -2538,11 +2546,8 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 	if out.code != findings.ExitOK || out.stdout != want || out.doc.BundleID != sealedID {
 		t.Errorf("exit %d, bundle_id %s, stdout:\n%s\nwant 0, sealed's %s, and:\n%s", out.code, out.doc.BundleID, out.stdout, sealedID, want)
 	}
-	if carriesRule(out.doc.Findings, findings.RuleStepStageSkipped) {
-		t.Errorf("findings %+v; a step to the stage before skips none", out.doc.Findings)
-	}
-	if carriesRule(out.doc.Findings, findings.RuleStageTwinMoved) {
-		t.Errorf("findings %+v; the twin's mark still resolves to the record's reference, so it has not moved", out.doc.Findings)
+	if carriesRule(out.doc.Findings, findings.RuleStepStageSkipped) || carriesRule(out.doc.Findings, findings.RuleStageTwinMoved) {
+		t.Errorf("findings %+v; a record that names no stage skips none and sees none move", out.doc.Findings)
 	}
 	reg, err := psp.Load("")
 	if err != nil {
@@ -2585,7 +2590,7 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 		"step push e1: done in 1.6s",
 		"step push s1: done in 2.4s",
 		"step record: done in 0.1s",
-		"stepped to stage change-1/sealed (bundle "+short(sealedID)+") in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s")...)
+		"stepped to "+side(snapshotOf(t, sealedID), sealedID)+" in 71.2s: reconcile 3.9s; readiness e1 54.8s; push e1 1.6s, s1 2.4s")...)
 	if out.code != findings.ExitOK || out.stdout != want || carriesRule(out.doc.Findings, findings.RuleStageTwinMoved) {
 		t.Errorf("exit %d, findings %+v, stdout:\n%s\nwant 0, no stage.twin.moved, and:\n%s", out.code, out.doc.Findings,
 			out.stdout, want)
@@ -2729,9 +2734,10 @@ func TestStepStagelessTwinToAStage(t *testing.T) {
 	})
 }
 
-// Scenario 5: from the branch point, a step to the head goes straight there, warning that it
-// skips the marks between, and with no target goes to the first mark, skipping none. main
-// here reads as the mixed fixture, as change-1 began.
+// Scenario 5: from the branch point, a step to the head goes straight there. It warns of no
+// marks between since twin.json 12, whose record names no stage (020, research R-06), and
+// names its from side by the twin's snapshot. main here reads as the mixed fixture, as
+// change-1 began.
 func TestStepFromTheBranchPointToTheHead(t *testing.T) {
 	h := stepHost(t, "plan-nothing.json", nil)
 	mixed, err := ctm.Load(repoPath("testdata", "ctm", "mixed.json"))
@@ -2741,27 +2747,23 @@ func TestStepFromTheBranchPointToTheHead(t *testing.T) {
 	mixed.Envelope.Branch = "main"
 	h.infra.branches["main"] = mixed
 	bp := compileStage(t, h.paths, "branch-point")
-	twinAt(t, h, stepTwin{id: bp.id, label: "branch-point", atSource: "branch_point", branch: "main", at: fakeBranchedFrom})
-	twinLine := "twin: stage change-1/branch-point (snapshot " + short(bp.snapshot.ID) + ", bundle %s), pinned at " +
-		fakeBranchedFrom + "; 3 nodes"
+	twinAt(t, h, stepTwin{id: bp.id, branch: "main", at: fakeBranchedFrom})
+	twinLine := "twin: snapshot " + short(bp.snapshot.ID) + " (bundle %s), branch main at " + fakeBranchedFrom + "; 3 nodes"
 
 	t.Run("to the head", func(t *testing.T) {
 		h.clab.plan = []byte(`{"dry-run": true, "deployed-lab": false, "lab-name": "fylgja", "added-nodes": [],
 			"deleted-nodes": ["e2"], "recreated-nodes": [], "started-nodes": [], "added-links": [],
 			"deleted-endpoints": ["e1:eth2_1", "s1:e1-2"], "restarted-nodes": ["e1"], "node-change-reasons": {"e1": "deleted endpoint"}}`)
 		out := runStepCmd(t, "--stage", "change-1/head", "--dry-run", "--allow-restart")
-		skipped := findings.Finding{Severity: findings.Warning, Rule: findings.RuleStepStageSkipped, Object: "change-1/head",
-			Step: findings.StepResolve, Message: "the step from change-1/branch-point to change-1/head skips stages sealed, linked, " +
-				"again, less; the step is between the two bundles either way"}
-		if out.code != findings.ExitOK || !slices.Contains(out.doc.Findings, skipped) || out.doc.Findings.Rejected() {
-			t.Errorf("exit %d, findings %+v; want 0 beside %+v", out.code, out.doc.Findings, skipped)
+		if out.code != findings.ExitOK || carriesRule(out.doc.Findings, findings.RuleStepStageSkipped) || out.doc.Findings.Rejected() {
+			t.Errorf("exit %d, findings %+v; want 0 and no %s", out.code, out.doc.Findings, findings.RuleStepStageSkipped)
 		}
 		for i, line := range []string{fmt.Sprintf(twinLine, short(bp.id)), "stage change-1/head: branch change-1 at " + stepHeadAt + " (head)"} {
 			if got := lineOf(out.stdout, i+2); got != line {
 				t.Errorf("stdout line %d %q, want %q:\n%s", i+2, got, line, out.stdout)
 			}
 		}
-		if !strings.HasPrefix(lineOf(out.stdout, 4), "step change-1/branch-point → change-1/head (") ||
+		if !strings.HasPrefix(lineOf(out.stdout, 4), "step snapshot "+short(bp.snapshot.ID)+" → change-1/head (") ||
 			!strings.Contains(out.stdout, "\nverdict: clear\n") {
 			t.Errorf("stdout:\n%s\nwant the step from the branch point to the head, clear", out.stdout)
 		}
@@ -2788,8 +2790,8 @@ func TestStepTargetCurrentByResolvedReference(t *testing.T) {
 				"stages are: branch-point, sealed, twin, linked, again, less, head"},
 		{name: "the head where the twin was built", ref: "change-1/head",
 			setup: func(t *testing.T, h *stepHostFixture) {
-				twinAt(t, h, stepTwin{id: buildStage(t, h.paths, "head"), label: "head", atSource: "head", branch: "change-1",
-					at: stepHeadAt, retired: true})
+				twinAt(t, h, stepTwin{id: buildStage(t, h.paths, "head"), branch: "change-1", at: stepHeadAt,
+					retired: true})
 			},
 			message: "the twin is already at stage change-1/head (branch change-1, at " + stepHeadAt + "); the proposed change's " +
 				"stages are: " + stepStages},
@@ -2850,7 +2852,8 @@ func TestStepToAStaleStageIsRefused(t *testing.T) {
 // beside the target's bundle; the record NewStepRecord builds from that input names the
 // target's at its top level once the step moves the twin, and both in its step, while a
 // diverged step keeps the record's own. A record of 8, which names none and which 018 let
-// step, is refused before Infrahub is asked, the dry run's included (019, research R-03).
+// step, is refused naming its version before Infrahub is asked, the dry run's included, as
+// any record before 12 is (019, research R-03; 020, research R-06).
 func TestStepNamesEachSidesSnapshot(t *testing.T) {
 	t.Run("from a 9 record", func(t *testing.T) {
 		h := stepHost(t, "plan-nothing.json", nil)
@@ -2910,10 +2913,10 @@ func TestStepNamesEachSidesSnapshot(t *testing.T) {
 			m["twin_version"] = "8"
 			unsnapshotted(m)
 		})
-		out := runStepCmd(t, "--dry-run", "--allow-restart")
+		out := runStepCmd(t, "--stage", "change-1/again", "--dry-run", "--allow-restart")
 		want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Step: findings.StepResolve,
-			Object: h.fromID, Message: "the twin was created from a record version that names no snapshot (twin.json 8); only a " +
-				"twin whose record names a snapshot steps; fylgja twin destroy clears it"}
+			Object: h.fromID, Message: "the twin was created from a record version this build no longer steps (twin.json 8); " +
+				"fylgja twin destroy clears it"}
 		if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want || out.doc.Step != nil {
 			t.Errorf("exit %d, refusal %+v, step %+v; want 1 with %+v and no step", out.code, got, out.doc.Step, want)
 		}
@@ -3421,19 +3424,19 @@ func TestStepToASnapshotRefused(t *testing.T) {
 // US4 scenarios 1, 2 and 4 (FR-015; research R-06): a twin's scope and mapping are fixed
 // when it is created. A snapshot target whose envelope names another scope, or another
 // mapping version, is refused step.twin.unsteppable before any run, its object the
-// snapshot's id, naming the record's and the target's, by a file and then by the id it was
+// snapshot's id, naming the twin's snapshot's and the target's, by a file and then by the id it was
 // filed under, the dry run's included: the snapshot stays filed and is named, no bundle is
 // filed, Infrahub is asked nothing and twin.json is unchanged. A stage target is judged on its
-// bundle's manifest after its build: against a record whose mapping version differs it is
+// filed snapshot after its build: against a twin whose snapshot's mapping version differs it is
 // refused the same way, its object the stage's reference, before the host check and
-// containerlab's plan; and a stage or a snapshot under the record's scope and mapping passes
+// containerlab's plan; and a stage or a snapshot under the twin's scope and mapping passes
 // without a word.
 func TestStepTargetKeepsScopeAndMapping(t *testing.T) {
 	const dcim = "infrahub-dcim opsmill/schema-library 26336e9"
 	const fixed = "; a twin's scope and mapping are fixed when it is created; fylgja twin destroy and create again to change them"
-	unheld := func(object, record, target string) findings.Finding {
+	unheld := func(object, twin, target string) findings.Finding {
 		return findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepTwinUnsteppable, Step: findings.StepResolve,
-			Object: object, Message: "the twin's record names " + record + "; " + target + fixed}
+			Object: object, Message: "the twin's snapshot " + twin + "; " + target + fixed}
 	}
 	for _, c := range []struct {
 		name string
@@ -3466,7 +3469,7 @@ func TestStepTargetKeepsScopeAndMapping(t *testing.T) {
 				if id == "" || id == target.ID {
 					t.Fatalf("%v: the document names snapshot %q; want the edited file's own id", args, id)
 				}
-				want := unheld(id, "scope tag:fylgja and mapping "+dcim, "snapshot "+short(id)+" "+c.target)
+				want := unheld(id, short(h.fromSnapshot)+" names scope tag:fylgja and mapping "+dcim, "snapshot "+short(id)+" "+c.target)
 				if got := refusalOf(t, out.doc); out.code != findings.ExitRejected || got != want || out.doc.Step != nil {
 					t.Errorf("%s %v: exit %d, refusal %+v, step %+v\nwant 1, %+v and no step", arg, args, out.code, got, out.doc.Step, want)
 				}
@@ -3490,9 +3493,26 @@ func TestStepTargetKeepsScopeAndMapping(t *testing.T) {
 		})
 	}
 	t.Run("a stage under another mapping version", func(t *testing.T) {
-		h := stepHost(t, "plan-link-added.json", func(f *lab.RecordFields) { f.Provenance.Mapping.Version = "0f0f0f0" })
+		h := stepHost(t, "plan-link-added.json", nil)
+		// The twin's snapshot is filed under another mapping version, and the record names it:
+		// the rule reads the snapshot's envelope, not the record (020, research R-06).
+		s, err := snap.NewDirStore(h.paths.Snapshots).Fetch(context.Background(), h.fromSnapshot)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.CTM.Envelope.Mapping.Version = "0f0f0f0"
+		if s.ID, err = snap.ID(s); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := snap.NewDirStore(h.paths.Snapshots).Put(context.Background(), s); err != nil {
+			t.Fatal(err)
+		}
+		writeTwin(t, h.paths, stepRecordOf(t, h.fromID, func(f *lab.RecordFields) {
+			f.SnapshotID = s.ID
+			f.Provenance.Mapping.Version = "0f0f0f0"
+		}))
 		record := sha256Of(t, h.paths.TwinJSON)
-		want := unheld("change-1/linked", "scope tag:fylgja and mapping infrahub-dcim opsmill/schema-library 0f0f0f0",
+		want := unheld("change-1/linked", short(s.ID)+" names scope tag:fylgja and mapping infrahub-dcim opsmill/schema-library 0f0f0f0",
 			"stage change-1/linked names scope tag:fylgja and mapping "+dcim)
 		for _, args := range [][]string{{"--allow-restart"}, {"--dry-run"}} {
 			out := runStepCmd(t, append([]string{"--stage", "change-1/linked"}, args...)...)
@@ -3625,8 +3645,8 @@ func TestStepToASnapshotEdges(t *testing.T) {
 }
 
 // The dry run of a step to a snapshot (US2 scenario 8; contracts/commands.md, "The text"),
-// line for line: the twin line, a stage twin's as before and a stage-less twin's naming its
-// snapshot and what it is of, its branch at its at or read at its read; the target line in
+// line for line: the twin line naming its snapshot and what it is of, its branch at its at or
+// read at its read, as every twin's since twin.json 12 names no stage; the target line in
 // place of a stage's resolution, pinned or read; the step between the two sides' names,
 // containerlab's plan, the push plan and the wait; then the host and the verdict. It files
 // the snapshot sent and the bundle, starts no run and dials no service, and changes nothing of
@@ -3640,10 +3660,6 @@ func TestStepToASnapshotDryRun(t *testing.T) {
 		// unpinned makes the target a snapshot read with no at.
 		unpinned bool
 	}{
-		{"from a stage twin", nil, func(h *stepHostFixture) string {
-			return "twin: snapshot " + short(h.fromSnapshot) + " (bundle " + short(h.fromID) + "), branch change-1 at " +
-				stepMixedAt + "; 3 nodes"
-		}, false},
 		{"from a branch twin pinned", func(*lab.RecordFields) {}, func(h *stepHostFixture) string {
 			return "twin: snapshot " + short(h.fromSnapshot) + " (bundle " + short(h.fromID) + "), branch change-1 at " + stepMixedAt +
 				"; 3 nodes"
@@ -3682,10 +3698,7 @@ func TestStepToASnapshotDryRun(t *testing.T) {
 			if c.unpinned {
 				of = "branch change-1, read at " + target.ObservedAt
 			}
-			from := "change-1/sealed"
-			if c.change != nil {
-				from = "snapshot " + short(h.fromSnapshot)
-			}
+			from := "snapshot " + short(h.fromSnapshot)
 			want := stepDryRunLines(h, toID)
 			want[1] = c.twin(h)
 			want[2] = "target: snapshot " + short(toSnapshot) + " (" + of + ")"
@@ -3717,7 +3730,7 @@ func TestStepToASnapshotDryRun(t *testing.T) {
 
 // A step to a snapshot closes as a step to a stage closes, the target named snapshot <short>
 // (contracts/commands.md, "The text"): stepped, unchanged, and diverged naming where the
-// twin is still up, its stage from a stage twin and its snapshot from a stage-less one. While
+// twin is still up by its snapshot and bundle, whatever the twin's source (twin.json 12). While
 // such a step runs, twin show names it stepping towards snapshot <short>, as the service reads
 // the run's input.
 func TestStepToASnapshotCloses(t *testing.T) {
@@ -3747,18 +3760,18 @@ func TestStepToASnapshotCloses(t *testing.T) {
 			code: findings.ExitOK, closing: func(_ *stepHostFixture, toSnapshot, toID string) string {
 				return "unchanged; the record moves to snapshot " + short(toSnapshot) + " (bundle " + short(toID) + ") in 1.8s"
 			}},
-		{name: "diverged from a stage twin", plan: "plan-link-added.json", res: &diverged, code: findings.ExitUnclean,
+		{name: "diverged from a branch twin", plan: "plan-link-added.json", res: &diverged, code: findings.ExitUnclean,
 			closing: func(h *stepHostFixture, toSnapshot, toID string) string {
 				return "diverged towards snapshot " + short(toSnapshot) + " (bundle " + short(toID) + ") at phase push: landed s1; " +
-					"not landed e1 (push.refused); the twin is up at stage change-1/sealed (bundle " + short(h.fromID) + "); " +
+					"not landed e1 (push.refused); the twin is up at " + side(h.fromSnapshot, h.fromID) + "; " +
 					"fylgja twin destroy clears it"
 			}},
 		{name: "diverged from a snapshot twin", change: func(f *lab.RecordFields) { f.Source = wire.SourceSnapshot },
 			plan: "plan-link-added.json", res: &diverged, code: findings.ExitUnclean,
 			closing: func(h *stepHostFixture, toSnapshot, toID string) string {
 				return "diverged towards snapshot " + short(toSnapshot) + " (bundle " + short(toID) + ") at phase push: landed s1; " +
-					"not landed e1 (push.refused); the twin is up at snapshot " + short(h.fromSnapshot) + " (bundle " +
-					short(h.fromID) + "); fylgja twin destroy clears it"
+					"not landed e1 (push.refused); the twin is up at " + side(h.fromSnapshot, h.fromID) + "; " +
+					"fylgja twin destroy clears it"
 			}},
 	} {
 		t.Run(c.name, func(t *testing.T) {

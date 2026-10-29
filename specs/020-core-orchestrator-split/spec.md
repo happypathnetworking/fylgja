@@ -60,6 +60,39 @@ runs. F-025's NetBox adapter, following brought back as a flow, a callback on th
 API, the explicit mutation of a node or a link and a second orchestrator platform are out
 of this feature.
 
+## Clarifications
+
+### Session 2026-10-29
+
+- No question was asked (headless). The brief's [Open](brief.md#open) section is empty,
+  the operator having settled its six questions at feature-open on 2026-10-29, and the
+  coverage scan found every category Clear or deliberately the plan's: functional scope,
+  the five actors and the out-of-scope list (Clear, from the brief's Decided list); the
+  entities, the snapshot's identity and the twin record's version (Clear; `twin.json`
+  `12`'s shape, the orchestrator's record's shape and place, and the new operations' names
+  and frames the plan's, by the brief); the journeys, each refusal and the empty or
+  distrusted record (Clear; the words of a distrusted record's line and of the read of an
+  unknown run identity the plan's); security, in that the core's token never crosses the
+  bridge, the task workers hold the orchestrator's credential alone, and the adapter holds
+  no node login and never the API's token (Clear); performance, tier 1's 65 s budget kept
+  and tier 2's wall time and `fylgja-twin`'s `timeout` against the flow's overhead (the
+  plan's, by the brief); the external dependencies, Prefect's open-source boundary and
+  how a task worker triggers and waits for a deployment on the bridge, each verified on the
+  development host by the plan before it is relied on (the plan's, by the brief); the
+  formats and versions, what moves (`twin.json`, the API's documents) and what does not
+  (FR-033), and whether the API's version moves (the plan's, by the brief); the negative
+  flows (Clear; the 015 defect's fate the plan's to confirm); the constraints and the
+  rejected alternatives (Clear, each *Not chosen* in the brief's Decided list);
+  terminology (Clear; Core, Orchestrator, Adapter, Tool and Flow (orchestrator) are the
+  glossary's new terms, and the two Flows and the two Checks are told apart); the
+  completion signals (Clear, the fixture's ids and the goldens); and no placeholder or
+  unquantified adjective remains. Two consequences the spec states that the brief leaves
+  implicit are derivations, not decisions, recorded here for `analyze`: a distrusted record
+  leaves `twin step` requiring a target and `stage list` without a twin row, as 019's rule
+  for a twin that names no stage already has it (US6 scenario 2, FR-021); and a twin the
+  reclaim finds not its own leaves the rehearsal refused as the host held, as 015's
+  `host.twin.present` already refuses it (US6 scenario 4).
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A proposed change is rehearsed and reported by the orchestrator, while the core knows no branch (Priority: P1)

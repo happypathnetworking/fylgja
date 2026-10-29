@@ -75,9 +75,13 @@ cut along, in five specs, in this order:
    019): a node declared outside intent, the explicit-instruction input to the core.
    **Built** on 2026-10-29, under [D-064](decisions.md#d-064) and Constitution 2.3.0.
 5. **[F-027](#f-027)**, the split of the core and the orchestrator, **the next spec**,
-   added on 2026-10-29 and placed before F-025 by the operator: the production shape's two
+   as `020-core-orchestrator-split` ([spec](../specs/020-core-orchestrator-split/spec.md),
+   [brief](../specs/020-core-orchestrator-split/brief.md), written 2026-10-29), added on
+   2026-10-29 and placed before F-025 by the operator: the production shape's two
    deployables, with the readers, the stages, the rehearsal and the reports on the
-   orchestrator's side; its description, platform and estimate are left to its brainstorm.
+   orchestrator's side, a Python project on Prefect 3.9.0 whose first adapter is the
+   Infrahub reader ported to Python, and the core narrowed to the snapshot; under
+   [D-065](decisions.md#d-065) and [D-066](decisions.md#d-066).
 6. **[F-025](#f-025)**, a reader of NetBox with its branching plugin, producing snapshots
    and taking a stage as a snapshot, after the split: the reader seam against a second
    source of truth, built as the orchestrator's second adapter, in Python. Probed live on
@@ -188,7 +192,7 @@ the next free numbers; [F-026](#f-026) was added on 2026-10-27 and takes the nex
 | F-024 | **Snapshots** | the CTM, which carries each node's configuration, wrapped in one content-addressed document with a slot for the probe declarations; the core's one input, taken by the server and stored beside the bundles; `twin create` and `twin compile` from one | [F-011](#f-011) | 3–5 | The core and orchestrator seam, proved before anything is split. Its [brief](../specs/018-snapshots/brief.md) written 2026-10-27. Built as `018-snapshots` on 2026-10-27. |
 | F-026 | **Following removed from the core** | D-012's following, D-026 and D-027 superseded; the reconcile workflow, its Schedule, `--interval` and `--no-follow` gone; a twin frozen at its snapshot; any twin with a snapshot stepping to a stage or a snapshot, `twin step --snapshot`; walking as stepping | [F-024](#f-024) | 3–5 | A snapshot-fed core does not read a branch on a timer; the production shape's orchestrator may bring following back as take, compare, step. Added 2026-10-27; its [brief](../specs/019-following-removed/brief.md) written the same day. Built as `019-following-removed` on 2026-10-28, in about 6.2 hours of sessions against R-25's 8–11. |
 | F-022 | *`infrahub-sync` into the DCIM*, superseded by [F-025](#f-025) | a sync mapping from NetBox onto [F-011](#f-011)'s schema | — | — | The operator wants NetBox read directly, not synced into Infrahub. |
-| F-027 | **The split: the core and the orchestrator** | the production shape's two deployables: a core that builds, steps, destroys, shows and verifies a twin from a snapshot, and an orchestrator owning the readers, the stages and their resolution, the rehearsal and the reports, driving the core through the API; Constitution I kept for the core and freed for the orchestrator | [F-014](#f-014) | — | Added 2026-10-29 and placed before F-025 by the operator, so the NetBox reader is built as the orchestrator's second adapter. Its description, platform and estimate are its brainstorm's. |
+| F-027 | **The split: the core and the orchestrator** | the production shape's two deployables: a core narrowed to the snapshot, which builds, steps, destroys, shows and verifies a twin from one, and an orchestrator in Python on Prefect 3.9.0 owning the readers, the stages and their resolution, the rehearsal and the reports, driving the core through the API; the Infrahub reader ported to Python as its first adapter; Constitution I kept for the core and freed for the orchestrator | [F-014](#f-014) | 24–36 | Added 2026-10-29 and placed before F-025 by the operator, so the NetBox reader is built as the orchestrator's second adapter. Its [brief](../specs/020-core-orchestrator-split/brief.md) written 2026-10-29; specified as `020-core-orchestrator-split`, under [D-065](decisions.md#d-065) and [D-066](decisions.md#d-066), its estimate [R-22](../specs/020-core-orchestrator-split/research.md#2-decisions)'s. |
 | F-025 | **The NetBox reader** | NetBox with its branching plugin on the development host; an adapter outside the core, in Python, producing snapshots from a branch, with `render-config` as the configuration; a stage taken as a snapshot the adapter holds; a twin of a NetBox branch | [F-027](#f-027), a NetBox instance (installed under `local/netbox/`, stopped) | 8–12 | The reader seam against a second source of truth, and the first that cannot replay time. Probed live on 2026-10-29. |
 | F-012 | **Agent surface** | `fylgja-rehearsing-changes`, a skill in OpsMill's format over the CLI's JSON, with a findings catalogue generated from the code; an MCP server deferred | verify, the API, the rehearsal | 2–5 | Cheap once there is something to ask. Left 0.3 on 2026-10-25: it bolts on later and touches no core. |
 | F-013 | **Observation** | markers with bundle id and stage; a `gnmic` targets export; a documented collector and Grafana dashboard; a per-capability definition of settled | stepping, the API | 4–6 | Convergence across a step becomes a graph. |
@@ -203,10 +207,10 @@ the next free numbers; [F-026](#f-026) was added on 2026-10-27 and takes the nex
 
 | Phase | Features | Hours |
 |---|---|---|
-| Release 0.3 | F-011, F-024, F-026, F-014, F-027, F-025 | 25–39, plus F-027's once briefed |
+| Release 0.3 | F-011, F-024, F-026, F-014, F-027, F-025 | 49–75 |
 | Observing | F-012, F-013, F-015, F-016 | 12–21 |
 | Scale and surface | F-017–F-021 | 37–66 |
-| **All** | | **74–126** |
+| **All** | | **98–162** |
 
 ### The features
 
@@ -380,9 +384,14 @@ destroys, shows and verifies a twin from a snapshot, and an orchestrator that ow
 readers, the stages and their resolution, the rehearsal and the reports posted back to the
 source, driving the core through the API alone; Constitution I kept for the core and freed
 for the orchestrator by a decision entry; and the API's shape for long operations, the
-orchestrator's first demand. Its description, its platform (Prefect leads, Temporal and
-Kestra beside it), its exit criteria and its estimate are left to its brainstorm and
-brief. Why before F-025: the NetBox reader is a Python adapter, so it is orchestrator
+orchestrator's first demand. It is specified as `020-core-orchestrator-split`
+([spec](../specs/020-core-orchestrator-split/spec.md),
+[brief](../specs/020-core-orchestrator-split/brief.md), written 2026-10-29), under
+[D-065](decisions.md#d-065) and [D-066](decisions.md#d-066): the orchestrator a Python
+project on Prefect 3.9.0 under `orchestrator/`, chosen over Temporal and Kestra; the
+Infrahub reader ported to Python as its first adapter; the core narrowed to the snapshot;
+and 24–36 hours of sessions by
+[R-22](../specs/020-core-orchestrator-split/research.md#2-decisions). Why before F-025: the NetBox reader is a Python adapter, so it is orchestrator
 code, and built first it would invent what the split decides. What F-025's spike gives
 it: a source that cannot replay time read as snapshot files, a stage as the snapshot the
 orchestrator holds, the CTM envelope's three Infrahub-shaped places (`schema_hash`, `at`,

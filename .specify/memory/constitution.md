@@ -1,5 +1,14 @@
 <!--
 Sync Impact Report
+- Version change: 2.3.0 → 3.0.0 (2026-10-29, MAJOR: Principle I redefined in its scope).
+  Fylgja is two deployables (D-065): I binds the core and frees the orchestrator; III
+  binds every reader, now an adapter of the orchestrator; VI's "where the source cannot
+  replay time" names the adapter and the orchestrator's store (D-066); VIII and IX are
+  the core's, IX adding the orchestrator's files; X binds both; XI names the orchestrator
+  as a client. Development Workflow: the repository gate reads "a single Go module, one
+  binary, for the core; the orchestrator a Python project under orchestrator/".
+  Templates: .specify/templates/plan-template.md's Constitution Check names 3.0.0 and its
+  rows I, III, VI, VIII, IX and XI read the amended text.
 - Version change: 2.2.0 → 2.3.0 (2026-10-28, MINOR: Principle II materially expanded).
   II gains that a probe format is data as a platform is: one probe package (`probes/`) per
   format, keyed by its format value, from which its image, host configuration, flow,
@@ -59,23 +68,27 @@ Sync Impact Report
 
 # Fylgja Constitution
 
-Fylgja reads network intent from Infrahub and builds a walking twin of it: a running
-virtual topology on real network operating system images, built from one branch at an
-optional point in time, provisioned durably through Temporal, one twin at a time. This
-document holds the non-negotiables. The reasoning behind each lives in
-`docs/architecture.md` and the decision log in `docs/decisions.md`; the constitution cites
-them and does not restate them.
+Fylgja reads network intent from Infrahub and builds a walking twin of it, as two
+deployables: a core that runs a twin from a snapshot, and an orchestrator that reads the
+sources, resolves stages and rehearses (D-065). A twin is a running virtual topology on
+real network operating system images, built from one branch at an optional point in
+time, provisioned durably through Temporal, one twin at a time. This document holds the
+non-negotiables. The reasoning behind each lives in `docs/architecture.md` and the
+decision log in `docs/decisions.md`; the constitution cites them and does not restate
+them.
 
 ## Core Principles
 
-### I. Go, End to End
-Fylgja MUST be a single-language Go system: one toolchain, one test framework, one
-static binary that is CLI, worker and API server. There MUST be no second runtime in the
-critical path. Where a dependency choice affects the static binary, the pure-Go option
-MUST be chosen. Platform support packages and the schema MUST be embedded in the binary
-with a runtime override directory. CLI parsing, where a platform requires it, is a Go
-TextFSM implementation over vendored templates.
-*Rationale: D-005, D-018, D-040.*
+### I. Go, End to End, for the Core
+Fylgja's core MUST be a single-language Go system: one toolchain, one test framework,
+one static binary that is CLI, worker and API server. There MUST be no second runtime in
+the critical path. Where a dependency choice affects the static binary, the pure-Go
+option MUST be chosen. Platform support packages and the schema MUST be embedded in the
+binary with a runtime override directory. CLI parsing, where a platform requires it, is
+a Go TextFSM implementation over vendored templates. The orchestrator is not bound by
+this principle: it is a Python project on Prefect that calls tools written in anything
+and reaches the core through the API alone (XI).
+*Rationale: D-005, D-018, D-040, D-065.*
 
 ### II. Platforms Are Data, Never Code
 A platform MUST be added by writing a Platform Support Package (`psp/`) and nothing
@@ -92,8 +105,9 @@ come from that package, and no component MAY branch on what a format is.
 
 ### III. The CTM Is the Contract; a Reader Maps One Source
 The CTM MUST be the one contract between a source of truth and the compiler. A reader
-MUST read one source's model, as a named version of it, by one documented mapping, and
-nothing the mapping does not name; it MUST read the least possible. Specifically:
+is an adapter of the orchestrator; it MUST read one source's model, as a named version
+of it, by one documented mapping, and nothing the mapping does not name; it MUST read
+the least possible and write a snapshot, the core's one input (D-061). Specifically:
 - MUST name, in every CTM's envelope, the reader and the model version it reads.
 - MUST record every approximation (a CTM field read from a source field whose meaning is
   near and not identical) and every omission (an object inside or touching the scope left
@@ -113,7 +127,7 @@ nothing the mapping does not name; it MUST read the least possible. Specifically
 - MUST validate schema conformance (the kinds and fields the mapping reads, as the named
   model version has them) and data completeness (inside the scope) separately, report all
   findings in one pass, and produce no CTM on failure.
-*Rationale: D-010, D-045, D-048, D-057, D-058, D-059.*
+*Rationale: D-010, D-045, D-048, D-057, D-058, D-059, D-065.*
 
 ### IV. Fylgja Never Renders Configuration
 Fylgja MUST consume the artifacts Infrahub renders for the branch under test and push
@@ -149,8 +163,8 @@ verbatim on every query, and is then recorded as the read's `at`. A read with ne
 has `observed_at` as the only record of when the intent was seen. `observed_at` is
 informational in every case, governs nothing when `at` is supplied, and any claim of
 reproducibility from it MUST say best-effort. Where the source of truth cannot replay
-time, the snapshot's id addresses intent, and a stage there is the snapshot Fylgja took
-when the operator marked it.
+time, the snapshot's id addresses intent, and a stage there is the snapshot the adapter
+took when the operator marked it, held by the orchestrator (D-066).
 *Rationale: D-001, D-012, D-023, D-045, D-061.*
 
 ### VII. One Twin at a Time
@@ -162,15 +176,16 @@ name resources per twin.
 *Rationale: D-013.*
 
 ### VIII. Temporal Runs Short, Idempotent Provisioning
-Provisioning MUST be a Temporal workflow with a fixed ID that runs to a ready twin or
-cleans up; destroy MUST be a second workflow with a fixed ID. Workflow code MUST be
-deterministic: no I/O, no wall clock, no randomness. Every activity MUST be idempotent,
-MUST pass paths and hashes rather than bundle bytes, and, if it can run for minutes,
-MUST heartbeat under a budget from the PSP. Cleanup MUST run on a disconnected context
-from every failure and cancellation path. There MUST be one task queue until the host
-move, and everything that must run on the lab host MUST live in `internal/lab`. A
+Provisioning MUST be a Temporal workflow in the core with a fixed ID that runs to a
+ready twin or cleans up; destroy MUST be a second workflow with a fixed ID. Workflow
+code MUST be deterministic: no I/O, no wall clock, no randomness. Every activity MUST be
+idempotent, MUST pass paths and hashes rather than bundle bytes, and, if it can run for
+minutes, MUST heartbeat under a budget from the PSP. Cleanup MUST run on a disconnected
+context from every failure and cancellation path. There MUST be one task queue until the
+host move, and everything that must run on the lab host MUST live in `internal/lab`. A
 long-running workflow, a signal, a TTL, or a second task queue MUST NOT be introduced
-without a decision-log entry.
+without a decision-log entry. The orchestrator MUST drive the core through the API and
+MUST NOT start a workflow of the core's.
 *Rationale: D-006, D-007, D-015.*
 
 ### IX. State Lives in containerlab and Files; No Database
@@ -178,7 +193,10 @@ Whether the twin exists is what containerlab reports. Its provenance is the mani
 staged in the twin directory beside it. Every compiled bundle MUST be kept in the
 bundle store by hash, behind an interface small enough to be replaced by object
 storage. Temporal holds run history. Fylgja MUST NOT introduce a database without a
-decision-log entry naming the question only a database can answer.
+decision-log entry naming the question only a database can answer. The orchestrator's
+state is Prefect's own run history and files under its state root, the snapshots it took
+and one record of the twin it drove; neither deployable introduces a database without a
+decision-log entry.
 *Rationale: D-014.*
 
 ### X. Report Honestly
@@ -187,22 +205,23 @@ stubbed, omitted; software- versus hardware-forwarding per platform; every synth
 node; every omission with its reason. Skips and omissions MUST be recorded, never
 silent. Every finding, rejection and skip MUST have a stable identifier. Fidelity is
 asserted, not measured, and every surface that reports it MUST say so. No credential
-MAY appear in a bundle, a finding, or a log line; credentials come from the process
-environment only and are never persisted.
+MAY appear in a bundle, a finding, or a log line in either deployable; credentials come
+from the process environment only and are never persisted.
 *Rationale: D-022, D-017.*
 
 ### XI. The API Is the Boundary
 A user-facing client MUST reach Fylgja's core through the API alone. The CLI is a
-client, and so is every later one: a web UI, an agent surface, a check running inside
-Infrahub. A client MUST NOT import, link or run the core by any other path, and no
-command of the CLI runs the core in its own process: the binary's roles, `serve` and
-`worker run`, are the core and not clients. Every refusal that concerns intent, a twin,
-a bundle or the host MUST be the server's, so that every client is refused alike. The
-API's payloads MUST be the documents Fylgja already versions, never a second
-representation. Test code and test tools MAY call the core directly and MAY read the
-nodes, the containers and the record on their own; a shipped client MUST NOT carry a
-second path for them. The boundary MUST be held by a test over imports.
-*Rationale: D-040.*
+client, and so is every later one: the orchestrator, a web UI, an agent surface, a check
+running inside Infrahub, which is the orchestrator's client. A client MUST NOT import,
+link or run the core by any other path, and no command of the core's CLI runs the core
+in its own process: the binary's roles, `serve` and `worker run`, are the core and not
+clients. Every refusal that concerns intent, a twin, a bundle or the host MUST be the
+server's, so that every client is refused alike. The API's payloads MUST be the
+documents Fylgja already versions, never a second representation. Test code and test
+tools MAY call the core directly and MAY read the nodes, the containers and the record
+on their own; a shipped client MUST NOT carry a second path for them. The boundary MUST
+be held by a test over imports.
+*Rationale: D-040, D-065.*
 
 ## Constitution Check — Gate Adjustments
 
@@ -230,13 +249,16 @@ Detail lives in `docs/development.md`; these are the gates.
 
 - **Three test tiers.** Pure, golden-file and Temporal test-suite tests run on every
   PR and need no infrastructure. Contract tests run against a real Infrahub with the
-  vendored library and the stage kind loaded on `main` — a fake Infrahub MUST NOT be used. End-to-end tests with a
-  booted NOS run on demand and MUST NOT gate a PR. *(D-017)*
+  vendored library and the stage kind loaded on `main` — a fake Infrahub MUST NOT be used.
+  The orchestrator's pure tests run with the pure tier; its contract tests with the
+  contract tier. End-to-end tests with a booted NOS run on demand and MUST NOT gate a PR.
+  *(D-017)*
 - **Verification is just-in-time and recorded.** Before an implementation task
   depends on how Infrahub, containerlab or Temporal behaves, the behaviour MUST be
   verified against the running system and recorded in the feature's `research.md`.
-- **Repository.** Single Go module, one binary, `internal/lab` as the host-bound
-  boundary. *(D-018, D-015)*
+- **Repository.** The core is a single Go module, one binary, `internal/lab` as the
+  host-bound boundary; the orchestrator is a Python project under `orchestrator/` with
+  its own tests and lint, in this repository. *(D-018, D-015, D-065)*
 - **CLI.** Noun-verb; `fylgja twin create` is the front door; every stage is exposed
   on the same code path as its tests. From M13 the CLI is the API's client, and each
   stage runs in the server. *(D-019, D-040)*
@@ -262,4 +284,4 @@ Detail lives in `docs/development.md`; these are the gates.
   preceded 1.0.0 at the repository root is retired and MUST NOT be edited in its
   place.
 
-**Version**: 2.3.0 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-28
+**Version**: 3.0.0 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-29

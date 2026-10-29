@@ -53,7 +53,7 @@ Constitution 2.3.0, amended to 3.0.0 by this feature (research §3.2); each gate
 
 | # | Gate | Status |
 |---|---|---|
-| I | Go only; static binary; no second runtime; pure-Go deps; PSPs and schema embedded | PASS for the core, unchanged; VIOLATION for the orchestrator under 2.3.0, resolved by D-065 and the MAJOR amendment (Complexity Tracking) |
+| I | Go only for the core; static binary; no second runtime; pure-Go deps; PSPs and schema embedded | PASS under 3.0.0: the core unchanged; the orchestrator, a Python project on Prefect, is outside I as amended and reaches the core through the API alone (XI); a VIOLATION under 2.3.0, resolved by D-065 and the MAJOR amendment (Complexity Tracking) |
 | II | Platforms are data; probe format a package | PASS: untouched; the adapter reads `platform.matches` from the shipped packages (FR-013) |
 | III | The CTM is the contract; a reader maps one source | PASS: the mapping, the fidelity list, the read-only kinds and the two validations are ported with their identifiers (R-07); the reader is now an adapter (amendment) |
 | IV | No configuration rendered | PASS: untouched |

@@ -880,3 +880,66 @@ made.
   registries are loaded once too. Tier 1: 454 tests in 5.1 s (208 new); `make test`
   uncached 62.3 s at a load of 1.8-2.2, under 65 s. The orchestrator's tier 2, eight
   tests, green on the new client in 1.2 s.
+
+
+### 5.12 The adapter's stages (T018, Run 16, 2026-10-29)
+
+- **Two modules.** `adapters/infrahub/stages.py` ports `internal/stages`' ref.go,
+  resolve.go, stale.go, list.go, target.go and blocks.go, and the read-and-take of
+  `internal/server/resolve.go` and `internal/stage/stage.go` (`read_stage`: the stage
+  resolved, then its branch read at its at by `read.read_snapshot`, the resolution's
+  warnings first). `adapters/infrahub/stage_reader.py`, beyond the task's files, ports
+  `internal/intent/stages.go`'s `StageReader` (the kind's check, the open proposed changes
+  with their marks, the orphans, a branch's origin, the validators pinned at an `at`) on
+  `client.DefaultClient`, whose failures name `(the default branch)`; the event log stays
+  `events.intent_events`. `stages.Stamper` is the server's `intentStamper`: a branch's
+  conformance asked once and remembered, a refusal raised as `schema.ConformanceError`.
+  The two collaborators keep the Go interfaces' shape (`check`, `proposed_changes`,
+  `orphans`, `branch`, `validations`, `intent_events`; `stamps(branch, at, scope)`), so the
+  Go tests' fakes port as they are.
+- **`stages.multiple` is no rule.** The task's line names it; the core files none: two open
+  proposed changes on one source branch, which Infrahub refuses itself, are an error naming
+  every id and choosing none (operation.failed), and the port raises `StagesError` in the
+  same words. No identifier was added.
+- **Instants to the nanosecond.** The core's `ParseAt` reads nine fractional digits and
+  compares to the nanosecond, Python's `datetime` to the microsecond, so `parse_at` returns
+  integer nanoseconds since the epoch over the core's five layouts (RFC 3339 with a T or a
+  space, either naive and read as UTC, and a date), a tenth digit and later cut as Go cuts
+  them. `head_at` reads `time.RFC3339Nano` alone, as `HeadAt` does, and writes the stamp's
+  own offset (`+00:00` for a `Z`) with six digits.
+- **The record a parameter.** `twin_moved` and the listing's twin row take a `RecordView`;
+  the orchestrator's record (R-09) is T024's to build it from. Its `scope` judges a head
+  record under its own scope, as the core did.
+- **Not ported here**: `internal/stages/plan.go` (`Plan`, `Build`), the stage-plan flow's
+  and `documents/plan.py`'s; so `TestTargetResolvesUnderTheReferenceRules` checks its
+  target's refusal through `resolve_from` rather than `Build`, and `TestBlocksValidate`'s
+  plan half waits for the plan. Schema check's `verified.stages` is T019's command;
+  `StageKindError` carries `missing` and `extension` for it. `TestStageReaderFromEnv` is
+  `client.default_from_env`'s, already tested.
+- **The golden.** `tests/data/graphql/stages/golden.json` answers as Infrahub would for the
+  golden's proposed change (its id, its three marks' ids, ats and descriptions, its
+  branched_from, the branch's latest stamp one microsecond before the head, main holding no
+  device, the default branch's schema cut from this host's `main`); the listing through the
+  real reader and stamper equals `tests/golden/stages.json`'s `stages` block, and with the
+  record of `seeded`, `stages-with-twin.json`'s, no finding in either.
+- **Live, on this host's Infrahub**: `fylgja-test-py-stages-869676`, seeded with the
+  three-node fixture, proposed (`18e324b6-ea27-79a2-33b0-c5177c673cc7`, draft, 64 s for its
+  five validators), marked `seeded`, `-add-link`, `third-link`, and `given` with an
+  `as_of` of nine fractional digits (this host's `date` ignores `%6N`, which made the
+  `intent.at.precision` case for free). The adapter's listing equals the Go server's
+  `stage list --json` (its server ran an earlier build of this branch, whose stage listing
+  is unchanged since), and each stage resolved as Go's `stage plan --json` resolved it:
+  the branch point, `seeded` and the head at the same ats, `given` refused
+  `intent.at.precision` and `third-link` `stage.artifact.stale` on n1 and n3, word for
+  word. The adapter's 72 requests are `live.json` (each kept once, the branch schema answers
+  as `test_recorded.py` serves them, 29.5 MB cut to 167 KB), with Go's two documents, and
+  `test_the_recorded_listing_is_the_go_servers` replays them. Then `fylgja-fixture -delete`
+  (3 stages, the proposed change, the branch); `CoreProposedChange`, `FylgjaStage`,
+  `FylgjaProbe`, `CoreChangeThread` and `CoreUserValidator` 0, `Branch` `main` and
+  `fylgja-fixture` alone.
+- **Tests**: `test_stages.py` (141: every pure case of `ref_test.go`, `resolve_test.go`,
+  `stale_test.go`, `list_test.go`, `target_test.go` and `blocks_test.go` by its Go name, the
+  stamper, `read_stage`, the golden and the live replay) and `test_stage_reader.py` (16,
+  `internal/intent/stages_test.go`'s); five mutations of the rules each failed a test.
+  Tier 1: 611 tests in 5.2 s (157 new); `make test` uncached 64.5 s at a load of 1.2-2.0,
+  `internal/cli` 41.7 s of it; `make lint` clean.

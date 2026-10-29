@@ -86,6 +86,12 @@ type BootNode struct {
 // order, after any failure of the package as a whole (Node empty). It boots, pushes and
 // changes nothing, reads each path once and retries nothing.
 //
+// On a probed twin (016) it reads the devices alone: a probe's host has no support
+// package to read it by, so it has no report of its own, and a device's end of a
+// synthesized link is not held to a neighbour, since the host speaks no discovery
+// protocol; the skip is a note of the device's report, in verify's words, and its success
+// line counts it.
+//
 // Every expectation is the package's own data or the bundle's: the paths and values are
 // the conformance facet's, the port names the mapping rows', the far ends the links'.
 // Nothing here knows which platform it reads (Constitution II).
@@ -96,6 +102,9 @@ func Boot(ctx context.Context, in BootInput) []Report {
 	}
 	byPackage := map[string][]compiler.ManifestNode{}
 	for _, n := range in.Manifest.Nodes {
+		if n.Probe != nil {
+			continue
+		}
 		byPackage[n.PSP.ID] = append(byPackage[n.PSP.ID], n)
 	}
 
@@ -114,6 +123,9 @@ func bootPackage(ctx context.Context, in BootInput, id string, nodes []compiler.
 	r := Report{Package: id, BootHalf: BootHalfNotDeclared}
 	fail := func(node, check, message string) {
 		r.Failures = append(r.Failures, Failure{Package: r.Package, Path: r.Path, Check: check, Node: node, Message: message})
+	}
+	note := func(message string) {
+		r.Notes = append(r.Notes, message)
 	}
 
 	p, found := in.Packages.LookupID(id)
@@ -160,17 +172,21 @@ func bootPackage(ctx context.Context, in BootInput, id string, nodes []compiler.
 		}
 
 		n := nodeReader{ctx: ctx, in: in, p: p, name: name,
-			addr: net.JoinHostPort(rec.MgmtIPv4, strconv.Itoa(p.Readiness.PortOrDefault())), fail: fail}
-		hostName, version, listed, ports := n.read()
+			addr: net.JoinHostPort(rec.MgmtIPv4, strconv.Itoa(p.Readiness.PortOrDefault())), fail: fail, note: note}
+		hostName, version, listed, ports, skipped := n.read()
 		node := BootNode{Name: name, Addr: n.addr}
 		if len(r.Failures) == before {
 			pushed := "read after the push"
 			if rec.Artifact == nil {
 				pushed = "read with no push recorded"
 			}
-			node.Passed = fmt.Sprintf("node %s (%s): booted; ready after %ss of %ds; host name %s; %s enabled and discovering; %s as the bundle's links name them; version %s (listed: %s); %s",
+			neighbours := count(ports-skipped, "neighbour", "neighbours") + " as the bundle's links name them"
+			if skipped > 0 {
+				neighbours += fmt.Sprintf("; %d skipped on synthesized links", skipped)
+			}
+			node.Passed = fmt.Sprintf("node %s (%s): booted; ready after %ss of %ds; host name %s; %s enabled and discovering; %s; version %s (listed: %s); %s",
 				name, n.addr, seconds(rec.ReadyAfterS), p.Readiness.TimeoutS, hostName,
-				count(ports, "cabled port", "cabled ports"), count(ports, "neighbour", "neighbours"), version, listed, pushed)
+				count(ports, "cabled port", "cabled ports"), neighbours, version, listed, pushed)
 		}
 		r.Nodes = append(r.Nodes, node)
 	}
@@ -184,11 +200,13 @@ type nodeReader struct {
 	p          *psp.PSP
 	name, addr string
 	fail       func(node, check, message string)
+	note       func(message string)
 }
 
 // read runs the node's reads in check order and returns what the success line names:
-// the host name and version read, the listed version it matched, and the cabled ports.
-func (n nodeReader) read() (hostName, version, listed string, ports int) {
+// the host name and version read, the listed version it matched, the cabled ports, and
+// the neighbours skipped on synthesized links.
+func (n nodeReader) read() (hostName, version, listed string, ports, skipped int) {
 	c := n.p.Conformance
 
 	switch v, got := n.value(CheckHostName, c.HostName, ""); got {
@@ -225,7 +243,9 @@ func (n nodeReader) read() (hostName, version, listed string, ports int) {
 		}
 	}
 	for _, row := range rows {
-		n.neighbor(c.Port.Neighbor, row)
+		if !n.neighbor(c.Port.Neighbor, row) {
+			skipped++
+		}
 	}
 
 	listedText := "[" + strings.Join(n.p.Platform.Versions, ", ") + "]"
@@ -240,7 +260,7 @@ func (n nodeReader) read() (hostName, version, listed string, ports int) {
 	case readNothing:
 		n.failAt(CheckVersion, c.Version, "read nothing, which matches none of the package's versions "+listedText, "")
 	}
-	return hostName, version, listed, len(rows)
+	return hostName, version, listed, len(rows), skipped
 }
 
 // What one read gave.
@@ -287,32 +307,39 @@ func (n nodeReader) failAt(check, path, what, row string) {
 
 // neighbor holds one cabled port's neighbour list to the link the bundle names on it:
 // exactly one entry, naming the far node and the far port under the far node's own name.
-func (n nodeReader) neighbor(at psp.NeighborAt, row compiler.MappingRow) {
+// A synthesized link's end is not read, and noted with verify's reason: asserted is
+// false for it alone.
+func (n nodeReader) neighbor(at psp.NeighborAt, row compiler.MappingRow) (asserted bool) {
 	path := strings.ReplaceAll(at.Path, "{node_name}", verify.NodeName(row))
 	link, far, farRow, ok := n.farSide(row)
 	if !ok {
 		n.failAt(CheckNeighbor, path, fmt.Sprintf("the bundle names no link on port %s", *row.Port), describeRow(row))
-		return
+		return true
+	}
+	if link.Provenance == compiler.ProvenanceSynthesized {
+		n.note(fmt.Sprintf("node %s (%s): %s at %s: skipped: %s; checking %s",
+			n.name, n.addr, CheckNeighbor, path, verify.SynthesizedSkip(link, n.isHost), describeRow(row)))
+		return false
 	}
 	where := describeRow(row) + " for link " + link.ID
 	if farRow == nil {
 		n.failAt(CheckNeighbor, path, fmt.Sprintf("the bundle names no mapping row for %s port %s, the far end", far.Node, far.Port), where)
-		return
+		return true
 	}
 	want := far.Node + " " + verify.NodeName(*farRow)
 
 	a, ok := n.get(CheckNeighbor, path, where)
 	if !ok {
-		return
+		return true
 	}
 	list, value, outcome := verify.EntriesAt(a, path)
 	switch outcome {
 	case verify.ListNothing:
 		n.failAt(CheckNeighbor, path, fmt.Sprintf("expected %s, read nothing", want), where)
-		return
+		return true
 	case verify.ListNotAList:
 		n.failAt(CheckNeighbor, path, fmt.Sprintf("expected %s, read %s, not a list", want, verify.Text(value)), where)
-		return
+		return true
 	}
 	var entries []string
 	for _, e := range list {
@@ -328,6 +355,17 @@ func (n nodeReader) neighbor(at psp.NeighborAt, row compiler.MappingRow) {
 	default:
 		n.failAt(CheckNeighbor, path, fmt.Sprintf("expected %s, read %d entries: %s", want, len(entries), strings.Join(entries, ", ")), where)
 	}
+	return true
+}
+
+// isHost says whether the manifest's node of that name is a probe's host (016).
+func (n nodeReader) isHost(name string) bool {
+	for _, mn := range n.in.Manifest.Nodes {
+		if mn.Name == name {
+			return mn.Probe != nil
+		}
+	}
+	return false
 }
 
 // farSide finds the manifest's link on this row's port and the mapping row at its far

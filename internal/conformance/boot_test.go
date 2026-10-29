@@ -600,6 +600,73 @@ func TestBootHalfReadsUnderNodeNames(t *testing.T) {
 	}
 }
 
+// On a probed twin (016, the fourth golden) the boot half reads the devices alone: the
+// two hosts, which have no package to read them by, get no report and no read, and n1's
+// two probe ports are held to their state as every cabled port is while their
+// neighbours, on synthesized links, are skipped with verify's reason, noted and counted
+// on n1's line. Every other check reads as on the three-node twin.
+func TestBootHalfOnAProbedTwin(t *testing.T) {
+	plain, plainReader := threeNode(t)
+	plainReports := Boot(context.Background(), plain)
+
+	in, reader := threeNode(t)
+	in.Manifest = goldenManifest(t, "three-node-probed")
+	for _, h := range []string{"n1-loop-a", "n1-loop-b"} {
+		in.Record.Nodes = append(in.Record.Nodes, wire.TwinNode{
+			Name: h, Container: "clab-fylgja-" + h, Image: "alpine:3.24.2",
+			Probe:    &wire.TwinProbe{Name: "n1-loop", Endpoint: h[len(h)-1:], Format: "ping", Package: wire.PSPRef{ID: "ping", Source: "embedded"}},
+			MgmtIPv4: map[string]string{"n1-loop-a": "172.20.20.5", "n1-loop-b": "172.20.20.6"}[h], ReadyAfterS: 0.4,
+		})
+	}
+	for _, port := range []string{"ethernet-1/10", "ethernet-1/11"} {
+		reader.answers[a1+" "+enabledPath(port)] = leaf("srl_nokia-interfaces:interface[name="+port+"]/admin-state", "enable")
+		reader.answers[a1+" "+discoveringPath(port)] = leaf("srl_nokia-system:system/srl_nokia-lldp:lldp/interface[name="+port+"]/admin-state", "enable")
+	}
+
+	reports := Boot(context.Background(), in)
+	if len(reports) != 1 || reports[0].Package != "nokia_srlinux" || reports[0].BootHalf != BootHalfTier3 {
+		t.Fatalf("reports for %v, want one for nokia_srlinux, boot half tier 3", packagesOf(reports))
+	}
+	r := reports[0]
+	if len(r.Failures) != 0 {
+		t.Errorf("failures on a healthy probed twin:\n%s", strings.Join(messages(r.Failures), "\n"))
+	}
+	n1 := strings.Replace(passedLine("n1", a1, "15.8"),
+		"; 2 cabled ports enabled and discovering; 2 neighbours as the bundle's links name them;",
+		"; 4 cabled ports enabled and discovering; 2 neighbours as the bundle's links name them; 2 skipped on synthesized links;", 1)
+	want := []BootNode{
+		{Name: "n1", Addr: a1, Passed: n1},
+		plainReports[0].Nodes[1],
+		plainReports[0].Nodes[2],
+	}
+	if !reflect.DeepEqual(r.Nodes, want) {
+		t.Errorf("nodes =\n%+v\nwant\n%+v", r.Nodes, want)
+	}
+	wantNotes := []string{
+		"node n1 (" + a1 + "): neighbor at " + neighborPath("ethernet-1/10") +
+			": skipped: link n1-loop-a:eth1|n1:ethernet-1/10 is synthesized: n1-loop-a speaks no discovery protocol; checking mapping row n1:ethernet-1/10 (port e1-10, node name ethernet-1/10)",
+		"node n1 (" + a1 + "): neighbor at " + neighborPath("ethernet-1/11") +
+			": skipped: link n1-loop-b:eth1|n1:ethernet-1/11 is synthesized: n1-loop-b speaks no discovery protocol; checking mapping row n1:ethernet-1/11 (port e1-11, node name ethernet-1/11)",
+	}
+	if !slices.Equal(r.Notes, wantNotes) {
+		t.Errorf("notes =\n%s\nwant\n%s", strings.Join(r.Notes, "\n"), strings.Join(wantNotes, "\n"))
+	}
+
+	// Every read of the three-node twin, then n1's two probe ports' state and nothing
+	// else: no neighbour read on a synthesized link, and no read at a host.
+	extra := []string{
+		a1 + " " + enabledPath("ethernet-1/10"), a1 + " " + enabledPath("ethernet-1/11"),
+		a1 + " " + discoveringPath("ethernet-1/10"), a1 + " " + discoveringPath("ethernet-1/11"),
+	}
+	got, wantCalls := slices.Sorted(slices.Values(reader.calls)), slices.Sorted(slices.Values(append(slices.Clone(plainReader.calls), extra...)))
+	if !slices.Equal(got, wantCalls) {
+		t.Errorf("reads =\n%s\nwant\n%s", strings.Join(got, "\n"), strings.Join(wantCalls, "\n"))
+	}
+	if dup := duplicates(reader.calls); len(dup) > 0 {
+		t.Errorf("paths read more than once: %v", dup)
+	}
+}
+
 func packagesOf(rs []Report) []string {
 	var out []string
 	for _, r := range rs {

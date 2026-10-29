@@ -139,11 +139,7 @@ func Derive(m compiler.Manifest) ([]Assertion, error) {
 		skip := ""
 		switch {
 		case l.Provenance == compiler.ProvenanceSynthesized:
-			host := l.A.Node
-			if !hosts[host] && hosts[l.B.Node] {
-				host = l.B.Node
-			}
-			skip = fmt.Sprintf("link %s is synthesized: %s speaks no discovery protocol", l.ID, host)
+			skip = SynthesizedSkip(l, func(node string) bool { return hosts[node] })
 		case len(disabled) > 0:
 			skip = fmt.Sprintf("link %s is not asserted: intent disables %s", l.ID, strings.Join(disabled, " and "))
 		}
@@ -200,6 +196,17 @@ func Derive(m compiler.Manifest) ([]Assertion, error) {
 		out = append(out, Assertion{Kind: KindBurst, Node: from.Node, Probe: p.Name, FarNode: to.Node, FarAddress: far})
 	}
 	return out, nil
+}
+
+// SynthesizedSkip is why each end of a synthesized link (016) is not asserted: its host,
+// the end isHost names, speaks no discovery protocol for either end to see. The boot half
+// skips a device's end of one in the same words.
+func SynthesizedSkip(l compiler.CabledLink, isHost func(node string) bool) string {
+	host := l.A.Node
+	if !isHost(host) && isHost(l.B.Node) {
+		host = l.B.Node
+	}
+	return fmt.Sprintf("link %s is synthesized: %s speaks no discovery protocol", l.ID, host)
 }
 
 // ManifestError is a staged manifest the compiler never emits: Object is what

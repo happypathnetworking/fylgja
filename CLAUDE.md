@@ -91,8 +91,8 @@ and is not cited here; a bare milestone marker (`M7`) is resolved by the table b
     kinds, `FylgjaStage` and any added after it.
   - **Some writes go to `main` on purpose**, against `workflow-branch-for-crud`: the
     library and the stage kind, the group `fylgja-devices` and the repository registration
-    (`fylgja-fixture -prepare-main`, which loads the library only on a `main` holding none
-    of its kinds);
+    (`fylgja-fixture -prepare-main`, which loads the stage and probe kinds wherever absent,
+    then the library only on a `main` holding none of its kinds);
     stages and other branch-agnostic objects, which land in no branch's diff; and what
     a check posts on a proposed change; and a demo's three-node baseline, for a window
     `-seed-main` opens and `-clear-main` closes ([D-054](docs/decisions.md#d-054)), with no
@@ -173,11 +173,12 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   rehearses a ready one on a twin and posts the report as a thread on it
   ([D-049](docs/decisions.md#d-049)–[D-053](docs/decisions.md#d-053)).
   `fylgja-fixture -prepare-main` loaded the library and the stage kind, made the group and
-  registered the repository, each only when absent; on a `main` holding any of the
-  library's kinds it loads nothing and refuses, exit 1, which the bring-up script reads as
-  the library present, so on such a `main` the probe kind was loaded by hand
-  (`.venv/bin/infrahubctl schema load --branch main schema/fylgja-probe.yaml`). No credential is
-  registered. **One template renders both platforms**: it branches on the device's
+  registered the repository, each only when absent. It loads the stage and probe kinds
+  first, wherever either is absent, then on a `main` holding any of the library's kinds
+  refuses, exit 1, loading nothing of the library, which the bring-up script reads as the
+  library present; this host's probe kind was loaded by hand
+  (`.venv/bin/infrahubctl schema load --branch main schema/fylgja-probe.yaml`) before the
+  tool took that order (016's T053). No credential is registered. **One template renders both platforms**: it branches on the device's
   platform, and renders each physical port's addresses (SR Linux's `subinterface 0 ipv4`
   lines; EOS's `ip routing`, `no switchport` and `ip address`). **A template or check change reaches Infrahub
   only when asked**: once it is on `origin`'s `main`, which the operator pushes,

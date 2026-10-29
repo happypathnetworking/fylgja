@@ -408,9 +408,10 @@ nor the bundle. Without the kind, only the stage surfaces refuse, and `schema ch
 reports whether the default branch has the kind and its extension.
 
 **What an install loads.** On a greenfield Infrahub, the fixture tool's `-prepare-main`
-loads the vendored library on a `main` that holds none of its kinds, then the stage kind;
-a `main` that already holds any of the library's kinds is its operator's, and is refused,
-loading nothing. `fylgja schema check` says whether a branch's DCIM is the one the reader
+loads the stage and probe kinds, then the vendored library on a `main` that holds none of
+its kinds; a `main` that already holds any of the library's kinds is its operator's, and
+is refused, loading nothing of the library, though the two kinds load on it where
+absent. `fylgja schema check` says whether a branch's DCIM is the one the reader
 reads. The library calls itself experimental, so the commit is pinned, and moving it is a
 change to the mapping's table, verified against the running Infrahub; a DCIM that has
 diverged from the commit needs a reader of its own ([D-057](decisions.md#d-057)).

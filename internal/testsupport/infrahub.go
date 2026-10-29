@@ -286,9 +286,9 @@ func (c *Client) KindsHeld(branch string, kinds []string) ([]string, error) {
 }
 
 // LibraryHeldError is -prepare-main's refusal (R-13): the branch already holds some of the
-// schema library's kinds, so nothing was loaded. Its sentence's opening, up to "an empty
-// main alone", is the one the bring-up script reads as present; the rest says the tool is
-// not an install path (US6 scenario 2).
+// schema library's kinds, so nothing of the library was loaded. Its sentence's opening, up
+// to "an empty main alone", is the one the bring-up script reads as present; the rest says
+// the tool is not an install path (US6 scenario 2).
 type LibraryHeldError struct {
 	Branch string
 	Held   []string
@@ -326,6 +326,22 @@ func (c *Client) LoadLibrary(branch, schemaDir string) (files int, err error) {
 		return 0, err
 	}
 	return len(paths), c.waitForKinds(branch, mutations...)
+}
+
+// PrepareMainSchema is -prepare-main's schema: Fylgja's own kinds first, then the library,
+// on the default branch (D-028, D-064). The own kinds load in one request, a no-op where
+// both are present, so a main holding the library and lacking one gains it; then
+// LoadLibrary, which refuses a main holding any of the library's kinds with a
+// *LibraryHeldError and loads nothing of it. own is whether the own kinds' load moved the
+// hash, set whenever that load succeeded, the library's refusal included; files is the
+// library's files loaded, 0 on its refusal.
+func (c *Client) PrepareMainSchema(schemaDir string) (own bool, files int, err error) {
+	own, err = c.LoadOwnSchema(DefaultBranch, schemaDir)
+	if err != nil {
+		return false, 0, err
+	}
+	files, err = c.LoadLibrary(DefaultBranch, schemaDir)
+	return own, files, err
 }
 
 // LoadOwnSchema loads schemaDir's own files, the stage kind, in one request and waits for

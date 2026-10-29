@@ -1877,7 +1877,8 @@ addr show dev eth1`, expecting its address), never dialled and never pushed.
   bundle version "5"; this build compares "6"`), so destroy it and create it again.
 - `FylgjaProbe` must be on the default branch before a request that sends no file:
   `.venv/bin/infrahubctl schema load --branch main schema/fylgja-probe.yaml`, or the fixture
-  tool's `-prepare-main`, which loads it where absent; without it every create, read, plan,
+  tool's `-prepare-main`, which loads it where absent before it loads or refuses the
+  library, so on a `main` holding the library too; without it every create, read, plan,
   step to a stage and rehearsal that sends no `--probes` is `probe.kind.absent`.
 - A probe image is never pulled by a run: `docker pull alpine:3.24.2` before the first
   probed create.

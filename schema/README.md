@@ -28,9 +28,10 @@ the note, the mapping's table and the CTM's `envelope.mapping.version` together;
 calls itself experimental, so the commit is pinned.
 
 **Loading them.** On the development host and CI's runner, `go run -tags fixture
-./cmd/fylgja-fixture -prepare-main` (the bring-up script's `infrahub` part) loads the six
-files in one request on `main`, then the stage and probe kinds in one more, and only onto
-a `main` holding none of the library's kinds. A `main` holding any is refused, with nothing loaded: `main holds <n>
+./cmd/fylgja-fixture -prepare-main` (the bring-up script's `infrahub` part) loads the stage
+and probe kinds in one request on `main`, wherever either is absent, then the six files in
+one more, and only onto a `main` holding none of the library's kinds. A `main` holding any
+is refused, with nothing of the library loaded: `main holds <n>
 of the schema library's kinds (…): -prepare-main is the development host's and CI's tool,
 which loads the library on an empty main alone; it is not an install path: a main that
 already holds the library is yours, and fylgja schema check says whether it is the one the
@@ -348,7 +349,7 @@ cancels it, about 16 seconds later.
 
 <a id="the-kind-on-the-default-branch"></a>
 **The kind on the default branch.** Load it once, beside the library: `-prepare-main` does
-on the development host after the library, and on an Infrahub that already holds the
+on the development host before the library, and on an Infrahub that already holds the
 library, `infrahubctl schema load schema/fylgja-stage.yaml` (check it first with
 `infrahubctl schema check`); it is the one file of Fylgja's a DCIM user loads. `fylgja schema check --branch <b>` then says `stages: FylgjaStage present on the
 default branch, with its extension`. An installation that never loads it loses only the
@@ -444,7 +445,8 @@ every one.
 
 <a id="the-probe-kind-on-the-default-branch"></a>
 **The kind on the default branch.** Load it once, beside the stage kind: `-prepare-main`
-does on the development host, and elsewhere `infrahubctl schema load
+does on the development host, wherever it is absent, a `main` holding the library
+included, and elsewhere `infrahubctl schema load
 schema/fylgja-probe.yaml` (check it first with `infrahubctl schema check`), which moves
 the default branch's schema hash. `fylgja schema check` does not report it. An
 installation that never loads it is refused, at `resolve`, every request that takes probes

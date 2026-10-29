@@ -12,6 +12,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -76,8 +77,8 @@ func main() {
 		"with -stage: its as_of, verbatim; omitted, its at is when it was written")
 	description := flag.String("description", "", "with -stage: its description")
 	prepare := flag.Bool("prepare-main", false,
-		"load the schema library on a main holding none of its kinds (refused, loading nothing, when it holds any), "+
-			"then the stage and probe kinds, create the group "+testsupport.ArtifactGroupName+
+		"load the stage and probe kinds where absent, then the schema library on a main holding none of its kinds "+
+			"(refused, loading nothing of it, when it holds any), create the group "+testsupport.ArtifactGroupName+
 			", register this repository read-only with no credential, wait for its import, and exit; takes no -branch")
 	repoName := flag.String("repository-name", testsupport.RepositoryName, "with -prepare-main: the registration's name")
 	repoLocation := flag.String("repository-location", testsupport.RepositoryLocation,
@@ -362,28 +363,26 @@ func clearedLine(d testsupport.ClearedBaseline) string {
 }
 
 // prepareMain makes main what every branch needs before it can render (D-028, D-044):
-// the schema library, the stage and probe kinds (D-064), the group the definition targets, and this
-// repository registered read-only with no credential, imported.
+// the stage and probe kinds (D-064), the schema library, the group the definition targets,
+// and this repository registered read-only with no credential, imported.
 //
-// The library goes first, and only onto a main that holds none of its kinds (R-13): the
-// development host's migrated main and CI's fresh one. A main holding any of them is
-// refused before any write, the group and the registration included, since a library
-// already there is its operator's, of whatever commit. So a second run is that refusal,
-// which the bring-up script reads as present. After the library, each step looks up by
-// name and skips what exists; nothing is updated or deleted.
+// The stage and probe kinds go first, wherever either is absent: they are Fylgja's own and
+// name none of the library's kinds, so a main holding the library and lacking one gains it
+// (016's upgrade). The library goes next, and only onto a main that holds none of its
+// kinds (R-13): the development host's migrated main and CI's fresh one. A main holding
+// any of them is refused before any write of the library, the group and the registration
+// included, since a library already there is its operator's, of whatever commit. So a
+// second run is the own kinds present, then that refusal, which the bring-up script reads
+// as present. After the library, each step looks up by name and skips what exists;
+// nothing is updated or deleted.
 func prepareMain(schemaDir, name, location, ref string, wait time.Duration) error {
 	c, err := testsupport.NewClient()
 	if err != nil {
 		return err
 	}
-	files, err := c.LoadLibrary(testsupport.DefaultBranch, schemaDir)
-	if err != nil {
-		return err
-	}
-	fmt.Printf("schema library loaded on %s (%d files, %s@%s)\n",
-		testsupport.DefaultBranch, files, ctm.ModelSchemaLibrary, ctm.ModelVersion)
-	loaded, err := c.LoadOwnSchema(testsupport.DefaultBranch, schemaDir)
-	if err != nil {
+	loaded, files, err := c.PrepareMainSchema(schemaDir)
+	var held *testsupport.LibraryHeldError
+	if err != nil && !errors.As(err, &held) {
 		return err
 	}
 	// The stage and probe kinds are schema/'s own files, loaded in one request: on a main
@@ -393,6 +392,11 @@ func prepareMain(schemaDir, name, location, ref string, wait time.Duration) erro
 	} else {
 		fmt.Println("stage and probe kinds present")
 	}
+	if err != nil {
+		return err
+	}
+	fmt.Printf("schema library loaded on %s (%d files, %s@%s)\n",
+		testsupport.DefaultBranch, files, ctm.ModelSchemaLibrary, ctm.ModelVersion)
 
 	created, err := c.EnsureGroup(testsupport.ArtifactGroupName)
 	if err != nil {

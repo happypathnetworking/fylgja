@@ -100,9 +100,9 @@ whose upgrade needs a step adds it here:
    `twin.json` `10` are read and destroyed, but cannot be stepped from, and a bundle `5`
    is refused by `twin provision` ([F-014](#f-014)).
 3. Load the probe kind on `main` before a request that sends no `--probes`:
-   `.venv/bin/infrahubctl schema load --branch main schema/fylgja-probe.yaml`, by hand,
-   since the fixture tool's `-prepare-main` writes nothing on a `main` that already holds
-   the schema library and the bring-up script then names the kind missing; import the
+   `.venv/bin/infrahubctl schema load --branch main schema/fylgja-probe.yaml`, or the
+   fixture tool's `-prepare-main` from this build, which loads the stage and probe kinds
+   where absent before it refuses a `main` already holding the schema library; import the
    template's commit on `main` so the probe-ready ports' addresses render; and `docker pull
    alpine:3.24.2`, since a run never pulls a probe image ([F-014](#f-014),
    `contracts/cli.md`'s 016 Upgrading).

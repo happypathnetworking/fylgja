@@ -226,9 +226,10 @@ on the proposed change they run for, through Infrahub's own task worker
   kind with its extension of `CoreProposedChange` (`schema/fylgja-stage.yaml`), loaded on
   `main` so that every branch created afterwards has them ([D-028](decisions.md#d-028)).
   The library's `DcimDevice` inherits `CoreArtifactTarget`, and Fylgja adds no kind to the
-  library and implements none of its kinds. `-prepare-main` loads the library only on a
-  `main` holding none of its kinds, and refuses one holding any, writing nothing, since a
-  library already there is its operator's: `fylgja schema check` says whether it is the
+  library and implements none of its kinds. `-prepare-main` loads the stage and probe
+  kinds wherever absent, then the library only on a `main` holding none of its kinds, and
+  refuses one holding any, writing nothing of the library, since a library already there
+  is its operator's: `fylgja schema check` says whether it is the
   one the reader reads;
 - **the empty group `fylgja-devices`**, the artifact definition's target; a device renders
   only once it joins it;

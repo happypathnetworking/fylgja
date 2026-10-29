@@ -1,0 +1,4107 @@
+{
+  "answers": [
+    {
+      "path": "/graphql/fylgja-fixture",
+      "operation": "IntentStamps",
+      "variables": {
+        "tag": "fylgja",
+        "limit": 100,
+        "offset": 0
+      },
+      "status": 200,
+      "body": {
+        "data": {
+          "DcimDevice": {
+            "count": 3,
+            "edges": [
+              {
+                "node_metadata": {
+                  "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                  "updated_by": {
+                    "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                  },
+                  "created_at": "2026-10-29T06:24:38.820707+00:00"
+                },
+                "node": {
+                  "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+                  "name": {
+                    "value": "n1"
+                  },
+                  "platform": {
+                    "node_metadata": {
+                      "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                      "updated_by": {
+                        "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                      },
+                      "created_at": "2026-10-29T06:24:38.086332+00:00"
+                    },
+                    "node": {
+                      "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+                      "name": {
+                        "value": "SR Linux"
+                      },
+                      "manufacturer": {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:38.013453+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa",
+                          "name": {
+                            "value": "Nokia"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.085649+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:40.472618+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546"
+                        }
+                      },
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.085649+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:40.743111+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebfe-aecd-f747-33bb-c515e159cb0e"
+                        }
+                      },
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.085649+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:41.125420+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebfe-c575-78be-33b4-c51bbd7e3413"
+                        }
+                      },
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:40.638720+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebfe-a88f-f465-33b0-c51889938927"
+                        }
+                      },
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.085649+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:39.782061+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebfe-4f01-7ee7-33b5-c51fd0119a60"
+                        }
+                      }
+                    ]
+                  },
+                  "artifacts": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "device-config"
+                          },
+                          "checksum": {
+                            "value": "28881d3d0d61d3fe5acf1f1ee0e31a60",
+                            "updated_at": "2026-10-29T06:24:58.771767+00:00"
+                          },
+                          "definition": {
+                            "node": {
+                              "transformation": {
+                                "node": {
+                                  "query": {
+                                    "node": {
+                                      "id": "18dc77c3-196f-6ca0-33b5-c51a3e210c66"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node_metadata": {
+                  "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                  "updated_by": {
+                    "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                  },
+                  "created_at": "2026-10-29T06:24:41.506900+00:00"
+                },
+                "node": {
+                  "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+                  "name": {
+                    "value": "n2"
+                  },
+                  "platform": {
+                    "node_metadata": {
+                      "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                      "updated_by": {
+                        "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                      },
+                      "created_at": "2026-10-29T06:24:38.086332+00:00"
+                    },
+                    "node": {
+                      "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+                      "name": {
+                        "value": "SR Linux"
+                      },
+                      "manufacturer": {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:38.013453+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa",
+                          "name": {
+                            "value": "Nokia"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.085649+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:41.759030+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf"
+                        }
+                      },
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.010680+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:42.020612+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebfe-fad9-4921-33bd-c51130548d82"
+                        }
+                      },
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.010680+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:42.375101+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebff-0fb0-0292-33b5-c51e876c3de1"
+                        }
+                      },
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:41.905675+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebfe-f3bb-7991-33b3-c51c5c595c14"
+                        }
+                      },
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.010680+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:41.642680+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebfe-e459-9d33-33b8-c51cbeef9b7c"
+                        }
+                      }
+                    ]
+                  },
+                  "artifacts": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "device-config"
+                          },
+                          "checksum": {
+                            "value": "092ca9f62fe2887add0ae679de0a7076",
+                            "updated_at": "2026-10-29T06:24:58.733506+00:00"
+                          },
+                          "definition": {
+                            "node": {
+                              "transformation": {
+                                "node": {
+                                  "query": {
+                                    "node": {
+                                      "id": "18dc77c3-196f-6ca0-33b5-c51a3e210c66"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node_metadata": {
+                  "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                  "updated_by": {
+                    "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                  },
+                  "created_at": "2026-10-29T06:24:42.788457+00:00"
+                },
+                "node": {
+                  "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+                  "name": {
+                    "value": "n3"
+                  },
+                  "platform": {
+                    "node_metadata": {
+                      "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                      "updated_by": {
+                        "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                      },
+                      "created_at": "2026-10-29T06:24:38.086332+00:00"
+                    },
+                    "node": {
+                      "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+                      "name": {
+                        "value": "SR Linux"
+                      },
+                      "manufacturer": {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:38.013453+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa",
+                          "name": {
+                            "value": "Nokia"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:43.036109+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebff-376b-cedb-33b4-c51cff4d38b8"
+                        }
+                      },
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:43.373107+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebff-4b77-17d6-33bb-c516eb985884"
+                        }
+                      },
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:43.717883+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebff-6006-119a-33ba-c51bb1ece87d"
+                        }
+                      },
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:43.157474+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebff-3e65-80f5-33bf-c51c68637630"
+                        }
+                      },
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                          "updated_by": {
+                            "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                          },
+                          "created_at": "2026-10-29T06:24:42.919948+00:00"
+                        },
+                        "node": {
+                          "id": "18e2ebff-3083-8b18-33b5-c516a46e146e"
+                        }
+                      }
+                    ]
+                  },
+                  "artifacts": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "device-config"
+                          },
+                          "checksum": {
+                            "value": "95a3a91788e63626cdb9b4ecdf56eb58",
+                            "updated_at": "2026-10-29T06:24:58.755014+00:00"
+                          },
+                          "definition": {
+                            "node": {
+                              "transformation": {
+                                "node": {
+                                  "query": {
+                                    "node": {
+                                      "id": "18dc77c3-196f-6ca0-33b5-c51a3e210c66"
+                                    }
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "path": "/graphql/fylgja-fixture",
+      "operation": "PortStamps",
+      "variables": {
+        "devices": [
+          "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+          "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+          "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+        ],
+        "limit": 100,
+        "offset": 0
+      },
+      "status": 200,
+      "body": {
+        "data": {
+          "InterfacePhysical": {
+            "count": 6,
+            "edges": [
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                    }
+                  },
+                  "connector": {
+                    "node_metadata": {
+                      "updated_at": "2026-10-29T06:25:03.085649+00:00",
+                      "updated_by": {
+                        "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                      },
+                      "created_at": "2026-10-29T06:24:44.395625+00:00"
+                    },
+                    "node": {
+                      "id": "18e2ebff-7599-0821-33b2-c516f58b6134"
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                    }
+                  },
+                  "connector": {
+                    "node_metadata": {
+                      "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                      "updated_by": {
+                        "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                      },
+                      "created_at": "2026-10-29T06:24:44.662611+00:00"
+                    },
+                    "node": {
+                      "id": "18e2ebff-983b-b045-33bf-c512b4bf4df7"
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                    }
+                  },
+                  "connector": {
+                    "node_metadata": {
+                      "updated_at": "2026-10-29T06:25:03.085649+00:00",
+                      "updated_by": {
+                        "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                      },
+                      "created_at": "2026-10-29T06:24:44.395625+00:00"
+                    },
+                    "node": {
+                      "id": "18e2ebff-7599-0821-33b2-c516f58b6134"
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                    }
+                  },
+                  "connector": {
+                    "node_metadata": {
+                      "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                      "updated_by": {
+                        "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                      },
+                      "created_at": "2026-10-29T06:24:44.533142+00:00"
+                    },
+                    "node": {
+                      "id": "18e2ebff-9088-afbd-33b8-c51053d5c358"
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                    }
+                  },
+                  "connector": {
+                    "node_metadata": {
+                      "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                      "updated_by": {
+                        "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                      },
+                      "created_at": "2026-10-29T06:24:44.533142+00:00"
+                    },
+                    "node": {
+                      "id": "18e2ebff-9088-afbd-33b8-c51053d5c358"
+                    }
+                  }
+                }
+              },
+              {
+                "node": {
+                  "device": {
+                    "node": {
+                      "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                    }
+                  },
+                  "connector": {
+                    "node_metadata": {
+                      "updated_at": "2026-10-29T06:25:03.201997+00:00",
+                      "updated_by": {
+                        "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                      },
+                      "created_at": "2026-10-29T06:24:44.662611+00:00"
+                    },
+                    "node": {
+                      "id": "18e2ebff-983b-b045-33bf-c512b4bf4df7"
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "path": "/graphql/fylgja-fixture",
+      "operation": "QueryGroups",
+      "variables": {
+        "queries": [
+          "18dc77c3-196f-6ca0-33b5-c51a3e210c66"
+        ],
+        "limit": 100,
+        "offset": 0
+      },
+      "status": 200,
+      "body": {
+        "data": {
+          "CoreGraphQLQueryGroup": {
+            "count": 3,
+            "edges": [
+              {
+                "node_metadata": {
+                  "created_by": {
+                    "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                  }
+                }
+              },
+              {
+                "node_metadata": {
+                  "created_by": {
+                    "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                  }
+                }
+              },
+              {
+                "node_metadata": {
+                  "created_by": {
+                    "id": "18dc77a5-c3c3-4096-33b6-c51dbb3fe536"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "path": "/graphql",
+      "operation": "BranchPoint",
+      "variables": {
+        "name": "fylgja-fixture"
+      },
+      "status": 200,
+      "body": {
+        "data": {
+          "Branch": [
+            {
+              "name": "fylgja-fixture",
+              "branched_from": "2026-10-29T06:24:26.973712Z",
+              "created_at": "2026-10-29T06:24:26.973605Z"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "path": "/graphql",
+      "operation": "IntentEvents",
+      "variables": {
+        "branch": "fylgja-fixture",
+        "since": "2026-10-29T06:24:26.973712Z",
+        "limit": 50,
+        "offset": 0
+      },
+      "status": 200,
+      "body": {
+        "data": {
+          "InfrahubEvent": {
+            "count": 135,
+            "edges": [
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.888676+00:00",
+                  "primary_node": {
+                    "id": "18e2ec02-7ad4-294c-33b0-c51365ad3d1e",
+                    "kind": "CoreNode"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "subscriber_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.886528+00:00",
+                  "primary_node": {
+                    "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897",
+                    "kind": "CoreGraphQLQueryGroup"
+                  },
+                  "attributes": [],
+                  "relationships": []
+                }
+              },
+              {
+                "node": {
+                  "__typename": "GroupEvent",
+                  "event": "infrahub.group.member_added",
+                  "occurred_at": "2026-10-29T06:25:03.741058+00:00",
+                  "primary_node": {
+                    "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897",
+                    "kind": "CoreGraphQLQueryGroup"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.739881+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-983b-b045-33bf-c512b4bf4df7",
+                    "kind": "DcimCable"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.737156+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-9088-afbd-33b8-c51053d5c358",
+                    "kind": "DcimCable"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.735920+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-670f-1206-33bc-c51c6102d664",
+                    "kind": "IpamIPAddress"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.734692+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-6006-119a-33ba-c51bb1ece87d",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.733498+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-527d-50a9-33bc-c5159b6568d1",
+                    "kind": "IpamIPAddress"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.732165+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-4b77-17d6-33bb-c516eb985884",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.730925+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-3e65-80f5-33bf-c51c68637630",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.729202+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-376b-cedb-33b4-c51cff4d38b8",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.727938+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-3083-8b18-33b5-c516a46e146e",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.726708+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.725468+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-f3bb-7991-33b3-c51c5c595c14",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.724114+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.722883+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-a88f-f465-33b0-c51889938927",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.721659+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.720417+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+                    "kind": "DcimPlatform"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.718692+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa",
+                    "kind": "OrganizationManufacturer"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.716514+00:00",
+                  "primary_node": {
+                    "id": "18e0a1eb-642e-c2c4-33bf-c51a92428897",
+                    "kind": "CoreGraphQLQueryGroup"
+                  },
+                  "attributes": [],
+                  "relationships": []
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.692577+00:00",
+                  "primary_node": {
+                    "id": "18e2ec02-7bc7-dd97-33b9-c515b0b8237c",
+                    "kind": "CoreNode"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "subscriber_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.690434+00:00",
+                  "primary_node": {
+                    "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4",
+                    "kind": "CoreGraphQLQueryGroup"
+                  },
+                  "attributes": [],
+                  "relationships": []
+                }
+              },
+              {
+                "node": {
+                  "__typename": "GroupEvent",
+                  "event": "infrahub.group.member_added",
+                  "occurred_at": "2026-10-29T06:25:03.645926+00:00",
+                  "primary_node": {
+                    "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4",
+                    "kind": "CoreGraphQLQueryGroup"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.644683+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-9088-afbd-33b8-c51053d5c358",
+                    "kind": "DcimCable"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.643005+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-7599-0821-33b2-c516f58b6134",
+                    "kind": "DcimCable"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.638968+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-376b-cedb-33b4-c51cff4d38b8",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.634926+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.633087+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-1953-3561-33b3-c514f5a09226",
+                    "kind": "IpamIPAddress"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.623608+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-0fb0-0292-33b5-c51e876c3de1",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.621926+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-01ce-79d5-33b1-c510b841160c",
+                    "kind": "IpamIPAddress"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.617548+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-fad9-4921-33bd-c51130548d82",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.615721+00:00",
+                  "primary_node": {
+                    "id": "18e2ec02-7b44-35d5-33b1-c519ca27e515",
+                    "kind": "CoreNode"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "subscriber_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.613873+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-f3bb-7991-33b3-c51c5c595c14",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.613570+00:00",
+                  "primary_node": {
+                    "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a",
+                    "kind": "CoreGraphQLQueryGroup"
+                  },
+                  "attributes": [],
+                  "relationships": []
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.612123+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.601676+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-e459-9d33-33b8-c51cbeef9b7c",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.598695+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.594187+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.590543+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.588748+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+                    "kind": "DcimPlatform"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.577370+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa",
+                    "kind": "OrganizationManufacturer"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.548972+00:00",
+                  "primary_node": {
+                    "id": "18e0a1eb-6516-f612-33be-c51bc4e71fb4",
+                    "kind": "CoreGraphQLQueryGroup"
+                  },
+                  "attributes": [],
+                  "relationships": []
+                }
+              },
+              {
+                "node": {
+                  "__typename": "GroupEvent",
+                  "event": "infrahub.group.member_added",
+                  "occurred_at": "2026-10-29T06:25:03.504671+00:00",
+                  "primary_node": {
+                    "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a",
+                    "kind": "CoreGraphQLQueryGroup"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.503256+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-983b-b045-33bf-c512b4bf4df7",
+                    "kind": "DcimCable"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.501876+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-7599-0821-33b2-c516f58b6134",
+                    "kind": "DcimCable"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.500490+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-3e65-80f5-33bf-c51c68637630",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.496880+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.495500+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.494122+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.492814+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-ccb3-db90-33bb-c515d48bcc01",
+                    "kind": "IpamIPAddress"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "path": "/graphql",
+      "operation": "IntentEvents",
+      "variables": {
+        "branch": "fylgja-fixture",
+        "since": "2026-10-29T06:24:26.973712Z",
+        "limit": 50,
+        "offset": 50
+      },
+      "status": 200,
+      "body": {
+        "data": {
+          "InfrahubEvent": {
+            "count": 135,
+            "edges": [
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.491476+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-c575-78be-33b4-c51bbd7e3413",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.489997+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-b521-b621-33b2-c51c9cd8eb7a",
+                    "kind": "IpamIPAddress"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.488609+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-aecd-f747-33bb-c515e159cb0e",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.487036+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-a88f-f465-33b0-c51889938927",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.485581+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.484116+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-4f01-7ee7-33b5-c51fd0119a60",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.481877+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.480198+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+                    "kind": "DcimPlatform"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.478714+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa",
+                    "kind": "OrganizationManufacturer"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "member_of_groups",
+                      "peer": {
+                        "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:25:03.475793+00:00",
+                  "primary_node": {
+                    "id": "18e0a1eb-642f-45f9-33be-c519c0d80e7a",
+                    "kind": "CoreGraphQLQueryGroup"
+                  },
+                  "attributes": [],
+                  "relationships": []
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ArtifactEvent",
+                  "event": "infrahub.artifact.created",
+                  "occurred_at": "2026-10-29T06:24:58.862953+00:00",
+                  "primary_node": {
+                    "id": "18e2ec02-7b44-35d5-33b1-c519ca27e515",
+                    "kind": "CoreArtifact"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:58.858712+00:00",
+                  "primary_node": {
+                    "id": "18e2ec02-7b44-35d5-33b1-c519ca27e515",
+                    "kind": "CoreArtifact"
+                  },
+                  "attributes": [
+                    {
+                      "name": "storage_id"
+                    },
+                    {
+                      "name": "checksum"
+                    },
+                    {
+                      "name": "status"
+                    }
+                  ],
+                  "relationships": []
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ArtifactEvent",
+                  "event": "infrahub.artifact.created",
+                  "occurred_at": "2026-10-29T06:24:58.829538+00:00",
+                  "primary_node": {
+                    "id": "18e2ec02-7ad4-294c-33b0-c51365ad3d1e",
+                    "kind": "CoreArtifact"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:58.824842+00:00",
+                  "primary_node": {
+                    "id": "18e2ec02-7ad4-294c-33b0-c51365ad3d1e",
+                    "kind": "CoreArtifact"
+                  },
+                  "attributes": [
+                    {
+                      "name": "storage_id"
+                    },
+                    {
+                      "name": "checksum"
+                    },
+                    {
+                      "name": "status"
+                    }
+                  ],
+                  "relationships": []
+                }
+              },
+              {
+                "node": {
+                  "__typename": "ArtifactEvent",
+                  "event": "infrahub.artifact.created",
+                  "occurred_at": "2026-10-29T06:24:58.812435+00:00",
+                  "primary_node": {
+                    "id": "18e2ec02-7bc7-dd97-33b9-c515b0b8237c",
+                    "kind": "CoreArtifact"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:58.806840+00:00",
+                  "primary_node": {
+                    "id": "18e2ec02-7bc7-dd97-33b9-c515b0b8237c",
+                    "kind": "CoreArtifact"
+                  },
+                  "attributes": [
+                    {
+                      "name": "storage_id"
+                    },
+                    {
+                      "name": "checksum"
+                    },
+                    {
+                      "name": "status"
+                    }
+                  ],
+                  "relationships": []
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:57.143238+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "artifacts",
+                      "peer": {
+                        "id": "18e2ec02-7b44-35d5-33b1-c519ca27e515"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:57.141446+00:00",
+                  "primary_node": {
+                    "id": "18dc77c7-0ebf-e2c3-33b3-c5132710ff31",
+                    "kind": "CoreArtifactDefinition"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "artifacts",
+                      "peer": {
+                        "id": "18e2ec02-7b44-35d5-33b1-c519ca27e515"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:57.134419+00:00",
+                  "primary_node": {
+                    "id": "18e2ec02-7b44-35d5-33b1-c519ca27e515",
+                    "kind": "CoreArtifact"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "parameters"
+                    },
+                    {
+                      "name": "storage_id"
+                    },
+                    {
+                      "name": "checksum"
+                    },
+                    {
+                      "name": "content_type"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "status"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "definition",
+                      "peer": {
+                        "id": "18dc77c7-0ebf-e2c3-33b3-c5132710ff31"
+                      }
+                    },
+                    {
+                      "name": "object",
+                      "peer": {
+                        "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:57.124749+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "artifacts",
+                      "peer": {
+                        "id": "18e2ec02-7bc7-dd97-33b9-c515b0b8237c"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:57.123163+00:00",
+                  "primary_node": {
+                    "id": "18dc77c7-0ebf-e2c3-33b3-c5132710ff31",
+                    "kind": "CoreArtifactDefinition"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "artifacts",
+                      "peer": {
+                        "id": "18e2ec02-7bc7-dd97-33b9-c515b0b8237c"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:57.121632+00:00",
+                  "primary_node": {
+                    "id": "18e2ec02-7bc7-dd97-33b9-c515b0b8237c",
+                    "kind": "CoreArtifact"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "parameters"
+                    },
+                    {
+                      "name": "storage_id"
+                    },
+                    {
+                      "name": "checksum"
+                    },
+                    {
+                      "name": "content_type"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "status"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "definition",
+                      "peer": {
+                        "id": "18dc77c7-0ebf-e2c3-33b3-c5132710ff31"
+                      }
+                    },
+                    {
+                      "name": "object",
+                      "peer": {
+                        "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:57.120041+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "artifacts",
+                      "peer": {
+                        "id": "18e2ec02-7ad4-294c-33b0-c51365ad3d1e"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:57.117864+00:00",
+                  "primary_node": {
+                    "id": "18dc77c7-0ebf-e2c3-33b3-c5132710ff31",
+                    "kind": "CoreArtifactDefinition"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "artifacts",
+                      "peer": {
+                        "id": "18e2ec02-7ad4-294c-33b0-c51365ad3d1e"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:57.115602+00:00",
+                  "primary_node": {
+                    "id": "18e2ec02-7ad4-294c-33b0-c51365ad3d1e",
+                    "kind": "CoreArtifact"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "parameters"
+                    },
+                    {
+                      "name": "storage_id"
+                    },
+                    {
+                      "name": "checksum"
+                    },
+                    {
+                      "name": "content_type"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "status"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "definition",
+                      "peer": {
+                        "id": "18dc77c7-0ebf-e2c3-33b3-c5132710ff31"
+                      }
+                    },
+                    {
+                      "name": "object",
+                      "peer": {
+                        "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "GroupEvent",
+                  "event": "infrahub.group.member_added",
+                  "occurred_at": "2026-10-29T06:24:45.004634+00:00",
+                  "primary_node": {
+                    "id": "18dc77bb-b988-8573-33b2-c515208ee44c",
+                    "kind": "CoreStandardGroup"
+                  }
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:44.727862+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-a88f-f465-33b0-c51889938927",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "connector",
+                      "peer": {
+                        "id": "18e2ebff-983b-b045-33bf-c512b4bf4df7"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:44.723720+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-3e65-80f5-33bf-c51c68637630",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "connector",
+                      "peer": {
+                        "id": "18e2ebff-983b-b045-33bf-c512b4bf4df7"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:44.721030+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-983b-b045-33bf-c512b4bf4df7",
+                    "kind": "DcimCable"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "label"
+                    },
+                    {
+                      "name": "cable_type"
+                    },
+                    {
+                      "name": "length"
+                    },
+                    {
+                      "name": "color"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "connected_endpoints",
+                      "peer": {
+                        "id": "18e2ebff-3e65-80f5-33bf-c51c68637630"
+                      }
+                    },
+                    {
+                      "name": "connected_endpoints",
+                      "peer": {
+                        "id": "18e2ebfe-a88f-f465-33b0-c51889938927"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:44.596647+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-376b-cedb-33b4-c51cff4d38b8",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "connector",
+                      "peer": {
+                        "id": "18e2ebff-9088-afbd-33b8-c51053d5c358"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:44.592141+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-f3bb-7991-33b3-c51c5c595c14",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "connector",
+                      "peer": {
+                        "id": "18e2ebff-9088-afbd-33b8-c51053d5c358"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:44.589220+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-9088-afbd-33b8-c51053d5c358",
+                    "kind": "DcimCable"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "label"
+                    },
+                    {
+                      "name": "cable_type"
+                    },
+                    {
+                      "name": "length"
+                    },
+                    {
+                      "name": "color"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "connected_endpoints",
+                      "peer": {
+                        "id": "18e2ebfe-f3bb-7991-33b3-c51c5c595c14"
+                      }
+                    },
+                    {
+                      "name": "connected_endpoints",
+                      "peer": {
+                        "id": "18e2ebff-376b-cedb-33b4-c51cff4d38b8"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:44.467338+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "connector",
+                      "peer": {
+                        "id": "18e2ebff-7599-0821-33b2-c516f58b6134"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:44.463141+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "connector",
+                      "peer": {
+                        "id": "18e2ebff-7599-0821-33b2-c516f58b6134"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:44.460489+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-7599-0821-33b2-c516f58b6134",
+                    "kind": "DcimCable"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "label"
+                    },
+                    {
+                      "name": "cable_type"
+                    },
+                    {
+                      "name": "length"
+                    },
+                    {
+                      "name": "color"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "connected_endpoints",
+                      "peer": {
+                        "id": "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546"
+                      }
+                    },
+                    {
+                      "name": "connected_endpoints",
+                      "peer": {
+                        "id": "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:43.770836+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebff-6006-119a-33ba-c51bb1ece87d"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:43.768136+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-6006-119a-33ba-c51bb1ece87d",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:43.425163+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebff-4b77-17d6-33bb-c516eb985884"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:43.422524+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-4b77-17d6-33bb-c516eb985884",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:43.307684+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebff-3e65-80f5-33bf-c51c68637630"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:43.303693+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-3e65-80f5-33bf-c51c68637630",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:43.091763+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebff-376b-cedb-33b4-c51cff4d38b8"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:43.088987+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-376b-cedb-33b4-c51cff4d38b8",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:42.971661+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebff-3083-8b18-33b5-c516a46e146e"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:42.968940+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-3083-8b18-33b5-c516a46e146e",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:42.859237+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfd-e135-7632-33b9-c512c9e47196",
+                    "kind": "LocationSite"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "devices",
+                      "peer": {
+                        "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:42.855222+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+                    "kind": "DcimPlatform"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "devices",
+                      "peer": {
+                        "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:42.852510+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-27f2-20c6-33ba-c5183426abf5",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "rack_face"
+                    },
+                    {
+                      "name": "position"
+                    },
+                    {
+                      "name": "serial_number"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "platform",
+                      "peer": {
+                        "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2"
+                      }
+                    },
+                    {
+                      "name": "tags",
+                      "peer": {
+                        "id": "18e2ebfd-6da8-9c8f-33b7-c515bbc7996b"
+                      }
+                    },
+                    {
+                      "name": "location",
+                      "peer": {
+                        "id": "18e2ebfd-e135-7632-33b9-c512c9e47196"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:42.443698+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebff-0fb0-0292-33b5-c51e876c3de1"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:42.440911+00:00",
+                  "primary_node": {
+                    "id": "18e2ebff-0fb0-0292-33b5-c51e876c3de1",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "path": "/graphql",
+      "operation": "IntentEvents",
+      "variables": {
+        "branch": "fylgja-fixture",
+        "since": "2026-10-29T06:24:26.973712Z",
+        "limit": 50,
+        "offset": 100
+      },
+      "status": 200,
+      "body": {
+        "data": {
+          "InfrahubEvent": {
+            "count": 135,
+            "edges": [
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:42.072386+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebfe-fad9-4921-33bd-c51130548d82"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:42.069348+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-fad9-4921-33bd-c51130548d82",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:41.955451+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebfe-f3bb-7991-33b3-c51c5c595c14"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:41.952907+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-f3bb-7991-33b3-c51c5c595c14",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:41.836789+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:41.834086+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-eb44-cc5e-33bf-c51a38f90bbf",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:41.696842+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebfe-e459-9d33-33b8-c51cbeef9b7c"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:41.694197+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-e459-9d33-33b8-c51cbeef9b7c",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:41.583446+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfd-e135-7632-33b9-c512c9e47196",
+                    "kind": "LocationSite"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "devices",
+                      "peer": {
+                        "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:41.579170+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+                    "kind": "DcimPlatform"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "devices",
+                      "peer": {
+                        "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:41.573723+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-dbc5-89eb-33b3-c515b06545a4",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "rack_face"
+                    },
+                    {
+                      "name": "position"
+                    },
+                    {
+                      "name": "serial_number"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "platform",
+                      "peer": {
+                        "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2"
+                      }
+                    },
+                    {
+                      "name": "tags",
+                      "peer": {
+                        "id": "18e2ebfd-6da8-9c8f-33b7-c515bbc7996b"
+                      }
+                    },
+                    {
+                      "name": "location",
+                      "peer": {
+                        "id": "18e2ebfd-e135-7632-33b9-c512c9e47196"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:41.182563+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebfe-c575-78be-33b4-c51bbd7e3413"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:41.179181+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-c575-78be-33b4-c51bbd7e3413",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:40.789432+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebfe-aecd-f747-33bb-c515e159cb0e"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:40.785861+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-aecd-f747-33bb-c515e159cb0e",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:40.686073+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebfe-a88f-f465-33b0-c51889938927"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:40.683648+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-a88f-f465-33b0-c51889938927",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:40.581453+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:40.579004+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-7d9b-3bd9-33b1-c5166a2a6546",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:39.847910+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "interfaces",
+                      "peer": {
+                        "id": "18e2ebfe-4f01-7ee7-33b5-c51fd0119a60"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:39.845110+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-4f01-7ee7-33b5-c51fd0119a60",
+                    "kind": "InterfacePhysical"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "mtu"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "mac_address"
+                    },
+                    {
+                      "name": "l2_mode"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "device",
+                      "peer": {
+                        "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:39.078056+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfd-e135-7632-33b9-c512c9e47196",
+                    "kind": "LocationSite"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "devices",
+                      "peer": {
+                        "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:39.072647+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+                    "kind": "DcimPlatform"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "devices",
+                      "peer": {
+                        "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:39.069762+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-15b1-0c64-33bc-c519c51d054f",
+                    "kind": "DcimDevice"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "role"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "rack_face"
+                    },
+                    {
+                      "name": "position"
+                    },
+                    {
+                      "name": "serial_number"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "platform",
+                      "peer": {
+                        "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2"
+                      }
+                    },
+                    {
+                      "name": "tags",
+                      "peer": {
+                        "id": "18e2ebfd-6da8-9c8f-33b7-c515bbc7996b"
+                      }
+                    },
+                    {
+                      "name": "location",
+                      "peer": {
+                        "id": "18e2ebfd-e135-7632-33b9-c512c9e47196"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:38.126628+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa",
+                    "kind": "OrganizationManufacturer"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "platforms",
+                      "peer": {
+                        "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:38.125148+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-10a2-d6cf-33ba-c518425efda2",
+                    "kind": "DcimPlatform"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "name"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "manufacturer",
+                      "peer": {
+                        "id": "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:38.037419+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfe-0c77-4bd1-33bd-c5122e2998aa",
+                    "kind": "OrganizationManufacturer"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "name"
+                    }
+                  ],
+                  "relationships": []
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:37.648787+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfd-b41f-7e92-33ba-c51a95218664",
+                    "kind": "LocationMetro"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "children",
+                      "peer": {
+                        "id": "18e2ebfd-e135-7632-33b9-c512c9e47196"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:37.645566+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfd-e135-7632-33b9-c512c9e47196",
+                    "kind": "LocationSite"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "facility"
+                    },
+                    {
+                      "name": "physical_address"
+                    },
+                    {
+                      "name": "timezone"
+                    },
+                    {
+                      "name": "status"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "parent",
+                      "peer": {
+                        "id": "18e2ebfd-b41f-7e92-33ba-c51a95218664"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:36.589658+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfd-8b1c-61fe-33b9-c51cd5ea3381",
+                    "kind": "LocationCountry"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "children",
+                      "peer": {
+                        "id": "18e2ebfd-b41f-7e92-33ba-c51a95218664"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:36.586994+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfd-b41f-7e92-33ba-c51a95218664",
+                    "kind": "LocationMetro"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "parent",
+                      "peer": {
+                        "id": "18e2ebfd-8b1c-61fe-33b9-c51cd5ea3381"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.updated",
+                  "occurred_at": "2026-10-29T06:24:36.417919+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfd-7477-94c5-33bf-c510d4014714",
+                    "kind": "LocationRegion"
+                  },
+                  "attributes": [],
+                  "relationships": [
+                    {
+                      "name": "parent",
+                      "peer": {
+                        "id": "18e2ebfd-8b1c-61fe-33b9-c51cd5ea3381"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:36.415577+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfd-8b1c-61fe-33b9-c51cd5ea3381",
+                    "kind": "LocationCountry"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    }
+                  ],
+                  "relationships": [
+                    {
+                      "name": "parent",
+                      "peer": {
+                        "id": "18e2ebfd-7477-94c5-33bf-c510d4014714"
+                      }
+                    }
+                  ]
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:35.755147+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfd-7477-94c5-33bf-c510d4014714",
+                    "kind": "LocationRegion"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "name"
+                    },
+                    {
+                      "name": "description"
+                    }
+                  ],
+                  "relationships": []
+                }
+              },
+              {
+                "node": {
+                  "__typename": "NodeMutatedEvent",
+                  "event": "infrahub.node.created",
+                  "occurred_at": "2026-10-29T06:24:35.370604+00:00",
+                  "primary_node": {
+                    "id": "18e2ebfd-6da8-9c8f-33b7-c515bbc7996b",
+                    "kind": "BuiltinTag"
+                  },
+                  "attributes": [
+                    {
+                      "name": "human_friendly_id"
+                    },
+                    {
+                      "name": "display_label"
+                    },
+                    {
+                      "name": "description"
+                    },
+                    {
+                      "name": "name"
+                    }
+                  ],
+                  "relationships": []
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

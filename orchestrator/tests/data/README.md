@@ -21,3 +21,19 @@ held to (020's T016).
 `schema/schema-26336e9.json` is a copy of `internal/intent/testdata/`'s recorded
 `GET /api/schema` answer for the schema library at `26336e9` (a test holds the copy to its
 original); each conformance case changes it in the test, as the Go test does.
+
+`probes/` holds copies of `testdata/probes/`'s declarations, `invalid/` beside them (a test
+holds each copy to its original and the set to the original's), which `test_probes.py`
+reads as the Go tests of `internal/probe` and `internal/server` read them.
+`schema/schema-fylgja-probe.json` is a copy of `internal/intent/testdata/`'s recorded
+`FylgjaProbe` node (a test holds the copy to its original), added to the default branch's
+schema in the test, less the attributes a case drops, as the Go test does.
+
+`graphql/fylgja-fixture/` is this host's Infrahub 1.11.2 answering the adapter for the
+fixture branch on 2026-10-29, recorded read-only by the adapter itself (020's T017):
+`read.json` the Devices and Ports answers and the branch's schema hash, `object-<id>.txt`
+the three artifacts' bytes, `stamps.json` the IntentStamps, PortStamps, QueryGroups,
+BranchPoint and IntentEvents answers, and `go-stamps-events.json` what the Go reader's
+`Stamps` and `IntentEvents` returned for the same branch at the same moment.
+`test_recorded.py` replays them: the read files `0940db93…`, and the stamps and events are
+Go's. They hold node ids and timestamps, no credential and no address.

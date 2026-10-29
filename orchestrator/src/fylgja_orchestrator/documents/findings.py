@@ -38,6 +38,14 @@ class Findings(list):
     def reject(self, rule: str, object: str, message: str) -> None:
         self.add(REJECTION, rule, object, message)
 
+    def add_step(self, severity: str, step: str, rule: str, object: str, message: str) -> None:
+        """A finding of a run's step."""
+        self.append(Finding(severity, rule, object, message, step))
+
+    def at_step(self, step: str) -> "Findings":
+        """A copy with every finding at step (`List.AtStep`)."""
+        return Findings(Finding(f.severity, f.rule, f.object, f.message, step) for f in self)
+
     @property
     def rejected(self) -> bool:
         """Whether any finding is a rejection: what stops the command."""

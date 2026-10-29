@@ -2,7 +2,9 @@
 registry joins them: a device's package is the one naming its manufacturer and platform
 pair, both compared exactly, letter case and spacing included.
 
-The adapter reads only each package's `platform` (its id, NOS and pairs). The packages are
+The adapter reads only each package's `platform` (its id, NOS and pairs) and the two keys
+of its `config` that name its artifact (`artifact_name`, `artifact_content_types`, which the
+read selects a device's configuration by). The packages are
 the core's: it validates them, and compiles with them, so a package this module reads
 and the core refuses fails at the core's compile. Where they are read from (research
 §5.10):
@@ -64,6 +66,10 @@ class Package:
     matches: tuple[Match, ...]
     path: str
     origin: str
+    # config.artifact_name and config.artifact_content_types: which of a device's artifacts
+    # is its configuration, and the types the package accepts it in (the read's steps 1, 4).
+    artifact_name: str = ""
+    artifact_content_types: tuple[str, ...] = ()
 
 
 class PackageError(Exception):
@@ -88,12 +94,15 @@ def _parse(path: Path, origin: str) -> Package:
         for m in platform.get("matches") or []
         if isinstance(m, dict)
     )
+    config = doc.get("config") if isinstance(doc.get("config"), dict) else {}
     return Package(
         id=str(platform.get("id") or ""),
         nos=str(platform.get("nos") or ""),
         matches=matches,
         path=str(path),
         origin=origin,
+        artifact_name=str(config.get("artifact_name") or ""),
+        artifact_content_types=tuple(str(t) for t in config.get("artifact_content_types") or []),
     )
 
 

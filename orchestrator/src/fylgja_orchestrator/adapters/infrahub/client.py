@@ -41,6 +41,26 @@ fractional digits are honoured exactly, a seventh and later digit truncated."""
 RULE_AT_PRECISION = "intent.at.precision"
 
 _AT_FRACTION = re.compile(r"\.([0-9]+)")
+_OPERATION = re.compile(r"^\s*query\s+([_A-Za-z][_0-9A-Za-z]*)")
+
+_RELOGIN_FAILURES = (AttributeError, TypeError, ValueError)
+"""What the SDK's relogin hook raises on a 401 whose body it cannot read as it expects."""
+
+DEFAULT_BRANCH = "(the default branch)"
+"""What a default-branch read names in its failures, as a branch read names its (branch,
+at): the reader asked no branch of its own."""
+
+
+def operation_name(query: str) -> str | None:
+    """The name of a query document's operation, its first definition's."""
+    m = _OPERATION.match(query)
+    return m.group(1) if m else None
+
+
+def default_branch_at(at: str = "") -> str:
+    """What a default-branch request asked: the default branch, at an instant when one was
+    sent."""
+    return f"(the default branch at {at})" if at else DEFAULT_BRANCH
 
 
 class ConfigError(ValueError):
@@ -55,10 +75,15 @@ class ClientError(Exception):
     `credential_refused` a 401 or 403, so a caller tells them from an unreachable Infrahub
     without reading the text."""
 
-    def __init__(self, message: str, *, branch_missing: bool = False, credential_refused: bool = False):
+    def __init__(
+        self, message: str, *, branch_missing: bool = False, credential_refused: bool = False, detail: str = ""
+    ):
         super().__init__(message)
         self.branch_missing = branch_missing
         self.credential_refused = credential_refused
+        # The cause alone, redacted, without what was asked or of which (branch, at): the
+        # read groups the content fetches that failed alike by it, as the Go reader did.
+        self.detail = detail or message
 
 
 def at_fraction_digits(at: str) -> int:
@@ -217,6 +242,27 @@ def _sdk():
     return infrahub_sdk.Config, SDKClient, exceptions.Error, exceptions.GraphQLError
 
 
+@functools.cache
+def _sdk_settings(token: str):
+    """The SDK's settings for a token, built once per process and copied per client with
+    its own recorder and transport. Explicit, so no INFRAHUB_* variable the SDK's settings
+    read moves them: the token alone authenticates, and nothing is retried, as the Go reader
+    retried nothing. Building them reads the environment and a TLS context of the system's
+    certificates, about 30 ms, which a command pays once and tier 1 once, not per client;
+    a copy shares the context, which is made for sharing."""
+    sdk_config = _sdk()[0]
+    settings = sdk_config(
+        api_token=token,
+        username=None,
+        password=None,
+        timeout=TIMEOUT_S,
+        retry_on_failure=False,
+        echo_graphql_queries=False,
+    )
+    _ = settings.tls_context
+    return settings
+
+
 class Client:
     """Reads one branch, at one instant when `at` is given.
 
@@ -226,21 +272,12 @@ class Client:
     def __init__(self, config: Config, requester=None):
         self.config = config
         self._last = _Last()
-        # Explicit, so no INFRAHUB_* variable the SDK's settings read moves them: the token
-        # alone authenticates, and nothing is retried, as the Go reader retried nothing.
-        settings = {
-            "api_token": config.token,
-            "username": None,
-            "password": None,
-            "timeout": TIMEOUT_S,
-            "retry_on_failure": False,
-            "echo_graphql_queries": False,
-            "custom_recorder": self._last,
-        }
-        if requester is not None:
-            settings["sync_requester"] = requester
-        sdk_config, sdk_client, self._sdk_error, self._graphql_error = _sdk()
-        self._sdk = sdk_client(address=config.address, config=sdk_config(**settings))
+        self._requester = requester
+        _, sdk_client, self._sdk_error, self._graphql_error = _sdk()
+        settings = _sdk_settings(config.token).model_copy(
+            update={"custom_recorder": self._last, "sync_requester": requester}
+        )
+        self._sdk = sdk_client(address=config.address, config=settings)
 
     @property
     def branch(self) -> str:
@@ -250,19 +287,42 @@ class Client:
     def at(self) -> str:
         return self.config.at
 
-    def _error(self, what: str, detail: str, *, branch_missing=False, credential_refused=False) -> ClientError:
-        message = redact(f"{what} {self.config.describe()}: {detail}", self.config.token)
-        return ClientError(message, branch_missing=branch_missing, credential_refused=credential_refused)
+    def where(self, at: str | None = None) -> str:
+        """What a failure was about: the (branch, at) this client reads."""
+        return self.config.describe()
+
+    def _error(self, what: str, detail: str, *, at=None, branch_missing=False, credential_refused=False) -> ClientError:
+        message = redact(f"{what} {self.where(at)}: {detail}", self.config.token)
+        return ClientError(
+            message,
+            branch_missing=branch_missing,
+            credential_refused=credential_refused,
+            detail=redact(detail, self.config.token),
+        )
+
+    def _relogin_failure(self, what: str, e: Exception, at=None) -> ClientError:
+        """The SDK reads a 401's body as `{"errors": [{"message": …}]}` before anything
+        else (its relogin hook), and fails on any other body, errors as strings or no JSON
+        at all: the status recorded decides, as the Go reader's transport decided by the
+        status alone."""
+        response = self._last.response
+        refused = auth_failure(response.status_code) if response is not None else ""
+        if refused:
+            return self._error(what, refused, at=at, credential_refused=True)
+        return self._error(what, str(e), at=at)
 
     def get(self, path: str, what: str = "") -> tuple[bytes, int]:
         """A plain REST read with no `at` (the schema endpoint, which has none): the body
         and the status. A refused credential or an Infrahub that never answered raises,
         naming `what` was being read; any other status is the caller's."""
         what = what or f"reading {path}"
+        self._last.response = None
         try:
             response = self._sdk._get(self.config.address + path)
         except self._sdk_error as e:
             raise self._error(what, str(e)) from None
+        except _RELOGIN_FAILURES as e:
+            raise self._relogin_failure(what, e) from None
         refused = auth_failure(response.status_code)
         if refused:
             raise self._error(what, refused, credential_refused=True)
@@ -277,29 +337,42 @@ class Client:
             path += ("&" if "?" in path else "?") + urlencode({"at": self.config.at})
         return self.get(path, what)
 
-    def graphql(self, query: str, variables: dict | None = None, what: str = "querying") -> dict:
-        """One GraphQL request on the branch, at `at` when given: its `data`. A refusal
-        raises ClientError in Infrahub's own words (`HTTP <code>: <its messages>` for any
-        status but 200, its messages alone for errors under 200), naming the (branch, at)
-        asked for; a missing branch is GraphQL's 404 with Infrahub's sentence."""
+    def graphql(self, query: str, variables: dict | None = None, what: str = "querying", at: str | None = None) -> dict:
+        """One GraphQL request on the branch, at `at` when given: its `data`. The request
+        names its operation, the query's own name, as genqlient's did. A refusal raises
+        ClientError in Infrahub's own words (`HTTP <code>: <its messages>` for any status but
+        200, its messages alone for errors under 200), naming the (branch, at) asked for; a
+        missing branch is GraphQL's 404 with Infrahub's sentence. `at` replaces the client's
+        own for this request alone ("" sends none); None keeps it."""
+        at = self.config.at if at is None else at
         self._last.response = None
         try:
             return self._sdk.execute_graphql(
-                query=query, variables=variables, branch_name=self.config.branch, at=self.config.at or None
+                query=query,
+                variables=variables,
+                branch_name=self.config.branch,
+                at=at or None,
+                operation_name=operation_name(query),
             )
+        except _RELOGIN_FAILURES as e:
+            raise self._relogin_failure(what, e, at=at) from None
         except self._sdk_error as e:
             response = self._last.response
             if response is None:
-                raise self._error(what, str(e)) from None
+                raise self._error(what, str(e), at=at) from None
             status, body = response.status_code, response.text
             refused = auth_failure(status)
             if refused:
-                raise self._error(what, refused, credential_refused=True) from None
+                raise self._error(what, refused, at=at, credential_refused=True) from None
             if status == 200 and isinstance(e, self._graphql_error):
                 msgs = [m.strip() for m in (err.get("message") for err in e.errors if isinstance(err, dict)) if m]
-                raise self._error(what, "; ".join(m for m in msgs if m) or str(e)) from None
-            missing = status == 404 and not_found(self.config.branch) in unwrap_error_body(body)
-            raise self._error(what, explain_status(status, body), branch_missing=missing) from None
+                raise self._error(what, "; ".join(m for m in msgs if m) or str(e), at=at) from None
+            missing = (
+                bool(self.config.branch)
+                and status == 404
+                and not_found(self.config.branch) in unwrap_error_body(body)
+            )
+            raise self._error(what, explain_status(status, body), at=at, branch_missing=missing) from None
 
     def schema_document(self) -> dict:
         """The branch's schema as `GET /api/schema?branch=` answers it, with no `at`.
@@ -321,3 +394,46 @@ class Client:
         if not isinstance(doc, dict) or not doc.get("main"):
             raise self._error(what, "no schema hash reported")
         return doc
+
+
+class DefaultClient(Client):
+    """Reads Infrahub's unnamed endpoints, `/graphql` and `/api/schema`, which answer for
+    the default branch whatever it is called: the stages' proposed changes, the probe kind
+    and the event log live on no branch of the operator's (D-045, D-048, D-064), so an
+    installation whose default branch is not `main` needs nothing of this client. Nothing is
+    pinned unless a request names an `at`. Its failures name `(the default branch)`, and it
+    marks no branch missing: it asks for none."""
+
+    def __init__(self, address: str, token: str, requester=None):
+        super().__init__(Config(address=address, token=token, branch=""), requester)
+        # execute_graphql reads `branch_name or default_branch`: with neither, _graphql_url
+        # names no branch, so the request is POST /graphql.
+        self._sdk.default_branch = ""
+
+    def where(self, at: str | None = None) -> str:
+        return default_branch_at(at or "")
+
+    def on_branch(self, branch: str) -> Client:
+        """A client of the same Infrahub reading a branch, unpinned: the event log's kinds
+        are the branch schema's."""
+        return Client(Config(address=self.config.address, token=self.config.token, branch=branch), self._requester)
+
+    def schema_nodes(self, what: str = "reading the schema") -> list[dict]:
+        """The default branch's node kinds as `GET /api/schema` lists them, each with its
+        attributes and relationships: what a check of a kind of Fylgja's own reads."""
+        body, status = self.get("/api/schema", what)
+        if status != 200:
+            raise self._error(what, explain_status(status, body.decode("utf-8", "replace")))
+        try:
+            doc = json.loads(body)
+        except ValueError as e:
+            raise self._error(what, str(e)) from None
+        nodes = doc.get("nodes") if isinstance(doc, dict) else None
+        return [n for n in nodes if isinstance(n, dict)] if isinstance(nodes, list) else []
+
+
+def default_from_env(requester=None) -> DefaultClient:
+    """A default-branch client from the variables a read uses, refusing alike when one is
+    unset."""
+    address, token = env_credentials()
+    return DefaultClient(address, token, requester)

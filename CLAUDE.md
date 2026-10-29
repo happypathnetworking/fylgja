@@ -665,7 +665,11 @@ Rewritten whole at each release's close, never appended to.
     the operator settled by amending the artifacts (`d3525cf`): a twin an earlier build left
     is destroyed and created again, never stepped from (T055, `spec.md`'s edge case), and
     `plan.md`'s Structure Decision names the registry's `gopkg.in/yaml.v3`, `jsonschema/v6`
-    and embedded `probes/` imports (T059).
+    and embedded `probes/` imports (T059). Its second pass's one fix changed what the code
+    does: an empty `--probes` file, or one of JSON's whitespace alone, declares no probes,
+    read by `probe.Parse` as `probes 1` with an empty list, held by
+    `testdata/probes/none.json` and a fourth read in `TestProbesFromTheKind` (T061,
+    `1dd98b6`).
 - **Next**: F-025 the NetBox reader, Release 0.3's fifth and last spec; it has no brief
   yet.
 - **Open, the operator's**: 016's command log (`make command-log`, once this session is

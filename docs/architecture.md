@@ -51,7 +51,10 @@ different artifact than the one production receives. Per-node bootstrap — host
 cabled ports enabled, discovery on — comes from the platform support package;
 everything else a node runs is an artifact Infrahub rendered for the branch under test
 ([D-009](decisions.md#d-009)). Those artifacts enter the bundle at read time, so
-`bundle_id` covers configuration ([D-028](decisions.md#d-028)).
+`bundle_id` covers configuration ([D-028](decisions.md#d-028)). A probe's host is no
+device of production: its address and its route are two `exec` lines its probe package's
+templates render from the declaration, and the device side of its link is intent's, the
+interface's address Infrahub's template renders ([D-064](decisions.md#d-064)).
 
 **Platforms are data, and any single twin is heterogeneous.** A slice of a real
 network spans vendors. Adding a platform is a data change — a Platform Support
@@ -94,25 +97,29 @@ twin's reference is read under its scope, by the reader's mapping, into a CTM; t
 takes the CTM as a **snapshot**, the core's one input, content-addressed and filed
 ([D-061](decisions.md#d-061)); the snapshot's CTM is compiled into a bundle, the bundle is
 provisioned into a twin and recorded in `twin.json`, and `twin verify` reads the twin
-against it. A twin can also be built from a snapshot alone, by its id or as a file, with
-no read. Every command's answer ends in the findings document. Each format carries its
-version; a step takes a twin whose record names a snapshot to a stage of any proposed
-change by the same read, take and compile, or to a snapshot with no read, then reconciles
-and pushes instead of rebuilding.
+against it. From 016 a request's probe declarations, read once from a file or from
+Infrahub's `FylgjaProbe`, ride in every snapshot it takes beside the CTM, and the compile
+places two synthesized hosts for each ([D-064](decisions.md#d-064)). A twin can also be
+built from a snapshot alone, by its id or as a file, with no read. Every command's answer
+ends in the findings document. Each format carries its version; a step takes a twin whose
+record names a snapshot to a stage of any proposed change by the same read, take and
+compile, or to a snapshot with no read, then reconciles and pushes instead of rebuilding.
 
 ```mermaid
 flowchart LR
     api{{"API 1<br/>POST /v1/noun/verb"}}
     ref(["intent reference<br/>(branch, at?) or a stage,<br/>under a scope"])
+    probes(["probe declarations 1<br/>--probes file, or FylgjaProbe"])
     read["read<br/>Infrahub's DCIM, by the mapping"]
-    snap[("snapshot 1<br/>CTM 2, content-addressed")]
-    compile["compile<br/>PSPs 0.7, pure"]
-    bundle[("bundle 5<br/>content-addressed")]
-    provision["stage · deploy · readiness · push<br/>containerlab, the nodes"]
-    twin[("twin.json 10")]
+    snap[("snapshot 2<br/>CTM 2 and the probes,<br/>content-addressed")]
+    compile["compile<br/>PSPs 0.7, probe packages 0.1, pure"]
+    bundle[("bundle 6<br/>content-addressed")]
+    provision["stage · deploy · readiness · push<br/>containerlab, the nodes and the hosts"]
+    twin[("twin.json 11")]
     verify["verify"]
     doc[("findings 1")]
     api --> ref --> read --> snap --> compile --> bundle --> provision --> twin --> verify --> doc
+    api -. "read once a request" .-> probes --> snap
     api -. "twin create --snapshot: no read" .-> snap
     twin -. "twin step: a stage" .-> read
     twin -. "twin step --snapshot: no read" .-> snap
@@ -121,8 +128,8 @@ flowchart LR
 | Stage | Input | Output | Pure? |
 |---|---|---|---|
 | Read | intent reference and scope | CTM, with provenance, the reader's fidelity list and each device's configuration artifact; or findings and no CTM | no — reads Infrahub |
-| Take | CTM | snapshot: the CTM wrapped with an empty probe list, its `snapshot_id` the hash of that body without the read's `observed_at`; filed by id in the snapshot store, never overwritten | the id is; the filing writes the store |
-| Compile | a snapshot's CTM + PSPs | bundle: deployable topology, bootstrap and configuration artifact per node, manifest | **yes** |
+| Take | CTM and the request's probe declarations | snapshot: the CTM wrapped with the probe list (`[]` when the request has none), its `snapshot_id` the hash of that body without the read's `observed_at`; filed by id in the snapshot store, never overwritten | the id is; the filing writes the store |
+| Compile | a snapshot's CTM and probes + PSPs and probe packages | bundle: deployable topology, bootstrap and configuration artifact per node, two synthesized hosts per probe, manifest | **yes** |
 | Provision | bundle | a ready twin on the lab host, each node running its artifact | no — drives containerlab, pushes to the nodes |
 | Operate | the twin | show, destroy; step from M11, to another stage's bundle without a rebuild, and from 019 to a stage of any proposed change or a snapshot of any branch; verify from M12, which reads the twin against intent and changes nothing; rehearse from 015, a proposed change's stages built, stepped and verified in turn on one twin, which is then destroyed | no |
 
@@ -135,8 +142,8 @@ the API's server, on the same code path as its tests.
 
 ```
  intent reference ──read──▶ CTM ──take──▶ snapshot ──compile──▶ bundle ──provision──▶ walking twin
-   (branch, at?)             (envelope:    (the CTM and an       (manifest:            (lab "fylgja" +
-   under a scope              branch, at?,  empty probe list;     branch, at?,          twin directory:
+   (branch, at?)             (envelope:    (the CTM and its      (manifest:            (lab "fylgja" +
+   under a scope              branch, at?,  probe declarations;   branch, at?,          twin directory:
                               observed_at,  snapshot_id =         schema_hash,          twin.json adds
                               schema_hash,  hash without          scope, mapping;       observed_at and
                               scope,        observed_at)          bundle_id = hash)     snapshot_id)
@@ -150,7 +157,7 @@ the API's server, on the same code path as its tests.
 | Scope | `tag:<name>`, the request's or the server's default | — | CTM, manifest and `twin.json`, beside the reference |
 | CTM | its envelope: `(branch, at?, observed_at, schema_hash, scope, mapping)` and the reader's fidelity list | Infrahub, when pinned | a snapshot's body |
 | Snapshot | `snapshot_id`, the hash of its body's canonical bytes without the read's `observed_at` | Infrahub, when pinned, while the branch's history stands | snapshot store, `snapshots/<snapshot_id>.json` |
-| Bundle | `bundle_id`, hash of canonical bytes | its snapshot's CTM and PSPs, always | bundle store, `bundles/<bundle_id>/` |
+| Bundle | `bundle_id`, hash of canonical bytes | its snapshot's CTM and probes, the PSPs and the probe packages, always | bundle store, `bundles/<bundle_id>/` |
 | Walking twin | there is one; `fylgja twin show` describes it | never — it is live | containerlab (lab `fylgja`) + the twin directory |
 | Lab host | the machine running the worker | — | — |
 
@@ -170,6 +177,12 @@ Rules that follow:
   stands ([§6](#6-known-limitations)). A twin is **frozen at its snapshot**
   ([D-062](decisions.md#d-062)): nothing rebuilds it, and only `twin step` moves it, to
   another snapshot, as 018 made a twin built from a snapshot frozen by rule.
+- **A probe is a declaration beside intent, never intent** ([D-064](decisions.md#d-064)).
+  It names two uncabled ports of the scope's devices and the address and gateway each of
+  its hosts takes; the operator writes it in a file or in `FylgjaProbe` on the default
+  branch, a request reads it once, and every snapshot the request takes carries it beside
+  the CTM, which it never enters. The compile turns it into two synthesized hosts, and a
+  stage that cables, removes or deletes a probe's port is refused; nothing drops a probe.
 - **A bundle is deployable as emitted.** It carries the fixed lab name and relies on
   containerlab's default management network; nothing host- or twin-specific is added
   after compilation ([D-011](decisions.md#d-011)).
@@ -421,26 +434,40 @@ naming the field, prefixed `ctm.` (`data.required.missing`), never read as `[]`.
 justify it ([D-010](decisions.md#d-010)): **synthesized nodes** — boundary stubs, service
 mocks, later traffic generators are not in any source and cannot live in types generated
 from one — and **insulation** of the compiler from each source's model. Every
-object carries **provenance**: `intent`, `observed`, or `synthesized`. Everything is
-`intent` today. From M5 each device carries
+object carries **provenance**: `intent`, `observed`, or `synthesized`. Until 016 everything
+was `intent`, as D-010 put it then; from 016 a probe's two hosts, their links and the
+device ports those links cable are `synthesized` ([D-064](decisions.md#d-064)), placed in
+the compiler's own copy of the CTM ([§4.3](#43-compiler)), so the first synthesized nodes
+are the traffic hosts D-010 foresaw. A reader writes `intent` alone, and the CTM a snapshot
+stores holds no host. From M5 each device carries
 its configuration artifact: name, content type, Infrahub's checksum and the content,
 but no Infrahub identifier or generation time, so a regeneration to identical bytes
 moves nothing. The artifact reaches the compiler only this way, which keeps it pure.
 
 **The snapshot** ([D-061](decisions.md#d-061)). From 018 the CTM travels wrapped, CTM `2`
-unchanged inside a snapshot, version `1` ([`snapshot.schema.json`](../contracts/snapshot.schema.json)):
+unchanged inside a snapshot, version `2` from 016 ([`snapshot.schema.json`](../contracts/snapshot.schema.json)):
 `snapshot_version`, `snapshot_id`, the take's `observed_at`, equal to the CTM's, the `ctm`,
-and `probes`, a list required and empty until probe declarations are defined. The
-**snapshot id** is the SHA-256 of the body's canonical bytes, `{"ctm": …, "probes": []}`
-with the CTM normalised and its envelope's `observed_at` left out, indented two spaces and
+and `probes`, the request's probe declarations ([D-064](decisions.md#d-064)), a list
+required and `[]` when there are none. Each element is a declaration file's probe without
+the file's wrapper ([`probes.schema.json`](../contracts/probes.schema.json), version `1`):
+a name, a format and two endpoints, each a device, an interface, the address its host takes
+with its prefix length and its gateway. The
+**snapshot id** is the SHA-256 of the body's canonical bytes, `{"ctm": …, "probes": […]}`
+with the CTM normalised and its envelope's `observed_at` left out, the probes in the order
+taken, indented two spaces and
 ending in a newline, by the rule the manifest uses for `bundle_id`
 ([D-023](decisions.md#d-023)). Nothing else is left out: the branch, the `at`, the schema
 hash, the scope, the mapping, the fidelity list, every artifact and the probe list are
-hashed, so two reads of one intent share an id whenever they were read, and any change of
-intent moves it. The bytes hashed are not the bytes stored, which carry the id and
+hashed, so two reads of one intent with one list share an id whenever they were read, and
+any change of intent or of the list moves it. The version is not hashed, so a `1`, which
+018 wrote with its list empty, hashes to the id it was filed under, and is read wherever a
+snapshot is read as a `2` with no probe; nothing converts it, and every snapshot written
+is a `2`. The bytes hashed are not the bytes stored, which carry the id and
 `observed_at`; the schema gives the recipe that recomputes the id by hand. A snapshot is
-read strictly, its version first: one of another version, or declaring none, is
-`snapshot.version.unsupported`; an unknown key, a missing `ctm` or a non-empty `probes` is
+read strictly, its version first: one of another version than `1` or `2`, or declaring
+none, is `snapshot.version.unsupported`; an unknown key, a missing `ctm`, a `1` whose
+`probes` is not empty, or an element that is not a probe or breaks one of the
+declaration's rules that read no CTM (at `probes[<i>].<field>`) is
 `snapshot.invalid`; a declared id the body does not hash to is `snapshot.id.mismatch`,
 naming both; and the inner CTM is refused under its own rules, `ctm.version.unsupported`
 at the file and `data.required.missing` at the field prefixed `ctm.`, and for its
@@ -456,26 +483,28 @@ platform no package matches, comes at the compile after the filing, as a read's 
 behind an interface of the bundle store's shape that never overwrites: two takes of one
 intent keep one document, the first. `fylgja intent read --out` writes the read as a
 snapshot and files it too; a bare CTM is compiled by wrapping it by hand, `{"snapshot_version":
-"1", "ctm": …, "probes": []}`, its id and `observed_at` left for the server to fill. A
+"2", "ctm": …, "probes": []}`, its id and `observed_at` left for the server to fill. A
 snapshot holds the configuration artifacts its CTM holds, so it lives in the store and
 crosses as a file, never in a finding, a log line or a document, which name its id alone.
 
 ### 4.3 Compiler
 
 A snapshot's CTM → bundle. **A pure function**: no I/O, no clock, no environment, enforced by a
-test ([D-011](decisions.md#d-011)). It compiles the CTM inside the snapshot and nothing
-of the wrap, so the three fixture CTMs, wrapped under `testdata/snapshot/`, compile to the
-three goldens byte for byte, as the bare CTMs do. Purity is what makes the highest-risk logic
+test ([D-011](decisions.md#d-011)). It compiles the CTM inside the snapshot and its
+probes, and nothing else of the wrap, so the three fixture CTMs, wrapped under
+`testdata/snapshot/` with no probe, compile to the three goldens byte for byte, as the bare
+CTMs do, and the three-node CTM wrapped with one probe (`three-node-probed.json`) compiles
+to the fourth. Purity is what makes the highest-risk logic
 in the system — interface mapping — golden-file testable with zero infrastructure.
 
 A bundle is one directory:
 
 | File | Contents |
 |---|---|
-| `topology.clab.yml` | lab name `fylgja`; every node with platform and image; every cabled link between node ports; containerlab's default management network |
+| `topology.clab.yml` | lab name `fylgja`; every node with platform and image; from 016 each probe's two hosts, of the probe package's containerlab kind and image, each with its `exec` lines (its address on `eth1`, a host route to the far host via its gateway) and no startup configuration; every cabled link between node ports, a host's to its device's port among them; containerlab's default management network |
 | `configs/<node>.<startup_format>` | bootstrap per node from the PSP: hostname, cabled ports enabled, link-layer discovery on, under the package's comment marker. No addresses, no production configuration. From M7 the package says how it reaches the node — containerlab applies it at deploy, or the push sends its lines ahead of the artifact's ([§4.4](#44-provisioner--temporal)) |
 | `configs/<node>.<artifact_name>` | from M5, the node's configuration artifact as Infrahub rendered it, bytes unchanged (`configs/n1.device-config`). Pushed after boot; never rendered or reordered by Fylgja |
-| `manifest.json` | bundle format version (`5` from 017, `4` from M12, `3` from M7); the provenance block `(branch, at?, schema_hash, scope, mapping)` — never `observed_at`; platform per node, its `artifact` entry (name, content type, checksum, size, file) and its `bootstrap` entry (the file, and whether it is applied at deploy or pushed); the interface mapping table (production name → node port, the node's own name for the port as `node_name` on every row and `null` on a row with no port, `mgmt_only`, from M12 intent's `enabled`, disposition: cabled / management / configured-not-cabled / omitted); the fidelity manifest, which states that fidelity is asserted, not measured, and carries `production_forwarding` as one entry per platform in the bundle; everything omitted and why; `fidelity.lossy`, every lossy mapping and every shared port with the rule that decided it and the interfaces it shares with; from 017 `fidelity.read`, the reader's fidelity list copied from the CTM unchanged |
+| `manifest.json` | bundle format version (`6` from 016, `5` from 017, `4` from M12, `3` from M7); the provenance block `(branch, at?, schema_hash, scope, mapping)` — never `observed_at`; platform per node, its `artifact` entry (name, content type, checksum, size, file) and its `bootstrap` entry (the file, and whether it is applied at deploy or pushed); the interface mapping table (production name → node port, the node's own name for the port as `node_name` on every row and `null` on a row with no port, `mgmt_only`, from M12 intent's `enabled`, disposition: cabled / management / configured-not-cabled / omitted); the fidelity manifest, which states that fidelity is asserted, not measured, and carries `production_forwarding` as one entry per platform in the bundle; everything omitted and why; `fidelity.lossy`, every lossy mapping and every shared port with the rule that decided it and the interfaces it shares with; from 017 `fidelity.read`, the reader's fidelity list copied from the CTM unchanged; from 016 `provenance: synthesized` on each host, its links and their rows (left out when `intent`), each host's `probe` (name, endpoint, format and package) with its `platform`, `psp`, `artifact` and `bootstrap` written `null`, the top-level `probes[]`, each probe as compiled (its format, package, each host with its endpoint, device, interface, port, address and gateway, and the package's `fidelity`, software forwarding and container timing), and `fidelity.synthesized`, every synthesized node |
 
 The bundle is **deterministic** (same CTM and PSPs → byte-identical files, stable
 ordering everywhere), **self-describing** (provisioning needs nothing outside the
@@ -483,12 +512,15 @@ directory), **deployable as emitted** (no binding step), and therefore
 **content-addressed**: `bundle_id` is the hash of its canonical bytes, and a changed
 `bundle_id` is the drift signal between two references. The artifacts are among those bytes, so a
 configuration change moves `bundle_id` as a topology change does. `twin provision`
-refuses a bundle of any other format than `5` (`bundle.version.unsupported`, naming both):
+refuses a bundle of any other format than `6` (`bundle.version.unsupported`, naming both):
 a `1` carries no artifacts, a `2` asserts one forwarding value for every node in it and
 names no bootstrap entry, a `3` carries no `enabled`, so `twin verify` would assert a
-port intent disables, and a `4` names the retired contract version where a `5` names the
-scope and the mapping. Every mapping row carries `node_name`, `fidelity.lossy` and
-`fidelity.read` are always present, and an empty list is written `[]`; `fidelity.production_forwarding` has one entry
+port intent disables, a `4` names the retired contract version where a `5` names the
+scope and the mapping, and a `5` marks nothing synthesized, where a `6` names each probe's
+hosts. A probe-less snapshot compiles to what it compiled to as a `5` but for the version,
+`probes: []` and `fidelity.synthesized: []`. Every mapping row carries `node_name`,
+`fidelity.lossy`, `fidelity.read`, `fidelity.synthesized` and `probes` are always present,
+and an empty list is written `[]`; `fidelity.production_forwarding` has one entry
 per platform ([D-025](decisions.md#d-025)), and each node a `bootstrap` entry naming its
 bootstrap file and how that file reaches the node.
 
@@ -535,8 +567,23 @@ Sub-problems, in the order they kill projects like this:
   (*exact*, *near*, *approximated*, *stub*) from the PSP; the platform's version, which the
   Infrahub reader leaves out, selects nothing. A locally imported image is
   supplied through the PSP override directory, not through a bundle parameter.
-- **Synthesized nodes.** Added to the CTM before compilation; never looked up by the
-  compiler; always in the fidelity manifest.
+- **Synthesized nodes** ([D-064](decisions.md#d-064)). A probe's hosts, the first. The
+  compile's first step, `PlaceProbes`, a pure function validation calls too, so both word
+  every refusal alike, returns a copy of the CTM with, for each probe in name order and
+  each endpoint in order, one device `<probe>-a` or `<probe>-b` whose one interface is
+  `eth1`, its package the probe's format, and one link from that `eth1` to the endpoint's
+  device interface, all `synthesized`; the stored CTM moves nothing. It refuses, naming the
+  probe, the endpoint and the cause, and writing no bundle, a device the snapshot lacks
+  (`probe.device.unknown`), an interface the device lacks (`probe.interface.unknown`), one
+  intent cables (`probe.interface.cabled`), the `mgmt_only` one
+  (`probe.interface.mgmt_only`), one another probe took (`probe.port.taken`), a format no
+  probe package declares (`probe.format.unknown`) and a host name a device has
+  (`probe.host.collision`), every refusal in one pass. The compiler then surveys the placed
+  CTM as before, reading a host's package from the probe registry by its provenance, never
+  by what the format or the kind is: no `linux`, `alpine` or `ping` stands in its sources,
+  which `TestCompilerNamesNoPlatform` greps for. A host has no artifact and no bootstrap,
+  and its device's port is cabled by the synthesized link, so bootstrap enables it. Every
+  synthesized node is in `fidelity.synthesized`.
 - **Secrets.** No credential appears in a bundle or a finding. The Infrahub token
   comes from the process environment and is never persisted. A configuration
   artifact's bytes are treated as a secret outside the places they must be: the
@@ -601,7 +648,8 @@ diverged one as kind `diverged`, no twin as `none`, and a run in flight by its s
  step       (M11; workflow ID fixed: fylgja-step; started by twin step with the target read, taken,
              compiled and filed, or a snapshot given, compiled and filed)
    InspectTwin ─▶ CheckHost on the target (presence refusals dropped) ─▶ PlanReconcile
-     ─▶ StageStep ─▶ ReconcileLab ─▶ AwaitReadiness ─▶ PushConfig ─▶ RecordStep ─▶ VerifyTwin
+     ─▶ StageStep ─▶ StartFlows ─▶ ReconcileLab ─▶ AwaitReadiness ─▶ PushConfig ─▶ RecordStep
+     ─▶ VerifyTwin ─▶ ReadFlows
         (ReconcileLab skipped when containerlab's plan is empty or the step is unchanged;
          AwaitReadiness once per node it restarted, recreated or created; PushConfig once
          per node of the push plan, concurrently)
@@ -610,6 +658,9 @@ diverged one as kind `diverged`, no twin as `none`, and a run in flight by its s
         VerifyTwin (M12, under GetVersion("verify")): after every record, stepped,
         unchanged or diverged, on the run's own context; skipped when the run was
         cancelled before it; never changes the step's outcome
+        StartFlows and ReadFlows (016, under GetVersion("flows")): the flow of every probe
+        both bundles carry, started before the first change and read after the wait, the
+        read on the record's disconnected context whatever happened after the stage
 
  rehearse   (015; workflow ID fixed: fylgja-rehearse; started by twin rehearse with every stage resolved, taken, compiled and filed)
    child provision (fylgja-provision, already compiled: the baseline stage) ─▶ VerifyTwin (the baseline's wait)
@@ -623,7 +674,8 @@ diverged one as kind `diverged`, no twin as `none`, and a run in flight by its s
 
 **Inside the worker.** `internal/provision` holds the four workflows and the worker's
 registration. It schedules every activity by the name `internal/lab/wire` gives it and
-registers the fifteen host-bound activities `internal/lab` holds, and nothing else: every
+registers the seventeen host-bound activities `internal/lab` holds, fifteen until 016 added
+`StartFlows` and `ReadFlows`, and nothing else: every
 run starts with a snapshot id and a bundle id the server compiled, and the worker reads no
 source of truth ([D-061](decisions.md#d-061), [D-062](decisions.md#d-062)). Until 019 it
 also held following's five control activities (`ReadIntent`, `Compile`, `RunsInFlight`,
@@ -632,9 +684,12 @@ also held following's five control activities (`ReadIntent`, `Compile`, `RunsInF
 types that cross the task queue, and `VerifyTwin` waits on the twin through
 `internal/verify`, which reads the record's types from wire. The rehearsal classifies each
 stage through `internal/rehearsal`, a pure package the server shares for the deadline and
-the report.
+the report. A probe's host is planned, readied, given its flow and its burst from its probe
+package, which `internal/lab` and `internal/verify` read through `internal/probe`, as they
+read a platform's through `internal/psp`; the worker's start-up report names the probe
+packages beside the platform packages.
 
-![The worker's components: provision, lab, lab/wire, verify and rehearsal](c4/structurizr-WorkerComponents.svg)
+![The worker's components: provision, lab, lab/wire, verify, probe and rehearsal](c4/structurizr-WorkerComponents.svg)
 
 *The worker's components, derived from [`c4/workspace.dsl`](c4/workspace.dsl) by `make diagrams`.*
 
@@ -671,7 +726,11 @@ answers a second before its eAPI endpoint does, and on that platform the push is
 bootstrap reaches the node at all; SR Linux does not, because its push transport is up
 when its probe answers. Both waits live inside the package's one readiness timeout, and a
 transport that never opens fails under `readiness.timeout`, naming which of the two did
-not come up.
+not come up. A probe's host (016) is ready by its probe package's `readiness`, whose one
+mechanism is `exec`: `docker exec <host> <command>` once a second until its output holds
+the address the topology's `exec` lines gave it, under the package's timeout, with no login
+(`ip -4 -o addr show dev eth1` expecting `10.1.10.2/24` for `ping`). A host has no artifact
+and no bootstrap, so no push reaches it: its configuration is the topology's.
 
 **The push** ([D-028](decisions.md#d-028), [D-033](decisions.md#d-033)). Once every node is ready, the run pushes each node its
 artifact from the staged bundle, all nodes at once. The activity takes the twin
@@ -842,18 +901,26 @@ as second locks and runs:
    exit 1, and a cancellation is `cancelled`, exit 2; nothing is recorded.
 2. **`stage`**: the twin directory's bundle is swapped to the target's. From here the
    host is touched, and every failure or cancellation is **diverged**.
-3. **`reconcile`**: `clab deploy` on the target topology, without `--reconfigure`, so
+3. **`flows`** (016, [D-064](decisions.md#d-064)): `StartFlows` starts, before the first
+   change, the flow of every probe both snapshots carry, in its first host:
+   `docker exec -d <host> sh -c 'pkill -x ping; exec <flow.command> > /run/flow.log 2>&1'`,
+   the package's command rendered with the far host's address and its interval, killing a
+   stray flow first, under the package's `start_timeout_s`. A flow that cannot start is no
+   failure of the step but an entry of its loss, `not_started`, under the warning
+   `flow.start.failed`; only the activity's own error or a cancellation stops the step at
+   the phase `flows`.
+4. **`reconcile`**: `clab deploy` on the target topology, without `--reconfigure`, so
    containerlab applies the change to the running lab: SR Linux re-cables live, a cEOS
    node restarts in place, a node whose image or kind changed is recreated, a new node is
    created. Skipped when the plan is empty or the step is unchanged.
-4. **`readiness`**: the readiness probe for every node containerlab restarted, recreated or
-   created, all at once, under each node's package's budget.
-5. **`push`**: the replace on every node whose artifact or bootstrap changed and every
+5. **`readiness`**: the readiness probe for every node containerlab restarted, recreated or
+   created, a probe's host among them, all at once, under each node's package's budget.
+6. **`push`**: the replace on every node whose artifact or bootstrap changed and every
    node containerlab restarted, recreated or created, all at once. Every push is awaited,
    so the record names each node's outcome.
-6. **`record`**: `twin.json`, on a disconnected context,
+7. **`record`**: `twin.json`, on a disconnected context,
    whatever happened after the stage.
-7. **`observe`** ([D-039](decisions.md#d-039)): the **wait**. `VerifyTwin` reads the
+8. **`observe`** ([D-039](decisions.md#d-039)): the **wait**. `VerifyTwin` reads the
    twin as `twin verify` does, once a second, until every assertion read from a node
    holds (**settled**) or the budget is spent (`expired`, or `incomplete` when a node was
    still unread), and writes how it ended into the record's `step.wait`. The budget runs
@@ -861,7 +928,21 @@ as second locks and runs:
    runs after every record, a diverged one included, and never waits on the record's
    claims. A `twin destroy` during it cancels it (`cancelled`, recorded), and a run
    cancelled before it skips it. It was added under `workflow.GetVersion("verify")`, so
-   M11's step histories replay without it.
+   M11's step histories replay without it. From 016 every read also runs each probe's
+   **burst**, whose failure the twin has not settled from ([§4.6](#46-operator-surface)).
+9. **`flows`**, read: `ReadFlows`, on the record's disconnected context, after the wait or
+   wherever the step stopped once its flows had started: `docker exec <host> sh -c 'pkill
+   -INT -x ping; …; cat /run/flow.log'`, the output parsed by `internal/probe` into the
+   packets sent, those lost and the longest gap, the longest run of unanswered sequence
+   numbers times the interval. The **loss** block it writes into the record's `step.loss`,
+   on basis `container`, names each probe's outcome: `measured`; `not_started` or
+   `not_read` (`flow.read.failed`, a warning); or `interrupted`, every flow of a step that
+   failed or was cancelled after its stage, read until the stop. A host only the twin's
+   snapshot carries is a node the reconcile deletes, read for nothing and listed under
+   `dropped`; one only the target carries is created by the reconcile, with no flow, and
+   listed under `added`. A step that stopped before its stage, and a dry run, carry
+   `loss: null`. Both flow activities were added under `workflow.GetVersion("flows")`, so
+   the seven recorded histories replay without them.
 
 A step ends `stepped` or `unchanged` (exit 0), `rejected` (1), `cancelled` before the
 stage (2), or `diverged` (4): the twin stays up, the record keeps where it came from and
@@ -869,10 +950,16 @@ names where it was going, the phase, and which nodes the push reached, and it ac
 `twin destroy`. A step whose plan restarts or recreates a node needs `--allow-restart`. No
 step tears anything down. **The wait never changes the outcome, exit, status, phase or
 timings**: a wait that did not settle adds the warning `verify.wait.unsettled` and nothing
-else, and the timings stop at the record. The phases reuse the existing budgets: the
+else, and the timings stop at the record. **Nor does the loss**: what a flow lost is
+measured and reported, never asserted, and only a failed burst in the wait, read as any
+assertion is, says that the twin did not recover. A `ReadFlows` that fails outright, after a
+step that had ended `stepped` or `unchanged`, ends it `diverged` at `flows`: the twin is up
+at the target and its record says it is ready there, but the loss is not recorded. The
+phases reuse the existing budgets: the
 deploy budget for the reconcile, `readiness.timeout_s` for each awaited node,
-`push_timeout_s` for each replace; the wait's is the operator's, and its activity is
-bounded by it plus 30s.
+`push_timeout_s` for each replace, the probe package's `start_timeout_s` and
+`read_timeout_s` for the flows, each with a 15s margin; the wait's is the operator's, and
+its activity is bounded by it plus 30s.
 
 **A step, end to end.** Before the stage a cancellation ends the run `cancelled` with
 nothing recorded; from the stage on, every failure or cancellation is recorded diverged,
@@ -898,6 +985,9 @@ sequenceDiagram
     Note over W: context checked after each. A refusal is rejected, a cancellation cancelled, and nothing is recorded
     W->>W: StageStep (twin directory swapped to the target)
     Note over W: context checked. From here a failure or a cancellation is diverged
+    opt a probe both bundles carry (016)
+        W->>N: StartFlows (docker exec -d, each probe's first host)
+    end
     opt containerlab's plan not empty, the step not unchanged
         W->>L: ReconcileLab (clab deploy)
         L->>N: re-cable, restart, recreate, create
@@ -911,7 +1001,10 @@ sequenceDiagram
     end
     W->>W: RecordStep (twin.json), on a disconnected context, whatever happened
     opt the run not cancelled before it
-        W->>N: VerifyTwin (the wait, which never changes the outcome)
+        W->>N: VerifyTwin (the wait and its bursts, which never change the outcome)
+    end
+    opt the flows started
+        W->>N: ReadFlows (the loss, into twin.json), on a disconnected context
     end
     Note over W,N: nothing is torn down
     W-->>T: outcome, phase, findings
@@ -954,7 +1047,9 @@ The **deadline** is the stages' budgets summed from their node plans, each the l
 its package's deploy, readiness, push and destroy budgets over the stage's nodes, plus the
 mechanism constants that already bound each activity and the wait's default: 1,950 s for
 the three SR Linux stages the fixture tool composes, of which a rehearsal on the
-development host uses about 70. A timer on the run's clock enforces it: it cancels the
+development host uses about 70. From 016 a stepped stage with a probe's host adds its
+flows' two budgets, each with its margin, 90 s for the shipped `ping` package; a burst rides
+inside the wait's default. A timer on the run's clock enforces it: it cancels the
 children's context, a step so cut records the twin diverged
 ([D-036](decisions.md#d-036)), and the destroy follows. The **ceiling**, 3,600 s, is a constant of Fylgja's own, the operator's patience
 as the wait's budget is, and only refuses a rehearsal before any run. The operator's first
@@ -1027,23 +1122,27 @@ and nowhere else. There is no database ([D-014](decisions.md#d-014)):
 **What runs, and what each part reaches.** The operator runs the client, `fylgja`, whose
 every command is one request to `fylgja serve`: `POST /v1/<noun>/<verb>` over HTTP with
 the bearer token, answered in NDJSON frames. The server reads intent and artifacts from
-Infrahub (GraphQL, REST); starts, follows and cancels runs on the workflow service
+Infrahub (GraphQL, REST), and a request's probes from `FylgjaProbe` on the default branch
+when the request sends no probe file; starts, follows and cancels runs on the workflow service
 (gRPC); takes snapshots and files them in the snapshot store; files bundles in the
 bundle store and reads them back; reads a snapshot back for `twin create --snapshot` and
 `twin step --snapshot`; reads the record and the
 staged bundle in the twin directory; asks containerlab to inspect the lab and for its dry
-runs; and reads the nodes over gNMI for `twin verify`. The worker polls the workflow
+runs; and reads the nodes over gNMI for `twin verify`, and runs each probe's burst in its
+first host by `docker exec`. The worker polls the workflow
 service's task queue `fylgja` (gRPC); reads no source of truth, since every run it serves
 starts compiled ([D-062](decisions.md#d-062)); files and
 reads bundles in the store; stages and records in the twin directory; has containerlab
-deploy, reconcile and destroy lab `fylgja`; and probes each node over gNMI, pushes it its
-artifact over JSON-RPC or eAPI, and waits on it after a step. containerlab creates the
-nodes and cables them. The operator also edits intent in Infrahub and marks stages
+deploy, reconcile and destroy lab `fylgja`; probes each node over gNMI, pushes it its
+artifact over JSON-RPC or eAPI, and waits on it after a step; and, in each probe's host by
+`docker exec`, awaits its address, starts and reads a step's flow and runs the burst in the
+wait. containerlab creates the nodes and the probes' hosts, cables them, and runs each
+host's `exec` lines. The operator also edits intent in Infrahub and marks stages
 there. Infrahub's task workers run this repository's two checks on every proposed change,
 and each reaches the server as a client does, over the host's Docker bridge with the API's
 token ([§4.6](#46-operator-surface)).
 
-![Fylgja's containers: the client, the server, the worker, the workflow service, the bundle store, the snapshot store, the twin directory and containerlab, with Infrahub and the twin's nodes](c4/structurizr-Containers.svg)
+![Fylgja's containers: the client, the server, the worker, the workflow service, the bundle store, the snapshot store, the twin directory and containerlab, with Infrahub and the twin's nodes and probe hosts](c4/structurizr-Containers.svg)
 
 *Fylgja's containers, derived from [`c4/workspace.dsl`](c4/workspace.dsl) by `make diagrams`.*
 
@@ -1075,16 +1174,17 @@ has no state root: it reads no store and no twin directory of its own.
     │                           a step swaps it for the target's (through .bundle.next and .bundle.prev)
     ├── clab-fylgja/            containerlab's working directory, placed here with CLAB_LABDIR_BASE; root-owned;
     │                           its .state.clab.yaml is what containerlab's plan for a step reads
-    └── twin.json               written last (version 10): provenance (the reference read, its
+    └── twin.json               written last (version 11): provenance (the reference read, its
                                 schema hash, the scope and the mapping that read it), observed_at
                                 (or why it is unknown), snapshot_id (or null), bundle_id, the run, the worker's version, the stage it
                                 was built from (its proposed change's id and branch, its label,
                                 description and where its at came from; or null), the rehearsal
                                 whose run built it (or null), each node's address, its artifact
                                 (name, content type, checksum, size; never the bytes), how long
-                                its push took and the bundle it holds; the state (ready or
-                                diverged), the last step (or null) and the step's wait (or null
-                                until it ran)
+                                its push took and the bundle it holds, or for a probe's host its
+                                probe in place of a package and an artifact; the state (ready
+                                or diverged), the last step (or null), the step's wait (or null
+                                until it ran) and its loss (or null until its flows were read)
 ```
 
 **Where each role runs.** The client runs on the operator's machine with
@@ -1097,7 +1197,9 @@ and no API token, and reading no Infrahub variable ([D-062](decisions.md#d-062))
 server start-dev`) on `:7233`, its UI on `:8233`. The state root (`FYLGJA_STATE_ROOT`)
 holds `bundles/`, `snapshots/` and `twin/`, and containerlab runs as a command. Docker runs lab
 `fylgja`'s privileged containers, `clab-fylgja-<node>`, each with gNMI on `:57400` over
-TLS (SR Linux) or on `:6030` in plaintext (EOS), and JSON-RPC or eAPI on `:443`. Infrahub
+TLS (SR Linux) or on `:6030` in plaintext (EOS), and JSON-RPC or eAPI on `:443`, and from
+016 each probe's two hosts, `clab-fylgja-<probe>-a` and `-b`, which listen on nothing and
+are reached by `docker exec` alone. Infrahub
 runs under Docker Compose on `:8000`, on the lab host or another machine; the checks need
 it on the lab host, where its task workers, on Compose's own network, reach the server on
 the bridge as `host.docker.internal:7650`, a name the Compose override's `host-gateway`
@@ -1132,6 +1234,14 @@ replace is atomic. A `failed` push (no answer within the budget, a lost heartbea
 cancellation) may have committed, as a replace that darkens a node does. So a later
 rollback reads each node's `step.pushed[].outcome` beside its `holds`; none is built. A
 `3` record reads as a ready twin that has not stepped.
+
+**The record names each host and the step's loss** ([D-064](decisions.md#d-064)).
+`twin.json` `11` lists a probe's host among the nodes, with its `probe` (name, endpoint,
+format and package) where a device names its package and its artifact, both `null`; a
+host containerlab created or recreated holds the staged bundle, since its configuration is
+the topology's and no push reaches it. The step block carries `loss`, the block `ReadFlows`
+writes ([§4.4](#44-provisioner--temporal)), or `null` until it wrote one, as `VerifyTwin`
+writes `wait`. A record of `10` or earlier reads with no host and no loss.
 
 **The record says how the step's wait ended** ([D-014](decisions.md#d-014)).
 `twin.json` `5`'s step block carries `wait`: its outcome, budget, reads, `after_s` (seconds
@@ -1202,7 +1312,11 @@ disables is still cabled and still enabled by bootstrap, since intent's disablin
 the node through the artifact, so verify skips that port and its link and records the
 skip rather than asserting either. A node's address is the record's, else containerlab's.
 What the record says each node holds is reported as the record's claim, never as a read.
-A `3` manifest staged under a twin built before M12 reads with every row enabled.
+A `3` manifest staged under a twin built before M12 reads with every row enabled. From
+016 a probe's host is read by its burst alone ([§4.6](#46-operator-surface)): it has no
+host name, port or neighbour to assert, and a synthesized link's neighbour assertions are
+skipped at both ends, since a host speaks no discovery protocol, while the device port's
+`port_enabled` stands.
 
 Image acquisition varies by vendor — public registry, account-gated download plus
 `docker import`, licensed, VM-based via vrnetlab — and the PSP records the method
@@ -1220,7 +1334,11 @@ behalf**: an imported image is the operator's to place, under exactly the refere
 package names, and the same image under another tag is absent. The worker says at start
 whether each such image is present and serves either way, so the state is visible before
 a create rather than at the deploy. A bundle whose packages all say `public_registry`
-makes no call at all.
+makes no call at all. **A probe package's image is asked for whatever its acquisition**
+(016): a host's deploy budget is sized for a container that starts in a second, and a pull
+inside a step's reconcile would be timed as the step's, so `alpine:3.24.2`, public as it
+is, must be on the host (`docker pull` it), or the run is refused `host.image.absent` with
+that remedy. A host whose probe package is not on the worker is `host.probe_package.missing`.
 
 ### 4.6 Operator surface
 
@@ -1233,15 +1351,17 @@ fylgja serve         [--listen <host:port>]... [--psp-dir <dir>]
                                                   # the API's server, on the lab host beside the worker; serves
                                                   #   every command below but worker run; --listen repeated, on
                                                   #   the lab host loopback and the Docker bridge
-fylgja twin create   --branch <b> [--at <ts>] [--scope tag:<name>]
+fylgja twin create   --branch <b> [--at <ts>] [--scope tag:<name>] [--probes <file>]
                                                   # all stages; refused while a twin exists; the twin is frozen at
-                                                  #   its snapshot until it is stepped
-fylgja twin create   --stage <branch>/<label> [--scope tag:<name>]
+                                                  #   its snapshot until it is stepped; --probes in place of the
+                                                  #   probes FylgjaProbe declares (016)
+fylgja twin create   --stage <branch>/<label> [--scope tag:<name>] [--probes <file>]
                                                   # the same run, pinned to what the stage resolves to
 fylgja twin create   --snapshot <id|file>
                                                   # the same run from a snapshot, a filed one by its id or a file
-                                                  #   sent; no read; takes no --branch, --stage, --at or --scope
-fylgja twin step     [--stage <branch>/<label> | --snapshot <id|file>] [--allow-restart] [--wait <duration>] [--dry-run]
+                                                  #   sent, with its own probes; no read; takes no --branch,
+                                                  #   --stage, --at, --scope or --probes
+fylgja twin step     [--stage <branch>/<label> [--probes <file>] | --snapshot <id|file>] [--allow-restart] [--wait <duration>] [--dry-run]
                                                   # a twin whose record names a snapshot to a stage of any proposed
                                                   #   change (the next of its own by default) or to a snapshot of
                                                   #   any branch, with no read, without a rebuild; --allow-restart
@@ -1249,9 +1369,10 @@ fylgja twin step     [--stage <branch>/<label> | --snapshot <id|file>] [--allow-
                                                   #   bounds the wait for the twin to settle after the record (2m0s
                                                   #   by default; 0 reads once); --dry-run changes nothing; reads
                                                   #   under the record's scope, the twin's for life, and takes no
-                                                  #   --scope
+                                                  #   --scope; measures each probe's loss across it (016)
 fylgja twin verify   [--wait[=<duration>]]        # reads the twin against intent: host names, cabled ports,
-                                                  #   adjacencies, and the record's claim of what each node holds;
+                                                  #   adjacencies, each probe's burst (016), and the record's
+                                                  #   claim of what each node holds;
                                                   #   --wait reads again until it conforms (2m0s bare); no run, no
                                                   #   worker; changes nothing; exit 5 when it does not conform
 fylgja twin show                                  # the host, twin.json, the kind (the snapshot it was built from or
@@ -1259,7 +1380,7 @@ fylgja twin show                                  # the host, twin.json, the kin
                                                   #   built from and the step that brought it there with how its
                                                   #   wait ended, each node's artifact, runs in flight; changes
                                                   #   nothing
-fylgja twin rehearse --branch <b> [--scope tag:<name>] [--markdown]
+fylgja twin rehearse --branch <b> [--scope tag:<name>] [--probes <file>] [--markdown]
                                                   # an open proposed change's stages in turn on one twin: the first
                                                   #   compiled built and verified, each later stepped and verified,
                                                   #   stopped at the first that fails, then destroyed and reported;
@@ -1267,8 +1388,8 @@ fylgja twin rehearse --branch <b> [--scope tag:<name>] [--markdown]
 fylgja twin destroy                               # cancels a step and waits for its record, or a rehearsal and
                                                   #   waits for its destroy, then removes the twin
 
-fylgja intent read   --branch <b> [--at <ts>] [--scope tag:<name>] --out snapshot.json
-fylgja intent read   --stage <branch>/<label> [--scope tag:<name>] --out snapshot.json
+fylgja intent read   --branch <b> [--at <ts>] [--scope tag:<name>] [--probes <file>] --out snapshot.json
+fylgja intent read   --stage <branch>/<label> [--scope tag:<name>] [--probes <file>] --out snapshot.json
                                                   # writes the read as a snapshot, and files it
 fylgja twin compile  --snapshot snapshot.json --out <bundle-dir>
                                                   # the pure function on the snapshot's CTM, same code path as the
@@ -1279,7 +1400,7 @@ fylgja stage list    [--branch <b>] [--scope tag:<name>]
                                                   # every open proposed change's stages, or one's, and what each
                                                   #   resolves to; marks the twin's row, and where a diverged twin
                                                   #   was going
-fylgja stage plan    --branch <b> [--scope tag:<name>]
+fylgja stage plan    --branch <b> [--scope tag:<name>] [--probes <file>]
                                                   # reads, takes and compiles each stage; the step between each pair
 
 fylgja schema check  --branch <b>                 # the branch's schema against the mapping's table of the schema
@@ -1298,7 +1419,8 @@ a **client's command**: one request to the server, `POST /v1/<noun>/<verb>`, whi
 prints what comes back and exits by the document's status. A client's whole
 environment is `FYLGJA_API_ADDRESS` (default `127.0.0.1:7650`) and `FYLGJA_API_TOKEN`
 ([D-042](decisions.md#d-042)). It reads no Infrahub variable, no login, no state root and
-no package directory, and `--psp-dir` is a flag of the two roles alone. The package that
+no package directory, and `--psp-dir` is a flag of the two roles alone; a `--probes` file
+is read by the client and sent whole, as a snapshot file is. The package that
 holds the client's commands, `internal/cli`, links `internal/api`, `internal/findings`
 and `internal/tree` and nothing else of the module, and
 `TestClientReachesTheCoreThroughTheAPIAlone` holds it so. So no flag or variable can make
@@ -1316,13 +1438,15 @@ a client run the core.
   **Inside the server.** The handlers, `internal/server`, decode each request and write
   each frame through `internal/api`, which carries the document `internal/findings`
   defines; they word every refusal and write that document through `findings`, and load
-  the packages through `internal/psp`. A read and a compile go through `internal/stage`,
+  the packages through `internal/psp`, and the probe packages and a request's declaration
+  file through `internal/probe` (016). A read and a compile go through `internal/stage`,
   which reads with `internal/intent`, validates with `internal/validate`, compiles with
   `internal/compiler` and files with `internal/bundle`. The handlers take, validate and
-  file each snapshot with `internal/snapshot`, which imports the CTM and nothing else of
-  the module, and hold a sent snapshot's CTM to `validate`'s rules that read no package
-  before they file it. `internal/stages` resolves, lists
-  and plans: it reads the proposed changes, their stages, the branch point and the stamps
+  file each snapshot with `internal/snapshot`, which imports the CTM, `internal/probe` for
+  the declarations it carries and `findings`, and nothing else of the module, and hold a
+  sent snapshot's CTM to `validate`'s rules that read no package before they file it.
+  `internal/stages` resolves, lists and plans: it reads the proposed changes, their stages,
+  the branch point and the stamps
   with `intent`, reads and compiles each stage through `stage`, takes each stage's
   snapshot through the function the handlers hand it, diffs each pair with
   `internal/step` and reads manifests from `compiler`; it also chooses a step's target.
@@ -1337,10 +1461,16 @@ a client run the core.
   reads the manifest from `compiler` and reads the nodes through `verify`'s readers;
   `verify` derives its assertions from the manifest, `validate` surveys each device as the
   compiler does, `step` compares two manifests, and the compiler applies each package's
-  mapping profile from `psp`. Every arrow in the view below is an import but `stages`' to
-  `snapshot`, which is that function. `findings` and
-  `psp`, which nearly every package imports, are drawn from the handlers, the API and the
-  compiler alone, and `provision`'s own imports serve the workflows the worker runs; the
+  mapping profile from `psp`. `internal/probe`, which imports `findings`, the embedded files
+  and the standard library alone, is the one definition of a probe that the compiler, the
+  snapshot, the reader, the lab and verify share without importing one another: the
+  declaration and its rules, the probe packages and the reading of a flow's output; the
+  compiler and `validate` place the hosts through it, `intent` maps `FylgjaProbe` to it,
+  and `lab` plans each host and runs its burst from its package. Every arrow in the view
+  below is an import but `stages`' to `snapshot`, which is that function, and `lab`'s to a
+  probe's host, which is the burst it runs there by `docker exec`. `findings`, `psp` and
+  `probe`, which nearly every package imports, are drawn from the few that lean on them
+  most, and `provision`'s own imports serve the workflows the worker runs; the
   [development guide](development.md#repository-layout)'s import graph has every edge. On
   the client's side of the boundary, `internal/cli` links `api`, `findings` and `tree` and
   nothing else.
@@ -1362,6 +1492,19 @@ a client run the core.
   reads nothing: the scope is the snapshot's, and `--scope` beside it is
   `snapshot.flags.conflict`, as `--branch`, `--stage` and `--at` are. The checks `fylgja-step` and
   `fylgja-twin` send none, so theirs is the default of the server they reach.
+- **A request's probes are read once** ([D-064](decisions.md#d-064)). The commands that
+  take a snapshot from a reference, `intent read`, `twin create --branch` or `--stage`,
+  `twin step` to a stage, `stage plan` and `twin rehearse`, take `--probes <file>`, sent as
+  the request's one file under the argument `probes`. The server reads the list once, after
+  the guards and before any stage resolves or any branch is read: the file when one is
+  sent, else `FylgjaProbe` on the default branch, unpinned, through `intent`'s probe reader
+  on the stage reader's pattern (`probe.kind.absent`, naming `schema/fylgja-probe.yaml`,
+  when the kind is missing there), else none, with no warning. Every take of the request
+  carries that one list, so a rehearsal's or a plan's stages share it. A file is held to
+  the declaration's rules at `start` and the kind's objects at `resolve`, each refusal
+  naming the probe and the field. `--probes` beside `--snapshot` is
+  `snapshot.flags.conflict`, since a snapshot carries its own; `twin compile` and `twin
+  provision` take no `--probes`. The checks send none, so theirs are the kind's.
 - **An answer is frames**: one JSON object a line (`application/x-ndjson`), the last
   always the findings document. With nothing asked, a command that is one answer is the
   document alone, after the `files` frame that `intent read` and `twin compile` send
@@ -1421,7 +1564,9 @@ from: `kind: snapshot 576933ec… (branch fylgja-fixture, read at …)` with no 
 … at …)` with one, then the stage it names and the step that took it there; a record naming
 none reads `snapshot none`, with the note that `twin step` refuses it and `twin destroy`
 clears it. A twin from a bundle is `from a bundle`. `pinned`, `frozen` and `following`,
-kinds from M4 until 019, are gone; "pinned" still names a reference with an `at`.
+kinds from M4 until 019, are gone; "pinned" still names a reference with an `at`. From 016
+it lists each probe's host among the nodes, a `ping host` with its probe and endpoint in
+place of a package and an artifact.
 
 `stage list` and `stage plan` run in the server too, and need no lab, worker or
 workflow service. The list reads every open proposed change's stages, or the one of the
@@ -1467,6 +1612,11 @@ failing)`, `; wait not run`), and a step at `observe` is listed under `in flight
 since its record is already written. `twin step` prints `step observe: settled after 2.4s
 (1 read)` after `step record:`, and its closing line ends with the same clause; the dry
 run prints the budget (`wait: after the record, until the twin conforms, at most 2m0s`).
+From 016 a step with a probe prints `step flows:` after `step stage:`, naming each flow
+started or why one did not start, and `step loss:` after the wait, one figure per probe
+labelled the container's (`step loss: n1-loop 0/312 lost, longest gap 0.0s (container
+timing)`), and its closing line ends with the loss; a step whose loss names no probe prints
+what 019's did. Its dry run lists each host among the nodes with its memory.
 
 `twin verify` ([D-037](decisions.md#d-037)–[D-039](decisions.md#d-039)) runs in the
 server's process on the lab host, as `twin show` does, with no run and no worker. It reads
@@ -1474,7 +1624,16 @@ the twin, asks the workflow service best-effort for runs in flight, refuses befo
 node is read when there is no twin (`verify.twin.absent`, in the host check's phrase), when a
 package cannot be read (`host.psp.missing`, `verify.package.unreadable`) or when a probe
 login is unset, then derives its assertions from the staged manifest and reads each path
-once, over each node's own package's transport. It reports one finding per failed
+once, over each node's own package's transport. From 016 it then runs one **burst** per
+probe of the staged manifest ([D-038](decisions.md#d-038)'s assertion kinds gaining
+`burst`): the probe package's burst command in the probe's `a` host by `docker exec`, at
+the `b` host's address (`ping -c 5 -i 0.2 -W 2 <far address>` for `ping`), held when every
+reply came back and failed when one did not (`verify.burst`, its object the probe); a burst
+that could not be run leaves its host unread. A host is never dialled and asserts nothing
+else. The step's wait runs the same bursts on every read, so a twin whose probe has not
+recovered does not settle, and a rehearsed stage whose wait ends with a failed burst the
+baseline did not have fails, by 015's rule unchanged ([D-052](decisions.md#d-052)). It
+reports one finding per failed
 assertion and per record claim not held, counts the held ones and names the skips. It
 ends `ok` (0), `nonconforming` (5) when every node was read and something failed, or
 `operation.failed` (2) when a node could not be read. A diverged twin is verified against
@@ -1491,15 +1650,19 @@ line; on a failure, the commands that reproduce it by hand, from `twin create --
 --allow-restart` to the failed stage, then `twin verify` and `twin destroy`. Its document
 carries a `rehearsal` block: the proposed change, when its stages were resolved, the
 deadline and the time used, the reclaim, the run, the baseline findings, each stage's
-role, snapshot, bundle, step, wait, verify counts, new findings and verdict, the destroy's cleanup
-and the reproduce commands. Its **markdown** is rendered from the document and the plan's
+role, snapshot, bundle, step, wait, verify counts, new findings, loss (016) and verdict, the
+destroy's cleanup and the reproduce commands. Its **markdown** is rendered from the document
+and the plan's
 steps between the stages, which the drawing's edges name: a heading
 naming the proposed change and the run, a table of the stages, whose column `new
-verification failures` holds the wait's failing assertions the baseline's did not have, a
+verification failures` holds the wait's failing assertions the baseline's did not have,
+and from 016 whose column `loss` holds each stepped stage's figure per probe, `<probe>
+<lost>/<sent>, gap <s>s`, or `—` for a stage that measured none, a
 Mermaid drawing, top to bottom, with one box per stage, a failed or erred one outlined red
 by a class, and one edge per step naming what it changed and never a line of
 configuration, the stages, the warnings, the baseline findings, the reproduce commands
-and the fidelity caveat. It is never longer than the 4,092 bytes Infrahub keeps of a
+and the fidelity caveat, which says a loss figure is the container's, never a hardware
+forwarder's. It is never longer than the 4,092 bytes Infrahub keeps of a
 comment: a longer report names each finding by its identifier and object alone, then
 leaves whole sections out by rank, and says what it shortened. `twin show` names a
 rehearsal in flight with its child and the stage it is at, and a twin by the rehearsal
@@ -1605,8 +1768,31 @@ by `twin verify` and by the step's wait, so a change to them moves no
 rule's lossiness does, and a running twin keeps the bundle it was built from until the
 operator steps it or creates it again ([D-062](decisions.md#d-062)).
 
-PSPs and the schema (the vendored library and the stage kind) are embedded in the binary,
-the packages with a runtime override directory
+**A probe package is a second package kind, beside the PSP** ([D-064](decisions.md#d-064),
+016). A probe's host is of no platform, so its package is not a PSP facet: it is a
+mechanism keyed by a format value, as D-031 has it, in [`probes/`](../probes/), format
+`0.1` ([`probes/probe.schema.json`](../probes/probe.schema.json)), one file per format:
+`format`, the value a probe declaration names and that keys the mechanism; `image`
+(containerlab kind, reference, acquisition, resources, deploy and destroy budgets, the
+PSP's shape); `host` (the interface, and the templates of the `exec` lines that address it
+and route it to the far host); `readiness` (`exec`, a command and what its output must
+hold); `flow` (the interval, the command, its start and read budgets); `burst` (the count,
+the wait and the command); and `fidelity` (`forwarding: software`, `timing: container`,
+the approximations). The one shipped package is `ping`: `alpine:3.24.2`, busybox's `ping`
+and `ip`, 32 MiB, a flow every 0.2 s, a burst of five. The packages load into a probe
+registry in both roles, the embedded `probes/*.yaml` first and then the override
+directory's `probes/` subdirectory, an override shadowing by format, so no flag is added;
+an invalid one refuses `serve` and `worker run` at start, and two declaring one format are
+`probe.package.format.duplicate`. The start-up reports name each beside the platform
+packages. Only the package's identity, its containerlab kind, its image and the rendered
+`exec` lines reach a bundle, so a budget, an interval or a count moves no `bundle_id`. The
+code that runs
+a host, `internal/lab`'s flows and burst and `internal/verify`'s derivation, reads every
+command, count and budget from the package and branches on nothing it names; the
+compiler's grep holds `linux`, `alpine` and the `ping` literal out of its sources.
+
+PSPs, the probe packages and the schema (the vendored library, the stage kind and the probe
+kind) are embedded in the binary, the packages with a runtime override directory
 ([D-018](decisions.md#d-018)). A platform is supported only when its PSP passes
 the **conformance suite** (M6): `go test` in `internal/conformance`, a package no product
 code imports, in two halves.
@@ -1614,7 +1800,9 @@ code imports, in two halves.
 - **The pure half** runs in tier 1 on every package meant to load, shipped or test: the
   package validates, it declares at least one pair and shares none with another, every
   declared mapping maps as declared and round-trips back to its production name, and
-  bootstrap renders for it.
+  bootstrap renders for it. From 016 its check `probe_package` holds every shipped probe
+  package too: it validates as the probe registry validates an override, and each of its
+  templates renders from its own field's placeholders with nothing left unrendered.
 - **The boot half** runs inside tier 3's run, against case 1's ready twin, and reads each
   node once over the readiness probe's transport, by the paths the Conformance facet
   declares, through the readers in `internal/verify`, which product code shares with it
@@ -1668,6 +1856,22 @@ To be stated in the product surface, not buried here.
 - **No hardware data plane.** No ASIC, TCAM, buffers, hardware QoS or line rate.
   Where production forwards in software the twin is more faithful; the PSP says which.
 - **Timing differs** in containers: convergence, BFD, control-plane policing.
+- **A loss figure is the container's** ([D-064](decisions.md#d-064)). A probe's hosts
+  forward in software and keep the container's timing, and so do the nodes between them:
+  the loss a step measures says what this twin dropped while it changed, never what a
+  hardware forwarder would. It is reported and never asserted; only a burst that comes back
+  short after the step fails anything. The shipped package sends one packet each 0.2 s, so a
+  gap is known to that interval.
+- **A probe across two devices needs routing that intent renders.** The reference template
+  renders each physical port's addresses and no routing, so two addressed ports of one
+  device reach each other by its connected routes and two devices do not: a probe whose
+  endpoints lie on two devices fails its burst until intent's routing reaches the
+  configuration. The fixture's probe therefore lies across one device, on two probe-ready
+  ports.
+- **The kind's probes are read unpinned.** Without a file a request reads `FylgjaProbe` on
+  the default branch as it stands, whatever `--at` or a stage pins, so a pinned read
+  reproduces its snapshot only while the kind holds the same probes; the snapshot, or the
+  file, reproduces it whatever the kind holds later.
 - **One twin at a time.** Runtime A/B between two live twins is out of scope;
   compile-time diffs between references are not.
 - **Unpinned references are approximate.** `observed_at` is a local clock reading.

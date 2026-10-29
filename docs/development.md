@@ -1484,7 +1484,11 @@ headless session like any other, except that it keeps both node logins, gets
 never to end its turn while a command it started still runs, and how to wait for tier 3
 instead: start it detached with its exit status in `local/converge-e2e.out`, then wait in
 foreground calls of under ten minutes. A headless session that ends its turn exits, and
-what it started dies with it, and tier 3 outlasts one Bash call. Converge, attended, tags
+what it started dies with it, and tier 3 outlasts one Bash call. Every implement session,
+live or not, is told the same of a subagent or background task it starts: 020's Run 10
+ended its turn with four subagents fixing tests, and the headless runtime stopped them ten
+minutes later, leaving its lane uncommitted and the loop stopped at `contract`
+(2026-10-29). Converge, attended, tags
 what needs the host `[live]` and keeps `[operator]` for what needs a decision; unattended
 both are `[operator]`. The attended session itself never runs tier 3, a twin or the worker.
 

@@ -672,7 +672,7 @@ implement_prompt() { # <route line> <ids> <live clause> [lane]
 		adding="commit your work, adding the files you edited by name and never with git add -A or git add . (this worktree holds symlinks to the main tree's ignored files, which must not be committed)"
 	fi
 	echo "/speckit-implement $1
-Loop run (scripts/converge-loop.sh). Only $(echo $2 | sed 's/ /, /g'); stop at the run's checkpoint and report, and do not start another run. $3, or a decision you cannot take from spec.md, plan.md, research.md or docs/decisions.md, stays unchecked and your report says what it needs. End with $tests. Then $adding, the ticks in tasks.md included, on the current branch as conventional commits whose bodies say why, as docs/development.md's Conventions say (a golden re-baseline in a commit of its own). Never push."
+Loop run (scripts/converge-loop.sh). Only $(echo $2 | sed 's/ /, /g'); stop at the run's checkpoint and report, and do not start another run. $3, or a decision you cannot take from spec.md, plan.md, research.md or docs/decisions.md, stays unchecked and your report says what it needs. End with $tests. Then $adding, the ticks in tasks.md included, on the current branch as conventional commits whose bodies say why, as docs/development.md's Conventions say (a golden re-baseline in a commit of its own). Never push. You run headless: ending your turn ends the session and stops every subagent or background task you started (after at most ten minutes), with its work uncommitted. So never end your turn while one still runs: wait for each to finish, check what it changed, and commit before your final message."
 }
 
 # The pure gates, into <log>; returns their status.

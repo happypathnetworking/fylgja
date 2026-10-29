@@ -122,7 +122,7 @@ func (a *Activities) VerifyTwin(ctx context.Context, in wire.VerifyInput) (wire.
 	}
 	a.logger().Info("the step's wait ended", "run", in.RunID, "outcome", wait.Outcome, "reads", wait.Reads,
 		"after_s", wait.AfterS, "failing", len(wait.Failing))
-	recorded, err := a.recordWait(path, in.RunID, mine(rec, in.RunID), wait)
+	recorded, err := a.recordInStep(path, in.RunID, mine(rec, in.RunID), "wait", func(s *wire.StepRecord) { s.Wait = &wait })
 	if err != nil {
 		return failed(path, "the step's wait is not recorded: %v", err)
 	}
@@ -155,26 +155,27 @@ func failing(w verify.WaitResult) []wire.StepFinding {
 	return out
 }
 
-// recordWait writes the wait into the record's step block, read again just before, when that
-// step is runID's, and says whether it did. A record that is another run's keeps what it
-// holds, as does one that cannot be read again when the record the wait began with was not
-// runID's either: the wait is still the run's result, and the record's wait stays null.
-// named says the record the wait began with was runID's: then a record that
-// cannot be read again, or will not write, is the error, since the run's record would
-// otherwise say the wait never ran while the run's result says it did.
-func (a *Activities) recordWait(path, runID string, named bool, wait wire.StepWait) (bool, error) {
+// recordInStep writes what set sets — the wait, or the loss (016) — into the record's step
+// block, read again just before, when that step is runID's, and says whether it did. A record
+// that is another run's keeps what it holds, as does one that cannot be read again when the
+// record the activity began with was not runID's either: what it writes is still the run's
+// result, and the record's field stays null. named says the record the activity began with
+// was runID's: then a record that cannot be read again, or will not write, is the error,
+// since the run's record would otherwise say the wait or the read never ran while the run's
+// result says it did. what names the field in the log.
+func (a *Activities) recordInStep(path, runID string, named bool, what string, set func(*wire.StepRecord)) (bool, error) {
 	rec, err := ReadRecord(path)
 	if err != nil {
 		if named {
 			return false, err
 		}
-		a.logger().Warn("the step's wait is not recorded: the twin's record cannot be read", "run", runID, "error", err)
+		a.logger().Warn("the step's "+what+" is not recorded: the twin's record cannot be read", "run", runID, "error", err)
 		return false, nil
 	}
 	if !mine(rec, runID) {
 		return false, nil
 	}
-	rec.Step.Wait = &wait
+	set(rec.Step)
 	if err := WriteRecord(path, rec); err != nil {
 		return false, err
 	}

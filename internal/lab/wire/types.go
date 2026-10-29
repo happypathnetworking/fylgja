@@ -884,15 +884,32 @@ type FlowPlan struct {
 	Flow  FlowSpec `json:"flow"`
 }
 
-// FlowsInput is the staged twin and the flows to start or read in it.
+// FlowsInput is the staged twin and the flows to start or read in it. StartFlows reads the
+// first two alone. ReadFlows also takes the step run whose record it writes the loss into,
+// how each flow's start ended (a flow not_started is carried as it was; none given, every
+// flow is read), the probes the target adds and drops, which the loss lists as they are, and
+// whether the step failed or was cancelled after its stage, which reads every flow
+// interrupted.
 type FlowsInput struct {
-	TwinDir string     `json:"twin_dir"`
-	Flows   []FlowPlan `json:"flows"`
+	TwinDir     string        `json:"twin_dir"`
+	Flows       []FlowPlan    `json:"flows"`
+	RunID       string        `json:"run_id,omitempty"`
+	Started     []FlowOutcome `json:"started,omitempty"`
+	Added       []string      `json:"added,omitempty"`
+	Dropped     []string      `json:"dropped,omitempty"`
+	Interrupted bool          `json:"interrupted,omitempty"`
 }
 
 // FlowsResult is each flow's outcome as StartFlows answers it.
 type FlowsResult struct {
 	Flows []FlowOutcome `json:"flows"`
+}
+
+// ReadFlowsResult is the step's loss as ReadFlows read it, and whether it is in the record:
+// a record that is another run's, or one the step could not write, keeps what it holds.
+type ReadFlowsResult struct {
+	Loss     Loss `json:"loss"`
+	Recorded bool `json:"recorded"`
 }
 
 // FlowOutcome is one flow's start: started, or not_started with the rule and the message

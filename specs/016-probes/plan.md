@@ -246,9 +246,13 @@ docs/{architecture,brief,glossary,development,roadmap,verified-facts}.md, decisi
 ```
 
 **Structure Decision**: the declaration, the package and the mechanism's pure reading live
-in one new package, `internal/probe`, which imports `findings` and the standard library
-alone, so that the compiler, the snapshot, the server and the lab share one definition of
-a probe without any of them importing another. The synthesis lives in the compiler
+in one new package, `internal/probe`, which imports `findings` and the standard library,
+and for the registry alone `gopkg.in/yaml.v3`, `github.com/santhosh-tekuri/jsonschema/v6`
+and the module root's embedded `probes/`; the declaration and the ping reading import
+`findings` and the standard library alone
+(`TestTheDeclarationAndThePingReadingImportNoDecoder`), so that the compiler, the
+snapshot, the server and the lab share one definition of a probe without any of them
+importing another. The synthesis lives in the compiler
 (`PlaceProbes`), called by validation and by `Compile`, on the pattern `SurveyDevice` and
 `LinkTerminations` already follow, so a refusal is worded alike from both. The hosts'
 runtime, `docker exec` to start, read and burst, lives in `internal/lab` as every

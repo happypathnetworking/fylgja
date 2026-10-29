@@ -108,6 +108,17 @@ any read of a node's running configuration are out of this feature.
     is verified present whatever its acquisition (R-12); the probe package's override is
     the PSP override directory's `probes/` subdirectory (R-08).
 
+### Session 2026-10-29 (converge)
+
+- **A twin from an earlier build is destroyed and created again, never stepped from** (the
+  operator, T055): the edge case "A twin created before this feature" now says so, as
+  `contracts/cli.md`'s 016 Upgrading and the code do; a step across bundle versions was not
+  chosen.
+- **`internal/probe`'s imports** (the operator, T059): `plan.md`'s Structure Decision names
+  the registry's decoder and schema imports beside `findings` and the standard library,
+  which the declaration and the ping reading alone are held to; splitting the registry
+  into a package of its own was not chosen.
+
 ## User Scenarios & Testing *(mandatory)*
 
 ### User Story 1 - A declared probe becomes a host on the twin (Priority: P1)
@@ -501,8 +512,12 @@ decision log; `make linkcheck` clean.
 - **A diverged twin**: `step.twin.diverged` as today; its probes are whatever its record's
   snapshot carries.
 - **A twin created before this feature, left up across the upgrade**: its record names a
-  snapshot `1` or none; `twin step` reads its snapshot as Story 7 scenario 1 says, and a
-  step to a snapshot with probes builds the hosts as a step that adds a probe does.
+  snapshot `1` or none, and its bundle is a `5`, which this build does not compare:
+  `twin step` refuses it at `compare` (`… is bundle version "5"; this build compares "6"`),
+  while `twin show` and `twin destroy` take it as they take any twin. It is destroyed and
+  created again, as `contracts/cli.md`'s 016 Upgrading says; the snapshot `1` it was built
+  from is still read, as Story 7 scenario 1 says, so `twin create --snapshot <id>` rebuilds
+  it under bundle `6`.
 - **A probe edited on `main` mid-rehearsal**: the rehearsal's stages keep the list read at
   its start; the next request reads the edit.
 - **`FylgjaProbe` absent on `main`**: a take with no `--probes` on an install whose `main`

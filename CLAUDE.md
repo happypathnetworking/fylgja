@@ -666,10 +666,6 @@ Rewritten whole at each release's close, never appended to.
   yet.
 - **Open, the operator's**: 016's command log (`make command-log`, once this session is
   closed; specify through Run 28 are published); 016's review, merge and push (T050);
-  016's T055, the spec's edge case on a twin an earlier build left (its bundle `5` cannot
-  be stepped from: amend the edge case, or ask for a step across bundle versions), and
-  T059, `plan.md`'s Structure Decision on `internal/probe`'s imports, each changing a
-  feature artifact;
   file 014's upstream
   request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of

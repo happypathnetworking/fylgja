@@ -71,7 +71,7 @@ func TestGoldenMixed(t *testing.T) {
 	if id := bundle.ID(files); id != goldenMixedID {
 		t.Errorf("bundle_id = %s, want %s", id, goldenMixedID)
 	}
-	checkInvariants(t, "testdata/ctm/mixed.json", files)
+	checkInvariants(t, loadFixture(t, "testdata/ctm/mixed.json"), files)
 }
 
 // Each node is deployed as its own package says: its image under its container kind, and

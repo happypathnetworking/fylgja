@@ -1,6 +1,7 @@
 package server
 
 import (
+	"os"
 	"reflect"
 	"testing"
 
@@ -8,6 +9,8 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 	"github.com/happypathnetworking/fylgja/internal/provision"
+	"github.com/happypathnetworking/fylgja/internal/psp"
+	"github.com/happypathnetworking/fylgja/internal/step"
 )
 
 // manifestProbe is a probe's manifest entry with its two hosts on device dev, a towards b.
@@ -63,6 +66,42 @@ func TestFlowsOfTwoManifests(t *testing.T) {
 
 	if _, _, _, err := flowsOf(from, to, nodes[:2]); err == nil {
 		t.Error("a probe both carry whose a host the host check did not plan gave no error")
+	}
+}
+
+// A step from a probed twin reads the twin's own manifest, whose hosts name no support
+// package (psp null): the from side's packages are the devices' alone, and the flow is the
+// probe both bundles carry (016). Run 27 found the server's step panicking here on the
+// first step from a probed twin, a dry run's included.
+func TestStepInputFromAProbedTwin(t *testing.T) {
+	raw, err := os.ReadFile(repoPath("testdata", "golden", "three-node-probed", compiler.ManifestFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg, err := psp.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const id = "5222063bac574cf7ba031a0cb7a04dc0ae8b40cca84403215bf5356c50dfcde9"
+	probed := step.Bundle{ID: id, Files: map[string][]byte{compiler.ManifestFile: raw}}
+	plan := wire.CheckHostResult{Nodes: []wire.NodePlan{
+		{Name: "n1", PSPID: "nokia_srlinux"}, {Name: "n2", PSPID: "nokia_srlinux"}, {Name: "n3", PSPID: "nokia_srlinux"},
+		hostNode("n1-loop-a", "n1-loop", "a", "10.1.11.2"), hostNode("n1-loop-b", "n1-loop", "b", "10.1.10.2")}}
+
+	in, packages, err := stepInput(&stepFlags{}, &wire.TwinRecord{BundleID: id}, probed, stepTarget{bundle: probed}, "",
+		step.Step{Unchanged: true}, nil, plan, wire.ReconcilePlan{}, reg, "test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var from []string
+	for _, p := range packages.from {
+		from = append(from, p.Node+":"+p.ID)
+	}
+	if want := []string{"n1:nokia_srlinux", "n2:nokia_srlinux", "n3:nokia_srlinux"}; !reflect.DeepEqual(from, want) {
+		t.Errorf("the from side's packages %q, want %q", from, want)
+	}
+	if len(in.Flows) != 1 || in.Flows[0].Probe != "n1-loop" || in.Added != nil || in.Dropped != nil {
+		t.Errorf("flows %+v, added %q, dropped %q; want n1-loop's flow alone", in.Flows, in.Added, in.Dropped)
 	}
 }
 

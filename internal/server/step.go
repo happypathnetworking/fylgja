@@ -679,6 +679,10 @@ func stepInput(f *stepFlags, rec *wire.TwinRecord, from step.Bundle, target step
 		return provision.StepInput{}, packages, err
 	}
 	for _, n := range m.Nodes {
+		// A host names no support package (016): nothing it carries is pushed.
+		if n.PSP == nil {
+			continue
+		}
 		if p, ok := reg.LookupID(n.PSP.ID); ok {
 			packages.from = append(packages.from, provision.NodePackage{Node: n.Name, ID: n.PSP.ID, Mode: p.Config.Mode,
 				LinkChange: p.Fidelity.LinkChange})

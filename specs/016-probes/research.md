@@ -615,3 +615,86 @@ Appended by the runs.
   `TestFixtureReadsToTheThreeNodeCTM` fails on the interfaces and artifacts, as
   `TestReadCountsTheFixture` does on the count. *(Infrahub 1.11.2, infrahub-sdk 1.23.2,
   2026-10-29)*
+- **The image** (Run 27, T042): `docker pull alpine:3.24.2` fetched it, and `docker image
+  inspect --format '{{.Id}} {{.RepoDigests}}' alpine:3.24.2` reads
+  `sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6
+  [alpine@sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6]`: on
+  Docker 29.8.1 the image's id is its repository digest. Its busybox reads `v1.37.0`,
+  `/etc/alpine-release` `3.24.2`. Both start-up reports then name it: `ping (embedded):
+  image alpine:3.24.2 (public_registry, present on this host), flow ping every 0.2s, burst
+  5`. *(Docker 29.8.1, 2026-10-29)*
+- **§4.4 The fixture re-seeded under the imported template** (Run 27, T042): `make
+  infrahub-clean && make infrahub-seed` (9 s and 43 s) seeds `fylgja-fixture` with the two
+  addressed ports per device, and each `device-config` artifact, `Ready`, carries both
+  ports' SR Linux lines, `subinterface 0 ipv4 admin-state enable` and `… ipv4 address
+  10.<d>.10.1/24` (and `.11.1/24`), 1,327 bytes each, checksums `28881d3d…` (`n1`),
+  `092ca9f6…` (`n2`) and `95a3a917…` (`n3`), each the MD5 of the stored bytes and equal to
+  Run 20's renders. `intent read --branch fylgja-fixture --out` reads 3 devices, 15
+  interfaces, 3 links and 3 artifacts, schema `8a4f3bee…`, `probes` `[]` with
+  `FylgjaProbe` empty, and files snapshot
+  **`0940db93e2ad1244a097824ececdaa6979500b1ddeeef15ca3cd612da68656ef`**, the same on a
+  second read; its CTM's devices and links equal `testdata/ctm/three-node.json`'s; `twin
+  compile --snapshot` writes bundle
+  **`c3872f5c1cf8b79170a9bb0b902a3040ac34572e91c4ac089e5eb08306f0cf83`** (3 nodes, 3 links).
+  *(Infrahub 1.11.2, 2026-10-29)*
+- **§4.1 The `linux` host, live** (Run 27, T042, T043): on a throwaway branch's twin with
+  `n1-loop`, containerlab deploys both hosts beside the three privileged SR Linux nodes in
+  lab `fylgja` (deploy 46.7 s for 5 nodes; the whole create 52.5 s); a `linux` host is
+  privileged too, as containerlab runs it. It runs each host's two `exec` lines after its
+  links are made: inside `clab-fylgja-n1-loop-a`, `ip -4 -o addr show dev eth1` reads
+  `inet 10.1.10.2/24`, and `ip route` holds `10.1.11.2 via 10.1.10.1 dev eth1` beside the
+  connected route (`n1-loop-b` the mirror). The exec readiness held each host at its first
+  attempt, 0.1–0.2 s after the deploy. `ping -c 3 10.1.11.2` from `a` is answered three
+  times at TTL 63, and `traceroute` reads `10.1.10.1` then `10.1.11.2`: through `n1`. A
+  host's container holds about 700 KiB. **A failed `exec` line is logged, not failed**: on
+  a throwaway two-host topology under `CLAB_LABDIR_BASE` at a scratch directory, a route
+  through an unreachable gateway is logged `ERRO Failed to execute command … rc=2` with its
+  stderr (`ip: RTNETLINK answers: Network unreachable`), and the deploy exits 0 with the
+  node `running`; the exec readiness is what catches it (destroyed after, with
+  `--cleanup`). **`docker exec -d` and `pkill -INT` in a containerlab-run container**: `docker
+  exec -d <host> sh -c 'pkill -x ping; exec ping -i 0.2 <far> > /run/flow.log 2>&1'` exits
+  0 and leaves `ping` running; `pkill -INT -x ping` then makes it print its counters at
+  once (`17 packets transmitted, 17 packets received, 0% packet loss`, the read 0.15 s), as
+  §1.2 found outside containerlab. *(containerlab 0.79.0, Docker 29.8.1, alpine 3.24.2,
+  SR Linux 24.7.1, 2026-10-29)*
+- **§4.4 The template's lines on both images** (Run 27, T043): SR Linux accepts
+  `subinterface 0 ipv4 admin-state enable` and `subinterface 0 ipv4 address 10.1.10.1/24`
+  in the replace (each node's push 2.8–2.9 s), and `info from running /interface
+  ethernet-1/10` reads `ipv4 { admin-state enable address 10.1.10.1/24 { } }`. On a
+  throwaway mixed twin with `e1-loop` (`testdata/probes/e1-loop.json`; create 90.4 s,
+  deploy 76.5 s), cEOS accepts `ip routing`, `no switchport` and `ip address` in the eAPI
+  replace (pushes 2.3–2.5 s): `show running-config` on `e1` reads `ip routing`, and
+  `no switchport`, `ip address 10.2.10.1/24` under `Ethernet10` (and `.11.1/24` under
+  `Ethernet11`); the hosts ping through `e1` (first hop `10.2.10.1`), and `twin verify`
+  reads `burst e1-loop 5 of 5 replies … held`. *(SR Linux 24.7.1, cEOS 4.32.0.2F,
+  2026-10-29)*
+- **§4.6 The flows' and the bursts' cost** (Run 27, T043): a burst, `ping -c 5 -i 0.2 -W 2`,
+  takes 0.93–0.96 s by hand when every echo is answered; `twin verify` on the probed
+  three-node twin 5.3 s (22 assertions over 5 nodes, 4 skipped), 6.0 s with the burst
+  failing. Three steps on the probed twin, each pushing `n1` alone: to `n1:ethernet-1/2`
+  disabled, 5.4 s and settled after 5.0 s, `loss n1-loop 0/45`; to `n1:ethernet-1/10`
+  disabled with `--wait 30s`, `stepped` in 4.8 s and the wait expired after 34.4 s on
+  `verify.burst n1-loop` (`0 of 5 replies`), `loss n1-loop 176/190`, longest gap 35.2 s,
+  `twin verify` then exit 5 with `failed: 1 burst` alone; back, 5.0 s, settled after
+  11.6 s, `loss n1-loop 41/77`, longest gap 8.2 s, the burst held. The flows add `step
+  flows` (no measurable time) after the stage and `step loss` after the observe; the
+  client's whole step 12.0, 40.8 and 18.3 s. Destroy 3.2 s, the hosts among its 5
+  containers. *(2026-10-29)*
+- **A step from a probed twin panicked the server** (Run 27, T043): `stepInput`
+  (`internal/server/step.go`) read `n.PSP.ID` for every node of the twin's own manifest,
+  and a host's `psp` is null, so the first step from a probed twin, a dry run's included,
+  ended `twin.step outcome=panic` with no document (the client: `api.unreachable … unexpected
+  EOF`). No tier-1 test stepped from a bundle carrying hosts. Fixed by skipping a node with
+  no support package, as the target side's lookup already did, with
+  `TestStepInputFromAProbedTwin` over the probed golden. `conformance.Boot` reads
+  `n.PSP.ID` the same way, and its neighbour check would also expect a discovery neighbour
+  on a probe's port; tier 3 runs the boot half on cases 1 and 6, whose twins carry no
+  probe, so it is left for converge, named in T043's note. *(2026-10-29)*
+- **Quickstart §3 and §4 corrected** (Run 27, T043): `intent read --probes` with a cabled
+  endpoint files its snapshot, since placement is the compile's (FR-009, data-model §12),
+  and `twin compile --snapshot` (or a create from it) refuses it,
+  `probe.interface.cabled n1-loop/b`, exit 1; `--wait` takes a duration (`60s`), a bare
+  `60` being `verify.wait.invalid`, exit 2; and `-generate` returns once the artifact
+  count holds, before a rewrite lands (`GenerateArtifacts`' comment), so a read straight
+  after it took `n1`'s old artifact once: the hand scenario waits for the checksum to
+  move (about 10 s here). *(2026-10-29)*

@@ -100,7 +100,8 @@ docker exec clab-fylgja-n1-loop-a ping -c 3 10.1.11.2             # answered thr
 bin/fylgja twin verify                                             # burst n1-loop held; counts burst 1/0
 bin/fylgja twin show                                               # the hosts among the nodes, probe named
 sed 's/ethernet-1\/11/ethernet-1\/1/' testdata/probes/n1-loop.json > local/qs-cabled.json
-bin/fylgja intent read --branch "$B" --probes local/qs-cabled.json --out local/qs.json   # refused: probe.interface.cabled n1-loop/b
+bin/fylgja intent read --branch "$B" --probes local/qs-cabled.json --out local/qs.json   # filed: placement is the compile's (FR-009)
+bin/fylgja twin compile --snapshot local/qs.json --out local/qs-bundle   # refused: probe.interface.cabled n1-loop/b, exit 1, no bundle
 bin/fylgja twin create --snapshot local/qs.json --probes testdata/probes/n1-loop.json    # snapshot.flags.conflict --probes
 ```
 
@@ -111,14 +112,15 @@ null and `probe` named.
 
 ```sh
 go run -tags fixture ./cmd/fylgja-fixture -branch "$B" -disable-port n1:ethernet-1/2 -generate
+# -generate returns once the count holds, before a rewrite lands: wait for n1's checksum to move
 bin/fylgja intent read --branch "$B" --probes testdata/probes/n1-loop.json --out local/qs-1.json
-bin/fylgja twin step --snapshot local/qs-1.json --wait 60   # step flows: n1-loop started; … step observe: settled …; loss n1-loop 0/N, gap 0.0s (container timing)
+bin/fylgja twin step --snapshot local/qs-1.json --wait 60s   # step flows: n1-loop started; … step observe: settled …; loss n1-loop 0/N, gap 0.0s (container timing)
 jq '.step.loss' local/twin/twin.json                        # basis container, one probe, sent > 0
-go run -tags fixture ./cmd/fylgja-fixture -branch "$B" -disable-port n1:ethernet-1/10 -generate
+go run -tags fixture ./cmd/fylgja-fixture -branch "$B" -disable-port n1:ethernet-1/10 -generate   # and wait, as above
 bin/fylgja intent read --branch "$B" --probes testdata/probes/n1-loop.json --out local/qs-2.json
-bin/fylgja twin step --snapshot local/qs-2.json --wait 30   # stepped; wait expired: verify.burst n1-loop 0 of 5 replies
+bin/fylgja twin step --snapshot local/qs-2.json --wait 30s   # stepped; wait expired: verify.burst n1-loop 0 of 5 replies
 bin/fylgja twin verify; echo $?                             # 5, nonconforming on the burst alone
-bin/fylgja twin step --snapshot local/qs-1.json --wait 60   # back: the port re-enabled, the burst held, lost > 0 across the step
+bin/fylgja twin step --snapshot local/qs-1.json --wait 60s   # back: the port re-enabled, the burst held, lost > 0 across the step
 bin/fylgja twin destroy                                     # the hosts removed with the lab
 go run -tags fixture ./cmd/fylgja-fixture -branch "$B" -delete
 rm -f local/qs-*.json

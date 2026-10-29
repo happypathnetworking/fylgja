@@ -964,6 +964,18 @@ the core took unchanged. The adapter and the install files are not in this repos
   order and the lists sorted as `ctm.Normalize` sorts them; Python's `json.dumps(body,
   indent=2) + "\n"` gave `1a29d9dc…` and `6a4a91ff…`, the ids the server filed; the
   compact and sorted-key forms do not. *(10-29)*
+- **Python writes Go's bytes once five characters are escaped**: Python 3.14.4's
+  `json.dumps(…, indent=2, ensure_ascii=False)`, with `<`, `>`, `&`, U+2028 and U+2029
+  translated to Go's `\u003c`, `\u003e`, `\u0026`, `\u2028`, `\u2029` and a lone surrogate
+  to U+FFFD, plus a newline, is go1.26.8's `json.MarshalIndent` byte for byte: control
+  characters both write as `\b`, `\f`, `\n`, `\r`, `\t` or a lowercase `\u00XX`, DEL and
+  every character beyond ASCII both raw. The default `ensure_ascii=True` escapes beyond
+  ASCII, which Go never does, so the form above is exact only for ASCII text. The adapter's
+  `snapshot.py` gave the id of all 203 snapshots under this host's `local/snapshots/` (133
+  of version `1`), wrote the 70 of version `2` back byte for byte, and did the same for the
+  four wrapped fixtures and a Go-written file holding every such character
+  (`orchestrator/tests/data/snapshot/escapes.json`). *(10-29;
+  `specs/020-core-orchestrator-split/research.md` §5.9)*
 
 ---
 

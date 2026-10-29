@@ -695,3 +695,37 @@ made.
   golangci-lint on its action and runs `make lint-python` (ruff alone, the half of `make
   lint` the action does not run). Not yet run on GitHub's runner: the operator pushes, and
   the first pull request or push after it is its check.
+
+### 5.9 The snapshot id in Python (T015, Run 13, 2026-10-29)
+
+- **`adapters/infrahub/snapshot.py`** ports `ctm.Normalize` (its defaults and its five
+  stable sorts), the hashed bytes and the stored form over plain dicts: each object built
+  in its Go struct's key order, a field tagged `omitempty` left out when empty (`at`,
+  `platform.version`, `enabled` when unset, `link`, `artifact` when absent) and a
+  provenance of `intent` left out as `omitzero` leaves it, a string Go writes `""` when
+  absent written so, an unknown key dropped. Encoded by `json.dumps(…, indent=2,
+  ensure_ascii=False)`, the text translated (`<`, `>`, `&`, U+2028, U+2029 to Go's `\u`
+  escapes, a lone surrogate to U+FFFD) and a newline added. Besides the task's
+  `normalize`, `hashed_bytes`, `snapshot_id`, `write` and `read`: `take(ctm, probes)`
+  (`snapshot.Take`, for T017's read to end on), `marshal`, `unmarshal`, `is_id` and
+  `SnapshotError` carrying the core's rule (`snapshot.version.unsupported`,
+  `snapshot.invalid`, `snapshot.id.mismatch`) and the field. `marshal` holds a snapshot to
+  `Marshal`'s invariants but the probes' declaration rules, which `probes.py` (T017)
+  holds before the take; `unmarshal` holds `Unmarshal`'s outer shape and the id, not the
+  inner CTM's own rules, which `validate.py` (T016) holds.
+- **Held to Go's bytes**: the four wrapped fixtures, copied into
+  `orchestrator/tests/data/snapshot/` (a test holds each copy to `testdata/snapshot/`),
+  read to their ids and written back byte for byte, and taken again from their inner CTM to
+  the same file; a fifth, `escapes.json`, written by a new Go test
+  (`TestTheOrchestratorsEscapesFixture`, `internal/snapshot/orchestrator_test.go`, with
+  `-update`) from a CTM whose strings carry HTML's three, U+2028, U+2029, the control
+  characters, DEL and characters beyond the BMP, and whose lists arrive out of order, id
+  `38e0ced3…`, the same both ways. Without the translation its id differs, so the fixture
+  is the one that catches it. By hand, every one of the 203 snapshots the core filed under
+  this host's `local/snapshots/` read to its file name's id (133 of version `1`), and the
+  70 of version `2` wrote back byte for byte. Recorded in `docs/verified-facts.md`.
+- **Tier 2**: `tests/contract/test_snapshot_id.py` read the core's
+  `local/snapshots/0940db93….json` (a `2`) to `0940db93…` and wrote it back byte for byte;
+  the orchestrator's tier 2, three tests, green. `make test` uncached 60.0 s at a load of
+  about 2, the Python share 43 tests in 2.1 s.
+

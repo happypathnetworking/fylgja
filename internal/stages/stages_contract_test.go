@@ -176,8 +176,8 @@ func filing(t *testing.T) (Pipeline, map[string]*ctm.CTM) {
 	scratch := t.TempDir()
 	compiled := map[string]*ctm.CTM{}
 	filed := map[string]*ctm.CTM{}
-	take := func(ctx context.Context, c *ctm.CTM) (string, findings.List, error) {
-		s := snapshot.Take(c, nil)
+	take := func(ctx context.Context, c *ctm.CTM, probes []probe.Probe) (string, findings.List, error) {
+		s := snapshot.Take(c, probes)
 		_, err := snapshots.Put(ctx, s)
 		return s.ID, nil, err
 	}
@@ -188,7 +188,7 @@ func filing(t *testing.T) (Pipeline, map[string]*ctm.CTM) {
 		}
 		filed[id] = compiled[id]
 		return nil, err
-	}, nil)
+	}, nil, nil)
 	compile := p.Compile
 	p.Compile = func(c *ctm.CTM, decls []probe.Probe, reg *psp.Registry, probes *probe.Registry) (map[string][]byte, string, findings.List) {
 		files, id, list := compile(c, decls, reg, probes)

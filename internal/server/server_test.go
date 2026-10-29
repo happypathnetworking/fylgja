@@ -469,7 +469,9 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 		{findings.OpTwinRehearse, `{"args":{"stage":"change-1/head"}}`, `twin.rehearse takes no argument "stage"`},
 		{findings.OpTwinRehearse, `{"args":{"branch":"change-1","dry_run":true}}`, `twin.rehearse takes no argument "dry_run"`},
 		{findings.OpTwinRehearse, `{"args":{"branch":["change-1"]}}`, `twin.rehearse's argument "branch" is not a string`},
-		{findings.OpTwinRehearse, `{"files":[{"path":"a","data":""}]}`, "twin.rehearse takes no files"},
+		// 016: twin.rehearse takes a probe file beside its probes argument alone.
+		{findings.OpTwinRehearse, `{"files":[{"path":"a","data":""}]}`,
+			`twin.rehearse carries 1 file where it takes a probe file beside its argument "probes" alone`},
 		// 017: twin.step reads under its record's scope and takes none, and an operation that
 		// reads no intent takes none either; where it is taken, it is a string.
 		{findings.OpTwinStep, `{"args":{"scope":"tag:fylgja"}}`, `twin.step takes no argument "scope"`},

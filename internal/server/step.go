@@ -46,6 +46,9 @@ type stepFlags struct {
 	waitGiven bool
 	// waitS is the budget in seconds, verify.DefaultBudget's when --wait is left out.
 	waitS int
+	// probes is --probes as given (016): the probe file a stage target's take carries in
+	// place of the kind's, refused beside --snapshot.
+	probes probesArg
 }
 
 // fromStage is whether the step names a stage: --stage given, whatever its value, or a value
@@ -88,10 +91,10 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags, files []api.F
 	// start, exit 2, as create's snapshot guards are (019, research R-04), and before the
 	// files' shape, since a client sends no file beside it.
 	if f.fromSnapshot() && f.fromStage() {
-		doc := findings.RuleErrorDocument(op, subject, findings.RuleSnapshotFlagsConflict, "--stage",
-			"--stage is meaningless with --snapshot: the snapshot is the target")
-		doc.Findings[0].Step = findings.StepStart
-		return &result{doc: doc}
+		return snapshotConflict(op, subject, "--stage", "--stage is meaningless with --snapshot: the snapshot is the target")
+	}
+	if f.fromSnapshot() && f.probes.given {
+		return probesConflict(op, subject)
 	}
 	if refused := snapshotFiles(op, subject, f.fromSnapshot(), f.snapshot, files); refused != nil {
 		return refused
@@ -171,6 +174,14 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags, files []api.F
 		return stepToSnapshot(ctx, opts, f, op, subject, reg, paths, acts, rec, files)
 	}
 
+	// The request's one probe list, which the target's take carries (016): read before the
+	// target's proposed change is found, and only for a stage, since a snapshot carries its
+	// own.
+	probes, err := readProbes(ctx, opts, op, subject, f.probes)
+	if err != nil {
+		return err
+	}
+
 	// The target's proposed change, found once by the given reference's source branch, or by
 	// the record's stage's when none is given (steps 1–3 and the head's at; 019, research
 	// R-07), and the target chosen among its stages; then the target resolved (steps 4–9),
@@ -212,7 +223,7 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags, files []api.F
 	if err != nil {
 		return loadFailureAt(op, subject, findings.StepCompile, err)
 	}
-	built := stages.Build(ctx, reader, stamper, reg, ch, target, stagePipeline(paths, packages), time.Now().UTC())
+	built := stages.Build(ctx, reader, stamper, reg, ch, target, stagePipeline(paths, probes, packages), time.Now().UTC())
 	list = append(list, built.Findings...)
 	var resolved *resolvedStage
 	if r := built.Resolved; r != nil {

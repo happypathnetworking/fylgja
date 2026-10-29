@@ -28,6 +28,9 @@ type rehearseFlags struct {
 	// stands (017).
 	scope      string
 	scopeGiven bool
+	// probes is --probes as given (016): the probe file every stage's take carries in place
+	// of the kind's, as stage plan's.
+	probes probesArg
 }
 
 // runTwinRehearse is twin rehearse (015; specs/015-proposed-change-rehearsal/contracts/
@@ -70,7 +73,7 @@ func runTwinRehearse(ctx context.Context, opts *options, f *rehearseFlags) error
 		ctx = context.Background()
 	}
 
-	planned, err := planStages(ctx, opts, op, subject, f.branch, scope, nil, nil, nil)
+	planned, err := planStages(ctx, opts, op, subject, f.branch, scope, f.probes, nil, nil, nil)
 	if err != nil {
 		return err
 	}

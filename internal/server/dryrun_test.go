@@ -29,7 +29,7 @@ func TestDryRunSaysNothingOfFollowing(t *testing.T) {
 			reads := 0
 			subject := &findings.Subject{Branch: "fylgja-fixture"}
 			return runCreateDryRun(context.Background(), opts, findings.OpTwinCreate, subject,
-				fakeRead(t, "three-node.json", nil, &reads), subject.Branch, "", "tag:fylgja", shippedPackages(t))
+				fakeRead(t, "three-node.json", nil, &reads), subject.Branch, "", "tag:fylgja", shippedPackages(t), nil)
 		}, false},
 		{"twin provision --dry-run", func(t *testing.T, opts *options, paths lab.Paths) error {
 			return dryRunReport(context.Background(), opts, findings.OpTwinProvision, &findings.Subject{Bundle: "bundle"},

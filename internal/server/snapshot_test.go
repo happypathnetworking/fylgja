@@ -34,7 +34,7 @@ func loadCTM(t *testing.T, name, observedAt string) *ctm.CTM {
 // path the server names is that entry (data-model §4).
 func TestTakeSnapshotFilesUnderItsID(t *testing.T) {
 	paths := useStateRoot(t)
-	s, path, list, err := takeSnapshot(context.Background(), paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"))
+	s, path, list, err := takeSnapshot(context.Background(), paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil || len(list) != 0 {
 		t.Fatalf("takeSnapshot = %v, %v; want it filed", list, err)
 	}
@@ -65,7 +65,7 @@ func TestTakeSnapshotFilesUnderItsID(t *testing.T) {
 func TestASecondTakeLeavesTheEntry(t *testing.T) {
 	paths := useStateRoot(t)
 	ctx := context.Background()
-	_, path, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"))
+	_, path, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestASecondTakeLeavesTheEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, again, list, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T10:30:00.000000Z"))
+	s, again, list, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T10:30:00.000000Z"), nil)
 	if err != nil || len(list) != 0 || s.ID != fixtureSnapshotID || again != path {
 		t.Fatalf("the second take = %v at %s, %v, %v; want %s at %s", s, again, list, err, fixtureSnapshotID, path)
 	}
@@ -90,7 +90,7 @@ func TestASecondTakeLeavesTheEntry(t *testing.T) {
 func TestACorruptEntryIsSnapshotIDMismatch(t *testing.T) {
 	paths := useStateRoot(t)
 	ctx := context.Background()
-	other, _, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"))
+	other, _, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestACorruptEntryIsSnapshotIDMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, path, list, err := takeSnapshot(ctx, paths, findings.StepCompile, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"))
+	s, path, list, err := takeSnapshot(ctx, paths, findings.StepCompile, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil || s != nil || path != "" {
 		t.Fatalf("takeSnapshot = %v at %q, %v; want no snapshot and the refusal", s, path, err)
 	}
@@ -327,7 +327,7 @@ func TestARefusedObservedAtLeavesTheTakeOfItsIntent(t *testing.T) {
 			}
 
 			const observedAt = "2026-10-27T09:00:00.000000Z"
-			s, path, list, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", observedAt))
+			s, path, list, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", observedAt), nil)
 			if err != nil || len(list) != 0 || s.ID != fixtureSnapshotID || path != filepath.Join(paths.Snapshots, fixtureSnapshotID+".json") {
 				t.Fatalf("takeSnapshot = %v at %s, %v, %v; want %s filed", s, path, list, err, fixtureSnapshotID)
 			}
@@ -357,7 +357,7 @@ func TestResolveSnapshotByID(t *testing.T) {
 	}
 	validateWithShow(t, currentContract, "018", doc)
 
-	stored, path, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"))
+	stored, path, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +367,7 @@ func TestResolveSnapshotByID(t *testing.T) {
 	}
 
 	// The lossy fixture's stored bytes under the three-node's id.
-	other, _, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"))
+	other, _, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

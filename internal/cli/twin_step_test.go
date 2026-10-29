@@ -28,6 +28,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	snap "github.com/happypathnetworking/fylgja/internal/snapshot"
@@ -364,8 +365,8 @@ func compileStage(t *testing.T, paths lab.Paths, label string) compiledStage {
 	if err != nil || ch == nil {
 		t.Fatalf("change-1's proposed change was not found: %v %+v", err, list)
 	}
-	take := func(ctx context.Context, c *ctm.CTM) (string, findings.List, error) {
-		built.snapshot = snap.Take(c, nil)
+	take := func(ctx context.Context, c *ctm.CTM, probes []probe.Probe) (string, findings.List, error) {
+		built.snapshot = snap.Take(c, probes)
 		_, err := snap.NewDirStore(paths.Snapshots).Put(ctx, built.snapshot)
 		return built.snapshot.ID, nil, err
 	}
@@ -375,7 +376,7 @@ func compileStage(t *testing.T, paths lab.Paths, label string) compiledStage {
 		return list, err
 	}
 	ref := stages.Ref{Branch: "change-1", Label: label}
-	s := stages.Build(ctx, reader, stepStamper{}, reg, ch, ref, stages.NewPipeline(take, file, nil), time.Now().UTC())
+	s := stages.Build(ctx, reader, stepStamper{}, reg, ch, ref, stages.NewPipeline(take, file, nil, nil), time.Now().UTC())
 	if s.Status != stages.PlanCompiled {
 		t.Fatalf("%s did not compile: %+v", ref, s.Findings)
 	}

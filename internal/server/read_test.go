@@ -108,7 +108,7 @@ func readOf(t *testing.T, rec *recordedFrames, readFn readFunc, observedAt strin
 	opts := helperServer.newCall(context.Background(), "test", api.Request{Render: api.RenderText}, newFrames(rec, nil), nil).options()
 	subject := &findings.Subject{Branch: "fylgja-fixture", Out: "snap.json", Scope: "tag:fylgja"}
 	return read(context.Background(), opts, subject, readFn, "fylgja-fixture", "", "tag:fylgja", "snap.json", shippedPackages(t),
-		observedAt, nil)
+		observedAt, nil, nil)
 }
 
 // intent read --out takes the clean read's snapshot and files it where a create files one,
@@ -217,7 +217,7 @@ func TestARefusedReadSendsAndFilesNothing(t *testing.T) {
 func TestAReadOverACorruptSnapshotEntry(t *testing.T) {
 	ctx := context.Background()
 	paths := useStateRoot(t)
-	other, _, _, err := takeSnapshot(ctx, paths, "", loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"))
+	other, _, _, err := takeSnapshot(ctx, paths, "", loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

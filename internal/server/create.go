@@ -38,6 +38,9 @@ type createFlags struct {
 	// stageGiven is.
 	snapshot      string
 	snapshotGiven bool
+	// probes is --probes as given (016): the probe file every take of the create carries in
+	// place of the kind's, refused beside --snapshot.
+	probes probesArg
 }
 
 // fromStage is whether the create names a stage: --stage given, whatever its value, or a
@@ -106,6 +109,11 @@ func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.F
 	if err != nil {
 		return loadFailureAt(op, subject, findings.StepRead, err)
 	}
+	// The request's one probe list, before the stage resolves and the branch is read (016).
+	probes, err := readProbes(ctx, opts, op, subject, f.probes)
+	if err != nil {
+		return err
+	}
 
 	// A stage resolves here, on the server, before any run starts and before any branch's
 	// intent is read; what follows is the pinned create of the reference it names.
@@ -119,13 +127,13 @@ func runCreate(ctx context.Context, opts *options, f *createFlags, files []api.F
 		opts.note("%s", resolved.block.Line())
 	}
 	if f.dryRun {
-		return withStage(runCreateDryRun(ctx, opts, op, subject, stage.Read, branch, at, scope, reg), resolved)
+		return withStage(runCreateDryRun(ctx, opts, op, subject, stage.Read, branch, at, scope, reg, probes), resolved)
 	}
 
 	// The server reads, takes the snapshot, compiles and files before any run starts, so
 	// the run begins at the host check and reads nothing (R-11): every refusal here is the
 	// command's document, and no run starts.
-	compiled, err := readTakeCompile(ctx, opts, op, subject, stage.Read, branch, at, scope, reg)
+	compiled, err := readTakeCompile(ctx, opts, op, subject, stage.Read, branch, at, scope, reg, probes)
 	if err != nil {
 		return withStage(err, resolved)
 	}
@@ -218,10 +226,11 @@ func runCreateFromSnapshot(ctx context.Context, opts *options, op string, subjec
 // the workflow service. Read and compile are the stage commands' own pipelines, so a dry
 // run refuses exactly what `intent read` and `twin compile` would, under the same
 // identifiers. The snapshot and the bundle are filed as the create files them, so the
-// report's snapshot and bundle are there to inspect (FR-014).
+// report's snapshot and bundle are there to inspect (FR-014). probes is the request's list,
+// which the snapshot carries (016).
 func runCreateDryRun(ctx context.Context, opts *options, op string, subject *findings.Subject, read readFunc, branch, at, scope string,
-	reg *psp.Registry) error {
-	compiled, err := readTakeCompile(ctx, opts, op, subject, read, branch, at, scope, reg)
+	reg *psp.Registry, probes []probe.Probe) error {
+	compiled, err := readTakeCompile(ctx, opts, op, subject, read, branch, at, scope, reg, probes)
 	if err != nil {
 		return err
 	}
@@ -259,13 +268,14 @@ type compiledRead struct {
 // bounded by stage.ReadTimeout; the snapshot taken and filed; the compile; the bundle
 // filed (R-11). Each refusal, and each step that cannot run, is the command's document,
 // returned as the error, at read or compile as the run's own steps placed them. A refused
-// read files nothing. A compile refused after a clean read leaves the snapshot filed, and
+// read files nothing. The snapshot carries probes, the request's one list (016). A compile
+// refused after a clean read leaves the snapshot filed, and
 // its document and its text answer name it, since the input validated and only the output
 // was refused (R-05). An Infrahub that fails or times out during the read is
 // operation.failed at read, at once: no retry and no heartbeat stand between a create and
 // its read (FR-010).
 func readTakeCompile(ctx context.Context, opts *options, op string, subject *findings.Subject, read readFunc,
-	branch, at, scope string, reg *psp.Registry) (*compiledRead, error) {
+	branch, at, scope string, reg *psp.Registry, probes []probe.Probe) (*compiledRead, error) {
 	paths, err := opts.paths()
 	if err != nil {
 		return nil, failAt(op, subject, findings.StepRead, findings.StepRead, "%v", err)
@@ -290,7 +300,7 @@ func readTakeCompile(ctx context.Context, opts *options, op string, subject *fin
 	// stores' refusals are the compile step's, a corrupt snapshot entry's as a corrupt
 	// bundle entry's (contracts/cli.md, "018: snapshots", Identifiers), where the run's
 	// compile step filed the sidecar this replaces.
-	snap, snapPath, taken, err := takeSnapshot(ctx, paths, findings.StepCompile, c)
+	snap, snapPath, taken, err := takeSnapshot(ctx, paths, findings.StepCompile, c, probes)
 	if err != nil {
 		return nil, failAt(op, subject, findings.StepCompile, paths.Snapshots, "%v", err)
 	}

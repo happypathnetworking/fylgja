@@ -61,6 +61,9 @@ type Server struct {
 	// Getenv reads the host check's and verify's variables: the logins, the memory budget
 	// (os.LookupEnv).
 	Getenv func(string) (string, bool)
+	// Probes is the kind's read a request that sends no probe file makes (016): nil is
+	// intent.ProbeReader from the process environment, and a test sets its own.
+	Probes func() (ProbeReader, error)
 	// RehearsalCeiling is the longest deadline twin rehearse admits; zero is
 	// rehearsal.Ceiling. A test lowers it, and no flag sets it (015).
 	RehearsalCeiling time.Duration

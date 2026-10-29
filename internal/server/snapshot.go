@@ -11,13 +11,14 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/snapshot"
 	"github.com/happypathnetworking/fylgja/internal/validate"
 )
 
-// takeSnapshot wraps a CTM a read produced as a snapshot and files it in the store under
-// the state root, returning the snapshot and its store path (data-model §4; R-05). It
-// takes no probes yet: a request's list reaches the take with --probes (016, R-06). Where
+// takeSnapshot wraps a CTM a read produced as a snapshot, with probes, the request's one list
+// (016, R-06; readProbes), and files it in the store under the state root, returning the
+// snapshot and its store path (data-model §4; R-05). Where
 // the server takes a snapshot is here alone, so the create, its dry run, intent read and
 // the stages' pipeline take and file alike (D-011's one code path). Called after a clean
 // read and before the compile: a refused read files nothing, and a compile refused after
@@ -28,8 +29,9 @@ import (
 // under the id that hashes to another, or declares another, is snapshot.id.mismatch at
 // step, naming the store path and both ids, the one finding it returns, with no snapshot, since none was filed;
 // any other failure is an error the caller reports as operation.failed.
-func takeSnapshot(ctx context.Context, paths lab.Paths, step string, c *ctm.CTM) (*snapshot.Snapshot, string, findings.List, error) {
-	s := snapshot.Take(c, nil)
+func takeSnapshot(ctx context.Context, paths lab.Paths, step string, c *ctm.CTM, probes []probe.Probe) (*snapshot.Snapshot,
+	string, findings.List, error) {
+	s := snapshot.Take(c, probes)
 	store := snapshot.NewDirStore(paths.Snapshots)
 	_, err := store.Put(ctx, s)
 	var mismatch *snapshot.ErrIDMismatch
@@ -77,7 +79,7 @@ func snapshotFiles(op string, subject *findings.Subject, given bool, arg string,
 // snapshotGuards refuses what a snapshot makes meaningless, before any connection (R-07):
 // --branch, --stage, --at or --scope beside --snapshot, the first found in that order, is
 // snapshot.flags.conflict, since a snapshot carries its own branch, at and scope, exit 2 at
-// start. --dry-run is accepted.
+// start; then --probes (016), since it carries its own probes. --dry-run is accepted.
 func snapshotGuards(op string, subject *findings.Subject, f *createFlags) error {
 	for _, c := range []struct {
 		given bool
@@ -89,13 +91,28 @@ func snapshotGuards(op string, subject *findings.Subject, f *createFlags) error 
 		{f.scopeGiven, "--scope"},
 	} {
 		if c.given {
-			doc := findings.RuleErrorDocument(op, subject, findings.RuleSnapshotFlagsConflict, c.flag,
-				c.flag+" is meaningless with --snapshot: a snapshot carries its own branch, at and scope")
-			doc.Findings[0].Step = findings.StepStart
-			return &result{doc: doc}
+			return snapshotConflict(op, subject, c.flag, c.flag+" is meaningless with --snapshot: a snapshot carries its own "+
+				"branch, at and scope")
 		}
 	}
+	if f.probes.given {
+		return probesConflict(op, subject)
+	}
 	return nil
+}
+
+// snapshotConflict is snapshot.flags.conflict at flag, at start, saying message.
+func snapshotConflict(op string, subject *findings.Subject, flag, message string) error {
+	doc := findings.RuleErrorDocument(op, subject, findings.RuleSnapshotFlagsConflict, flag, message)
+	doc.Findings[0].Step = findings.StepStart
+	return &result{doc: doc}
+}
+
+// probesConflict is --probes beside --snapshot on a create or a step (016; FR-006): the
+// snapshot's own list is the one its twin carries, and a file would replace nothing.
+func probesConflict(op string, subject *findings.Subject) error {
+	return snapshotConflict(op, subject, "--probes", "--probes is meaningless with --snapshot: a snapshot carries its own "+
+		"probes, which the twin is built with")
 }
 
 // resolveSnapshot resolves --snapshot to the stored snapshot a create builds from, at

@@ -11,7 +11,9 @@ import (
 	"go.temporal.io/sdk/workflow"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/rehearsal"
 	"github.com/happypathnetworking/fylgja/internal/verify"
@@ -332,7 +334,8 @@ func TestRehearseStartOptionsPinned(t *testing.T) {
 // the deadline would cut a rehearsal its own budgets allow (015, research R-09). With the
 // shipped SR Linux package's budgets, the fixture's rehearsal (the branch point refused, two
 // marks and the head) is 1,950 s, research §1.7's: the baseline's stop-following bound, 30 s,
-// that 015's T082 added is gone with following (019, R-15).
+// that 015's T082 added is gone with following (019, R-15). With the probed golden's two
+// probes, 2,130 s: each rehearsed stage starts and reads its flows (016, research R-16).
 func TestDeadlineMechanismIsTheConstants(t *testing.T) {
 	m := DeadlineMechanism()
 	for _, c := range []struct {
@@ -348,6 +351,7 @@ func TestDeadlineMechanismIsTheConstants(t *testing.T) {
 		{"ReadinessMargin", m.ReadinessMargin, ReadinessMargin},
 		{"PushMargin", m.PushMargin, PushMargin},
 		{"VerifyMargin", m.VerifyMargin, VerifyMargin},
+		{"FlowsMargin", m.FlowsMargin, FlowsMargin},
 		{"Wait", m.Wait, verify.DefaultBudget},
 		// The options the children's activities run under, read rather than restated.
 		{"CheckHost as CheckHostOptions", m.CheckHost, CheckHostOptions().StartToCloseTimeout},
@@ -357,13 +361,15 @@ func TestDeadlineMechanismIsTheConstants(t *testing.T) {
 		{"Unstage as UnstageOptions", m.Unstage, UnstageOptions().StartToCloseTimeout},
 		{"InspectTwin as InspectTwinOptions", m.InspectTwin, InspectTwinOptions().StartToCloseTimeout},
 		{"Wait and VerifyMargin as VerifyOptions", m.Wait + m.VerifyMargin, VerifyOptions(int(verify.DefaultBudget / time.Second)).StartToCloseTimeout},
+		{"FlowsMargin as StartFlowsOptions with no flow", m.FlowsMargin, StartFlowsOptions(nil).StartToCloseTimeout},
+		{"FlowsMargin as ReadFlowsOptions with no flow", m.FlowsMargin, ReadFlowsOptions(nil).StartToCloseTimeout},
 	} {
 		if c.got != c.want {
 			t.Errorf("%s = %s, want %s", c.field, c.got, c.want)
 		}
 	}
-	if v := reflect.ValueOf(m); v.NumField() != 10 {
-		t.Errorf("rehearsal.Mechanism has %d fields, want the ten this test compares", v.NumField())
+	if v := reflect.ValueOf(m); v.NumField() != 11 {
+		t.Errorf("rehearsal.Mechanism has %d fields, want the eleven this test compares", v.NumField())
 	}
 
 	plan := srlinuxPlan(t)
@@ -371,5 +377,29 @@ func TestDeadlineMechanismIsTheConstants(t *testing.T) {
 		{Role: rehearsal.RoleRehearsed, Nodes: plan}, {Role: rehearsal.RoleRehearsed, Nodes: plan}}
 	if got := rehearsal.Deadline(m, stages); got != 1950*time.Second {
 		t.Errorf("the fixture's deadline = %s, want 1950s (570 + 630 + 630 + 120)", got)
+	}
+
+	// With probes (016, research R-16): the probed golden planned from the shipped packages,
+	// its hosts' flows budgets the ping package's (start 30, read 30). The baseline starts no
+	// flow, so it stays 570; each rehearsed stage adds (30 + 15) + (30 + 15), 720; the destroy
+	// stays 120, a host's 30 under SR Linux's 60.
+	reg, err := psp.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	probes, err := probe.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	probed, err := lab.NodePlans(filepath.Join("..", "..", "testdata", "golden", "three-node-probed"), reg, probes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stages = []rehearsal.DeadlineStage{{Role: rehearsal.RoleRefused}, {Role: rehearsal.RoleBaseline, Nodes: probed},
+		{Role: rehearsal.RoleRehearsed, Nodes: probed}, {Role: rehearsal.RoleRehearsed, Nodes: probed}}
+	got := rehearsal.Deadline(m, stages)
+	if got != 2130*time.Second || !rehearsal.Fits(got, rehearsal.Ceiling) {
+		t.Errorf("the probed fixture's deadline = %s, want 2130s (570 + 720 + 720 + 120), under the ceiling %s",
+			got, rehearsal.Ceiling)
 	}
 }

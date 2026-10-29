@@ -18,7 +18,7 @@ import (
 )
 
 // Step is the step run, fylgja-step: it takes the running twin to the target the
-// server resolved, read, compiled and planned, without a rebuild. Its eight steps, every
+// server resolved, read, compiled and planned, without a rebuild. Its steps, every
 // activity by its wire.Act* name:
 //
 //  1. inspect: InspectTwin; the record must still be the one the CLI planned from.
@@ -30,6 +30,10 @@ import (
 //     restarting unasked.
 //  4. stage: StageStep swaps the target into the twin directory. From here the host is
 //     touched, and every failure and cancellation leaves the twin up and diverged.
+//     Then flows, under the version marker "flows" (016): StartFlows starts the flow of every
+//     probe both bundles carry, before the first change. A flow that cannot start is an
+//     entry of the loss, not_started under the warning flow.start.failed; the activity's
+//     own failure or cancellation stops the step at the phase flows.
 //  5. reconcile: ReconcileLab, unless the plan is empty or the bundles' content is equal.
 //  6. readiness: AwaitReadiness for every node containerlab restarted, recreated or
 //     created, all at once, each under its own package's readiness.
@@ -42,6 +46,11 @@ import (
 //     on the run's own context, bounded by StepInput.WaitS. It reads, and writes its outcome
 //     into the record; nothing of the step's outcome, phase, findings before it, timings or
 //     record depends on what it found, and a cancellation during it adds no run.cancelled.
+//  10. flows: ReadFlows, under the marker "flows", on the record's disconnected context:
+//     the flows' cleanup, as the record is the step's. It reads every flow and writes the
+//     loss into the record; on a step that failed or was cancelled after its stage every
+//     flow reads interrupted. Nothing of the step's outcome depends on what was lost
+//     (FR-016).
 //
 // Up to and including step 3 nothing is touched: a refusal is rejected, a step that could
 // not run is error, a cancellation is cancelled, and no record is written. Nothing is ever
@@ -117,7 +126,138 @@ func Step(ctx workflow.Context, in StepInput) (StepResult, error) {
 	if workflow.GetVersion(ctx, VerifyVersionID, workflow.DefaultVersion, 1) >= 1 {
 		res = observeStep(ctx, in, res)
 	}
+	res = readStepFlows(ctx, in, res, st, stop != nil)
 	return res, nil
+}
+
+// startStepFlows is the phase flows after the stage (016, research R-13): the marker
+// "flows", then StartFlows for every probe both bundles carry, on the run's own context. A
+// step with no flow to start starts nothing and schedules no activity, though its loss is
+// still read, empty, after the wait; a history from before the marker reaches neither. A
+// flow that could not start is not_started, carried to the read and named by the warning
+// flow.start.failed; the activity's own failure or a cancellation stops the step here, at
+// the phase flows, before the first change.
+func startStepFlows(ctx workflow.Context, in StepInput, res *StepResult, st *stepState) *stopped {
+	if workflow.GetVersion(ctx, FlowsVersionID, workflow.DefaultVersion, 1) < 1 {
+		return nil
+	}
+	st.flows = true
+	if len(in.Flows) == 0 {
+		return nil
+	}
+	var started wire.FlowsResult
+	if err := execute(ctx, StartFlowsOptions(in.Flows), wire.ActStartFlows, &started,
+		wire.FlowsInput{TwinDir: st.twinDir, Flows: in.Flows}); err != nil {
+		return stepStopAt(ctx, findings.StepFlows, findings.RuleOperationFailed, flowProbes(in.Flows), err)
+	}
+	st.started = started.Flows
+	for _, f := range started.Flows {
+		if f.Outcome == wire.FlowNotStarted {
+			res.Findings.AddStep(findings.Warning, findings.StepFlows, f.Rule, f.Probe, f.Message)
+		}
+	}
+	// StartFlows returns once its execs have, so a cancellation during them arrives here.
+	if ctx.Err() != nil {
+		return &stopped{step: findings.StepFlows, cancelled: true}
+	}
+	return nil
+}
+
+// readStepFlows is the run's step 10 (016, research R-13): ReadFlows after the wait, on the
+// record's disconnected context, since reading a flow is what stops it. It runs on every
+// record a step that started its flows follows — stepped, unchanged, diverged at any phase,
+// or one that could not be written — and reads every flow interrupted when the step failed
+// or was cancelled after its stage (stopped, or a cancellation during the wait). Its result
+// is the run's loss, and a flow it could not read adds the warning flow.read.failed. A step
+// stopped before its flows has no loss; one under the marker with no flow, no added and no
+// dropped probe reads nothing and carries the empty loss.
+//
+// The activity's own failure is the phase flows, diverged as every failure after the stage
+// is: each flow it would have read is not_read, and a step that had stepped, its record
+// written ready at the target, says so beside the remedy.
+func readStepFlows(ctx workflow.Context, in StepInput, res StepResult, st stepState, stopped bool) StepResult {
+	if !st.flows {
+		return res
+	}
+	if len(in.Flows) == 0 && len(in.Added) == 0 && len(in.Dropped) == 0 {
+		res.Loss = &wire.Loss{Basis: wire.LossBasisContainer, Probes: []wire.ProbeLoss{}, Added: []string{}, Dropped: []string{}}
+		return res
+	}
+	interrupted := stopped || ctx.Err() != nil
+	runID := workflow.GetInfo(ctx).WorkflowExecution.RunID
+	uninterrupted, _ := workflow.NewDisconnectedContext(ctx)
+	var r wire.ReadFlowsResult
+	err := execute(uninterrupted, ReadFlowsOptions(in.Flows), wire.ActReadFlows, &r, wire.FlowsInput{
+		TwinDir: st.twinDir, Flows: in.Flows, RunID: runID, Started: st.started,
+		Added: in.Added, Dropped: in.Dropped, Interrupted: interrupted,
+	})
+	if err == nil {
+		res.Loss = &r.Loss
+		for _, p := range r.Loss.Probes {
+			if p.Outcome == wire.FlowNotRead {
+				res.Findings.AddStep(findings.Warning, findings.StepFlows, p.Rule, p.Probe, p.Message)
+			}
+		}
+		return res
+	}
+	f := failureFinding(err, findings.StepFlows, findings.RuleOperationFailed, flowProbes(in.Flows))
+	res.Loss = unreadLoss(in, st.started, f.Message, interrupted)
+	res.Findings = append(res.Findings, f)
+	if res.Phase == "" && !interrupted {
+		res.Outcome, res.Phase, res.Step = StepDiverged, findings.StepFlows, findings.StepFlows
+		res.Findings = append(res.Findings, flowsDivergedFinding(runID, in, res.PushPlan))
+	}
+	return res
+}
+
+// unreadLoss is the loss of a step whose ReadFlows failed outright: each flow not_started
+// carried as it was, and every other not_read, or interrupted on a step stopped after its
+// stage, under flow.read.failed with the activity's message.
+func unreadLoss(in StepInput, started []wire.FlowOutcome, why string, interrupted bool) *wire.Loss {
+	start := make(map[string]wire.FlowOutcome, len(started))
+	for _, s := range started {
+		start[s.Probe] = s
+	}
+	outcome := wire.FlowNotRead
+	if interrupted {
+		outcome = wire.FlowInterrupted
+	}
+	probes := make([]wire.ProbeLoss, 0, len(in.Flows))
+	for _, f := range in.Flows {
+		p := wire.ProbeLoss{Probe: f.Probe, From: f.From, To: f.To, Outcome: outcome, Rule: findings.RuleFlowReadFailed,
+			Message: fmt.Sprintf("probe %s: the step's flows could not be read (%s); its loss across the step is not known", f.Probe, why)}
+		if s, ok := start[f.Probe]; ok && s.Outcome == wire.FlowNotStarted {
+			p.Outcome, p.Rule, p.Message = wire.FlowNotStarted, s.Rule, s.Message
+		}
+		probes = append(probes, p)
+	}
+	sort.Slice(probes, func(i, j int) bool { return probes[i].Probe < probes[j].Probe })
+	return &wire.Loss{Basis: wire.LossBasisContainer, Probes: probes,
+		Added: append([]string{}, in.Added...), Dropped: append([]string{}, in.Dropped...)}
+}
+
+// flowsDivergedFinding is step.diverged for a step whose ReadFlows failed after it had
+// stepped: the twin is up at the target and its record, written before the read, says it is
+// ready there, but the flows' loss is not in it.
+func flowsDivergedFinding(runID string, in StepInput, pushes []wire.StepPush) findings.Finding {
+	return findings.Finding{Severity: findings.Rejection, Rule: findings.RuleStepDiverged, Object: runID, Step: findings.StepFlows,
+		Message: fmt.Sprintf("step run %s towards %s (bundle %s) stopped at phase flows: %s; the twin is up at %s (bundle %s) "+
+			"and its record says it is ready there, but the step's flows could not be read and their loss is not recorded; "+
+			"fylgja twin destroy clears it",
+			runID, in.To.Name(), shortBundle(in.To.BundleID), Landed(pushes, " "), in.To.Name(), shortBundle(in.To.BundleID))}
+}
+
+// flowProbes names a step's flows by probe, the object of the flows' own failure.
+func flowProbes(flows []wire.FlowPlan) string {
+	names := make([]string, len(flows))
+	for i, f := range flows {
+		names[i] = f.Probe
+	}
+	sort.Strings(names)
+	if len(names) == 0 {
+		return "flows"
+	}
+	return strings.Join(names, ", ")
 }
 
 // observeStep is the run's step 9: the wait after
@@ -211,17 +351,20 @@ func unsettledFinding(runID, bundle string, w wire.StepWait, answered bool) find
 
 // stepState is what the steps that touch the host left for the record: the twin
 // directory, whether containerlab's reconcile was scheduled, and the lab's nodes — the
-// reconcile's, or the inspection's when none ran.
+// reconcile's, or the inspection's when none ran — and for the flows' read (016) whether
+// the step reached its flows under the marker, and how each flow's start ended.
 type stepState struct {
 	twinDir          string
 	reconcileStarted bool
 	nodes            []wire.LabNode
+	flows            bool
+	started          []wire.FlowOutcome
 }
 
-// stepHost stages, reconciles, waits for the nodes containerlab touched and pushes: every
-// step of the run that touches the host (steps 4–7). It fills res as it
+// stepHost stages, starts the flows, reconciles, waits for the nodes containerlab touched
+// and pushes: every step of the run that touches the host (steps 4–7). It fills res as it
 // goes and, when a step stops it, says how and in which phase: reconcile (the stage or the
-// reconcile), readiness or push.
+// reconcile), flows, readiness or push.
 func stepHost(ctx workflow.Context, in StepInput, res *StepResult, st *stepState, plan wire.CheckHostResult,
 	lab wire.ReconcilePlan) (string, *stopped) {
 	var staged wire.StageResult
@@ -234,6 +377,11 @@ func stepHost(ctx workflow.Context, in StepInput, res *StepResult, st *stepState
 	// StageStep never heartbeats, so a cancellation during it arrives here.
 	if ctx.Err() != nil {
 		return findings.StepReconcile, &stopped{step: findings.StepStage, cancelled: true}
+	}
+	// The flows start before the first change, an unchanged step's too, whose wait they
+	// measure.
+	if s := startStepFlows(ctx, in, res, st); s != nil {
+		return findings.StepFlows, s
 	}
 	if in.Unchanged {
 		// The content is equal: the stage makes the twin directory the provenance of what

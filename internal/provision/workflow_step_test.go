@@ -186,6 +186,12 @@ func newStepHarness(t *testing.T) *stepHarness {
 		wire.ActVerifyTwin: func(context.Context, wire.VerifyInput) (wire.VerifyResult, error) {
 			return wire.VerifyResult{}, errUnmocked
 		},
+		wire.ActStartFlows: func(context.Context, wire.FlowsInput) (wire.FlowsResult, error) {
+			return wire.FlowsResult{}, errUnmocked
+		},
+		wire.ActReadFlows: func(context.Context, wire.FlowsInput) (wire.ReadFlowsResult, error) {
+			return wire.ReadFlowsResult{}, errUnmocked
+		},
 	}
 	for name, fn := range stubs {
 		env.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name})
@@ -276,6 +282,8 @@ func (h *stepHarness) mockHappyPath() {
 	env.OnActivity(wire.ActPushConfig, mock.Anything, mock.Anything).Return(h.landed)
 	env.OnActivity(wire.ActRecordStep, mock.Anything, mock.Anything).Return(h.recordAs)
 	env.OnActivity(wire.ActVerifyTwin, mock.Anything, mock.Anything).Return(settledWait)
+	env.OnActivity(wire.ActStartFlows, mock.Anything, mock.Anything).Return(allStarted)
+	env.OnActivity(wire.ActReadFlows, mock.Anything, mock.Anything).Return(readAs)
 }
 
 // landed answers a push as a node that commits its replace does, with the device's diff.

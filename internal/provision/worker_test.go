@@ -472,11 +472,15 @@ func TestWorkerRegistersEveryScheduledActivity(t *testing.T) {
 		"ActRecordStep":    wire.ActRecordStep,
 		// M12: the step's wait.
 		"ActVerifyTwin": wire.ActVerifyTwin,
+		// 016: the step's flows.
+		"ActStartFlows": wire.ActStartFlows,
+		"ActReadFlows":  wire.ActReadFlows,
 	}
 	all := slices.Sorted(maps.Values(constants))
-	if len(all) != 15 {
-		t.Fatalf("%d activity names, want the fifteen: M2's eight host-bound, M4's InspectTwin, M5's push, "+
-			"M11's four (PlanReconcile, StageStep, ReconcileLab, RecordStep) and M12's VerifyTwin", len(all))
+	if len(all) != 17 {
+		t.Fatalf("%d activity names, want the seventeen: M2's eight host-bound, M4's InspectTwin, M5's push, "+
+			"M11's four (PlanReconcile, StageStep, ReconcileLab, RecordStep), M12's VerifyTwin and 016's "+
+			"StartFlows and ReadFlows", len(all))
 	}
 	// The table, from a zero-value receiver: registration needs the method values only.
 	registered := map[string]bool{}

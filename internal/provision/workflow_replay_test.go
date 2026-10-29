@@ -82,6 +82,12 @@ func replayStep(t *testing.T, history string) StepResult {
 	if capture.step == nil {
 		t.Fatalf("replaying %s: Step returned no result (error %v)", history, capture.err)
 	}
+	// Every step history was recorded before the flows marker (016): it replays at
+	// DefaultVersion, schedules neither StartFlows nor ReadFlows, which a replay would refuse
+	// as commands the history lacks, and has no loss.
+	if l := capture.step.Loss; l != nil {
+		t.Errorf("replaying %s: loss %+v; a history from before the marker flows has none", history, l)
+	}
 	return *capture.step
 }
 

@@ -620,6 +620,9 @@ func TestStepNames(t *testing.T) {
 		// M12: the step's wait after its record.
 		{WorkflowStep, wire.ActVerifyTwin, "observe", findings.StepObserve},
 		{WorkflowStep, wire.ActRecordStep, "record", findings.StepRecord},
+		// 016: the step's flows.
+		{WorkflowStep, wire.ActStartFlows, "flows", findings.StepFlows},
+		{WorkflowStep, wire.ActReadFlows, "flows", findings.StepFlows},
 	} {
 		if got := stepName(c.workflowID, c.activityType); got != c.step {
 			t.Errorf("stepName(%s, %s) = %q, want %q", c.workflowID, c.activityType, got, c.step)

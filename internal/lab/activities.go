@@ -96,6 +96,9 @@ func (a *Activities) Names() map[string]any {
 		wire.ActRecordStep:    a.RecordStep,
 		// M12: the step's wait after its record.
 		wire.ActVerifyTwin: a.VerifyTwin,
+		// 016: the step's flows, started after its stage and read after its wait.
+		wire.ActStartFlows: a.StartFlows,
+		wire.ActReadFlows:  a.ReadFlows,
 	}
 }
 

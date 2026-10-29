@@ -919,6 +919,9 @@ func findingStep(activityType string) string {
 	// M12: the step's wait after its record.
 	case wire.ActVerifyTwin:
 		return findings.StepObserve
+	// 016: the step's flows, started after its stage and read after its wait.
+	case wire.ActStartFlows, wire.ActReadFlows:
+		return findings.StepFlows
 	}
 	return ""
 }
@@ -1078,6 +1081,9 @@ func stepName(workflowID, activityType string) string {
 	// M12: the step's wait after its record.
 	case wire.ActVerifyTwin:
 		return "observe"
+	// 016: the step's flows.
+	case wire.ActStartFlows, wire.ActReadFlows:
+		return "flows"
 	case wire.ActCheckHost:
 		return "host check"
 	case wire.ActStageBundle:

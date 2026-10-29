@@ -238,9 +238,10 @@ type StepResult struct {
 	// rehearsal's report (015, research R-07). Nil when the activity gave none: the wait did
 	// not run, failed outright, kept no read, or was a retry's answer from the record.
 	WaitCounts *wire.VerifyCounts `json:"wait_counts,omitempty"`
-	// Loss is what the step's flows lost, as ReadFlows answered it (016). Nil when the flows
-	// did not run: a dry run, a run that ended before its stage, and every run of a history
-	// from before the marker flows.
+	// Loss is what the step's flows lost, as ReadFlows answered it (016), or each flow not_read
+	// when the read itself failed. Nil when the flows did not run: a dry run, a run that ended
+	// at or before its stage, and every run of a history from before the marker flows. A step
+	// with no probe, none added and none dropped carries the empty loss, and reads nothing.
 	Loss *wire.Loss `json:"loss,omitempty"`
 }
 

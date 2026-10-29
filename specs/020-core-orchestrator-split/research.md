@@ -628,3 +628,46 @@ made.
 - **Replay**: the seven histories replay unchanged; their payloads' `stage` keys decode to
   nothing and no run branched on them.
 
+
+### 5.7 The orchestrator's two pins do not co-install (T013, Run 12, 2026-10-29)
+
+- **R-01's and R-02's pins conflict**: `pip install -e 'orchestrator[dev]'` with
+  `prefect==3.9.0` and `infrahub-sdk==1.23.2` answers `ResolutionImpossible`:
+  `infrahub-sdk 1.23.2 depends on whenever<0.10.0 and >=0.9.3`, `prefect 3.9.0 depends on
+  whenever<0.11.0 and >=0.10.5` (on Python ≥ 3.13). §1.2 installed Prefect alone, so the pair
+  was never tried. PyPI on 2026-10-29: no `infrahub-sdk` release, pre-releases included,
+  admits `whenever` 0.10 (1.22.1 to 1.23.2 all say `<0.10.0`); every Prefect from 3.6.26 to
+  3.8.8 says `whenever<0.11.0,>=0.7.3`, and 3.9.0 alone raised the floor to 0.10.5.
+- **Prefect 3.8.8 with the SDK 1.23.2** (released 2026-10-06, the last before 3.9.0):
+  resolves on Python 3.14.4 with `whenever 0.9.5` and `pydantic 2.14.2`, `pip check`
+  clean, `prefect version` 3.8.8, API version `0.8.4` (3.9.0's and Infrahub's 3.7.5's).
+  **Its server does not start against the FastAPI pip picks**: 3.8.8 requires `fastapi<1.0.0,>=0.139.0`,
+  which resolved to 0.162.0, and `prefect server start` fails at import
+  (`concurrency_limits_v2.py`: `TypeError: Body() got an unexpected keyword argument
+  'min_items'`); 3.9.0 narrowed it to `fastapi<0.151`, which resolves to 0.150.0. With
+  `fastapi==0.150.0` beside 3.8.8, §1.2's facts hold on 3.8.8: on `127.0.0.1:4211` with a
+  scratch `PREFECT_HOME` and `PREFECT_SERVER_API_AUTH_STRING`, `/api/health` `200` after
+  29 s; `GET /api/version` and `POST /api/flows/filter` `401` without the credential, `0.8.4`
+  and `200` with it. §1.3 to §1.5 (deployments over HTTP, the artifact, `finally` on a
+  timeout and a cancellation) were not re-run on 3.8.8.
+- **Prefect 3.9.0 with the SDK forced onto `whenever` 0.10.5** (installed after it, against
+  its requirement): imports, and `Timestamp(...).to_string()` answers, with a
+  `WheneverDeprecationWarning` from the SDK's `timestamp.py`; `pip check` fails. Not a
+  state `make orchestrator-venv` can make by its pins.
+- **The decision is the operator's** (T013's note): R-01's Prefect is plan and research
+  text, FR-012's SDK is the spec's. The options: (1) Prefect `3.8.8` with `fastapi==0.150.0`
+  pinned beside it, R-01 and plan.md amended and §1.3–§1.5 re-verified on it where the
+  flows' runs (T025, T026) first lean on them; (2) Prefect 3.9.0 kept and the adapter on
+  `httpx` alone, FR-012's "on `infrahub-sdk`", R-07 and T016 amended (the Go reader and the
+  checks already send plain GraphQL); (3) wait for an SDK release admitting `whenever` 0.10.
+  Option 1 changes no spec text and keeps the SDK the root `.venv` holds.
+- **What T013 built regardless of the pin**, measured with a scratch venv on 3.8.8 and the
+  package on `PYTHONPATH` (no install into the tree): the layout's tier 1, six tests, in
+  5.7 s wall (`pytest` 2.3 s of it), against 58.0 s of Go (Run 1), so about 64 s whole
+  against the 65 s budget; tier 2's two tests green against this host's Infrahub (the
+  pinned SDK, and `Branch` on `main` read with the token), writing nothing; `ruff check
+  --config orchestrator/pyproject.toml orchestrator infrahub/checks` at E, F, W, B, SIM and
+  line length 120 (the checks' longest line) clean. The lane seed (`seed_worktree`) dropped
+  its last path, the planner's join leaving the last entry unterminated for `read -d ''`;
+  in this tree a `__pycache__/` under `.claude/skills/`, and in `SeedWorktree`'s repository
+  `orchestrator/.venv`.

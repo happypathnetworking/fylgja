@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -623,5 +624,36 @@ func TestDiffDoesNotCompareEnabled(t *testing.T) {
 				t.Errorf("%s disabled alone: step %+v, want %+v", disabled, got, want)
 			}
 		})
+	}
+}
+
+// A probe's host has no bootstrap, so the step reads it by its node alone (016): the probed
+// golden steps to itself unchanged, and from the three-node golden it adds the two hosts and
+// their links, naming no artifact for either; a node that is no host is still refused for a
+// bootstrap it lacks.
+func TestDiffReadsAHostWithNoBootstrap(t *testing.T) {
+	probed := golden(t, "three-node-probed", idB)
+	same, err := Diff(probed, probed)
+	if err != nil || !same.Unchanged {
+		t.Fatalf("probed → probed: %+v, %v; want unchanged", same, err)
+	}
+	s, err := Diff(golden(t, "three-node", idA), probed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"n1-loop-a", "n1-loop-b"}; !slices.Equal(s.NodesAdded, want) || len(s.ArtifactsAdded) != 0 ||
+		len(s.LinksAdded) != 2 {
+		t.Errorf("three-node → probed: nodes added %v, artifacts added %v, links added %v; want %v, none and two",
+			s.NodesAdded, s.ArtifactsAdded, s.LinksAdded, want)
+	}
+	noBootstrap := edited(t, probed, idA, func(m *compiler.Manifest, _ map[string][]byte) {
+		for i := range m.Nodes {
+			if m.Nodes[i].Name == "n2" {
+				m.Nodes[i].Bootstrap = nil
+			}
+		}
+	})
+	if _, err := Diff(noBootstrap, probed); err == nil || !strings.Contains(err.Error(), "names no bootstrap file for node n2") {
+		t.Errorf("a device with no bootstrap: %v; want it refused", err)
 	}
 }

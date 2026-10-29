@@ -199,7 +199,15 @@ func read(which string, b Bundle) (*side, error) {
 			return nil, fail(manifestFile, "names node %s twice", n.Name)
 		}
 		s.nodes[n.Name] = n
-		file := n.Bootstrap.File
+		if n.Bootstrap == nil && n.Probe != nil {
+			// A probe's host has no bootstrap (016): nothing of it to compare but what the
+			// node itself says.
+			continue
+		}
+		file := ""
+		if n.Bootstrap != nil {
+			file = n.Bootstrap.File
+		}
 		if file == "" {
 			return nil, fail(manifestFile, "names no bootstrap file for node %s", n.Name)
 		}

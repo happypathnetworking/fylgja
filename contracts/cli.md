@@ -1,4 +1,4 @@
-# CLI contract: M13 — API; 014 — the stage surface; 015 — the rehearsal; 017 — the scope and the DCIM reader; 018 — snapshots; 019 — following removed; 016 — probes
+# CLI contract: M13 — API; 014 — the stage surface; 015 — the rehearsal; 017 — the scope and the DCIM reader; 018 — snapshots; 019 — following removed; 016 — probes; 020 — runs by identity and the diff
 
 Extends the CLI as M2–M12 built it, and 014 moves it once more: the section "014: the
 stage surface" at the end says what moved. 015 adds to it, and the section "015: the
@@ -6,7 +6,9 @@ rehearsal" after that says what was added. 017 moves it again, and the section "
 scope and the DCIM reader" says what moved. 018 makes the snapshot the core's one input,
 and the section "018: snapshots" says what moved. 019 removes following from the core, and
 the section "019: following removed" says what moved. 016 adds probes, and the section
-"016: probes", last, says what moved. **Everything not named here is
+"016: probes" says what moved. 020 adds `--detach`, `fylgja run read`, `fylgja run
+interrupt` and `fylgja twin diff`, and the section "020: runs by identity and the diff",
+last, says what was added. **Everything not named here is
 as M12 left it**:
 every command's text on stdout and stderr, its `--json` document, each identifier, step,
 object and message, and each exit status. Identifiers, exit statuses and the JSON
@@ -97,8 +99,9 @@ The listen line names the address as `--listen` gave it, with the port it got: `
 `twin create`, `twin show`, `twin destroy`, `twin provision`, `twin step`, `twin verify`,
 `twin compile`, `waypoint list` and `waypoint plan` (moved at 014: `stage list` and `stage
 plan`), `intent read`, `schema check` and `psp validate`, each with its dry run where it
-has one, and `twin rehearse` (added at 015). Each does its work by one
-request to the API and prints what comes back.
+has one, and `twin rehearse` (added at 015), and `run read`, `run interrupt` and `twin
+diff` (added at 020). Each does its work by one request to the API and prints what comes
+back.
 
 - **What it prints and how it exits are M12's**, for the same arguments and the same
   state of the host, Infrahub and the workflow service.
@@ -200,7 +203,10 @@ what follows holds for it, with its own interrupt below.
   it, with M12's notices.
 - The server stopped during a run: the run goes on, a start still waiting for a worker
   included; the client ends `api.unreachable`, exit 2, saying the run was not cancelled.
-  There is no command to re-attach to it.
+  Until 020 there was no command to re-attach to it; `fylgja run read` now reads it by its
+  identity and `fylgja run interrupt` asks it to cancel.
+- Since 020, `--detach` on the four ends the command once the run has started, at its
+  identity, exit 0, and leaves it running ("020: runs by identity and the diff", last).
 
 ## The stage commands and the operator's files
 
@@ -1898,3 +1904,142 @@ fails on `verify.burst`, the two earlier stages passed with their loss figures, 
 thread's table carries `loss` between `verify` and `new verification failures`. The trap's
 leak check counts the hosts' containers after every destroy. The case-to-package table and
 `PLATFORMS=` are unchanged: cases 5 and 9 SR Linux alone, case 8 both.
+
+## 020: runs by identity and the diff
+
+A run can be left running and reached again by its identity, from any client, and the step
+between two snapshots is printed with nothing built. **Everything not named here is as 016
+left it.** Identifiers, exit statuses and the JSON documents are the contract; text is
+illustrative except where a sentence is quoted. The wire is [api.md](api.md), "020: runs by
+identity and the diff". The commands the orchestrator takes over leave the core's CLI later
+in 020, and are not named here.
+
+### The commands
+
+```text
+fylgja twin create    … --detach
+fylgja twin provision <bundle> --detach
+fylgja twin step      … --detach
+fylgja twin destroy   --detach
+fylgja run read       --workflow <id> [--run <id>] [--json]
+fylgja run interrupt  --workflow <id> [--run <id>] [--json]
+fylgja twin diff      --from <id|file> --to <id|file> [--json]
+```
+
+- **`--detach`** on `twin create`, `twin provision`, `twin step` and `twin destroy`: `end
+  once the run has started, printing its identity, and leave it running; fylgja run read
+  reads it and fylgja run interrupt interrupts it` (and `; refused beside --dry-run` on the
+  three that have one). The command prints what it printed before the start, as without
+  it (a create's stored lines, a step's lines before its start), then its document's
+  findings with `run.detached`, and exits 0; under `--json` the document, status `ok`. No
+  progress line of the run is printed. `--detach` beside `--dry-run` is
+  `run.flags.conflict` at `start`, exit 1, before any other guard. An interrupt before the
+  start ends the command as without it; one that reaches the start is the operator's
+  before the run was detached from, so the run is asked to cancel and followed to its
+  end. `twin destroy --detach` still waits for what it cancels first, then returns at the
+  destroy run's start.
+- **`fylgja run read --workflow <id> [--run <id>]`**: `--workflow` is `fylgja-provision`,
+  `fylgja-step` or `fylgja-destroy`, sent as given (an empty or other one is the server's
+  `run.unknown`, exit 1); `--run` left out reads the workflow's latest run. It prints the
+  run's state, then a line for each step so far, as the command that started it printed
+  them while following it, then, once the run has closed, that command's closing lines,
+  its findings and its exit status, under operation `run.read`, the run's own status (a
+  cancelled create's `failed`, exit 3). A run still running prints its lines so far and
+  exits 0 with no findings; under `--json` it prints nothing. It reads the workflow
+  service alone and starts nothing; any client of the server reads any run of the three.
+  Help: `Print a run's progress so far and, once it has ended, its result`.
+- **`fylgja run interrupt --workflow <id> [--run <id>]`**: asks a running run to cancel,
+  as the first interrupt of the command that started it does, and exits 0 with
+  `run.cancel.requested`; it waits for nothing, and `fylgja run read` says how the run
+  closes. A run that has already closed is `run.ended`, exit 1; an identity no run has is
+  `run.unknown`, exit 1. Help: `Ask a running run to cancel, as a first interrupt of its
+  command does`.
+- **`fylgja twin diff --from <id|file> --to <id|file>`**: each side a snapshot id the
+  server's store holds or a snapshot file, read here and sent, a path both flags name sent
+  once. The server resolves each as `twin create --snapshot` does, compiles each as `twin
+  compile` does, files both snapshots and both bundles, and prints the step between the
+  two bundles as `twin step --dry-run` prints its step; nothing is read from a twin,
+  deployed or started, and no workflow service is dialled. One snapshot against itself is
+  `unchanged`. A missing flag is `operation.failed`, `--from is required` or `--to is
+  required`, exit 2, judged in that order before any file is read; an unreadable file is
+  `operation.failed`, exit 2, before any connection; an id the store lacks is
+  `snapshot.unknown` at `resolve`, exit 1; a refused compile is the compile's findings at
+  `compile`, exit 1, naming what was filed so far. Help: `Print the step between two
+  snapshots, building nothing`.
+- `fylgja run` is a command group of its own: `fylgja run` alone prints its help.
+
+### The text
+
+A detached create from a stored snapshot:
+
+```text
+$ fylgja twin create --snapshot 0940db93… --detach
+snapshot_id 0940db93…  stored: /…/local/snapshots/0940db93….json
+bundle_id c3872f5c…  stored: /…/local/bundles/c3872f5c…
+info run.detached [step start] fylgja-provision 01a1…: run fylgja-provision 01a1… started; read it with fylgja run read
+```
+
+A read of that run while it runs, exit 0:
+
+```text
+$ fylgja run read --workflow fylgja-provision
+run fylgja-provision 01a1…: running
+step host check: begins
+step host check: done in 0.3s
+step deploy: begins
+```
+
+Once it has closed, the same command prints `run fylgja-provision 01a1…: completed`, every
+step, and the closing lines and findings the create would have ended with.
+
+The step between the two goldens' snapshots:
+
+```text
+$ fylgja twin diff --from testdata/snapshot/three-node.json --to testdata/snapshot/three-node-probed.json
+from: snapshot b9db37f8… (branch fylgja-fixture at 2026-09-08T12:00:00Z)
+snapshot_id b9db37f8…  stored: /…/local/snapshots/b9db37f8….json
+to: snapshot aef03f5d… (branch fylgja-fixture at 2026-09-08T12:00:00Z)
+snapshot_id aef03f5d…  stored: /…/local/snapshots/aef03f5d….json
+bundle_id c70589c3…  stored: /…/local/bundles/c70589c3…
+bundle_id 5222063b…  stored: /…/local/bundles/5222063b…
+step snapshot b9db37f8… → snapshot aef03f5d… (c70589c3… → 5222063b…):
+  nodes: +n1-loop-a; +n1-loop-b; ~n1 (bootstrap)
+  links: +n1-loop-a:eth1 — n1:e1-10; +n1-loop-b:eth1 — n1:e1-11
+  artifacts: unchanged
+```
+
+n1 changes by its bootstrap alone, which enables the two ports the probe's hosts take.
+
+### Identifiers
+
+Five added, none retired; no step, status or exit is new.
+
+| Rule | Severity, exit, step | Object | When |
+|---|---|---|---|
+| `run.detached` | info, 0 (status `ok`), `start` | `<workflow_id> <run_id>` | under `--detach` the run started and goes on: `run <workflow_id> <run_id> started; read it with fylgja run read` |
+| `run.unknown` | rejection, 1, none | `<workflow_id> <run_id>`, or the workflow id alone | `run read` or `run interrupt` names a workflow outside the three, before any connection, or an identity the workflow service holds no run under, after the describe alone |
+| `run.cancel.requested` | info, 0, none | the identity | `run interrupt` asked the workflow service to cancel a running run, which then ends as `run.cancelled` |
+| `run.ended` | rejection, 1, none | the identity | `run interrupt` names a run that has already closed: `run <workflow_id> <run_id> has already closed: <state>` |
+| `run.flags.conflict` | rejection, 1, `start` | `dry_run` | `--detach` beside `--dry-run`, before any guard: `--detach is meaningless with --dry-run: a dry run starts no run to detach from` |
+
+### Formats and versions
+
+| Format | Version | Change |
+|---|---|---|
+| the API | `1` | [api.schema.json](api.schema.json): `detach` on `twin.create`, `twin.provision`, `twin.step` and `twin.destroy`; the operations `run.read`, `run.interrupt` and `twin.diff` and their args; `state` on the `run` frame, `run.read`'s alone |
+| findings | `1` | [findings.schema.json](findings.schema.json): the operations `run.read`, `run.interrupt` and `twin.diff`; `snapshot_from`, `snapshot_to`, `bundle_from` and `bundle_to`; `step` either [step.schema.json](step.schema.json)'s block or, on `twin.diff`, [stages.schema.json](stages.schema.json)'s `$defs/step`; the five identifiers; additive |
+| snapshot, bundle manifest, `twin.json`, PSP, CTM, probe declaration, probe package | `2`, `6`, `11`, `0.7`, `2`, `1`, `0.1` | none |
+
+- The versions of the findings document and of the API did not move: every change is
+  additive, and a client that never sends `detach` and never asks the three operations is
+  answered as before.
+- The goldens are unmoved: `twin diff` compiles on their path, and its step between
+  three-node and three-node-probed is the one above.
+
+### Workflows and activities
+
+None is added, removed or changed. `run read` and `run interrupt` describe, read and cancel
+a run of `fylgja-provision`, `fylgja-step` or `fylgja-destroy` through `provision.Service`
+(`Describe`, `History`, `Follow`, the results and `Cancel`), and the seven recorded
+histories replay through them. A detached destroy starts its run with
+`StartDestroyDetached`, which reads no result. `twin diff` dials no workflow service.

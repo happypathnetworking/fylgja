@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -427,6 +428,49 @@ func TestEveryOperationIsServed(t *testing.T) {
 		}
 		if _, ok := operationArgs[op.name]; !ok {
 			t.Errorf("%s names no arguments", op.name)
+		}
+	}
+}
+
+// Each operation's arguments in api.schema.json are the ones the server takes, by name and
+// by kind, so the contract gains an argument where the server does (020: detach on the four
+// runs, workflow_id and run_id on run.read and run.interrupt, from and to on twin.diff).
+func TestOperationArgsAreTheContracts(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "contracts", "api.schema.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Defs struct {
+			Args struct {
+				Defs map[string]struct {
+					Properties map[string]struct {
+						Type string `json:"type"`
+					} `json:"properties"`
+				} `json:"$defs"`
+			} `json:"args"`
+		} `json:"$defs"`
+	}
+	if err := json.Unmarshal(raw, &schema); err != nil {
+		t.Fatal(err)
+	}
+	kinds := map[string]string{argString: "string", argBool: "boolean", argStrings: "array"}
+	if len(schema.Defs.Args.Defs) != len(operationArgs) {
+		t.Errorf("the contract defines the args of %d operations, the server %d", len(schema.Defs.Args.Defs), len(operationArgs))
+	}
+	for op, taken := range operationArgs {
+		def, ok := schema.Defs.Args.Defs[op]
+		if !ok {
+			t.Errorf("the contract defines no args of %s", op)
+			continue
+		}
+		if got, want := slices.Sorted(maps.Keys(def.Properties)), slices.Sorted(maps.Keys(taken)); !slices.Equal(got, want) {
+			t.Errorf("%s: the contract's args are %v, the server's %v", op, got, want)
+		}
+		for name, kind := range taken {
+			if p, ok := def.Properties[name]; ok && p.Type != kinds[kind] {
+				t.Errorf("%s's %s is %q in the contract, %s to the server", op, name, p.Type, kind)
+			}
 		}
 	}
 }

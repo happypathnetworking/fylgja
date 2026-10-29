@@ -165,6 +165,19 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 		{"psp.validate", map[string]json.RawMessage{"files": mustJSON(t, []string{"a.yaml", "b.yaml"})},
 			[]File{{Path: "a.yaml", Data: []byte("psp_version: \"0.6\"\n")}, {Path: "b.yaml", Data: nil}}},
 		{"twin.rehearse", map[string]json.RawMessage{"branch": str("change-1"), "scope": str("tag:fylgja")}, nil},
+		// 020: detach on the four runs, a destroy's its one argument.
+		{"twin.create", map[string]json.RawMessage{"snapshot": str(strings.Repeat("6a", 32)), "detach": yes}, nil},
+		{"twin.provision", map[string]json.RawMessage{"bundle": str("./b9d53ebc"), "detach": yes},
+			[]File{{Path: "manifest.json", Data: []byte("{}\n")}}},
+		{"twin.step", map[string]json.RawMessage{"snapshot": str(strings.Repeat("6a", 32)), "allow_restart": yes, "detach": yes}, nil},
+		{"twin.destroy", map[string]json.RawMessage{"detach": yes}, nil},
+		// 020: a run by its identity, its workflow's latest run without run_id.
+		{"run.read", map[string]json.RawMessage{"workflow_id": str("fylgja-provision"), "run_id": str("01a1")}, nil},
+		{"run.read", map[string]json.RawMessage{"workflow_id": str("fylgja-destroy")}, nil},
+		{"run.interrupt", map[string]json.RawMessage{"workflow_id": str("fylgja-step"), "run_id": str("01a1")}, nil},
+		// 020: the step between two snapshots, an id and a file, the file under its path.
+		{"twin.diff", map[string]json.RawMessage{"from": str(strings.Repeat("6a", 32)), "to": str("snap.json")},
+			[]File{{Path: "snap.json", Data: []byte(`{"snapshot_version":"2"}`)}}},
 	} {
 		t.Run(c.op, func(t *testing.T) {
 			// 015: markdown is a rendering every operation is asked for and accepts.
@@ -225,11 +238,34 @@ func TestEveryOperationsRequestSatisfiesTheContract(t *testing.T) {
 		valid(t, apiSchema(t, "args/$defs/"+op), []byte(`{"branch":"change-1"}`), op+" with no scope")
 		invalid(t, apiSchema(t, "args/$defs/"+op), `{"scope":true}`, op+" with a scope that is not a string")
 	}
-	for _, op := range []string{"twin.step", "twin.destroy", "twin.show", "twin.verify", "twin.compile", "schema.check", "psp.validate"} {
+	for _, op := range []string{"twin.step", "twin.destroy", "twin.show", "twin.verify", "twin.compile", "schema.check", "psp.validate",
+		"run.read", "run.interrupt", "twin.diff"} {
 		invalid(t, apiSchema(t, "args/$defs/"+op), `{"scope":"tag:fylgja"}`, op+" with a scope")
 	}
 	invalid(t, apiSchema(t, "args/$defs/twin.provision"), `{"bundle":"./b","scope":"tag:fylgja"}`, "twin.provision with a scope")
 	valid(t, apiSchema(t, "args/$defs/twin.verify"), []byte(`{}`), "twin.verify with no argument")
+	// 020: detach is a flag of the four runs alone; run.read and run.interrupt take the
+	// workflow always, the run when given, and nothing of a run's start; twin.diff takes its
+	// two snapshots and no flag of twin step's or twin compile's.
+	for _, op := range []string{"twin.create", "twin.step", "twin.destroy"} {
+		invalid(t, apiSchema(t, "args/$defs/"+op), `{"detach":"yes"}`, op+" with a detach that is not a boolean")
+	}
+	invalid(t, apiSchema(t, "args/$defs/twin.provision"), `{"bundle":"./b","detach":"yes"}`, "twin.provision with a detach that is not a boolean")
+	for _, op := range []string{"twin.show", "twin.verify", "twin.compile", "twin.rehearse", "stage.plan"} {
+		invalid(t, apiSchema(t, "args/$defs/"+op), `{"detach":true}`, op+" with detach")
+	}
+	for _, op := range []string{"run.read", "run.interrupt"} {
+		invalid(t, apiSchema(t, "args/$defs/"+op), `{"workflow_id":"fylgja-step","detach":true}`, op+" with detach")
+		invalid(t, apiSchema(t, "args/$defs/"+op), `{"run_id":"01a1"}`, op+" without its workflow")
+		invalid(t, apiSchema(t, "args/$defs/"+op), `{"workflow_id":"fylgja-step","run_id":null}`, op+" with a null run")
+		invalid(t, apiSchema(t, "args/$defs/"+op), `{"workflow_id":"fylgja-step","stage":"change-1/head"}`, op+" with a stage")
+	}
+	// A workflow no read reaches is the server's run.unknown, never the transport's 400.
+	valid(t, apiSchema(t, "args/$defs/run.read"), []byte(`{"workflow_id":"fylgja-rehearse"}`), "run.read of a rehearsal")
+	for _, arg := range []string{`{"snapshot":"a"}`, `{"allow_restart":true}`, `{"dry_run":true}`, `{"detach":true}`, `{"out":"out"}`, `{"from":true}`} {
+		invalid(t, apiSchema(t, "args/$defs/twin.diff"), arg, "twin.diff with "+arg)
+	}
+	valid(t, apiSchema(t, "args/$defs/twin.diff"), []byte(`{}`), "twin.diff with no argument, which the server refuses --from is required")
 }
 
 // The request is decoded strictly: a key not known at the top or inside a file, or not
@@ -299,6 +335,26 @@ func TestEveryFrameKindSatisfiesTheContract(t *testing.T) {
 	none.AddStep(findings.Warning, findings.StepResolve, findings.RuleRehearsalStepsNone, "change-1/seeded",
 		"one stage compiled: it is built, verified and destroyed, and no step is rehearsed")
 	rehearsed := findings.NewDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1", RunID: "01a1"}, none)
+	// 020's documents, as internal/server writes them.
+	var started findings.List
+	started.AddStep(findings.Info, findings.StepStart, findings.RuleRunDetached, "fylgja-provision 01a1",
+		"run fylgja-provision 01a1 started; read it with fylgja run read")
+	detachedDoc := findings.NewDocument(findings.OpTwinCreate, &findings.Subject{RunID: "01a1"}, started)
+	readDoc := findings.NewDocument(findings.OpRunRead, &findings.Subject{RunID: "01a1"}, nil)
+	var noRun findings.List
+	noRun.Add(findings.Rejection, findings.RuleRunUnknown, "fylgja-step r-gone", "the workflow service holds no run fylgja-step r-gone")
+	unknownDoc := findings.NewDocument(findings.OpRunRead, &findings.Subject{RunID: "r-gone"}, noRun)
+	var asked findings.List
+	asked.Add(findings.Info, findings.RuleRunCancelRequested, "fylgja-step 01a1",
+		"cancellation of run fylgja-step 01a1 was requested; it cleans up and closes, and fylgja run read says how")
+	interruptDoc := findings.NewDocument(findings.OpRunInterrupt, &findings.Subject{RunID: "01a1"}, asked)
+	const snap, bundle = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00",
+		"c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
+	diffDoc := findings.NewDocument(findings.OpTwinDiff, nil, nil)
+	diffDoc.SnapshotFrom, diffDoc.SnapshotTo, diffDoc.BundleFrom, diffDoc.BundleTo = snap, snap, bundle, bundle
+	diffDoc.Step = findings.DiffBlock(json.RawMessage(`{"from":"snapshot b9db37f8…","to":"snapshot b9db37f8…",` +
+		`"from_bundle_id":"` + bundle + `","to_bundle_id":"` + bundle + `","computed":true,"unchanged":true,` +
+		`"nodes":{"added":[],"removed":[],"changed":[]},"links":{"added":[],"removed":[]},"artifacts":{"changed":[]}}`))
 	for _, c := range []struct {
 		label string
 		frame Frame
@@ -325,6 +381,16 @@ func TestEveryFrameKindSatisfiesTheContract(t *testing.T) {
 		{"document with markdown and no findings", Frame{Document: documentBytes(t,
 			findings.NewDocument(findings.OpTwinRehearse, &findings.Subject{Branch: "change-1", RunID: "01a1"}, nil)),
 			Markdown: "## …\n"}, KindDocument},
+		// 020: a detached answer's run, a destroy's included, and its document; run.read's
+		// document, and its refusal; run.interrupt's; twin.diff's. run.read's run frame with its
+		// state is below, in each state.
+		{"a detached destroy's run", Frame{Run: &RunRef{WorkflowID: "fylgja-destroy", RunID: "01a1"}}, KindRun},
+		{"a detached document", Frame{Document: documentBytes(t, detachedDoc),
+			Text: "info run.detached [step start] fylgja-provision 01a1: …\n"}, KindDocument},
+		{"run.read's document", Frame{Document: documentBytes(t, readDoc)}, KindDocument},
+		{"run.read of no run", Frame{Document: documentBytes(t, unknownDoc)}, KindDocument},
+		{"run.interrupt's document", Frame{Document: documentBytes(t, interruptDoc)}, KindDocument},
+		{"twin.diff's document", Frame{Document: documentBytes(t, diffDoc)}, KindDocument},
 	} {
 		raw := mustJSON(t, c.frame)
 		valid(t, frame, raw, c.label+" frame")
@@ -345,6 +411,27 @@ func TestEveryFrameKindSatisfiesTheContract(t *testing.T) {
 	invalid(t, frame, `{"files":[]}`, "a files frame with none")
 	invalid(t, frame, `{"markdown":"## …\n"}`, "markdown with no document")
 	invalid(t, frame, `{"start":{"workflow_id":"fylgja-rehearse","run_id":"01a1"}}`, "a rehearsal's start that names its run")
+	// 020: run.read's run frame names one of the six states the workflow service describes; a
+	// run frame of any other operation names none, and a start, which comes before the run,
+	// never one.
+	for _, state := range []string{"running", "completed", "failed", "cancelled", "terminated", "timed_out"} {
+		raw := mustJSON(t, Frame{Run: &RunRef{WorkflowID: "fylgja-step", RunID: "01a1", State: state}})
+		valid(t, frame, raw, "run.read's run frame, "+state)
+		var back Frame
+		if err := json.Unmarshal(raw, &back); err != nil || back.Kind() != KindRun || back.Run.State != state {
+			t.Errorf("run.read's run frame, %s, decodes as %+v (%v)", state, back.Run, err)
+		}
+	}
+	if raw := string(mustJSON(t, Frame{Run: &RunRef{WorkflowID: "fylgja-step", RunID: "01a1"}})); strings.Contains(raw, "state") {
+		t.Errorf("a run frame with no state writes %s", raw)
+	}
+	if StateRunning != "running" {
+		t.Errorf("StateRunning is %q, the contract's running", StateRunning)
+	}
+	invalid(t, frame, `{"run":{"workflow_id":"fylgja-step","run_id":"01a1","state":"paused"}}`, "a run in a state no service describes")
+	invalid(t, frame, `{"run":{"workflow_id":"fylgja-step","run_id":"01a1","state":"timed out"}}`, "a run's state spelled as an event's outcome")
+	invalid(t, frame, `{"run":{"workflow_id":"fylgja-step","state":"running"}}`, "a run's state with no run")
+	invalid(t, frame, `{"start":{"workflow_id":"fylgja-step","state":"running"}}`, "a start with a state")
 	var unknown Frame
 	if err := json.Unmarshal([]byte(`{"progress":{"pct":40}}`), &unknown); err != nil || unknown.Kind() != "" {
 		t.Errorf("a frame of a kind this build does not know decodes as %q, %v; a client ignores it", unknown.Kind(), err)

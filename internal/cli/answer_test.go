@@ -526,6 +526,42 @@ func answerCases() []answerCase {
 			return answerWant{args: map[string]any{"workflow_id": provision.WorkflowStep},
 				kinds: []string{api.KindDocument}, status: findings.StatusRejected}
 		}},
+		// 020: a create under detach ends at its start, its run and the document naming
+		// run.detached; a read of the run once it has ended is its run, with its state, its
+		// events and the document its result makes, with no start, since it starts nothing.
+		{"twin create --detach (TestADetachedRunIsReadAndInterruptedByItsIdentity)", findings.OpTwinCreate, func(t *testing.T) answerWant {
+			paths := useStateRoot(t)
+			useInterrupts(t)
+			storeFixtureSnapshot(t, paths)
+			useService(t, &fakeService{runID: "run-1"})
+			return answerWant{args: map[string]any{"snapshot": fixtureSnapshotID, "detach": true},
+				kinds: []string{api.KindStart, api.KindRun, api.KindDocument}, status: findings.StatusOK,
+				stdout: lines(storedLines(paths, fixtureSnapshotID, fixtureBundleID)...)}
+		}},
+		{"run read, ended (TestADetachedRunIsReadAndInterruptedByItsIdentity)", findings.OpRunRead, func(t *testing.T) answerWant {
+			useStateRoot(t)
+			events := []provision.Event{
+				{WorkflowID: provision.WorkflowProvision, Step: "host check", FindingStep: findings.StepHostCheck},
+				{WorkflowID: provision.WorkflowProvision, Step: "host check", FindingStep: findings.StepHostCheck, End: true,
+					Outcome: provision.EventDone, Duration: 300 * time.Millisecond},
+			}
+			cancelled := provision.ProvisionResult{Outcome: provision.OutcomeCancelled, BundleID: fixtureBundleID,
+				Step: findings.StepDeploy, Findings: findings.List{}, Cleanup: provision.CleanupResult{
+					Teardown: provision.CleanupDone, Unstage: provision.CleanupDone, Removed: []string{"twin directory /abs/local/twin"}}}
+			useService(t, &fakeService{readOnly: t, events: events, result: cancelled, described: &provision.RunState{
+				WorkflowID: provision.WorkflowProvision, RunID: "run-1", State: provision.RunCompleted}})
+			kinds := []string{api.KindRun}
+			for range events {
+				kinds = append(kinds, api.KindEvent)
+			}
+			return answerWant{args: map[string]any{"workflow_id": provision.WorkflowProvision},
+				kinds: append(kinds, api.KindDocument), status: findings.StatusFailed, events: stepsOf(events),
+				cli: func(t *testing.T) string {
+					return cliStdout(t, func() error {
+						return runRunRead(context.Background(), &options{}, &runFlags{workflow: provision.WorkflowProvision})
+					})
+				}}
+		}},
 		// 020: the step between two snapshot files, each compiled and filed, nothing started.
 		{"twin diff (TestTwinDiffPrintsTheStepBetweenTwoSnapshots)", findings.OpTwinDiff, func(t *testing.T) answerWant {
 			useStateRoot(t)

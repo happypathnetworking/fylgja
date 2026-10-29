@@ -1,4 +1,4 @@
-# API contract: M13, version 1; 014's stage surface; 015's rehearsal; 017's scope; 018's snapshots; 019's following removed; 016's probes
+# API contract: M13, version 1; 014's stage surface; 015's rehearsal; 017's scope; 018's snapshots; 019's following removed; 016's probes; 020's runs by identity and the diff
 
 What crosses between a client and `fylgja serve`. The shapes are
 [api.schema.json](api.schema.json); the documents are M12's
@@ -6,7 +6,9 @@ What crosses between a client and `fylgja serve`. The shapes are
 ("014: the stage surface", at the end) and 015 added to them ("015: the rehearsal", after
 it), and 017 moved them again ("017: the scope and the DCIM reader"), and 018 added the
 snapshot ("018: snapshots"), and 019 removed following from them ("019: following removed"),
-and 016 added probes to them ("016: probes", last). The addresses, the statuses, the frame kinds and the
+and 016 added probes to them ("016: probes"), and 020 added the detached run, the run read
+and interrupted by its identity and the step between two snapshots ("020: runs by identity
+and the diff", last). The addresses, the statuses, the frame kinds and the
 document are the contract; a sentence is contract only where it is quoted.
 
 ## Transport
@@ -50,10 +52,10 @@ frames. A dry run is its operation with `dry_run` set.
 
 | Operation | Path | `args` | Files in | Files out | Takes an interrupt |
 |---|---|---|---|---|---|
-| `twin.create` | `/v1/twin/create` | `branch`, `at`, `stage`, `dry_run`, `scope`, `snapshot`, `probes` | the snapshot, when `snapshot` is a path; else the probe file, when `probes` is given | | from `start` |
-| `twin.provision` | `/v1/twin/provision` | `bundle`, `dry_run` | the bundle's regular files | | from `start` |
-| `twin.step` | `/v1/twin/step` | `stage`, `snapshot`, `probes`, `allow_restart`, `dry_run`, `wait` | the snapshot, when `snapshot` is a path; else the probe file, when `probes` is given | | from `start` |
-| `twin.destroy` | `/v1/twin/destroy` | | | | no |
+| `twin.create` | `/v1/twin/create` | `branch`, `at`, `stage`, `dry_run`, `scope`, `snapshot`, `probes`, `detach` | the snapshot, when `snapshot` is a path; else the probe file, when `probes` is given | | from `start`; by identity, `run.interrupt` |
+| `twin.provision` | `/v1/twin/provision` | `bundle`, `dry_run`, `detach` | the bundle's regular files | | from `start`; by identity |
+| `twin.step` | `/v1/twin/step` | `stage`, `snapshot`, `probes`, `allow_restart`, `dry_run`, `wait`, `detach` | the snapshot, when `snapshot` is a path; else the probe file, when `probes` is given | | from `start`; by identity |
+| `twin.destroy` | `/v1/twin/destroy` | `detach` | | | by identity alone |
 | `twin.show` | `/v1/twin/show` | | | | no |
 | `twin.verify` | `/v1/twin/verify` | `wait`, `args` | | | no |
 | `twin.rehearse` | `/v1/twin/rehearse` | `branch`, `scope`, `probes` | the probe file, when `probes` is given | | from `start` |
@@ -63,9 +65,13 @@ frames. A dry run is its operation with `dry_run` set.
 | `intent.read` | `/v1/intent/read` | `branch`, `at`, `stage`, `out`, `scope`, `probes` | the probe file, when `probes` is given | the snapshot | no |
 | `schema.check` | `/v1/schema/check` | `branch` | | | no |
 | `psp.validate` | `/v1/psp/validate` | `files` | each package | | no |
+| `run.read` | `/v1/run/read` | `workflow_id`, `run_id` | | | no |
+| `run.interrupt` | `/v1/run/interrupt` | `workflow_id`, `run_id` | | | no |
+| `twin.diff` | `/v1/twin/diff` | `from`, `to` | each snapshot file `from` and `to` name | | no |
 
-There is no other operation. In particular there is none to re-attach to a run, to list
-runs or to fetch a filed bundle. Moved at 014: `waypoint.list` and `waypoint.plan`
+There is no other operation. In particular there is none to list runs or to fetch a filed
+bundle; until 020 there was none to re-attach to a run, which `run.read` now reads by its
+identity. Moved at 014: `waypoint.list` and `waypoint.plan`
 (`/v1/waypoint/list`, `/v1/waypoint/plan`, argument `series`) became `stage.list` and
 `stage.plan`, and `twin.create`, `twin.step` and `intent.read` take `stage` where they took
 `waypoint`. Added at 015: `twin.rehearse`. Added at 017: the argument `scope` on
@@ -75,7 +81,10 @@ runs or to fetch a filed bundle. Moved at 014: `waypoint.list` and `waypoint.pla
 takes the argument `snapshot`, with the snapshot's file when it is a path. Moved at 019:
 `twin.create` takes neither `interval` nor `no_follow`, and `twin.step` takes `snapshot` as
 `twin.create` does. Added at 016: the argument `probes` on `intent.read`, `twin.create`,
-`twin.step`, `stage.plan` and `twin.rehearse`, with the probe file it names.
+`twin.step`, `stage.plan` and `twin.rehearse`, with the probe file it names. Added at 020:
+the argument `detach` on `twin.create`, `twin.provision`, `twin.step` and `twin.destroy`,
+and the operations `run.read`, `run.interrupt` and `twin.diff` ("020: runs by identity and
+the diff").
 
 **Arguments are as given.** An absent key is a flag that was not given; a present key is
 one that was, whatever its value (`"stage": ""` is `--stage=`). Every guard is the
@@ -98,7 +107,9 @@ with a message that begins `the request is not one: `, and no guard runs:
   (`twin.provision takes the bundle directory as its argument "bundle"`), and `twin.verify`
   with `args` and no `wait`, whose words only a bare `--wait` leaves behind
   (`twin.verify's argument "args" is given without "wait"`); no client's command builds
-  either, and the answer would name `""` as the directory or ignore the argument;
+  either, and the answer would name `""` as the directory or ignore the argument; and
+  `run.read` or `run.interrupt` without `workflow_id` (020: `run.read takes the workflow
+  its run is of as its argument "workflow_id"`), which `--workflow` always sends;
 - files on an operation that takes none (`twin.show takes no files`), a file that is
   `null` (`files[0] is not a file`) or has no path, data that is not base64, or bytes
   after the object;
@@ -112,14 +123,15 @@ no bytes.
 
 `200`, `Content-Type: application/x-ndjson`. One JSON object a line
 ([`$defs/frame`](api.schema.json)), written as it happens. The last line is always the
-`document` frame.
+`document` frame, but on a `run.read` of a run still running (020), which ends after its
+events.
 
 | Frame | Meaning |
 |---|---|
 | `{"out": "…"}` | text for stdout, whole lines |
 | `{"err": "…"}` | text for stderr, whole lines |
 | `{"start": {"workflow_id": "…"}}` | the server begins to start this run; from here an interrupt reaches it, but for `twin.destroy`'s, `fylgja-destroy`, which opens no stream |
-| `{"run": {"workflow_id": "…", "run_id": "…"}}` | the run's identity |
+| `{"run": {"workflow_id": "…", "run_id": "…", "state": "…"}}` | the run's identity; `state` on `run.read` alone (020) |
 | `{"event": {…}}` | one step boundary of a run, or one notice about a run |
 | `{"files": [{"path": "…", "data": "<base64>"}]}` | the CTM (`ctm.json`; since 018 the snapshot, `snapshot.json`), or every file of the bundle |
 | `{"document": {…}, "text": "…", "markdown": "…"}` | the command's findings document; `text` under `render: "text"` or `"markdown"` when it has findings; `markdown` under `render: "markdown"` on `twin.rehearse` alone (015) |
@@ -136,7 +148,9 @@ no bytes.
 With `render` absent, a command that is one answer is its `document` frame alone, but for
 `intent.read` and `twin.compile`, whose `files` frame comes first. A run is its `start`,
 its `run`, its `event`s and its `document`, and `twin.destroy` its `start`, the destroy's
-`event`s and its `document`, with no `run`.
+`event`s and its `document`, with no `run`. Under `detach` (020) a run is its `start`, its
+`run` and its `document`, a destroy's included, and `run.read` is its `run`, its `event`s
+and, once the run has closed, its `document`.
 
 **The document** is the one the command printed under `--json` at M12:
 `findings_version` `1`, the same operation, status, subject, blocks and findings. Its
@@ -144,7 +158,8 @@ its `run`, its `event`s and its `document`, and `twin.destroy` its `start`, the 
 `diverged` and `nonconforming` keep exits 0, 1, 2, 3, 4, 4 and 5.
 
 **An answer with no `document` frame did not finish.** The server stopped, or the
-connection was lost.
+connection was lost. The one exception is a `run.read` whose `run` frame says `running`
+(020): it ends there, whole, by EOF after its last `event`.
 
 ## The transport's statuses
 
@@ -187,7 +202,8 @@ POST /v1/twin/create        Fylgja-Stream: 5f1c9a…
   nothing.
 - **A client that goes away leaves its run running.** A start still waiting for a worker
   finishes, and the run goes on for that worker, as M12's killed process left it; only the
-  operator's interrupt abandons a start. The same holds when the server stops.
+  operator's interrupt abandons a start. The same holds when the server stops. Since 020
+  `run.read` reads such a run by its identity and `run.interrupt` asks it to cancel.
 - Two clients asking at once are refused as two shells were: by the fixed workflow
   identities, under `run.in_flight`. The server adds no lock.
 
@@ -241,6 +257,13 @@ bytes written are the bytes read.
   anything is validated: `operation.failed`, exit 2, in a sentence giving the two counts
   (`the request carries 0 files for 1 path where psp validate takes at least one path and
   one package for each, in order and under that path`).
+- **`twin.diff`** (020): `files` holds the snapshot file of each of `args.from` and
+  `args.to` that is not a snapshot id, under that path, a path both name sent once; an id
+  is sent with no file. Any other shape is refused before anything is parsed:
+  `operation.failed`, exit 2 (`the request carries no file for --from, which names a
+  snapshot file; …`; `the request carries a file under a path neither --from nor --to
+  gives, or one twice, …`). Its answer carries no `files` frame: both snapshots and both
+  bundles are filed in the store on the lab host.
 
 ## What the server keeps and logs
 
@@ -547,3 +570,103 @@ as 019 left them, but for these.
   credential; the flows' and bursts' output never crosses, but as the figures the
   documents carry.
 - **The checks** `fylgja-step` and `fylgja-twin` send no `probes`: theirs are the kind's.
+
+## 020: runs by identity and the diff
+
+A run can be left running and reached again by its identity, and the step between two
+snapshots is read with nothing built ([cli.md](cli.md), "020: runs by identity and the
+diff", says what each command does). The API's version stays `1`: a client that never sends
+`detach` is answered as before, and a client ignores an operation it never asks and a frame
+field it does not know. Every other operation, the transport, the token, the statuses and
+the files are as 016 left them, but for these. The operations the orchestrator takes over
+leave the API later in 020, and are not named here.
+
+| | Operation | Path | `args` | Files in | Files out | Takes an interrupt |
+|---|---|---|---|---|---|---|
+| argument added | `twin.create`, `twin.provision`, `twin.step`, `twin.destroy` | | `detach` | | | |
+| added | `run.read` | `/v1/run/read` | `workflow_id`, `run_id` | | | no |
+| added | `run.interrupt` | `/v1/run/interrupt` | `workflow_id`, `run_id` | | | no |
+| added | `twin.diff` | `/v1/twin/diff` | `from`, `to` | each snapshot file `from` and `to` name | | no |
+
+- **`detach`** is `--detach`, a boolean. Under it the answer ends once the run has started:
+  `{"start": …}`, `{"run": {"workflow_id", "run_id"}}`, then the `document`, status `ok`,
+  carrying what the command found before the start (a create's snapshot and bundle and
+  its compile's findings, a step's warnings) and then the one finding `run.detached`, info,
+  at step `start`, object `<workflow_id> <run_id>`: `run <workflow_id> <run_id> started;
+  read it with fylgja run read`. No `event` of the run is sent, and the run goes on.
+  `twin.destroy`'s detached answer carries the `run` frame its followed answer never did;
+  what it cancels first, a create, a step or a rehearsal in flight, is still waited for
+  inside the answer, as when it is followed. Beside `dry_run` it is `run.flags.conflict`,
+  error, at step `start`, object `dry_run`, before any guard: `--detach is meaningless with
+  --dry-run: a dry run starts no run to detach from`. A refusal before the start is the
+  `document` frame alone, as without it. An interrupt delivered before the run frame was
+  the operator's before the run was detached from: the run is asked to cancel and followed
+  to its end, as on a followed answer.
+
+  ```text
+  POST /v1/twin/create        {"args":{"snapshot":"0940db93…","detach":true}}
+  ← {"start":{"workflow_id":"fylgja-provision"}}
+  ← {"run":{"workflow_id":"fylgja-provision","run_id":"01a1…"}}
+  ← {"document":{"findings_version":"1","operation":"twin.create","status":"ok",…,"findings":[…,{"severity":"info","rule":"run.detached","step":"start",…}]}}
+  ```
+
+- **`run.read`** takes `workflow_id`, `fylgja-provision`, `fylgja-step` or
+  `fylgja-destroy`, required, and `run_id`, absent for the workflow's latest run. A
+  workflow outside the three, `fylgja-rehearse` and `""` among them, is `run.unknown` before
+  anything is dialled; an identity the workflow service holds no run under is
+  `run.unknown`, rejection, exit 1, no step, object the identity, after the describe
+  alone. Otherwise the answer is the `run` frame with its `state`, one of `running`,
+  `completed`, `failed`, `cancelled`, `terminated` and `timed_out`, as the workflow service
+  describes the run, then every `event` its history holds so far, then, under a rendering,
+  the `out` lines the followed command printed, beginning `run <workflow_id> <run_id>:
+  <state>`. It ends one of two ways:
+  - **running**: after the events so far, by EOF, with **no `document` frame**, the one
+    answer that ends without one. A client reads it as whole, exit 0, and prints nothing
+    under `--json`.
+  - **closed**: with the `document` the run's stream would have ended with, under
+    operation `run.read`, `subject.run_id` the run's, and the run's own status and
+    findings from its result, a cancelled run's included, since the workflows answer a
+    cancellation with a result; a run closed without one (terminated, timed out or failed
+    at the service) is `operation.failed` at the step its history reached.
+
+  ```text
+  POST /v1/run/read           {"args":{"workflow_id":"fylgja-provision"}}
+  ← {"run":{"workflow_id":"fylgja-provision","run_id":"01a1…","state":"running"}}
+  ← {"event":{"workflow_id":"fylgja-provision","step":"host check","finding_step":"host_check","end":false}}
+  ← {"event":{"workflow_id":"fylgja-provision","step":"host check","finding_step":"host_check","end":true,"outcome":"done","duration_s":0.3}}
+  ← {"event":{"workflow_id":"fylgja-provision","step":"deploy","finding_step":"deploy","end":false}}
+  (EOF)
+  ```
+
+  It reads the workflow service alone: nothing is kept between two reads, and a read of a
+  destroy is the destroy run's own events and document, never those of a run it cancelled
+  first. It takes no interrupt and starts nothing.
+- **`run.interrupt`** takes the same arguments and answers one `document`: a running run
+  is asked to cancel, as a stream's first interrupt asks it, and the document carries
+  `run.cancel.requested`, info, exit 0, object the identity (`cancellation of run
+  <workflow_id> <run_id> was requested; it cleans up and closes, and fylgja run read says
+  how`); nothing is waited for, and a read says how the run closes. A run that has
+  already closed is `run.ended`, rejection, exit 1 (`run <workflow_id> <run_id> has
+  already closed: <state>`); an identity no run has is `run.unknown`. No `run` frame, no
+  event, no file.
+- **`twin.diff`** takes `from` and `to`, each a snapshot id the store holds or the path of
+  a snapshot file the request carries ("Files", above); absent, each is `operation.failed`,
+  `--from is required` or `--to is required`, exit 2. Both sides are resolved as
+  `twin.create`'s `snapshot` is (a file held to the CTM's own rules and filed; an id the
+  store lacks `snapshot.unknown` at `resolve`, exit 1), then each compiled as
+  `twin.compile` compiles and its bundle filed, a side equal to the other compiled once; a
+  refused compile answers the compile's findings at step `compile`. The answer is one
+  `document`, operation `twin.diff`, with `snapshot_from`, `snapshot_to`, `bundle_from` and
+  `bundle_to` as far as it got, and the `step` block, the pair as `twin.step`'s dry run
+  writes its diff ([stages.schema.json](stages.schema.json)'s `$defs/step`; each side
+  named `snapshot <short>…`, `unchanged: true` when the two bundles are one). It dials no
+  workflow service, reads no twin, deploys nothing and starts nothing, and takes no
+  interrupt.
+- **The frames**: [api.schema.json](api.schema.json)'s `$defs/run` gains `state`, and the
+  `args` definitions gain `detach` on the four runs and the three operations' own; the
+  `start` frame's `workflow_id` enum is unchanged. **The documents** stay
+  `findings_version` `1`: the operations `run.read`, `run.interrupt` and `twin.diff`, the
+  four sides of `twin.diff`, its `step` block, and the five identifiers `run.detached`,
+  `run.unknown`, `run.cancel.requested`, `run.ended` and `run.flags.conflict` are
+  [findings.schema.json](findings.schema.json)'s.
+- **The checks** `fylgja-step` and `fylgja-twin` send nothing new.

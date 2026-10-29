@@ -242,7 +242,8 @@ SPECIFY_FEATURE_DIRECTORY=specs/020-core-orchestrator-split GIT_BRANCH_NAME=020-
    question 4 says so. **D-066**, stages across sources: a stage resolves to a snapshot id;
    where the source replays time, by a pinned read at the mark (D-045); where it cannot,
    the snapshot the adapter took when the operator marked it, held by the orchestrator; and
-   D-001 superseded in the part that says NetBox lacks branching. Constitution **3.0.0**.
+   D-001 superseded in the part that says NetBox lacks branching. The constitution's
+   amendment is MAJOR.
 10. **The repository and the toolchain.** `orchestrator/` with its `pyproject.toml`, its
     tests and its lint; `cmd/fylgja-infrahub`; CI's unit job runs the Python tests beside
     `go test`, and its lint job the Python linter beside golangci-lint and ShellCheck; the
@@ -366,7 +367,7 @@ tabled) or on 2026-10-29 (F-027 added before F-025, with F-025's shape), unless 
   read once `twin.json` names no stage. *Not chosen*: those four retired, so that every
   step names its target and a dead rehearsal's twin is the operator's to destroy; and a
   stage kept in the core's record, which is the knowledge the split removes.
-- **Two decision entries, D-065 and D-066, and Constitution 3.0.0** (*proposed*): the
+- **Two decision entries, D-065 and D-066, and a MAJOR amendment** (*proposed*): the
   split in one entry on D-061's pattern; stages across sources, with D-001's supersession,
   in a second, since F-025 will cite it alone.
 - **The estimate is 16–24 hours of sessions** (*proposed*, the plan re-estimates):
@@ -458,7 +459,8 @@ before the chain starts.
   written against the orchestrator, and the tier's wall time, with `internal/stages` at
   1,713 s against its 30-minute bound.
 - **The Constitution Check**: the amendment's text per principle, the Development
-  Workflow's "single Go module, one binary" as the core's, and 3.0.0's Sync Impact Report.
+  Workflow's "single Go module, one binary" as the core's, and the amendment's Sync Impact
+  Report.
 - **Which Infrahub skill to load**: none designs a kind; `infrahub-managing-checks` before
   `fylgja_step.py` and `fylgja_twin.py` are touched, as `CLAUDE.md`'s hook rule says.
 - **The estimate**, re-made from the route, and whether the plan proposes a cut into two
@@ -472,7 +474,7 @@ before the chain starts.
 - [ ] Push `main` to `origin` before the chain (`git push origin main`): the roadmap's
   commit (`95c0246`) and this brief, once committed. A push during the chain would stop
   the loop at `contract`.
-- [ ] `make command-log` for 016, once that session is closed.
+- [x] `make command-log` for 016: nothing pending on 2026-10-29, by feature-open's check.
 
 Waiting for the chain, each the route's `[operator]` task with its reason:
 

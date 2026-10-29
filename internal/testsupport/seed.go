@@ -66,13 +66,32 @@ var (
 )
 
 // nodeSpec describes one fixture device: its platform, the name that platform gives its
-// management port, and its data ports in production naming. Every name is one a booted
-// node of that platform carried.
+// management port, its data ports in production naming, and its probe-ready ports. Every
+// name is one a booted node of that platform carried.
 type nodeSpec struct {
-	name     string
-	platform platformSpec
-	mgmt     string
-	ports    []string
+	name      string
+	platform  platformSpec
+	mgmt      string
+	ports     []string
+	addressed []addressedPort
+}
+
+// addressedPort is a probe-ready port (R-19): a physical port with no role and no cable,
+// holding one IpamIPAddress, its address and prefix length as the library writes it.
+type addressedPort struct {
+	name, address string
+}
+
+// probeReady is a device's two probe-ready ports, first and second, addressed
+// 10.<d>.10.1/24 and 10.<d>.11.1/24, d the device's index in its fixture (R-19). Two,
+// because the reference transform renders no routing (R-18): a probe across one device
+// lies between two of its ports, reached by connected routes. Neither is ethernet-1/3,
+// which SeedFourthNode, SeedThirdLink and SeedMixedLink create and refuse when present.
+func probeReady(d int, first, second string) []addressedPort {
+	return []addressedPort{
+		{first, fmt.Sprintf("10.%d.10.1/24", d)},
+		{second, fmt.Sprintf("10.%d.11.1/24", d)},
+	}
 }
 
 // linkSpec is one fixture link, written as a cable between two ports.
@@ -86,14 +105,17 @@ func (l linkSpec) id() string {
 	return ctm.CanonicalLinkID(ctm.Endpoint{Device: l.aDev, Interface: l.aPort}, ctm.Endpoint{Device: l.bDev, Interface: l.bPort})
 }
 
-// The three-node fixture: a triangle, so every node has two cabled ports and one
-// management port. Small enough to boot on a small host, and large enough that link
-// ordering and per-node port ordering are actually exercised.
+// The three-node fixture: a triangle, so every node has two cabled ports, one management
+// port and two probe-ready ports. Small enough to boot on a small host, and large enough
+// that link ordering and per-node port ordering are actually exercised.
 var (
 	fixtureNodes = []nodeSpec{
-		{name: "n1", platform: srLinux, mgmt: "mgmt0", ports: []string{"ethernet-1/1", "ethernet-1/2"}},
-		{name: "n2", platform: srLinux, mgmt: "mgmt0", ports: []string{"ethernet-1/1", "ethernet-1/2"}},
-		{name: "n3", platform: srLinux, mgmt: "mgmt0", ports: []string{"ethernet-1/1", "ethernet-1/2"}},
+		{name: "n1", platform: srLinux, mgmt: "mgmt0", ports: []string{"ethernet-1/1", "ethernet-1/2"},
+			addressed: probeReady(1, "ethernet-1/10", "ethernet-1/11")},
+		{name: "n2", platform: srLinux, mgmt: "mgmt0", ports: []string{"ethernet-1/1", "ethernet-1/2"},
+			addressed: probeReady(2, "ethernet-1/10", "ethernet-1/11")},
+		{name: "n3", platform: srLinux, mgmt: "mgmt0", ports: []string{"ethernet-1/1", "ethernet-1/2"},
+			addressed: probeReady(3, "ethernet-1/10", "ethernet-1/11")},
 	}
 	fixtureLinks = []linkSpec{
 		{"n1", "ethernet-1/1", "n2", "ethernet-1/1"},
@@ -105,12 +127,16 @@ var (
 // The mixed fixture, the live twin of testdata/ctm/mixed.json: one node of the first
 // platform and two of the second, cabled in a triangle so that every link crosses
 // something — the two platforms on a plain port, the second platform to itself on a
-// modular port, and the platforms again on a breakout lane.
+// modular port, and the platforms again on a breakout lane. Each device's probe-ready
+// ports are named as its platform names them.
 var (
 	mixedNodes = []nodeSpec{
-		{name: "s1", platform: srLinux, mgmt: "mgmt0", ports: []string{"ethernet-1/1", "ethernet-1/2"}},
-		{name: "e1", platform: eos, mgmt: "Management1", ports: []string{"Ethernet1", "Ethernet2/1"}},
-		{name: "e2", platform: eos, mgmt: "Management1", ports: []string{"Ethernet1", "Ethernet3/1/1"}},
+		{name: "s1", platform: srLinux, mgmt: "mgmt0", ports: []string{"ethernet-1/1", "ethernet-1/2"},
+			addressed: probeReady(1, "ethernet-1/10", "ethernet-1/11")},
+		{name: "e1", platform: eos, mgmt: "Management1", ports: []string{"Ethernet1", "Ethernet2/1"},
+			addressed: probeReady(2, "Ethernet10", "Ethernet11")},
+		{name: "e2", platform: eos, mgmt: "Management1", ports: []string{"Ethernet1", "Ethernet3/1/1"},
+			addressed: probeReady(3, "Ethernet10", "Ethernet11")},
 	}
 	mixedLinks = []linkSpec{
 		{"s1", "ethernet-1/1", "e1", "Ethernet1"},
@@ -121,7 +147,7 @@ var (
 
 // SeedThreeNode populates the three-node fixture on a branch, in the schema library's
 // kinds (R-15): the tag, Nokia's SR Linux, the lab site and its hierarchy, the three
-// devices with their ports and cables, then the group join and the generation every seed
+// devices with their ports, cables and probe-ready ports' addresses, then the group join and the generation every seed
 // ends with. It is idempotent at the branch level: seeding a branch that already has
 // devices is a no-op.
 func (c *Client) SeedThreeNode(branch string) error {
@@ -140,8 +166,8 @@ func (c *Client) SeedThreeNode(branch string) error {
 }
 
 // SeedMixed populates the mixed fixture on a throwaway branch: beside the three-node
-// seed's objects, Arista's EOS, and the three devices of two platforms with their ports and
-// cables, every device under the branch's marker, then the group join and the generation.
+// seed's objects, Arista's EOS, and the three devices of two platforms with their ports,
+// cables and probe-ready ports' addresses, every device under the branch's marker, then the group join and the generation.
 //
 // It is idempotent at the branch level, as SeedThreeNode is, and it refuses the durable
 // fixture branch as every change flag does: that branch holds the three-node fixture,
@@ -161,10 +187,10 @@ func (c *Client) SeedMixed(branch string) error {
 	return c.generateFor(branch, devices)
 }
 
-// writeTopology writes a fixture's devices, each with its management port and its data
-// ports, and a cable per link, and returns the devices' ids. Every device has status
-// active, the lab site, its platform, the fixture's tag and the branch's marker as its
-// description.
+// writeTopology writes a fixture's devices, each with its management port, its data ports
+// and its probe-ready ports with their addresses, and a cable per link, and returns the
+// devices' ids. Every device has status active, the lab site, its platform, the fixture's
+// tag and the branch's marker as its description.
 func (c *Client) writeTopology(branch string, nodes []nodeSpec, links []linkSpec) ([]string, error) {
 	tag, err := c.EnsureTag(branch, FixtureTag)
 	if err != nil {
@@ -202,6 +228,15 @@ func (c *Client) writeTopology(branch string, nodes []nodeSpec, links []linkSpec
 			}
 			ports[n.name+":"+p] = id
 		}
+		for _, p := range n.addressed {
+			id, err := c.createPort(branch, dev, p.name, "")
+			if err != nil {
+				return nil, err
+			}
+			if _, err := c.createAddress(branch, id, p.address); err != nil {
+				return nil, err
+			}
+		}
 	}
 	for _, l := range links {
 		a, b := ports[l.aDev+":"+l.aPort], ports[l.bDev+":"+l.bPort]
@@ -237,6 +272,13 @@ func (c *Client) createPort(branch, device, name, role string) (string, error) {
 		data += fmt.Sprintf(`, role: {value: %q}`, role)
 	}
 	return c.create(branch, "InterfacePhysical", data+"}")
+}
+
+// createAddress writes one IpamIPAddress on a port, as <address>/<prefix length>. It names
+// no ip_namespace, so the address lands in Infrahub's default namespace (research §5), and
+// its interface is the port, which reads it back as one of its ip_addresses.
+func (c *Client) createAddress(branch, port, address string) (string, error) {
+	return c.create(branch, "IpamIPAddress", fmt.Sprintf(`{address: {value: %q}, interface: {id: %q}}`, address, port))
 }
 
 // createCable writes one cable between two ports, labelled with the link's canonical id,

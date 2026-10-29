@@ -28,10 +28,8 @@ import (
 // snapshot it sends, and dials nothing either. The branch is deleted
 // when the test ends.
 //
-// The compile needs the seed's two probe-ready ports per device, which T033 writes: until
-// then a seeded branch has no ethernet-1/10, and the compile is refused at
-// probe.interface.unknown. So the test runs the read and skips before the compile, saying
-// why; T033 removes the skip and runs it alone.
+// The compile needs the seed's two probe-ready ports per device (R-19): a branch seeded
+// without them has no ethernet-1/10, and the compile is refused at probe.interface.unknown.
 //
 //	set -a; . local/.env; set +a; go test -count=1 -tags contract ./internal/cli -run '^TestIntentReadFilesASnapshot2$' -v
 func TestIntentReadFilesASnapshot2(t *testing.T) {
@@ -99,9 +97,6 @@ func TestIntentReadFilesASnapshot2(t *testing.T) {
 		t.Errorf("the read dialled the workflow service %d times", n)
 	}
 	t.Logf("intent read --out: snapshot %s carrying %d probe(s) in %.1fs", s.ID, len(s.Probes), time.Since(started).Seconds())
-
-	t.Skip("T033: this tree's seed writes no ethernet-1/10 or ethernet-1/11, so the compile of n1-loop is refused at " +
-		"probe.interface.unknown until the seed's probe-ready ports land; T033 removes this skip and runs the test alone")
 
 	dryRunEnv(t)
 	clab := useClab(t, "inspect-empty.json")

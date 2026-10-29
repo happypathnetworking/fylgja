@@ -714,10 +714,13 @@ func validateM10Document(t *testing.T, doc *findings.Document) {
 }
 
 // carriesLoss says whether doc carries what 016 alone writes, which no earlier contract
-// accepts: a step block's loss its flows read, a rehearsal stage's, or a verify block of a
-// twin with probes, its hosts and its bursts.
+// accepts: a step block's loss its flows read, a rehearsal stage's, a verify block of a
+// twin with probes, its hosts and its bursts, or a dry run planning a probe's hosts.
 func carriesLoss(doc *findings.Document) bool {
 	if doc.Step != nil && doc.Step.Loss != nil {
+		return true
+	}
+	if d := doc.DryRun; d != nil && slices.ContainsFunc(d.Nodes, func(n findings.DryRunNode) bool { return n.Probe != nil }) {
 		return true
 	}
 	if r := doc.Rehearsal; r != nil && slices.ContainsFunc(r.Stages, func(s findings.RehearsalStage) bool { return s.Loss != nil }) {

@@ -132,7 +132,7 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 				what, got.Devices, got.Interfaces, got.Links, got.Artifacts, want.Devices, want.Interfaces, want.Links, want.Artifacts)
 		}
 	}
-	seeded := intent.Counts{Devices: 3, Interfaces: 9, Links: 3, Artifacts: 3}
+	seeded := intent.Counts{Devices: 3, Interfaces: 15, Links: 3, Artifacts: 3}
 
 	before, beforeID, beforeTake := read(at)
 	counts("the read at T does not see the whole seed", beforeTake.CTM, seeded)
@@ -221,7 +221,7 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	}
 
 	unpinned, unpinnedID, unpinnedTake := read("")
-	counts("the unpinned read after the change", unpinnedTake.CTM, intent.Counts{Devices: 5, Interfaces: 13, Links: 4, Artifacts: 5})
+	counts("the unpinned read after the change", unpinnedTake.CTM, intent.Counts{Devices: 5, Interfaces: 19, Links: 4, Artifacts: 5})
 	if unpinnedTake.CTM.Device("cs1") == nil {
 		t.Error("the unpinned read after cs1 was tagged did not read it")
 	}

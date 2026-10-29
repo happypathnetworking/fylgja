@@ -292,6 +292,17 @@ const (
 	RuleFlowStartFailed             = "flow.start.failed"              // warning, exit 0, flows: <probe>; a host's flow could not be started, so its probe is not_started and the step goes on
 	RuleFlowReadFailed              = "flow.read.failed"               // warning, exit 0, flows: <probe>; a host's flow could not be read, so its probe is not_read
 	RuleVerifyBurst                 = "verify.burst"                   // rejection, exit 5 (status nonconforming), observe: <probe>; the burst's replies are fewer than its count, naming the replies, the count, the far host and its address
+
+	// 020, the core's runs by identity (specs/020-core-orchestrator-split/data-model.md §1,
+	// §11; research R-03, R-04). Each comment gives the severity, the exit, the step, the
+	// object and when it fires. A detached start answers its identity and goes on; a run
+	// is read or interrupted by its workflow id and run id. None replaces a rule: the
+	// orchestrator's retire at T035.
+	RuleRunDetached        = "run.detached"         // info, exit 0 (status ok), start: <workflow_id> <run_id>; under detach the run started and goes on, the message `run <workflow_id> <run_id> started; read it with fylgja run read`
+	RuleRunUnknown         = "run.unknown"          // rejection, exit 1, no step: the identity, <workflow_id> <run_id> or the workflow id alone; run.read or run.interrupt names a run the workflow service does not hold, after the describe alone
+	RuleRunCancelRequested = "run.cancel.requested" // info, exit 0, no step: the identity; run.interrupt asked the workflow service to cancel a running run, which ends as run.cancelled
+	RuleRunEnded           = "run.ended"            // rejection, exit 1, no step: the identity; run.interrupt names a run that has already closed, naming its state
+	RuleRunFlagsConflict   = "run.flags.conflict"   // rejection, exit 1, start: dry_run; detach beside dry_run on twin.create, twin.provision, twin.step or twin.destroy, before any guard, since a dry run starts no run to detach from
 )
 
 // Steps a finding can belong to, as contracts/findings.schema.json enumerates them. New

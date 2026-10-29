@@ -33,6 +33,12 @@ const (
 	// 015: a proposed change's stages rehearsed on a twin of its own, built, stepped,
 	// verified and destroyed by one run.
 	OpTwinRehearse = "twin.rehearse"
+
+	// 020: a run read and interrupted by its identity, and two snapshots' bundles
+	// compared with no twin (data-model §1).
+	OpRunRead      = "run.read"
+	OpRunInterrupt = "run.interrupt"
+	OpTwinDiff     = "twin.diff"
 )
 
 // Status maps onto the process exit code.

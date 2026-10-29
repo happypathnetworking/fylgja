@@ -29,7 +29,10 @@
         "stage.plan",
         "twin.step",
         "twin.verify",
-        "twin.rehearse"
+        "twin.rehearse",
+        "run.read",
+        "run.interrupt",
+        "twin.diff"
       ]
     },
     "status": {

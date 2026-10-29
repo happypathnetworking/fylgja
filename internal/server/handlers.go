@@ -43,6 +43,9 @@ var operationArgs = map[string]map[string]string{
 	findings.OpSchemaCheck:  {"branch": argString},
 	findings.OpPSPValidate:  {"files": argStrings},
 	findings.OpTwinRehearse: {"branch": argString, "scope": argString, "probes": argString},
+	// 020: a run by its identity, its workflow's latest run when run_id is absent.
+	findings.OpRunRead:      {"workflow_id": argString, "run_id": argString},
+	findings.OpRunInterrupt: {"workflow_id": argString, "run_id": argString},
 }
 
 // args are one request's arguments, read strictly: checkArgs has refused a name the
@@ -120,7 +123,7 @@ func (a args) strings(name string) []string {
 	return v
 }
 
-// handlers are the thirteen operations' runs: each fills the flags M12's command filled from
+// handlers are the fifteen operations' runs: each fills the flags M12's command filled from
 // the request's arguments, a key's presence standing for cobra's Changed, and calls M12's
 // logic, which keeps its guards, their order, their identifiers and their words.
 var handlers = map[string]func(*call) error{
@@ -198,6 +201,14 @@ var handlers = map[string]func(*call) error{
 		return runTwinRehearse(c.ctx, c.options(), &rehearseFlags{branch: a.string("branch"), branchGiven: a.given("branch"),
 			scope: a.string("scope"), scopeGiven: a.given("scope"), probes: probes})
 	},
+	findings.OpRunRead: func(c *call) error {
+		a := args(c.req.Args)
+		return runReadByIdentity(c.ctx, c.options(), a.string("workflow_id"), a.string("run_id"))
+	},
+	findings.OpRunInterrupt: func(c *call) error {
+		a := args(c.req.Args)
+		return runInterruptByIdentity(c.ctx, c.options(), a.string("workflow_id"), a.string("run_id"))
+	},
 }
 
 // checkRequest refuses an argument op does not take, a value of another kind, an argument
@@ -216,12 +227,14 @@ func checkRequest(op string, req api.Request) error {
 	return probesFiles(op, req.Args, req.Files)
 }
 
-// checkRequired refuses the two requests no client's command can build, whose answers would
+// checkRequired refuses the requests no client's command can build, whose answers would
 // name nothing or ignore an argument: twin.provision without its bundle
 // directory, which M12's ExactArgs(1) made the command's, so every sentence would name ""
-// as the directory; and twin.verify with "args" and no "wait", whose words only a bare
+// as the directory; twin.verify with "args" and no "wait", whose words only a bare
 // --wait leaves behind and which verifyBudget reads only under it, as M12's cobra refused
-// an argument without --wait. The sentence names the argument and never its value.
+// an argument without --wait; and run.read or run.interrupt without the workflow its run is
+// of, which the command's --workflow always gives (020). The sentence names the argument and
+// never its value.
 func checkRequired(op string, given map[string]json.RawMessage) error {
 	a := args(given)
 	switch {
@@ -229,6 +242,8 @@ func checkRequired(op string, given map[string]json.RawMessage) error {
 		return fmt.Errorf("the request is not one: %s takes the bundle directory as its argument %q", op, "bundle")
 	case op == findings.OpTwinVerify && a.given("args") && !a.given("wait"):
 		return fmt.Errorf("the request is not one: %s's argument %q is given without %q", op, "args", "wait")
+	case (op == findings.OpRunRead || op == findings.OpRunInterrupt) && !a.given("workflow_id"):
+		return fmt.Errorf("the request is not one: %s takes the workflow its run is of as its argument %q", op, "workflow_id")
 	}
 	return nil
 }

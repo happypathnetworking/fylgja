@@ -99,6 +99,19 @@ type Service interface {
 	StartRehearse(ctx context.Context, in RehearseInput) (runID string, err error)
 	// ResultOfRehearse waits for the rehearsal run to close and returns how it ended.
 	ResultOfRehearse(ctx context.Context, runID string) (RehearseResult, error)
+	// Describe is the run the identity names, the workflow's latest run when runID is "",
+	// and its state (020, R-04). An identity the service holds no run under is an
+	// *UnknownRunError; a service that does not answer is an *UnreachableError. It changes
+	// nothing and needs no worker.
+	Describe(ctx context.Context, workflowID, runID string) (RunState, error)
+	// History calls onEvent for each step boundary the run's history holds so far, as Follow
+	// would have, and returns without waiting for more: run.read of a running run (020).
+	History(ctx context.Context, workflowID, runID string, onEvent func(Event)) error
+	// InputOfStep is the input the step run was started with, read from its history: what a
+	// step's document is built from beside its result (020).
+	InputOfStep(ctx context.Context, runID string) (StepInput, error)
+	// ResultOfDestroy waits for the destroy run to close and returns how it ended (020).
+	ResultOfDestroy(ctx context.Context, runID string) (DestroyResult, error)
 	Close()
 }
 
@@ -129,6 +142,24 @@ func (e *UnreachableError) Error() string {
 }
 
 func (e *UnreachableError) Unwrap() error { return e.Err }
+
+// UnknownRunError is an identity the workflow service holds no run under (020): run.read
+// and run.interrupt refuse it as run.unknown. RunID is "" when the request named the
+// workflow alone.
+type UnknownRunError struct {
+	WorkflowID string
+	RunID      string
+}
+
+func (e *UnknownRunError) Error() string {
+	return "the workflow service holds no run " + e.Identity()
+}
+
+// Identity is the run as the request named it: <workflow_id> <run_id>, or the workflow id
+// alone.
+func (e *UnknownRunError) Identity() string {
+	return strings.TrimSpace(e.WorkflowID + " " + e.RunID)
+}
 
 // StartError is a run that was not started, under its own identifier: a refusal the
 // command reports as a document rather than as a failure to run.
@@ -929,6 +960,18 @@ func findingStep(activityType string) string {
 // Follow implements Service over the run's event history, long-polled, so progress needs
 // no query handler, signal or change to workflow code (D-007).
 func (c *Client) Follow(ctx context.Context, workflowID, runID string, onEvent func(Event)) error {
+	return c.follow(ctx, workflowID, runID, true, onEvent)
+}
+
+// History implements Service: Follow's events over the history as it stands, read once
+// without waiting for more, so a running run's read ends where its history does (020).
+func (c *Client) History(ctx context.Context, workflowID, runID string, onEvent func(Event)) error {
+	return c.follow(ctx, workflowID, runID, false, onEvent)
+}
+
+// follow is Follow and History: the run's history read event by event, waiting for more
+// when wait is set, and a child's followed the same way.
+func (c *Client) follow(ctx context.Context, workflowID, runID string, wait bool, onEvent func(Event)) error {
 	type scheduled struct {
 		activityType string
 		step         string
@@ -947,7 +990,7 @@ func (c *Client) Follow(ctx context.Context, workflowID, runID string, onEvent f
 		onEvent(e)
 	}
 
-	iter := c.GetWorkflowHistory(ctx, workflowID, runID, true, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
+	iter := c.GetWorkflowHistory(ctx, workflowID, runID, wait, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
 	for iter.HasNext() {
 		ev, err := iter.Next()
 		if err != nil {
@@ -1010,7 +1053,7 @@ func (c *Client) Follow(ctx context.Context, workflowID, runID string, onEvent f
 		case enumspb.EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_STARTED:
 			child := ev.GetChildWorkflowExecutionStartedEventAttributes().GetWorkflowExecution()
 			onEvent(Event{Notice: fmt.Sprintf("run %s %s", child.GetWorkflowId(), child.GetRunId())})
-			_ = c.Follow(ctx, child.GetWorkflowId(), child.GetRunId(), childEvents(workflowID, onEvent))
+			_ = c.follow(ctx, child.GetWorkflowId(), child.GetRunId(), wait, childEvents(workflowID, onEvent))
 		case enumspb.EVENT_TYPE_CHILD_WORKFLOW_EXECUTION_COMPLETED:
 			s, d := ended(ev.GetChildWorkflowExecutionCompletedEventAttributes().GetInitiatedEventId(), at)
 			emit(s.activityType, Event{Step: s.step, End: true, Outcome: EventDone, Duration: d})
@@ -1277,6 +1320,70 @@ func (c *Client) Result(ctx context.Context, workflowID, runID string) (Provisio
 	var res ProvisionResult
 	err := c.GetWorkflow(ctx, workflowID, runID).Get(ctx, &res)
 	return res, err
+}
+
+// ResultOfDestroy implements Service.
+func (c *Client) ResultOfDestroy(ctx context.Context, runID string) (DestroyResult, error) {
+	var res DestroyResult
+	err := c.GetWorkflow(ctx, WorkflowDestroy, runID).Get(ctx, &res)
+	return res, err
+}
+
+// InputOfStep implements Service: the input the step run's history starts with, as towards
+// reads it.
+func (c *Client) InputOfStep(ctx context.Context, runID string) (StepInput, error) {
+	var in StepInput
+	iter := c.GetWorkflowHistory(ctx, WorkflowStep, runID, false, enumspb.HISTORY_EVENT_FILTER_TYPE_ALL_EVENT)
+	if !iter.HasNext() {
+		return in, fmt.Errorf("the history of step run %s is empty", runID)
+	}
+	ev, err := iter.Next()
+	if err != nil {
+		return in, c.unreachable(err)
+	}
+	attrs := ev.GetWorkflowExecutionStartedEventAttributes()
+	if attrs == nil {
+		return in, fmt.Errorf("the history of step run %s does not begin with its start", runID)
+	}
+	if err := converter.GetDefaultDataConverter().FromPayloads(attrs.GetInput(), &in); err != nil {
+		return in, fmt.Errorf("reading the input of step run %s: %w", runID, err)
+	}
+	return in, nil
+}
+
+// Describe implements Service over DescribeWorkflowExecution, the one call run.read and
+// run.interrupt make before anything else (020, R-04). The service answers NotFound for an
+// identity it holds no run under, and InvalidArgument ("Invalid RunId.") for a run id that
+// is no run's shape (verified on the dev server, Temporal CLI 1.9.1, 2026-10-29): both name
+// no run.
+func (c *Client) Describe(ctx context.Context, workflowID, runID string) (RunState, error) {
+	desc, err := c.DescribeWorkflowExecution(ctx, workflowID, runID)
+	var notFound *serviceerror.NotFound
+	var invalid *serviceerror.InvalidArgument
+	if errors.As(err, &notFound) || errors.As(err, &invalid) {
+		return RunState{}, &UnknownRunError{WorkflowID: workflowID, RunID: runID}
+	}
+	if err != nil {
+		return RunState{}, c.unreachable(err)
+	}
+	info := desc.GetWorkflowExecutionInfo()
+	state, ok := runStates[info.GetStatus()]
+	if !ok {
+		return RunState{}, fmt.Errorf("run %s %s is in state %s, which no run of Fylgja's reaches",
+			workflowID, info.GetExecution().GetRunId(), info.GetStatus())
+	}
+	return RunState{WorkflowID: workflowID, RunID: info.GetExecution().GetRunId(), State: state}, nil
+}
+
+// runStates are the workflow service's statuses as run.read names them. A continued-as-new
+// run is none: no workflow of Fylgja's continues as new.
+var runStates = map[enumspb.WorkflowExecutionStatus]string{
+	enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING:    RunRunning,
+	enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED:  RunCompleted,
+	enumspb.WORKFLOW_EXECUTION_STATUS_FAILED:     RunFailed,
+	enumspb.WORKFLOW_EXECUTION_STATUS_CANCELED:   RunCancelled,
+	enumspb.WORKFLOW_EXECUTION_STATUS_TERMINATED: RunTerminated,
+	enumspb.WORKFLOW_EXECUTION_STATUS_TIMED_OUT:  RunTimedOut,
 }
 
 // Cancel implements Service. No signal: cancellation is the workflow service's own

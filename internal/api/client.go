@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/happypathnetworking/fylgja/internal/findings"
 )
 
 // Client speaks the API to one server. It is built from the client's
@@ -249,7 +251,35 @@ func (c *Client) Do(ctx context.Context, op string, req Request, stream string, 
 	if onHeaders != nil {
 		onHeaders(resp.Header.Get(HeaderBuild))
 	}
-	return &Answer{address: c.address, body: resp.Body, r: bufio.NewReader(resp.Body), max: c.MaxFrameBytes}, nil
+	return &Answer{address: c.address, body: resp.Body, r: bufio.NewReader(resp.Body), max: c.MaxFrameBytes, op: op}, nil
+}
+
+// RunRead asks run.read for workflowID's run runID, the workflow's latest run when runID is
+// "" (020): the run frame with its state, the run's events so far and, once it has closed,
+// its document. A running run's answer ends after its events, where Next is io.EOF with no
+// document.
+func (c *Client) RunRead(ctx context.Context, workflowID, runID, render string, onHeaders func(build string)) (*Answer, error) {
+	return c.Do(ctx, findings.OpRunRead, runRequest(workflowID, runID, render), "", onHeaders)
+}
+
+// RunInterrupt asks run.interrupt to cancel workflowID's run runID, its latest when runID is
+// "" (020), as a stream's first interrupt does; its answer is the document alone.
+func (c *Client) RunInterrupt(ctx context.Context, workflowID, runID, render string, onHeaders func(build string)) (*Answer, error) {
+	return c.Do(ctx, findings.OpRunInterrupt, runRequest(workflowID, runID, render), "", onHeaders)
+}
+
+// runRequest is run.read's and run.interrupt's request: the workflow always, the run only
+// when one is named.
+func runRequest(workflowID, runID, render string) Request {
+	quoted := func(s string) json.RawMessage {
+		b, _ := json.Marshal(s) // a string always marshals
+		return b
+	}
+	args := map[string]json.RawMessage{"workflow_id": quoted(workflowID)}
+	if runID != "" {
+		args["run_id"] = quoted(runID)
+	}
+	return Request{Render: render, Args: args}
 }
 
 // errNotTheAPI is an answer from something at the address that is not the API.
@@ -334,10 +364,15 @@ type Answer struct {
 	r       *bufio.Reader
 	max     int64
 	done    bool
+	// op is the operation answering, and endsByEOF whether its answer may end without a
+	// document: run.read's, once its run frame said the run is running (020).
+	op        string
+	endsByEOF bool
 }
 
-// Next is the answer's next frame. After the document it is io.EOF. An answer that ends, or
-// whose connection fails, before its document is *Cut; a line longer than the client's
+// Next is the answer's next frame. After the document it is io.EOF, and so it is where a
+// run.read of a running run ends, after its events, at the end of a whole line (020). Any
+// other answer that ends, or whose connection fails, before its document is *Cut; a line longer than the client's
 // bound is *FrameTooLarge, and nothing more of the answer is read. A frame of a kind this
 // build does not know is returned with no kind, for the caller to pass over. The document
 // frame carries the renderings the request asked for, as the server wrote them: its text
@@ -367,6 +402,9 @@ func (a *Answer) Next() (Frame, error) {
 			a.done = true
 			_ = a.body.Close()
 		}
+		if f.Kind() == KindRun && a.op == findings.OpRunRead && f.Run.State == StateRunning {
+			a.endsByEOF = true
+		}
 		return f, nil
 	}
 }
@@ -389,6 +427,8 @@ func (a *Answer) line() ([]byte, error) {
 			return line[:len(line)-1], nil
 		case errors.Is(err, bufio.ErrBufferFull):
 			continue
+		case errors.Is(err, io.EOF) && len(line) == 0 && a.endsByEOF:
+			return nil, io.EOF
 		case errors.Is(err, io.EOF):
 			return nil, &Cut{Address: a.address, Cause: io.ErrUnexpectedEOF}
 		default:

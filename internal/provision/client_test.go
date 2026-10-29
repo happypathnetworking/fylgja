@@ -1596,3 +1596,114 @@ func TestInFlightNamesARehearsalAndItsChild(t *testing.T) {
 		})
 	}
 }
+
+// Describe names the run an identity names and its state in run.read's words, the
+// workflow's latest run when the request names none; an identity the service holds no run
+// under, NotFound or a run id of no run's shape (InvalidArgument, "Invalid RunId."), is an
+// *UnknownRunError naming it, and any other failure the service not answering (020).
+func TestDescribeNamesTheRunAndItsState(t *testing.T) {
+	described := func(status enumspb.WorkflowExecutionStatus, runID string) *workflowservice.DescribeWorkflowExecutionResponse {
+		return &workflowservice.DescribeWorkflowExecutionResponse{WorkflowExecutionInfo: &workflowpb.WorkflowExecutionInfo{
+			Execution: &commonpb.WorkflowExecution{WorkflowId: WorkflowStep, RunId: runID}, Status: status}}
+	}
+	for status, want := range map[enumspb.WorkflowExecutionStatus]string{
+		enumspb.WORKFLOW_EXECUTION_STATUS_RUNNING:    RunRunning,
+		enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED:  RunCompleted,
+		enumspb.WORKFLOW_EXECUTION_STATUS_FAILED:     RunFailed,
+		enumspb.WORKFLOW_EXECUTION_STATUS_CANCELED:   RunCancelled,
+		enumspb.WORKFLOW_EXECUTION_STATUS_TERMINATED: RunTerminated,
+		enumspb.WORKFLOW_EXECUTION_STATUS_TIMED_OUT:  RunTimedOut,
+	} {
+		mc := &mocks.Client{}
+		mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowStep, "r-s").Return(described(status, "r-s"), nil)
+		got, err := (&Client{Client: mc}).Describe(context.Background(), WorkflowStep, "r-s")
+		if err != nil || got != (RunState{WorkflowID: WorkflowStep, RunID: "r-s", State: want}) {
+			t.Errorf("%s: Describe = %+v, %v; want state %s", status, got, err, want)
+		}
+		if got.Running() != (want == RunRunning) {
+			t.Errorf("%s: Running() = %v", status, got.Running())
+		}
+	}
+
+	t.Run("the latest run", func(t *testing.T) {
+		mc := &mocks.Client{}
+		mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowStep, "").
+			Return(described(enumspb.WORKFLOW_EXECUTION_STATUS_COMPLETED, "r-latest"), nil)
+		got, err := (&Client{Client: mc}).Describe(context.Background(), WorkflowStep, "")
+		if err != nil || got.RunID != "r-latest" {
+			t.Errorf("Describe with no run = %+v, %v; want the latest run, r-latest", got, err)
+		}
+	})
+
+	for name, c := range map[string]struct {
+		runID string
+		err   error
+		says  string
+	}{
+		"not found":   {"r-gone", serviceerror.NewNotFound("workflow execution not found"), "fylgja-step r-gone"},
+		"no run's id": {"not-a-run", serviceerror.NewInvalidArgument("Invalid RunId."), "fylgja-step not-a-run"},
+		"never run":   {"", serviceerror.NewNotFound("workflow not found for ID: fylgja-step"), "fylgja-step"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			mc := &mocks.Client{}
+			mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowStep, c.runID).Return(nil, c.err)
+			_, err := (&Client{Client: mc}).Describe(context.Background(), WorkflowStep, c.runID)
+			var unknown *UnknownRunError
+			if !errors.As(err, &unknown) || unknown.Identity() != c.says ||
+				err.Error() != "the workflow service holds no run "+c.says {
+				t.Errorf("Describe = %v, want an *UnknownRunError naming %q", err, c.says)
+			}
+		})
+	}
+
+	t.Run("unreachable", func(t *testing.T) {
+		mc := &mocks.Client{}
+		mc.On("DescribeWorkflowExecution", mock.Anything, WorkflowStep, "r-s").
+			Return(nil, serviceerror.NewUnavailable("connection refused"))
+		_, err := (&Client{Client: mc, Address: "localhost:7233"}).Describe(context.Background(), WorkflowStep, "r-s")
+		if _, ok := AsStartError(err); !ok {
+			t.Errorf("Describe = %v, want the service unreachable", err)
+		}
+	})
+}
+
+// History reads the history once without waiting, Follow's events over what it holds so
+// far; InputOfStep reads the step's input from the history's first event, as the recorded
+// step-diverged run was started with it (020).
+func TestHistoryAndTheStepsInputAreReadByIdentity(t *testing.T) {
+	mc := &mocks.Client{}
+	history(mc, WorkflowProvision, "r-p",
+		scheduledEvent(t, 5, wire.ActCheckHost), completedEvent(5),
+		scheduledEvent(t, 7, wire.ActDeployLab))
+	var steps []string
+	if err := (&Client{Client: mc}).History(context.Background(), WorkflowProvision, "r-p", func(e Event) {
+		steps = append(steps, e.Step+" "+strconv.FormatBool(e.End))
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if want := []string{"host check false", "host check true", "deploy false"}; !slices.Equal(steps, want) {
+		t.Errorf("History's events = %q, want %q", steps, want)
+	}
+	mc.AssertNotCalled(t, "GetWorkflowHistory", mock.Anything, mock.Anything, mock.Anything, true, mock.Anything)
+
+	raw, err := os.Open(filepath.Join("testdata", "step-diverged.history.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = raw.Close() }()
+	h, err := client.HistoryFromJSON(raw, client.HistoryJSONOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var want StepInput
+	if err := converter.GetDefaultDataConverter().FromPayloads(
+		h.GetEvents()[0].GetWorkflowExecutionStartedEventAttributes().GetInput(), &want); err != nil {
+		t.Fatal(err)
+	}
+	mc = &mocks.Client{}
+	history(mc, WorkflowStep, "r-s", h.GetEvents()...)
+	got, err := (&Client{Client: mc}).InputOfStep(context.Background(), "r-s")
+	if err != nil || !reflect.DeepEqual(got, want) || got.To.BundleID == "" {
+		t.Errorf("InputOfStep = %+v, %v; want the recorded input %+v", got, err, want)
+	}
+}

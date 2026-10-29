@@ -661,7 +661,11 @@ Rewritten whole at each release's close, never appended to.
     counts and hash, its probe section filled from case 5 (T058). `probes/ping.yaml`'s
     `acquisition` comment, also found, was T040's (`3f6b82e`). Its live task (T056) ran
     the boot half on a probed twin by hand, then in tier 3's case 5, which now runs it:
-    `E2E-OK` in 2,171.8 s on 2026-10-29, case 5's boot half 10.0 s.
+    `E2E-OK` in 2,171.8 s on 2026-10-29, case 5's boot half 10.0 s. The pass's two others
+    the operator settled by amending the artifacts (`d3525cf`): a twin an earlier build left
+    is destroyed and created again, never stepped from (T055, `spec.md`'s edge case), and
+    `plan.md`'s Structure Decision names the registry's `gopkg.in/yaml.v3`, `jsonschema/v6`
+    and embedded `probes/` imports (T059).
 - **Next**: F-025 the NetBox reader, Release 0.3's fifth and last spec; it has no brief
   yet.
 - **Open, the operator's**: 016's command log (`make command-log`, once this session is

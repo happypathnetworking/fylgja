@@ -34,6 +34,10 @@ type readFlags struct {
 	// stands, and an explicit empty one is the server's to refuse (017).
 	scope      string
 	scopeGiven bool
+	// probes is --probes as given (016): the path of a probe declaration the client reads and
+	// sends. probesGiven is whether it was given at all.
+	probes      string
+	probesGiven bool
 }
 
 // fromStage is whether the read names a stage: --stage given, whatever its value, or a
@@ -58,6 +62,7 @@ func newIntentReadCmd(opts *options) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			f.stageGiven = cmd.Flags().Changed("stage")
 			f.scopeGiven = cmd.Flags().Changed("scope")
+			f.probesGiven = cmd.Flags().Changed("probes")
 			return runRead(cmd.Context(), opts, f)
 		},
 	}
@@ -68,6 +73,7 @@ func newIntentReadCmd(opts *options) *cobra.Command {
 		"stage to read, <branch>/<label>: the pinned branch and at a proposed change's stage resolves to")
 	cmd.Flags().StringVar(&f.out, "out", "", "path of the snapshot file to write (required)")
 	cmd.Flags().StringVar(&f.scope, "scope", "", scopeUsage)
+	cmd.Flags().StringVar(&f.probes, "probes", "", probesUsage)
 	return cmd
 }
 
@@ -84,7 +90,13 @@ func runRead(ctx context.Context, opts *options, f *readFlags) error {
 	}
 	a.string("out", f.out)
 	a.scope(f.scope, f.scopeGiven)
-	return send(ctx, opts, findings.OpIntentRead, a, nil, handlers{
+	a.probes(f.probes, f.probesGiven)
+	sent, err := probesSent(findings.OpIntentRead, &findings.Subject{Branch: f.branch, At: f.at, Out: f.out}, f.probes,
+		f.probesGiven)
+	if err != nil {
+		return err
+	}
+	return send(ctx, opts, findings.OpIntentRead, a, sent, handlers{
 		files: func(files []api.File) error {
 			if len(files) != 1 {
 				return fmt.Errorf("the answer carries %d files where intent read sends the snapshot alone", len(files))

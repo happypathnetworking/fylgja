@@ -33,6 +33,10 @@ type createFlags struct {
 	// file the client reads and sends. snapshotGiven is whether it was given at all.
 	snapshot      string
 	snapshotGiven bool
+	// probes is --probes as given (016): the path of a probe declaration the client reads and
+	// sends. probesGiven is whether it was given at all.
+	probes      string
+	probesGiven bool
 }
 
 func newTwinCreateCmd(opts *options) *cobra.Command {
@@ -55,6 +59,7 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 			f.stageGiven = cmd.Flags().Changed("stage")
 			f.scopeGiven = cmd.Flags().Changed("scope")
 			f.snapshotGiven = cmd.Flags().Changed("snapshot")
+			f.probesGiven = cmd.Flags().Changed("probes")
 			return runCreate(cmd.Context(), opts, f)
 		},
 	}
@@ -70,6 +75,7 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 	cmd.Flags().StringVar(&f.snapshot, "snapshot", "",
 		"snapshot to build the twin from, <id|file>: a snapshot id (64 lowercase hex characters) the server's store holds, "+
 			"or a snapshot file, which is read here and sent; no branch is read")
+	cmd.Flags().StringVar(&f.probes, "probes", "", probesUsage+"; refused beside --snapshot, which carries its own")
 	return cmd
 }
 
@@ -91,7 +97,9 @@ func (f *createFlags) fromSnapshot() bool {
 // before any connection (R-07). The file is read only when no flag beside --snapshot would
 // be refused by the snapshot's guards, so those refusals come first, whatever the file, as
 // twin compile holds its read back for the server's; an explicit empty --snapshot= with
-// none beside it names no file, and is the client's own refusal.
+// none beside it names no file, and is the client's own refusal. A --probes is sent as the
+// request's one file in the same way (016); beside --snapshot it is a flag the guards refuse,
+// sent with no file.
 func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	a := given{}
 	a.string("branch", f.branch)
@@ -101,16 +109,19 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 	}
 	a.bool("dry_run", f.dryRun)
 	a.scope(f.scope, f.scopeGiven)
+	a.probes(f.probes, f.probesGiven)
+	subject := &findings.Subject{Branch: f.branch, At: f.at, Snapshot: f.snapshot}
 	var files []api.File
+	var err error
 	if f.fromSnapshot() {
 		a["snapshot"] = f.snapshot
 		if !f.snapshotConflicts() {
-			var err error
-			subject := &findings.Subject{Branch: f.branch, At: f.at, Snapshot: f.snapshot}
 			if files, err = snapshotSent(findings.OpTwinCreate, subject, f.snapshot); err != nil {
 				return err
 			}
 		}
+	} else if files, err = probesSent(findings.OpTwinCreate, subject, f.probes, f.probesGiven); err != nil {
+		return err
 	}
 	return send(ctx, opts, findings.OpTwinCreate, a, files, handlers{})
 }
@@ -135,10 +146,10 @@ func snapshotSent(op string, subject *findings.Subject, arg string) ([]api.File,
 }
 
 // snapshotConflicts is whether a flag is given beside --snapshot that the server's snapshot
-// guards refuse: --branch, --stage, --at or --scope, as the server's snapshotGuards reads
-// them. The request then carries no file, and the guard answers.
+// guards refuse: --branch, --stage, --at, --scope or --probes (016), as the server's
+// snapshotGuards reads them. The request then carries no file, and the guard answers.
 func (f *createFlags) snapshotConflicts() bool {
-	return f.branch != "" || f.fromStage() || f.at != "" || f.scopeGiven
+	return f.branch != "" || f.fromStage() || f.at != "" || f.scopeGiven || f.probesGiven
 }
 
 // isSnapshotID is whether --snapshot's value is a snapshot id, 64 lowercase hex characters,

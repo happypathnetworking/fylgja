@@ -31,6 +31,10 @@ type stageFlags struct {
 	// stands, and an explicit empty one is the server's to refuse (017).
 	scope      string
 	scopeGiven bool
+	// probes is --probes as given (016), on stage plan alone: the path of a probe declaration
+	// the client reads and sends. probesGiven is whether it was given at all.
+	probes      string
+	probesGiven bool
 }
 
 func newStageListCmd(opts *options) *cobra.Command {
@@ -77,22 +81,25 @@ func newStagePlanCmd(opts *options) *cobra.Command {
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			f.branchGiven = cmd.Flags().Changed("branch")
 			f.scopeGiven = cmd.Flags().Changed("scope")
+			f.probesGiven = cmd.Flags().Changed("probes")
 			return runStagePlan(cmd.Context(), opts, f)
 		},
 	}
 	cmd.Flags().StringVar(&f.branch, "branch", "", "the source branch of the proposed change to plan (required)")
 	cmd.Flags().StringVar(&f.scope, "scope", "", scopeUsage)
+	cmd.Flags().StringVar(&f.probes, "probes", "", probesUsage+"; every stage carries the one list")
 	return cmd
 }
 
-// stageArgs are --branch and --scope as given: each present whenever its flag was, an empty
-// one included.
+// stageArgs are --branch, --scope and, on stage plan, --probes as given: each present
+// whenever its flag was, an empty one included.
 func stageArgs(f *stageFlags) given {
 	a := given{}
 	if f.branchGiven {
 		a["branch"] = f.branch
 	}
 	a.scope(f.scope, f.scopeGiven)
+	a.probes(f.probes, f.probesGiven)
 	return a
 }
 
@@ -104,7 +111,12 @@ func runStageList(ctx context.Context, opts *options, f *stageFlags) error {
 // runStagePlan is stage plan as one request: the server resolves and reads each stage of
 // the proposed change, takes and files its snapshot, compiles it and files its bundle, and
 // prints each as it is known. --branch left out is the
-// server's to refuse, before anything is dialled.
+// server's to refuse, before anything is dialled. A --probes file is read here and sent as
+// the request's one file (016).
 func runStagePlan(ctx context.Context, opts *options, f *stageFlags) error {
-	return send(ctx, opts, findings.OpStagePlan, stageArgs(f), nil, handlers{})
+	files, err := probesSent(findings.OpStagePlan, nil, f.probes, f.probesGiven)
+	if err != nil {
+		return err
+	}
+	return send(ctx, opts, findings.OpStagePlan, stageArgs(f), files, handlers{})
 }

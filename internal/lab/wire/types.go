@@ -34,6 +34,11 @@ const (
 	// verify's waiting form run on the lab host, which writes how the wait ended into the
 	// record.
 	ActVerifyTwin = "VerifyTwin"
+
+	// 016: the step's flows, started in each host of a probe both bundles carry after the
+	// stage and read after the wait, under the step's version marker flows.
+	ActStartFlows = "StartFlows"
+	ActReadFlows  = "ReadFlows"
 )
 
 // ProvisionWorkflowID is the provisioning workflow's fixed identity (Constitution VIII).
@@ -830,6 +835,82 @@ type StepRecord struct {
 	// version 5 writes an explicit null, as step does, and a version 4 record, which has
 	// no key, reads as nil.
 	Wait *StepWait `json:"wait"`
+	// Loss is what the step's flows lost, written by ReadFlows after the wait as VerifyTwin
+	// writes Wait, or nil until it has (016). No omitempty: version 11 writes an explicit
+	// null, and a record of 10 or earlier, which has no key, reads as nil.
+	Loss *Loss `json:"loss"`
+}
+
+// How a probe's flow ended, as a step's loss names it (016, research R-13): measured, read
+// after the wait; not_started, its start failed (flow.start.failed); not_read, its read
+// failed (flow.read.failed); interrupted, read on a step that failed or was cancelled after
+// its stage. A flow's start answers started or not_started.
+const (
+	FlowStarted     = "started"
+	FlowMeasured    = "measured"
+	FlowNotStarted  = "not_started"
+	FlowNotRead     = "not_read"
+	FlowInterrupted = "interrupted"
+)
+
+// LossBasisContainer is a loss's one basis: the figures are the containers', which forward
+// in software and keep their own timing, never a hardware forwarder's.
+const LossBasisContainer = "container"
+
+// FlowPlan is one host's flow in a step: the probe, the containers it runs from and to, the
+// far host's address, and its package's flow with the command rendered for this host. The
+// server builds it from the two manifests for every probe both bundles carry.
+type FlowPlan struct {
+	Probe string   `json:"probe"`
+	From  string   `json:"from"` // the container the flow runs in
+	To    string   `json:"to"`   // the far host's container
+	Far   string   `json:"far"`  // the far host's address, without its prefix
+	Flow  FlowSpec `json:"flow"`
+}
+
+// FlowsInput is the staged twin and the flows to start or read in it.
+type FlowsInput struct {
+	TwinDir string     `json:"twin_dir"`
+	Flows   []FlowPlan `json:"flows"`
+}
+
+// FlowsResult is each flow's outcome as StartFlows answers it.
+type FlowsResult struct {
+	Flows []FlowOutcome `json:"flows"`
+}
+
+// FlowOutcome is one flow's start: started, or not_started with the rule and the message
+// of why. No content.
+type FlowOutcome struct {
+	Probe   string `json:"probe"`
+	Outcome string `json:"outcome"`
+	Rule    string `json:"rule,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// Loss is a step's flows as twin.json 11's step.loss keeps them (contracts/step.schema.json,
+// $defs/loss): the basis, each probe's figures, and the probes the target adds or drops,
+// which no flow measured across the step.
+type Loss struct {
+	Basis   string      `json:"basis"`
+	Probes  []ProbeLoss `json:"probes"`
+	Added   []string    `json:"added"`
+	Dropped []string    `json:"dropped"`
+}
+
+// ProbeLoss is one probe's flow across a step: its containers, how it ended, the replies
+// sent and lost and the longest run of unanswered ones in seconds, and the rule and message
+// of a flow not started or not read.
+type ProbeLoss struct {
+	Probe       string  `json:"probe"`
+	From        string  `json:"from"`
+	To          string  `json:"to"`
+	Outcome     string  `json:"outcome"`
+	Sent        int     `json:"sent"`
+	Lost        int     `json:"lost"`
+	LongestGapS float64 `json:"longest_gap_s"`
+	Rule        string  `json:"rule,omitempty"`
+	Message     string  `json:"message,omitempty"`
 }
 
 // StepReconcile is containerlab's plan as the record keeps it, with each touched node's

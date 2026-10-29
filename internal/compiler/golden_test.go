@@ -69,7 +69,7 @@ func lossyRegistry(t *testing.T) *psp.Registry {
 
 func compileFixtureWith(t *testing.T, path string, reg *psp.Registry) map[string][]byte {
 	t.Helper()
-	files, list := Compile(loadFixture(t, path), reg)
+	files, list := Compile(loadFixture(t, path), nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("%s was rejected by the compiler: %v", path, list)
 	}

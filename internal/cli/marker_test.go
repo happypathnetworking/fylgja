@@ -205,7 +205,7 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, compiledID, list := stage.Compile(read, reg)
+	files, compiledID, list := stage.Compile(read, nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("the fixture does not compile: %v", list)
 	}

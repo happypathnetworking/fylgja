@@ -21,6 +21,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/snapshot"
 	"github.com/happypathnetworking/fylgja/internal/stage"
@@ -187,10 +188,10 @@ func filing(t *testing.T) (Pipeline, map[string]*ctm.CTM) {
 		}
 		filed[id] = compiled[id]
 		return nil, err
-	})
+	}, nil)
 	compile := p.Compile
-	p.Compile = func(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, string, findings.List) {
-		files, id, list := compile(c, reg)
+	p.Compile = func(c *ctm.CTM, decls []probe.Probe, reg *psp.Registry, probes *probe.Registry) (map[string][]byte, string, findings.List) {
+		files, id, list := compile(c, decls, reg, probes)
 		compiled[id] = c
 		return files, id, list
 	}
@@ -561,7 +562,7 @@ func TestStagesListAndPlan(t *testing.T) {
 	if !bytes.Equal(a, b) {
 		t.Errorf("the CTM %s plans from differs from --branch %s --at %s's but for observed_at", seeded.Ref, name, seededAt)
 	}
-	if _, byAtID, list := stage.Compile(byAt, registry(t)); list.Rejected() || byAtID != seeded.BundleID() {
+	if _, byAtID, list := stage.Compile(byAt, nil, registry(t), nil); list.Rejected() || byAtID != seeded.BundleID() {
 		t.Errorf("--branch %s --at %s compiles to %s (%v); %s planned to %s", name, seededAt, byAtID, list, seeded.Ref, seeded.BundleID())
 	}
 	t.Logf("%s: at %s (written), bundle_id %s", seeded.Ref, seededAt, seeded.BundleID())

@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"reflect"
+	"slices"
 	"testing"
 	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
@@ -105,7 +107,7 @@ func TestTiedFidelityRowsIgnoreInputOrder(t *testing.T) {
 		t.Helper()
 		c := loadFixture(t, "testdata/ctm/three-node.json")
 		c.Envelope.Fidelity = append(c.Envelope.Fidelity, rows...)
-		files, list := Compile(c, reg)
+		files, list := Compile(c, nil, reg, nil)
 		if list.Rejected() {
 			t.Fatalf("refused: %v", list)
 		}
@@ -144,4 +146,20 @@ func TestCompileIsFast(t *testing.T) {
 	if elapsed := time.Since(start); elapsed > budget {
 		t.Errorf("compiling the three-node fixture took %s, budget is %s", elapsed, budget)
 	}
+}
+
+// A probed snapshot compiles to the same bytes whatever order its devices, its interfaces
+// and its probes arrive in (016).
+func TestAProbedCompileIsDeterministic(t *testing.T) {
+	decls := append(declared(t, "n1-loop"), declared(t, "n2-loop")...)
+	first := compileProbed(t, probedThreeNode(t), decls)
+
+	shuffled := probedThreeNode(t)
+	slices.Reverse(shuffled.Devices)
+	for i := range shuffled.Devices {
+		slices.Reverse(shuffled.Devices[i].Interfaces)
+	}
+	slices.Reverse(shuffled.Links)
+	second := compileProbed(t, shuffled, []probe.Probe{decls[1], decls[0]})
+	sameBundle(t, "a shuffled probed snapshot", first.files, second.files)
 }

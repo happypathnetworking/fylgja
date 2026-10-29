@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/validate"
 )
@@ -61,8 +63,8 @@ func refusalsOf(list findings.List) []refusal {
 func bothCallers(t *testing.T, load func() *ctm.CTM) []refusal {
 	t.Helper()
 	reg := registry(t)
-	read := validate.Validate(load(), reg)
-	files, compiled := compiler.Compile(load(), reg)
+	read := validate.Validate(load(), nil, reg, nil)
+	files, compiled := compiler.Compile(load(), nil, reg, nil)
 	if files != nil {
 		t.Error("the compiler built a bundle beside a refusal")
 	}
@@ -258,8 +260,8 @@ func TestUnflaggedManagementNameIsRefusedAlike(t *testing.T) {
 func bothCallersClean(t *testing.T, load func() *ctm.CTM) []refusal {
 	t.Helper()
 	reg := registry(t)
-	read := validate.Validate(load(), reg)
-	files, compiled := compiler.Compile(load(), reg)
+	read := validate.Validate(load(), nil, reg, nil)
+	files, compiled := compiler.Compile(load(), nil, reg, nil)
 	if read.Rejected() || compiled.Rejected() {
 		t.Fatalf("intent was refused:\n read    %+v\n compile %+v", read, compiled)
 	}
@@ -341,5 +343,112 @@ func TestArtifactOmittedWarningCarriesTheOmissionsReason(t *testing.T) {
 	}
 	if len(got) != 5 {
 		t.Errorf("%d warnings, want the fixture's four and the omitted one:\n%+v", len(got), got)
+	}
+}
+
+// probedCTM is the three-node fixture with ethernet-1/10 and ethernet-1/11 on each device,
+// uncabled, the ports a probe takes (research R-19).
+func probedCTM(t *testing.T) *ctm.CTM {
+	t.Helper()
+	c := loadCTM(t, "testdata", "ctm", "three-node.json")
+	for i := range c.Devices {
+		c.Devices[i].Interfaces = append(c.Devices[i].Interfaces, ctm.Interface{Name: "ethernet-1/10"}, ctm.Interface{Name: "ethernet-1/11"})
+	}
+	return c
+}
+
+// probeAt is a probe of the two endpoints given, each "device:interface".
+func probeAt(name, format, a, b string) probe.Probe {
+	p := probe.Probe{Name: name, Format: format}
+	for j, end := range []string{a, b} {
+		device, iface, _ := strings.Cut(end, ":")
+		p.Endpoints[j] = probe.Endpoint{Device: device, Interface: iface,
+			Address: fmt.Sprintf("10.8.%d.2/24", j+1), Gateway: fmt.Sprintf("10.8.%d.1", j+1)}
+	}
+	return p
+}
+
+// Each placement refusal is worded alike by validation and the compiler (016, T012): one
+// function, PlaceProbes, words each for both, and the compiler builds nothing.
+func TestPlacementRefusalsAreWordedAlike(t *testing.T) {
+	packages, err := probe.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	const takes = "a probe takes an uncabled port that is not mgmt_only"
+	taken := probeAt("p", "ping", "n1:ethernet-1/10", "n1:ethernet-1/11")
+	for _, tc := range []struct {
+		name   string
+		decls  []probe.Probe
+		rename string // a device renamed, for a host's name to collide with
+		want   refusal
+	}{
+		{"device", []probe.Probe{probeAt("p", "ping", "n9:ethernet-1/10", "n1:ethernet-1/11")}, "",
+			refusal{rule: findings.RuleProbeDeviceUnknown, object: "p/a",
+				message: `device "n9" is not in the snapshot; a probe's endpoint names a device of the intent`}},
+		{"interface", []probe.Probe{probeAt("p", "ping", "n1:ethernet-1/10", "n1:ethernet-1/99")}, "",
+			refusal{rule: findings.RuleProbeInterfaceUnknown, object: "p/b",
+				message: `device n1 has no interface "ethernet-1/99" in the snapshot`}},
+		{"cabled", []probe.Probe{probeAt("p", "ping", "n1:ethernet-1/10", "n1:ethernet-1/1")}, "",
+			refusal{rule: findings.RuleProbeInterfaceCabled, object: "p/b",
+				message: "interface n1:ethernet-1/1 is cabled (n1:ethernet-1/1|n2:ethernet-1/1); " + takes}},
+		{"mgmt_only", []probe.Probe{probeAt("p", "ping", "n1:mgmt0", "n1:ethernet-1/11")}, "",
+			refusal{rule: findings.RuleProbeInterfaceMgmtOnly, object: "p/a",
+				message: "interface n1:mgmt0 is mgmt_only; " + takes}},
+		{"taken", []probe.Probe{taken, probeAt("q", "ping", "n1:ethernet-1/11", "n2:ethernet-1/10")}, "",
+			refusal{rule: findings.RuleProbePortTaken, object: "q/a",
+				message: "interface n1:ethernet-1/11 is taken by probe p endpoint b; a port is one probe's"}},
+		{"format", []probe.Probe{probeAt("p", "twamp", "n1:ethernet-1/10", "n1:ethernet-1/11")}, "",
+			refusal{rule: findings.RuleProbeFormatUnknown, object: "p",
+				message: `format "twamp": no probe package declares it; the formats loaded are ping`}},
+		{"collision", []probe.Probe{probeAt("n3", "ping", "n1:ethernet-1/10", "n1:ethernet-1/11")}, "n3-b",
+			refusal{rule: findings.RuleProbeHostCollision, object: "n3/b",
+				message: "host n3-b, this endpoint's node, is the name of a device or of another host; a node name is one node's"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			load := func() *ctm.CTM {
+				c := probedCTM(t)
+				if tc.rename != "" {
+					// n2 renamed, with every reference to it.
+					b, err := ctm.Marshal(c)
+					if err != nil {
+						t.Fatal(err)
+					}
+					c, err = ctm.Unmarshal([]byte(strings.ReplaceAll(string(b), `"n2`, `"`+tc.rename)))
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				return c
+			}
+			reg := registry(t)
+			read := validate.Validate(load(), tc.decls, reg, packages)
+			files, compiled := compiler.Compile(load(), tc.decls, reg, packages)
+			if files != nil {
+				t.Error("the compiler built a bundle beside a refusal")
+			}
+			r, c := refusalsOf(read), refusalsOf(compiled)
+			if !slices.Equal(r, c) {
+				t.Errorf("validation and the compiler differ:\n read    %+v\n compile %+v", r, c)
+			}
+			wantRefusals(t, r, tc.want)
+		})
+	}
+}
+
+// A probed intent nothing refuses is clean to both callers, and the compiler builds it:
+// validation holds the placed CTM as the compiler surveys it.
+func TestAPlacedProbeIsCleanToBothCallers(t *testing.T) {
+	packages, err := probe.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	decls := []probe.Probe{probeAt("p", "ping", "n1:ethernet-1/10", "n2:ethernet-1/11")}
+	reg := registry(t)
+	if read := validate.Validate(probedCTM(t), decls, reg, packages); read.Rejected() {
+		t.Errorf("validation refused a placeable probe: %v", read)
+	}
+	if files, compiled := compiler.Compile(probedCTM(t), decls, reg, packages); compiled.Rejected() || files == nil {
+		t.Errorf("the compiler refused a placeable probe: %v", compiled)
 	}
 }

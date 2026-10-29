@@ -131,15 +131,16 @@ func stagePush(t *testing.T, a *Activities, b stagedBundle) string {
 	}
 	sum := md5.Sum([]byte(b.artifact))
 	checksum := hex.EncodeToString(sum[:])
+	platform := "testos"
 	manifest := compiler.Manifest{
 		BundleVersion: "3",
 		Nodes: []compiler.ManifestNode{{
-			Name: "n1", Platform: "testos", PSP: compiler.ManifestPSP{ID: "testos", Source: "embedded"},
+			Name: "n1", Platform: &platform, PSP: &compiler.ManifestPSP{ID: "testos", Source: "embedded"},
 			Artifact: &compiler.ManifestArtifact{
 				Name: "device-config", ContentType: "text/plain", Checksum: checksum,
 				Size: len(b.artifact), File: "configs/n1.device-config",
 			},
-			Bootstrap: compiler.ManifestBootstrap{File: "configs/n1.cli", Via: b.via},
+			Bootstrap: &compiler.ManifestBootstrap{File: "configs/n1.cli", Via: b.via},
 		}},
 	}
 	raw, err := json.Marshal(manifest)

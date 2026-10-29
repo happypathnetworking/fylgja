@@ -11,6 +11,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/stages"
 	"github.com/happypathnetworking/fylgja/internal/step"
@@ -313,6 +314,10 @@ func planStages(ctx context.Context, opts *options, op string, subject *findings
 	if err != nil {
 		return plannedStages{}, loadFailureAt(op, subject, findings.StepRead, err)
 	}
+	packages, err := opts.probes()
+	if err != nil {
+		return plannedStages{}, loadFailureAt(op, subject, findings.StepRead, err)
+	}
 	paths, err := opts.paths()
 	if err != nil {
 		return plannedStages{}, failAt(op, subject, findings.StepCompile, op, "%v", err)
@@ -323,7 +328,7 @@ func planStages(ctx context.Context, opts *options, op string, subject *findings
 	}
 
 	now := time.Now().UTC()
-	res, err := stages.Plan(ctx, reader, newIntentStamper(), branch, scope, reg, stagePipeline(paths), now, onChange, onStage, onStep)
+	res, err := stages.Plan(ctx, reader, newIntentStamper(), branch, scope, reg, stagePipeline(paths, packages), now, onChange, onStage, onStep)
 	if err != nil {
 		return plannedStages{}, failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
@@ -334,8 +339,8 @@ func planStages(ctx context.Context, opts *options, op string, subject *findings
 // as its snapshot and filed by takeSnapshot, as a create takes its read, its refusals at
 // compile (018), and each bundle filed as the dry run files it. stage plan, twin step and
 // twin rehearse build every stage through it, so a stage's ids are the same whichever
-// command built it (D-011).
-func stagePipeline(paths lab.Paths) stages.Pipeline {
+// command built it (D-011). packages is the probe registry every stage compiles with (016).
+func stagePipeline(paths lab.Paths, packages *probe.Registry) stages.Pipeline {
 	take := func(ctx context.Context, c *ctm.CTM) (string, findings.List, error) {
 		s, _, list, err := takeSnapshot(ctx, paths, findings.StepCompile, c)
 		if s == nil {
@@ -347,7 +352,7 @@ func stagePipeline(paths lab.Paths) stages.Pipeline {
 		_, list, err := fileCompiled(ctx, paths.Bundles, files, id)
 		return list, err
 	}
-	return stages.NewPipeline(take, file)
+	return stages.NewPipeline(take, file, packages)
 }
 
 // printPlanned prints one planned stage: its resolution, snapshot_id, bundle_id and what its

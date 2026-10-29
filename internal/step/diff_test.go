@@ -156,7 +156,8 @@ func TestDiffNamesEachEdit(t *testing.T) {
 				{
 					name: "a platform changed",
 					b: edited(t, a, idB, func(m *compiler.Manifest, _ map[string][]byte) {
-						m.Nodes[0].Platform = "other"
+						other := "other"
+						m.Nodes[0].Platform = &other
 					}),
 					want: Step{From: idA, To: idB, NodesChanged: []NodeChange{{Node: first.Name, Reasons: []string{ReasonPlatform}}}},
 				},

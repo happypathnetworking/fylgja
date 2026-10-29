@@ -137,7 +137,7 @@ func TestUnmappableLinkedIsARejectionNotAnOmission(t *testing.T) {
 				t.Errorf("a linked unmappable interface was also omitted: %+v", s.Omissions)
 			}
 
-			files, list := Compile(c, reg)
+			files, list := Compile(c, nil, reg, nil)
 			if files != nil {
 				t.Error("the compiler built a bundle around a linked unmappable interface")
 			}
@@ -160,7 +160,7 @@ func TestNoRuleUnlinkedIsARefusal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, list := Compile(c, reg)
+	files, list := Compile(c, nil, reg, nil)
 	if files != nil {
 		t.Error("the compiler built a bundle around a name no rule matches")
 	}
@@ -333,7 +333,7 @@ func TestManifestRecordsOverriddenSupportPackage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, list := Compile(c, reg)
+	files, list := Compile(c, nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("the fixture was rejected: %v", list)
 	}

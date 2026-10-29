@@ -243,14 +243,31 @@ func nodeReasons(from, to *side, name string) []string {
 	if !sameMapping(from.mapping[name], to.mapping[name]) {
 		reasons = append(reasons, ReasonMapping)
 	}
-	if was.Platform != now.Platform {
+	if valueOf(was.Platform) != valueOf(now.Platform) {
 		reasons = append(reasons, ReasonPlatform)
 	}
-	if was.PSP.ID != now.PSP.ID {
+	if pspOf(was) != pspOf(now) {
 		reasons = append(reasons, ReasonPSP)
 	}
 	sort.Strings(reasons)
 	return reasons
+}
+
+// valueOf is a manifest's nullable string, "" when null: from bundle "6" a host's platform is
+// null (016).
+func valueOf(s *string) string {
+	if s == nil {
+		return ""
+	}
+	return *s
+}
+
+// pspOf is a node's support package id, "" for a host, whose psp is null (016).
+func pspOf(n compiler.ManifestNode) string {
+	if n.PSP == nil {
+		return ""
+	}
+	return n.PSP.ID
 }
 
 // sameMapping is whether a node's interfaces map alike on both sides: the same interfaces,

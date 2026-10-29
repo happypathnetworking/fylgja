@@ -215,9 +215,10 @@ func TestVerifyRefusals(t *testing.T) {
 	// configuration file at all; a "2" carries one but nothing that says how each node's
 	// bootstrap reaches it, so its push nodes would boot with containerlab's default
 	// alone; a "3" says nothing of which ports intent disables, so verify would assert
-	// them; a "4" was read through the generics and names no scope or mapping. None is
-	// deployable by this build, and none may fail late.
-	for _, have := range []string{"1", "2", "3", "4"} {
+	// them; a "4" was read through the generics and names no scope or mapping; a "5" cannot
+	// say which of its nodes is a synthesized host. None is deployable by this build, and
+	// none may fail late.
+	for _, have := range []string{"1", "2", "3", "4", "5"} {
 		t.Run("a bundle from format "+have, func(t *testing.T) {
 			dir := copyGolden(t, "b")
 			path := filepath.Join(dir, "manifest.json")
@@ -246,9 +247,9 @@ func TestVerifyRefusals(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		mustWrite(t, path, strings.Replace(string(b), `"bundle_version": "5"`, `"bundle_version": "3"`, 1))
+		mustWrite(t, path, strings.Replace(string(b), `"bundle_version": "6"`, `"bundle_version": "3"`, 1))
 		_, err = Verify(dir)
-		if want := dir + ` is bundle_version "3"; this build deploys bundle_version "5"`; err == nil || err.Error() != want {
+		if want := dir + ` is bundle_version "3"; this build deploys bundle_version "6"`; err == nil || err.Error() != want {
 			t.Fatalf("Verify = %v, want %q", err, want)
 		}
 	})
@@ -262,11 +263,11 @@ func TestVerifyRefusals(t *testing.T) {
 			t.Fatal(err)
 		}
 		mustWrite(t, path, strings.Replace(string(b),
-			`"bundle_version": "`+bundleVersion+`"`, `"bundle_version": "6"`, 1))
+			`"bundle_version": "`+bundleVersion+`"`, `"bundle_version": "7"`, 1))
 		_, err = Verify(dir)
 		var unsupported *ErrVersionUnsupported
-		if !errors.As(err, &unsupported) || unsupported.Have != "6" || unsupported.Want != bundleVersion {
-			t.Fatalf("Verify = %v, want *ErrVersionUnsupported naming 6 and %s", err, bundleVersion)
+		if !errors.As(err, &unsupported) || unsupported.Have != "7" || unsupported.Want != bundleVersion {
+			t.Fatalf("Verify = %v, want *ErrVersionUnsupported naming 7 and %s", err, bundleVersion)
 		}
 	})
 	// A real "4": the three-node golden's manifest as the last build of that format wrote
@@ -293,9 +294,58 @@ func TestVerifyRefusals(t *testing.T) {
 		if !errors.As(err, &unsupported) || unsupported.Have != "4" || unsupported.Want != bundleVersion {
 			t.Fatalf("Verify = %v, want *ErrVersionUnsupported naming 4 and %s", err, bundleVersion)
 		}
-		if want := dir + ` is bundle_version "4"; this build deploys bundle_version "5"`; err.Error() != want {
+		if want := dir + ` is bundle_version "4"; this build deploys bundle_version "6"`; err.Error() != want {
 			t.Errorf("Verify = %q, want %q", err, want)
 		}
+	})
+	// A real "5": the three-node golden's manifest as the last build of that format wrote it,
+	// valid against 019's frozen copy of its contract, so the refusal is of a bundle a host of
+	// 019 staged and not of an edited "6" (016, US7 scenario 2). twin provision reports it as
+	// bundle.version.unsupported naming both.
+	t.Run("a manifest 5 as the last build of that format wrote it", func(t *testing.T) {
+		b, err := os.ReadFile(filepath.Join("testdata", "three-node-5.manifest.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		frozen := compileManifestSchema(t, filepath.Join("testdata", "contracts", "019-following-removed", "manifest.schema.json"))
+		v, err := jsonschema.UnmarshalJSON(bytes.NewReader(b))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := frozen.Validate(v); err != nil {
+			t.Fatalf("three-node-5.manifest.json is not a valid manifest 5:\n%v", err)
+		}
+		dir := copyGolden(t, "b")
+		mustWrite(t, filepath.Join(dir, "manifest.json"), string(b))
+		_, err = Verify(dir)
+		var unsupported *ErrVersionUnsupported
+		if !errors.As(err, &unsupported) || unsupported.Have != "5" || unsupported.Want != bundleVersion {
+			t.Fatalf("Verify = %v, want *ErrVersionUnsupported naming 5 and %s", err, bundleVersion)
+		}
+		if want := dir + ` is bundle_version "5"; this build deploys bundle_version "6"`; err.Error() != want {
+			t.Errorf("Verify = %q, want %q", err, want)
+		}
+	})
+	// A synthesized host carries its probe in place of a platform, and no artifact and no
+	// bootstrap: no file of the bundle is its, so it is accepted without either (016). A node
+	// with neither and no probe is a device's that lost its file, refused as before.
+	t.Run("a host names no artifact and no bootstrap", func(t *testing.T) {
+		dir := copyGolden(t, "b")
+		editManifest(t, dir, func(m map[string]any) {
+			m["nodes"] = append(m["nodes"].([]any), map[string]any{
+				"name": "n1-loop-a", "provenance": "synthesized",
+				"probe":    map[string]any{"name": "n1-loop", "endpoint": "a", "format": "ping", "package": map[string]any{"id": "ping", "source": "embedded"}},
+				"platform": nil, "psp": nil, "image": "alpine:3.24.2", "management_port": "eth0", "artifact": nil, "bootstrap": nil,
+			})
+		})
+		if _, err := Verify(dir); err != nil {
+			t.Fatalf("Verify = %v, want a host accepted with no artifact and no bootstrap", err)
+		}
+		editManifest(t, dir, func(m map[string]any) {
+			nodes := m["nodes"].([]any)
+			delete(nodes[len(nodes)-1].(map[string]any), "probe")
+		})
+		wantInvalid(t, dir, "names no artifact", "n1-loop-a")
 	})
 	t.Run("bytes altered under the identity they were stored as", func(t *testing.T) {
 		dir := copyGolden(t, goldenThreeNodeID)

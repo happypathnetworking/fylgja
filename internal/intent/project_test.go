@@ -274,7 +274,7 @@ func TestReadOfTwoManagementPortsCompilesOne(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, id, list := stage.Compile(c, reg)
+	files, id, list := stage.Compile(c, nil, reg, nil)
 	if files == nil || id == "" || list.Rejected() {
 		t.Fatalf("the compile refused: %v", list)
 	}

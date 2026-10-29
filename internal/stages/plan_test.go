@@ -12,6 +12,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/snapshot"
 	"github.com/happypathnetworking/fylgja/internal/stage"
@@ -88,9 +89,9 @@ func (f *fakePipeline) pipeline() Pipeline {
 			f.taken = append(f.taken, id)
 			return id, nil, nil
 		},
-		Compile: func(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, string, findings.List) {
+		Compile: func(c *ctm.CTM, _ []probe.Probe, reg *psp.Registry, _ *probe.Registry) (map[string][]byte, string, findings.List) {
 			f.calls = append(f.calls, "compile")
-			return stage.Compile(c, reg)
+			return stage.Compile(c, nil, reg, nil)
 		},
 		File: func(_ context.Context, _ map[string][]byte, id string) (findings.List, error) {
 			f.calls = append(f.calls, "file")
@@ -575,8 +576,8 @@ func TestPlanStepThatDoesNotReadIsAnError(t *testing.T) {
 	f := &fakePipeline{t: t}
 	p := f.pipeline()
 	compiles := 0
-	p.Compile = func(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, string, findings.List) {
-		files, id, list := stage.Compile(c, reg)
+	p.Compile = func(c *ctm.CTM, decls []probe.Probe, reg *psp.Registry, probes *probe.Registry) (map[string][]byte, string, findings.List) {
+		files, id, list := stage.Compile(c, decls, reg, probes)
 		if compiles++; compiles == 2 {
 			delete(files, "manifest.json")
 		}

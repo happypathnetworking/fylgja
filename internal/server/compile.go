@@ -70,12 +70,16 @@ func runCompile(opts *options, f *compileFlags, files []api.File) error {
 	if err != nil {
 		return loadFailure(findings.OpCompile, subject, err)
 	}
+	packages, err := opts.probes()
+	if err != nil {
+		return loadFailure(findings.OpCompile, subject, err)
+	}
 
 	// Validation, compilation and the identity, on the pipeline a create runs before its
 	// run (internal/stage). Rejections stop everything: a bundle is never written from
 	// intent that could not be built faithfully. The id is computed from the
 	// bytes before they are written, so what is printed describes what was compiled.
-	bundled, id, list := stage.Compile(c, reg)
+	bundled, id, list := stage.Compile(c, s.Probes, reg, packages)
 	if list.Rejected() {
 		return finish(findings.OpCompile, subject, list)
 	}

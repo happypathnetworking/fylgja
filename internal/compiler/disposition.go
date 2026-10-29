@@ -47,6 +47,10 @@ type MappingRow struct {
 	// (D-025).
 	NodeName    *string     `json:"node_name"`
 	Disposition Disposition `json:"disposition"`
+	// Provenance is ProvenanceSynthesized on a host's port and on the device port a host is
+	// cabled to, which intent did not cable, and empty, written not at all, on every other
+	// row (016).
+	Provenance string `json:"provenance,omitempty"`
 }
 
 // IsEnabled reports the row's intent admin state, nil being enabled, as

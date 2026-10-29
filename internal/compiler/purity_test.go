@@ -3,9 +3,11 @@ package compiler
 import (
 	"go/parser"
 	"go/token"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -63,12 +65,28 @@ func TestCompilerIsPure(t *testing.T) {
 			}
 		}
 	}
+
+	// Of the module, the compiler reads the CTM, the findings, the platform packages and,
+	// from 016, the probe declarations and packages, which its synthesis places and builds
+	// hosts from: nothing else of Fylgja's is a compiler's input.
+	admitted := map[string]bool{"internal/ctm": true, "internal/findings": true, "internal/psp": true, "internal/probe": true}
+	for _, imp := range moduleImports(t, ".") {
+		if !admitted[imp] {
+			t.Errorf("the compiler imports %s; of the module it imports %v alone", imp, slices.Sorted(maps.Keys(admitted)))
+		}
+	}
 }
 
 // platformNames are the platforms the tree knows by name: the two shipped ones, the
 // design case, and the vendors, systems and container kinds any of them is modelled on.
 // `ceos` joins the list at M7, with the second shipped platform.
 var platformNames = regexp.MustCompile(`(?i)\b(srlinux|nokia|eos|chassisos|arista|ceos)\b`)
+
+// probeNames are what a probe package names that the compiler must not (016, FR-011,
+// SC-008): the host's container kind, its image, and the one shipped format, as a literal.
+// A host's kind, image and exec lines come from its package and its format from the
+// declaration, so the compiler that builds it names none of them.
+var probeNames = regexp.MustCompile(`(?i)\b(linux|alpine)\b|"ping"`)
 
 // No source under the compiler, the profile engine, the lab-host driver, the workflows,
 // the stage pipelines, the bundle store or validation names a platform (Constitution
@@ -123,6 +141,11 @@ func TestCompilerNamesNoPlatform(t *testing.T) {
 			for i, line := range strings.Split(string(b), "\n") {
 				if m := platformNames.FindString(line); m != "" {
 					t.Errorf("%s:%d names the platform %q: %s", p, i+1, m, strings.TrimSpace(line))
+				}
+				// The compiler's own files, as quickstart §1's grep reads them; elsewhere a
+				// comment may still say SR Linux, which the platform names above hold.
+				if m := probeNames.FindString(line); m != "" && dir == "." {
+					t.Errorf("%s:%d names the probe package's %s: %s", p, i+1, m, strings.TrimSpace(line))
 				}
 			}
 			return nil

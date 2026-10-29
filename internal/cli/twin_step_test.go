@@ -375,7 +375,7 @@ func compileStage(t *testing.T, paths lab.Paths, label string) compiledStage {
 		return list, err
 	}
 	ref := stages.Ref{Branch: "change-1", Label: label}
-	s := stages.Build(ctx, reader, stepStamper{}, reg, ch, ref, stages.NewPipeline(take, file), time.Now().UTC())
+	s := stages.Build(ctx, reader, stepStamper{}, reg, ch, ref, stages.NewPipeline(take, file, nil), time.Now().UTC())
 	if s.Status != stages.PlanCompiled {
 		t.Fatalf("%s did not compile: %+v", ref, s.Findings)
 	}

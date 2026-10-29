@@ -31,7 +31,7 @@ func TestCompileRefusesAnArtifactNotNamedAsItsPackageNamesIt(t *testing.T) {
 		}
 	}
 
-	files, id, list := Compile(c, reg)
+	files, id, list := Compile(c, nil, reg, nil)
 	if files != nil || id != "" {
 		t.Errorf("compiled a bundle (%d files, id %q) from a misnamed artifact", len(files), id)
 	}

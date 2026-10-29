@@ -135,7 +135,7 @@ func compileClean(t *testing.T, branch string, reg *psp.Registry) (*ctm.CTM, str
 	if list.Rejected() {
 		t.Fatalf("reading %s was rejected: %v", branch, list)
 	}
-	_, id, list := Compile(snapshot, reg)
+	_, id, list := Compile(snapshot, nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("compiling %s was rejected: %v", branch, list)
 	}
@@ -231,7 +231,7 @@ func artifactReadAndBundle(t *testing.T, c *testsupport.Client, branch string, r
 		}
 	}
 
-	files, id, list := Compile(snapshot, reg)
+	files, id, list := Compile(snapshot, nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("compiling %s was rejected: %v", branch, list)
 	}

@@ -53,7 +53,7 @@ func TestSeededDefectsAreAllReportedInOnePass(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	list = append(list, validate.Validate(snapshot, reg)...)
+	list = append(list, validate.Validate(snapshot, nil, reg, nil)...)
 
 	// The --json document is the contract, so the assertions are made against the
 	// serialized shape rather than the in-memory list. This is the document `intent read`

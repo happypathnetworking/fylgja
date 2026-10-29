@@ -2,6 +2,7 @@ package compiler
 
 import (
 	"encoding/json"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -114,7 +115,7 @@ func twoPlatformCTM() *ctm.CTM {
 // until M7's second one; reachable through --psp-dir either way.
 func TestTwoForwardingAnswersAreBothRecorded(t *testing.T) {
 	reg := twoPlatformRegistry(t, "software")
-	files, list := Compile(twoPlatformCTM(), reg)
+	files, list := Compile(twoPlatformCTM(), nil, reg, nil)
 
 	if list.Rejected() {
 		t.Fatalf("a twin with two forwarding answers was refused: %v", list)
@@ -136,7 +137,7 @@ func TestTwoForwardingAnswersAreBothRecorded(t *testing.T) {
 // platform, so agreement is two entries with the same value, never one merged claim.
 func TestMatchingForwardingCompilesAcrossPlatforms(t *testing.T) {
 	reg := twoPlatformRegistry(t, "hardware")
-	files, list := Compile(twoPlatformCTM(), reg)
+	files, list := Compile(twoPlatformCTM(), nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("matching forwarding was rejected: %v", list)
 	}
@@ -182,7 +183,7 @@ func TestManifestCopiesTheFidelityList(t *testing.T) {
 	ctm.Normalize(c)
 	want := append([]ctm.FidelityRow{}, c.Envelope.Fidelity...)
 
-	files, list := Compile(c, embeddedRegistry(t))
+	files, list := Compile(c, nil, embeddedRegistry(t), nil)
 	if list.Rejected() {
 		t.Fatalf("refused: %v", list)
 	}
@@ -213,5 +214,30 @@ func TestManifestCopiesTheFidelityList(t *testing.T) {
 				t.Errorf("%s holds the reader's reason %q; the compiler copies the list and writes no row", e.Name(), row.Reason)
 			}
 		}
+	}
+}
+
+// A host is in the fidelity record by name, and its package's forwarding and timing are its
+// probe's (016): production_forwarding stays per platform package and gains no entry for a
+// host, the platform packages' approximations are unchanged, and the basis is asserted.
+func TestHostsAreInTheFidelityRecord(t *testing.T) {
+	without := compileProbed(t, probedThreeNode(t), nil)
+	with := compileProbed(t, probedThreeNode(t), declared(t, "n1-loop"))
+	if len(without.m.Fidelity.Synthesized) != 0 || len(without.m.Probes) != 0 {
+		t.Errorf("a probe-less bundle records synthesized %v and probes %v, want neither",
+			without.m.Fidelity.Synthesized, without.m.Probes)
+	}
+	if !reflect.DeepEqual(with.m.Fidelity.ProductionForwarding, without.m.Fidelity.ProductionForwarding) ||
+		!reflect.DeepEqual(with.m.Fidelity.Approximations, without.m.Fidelity.Approximations) {
+		t.Errorf("the hosts moved the platforms' record: %+v, against %+v", with.m.Fidelity, without.m.Fidelity)
+	}
+	if with.m.Fidelity.Basis != FidelityAsserted {
+		t.Errorf("basis %q, want asserted", with.m.Fidelity.Basis)
+	}
+	if got := with.m.Fidelity.Synthesized; fmt.Sprint(got) != "[n1-loop-a n1-loop-b]" {
+		t.Errorf("fidelity.synthesized %v, want both hosts", got)
+	}
+	if f := with.m.Probes[0].Fidelity; f.Forwarding != "software" || f.Timing != "container" {
+		t.Errorf("the probe's fidelity is %+v, want its package's software forwarding and container timing", f)
 	}
 }

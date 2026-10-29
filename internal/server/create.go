@@ -11,6 +11,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/stage"
@@ -185,7 +186,7 @@ func runCreateFromSnapshot(ctx context.Context, opts *options, op string, subjec
 	// The stored document's observed_at, the first take's, is the one the twin records
 	// (US3 scenario 8).
 	cr := &compiledRead{paths: paths, snapshot: filedSnapshot{id: s.ID, path: path}, observedAt: s.ObservedAt}
-	if err := cr.compileAndFile(ctx, opts, op, subject, s.CTM, reg, nil); err != nil {
+	if err := cr.compileAndFile(ctx, opts, op, subject, s.CTM, s.Probes, reg, nil); err != nil {
 		return err
 	}
 	if f.dryRun {
@@ -297,22 +298,27 @@ func readTakeCompile(ctx context.Context, opts *options, op string, subject *fin
 		return nil, finish(op, subject, append(list, taken...))
 	}
 	cr := &compiledRead{paths: paths, snapshot: filedSnapshot{id: snap.ID, path: snapPath}, observedAt: observedAt}
-	if err := cr.compileAndFile(ctx, opts, op, subject, c, reg, list); err != nil {
+	if err := cr.compileAndFile(ctx, opts, op, subject, c, snap.Probes, reg, list); err != nil {
 		return nil, err
 	}
 	cr.read = &readSummary{counts: intent.Summarize(c), packages: intent.DevicesByPackage(c, reg), envelope: c.Envelope}
 	return cr, nil
 }
 
-// compileAndFile compiles c, the CTM of the snapshot cr names, and files the bundle under the
+// compileAndFile compiles c and decls, the CTM and the probes of the snapshot cr names, with
+// the probe packages beside reg (016), and files the bundle under the
 // state root, after list, the findings before the compile: what a create from a read and a
 // create from a snapshot share once the snapshot is filed. Each refusal, and each step that
 // cannot run, is the command's document at compile, naming the snapshot, which stays filed,
 // since its CTM validated and only the output was refused (R-05); the text answer names it
 // too, by its stored line.
 func (cr *compiledRead) compileAndFile(ctx context.Context, opts *options, op string, subject *findings.Subject, c *ctm.CTM,
-	reg *psp.Registry, list findings.List) error {
-	files, id, compiled := stage.Compile(c, reg)
+	decls []probe.Probe, reg *psp.Registry, list findings.List) error {
+	packages, err := opts.probes()
+	if err != nil {
+		return cr.refused(opts, loadFailureAt(op, subject, findings.StepCompile, err))
+	}
+	files, id, compiled := stage.Compile(c, decls, reg, packages)
 	compiled = compiled.AtStep(findings.StepCompile)
 	list = append(list, compiled...)
 	if compiled.Rejected() {

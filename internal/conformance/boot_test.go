@@ -786,8 +786,8 @@ func mixedTwin(t *testing.T) (BootInput, *fakeReader) {
 	manifest := compiler.Manifest{
 		BundleVersion: "3",
 		Nodes: []compiler.ManifestNode{
-			{Name: "e1", Platform: "arista_eos", PSP: compiler.ManifestPSP{ID: "arista_eos", Source: "embedded"}},
-			{Name: "s1", Platform: "nokia_srlinux", PSP: compiler.ManifestPSP{ID: "nokia_srlinux", Source: "embedded"}},
+			{Name: "e1", Platform: ptr("arista_eos"), PSP: &compiler.ManifestPSP{ID: "arista_eos", Source: "embedded"}},
+			{Name: "s1", Platform: ptr("nokia_srlinux"), PSP: &compiler.ManifestPSP{ID: "nokia_srlinux", Source: "embedded"}},
 		},
 		Mapping: []compiler.MappingRow{
 			{Device: "e1", Interface: "Ethernet1", Port: &eosPort, NodeName: &eosName, Disposition: compiler.DispCabled},
@@ -963,3 +963,6 @@ func TestBootHalfOnAMixedTwin(t *testing.T) {
 		})
 	}
 }
+
+// ptr is a manifest's nullable string, as bundle 6 writes a node's platform.
+func ptr(s string) *string { return &s }

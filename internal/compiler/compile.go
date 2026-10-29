@@ -1,7 +1,7 @@
 // Package compiler turns intent into deployment artifacts.
 //
-// Compile is a pure function: a CTM and a platform registry in, a bundle out, no I/O of
-// any kind — no files, no network, no clock, no randomness (Constitution V). That is
+// Compile is a pure function: a snapshot's body (its CTM and its probes) and the two
+// registries in, a bundle out, no I/O of any kind — no files, no network, no clock, no randomness (Constitution V). That is
 // what lets the riskiest logic in Fylgja be golden-file tested with zero
 // infrastructure, and lets `fylgja twin compile` expose exactly the function the tests
 // exercise. A purity test enforces the import boundary; treat a failure there as a
@@ -17,11 +17,13 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
-// Compile turns a normalized CTM into the bundle's files, keyed by their path
-// relative to the bundle root.
+// Compile turns a snapshot's body, a normalized CTM and its probes, into the bundle's files,
+// keyed by their path relative to the bundle root. reg is the platform packages, probes the
+// probe packages, which may be nil where decls is empty.
 //
 // The map is the bundle: internal/bundle writes it and hashes it, and nothing about
 // the compiler's internal structure reaches either. There is no error return, because
@@ -35,7 +37,14 @@ import (
 // interface.rule.unmatched, a refusal, since the gap is the profile's or the intent's.
 // When a rejection does surface here, it means a caller skipped validation or
 // the two disagree; no files are returned.
-func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
+//
+// The probes are placed first (016, R-01): PlaceProbes adds a synthesized host per
+// endpoint and its link, and the survey then runs over the placed CTM as it ran over
+// intent, so the device port a host is cabled to is surveyed as a cabled port. A host is a
+// node of the placement's table: its package is the probe registry's, by its format, and it
+// has no profile, no artifact and no bootstrap. The compiler branches on that, never on
+// what the format or the platform is.
+func Compile(c *ctm.CTM, decls []probe.Probe, reg *psp.Registry, probes *probe.Registry) (map[string][]byte, findings.List) {
 	var list findings.List
 	ctm.Normalize(c)
 
@@ -50,6 +59,14 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 		return nil, list
 	}
 
+	// Every placement refusal is reported with the survey's, in one pass, as validation
+	// reports them; a refused placement placed nothing, so intent alone is surveyed.
+	placed, hosts, placing := PlaceProbes(c, decls, probes)
+	list = append(list, placing...)
+	if placed == nil {
+		placed = c
+	}
+
 	var (
 		nodes     []TopologyNode
 		mNodes    []ManifestNode
@@ -58,6 +75,8 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 		lossy     []LossyMapping
 		configs   []ConfigFile
 		approx    []string
+		entries   = map[string]*ManifestProbeEntry{}
+		synth     []string
 	)
 	// One entry per support package in the bundle, gathered in the device loop as
 	// approximations are. Go's encoder sorts map keys, so the manifest's bytes do not
@@ -70,10 +89,13 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 	// is reported for every device at once, in one pass, as validation reports it.
 	// The refusals are validation's, mirrored word for word: reaching one
 	// means a caller skipped validation or the two disagree.
-	pkgs := make([]*psp.PSP, len(c.Devices))
-	profs := make([]*psp.Profile, len(c.Devices))
-	surveys := make([]DeviceSurvey, len(c.Devices))
-	for i, d := range c.Devices {
+	pkgs := make([]*psp.PSP, len(placed.Devices))
+	profs := make([]*psp.Profile, len(placed.Devices))
+	surveys := make([]DeviceSurvey, len(placed.Devices))
+	for i, d := range placed.Devices {
+		if _, host := hosts[d.Name]; host {
+			continue
+		}
 		p, ok := reg.LookupID(d.Platform.Package)
 		if !ok {
 			// Validation rejects this first; reaching it means the two disagree.
@@ -96,14 +118,41 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 	}
 	// The links and each interface's link held to one another: validation's refusal, by
 	// the one function both call, filed with the surveys' so both callers report one list.
-	list = append(list, LinkTerminations(c)...)
+	list = append(list, LinkTerminations(placed)...)
 	if list.Rejected() {
 		return nil, list
 	}
 
-	for i, d := range c.Devices {
+	// The device ports a host is cabled to: intent did not cable them, so their rows say
+	// the synthesized link did (R-11).
+	hostPorts := map[string]bool{}
+	for _, h := range hosts {
+		hostPorts[h.Device+":"+h.Interface] = true
+	}
+
+	for i, d := range placed.Devices {
+		if h, host := hosts[d.Name]; host {
+			node, row, err := hostNode(h)
+			if err != nil {
+				list.Add(findings.Rejection, findings.RuleProbePackageTemplate, h.Package.Path, err.Error())
+				return nil, list
+			}
+			nodes = append(nodes, node)
+			rows = append(rows, row)
+			portOf[h.Node+":"+h.Port] = h.Port
+			mNodes = append(mNodes, hostManifestNode(h))
+			addProbeEntry(entries, h)
+			synth = append(synth, h.Node)
+			continue
+		}
+
 		p, prof, survey := pkgs[i], profs[i], surveys[i]
 		devRows := survey.Rows
+		for k := range devRows {
+			if hostPorts[devRows[k].Device+":"+devRows[k].Interface] {
+				devRows[k].Provenance = ProvenanceSynthesized
+			}
+		}
 		rows = append(rows, devRows...)
 		omissions = append(omissions, survey.Omissions...)
 		lossy = append(lossy, survey.Lossy...)
@@ -189,10 +238,11 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 		artifactName := d.Name + "." + d.Artifact.Name
 		configs = append(configs, ConfigFile{Name: artifactName, Content: content})
 
+		nos := p.Platform.NOS
 		mNodes = append(mNodes, ManifestNode{
 			Name:           d.Name,
-			Platform:       p.Platform.NOS,
-			PSP:            ManifestPSP{ID: p.Platform.ID, Source: p.Origin},
+			Platform:       &nos,
+			PSP:            &ManifestPSP{ID: p.Platform.ID, Source: p.Origin},
 			Image:          p.Image.Ref,
 			ManagementPort: prof.ManagementPort(),
 			Artifact: &ManifestArtifact{
@@ -202,7 +252,7 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 				Size:        len(content),
 				File:        path.Join(ConfigsDir, artifactName),
 			},
-			Bootstrap: ManifestBootstrap{File: cfgFile, Via: via},
+			Bootstrap: &ManifestBootstrap{File: cfgFile, Via: via},
 		})
 
 		// Forwarding and approximations are both gathered per platform, so a bundle of
@@ -227,7 +277,7 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 		}
 	}
 
-	links, linkOmissions := cableLinks(c, rows, portOf)
+	links, linkOmissions := cableLinks(placed, rows, portOf)
 	omissions = append(omissions, linkOmissions...)
 
 	for _, o := range omissions {
@@ -246,6 +296,7 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 		Mapping:       rows,
 		Links:         links,
 		Omissions:     omissions,
+		Probes:        probeEntries(entries),
 		Fidelity: Fidelity{
 			Basis:                FidelityAsserted,
 			ProductionForwarding: forwarding,
@@ -256,6 +307,8 @@ func Compile(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, findings.List) {
 			// carry is the reader's to say, and the compiler holds no table of any
 			// source's rows (FR-029).
 			Read: c.Envelope.Fidelity,
+			// Every node the compiler invented rather than read (016): the hosts.
+			Synthesized: synth,
 		},
 	}
 	manifestBytes, err := marshalManifest(manifest)
@@ -353,11 +406,15 @@ func cableLinks(c *ctm.CTM, rows []MappingRow, portOf map[string]string) ([]Cabl
 			omissions = append(omissions, Omission{findings.RuleOmitInterfaceUnmappable, l.ID, reasonUnmappable})
 			continue
 		}
-		links = append(links, CabledLink{
+		link := CabledLink{
 			ID: l.ID,
 			A:  NodePort{Node: a.Device, Port: pa},
 			B:  NodePort{Node: b.Device, Port: pb},
-		})
+		}
+		if l.Provenance == ctm.ProvenanceSynthesized {
+			link.Provenance = ProvenanceSynthesized
+		}
+		links = append(links, link)
 	}
 	return links, omissions
 }

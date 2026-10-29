@@ -249,7 +249,7 @@ func TestManagementCableReachesTheCTM(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, id, compiled := stage.Compile(c, reg)
+	files, id, compiled := stage.Compile(c, nil, reg, nil)
 	if files == nil || id == "" || compiled.Rejected() {
 		t.Fatalf("the compile refused: %v", compiled)
 	}

@@ -140,7 +140,7 @@ func TestCommandAndGoldenShareTheCompilerPath(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want, list := compiler.Compile(s.CTM, reg)
+	want, list := compiler.Compile(s.CTM, nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("the fixture was rejected: %v", list)
 	}

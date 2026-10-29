@@ -44,7 +44,7 @@ func TestWrappedFixturesCompileToTheGoldens(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			files, id, list := Compile(s.CTM, c.reg)
+			files, id, list := Compile(s.CTM, nil, c.reg, nil)
 			if list.Rejected() {
 				t.Fatalf("the wrapped %s was rejected: %v", c.name, list)
 			}
@@ -73,7 +73,7 @@ func TestWrappedFixturesCompileToTheGoldens(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			bareFiles, bareID, list := Compile(bare, c.reg)
+			bareFiles, bareID, list := Compile(bare, nil, c.reg, nil)
 			if list.Rejected() {
 				t.Fatalf("the bare %s was rejected: %v", c.name, list)
 			}

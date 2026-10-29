@@ -75,7 +75,7 @@ func TestMixedSeedReads(t *testing.T) {
 	}
 	mustReadAsTheMixedCTM(t, snapshot, branch)
 
-	files, id, list := Compile(snapshot, reg)
+	files, id, list := Compile(snapshot, nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("compiling %s was rejected: %v", branch, list)
 	}

@@ -261,7 +261,7 @@ func TestMixedArtifactsReachTheBundleUnchanged(t *testing.T) {
 // true and the line is pushed as production wrote it — Fylgja configures no management
 // (D-009). Nothing else warns: no interface is omitted and no data port is renamed.
 func TestMixedWarnsOnlyAboutTheManagementNames(t *testing.T) {
-	files, list := Compile(loadFixture(t, "testdata/ctm/mixed.json"), embeddedRegistry(t))
+	files, list := Compile(loadFixture(t, "testdata/ctm/mixed.json"), nil, embeddedRegistry(t), nil)
 	if list.Rejected() || files == nil {
 		t.Fatalf("the mixed fixture was refused: %v", list)
 	}

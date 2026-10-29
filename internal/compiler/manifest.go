@@ -32,8 +32,21 @@ import (
 // list of what it approximated and omitted, copied from the CTM (D-057). A "4" bundle
 // was read through the generics, so it is refused as each earlier version is.
 //
+// "6" at 016: a probe's endpoints are compiled into synthesized hosts (D-064). A node
+// carries `provenance` (written only when synthesized) and, for a host, `probe` with its
+// platform, psp, artifact and bootstrap null; a mapping row and a link carry `provenance`
+// likewise; `probes` records each probe as compiled and fidelity.synthesized names every
+// synthesized node. A probe-less snapshot compiles to its "5" bundle but for the version and
+// the two empty lists (R-11). A "5" deployed by this build could not say which of its nodes
+// a host is, so it is refused as each earlier version is.
+//
 // bundle.Verify accepts this version alone and refuses any other naming both.
-const BundleVersion = "5"
+const BundleVersion = "6"
+
+// ProvenanceSynthesized is a node's, a row's or a link's provenance when the compiler
+// invented it rather than read it (016): the CTM's own value, the only one the manifest
+// writes, since intent is the default and is left out.
+const ProvenanceSynthesized = string(ctm.ProvenanceSynthesized)
 
 // FidelityAsserted is the only basis Fylgja can claim at M1.
 const FidelityAsserted = "asserted"
@@ -66,21 +79,69 @@ func provenanceOf(e ctm.Envelope) Provenance {
 	}
 }
 
-// ManifestNode records one node and the platform support it was built with.
+// ManifestNode records one node and the platform support it was built with, or, for a
+// synthesized host, the probe it is an endpoint of (016).
 type ManifestNode struct {
-	Name           string      `json:"name"`
-	Platform       string      `json:"platform"`
-	PSP            ManifestPSP `json:"psp"`
-	Image          string      `json:"image"`
-	ManagementPort string      `json:"management_port"`
+	Name string `json:"name"`
+	// Provenance is ProvenanceSynthesized for a host and empty, written not at all, for a
+	// device of intent: the CTM's own rule, so a probe-less bundle's bytes move the least.
+	Provenance string `json:"provenance,omitempty"`
+	// Probe is what a host is in place of a platform: its probe, its endpoint and the probe
+	// package it was built with. Nil, and not written, on a device of intent.
+	Probe *ManifestProbe `json:"probe,omitempty"`
+	// Platform and PSP are the support package's; null on a host, which has none.
+	Platform       *string      `json:"platform"`
+	PSP            *ManifestPSP `json:"psp"`
+	Image          string       `json:"image"`
+	ManagementPort string       `json:"management_port"`
 	// Artifact names the configuration file this node is pushed after it boots (M5,
-	// D-028). A pointer only so the field's absence is expressible; the compiler refuses
-	// a device without one, so every node of a bundle this build writes has it.
-	Artifact *ManifestArtifact `json:"artifact,omitempty"`
+	// D-028). The compiler refuses a device without one, so every device's node has it;
+	// a host's is null, since nothing is pushed to it (016).
+	Artifact *ManifestArtifact `json:"artifact"`
 	// Bootstrap names the node's bootstrap file and how it reaches the node. On every
-	// node, because a reader of a "3" bundle cannot otherwise tell a node whose topology
-	// names no startup-config from one whose bootstrap was forgotten.
-	Bootstrap ManifestBootstrap `json:"bootstrap"`
+	// device's node, because a reader of a "3" bundle cannot otherwise tell a node whose
+	// topology names no startup-config from one whose bootstrap was forgotten; null on a
+	// host, whose configuration is its topology node's exec lines (016).
+	Bootstrap *ManifestBootstrap `json:"bootstrap"`
+}
+
+// ManifestProbe is what a host is (016): one endpoint, a or b, of a probe, built with the
+// probe package of the probe's format.
+type ManifestProbe struct {
+	Name     string      `json:"name"`
+	Endpoint string      `json:"endpoint"`
+	Format   string      `json:"format"`
+	Package  ManifestPSP `json:"package"`
+}
+
+// ManifestProbeEntry is one probe as compiled (016): its format and package, its two hosts
+// in endpoint order, and what its package says the hosts cannot reproduce. The lab's flows
+// and verify's burst read their probes from here.
+type ManifestProbeEntry struct {
+	Name     string        `json:"name"`
+	Format   string        `json:"format"`
+	Package  ManifestPSP   `json:"package"`
+	Hosts    [2]ProbeHost  `json:"hosts"`
+	Fidelity ProbeFidelity `json:"fidelity"`
+}
+
+// ProbeHost is one host of a probe: its endpoint, its node, the intent's port it is cabled
+// to, its own port, and its address and gateway as declared.
+type ProbeHost struct {
+	Endpoint  string `json:"endpoint"`
+	Node      string `json:"node"`
+	Device    string `json:"device"`
+	Interface string `json:"interface"`
+	Port      string `json:"port"`
+	Address   string `json:"address"`
+	Gateway   string `json:"gateway"`
+}
+
+// ProbeFidelity is the probe package's fidelity: the hosts forward in software and keep
+// the container's timing, asserted as every fidelity is (Constitution X).
+type ProbeFidelity struct {
+	Forwarding string `json:"forwarding"`
+	Timing     string `json:"timing"`
 }
 
 // ManifestBootstrap is the bootstrap file of one node, and the way it is applied.
@@ -151,6 +212,9 @@ type Fidelity struct {
 	// envelope's fidelity copied verbatim from bundle "5": the compiler knows no row's
 	// meaning and holds no table of them (FR-029). [] only for a reader that wrote none.
 	Read []ctm.FidelityRow `json:"read"`
+	// Synthesized names every node the compiler invented rather than read, sorted: the
+	// probes' hosts (016). [] when there is none.
+	Synthesized []string `json:"synthesized"`
 }
 
 // LossyMapping is one interface a lossy rule mapped, or whose port another interface of
@@ -188,7 +252,10 @@ type Manifest struct {
 	Mapping       []MappingRow   `json:"mapping"`
 	Links         []CabledLink   `json:"links"`
 	Omissions     []Omission     `json:"omissions"`
-	Fidelity      Fidelity       `json:"fidelity"`
+	// Probes is each probe as compiled, sorted by name, [] when the snapshot declares none
+	// (016).
+	Probes   []ManifestProbeEntry `json:"probes"`
+	Fidelity Fidelity             `json:"fidelity"`
 }
 
 // marshalManifest encodes the manifest deterministically: every list sorted, fixed
@@ -208,7 +275,9 @@ func marshalManifest(m *Manifest) ([]byte, error) {
 		}
 		return m.Omissions[i].Rule < m.Omissions[j].Rule
 	})
+	sort.SliceStable(m.Probes, func(i, j int) bool { return m.Probes[i].Name < m.Probes[j].Name })
 	sort.Strings(m.Fidelity.Omitted)
+	sort.Strings(m.Fidelity.Synthesized)
 	sort.SliceStable(m.Fidelity.Lossy, func(i, j int) bool {
 		a, b := m.Fidelity.Lossy[i], m.Fidelity.Lossy[j]
 		if a.Device != b.Device {
@@ -249,6 +318,12 @@ func marshalManifest(m *Manifest) ([]byte, error) {
 	}
 	if m.Fidelity.Read == nil {
 		m.Fidelity.Read = []ctm.FidelityRow{}
+	}
+	if m.Probes == nil {
+		m.Probes = []ManifestProbeEntry{}
+	}
+	if m.Fidelity.Synthesized == nil {
+		m.Fidelity.Synthesized = []string{}
 	}
 
 	b, err := json.MarshalIndent(m, "", "  ")

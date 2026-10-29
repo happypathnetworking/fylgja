@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/happypathnetworking/fylgja/contracts/bundle-manifest/v5",
-  "title": "Fylgja bundle manifest v5 — the scope and the mapping in the provenance, every interface a port, the reader’s fidelity list",
-  "description": "From M6’s v2: bundle_version was 3 at M7 (D-025 and its M6 notes) and is 4 at M12 (below). `fidelity.production_forwarding` is an object, one entry per platform in the bundle keyed by its package id, so a mixed bundle asserts each platform’s forwarding and M1’s fidelity.forwarding.mixed refusal retires; `mapping[].node_name` is on every row (null on a row without a port) and `fidelity.lossy` is always present ([] when empty), ending M6’s one exception to the empty-list rule; every node gains `bootstrap` {file, via}: the bootstrap file the bundle carries for it and whether containerlab applies it at deploy (startup_config, the topology names it) or the push sends its lines before the artifact’s (push, the topology node has no startup-config; M7). A v2 or v1 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions. Everything else is v2’s. From M5’s v2, bundle_version still 2 at M6: a mapping row may carry `node_name`, the node’s own name for its port, present only where it differs from `interface`; `fidelity.lossy` records every lossy mapping and every shared port, present only when it has content; omissions gain the rule omit.interface.shared. Both fields are the one deliberate exception to M1’s rule that every empty list is emitted as []: a bundle with nothing lossy in it is byte-identical to M5’s, so the goldens and both fixture ids stand and no following twin is rebuilt by the upgrade. The exception expires with M7’s bundle_version bump for per-platform forwarding (D-025), which makes both fields unconditional in the same move. From v1: bundle_version is 2, and every node gains `artifact`, the configuration file the bundle carries for it beside its bootstrap (M5). A v1 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions. Nothing of Infrahub’s — artifact, storage or definition identifiers, a time of generation — appears, so bundle_id moves for the artifact’s bytes or name and for nothing else. Everything else is v1’s. M12: bundle_version is 4. Every mapping row carries enabled, the interface's intent admin state (the CTM's enabled, true when unset), so the bundle says what intent says of each port: twin verify asserts nothing of a cabled port whose row says false, and records the skip. The topology, the bootstrap and every configs file are unchanged by the field. 017 (D-057): bundle_version is 5. The provenance names the scope the read was made under and the mapping that produced the CTM ({reader, model, version}), copied from the CTM envelope, in place of the generics contract’s version; a mapping row loses `iftype`, since every interface of a CTM 2 is a port (configured-not-cabled is an uncabled port); and `fidelity.read` is the CTM envelope’s fidelity list, the reader’s own rows of what it approximated and omitted, copied unchanged by the compiler, which holds no table of any source’s rows. A v4 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions. Everything else is v4’s.",
+  "$id": "https://github.com/happypathnetworking/fylgja/contracts/bundle-manifest/v6",
+  "title": "Fylgja bundle manifest v6 — the probes’ synthesized hosts, their links and ports under provenance synthesized",
+  "description": "From M6’s v2: bundle_version was 3 at M7 (D-025 and its M6 notes) and is 4 at M12 (below). `fidelity.production_forwarding` is an object, one entry per platform in the bundle keyed by its package id, so a mixed bundle asserts each platform’s forwarding and M1’s fidelity.forwarding.mixed refusal retires; `mapping[].node_name` is on every row (null on a row without a port) and `fidelity.lossy` is always present ([] when empty), ending M6’s one exception to the empty-list rule; every node gains `bootstrap` {file, via}: the bootstrap file the bundle carries for it and whether containerlab applies it at deploy (startup_config, the topology names it) or the push sends its lines before the artifact’s (push, the topology node has no startup-config; M7). A v2 or v1 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions. Everything else is v2’s. From M5’s v2, bundle_version still 2 at M6: a mapping row may carry `node_name`, the node’s own name for its port, present only where it differs from `interface`; `fidelity.lossy` records every lossy mapping and every shared port, present only when it has content; omissions gain the rule omit.interface.shared. Both fields are the one deliberate exception to M1’s rule that every empty list is emitted as []: a bundle with nothing lossy in it is byte-identical to M5’s, so the goldens and both fixture ids stand and no following twin is rebuilt by the upgrade. The exception expires with M7’s bundle_version bump for per-platform forwarding (D-025), which makes both fields unconditional in the same move. From v1: bundle_version is 2, and every node gains `artifact`, the configuration file the bundle carries for it beside its bootstrap (M5). A v1 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions. Nothing of Infrahub’s — artifact, storage or definition identifiers, a time of generation — appears, so bundle_id moves for the artifact’s bytes or name and for nothing else. Everything else is v1’s. M12: bundle_version is 4. Every mapping row carries enabled, the interface's intent admin state (the CTM's enabled, true when unset), so the bundle says what intent says of each port: twin verify asserts nothing of a cabled port whose row says false, and records the skip. The topology, the bootstrap and every configs file are unchanged by the field. 017 (D-057): bundle_version is 5. The provenance names the scope the read was made under and the mapping that produced the CTM ({reader, model, version}), copied from the CTM envelope, in place of the generics contract’s version; a mapping row loses `iftype`, since every interface of a CTM 2 is a port (configured-not-cabled is an uncabled port); and `fidelity.read` is the CTM envelope’s fidelity list, the reader’s own rows of what it approximated and omitted, copied unchanged by the compiler, which holds no table of any source’s rows. A v4 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions. Everything else is v4’s. 016 (D-064): bundle_version is 6. A snapshot’s probes are compiled into synthesized hosts, one per endpoint, each a node of its probe package’s kind and image cabled by a synthesized link to an uncabled port of the intent. A node carries `provenance` (synthesized; absent on a node of intent, whose provenance is the default) and, for a host, `probe` {name, endpoint, format, package {id, source}} in place of a platform: a host’s `platform`, `psp`, `artifact` and `bootstrap` are null, and `probe` is present exactly when they are, since a host has no support package, no configuration file and no bootstrap (its configuration is its topology node’s exec lines, its package’s host.address and host.route rendered), and its management_port is eth0, containerlab’s. A mapping row and a link carry `provenance` likewise: the host’s own row (its port, cabled) and the device port’s row (cabled, since the synthesized link cables it; intent did not) and the link are synthesized. `probes` records each probe as compiled, sorted by name: its format and package, its two hosts in endpoint order (endpoint, node, device, interface, the host’s port, address, gateway), and its package’s fidelity {forwarding, timing}; `fidelity.synthesized` names every synthesized node, sorted. Both are required and [] when the snapshot declares no probe, so a probe-less snapshot compiles to its v5 bundle but for the version and the two empty lists (R-11). A v5 bundle is refused by `twin provision` as bundle.version.unsupported naming both versions. Everything else is v5’s.",
   "type": "object",
   "required": [
     "bundle_version",
@@ -11,12 +11,13 @@
     "mapping",
     "links",
     "omissions",
+    "probes",
     "fidelity"
   ],
   "additionalProperties": false,
   "properties": {
     "bundle_version": {
-      "const": "5"
+      "const": "6"
     },
     "provenance": {
       "type": "object",
@@ -90,28 +91,61 @@
           "name": {
             "type": "string"
           },
-          "platform": {
-            "type": "string",
-            "description": "The `platform.nos` of the support package the node was built with (017 R-08): a CTM `2` device names its package, not a NOS, and `nos` keys the registry's shadowing of an embedded package by an override."
+          "provenance": {
+            "enum": [
+              "intent",
+              "synthesized"
+            ],
+            "default": "intent",
+            "description": "016: where the object came from; written only when synthesized, so absent reads as intent."
           },
-          "psp": {
+          "probe": {
             "type": "object",
+            "description": "016: a synthesized host’s probe, in place of a platform: present exactly when platform, psp, artifact and bootstrap are null.",
             "required": [
-              "id",
-              "source"
+              "name",
+              "endpoint",
+              "format",
+              "package"
             ],
             "additionalProperties": false,
             "properties": {
-              "id": {
-                "type": "string"
+              "name": {
+                "type": "string",
+                "pattern": "^[a-z0-9][a-z0-9-]{0,23}$"
               },
-              "source": {
+              "endpoint": {
                 "enum": [
-                  "embedded",
-                  "override"
+                  "a",
+                  "b"
                 ]
+              },
+              "format": {
+                "type": "string",
+                "minLength": 1
+              },
+              "package": {
+                "$ref": "#/$defs/packageRef"
               }
             }
+          },
+          "platform": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The `platform.nos` of the support package the node was built with (017 R-08): a CTM `2` device names its package, not a NOS, and `nos` keys the registry's shadowing of an embedded package by an override. Null on a synthesized host (016)."
+          },
+          "psp": {
+            "oneOf": [
+              {
+                "$ref": "#/$defs/packageRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The support package the node was built with; null on a synthesized host (016)."
           },
           "image": {
             "type": "string"
@@ -121,8 +155,11 @@
             "description": "Always the PSP's interfaces.management name: containerlab gives every node one, whether or not intent flags a mgmt_only interface."
           },
           "artifact": {
-            "type": "object",
-            "description": "The node’s configuration artifact, as the bundle carries it: `file` is its path in the bundle, configs/<node>.<artifact_name>, bytes exactly as Infrahub served them; `checksum` is Infrahub’s own (MD5 hex), verbatim; `size` is the byte count.",
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The node’s configuration artifact, as the bundle carries it: `file` is its path in the bundle, configs/<node>.<artifact_name>, bytes exactly as Infrahub served them; `checksum` is Infrahub’s own (MD5 hex), verbatim; `size` is the byte count. Null on a synthesized host, which is pushed nothing (016).",
             "required": [
               "name",
               "content_type",
@@ -155,8 +192,11 @@
             }
           },
           "bootstrap": {
-            "type": "object",
-            "description": "M7: the node’s bootstrap file, rendered from its package’s template (Constitution IV), and how it reaches the node (the package’s config.bootstrap_via).",
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "M7: the node’s bootstrap file, rendered from its package’s template (Constitution IV), and how it reaches the node (the package’s config.bootstrap_via). Null on a synthesized host, whose configuration is its topology node’s exec lines (016).",
             "required": [
               "file",
               "via"
@@ -173,6 +213,49 @@
                   "push"
                 ]
               }
+            }
+          }
+        },
+        "if": {
+          "required": [
+            "probe"
+          ]
+        },
+        "then": {
+          "properties": {
+            "platform": {
+              "type": "null"
+            },
+            "psp": {
+              "type": "null"
+            },
+            "artifact": {
+              "type": "null"
+            },
+            "bootstrap": {
+              "type": "null"
+            },
+            "provenance": {
+              "const": "synthesized"
+            }
+          },
+          "required": [
+            "provenance"
+          ]
+        },
+        "else": {
+          "properties": {
+            "platform": {
+              "type": "string"
+            },
+            "psp": {
+              "type": "object"
+            },
+            "artifact": {
+              "type": "object"
+            },
+            "bootstrap": {
+              "type": "object"
             }
           }
         }
@@ -228,6 +311,14 @@
           "enabled": {
             "type": "boolean",
             "description": "M12: the interface's intent admin state (ctm.Interface.enabled, true when unset). On every row from bundle 4. A cabled row with false is still cabled and its bootstrap still enables the port; intent's disabling reaches the node through the artifact (M5), and twin verify asserts nothing of the port or its link."
+          },
+          "provenance": {
+            "enum": [
+              "intent",
+              "synthesized"
+            ],
+            "default": "intent",
+            "description": "016: synthesized on a host’s own row and on the device port a host is cabled to; absent, intent, on every other row."
           }
         }
       }
@@ -252,6 +343,14 @@
           },
           "b": {
             "$ref": "#/$defs/nodePort"
+          },
+          "provenance": {
+            "enum": [
+              "intent",
+              "synthesized"
+            ],
+            "default": "intent",
+            "description": "016: synthesized on a host’s link; absent, intent, on a link of intent."
           }
         }
       }
@@ -285,16 +384,114 @@
         }
       }
     },
+    "probes": {
+      "type": "array",
+      "description": "016: each probe as compiled, sorted by name; [] when the snapshot declares none. The lab’s flows and verify’s burst read their probes from here.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "format",
+          "package",
+          "hosts",
+          "fidelity"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{0,23}$"
+          },
+          "format": {
+            "type": "string",
+            "minLength": 1
+          },
+          "package": {
+            "$ref": "#/$defs/packageRef"
+          },
+          "hosts": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "The two hosts, a then b.",
+            "items": {
+              "type": "object",
+              "required": [
+                "endpoint",
+                "node",
+                "device",
+                "interface",
+                "port",
+                "address",
+                "gateway"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "endpoint": {
+                  "enum": [
+                    "a",
+                    "b"
+                  ]
+                },
+                "node": {
+                  "type": "string",
+                  "description": "The host’s node, <probe>-<endpoint>."
+                },
+                "device": {
+                  "type": "string"
+                },
+                "interface": {
+                  "type": "string",
+                  "description": "The intent’s port the host is cabled to."
+                },
+                "port": {
+                  "type": "string",
+                  "description": "The host’s own port, its package’s host.interface."
+                },
+                "address": {
+                  "type": "string",
+                  "description": "The host’s address with its prefix length, as declared."
+                },
+                "gateway": {
+                  "type": "string",
+                  "description": "The gateway of the host’s route to the far host, as declared."
+                }
+              }
+            }
+          },
+          "fidelity": {
+            "type": "object",
+            "description": "The probe package’s: the hosts forward in software and keep the container’s timing. Asserted, as every fidelity is.",
+            "required": [
+              "forwarding",
+              "timing"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "forwarding": {
+                "enum": [
+                  "software"
+                ]
+              },
+              "timing": {
+                "const": "container"
+              }
+            }
+          }
+        }
+      }
+    },
     "fidelity": {
       "type": "object",
-      "description": "Asserted, never measured (D-022); `basis` says so in the bundle itself (Constitution X). M7: `production_forwarding` per platform; `lossy` always present. 017: `read`, the reader’s fidelity list.",
+      "description": "Asserted, never measured (D-022); `basis` says so in the bundle itself (Constitution X). M7: `production_forwarding` per platform; `lossy` always present. 017: `read`, the reader’s fidelity list. 016: `synthesized`.",
       "required": [
         "basis",
         "production_forwarding",
         "approximations",
         "omitted",
         "lossy",
-        "read"
+        "read",
+        "synthesized"
       ],
       "additionalProperties": false,
       "properties": {
@@ -427,6 +624,13 @@
               }
             }
           }
+        },
+        "synthesized": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "016: every synthesized node, the probes’ hosts, sorted; [] when there is none."
         }
       }
     }
@@ -445,6 +649,26 @@
         },
         "port": {
           "type": "string"
+        }
+      }
+    },
+    "packageRef": {
+      "type": "object",
+      "description": "A package a node was built with: a support package’s platform id, or a probe package’s format, and whether it was the shipped one.",
+      "required": [
+        "id",
+        "source"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "embedded",
+            "override"
+          ]
         }
       }
     }

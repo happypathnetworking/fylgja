@@ -105,7 +105,7 @@ func TestEveryInterfaceIsAPort(t *testing.T) {
 	}
 	n1 := c.Device("n1")
 	n1.Interfaces = append(n1.Interfaces, ctm.Interface{Name: "ethernet-1/3"}, ctm.Interface{Name: "ethernet-1/4/1"})
-	files, list := Compile(c, embeddedRegistry(t))
+	files, list := Compile(c, nil, embeddedRegistry(t), nil)
 	if list.Rejected() {
 		t.Fatalf("refused: %v", list)
 	}
@@ -203,11 +203,11 @@ func TestIntentDisabledPortReachesTheMappingRowAlone(t *testing.T) {
 	if !found {
 		t.Fatalf("the fixture has no %s:%s; the test proves nothing", device, iface)
 	}
-	want, list := Compile(plain, reg)
+	want, list := Compile(plain, nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("the unedited fixture was rejected: %v", list)
 	}
-	got, list := Compile(edited, reg)
+	got, list := Compile(edited, nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("a port intent disables was rejected: %v", list)
 	}
@@ -302,6 +302,47 @@ func TestMappingRowWithoutEnabledIsEnabled(t *testing.T) {
 	for _, r := range m.Mapping {
 		if r.Enabled != nil || !r.IsEnabled() {
 			t.Errorf("row %s:%s of a manifest without the key reads enabled %v, IsEnabled %t; want nil and true", r.Device, r.Interface, r.Enabled, r.IsEnabled())
+		}
+	}
+}
+
+// With probes placed, every interface still has exactly one row, the hosts' ports among
+// them, and a row is synthesized exactly where the synthesized link is: each host's own
+// port, and each device port a host is cabled to, which intent left uncabled (016, R-11).
+func TestEveryInterfaceHasOneRowWithHosts(t *testing.T) {
+	c := probedThreeNode(t)
+	placed, hosts, _ := PlaceProbes(c, declared(t, "n1-loop"), probeRegistry(t))
+	b := compileProbed(t, probedThreeNode(t), declared(t, "n1-loop"))
+
+	rows := map[string]int{}
+	for _, r := range b.m.Mapping {
+		rows[r.Device+":"+r.Interface]++
+	}
+	total := 0
+	for _, d := range placed.Devices {
+		for _, in := range d.Interfaces {
+			total++
+			if rows[d.Name+":"+in.Name] != 1 {
+				t.Errorf("%s:%s has %d rows, want 1", d.Name, in.Name, rows[d.Name+":"+in.Name])
+			}
+		}
+	}
+	if len(b.m.Mapping) != total {
+		t.Errorf("%d rows for %d interfaces", len(b.m.Mapping), total)
+	}
+
+	synthesized := map[string]bool{}
+	for _, h := range hosts {
+		synthesized[h.Node+":"+h.Port] = true
+		synthesized[h.Device+":"+h.Interface] = true
+	}
+	for _, r := range b.m.Mapping {
+		key := r.Device + ":" + r.Interface
+		if want := synthesized[key]; (r.Provenance == ProvenanceSynthesized) != want {
+			t.Errorf("row %s is %q, want synthesized %t", key, r.Provenance, want)
+		}
+		if synthesized[key] && r.Disposition != DispCabled {
+			t.Errorf("row %s is %s, want cabled by its synthesized link", key, r.Disposition)
 		}
 	}
 }

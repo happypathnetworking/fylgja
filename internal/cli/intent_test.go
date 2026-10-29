@@ -164,7 +164,7 @@ func compiledCTM(t *testing.T, path string) (map[string][]byte, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, id, list := stage.Compile(c, reg)
+	files, id, list := stage.Compile(c, nil, reg, nil)
 	if list.Rejected() || id == "" {
 		t.Fatalf("%s did not compile: %+v", path, list)
 	}

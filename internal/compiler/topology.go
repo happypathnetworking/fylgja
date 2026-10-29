@@ -30,6 +30,9 @@ type CabledLink struct {
 	ID string   `json:"id"`
 	A  NodePort `json:"a"`
 	B  NodePort `json:"b"`
+	// Provenance is ProvenanceSynthesized on a host's link and empty, written not at all,
+	// on a link of intent (016).
+	Provenance string `json:"provenance,omitempty"`
 }
 
 // NodePort names one side of a cabled link.
@@ -46,6 +49,10 @@ type TopologyNode struct {
 	// StartupConfig is empty for a node whose package says its bootstrap reaches it
 	// through the push; renderTopology then writes no startup-config key for it.
 	StartupConfig string
+	// Exec is a host's commands, run by containerlab inside the container once it starts:
+	// its package's host.address and host.route rendered (016). Empty on a device's node,
+	// which is written with no exec key.
+	Exec []string
 }
 
 // yamlMap builds an ordered YAML mapping. Go map iteration is randomized, so anything
@@ -94,6 +101,13 @@ func renderTopology(nodes []TopologyNode, links []CabledLink) ([]byte, error) {
 		pairs := []any{"kind", n.Kind, "image", n.Image}
 		if n.StartupConfig != "" {
 			pairs = append(pairs, "startup-config", n.StartupConfig)
+		}
+		if len(n.Exec) > 0 {
+			exec := &yaml.Node{Kind: yaml.SequenceNode}
+			for _, line := range n.Exec {
+				exec.Content = append(exec.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: line})
+			}
+			pairs = append(pairs, "exec", exec)
 		}
 		nodesNode.Content = append(nodesNode.Content,
 			&yaml.Node{Kind: yaml.ScalarNode, Value: n.Name},

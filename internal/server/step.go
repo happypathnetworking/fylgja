@@ -208,7 +208,11 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags, files []api.F
 	}
 	subject.Stage = target.String()
 
-	built := stages.Build(ctx, reader, stamper, reg, ch, target, stagePipeline(paths), time.Now().UTC())
+	packages, err := opts.probes()
+	if err != nil {
+		return loadFailureAt(op, subject, findings.StepCompile, err)
+	}
+	built := stages.Build(ctx, reader, stamper, reg, ch, target, stagePipeline(paths, packages), time.Now().UTC())
 	list = append(list, built.Findings...)
 	var resolved *resolvedStage
 	if r := built.Resolved; r != nil {
@@ -321,7 +325,7 @@ func snapshotTarget(ctx context.Context, opts *options, op string, subject *find
 	if refused := targetUnheld(rec, env.Scope, wire.Mapping(env.Mapping), s.ID, name); refused != nil {
 		return stepTarget{}, nil, cr.refused(opts, finish(op, subject, findings.List{*refused}))
 	}
-	if err := cr.compileAndFile(ctx, opts, op, subject, s.CTM, reg, nil); err != nil {
+	if err := cr.compileAndFile(ctx, opts, op, subject, s.CTM, s.Probes, reg, nil); err != nil {
 		return stepTarget{}, nil, err
 	}
 	target := stepTarget{name: name, snapshotID: s.ID,

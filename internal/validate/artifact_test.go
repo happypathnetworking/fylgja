@@ -30,7 +30,7 @@ func fixtureWithout(t *testing.T, device string) (*ctm.CTM, *psp.Registry) {
 // device, so an operator reading it knows whether to read again or to look at Infrahub.
 func TestArtifactMissingIsRejected(t *testing.T) {
 	c, reg := fixtureWithout(t, "n2")
-	list := Validate(c, reg)
+	list := Validate(c, nil, reg, nil)
 
 	found := onlyFinding(t, list, findings.RuleArtifactMissing)
 	if found.Object != "n2" {
@@ -52,7 +52,7 @@ func TestEveryDeviceWithoutAnArtifactIsNamed(t *testing.T) {
 		c.Devices[i].Artifact = nil
 	}
 	var named []string
-	for _, f := range Validate(c, reg) {
+	for _, f := range Validate(c, nil, reg, nil) {
 		if f.Rule == findings.RuleArtifactMissing {
 			named = append(named, f.Object)
 		}
@@ -89,7 +89,7 @@ func TestAnArtifactNotNamedAsItsPackageNamesItIsMissing(t *testing.T) {
 	for _, name := range []string{"cli", "running-config"} {
 		t.Run(name, func(t *testing.T) {
 			c, reg := fixtureRenamed(t, "n1", name)
-			list := Validate(c, reg)
+			list := Validate(c, nil, reg, nil)
 
 			found := onlyFinding(t, list, findings.RuleArtifactMissing)
 			if found.Object != "n1" {
@@ -116,7 +116,7 @@ func TestChecksumMismatchIsRejected(t *testing.T) {
 	c.Devices[0].Artifact.Content += "set / system name host-name intruder\n"
 	actual := ctm.ChecksumOf(c.Devices[0].Artifact.Content)
 
-	found := onlyFinding(t, Validate(c, reg), findings.RuleArtifactChecksumMismatch)
+	found := onlyFinding(t, Validate(c, nil, reg, nil), findings.RuleArtifactChecksumMismatch)
 	if found.Object != "n1" {
 		t.Errorf("finding names %q, want n1", found.Object)
 	}
@@ -169,11 +169,11 @@ func TestCompilerAndValidationWordTheArtifactRulesIdentically(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			c, reg := tc.make(t)
-			validated := onlyFinding(t, Validate(c, reg), tc.rule)
+			validated := onlyFinding(t, Validate(c, nil, reg, nil), tc.rule)
 
 			// The compiler runs on its own copy, since Compile normalizes in place.
 			compiled, regForCompile := tc.make(t)
-			_, list := compiler.Compile(compiled, regForCompile)
+			_, list := compiler.Compile(compiled, nil, regForCompile, nil)
 			guard := onlyFinding(t, list, tc.rule)
 
 			if guard.Message != validated.Message {
@@ -221,7 +221,7 @@ func TestAnUnsupportedPlatformIsNotAlsoArtifactMissing(t *testing.T) {
 		}
 	}
 	for label, list := range map[string]findings.List{
-		"validation": Validate(c, reg),
+		"validation": Validate(c, nil, reg, nil),
 		"compiler":   compileFindings(c, reg),
 	} {
 		var named []string
@@ -238,6 +238,6 @@ func TestAnUnsupportedPlatformIsNotAlsoArtifactMissing(t *testing.T) {
 
 // compileFindings is what the compiler refuses c with, validation skipped.
 func compileFindings(c *ctm.CTM, reg *psp.Registry) findings.List {
-	_, list := compiler.Compile(c, reg)
+	_, list := compiler.Compile(c, nil, reg, nil)
 	return list
 }

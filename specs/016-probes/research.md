@@ -537,3 +537,10 @@ Appended by the runs.
   schema check --branch main schema/fylgja-probe.yaml` answers `Valid!` with a diff that adds
   `FylgjaProbe` and changes and removes nothing. A check only: nothing loaded, `main`'s hash
   unmoved; the load stays T017's. *(Infrahub 1.11.2, infrahub-sdk 1.23.2, 2026-10-28)*
+- **`FylgjaProbe` loaded on `main`** (T017, the operator): `.venv/bin/infrahubctl schema
+  load --branch main schema/fylgja-probe.yaml` loads it in about 24 s, and `main`'s hash moves
+  from `7c413536d67ef86321c629c076a0d3a4` to `8a4f3bee8a72549e97450a414da18107`. An object
+  written by `infrahubctl object create FylgjaProbe --set …` reads back with every `Text`
+  attribute as written (addresses with their prefix length, gateways without), `format`
+  defaulting to `ping`, and `object delete FylgjaProbe <name>` removes it by its
+  human-friendly id. *(Infrahub 1.11.2, infrahub-sdk 1.23.2, 2026-10-29)*

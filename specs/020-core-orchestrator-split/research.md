@@ -805,3 +805,78 @@ made.
   endpoint, 400, and by GraphQL, 404; a wrong token refused on both and never quoted; a
   pinned `at` with a `+00:00` offset reads `main`), green with the three earlier, eight in
   1.3 s, writing nothing.
+
+
+### 5.11 The adapter's read, stamps, events and probes (T017, Run 15, 2026-10-29)
+
+- **The skills (R-21).** `infrahub-common`'s GraphQL references and
+  `infrahub-managing-transforms`' union-fragment rule apply as the Go reader already applied
+  them: a connector, an end and an event are selected by `__typename` with inline fragments
+  (`... on DcimCable`, `... on InterfacePhysical`, `... on NodeMutatedEvent`), and the
+  branch is in the path; the queries are carried over, not redesigned.
+- **The eleven queries** are `adapters/infrahub/queries.py`, one module the read, the
+  stamps, the events, the probes and T018's stages share, each a whole document (its
+  operation, then the fragment it spreads), sent through the SDK's `execute_graphql` with
+  its `operationName`. Held to `internal/intent/queries.graphql` token by token
+  (`tests/unit/test_queries.py`, which skips once T035 removes the file) but for
+  `__typename`, which genqlient added to every abstract selection itself and the adapter
+  writes where it reads it, the event's node among them; genqlient's directives (`bind`,
+  `pointer`, `omitempty`) have no Python counterpart, since the adapter decodes plain JSON,
+  so an end or an interface of a kind the SDL does not name decodes as any other. The
+  read-only rules of `readonly_test.go` (every operation a query, the roots the mapping's or
+  the seven named, the fragments' targets, the tag by its filter alone) are carried over.
+- **The default branch's endpoint.** The SDK's `execute_graphql` reads `branch_name or
+  default_branch`, so a client naming no branch would post to `/graphql/main`; the stages',
+  probes' and events' reader is `client.DefaultClient`, whose SDK client's `default_branch`
+  is emptied so the request is `POST /graphql`, unnamed, as the Go `StageReader` asked, and
+  whose failures name `(the default branch)`. `Client.graphql` takes a per-request `at`
+  (T018's validations, pinned at a stage). `ClientError.detail` keeps the cause alone, by
+  which the read groups the content fetches that failed alike, as `fetchFailures` did.
+- **One difference from the Go read, as T017 words it**: the read ends by
+  `validate.intrinsic`, not by `validate.Validate` with the registry as `stage.Read` did.
+  The rules that read a package's ports and profiles stay the core's, which runs them on
+  the snapshot when it compiles it, so a scope the core cannot build is refused there, under
+  the same rules and words, one step later. `stage.dedupe` is ported beside it, for the
+  artifact rules' collision. The scope's refusal (`the read names scope "…", which is not
+  tag:<name>`) drops the Go sentence's tail about a twin created before 017, which no
+  adapter read meets.
+- **The packages** gain `config.artifact_name` and `config.artifact_content_types`, the
+  read's steps 1 and 4; **the probe packages' formats** are read from `probes/*.yaml`
+  beside the shipped `psp/` (the repository's, or `FYLGJA_PSP_SHIPPED`'s sibling) and from
+  `$FYLGJA_PSP_DIR/probes/`, as the core's probe registry loads them, `format` alone.
+- **Live, read-only, on this host's Infrahub**: the adapter's read of `fylgja-fixture`
+  under `tag:fylgja` took the snapshot **`0940db93…`**, the Go reader's (SC-002, ahead of
+  T020's tier-2 test); its stamps and its 48 intent events since the branch's
+  `branched_from` equal, field for field, what `intent.Client.Stamps` and
+  `StageReader.IntentEvents` returned at the same moment through a throwaway Go test
+  (deleted). Those answers are recorded under `orchestrator/tests/data/graphql/fylgja-fixture/`
+  with Go's outputs (`go-stamps-events.json`), and `tests/unit/test_recorded.py` replays
+  them: a real Infrahub's wire shapes, in tier 1.
+- **Tier 1's fake** (`tests/unit/dcim.py`) is the Go fake `fakeInfrahub` ported onto the
+  SDK's transport hook; `conftest.FakeInfrahub` gains per-operation answers, the unnamed
+  `/graphql`, the default branch's `/api/schema` and the object store. The Go tests of
+  `project_test.go`, `cable_test.go`, `artifact_test.go`, `storage_test.go`,
+  `stamps_test.go`, `events_test.go`, `probes_test.go`, `internal/probe/decl_test.go` and
+  `readProbes`' cases of `internal/server/probes_test.go` are carried over by name; the
+  three-node, lossy and mixed fixtures each read back to their CTM. Two Go tests keep their
+  read half alone: `TestReadOfTwoManagementPortsCompilesOne` and
+  `TestManagementCableReachesTheCTM`, whose second half compiles, the core's. Of
+  `internal/server/probes_test.go`, the request-shape and pipeline cases (`probesFiles`,
+  `probesOf`, the takes of a create and a stage pipeline, the snapshot conflict) stay the
+  core's API plumbing. Every ported assertion held against the modules as first written
+  but three, each fixed to Go's behaviour: a probe's name is matched whole (Python's `$`
+  also matches before a trailing newline, Go's does not); `NaN` and `Infinity`, which Go's
+  decoder refuses, make a declaration not a JSON object; and a 401 or 403 whose body the
+  SDK's relogin hook cannot read (errors as strings, as the Go test sends, or no JSON) is
+  the credential's refusal by its status, where it escaped the client as an
+  `AttributeError`. One difference left: a value of the wrong type is named in the
+  declaration's findings as compact JSON, where Go quotes the file's own text, so they
+  differ only in a spacing or a number's spelling (`1e5`).
+- **The SDK's settings built once per process.** Each `InfrahubClientSync` built its
+  settings anew, reading the environment and a TLS context of the system's certificates,
+  about 32 ms; ~300 clients took tier 1 from 4.5 s to 12.9 s and `make test` to 67.1 s.
+  `_sdk_settings(token)` builds them once and each client copies them with its own recorder
+  and transport (0.1 ms), the context shared; the fake's package pairs and the tests'
+  registries are loaded once too. Tier 1: 454 tests in 5.1 s (208 new); `make test`
+  uncached 62.3 s at a load of 1.8-2.2, under 65 s. The orchestrator's tier 2, eight
+  tests, green on the new client in 1.2 s.

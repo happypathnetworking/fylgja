@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/happypathnetworking/fylgja/internal/probe"
 )
 
 // Client talks to Infrahub with write access.
@@ -513,6 +515,59 @@ func (c *Client) create(branch, kind, data string) (string, error) {
 		return "", err
 	}
 	return r[kind+"Create"].Object.ID, nil
+}
+
+// ProbeKind is Fylgja's probe kind (016, D-064): branch-agnostic, on the default branch,
+// where the server reads it when a request sends no probe file.
+const ProbeKind = "FylgjaProbe"
+
+// WriteProbes writes each probe of a declaration as one object of the probe kind on the
+// default branch, its endpoints the a_ and b_ attributes, every value verbatim (R-26). The
+// kind is branch-agnostic, so a probe lands in no branch's diff and every branch's request
+// reads it: whoever writes one deletes it (DeleteProbes) before another test reads the kind.
+func (c *Client) WriteProbes(decl *probe.Declaration) error {
+	if decl == nil {
+		return fmt.Errorf("writing probes: no declaration")
+	}
+	for _, p := range decl.Probes {
+		a, b := p.Endpoints[0], p.Endpoints[1]
+		data := fmt.Sprintf(`{name: {value: %q}, format: {value: %q}, `+
+			`a_device: {value: %q}, a_interface: {value: %q}, a_address: {value: %q}, a_gateway: {value: %q}, `+
+			`b_device: {value: %q}, b_interface: {value: %q}, b_address: {value: %q}, b_gateway: {value: %q}}`,
+			p.Name, p.Format, a.Device, a.Interface, a.Address, a.Gateway, b.Device, b.Interface, b.Address, b.Gateway)
+		id, err := c.create(DefaultBranch, ProbeKind, data)
+		if err != nil {
+			return fmt.Errorf("writing probe %s: %w", p.Name, err)
+		}
+		if id == "" {
+			return fmt.Errorf("writing probe %s: %sCreate returned no object", p.Name, ProbeKind)
+		}
+	}
+	return nil
+}
+
+// DeleteProbes deletes every object of the probe kind on the default branch and returns
+// how many, so a test or the fixture tool leaves the kind as it found it: empty.
+func (c *Client) DeleteProbes() (int, error) {
+	ids, err := c.ids(DefaultBranch, ProbeKind, "")
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, id := range ids {
+		if err := c.deleteNode(DefaultBranch, ProbeKind, id); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
+// ProbeCount is how many objects of the probe kind the default branch holds. It writes
+// nothing.
+func (c *Client) ProbeCount() (int, error) {
+	ids, err := c.ids(DefaultBranch, ProbeKind, "")
+	return len(ids), err
 }
 
 // json_Unmarshal is a tiny indirection so seed.go can decode without importing

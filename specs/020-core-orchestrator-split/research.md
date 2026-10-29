@@ -729,3 +729,79 @@ made.
   the orchestrator's tier 2, three tests, green. `make test` uncached 60.0 s at a load of
   about 2, the Python share 43 tests in 2.1 s.
 
+
+### 5.10 The adapter's client, conformance, packages and intrinsic validation (T016, Run 14, 2026-10-29)
+
+- **`client.py` on `infrahub-sdk` 1.23.2, its sync client.** `InfrahubClientSync`, since
+  the adapter's commands and the flows' tasks read one request at a time, as the Go
+  reader did; the async `InfrahubClient` would make every caller a coroutine for no
+  concurrency used. Built from `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN` with every
+  setting that matters passed explicitly (the token, `username` and `password` `None`, a
+  60 s timeout, no retry, no echo), since the SDK's settings read `INFRAHUB_*` from the
+  environment and a `username` there would turn on password login. The SDK is imported
+  when the first `Client` is built (its import takes about 1.5 s; the module alone 0.12 s),
+  so a command that only words a refusal, and tier 2's collection, pay nothing.
+- **Two of the SDK's habits undone** (`docs/verified-facts.md`, Infrahub 1.11.2):
+  `execute_graphql` rewrites `at` through its `Timestamp` into UTC with six digits, so a
+  subclass's `_graphql_url` sends the operator's value verbatim, form-encoded as Go's
+  `url.QueryEscape` did (`+` as `%2B`), and only when given; and its exceptions drop the
+  HTTP status, so a `custom_recorder` keeps the last response and each failure is worded
+  as the Go reader worded it: `<what> (branch <b>[, at <t>]): HTTP <code>: <Infrahub's
+  messages>` (or the status alone for a body that is no error document), a 401 or 403 as
+  `the credential in INFRAHUB_API_TOKEN was rejected by Infrahub` / `is not permitted to
+  read this branch`, errors under 200 as their messages joined by `; `; a missing branch
+  marked (`branch_missing`) on the schema endpoint's 400 and GraphQL's 404 naming it, and
+  on nothing else; every message passed through `redact`. The REST read goes through the
+  SDK's `_get` (no public GET exists), so tier 1's recorded answers reach the client
+  through the SDK's own `sync_requester` hook and the SDK runs whole in every test.
+  `get_at` carries the `at` for the object store (T017's artifact read); the schema
+  endpoint never does. `check_at_precision` is `CheckAtPrecision`, its words
+  (`intent.at.precision`, T017's to file).
+- **The start-up line** reads `fylgja-infrahub: reading <address> as
+  infrahub-dcim@26336e9, scope tag:<n>`: the task's `<reader>@<model version>` taken as
+  the reader at the model's commit, the model's name being the reader's own
+  (`startup_line`; T019's `__main__` prints it to standard error).
+- **`schema.py` and `mapping.py`**: the table, `SchemaInfo` and `conformance_findings`
+  ported field by field, with 017's words (`READS_IT`, the used_by sentences), `Conformance`
+  with `verified()` as `findings.Verified` shapes it but `stages` (T018's) and
+  `ConformanceError`. Every case of `conformance_test.go` carried over on a copy of
+  `internal/intent/testdata/schema-26336e9.json` under `tests/data/schema/`, which a test
+  holds to its original, each mutation made as the Go test makes it, the expected words
+  literal.
+- **`packages.py`: the package-data question (§4) answered.** The shipped packages are
+  read as files from the repository's `psp/`, found as `Path(__file__).parents[5]` (the
+  editable install `make orchestrator-venv` makes leaves the module in the tree); when the
+  package is installed elsewhere, `FYLGJA_PSP_SHIPPED` names the directory, and a load
+  that finds none says to set it. `FYLGJA_PSP_DIR` adds override packages shadowing a
+  shipped one of the same NOS, as the core's `--psp-dir` does. Nothing is copied into the
+  wheel as package data, so the core and the orchestrator read one set of files and
+  cannot drift. Only `platform` (id, NOS, `matches`) is read: the core validates packages
+  and compiles with them. The survivors are held to `psp.identity.duplicate` and
+  `psp.matches.duplicate` with the core's words, so a pair never has two packages; a
+  shipped package's path in those words is the file's, where the core's is its embedded
+  name `psp/<f>.yaml`. `platform.unmatched`'s words are `completeness.go`'s, `Match`
+  quoted by a port of Go's `%q` (`documents/findings.quote`, held to `strconv.Quote` on
+  quotes, backslashes, control characters, DEL, U+00A0, U+200B, U+2028 and beyond the BMP).
+- **`validate.py`: `Intrinsic` and `compiler.LinkTerminations`, word for word.** Held two
+  ways: the Go tests' cases carried over with their expected words (the envelope's forms,
+  the empty envelope field named once, the required fields, `at` not required, the empty
+  CTM pinned and unpinned, the five link disagreements, the defects split between what
+  needs a package and what does not); and a Go-written file,
+  `orchestrator/tests/data/ctm/intrinsic.json`, Go's `Intrinsic` findings of every CTM
+  beside it (the ten fixtures and twelve defects of `testdata/ctm/` copied, `version-1.json`
+  aside since no CTM `1` reaches the rules, and eighteen cases written from
+  `three-node.json`, one change each, under `cases/`), written by a new Go test,
+  `TestTheOrchestratorsIntrinsicCases` (`internal/validate/orchestrator_test.go`, with
+  `-update`), which holds the file to Go's rules after: all 40 equal on the first run.
+  `snapshot.normalize` runs first, in place, as `ctm.Normalize` does.
+- **`documents/findings.py`** holds `Finding`, `Findings` (`add`, `reject`, `rejected`)
+  and `quote` now; the document `findings 1`, its validation and text form stay T019's.
+  The rule ids live beside the modules that file them until T019's `rules.py` gathers them.
+- **Tier 1**: 246 tests in 4.5 s by `pytest` (203 new); `make test` uncached 64.2 s with
+  the SDK imported eagerly and 62.3 s with it lazy, at a load of 1.5-1.8, `internal/cli`
+  42.4 s and 41.8 s of it: under the 65 s budget by 0.8-2.7 s, which T047 weighs as the
+  port's tests land. **Tier 2**: `tests/contract/test_client.py`, five reads of this
+  host's Infrahub (the fixture branch conforms; a missing branch named by the schema
+  endpoint, 400, and by GraphQL, 404; a wrong token refused on both and never quoted; a
+  pinned `at` with a `+00:00` offset reads `main`), green with the three earlier, eight in
+  1.3 s, writing nothing.

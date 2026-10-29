@@ -859,6 +859,23 @@ registration `fylgja`.
   `state: absent` on the member, as a load does. A check with `?branch=main` validates
   against `main`'s schema and writes nothing; `main`'s hash read `0aba31a5…` before and
   after seven rounds of checks. *(10-16)*
+- **`infrahub-sdk` 1.23.2's `execute_graphql` rewrites `at`**: its `_graphql_url` parses
+  the value with the SDK's `Timestamp` and sends `to_string()`, UTC with six fractional
+  digits (`2026-10-29T12:00:00.123456+02:00` goes as `…T10:00:00.123456Z`, `12:00:00Z` as
+  `12:00:00.000000Z`, a zone-less `2026-10-29 12:00:00` as UTC), so the operator's `at`
+  is not what reaches Infrahub. The branch goes in the path, `quote(branch, safe='')`.
+  Its exceptions drop the HTTP status: a 401 or 403 is `AuthenticationError` with
+  Infrahub's messages, a 404 `URLNotFoundError` naming the URL alone (not GraphQL's
+  `Branch: <b> not found.`), and any other status whose body holds `errors`, 400 and 422
+  among them, a `GraphQLError` as if under 200. The client's `custom_recorder` sees every
+  response, and its `sync_requester` replaces the transport. Its settings read
+  `INFRAHUB_*` from the environment: a `username` there turns on password login unless
+  `username` is passed explicitly. The adapter's `client.py` overrides `_graphql_url` to
+  send `at` verbatim, form-encoded, and reads the status from a recorder; against this
+  host's 1.11.2 a pinned `at` with a `+00:00` offset and six digits read `main`, and a
+  missing branch answered 400 from the schema endpoint and 404 from GraphQL, both
+  `Branch: <b> not found.`. *(10-29; `specs/020-core-orchestrator-split/research.md`
+  §5.10)*
 
 ---
 

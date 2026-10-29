@@ -1734,8 +1734,11 @@ fylgja twin verify   [--wait <d>]                                               
   manifest has a probe, so a probe-less twin prints byte for byte what it did.
 - `twin rehearse`'s stage lines gain the loss after the counts and before the verdict, when
   it names a probe: `stage change-1/third-link: stepped in 64.5s (push n1 2.5s, n3 2.6s);
-  settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; loss n1-loop 274/300, gap
-  54.8s; passed`.
+  settled after 6.1s (4 reads); 20 held, 0 failed, 0 skipped; loss n1-loop 274/300, gap
+  54.8s; passed`. The counts, there and in the report's `verify` cell, take each burst
+  beside the host names, ports and neighbours: held, failed or unread, never skipped, so a
+  stage failed on its burst reads `1 failed` beside `verify.burst`, and a probe-less
+  rehearsal's counts are what they were.
 - The rehearsal's report table gains the column `loss` after `verify`, `<probe>
   <lost>/<sent>, gap <s>s` per probe joined by `; `, the other outcomes worded as the
   step's, and `—` for a created, refused or not-reached stage and for every row of a

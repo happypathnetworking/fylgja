@@ -95,6 +95,17 @@ func counts(ports, failed int) *wire.VerifyCounts {
 	}
 }
 
+// probedCounts are a probed three-node twin's last read (016): counts' beside one burst,
+// held, or failed when burstFailed.
+func probedCounts(ports, failed int, burstFailed bool) *wire.VerifyCounts {
+	c := counts(ports, failed)
+	c.Burst = findings.VerifyCount{Held: 1, Unread: zero()}
+	if burstFailed {
+		c.Burst.Held, c.Burst.Failed = 0, 1
+	}
+	return c
+}
+
 func wait(outcome string, afterS float64, reads int, failing ...wire.StepFinding) *wire.StepWait {
 	return &wire.StepWait{Outcome: outcome, BudgetS: 120, Reads: reads, AfterS: afterS, From: resolvedAt,
 		EndedAt: resolvedAt, Failing: failing}
@@ -365,10 +376,10 @@ func probedRun() example {
 	return example{"ok, a probe's loss across the step and the head refused at the compile",
 		input(2130, seeded(), thirdLink(RoleRehearsed), refusedHead),
 		Result{Outcome: OutcomeOK, Run: run(), UsedS: 182.0, Destroy: destroyed(), Stages: []StageResult{
-			built(wait(wire.WaitSettled, 3.2, 2), counts(6, 0), 52.6),
+			built(wait(wire.WaitSettled, 3.2, 2), probedCounts(6, 0, false), 52.6),
 			{Ref: change + "/third-link", Verdict: VerdictPassed,
 				Step: stepTo(change+"/third-link", 1, wire.StepStepped, 64.5, landed("n1", 2.5), landed("n3", 2.6)),
-				Wait: wait(wire.WaitSettled, 6.1, 4), Counts: counts(8, 0), Loss: lossOf(flowOf("n1-loop", wire.FlowMeasured, 300, 274, 54.8)),
+				Wait: wait(wire.WaitSettled, 6.1, 4), Counts: probedCounts(8, 0, false), Loss: lossOf(flowOf("n1-loop", wire.FlowMeasured, 300, 274, 54.8)),
 				TookS: 70.6},
 		}},
 		findings.StatusOK}
@@ -1007,6 +1018,46 @@ func TestFindingsAreTheStagesInOrder(t *testing.T) {
 	}
 }
 
+// The verify cell counts a probed stage's bursts beside the three kinds (016, US3/AC3): a
+// burst held is one more held, a burst failed is the stage's one failure beside its
+// verify.burst finding, and one not run is unread; a burst is never skipped, and a
+// probe-less stage's counts read as they did.
+func TestTheVerifyCellCountsTheBurst(t *testing.T) {
+	one := 1
+	unread := probedCounts(8, 0, false)
+	unread.Burst = findings.VerifyCount{Unread: &one}
+	for _, c := range []struct {
+		name   string
+		counts *wire.VerifyCounts
+		want   string
+	}{
+		{"no probe", counts(8, 0), "19 held, 0 failed, 0 skipped"},
+		{"a burst held", probedCounts(8, 0, false), "20 held, 0 failed, 0 skipped"},
+		{"a burst failed", probedCounts(8, 0, true), "19 held, 1 failed, 0 skipped"},
+		{"a burst not run", unread, "19 held, 0 failed, 0 skipped, 1 unread"},
+	} {
+		if got := countsText(*c.counts); got != c.want {
+			t.Errorf("%s: %q, want %q", c.name, got, c.want)
+		}
+	}
+
+	e := probedRun()
+	burst := wire.StepFinding{Rule: findings.RuleVerifyBurst, Object: "n1-loop",
+		Message: "probe n1-loop: 4 of 5 replies from n1-loop-b at 10.1.11.2"}
+	e.res.Outcome = OutcomeStageFailed
+	third := &e.res.Stages[1]
+	third.Verdict, third.Wait, third.Counts = VerdictFailed, wait(wire.WaitExpired, 120, 60, burst), probedCounts(8, 0, true)
+	third.NewFindings = []wire.StepFinding{burst}
+	b := Build(e.in, e.res)
+	if got, want := StageLines(b)[1], "stage change-1/third-link: stepped in 64.5s (push n1 2.5s, n3 2.6s); expired after 120.0s (60 reads); "+
+		"19 held, 1 failed, 0 skipped; loss n1-loop 274/300, gap 54.8s; failed: verify.burst n1-loop"; got != want {
+		t.Errorf("a stage failed on its burst:\n%s\nwant\n%s", got, want)
+	}
+	if md, want := Markdown(e.document(), pairs()), "| expired after 120.0s | 19 held, 1 failed, 0 skipped | n1-loop 274/300, gap 54.8s | verify.burst n1-loop | failed |\n"; !strings.Contains(md, want) {
+		t.Errorf("the markdown does not hold %q:\n%s", want, md)
+	}
+}
+
 // Each stage's loss is its step's (016): the step document's block on a stepped stage, and
 // null on the baseline, a refused stage and one not reached, each written as null in the
 // document under the contract. The text's stage line names the loss after the counts when
@@ -1031,8 +1082,8 @@ func TestEachStageCarriesItsStepsLoss(t *testing.T) {
 	}
 
 	if got, want := StageLines(b), []string{
-		"stage change-1/seeded: created; settled after 3.2s (2 reads); 15 held, 0 failed, 0 skipped; baseline",
-		"stage change-1/third-link: stepped in 64.5s (push n1 2.5s, n3 2.6s); settled after 6.1s (4 reads); 19 held, 0 failed, 0 skipped; loss n1-loop 274/300, gap 54.8s; passed",
+		"stage change-1/seeded: created; settled after 3.2s (2 reads); 16 held, 0 failed, 0 skipped; baseline",
+		"stage change-1/third-link: stepped in 64.5s (push n1 2.5s, n3 2.6s); settled after 6.1s (4 reads); 20 held, 0 failed, 0 skipped; loss n1-loop 274/300, gap 54.8s; passed",
 		"stage change-1/head: refused (platform.unsupported)",
 		"stage change-1/bad-port: not reached",
 	}; !slices.Equal(got, want) {

@@ -743,12 +743,12 @@ func waitText(w *findings.RehearsalWait) string {
 	return fmt.Sprintf("%s after %.1fs (%d %s)", w.Outcome, w.AfterS, w.Reads, reads)
 }
 
-// countsText is the wait's last read counted over the three assertion kinds, the record's
-// claims aside, which are not waited on: 19 held, 0 failed, 0 skipped, and the unread when
-// a node was.
+// countsText is the wait's last read counted over the four assertion kinds, the bursts
+// among them (016), the record's claims aside, which are not waited on: 19 held, 0
+// failed, 0 skipped, and the unread when a node or a burst was. A burst is never skipped.
 func countsText(c findings.VerifyCounts) string {
 	held, failed, skipped, unread := 0, 0, 0, 0
-	for _, k := range []findings.VerifyCount{c.HostName, c.PortEnabled, c.Neighbor} {
+	for _, k := range []findings.VerifyCount{c.HostName, c.PortEnabled, c.Neighbor, c.Burst} {
 		held += k.Held
 		failed += k.Failed
 		if k.Skipped != nil {

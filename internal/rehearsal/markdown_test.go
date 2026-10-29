@@ -888,8 +888,8 @@ func TestTheLossColumn(t *testing.T) {
 	md := Markdown(probedRun().document(), pairs())
 	for _, want := range []string{
 		"\n\n| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |\n|---|---|---|---|---|---|---|---|---|---|\n",
-		"\n| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | settled after 3.2s | 15 held, 0 failed, 0 skipped | — | — | baseline |\n",
-		"\n| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 64.5s; push n1, n3 | settled after 6.1s | 19 held, 0 failed, 0 skipped | n1-loop 274/300, gap 54.8s | none | passed |\n",
+		"\n| change-1/seeded | 2026-10-16T17:25:30.118244+00:00 | a1a1a1a1… | 5c5c5c5c… | created | settled after 3.2s | 16 held, 0 failed, 0 skipped | — | — | baseline |\n",
+		"\n| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped 64.5s; push n1, n3 | settled after 6.1s | 20 held, 0 failed, 0 skipped | n1-loop 274/300, gap 54.8s | none | passed |\n",
 		"\n| change-1/head | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | — | | | | — | | refused (platform.unsupported) |\n\n",
 	} {
 		if !strings.Contains(md, want) {
@@ -969,15 +969,15 @@ func TestTheLossColumnShortened(t *testing.T) {
 			s.Ref = fmt.Sprintf("%s/mark-%02d", change, i)
 			e.in.Stages = append(e.in.Stages, s)
 			e.res.Stages = append(e.res.Stages, StageResult{Ref: s.Ref, Verdict: VerdictPassed,
-				Step: stepTo(s.Ref, 3, wire.StepUnchanged, 0.9), Wait: wait(wire.WaitSettled, 1.0, 1), Counts: counts(8, 0),
+				Step: stepTo(s.Ref, 3, wire.StepUnchanged, 0.9), Wait: wait(wire.WaitSettled, 1.0, 1), Counts: probedCounts(8, 0, false),
 				Loss: lossOf(flowOf("n1-loop"+strings.Repeat("x", pad), wire.FlowMeasured, 300, 0, 0.2)), TookS: 1.9})
 		}
 		return e
 	}
 	md := Markdown(probed(14, 0).document(), pairs())
 	for _, want := range []string{
-		"\n| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped | settled after 6.1s | 19 held, 0 failed, 0 skipped | n1-loop 274/300 | none | passed |\n",
-		"\n| change-1/mark-13 | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | unchanged | settled after 1.0s | 19 held, 0 failed, 0 skipped | n1-loop 0/300 | none | passed |\n",
+		"\n| change-1/third-link | 2026-10-16T17:30:00.000000+00:00 | a2a2a2a2… | d0d0d0d0… | stepped | settled after 6.1s | 20 held, 0 failed, 0 skipped | n1-loop 274/300 | none | passed |\n",
+		"\n| change-1/mark-13 | 2026-10-16T17:30:11.884302+00:00 | a4a4a4a4… | cccccccc… | unchanged | settled after 1.0s | 20 held, 0 failed, 0 skipped | n1-loop 0/300 | none | passed |\n",
 		", and the table each step by its outcome, its loss without its gaps and its new verification failures by the first few;",
 	} {
 		if !strings.Contains(md, want) {

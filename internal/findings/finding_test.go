@@ -221,6 +221,14 @@ var dataModelRules = []string{
 	"flow.start.failed",
 	"flow.read.failed",
 	"verify.burst",
+
+	// 020's rules (data-model §11, R-19). Appended; the core's runs by identity. The
+	// orchestrator's rules leave this table at T035, not here.
+	"run.detached",
+	"run.unknown",
+	"run.cancel.requested",
+	"run.ended",
+	"run.flags.conflict",
 }
 
 // dcimMapping is the mapping a twin.json 8 record's provenance names when the Infrahub
@@ -514,10 +522,11 @@ func TestOperationConstantsMatchTheContract(t *testing.T) {
 	}
 
 	// The newest schema enumerates every operation there is: M4's eight, 014's two (M10's
-	// two, renamed), M11's one, M12's one and 015's one.
+	// two, renamed), M11's one, M12's one, 015's one and 020's three.
 	all := []string{OpIntentRead, OpCompile, OpSchemaCheck, OpPSPValidate,
 		OpTwinCreate, OpTwinProvision, OpTwinDestroy, OpTwinShow,
-		OpStageList, OpStagePlan, OpTwinStep, OpTwinVerify, OpTwinRehearse}
+		OpStageList, OpStagePlan, OpTwinStep, OpTwinVerify, OpTwinRehearse,
+		OpRunRead, OpRunInterrupt, OpTwinDiff}
 	sort.Strings(all)
 	raw, err := os.ReadFile(newestSchemaPath("findings.schema.json"))
 	if err != nil {
@@ -1593,4 +1602,47 @@ func withDryRunArtifacts(doc *Document, checksum string) *Document {
 	block.Nodes = nodes
 	out.DryRun = &block
 	return &out
+}
+
+// 020's five run rules (data-model §1, §11) in documents of the operations that file them,
+// each held to the current contract with the status and exit the data model gives it: a
+// detached start is ok, an unknown or ended identity and a detach beside a dry run are
+// refusals (exit 1), an interrupt asked is ok; twin.diff's document carries no rule of its
+// own (T010 adds its fields).
+func TestTheRunRulesRenderValidDocuments(t *testing.T) {
+	schema := compileCurrentFindingsSchema(t)
+	const runID = "0199a3c4-5b6d-7e8f-9a0b-1c2d3e4f5a6b"
+	identity := "fylgja-provision " + runID
+
+	var detached List
+	detached.AddStep(Info, StepStart, RuleRunDetached, identity,
+		"run "+identity+" started; read it with fylgja run read")
+	var conflict List
+	conflict.AddStep(Rejection, StepStart, RuleRunFlagsConflict, "dry_run",
+		"detach was given beside dry_run; a dry run starts no run to detach from")
+	var unknown, requested, ended List
+	unknown.Add(Rejection, RuleRunUnknown, identity, "the workflow service holds no run "+identity)
+	requested.Add(Info, RuleRunCancelRequested, identity, "cancellation of run "+identity+" was requested")
+	ended.Add(Rejection, RuleRunEnded, identity, "run "+identity+" has already closed: completed")
+
+	cases := []struct {
+		label string
+		doc   *Document
+		exit  int
+	}{
+		{"twin create detached", NewDocument(OpTwinCreate, &Subject{RunID: runID}, detached), ExitOK},
+		{"twin step detach beside dry_run", NewDocument(OpTwinStep, nil, conflict), ExitRejected},
+		{"run read unknown", NewDocument(OpRunRead, &Subject{RunID: runID}, unknown), ExitRejected},
+		{"run interrupt requested", NewDocument(OpRunInterrupt, &Subject{RunID: runID}, requested), ExitOK},
+		{"run interrupt ended", NewDocument(OpRunInterrupt, &Subject{RunID: runID}, ended), ExitRejected},
+		{"twin diff ok", NewDocument(OpTwinDiff, nil, nil), ExitOK},
+	}
+	for _, c := range cases {
+		t.Run(c.label, func(t *testing.T) {
+			mustValidate(t, schema, c.doc, c.label)
+			if got := c.doc.Status.ExitCode(); got != c.exit {
+				t.Errorf("exit = %d (status %s), want %d", got, c.doc.Status, c.exit)
+			}
+		})
+	}
 }

@@ -109,7 +109,19 @@ func TestOperationsAreTheContractsAndTheirPaths(t *testing.T) {
 	if err := json.Unmarshal(raw, &schema); err != nil {
 		t.Fatal(err)
 	}
-	got, want := slices.Sorted(slices.Values(Operations)), slices.Sorted(slices.Values(schema.Properties.Operation.Enum))
+	// 020's three operations are in the findings contract (T005) before the server
+	// serves them: run.read and run.interrupt join Operations at T007, twin.diff at T010,
+	// each leaving this list as it does.
+	notYetServed := []string{"run.read", "run.interrupt", "twin.diff"}
+	for _, op := range notYetServed {
+		if slices.Contains(Operations, op) {
+			t.Errorf("Operations serves %s; drop it from notYetServed", op)
+		}
+	}
+	enum := slices.DeleteFunc(schema.Properties.Operation.Enum, func(op string) bool {
+		return slices.Contains(notYetServed, op)
+	})
+	got, want := slices.Sorted(slices.Values(Operations)), slices.Sorted(slices.Values(enum))
 	if !slices.Equal(got, want) {
 		t.Errorf("Operations = %v, the contract's enum %v", got, want)
 	}

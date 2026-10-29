@@ -95,7 +95,7 @@ next one.
 <a id="d-001"></a>
 ## D-001 — Infrahub as the network source of truth
 
-**Status:** Accepted 2026-09-14
+**Status:** Accepted 2026-09-14; superseded by [D-066](#d-066) on 2026-10-29 in the part that says NetBox has no native branching; Infrahub stays the first source of truth.
 
 ### Context
 
@@ -264,7 +264,7 @@ modelled.
 <a id="d-005"></a>
 ## D-005 — Go end to end; no second runtime
 
-**Status:** Accepted 2026-09-14
+**Status:** Accepted 2026-09-14; superseded by [D-065](#d-065) on 2026-10-29 in its scope: it binds the core, not the orchestrator.
 
 ### Context
 
@@ -847,7 +847,7 @@ a server and is where retry, cancellation and cleanup paths are tested.
 <a id="d-018"></a>
 ## D-018 — Single module, single binary in three roles, PSPs and schema embedded
 
-**Status:** Accepted 2026-09-14
+**Status:** Accepted 2026-09-14; superseded by [D-065](#d-065) on 2026-10-29 in its scope: it binds the core, not the orchestrator.
 
 ### Context
 
@@ -3111,7 +3111,7 @@ never queried.
 ## D-049 — A check posts the rehearsal's report as a comment; Fylgja writes nothing
 
 **Status:** Accepted 2026-10-19; superseded by [D-053](#d-053) on 2026-10-20 in the kind it
-names. Beside [D-026](#d-026), which stands. To be built by `015-proposed-change-rehearsal`.
+names. Beside [D-026](#d-026), which stands. To be built by `015-proposed-change-rehearsal`. Superseded by [D-065](#d-065) on 2026-10-29 in "the check posts" and "Fylgja writes nothing"; the thread stands.
 
 ### Context
 
@@ -3152,7 +3152,7 @@ and fails nothing.
 
 **Status:** Accepted 2026-10-19. Supersedes the loopback default of [D-042](#d-042) for this
 deployment; D-042's token and its comparison stand. To be built by
-`015-proposed-change-rehearsal`.
+`015-proposed-change-rehearsal`. Superseded by [D-065](#d-065) on 2026-10-29 in the listener it puts on the bridge, which is the orchestrator's platform API's; the core's server listens on loopback alone.
 
 ### Context
 
@@ -3192,7 +3192,7 @@ bring-up script starts the server so.
 **Status:** Accepted 2026-10-19. Beside [D-007](#d-007) and [D-036](#d-036). Constitution
 VIII is satisfied by this entry and its text is not amended: it admits a workflow through a
 decision-log entry, as the step and following workflows were admitted. To be built by
-`015-proposed-change-rehearsal`.
+`015-proposed-change-rehearsal`. Superseded by [D-065](#d-065) on 2026-10-29 whole.
 
 ### Context
 
@@ -3270,7 +3270,7 @@ retires it.
 of D-049 stands: the checks as clients of the API and glue, one new comment per run
 carrying the report's markdown headed by the run, none edited, `fylgja-step` writing
 nothing, a comment that cannot be posted failing nothing. [D-026](#d-026) stands. Built by
-`015-proposed-change-rehearsal`.
+`015-proposed-change-rehearsal`. Superseded by [D-065](#d-065) on 2026-10-29 in "the check posts" and "Fylgja writes nothing"; the thread stands.
 
 ### Context
 
@@ -4093,3 +4093,146 @@ device's configuration (D-028, Constitution IV).
   deleted; the remedy is the declaration's.
 - Revisit at F-020 (a second format and element shape), when the reference transform
   gains routing, or if a probe needs a rate of its own.
+
+---
+
+<a id="d-065"></a>
+## D-065 — Fylgja is two deployables: a core that runs a twin from a snapshot, and an orchestrator on Prefect that owns the sources, the stages and the rehearsal and drives the core through the API alone
+
+**Status:** Accepted 2026-10-29, by the operator, at `020-core-orchestrator-split`'s
+feature-open. Supersedes [D-051](#d-051) whole; [D-049](#d-049) and [D-053](#d-053) in "the
+check posts" and "Fylgja writes nothing"; [D-050](#d-050) in the listener it puts on the
+bridge, which becomes the orchestrator's platform API; and [D-005](#d-005) and
+[D-018](#d-018) in their scope, which is the core's. Beside [D-040](#d-040),
+[D-041](#d-041), [D-042](#d-042) and [D-052](#d-052), which stand, and [D-061](#d-061),
+[D-062](#d-062) and [D-064](#d-064), whose seam it completes. To be built by
+`020-core-orchestrator-split`.
+
+### Context
+
+Since D-061 every workflow starts with a snapshot id and a bundle id, since D-062 the
+worker reads no source of truth, and since D-064 the one input outside intent reaches the
+core inside the snapshot. But the server still reads Infrahub for `twin create --branch`
+and `--stage`, `twin step --stage`, `intent read`, `stage list`, `stage plan`, `twin
+rehearse` and `schema check`, resolves stages, renders the rehearsal's report and holds
+Infrahub's token, and `fylgja-rehearse` is a workflow of the worker (D-051). The roadmap's
+production shape, discussed and tabled on 2026-10-25, named two components as a direction.
+F-025's NetBox reader, settled on 2026-10-29 as a Python adapter outside the core, would
+invent the orchestrator's toolchain if built first; its spike showed the core takes an
+adapter's snapshot unchanged and the snapshot id reproduces outside Go
+([verified facts](verified-facts.md#netbox-474-with-netbox-branching-122), 10-29). And a
+platform whose resume is a rerun must start a run and poll it, which the API's open stream
+does not offer ([api.md](../contracts/api.md)).
+
+### Options considered
+
+- **One deployable, the readers in the server.** *Rejected*: the core keeps knowing a
+  branch, and every new source is Go inside it.
+- **The orchestrator on Temporal, in Go.** The cheapest split and the most durable.
+  *Rejected*: it defers the platform question, leaves Constitution I's freedom unused and
+  makes F-025's adapter the one Python in the system.
+- **The orchestrator on Kestra.** *Rejected*: declarative YAML fits an orchestrator that is
+  a contract others' flows fill, which is not decided.
+- **The orchestrator on Prefect, in Python.** *Chosen*: the ecosystem's language and
+  F-025's, flows as code, Apache 2, no Kubernetes, and the platform Infrahub's own checks
+  run on.
+- **The Infrahub reader extracted unchanged as a Go tool.** *Rejected*: the orchestrator
+  would hold two toolchains. *Chosen*: the reader ported to Python on `infrahub-sdk`.
+- **The check posts the report, as D-053 has it.** *Rejected*: F-025's report on a NetBox
+  branch has no check to post it, and a second posting path would follow.
+
+### Decision
+
+- **Two deployables.** The **core** is the `fylgja` binary in its three roles: it builds,
+  steps, destroys, shows and verifies a twin from a snapshot, compiles one, validates a
+  package and answers the step between two snapshots, and knows no branch, proposed change,
+  stage or source of truth. Its server holds no Infrahub credential and listens on loopback
+  alone; its worker serves provision, step and destroy. The **orchestrator** is a Python
+  project on Prefect in this repository: its adapters read one source each to a snapshot
+  file, the Infrahub adapter first, a port of the Go reader on `infrahub-sdk`; its flows
+  read, create, step, plan, rehearse and check a schema; it posts the rehearsal's report
+  back to the source; it keeps the snapshots it takes and one record of the twin it drove,
+  as files; and its CLI, `fylgja-cli`, runs a flow and prints the findings document.
+- **The orchestrator drives the core through the API alone**, a client under D-040's rule,
+  and never starts a core workflow. Temporal stays in the core, where mid-flight durability
+  matters, and is not the orchestrator's integration surface.
+- **The API's long operations** may end an answer at the run's identity, and a run is read
+  and interrupted by its identity, both built from the run's history so that the server
+  keeps nothing between two requests (D-014). The stream stays for the core's own CLI.
+- **The rehearsal is a flow of the orchestrator**, not a workflow. It posts its report as a
+  thread on the proposed change, as the view shows one; the checks trigger a flow, wait for
+  it and conclude from the report's status alone (D-052). The checks reach the
+  orchestrator's platform API on the host's Docker bridge, which takes D-050's place, and
+  the core's token never crosses the bridge.
+- **Constitution I binds the core and frees the orchestrator**, which calls tools written
+  in anything; D-005 and D-018 are the core's.
+
+### Consequences
+
+- The core's API and CLI lose `twin.rehearse`, `stage.list`, `stage.plan`, `intent.read`,
+  `schema.check` and the arguments `branch`, `at`, `stage`, `scope` and `probes`;
+  `twin.json` moves to `12`; the worker serves three workflows and seventeen activities,
+  which amends D-062's and D-064's count.
+- The `rehearsal`, `stages` and `plan` documents and the markdown report move to the
+  orchestrator's contract unchanged but for `fylgja-cli` in their reproduce lines.
+- The development host runs five processes; CI runs the Python tests and linter beside
+  Go's.
+- The constitution is amended MAJOR, citing this entry: I redefined in its scope, VIII and
+  IX the core's, XI gaining the orchestrator as a client.
+- **Revisit** if Prefect's open-source server lacks what the flows need (verified at plan),
+  or once the orchestrator is decided a contract rather than a product.
+
+---
+
+<a id="d-066"></a>
+## D-066 — A stage resolves to a snapshot: by a pinned read where the source replays time, else the snapshot the adapter took when the operator marked it
+
+**Status:** Accepted 2026-10-29, by the operator, at `020-core-orchestrator-split`'s
+feature-open. Supersedes [D-001](#d-001) in the part that says NetBox has no native
+branching; Infrahub stays the first source of truth and the one the development host runs.
+Beside [D-045](#d-045) to [D-048](#d-048), which stand for a source that replays time, and
+[D-065](#d-065), which makes stages the orchestrator's. To be built by
+`020-core-orchestrator-split` for Infrahub and by F-025 for NetBox.
+
+### Context
+
+D-045 makes a stage a moment of a proposed change, resolved to `(branch, at)` and read
+pinned, because Infrahub reads a branch as it stood at any past time. NetBox 4.7.4 with
+netbox-branching 1.2.2, probed live on 2026-10-29, has branches with a diff, merge, revert
+and a change log of their own, so D-001's "no native branching" no longer holds; but
+nothing reads a branch as it was at an earlier change
+([verified facts](verified-facts.md#netbox-474-with-netbox-branching-122), 10-29). A stage
+there has no `at` to resolve to. Since D-061 the core takes a snapshot alone, and since
+D-065 stages are the orchestrator's.
+
+### Options considered
+
+- **Stages for Infrahub alone.** *Rejected*: a twin of a NetBox branch could be built but
+  neither staged nor rehearsed.
+- **A NetBox branch's past rebuilt from its change log.** *Rejected*: it re-makes the
+  source's history outside the source.
+- **A stage is a snapshot, however it is got.** *Chosen*.
+
+### Decision
+
+- A stage resolves to a snapshot id. Where the source replays time (Infrahub), the adapter
+  resolves the mark by D-045 to D-048 and takes the snapshot by a read pinned there, at
+  each request. Where it cannot (NetBox), the stage is the snapshot the adapter took when
+  the operator marked it, which the orchestrator holds under its snapshot directory, by id,
+  never overwritten.
+- The flows that consume stages (the plan, a step to a stage, the rehearsal) take snapshot
+  ids and do not know how each was got.
+- NetBox with its branching plugin is a source Fylgja may read (F-025); Infrahub stays the
+  first.
+
+### Consequences
+
+- The orchestrator's snapshot directory is the stage store's seed; F-025 adds the marking
+  and the store for NetBox.
+- A NetBox stage is fixed when it is marked, and a later edit to its branch does not move
+  it; an Infrahub stage is read again at each request and refused when stale (D-046,
+  D-048).
+- **Revisit** if NetBox gains a read of a branch at a past time, or a source offers named
+  points in time (014's upstream request).
+
+---

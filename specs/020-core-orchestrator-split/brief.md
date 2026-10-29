@@ -8,9 +8,9 @@ the roadmap's [F-027](../../docs/roadmap.md#f-027) paragraph and
 [D-064](../../docs/decisions.md#d-064), 016's close, the three earlier briefs' hand-offs
 to the production shape and the NetBox spike's findings
 ([verified facts](../../docs/verified-facts.md#netbox-474-with-netbox-branching-122)),
-for the operator to settle at feature-open: every entry under [Decided](#decided) marked
-*proposed* is the author's and may be overturned there, and [Open](#open) holds the
-questions only the operator can answer. **Fylgja becomes two deployables**: a core that
+and settled by the operator at feature-open the same day: the six questions it left open
+are entries under [Decided](#decided) dated and attributed to the operator, and an entry
+still marked *proposed* is the author's, confirmed by the operator there. **Fylgja becomes two deployables**: a core that
 builds, steps, destroys, shows and verifies a twin from a snapshot and knows no branch,
 proposed change, stage or source of truth; and an orchestrator that owns the readers, the
 stages and their resolution, the rehearsal and the report posted back to the source, and
@@ -78,25 +78,26 @@ SPECIFY_FEATURE_DIRECTORY=specs/020-core-orchestrator-split GIT_BRANCH_NAME=020-
   runs on the lab host and reads the host in its own process; one token from the
   environment. All three stand; the orchestrator is the API's next client.
   **[D-050](../../docs/decisions.md#d-050)**, the bridge listener: moved to the
-  orchestrator's side ([Open](#open), question 5).
-- **[D-051](../../docs/decisions.md#d-051)**, the rehearsal as a workflow: superseded here.
+  orchestrator's side by [D-065](../../docs/decisions.md#d-065) ([Decided](#decided)).
+- **[D-051](../../docs/decisions.md#d-051)**, the rehearsal as a workflow: superseded by [D-065](../../docs/decisions.md#d-065).
   **[D-052](../../docs/decisions.md#d-052)**, the check concludes from the report's status
   alone, Fylgja's verdicts advisory: stands. **[D-049](../../docs/decisions.md#d-049)** and
   **[D-053](../../docs/decisions.md#d-053)**, the check posts the report as a thread and
-  Fylgja writes nothing: who posts is [Open](#open), question 4; the core writes nothing
-  to Infrahub either way.
+  Fylgja writes nothing: superseded by [D-065](../../docs/decisions.md#d-065) in who posts, which is the rehearse flow
+  ([Decided](#decided)), and kept in the thread; the orchestrator writes the thread, and
+  the core writes nothing to Infrahub.
 - **[D-057](../../docs/decisions.md#d-057), [D-061](../../docs/decisions.md#d-061),
   [D-062](../../docs/decisions.md#d-062), [D-064](../../docs/decisions.md#d-064)**: the
   CTM is the contract, the snapshot the core's one input, a twin frozen at it, a probe
   carried in it. None moves: CTM `2`, snapshot `2`, bundle `6` and the four goldens stand,
   and the fixture's snapshot id (`0940db93…`) and compiled id (`c3872f5c…`) are the test
-  that the extraction changed nothing ([Exit](#exit)).
+  that the split and the port changed nothing ([Exit](#exit)).
 - **[D-005](../../docs/decisions.md#d-005)** and **[D-018](../../docs/decisions.md#d-018)**:
-  Go end to end, one binary in three roles. From this feature they are the core's: D-005's
+  Go end to end, one binary in three roles. From this feature they are the core's ([D-065](../../docs/decisions.md#d-065)): D-005's
   own "honest counter-case" (adoption beats elegance where contributors write Python) is
   what the orchestrator takes up.
-- **[D-001](../../docs/decisions.md#d-001)**: superseded in the part that says NetBox lacks
-  branching, owed here by the roadmap since 2026-10-29. Infrahub stays the first source of
+- **[D-001](../../docs/decisions.md#d-001)**: superseded by [D-066](../../docs/decisions.md#d-066) in the part that says
+  NetBox lacks branching, owed here by the roadmap since 2026-10-29. Infrahub stays the first source of
   truth and the one the development host runs.
 - **[Constitution 2.3.0](../../.specify/memory/constitution.md)**: I (Go, end to end) is
   kept for the core and freed for the orchestrator; III (a reader maps one source) binds
@@ -160,30 +161,39 @@ SPECIFY_FEATURE_DIRECTORY=specs/020-core-orchestrator-split GIT_BRANCH_NAME=020-
    goldens' code path (Constitution V); its name is the plan's, and the orchestrator's plan
    and rehearsal flows are its consumers. *Proposed* by the author; the alternative is the
    plan showing snapshot and bundle ids alone, which loses the drawing's edges.
-5. **The Infrahub adapter, a tool of the orchestrator, and a reader alone.** A second
-   binary of the Go module, `cmd/fylgja-infrahub` (the name is the plan's), made from
-   `internal/intent`, the reader's half of `internal/stages` (the reference, its resolution
-   to `(branch, at)`, the staleness rule and the list), the read-and-take half of
-   `internal/stage`, the probe reader and the schema check, with no code added to them that
-   a move does not need; the plan's compile-and-diff half of `internal/stages` and the
-   baseline rule (015 R-03) are not moved but re-made in the orchestrator over the core's
-   operations (items 4 and 6), since the adapter never compiles. It reads a branch, a pinned
-   branch or a stage, under a scope (`tag:<name>`, `FYLGJA_DEFAULT_SCOPE` its default now),
-   with probes from a file, else `FylgjaProbe` on the default branch, else none, and writes
-   a snapshot `2` file whose id is the one the server files today; it lists a proposed
-   change's stages and what each resolves to; it checks a branch's schema against the
-   mapping. It embeds the platform packages as the core does, with the same override
-   directory, because the CTM names each device's package
-   ([ctm.schema.json](../../contracts/ctm.schema.json), `platform.package`) and the read
-   refuses a platform no package matches ([D-057](../../docs/decisions.md#d-057)); a skew
-   between the two binaries' packages is refused by the core when it takes the snapshot,
+5. **The Infrahub adapter, a tool of the orchestrator, in Python, and a reader alone**
+   ([Decided](#decided)). A port to Python on `infrahub-sdk` of `internal/intent`, the
+   reader's half of `internal/stages` (the reference, its resolution to `(branch, at)`, the
+   staleness rule and the list), the read-and-take half of `internal/stage`, the probe
+   reader and the schema check: the same mapping
+   ([D-057](../../docs/decisions.md#d-057), `schema/README.md`), the same stage rules
+   ([D-045](../../docs/decisions.md#d-045) to [D-048](../../docs/decisions.md#d-048)) and
+   the same stamps ([D-058](../../docs/decisions.md#d-058) to
+   [D-060](../../docs/decisions.md#d-060)), each rule and refusal carried over with its
+   identifier and wording, and nothing added that the port does not need. The plan's
+   compile-and-diff half of `internal/stages` and the baseline rule (015 R-03) are not
+   ported but re-made in the orchestrator over the core's operations (items 4 and 6), since
+   the adapter never compiles. It reads a branch, a pinned branch or a stage, under a scope
+   (`tag:<name>`, `FYLGJA_DEFAULT_SCOPE` its default now), with probes from a file, else
+   `FylgjaProbe` on the default branch, else none, and writes a snapshot `2` file whose id
+   is the one the Go reader files today, byte for byte (the NetBox spike reproduced the id
+   outside Go); it lists a proposed change's stages and what each resolves to; it checks a
+   branch's schema against the mapping. It reads the platform packages' `platform.matches`
+   from the shipped `psp/*.yaml`, with the same override directory, because the CTM names
+   each device's package ([ctm.schema.json](../../contracts/ctm.schema.json),
+   `platform.package`) and the read refuses a platform no package matches; a skew between
+   the adapter's packages and the core's is refused by the core when it takes the snapshot,
    never silent. Its environment is `INFRAHUB_*` and the default scope; it holds no node
-   login and never the API's token. The boundary is held by tests over imports both ways:
-   `cmd/fylgja` links neither `internal/intent` nor `internal/stages`, and the adapter
-   links neither `internal/provision`, `internal/lab` nor `internal/server`. Whether the
-   adapter stays Go in this feature is [Open](#open), question 2.
-6. **The orchestrator.** A Python project on Prefect ([Open](#open), question 1), under
-   `orchestrator/` (the name is the plan's) in this repository ([Open](#open), question 6).
+   login and never the API's token. **The Go reader is removed once the port reproduces
+   it**: `internal/intent`, the moved halves of `internal/stages` and `internal/stage`, and
+   the schema check leave the Go module only after the Python adapter files `0940db93…`
+   from `fylgja-fixture` and the Go contract tests' assertions pass against it, so the route
+   ports before it removes, as it captures the renderers' goldens before it removes them
+   (item 11). `cmd/fylgja-fixture` stays Go, a test tool that writes Infrahub through
+   `internal/testsupport` and links no reader. The boundary is held by a test over imports:
+   no package `cmd/fylgja` links reads Infrahub.
+6. **The orchestrator.** A Python project on Prefect ([Decided](#decided)), under
+   `orchestrator/` (the name is the plan's) in this repository ([Decided](#decided)).
    - **Its flows**, each a Prefect flow and a deployment: a read (branch, pinned branch or
      stage, with probes) to a snapshot file, through the adapter; a create from a branch or
      a stage, which reads then calls the core's `twin.create`; a step to a stage, which
@@ -192,10 +202,11 @@ SPECIFY_FEATURE_DIRECTORY=specs/020-core-orchestrator-split GIT_BRANCH_NAME=020-
      rehearsal, which plans, reclaims a twin its own dead run left, creates from the
      baseline, steps and verifies each later stage in order through the step's wait, stops
      at the first that fails, destroys whatever happened, computes each stage's verdict and
-     the report, and posts it ([Open](#open), question 4); and the schema check, passed
+     the report, and posts it as a thread on the proposed change ([Decided](#decided));
+     and the schema check, passed
      through. Each flow's refusals keep 014's and 015's identifiers and wording where the
      rule moved whole.
-   - **Its CLI** ([Open](#open), question 3): one console script, noun-verb, whose
+   - **Its CLI, `fylgja-cli`** ([Decided](#decided)): one console script, noun-verb, whose
      commands are the ones the core's CLI loses, `intent read`, `stage list`, `stage plan`,
      `twin create --branch|--stage`, `twin step --stage`, `twin rehearse` (`--markdown`
      kept) and `schema check`, each running its flow and printing the same findings
@@ -215,11 +226,13 @@ SPECIFY_FEATURE_DIRECTORY=specs/020-core-orchestrator-split GIT_BRANCH_NAME=020-
      never a node login.
    - **Its documents**: the `rehearsal`, `stages` and `plan` blocks, their text and the
      markdown report as 014, 015 and 016 shaped them, so that the checks and the report's
-     readers see no change but the author's name in the reproduce lines (Constitution XI's
+     readers see no change but the command's name in the reproduce lines, `fylgja-cli`
+     where they named `fylgja` (Constitution XI's
      "the documents Fylgja already versions"); they move from the core's contracts to the
      orchestrator's. The text and markdown renderers are a port of what `internal/rehearsal`,
      `internal/findings`' text form and the server's list and plan printers render today,
-     held to goldens captured from the Go implementation before it is removed (item 11).
+     held to goldens captured from the Go implementation before it is removed (item 11),
+     byte for byte but for the command's name in the reproduce lines.
    - **The rehearsal's deadline** is the flow's, derived from the stages' budgets as
      D-051 derived it; how the flow learns the packages' budgets without loading the
      packages is the plan's. A flow that times out or is cancelled still destroys.
@@ -227,38 +240,39 @@ SPECIFY_FEATURE_DIRECTORY=specs/020-core-orchestrator-split GIT_BRANCH_NAME=020-
    Python glue under `infrahub/checks/`, run by Infrahub's task workers on every proposed
    change; each triggers its flow's deployment through the orchestrator's platform API on
    the host's Docker bridge, waits for the flow run, reads its document and concludes from
-   the status alone (D-052). `fylgja_api.py` becomes that glue; the retry while the host is
+   the status alone (D-052); `fylgja-twin` posts nothing, since the rehearse flow posted
+   the thread ([Decided](#decided)). `fylgja_api.py` becomes that glue; the retry while the host is
    held (015 R-15) and the deadline margin move with it. `fylgja-twin`'s `timeout` of 4260
    stands until the plan measures the flow's overhead.
 8. **The core's listener.** The server listens on loopback alone on the lab host, the
    orchestrator reaches it there, and the bridge listener and D-050 move to the
    orchestrator's platform API, which the Compose override's two variables point at
-   ([Open](#open), question 5). `SECURITY.md`'s threat model follows.
-9. **The decision entries**, two. **D-065**, the split: two deployables; the core's surface;
-   the orchestrator's platform and language; the orchestrator drives the core through the
-   API alone and never starts its workflows; Temporal stays in the core; the long-operation
-   shape; Constitution I kept for the core and freed for the orchestrator; D-051 superseded,
-   D-018 and D-040 read as the core's, D-050 moved, D-049 and D-053 in their "who posts" if
-   question 4 says so. **D-066**, stages across sources: a stage resolves to a snapshot id;
-   where the source replays time, by a pinned read at the mark (D-045); where it cannot,
-   the snapshot the adapter took when the operator marked it, held by the orchestrator; and
-   D-001 superseded in the part that says NetBox lacks branching. The constitution's
-   amendment is MAJOR.
+   ([Decided](#decided)). `SECURITY.md`'s threat model follows.
+9. **The decision entries**, two, appended at feature-open on 2026-10-29 with the
+   operator's OK, each superseded entry's status line with them: [D-065](../../docs/decisions.md#d-065), the split (D-051
+   whole; D-049 and D-053 in who posts and "Fylgja writes nothing"; D-050 in its bridge
+   listener; D-005 and D-018 in their scope), and [D-066](../../docs/decisions.md#d-066), stages across sources (D-001 in the
+   part that says NetBox lacks branching). The chain writes no entry for them; it amends the
+   constitution, MAJOR, citing both, and greps `docs/architecture.md` for each superseded
+   position (item 12).
 10. **The repository and the toolchain.** `orchestrator/` with its `pyproject.toml`, its
-    tests and its lint; `cmd/fylgja-infrahub`; CI's unit job runs the Python tests beside
+    tests and its lint, the Infrahub adapter among its packages or beside them (the
+    layout is the plan's); CI's unit job runs the Python tests beside
     `go test`, and its lint job the Python linter beside golangci-lint and ShellCheck; the
     bring-up script gains a part that installs the orchestrator's venv and Prefect, starts
     its server and worker detached as the three processes are, and the development host
     runs five processes; `make` gains the orchestrator's targets. Which venv the
     orchestrator uses, beside the `.venv` that holds `infrahubctl`, is the plan's.
-11. **The tiers.** Tier 1: the Go tests as today, less the moved packages' share, plus the
+11. **The tiers.** Tier 1: the Go tests as today, less the removed packages' share, plus the
     boundary tests and the Python tests of the flows' pure parts (the verdict, the report,
     the deadline, the text and markdown renderings), against goldens captured from the Go
     implementation: a `stages`, a `plan` and a `rehearsal` document with their text and
     markdown, taken by a live run before the Go renderers go, so the route captures before
     it removes. Tier 2: the adapter's contract
-    tests, which are `internal/intent`'s, `internal/stages`' and `internal/stage`'s today,
-    unmoved but for their binary; the orchestrator's flows against the real Infrahub and a
+    tests, ported to Python from `internal/intent`'s, `internal/stages`' and
+    `internal/stage`'s, each Go test's assertions carried over against the same fixture and
+    throwaway `fylgja-test-*` branches, and run against the Go reader's answers before it
+    is removed; the orchestrator's flows against the real Infrahub and a
     core server started with no Infrahub credential; `TestChecksInsideInfrahub` reaching the
     orchestrator's platform on the bridge, skipping where it reaches none, as it does for
     the server today. Tier 3: nine cases, every command that names a branch, a stage or a
@@ -297,7 +311,8 @@ SPECIFY_FEATURE_DIRECTORY=specs/020-core-orchestrator-split GIT_BRANCH_NAME=020-
 
 Each was settled by the operator on 2026-10-25 (the production shape, discussed and
 tabled) or on 2026-10-29 (F-027 added before F-025, with F-025's shape), unless marked
-*proposed*, which is the brief's author on 2026-10-29, for the operator at feature-open.
+*proposed*, which is the brief's author on 2026-10-29, confirmed by the operator at
+feature-open the same day; the six the operator chose there are dated and attributed.
 
 - **Two deployables: a core and an orchestrator** (2026-10-25). The core builds, steps,
   destroys, shows and verifies a twin from a snapshot and exposes it through the API;
@@ -318,33 +333,43 @@ tabled) or on 2026-10-29 (F-027 added before F-025, with F-025's shape), unless 
 - **D-001 is superseded in the part that says NetBox lacks branching, and a stage where
   the source cannot replay time is the snapshot Fylgja holds** (2026-10-29, the roadmap's
   bullet moved here from F-025).
-- **The Infrahub adapter stays Go in this feature, extracted as a tool** (*proposed*;
-  [Open](#open), question 2). The reader, the stage resolution and the schema check are
-  about 20,000 lines with their tests, carry seven decision entries of verified Infrahub
-  behaviour ([D-045](../../docs/decisions.md#d-045) to [D-048](../../docs/decisions.md#d-048),
-  [D-058](../../docs/decisions.md#d-058) to [D-060](../../docs/decisions.md#d-060)) and
-  most of tier 2's 34 minutes; moving them across a language line is a rewrite and a
-  re-verification, not a split, and the production shape allows a tool in any language.
-  *Not chosen now*: the rewrite in Python with `infrahub-sdk`, one toolchain for the
-  orchestrator, which a later feature may take up once the flow shape is proved.
-- **The orchestrator ships a noun-verb CLI of its own that prints the documents the core's
-  CLI loses** (*proposed*; [Open](#open), question 3). CLI first
-  ([D-019](../../docs/decisions.md#d-019)) and the findings document as the oracle of
-  every tier hold on both sides. *Not chosen*: the core's `fylgja` CLI as a client of two
-  servers, which ties the core's binary to the orchestrator's platform API.
+- **The orchestrator's platform is Prefect** (the operator, 2026-10-29, at feature-open):
+  Python, the ecosystem's language and F-025's, flows as code, Apache 2, no Kubernetes,
+  and the platform Infrahub's own checks run on; the open-source server's boundary is
+  verified at plan ([Left to the plan](#left-to-the-plan)). *Not chosen*: Temporal in Go,
+  which defers the platform question and leaves Constitution I's freedom unused, and
+  Kestra, which fits an orchestrator that is a contract others' flows fill.
+- **The Infrahub adapter is rewritten in Python on `infrahub-sdk` in this feature** (the
+  operator, 2026-10-29, at feature-open): one toolchain for the orchestrator and its
+  adapters, which F-025's NetBox adapter joins, at the price of a port of about 25,600
+  lines (11,300 of them tests) and the re-proof in Python of the seven decision entries of
+  verified Infrahub behaviour it carries ([D-045](../../docs/decisions.md#d-045) to
+  [D-048](../../docs/decisions.md#d-048), [D-058](../../docs/decisions.md#d-058) to
+  [D-060](../../docs/decisions.md#d-060)) and of most of tier 2. *Not chosen*: the Go
+  reader extracted unchanged as a tool, `cmd/fylgja-infrahub`, which keeps its tests
+  unmoved but leaves the orchestrator two toolchains.
+- **The orchestrator ships a noun-verb CLI of its own, `fylgja-cli`, that runs a flow and
+  prints the documents the core's CLI loses** (the operator, 2026-10-29, at feature-open):
+  CLI first ([D-019](../../docs/decisions.md#d-019)) and the findings document as the
+  oracle of every tier hold on both sides, and the report's reproduce lines name
+  `fylgja-cli`; the core's own CLI stays `fylgja`. *Not chosen*: Prefect's CLI and UI
+  alone, which lose the tiers' document oracle and the README's walk-through, and the
+  core's `fylgja` CLI as a client of two servers, which ties the core's binary to the
+  orchestrator's platform API.
 - **The rehearsal's report is posted by the rehearse flow, and the check triggers, waits
-  and concludes** (*proposed*; [Open](#open), question 4). Posting back to the source is
+  and concludes** (the operator, 2026-10-29, at feature-open). Posting back to the source is
   the orchestrator's in the production shape, F-025's journal entry on a NetBox branch
   has no check to post it, and one flow then posts to either source. D-049 and D-053 are
-  superseded in "the check posts" and kept in "a thread, as the view shows one". *Not
+  superseded in "the check posts" and "Fylgja writes nothing", and kept in "a thread, as
+  the view shows one". *Not
   chosen*: the check posting what the flow returns, as today, which leaves F-025 to invent
   a second posting path.
 - **The core's server listens on loopback alone, and the bridge listener moves to the
-  orchestrator's platform API** (*proposed*; [Open](#open), question 5). The task workers
+  orchestrator's platform API** (the operator, 2026-10-29, at feature-open). The task workers
   then hold the orchestrator's credential and never the core's token, which no longer
   crosses the bridge unencrypted. *Not chosen*: both on the bridge, which keeps a listener
   nobody dials.
-- **The orchestrator lives in this repository** (*proposed*; [Open](#open), question 6),
+- **The orchestrator lives in this repository** (the operator, 2026-10-29, at feature-open),
   under one directory with its own toolchain: one history, one feature chain, the contracts
   and the frozen copies shared, CI's three jobs extended rather than doubled. *Not
   chosen*: a second repository, which the converge loop cannot run and which splits every
@@ -358,8 +383,8 @@ tabled) or on 2026-10-29 (F-027 added before F-025, with F-025's shape), unless 
   compiled outside the server need not be the one the server compiles, and the adapter is
   a client's tool; the step is a pure function of two bundles
   ([internal/step](../../internal/step), held pure by a test), so the core answers it.
-  *Not chosen*: `internal/stages` moved whole, compiler and all, which keeps its plan
-  tests unmoved at the price of a second compile path outside the core.
+  *Not chosen*: the compiler ported beside the reader, which in Python is a second
+  compiler outside the core, held to the goldens by nothing but a copy of their tests.
 - **The orchestrator keeps one record of the twin it drove** (*proposed*; item 6): the
   stage, its snapshot id and the flow run, as files beside its snapshots, trusted only
   while the core's `twin show` names the same snapshot. Without it `twin step`'s default
@@ -367,12 +392,15 @@ tabled) or on 2026-10-29 (F-027 added before F-025, with F-025's shape), unless 
   read once `twin.json` names no stage. *Not chosen*: those four retired, so that every
   step names its target and a dead rehearsal's twin is the operator's to destroy; and a
   stage kept in the core's record, which is the knowledge the split removes.
-- **Two decision entries, D-065 and D-066, and a MAJOR amendment** (*proposed*): the
-  split in one entry on D-061's pattern; stages across sources, with D-001's supersession,
-  in a second, since F-025 will cite it alone.
-- **The estimate is 16–24 hours of sessions** (*proposed*, the plan re-estimates):
+- **Two decision entries, [D-065](../../docs/decisions.md#d-065) and [D-066](../../docs/decisions.md#d-066), and a MAJOR amendment** (the author's
+  proposal, appended by the operator at feature-open on 2026-10-29): the split in one entry
+  on D-061's pattern; stages across sources, with D-001's supersession, in a second, since
+  F-025 will cite it alone.
+- **The estimate is 22–33 hours of sessions** (*proposed*, raised from 16–24 once the
+  operator chose the adapter's port; the plan re-estimates, and proposes a cut into two
+  specs if its route runs past 017's):
   the core's narrowing, the long-operation shape, the record and the boundary tests 4–6;
-  the adapter's extraction 2–3; the orchestrator, its flows, CLI, the documents'
+  the adapter's port to Python and its contract tests 8–12, about 017's size again; the orchestrator, its flows, CLI, the documents'
   renderers, the checks' glue and the platform 7–10; the tiers, the bring-up part and
   the documents 3–5. 017, the largest
   feature so far, ran T001–T121 against 6–10.
@@ -380,8 +408,7 @@ tabled) or on 2026-10-29 (F-027 added before F-025, with F-025's shape), unless 
   - the explicit mutation of a node or a link, the production shape's sixth core operation;
   - following brought back by the orchestrator as take, compare, step, and a webhook or
     an event rule that starts it ([ideas](../../docs/ideas.md));
-  - the NetBox adapter and its stage store (F-025), the Python rewrite of the Infrahub
-    adapter, and a second orchestrator platform;
+  - the NetBox adapter and its stage store (F-025), and a second orchestrator platform;
   - a callback on the core's API, a list of runs, or a fetch of a filed bundle or snapshot;
   - a gate that pauses a flow for a human, an automation fired by Infrahub's webhook,
     and any Prefect feature the open-source server lacks;
@@ -392,33 +419,7 @@ tabled) or on 2026-10-29 (F-027 added before F-025, with F-025's shape), unless 
 <a id="open"></a>
 ## Open, for clarify
 
-Each is the operator's, put at feature-open and moved into [Decided](#decided); `none`
-before the chain starts.
-
-1. **The orchestrator's platform.** *Prefect* (the roadmap's lead and the author's
-   recommendation: the ecosystem's language, Infrahub's own checks run on it, flows as
-   code, Apache 2, no Kubernetes, with the open-source server's boundary verified at plan),
-   *Temporal in Go* (already in the stack, the most durable, the cheapest split: the
-   orchestrator a second Go service driving the core through the API, which defers the
-   platform question and makes F-025 a Python tool a Go orchestrator calls) or *Kestra*
-   (declarative YAML, if the orchestrator is a contract others' flows fill).
-2. **The Infrahub adapter in this feature.** *Go, extracted as a tool* (recommended, above),
-   or *rewritten in Python with `infrahub-sdk`* (one toolchain; seven decision entries'
-   verified behaviour and most of tier 2 re-proved in Python; about 017's size again on
-   top of the split).
-3. **The orchestrator's operator surface, and its name.** *A noun-verb CLI of its own that
-   runs a flow and prints the document* (recommended), *Prefect's CLI and UI alone*
-   (nothing to build, but the tiers lose their document oracle and the README its
-   walk-through), or *the core's `fylgja` CLI kept as a client of both servers* (one
-   command for the operator; the core's binary learns the platform's API). With the first,
-   its name: two binaries on one `PATH` cannot both be `fylgja`, and the report's reproduce
-   lines (`fylgja twin create --stage …`, contract text the README and tier 3 read) name
-   whichever is chosen. The author recommends `fylgja-orchestrator`, on `fylgja-fixture`'s
-   pattern.
-4. **Who posts the report.** *The rehearse flow* (recommended) or *the check, as today*.
-5. **The core's listeners.** *Loopback alone, the bridge the orchestrator's* (recommended)
-   or *both kept on the bridge*.
-6. **The repository.** *This one, under one directory* (recommended) or *a second*.
+none
 
 <a id="left-to-the-plan"></a>
 ## Left to the plan
@@ -447,9 +448,14 @@ before the chain starts.
   documents with their text and markdown from the Go implementation (tier 3's case 9 and
   a hand rehearsal produce them; `local/` holds earlier runs' outputs), and where the route
   places that capture before the Go renderers are removed.
-- **Whether the adapter links the compiler through `internal/validate`**, whose probe
-  placement runs the compiler's, and if so how the test that it never compiles a bundle is
-  written.
+- **The adapter's port**: which of the Go reader's checks it makes before it writes
+  (the Go reader runs `internal/validate`, whose probe placement runs the compiler's) and
+  which it leaves to the core, which holds a sent snapshot to `validate.Intrinsic` before
+  it files it and refuses a probe it cannot place; the snapshot id's canonical bytes in
+  Python, as the spike made them; the `infrahub-sdk` version, pinned beside the `.venv`'s
+  1.23.2 or the same; how the Go contract tests' assertions are carried over and compared
+  with the Go reader's answers before it goes; and the route's order, port, compare,
+  remove.
 - **The rehearsal's deadline** from the stages' budgets without loading the packages,
   and `fylgja-twin`'s `timeout` against the flow's overhead.
 - **The orchestrator's layout, venv, linter and test runner**, CI's two jobs extended, the
@@ -462,18 +468,23 @@ before the chain starts.
   Workflow's "single Go module, one binary" as the core's, and the amendment's Sync Impact
   Report.
 - **Which Infrahub skill to load**: none designs a kind; `infrahub-managing-checks` before
-  `fylgja_step.py` and `fylgja_twin.py` are touched, as `CLAUDE.md`'s hook rule says.
+  `fylgja_step.py` and `fylgja_twin.py` are touched, as `CLAUDE.md`'s hook rule says; and,
+  before the adapter's port writes its queries on `infrahub-sdk`, `infrahub-common`'s
+  GraphQL references and `infrahub-managing-transforms`' rule on union fragments, each
+  applied where this repository does not already decide otherwise.
 - **The estimate**, re-made from the route, and whether the plan proposes a cut into two
   specs if its route runs past 017's.
 
 <a id="operator-steps"></a>
 ## Operator steps
 
-- [x] 016 merged into `main` and pushed: `origin/main` is `195af3a`, the merge. Done
-  2026-10-29.
-- [ ] Push `main` to `origin` before the chain (`git push origin main`): the roadmap's
-  commit (`95c0246`) and this brief, once committed. A push during the chain would stop
-  the loop at `contract`.
+- [x] 016 merged into `main` and pushed, and 016's T050 ticked: `origin/main` is `3a5aa37`
+  on 2026-10-29, carrying the merge (`195af3a`), the roadmap's commit (`95c0246`) and this
+  brief's draft.
+- [x] The push of feature-open's commit (this brief settled, D-065 and D-066 appended):
+  the operator's, before `/converge-loop` starts, as the operator said at feature-open on
+  2026-10-29; none during the chain, since a moved remote-tracking ref stops the loop at
+  `contract`.
 - [x] `make command-log` for 016: nothing pending on 2026-10-29, by feature-open's check.
 
 Waiting for the chain, each the route's `[operator]` task with its reason:
@@ -484,23 +495,28 @@ Waiting for the chain, each the route's `[operator]` task with its reason:
   `InfrahubReadOnlyRepositoryImportLastCommit(data: {id})` on `main` for the registration
   `fylgja`, and read both task workers' `commits/` (`CLAUDE.md`, Environment), as 016's
   T041 did. Before tier 2's `TestChecksInsideInfrahub` and tier 3's case 9.
-- **Recreate Infrahub's task workers with the changed override**, since the override's
-  two variables then point at the orchestrator: `docker compose -p fylgja-infrahub
-  --env-file local/.env -f local/infrahub/docker-compose.yml -f
-  local/infrahub/docker-compose.override.yml up -d` from the repository root, with no twin
-  up and no tier running. The operator decides at feature-open whether a live run may do
-  this instead; it needs no sudo.
 - **The review, the merge and the push**, because they are the operator's at every
   feature's close, with `make command-log` once the session is closed.
+
+Not the operator's: **recreating Infrahub's task workers with the changed override**, once
+its two variables point at the orchestrator's platform API, is a live session's of the
+attended loop, as the operator decided at feature-open on 2026-10-29: `docker compose -p
+fylgja-infrahub --env-file local/.env -f local/infrahub/docker-compose.yml -f
+local/infrahub/docker-compose.override.yml up -d` from the repository root, as the bring-up
+script's `infrahub` part runs it whenever it copies the override, needing no sudo and
+keeping the volumes; only with no twin up and no tier running, and followed by a read from
+inside each task worker that the orchestrator's platform answers on the bridge. A headless
+session never runs it.
 
 <a id="hand-off"></a>
 ## Hand-off
 
 - **To F-025**: the adapter's contract, a tool that reads one source under a scope and
   writes a snapshot `2` file with its probes from a file; the flows that take any adapter's
-  file; the package match, since an adapter writes each device's package, so the Python
-  adapter needs the packages' `platform.matches`, from the shipped YAML or from an
-  operation of the core that F-025 asks for; the orchestrator's snapshot directory as the
+  file; the package match, since an adapter writes each device's package, read here by the
+  Infrahub adapter from the shipped `psp/*.yaml`, which the NetBox adapter reads the same
+  way; the Python toolchain, `infrahub-sdk`'s place beside `pynetbox`, and the ported
+  Infrahub adapter as the pattern a second adapter follows; the orchestrator's snapshot directory as the
   stage store's seed, and D-066's rule for a stage where the source cannot replay time;
   the report posted by the flow, which for NetBox is a journal entry on the branch. The spike's adapter under
   `local/netbox-spike/` is its first draft, not in the tree.
@@ -522,9 +538,8 @@ by an orchestrator that reaches the core through the API alone, while the core's
 and worker hold no Infrahub credential and know no branch.
 
 - **Tier 1:**
-  - The boundary tests: `cmd/fylgja` links neither `internal/intent` nor
-    `internal/stages`; the adapter links none of `internal/provision`, `internal/lab` and
-    `internal/server`; `TestClientReachesTheCoreThroughTheAPIAlone` still holds.
+  - The boundary tests: no package `cmd/fylgja` links reads Infrahub, and the Go module
+    holds no reader; `TestClientReachesTheCoreThroughTheAPIAlone` still holds.
   - The API's lost operations are `404` as "no operation at this path"; the lost arguments
     are refused as unknown; a run started detached ends at its identity, and the read of
     a run replays its events and document from a recorded history, the seven replay
@@ -535,12 +550,13 @@ and worker hold no Infrahub credential and know no branch.
     names the two hosts and their links.
   - The orchestrator's pure parts: each stage's verdict, and the `stages`, `plan` and
     `rehearsal` documents' text and markdown against the goldens captured from the Go
-    implementation, byte for byte.
+    implementation, byte for byte but for `fylgja-cli` in place of `fylgja` in the
+    reproduce lines.
   - The goldens unmoved; `make test` inside its 65 s budget, the Python tests beside it.
 - **Tier 2:**
   - The adapter's read of `fylgja-fixture` files the snapshot `0940db93…`, and its stage
-    list and schema check answer what the server's did, each contract test green under its
-    new binary.
+    list and schema check answer what the server's did, each ported contract test green
+    in Python, and each compared with the Go reader's answer before the Go reader went.
   - The orchestrator's flows against the real Infrahub and a core server started with no
     `INFRAHUB_*`: a create from the fixture, a stage plan of a throwaway proposed change,
     a rehearsal refused before any run on a stale mark, and the composition
@@ -559,11 +575,16 @@ and worker hold no Infrahub credential and know no branch.
 - **Owed before the work starts:**
   - 016 closed, merged and pushed (done, 2026-10-29); this brief re-read against its
     [Hand-off](../016-probes/brief.md#hand-off) (done, the same day).
-  - The roadmap reconciled: F-027's table row gains the description, the dependency on
-    F-014 and the estimate [Decided](#decided) gives, and Release 0.3's item 5 links here;
-    the production shape's "a direction, not a decision" is the close's, by the pattern
-    016 set for F-014's paragraph.
-  - The [Open](#open) questions settled at feature-open and this brief committed.
+  - The open questions settled at feature-open (done, 2026-10-29) and this brief
+    committed.
+- **Owed by the route's first documents task**, as the operator decided at feature-open on
+  2026-10-29: the roadmap reconciled. F-027's table row gains its description (Prefect,
+  the Infrahub reader ported to Python), the dependency on F-014 and the estimate, 22–33
+  from [Decided](#decided) or the plan's re-estimate where it differs, in place of "—" and
+  "its brainstorm's"; Release 0.3's total moves from "25–39, plus F-027's once briefed" by
+  the same figure (47–72 at 22–33); and Release 0.3's item 5 links here. The production
+  shape's "a direction, not a decision" is the close's, by the pattern 016 set for F-014's
+  paragraph.
 
 <a id="references"></a>
 ## References

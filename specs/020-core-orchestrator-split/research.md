@@ -610,3 +610,21 @@ made.
   `workflow_id` `400`) and the text the tests assert (quickstart §3's running read, the
   goldens' diff); `api.md`'s and `cli.md`'s rows for the operations the orchestrator takes
   are T036's.
+
+### 5.6 `twin.json` `12` and the step's rule from the envelopes (T011, Run 10, 2026-10-29)
+
+- **Decisions taken within R-06**: a step given neither `--snapshot` nor `--stage` is
+  refused before anything is read (`noTargetGiven`: `step.target.unknown`, at resolve, its
+  object `--snapshot`), since no record names a stage to take a next one from; the record's
+  bundle, its object until 019's R-08, would need the record read. A twin whose snapshot the
+  store does not hold is `step.twin.unsteppable`, its object the id: the envelope the rule
+  reads is absent. A stage target's envelope is its filed snapshot's (`built.SnapshotID`),
+  read from the store as the twin's is.
+- **What goes with the blocks until T034/T035**: the rehearsal's reclaim of a dead
+  rehearsal's twin (keyed on the record's rehearsal block), stage list's twin row and
+  `stage.twin.moved` from the record's stage, and a provisioning run's `towards` in `twin
+  show`'s in-flight line. Step and rehearsal documents write each side's `stage` null; show's
+  and verify's documents omit or null the stage and rehearsal, as their schemas allow.
+- **Replay**: the seven histories replay unchanged; their payloads' `stage` keys decode to
+  nothing and no run branched on them.
+

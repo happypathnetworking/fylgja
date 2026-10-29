@@ -1,0 +1,418 @@
+# research.md
+
+Research for `020-core-orchestrator-split` (F-027), written by the plan on 2026-10-29 to
+[the template](../../docs/templates/research-template.md): §1 what was verified on the
+development host and in the tree before the design relied on it, §2 the decisions
+R-01…R-24 with the requirement each serves, §3 the constitution amendment drafted for the
+operator's OK at `analyze` (D-065 and D-066 are already written, so no decision entry is
+drafted), §4 what implement must verify or measure, §5 appended by the runs.
+
+## 1. Verified at plan
+
+Each fact was checked on 2026-10-29 on the development host (Ubuntu 26.04.1, Infrahub
+1.11.2 as the Compose project `fylgja-infrahub`, Python 3.14.4) or in the tree at
+`a3bd43d`. Each lands in `docs/verified-facts.md` once it holds at implement.
+
+### 1.1 Infrahub 1.11.2's embedded Prefect is a separate server, on the Compose network alone
+
+- `local/infrahub/docker-compose.yml:273-292`: the service `task-manager` runs `uvicorn
+  --host 0.0.0.0 --port 4200 --factory infrahub.prefect_server.app:create_infrahub_prefect`
+  against `task-manager-db` (Postgres 18) and publishes **no port** on the host; `docker
+  compose ps` shows ports for `infrahub-server` (8000), `database`, `message-queue` only.
+  The host's 4200 is free (`ss -ltn`), so an orchestrator server on the host does not
+  collide with it. Its API answers `GET /api/version` `0.8.4` and `POST /api/flows/filter`
+  (Infrahub's own flows, `action-add-node-to-group`…) from inside a task worker, with no
+  authentication.
+- The two task workers are `prefect worker start --type infrahubasync --pool
+  infrahub-worker` with `PREFECT_API_URL=http://task-manager:4200/api` (:354, :373). Inside
+  `fylgja-infrahub-task-worker-1`: **Prefect 3.7.5** on Python 3.14.7, `httpx 0.28.1`,
+  `requests 2.34.2`, `infrahub_sdk 1.11.2` (the image's own, not the `.venv`'s 1.23.2),
+  `pydantic 2.12.5`, `yaml 6.0.3`; no `aiohttp`. So the roadmap's assumption holds: the
+  orchestrator runs its own Prefect server beside Infrahub's, and a check must not use the
+  worker's Prefect client with its environment, which points at Infrahub's server; plain
+  HTTP with `httpx`, which the checks already use (015), reaches the orchestrator's.
+
+### 1.2 Prefect 3.9.0 on Python 3.14.4: install, server, basic auth
+
+- PyPI on 2026-10-29: `prefect` latest `3.9.0`; `infrahub-sdk` latest `1.23.2` (the
+  `.venv`'s); `pytest` `9.2.0`; `ruff` `0.17.3`. `pip install prefect==3.9.0` into a fresh
+  `python3 -m venv` completed with `pydantic 2.14.2`; `prefect version` reports a SQLite
+  server (3.46.1). It installs and runs on 3.14.4.
+- `prefect server start --host 127.0.0.1 --port 4210 --no-ui` with
+  `PREFECT_SERVER_API_AUTH_STRING=fylgja:secret` and `PREFECT_HOME` under a scratch
+  directory answered `/api/health` 200 after about 30 s. **The open-source server has
+  basic authentication**: without the credential `GET /api/version` and `POST
+  /api/flows/filter` are `401`, `/api/health` stays `200`; with `Authorization: Basic`
+  (httpx `auth=("fylgja","secret")`, or the client setting `PREFECT_API_AUTH_STRING`) the
+  API answers. Its API version is `0.8.4`, the same as Infrahub's 3.7.5 server reports.
+- The first `create_flow_run` right after the deployments appeared answered `503 Service
+  Unavailable`; the same request a few seconds later answered `201`. A client retries a
+  `503` at start (R-14).
+
+### 1.3 A deployment is triggered, polled, read and cancelled over plain HTTP
+
+Two flows served by `serve(flow.to_deployment(name="main"), …)` from one process (the
+runner), driven by `httpx` alone:
+
+- `GET /api/deployments/name/{flow}/{deployment}` answers the deployment's `id` within 4 s
+  of the runner's start.
+- `POST /api/deployments/{id}/create_flow_run {"parameters": {…}}` answers `201` with the
+  flow run (`id`, `name`, `state.type` `SCHEDULED`); the runner picked it up and a 1 s
+  flow read `COMPLETED` after 14.3 s of polling `GET /api/flow_runs/{id}` (`state.type`,
+  `state.name`, `end_time`), the runner's poll interval being most of it.
+- `GET /api/flow_runs/<unknown uuid>` is `404`.
+- `POST /api/flow_runs/{id}/set_state {"state": {"type": "CANCELLING"}, "force": true}`
+  answers `201` `ACCEPT`; the runner ended the run `CANCELLED` 4.1 s later.
+- `POST /api/flow_runs/filter {"limit": 50}` lists the runs; nothing locks two runs of one
+  deployment, so the core's fixed workflow identities stay the one lock (`run.in_flight`).
+
+### 1.4 A flow's document crosses as a Prefect artifact of a type of Fylgja's own
+
+`Artifact(type="fylgja-findings", key="probe-<run id>", data={…}).create()` inside the
+flow was accepted; `POST /api/artifacts/filter {"flow_run_id": {"any_": ["<id>"]}}`
+answers it with `type`, `key` and `data`, the dict **serialised as a JSON string** in
+`data`. A check reads the findings document that way, and never a flow's return value,
+whose persistence would need a result store the container cannot read.
+
+### 1.5 A flow's `finally` and hooks run on a timeout and on a cancellation
+
+- `@flow(timeout_seconds=3)` sleeping 10 s ended `FAILED` named `TimedOut`, message `Flow
+  run exceeded timeout of 3.0 second(s)`, after 11.3 s; the flow's `finally` block ran (a
+  marker file was written) and the `on_failure` hook ran. The runner's log also shows
+  `Engine execution exited with unexpected exception … CancelledError` after the state
+  was set, noise and not a failure.
+- The API cancellation of 1.3 ran the `finally` block and the `on_cancellation` hook. So
+  a rehearsal whose flow times out or is cancelled still reaches its destroy (R-11), with
+  one caveat owed at implement (§4): the marker was instant, and a destroy of a minute
+  under a cancellation's grace must be measured.
+- `prefect.testing.utilities.prefect_test_harness` exists in 3.9.0, for the Python tests
+  that need a server of their own.
+
+### 1.6 The tree: what the long-operation shape and the removal rest on
+
+- **Events are already built from history.** `internal/provision/client.go:929-1040`:
+  `Follow` long-polls `GetWorkflowHistory` and derives every `event` frame; there is no
+  query handler, signal, search attribute or memo; results come from `GetWorkflow(…).Get`
+  (`Result` :1276, `ResultOfStep` :452), which reads the completion event. The server keeps
+  nothing (`contracts/api.md`, "The event"). A read of a run by identity is the same
+  `Follow` and `Result` over a run the request names, not a new mechanism (R-04).
+- **The interrupt**: `internal/server/follow.go:247-292`: the first interrupt asks
+  `CancelWorkflow`; the second stops waiting (`run.cancelled`, exit 2); a client that
+  closes its connection cancels nothing; termination happens only in `awaitFirstTask`
+  before a worker took the run. The interrupt by identity reuses `requestCancel`'s path.
+- **The 015 defect goes with the rehearse workflow** (the brief's reading, confirmed):
+  `Follow` follows a child synchronously on `CHILD_WORKFLOW_EXECUTION_STARTED`
+  (`client.go:1010-1013`), and the only workflow that starts children is `Rehearse`
+  (`workflow_rehearse.go`, `ParentClosePolicy ABANDON` in `options.go:291-298`). Provision,
+  step and destroy start none, so with `Rehearse` gone no `Follow` can block on an
+  abandoned child.
+- **The seven replay histories are provision's and step's**
+  (`internal/provision/testdata/*.history.json`, `workflow_replay_test.go`), none the
+  rehearsal's, which is covered by testsuite tests alone (`workflow_rehearse_test.go`,
+  `TestRehearse*`); FR-008's "every remaining history replays" is the seven unchanged.
+- **`internal/rehearsal` leaves whole.** The worker imports it for `Classify`, `Stop`,
+  `Ceiling` and `Mechanism` from `workflow_rehearse.go` alone; the server for the
+  deadline, the report and the markdown. With `Rehearse` gone nothing in the core needs
+  it, so it is removed after the Python port of its verdict, deadline and renderers is
+  held to the captured goldens (R-13, R-14). The baseline rule and the reclaim are the
+  server's (`internal/server/rehearse.go:141-198`, `:489-568`), re-made in the flow.
+- **An unknown argument is a transport `400`**, `the request is not one: <op> takes no
+  argument "<name>"` (`internal/server/handlers.go:55-88`), no finding id, which the CLI
+  files as `operation.failed`; the five lost arguments fall under it once they leave
+  `operationArgs`.
+- **The deadline's budgets are in the bundle**: `rehearsal.Deadline` sums
+  `lab.NodePlans` of each filed bundle (`internal/server/rehearse.go:241-258`), so the
+  flow reads them from `twin.compile`'s files (R-10), no package loaded.
+- **The reclaim is server-side, not the workflow's**: `internal/server/rehearse.go`
+  (`rehearsing.host`, `reclaim`) reads `twin.json`'s `rehearsal.workflow_id ==
+  fylgja-rehearse` and calls `StartReclaim` (`client.go:609-626`), which destroys. The
+  orchestrator re-makes it over its own record and Prefect's run state (R-09), and the
+  core's `twin.json` `12` carries no rehearsal block.
+- **The checks are httpx and the SDK alone** (`infrahub/checks/fylgja_api.py:14-21`):
+  no Prefect import; the 4,092-byte comment cut is the server's
+  (`internal/rehearsal/markdown.go:19-22`, `CommentMax`), so it moves to the Python
+  renderer. `fylgja-twin` posts the thread through SDK node creates (`post_comment`,
+  `fylgja_api.py:380-428`); the rehearse flow takes that code over.
+- **The CLI ignores `event` frames** and prints the server-rendered `out` lines
+  (`internal/cli/send.go:109-212`, `internal/server/console.go`); `--json` re-indents the
+  document frame. `TestClientReachesTheCoreThroughTheAPIAlone` is
+  `internal/compiler/purity_test.go:268`, allowing `internal/cli` to reach `internal/api`,
+  `internal/findings` and `internal/tree` alone. `cmd/fylgja-fixture` imports
+  `internal/ctm`, `internal/probe` and `internal/testsupport` only, never the reader.
+- **Tier 3's case 9 is Temporal-shaped in one helper**: `rehearsal_run`
+  (`scripts/e2e.sh:2140-2163`) parses ``Run `fylgja-rehearse <id>` `` from the comment and
+  reads the rehearsal's and its children's Temporal histories; the reproduce block it
+  asserts verbatim (:2386-2390) names `fylgja twin create --stage …`. Both move to the
+  orchestrator's shapes (R-19). The script's own server is started with a token it makes
+  and `--listen 127.0.0.1:0` (:976), and every client call carries only `PATH`, `HOME`,
+  `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN` (:360-368).
+- **The snapshot id in Python** was reproduced by the NetBox spike
+  (`docs/verified-facts.md`, 10-29): SHA-256 of `json.dumps(body, indent=2) + "\n"` in the
+  contract's key order with the lists sorted as `ctm.Normalize` sorts them; compact and
+  sorted-key forms do not match. The adapter's normaliser is held to `0940db93…` (R-07).
+
+## 2. Decisions
+
+- **R-01 The platform is Prefect 3.9.0, pinned, on Python 3.14, with a server of the
+  orchestrator's own.** Verified in §1.1-1.5. The server runs `prefect server start
+  --host <bridge address> --port 4200 --no-ui` with `PREFECT_HOME=local/orchestrator/prefect`
+  (SQLite, the open-source default) and `PREFECT_SERVER_API_AUTH_STRING` from
+  `local/.env`'s new `FYLGJA_ORCHESTRATOR_AUTH` (`<user>:<password>`, made by the bring-up
+  script); uvicorn takes one host, and the host's own processes reach the bridge address
+  as containers do, so one listener serves both. Nothing of Prefect's beyond the
+  open-source server is used (no automations, events, pause-for-input, work pools: the
+  runner is `serve()`). *Alternatives*: `0.0.0.0`, rejected as every interface; two
+  servers, one per address, rejected as two databases. Serves FR-017, FR-022, FR-005.
+- **R-02 The orchestrator's layout** (FR-017, FR-026): `orchestrator/` holds
+  `pyproject.toml` (package `fylgja_orchestrator`, console script `fylgja-cli`, a second
+  `fylgja-orchestrator` for `serve`), `src/fylgja_orchestrator/{adapters/infrahub,
+  documents, flows, core.py, record.py, cli.py, serve.py}`, `tests/` (`pytest`, tier 1 by
+  default, tier 2 under the marker `contract`, goldens under `tests/golden/`), and its
+  venv at `orchestrator/.venv` with a `.gitignore` of `*` inside, as the root `.venv`
+  has, made by `make orchestrator-venv` (`python3 -m venv` and `pip install -e
+  'orchestrator[dev]'`). The root `.venv` stays the operator's `infrahubctl` alone. Linter
+  `ruff 0.17.3` (E, F, W, B, SIM, as the checks were linted ad hoc), test runner `pytest
+  9.2.0`; `infrahub-sdk==1.23.2`, the `.venv`'s. `make test` runs `go test` then
+  `orchestrator/.venv/bin/pytest -q orchestrator -m 'not contract'`; `make lint` adds
+  `ruff check orchestrator infrahub/checks`; `make test-contract` adds `pytest -m
+  contract` after the Go packages; `make orchestrator-serve` and `make prefect-server`
+  start the two new processes; CI's unit and lint jobs gain `actions/setup-python` (3.14)
+  and the same commands. The shipped `psp/*.yaml` are read from the repository root
+  (`FYLGJA_PSP_DIR` as the override, the same variable as the core's), found from the
+  package by its installed path's parent or by `FYLGJA_PSP_SHIPPED` when installed
+  elsewhere (§4). *Alternative*: the orchestrator in the root `.venv`, rejected since it
+  would pin the hand tool to the orchestrator's dependencies.
+- **R-03 The core's detached start is the argument `detach`** (FR-009), boolean, on
+  `twin.create`, `twin.provision`, `twin.step` and `twin.destroy`. Under it the answer is
+  `start`, `run` (for destroy, whose stream opens none, `run` is written for the detached
+  answer alone), then the `document` frame, status `ok`, carrying one finding
+  `run.detached` (info, step `start`) naming the identity, so the contract's "the last
+  frame is the document" stands. A refusal before the start is the document, as today.
+  `dry_run` with `detach` is `snapshot.flags.conflict`'s successor `run.flags.conflict`.
+- **R-04 The read and the interrupt by identity are `run.read` and `run.interrupt`**
+  (FR-010), `/v1/run/read` and `/v1/run/interrupt`, args `workflow_id` (one of the three
+  fixed ids) and `run_id` (optional: the workflow's latest run when absent). `run.read`
+  answers `run` with a `state` (`running`, `completed`, `failed`, `cancelled`,
+  `terminated`, `timed_out`), then every `event` so far from `Follow` and, under `render`,
+  the `out` lines the stream would have printed; while the run runs the answer ends
+  there, by EOF, with no document (the spec's US4 scenario 2), the one answer the contract
+  lets end without one; once it has ended, the `document` frame follows, operation
+  `run.read`, its findings the run's own (`Result` or `ResultOfStep` from the completion
+  event), status by the run's outcome. An identity no run has is `run.unknown` (error,
+  exit 1) after `DescribeWorkflowExecution` alone. `run.interrupt` asks `CancelWorkflow`
+  as the stream's first interrupt does and answers a document with `run.cancel.requested`
+  (info); on an ended run, `run.ended` (error). The stream stays as it is for the core's
+  CLI, which gains `--detach` on the four commands and `fylgja run read|interrupt`.
+  **The API version stays `1`**: 019 removed arguments without a move, pre-1.0; the five
+  lost paths answer the contract's existing `404` wording, which is already "no operation
+  at this path"; a move to `2` would move every client and 72 frozen copies for no new
+  meaning. *Alternative*: a callback, out by the brief.
+- **R-05 The step between two snapshots is `twin.diff`** (FR-011), `/v1/twin/diff`, args
+  `from` and `to`, each a filed id or a path sent as a file as `twin.compile` takes one;
+  the server validates and files each snapshot as on create, compiles each on the
+  goldens' path, files both bundles, and answers the document `twin.diff` with the
+  `step`'s plan block as `twin.step`'s dry run shapes it (`contracts/step.schema.json`:
+  nodes added, removed, changed; links; artifacts moved), `unchanged` when the two
+  bundle ids are one; a refused compile answers the compile's own findings. Nothing is
+  deployed or started. *Alternative*: the plan showing ids alone, rejected by the brief.
+- **R-06 `twin.json` `12`** (FR-007): the `stage` block, `step.stage` and `rehearsal` go;
+  `snapshot {id, branch, at, observed_at}`, `bundle_id`, `scope`, `mapping` and the rest
+  stay as `11` had them. The step's rule reads the twin's filed snapshot (by
+  `snapshot.id` under `snapshots/`) and the target's: `envelope.scope` and
+  `envelope.mapping` (`reader`, `model`, `version`) must equal, else
+  `step.twin.unsteppable` naming both pairs; a twin whose record names no snapshot
+  (`from_bundle`) is unsteppable as 019 has it. `11` and earlier are read by the existing
+  version gate: shown with their version, refused a step naming `twin destroy`, destroyed.
+- **R-07 The adapter is the package `fylgja_orchestrator.adapters.infrahub`, a tool with
+  one command shape** (FR-012 to FR-016): `python -m fylgja_orchestrator.adapters.infrahub
+  read --branch <b> [--at <t>] [--stage <b>/<l>] [--scope tag:<n>] [--probes <f>] --out
+  <file> [--json]`, `… stages --branch <b> [--scope]` (the `stages` document) and `…
+  schema-check --branch <b>`, each exiting by its document's status; `fylgja-cli` calls
+  the same functions. Its start-up line: `fylgja-infrahub: reading <address> as <mapping
+  reader>@<model version>, scope <scope>`, never the token. It ports `internal/intent`
+  (the queries, the mapping, conformance and completeness, the `scope.*`, `schema.*`,
+  `platform.*`, `intent.*` and `probes.*` rules), the reader's half of `internal/stages`
+  (reference `<branch>/<label>`, resolution to `(branch, at)` under D-045 to D-048, the
+  list, `stage.*` and `stages.*`) and `internal/stage`'s read-and-take; it validates the
+  CTM as `validate.Intrinsic` does before writing, and leaves probe placement to the
+  core, which refuses a sent snapshot it cannot place (016). The snapshot's id is SHA-256
+  of `json.dumps(body, indent=2) + "\n"` with the contract's key order and
+  `ctm.Normalize`'s sort, a Python `normalize` tested against the fixture's `0940db93…`,
+  `testdata/snapshot/*`'s ids and the goldens' three. `infrahub-sdk==1.23.2`; queries
+  sent through the SDK's `execute_graphql` with the Go reader's query strings carried
+  over, under `infrahub-common`'s GraphQL rules where this repository does not decide
+  otherwise (the branch in the path, `at` only when supplied, `GET /api/schema` first).
+- **R-08 The flows** (FR-018 to FR-020): `intent-read`, `twin-create`, `twin-step`,
+  `stage-plan`, `twin-rehearse` and `schema-check`, each `@flow` with that name and a
+  deployment `main` served by `fylgja-orchestrator serve` (one process, the runner);
+  `fylgja-cli` runs the flow function in its own process, recorded on the platform when
+  `PREFECT_API_URL` is set, so no runner is needed for a hand command and a run exists for
+  the record. Every call to the core is `detach: true` then `run.read` polled every 2 s,
+  so a flow rerun after a restart reads the run it started (its identity is in the flow's
+  log and the record) rather than starting a second. `twin create --dry-run` passes
+  `dry_run` to `twin.create` with the snapshot file, and the CLI prints the `out` lines.
+- **R-09 The orchestrator's state** (FR-021): `FYLGJA_ORCHESTRATOR_ROOT` (default
+  `local/orchestrator`) holds `snapshots/<id>.json`, filed once, never overwritten, and
+  `twin.json`: `{record_version: "1", stage: {branch, label, at}, snapshot_id,
+  flow_run_id, flow, written_at}`, written by the create, step and rehearse flows, read
+  beside `twin.show` and trusted only while `twin.show`'s `snapshot.id` equals
+  `snapshot_id`; distrusted, `stage list` prints `record.twin.stale` (info) and no twin
+  row, `twin step` without `--stage` is refused `step.target.required` (error). The
+  reclaim: `twin.show` names a twin at the record's snapshot, and `GET
+  /api/flow_runs/{flow_run_id}` is a `twin-rehearse` run whose state is terminal
+  (`FAILED`, `CRASHED`, `CANCELLED`) or `404` after the platform's retention: the twin is
+  its own dead run's and is destroyed with `rehearsal.twin.reclaimed` naming the run; any
+  other case is the host held (`host.twin.present`), never reclaimed.
+- **R-10 The rehearsal's deadline** (FR-019): the plan's compiled bundles carry each
+  node's package and budgets in the manifest (`twin.compile`'s files), from which the flow
+  derives the deadline as `rehearsal.Deadline` did (the mechanism's per-stage sum and the
+  ceiling, 3,600 s), with `rehearsal.deadline.unfit` unchanged; `timeout_seconds` on the
+  flow is that deadline, and the destroy sits in the flow's `finally` (§1.5). `fylgja-twin`'s
+  `timeout` 4,260 stands; the flow's overhead is measured at implement (§4).
+- **R-11 The report is posted by the rehearse flow** (FR-019, FR-024): the thread and
+  comment creates move from `fylgja_api.py` into the flow (the SDK, `main`), the 4,092-byte
+  cut with the markdown renderer; the document is published as the flow run's artifact
+  `fylgja-findings` (§1.4); the check reads it. A rehearsal that cannot post logs
+  `rehearsal.report.unposted` (warning) and keeps its status.
+- **R-12 The checks' glue** (FR-024): `fylgja_api.py` becomes the orchestrator's client:
+  `FYLGJA_ORCHESTRATOR_ADDRESS` and `FYLGJA_ORCHESTRATOR_AUTH` from the override (the two
+  variables that replace `FYLGJA_API_ADDRESS` and `FYLGJA_API_TOKEN` there), basic auth on
+  `httpx`, `GET /api/deployments/name/<flow>/main`, `POST …/create_flow_run` (retried
+  once on `503`), `GET /api/flow_runs/{id}` every 5 s to a terminal state, the artifact's
+  `data` parsed as the document, `set_state CANCELLING` at the deadline; the R-15 retry
+  while held and the margins stay as 015 set them. `fylgja-twin` concludes from the
+  status and posts nothing.
+- **R-13 The documents move**: `rehearsal`, `stages` and `plan` blocks, their text and
+  the markdown, rendered by `fylgja_orchestrator.documents` from the Go renderers'
+  goldens, `fylgja-cli` in the reproduce lines; `contracts/orchestrator.md` holds them
+  with `rehearsal.schema.json` and `stages.schema.json` moved under it; the checks'
+  contract moves to `contracts/checks.md`. The findings document's `operation` keeps the
+  names (`twin.rehearse`, `stage.list`, `stage.plan`, `intent.read`, `schema.check`) as
+  the orchestrator's operations, so the checks' conclusions read unchanged.
+- **R-14 The goldens' capture is a live task before any removal**: on the attended
+  loop's host, a throwaway proposed change with three stages through the fixture tool, then
+  `fylgja stage list --json`, `stage plan --json`, `twin rehearse --json` and `--markdown`
+  with their text, saved under `orchestrator/tests/golden/`; a session that cannot boot a
+  twin captures `stages` and `plan` alone and leaves `rehearsal` to the live run.
+- **R-15 Tier 2's shape** (FR-028): the Go contract tests of `internal/intent`,
+  `internal/stages`, `internal/stage` and the server's Infrahub-reading handlers go with
+  their packages once the Python port has been compared; `internal/checks` stays Go;
+  `internal/cli`'s tests of lost commands go. The Python tier 2 (`pytest -m contract`)
+  holds the ported assertions, a compare test that runs the Go `fylgja intent read` and
+  the adapter on the fixture and on a throwaway branch and diffs the files byte for byte
+  (removed with the Go reader), and the flow tests against the real Infrahub and a core
+  server started by the test with no `INFRAHUB_*`. Wall time is measured at implement;
+  `internal/stages`' 1,713 s leaves the Go tier.
+- **R-16 Tier 3** (FR-029): `scripts/e2e.sh` runs `fylgja-cli` for every command naming a
+  branch or a stage, with `FYLGJA_ORCHESTRATOR_ROOT=$OUT/orchestrator` and no
+  `PREFECT_API_URL`, so the flows run under Prefect's ephemeral server in `PREFECT_HOME=$OUT/prefect`
+  (owed §4), against the script's own core server; case 9 goes through the operator's
+  platform on the bridge, its precheck a `GET /api/health` and an authenticated
+  `/api/deployments/name/twin-rehearse/main` from inside a task worker; `rehearsal_run`
+  reads the flow run and the core's Temporal runs by the identities the report names;
+  the credential greps add Prefect's home and the orchestrator's logs.
+- **R-17 The bring-up script's part `orchestrator`** (FR-026): installs the venv, writes
+  `FYLGJA_ORCHESTRATOR_AUTH` into a new `local/.env` (kept byte for byte when present,
+  with a note when the name is absent, as `FYLGJA_DEFAULT_SCOPE` was), starts the Prefect
+  server and the runner detached logging to `local/prefect.log` and
+  `local/orchestrator.log`, and recreates nothing of Infrahub's: the override's change
+  reaches the task workers by the live session's `up -d` (the brief's operator steps).
+- **R-18 The core's listener**: `fylgja serve` with no `--listen` stays `127.0.0.1:7650`;
+  the bring-up script's `serve` loses the bridge `--listen`; the "not a loopback" warning
+  stays for anyone who asks.
+- **R-19 Identifiers**: data-model §11. Retired from the core: every `scope.*`, `stage.*`,
+  `stages.*`, `rehearsal.*`, `schema.*`, `intent.*`, `probes.*` rule, `snapshot.flags.conflict`,
+  `step.target.*`'s stage forms. Added to the core: `run.detached`, `run.unknown`,
+  `run.cancel.requested`, `run.ended`, `run.flags.conflict`. Added to the orchestrator:
+  `record.twin.stale`, `step.target.required`, `rehearsal.report.unposted`,
+  `platform.unreachable` (the Prefect server), `api.unreachable` kept for the core.
+- **R-20 The constitution amendment is 3.0.0** (FR-025), drafted in §3.
+- **R-21 Which Infrahub skills**: none designs a kind; `infrahub-managing-checks` is read
+  before `fylgja_step.py` and `fylgja_twin.py` change; `infrahub-common`'s GraphQL
+  references and `infrahub-managing-transforms`' union-fragment rule before the adapter's
+  queries are written. Where they say `uv run`, branch-first or `infrahubctl check`, this
+  repository decides otherwise (`CLAUDE.md`).
+- **R-22 The estimate is 24–36 hours** of sessions, re-made from the route the plan
+  draws (plan.md, "Order of the work"): the core 5–7 (R-03 to R-06, the removal), the
+  adapter 9–13, the orchestrator 7–10, the tiers and documents 3–6. The route is expected
+  at T001–T095, inside 017's T121; if `tasks` draws past 121, the cut is between the
+  adapter's port (a spec of its own, leaving the Go reader as the orchestrator's tool
+  until the port lands) and the rest, and the plan proposes it then, not now.
+- **R-23 `make command-log` and the loop** are untouched; the orchestrator's tests run
+  in the loop's pure gate through `make test`.
+- **R-24 The roadmap's reconciliation** is the route's first documents task (FR-032):
+  F-027's row (Prefect, the reader ported, after F-014, 24–36), Release 0.3's total
+  49–75, item 5 linking here.
+
+## 3. Drafted for the operator
+
+### 3.1 No decision entry
+
+D-065 and D-066 were appended at feature-open (`docs/decisions.md:4099-4238`); each
+superseded entry's status line was written with them. The chain writes none.
+
+### 3.2 Constitution 2.3.0 → 3.0.0 (MAJOR: Principle I redefined in its scope)
+
+Sync Impact Report line: `2.3.0 → 3.0.0 (2026-10-29, MAJOR: Principle I redefined in its
+scope). Fylgja is two deployables (D-065): I binds the core and frees the orchestrator;
+III binds every reader, now an adapter of the orchestrator; VI's "where the source cannot
+replay time" names the adapter and the orchestrator's store (D-066); VIII and IX are the
+core's, IX adding the orchestrator's files; X binds both; XI names the orchestrator as a
+client. Development Workflow: the repository gate reads "a single Go module, one binary,
+for the core; the orchestrator a Python project under orchestrator/". Templates:
+.specify/templates/plan-template.md's Constitution Check names 3.0.0 and its rows I, III,
+VI, VIII, IX and XI read the amended text.`
+
+- **Preamble**: "builds a walking twin of it" gains "as two deployables: a core that runs
+  a twin from a snapshot, and an orchestrator that reads the sources, resolves stages and
+  rehearses (D-065)".
+- **I. Go, End to End, for the Core.** "Fylgja's core MUST be a single-language Go system
+  … one static binary that is CLI, worker and API server. … The orchestrator is not bound
+  by this principle: it is a Python project on Prefect that calls tools written in
+  anything and reaches the core through the API alone (XI)." Rationale adds D-065.
+- **III**: "A reader is an adapter of the orchestrator; it MUST read one source's model …
+  and write a snapshot, the core's one input (D-061)". The Infrahub-owned kinds list
+  stands. Rationale adds D-065.
+- **VI**: the last sentence reads "Where the source of truth cannot replay time, the
+  snapshot's id addresses intent, and a stage there is the snapshot the adapter took when
+  the operator marked it, held by the orchestrator (D-066)".
+- **VIII**: first sentence gains "in the core"; adds "The orchestrator MUST drive the
+  core through the API and MUST NOT start a workflow of the core's."
+- **IX**: adds "The orchestrator's state is Prefect's own run history and files under its
+  state root, the snapshots it took and one record of the twin it drove; neither
+  deployable introduces a database without a decision-log entry."
+- **X**: unchanged but for "in either deployable" after "a log line".
+- **XI**: "The CLI is a client, and so is every later one: the orchestrator, a web UI, an
+  agent surface, a check running inside Infrahub, which is the orchestrator's client. …
+  no command of the core's CLI runs the core in its own process". Rationale adds D-065.
+- **Gate Adjustments**: unchanged.
+- **Development Workflow, Repository**: "The core is a single Go module, one binary,
+  `internal/lab` as the host-bound boundary; the orchestrator is a Python project under
+  `orchestrator/` with its own tests and lint, in this repository. (D-018, D-015, D-065)".
+  **Three test tiers** gains "the orchestrator's pure tests run with the pure tier; its
+  contract tests with the contract tier".
+
+## 4. Owed at implement
+
+- Prefect's ephemeral server for tier 3's cases 1 to 8 (`PREFECT_SERVER_ALLOW_EPHEMERAL_MODE`,
+  a `PREFECT_HOME` under `$OUT`) and for `prefect_test_harness` in tier 2: verify a flow
+  runs with no `PREFECT_API_URL`, and how long its first start takes (R-16).
+- A destroy of a minute inside the flow's `finally` under an API cancellation: whether the
+  runner's grace lets it finish, and the setting that lengthens it if not (R-10, §1.5).
+- Which of the bundle's files carries the node plans' budgets the flow reads (R-10), and
+  whether `twin.compile`'s document should carry them instead.
+- The flow's overhead between `create_flow_run` and the flow's first request to the core,
+  and between its end and the artifact's visibility, against `fylgja-twin`'s margins
+  (R-12); the runner's poll interval (`PREFECT_RUNNER_POLL_FREQUENCY`) if 14 s is too slow.
+- Tier 2's wall time whole, and the Go tier's once `internal/stages` leaves it (R-15).
+- The adapter's package data: how the installed package finds `psp/*.yaml` (R-02).
+- The adapter's read time of the fixture against the Go reader's.
+- The goldens captured (R-14): the branch names and ids they carry, and the renderer's
+  test that substitutes them.
+- Each fact of §1 re-verified where the build changes it, then written to
+  `docs/verified-facts.md` under a new "Prefect 3.9.0" heading and Infrahub's.
+- The measured effort against R-22.
+
+## 5. Verified at implement
+
+Appended by the runs.

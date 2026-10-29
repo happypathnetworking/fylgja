@@ -70,11 +70,13 @@ cut along, in five specs, in this order:
    added on 2026-10-27 so that probes are specified against a twin that cannot rebuild
    itself. **Built** on 2026-10-28, under [D-062](decisions.md#d-062), with the
    constitution unamended at 2.2.0.
-4. **[F-014](#f-014)**, probes, `ping` only, **the next spec**, as `016-probes`
+4. **[F-014](#f-014)**, probes, `ping` only, as `016-probes`
    ([brief](../specs/016-probes/brief.md), rewritten on 2026-10-28 against 017, 018 and
    019): a node declared outside intent, the explicit-instruction input to the core.
+   **Built** on 2026-10-29, under [D-064](decisions.md#d-064) and Constitution 2.3.0.
 5. **[F-025](#f-025)**, a reader of NetBox with its branching plugin, producing snapshots
-   and taking a stage as a snapshot: the reader seam against a second source of truth.
+   and taking a stage as a snapshot, **the next spec**: the reader seam against a second
+   source of truth.
 
 A contract bump defines a release: 0.2 moved the twin record, the API and the CLI for
 stages while the contract stayed 0.2, and 0.3 retired the generics at F-011, after which
@@ -94,6 +96,16 @@ whose upgrade needs a step adds it here:
 1. Destroy a following twin before upgrading a host of an earlier build: a Schedule
    `fylgja-follow` left behind starts a workflow no worker of this build serves, and this
    build carries no code to clear it ([F-026](#f-026), [D-062](decisions.md#d-062)).
+2. Destroy, then create again, any twin an earlier build left up: its bundle `5` and
+   `twin.json` `10` are read and destroyed, but cannot be stepped from, and a bundle `5`
+   is refused by `twin provision` ([F-014](#f-014)).
+3. Load the probe kind on `main` before a request that sends no `--probes`:
+   `.venv/bin/infrahubctl schema load --branch main schema/fylgja-probe.yaml`, by hand,
+   since the fixture tool's `-prepare-main` writes nothing on a `main` that already holds
+   the schema library and the bring-up script then names the kind missing; import the
+   template's commit on `main` so the probe-ready ports' addresses render; and `docker pull
+   alpine:3.24.2`, since a run never pulls a probe image ([F-014](#f-014),
+   `contracts/cli.md`'s 016 Upgrading).
 
 <a id="the-production-shape"></a>
 ## The production shape
@@ -157,8 +169,8 @@ first six are built ([the archive](archive/v0.1-built.md)), F-009 is removed,
 [F-025](#f-025). [F-024](#f-024) and [F-025](#f-025) were added on 2026-10-25 and take
 the next free numbers; [F-026](#f-026) was added on 2026-10-27 and takes the next.
 
-[F-011](#f-011), [F-024](#f-024) and [F-026](#f-026) are built, as `017-dcim-reader`,
-`018-snapshots` and `019-following-removed`; none of the rest has a decision entry. [F-011](#f-011), [F-013](#f-013), [F-014](#f-014), [F-015](#f-015),
+[F-011](#f-011), [F-024](#f-024), [F-026](#f-026) and [F-014](#f-014) are built, as
+`017-dcim-reader`, `018-snapshots`, `019-following-removed` and `016-probes`; none of the rest has a decision entry. [F-011](#f-011), [F-013](#f-013), [F-014](#f-014), [F-015](#f-015),
 [F-017](#f-017) to [F-021](#f-021), [F-024](#f-024), [F-025](#f-025) and [F-026](#f-026)
 are each one spec, with one contract boundary and one new kind of infrastructure. [F-012](#f-012) and
 [F-016](#f-016) are chores or records, with no spec.
@@ -173,7 +185,7 @@ are each one spec, with one contract boundary and one new kind of infrastructure
 | F-025 | **The NetBox reader** | NetBox with its branching plugin on the development host; a reader producing snapshots from a branch, with `render-config` as the configuration; a stage taken as a snapshot; a twin of a NetBox branch | [F-024](#f-024), a NetBox instance | 8–12 | The reader seam against a second source of truth, and the first that cannot replay time. |
 | F-012 | **Agent surface** | `fylgja-rehearsing-changes`, a skill in OpsMill's format over the CLI's JSON, with a findings catalogue generated from the code; an MCP server deferred | verify, the API, the rehearsal | 2–5 | Cheap once there is something to ask. Left 0.3 on 2026-10-25: it bolts on later and touches no core. |
 | F-013 | **Observation** | markers with bundle id and stage; a `gnmic` targets export; a documented collector and Grafana dashboard; a per-capability definition of settled | stepping, the API | 4–6 | Convergence across a step becomes a graph. |
-| F-014 | **Probes** | a probe declaration, in a file and in a Fylgja-owned kind; synthesized `ping` hosts and no other synthesized node; loss across a step; a probe package format | [F-024](#f-024), stepping, verify | 5–7 | The headline demo: loss during a change on a running twin. `ping` only, by the operator's choice on 2026-10-25. |
+| F-014 | **Probes** | a probe declaration, in a file and in a Fylgja-owned kind; synthesized `ping` hosts and no other synthesized node; loss across a step; a probe package format | [F-024](#f-024), stepping, verify | 5–7 | The headline demo: loss during a change on a running twin. `ping` only, by the operator's choice on 2026-10-25. Built as `016-probes` on 2026-10-29, in about 9.1 hours of sessions against R-29's 14–20. |
 | F-015 | **Operational state diff** | adjacencies and routes snapshotted at each stage's pause and diffed; posted on the proposed change | stepping, verify, the rehearsal | 4–6 | Builds on verify's readers and its observed facts. |
 | F-016 | **Upgrade rehearsal** | the same intent on another NOS version through the package override, then verified | verify, a second image version | 2–4 | Cheap and operationally compelling. |
 | F-017 | **Object storage and Temporal cluster** | as below | nothing new | 6–10 | Needed either way before [F-018](#f-018). |
@@ -433,7 +445,24 @@ brief](../specs/016-probes/brief.md) was rewritten on 2026-10-28 against these a
 Constitution 2.3.0: `--probes <file>` on the five commands that read intent, else the kind
 on the default branch, else none; the snapshot `2` carrying the list; one `ping` probe
 package, `probes/ping.yaml`, on `alpine:3.24.2`; and a step's flows and verify's burst
-measuring and asserting each probe.
+measuring and asserting each probe. **Built** on 2026-10-29 as `016-probes`, under
+[D-064](decisions.md#d-064), with Constitution 2.3.0: a probe from `--probes <file>` or
+`FylgjaProbe` on `main` (loaded there, `8a4f3bee…`), carried by snapshot `2` and compiled
+into bundle `6`, its two hosts, their links and the ports they take under the manifest's
+`fidelity.synthesized`; `probes/ping.yaml`, probe package `0.1`, its image verified present
+and never pulled; `twin.json` `11`; a step's flows read as `loss`, reported and never
+asserted, beside verify's burst, the assertion kind `burst` and the rule `verify.burst`;
+the rehearsal's report a `loss` column. The worker serves four workflows and seventeen
+activities. The fixture's devices each gained two addressed, uncabled ports and the
+template their address lines on both platforms, so the goldens moved twice, to
+`c70589c3…`, `10099944…` and `44ac283f…`, beside a fourth, three-node-probed
+`5222063b…`; the fixture branch's snapshot is `0940db93…` and its bundle `c3872f5c…`, and
+both tiers passed on the development host, tier 3 with probes in cases 5, 8 and 9. Its
+measured effort, by its command log from specify through the live tiers, is about 9.1
+hours of sessions with the two tiers' 71 minutes among them, against
+[R-29](../specs/016-probes/research.md#2-decisions)'s estimate of 14–20 hours of sessions
+plus the tiers and the 5–7 set before snapshots, the template change and the fixture's
+ports.
 
 <a id="f-015"></a>
 **F-015. Operational state diff.** With verify's readers, snapshot adjacencies and routes at
@@ -550,6 +579,7 @@ status line. It is a second client of the same API.
 - At [F-014](#f-014) (016): the probe declaration as a file first and an Infrahub kind
   second, on [D-045](decisions.md#d-045)'s pattern for the kind; what a probe package is
   beside a platform package; and the declaration carrying its own gateway address.
+  Taken as [D-064](decisions.md#d-064), with Constitution 2.3.0.
 - Before [F-025](#f-025): [D-001](decisions.md#d-001) superseded in the part that says
   NetBox lacks branching; and a stage as a snapshot Fylgja holds where the source of
   truth cannot replay time, beside D-045's mark where it can. (A push-based follow for

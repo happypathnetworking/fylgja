@@ -226,6 +226,14 @@ development host up again there, or on a fresh 26.04 VM before it.
   `specs/017-dcim-reader/research.md` §5.2)*
 - The IPAM core generic is `BuiltinIPAddress`; `IpamIPAddress` is a demo-schema name.
   *(09-14)*
+- **An `IpamIPAddress` written with no `ip_namespace` lands in the default namespace**:
+  `IpamIPAddressCreate(data: {address: {value: "10.1.10.1/24"}, interface: {id: <port>}})`
+  reads back the one `BuiltinIPNamespace`, an `IpamNamespace` named `default` with
+  `default: true` (a field of `IpamNamespace` alone, so a query of the generic reads it in
+  an inline fragment). Its `interface` reads back the port by id, name and device, the
+  port's fields in a `... on InterfacePhysical` fragment, since `InterfaceLayer3` has no
+  `name`. Deleting the baseline (`-clear-main`'s order) takes the addresses first, and
+  `BuiltinIPAddress` then counts 0. *(10-29; `specs/016-probes/research.md` §5, T033)*
 - The SDL is at `GET /schema.graphql?branch=`, and its field order is not stable between
   two fetches of one branch: compare two SDLs structurally, never with `diff`. *(09-28)*
   Reported upstream: **dropped**, on the operator's word, before any search. *(10-08)*
@@ -314,6 +322,14 @@ Verified with M10's kind, since removed, and held by the stage kind (below).
   value is a `BigInt`, which genqlient binds to `int`. *(09-28)*
 - An object file's top-level `kind` is `Object`, with the node's kind under `spec.kind`;
   `infrahubctl object validate` checks one without writing. *(09-28)*
+- **The probe kind `FylgjaProbe` loads on `main`** (016): `schema check --branch main
+  schema/fylgja-probe.yaml` answers `Valid!` with a diff that adds the kind alone, and
+  `schema load` takes about 24 s, moving `main`'s hash from `7c413536…` to
+  **`8a4f3bee8a72549e97450a414da18107`**. An object written by `infrahubctl object create
+  FylgjaProbe --set …` reads back every `Text` attribute as written (addresses with their
+  prefix length, gateways without), `format` defaulting to `ping`, and `object delete
+  FylgjaProbe <name>` removes it by its human-friendly id. *(infrahub-sdk 1.23.2, 10-28,
+  10-29; `specs/016-probes/research.md` §5, T009, T017)*
 
 **Proposed changes and stages (014)**
 
@@ -745,6 +761,32 @@ registration `fylgja`.
   error; the pipeline renders the target group's members alone. A member that the imported
   template's query cannot read (a template reading `FylgjaDevice` over a `DcimDevice`)
   has its artifact end `Error`. *(10-26; `specs/017-dcim-reader/research.md` §5.2, §5.7)*
+- **`infrahubctl render <transform> device=<name> --branch <b> --out <file>` renders the
+  tree's template against a live branch** before any import: it reads `.infrahub.yml`'s
+  `jinja2_transforms` entry by the transform's name (`srlinux_device_config`, not the
+  query's), runs the tree's query on the branch and renders the tree's `.j2` locally. A
+  port's `ip_addresses { edges { node { address { value } } } }` inside `... on
+  InterfacePhysical` answers with no further fragment. *(infrahub-sdk 1.23.2, 10-29;
+  `specs/016-probes/research.md` §5, R-18)*
+- **The template's address lines** (016), rendered and then pushed: an addressed SR Linux
+  port gains `subinterface 0 ipv4 admin-state enable` and `subinterface 0 ipv4 address
+  <a/l>` after its `subinterface 0 admin-state enable`; an EOS device gains `ip routing`
+  after `hostname`, and each addressed port `no switchport` and `ip address <a/l>` after
+  `no shutdown` (a second address renders `secondary` on EOS, where a plain second `ip
+  address` replaces the first, and plainly on SR Linux, in value order). A device with no
+  addressed port renders byte for byte what the template rendered before: the fixture's
+  three before its re-seed, their stored checksums. SR Linux 24.7.1 accepts both lines in
+  the replace (pushes 2.8–2.9 s; `info from running` reads `ipv4 { admin-state enable
+  address 10.1.10.1/24 { } }`), and cEOS 4.32.0.2F all three in the eAPI replace (pushes
+  2.3–2.5 s; `show running-config` reads them). *(10-29; `specs/016-probes/research.md`
+  §5, T034, T043)*
+- **An artifact moves for every non-management port, cabled or not**, since the template
+  renders each, so a port added to a seeded device changes its artifact before any address
+  does, and its address changes it again. The fixture re-seeded under the imported
+  template carries each device's two addressed ports, 1,327 bytes an artifact (`n1`
+  `28881d3d…`, `n2` `092ca9f6…`, `n3` `95a3a917…`, the MD5 of the stored bytes); the
+  reader reads no address, so the CTM moves for the ports alone. *(10-29;
+  `specs/016-probes/research.md` §5, R-19, T042, T044)*
 - A branch created with `sync_with_git: false`, as every test branch is, keeps the
   repository commit it forked with: a template commit reaches it only by `BranchRebase`,
   then a generate. *(09-18)*
@@ -877,6 +919,52 @@ registration `fylgja`.
   containerlab's own release, and the copy at its `v0.79.0` tag predates 26.04. On 26.04 it
   installed `docker-ce` 29.8.1, `containerd.io` 2.3.6 and the Compose plugin 5.6.0.
   *(10-07; 26.04, 10-07)*
+
+**The `ping` host (016)**
+
+- **The image** is `alpine:3.24.2`, pulled by hand: its id and its repository digest are
+  both `sha256:294b683cb724975bec92580e1e685676bd4b50bda910ddb8c51d4cabeaec77e6` on Docker
+  29.8.1, its busybox `v1.37.0`. *(10-29)*
+- **busybox 1.37.0's `ping` and `ip` are the mechanism's tools**: `ping` takes `-c`, `-i`,
+  `-W` (seconds to wait for the first response after the `-c` packets are sent), `-w`,
+  `-q`, `-I` and `-t`, and `-i 0.2` is accepted as root with no minimum-interval refusal;
+  `ip` has `address`, `route` and `link`; `pgrep`, `pkill` and a fractional `sleep` are
+  applets of the same image. A reply line reads `64 bytes from <a>: seq=0 ttl=64 time=…`
+  (`seq=`, where iputils writes `icmp_seq=`), and the summary `N packets transmitted, M
+  packets received, P% packet loss`. A background `ping` sent `SIGINT` prints the same
+  summary and exits: an interrupt ends a flow and reads its counters. *(Docker 29.8.1,
+  10-28)*
+- **A `linux` node with `exec` lines plans and deploys beside SR Linux.** `clab deploy
+  --dry-run --format json` checks a topology of a `linux` node and a `nokia_srlinux` node
+  without the `linux` node's image and pulls nothing. In lab `fylgja`, both hosts of a
+  probe deploy beside three privileged SR Linux nodes (46.7 s for 5 nodes), a `linux` node
+  privileged too, and each runs its two `exec` lines after its links are made: inside
+  `clab-fylgja-n1-loop-a`, `eth1` holds `10.1.10.2/24` and the route `10.1.11.2 via
+  10.1.10.1 dev eth1` sits beside the connected one, 0.1–0.2 s after the deploy returns.
+  A host's container holds about 700 KiB, and its pings to the far host go through the
+  device (TTL 63; `traceroute` reads the gateway, then the far host). *(SR Linux 24.7.1,
+  alpine 3.24.2, 10-28, 10-29)*
+- **A failed `exec` line is logged, not failed**: a route through an unreachable gateway
+  is logged `ERRO Failed to execute command … rc=2` with its stderr (`ip: RTNETLINK
+  answers: Network unreachable`), and the deploy exits 0 with the node `running`, so the
+  host's readiness must read the lines' effect itself. *(10-29)*
+- **`docker exec -d` and `pkill -INT` in a containerlab-run container**: `docker exec -d
+  <host> sh -c 'pkill -x ping; exec ping -i 0.2 <far> > /run/flow.log 2>&1'` exits 0 and
+  leaves `ping` running; `pkill -INT -x ping` makes it print its counters at once (the
+  read 0.15 s), as outside containerlab. *(Docker 29.8.1, 10-29)*
+
+**The step's flows and a burst (016)**
+
+- A burst, `ping -c 5 -i 0.2 -W 2`, takes 0.93–0.96 s when every echo is answered; `twin
+  verify` on the probed three-node twin took 5.3 s (22 assertions over 5 nodes), 6.0 s
+  with the burst failing. *(10-29)*
+- Starting and reading the flows adds no measurable time to a step: three steps of a
+  probed twin, each pushing `n1` alone, took 12.0, 40.8 and 18.3 s at the client, the
+  second waiting out a 30 s wait on a failing burst. The loss read across them: `0/45`
+  with `n1:ethernet-1/2` disabled, `176/190` (longest gap 35.2 s) with the probe's own
+  port disabled, and `41/77` (8.2 s) back. Under tier 3, a step across a cEOS node's
+  restart in place lost `369/403` (gap 73.8 s) and `321/356` (64.2 s). *(SR Linux 24.7.1,
+  cEOS 4.32.0.2F, 10-29; `specs/016-probes/tasks.md` T043, T045)*
 
 ---
 

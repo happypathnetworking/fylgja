@@ -13,11 +13,13 @@ import (
 const DefaultBranch = "main"
 
 // baselineKinds are the schema library's kinds a baseline is made of, in the order
-// -clear-main deletes them: a cable before its ports, a port before its device, a device
+// -clear-main deletes them: an address before its port, a cable before its ports, a port
+// before its device, a device
 // before its platform, its site and its tag, a platform before its manufacturer, and a
 // location before its parent. Each is counted beside the generic it implements, where it
 // has one, so that an object of another kind implementing the generic is seen too.
 var baselineKinds = []struct{ concrete, generic string }{
+	{"IpamIPAddress", "BuiltinIPAddress"},
 	{"DcimCable", "DcimConnector"},
 	{"InterfacePhysical", "DcimInterface"},
 	{"DcimDevice", "DcimGenericDevice"},
@@ -34,7 +36,7 @@ var baselineKinds = []struct{ concrete, generic string }{
 // library's kinds, its devices joined to the artifact group and their artifacts rendered
 // and Ready, as SeedThreeNode writes it on a branch. It refuses a main that holds anything
 // of the baseline's kinds (the tag, the manufacturer, the platform, the locations, the
-// devices, their ports and cables), so it never adds to a network and never runs twice.
+// devices, their ports, cables and addresses), so it never adds to a network and never runs twice.
 func (c *Client) SeedMainBaseline() error {
 	held, err := c.baselineCounts(DefaultBranch)
 	if err != nil {
@@ -51,15 +53,15 @@ func (c *Client) SeedMainBaseline() error {
 // three levels above it. Artifacts counts the baseline's artifacts it deleted itself;
 // ArtifactsWithDevices those Infrahub had already removed with their devices.
 type ClearedBaseline struct {
-	Cables, Interfaces, Devices, Platforms, Manufacturers, Locations, Tags int
-	Artifacts, ArtifactsWithDevices                                        int
+	Addresses, Cables, Interfaces, Devices, Platforms, Manufacturers, Locations, Tags int
+	Artifacts, ArtifactsWithDevices                                                   int
 }
 
 // ClearMainBaseline deletes what SeedMainBaseline wrote, and nothing else (D-054). It
 // refuses while any test branch exists, since the window closes after every demo branch
 // is deleted, and when main holds anything beyond the baseline, such as a merged change,
-// naming what it found; either refusal deletes nothing. Then it deletes the cables, the
-// ports, the devices, the platform, the manufacturer, the site and the levels above it,
+// naming what it found; either refusal deletes nothing. Then it deletes the addresses, the
+// cables, the ports, the devices, the platform, the manufacturer, the site and the levels above it,
 // and the tag, and last any of the devices' artifacts Infrahub left behind.
 func (c *Client) ClearMainBaseline() (ClearedBaseline, error) {
 	var done ClearedBaseline
@@ -119,6 +121,8 @@ func (c *Client) clearBaseline(branch string) (ClearedBaseline, error) {
 // counter is the count a deletion of a kind adds to.
 func (d *ClearedBaseline) counter(kind string) *int {
 	switch kind {
+	case "IpamIPAddress":
+		return &d.Addresses
 	case "DcimCable":
 		return &d.Cables
 	case "InterfacePhysical":
@@ -203,7 +207,8 @@ type baselineInventory struct {
 
 	// objects holds each concrete kind's objects by key: a tag, a manufacturer or a
 	// location by name, a platform as "<manufacturer>/<name>", a device by name, a port as
-	// "device:port", and a cable by its ends' canonical id.
+	// "device:port", an address as "device:port:address", and a cable by its ends'
+	// canonical id.
 	objects      map[string]map[string]string // kind -> key -> id
 	devices      map[string]string            // name -> id
 	descriptions map[string]string            // device name -> description
@@ -221,7 +226,8 @@ const baselineQuery = `{
   DcimDevice { count edges { node { id name { value } description { value } } } }
   InterfacePhysical { count edges { node { id name { value } device { node { name { value } } } } } }
   DcimCable { count edges { node { id connected_endpoints { edges { node { id } } } } } }
-  DcimConnector { count } DcimInterface { count } DcimGenericDevice { count }
+  IpamIPAddress { count edges { node { id address { value } interface { node { id } } } } }
+  BuiltinIPAddress { count } DcimConnector { count } DcimInterface { count } DcimGenericDevice { count }
   OrganizationGeneric { count } LocationGeneric { count }
 }`
 
@@ -245,7 +251,13 @@ func (c *Client) readBaseline(branch string) (*baselineInventory, error) {
 		Description  value  `json:"description"`
 		Manufacturer named  `json:"manufacturer"`
 		Device       named  `json:"device"`
-		Endpoints    struct {
+		Address      value  `json:"address"`
+		Interface    struct {
+			Node *struct {
+				ID string `json:"id"`
+			} `json:"node"`
+		} `json:"interface"`
+		Endpoints struct {
 			Edges []struct {
 				Node struct {
 					ID string `json:"id"`
@@ -308,6 +320,16 @@ func (c *Client) readBaseline(branch string) (*baselineInventory, error) {
 		sort.Strings(ends)
 		inv.objects["DcimCable"][strings.Join(ends, "|")] = e.Node.ID
 	}
+	inv.objects["IpamIPAddress"] = map[string]string{}
+	for _, e := range r["IpamIPAddress"].Edges {
+		port := "no interface"
+		if e.Node.Interface.Node != nil {
+			if port = byID[e.Node.Interface.Node.ID]; port == "" {
+				port = "interface " + e.Node.Interface.Node.ID
+			}
+		}
+		inv.objects["IpamIPAddress"][port+":"+e.Node.Address.Value] = e.Node.ID
+	}
 	return inv, nil
 }
 
@@ -330,6 +352,7 @@ func (inv *baselineInventory) beyondBaseline() []string {
 		generic   string
 		concretes []string
 	}{
+		{"BuiltinIPAddress", []string{"IpamIPAddress"}},
 		{"DcimConnector", []string{"DcimCable"}},
 		{"DcimInterface", []string{"InterfacePhysical"}},
 		{"DcimGenericDevice", []string{"DcimDevice"}},
@@ -357,6 +380,7 @@ func (inv *baselineInventory) beyondBaseline() []string {
 		"DcimDevice":               {},
 		"InterfacePhysical":        {},
 		"DcimCable":                {},
+		"IpamIPAddress":            {},
 	}
 	for _, level := range siteLevels {
 		want[level.kind] = map[string]bool{level.name: true}
@@ -365,6 +389,10 @@ func (inv *baselineInventory) beyondBaseline() []string {
 		want["DcimDevice"][n.name] = true
 		for _, p := range append([]string{n.mgmt}, n.ports...) {
 			want["InterfacePhysical"][n.name+":"+p] = true
+		}
+		for _, p := range n.addressed {
+			want["InterfacePhysical"][n.name+":"+p.name] = true
+			want["IpamIPAddress"][n.name+":"+p.name+":"+p.address] = true
 		}
 	}
 	for _, l := range fixtureLinks {

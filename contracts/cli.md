@@ -1,11 +1,12 @@
-# CLI contract: M13 — API; 014 — the stage surface; 015 — the rehearsal; 017 — the scope and the DCIM reader; 018 — snapshots; 019 — following removed
+# CLI contract: M13 — API; 014 — the stage surface; 015 — the rehearsal; 017 — the scope and the DCIM reader; 018 — snapshots; 019 — following removed; 016 — probes
 
 Extends the CLI as M2–M12 built it, and 014 moves it once more: the section "014: the
 stage surface" at the end says what moved. 015 adds to it, and the section "015: the
 rehearsal" after that says what was added. 017 moves it again, and the section "017: the
 scope and the DCIM reader" says what moved. 018 makes the snapshot the core's one input,
 and the section "018: snapshots" says what moved. 019 removes following from the core, and
-the section "019: following removed", last, says what moved. **Everything not named here is
+the section "019: following removed" says what moved. 016 adds probes, and the section
+"016: probes", last, says what moved. **Everything not named here is
 as M12 left it**:
 every command's text on stdout and stderr, its `--json` document, each identifier, step,
 object and message, and each exit status. Identifiers, exit statuses and the JSON
@@ -17,7 +18,9 @@ moved `twin.json` to `7` and added the rehearsal's block; 017 moved the CTM to `
 bundle manifest to `5`, `twin.json` to `8` and PSP to `0.7`, and retired the contract
 version; 018 added the snapshot `1`, moved `twin.json` to `9`, and retired `twin compile
 --ctm` and the bundle's CTM sidecar; 019 moved `twin.json` to `10` and removed the following
-blocks from the findings document and the `show` block.
+blocks from the findings document and the `show` block; 016 added the probe declaration `1`
+and the probe package `0.1`, and moved the snapshot to `2`, the bundle manifest to `6` and
+`twin.json` to `11`.
 
 ## `fylgja serve [--listen <host:port>]... [--psp-dir <dir>]`
 
@@ -259,7 +262,7 @@ exit status changes. `serve`'s refusals to start and the build line have no iden
 |---|---|---|
 | the API | `1` | new: [api.md](api.md), [api.schema.json](api.schema.json) |
 | findings | `1` | none; the four identifiers match its `rule` pattern |
-| bundle manifest, `twin.json`, PSP, CTM, contract | `4`, `5`, `0.6`, `1`, `0.2` | none (`twin.json` `6` since 014, `7` since 015; since 017 the bundle manifest `5`, `twin.json` `8`, PSP `0.7` and CTM `2`, and the contract version retired; since 018 `twin.json` `9`, and the snapshot `1` new; since 019 `twin.json` `10`) |
+| bundle manifest, `twin.json`, PSP, CTM, contract | `4`, `5`, `0.6`, `1`, `0.2` | none (`twin.json` `6` since 014, `7` since 015; since 017 the bundle manifest `5`, `twin.json` `8`, PSP `0.7` and CTM `2`, and the contract version retired; since 018 `twin.json` `9`, and the snapshot `1` new; since 019 `twin.json` `10`; since 016 the bundle manifest `6`, `twin.json` `11`, the snapshot `2`, and the probe declaration `1` and probe package `0.1` new) |
 
 ## Workflows and activities
 
@@ -566,7 +569,9 @@ is [api.md](api.md), "015: the rehearsal"; the block is
 ### `twin rehearse --branch <b> [--markdown] [--json]`
 
 Moved at 019: every deadline is 30 s shorter, since the baseline's provision stops nothing
-("019: following removed", below).
+("019: following removed", below). Moved at 016: the report's table gains the column `loss`,
+a stage line its loss, the caveat a sentence, and a rehearsed stage with a probe a longer
+deadline ("016: probes", below).
 
 A client's command and a run command: one request, the frames printed, the exit by the
 document. It needs everything `twin create`, `twin step`, `twin verify` and `twin destroy`
@@ -1130,7 +1135,8 @@ Identifiers, exit statuses and the JSON documents are the contract; text is illu
 except where a sentence is quoted. The wire is [api.md](api.md), "018: snapshots".
 
 Moved at 019: the reconcile is gone, so every workflow takes a snapshot id and a bundle id
-("019: following removed", below).
+("019: following removed", below). Moved at 016: the snapshot is version `2`, its `probes`
+the probe declarations, and a `1` reads as a `2` with none ("016: probes", below).
 
 ### The commands
 
@@ -1202,7 +1208,8 @@ fylgja twin rehearse --branch <b> …                                           
 ### The text
 
 Moved at 019: the dry run has no `follow:` line, and the kind line is `snapshot …` ("019:
-following removed", below).
+following removed", below). Moved at 016: `snapshot.version.unsupported` names `"1"` and
+`"2"`, and a hand wrap is a `"2"` ("016: probes", below).
 
 - `twin create` and its dry run print, before the run's `start` (or the dry run's
   report):
@@ -1303,7 +1310,8 @@ connection; beside one, the guard answers.
 ### Formats and versions
 
 Moved at 019: `twin.json` `10`, and the following blocks and kinds are gone ("019: following
-removed", below).
+removed", below). Moved at 016: the snapshot `2`, bundle `6` and `twin.json` `11` ("016:
+probes", below).
 
 | Format | Version | Change |
 |---|---|---|
@@ -1523,6 +1531,8 @@ The wordings, in shape:
 
 ### Formats and versions
 
+Moved at 016: `twin.json` `11`, bundle `6` and snapshot `2` ("016: probes", below).
+
 | Format | Version | Change |
 |---|---|---|
 | `twin.json` | `10` | [twin.schema.json](twin.schema.json), `$id` `…/contracts/twin/v10`: a stage needs `provenance.at` alone, so a `--snapshot` twin stepped to a stage names it beside `source: snapshot`; a step keeps `source`; `snapshot_id` null names an earlier build's rebuild, not a check's |
@@ -1544,6 +1554,9 @@ The wordings, in shape:
   still validates under 018's contract.
 
 ### Workflows and activities
+
+Moved at 016: seventeen activities, `StartFlows` and `ReadFlows` added ("016: probes",
+below).
 
 `Provision`, `Destroy`, `Step`, `Rehearse`, and the lab's fifteen activities. `Reconcile`,
 the Schedule `fylgja-follow`, `ReadIntent`, `Compile`, `RunsInFlight`, `StartFollowing`
@@ -1572,3 +1585,316 @@ verify 5a, which names the snapshot) and by id (a topology change), and `twin sh
 the step from the first. Cases 7 and 8 read the kind `snapshot` where they read `pinned`.
 No case passes `--no-follow` or `--interval`, and none makes a Schedule; the trap still
 refuses a stray `fylgja-follow`.
+
+## 016: probes
+
+A probe is a declaration outside intent: two endpoints on two uncabled device ports, each
+with an address and a gateway, which the compiler turns into two synthesized `linux` hosts
+and their links ([D-064](../docs/decisions.md#d-064)). A probe file comes first, the kind
+`FylgjaProbe` on the default branch second, and with neither there are none; the snapshot,
+now version `2`, carries the list. A step measures each probe's transient loss, labelled
+container timing and never asserted; `twin verify` and a step's wait run one burst per
+probe, and a burst that comes back short fails the stage through 015's unchanged gate.
+**Everything not named here is as 019 left it.** Identifiers, exit statuses and the JSON
+documents are the contract; text is illustrative except where a sentence is quoted. The
+wire is [api.md](api.md), "016: probes"; the declaration is
+[probes.schema.json](probes.schema.json), the probe package
+[probes/probe.schema.json](../probes/probe.schema.json).
+
+### The commands
+
+```text
+fylgja intent read   --branch <b> [--at <t>] [--scope tag:<name>] [--probes <file>] --out <file>
+fylgja intent read   --stage <b>/<label> [--scope tag:<name>] [--probes <file>] --out <file>
+fylgja twin create   --branch <b> [--at <t>] [--scope tag:<name>] [--probes <file>] [--dry-run]
+fylgja twin create   --stage <b>/<label> [--scope tag:<name>] [--probes <file>] [--dry-run]
+fylgja twin create   --snapshot <id|file> [--dry-run]                                   # the snapshot's probes
+fylgja twin step     [--stage <b>/<label>] [--probes <file>] [--allow-restart] [--wait <d>] [--dry-run]
+fylgja twin step     --snapshot <id|file> [--allow-restart] [--wait <d>] [--dry-run]    # the snapshot's probes
+fylgja stage plan    --branch <b> [--scope tag:<name>] [--probes <file>]
+fylgja twin rehearse --branch <b> [--scope tag:<name>] [--probes <file>] [--markdown] [--json]
+fylgja twin verify   [--wait <d>]                                                       # one burst per probe
+```
+
+- **`--probes <file>`** is a probe declaration ([probes.schema.json](probes.schema.json),
+  version `1`), read by the client and sent as the request's one file under that path, as
+  `--snapshot` sends a snapshot. It replaces the probes declared in Infrahub; it never adds
+  to them. Without it the server reads `FylgjaProbe` on the default branch, unpinned,
+  whatever `--at` or the stage says, and with no object there the list is `[]`, with no
+  warning. The help says so: `a probe declaration file, read here and sent: every snapshot
+  the command takes carries its probes, in place of the ones declared in Infrahub (default:
+  the probes of FylgjaProbe on the default branch, and none when it holds none)`.
+- **One list per request.** The server reads it once, after the guards, the scope and the
+  packages and before any stage resolves or any branch is read, and hands it to every take
+  the request makes: each stage of a `stage plan` and of a rehearsal carries the same list,
+  so a probe edited on `main` mid-rehearsal reaches the next request, never this one. A
+  file is refused at `start` and the kind's objects at `resolve`, each under the
+  declaration's rules (Identifiers, below), with nothing read and nothing filed.
+- **`intent read --out`** writes a snapshot `2`, its `probes` the file's list, else the
+  kind's, else `[]`, and files it; the summary line is as 018 has it.
+- **`twin create --branch` and `--stage`** take the snapshot with the list and compile it
+  with the hosts: one `linux` host per endpoint, named `<probe>-a` and `<probe>-b`, each
+  cabled by its `eth1` to its endpoint's device port, the host, its port and the link of
+  provenance `synthesized`. A probe that cannot be placed refuses the compile, naming the
+  probe, the endpoint and the cause; every refusal is found in one pass, and the snapshot
+  stays filed, as a compile refusal leaves it at 018.
+- **`twin create --snapshot <id|file>`** and **`twin step --snapshot <id|file>`** take the
+  snapshot's own list and read no kind. `--probes` beside `--snapshot` is
+  `snapshot.flags.conflict` at `--probes`, exit 2 at `start`, judged after `--branch`,
+  `--stage`, `--at` and `--scope` on create and after `--stage` on step, before any
+  connection: `--probes is meaningless with --snapshot: a snapshot carries its own probes,
+  which the twin is built with`. The client then reads and sends no file, so the guard
+  answers whatever the path holds.
+- **`twin step`** to a stage, named or the record's next, takes the target with the
+  request's list (the file's or the kind's), read after the record's own refusals. The step
+  starts a flow for every probe both its sides carry, after its stage and before the
+  reconcile, and reads each after the wait: the loss, per probe, in the record and the
+  document. A probe only the target carries is `added`, its hosts created by the reconcile;
+  one only the twin carries is `dropped`, its hosts torn down as a node intent removes is;
+  neither is measured. A step with no probe starts nothing and carries an empty loss. The
+  dry run starts nothing and carries `loss: null`.
+- **`twin verify`** and the step's wait derive one burst per probe from the staged
+  manifest, run by the server from the probe's `a` host to its `b` host's address in the
+  probe package's form (`ping -c 5 -i 0.2 -W 2 <far address>` for `ping`), held when every
+  reply came back; a burst that comes back short is `verify.burst`, exit 5. A host is never
+  dialled and asserts nothing else; both ends of a synthesized link are skipped, since a
+  host speaks no discovery protocol.
+- **`stage plan`** and **`twin rehearse`**: every stage's take carries the one list; a stage
+  whose intent cables a probe's port is refused at its compile by
+  `probe.interface.cabled`, as a stage no package matches is, and the plan goes on. A
+  rehearsed stage with a probe adds the two flow activities' budgets to its deadline
+  (Workflows and activities, below); `fylgja-twin`'s `timeout` of 4260 does not move.
+- **`twin compile`** and **`twin provision`** take no `--probes`: cobra's `unknown flag:
+  --probes`, exit 2, before any request. The snapshot, or the bundle, says what it carries.
+- **`twin show`** lists a host among the nodes, and `twin destroy` tears the hosts down
+  with the lab.
+- **The checks** `fylgja-step` and `fylgja-twin` send no file: theirs are the kind's.
+- **`fylgja serve` and `worker run`** load the probe packages beside the platform packages
+  (the embedded `probes/*.yaml`, then the PSP override directory's `probes/`, an override
+  shadowing by format), name each in their start-up report, and refuse to start with an
+  invalid one, exit 2.
+
+### The text
+
+- The start-up report of both roles, after the platform packages' lines:
+
+  ```text
+  fylgja worker: ping (embedded): image alpine:3.24.2 (public_registry, present on this host), flow ping every 0.2s, burst 5
+  ```
+
+  and, the image absent, `… (public_registry, absent from this host; a create needing it
+  is refused until docker pull alpine:3.24.2 fetches it)`.
+- `twin create`'s dry run lists a host among the nodes, its format in the package's place
+  and no push, and counts its memory:
+
+  ```text
+    n1-loop-a  alpine:3.24.2  ping host  32 MiB
+    n1-loop-b  alpine:3.24.2  ping host  32 MiB
+  memory: sum 6208 MiB; host budget unset
+  ```
+
+  A probe-less dry run prints byte for byte what it did.
+- `twin show`'s node lines:
+
+  ```text
+    n1-loop-a  clab-fylgja-n1-loop-a  running  172.20.20.5  ping host  probe n1-loop a
+    n1-loop-b  clab-fylgja-n1-loop-b  running  172.20.20.6  ping host  probe n1-loop b
+  ```
+
+- `twin step` prints the flows after its stage and the loss after its wait, and the closing
+  line ends with the loss:
+
+  ```text
+  step stage: done in 0.2s
+  step flows: n1-loop started
+  step reconcile: …
+  step observe: …
+  step loss: n1-loop 0/312 lost, longest gap 0.0s (container timing)
+  stepped to stage change-1/third-link (bundle 2b7e90c1…) in 41s: push n1 6s; settled after 1.9s; loss n1-loop 0/312
+  ```
+
+  A flow that could not start reads `step flows: n1-loop not started: <reason>`; the loss's
+  other outcomes read `n1-loop 274/300 interrupted, …`, `n1-loop not started`, `n1-loop not
+  read: <reason>`, `n2-loop added, not measured` and `n2-loop dropped, not measured`, the
+  closing line's `loss n1-loop 274/300 interrupted, n2-loop not started, n3-loop not read`.
+  A step whose loss names no probe prints neither line's figures and no `; loss`.
+- `twin verify`'s host lines, the counts line and the skipped line:
+
+  ```text
+  n1-loop-a (ping host, 172.20.20.5): burst n1-loop 5 of 5 replies from n1-loop-b at 10.1.11.2 held; record: holds …
+  n1-loop-b (ping host, 172.20.20.6): the far end of probe n1-loop's burst; record: holds …
+  skipped: link n1-loop-a:eth1|n1:ethernet-1/10 at both ends (synthesized: n1-loop-a speaks no discovery protocol); …
+  held: 3 host names, 8 ports, 6 link ends, 5 record claims (the record's, not read); burst 1 held; failed: none; unread: none
+  ```
+
+  Failed: `… burst n1-loop 4 of 5 replies from n1-loop-b at 10.1.11.2 (verify.burst); …`,
+  and the counts line's `burst 0 held; failed: 1 burst`. Not run: `n1-loop-a (ping host,
+  172.20.20.5): not read: probe n1-loop: the burst from n1-loop-a to n1-loop-b at 10.1.11.2
+  could not be run: …`. The counts line gains `; burst N held` only when the staged
+  manifest has a probe, so a probe-less twin prints byte for byte what it did.
+- `twin rehearse`'s stage lines gain the loss after the counts and before the verdict, when
+  it names a probe: `stage change-1/third-link: stepped in 64.5s (push n1 2.5s, n3 2.6s);
+  settled after 6.1s (4 reads); 20 held, 0 failed, 0 skipped; loss n1-loop 274/300, gap
+  54.8s; passed`. The counts, there and in the report's `verify` cell, take each burst
+  beside the host names, ports and neighbours: held, failed or unread, never skipped, so a
+  stage failed on its burst reads `1 failed` beside `verify.burst`, and a probe-less
+  rehearsal's counts are what they were.
+- The rehearsal's report table gains the column `loss` after `verify`, `<probe>
+  <lost>/<sent>, gap <s>s` per probe joined by `; `, the other outcomes worded as the
+  step's, and `—` for a created, refused or not-reached stage and for every row of a
+  rehearsal with no probe:
+
+  ```text
+  | stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |
+  ```
+
+  Shortened, a figure keeps `<lost>/<sent>` and drops its gap, and the shortening's note
+  gains "its loss without its gaps" only when a stage measured a flow. The caveat reads:
+  `*Fidelity is asserted, not measured: the twin's containers forward in software and keep
+  their own timing; a loss figure is the container's, never a hardware forwarder's.*`
+- The refusals, as they print:
+
+  ```text
+  rejection probes.version.unsupported [step start] probes.json: the probe declaration is probes_version "2"; this build reads probes "1"
+  rejection probe.gateway.outside [step start] n1-loop/a.gateway: probe file probes.json: gateway 10.9.9.1 is not within 10.1.10.0/24, so the host's route to the far host could not be added
+  rejection probe.interface.cabled [step compile] n1-loop/b: interface n1:ethernet-1/1 is cabled (n1:ethernet-1/1|n2:ethernet-1/1); a probe takes an uncabled port that is not mgmt_only
+  rejection probe.interface.unknown [step compile] n1-loop/a: device n1 has no interface "ethernet-1/10" in the snapshot
+  rejection probe.kind.absent [step resolve] FylgjaProbe: the default branch's schema has no kind FylgjaProbe: load schema/fylgja-probe.yaml on it; only a request that sends no --probes file reads it
+  rejection snapshot.flags.conflict [step start] --probes: --probes is meaningless with --snapshot: a snapshot carries its own probes, which the twin is built with
+  rejection snapshot.invalid probes: probes holds 1 entry; in snapshot 1 the list is required and empty; a snapshot with probes is a 2
+  rejection snapshot.version.unsupported snap.json: the snapshot declares snapshot_version "3"; this build reads "1" and "2", and nothing converts one
+  ```
+
+  A probe read from the kind is named `FylgjaProbe on the default branch: …`, as a file's
+  is `probe file <path>: …`. The probe image absent: `image alpine:3.24.2 is not on this
+  host: probe package ping (nodes n1-loop-a, n1-loop-b) declares it public_registry, which
+  a run never pulls, since a host's deploy budget is sized for a container already held:
+  docker pull alpine:3.24.2 fetches it; a reference held under another tag is absent`
+  (`host.image.absent`).
+
+### Identifiers
+
+Twenty-five added, none retired; the step `flows` is new, and no status or exit is.
+
+| Rule | Severity, exit, step | Object | When |
+|---|---|---|---|
+| `probes.version.unsupported` | rejection, 1, `start` | the file | `probes_version` is not `"1"`, or absent, naming the version read, or that none was, and `"1"` |
+| `probes.invalid` | rejection, 1, `start` | the file or `probes[<i>].<field>` | not an object, an unknown key, a missing field, or a probe of other than two endpoints; a file that is empty, or of whitespace alone, is not refused: it declares none, as a take with neither |
+| `probe.name.invalid` | rejection, 1, `start` or `resolve` | `<probe>` | the name is not `^[a-z0-9][a-z0-9-]{0,23}$` |
+| `probe.name.duplicate` | rejection, 1, `start` or `resolve` | `<probe>` | two probes share the name, naming each position |
+| `probe.address.invalid` | rejection, 1, `start` or `resolve` | `<probe>/<a\|b>.address` | not an address with a prefix length |
+| `probe.gateway.invalid` | rejection, 1, `start` or `resolve` | `<probe>/<a\|b>.gateway` | not an address, or one carrying a prefix length |
+| `probe.gateway.outside` | rejection, 1, `start` or `resolve` | `<probe>/<a\|b>.gateway` | the gateway is not within the address's prefix |
+| `probe.family.mixed` | rejection, 1, `start` or `resolve` | `<probe>` | the probe's four addresses are not of one family |
+| `probe.address.duplicate` | rejection, 1, `start` or `resolve` | `<probe>/<a\|b>.address` | two endpoints of the list share a host address, naming both probes |
+| `probe.format.unknown` | rejection, 1, `start` or `resolve`, and `compile` | `<probe>` | no loaded probe package declares the format, naming the formats loaded |
+| `probe.device.unknown` | rejection, 1, `compile` (and a stage's compile in a plan) | `<probe>/<a\|b>` | the snapshot has no device of the endpoint's name |
+| `probe.interface.unknown` | rejection, 1, `compile` | `<probe>/<a\|b>` | the device has no interface of the endpoint's name |
+| `probe.interface.cabled` | rejection, 1, `compile` | `<probe>/<a\|b>` | the port is cabled, naming the link |
+| `probe.interface.mgmt_only` | rejection, 1, `compile` | `<probe>/<a\|b>` | the port is `mgmt_only` |
+| `probe.port.taken` | rejection, 1, `compile` | `<probe>/<a\|b>` | an earlier probe's endpoint takes the port, naming it |
+| `probe.host.collision` | rejection, 1, `compile` | `<probe>/<a\|b>` | the host's name, `<probe>-<a\|b>`, is a device's or another host's |
+| `probe.kind.absent` | rejection, 1, `resolve` | `FylgjaProbe` | the default branch lacks the kind or an attribute this build reads, naming `schema/fylgja-probe.yaml`; only when no file is sent |
+| `probe.package.schema` | rejection, 1 (2 at `serve` and `worker run` start), `verify` | the package path | the package is not of [probes/probe.schema.json](../probes/probe.schema.json), naming the field |
+| `probe.package.version.unknown` | rejection, 1 (2 at start), `verify` | the package path | `probe_version` is not `"0.1"`, naming both |
+| `probe.package.format.duplicate` | rejection, 1 (2 at start), `verify` | the package path | two packages of one origin declare one format, naming both |
+| `probe.package.template` | rejection, 1 (2 at start), `verify` | the package path | a command template names a placeholder its field does not render |
+| `host.probe_package.missing` | rejection, 1, `host_check` | the package id | a host's probe package is not on the worker, naming the manifest's source and the hosts |
+| `flow.start.failed` | warning, 0, `flows` | `<probe>` | a host's flow could not be started; the probe is `not_started` and the step goes on |
+| `flow.read.failed` | warning, 0, `flows` | `<probe>` | a host's flow could not be read; the probe is `not_read` |
+| `verify.burst` | rejection, 5 (nonconforming), `observe` | `<probe>` | the burst's replies are fewer than its count: `probe n1-loop: 4 of 5 replies from n1-loop-b at 10.1.11.2` |
+
+Moved: `snapshot.flags.conflict` gains `--probes` beside `--snapshot`, at `--probes`;
+`snapshot.invalid` and `snapshot.version.unsupported` read version `2` (`… this build reads
+"1" and "2", and nothing converts one`), an element of `probes` held to the declaration's
+rules at `probes[<i>].<field>`, so a sent snapshot's element is refused there rather than
+under the read's rules, and is then placed by the compile as a take's is; `host.image.absent` covers a probe image of any
+acquisition, never pulled, its remedy `docker pull <ref>` for `public_registry`. The client's
+own refusals, before any connection: an unreadable file is `operation.failed`, exit 2,
+`reading probes: open <path>: …`, and an explicit empty `--probes=` is `operation.failed`,
+exit 2, `--probes= is empty; …`.
+
+### Formats and versions
+
+| Format | Version | Change |
+|---|---|---|
+| probe declaration | `1` | new: [probes.schema.json](probes.schema.json), `$id` `…/contracts/probes/v1`; the file `--probes` sends, the kind's objects mapped to its element, and the snapshot's element; four rules read across fields (`probe.name.duplicate`, `probe.gateway.outside`, `probe.family.mixed`, `probe.address.duplicate`) are the reader's alone |
+| probe package | `0.1` | new: [probes/probe.schema.json](../probes/probe.schema.json), `$id` `…/probes/v0.1`; `probes/ping.yaml` the one shipped, `alpine:3.24.2`, `public_registry` |
+| snapshot | `2` | [snapshot.schema.json](snapshot.schema.json), `$id` `…/contracts/snapshot/v2`: `probes` the declaration's elements, hashed in the declaration's order and held to its rules before filing; a `1` reads as a `2` with no probes and the same id, since the version is not hashed; the hand wrap is `{"snapshot_version": "2", "ctm": <the CTM>, "probes": []}` |
+| bundle manifest | `6` | [manifest.schema.json](manifest.schema.json), `$id` `…/bundle-manifest/v6`: a host node (`provenance: synthesized`, `probe`, `platform`, `psp`, `artifact` and `bootstrap` null, `management_port` `eth0`), `provenance` on `mapping[]` and `links[]`, `probes[]` and `fidelity.synthesized[]`, each `[]` when none; `bundle.Verify` refuses a `5`; no configs file for a host |
+| `twin.json` | `11` | [twin.schema.json](twin.schema.json), `$id` `…/contracts/twin/v11`: `step.loss` (the step's loss, or null), required; `nodes[]` admits a host (`probe`, `psp` and `artifact` null); `step.phase` gains `flows`; a record of `10` or earlier reads with `loss` null |
+| findings | `1` | [findings.schema.json](findings.schema.json): the step enum gains `flows`; `dry_run.nodes[]` admits a host; the twenty-five identifiers; additive |
+| the `step` block | `1` | [step.schema.json](step.schema.json): `$defs/loss` (`basis` `container`, `probes[]` with the outcomes `measured`, `not_started`, `not_read`, `interrupted`, `added[]`, `dropped[]`), `step.loss` (object or null, always written, null on the dry run), `phase` gains `flows`, `wait_counts.burst` |
+| the `verify` block | `1` | [verify.schema.json](verify.schema.json): `$defs/burst`, a host node (`psp` null, `probe`, no `host_name`, `ports` `[]`, `bursts[]`), `counts.burst` (always written), `twin.diverged.phase` gains `flows` |
+| the `rehearsal` block | `1` | [rehearsal.schema.json](rehearsal.schema.json): `stages[].loss` (the step's, or null), required; `stages[].verify.burst`; `stages[].step.phase` gains `flows`; the markdown's `loss` column and the caveat's sentence |
+| the API | `1` | [api.schema.json](api.schema.json): `probes` on `intent.read`, `twin.create`, `twin.step`, `stage.plan` and `twin.rehearse` |
+| CTM, PSP, `show` and `stages` blocks | `2`, `0.7`, `1`, `1` | none |
+
+- The goldens: the three re-baselined for bundle `6` (`probes: []`, `fidelity.synthesized:
+  []`), then once more when the fixture's probe-ready ports landed, with a fourth,
+  `three-node-probed`, from `testdata/snapshot/three-node-probed.json`. three-node
+  `c70589c3…`, lossy `10099944…`, mixed `44ac283f…`, three-node-probed `5222063b…`.
+- The test fixtures: each device of three-node and mixed carries two probe-ready ports,
+  uncabled (`ethernet-1/10` and `-1/11` on SR Linux, `Ethernet10` and `Ethernet11` on EOS);
+  `testdata/probes/` holds `n1-loop.json`, `n2-loop.json` and `e1-loop.json`.
+- The versions of the findings document and of the API did not move: every change is
+  additive, and a client that never sends `probes` is served with the kind's probes, or
+  none.
+- The earlier contracts are frozen where tests read them, under each of
+  `internal/snapshot`, `internal/compiler`, `internal/bundle`, `internal/lab`,
+  `internal/findings`, `internal/server` and `internal/cli`'s
+  `testdata/contracts/019-following-removed/` (snapshot `1`, manifest `5`, `twin.json`
+  `10`, and the findings, step, verify and rehearsal contracts; 72 copies in all), so a
+  document an earlier build wrote still validates under 019's contract; a document that
+  carries a loss, a burst or a host is 016's alone.
+
+### Workflows and activities
+
+`Provision`, `Destroy`, `Step`, `Rehearse`, and seventeen activities: `StartFlows` and
+`ReadFlows` join the lab's fifteen. The step runs `StartFlows` after `StageStep` and before
+`ReconcileLab`, and `ReadFlows` after `VerifyTwin`, both under the version marker `flows`,
+read once after the stage on every step, so the seven recorded histories, which lack it,
+replay with no loss. `StartFlows` runs each flow in its `a` host (`docker exec -d <host> sh -c
+'pkill -x ping; exec <the flow command, each word quoted> > /run/flow.log 2>&1'`); `ReadFlows` stops each,
+parses ping's summary into sent, lost and the longest gap, and writes `step.loss` into the
+record, always on the record's disconnected context, so a step stopped or cancelled after
+its stage reads its flows `interrupted`. A failure or cancellation of `StartFlows` is the
+phase `flows`, diverged; one of `ReadFlows` makes the result diverged at `flows` while the
+record, written before the read, says ready at the target, and `step.diverged` says so.
+Each activity's bound is the largest flow budget plus a 15 s margin; a rehearsed stage
+with a probe adds both to its deadline (the probed golden's three stages 2,130 s, a
+probe-less rehearsal's unmoved). A host is readied by its package's exec probe (`ip -4 -o
+addr show dev eth1`, expecting its address), never dialled and never pushed.
+
+### Upgrading
+
+- A snapshot `1` in the store reads as a `2` with no probes, under the same id.
+- A bundle `5` is refused by `twin provision`: `bundle.version.unsupported` at `verify`,
+  `<dir> is bundle_version "5"; this build deploys bundle_version "6"`.
+- A twin an earlier build made, left up, has a `10` record and a bundle `5`: `twin show`
+  reads it with `loss` null and `twin destroy` clears it, but `twin step` cannot compare
+  from its bundle (`operation.failed` at `compare`, `the from bundle <id>: manifest.json: is
+  bundle version "5"; this build compares "6"`), so destroy it and create it again.
+- `FylgjaProbe` must be on the default branch before a request that sends no file:
+  `.venv/bin/infrahubctl schema load --branch main schema/fylgja-probe.yaml`, or the fixture
+  tool's `-prepare-main`, which loads it where absent before it loads or refuses the
+  library, so on a `main` holding the library too; without it every create, read, plan,
+  step to a stage and rehearsal that sends no `--probes` is `probe.kind.absent`.
+- A probe image is never pulled by a run: `docker pull alpine:3.24.2` before the first
+  probed create.
+
+### Tier 3 (`scripts/e2e.sh`)
+
+Nine cases, probes in three. The precheck names `alpine:3.24.2` present and the kind on
+`main`, each before any case. **Case 5** creates with `--probes testdata/probes/n1-loop.json`,
+reads the dry run's two hosts and `twin verify`'s `burst 1 held`, and requires each step's
+`.step.loss.basis == "container"` with one probe sent more than nothing, in the document and
+in `twin.json`. **Case 8** writes `e1-loop` into `FylgjaProbe` on `main` with the fixture
+tool's `-probes`, creates with no flag and finds the probe in the snapshot, steps to
+`mixed-link`, which restarts `e1`, and requires a loss and the burst held after the wait,
+then `-delete-probes` and the kind counting 0. **Case 9**'s proposed change gains a stage
+`probe-port-down` after `third-link`, disabling `n1:ethernet-1/10`, at which `fylgja-twin`
+fails on `verify.burst`, the two earlier stages passed with their loss figures, and the
+thread's table carries `loss` between `verify` and `new verification failures`. The trap's
+leak check counts the hosts' containers after every destroy. The case-to-package table and
+`PLATFORMS=` are unchanged: cases 5 and 9 SR Linux alone, case 8 both.

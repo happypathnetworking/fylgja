@@ -71,7 +71,8 @@ two *checks (Infrahub)*.
 
 **Assertion (of verify)** — From M12: one fact `twin verify` expects of a running twin,
 derived from the staged bundle's manifest by a pure function (`verify.Derive`) and never
-written by an operator ([D-038](decisions.md#d-038)). Three kinds: each node's host name
+written by an operator ([D-038](decisions.md#d-038)). Three kinds, and from 016 a fourth,
+the *burst* ([D-064](decisions.md#d-064)): each node's host name
 is its node name (`host_name`); each cabled port intent enables is enabled
 (`port_enabled`); each link is an LLDP adjacency seen from both ends, each end naming the
 far node and the far port under its node name (`neighbor`). It is read once per path over
@@ -79,8 +80,10 @@ the node's own package's transport, by the paths of its `conformance` facet, and
 held, failed, absent (nothing read, and the facet declares no meaning for that), unread
 (the node could not be read) or skipped. A port intent disables, and its link at both
 ends, is skipped with its reason, never asserted. A failed or absent one is a finding
-under its kind's rule (`verify.host_name`, `verify.port.enabled`, `verify.neighbor`).
-Not a *record claim*.
+under its kind's rule (`verify.host_name`, `verify.port.enabled`, `verify.neighbor`,
+`verify.burst`). A *probe*'s host asserts nothing but its burst, and both ends of its link
+are skipped with the reason `link <id> is synthesized: <host> speaks no discovery
+protocol`. Not a *record claim*.
 
 **`at` / point in time** — The optional half of an intent reference: an RFC 3339 UTC
 timestamp Infrahub applies to every query as a time-travel filter
@@ -163,13 +166,18 @@ Without the cEOS tar it sets the host up for SR Linux alone. CI's contract job r
 
 **Bundle** — The compiler's output: `topology.clab.yml`, `configs/` (each node's
 *bootstrap* and its *artifact*), `manifest.json`. Deterministic, self-describing,
-deployable as emitted, content-addressed by `bundle_id`. Format `5`, whose provenance
-names the *scope* and the *mapping* that read the CTM, and whose *fidelity manifest*
-carries the reader's own list. A bundle of another format is refused, naming both versions:
+deployable as emitted, content-addressed by `bundle_id`. Format `6`, whose provenance
+names the *scope* and the *mapping* that read the CTM, whose *fidelity manifest*
+carries the reader's own list, and which from 016 carries each *probe*'s two hosts: their
+nodes (`provenance: synthesized`, the `probe`, `platform`, `psp`, `artifact` and
+`bootstrap` null), their mapping rows and links, `probes[]` and `fidelity.synthesized`,
+each `[]` when there is none, and no configs file for a host. A bundle of another format is
+refused, naming both versions:
 a `1` carries no artifacts, a `2` asserts one forwarding value for every node in it,
-a `3` says nothing of what intent enables, and a `4` names the retired *contract version*
-in place of the scope and the mapping ([§4.3](architecture.md#43-compiler),
-[D-011](decisions.md#d-011), [D-057](decisions.md#d-057)).
+a `3` says nothing of what intent enables, a `4` names the retired *contract version*
+in place of the scope and the mapping, and a `5` has no place for a host
+([§4.3](architecture.md#43-compiler), [D-011](decisions.md#d-011),
+[D-057](decisions.md#d-057), [D-064](decisions.md#d-064)).
 
 **`bundle_id`** — Hash of a bundle's canonical bytes. The same intent compiles to the
 same one. The *artifacts* are among the bytes, so a configuration change moves it too
@@ -184,6 +192,18 @@ as `<bundle_id>.ctm.json`; that sidecar is retired ([D-061](decisions.md#d-061))
 writes one, those on disk are never read, and the *snapshot store* holds what a read
 took. Until 019 `bundles/.reads/` held following's *check*'s CTM between its `ReadIntent`
 and its `Compile`; nothing writes it now ([D-062](decisions.md#d-062)).
+
+**Burst** — From 016 ([D-064](decisions.md#d-064)): the *assertion* `twin verify` and a
+step's wait derive for each *probe* in the staged manifest (`burst`): a fixed count of
+echoes from the probe's `a` host to its `b` host's address, in its *probe package*'s form
+(`ping -c 5 -i 0.2 -W 2 <far address>` for `ping`), run by the *server* through `docker
+exec` in the host, and held when every reply came back. One that comes back short fails
+under `verify.burst`, exit 5 (`probe n1-loop: 4 of 5 replies from n1-loop-b at
+10.1.11.2`), so a *rehearsal*'s stage whose burst comes back short fails through 015's
+unchanged gate; one that could not run leaves the host unread. It is the probe's one
+verdict: the *transient loss* a *flow* measures is reported and never asserted. `twin
+verify`'s counts line gains `burst N held` only when the manifest names a probe, so a
+probe-less twin prints what it did.
 
 **C4 model** — The architecture's diagrams, drawn from one Structurizr model,
 `docs/c4/workspace.dsl`: five views (the system context, the containers, the server's and
@@ -363,7 +383,9 @@ the *snapshot* they took in the *snapshot store* and the bundle in the *bundle s
 `twin create --snapshot`'s and `twin step --snapshot`'s take none: each files the snapshot
 a file carries, or reads the stored one, then compiles and files the bundle. `twin
 provision`'s reads, takes and compiles nothing: it verifies the bundle it was given and files it. The *server* makes it on the lab
-host, so it needs `docker` and `containerlab` on the server's `PATH`.
+host, so it needs `docker` and `containerlab` on the server's `PATH`. From 016 it lists a
+*probe*'s hosts among the nodes, each `ping host` on its image with no push, and counts
+their memory; a step's dry run starts no *flow* and carries `loss: null`.
 
 **Feature (`F-NNN`)** — One row of the roadmap's backlog, with an anchor
 (`roadmap.md#f-011`): a unit of planned work with an estimate, built as one or more
@@ -374,8 +396,10 @@ leaves its number unused.
 **Fidelity manifest** — Part of every bundle's manifest: modelled exactly,
 approximated, stubbed, omitted; software- or hardware-forwarding, asserted per platform
 with one `production_forwarding` entry per package in the bundle, so a *mixed twin*
-asserts each vendor's own answer ([D-025](decisions.md#d-025)); every synthesized node;
-and every *lossy mapping* and *shared port*, as `fidelity.lossy`, `[]` when there is
+asserts each vendor's own answer ([D-025](decisions.md#d-025)); every *synthesized
+node*, by name in `fidelity.synthesized` from 016, each *probe*'s `forwarding: software`
+and `timing: container` in its `probes[]` entry, and no `production_forwarding` entry for
+a host; and every *lossy mapping* and *shared port*, as `fidelity.lossy`, `[]` when there is
 none; and, from 017, the reader's own list, `fidelity.read`: the CTM envelope's
 *approximations* and *omissions*, copied unchanged by the compiler, which holds no table of
 any source's rows ([D-057](decisions.md#d-057)). The only trust signal Fylgja has
@@ -423,6 +447,18 @@ and refused, loading nothing, on one holding any; then the stage kind, the group
 `fylgja-devices` and this repository's read-only registration, each made only when absent.
 `-seed-main` and `-clear-main` open and close a
 *demo window*, and `-add-fourth-node` adds n4 to a throwaway branch, cabled to a peer.
+
+**Flow** — From 016 ([D-064](decisions.md#d-064)): the traffic a *step (of a twin)* runs
+for each *probe* both its sides carry: started in the probe's `a` host after the stage and
+before the reconcile (`StartFlows`: `docker exec -d`, the *probe package*'s flow command,
+`ping -i 0.2 <far address>` for `ping`), then stopped and read after the wait
+(`ReadFlows`), ping's summary parsed into sent, lost and the longest gap: the step's
+*transient loss*. A flow that could not start is `not_started` (`flow.start.failed`, a
+warning) and one that could not be read `not_read` (`flow.read.failed`); a step failed or
+cancelled after its stage reads its flows on the record's disconnected context as
+`interrupted`. A probe only the target carries is `added`, one only the twin carries
+`dropped`, and neither is measured. A failure or cancellation of either activity is the
+*phase* `flows`. A dry run starts none.
 
 **Frame** — From M13: one line of an *API* answer, a JSON object whose one key names its
 kind: `out` and `err` (text for stdout and stderr), `start` (the server begins to start a
@@ -638,9 +674,11 @@ artifacts are regenerated, or the mark is stale ([schema/README.md](../schema/RE
 
 **Mechanism** — From M7 ([D-031](decisions.md#d-031)): one of the fixed, named ways
 Fylgja's code reaches a node, selected by a value in a *PSP* and by nothing else about the
-platform. The set is the push mechanisms (`json_rpc`, `eapi`), the probe's transport
-(`readiness.tls`), the *bootstrap*'s route (`config.bootstrap_via`) and the image-presence
-check (`image.acquisition`). **A mechanism is code; a platform is data; the format is the
+platform. The set is the push mechanisms (`json_rpc`, `eapi`), the *readiness* probe's
+transport (`readiness.tls`), the *bootstrap*'s route (`config.bootstrap_via`) and the
+image-presence check (`image.acquisition`); and from 016 a *probe package*'s `format`
+(`ping`), one mechanism per traffic generator, and its host's `exec` readiness
+([D-064](decisions.md#d-064)). **A mechanism is code; a platform is data; the format is the
 seam.** No code may branch on a platform's id, vendor, NOS, containerlab kind or image
 reference, and a test greps every non-test source for the platform names the tree knows,
 comments included. A package naming a value this build has no mechanism for is refused at
@@ -760,8 +798,10 @@ key a package.
 or `FYLGJA_PSP_DIR`: a directory of support packages loaded after the embedded ones,
 each shadowing an embedded package with the same NOS identifier, by the server and the
 worker alike. An override package `psp validate` rejects is refused at load. How an
-operator boots another NOS version without a rebuild. A client's command has no
-`--psp-dir`.
+operator boots another NOS version without a rebuild. From 016 its `probes/`
+subdirectory holds override *probe packages*, each shadowing an embedded one of the same
+format; the PSP loader reads the directory's own files alone and never descends into it.
+A client's command has no `--psp-dir`.
 
 **Partial pass** — The end of a tier-3 run narrowed by a *platform list* that skipped a
 case and passed every case it ran: `E2E-PARTIAL: platforms <list>; ran <cases>; skipped
@@ -770,7 +810,7 @@ case and passed every case it ran: `E2E-PARTIAL: platforms <list>; ran <cases>; 
 
 **Phase (of a step)** — From M11: where a *step* that failed or was cancelled after it
 touched the host stopped: `reconcile` (the stage swap or containerlab's apply),
-`readiness`, `push` or `record`. A *diverged* record names it, and `step.diverged`
+`readiness`, `push`, `record` or, from 016, `flows` (either *flow* activity). A *diverged* record names it, and `step.diverged`
 carries it. A step that ended `stepped` or `unchanged` has none.
 
 **Pinned** — Of a reference: has an `at`. A *stage* always resolves to a pinned one: a
@@ -795,12 +835,62 @@ each account-gated image among them is present, and is skipped, saying why, othe
 Unset, every case runs and every image is required. A run that skipped a case ends on a
 *partial pass* ([development.md](development.md#test-architecture)).
 
-**Probe login** — The username and password the *readiness* probe authenticates with.
+**Probe** — From 016 ([D-064](decisions.md#d-064)): two endpoints, each on an uncabled
+device port that is not `mgmt_only`, with a host's address (with its prefix length) and
+its gateway, between which a twin carries traffic: the compiler places two *synthesized
+nodes* for it, `<probe>-a` and `<probe>-b`, each a host of its *probe package*'s image
+cabled by its `eth1` to its endpoint's port and configured from the declaration alone,
+since the CTM carries no addresses. A step measures its *transient loss* by a *flow*, and
+`twin verify` asserts it by a *burst*. Not intent, so never in the CTM: a *snapshot*
+carries the list beside it, from a *probe declaration*. Two ports of one device reach each
+other through it, the template rendering each physical port's addresses and no routing;
+two devices' ports reach each other only where intent renders the routing between them.
+Not the *readiness* probe, the per-platform read that tells a booted node ready, which
+Fylgja called a probe from M2: a host is readied by its package's `exec` command, with no
+login, and is never dialled.
+
+**Probe declaration** — From 016 ([D-064](decisions.md#d-064)): the list of *probes* a
+request carries, a file of version `1`
+([contracts/probes.schema.json](../contracts/probes.schema.json)): `probes_version` and
+`probes`, each `{name, format, endpoints}` with two endpoints of `{device, interface,
+address, gateway}`, its name `^[a-z0-9][a-z0-9-]{0,23}$`. One list per request, from one
+source: `--probes <file>` on `intent read`, `twin create`, `twin step` to a stage, `stage
+plan` and `twin rehearse`, sent by the client, replaces the others; without it, the objects
+of `FylgjaProbe` (`schema/fylgja-probe.yaml`), a branch-agnostic kind on the default
+branch that the operator writes, read unpinned whatever the `at` or the stage says; and
+with neither, none, with no warning. The server reads it once, before any stage resolves,
+and hands it to every take the request makes, so each stage of a plan or a rehearsal
+carries the same list. `--snapshot` takes the snapshot's own list, and `--probes` beside it
+is `snapshot.flags.conflict`. Held to its rules at the read (`probes.version.unsupported`,
+`probes.invalid`, `probe.name.*`, `probe.address.*`, `probe.gateway.*`,
+`probe.family.mixed`), then placed by the compile, every refusal in one pass
+(`probe.device.unknown`, `probe.interface.unknown`, `probe.interface.cabled`,
+`probe.interface.mgmt_only`, `probe.port.taken`, `probe.format.unknown`,
+`probe.host.collision`). The checks (Infrahub) send no file: theirs are the kind's.
+
+**Probe login** — The username and password the *readiness* probe authenticates with,
+never a *probe*'s, whose hosts have none.
 A PSP names the environment variables that carry them (`readiness.login`) and never
 the values; the worker reads them from its process environment; no bundle, finding,
 `twin.json` or log carries them (constitution X). The *push* has a login of its own under
 the same rules (`config.push.login`); each shipped package names the same two variables
 for both.
+
+**Probe package** — From 016 ([D-064](decisions.md#d-064)): the declarative file that
+makes one *probe* `format` buildable, format `0.1`
+([probes/probe.schema.json](../probes/probe.schema.json)), the
+[D-031](decisions.md#d-031) move for a traffic generator, which is not a platform: the
+host's image (its containerlab kind, reference, acquisition, resources and budgets), its
+port and the commands that add its address and its route to the far host, its `exec`
+readiness, the *flow*'s and the *burst*'s commands and budgets, and its fidelity
+(`forwarding: software`, `timing: container`). `probes/ping.yaml` is the one shipped: a
+`linux` host on `alpine:3.24.2`, `public_registry`, which a run never pulls (`docker pull
+alpine:3.24.2` before the first probed create; `host.image.absent` otherwise). Loaded by
+the server and the worker beside the *PSPs*, from the embedded `probes/` and then the
+*package override directory*'s `probes/`, each named in their start-up reports; an invalid
+one refuses the start, exit 2. Only its format, kind, image and rendered commands enter a
+bundle, so a budget change moves no `bundle_id`, and the compiler names no `linux`,
+`alpine` or `ping` of its own.
 
 **Proposed change (Infrahub)** — Infrahub's unit of change: a `CoreProposedChange` from
 a source branch into `main`, which may be opened as a draft while the change is built.
@@ -818,7 +908,10 @@ validators with it ([D-053](decisions.md#d-053)).
 **Provenance** — Per-object tag in the CTM (`intent`, `observed`, `synthesized`), and
 the block in every manifest recording branch, `at`, schema hash, the *scope* and the
 *mapping* block (`{reader, model, version}`), in place of the retired *contract version*;
-the CTM envelope and `twin.json` add `observed_at`.
+the CTM envelope and `twin.json` add `observed_at`. A reader writes every object `intent`.
+From 016 a *probe*'s hosts, their ports and their links are `synthesized`, in the placed
+CTM and in the manifest's nodes, mapping rows and links, as is the mapping row of the
+device port a host takes, while the port itself stays `intent` ([D-064](decisions.md#d-064)).
 
 **`provision` (workflow)** — The short Temporal workflow that turns a compiled bundle
 into a ready twin: check host, stage, deploy, await readiness, push, record. The twin is
@@ -867,7 +960,10 @@ is ready only once the endpoint its *push* uses also accepts a connection, becau
 platform can answer its probe while that transport is still shut and the *bootstrap*
 itself may travel over it. Both waits share the one timeout, and `ready_after_s` covers
 both ([D-029](decisions.md#d-029)). The conformance suite's boot half reads more of a
-ready node, once, in tier 3.
+ready node, once, in tier 3. The readiness probe is not a *probe*: from 016 a probe's host
+is readied by its *probe package*'s `exec` command, run inside the container (`ip -4 -o
+addr show dev eth1`, ready once its address is on the port), with no login, under the
+package's own timeout.
 
 **Rebuild** — From M4 until 019 ([D-062](decisions.md#d-062)): what following's *check*
 did when its branch's `bundle_id` moved, the `destroy` and `provision` workflows as its
@@ -1017,17 +1113,19 @@ cabled, all keep it. Two cabled is `interface.port.collision`, a refusal. Every 
 recorded in `fidelity.lossy` with the others it shares with.
 
 **Snapshot** — From 018 ([D-061](decisions.md#d-061)): the core's one input, one document
-of version `1` ([contracts/snapshot.schema.json](../contracts/snapshot.schema.json)) that
+of version `2` ([contracts/snapshot.schema.json](../contracts/snapshot.schema.json)) that
 wraps a *CTM* `2` unchanged: `snapshot_version`, `snapshot_id`, the take's `observed_at`,
-equal to the CTM's, the `ctm`, and `probes`, required and empty until probe declarations
-are defined. The *server* takes one of every read before it compiles: for a create, a
+equal to the CTM's, the `ctm`, and `probes`, the request's *probe declaration*'s elements,
+required and `[]` when there is none, held to the declaration's rules before it is filed.
+Version `1`, 018's, held the list empty, and reads as a `2` with no probes under the same
+id, since the version is not hashed ([D-064](decisions.md#d-064)). The *server* takes one of every read before it compiles: for a create, a
 dry run, each stage a plan, a step or a *rehearsal* reads, and `intent read --out`, which
 writes it; it files each in the *snapshot store*. `twin create --snapshot <id|file>`
 builds a twin from one with no read, and from 019 `twin step --snapshot <id|file>` steps a
 twin to one of any branch, with no request to Infrahub ([D-062](decisions.md#d-062)); `twin
 compile --snapshot <file>` compiles one's CTM. A twin stays at the snapshot it was built
 from until the operator steps it. A bare CTM is wrapped by hand as
-`{"snapshot_version": "1", "ctm": …, "probes": []}`, its id and `observed_at` left for
+`{"snapshot_version": "2", "ctm": …, "probes": []}`, its id and `observed_at` left for
 the server to fill. Read strictly, its version first (`snapshot.version.unsupported`,
 `snapshot.invalid`, `snapshot.id.mismatch`). It holds each device's *artifact*, as the
 CTM does, so it lives in the store and crosses as a file, never in a finding, a log line
@@ -1036,18 +1134,18 @@ or a document, which name its id alone. `twin.json` from `9` and the documents t
 
 **Snapshot id** — From 018 ([D-061](decisions.md#d-061)): a *snapshot*'s content
 address, `snapshot_id`, the lowercase-hex SHA-256 of the body's canonical bytes,
-`{"ctm": …, "probes": []}` with the CTM normalised and its envelope's `observed_at` left
-out, indented two spaces and ending in a newline. The bytes hashed are not the bytes
+`{"ctm": …, "probes": […]}`, the probes in the declaration's order, with the CTM
+normalised and its envelope's `observed_at` left out, indented two spaces and ending in a newline. The bytes hashed are not the bytes
 stored, which carry the outer part; the schema's description gives the hand recipe, `jq
 --indent 2 'del(.snapshot_version, .snapshot_id, .observed_at,
 .ctm.envelope.observed_at)' snapshots/<id>.json | sha256sum`, exact when no string holds
 `<`, `>` or `&`, which Go's encoder escapes. Nothing else is left out, so the same
 intent read twice has one id whenever it was read, and one stage resolved twice has one,
-while any change of intent, the `at`
-or the scope moves it. Two limits, stated and not tested: a rebase re-stamps a branch's
+while any change of intent, the `at`,
+the scope or the probes moves it. Two limits, stated and not tested: a rebase re-stamps a branch's
 content, so a stage resolved after it reads differently, or empty, and gets another id;
 and an artifact Infrahub re-rendered to different bytes for unchanged data, never seen,
-would move it. The *fixture branch*'s is `576933ec…`.
+would move it. The *fixture branch*'s is `0940db93…`.
 
 **Snapshot store** — From 018 ([D-061](decisions.md#d-061)): `snapshots/<snapshot_id>.json`
 under the *state root*, beside the *bundle store*: every snapshot taken or sent, by
@@ -1164,7 +1262,10 @@ configuration and records. It ends *stepped*, `unchanged`, rejected, cancelled o
 *diverged*. A step that would restart or recreate a node needs `--allow-restart`
 ([D-036](decisions.md#d-036)). It then waits for the twin to be *settled* (*observe*),
 under `--wait <duration>` or 2m0s, and records how the wait ended; the wait never changes
-its outcome.
+its outcome. From 016 a step to a stage takes the request's *probe declaration*, and one to
+a snapshot the snapshot's; it runs a *flow* for each *probe* both its sides carry, from
+after its stage to after its wait, and records each one's *transient loss* in the step's
+`loss`.
 
 **Stepped** — From M11: a twin a *step (of a twin)* took to its target. Its `twin.json`
 names the target's branch, `at`, snapshot and bundle at the top level, and its stage, or
@@ -1191,9 +1292,16 @@ shipped package without a row is not supported. Both shipped packages, `nokia_sr
 and `arista_eos`, have one. The test packages (`chassisos`, `fastos`, `slowos`) pass the
 pure half only and are never shipped. Nothing at run time consults the table.
 
-**Synthesized node** — A node in the twin but absent from intent: boundary speakers,
-service mocks, later traffic generators. Added to the CTM before compilation; always
-in the fidelity manifest.
+**Synthesized node** — A node in the twin but absent from intent, of provenance
+`synthesized`, always in the *fidelity manifest*. From 016 the one kind is a *probe*'s
+host, `<probe>-a` or `<probe>-b` ([D-064](decisions.md#d-064)): placed by the compiler
+(`PlaceProbes`) on a copy of the CTM before the survey, every refusal in one pass, then a
+container of its *probe package*'s kind and image, cabled to its endpoint's device port by
+a synthesized link and configured by the topology's `exec` lines, with no artifact, no
+bootstrap and no push; `twin show` lists it among the nodes (`ping host`, `probe n1-loop
+a`), and `twin destroy` tears it down with the lab. Boundary speakers, service mocks and
+other traffic generators are later formats of the same declaration
+([roadmap](roadmap.md#f-014)).
 
 **Target group** — The Infrahub Standard Group an artifact definition renders for:
 `fylgja-devices` for `srlinux_device_config`. A device in the *scope* outside it has no
@@ -1213,13 +1321,24 @@ proposed change rehearsed by the *checks (Infrahub)*, on demand and never in CI,
 by a *platform list* when asked. A **hand check** is a scenario run by hand on the host, read by someone
 present.
 
+**Transient loss** — From 016 ([D-064](decisions.md#d-064)): what a step's *flows*
+measured, per *probe*: packets sent and lost and the longest gap between replies, under
+`basis: container`, in the step document's `step.loss`, `twin.json`'s `step.loss` and a
+*rehearsal*'s stage, where the report's table carries it in a `loss` column. `twin step`
+prints `step loss: n1-loop 0/312 lost, longest gap 0.0s (container timing)` after its
+wait and ends its closing line `; loss n1-loop 0/312`. Reported and never asserted: no rule
+fails on it, since the twin's containers forward in software and keep their own timing,
+so a figure is the container's and never a hardware forwarder's, and it compares one change
+with another on the same twin and predicts nothing absolute
+([§6](architecture.md#6-known-limitations)). The *burst* is the probe's verdict.
+
 **Twin directory** — `twin/` under the *state root*: `bundle/`, a copy of the staged
 bundle verified to hash to its `bundle_id` before deploy; `clab-fylgja/`, containerlab's
 own working directory; and `twin.json`. Present exactly while a twin is provisioned or
 being provisioned; removed whole by unstage. With containerlab, the whole state of the
 twin ([D-014](decisions.md#d-014)).
 
-**`twin.json`** — The twin's record, version `10`, written last by the record step and
+**`twin.json`** — The twin's record, version `11`, written last by the record step and
 removed with the *twin directory*
 ([contracts/twin.schema.json](../contracts/twin.schema.json)): the manifest's provenance
 block, with its *scope* and *mapping*, `observed_at` (or an explicit statement that it is unknown, when no read took
@@ -1236,10 +1355,14 @@ names it beside `source: snapshot`; the
 *rehearsal* whose run built it (`fylgja-rehearse` and the run's id, kept by each step's
 record), or `null`, by which a rehearsal knows a twin to *reclaim*; `state`
 (`ready` or *diverged*); the last *step* (its sides, run, outcome, *phase*, containerlab's
-plan with each package's declaration, each node's push outcome, the timings, and the
-step's `wait`, `null` until `VerifyTwin` writes it), or `null`; and on each node `holds`,
-the bundle whose content it runs. A step rewrites it whole, on every path after its stage.
-Older versions are read where a twin may still carry one: a `9` reads as 018 wrote it; an
+plan with each package's declaration, each node's push outcome, the timings, the
+step's `wait`, `null` until `VerifyTwin` writes it, and from `11` its `loss`, the
+*transient loss*, `null` until `ReadFlows` writes it), or `null`; and on each node `holds`,
+the bundle whose content it runs, a *probe*'s host among them with its `probe` named and
+its `psp` and `artifact` `null`. A step rewrites it whole, on every path after its stage.
+Older versions are read where a twin may still carry one: a `10` reads with `loss` null,
+and its twin, whose bundle is a `5`, cannot step, since the step cannot compare from that
+bundle (destroy it and create it again); a `9` reads as 018 wrote it; an
 `8` names no snapshot, so `twin show` says `snapshot none (record 8)` and `twin step`
 refuses it (`step.twin.unsteppable`), where 018 stepped one that named a stage
 ([D-062](decisions.md#d-062)); a `7` or earlier names no scope,

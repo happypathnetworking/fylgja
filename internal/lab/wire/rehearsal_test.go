@@ -20,7 +20,7 @@ func marshal(t *testing.T, v any) string {
 
 // The verify result's counts ride beside the wait (015, research R-07): absent when nil, so
 // every recorded history's VerifyTwin result reads and writes as it was, and written by kind
-// when a read was kept.
+// when a read was kept, the bursts among them (016).
 func TestVerifyResultCounts(t *testing.T) {
 	wait := StepWait{Outcome: WaitSettled, BudgetS: 120, Reads: 1, From: "2026-10-19T10:00:00Z",
 		EndedAt: "2026-10-19T10:00:01Z", Failing: []StepFinding{}}
@@ -33,12 +33,14 @@ func TestVerifyResultCounts(t *testing.T) {
 		HostName:    findings.VerifyCount{Held: 3, Unread: &zero},
 		PortEnabled: findings.VerifyCount{Held: 10, Failed: 1, Skipped: &two, Unread: &zero},
 		Neighbor:    findings.VerifyCount{Held: 6, Skipped: &zero, Unread: &zero},
+		Burst:       findings.VerifyCount{Held: 1, Unread: &zero},
 		Record:      findings.VerifyCount{Held: 3},
 	}
 	got := marshal(t, VerifyResult{Wait: wait, Counts: &counts})
 	want := `"counts":{"host_name":{"held":3,"failed":0,"unread":0},` +
 		`"port_enabled":{"held":10,"failed":1,"skipped":2,"unread":0},` +
-		`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"record":{"held":3,"failed":0}}`
+		`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"burst":{"held":1,"failed":0,"unread":0},` +
+		`"record":{"held":3,"failed":0}}`
 	if !strings.HasSuffix(got, ","+want+"}") {
 		t.Errorf("result %s\nwant it to end with %s", got, want)
 	}

@@ -74,22 +74,74 @@ type VerifyTowards struct {
 	BundleID string     `json:"bundle_id"`
 }
 
-// VerifyNode is one node the staged manifest names, read or not.
+// VerifyNode is one node the staged manifest names, read or not: a device of intent, read
+// over its package's readiness transport, or a synthesized host (016), which is not read
+// but bursts.
 type VerifyNode struct {
-	Node     string          `json:"node"`
-	PSP      string          `json:"psp"`
-	Addr     *string         `json:"addr"` // <mgmt ipv4>:<readiness port> as dialled; nil when there was none
-	Read     bool            `json:"read"` // false when any assertion of the node is unread
-	Error    string          `json:"error,omitempty"`
-	HostName VerifyAssertion `json:"host_name"`
-	Ports    []VerifyPort    `json:"ports"`
+	Node string `json:"node"`
+	// PSP is the manifest's nodes[].psp.id; nil, written as null, on a host, which has none.
+	PSP *string `json:"psp"`
+	// Probe is what a host is in place of a package: its probe, its endpoint and its probe
+	// package, as the dry run names it. Nil, and not written, on a device.
+	Probe *VerifyProbe `json:"probe,omitempty"`
+	// Addr is a device's <mgmt ipv4>:<readiness port> as dialled, and a host's management
+	// address alone, since a host is not dialled; nil when there was none.
+	Addr  *string `json:"addr"`
+	Read  bool    `json:"read"` // false when any assertion of the node is unread
+	Error string  `json:"error,omitempty"`
+	// HostName is a device's host name; nil, and not written, on a host, which asserts none.
+	HostName *VerifyAssertion `json:"host_name,omitempty"`
+	Ports    []VerifyPort     `json:"ports"`
+	// Bursts are the bursts a host sends (016): one per probe whose first host it is, none
+	// for a second host. Written, [] when empty, on a host alone.
+	Bursts []VerifyBurst `json:"-"`
 }
 
-// MarshalJSON writes a node with no cabled port as ports [].
+// VerifyProbe names a host's probe, as the dry run's node does.
+type VerifyProbe = DryRunProbe
+
+// MarshalJSON writes a node with no cabled port as ports [], and a host's bursts as [] when
+// it sends none; a device carries no bursts key.
 func (n VerifyNode) MarshalJSON() ([]byte, error) {
 	type plain VerifyNode
-	n.Ports = orEmpty(n.Ports)
-	return json.Marshal(plain(n))
+	out := struct {
+		plain
+		Bursts *[]VerifyBurst `json:"bursts,omitempty"`
+	}{plain: plain(n)}
+	out.Ports = orEmpty(n.Ports)
+	if n.Probe != nil {
+		b := orEmpty(n.Bursts)
+		out.Bursts = &b
+	}
+	return json.Marshal(out)
+}
+
+// UnmarshalJSON reads a node as MarshalJSON writes it, its bursts included.
+func (n *VerifyNode) UnmarshalJSON(data []byte) error {
+	type plain VerifyNode
+	var in struct {
+		plain
+		Bursts []VerifyBurst `json:"bursts"`
+	}
+	if err := json.Unmarshal(data, &in); err != nil {
+		return err
+	}
+	*n = VerifyNode(in.plain)
+	n.Bursts = in.Bursts
+	return nil
+}
+
+// VerifyBurst is one burst (016): from a probe's first host to its second's address, the
+// replies expected, and what came of it. Read is nil when the burst was not run.
+type VerifyBurst struct {
+	Probe      string  `json:"probe"`
+	From       string  `json:"from"`
+	To         string  `json:"to"`
+	FarAddress string  `json:"far_address"`
+	Expected   string  `json:"expected"`
+	Outcome    string  `json:"outcome"`
+	Read       *string `json:"read"`
+	Error      string  `json:"error,omitempty"`
 }
 
 // VerifyAssertion is one assertion: the path read, the value expected and what came of it.
@@ -172,11 +224,14 @@ type VerifyCounts struct {
 	HostName    VerifyCount `json:"host_name"`
 	PortEnabled VerifyCount `json:"port_enabled"`
 	Neighbor    VerifyCount `json:"neighbor"`
-	Record      VerifyCount `json:"record"`
+	// Burst counts the bursts (016), one per probe; held, failed and unread alone, all 0 on
+	// a twin with no probe.
+	Burst  VerifyCount `json:"burst"`
+	Record VerifyCount `json:"record"`
 }
 
 // VerifyCount is one kind's count. Skipped is written for the two port kinds alone, and
-// Unread for every kind read from a node; a claim is neither.
+// Unread for every kind read from a node, the burst included; a claim is neither.
 type VerifyCount struct {
 	Held    int  `json:"held"`
 	Failed  int  `json:"failed"`

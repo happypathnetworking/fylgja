@@ -1,0 +1,226 @@
+{
+  "snapshot_version": "2",
+  "snapshot_id": "aef03f5d8136b49bb4e0b6b40c9473c5d009af966d07a5fe658860d203c1de3c",
+  "observed_at": "2026-09-08T12:00:00.000000Z",
+  "ctm": {
+    "ctm_version": "2",
+    "envelope": {
+      "branch": "fylgja-fixture",
+      "at": "2026-09-08T12:00:00Z",
+      "observed_at": "2026-09-08T12:00:00.000000Z",
+      "schema_hash": "fixture",
+      "scope": "tag:fylgja",
+      "mapping": {
+        "reader": "infrahub-dcim",
+        "model": "opsmill/schema-library",
+        "version": "26336e9"
+      },
+      "fidelity": [
+        {
+          "disposition": "approximated",
+          "object": "interface.enabled",
+          "source": "InterfacePhysical.status",
+          "reason": "a port is enabled unless its status is disabled; the library's status is not an admin state"
+        },
+        {
+          "disposition": "approximated",
+          "object": "interface.mgmt_only",
+          "source": "InterfacePhysical.role",
+          "reason": "the management port is the port whose role is management; the library has no management-only flag"
+        },
+        {
+          "disposition": "omitted",
+          "object": "platform.version",
+          "source": "DcimPlatform",
+          "reason": "the library's platform carries no version"
+        }
+      ]
+    },
+    "devices": [
+      {
+        "name": "n1",
+        "platform": {
+          "package": "nokia_srlinux"
+        },
+        "interfaces": [
+          {
+            "name": "ethernet-1/1",
+            "mgmt_only": false,
+            "enabled": true,
+            "link": "n1:ethernet-1/1|n2:ethernet-1/1"
+          },
+          {
+            "name": "ethernet-1/10",
+            "mgmt_only": false,
+            "enabled": true
+          },
+          {
+            "name": "ethernet-1/11",
+            "mgmt_only": false,
+            "enabled": true
+          },
+          {
+            "name": "ethernet-1/2",
+            "mgmt_only": false,
+            "enabled": true,
+            "link": "n1:ethernet-1/2|n3:ethernet-1/2"
+          },
+          {
+            "name": "mgmt0",
+            "mgmt_only": true,
+            "enabled": true
+          }
+        ],
+        "artifact": {
+          "name": "device-config",
+          "content_type": "text/plain",
+          "checksum": "28881d3d0d61d3fe5acf1f1ee0e31a60",
+          "content": "# n1: production configuration rendered by Infrahub (fylgja-artifacts)\n# platform Nokia SR Linux; FYLGJA-MARKER-fixture\nset / system name host-name n1\nset / network-instance default type default\nset / interface ethernet-1/1 description \"to n2 ethernet-1/1\"\nset / interface ethernet-1/1 admin-state enable\nset / interface ethernet-1/1 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/1.0\nset / interface ethernet-1/10 admin-state enable\nset / interface ethernet-1/10 subinterface 0 admin-state enable\nset / interface ethernet-1/10 subinterface 0 ipv4 admin-state enable\nset / interface ethernet-1/10 subinterface 0 ipv4 address 10.1.10.1/24\nset / network-instance default interface ethernet-1/10.0\nset / interface ethernet-1/11 admin-state enable\nset / interface ethernet-1/11 subinterface 0 admin-state enable\nset / interface ethernet-1/11 subinterface 0 ipv4 admin-state enable\nset / interface ethernet-1/11 subinterface 0 ipv4 address 10.1.11.1/24\nset / network-instance default interface ethernet-1/11.0\nset / interface ethernet-1/2 description \"to n3 ethernet-1/2\"\nset / interface ethernet-1/2 admin-state enable\nset / interface ethernet-1/2 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/2.0\n# mgmt0: out-of-band management, left to the platform\n"
+        }
+      },
+      {
+        "name": "n2",
+        "platform": {
+          "package": "nokia_srlinux"
+        },
+        "interfaces": [
+          {
+            "name": "ethernet-1/1",
+            "mgmt_only": false,
+            "enabled": true,
+            "link": "n1:ethernet-1/1|n2:ethernet-1/1"
+          },
+          {
+            "name": "ethernet-1/10",
+            "mgmt_only": false,
+            "enabled": true
+          },
+          {
+            "name": "ethernet-1/11",
+            "mgmt_only": false,
+            "enabled": true
+          },
+          {
+            "name": "ethernet-1/2",
+            "mgmt_only": false,
+            "enabled": true,
+            "link": "n2:ethernet-1/2|n3:ethernet-1/1"
+          },
+          {
+            "name": "mgmt0",
+            "mgmt_only": true,
+            "enabled": true
+          }
+        ],
+        "artifact": {
+          "name": "device-config",
+          "content_type": "text/plain",
+          "checksum": "092ca9f62fe2887add0ae679de0a7076",
+          "content": "# n2: production configuration rendered by Infrahub (fylgja-artifacts)\n# platform Nokia SR Linux; FYLGJA-MARKER-fixture\nset / system name host-name n2\nset / network-instance default type default\nset / interface ethernet-1/1 description \"to n1 ethernet-1/1\"\nset / interface ethernet-1/1 admin-state enable\nset / interface ethernet-1/1 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/1.0\nset / interface ethernet-1/10 admin-state enable\nset / interface ethernet-1/10 subinterface 0 admin-state enable\nset / interface ethernet-1/10 subinterface 0 ipv4 admin-state enable\nset / interface ethernet-1/10 subinterface 0 ipv4 address 10.2.10.1/24\nset / network-instance default interface ethernet-1/10.0\nset / interface ethernet-1/11 admin-state enable\nset / interface ethernet-1/11 subinterface 0 admin-state enable\nset / interface ethernet-1/11 subinterface 0 ipv4 admin-state enable\nset / interface ethernet-1/11 subinterface 0 ipv4 address 10.2.11.1/24\nset / network-instance default interface ethernet-1/11.0\nset / interface ethernet-1/2 description \"to n3 ethernet-1/1\"\nset / interface ethernet-1/2 admin-state enable\nset / interface ethernet-1/2 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/2.0\n# mgmt0: out-of-band management, left to the platform\n"
+        }
+      },
+      {
+        "name": "n3",
+        "platform": {
+          "package": "nokia_srlinux"
+        },
+        "interfaces": [
+          {
+            "name": "ethernet-1/1",
+            "mgmt_only": false,
+            "enabled": true,
+            "link": "n2:ethernet-1/2|n3:ethernet-1/1"
+          },
+          {
+            "name": "ethernet-1/10",
+            "mgmt_only": false,
+            "enabled": true
+          },
+          {
+            "name": "ethernet-1/11",
+            "mgmt_only": false,
+            "enabled": true
+          },
+          {
+            "name": "ethernet-1/2",
+            "mgmt_only": false,
+            "enabled": true,
+            "link": "n1:ethernet-1/2|n3:ethernet-1/2"
+          },
+          {
+            "name": "mgmt0",
+            "mgmt_only": true,
+            "enabled": true
+          }
+        ],
+        "artifact": {
+          "name": "device-config",
+          "content_type": "text/plain",
+          "checksum": "95a3a91788e63626cdb9b4ecdf56eb58",
+          "content": "# n3: production configuration rendered by Infrahub (fylgja-artifacts)\n# platform Nokia SR Linux; FYLGJA-MARKER-fixture\nset / system name host-name n3\nset / network-instance default type default\nset / interface ethernet-1/1 description \"to n2 ethernet-1/2\"\nset / interface ethernet-1/1 admin-state enable\nset / interface ethernet-1/1 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/1.0\nset / interface ethernet-1/10 admin-state enable\nset / interface ethernet-1/10 subinterface 0 admin-state enable\nset / interface ethernet-1/10 subinterface 0 ipv4 admin-state enable\nset / interface ethernet-1/10 subinterface 0 ipv4 address 10.3.10.1/24\nset / network-instance default interface ethernet-1/10.0\nset / interface ethernet-1/11 admin-state enable\nset / interface ethernet-1/11 subinterface 0 admin-state enable\nset / interface ethernet-1/11 subinterface 0 ipv4 admin-state enable\nset / interface ethernet-1/11 subinterface 0 ipv4 address 10.3.11.1/24\nset / network-instance default interface ethernet-1/11.0\nset / interface ethernet-1/2 description \"to n1 ethernet-1/2\"\nset / interface ethernet-1/2 admin-state enable\nset / interface ethernet-1/2 subinterface 0 admin-state enable\nset / network-instance default interface ethernet-1/2.0\n# mgmt0: out-of-band management, left to the platform\n"
+        }
+      }
+    ],
+    "links": [
+      {
+        "id": "n1:ethernet-1/1|n2:ethernet-1/1",
+        "endpoints": [
+          {
+            "device": "n1",
+            "interface": "ethernet-1/1"
+          },
+          {
+            "device": "n2",
+            "interface": "ethernet-1/1"
+          }
+        ]
+      },
+      {
+        "id": "n1:ethernet-1/2|n3:ethernet-1/2",
+        "endpoints": [
+          {
+            "device": "n1",
+            "interface": "ethernet-1/2"
+          },
+          {
+            "device": "n3",
+            "interface": "ethernet-1/2"
+          }
+        ]
+      },
+      {
+        "id": "n2:ethernet-1/2|n3:ethernet-1/1",
+        "endpoints": [
+          {
+            "device": "n2",
+            "interface": "ethernet-1/2"
+          },
+          {
+            "device": "n3",
+            "interface": "ethernet-1/1"
+          }
+        ]
+      }
+    ]
+  },
+  "probes": [
+    {
+      "name": "n1-loop",
+      "format": "ping",
+      "endpoints": [
+        {
+          "device": "n1",
+          "interface": "ethernet-1/10",
+          "address": "10.1.10.2/24",
+          "gateway": "10.1.10.1"
+        },
+        {
+          "device": "n1",
+          "interface": "ethernet-1/11",
+          "address": "10.1.11.2/24",
+          "gateway": "10.1.11.1"
+        }
+      ]
+    }
+  ]
+}

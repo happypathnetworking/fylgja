@@ -61,7 +61,11 @@ func dryRunReport(ctx context.Context, opts *options, op string, subject *findin
 		return withFound(err, prior)
 	}
 
-	plan, err := lab.CheckHost(ctx, dryRunActivities(opts, reg, paths), wire.CheckHostInput{BundlePath: bundlePath, BundleID: id})
+	acts, err := dryRunActivities(opts, reg, paths)
+	if err != nil {
+		return failed(loadFailureAt(op, subject, findings.StepHostCheck, err))
+	}
+	plan, err := lab.CheckHost(ctx, acts, wire.CheckHostInput{BundlePath: bundlePath, BundleID: id})
 	if err != nil {
 		return failed(failAt(op, subject, findings.StepHostCheck, findings.StepHostCheck, "host check: %s", activityMessage(err)))
 	}
@@ -89,11 +93,20 @@ func dryRunReport(ctx context.Context, opts *options, op string, subject *findin
 	opts.note("%s", bundleStoredLine(id, bundlePath))
 	opts.note("nodes:")
 	for _, n := range block.Nodes {
+		// A device names its package and what it would be pushed; a probe's host its
+		// format, and nothing is pushed to it (016).
+		what := ""
+		switch {
+		case n.Probe != nil:
+			what = n.Probe.Format + " host"
+		case n.PSP != nil:
+			what = *n.PSP
+		}
 		push := ""
 		if a := n.Artifact; a != nil {
 			push = fmt.Sprintf("  push %s %s (%d bytes)", a.Name, a.Checksum, a.Size)
 		}
-		opts.note("  %s  %s  %s  %d MiB%s", n.Name, n.Image, n.PSP, n.MemoryMB, push)
+		opts.note("  %s  %s  %s  %d MiB%s", n.Name, n.Image, what, n.MemoryMB, push)
 	}
 	opts.note("mapping: %d lossy mappings, %d shared ports", lossy.LossyMappings, lossy.SharedPorts)
 	printDryRunHost(opts, plan)
@@ -113,9 +126,14 @@ func dryRunReport(ctx context.Context, opts *options, op string, subject *findin
 // process: lab.CheckHost and containerlab's own plan, through the server's runner, never the
 // workflow service. Shared by the create's and provision's dry run, by twin step, whose host
 // check and plan are read the same way, and by twin verify
-// (D-041).
-func dryRunActivities(opts *options, reg *psp.Registry, paths lab.Paths) *lab.Activities {
-	return opts.c.activities(reg, paths)
+// (D-041). The probe packages are loaded beside reg, as every request loads them (016); a
+// package its validation refuses is the error, which the caller files as loadFailure does.
+func dryRunActivities(opts *options, reg *psp.Registry, paths lab.Paths) (*lab.Activities, error) {
+	probes, err := opts.probes()
+	if err != nil {
+		return nil, err
+	}
+	return opts.c.activities(reg, probes, paths), nil
 }
 
 // dryRunBlock is the dry_run block over the host check's plan: each node with what it would
@@ -134,8 +152,17 @@ func dryRunBlock(plan wire.CheckHostResult, artifacts map[string]*findings.DryRu
 		SharedPorts:   lossy.SharedPorts,
 	}
 	for _, n := range plan.Nodes {
-		block.Nodes = append(block.Nodes, findings.DryRunNode{Name: n.Name, Image: n.Image, PSP: n.PSPID, MemoryMB: n.MemoryMB,
-			Artifact: artifacts[n.Name]})
+		node := findings.DryRunNode{Name: n.Name, Image: n.Image, MemoryMB: n.MemoryMB, Artifact: artifacts[n.Name]}
+		if h := n.Host; h != nil {
+			// A probe's host, planned from its probe package: no support package, nothing
+			// pushed (016).
+			node.Probe = &findings.DryRunProbe{Name: h.Probe, Endpoint: h.Endpoint, Format: h.Format,
+				Package: findings.DryRunPackage{ID: h.Package.ID, Source: h.Package.Source}}
+		} else {
+			id := n.PSPID
+			node.PSP = &id
+		}
+		block.Nodes = append(block.Nodes, node)
 	}
 	var refusedBy []string
 	for _, f := range refusals {

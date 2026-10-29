@@ -435,17 +435,39 @@ type DryRunBlock struct {
 	SharedPorts   int `json:"shared_ports"`
 }
 
-// DryRunNode is one node a real run would deploy.
+// DryRunNode is one node a real run would deploy: a device of intent, or a probe's host
+// (016).
 type DryRunNode struct {
-	Name     string `json:"name"`
-	Image    string `json:"image"`
-	PSP      string `json:"psp"`
-	MemoryMB int    `json:"memory_mb"`
+	Name  string `json:"name"`
+	Image string `json:"image"`
+	// PSP is the device's support package; nil, written null, on a host, which has none.
+	PSP *string `json:"psp"`
+	// Probe is what a host is, as twin.json 11 records it: its probe, its endpoint, its
+	// format and its probe package. Nil, and not written, on a device.
+	Probe    *DryRunProbe `json:"probe,omitempty"`
+	MemoryMB int          `json:"memory_mb"`
 	// Artifact is what would be pushed to this node, as the bundle's manifest names it
-	// (M5). Every M5 bundle carries one per node, so the contract requires it
-	// here; it is a pointer only so that a document built from an M2-era bundle, which
-	// twin provision refuses as bundle.version.unsupported, marshals without it.
+	// (M5). Every M5 bundle carries one per device, so the contract requires it
+	// there; it is a pointer so that a document built from an M2-era bundle, which
+	// twin provision refuses as bundle.version.unsupported, marshals without it, and a
+	// host, to which nothing is pushed, carries none (016).
 	Artifact *DryRunArtifact `json:"artifact,omitempty"`
+}
+
+// DryRunProbe is a host's probe in a dry run (016): the probe it is an endpoint of, which
+// endpoint, the probe's format and the probe package the host is built with.
+type DryRunProbe struct {
+	Name     string        `json:"name"`
+	Endpoint string        `json:"endpoint"`
+	Format   string        `json:"format"`
+	Package  DryRunPackage `json:"package"`
+}
+
+// DryRunPackage names a probe package, as the manifest does: its id and whether it is the
+// shipped one.
+type DryRunPackage struct {
+	ID     string `json:"id"`
+	Source string `json:"source"`
 }
 
 // DryRunArtifact names what would be pushed: never a byte of it.
@@ -923,6 +945,9 @@ type StepBlock struct {
 	// WaitCounts is the wait's last read counted by kind, as twin verify counts its block
 	// (015): nil on the dry run, before the run closed, and when the wait made no read.
 	WaitCounts *VerifyCounts `json:"wait_counts,omitempty"`
+	// Loss is what the step's probe flows lost (016), written always: null on the dry run,
+	// before the run closed and when the run ended before its flows were read.
+	Loss *StepLoss `json:"loss"`
 }
 
 // MarshalJSON writes an empty push plan, and a run's empty pushes and awaited nodes, as []
@@ -944,6 +969,46 @@ func (b StepBlock) MarshalJSON() ([]byte, error) {
 		b.StepRunBlock = &run
 	}
 	return json.Marshal(plain(b))
+}
+
+// StepLoss is the step document's loss (contracts/step.schema.json, $defs/loss), as
+// twin.json 11's step.loss keeps it: the basis, container, one entry per probe both bundles
+// carry, and the probes the target adds and drops, which no flow measured across the step.
+type StepLoss struct {
+	Basis   string          `json:"basis"`
+	Probes  []StepProbeLoss `json:"probes"`
+	Added   []string        `json:"added"`
+	Dropped []string        `json:"dropped"`
+}
+
+// MarshalJSON writes every list, [] for none.
+func (l StepLoss) MarshalJSON() ([]byte, error) {
+	type plain StepLoss
+	if l.Probes == nil {
+		l.Probes = []StepProbeLoss{}
+	}
+	if l.Added == nil {
+		l.Added = []string{}
+	}
+	if l.Dropped == nil {
+		l.Dropped = []string{}
+	}
+	return json.Marshal(plain(l))
+}
+
+// StepProbeLoss is one probe's flow across the step: the containers it ran from and to, how
+// it ended, the requests sent and lost and the longest run of unanswered ones in seconds,
+// and the rule and message of a flow not started or not read. Never a configuration line.
+type StepProbeLoss struct {
+	Probe       string  `json:"probe"`
+	From        string  `json:"from"`
+	To          string  `json:"to"`
+	Outcome     string  `json:"outcome"`
+	Sent        int     `json:"sent"`
+	Lost        int     `json:"lost"`
+	LongestGapS float64 `json:"longest_gap_s"`
+	Rule        string  `json:"rule,omitempty"`
+	Message     string  `json:"message,omitempty"`
 }
 
 // StepRunBlock is what a step run adds to the block: the run, and once it closed its
@@ -1178,6 +1243,10 @@ type RehearsalStage struct {
 	Wait *RehearsalWait `json:"wait"`
 	// Verify is the wait's last read counted by kind, nil when no read was made.
 	Verify *VerifyCounts `json:"verify"`
+	// Loss is what the step child's probe flows lost, the step document's block copied
+	// (016), written always: null on the baseline, a refused stage, one not reached, and a
+	// step that ended before its flows were read.
+	Loss *StepLoss `json:"loss"`
 	// NewFindings are the wait's failing assertions the baseline's wait did not have, by
 	// identifier then object.
 	NewFindings []StepWaitFailing `json:"new_findings"`

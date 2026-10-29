@@ -46,6 +46,9 @@ type Mechanism struct {
 	ReadinessMargin time.Duration
 	PushMargin      time.Duration
 	VerifyMargin    time.Duration
+	// FlowsMargin is added to the flows' start budget and to their read budget, as StartFlows'
+	// and ReadFlows' timeouts add it (016).
+	FlowsMargin time.Duration
 	// Wait is a wait's budget: verify's default, which every stage of a rehearsal waits.
 	Wait time.Duration
 }
@@ -63,9 +66,13 @@ type DeadlineStage struct {
 //
 //	baseline  = CheckHost + Stage + deploy + (readiness + ReadinessMargin) + (push + PushMargin) + Record + (Wait + VerifyMargin)
 //	rehearsed = InspectTwin + 2 CheckHost + Stage + deploy + (readiness + ReadinessMargin) + (push + PushMargin) + Record + (Wait + VerifyMargin)
+//	          + (start + FlowsMargin) + (read + FlowsMargin), when the stage has a probe's host
 //	destroy   = PlanTeardown + destroy + Unstage
 //
-// A stage of another role is not run, and adds nothing. The destroy's budget is the largest
+// A rehearsed stage's flows are its hosts' (016, research R-16): a step starts and reads
+// them, each budget its probe package's, the largest over the stage's hosts; a create
+// starts none, and a stage with no host has none. A stage of another role is not run, and
+// adds nothing. The destroy's budget is the largest
 // over every stage counted, since the run may stop at any of them.
 func Deadline(m Mechanism, stages []DeadlineStage) time.Duration {
 	var total time.Duration
@@ -79,6 +86,9 @@ func Deadline(m Mechanism, stages []DeadlineStage) time.Duration {
 			total += m.CheckHost + build
 		case RoleRehearsed:
 			total += m.InspectTwin + 2*m.CheckHost + build
+			if b.flows {
+				total += seconds(b.start) + m.FlowsMargin + seconds(b.read) + m.FlowsMargin
+			}
 		default:
 			continue
 		}
@@ -90,8 +100,13 @@ func Deadline(m Mechanism, stages []DeadlineStage) time.Duration {
 // Fits says whether a deadline is within the ceiling.
 func Fits(deadline, ceiling time.Duration) bool { return deadline <= ceiling }
 
-// budgets are a stage's budgets in seconds, each the largest over its nodes.
-type budgets struct{ deploy, readiness, push, destroy int }
+// budgets are a stage's budgets in seconds, each the largest over its nodes, and whether it
+// has a probe's host, whose flow's start and read budgets are the largest over its hosts.
+type budgets struct {
+	deploy, readiness, push, destroy int
+	flows                            bool
+	start, read                      int
+}
 
 func budgetsOf(nodes []wire.NodePlan) budgets {
 	var b budgets
@@ -100,6 +115,11 @@ func budgetsOf(nodes []wire.NodePlan) budgets {
 		b.readiness = max(b.readiness, n.TimeoutS)
 		b.push = max(b.push, n.Push.TimeoutS)
 		b.destroy = max(b.destroy, n.DestroyTimeoutS)
+		if h := n.Host; h != nil {
+			b.flows = true
+			b.start = max(b.start, h.Flow.StartTimeoutS)
+			b.read = max(b.read, h.Flow.ReadTimeoutS)
+		}
 	}
 	return b
 }

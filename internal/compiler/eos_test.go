@@ -99,7 +99,7 @@ func eosOnlyCTM() *ctm.CTM {
 // second platform is data, and this test is what says so.
 func TestEOSOnlyTwinCompilesFromTheShippedPackage(t *testing.T) {
 	reg := embeddedRegistry(t)
-	files, list := compiler.Compile(eosOnlyCTM(), reg)
+	files, list := compiler.Compile(eosOnlyCTM(), nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("an EOS-only twin was refused: %v", list)
 	}
@@ -198,7 +198,7 @@ func TestEOSOnlyTwinCompilesFromTheShippedPackage(t *testing.T) {
 
 	// The same intent reads clean: validation and the compiler share SurveyDevice, so a
 	// CTM the compiler builds must be one a read would have written.
-	if read := validate.Validate(eosOnlyCTM(), reg); read.Rejected() {
+	if read := validate.Validate(eosOnlyCTM(), nil, reg, nil); read.Rejected() {
 		t.Errorf("the compiler built a bundle from intent validation refuses: %v", read)
 	}
 }
@@ -218,7 +218,7 @@ func deref(s *string) string {
 // the compiler neither reads nor rewrites a byte of it.
 func TestEOSArtifactReachesTheBundleUnchanged(t *testing.T) {
 	c := eosOnlyCTM()
-	files, list := compiler.Compile(c, embeddedRegistry(t))
+	files, list := compiler.Compile(c, nil, embeddedRegistry(t), nil)
 	if list.Rejected() {
 		t.Fatalf("an EOS-only twin was refused: %v", list)
 	}

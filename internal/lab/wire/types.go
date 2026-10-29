@@ -34,6 +34,11 @@ const (
 	// verify's waiting form run on the lab host, which writes how the wait ended into the
 	// record.
 	ActVerifyTwin = "VerifyTwin"
+
+	// 016: the step's flows, started in each host of a probe both bundles carry after the
+	// stage and read after the wait, under the step's version marker flows.
+	ActStartFlows = "StartFlows"
+	ActReadFlows  = "ReadFlows"
 )
 
 // ProvisionWorkflowID is the provisioning workflow's fixed identity (Constitution VIII).
@@ -168,6 +173,52 @@ type NodePlan struct {
 	// Push names, not only for the probe (M7 D-029). A defaulted field, absent in every
 	// recorded history, where false is the behaviour those histories recorded.
 	AwaitPushTransport bool `json:"await_push_transport,omitempty"`
+	// Host is a probe's host planned from its probe package (016, R-12): its readiness, flow
+	// and burst with every template rendered for this host, so nothing is rendered on the
+	// queue's far side. Nil on a device of intent, and absent in every recorded history. A
+	// host has no PSP, no gNMI Probe, no Push and no Artifact; its budgets and memory above
+	// are its probe package's. Probe is taken by the readiness probe (M2), whose key every
+	// recorded history carries, so the host's plan is named for what the node is.
+	Host *ProbePlan `json:"host,omitempty"`
+}
+
+// ProbePlan is a host's plan from its probe package (data-model §7): the format and the
+// package it was built with, and the package's readiness, flow and burst, each command
+// rendered for this host. Every budget is the package's (Constitution II).
+type ProbePlan struct {
+	Format    string    `json:"format"`
+	Package   PSPRef    `json:"package"`
+	Probe     string    `json:"probe"`    // the probe the host is an endpoint of
+	Endpoint  string    `json:"endpoint"` // a or b
+	Readiness ExecProbe `json:"readiness"`
+	Flow      FlowSpec  `json:"flow"`
+	Burst     BurstSpec `json:"burst"`
+}
+
+// ExecProbe is a readiness probe run inside the node's container (readiness.probe exec):
+// ready once Command's output contains Expect, within TimeoutS. No login: it is the
+// container runtime's exec, not a request to the node.
+type ExecProbe struct {
+	Command  []string `json:"command"`
+	Expect   string   `json:"expect"`
+	TimeoutS int      `json:"timeout_s"`
+}
+
+// FlowSpec is a host's flow during a step: Command, rendered, sends to the far host every
+// IntervalS, started within StartTimeoutS and read within ReadTimeoutS.
+type FlowSpec struct {
+	IntervalS     float64  `json:"interval_s"`
+	Command       []string `json:"command"`
+	StartTimeoutS int      `json:"start_timeout_s"`
+	ReadTimeoutS  int      `json:"read_timeout_s"`
+}
+
+// BurstSpec is a host's burst in verify: Command, rendered, sends Count and waits WaitS for
+// each answer.
+type BurstSpec struct {
+	Count   int      `json:"count"`
+	WaitS   int      `json:"wait_s"`
+	Command []string `json:"command"`
 }
 
 // PlanArtifact is where a node's artifact is in the bundle and what it must hash to: the
@@ -302,6 +353,11 @@ type ReadinessInput struct {
 	// opens a connection and closes it, so no login is needed and none is sent.
 	AwaitPushScheme string `json:"await_push_scheme,omitempty"`
 	AwaitPushPort   int    `json:"await_push_port,omitempty"`
+	// Exec is a host's readiness (016): its package's command run in the container, in
+	// place of Probe, set only for a host and absent in every recorded history. Container
+	// is the container it runs in.
+	Exec      *ExecProbe `json:"exec,omitempty"`
+	Container string     `json:"container,omitempty"`
 }
 
 // ReadinessResult is how long a node took to answer its probe.
@@ -498,17 +554,24 @@ type ProvisionedBy struct {
 	Version string `json:"version"`
 }
 
-// TwinNode is one node of a recorded twin.
+// TwinNode is one node of a recorded twin: a device of intent, or a probe's host (016).
 type TwinNode struct {
-	Name        string  `json:"name"`
-	Container   string  `json:"container"`
-	Image       string  `json:"image"`
-	PSP         PSPRef  `json:"psp"`
+	Name      string `json:"name"`
+	Container string `json:"container"`
+	Image     string `json:"image"`
+	// Probe is what a host is in place of a support package, copied from the staged
+	// manifest (016): its probe, its endpoint, its format and the probe package it was
+	// built with. Nil, and not written, on a device, and in every record of 10 or earlier.
+	Probe *TwinProbe `json:"probe,omitempty"`
+	// PSP is the device's support package, copied from the staged manifest; nil, written
+	// null, on a host, which has none (016).
+	PSP         *PSPRef `json:"psp"`
 	MgmtIPv4    string  `json:"mgmt_ipv4"`
 	ReadyAfterS float64 `json:"ready_after_s"`
 	// Artifact is what this node was pushed, copied from the staged manifest as PSP is
 	// (M5). The document projects it to a name and a checksum; the record keeps all
-	// four fields. No content. Nil only in a record written before M5.
+	// four fields. No content. Nil in a record written before M5, and on a host, to which
+	// nothing is pushed (016).
 	Artifact *TwinArtifact `json:"artifact"`
 	// PushedInS is how long this node's push took, from the activity's start to the
 	// node's commit.
@@ -533,6 +596,15 @@ type TwinArtifact struct {
 	ContentType string `json:"content_type"`
 	Checksum    string `json:"checksum"`
 	Size        int    `json:"size"`
+}
+
+// TwinProbe is what a recorded host is (016): one endpoint, a or b, of a probe, of the
+// probe's format, built with the probe package named, as the manifest's node names it.
+type TwinProbe struct {
+	Name     string `json:"name"`
+	Endpoint string `json:"endpoint"`
+	Format   string `json:"format"`
+	Package  PSPRef `json:"package"`
 }
 
 // PSPRef names the support package a node was provisioned with, as the manifest does.
@@ -779,6 +851,99 @@ type StepRecord struct {
 	// version 5 writes an explicit null, as step does, and a version 4 record, which has
 	// no key, reads as nil.
 	Wait *StepWait `json:"wait"`
+	// Loss is what the step's flows lost, written by ReadFlows after the wait as VerifyTwin
+	// writes Wait, or nil until it has (016). No omitempty: version 11 writes an explicit
+	// null, and a record of 10 or earlier, which has no key, reads as nil.
+	Loss *Loss `json:"loss"`
+}
+
+// How a probe's flow ended, as a step's loss names it (016, research R-13): measured, read
+// after the wait; not_started, its start failed (flow.start.failed); not_read, its read
+// failed (flow.read.failed); interrupted, read on a step that failed or was cancelled after
+// its stage. A flow's start answers started or not_started.
+const (
+	FlowStarted     = "started"
+	FlowMeasured    = "measured"
+	FlowNotStarted  = "not_started"
+	FlowNotRead     = "not_read"
+	FlowInterrupted = "interrupted"
+)
+
+// LossBasisContainer is a loss's one basis: the figures are the containers', which forward
+// in software and keep their own timing, never a hardware forwarder's.
+const LossBasisContainer = "container"
+
+// FlowPlan is one host's flow in a step: the probe, the containers it runs from and to, the
+// far host's address, and its package's flow with the command rendered for this host. The
+// server builds it from the two manifests for every probe both bundles carry.
+type FlowPlan struct {
+	Probe string   `json:"probe"`
+	From  string   `json:"from"` // the container the flow runs in
+	To    string   `json:"to"`   // the far host's container
+	Far   string   `json:"far"`  // the far host's address, without its prefix
+	Flow  FlowSpec `json:"flow"`
+}
+
+// FlowsInput is the staged twin and the flows to start or read in it. StartFlows reads the
+// first two alone. ReadFlows also takes the step run whose record it writes the loss into,
+// how each flow's start ended (a flow not_started is carried as it was; none given, every
+// flow is read), the probes the target adds and drops, which the loss lists as they are, and
+// whether the step failed or was cancelled after its stage, which reads every flow
+// interrupted.
+type FlowsInput struct {
+	TwinDir     string        `json:"twin_dir"`
+	Flows       []FlowPlan    `json:"flows"`
+	RunID       string        `json:"run_id,omitempty"`
+	Started     []FlowOutcome `json:"started,omitempty"`
+	Added       []string      `json:"added,omitempty"`
+	Dropped     []string      `json:"dropped,omitempty"`
+	Interrupted bool          `json:"interrupted,omitempty"`
+}
+
+// FlowsResult is each flow's outcome as StartFlows answers it.
+type FlowsResult struct {
+	Flows []FlowOutcome `json:"flows"`
+}
+
+// ReadFlowsResult is the step's loss as ReadFlows read it, and whether it is in the record:
+// a record that is another run's, or one the step could not write, keeps what it holds.
+type ReadFlowsResult struct {
+	Loss     Loss `json:"loss"`
+	Recorded bool `json:"recorded"`
+}
+
+// FlowOutcome is one flow's start: started, or not_started with the rule and the message
+// of why. No content.
+type FlowOutcome struct {
+	Probe   string `json:"probe"`
+	Outcome string `json:"outcome"`
+	Rule    string `json:"rule,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+// Loss is a step's flows as twin.json 11's step.loss keeps them (contracts/step.schema.json,
+// $defs/loss): the basis, each probe's figures, and the probes the target adds or drops,
+// which no flow measured across the step.
+type Loss struct {
+	Basis   string      `json:"basis"`
+	Probes  []ProbeLoss `json:"probes"`
+	Added   []string    `json:"added"`
+	Dropped []string    `json:"dropped"`
+}
+
+// ProbeLoss is one probe's flow across a step: its containers, how it ended, the replies
+// sent and lost and the longest run of unanswered ones in seconds, and the rule and message
+// of a flow not started or not read.
+type ProbeLoss struct {
+	Probe       string  `json:"probe"`
+	From        string  `json:"from"`
+	To          string  `json:"to"`
+	Outcome     string  `json:"outcome"`
+	Sent        int     `json:"sent"`
+	Lost        int     `json:"lost"`
+	LongestGapS float64 `json:"longest_gap_s"`
+	Rule        string  `json:"rule,omitempty"`
+	Message     string  `json:"message,omitempty"`
 }
 
 // StepReconcile is containerlab's plan as the record keeps it, with each touched node's

@@ -26,6 +26,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/rehearsal"
 	"github.com/happypathnetworking/fylgja/internal/step"
@@ -469,7 +470,9 @@ func TestAnArgumentNotTakenIsUnreadable(t *testing.T) {
 		{findings.OpTwinRehearse, `{"args":{"stage":"change-1/head"}}`, `twin.rehearse takes no argument "stage"`},
 		{findings.OpTwinRehearse, `{"args":{"branch":"change-1","dry_run":true}}`, `twin.rehearse takes no argument "dry_run"`},
 		{findings.OpTwinRehearse, `{"args":{"branch":["change-1"]}}`, `twin.rehearse's argument "branch" is not a string`},
-		{findings.OpTwinRehearse, `{"files":[{"path":"a","data":""}]}`, "twin.rehearse takes no files"},
+		// 016: twin.rehearse takes a probe file beside its probes argument alone.
+		{findings.OpTwinRehearse, `{"files":[{"path":"a","data":""}]}`,
+			`twin.rehearse carries 1 file where it takes a probe file beside its argument "probes" alone`},
 		// 017: twin.step reads under its record's scope and takes none, and an operation that
 		// reads no intent takes none either; where it is taken, it is a string.
 		{findings.OpTwinStep, `{"args":{"scope":"tag:fylgja"}}`, `twin.step takes no argument "scope"`},
@@ -1169,8 +1172,13 @@ func TestACallBuildsWhatItsRequestNeeds(t *testing.T) {
 	}
 
 	paths := lab.PathsAt(t.TempDir())
-	a := c.activities(reg, paths)
-	if a.Clab.Runner != s.Runner || a.Clab.Log != c.log || a.Paths != paths || a.Registry != reg || a.Version != testBuild {
+	probes, err := probe.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := c.activities(reg, probes, paths)
+	if a.Clab.Runner != s.Runner || a.Clab.Log != c.log || a.Paths != paths || a.Registry != reg || a.Probes != probes ||
+		a.Version != testBuild {
 		t.Errorf("activities %+v", a)
 	}
 	if _, ok := a.Getenv("FYLGJA_HOST_MEMORY_MB"); ok {

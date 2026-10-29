@@ -179,6 +179,14 @@ type StepInput struct {
 	// left out, its value otherwise; 0 reads once. Absent from both M11 step histories, which
 	// never reach the wait's marker.
 	WaitS int `json:"wait_s"`
+	// Flows is each host's flow of every probe both bundles carry, built by the server from
+	// the two manifests (016, data-model §8): started after the stage and read after the
+	// wait. Added and Dropped are the probes the target adds or drops, which no flow
+	// measures across the step. Absent from every recorded history, and omitted when empty,
+	// so their inputs are byte-identical.
+	Flows   []wire.FlowPlan `json:"flows,omitempty"`
+	Added   []string        `json:"added,omitempty"`
+	Dropped []string        `json:"dropped,omitempty"`
 	// Version is the starting binary's version, kept in history only.
 	Version string `json:"version"`
 }
@@ -230,6 +238,11 @@ type StepResult struct {
 	// rehearsal's report (015, research R-07). Nil when the activity gave none: the wait did
 	// not run, failed outright, kept no read, or was a retry's answer from the record.
 	WaitCounts *wire.VerifyCounts `json:"wait_counts,omitempty"`
+	// Loss is what the step's flows lost, as ReadFlows answered it (016), or each flow not_read
+	// when the read itself failed. Nil when the flows did not run: a dry run, a run that ended
+	// at or before its stage, and every run of a history from before the marker flows. A step
+	// with no probe, none added and none dropped carries the empty loss, and reads nothing.
+	Loss *wire.Loss `json:"loss,omitempty"`
 }
 
 // RehearseInput starts a rehearsal run (015, data-model §6): everything the server

@@ -12,7 +12,7 @@ Read in this order, then the current feature under `specs/`:
 `docs/archive/`) · `docs/development.md` (conventions).
 Terms are in `docs/glossary.md`. What has been verified about a dependency is in
 `docs/verified-facts.md`, read when a task touches that dependency. The constitution at
-`.specify/memory/constitution.md` (2.2.0) binds every plan's Constitution Check. The schema
+`.specify/memory/constitution.md` (2.3.0) binds every plan's Constitution Check. The schema
 Fylgja reads is the OpsMill schema library's DCIM at a pinned commit, by one documented
 mapping ([D-057](docs/decisions.md#d-057)); `schema/README.md` says which kinds and fields.
 
@@ -91,8 +91,8 @@ and is not cited here; a bare milestone marker (`M7`) is resolved by the table b
     kinds, `FylgjaStage` and any added after it.
   - **Some writes go to `main` on purpose**, against `workflow-branch-for-crud`: the
     library and the stage kind, the group `fylgja-devices` and the repository registration
-    (`fylgja-fixture -prepare-main`, which loads the library only on a `main` holding none
-    of its kinds);
+    (`fylgja-fixture -prepare-main`, which loads the stage and probe kinds wherever absent,
+    then the library only on a `main` holding none of its kinds);
     stages and other branch-agnostic objects, which land in no branch's diff; and what
     a check posts on a proposed change; and a demo's three-node baseline, for a window
     `-seed-main` opens and `-clear-main` closes ([D-054](docs/decisions.md#d-054)), with no
@@ -147,16 +147,21 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   contract node; and the stage kind `FylgjaStage`, branch-agnostic (`label`, `as_of`,
   `description`, a required `proposed_change`), with its `fylgja_stages` extension of
   `CoreProposedChange`, loaded from `schema/fylgja-stage.yaml` on 2026-10-16 (M10's kind
-  was removed on 2026-10-17 by `specs/014-proposed-change-stages/migration/`). It holds no
-  device. Hash **`7c413536…`** on this install (`e43a1cde…` before the library,
+  was removed on 2026-10-17 by `specs/014-proposed-change-stages/migration/`); and the
+  probe kind `FylgjaProbe`, branch-agnostic (`name`, `format` `ping`, and each end's device,
+  interface, address and gateway), loaded from `schema/fylgja-probe.yaml` on 2026-10-29,
+  which holds no probe once a tier or a hand scenario has run. It holds no device. Hash
+  **`8a4f3bee…`** on this install (`7c413536…` before the probe kind, `e43a1cde…` before
+  the library,
   `a8045729…` before M10's kind's removal, `e7386419…` with
   [D-045](docs/decisions.md#d-045)'s candidate kind, `0aba31a5…` before any stage kind; a
   branch's hash is its own, so each install and each branch has one; the 24.04 install's
   was `4d5b37aa…`); the empty group
   `fylgja-devices`; and the registration `fylgja`, a `CoreReadOnlyRepository` at
   `https://github.com/happypathnetworking/fylgja.git`, `ref main`, with no credential
-  ([D-044](docs/decisions.md#d-044)), imported at `c006bf9` on 2026-10-26 and at
-  `cb0a8d7` on 2026-10-27, whose import
+  ([D-044](docs/decisions.md#d-044)), imported at `c006bf9` on 2026-10-26, at
+  `cb0a8d7` on 2026-10-27 and at `842c893` on 2026-10-29 (the template's address lines),
+  whose import
   made the query `device_config` (over the library's kinds), the transform
   `srlinux_device_config` and the definition `srlinux_device_config` → artifact
   `device-config`, `text/plain`, and the query `fylgja_branch` and the two checks beside
@@ -168,11 +173,14 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   rehearses a ready one on a twin and posts the report as a thread on it
   ([D-049](docs/decisions.md#d-049)–[D-053](docs/decisions.md#d-053)).
   `fylgja-fixture -prepare-main` loaded the library and the stage kind, made the group and
-  registered the repository, each only when absent; on a `main` holding any of the
-  library's kinds it loads nothing and refuses, exit 1, which the bring-up script reads as
-  the library present. No credential is
-  registered. **One template renders both platforms**: it branches on the device's
-  platform. **A template or check change reaches Infrahub
+  registered the repository, each only when absent. It loads the stage and probe kinds
+  first, wherever either is absent, then on a `main` holding any of the library's kinds
+  refuses, exit 1, loading nothing of the library, which the bring-up script reads as the
+  library present; this host's probe kind was loaded by hand
+  (`.venv/bin/infrahubctl schema load --branch main schema/fylgja-probe.yaml`) before the
+  tool took that order (016's T053). No credential is registered. **One template renders both platforms**: it branches on the device's
+  platform, and renders each physical port's addresses (SR Linux's `subinterface 0 ipv4`
+  lines; EOS's `ip routing`, `no switchport` and `ip address`). **A template or check change reaches Infrahub
   only when asked**: once it is on `origin`'s `main`, which the operator pushes,
   `InfrahubReadOnlyRepositoryImportLastCommit(data: {id})` on `main` imports it (neither
   the minute sync nor rewriting `ref` does), and both task workers fetch it about 15 s
@@ -185,16 +193,20 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   one concurrency slot, so a run stuck `PENDING` blocks every import until it is
   cancelled.
 - **The fixture branch `fylgja-fixture`**: three devices in the library's kinds, re-seeded
-  on 2026-10-26: the tag `fylgja` on each, the manufacturer `Nokia`, the platform `SR
-  Linux`, four locations, 9 physical ports (`ethernet-1/1`, `ethernet-1/2` and `mgmt0`,
-  role `management`, on each) and 3 cables; the devices are in group `fylgja-devices`,
-  each with one `device-config` artifact, `Ready`, and each `description` is the marker.
-  Its schema hash is `main`'s, `7c413536…`, since a branch sees `main`'s schema as it was
+  on 2026-10-29: the tag `fylgja` on each, the manufacturer `Nokia`, the platform `SR
+  Linux`, four locations, 15 physical ports (`ethernet-1/1`, `ethernet-1/2`, `mgmt0`, role
+  `management`, and the two probe-ready ports `ethernet-1/10` and `ethernet-1/11`,
+  uncabled, addressed `10.<d>.10.1/24` and `10.<d>.11.1/24` in the default namespace, on
+  each), 6 addresses and 3 cables; the devices are in group `fylgja-devices`, each with
+  one `device-config` artifact, `Ready`, 1,327 bytes carrying its two ports' address lines
+  (`n1` `28881d3d…`, `n2` `092ca9f6…`, `n3` `95a3a917…`), and each `description` is the
+  marker. Its schema hash is `main`'s, `8a4f3bee…`, since a branch sees `main`'s schema as it was
   at the branch's creation; it is never rebased, only deleted and re-seeded. It has no
-  proposed change. It compiles to **`f764e1fa…`** on this install (`47b2c449…` in the
-  generics' kinds before 017), and its snapshot id is **`576933ec…`**
-  (`576933ec51da1866cdb7344a1f60ec2468c7d04aafbee42eacd171e352bd7482`, the same for every
-  read while the branch stands); its CTM equals `testdata/ctm/three-node.json` in
+  proposed change. It compiles to **`c3872f5c…`** on this install (`f764e1fa…` before
+  016's ports, `47b2c449…` in the generics' kinds before 017), and its snapshot id is
+  **`0940db93…`** (`0940db93e2ad1244a097824ececdaa6979500b1ddeeef15ca3cd612da68656ef`, the
+  same for every read while the branch stands and no probe is declared; `576933ec…` before
+  016's ports); its CTM equals `testdata/ctm/three-node.json` in
   everything but the envelope. It is written by its seed (`make infrahub-seed`, which the bring-up
   script runs when the branch is absent) and by no test. Contract tests make their own
   throwaway `fylgja-test-*` branches, with their draft proposed changes and stages, and
@@ -205,7 +217,7 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   object file (`kind: Object`, `spec.kind: FylgjaStage`, `proposed_change` the proposed
   change's id), the UI (`Stage`, an object entry of its own) or `.venv/bin/infrahubctl
   object create FylgjaStage --set label=… --set proposed_change=<id>`; the guide is
-  `schema/README.md`. After the contract tier, `CoreProposedChange`, `FylgjaStage`,
+  `schema/README.md`. After the contract tier, `CoreProposedChange`, `FylgjaStage`, `FylgjaProbe`,
   `CoreChangeThread` and `CoreUserValidator` count 0, `CoreReadOnlyRepository` holds
   `fylgja` alone with its two check definitions, and `Branch` lists `main` and
   `fylgja-fixture` alone. **Every proposed change opened here runs both checks** at its
@@ -228,7 +240,10 @@ only lab host until M9. Ubuntu 26.04 is the one release the script supports; the
   import` leaves it; each import gets a new image id. **cEOS is never pulled**: its
   package says `acquisition: account_gated`, so the host check verifies presence under
   exactly that reference and refuses the run when it is absent — the same image under
-  another tag is absent.
+  another tag is absent. `alpine:3.24.2`, the `ping` probe package's image (id and
+  repository digest `sha256:294b683c…`, busybox 1.37.0), pulled by hand: a run never pulls
+  a probe image, whatever its acquisition, and the host check refuses a probed run without
+  it.
 - **The host's AppArmor must allow SR Linux's `rsyslogd`.** Ubuntu's
   `/etc/apparmor.d/usr.sbin.rsyslogd` attaches to the `rsyslogd` inside every privileged
   SR Linux container; unwidened, every `nokia_srlinux` deploy fails at containerlab's
@@ -279,14 +294,16 @@ set -a; . local/.env; set +a; setsid nohup env FYLGJA_STATE_ROOT="$PWD/local" bi
 ```
 
 Then verify what you started, never assume it: `/proc/<pid>/exe` is not `(deleted)`, the
-environment names carry both logins, and the start-up report names both packages. The
+environment names carry both logins, and the start-up report names both platform packages and the probe package. The
 worker reads no source of truth since 019, so it needs no `INFRAHUB_*`, which it still
 inherits from `local/.env` and never reads. A rebuild does not always replace the binary,
 so read `/proc/<pid>/exe` rather than assuming either way. The worker serves four
 workflows (provision, destroy, step and the rehearsal), each started with a snapshot id
-and a bundle id, and fifteen activities; a worker on an older binary than the
-tree may lack one and fail a run at it. The start-up report names
-packages, never workflows or activities. A stopped worker lingers as a poller for about
+and a bundle id, and seventeen activities (016 added the flows' start and read); a worker
+on an older binary than the tree may lack one and fail a run at it. The start-up report
+names the packages, the probe package among them (`ping (embedded): image alpine:3.24.2
+(public_registry, present on this host), flow ping every 0.2s, burst 5`), never workflows
+or activities. A stopped worker lingers as a poller for about
 five minutes — harmless, and not a second worker. The dev server is the same: restart it
 if it is down.
 
@@ -309,7 +326,8 @@ Then verify it: `/proc/<pid>/exe` is not `(deleted)`; its environment carries
 bridge's address) followed straight away by `172.17.0.1:7650 is not a loopback address:
 the API's token is sent unencrypted on it`, names `bundles:`, `snapshots:` and `twin:` in
 its state root line (the worker's names the same), says `default scope: tag:fylgja` after
-the state root, and names both packages with their logins set. From inside each Infrahub task worker, a
+the state root, and names both platform packages with their logins set and the `ping` probe package with
+its image present. From inside each Infrahub task worker, a
 `POST` to `http://$FYLGJA_API_ADDRESS/v1/twin/show` with the container's token answers
 `200` with this build, and `401` without it
 (`specs/015-proposed-change-rehearsal/quickstart.md` §2). **Find both with `pgrep -x fylgja`**
@@ -325,19 +343,25 @@ token alone, or with `local/.env` loaded, which it ignores but for the token. A 
 another machine comes through `ssh -N -L 7650:127.0.0.1:7650 <lab host>`, with a binary
 built from this tree.
 
-**Formats**: bundle `5` (a bundle of another format is refused), CTM `2` (its version is
+**Formats**: bundle `6` (a probe's two hosts, their links and the ports they take under
+the manifest's `fidelity.synthesized`; a bundle of another format is refused), CTM `2` (its version is
 the contract's: contract `0.2` is retired, [D-057](docs/decisions.md#d-057)), PSP `0.7`
 (each package's `platform.matches`, matched exactly; both shipped packages on `mode:
-replace`), snapshot `1` (CTM `2` wrapped, its id the hash of the body without the read's
-`observed_at`, filed under `snapshots/`, [D-061](docs/decisions.md#d-061)), `twin.json`
-`10` (a pinned stage beside any source but a bundle, [D-062](docs/decisions.md#d-062)), findings
+replace`), snapshot `2` (CTM `2` wrapped with its probe list, its id the hash of the body without
+the read's `observed_at`, filed under `snapshots/`, [D-061](docs/decisions.md#d-061); a `1`
+read as a `2` with no probes, under the same id), probes `1` (a declaration's file,
+`contracts/probes.schema.json`, [D-064](docs/decisions.md#d-064)), probe package `0.1`
+(`probes/ping.yaml`, keyed by its `format`), `twin.json` `11` (a host in the record and
+`step.loss`; a pinned stage beside any source but a bundle, [D-062](docs/decisions.md#d-062);
+a `10` an earlier build left is shown and destroyed, never stepped from), findings
 `1`, the API `1` (`contracts/api.md`, the version in every path; `scope` an optional
-argument; `snapshot` on `twin.create`, `twin.compile` and `twin.step`; `interval` and
+argument; `snapshot` on `twin.create`, `twin.compile` and `twin.step`; `probes` on
+`intent.read`, `twin.create`, `twin.step`, `stage.plan` and `twin.rehearse`; `interval` and
 `no_follow` gone, pre-1.0, without a version move). `twin compile --ctm`, the bundle's CTM
-sidecar, `--interval` and `--no-follow` are retired. The three goldens are three-node
-**`43d91715…`**, lossy **`4213b3cf…`** and mixed **`ecb665f5…`**, their wrapped fixtures
-under `testdata/snapshot/` compiling to each, and the live fixture compiles to `f764e1fa…`
-on this install, from snapshot `576933ec…`. The current contracts are in `contracts/`; a test of an
+sidecar, `--interval` and `--no-follow` are retired. The four goldens are three-node
+**`c70589c3…`**, lossy **`10099944…`**, mixed **`44ac283f…`** and three-node-probed
+**`5222063b…`**, their wrapped fixtures under `testdata/snapshot/` compiling to each, and
+the live fixture compiles to `c3872f5c…` on this install, from snapshot `0940db93…`. The current contracts are in `contracts/`; a test of an
 older format reads a frozen copy under its package's `testdata/contracts/`.
 
 ## Verified facts a session acts on (trust these over recollection)
@@ -432,27 +456,30 @@ Infrahub with `main` prepared and the fixture seeded, then the build, the three 
 started before tiers 1 and 2 so that tier 2 reaches this build's server, and left running; `--part NAME` runs one part, and `--part infrahub` is
 what CI's contract job runs; a second run installs nothing; it asks for sudo, so it is
 the operator's) · `make build` → `bin/fylgja` (CGO disabled; must stay static; `make
-build VERSION=…` stamps `--version`) · `make test` (tier 1, no infrastructure; under 45s
-wall uncached, raised from 35s on 2026-10-17 when 014's close measured 35.3–38.7s under a
+build VERSION=…` stamps `--version`) · `make test` (tier 1, no infrastructure; under 65s
+wall uncached, raised from 45s on 2026-10-29 when 016's close measured 53.6–60.9s in
+three runs at a load of 3–4, `internal/cli` 43.8–44.5s of it; from 35s on 2026-10-17 when 014's close measured 35.3–38.7s under a
 load average of 2–5, `internal/cli` about 26s of it; 40.6s on 2026-10-27 at a load of
 1.5–2.6, `internal/cli` 36.2s of it, since 018's tests; 43.8–45.0s in three runs on
-2026-10-28 at a load of 1.1–4.9, `internal/cli` 39.2–40.5s of it, since 019's, so about a
-second of headroom; CI's unit job on every push and pull request, beside its lint job, which
+2026-10-28 at a load of 1.1–4.9, `internal/cli` 39.2–40.5s of it, since 019's; CI's unit job on every push and pull request, beside its lint job, which
 runs golangci-lint and `shellcheck scripts/bring-up.sh scripts/e2e.sh`) · `make
 test-contract` (tier 2, real
 Infrahub, never cached; needs `INFRAHUB_ADDRESS` and `INFRAHUB_API_TOKEN`; CI's contract
 job on every push to `main`, against an Infrahub the script brings up on the runner, with
-no secret; about 33 minutes (2,009 s on 2026-10-28 with 019's `TestStepTargetFromASnapshot`
-and without `TestFollowingDetection`, 1,814.4 s on 2026-10-27, beside the imported checks),
-`internal/stages` the longest package at 1,690.6 s, 109 s under the `-timeout 30m` it
-sets, then `internal/checks` alone in a second `go test` (310.0 s), whose `TestChecksInsideInfrahub`
+no secret; about 34 minutes (2,017 s on 2026-10-29 with 016's `TestProbesFromTheKind` and
+`TestIntentReadFilesASnapshot2`, green once `internal/stage` and `internal/stages`, whose
+three 1m30s artifact waits lapsed under the tier's own load, were re-run alone; 2,009 s on
+2026-10-28, beside the imported checks; every artifact wait is 180 s since,
+`testsupport.ArtifactWait`, the schema waits' 90 s unmoved), `internal/stages` the
+longest package at 1,712.9 s, 87 s under the `-timeout 30m` it sets, then `internal/checks` alone in a second
+`go test` (295.4 s), whose `TestChecksInsideInfrahub`
 runs the tree's checks inside Infrahub's pipeline under a registration of its own, needs
 the server on the bridge from this tree here, and skips, saying why, where the task workers
 reach none, as in CI) · `make lint` (runs with build
 tags `contract,fixture,e2e`) · `make linkcheck` (`scripts/linkcheck.py`: every relative
 link and anchor in the tracked Markdown resolves in a public clone; a hand tool, not a CI
 step) ·
-`go test ./internal/compiler -update` regenerates the three goldens — review the diff,
+`go test ./internal/compiler -update` regenerates the four goldens — review the diff,
 and commit a re-baseline on its own · the conformance suite's pure half is part of
 `make test`; its boot half is `FYLGJA_STATE_ROOT=$PWD/local go test -count=1 -tags e2e
 ./internal/conformance -run '^TestBootHalf$' -v` against a ready twin · `make
@@ -462,14 +489,15 @@ infrahub-clean` (the fixture branch) · `make sdl` · `make diagrams` (needs Doc
 needs it) · **every command but `worker run` and `serve` needs a running server**, the
 pipeline's stage commands and `stage list` and `stage plan` included (`psp validate` and
 `twin compile` need neither Infrahub nor the workflow service, but they need the server) ·
-`make test-e2e` (tier 3, `scripts/e2e.sh`: nine cases, nine twins, `twin verify` on three of them and on the steps' waits, case 5 a twin left 330 s with nothing rebuilding it and then stepped to a snapshot by file and by id, every
+`make test-e2e` (tier 3, `scripts/e2e.sh`: nine cases, nine twins, the boot half on three of them (cases 1, 5 and 6, case 5's twin probed), `twin verify` on three of them and on the steps' waits, case 5 a twin left 330 s with nothing rebuilding it and then stepped to a snapshot by file and by id, probes in cases 5, 8 and 9 (case 5's `n1-loop` by file, case 8's `e1-loop` from the kind across `e1`'s restart, case 9's stage `probe-port-down` failing on `verify.burst`), every
 command through a server the script starts itself with a token it makes, but case 9, a
 proposed change rehearsed twice by `fylgja-twin` inside Infrahub, through the operator's
 server on the bridge; needs the dev
 server and a worker running from the repository root, Docker, containerlab, **both**
-images and Infrahub, and for case 9 the server on the bridge from this tree and both
-checks imported on `main`, each checked before any case; about 31.5 minutes (1,894.1 s on
-2026-10-28 with case 5's frozen wait, 1,758.0 s on 2026-10-27); `WORKER_LOG=<file>`
+images, `alpine:3.24.2` and Infrahub with `FylgjaProbe` on `main` holding no probe, and for case 9 the server on the bridge from this tree and both
+checks imported on `main`, each checked before any case; about 36 to 37 minutes (2,171.8 s
+on 2026-10-29 with case 5's boot half, 10.0 s of it, and 2,236.6 s the same day with 016's
+probes, 1,894.1 s on 2026-10-28 with case 5's frozen wait); `WORKER_LOG=<file>`
 adds the worker's log to its credential greps; `PLATFORMS=nokia_srlinux` narrows it to
 the seven cases SR Linux alone runs, about 19 minutes (1,156.1 s on 2026-10-27), ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
 never `E2E-OK`; never in CI). A command that runs longer than one tool call (tier 3)
@@ -594,13 +622,59 @@ Rewritten whole at each release's close, never appended to.
     re-run alone (220.3 s), a seed's 1m30s artifact wait having lapsed under the tier's
     own load; tier 3 `E2E-OK` in 1,894.1 s, its first start refused by case 9's precheck
     because a commit's VCS stamp had replaced the bridge server's binary; `PLATFORMS=nokia_srlinux`
-    not run, by the operator's choice, since the whole run covers its cases. The
-    operator's review (T056) and `converge` follow.
-- **Next**: F-014 probes (`016-probes`), Release 0.3's fourth spec; its
-  [brief](specs/016-probes/brief.md), rewritten on 2026-10-28, is re-read against 019's
-  close before specifying.
-- **Open, the operator's**: 017's, 018's and 019's command logs (`make command-log`, once
-  each session is closed); 019's review, merge and push (T056); file 014's upstream
+    not run, by the operator's choice, since the whole run covers its cases. Reviewed by
+    the operator (T056), and merged into `main` and pushed.
+  - **016** (`016-probes`, F-014, closed 2026-10-29): probes, `ping` only
+    ([D-064](docs/decisions.md#d-064); Constitution 2.3.0, a probe package a blessed
+    layer): a probe is a declaration outside intent, `--probes <file>` on the five
+    commands that read intent, else `FylgjaProbe` on the default branch, else none, and
+    the snapshot `2` carries the list; the compile places each probe's two hosts,
+    `<probe>-a` and `<probe>-b`, on two uncabled device ports and records them, their
+    links and the ports they take under `fidelity.synthesized` in bundle `6`; one probe
+    package, `probes/ping.yaml` (`0.1`, `alpine:3.24.2`, never pulled), and a probe file's
+    format `probes 1`; a host's `exec` readiness; a step's flows started after the stage
+    and read after the observe as `step.loss`, reported and never asserted, and verify's
+    burst, the kind `burst` and the rule `verify.burst`, in the step's wait and in a
+    rehearsal's verdict; the report's `loss` column and caveat; `twin.json` `11`; the
+    worker's seventeen activities; the `probe.*` and `probes.*` rules, `flow.start.failed`, `flow.read.failed` and
+    `snapshot.flags.conflict` (`--probes` beside `--snapshot`); the
+    fixtures' devices two addressed, uncabled ports each and the template their address
+    lines (imported at `842c893`), so the goldens moved twice beside a fourth,
+    three-node-probed; the 019 shapes frozen under `019-following-removed/` (16 copies,
+    72 in all); `FylgjaProbe` on `main` (`8a4f3bee…`) and the fixture re-seeded
+    (`0940db93…`, `c3872f5c…`). Built by the converge loop, T001–T049, the operator's T002
+    at `analyze`, T017 (the kind's load) and T041 (the template's push and import) among
+    them. One defect found live and fixed: a step from a probed twin panicked the server
+    (`ff76c8c`). Tier 2 green whole on 2026-10-29 in 2,017 s once `internal/stage` and
+    `internal/stages` were re-run alone, three 1m30s artifact waits having lapsed under
+    the tier's own load; tier 3 `E2E-OK` at the first attempt in 2,236.6 s, probes in
+    cases 5, 8 and 9; tier 1's budget raised to 65 s. `converge`, then the operator's
+    review (T050), follow. Its first pass (T051–T060) found and fixed: the boot half
+    (`conformance.Boot`), which panicked on a host's null `psp`, reads a probed twin's
+    devices alone, a synthesized link's neighbour skipped in verify's words (T051); the
+    rehearsal's `verify` cell counts the burst, a stage failed on it reading `1 failed`
+    (T052); `-prepare-main` loads the stage and probe kinds before it loads or refuses
+    the library, so a `main` holding the library gains a kind it lacks (T053); tier 2's
+    artifact wait is 180 s, `testsupport.ArtifactWait`, every checksum wait sharing it
+    (T054); the records naming the fixture's former ids, and `twin compile`'s hand wrap
+    written as a `2` (T057); and `README.md`'s walk-through at the re-seeded fixture's
+    counts and hash, its probe section filled from case 5 (T058). `probes/ping.yaml`'s
+    `acquisition` comment, also found, was T040's (`3f6b82e`). Its live task (T056) ran
+    the boot half on a probed twin by hand, then in tier 3's case 5, which now runs it:
+    `E2E-OK` in 2,171.8 s on 2026-10-29, case 5's boot half 10.0 s. The pass's two others
+    the operator settled by amending the artifacts (`d3525cf`): a twin an earlier build left
+    is destroyed and created again, never stepped from (T055, `spec.md`'s edge case), and
+    `plan.md`'s Structure Decision names the registry's `gopkg.in/yaml.v3`, `jsonschema/v6`
+    and embedded `probes/` imports (T059). Its second pass's one fix changed what the code
+    does: an empty `--probes` file, or one of JSON's whitespace alone, declares no probes,
+    read by `probe.Parse` as `probes 1` with an empty list, held by
+    `testdata/probes/none.json` and a fourth read in `TestProbesFromTheKind` (T061,
+    `1dd98b6`).
+- **Next**: F-025 the NetBox reader, Release 0.3's fifth and last spec; it has no brief
+  yet.
+- **Open, the operator's**: 016's command log (`make command-log`, once this session is
+  closed; specify through Run 28 are published); 016's review, merge and push (T050);
+  file 014's upstream
   request for named points in time
   (`specs/014-proposed-change-stages/upstream-request.md`, a public file) and a report of
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left

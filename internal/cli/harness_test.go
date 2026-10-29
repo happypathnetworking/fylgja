@@ -26,6 +26,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/server"
 	"github.com/happypathnetworking/fylgja/internal/verify"
@@ -67,15 +68,44 @@ var (
 	dialService = func(ctx context.Context) (provision.Service, error) {
 		return provision.Dial(ctx, nil)
 	}
-	dryRunRunner      lab.Runner    = lab.ExecRunner{}
-	verifyReader      verify.Reader = lab.GNMIReader{}
+	dryRunRunner      lab.Runner     = lab.ExecRunner{}
+	verifyReader      verify.Reader  = lab.GNMIReader{}
+	verifyBurster     verify.Burster // nil: the server's DockerBurster over dryRunRunner (016)
 	verifySleep       func(ctx context.Context, d time.Duration) error
 	verifyNow         func() time.Time
 	showServiceBudget = provision.ShowServiceBudget
 	pspDir            string
 	rehearsalCeiling  time.Duration
 	defaultScope      = "tag:fylgja"
+	// probeKind is Probes, the kind's read a request that sends no probe file makes (016):
+	// FylgjaProbe present on the default branch and holding no probe, so a test that sends
+	// no --probes is served an empty list with no warning, as before the kind, and no
+	// request of the read reaches a fake Infrahub a test serves. A test that reads the kind
+	// sets its own.
+	probeKind = func() (server.ProbeReader, error) { return &kindProbes{}, nil }
 )
+
+// kindProbes is a FylgjaProbe on the default branch: check is Check's answer, and probes
+// and err Probes'. reads counts the reads of the list.
+type kindProbes struct {
+	check  error
+	probes []probe.Probe
+	err    error
+	reads  atomic.Int32
+}
+
+func (k *kindProbes) Check(context.Context) error { return k.check }
+
+func (k *kindProbes) Probes(context.Context) ([]probe.Probe, error) {
+	k.reads.Add(1)
+	if k.err != nil {
+		return nil, k.err
+	}
+	if k.probes == nil {
+		return []probe.Probe{}, nil
+	}
+	return k.probes, nil
+}
 
 // version is the build of the harness's server and of its client: M12's unstamped version,
 // which a run records as the CLI's version was.
@@ -146,10 +176,12 @@ func handSeams() {
 	s.Dial = func(ctx context.Context, _ *slog.Logger) (provision.Service, error) { return dial(ctx) }
 	s.Runner = dryRunRunner
 	s.Reader = verifyReader
+	s.Burster = verifyBurster
 	s.Sleep, s.Now = verifySleep, verifyNow
 	s.ServiceBudget = showServiceBudget
 	s.RehearsalCeiling = rehearsalCeiling
 	s.DefaultScope = defaultScope
+	s.Probes = probeKind
 	s.PSPDir = pspDir
 	if s.PSPDir == "" {
 		s.PSPDir = os.Getenv(lab.EnvPSPDir)

@@ -22,6 +22,8 @@ import (
 	"time"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/happypathnetworking/fylgja/internal/probe"
 )
 
 // Client talks to Infrahub with write access.
@@ -284,9 +286,9 @@ func (c *Client) KindsHeld(branch string, kinds []string) ([]string, error) {
 }
 
 // LibraryHeldError is -prepare-main's refusal (R-13): the branch already holds some of the
-// schema library's kinds, so nothing was loaded. Its sentence's opening, up to "an empty
-// main alone", is the one the bring-up script reads as present; the rest says the tool is
-// not an install path (US6 scenario 2).
+// schema library's kinds, so nothing of the library was loaded. Its sentence's opening, up
+// to "an empty main alone", is the one the bring-up script reads as present; the rest says
+// the tool is not an install path (US6 scenario 2).
 type LibraryHeldError struct {
 	Branch string
 	Held   []string
@@ -324,6 +326,22 @@ func (c *Client) LoadLibrary(branch, schemaDir string) (files int, err error) {
 		return 0, err
 	}
 	return len(paths), c.waitForKinds(branch, mutations...)
+}
+
+// PrepareMainSchema is -prepare-main's schema: Fylgja's own kinds first, then the library,
+// on the default branch (D-028, D-064). The own kinds load in one request, a no-op where
+// both are present, so a main holding the library and lacking one gains it; then
+// LoadLibrary, which refuses a main holding any of the library's kinds with a
+// *LibraryHeldError and loads nothing of it. own is whether the own kinds' load moved the
+// hash, set whenever that load succeeded, the library's refusal included; files is the
+// library's files loaded, 0 on its refusal.
+func (c *Client) PrepareMainSchema(schemaDir string) (own bool, files int, err error) {
+	own, err = c.LoadOwnSchema(DefaultBranch, schemaDir)
+	if err != nil {
+		return false, 0, err
+	}
+	files, err = c.LoadLibrary(DefaultBranch, schemaDir)
+	return own, files, err
 }
 
 // LoadOwnSchema loads schemaDir's own files, the stage kind, in one request and waits for
@@ -515,6 +533,59 @@ func (c *Client) create(branch, kind, data string) (string, error) {
 	return r[kind+"Create"].Object.ID, nil
 }
 
+// ProbeKind is Fylgja's probe kind (016, D-064): branch-agnostic, on the default branch,
+// where the server reads it when a request sends no probe file.
+const ProbeKind = "FylgjaProbe"
+
+// WriteProbes writes each probe of a declaration as one object of the probe kind on the
+// default branch, its endpoints the a_ and b_ attributes, every value verbatim (R-26). The
+// kind is branch-agnostic, so a probe lands in no branch's diff and every branch's request
+// reads it: whoever writes one deletes it (DeleteProbes) before another test reads the kind.
+func (c *Client) WriteProbes(decl *probe.Declaration) error {
+	if decl == nil {
+		return fmt.Errorf("writing probes: no declaration")
+	}
+	for _, p := range decl.Probes {
+		a, b := p.Endpoints[0], p.Endpoints[1]
+		data := fmt.Sprintf(`{name: {value: %q}, format: {value: %q}, `+
+			`a_device: {value: %q}, a_interface: {value: %q}, a_address: {value: %q}, a_gateway: {value: %q}, `+
+			`b_device: {value: %q}, b_interface: {value: %q}, b_address: {value: %q}, b_gateway: {value: %q}}`,
+			p.Name, p.Format, a.Device, a.Interface, a.Address, a.Gateway, b.Device, b.Interface, b.Address, b.Gateway)
+		id, err := c.create(DefaultBranch, ProbeKind, data)
+		if err != nil {
+			return fmt.Errorf("writing probe %s: %w", p.Name, err)
+		}
+		if id == "" {
+			return fmt.Errorf("writing probe %s: %sCreate returned no object", p.Name, ProbeKind)
+		}
+	}
+	return nil
+}
+
+// DeleteProbes deletes every object of the probe kind on the default branch and returns
+// how many, so a test or the fixture tool leaves the kind as it found it: empty.
+func (c *Client) DeleteProbes() (int, error) {
+	ids, err := c.ids(DefaultBranch, ProbeKind, "")
+	if err != nil {
+		return 0, err
+	}
+	n := 0
+	for _, id := range ids {
+		if err := c.deleteNode(DefaultBranch, ProbeKind, id); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
+}
+
+// ProbeCount is how many objects of the probe kind the default branch holds. It writes
+// nothing.
+func (c *Client) ProbeCount() (int, error) {
+	ids, err := c.ids(DefaultBranch, ProbeKind, "")
+	return len(ids), err
+}
+
 // json_Unmarshal is a tiny indirection so seed.go can decode without importing
 // encoding/json again under a different name.
 func json_Unmarshal(data []byte, v any) error { return json.Unmarshal(data, v) }
@@ -541,9 +612,13 @@ const ArtifactDefinitionName = "srlinux_device_config"
 // device outside it has no artifact, which is a refusal the tiers prove.
 const ArtifactGroupName = "fylgja-devices"
 
-// artifactWait bounds every wait for generation: twelve times the 7.6s measured for
-// three devices, the same bound the schema wait uses.
-const artifactWait = 90 * time.Second
+// ArtifactWait bounds every wait for generation, WaitForArtifacts' and each contract
+// test's wait for a checksum to move: 180s, about twenty-four times the 7.6s measured for
+// three devices alone. 90s, twelve times, lapsed three times under the whole tier on
+// 2026-10-29 (016's T044: one artifact still Pending, each test green alone) and once at
+// 019's close, as Infrahub's task workers queue the tier's generations behind one another;
+// the schema waits keep their 90s, which never lapsed.
+const ArtifactWait = 180 * time.Second
 
 // unregistered is what a lookup by name says when main lacks what the registration brings,
 // or a branch predates it: the definition comes with the repository's import, and the
@@ -656,7 +731,7 @@ func (c *Client) GenerateArtifacts(branch string) error {
 // it saw, so a test fails on the generation rather than later on a missing artifact.
 func (c *Client) WaitForArtifacts(branch string, want int) error {
 	const q = `{ CoreArtifact { count edges { node { status { value } } } } }`
-	deadline := time.Now().Add(artifactWait)
+	deadline := time.Now().Add(ArtifactWait)
 	last := "nothing yet"
 	for time.Now().Before(deadline) {
 		raw, err := c.GraphQL(branch, q)
@@ -691,7 +766,7 @@ func (c *Client) WaitForArtifacts(branch string, want int) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("branch %s: %d artifact(s) did not all reach Ready within %s (last saw %s)",
-		branch, want, artifactWait, last)
+		branch, want, ArtifactWait, last)
 }
 
 // ArtifactsReadyAt returns when the branch's last artifact was rendered: the latest

@@ -10,6 +10,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/stage"
 	"github.com/happypathnetworking/fylgja/internal/step"
@@ -25,20 +26,29 @@ type Pipeline struct {
 	// Take wraps a clean read as its snapshot and files it in the store, returning its id
 	// (018). A refusal is its findings (snapshot.id.mismatch, a corrupt store entry); an
 	// error is a filing that could not run. It runs before the compile, so a refused read
-	// files nothing and a compile refused after it leaves the snapshot filed (R-05).
-	Take    func(ctx context.Context, c *ctm.CTM) (id string, list findings.List, err error)
-	Compile func(c *ctm.CTM, reg *psp.Registry) (files map[string][]byte, id string, list findings.List)
+	// files nothing and a compile refused after it leaves the snapshot filed (R-05). The
+	// snapshot carries probes, the pipeline's Probes (016).
+	Take    func(ctx context.Context, c *ctm.CTM, probes []probe.Probe) (id string, list findings.List, err error)
+	Compile func(c *ctm.CTM, decls []probe.Probe, reg *psp.Registry, probes *probe.Registry) (files map[string][]byte, id string, list findings.List)
 	// File files a compiled bundle. A refusal is its findings (bundle.id.mismatch); an
 	// error is a filing that could not run. No CTM is filed beside it: the sidecar is
 	// retired (018).
 	File func(ctx context.Context, files map[string][]byte, id string) (findings.List, error)
+	// Probes is the request's one list, which every stage's snapshot carries and every
+	// stage's compile places (016), and Packages the probe registry it is compiled with; nil
+	// where none is declared.
+	Probes   []probe.Probe
+	Packages *probe.Registry
 }
 
 // NewPipeline is the product's pipeline: the stage pipelines, and take and file, the
-// command's filing of the snapshot and the bundle in the stores under its state root.
-func NewPipeline(take func(ctx context.Context, c *ctm.CTM) (string, findings.List, error),
-	file func(ctx context.Context, files map[string][]byte, id string) (findings.List, error)) Pipeline {
-	return Pipeline{Read: stage.Read, Take: take, Compile: stage.Compile, File: file}
+// command's filing of the snapshot and the bundle in the stores under its state root, with
+// the request's one probe list, which every stage's take carries and every stage's compile
+// places, and the probe registry packages (016).
+func NewPipeline(take func(ctx context.Context, c *ctm.CTM, probes []probe.Probe) (string, findings.List, error),
+	file func(ctx context.Context, files map[string][]byte, id string) (findings.List, error), probes []probe.Probe,
+	packages *probe.Registry) Pipeline {
+	return Pipeline{Read: stage.Read, Take: take, Compile: stage.Compile, File: file, Probes: probes, Packages: packages}
 }
 
 // How far one planned stage got.
@@ -268,7 +278,7 @@ func build(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 	// refused below leaves the snapshot to inspect. The stores' refusals are the compile
 	// step's, a corrupt snapshot entry's as a corrupt bundle entry's (contracts/cli.md,
 	// "018: snapshots", Identifiers).
-	snapshotID, taken, err := p.Take(ctx, snapshot)
+	snapshotID, taken, err := p.Take(ctx, snapshot, p.Probes)
 	if err != nil {
 		return failed(findings.StepCompile, err)
 	}
@@ -279,7 +289,7 @@ func build(ctx context.Context, r Reader, s Stamper, reg *psp.Registry, ch *Chan
 	ps.Findings = append(ps.Findings, taken...)
 	ps.SnapshotID = snapshotID
 
-	files, id, compiled := p.Compile(snapshot, reg)
+	files, id, compiled := p.Compile(snapshot, p.Probes, reg, p.Packages)
 	compiled = compiled.AtStep(findings.StepCompile)
 	if compiled.Rejected() {
 		return stop(compiled)

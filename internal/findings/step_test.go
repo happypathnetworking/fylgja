@@ -58,7 +58,7 @@ func stepDocuments() []labelledDocument {
 	dry.BundleID = stepToID
 	dry.Stage = resolved
 	dry.Step = stepBlock()
-	dry.DryRun = &DryRunBlock{Nodes: []DryRunNode{{Name: "e1", Image: "ceos:4.32.0.2F", PSP: "arista_eos", MemoryMB: 2048,
+	dry.DryRun = &DryRunBlock{Nodes: []DryRunNode{{Name: "e1", Image: "ceos:4.32.0.2F", PSP: ptr("arista_eos"), MemoryMB: 2048,
 		Artifact: &DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: m5Checksum, Size: 900}}},
 		MemorySumMB: 2048, Host: DryRunHost{LabPresent: true, TwinDirPresent: true}, Verdict: VerdictRefused}
 
@@ -379,5 +379,102 @@ func TestStepWaitDocumentsSatisfySchema(t *testing.T) {
 		`"object":"s1:ethernet-1/3"}`, `"object":"s1:ethernet-1/3","message":"sees no neighbour"}`, 1)
 	if err := schema.Validate(mustAny(t, []byte(withMessage))); err == nil {
 		t.Error("a show wait's failing entry with a message satisfied the show schema")
+	}
+}
+
+// stepLoss is the example step's loss (016): n1-loop measured, n2-loop not started, n3-loop
+// the target adds and n4-loop it drops.
+func stepLoss() *StepLoss {
+	return &StepLoss{Basis: "container", Probes: []StepProbeLoss{
+		{Probe: "n1-loop", From: "clab-fylgja-n1-loop-a", To: "clab-fylgja-n1-loop-b", Outcome: "measured", Sent: 312, Lost: 5,
+			LongestGapS: 1.0},
+		{Probe: "n2-loop", From: "clab-fylgja-n2-loop-a", To: "clab-fylgja-n2-loop-b", Outcome: "not_started",
+			Rule: RuleFlowStartFailed, Message: "probe n2-loop: the flow did not start in clab-fylgja-n2-loop-a: exit 1"}},
+		Added: []string{"n3-loop"}, Dropped: []string{"n4-loop"}}
+}
+
+// The step document's loss (016): null on the dry run and on a run that closed without it,
+// and once the flows were read their figures per probe, a flow not started, one interrupted
+// on a diverged step at the phase flows, and a step with no probe's empty loss. Each
+// satisfies the current contract; 019's copy, which has no loss, refuses each that carries
+// one, and accepts the null taken out (TestA019DocumentIsUnchanged).
+func TestStepLossDocuments(t *testing.T) {
+	schema := compileCurrentFindingsSchema(t)
+	v019 := compileFeatureFindingsSchema(t, contract019, currentResources...)
+	steps := stepDocuments()
+
+	for _, c := range []struct {
+		label string
+		doc   *Document
+		keys  []string
+	}{
+		{"dry run", steps[0].doc, []string{`"loss":null`}},
+		{"run closed without its flows", steps[3].doc, []string{`"loss":null`}},
+	} {
+		t.Run(c.label, func(t *testing.T) {
+			mustValidate(t, schema, c.doc, c.label)
+			if b := string(mustMarshal(t, c.doc)); !containsAll(b, c.keys) {
+				t.Errorf("does not carry every one of %q: %s", c.keys, b)
+			}
+		})
+	}
+
+	stepped := stepDocuments()[1].doc
+	stepped.Step.Loss = stepLoss()
+
+	interrupted := stepDocuments()[2].doc
+	interrupted.Step.Phase = "flows"
+	interrupted.Step.Loss = &StepLoss{Basis: "container", Probes: []StepProbeLoss{{Probe: "n1-loop",
+		From: "clab-fylgja-n1-loop-a", To: "clab-fylgja-n1-loop-b", Outcome: "interrupted", Sent: 40, Lost: 12, LongestGapS: 12.0}}}
+
+	notRead := stepDocuments()[1].doc
+	notRead.Step.Loss = &StepLoss{Basis: "container", Probes: []StepProbeLoss{{Probe: "n1-loop",
+		From: "clab-fylgja-n1-loop-a", To: "clab-fylgja-n1-loop-b", Outcome: "not_read", Rule: RuleFlowReadFailed,
+		Message: "probe n1-loop: the flow could not be read in clab-fylgja-n1-loop-a: exit 1"}}}
+
+	none := stepDocuments()[3].doc
+	none.Step.Loss = &StepLoss{Basis: "container"}
+
+	for _, c := range []struct {
+		label string
+		doc   *Document
+		keys  []string
+	}{
+		{"measured, not started, added and dropped", stepped, []string{`"loss":{"basis":"container","probes":[{"probe":"n1-loop",` +
+			`"from":"clab-fylgja-n1-loop-a","to":"clab-fylgja-n1-loop-b","outcome":"measured","sent":312,"lost":5,"longest_gap_s":1}`,
+			`"outcome":"not_started","sent":0,"lost":0,"longest_gap_s":0,"rule":"flow.start.failed","message":"probe n2-loop:`,
+			`"added":["n3-loop"],"dropped":["n4-loop"]}`}},
+		{"interrupted, diverged at flows", interrupted, []string{`"phase":"flows"`, `"outcome":"interrupted","sent":40,"lost":12,"longest_gap_s":12}`}},
+		{"not read", notRead, []string{`"outcome":"not_read"`, `"rule":"flow.read.failed"`}},
+		{"no probe", none, []string{`"loss":{"basis":"container","probes":[],"added":[],"dropped":[]}`}},
+	} {
+		t.Run(c.label, func(t *testing.T) {
+			mustValidate(t, schema, c.doc, c.label)
+			mustCarryNoContent(t, c.doc, c.label)
+			b := mustMarshal(t, c.doc)
+			if !containsAll(string(b), c.keys) {
+				t.Errorf("does not carry every one of %q: %s", c.keys, b)
+			}
+			if err := v019.Validate(mustAny(t, b)); err == nil {
+				t.Errorf("019's contract accepts a step document carrying a loss: %s", b)
+			}
+		})
+	}
+
+	// The loss is the contract's: a basis other than container, an outcome outside the enum, a
+	// probe with no longest gap, and a loss with no dropped list are each refused.
+	for _, c := range []struct{ label, old, new string }{
+		{"basis", `"basis":"container"`, `"basis":"hardware"`},
+		{"outcome", `"outcome":"measured"`, `"outcome":"guessed"`},
+		{"longest gap", `,"longest_gap_s":1}`, `}`},
+		{"dropped", `,"dropped":["n4-loop"]`, ``},
+	} {
+		raw := strings.Replace(string(mustMarshal(t, stepped)), c.old, c.new, 1)
+		if raw == string(mustMarshal(t, stepped)) {
+			t.Fatalf("%s: %s is not in the document", c.label, c.old)
+		}
+		if err := schema.Validate(mustAny(t, []byte(raw))); err == nil {
+			t.Errorf("a loss with its %s changed satisfied the step schema: %s", c.label, raw)
+		}
 	}
 }

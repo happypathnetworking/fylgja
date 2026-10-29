@@ -9,26 +9,33 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
+	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 )
 
-// The outer keys of a snapshot of version 1, in their stored order.
+// The outer keys of a snapshot, of version 1 and 2 alike, in their stored order.
 var outerKeys = []string{"snapshot_version", "snapshot_id", "observed_at", "ctm", "probes"}
 
 // Unmarshal decodes a snapshot strictly, in R-03's order, and returns it normalised with
 // its id and observed_at filled. Each refusal is typed, so the server files it under its
 // rule:
 //
-//  1. snapshot_version, read on its own: not "1", or absent, is a *VersionError. A bare
-//     CTM is refused here, for its version, rather than for the first key the strict
-//     decode would trip on.
+//  1. snapshot_version, read on its own: neither "2" nor "1", or absent, is a
+//     *VersionError. A bare CTM is refused here, for its version, rather than for the
+//     first key the strict decode would trip on. A "1" is read on as a "2" whose list
+//     must be empty (R-05).
 //  2. the outer shape: an unknown key; ctm absent, null or not an object; probes absent,
-//     null, not a list or not empty; snapshot_id present and not an id; observed_at
-//     present and not of the CTM's form or not the inner CTM's. Each is an *InvalidError
-//     naming the field. A document that is not a JSON object has no version to read, and
-//     is an *InvalidError naming no field.
+//     null or not a list, in a 1 not empty, in a 2 an element that is not the
+//     declaration's probe (decoded strictly, probe.DecodeProbe) or breaks a rule of the
+//     declaration's that reads no CTM (probe.Validate), at probes[<i>].<field>, the first
+//     fault in the list's order; snapshot_id present and not an id; observed_at present
+//     and not of the CTM's form or not the inner CTM's. Each is an *InvalidError naming
+//     the field. A document that is not a JSON object has no version to read, and is an
+//     *InvalidError naming no field.
 //  3. the inner CTM under ctm.Unmarshal's own refusals: a *ctm.VersionError as it is, a
 //     *ctm.MissingError with its field and message prefixed "ctm.".
 //  4. the inner CTM's observed_at: none recorded is a *ctm.MissingError, one not of the
@@ -53,7 +60,8 @@ func Unmarshal(data []byte) (*Snapshot, error) {
 	}
 
 	// 1. The version, on its own.
-	if err := readVersion(outer["snapshot_version"]); err != nil {
+	version, err := readVersion(outer["snapshot_version"])
+	if err != nil {
 		return nil, err
 	}
 
@@ -70,7 +78,8 @@ func Unmarshal(data []byte) (*Snapshot, error) {
 		return nil, &InvalidError{Field: "ctm", Message: "ctm is not an object: a snapshot of version " + Version +
 			" wraps one CTM " + ctm.Version + ", a JSON object"}
 	}
-	if err := readProbes(outer["probes"]); err != nil {
+	list, err := readProbes(outer["probes"], version)
+	if err != nil {
 		return nil, err
 	}
 	declaredID, err := readID(outer)
@@ -108,7 +117,7 @@ func Unmarshal(data []byte) (*Snapshot, error) {
 		observedAt = c.Envelope.ObservedAt
 	}
 
-	s := &Snapshot{Version: Version, ObservedAt: observedAt, CTM: c, Probes: []json.RawMessage{}}
+	s := &Snapshot{Version: Version, ObservedAt: observedAt, CTM: c, Probes: list}
 
 	// 5. The id: computed, then held to the one declared.
 	computed, err := ID(s)
@@ -122,24 +131,24 @@ func Unmarshal(data []byte) (*Snapshot, error) {
 	return s, nil
 }
 
-// readVersion refuses a snapshot_version that is not "1", or none. A value that is not
-// a JSON string is named as its JSON text.
-func readVersion(raw json.RawMessage) error {
+// readVersion returns the snapshot_version a document declares, "2" or "1", and refuses
+// any other, or none. A value that is not a JSON string is named as its JSON text.
+func readVersion(raw json.RawMessage) (string, error) {
 	if raw == nil || isNull(raw) {
-		return &VersionError{}
+		return "", &VersionError{}
 	}
 	var got string
 	if err := json.Unmarshal(raw, &got); err != nil {
 		text := string(bytes.TrimSpace(raw))
-		return &VersionError{Got: text, raw: text}
+		return "", &VersionError{Got: text, raw: text}
 	}
-	if got != Version {
-		return &VersionError{Got: got}
+	if got != Version && got != Version1 {
+		return "", &VersionError{Got: got}
 	}
-	return nil
+	return got, nil
 }
 
-// unknownKey names the first outer key, in byte order, that version 1 does not hold.
+// unknownKey names the first outer key, in byte order, that a snapshot does not hold.
 func unknownKey(outer map[string]json.RawMessage) error {
 	var unknown []string
 	for k := range outer {
@@ -163,20 +172,71 @@ func unknownKey(outer map[string]json.RawMessage) error {
 		unknown[0], Version)}
 }
 
-// readProbes refuses a probes list that is absent, null, not a list, or not empty.
-func readProbes(raw json.RawMessage) error {
-	const why = "in snapshot " + Version + " the list is required and empty, since 016 defines its element"
+// readProbes returns the probes of a document of version, never nil, and refuses a list
+// that is absent, null or not a list; in a 1, one that is not empty; in a 2, an element
+// that is not the declaration's probe or breaks one of its rules that read no CTM, the
+// first fault in the list's order, at probes[<i>].<field>.
+func readProbes(raw json.RawMessage, version string) ([]probe.Probe, error) {
+	why := "in snapshot " + Version + " the list is required, [] when the snapshot declares no probe"
+	if version == Version1 {
+		why = "in snapshot " + Version1 + " the list is required and empty; a snapshot with probes is a " + Version
+	}
 	if raw == nil || isNull(raw) {
-		return &InvalidError{Field: "probes", Message: "probes is not recorded; " + why}
+		return nil, &InvalidError{Field: "probes", Message: "probes is not recorded; " + why}
 	}
-	var list []json.RawMessage
-	if err := json.Unmarshal(raw, &list); err != nil {
-		return &InvalidError{Field: "probes", Message: "probes is not a list; " + why}
+	var elements []json.RawMessage
+	if err := json.Unmarshal(raw, &elements); err != nil {
+		return nil, &InvalidError{Field: "probes", Message: "probes is not a list; " + why}
 	}
-	if len(list) != 0 {
-		return &InvalidError{Field: "probes", Message: fmt.Sprintf("probes holds %s; %s", entries(len(list)), why)}
+	if version == Version1 && len(elements) != 0 {
+		return nil, &InvalidError{Field: "probes", Message: fmt.Sprintf("probes holds %s; %s", entries(len(elements)), why)}
+	}
+	list := make([]probe.Probe, 0, len(elements))
+	for i, el := range elements {
+		p, found := probe.DecodeProbe(el, fmt.Sprintf("probes[%d]", i))
+		if found.Rejected() {
+			return nil, invalidAt(found[0], "")
+		}
+		list = append(list, p)
+	}
+	if err := probeFault(list); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// probeFault holds a list of probes to the declaration's rules that read no CTM, with no
+// registry (the formats loaded are the server's to hold), and returns the first fault as
+// an *InvalidError at probes[<i>].<field>, or nil.
+func probeFault(list []probe.Probe) *InvalidError {
+	found := probe.Validate(list, nil, func(i int) string { return fmt.Sprintf("probes[%d]", i) })
+	for _, f := range found {
+		if f.Severity == findings.Rejection {
+			return invalidAt(f, f.Rule)
+		}
 	}
 	return nil
+}
+
+// invalidAt is a probe's finding as the snapshot's refusal, at the element's field in the
+// document's own path: Validate names a probe's field by its rule and an endpoint's as
+// <probe>/<a|b>.<field>, which is probes[<i>].endpoints[<0|1>].<field> here. rule is the
+// finding's rule when Validate found it, "" when the strict decode did, whose objects are
+// already the document's path.
+func invalidAt(f findings.Finding, rule string) *InvalidError {
+	field := f.Object
+	switch rule {
+	case findings.RuleProbeNameInvalid, findings.RuleProbeNameDuplicate:
+		field += ".name"
+	case findings.RuleProbeFormatUnknown:
+		field += ".format"
+	}
+	for j, end := range probe.Ends {
+		if before, after, ok := strings.Cut(field, "/"+end+"."); ok {
+			field = fmt.Sprintf("%s.endpoints[%d].%s", before, j, after)
+		}
+	}
+	return &InvalidError{Field: field, Message: f.Message}
 }
 
 // readID returns the snapshot_id a document declares, "" when it declares none, and
@@ -276,12 +336,13 @@ func (e *VersionError) Error() string {
 	case e.Got != "":
 		declares = "declares snapshot_version " + strconv.Quote(e.Got)
 	}
-	return fmt.Sprintf("the snapshot %s; this build reads %q, and nothing converts one", declares, Version)
+	return fmt.Sprintf("the snapshot %s; this build reads %q and %q, and nothing converts one", declares, Version1, Version)
 }
 
-// InvalidError is Unmarshal's refusal of a document whose outer shape is not version 1's,
+// InvalidError is Unmarshal's refusal of a document whose outer shape is not its version's,
 // or whose inner CTM's observed_at is not of the CTM's form: Field is the key at fault
-// (probes, snapshot_id, observed_at, ctm, an unknown key, or ctm.envelope.observed_at),
+// (probes or a probe's field at probes[<i>].<field>, snapshot_id, observed_at, ctm, an
+// unknown key, or ctm.envelope.observed_at),
 // empty when the document itself is at fault, and Message names it and says why.
 // The server files it as snapshot.invalid at the field, or at the file when Field is
 // empty.

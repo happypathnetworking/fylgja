@@ -5,12 +5,14 @@
 // or the mixed one, or makes tier 3's branch changes on a throwaway branch, or opens,
 // marks, readies, checks and closes a throwaway branch's proposed change (D-045), or prepares main:
 // the schema, the group and this repository's read-only registration (D-044), or opens and
-// closes a demo's window, the three-node baseline on main (D-054). Development tooling, not the product —
+// closes a demo's window, the three-node baseline on main (D-054), or writes and deletes the
+// probes of the probe kind on main (D-064). Development tooling, not the product —
 // it writes to Infrahub, which the product never does. Build-tagged so it cannot be built
 // by accident.
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -22,6 +24,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/testsupport"
 )
 
@@ -74,8 +77,8 @@ func main() {
 		"with -stage: its as_of, verbatim; omitted, its at is when it was written")
 	description := flag.String("description", "", "with -stage: its description")
 	prepare := flag.Bool("prepare-main", false,
-		"load the schema library on a main holding none of its kinds (refused, loading nothing, when it holds any), "+
-			"then the stage kind, create the group "+testsupport.ArtifactGroupName+
+		"load the stage and probe kinds where absent, then the schema library on a main holding none of its kinds "+
+			"(refused, loading nothing of it, when it holds any), create the group "+testsupport.ArtifactGroupName+
 			", register this repository read-only with no credential, wait for its import, and exit; takes no -branch")
 	repoName := flag.String("repository-name", testsupport.RepositoryName, "with -prepare-main: the registration's name")
 	repoLocation := flag.String("repository-location", testsupport.RepositoryLocation,
@@ -89,6 +92,11 @@ func main() {
 	clearMain := flag.Bool("clear-main", false,
 		"delete the baseline -seed-main wrote in the schema library's kinds, and nothing else, once no "+
 			testsupport.TestBranchPrefix+"* branch exists, and exit; takes no other flag")
+	probesFile := flag.String("probes", "",
+		"write each probe of this declaration file as one "+testsupport.ProbeKind+" on main, which every branch's "+
+			"read with no probe file then carries, and exit; takes no other flag")
+	deleteProbes := flag.Bool("delete-probes", false,
+		"delete every "+testsupport.ProbeKind+" on main, and exit; takes no other flag")
 	flag.Parse()
 
 	// -prepare-main is refused or allowed before any request: it writes main, so a flag
@@ -100,6 +108,17 @@ func main() {
 	if err := checkBaselineFlags(*seedMain, *clearMain); err != nil {
 		fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
 		os.Exit(1)
+	}
+	if err := checkProbeFlags(*probesFile, *deleteProbes); err != nil {
+		fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
+		os.Exit(1)
+	}
+	if *probesFile != "" || *deleteProbes {
+		if err := probes(*probesFile, *deleteProbes); err != nil {
+			fmt.Fprintln(os.Stderr, "fylgja-fixture:", err)
+			os.Exit(1)
+		}
+		return
 	}
 	if *seedMain || *clearMain {
 		if err := baseline(*seedMain); err != nil {
@@ -237,6 +256,76 @@ func checkBaselineFlags(seed, clear bool) error {
 	return nil
 }
 
+// checkProbeFlags refuses -probes and -delete-probes together, and either beside any other
+// flag, -branch among them, so -branch fylgja-fixture too: each writes the probe kind on
+// main, which is branch-agnostic (D-064), so a branch beside it is a mistake, never a
+// narrowing. It reads only the command line, so it refuses before any request.
+func checkProbeFlags(file string, remove bool) error {
+	if file == "" && !remove {
+		return nil
+	}
+	if file != "" && remove {
+		return fmt.Errorf("-probes and -delete-probes write and delete the probes on %s; give one", testsupport.DefaultBranch)
+	}
+	own := "probes"
+	if remove {
+		own = "delete-probes"
+	}
+	var other []string
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name != own {
+			other = append(other, "-"+f.Name)
+		}
+	})
+	if len(other) > 0 {
+		sort.Strings(other)
+		return fmt.Errorf("-%s acts on %s's %s alone and combines with no other flag: %s was given",
+			own, testsupport.DefaultBranch, testsupport.ProbeKind, strings.Join(other, ", "))
+	}
+	return nil
+}
+
+// probes writes a declaration's probes into the probe kind on main, or deletes every probe
+// there (R-26). The file is held to the declaration's own rules first, as the server holds
+// a --probes file, so a probe the server would refuse is never written; a probe of a name
+// the kind holds is Infrahub's to refuse, by its uniqueness constraint.
+func probes(file string, remove bool) error {
+	c, err := testsupport.NewClient()
+	if err != nil {
+		return err
+	}
+	if remove {
+		n, err := c.DeleteProbes()
+		if err != nil {
+			return fmt.Errorf("after deleting %s: %w", plural(n, "probe", "probes"), err)
+		}
+		fmt.Printf("deleted %s of %s on %s\n", plural(n, "probe", "probes"), testsupport.ProbeKind, testsupport.DefaultBranch)
+		return nil
+	}
+	raw, err := os.ReadFile(file)
+	if err != nil {
+		return err
+	}
+	decl, list := probe.Parse(raw, file)
+	if decl == nil {
+		var lines []string
+		for _, f := range list {
+			lines = append(lines, fmt.Sprintf("%s at %s: %s", f.Rule, f.Object, f.Message))
+		}
+		return fmt.Errorf("%s is refused, nothing written:\n  %s", file, strings.Join(lines, "\n  "))
+	}
+	if err := c.WriteProbes(decl); err != nil {
+		return err
+	}
+	names := make([]string, 0, len(decl.Probes))
+	for _, p := range decl.Probes {
+		names = append(names, p.Name)
+	}
+	fmt.Printf("wrote %s to %s on %s: %s\n", plural(len(names), "probe", "probes"), testsupport.ProbeKind,
+		testsupport.DefaultBranch, strings.Join(names, ", "))
+	return nil
+}
+
 // baseline opens or closes a demo's window (D-054): -seed-main writes the three-node
 // fixture onto main, -clear-main removes it, each refusing when main is not as it expects.
 func baseline(seed bool) error {
@@ -266,43 +355,48 @@ func baseline(seed bool) error {
 // clearedLine says what -clear-main deleted, and how many of the devices' artifacts
 // Infrahub had already removed with them.
 func clearedLine(d testsupport.ClearedBaseline) string {
-	return fmt.Sprintf("%s, %s, %s, %s, %s, %s, %s; artifacts: %d gone with their devices, %d deleted",
-		plural(d.Cables, "cable", "cables"), plural(d.Interfaces, "interface", "interfaces"),
+	return fmt.Sprintf("%s, %s, %s, %s, %s, %s, %s, %s; artifacts: %d gone with their devices, %d deleted",
+		plural(d.Addresses, "address", "addresses"), plural(d.Cables, "cable", "cables"), plural(d.Interfaces, "interface", "interfaces"),
 		plural(d.Devices, "device", "devices"), plural(d.Platforms, "platform", "platforms"),
 		plural(d.Manufacturers, "manufacturer", "manufacturers"), plural(d.Locations, "location", "locations"),
 		plural(d.Tags, "tag", "tags"), d.ArtifactsWithDevices, d.Artifacts)
 }
 
 // prepareMain makes main what every branch needs before it can render (D-028, D-044):
-// the schema library and the stage kind, the group the definition targets, and this
-// repository registered read-only with no credential, imported.
+// the stage and probe kinds (D-064), the schema library, the group the definition targets,
+// and this repository registered read-only with no credential, imported.
 //
-// The library goes first, and only onto a main that holds none of its kinds (R-13): the
-// development host's migrated main and CI's fresh one. A main holding any of them is
-// refused before any write, the group and the registration included, since a library
-// already there is its operator's, of whatever commit. So a second run is that refusal,
-// which the bring-up script reads as present. After the library, each step looks up by
-// name and skips what exists; nothing is updated or deleted.
+// The stage and probe kinds go first, wherever either is absent: they are Fylgja's own and
+// name none of the library's kinds, so a main holding the library and lacking one gains it
+// (016's upgrade). The library goes next, and only onto a main that holds none of its
+// kinds (R-13): the development host's migrated main and CI's fresh one. A main holding
+// any of them is refused before any write of the library, the group and the registration
+// included, since a library already there is its operator's, of whatever commit. So a
+// second run is the own kinds present, then that refusal, which the bring-up script reads
+// as present. After the library, each step looks up by name and skips what exists;
+// nothing is updated or deleted.
 func prepareMain(schemaDir, name, location, ref string, wait time.Duration) error {
 	c, err := testsupport.NewClient()
 	if err != nil {
 		return err
 	}
-	files, err := c.LoadLibrary(testsupport.DefaultBranch, schemaDir)
+	loaded, files, err := c.PrepareMainSchema(schemaDir)
+	var held *testsupport.LibraryHeldError
+	if err != nil && !errors.As(err, &held) {
+		return err
+	}
+	// The stage and probe kinds are schema/'s own files, loaded in one request: on a main
+	// that holds both the hash does not move, and one it lacks is added beside the other.
+	if loaded {
+		fmt.Printf("stage and probe kinds loaded on %s\n", testsupport.DefaultBranch)
+	} else {
+		fmt.Println("stage and probe kinds present")
+	}
 	if err != nil {
 		return err
 	}
 	fmt.Printf("schema library loaded on %s (%d files, %s@%s)\n",
 		testsupport.DefaultBranch, files, ctm.ModelSchemaLibrary, ctm.ModelVersion)
-	loaded, err := c.LoadOwnSchema(testsupport.DefaultBranch, schemaDir)
-	if err != nil {
-		return err
-	}
-	if loaded {
-		fmt.Printf("stage kind loaded on %s\n", testsupport.DefaultBranch)
-	} else {
-		fmt.Println("stage kind present")
-	}
 
 	created, err := c.EnsureGroup(testsupport.ArtifactGroupName)
 	if err != nil {

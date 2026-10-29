@@ -10,12 +10,19 @@ import (
 )
 
 // The stages are shared by the stage commands, the activities and the dry run, and are
-// usable without a workflow service: nothing here may reach Temporal or the lab host.
+// usable without a workflow service: nothing here may reach Temporal or the lab host. The
+// stage compiles a snapshot's probes with the probe packages from 016, so internal/probe is
+// admitted, and its own files are held to the same rule.
 func TestStageImportsNoTemporalOrLab(t *testing.T) {
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
 	}
+	probes, err := filepath.Glob(filepath.Join("..", "probe", "*.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	files = append(files, probes...)
 	var checked int
 	for _, name := range files {
 		if strings.HasSuffix(name, "_test.go") {

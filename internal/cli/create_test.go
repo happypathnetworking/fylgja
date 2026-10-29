@@ -22,11 +22,11 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/provision"
 )
 
-const fixtureBundleID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
+const fixtureBundleID = "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
 
 // fixtureSnapshotID is the fixture CTM's snapshot id (testdata/snapshot/three-node.json):
 // what a create of the fake Infrahub's fixture branch takes and files before its run (018).
-const fixtureSnapshotID = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
+const fixtureSnapshotID = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00"
 
 // useFixtureRead serves the fixture branch from a fake Infrahub and points the state root
 // at a fresh directory: a create reads, takes, compiles and files on the server before it
@@ -40,8 +40,8 @@ func useFixtureRead(t *testing.T) lab.Paths {
 // headSnapshotID and headBundleID are what an unpinned read of the fake Infrahub's fixture
 // branch takes and compiles to: the fixture's intent, its envelope naming no at.
 const (
-	headSnapshotID = "856af9ad8f6e5d13d2d99e3af7d21d86c2cc9645c45d548a2df0494a11aad617"
-	headBundleID   = "951b7d2145f65a6d906b786dab9e05b12d172b36ce85229f671f7c334a37444e"
+	headSnapshotID = "0d37e2ec3186bb59f58ee414a5ff34bd3e3833637c9684dfb4e6b337805a61f1"
+	headBundleID   = "16141134f94cef43492b5e80dc986a19c446f647a3ed660a5b615dc525848fe0"
 )
 
 // storedLines are the two lines a create prints before its run's start, the snapshot's
@@ -53,13 +53,14 @@ func storedLines(paths lab.Paths, snapshotID, bundleID string) []string {
 	}
 }
 
-// fixtureArtifacts are the fixture bundle's artifact checksums, by node: what 017's
-// template renders for the fylgja-fixture branch, 707 bytes each, predicted at T016
-// (research §5.1) and checked against a render at T060.
+// fixtureArtifacts are the fixture bundle's artifact checksums, by node: what 016's
+// template renders for the seed's fixture, its probe-ready ports addressed, 1327 bytes
+// each, rendered on a throwaway branch at 016's T035 (707 bytes each under 017's template
+// and seed, predicted at 017's T016 and checked against a render at T060).
 var fixtureArtifacts = map[string]string{
-	"n1": "597f6263eb7e0b539679b3956270876f",
-	"n2": "5ac21560015ad6bb1e881358115d0b7a",
-	"n3": "e93df96400ddbada7daa1a0777d9d3e3",
+	"n1": "28881d3d0d61d3fe5acf1f1ee0e31a60",
+	"n2": "092ca9f62fe2887add0ae679de0a7076",
+	"n3": "95a3a91788e63626cdb9b4ecdf56eb58",
 }
 
 // fakeService stands in for the workflow service: it starts nothing and answers with a
@@ -323,9 +324,9 @@ func readyResult() provision.ProvisionResult {
 	for i, name := range []string{"n1", "n2", "n3"} {
 		nodes = append(nodes, wire.TwinNode{
 			Name: name, Container: "clab-fylgja-" + name, Image: "ghcr.io/nokia/srlinux:24.7.1",
-			PSP:      wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
+			PSP:      &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
 			MgmtIPv4: "172.20.20." + string(rune('2'+i)), ReadyAfterS: 0.9,
-			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[name], Size: 707},
+			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[name], Size: 1327},
 			PushedInS: 0.7,
 		})
 	}
@@ -695,13 +696,116 @@ func validateM7Document(t *testing.T, doc *findings.Document) {
 // 019 removes following and puts kind snapshot in place of pinned and frozen: a document of
 // this build is 018's too, its kind as 018 wrote it (as018Contract), so it is also validated
 // against 018's frozen copy.
+//
+// 016 moves the step, verify, rehearsal and findings contracts on: a document of this build
+// is 019's as built, a null step loss taken out (withoutNullLoss), so it is also validated
+// against 019's frozen copy; one whose step carries a loss is 016's alone, and is read
+// against no earlier copy.
 func validateM10Document(t *testing.T, doc *findings.Document) {
 	t.Helper()
 	validateWithShow(t, currentContract, "M13", doc)
+	if carriesLoss(doc) {
+		return
+	}
+	validateWithShow(t, contract019, "019", doc)
 	validateWithShow(t, contract018, "018", doc)
 	if !namesSnapshot(t, doc) {
 		validateWithShow(t, contract017, "017", doc)
 	}
+}
+
+// carriesLoss says whether doc carries what 016 alone writes, which no earlier contract
+// accepts: a step block's loss its flows read, a rehearsal stage's, a verify block of a
+// twin with probes, its hosts and its bursts, or a dry run planning a probe's hosts.
+func carriesLoss(doc *findings.Document) bool {
+	if doc.Step != nil && doc.Step.Loss != nil {
+		return true
+	}
+	if d := doc.DryRun; d != nil && slices.ContainsFunc(d.Nodes, func(n findings.DryRunNode) bool { return n.Probe != nil }) {
+		return true
+	}
+	if r := doc.Rehearsal; r != nil && slices.ContainsFunc(r.Stages, func(s findings.RehearsalStage) bool { return s.Loss != nil }) {
+		return true
+	}
+	if v := doc.Verify; v != nil {
+		c := v.Counts.Burst
+		return c.Held+c.Failed > 0 || (c.Unread != nil && *c.Unread > 0) ||
+			slices.ContainsFunc(v.Nodes, func(n findings.VerifyNode) bool { return n.Probe != nil })
+	}
+	return false
+}
+
+// laterContract is the next later frozen feature's copy of the block name, or the current
+// one when no later copy holds it.
+func laterContract(t *testing.T, feature, name string) string {
+	t.Helper()
+	dirs, err := os.ReadDir(filepath.Join("testdata", "contracts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range dirs {
+		if d.Name() <= feature {
+			continue
+		}
+		if path := contractPath(d.Name(), name); fileExists(path) {
+			return path
+		}
+	}
+	return contractPath(currentContract, name)
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
+// withoutNullLoss is b, a document marshalled, with its step block's loss taken out when it
+// is null, as the dry run and a run closed before its flows write it (016), and each
+// rehearsal stage's, null on every stage whose step read no flow, and each burst
+// count of a read that ran no burst (016): the verify block's counts, the step's wait_counts
+// and a rehearsed stage's verify. Every contract before 016's forbids the keys, and from 016
+// they are always written.
+func withoutNullLoss(t *testing.T, b []byte) []byte {
+	t.Helper()
+	var generic map[string]any
+	if err := json.Unmarshal(b, &generic); err != nil {
+		t.Fatal(err)
+	}
+	noBurst := func(counts any) {
+		c, ok := counts.(map[string]any)
+		if !ok {
+			return
+		}
+		if burst, ok := c["burst"].(map[string]any); ok && burst["held"] == 0.0 && burst["failed"] == 0.0 &&
+			(burst["unread"] == nil || burst["unread"] == 0.0) {
+			delete(c, "burst")
+		}
+	}
+	if step, ok := generic["step"].(map[string]any); ok {
+		if v, ok := step["loss"]; ok && v == nil {
+			delete(step, "loss")
+		}
+		noBurst(step["wait_counts"])
+	}
+	if v, ok := generic["verify"].(map[string]any); ok {
+		noBurst(v["counts"])
+	}
+	if r, ok := generic["rehearsal"].(map[string]any); ok {
+		stages, _ := r["stages"].([]any)
+		for _, st := range stages {
+			if st, ok := st.(map[string]any); ok {
+				noBurst(st["verify"])
+				if v, ok := st["loss"]; ok && v == nil {
+					delete(st, "loss")
+				}
+			}
+		}
+	}
+	out, err := json.Marshal(generic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 // contract017 is the feature argument that names 017's copies of the findings contract and
@@ -711,6 +815,11 @@ const contract017 = "017-dcim-reader"
 // contract018 is the feature argument that names 018's copies of the findings contract and
 // the show block, the two 019 moves, frozen under testdata/contracts/018-snapshots/.
 const contract018 = "018-snapshots"
+
+// contract019 is the feature argument that names 019's copies of the findings contract and
+// the step, verify and rehearsal blocks, the four 016 moves, frozen under
+// testdata/contracts/019-following-removed/.
+const contract019 = "019-following-removed"
 
 // namesSnapshot says whether doc names a snapshot anywhere 018 puts one: such a document is
 // 018's, which no earlier contract accepts.
@@ -815,13 +924,16 @@ func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Doc
 		b = as017Contract(t, doc)
 	case contract018:
 		b = as018Contract(t, doc)
-	case currentContract:
+	case currentContract, contract019:
 		var err error
 		if b, err = json.Marshal(doc); err != nil {
 			t.Fatal(err)
 		}
 	default:
 		b = asEarlierContract(t, doc)
+	}
+	if feature != currentContract {
+		b = withoutNullLoss(t, b)
 	}
 	if err := validateAgainst(findingsContract(t, feature), b); err != nil {
 		t.Errorf("document does not satisfy %s's findings contract:\n%v\n%s", milestone, err, b)
@@ -876,19 +988,18 @@ func findingsContract(t *testing.T, feature string) *jsonschema.Schema {
 		t.Fatal(err)
 	}
 	c := jsonschema.NewCompiler()
-	if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/show.schema.json", load(contractPath(feature, "show.schema.json"))); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
+	for _, name := range []string{"show.schema.json", "stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
 		path := contractPath(feature, name)
 		if _, err := os.Stat(path); err != nil {
 			// A block the feature's contract refers to but its directory does not hold had not
-			// moved since the feature: 017's verify.schema.json, which 018 does not move, and
-			// 018's stages, step, verify and rehearsal blocks, which 019 does not freeze.
+			// moved until the next later feature's copy that holds it, or since the feature
+			// when none does: 017's and 018's verify.schema.json are 019's, which froze it as
+			// it stood from 017 until 016 moved it, and 019's show and stages blocks, which
+			// 016 does not move, are the current ones.
 			if feature == currentContract || !strings.Contains(string(refers), "/schemas/"+name) {
 				continue
 			}
-			path = contractPath(currentContract, name)
+			path = laterContract(t, feature, name)
 		}
 		if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/"+name, load(path)); err != nil {
 			t.Fatal(err)

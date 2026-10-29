@@ -43,9 +43,12 @@ import (
 //     same in.From. The end of the window is not retried, since VerifyOptions sets
 //     the schedule-to-close equal to the start-to-close, and the run says the wait could not
 //     complete, with the timeout's finding, and the record's wait stays null.
-//   - The result counts the wait's last read by kind (015, research R-07), for a
-//     rehearsal's report; the record keeps no counts, so a retry that returns the wait the
-//     record holds carries none.
+//   - Each read runs every probe's burst (016, R-15) by the burster, with the probe
+//     packages the worker loaded: a burst that lost a reply fails the read under
+//     verify.burst, and the wait reads again, as it does for any assertion that fails.
+//   - The result counts the wait's last read by kind (015, research R-07), the bursts among
+//     them (016), for a rehearsal's report; the record keeps no counts, so a retry that
+//     returns the wait the record holds carries none.
 func (a *Activities) VerifyTwin(ctx context.Context, in wire.VerifyInput) (wire.VerifyResult, error) {
 	stop := heartbeat(ctx)
 	defer stop()
@@ -105,8 +108,12 @@ func (a *Activities) VerifyTwin(ctx context.Context, in wire.VerifyInput) (wire.
 	if now == nil {
 		now = time.Now
 	}
+	burster := a.Burster
+	if burster == nil {
+		burster = DockerBurster{Runner: a.Clab.Runner, Log: a.logger()}
+	}
 	vin := verify.Input{Manifest: m, StagedID: stagedID, Record: rec, Lab: labNodes, Packages: a.Registry,
-		Reader: reader, Getenv: a.getenv(), Now: now}
+		Reader: reader, Probes: a.Probes, Burster: burster, Getenv: a.getenv(), Now: now}
 	w := verify.Wait(ctx, vin, assertions, verify.WaitOptions{Budget: time.Duration(in.BudgetS) * time.Second, From: from,
 		Sleep: a.waitSleep, Now: now, Lab: inspect})
 	if w.Outcome == verify.WaitCancelled && !temporal.IsCanceledError(context.Cause(ctx)) {
@@ -122,7 +129,7 @@ func (a *Activities) VerifyTwin(ctx context.Context, in wire.VerifyInput) (wire.
 	}
 	a.logger().Info("the step's wait ended", "run", in.RunID, "outcome", wait.Outcome, "reads", wait.Reads,
 		"after_s", wait.AfterS, "failing", len(wait.Failing))
-	recorded, err := a.recordWait(path, in.RunID, mine(rec, in.RunID), wait)
+	recorded, err := a.recordInStep(path, in.RunID, mine(rec, in.RunID), "wait", func(s *wire.StepRecord) { s.Wait = &wait })
 	if err != nil {
 		return failed(path, "the step's wait is not recorded: %v", err)
 	}
@@ -140,8 +147,8 @@ func counts(w verify.WaitResult) *wire.VerifyCounts {
 }
 
 // failing is what still fails at the wait's last read, as the record keeps it: each failed or
-// absent assertion and each unread node's operation.failed, by identifier, object and
-// message.
+// absent assertion, a failed burst's verify.burst among them (016), and each unread node's
+// operation.failed, by identifier, object and message.
 // The record's claims are never waited on, so verify.record.holds is
 // not among them, and a wait that settled has nothing else: it is empty, never null.
 func failing(w verify.WaitResult) []wire.StepFinding {
@@ -155,26 +162,27 @@ func failing(w verify.WaitResult) []wire.StepFinding {
 	return out
 }
 
-// recordWait writes the wait into the record's step block, read again just before, when that
-// step is runID's, and says whether it did. A record that is another run's keeps what it
-// holds, as does one that cannot be read again when the record the wait began with was not
-// runID's either: the wait is still the run's result, and the record's wait stays null.
-// named says the record the wait began with was runID's: then a record that
-// cannot be read again, or will not write, is the error, since the run's record would
-// otherwise say the wait never ran while the run's result says it did.
-func (a *Activities) recordWait(path, runID string, named bool, wait wire.StepWait) (bool, error) {
+// recordInStep writes what set sets — the wait, or the loss (016) — into the record's step
+// block, read again just before, when that step is runID's, and says whether it did. A record
+// that is another run's keeps what it holds, as does one that cannot be read again when the
+// record the activity began with was not runID's either: what it writes is still the run's
+// result, and the record's field stays null. named says the record the activity began with
+// was runID's: then a record that cannot be read again, or will not write, is the error,
+// since the run's record would otherwise say the wait or the read never ran while the run's
+// result says it did. what names the field in the log.
+func (a *Activities) recordInStep(path, runID string, named bool, what string, set func(*wire.StepRecord)) (bool, error) {
 	rec, err := ReadRecord(path)
 	if err != nil {
 		if named {
 			return false, err
 		}
-		a.logger().Warn("the step's wait is not recorded: the twin's record cannot be read", "run", runID, "error", err)
+		a.logger().Warn("the step's "+what+" is not recorded: the twin's record cannot be read", "run", runID, "error", err)
 		return false, nil
 	}
 	if !mine(rec, runID) {
 		return false, nil
 	}
-	rec.Step.Wait = &wait
+	set(rec.Step)
 	if err := WriteRecord(path, rec); err != nil {
 		return false, err
 	}

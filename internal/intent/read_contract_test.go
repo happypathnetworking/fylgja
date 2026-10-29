@@ -172,12 +172,13 @@ func TestFixtureReadsToTheThreeNodeCTM(t *testing.T) {
 }
 
 // The fixture branch holds exactly the three-node topology (CLAUDE.md): three devices,
-// each with its management port and two cabled ports, three cables and three artifacts.
-// The success line counts what it found.
+// each with its management port, two cabled ports and two probe-ready ports (R-19), three
+// cables and three artifacts. The success line counts what it found. It reads 15 once the
+// fixture is re-seeded by this tree's seed (T042); a fixture seeded before 016 holds 9.
 func TestReadCountsTheFixture(t *testing.T) {
 	harness(t)
 	got, _ := read(t, testsupport.FixtureBranch, "")
-	if n, want := Summarize(got), (Counts{Devices: 3, Interfaces: 9, Links: 3, Artifacts: 3}); n != want {
+	if n, want := Summarize(got), (Counts{Devices: 3, Interfaces: 15, Links: 3, Artifacts: 3}); n != want {
 		t.Errorf("read %+v, want %+v", n, want)
 	}
 }
@@ -238,7 +239,7 @@ func TestCablesTheReadCannotPlace(t *testing.T) {
 	if len(got.Envelope.Fidelity) != 5 {
 		t.Errorf("fidelity %+v, want the three fixed rows and the two omissions", got.Envelope.Fidelity)
 	}
-	if n, want := Summarize(got), (Counts{Devices: 3, Interfaces: 13, Links: 3, Artifacts: 3, CablesOmitted: 2}); n != want {
+	if n, want := Summarize(got), (Counts{Devices: 3, Interfaces: 19, Links: 3, Artifacts: 3, CablesOmitted: 2}); n != want {
 		t.Errorf("read %+v, want %+v", n, want)
 	}
 	if got.Device("cs1") != nil {

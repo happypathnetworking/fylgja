@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/happypathnetworking/fylgja/internal/bundle"
+	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
@@ -30,8 +32,10 @@ import (
 // stepped to, or null, each step side's snapshot when it is known, and a third source,
 // snapshot (018); version 10 lets a stage stand beside any source, since source says how the
 // twin was created and a step keeps it, so a twin created from a snapshot and stepped to a
-// stage names both (019).
-const TwinVersion = "10"
+// stage names both (019); version 11 records a probe's host among the nodes, with its probe
+// in place of a support package and no artifact, and the step's loss, step.loss, or null
+// while its flows have not been read (016).
+const TwinVersion = "11"
 
 // ObservedAtUnknown is what twin.json says when no read took place, so a null
 // observed_at is an explicit statement rather than a missing value (Constitution VI).
@@ -177,10 +181,12 @@ func WriteRecord(path string, rec wire.TwinRecord) error {
 
 // RecordTwin writes twin.json, last: its presence beside a lab is what makes the lab a
 // twin rather than an orphan (glossary). Provenance, each node's package and its
-// artifact come from the staged manifest, verbatim; containers and addresses from deploy;
+// artifact, and each host's probe, come from the staged manifest, verbatim; containers and
+// addresses from deploy;
 // how long each node took from readiness and its push; the version from this worker's
-// binary. A node deploy reports that the manifest does not name, or that no push result
-// names, is refused: the record would claim a twin the run did not build. No
+// binary. A node deploy reports that the manifest does not name, or a device no push result
+// names, is refused: the record would claim a twin the run did not build. A host is pushed
+// nothing, so it has no artifact and no push time (016). No
 // artifact's bytes are recorded, only its identity. It returns the record
 // exactly as written, so the workflow reports it without reading disk (Constitution VIII).
 func (a *Activities) RecordTwin(_ context.Context, in wire.RecordInput) (wire.RecordResult, error) {
@@ -194,14 +200,7 @@ func (a *Activities) RecordTwin(_ context.Context, in wire.RecordInput) (wire.Re
 	if err != nil {
 		return failed("%v", err)
 	}
-	pspOf := make(map[string]wire.PSPRef, len(m.Nodes))
-	artifactOf := make(map[string]*wire.TwinArtifact, len(m.Nodes))
-	for _, n := range m.Nodes {
-		pspOf[n.Name] = wire.PSPRef{ID: n.PSP.ID, Source: n.PSP.Source}
-		if a := n.Artifact; a != nil {
-			artifactOf[n.Name] = &wire.TwinArtifact{Name: a.Name, ContentType: a.ContentType, Checksum: a.Checksum, Size: a.Size}
-		}
-	}
+	staged := targetOf(m)
 	readyAfter := make(map[string]float64, len(in.ReadyAfter))
 	for _, r := range in.ReadyAfter {
 		readyAfter[r.Node] = r.ReadyAfterS
@@ -212,11 +211,22 @@ func (a *Activities) RecordTwin(_ context.Context, in wire.RecordInput) (wire.Re
 	}
 	nodes := make([]wire.TwinNode, 0, len(in.Nodes))
 	for _, n := range in.Nodes {
-		ref, ok := pspOf[n.Name]
+		if probe, ok := staged.Probes[n.Name]; ok {
+			nodes = append(nodes, wire.TwinNode{
+				Name:        n.Name,
+				Container:   n.Container,
+				Image:       n.Image,
+				Probe:       probe,
+				MgmtIPv4:    n.MgmtIPv4,
+				ReadyAfterS: readyAfter[n.Name],
+			})
+			continue
+		}
+		ref, ok := staged.PSP[n.Name]
 		if !ok {
 			return failed("containerlab reports node %s, which the staged manifest does not name", n.Name)
 		}
-		artifact, ok := artifactOf[n.Name]
+		artifact, ok := staged.Artifacts[n.Name]
 		if !ok {
 			return failed("the staged manifest names no artifact for node %s", n.Name)
 		}
@@ -228,7 +238,7 @@ func (a *Activities) RecordTwin(_ context.Context, in wire.RecordInput) (wire.Re
 			Name:        n.Name,
 			Container:   n.Container,
 			Image:       n.Image,
-			PSP:         ref,
+			PSP:         &ref,
 			MgmtIPv4:    n.MgmtIPv4,
 			ReadyAfterS: readyAfter[n.Name],
 			Artifact:    artifact,
@@ -267,7 +277,9 @@ func (a *Activities) RecordTwin(_ context.Context, in wire.RecordInput) (wire.Re
 // a version 5, 6 or 7 one's does while its wait has not run. A record of version 6 or
 // earlier has no rehearsal key and reads with Rehearsal nil, as a hand twin's 7 does (015).
 // A record of 8 or earlier has no snapshot key, at the top level or on a step's sides, and
-// reads with SnapshotID nil and each side's empty (018).
+// reads with SnapshotID nil and each side's empty (018). A record of 10 or earlier has no
+// host and no step.loss, and its step reads with Loss nil, as an 11's does while its flows
+// have not been read (016).
 func ReadRecord(path string) (wire.TwinRecord, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
@@ -323,23 +335,56 @@ type StepFields struct {
 }
 
 // StagedTarget is the target bundle as it is staged: the identity it hashes to and what
-// its manifest says of provenance, packages and artifacts.
+// its manifest says of provenance, packages and artifacts, and of each host's probe (016).
+// A device is named in PSP and a host in Probes, never both.
 type StagedTarget struct {
 	BundleID   string
 	Provenance wire.Provenance
 	PSP        map[string]wire.PSPRef
 	Artifacts  map[string]*wire.TwinArtifact
+	Probes     map[string]*wire.TwinProbe
+}
+
+// names says whether the target names node as a device or as a host.
+func (t *StagedTarget) names(node string) bool {
+	_, device := t.PSP[node]
+	_, host := t.Probes[node]
+	return device || host
+}
+
+// targetOf is what manifest m says of each node, as a StagedTarget with no identity: a
+// device's package and artifact, a host's probe (016).
+func targetOf(m compiler.Manifest) *StagedTarget {
+	t := &StagedTarget{Provenance: recordProvenance(m.Provenance), PSP: map[string]wire.PSPRef{},
+		Artifacts: map[string]*wire.TwinArtifact{}, Probes: map[string]*wire.TwinProbe{}}
+	for _, n := range m.Nodes {
+		if p := n.Probe; p != nil {
+			// A host has no support package: containerlab configures it from its topology
+			// node's exec lines, and nothing is pushed to it.
+			t.Probes[n.Name] = &wire.TwinProbe{Name: p.Name, Endpoint: p.Endpoint, Format: p.Format,
+				Package: wire.PSPRef{ID: p.Package.ID, Source: p.Package.Source}}
+			continue
+		}
+		if n.PSP != nil {
+			t.PSP[n.Name] = wire.PSPRef{ID: n.PSP.ID, Source: n.PSP.Source}
+		}
+		if a := n.Artifact; a != nil {
+			t.Artifacts[n.Name] = &wire.TwinArtifact{Name: a.Name, ContentType: a.ContentType, Checksum: a.Checksum, Size: a.Size}
+		}
+	}
+	return t
 }
 
 // NewStepRecord builds the record a step leaves (contracts/twin.schema.json
-// version 10) from the record the step started from, and refuses what the contract would
+// version 11) from the record the step started from, and refuses what the contract would
 // not accept, or what would claim more than the step did:
 //
 //   - a previous record that is not the step's from side (another bundle or stage), or
 //     is diverged, which no step starts from;
 //   - a diverged step from a record of 7 or earlier, whose provenance it would keep with
 //     no scope and no mapping (017);
-//   - a phase given to a stepped or unchanged step, or none, or another, to a diverged one;
+//   - a phase given to a stepped or unchanged step, or none, or another, to a diverged one
+//     (flows among them, from 016);
 //   - a stepped or unchanged step whose staged target is absent, hashes to another
 //     identity than its to side, or carries another at; or whose push plan holds a push
 //     that did not land; or whose lab runs a node the target does not name, or lacks one
@@ -351,9 +396,11 @@ type StagedTarget struct {
 // bundle, and a node the step left alone runs what both bundles give it. After a diverged step the top level stays the previous record's; a
 // node whose push landed holds the target, one containerlab restarted, recreated or
 // created that no push reached holds nothing (null) and runs its baseline, and
-// every other node holds what it held. run, provisioned_by and rehearsal stay the
-// create's. The step's wait is null: the record is written before the wait, which
-// VerifyTwin then writes into it.
+// every other node holds what it held, but a host containerlab created or recreated, which
+// holds the target, since its configuration is its topology node's and no push reaches it
+// (016). run, provisioned_by and rehearsal stay the
+// create's. The step's wait and loss are null: the record is written before the wait, which
+// VerifyTwin then writes into it, and before the flows are read, which ReadFlows writes.
 func NewStepRecord(prev wire.TwinRecord, f StepFields) (wire.TwinRecord, error) {
 	if !bundle.IsID(f.From.BundleID) || !bundle.IsID(f.To.BundleID) {
 		return wire.TwinRecord{}, fmt.Errorf("a step is between two bundle identities, not %q and %q", f.From.BundleID, f.To.BundleID)
@@ -412,9 +459,9 @@ func NewStepRecord(prev wire.TwinRecord, f StepFields) (wire.TwinRecord, error) 
 		}
 	case wire.StepDiverged:
 		switch f.Phase {
-		case findings.StepReconcile, findings.StepReadiness, findings.StepPush, findings.StepRecord:
+		case findings.StepFlows, findings.StepReconcile, findings.StepReadiness, findings.StepPush, findings.StepRecord:
 		default:
-			return wire.TwinRecord{}, fmt.Errorf("a diverged step names the phase it stopped at, one of reconcile, readiness, push or record, not %q", f.Phase)
+			return wire.TwinRecord{}, fmt.Errorf("a diverged step names the phase it stopped at, one of flows, reconcile, readiness, push or record, not %q", f.Phase)
 		}
 		for _, p := range f.Pushed {
 			if p.Outcome == wire.PushLanded && (f.Staged == nil || f.Staged.BundleID != f.To.BundleID) {
@@ -493,12 +540,14 @@ func targetStaged(f StepFields) error {
 func labIsTarget(f StepFields) error {
 	running := map[string]bool{}
 	for _, n := range f.Nodes {
-		if _, ok := f.Staged.PSP[n.Name]; !ok {
+		if !f.Staged.names(n.Name) {
 			return fmt.Errorf("containerlab reports node %s, which the target bundle %s does not name", n.Name, f.To.BundleID)
 		}
 		running[n.Name] = true
 	}
-	for name := range f.Staged.PSP {
+	named := append(slices.Collect(maps.Keys(f.Staged.PSP)), slices.Collect(maps.Keys(f.Staged.Probes))...)
+	slices.Sort(named)
+	for _, name := range named {
 		if !running[name] {
 			return fmt.Errorf("the target bundle %s names node %s, which containerlab does not report", f.To.BundleID, name)
 		}
@@ -529,7 +578,7 @@ func stepNodes(prev wire.TwinRecord, f StepFields, moved bool, pushes map[string
 	for _, lab := range f.Nodes {
 		was, existed := before[lab.Name]
 		n := wire.TwinNode{Name: lab.Name, Container: lab.Container, Image: lab.Image, MgmtIPv4: lab.MgmtIPv4,
-			PSP: was.PSP, Artifact: was.Artifact, ReadyAfterS: was.ReadyAfterS, PushedInS: was.PushedInS}
+			Probe: was.Probe, PSP: was.PSP, Artifact: was.Artifact, ReadyAfterS: was.ReadyAfterS, PushedInS: was.PushedInS}
 		if s, ok := ready[lab.Name]; ok {
 			n.ReadyAfterS = s
 		}
@@ -537,14 +586,20 @@ func stepNodes(prev wire.TwinRecord, f StepFields, moved bool, pushes map[string
 			if f.Staged == nil {
 				return
 			}
+			if probe, ok := f.Staged.Probes[lab.Name]; ok {
+				n.Probe, n.PSP, n.Artifact = probe, nil, nil
+				return
+			}
 			if ref, ok := f.Staged.PSP[lab.Name]; ok {
-				n.PSP = ref
+				n.PSP = &ref
 			}
 			if a := f.Staged.Artifacts[lab.Name]; a != nil {
 				n.Artifact = a
 			}
 		}
 		p := pushes[lab.Name]
+		host := was.Probe != nil || (f.Staged != nil && f.Staged.Probes[lab.Name] != nil)
+		made := slices.Contains(f.Plan.Added, lab.Name) || slices.Contains(f.Plan.Recreated, lab.Name)
 		switch {
 		case p.Outcome == wire.PushLanded || moved:
 			to := f.To.BundleID
@@ -553,6 +608,18 @@ func stepNodes(prev wire.TwinRecord, f StepFields, moved bool, pushes map[string
 			if p.Outcome == wire.PushLanded && p.TookS != nil {
 				n.PushedInS = *p.TookS
 			}
+		case host && made && baseline[lab.Name] && f.Staged != nil:
+			// A host containerlab created or recreated runs the staged topology's
+			// configuration, which is all a host has: no push reaches it (016).
+			staged := f.Staged.BundleID
+			n.Holds = &staged
+			n.PushedInS = 0
+			target()
+		case host && !made:
+			// A host restarted, or left as it was, runs its topology node's configuration,
+			// which a step that changed it would have recreated: what it held.
+			from := f.From.BundleID
+			n.Holds = &from
 		case baseline[lab.Name]:
 			// Restarted, recreated or created, and no push reached it: it runs the baseline
 			// containerlab left. A recreated or created node runs the target's image and

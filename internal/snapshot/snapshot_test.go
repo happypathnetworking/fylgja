@@ -4,20 +4,35 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 )
 
-// document is the stored form of three-node's take, decoded to a map for a case to
-// change: the keys' order is lost, which Unmarshal does not read.
+// document is the stored form of three-node's take, with no probes, decoded to a map for
+// a case to change: the keys' order is lost, which Unmarshal does not read.
 func document(t *testing.T) map[string]any {
 	t.Helper()
-	b, err := Marshal(Take(fixture(t, "three-node")))
+	return documentOf(t, Take(fixture(t, "three-node"), nil))
+}
+
+// probed is the stored form of three-node's take with n1-loop's and n2-loop's probes,
+// decoded to a map as document is.
+func probed(t *testing.T) map[string]any {
+	t.Helper()
+	return documentOf(t, Take(fixture(t, "three-node"), declared(t, "n1-loop", "n2-loop")))
+}
+
+func documentOf(t *testing.T, s *Snapshot) map[string]any {
+	t.Helper()
+	b, err := Marshal(s)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -26,6 +41,36 @@ func document(t *testing.T) map[string]any {
 		t.Fatal(err)
 	}
 	return m
+}
+
+// declared is the probes of the declarations under the module root's testdata/probes/,
+// in the order named.
+func declared(t *testing.T, names ...string) []probe.Probe {
+	t.Helper()
+	var list []probe.Probe
+	for _, name := range names {
+		path := filepath.Join("..", "..", "testdata", "probes", name+".json")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		d, found := probe.Parse(data, path)
+		if found.Rejected() {
+			t.Fatalf("%s: %v", path, found)
+		}
+		list = append(list, d.Probes...)
+	}
+	return list
+}
+
+// element is the stored form's probe i, for a case to change.
+func element(m map[string]any, i int) map[string]any {
+	return m["probes"].([]any)[i].(map[string]any)
+}
+
+// endpoint is the stored form's probe i's endpoint j, for a case to change.
+func endpoint(m map[string]any, i, j int) map[string]any {
+	return element(m, i)["endpoints"].([]any)[j].(map[string]any)
 }
 
 func encode(t *testing.T, v any) []byte {
@@ -53,21 +98,21 @@ func TestUnmarshalRefusals(t *testing.T) {
 		data  func(t *testing.T) []byte
 		check func(t *testing.T, err error)
 	}{
-		{"snapshot_version 2", func(t *testing.T) []byte {
+		{"snapshot_version 3", func(t *testing.T) []byte {
 			m := document(t)
-			m["snapshot_version"] = "2"
+			m["snapshot_version"] = "3"
 			return encode(t, m)
-		}, wantVersion("2", `the snapshot declares snapshot_version "2"; this build reads "1", and nothing converts one`)},
+		}, wantVersion("3", `the snapshot declares snapshot_version "3"; this build reads "1" and "2", and nothing converts one`)},
 		{"snapshot_version absent", func(t *testing.T) []byte {
 			m := document(t)
 			delete(m, "snapshot_version")
 			return encode(t, m)
-		}, wantVersion("", `the snapshot declares no snapshot_version; this build reads "1", and nothing converts one`)},
+		}, wantVersion("", `the snapshot declares no snapshot_version; this build reads "1" and "2", and nothing converts one`)},
 		{"snapshot_version a number", func(t *testing.T) []byte {
 			m := document(t)
-			m["snapshot_version"] = 1
+			m["snapshot_version"] = 2
 			return encode(t, m)
-		}, wantVersion("1", `the snapshot declares snapshot_version 1; this build reads "1", and nothing converts one`)},
+		}, wantVersion("2", `the snapshot declares snapshot_version 2; this build reads "1" and "2", and nothing converts one`)},
 		{"a bare CTM", func(*testing.T) []byte { return bare },
 			wantVersion("", "declares no snapshot_version")},
 		{"an unknown outer key", func(t *testing.T) []byte {
@@ -100,7 +145,13 @@ func TestUnmarshalRefusals(t *testing.T) {
 			m := document(t)
 			delete(m, "probes")
 			return encode(t, m)
-		}, wantInvalid("probes", "probes is not recorded", "required and empty")},
+		}, wantInvalid("probes", "probes is not recorded", "in snapshot 2 the list is required, [] when")},
+		{"probes absent from a 1", func(t *testing.T) []byte {
+			m := document(t)
+			m["snapshot_version"] = "1"
+			delete(m, "probes")
+			return encode(t, m)
+		}, wantInvalid("probes", "probes is not recorded", "in snapshot 1 the list is required and empty")},
 		{"probes null", func(t *testing.T) []byte {
 			m := document(t)
 			m["probes"] = nil
@@ -111,11 +162,77 @@ func TestUnmarshalRefusals(t *testing.T) {
 			m["probes"] = map[string]any{}
 			return encode(t, m)
 		}, wantInvalid("probes", "probes is not a list")},
-		{"probes holding one entry", func(t *testing.T) []byte {
+		{"a 1 holding a probe", func(t *testing.T) []byte {
+			m := probed(t)
+			m["snapshot_version"] = "1"
+			m["probes"] = m["probes"].([]any)[:1]
+			return encode(t, m)
+		}, wantInvalid("probes", "probes holds 1 entry; in snapshot 1 the list is required and empty; a snapshot with probes is a 2")},
+		// A 2's element is the declaration's probe, decoded strictly, then held to the
+		// declaration's rules that read no CTM: the first fault, at the element's field.
+		{"a probe not an object", func(t *testing.T) []byte {
+			m := document(t)
+			m["probes"] = []any{1}
+			return encode(t, m)
+		}, wantInvalid("probes[0]", "probes[0] is not a JSON object")},
+		{"a probe with no field", func(t *testing.T) []byte {
 			m := document(t)
 			m["probes"] = []any{map[string]any{}}
 			return encode(t, m)
-		}, wantInvalid("probes", "probes holds 1 entry; in snapshot 1 the list is required and empty, since 016 defines its element")},
+		}, wantInvalid("probes[0].name", "a probe has no name, which it requires")},
+		{"a probe with an unknown key", func(t *testing.T) []byte {
+			m := probed(t)
+			element(m, 1)["comment"] = "a hand user's note"
+			return encode(t, m)
+		}, wantInvalid("probes[1].comment", `the key "comment"`, "name, format, endpoints")},
+		{"a probe with one endpoint", func(t *testing.T) []byte {
+			m := probed(t)
+			element(m, 0)["endpoints"] = element(m, 0)["endpoints"].([]any)[:1]
+			return encode(t, m)
+		}, wantInvalid("probes[0].endpoints", "endpoints holds 1; a probe has exactly two")},
+		{"an endpoint's field not a string", func(t *testing.T) []byte {
+			m := probed(t)
+			endpoint(m, 0, 1)["device"] = 7
+			return encode(t, m)
+		}, wantInvalid("probes[0].endpoints[1].device", "device is 7, not a string")},
+		{"a probe's name invalid", func(t *testing.T) []byte {
+			m := probed(t)
+			element(m, 1)["name"] = "N2 Loop"
+			return encode(t, m)
+		}, wantInvalid("probes[1].name", `probe name "N2 Loop" is not`)},
+		{"a probe's name taken", func(t *testing.T) []byte {
+			m := probed(t)
+			element(m, 1)["name"] = "n1-loop"
+			return encode(t, m)
+		}, wantInvalid("probes[1].name", `probe name "n1-loop" is declared at probes[0] and probes[1]`)},
+		{"an address with no prefix length", func(t *testing.T) []byte {
+			m := probed(t)
+			endpoint(m, 0, 0)["address"] = "10.1.10.2"
+			return encode(t, m)
+		}, wantInvalid("probes[0].endpoints[0].address", `address "10.1.10.2" is not an address with a prefix length`)},
+		{"a gateway with a prefix length", func(t *testing.T) []byte {
+			m := probed(t)
+			endpoint(m, 1, 1)["gateway"] = "10.2.11.1/24"
+			return encode(t, m)
+		}, wantInvalid("probes[1].endpoints[1].gateway", `gateway "10.2.11.1/24" carries a prefix length`)},
+		{"a gateway outside its address's prefix", func(t *testing.T) []byte {
+			m := probed(t)
+			endpoint(m, 0, 1)["gateway"] = "10.1.12.1"
+			return encode(t, m)
+		}, wantInvalid("probes[0].endpoints[1].gateway", "gateway 10.1.12.1 is not within 10.1.11.0/24")},
+		{"a probe of two families", func(t *testing.T) []byte {
+			m := probed(t)
+			endpoint(m, 0, 1)["address"] = "2001:db8::2/64"
+			endpoint(m, 0, 1)["gateway"] = "2001:db8::1"
+			return encode(t, m)
+		}, wantInvalid("probes[0]", "probe n1-loop's addresses and gateways are of two families")},
+		{"an address another probe's", func(t *testing.T) []byte {
+			m := probed(t)
+			endpoint(m, 1, 0)["address"] = "10.1.10.2/24"
+			endpoint(m, 1, 0)["gateway"] = "10.1.10.1"
+			return encode(t, m)
+		}, wantInvalid("probes[1].endpoints[0].address",
+			"address 10.1.10.2 of probe n2-loop endpoint a is probe n1-loop endpoint a's too")},
 		{"snapshot_id not an id", func(t *testing.T) []byte {
 			m := document(t)
 			m["snapshot_id"] = "ABC"
@@ -135,7 +252,7 @@ func TestUnmarshalRefusals(t *testing.T) {
 			if !errors.As(err, &mismatch) {
 				t.Fatalf("err = %T %v, want *IDMismatchError", err, err)
 			}
-			want := Take(fixture(t, "three-node")).ID
+			want := Take(fixture(t, "three-node"), nil).ID
 			if mismatch.Declared != wrongID || mismatch.Computed != want {
 				t.Errorf("IDMismatchError{%s, %s}, want {%s, %s}", mismatch.Declared, mismatch.Computed, wrongID, want)
 			}
@@ -273,19 +390,34 @@ func TestUnmarshalRefusesInOrder(t *testing.T) {
 	const wrongID = "1111111111111111111111111111111111111111111111111111111111111111"
 
 	m := document(t)
-	m["snapshot_version"] = "2"
+	m["snapshot_version"] = "3"
 	m["probes"] = []any{1}
 	var version *VersionError
 	if _, err := Unmarshal(encode(t, m)); !errors.As(err, &version) {
-		t.Errorf("a version 2 with a probe: %T %v, want the version's refusal", err, err)
+		t.Errorf("a version 3 with a probe: %T %v, want the version's refusal", err, err)
 	}
 
 	m = document(t)
 	m["probes"] = []any{1}
 	innerCTM(m)["ctm_version"] = "1"
 	var invalid *InvalidError
-	if _, err := Unmarshal(encode(t, m)); !errors.As(err, &invalid) || invalid.Field != "probes" {
-		t.Errorf("a probe beside a CTM 1: %T %v, want probes' refusal", err, err)
+	if _, err := Unmarshal(encode(t, m)); !errors.As(err, &invalid) || invalid.Field != "probes[0]" {
+		t.Errorf("a probe not an object beside a CTM 1: %T %v, want the probe's refusal", err, err)
+	}
+
+	// The strict decode of every element before any rule across them, and the list's
+	// order: probe 1's unknown key before probe 0's address, which Validate would find.
+	m = probed(t)
+	endpoint(m, 0, 0)["address"] = "10.1.10.2"
+	element(m, 1)["comment"] = "a hand user's note"
+	if _, err := Unmarshal(encode(t, m)); !errors.As(err, &invalid) || invalid.Field != "probes[1].comment" {
+		t.Errorf("a bad address and an unknown key: %T %v, want the key's refusal", err, err)
+	}
+	m = probed(t)
+	endpoint(m, 1, 0)["address"] = "10.2.10.2"
+	endpoint(m, 0, 1)["gateway"] = "10.1.12.1"
+	if _, err := Unmarshal(encode(t, m)); !errors.As(err, &invalid) || invalid.Field != "probes[0].endpoints[1].gateway" {
+		t.Errorf("two probes' faults: %T %v, want the first probe's", err, err)
 	}
 
 	m = document(t)
@@ -315,53 +447,132 @@ func TestUnmarshalRefusesInOrder(t *testing.T) {
 	}
 }
 
-// A hand user wraps a bare CTM and nothing else: the id is computed and observed_at is
-// filled from the CTM (R-02; FR-005).
+// A hand user wraps a bare CTM and nothing else, as a 1 or as a 2: the id is computed and
+// observed_at is filled from the CTM (R-02; FR-005), and a 1 is read as a 2 with no probes
+// (R-05).
 func TestUnmarshalFillsTheOuterPart(t *testing.T) {
 	bare, err := os.ReadFile(fixturePath("three-node"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	wrapped := []byte(`{"snapshot_version": "1", "ctm": ` + string(bare) + `, "probes": []}`)
-	s, err := Unmarshal(wrapped)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := Take(fixture(t, "three-node"))
-	if s.ID != want.ID {
-		t.Errorf("snapshot_id = %s, want %s", s.ID, want.ID)
-	}
-	if s.ObservedAt != "2026-09-08T12:00:00.000000Z" || s.ObservedAt != s.CTM.Envelope.ObservedAt {
-		t.Errorf("observed_at = %q, want the CTM's", s.ObservedAt)
-	}
-	if s.Version != Version || s.Probes == nil || len(s.Probes) != 0 {
-		t.Errorf("version %q, probes %v", s.Version, s.Probes)
-	}
-	// Once filled, it is the document Fylgja writes for the same take.
-	got, err := Marshal(s)
-	if err != nil {
-		t.Fatal(err)
-	}
+	want := Take(fixture(t, "three-node"), nil)
 	stored, err := Marshal(want)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(got, stored) {
-		t.Error("the filled document is not the stored form of the same take")
+	for _, version := range []string{"1", "2"} {
+		t.Run(version, func(t *testing.T) {
+			wrapped := []byte(`{"snapshot_version": "` + version + `", "ctm": ` + string(bare) + `, "probes": []}`)
+			s, err := Unmarshal(wrapped)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if s.ID != want.ID {
+				t.Errorf("snapshot_id = %s, want %s", s.ID, want.ID)
+			}
+			if s.ObservedAt != "2026-09-08T12:00:00.000000Z" || s.ObservedAt != s.CTM.Envelope.ObservedAt {
+				t.Errorf("observed_at = %q, want the CTM's", s.ObservedAt)
+			}
+			if s.Version != Version || s.Probes == nil || len(s.Probes) != 0 {
+				t.Errorf("version %q, probes %v; want %q and []", s.Version, s.Probes, Version)
+			}
+			// Once filled, it is the document Fylgja writes for the same take: a 2.
+			got, err := Marshal(s)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !bytes.Equal(got, stored) {
+				t.Error("the filled document is not the stored form of the same take")
+			}
+		})
 	}
 }
 
-// What Marshal writes, Unmarshal reads back to the same snapshot and the same bytes.
+// A 1 on disk reads as a 2 with no probes and the same id, since the version is not hashed:
+// the three wrapped fixtures with their version line set back to 1, as 018 filed them, and
+// each take's stored form the same (R-05; US7 scenario 1).
+func TestAVersion1ReadsAsA2(t *testing.T) {
+	for _, f := range wrappedFixtures {
+		t.Run(f.name, func(t *testing.T) {
+			path := wrappedPath(f.name)
+			filed, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			data := asVersion1(t, filed)
+			var declared struct {
+				Version string `json:"snapshot_version"`
+			}
+			if err := json.Unmarshal(data, &declared); err != nil {
+				t.Fatal(err)
+			}
+			s, err := Unmarshal(data)
+			if err != nil {
+				t.Fatalf("%s (snapshot_version %q): %v", path, declared.Version, err)
+			}
+			if s.Version != Version || len(s.Probes) != 0 || s.ID != f.id {
+				t.Errorf("%s read as version %q, %d probes, id %s; want %q, none, %s",
+					path, s.Version, len(s.Probes), s.ID, Version, f.id)
+			}
+
+			taken := Take(fixture(t, f.name), nil)
+			stored, err := Marshal(taken)
+			if err != nil {
+				t.Fatal(err)
+			}
+			one := asVersion1(t, stored)
+			read, err := Unmarshal(one)
+			if err != nil {
+				t.Fatalf("the take's stored form as a 1: %v", err)
+			}
+			if read.ID != taken.ID || read.Version != Version {
+				t.Errorf("the take's stored form as a 1 reads as version %q, id %s; want %q, %s",
+					read.Version, read.ID, Version, taken.ID)
+			}
+			if again, err := Marshal(read); err != nil || !bytes.Equal(again, stored) {
+				t.Errorf("a 1 read and written again is not the take's stored form (%v)", err)
+			}
+		})
+	}
+}
+
+// asVersion1 is a stored form with its snapshot_version line set to 1, the bytes 018 wrote
+// for the same take.
+func asVersion1(t *testing.T, stored []byte) []byte {
+	t.Helper()
+	const line2, line1 = `"snapshot_version": "2",`, `"snapshot_version": "1",`
+	if bytes.Count(stored, []byte(line2)) != 1 {
+		t.Fatalf("the stored form does not declare snapshot_version 2 once:\n%s", stored)
+	}
+	return bytes.Replace(stored, []byte(line2), []byte(line1), 1)
+}
+
+// What Marshal writes, Unmarshal reads back to the same snapshot and the same bytes, the
+// probes in the order taken.
 func TestStoredFormRoundTrips(t *testing.T) {
-	for _, name := range []string{"three-node", "lossy", "mixed"} {
-		t.Run(name, func(t *testing.T) {
-			stored, err := Marshal(Take(fixture(t, name)))
+	for _, tc := range []struct {
+		name   string
+		probes []probe.Probe
+	}{
+		{"three-node", nil},
+		{"lossy", nil},
+		{"mixed", nil},
+		{"three-node", declared(t, "n2-loop", "n1-loop")},
+		{"mixed", declared(t, "e1-loop")},
+	} {
+		name := tc.name
+		t.Run(fmt.Sprintf("%s with %d probes", name, len(tc.probes)), func(t *testing.T) {
+			taken := Take(fixture(t, name), tc.probes)
+			stored, err := Marshal(taken)
 			if err != nil {
 				t.Fatal(err)
 			}
 			s, err := Unmarshal(stored)
 			if err != nil {
 				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(s.Probes, listOf(tc.probes)) || s.ID != taken.ID {
+				t.Errorf("read back with probes %v and id %s; taken with %v and %s", s.Probes, s.ID, tc.probes, taken.ID)
 			}
 			again, err := Marshal(s)
 			if err != nil {
@@ -377,7 +588,7 @@ func TestStoredFormRoundTrips(t *testing.T) {
 // The stored form is the outer part first, then the body: snapshot_version, snapshot_id,
 // observed_at, ctm, probes, the probes list written [] (data-model §1).
 func TestStoredFormOrder(t *testing.T) {
-	stored, err := Marshal(Take(fixture(t, "three-node")))
+	stored, err := Marshal(Take(fixture(t, "three-node"), nil))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -390,7 +601,7 @@ func TestStoredFormOrder(t *testing.T) {
 	}
 }
 
-// Marshal refuses a snapshot that breaks version 1's invariants, so nothing writes a
+// Marshal refuses a snapshot that breaks version 2's invariants, so nothing writes a
 // document Unmarshal would refuse.
 func TestMarshalRefusesABrokenSnapshot(t *testing.T) {
 	for _, tc := range []struct {
@@ -399,7 +610,8 @@ func TestMarshalRefusesABrokenSnapshot(t *testing.T) {
 	}{
 		{"another id", func(s *Snapshot) { s.ID = strings.Repeat("0", 64) }},
 		{"no id", func(s *Snapshot) { s.ID = "" }},
-		{"another version", func(s *Snapshot) { s.Version = "2" }},
+		{"version 1, which is read and never written", func(s *Snapshot) { s.Version = "1" }},
+		{"another version", func(s *Snapshot) { s.Version = "3" }},
 		{"observed_at not the CTM's", func(s *Snapshot) { s.ObservedAt = "2026-09-14T09:30:15.123456Z" }},
 		// Each beside an inner CTM recording the same, so the id still hashes and the two
 		// still agree: the form alone refuses it.
@@ -407,11 +619,19 @@ func TestMarshalRefusesABrokenSnapshot(t *testing.T) {
 		{"observed_at not of the CTM's form", func(s *Snapshot) {
 			s.ObservedAt, s.CTM.Envelope.ObservedAt = "2026-10-27T18:55:42Z", "2026-10-27T18:55:42Z"
 		}},
-		{"a probe", func(s *Snapshot) { s.Probes = []json.RawMessage{json.RawMessage(`{}`)} }},
+		// Each with the id recomputed, so the probe's rule alone refuses it.
+		{"a probe with no name", func(s *Snapshot) {
+			s.Probes = []probe.Probe{{}}
+			s.ID, _ = ID(s)
+		}},
+		{"a probe whose gateway is outside its prefix", func(s *Snapshot) {
+			s.Probes[0].Endpoints[1].Gateway = "10.1.12.1"
+			s.ID, _ = ID(s)
+		}},
 		{"no ctm", func(s *Snapshot) { s.CTM = nil }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			s := Take(fixture(t, "three-node"))
+			s := Take(fixture(t, "three-node"), declared(t, "n1-loop"))
 			tc.change(s)
 			if b, err := Marshal(s); err == nil {
 				t.Errorf("Marshal wrote it:\n%s", b)
@@ -423,7 +643,7 @@ func TestMarshalRefusesABrokenSnapshot(t *testing.T) {
 // Save writes the stored form whole, mode 0644, and Load reads it back; a file that is not
 // there is fs.ErrNotExist.
 func TestSaveAndLoad(t *testing.T) {
-	s := Take(fixture(t, "mixed"))
+	s := Take(fixture(t, "mixed"), declared(t, "e1-loop"))
 	path := filepath.Join(t.TempDir(), "snap.json")
 	if err := Save(s, path); err != nil {
 		t.Fatal(err)

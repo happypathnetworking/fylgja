@@ -205,7 +205,7 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, compiledID, list := stage.Compile(read, reg)
+	files, compiledID, list := stage.Compile(read, nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("the fixture does not compile: %v", list)
 	}
@@ -346,7 +346,7 @@ func TestConfigurationBytesGoToTheNodeAndNowhereElse(t *testing.T) {
 
 	env.ExecuteWorkflow(provision.Provision, provision.ProvisionInput{Source: wire.SourceIntent, Branch: read.Envelope.Branch,
 		BundleID: compiledID, BundlePath: store.Path(compiledID), ObservedAt: read.Envelope.ObservedAt,
-		SnapshotID: snap.Take(read).ID})
+		SnapshotID: snap.Take(read, nil).ID})
 	if !env.IsWorkflowCompleted() || env.GetWorkflowError() != nil {
 		t.Fatalf("the run did not complete: %v", env.GetWorkflowError())
 	}

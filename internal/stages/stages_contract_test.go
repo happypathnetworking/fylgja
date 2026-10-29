@@ -21,6 +21,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/snapshot"
 	"github.com/happypathnetworking/fylgja/internal/stage"
@@ -175,8 +176,8 @@ func filing(t *testing.T) (Pipeline, map[string]*ctm.CTM) {
 	scratch := t.TempDir()
 	compiled := map[string]*ctm.CTM{}
 	filed := map[string]*ctm.CTM{}
-	take := func(ctx context.Context, c *ctm.CTM) (string, findings.List, error) {
-		s := snapshot.Take(c)
+	take := func(ctx context.Context, c *ctm.CTM, probes []probe.Probe) (string, findings.List, error) {
+		s := snapshot.Take(c, probes)
 		_, err := snapshots.Put(ctx, s)
 		return s.ID, nil, err
 	}
@@ -187,10 +188,10 @@ func filing(t *testing.T) (Pipeline, map[string]*ctm.CTM) {
 		}
 		filed[id] = compiled[id]
 		return nil, err
-	})
+	}, nil, nil)
 	compile := p.Compile
-	p.Compile = func(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, string, findings.List) {
-		files, id, list := compile(c, reg)
+	p.Compile = func(c *ctm.CTM, decls []probe.Probe, reg *psp.Registry, probes *probe.Registry) (map[string][]byte, string, findings.List) {
+		files, id, list := compile(c, decls, reg, probes)
 		compiled[id] = c
 		return files, id, list
 	}
@@ -561,7 +562,7 @@ func TestStagesListAndPlan(t *testing.T) {
 	if !bytes.Equal(a, b) {
 		t.Errorf("the CTM %s plans from differs from --branch %s --at %s's but for observed_at", seeded.Ref, name, seededAt)
 	}
-	if _, byAtID, list := stage.Compile(byAt, registry(t)); list.Rejected() || byAtID != seeded.BundleID() {
+	if _, byAtID, list := stage.Compile(byAt, nil, registry(t), nil); list.Rejected() || byAtID != seeded.BundleID() {
 		t.Errorf("--branch %s --at %s compiles to %s (%v); %s planned to %s", name, seededAt, byAtID, list, seeded.Ref, seeded.BundleID())
 	}
 	t.Logf("%s: at %s (written), bundle_id %s", seeded.Ref, seededAt, seeded.BundleID())
@@ -1324,7 +1325,7 @@ func awaitJoined(t *testing.T, c *testsupport.Client, branch string) {
 // before's, as scripts/e2e.sh's await_checksums_moved does.
 func awaitMoved(t *testing.T, c *testsupport.Client, branch string, before map[string]string, devices ...string) {
 	t.Helper()
-	deadline := time.Now().Add(90 * time.Second)
+	deadline := time.Now().Add(testsupport.ArtifactWait)
 	for {
 		now := checksums(t, c, branch)
 		moved := true
@@ -1337,7 +1338,7 @@ func awaitMoved(t *testing.T, c *testsupport.Client, branch string, before map[s
 			return
 		}
 		if time.Now().After(deadline) {
-			t.Fatalf("the artifacts of %v on %s did not move from %v: %v", devices, branch, before, now)
+			t.Fatalf("the artifacts of %v on %s did not move from %v within %s: %v", devices, branch, before, testsupport.ArtifactWait, now)
 		}
 		time.Sleep(time.Second)
 	}

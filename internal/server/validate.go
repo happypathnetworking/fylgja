@@ -10,6 +10,7 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
@@ -79,6 +80,10 @@ func loadFailure(op string, subject *findings.Subject, err error) error {
 	if errors.As(err, &invalid) {
 		return finish(op, subject, invalid.Findings)
 	}
+	var probeInvalid *probe.InvalidError
+	if errors.As(err, &probeInvalid) {
+		return finish(op, subject, probeInvalid.Findings)
+	}
 	return fail(op, subject, "%v", err)
 }
 
@@ -90,6 +95,10 @@ func loadFailureAt(op string, subject *findings.Subject, step string, err error)
 	var invalid *psp.InvalidError
 	if errors.As(err, &invalid) {
 		return finish(op, subject, invalid.Findings.AtStep(step))
+	}
+	var probeInvalid *probe.InvalidError
+	if errors.As(err, &probeInvalid) {
+		return finish(op, subject, probeInvalid.Findings.AtStep(step))
 	}
 	return failAt(op, subject, step, step, "%v", err)
 }

@@ -51,6 +51,12 @@ const (
 	// and records it rather than being timed out itself.
 	VerifyMargin = 30 * time.Second
 
+	// FlowsMargin is added to the largest start_timeout_s, and the largest read_timeout_s,
+	// among a step's flows for StartFlows' and ReadFlows' bounds (016): each flow's exec is cut
+	// off at its package's budget, all at once, and the margin lets the activity say so and,
+	// for the read, write the record, rather than be timed out itself.
+	FlowsMargin = 15 * time.Second
+
 	// Reads that change nothing.
 
 	// InspectTwinBudget bounds InspectTwin, which only reads.
@@ -151,6 +157,11 @@ const PushVersionID = "push"
 // after the record: M11's two step histories replay at DefaultVersion and skip it.
 const VerifyVersionID = "verify"
 
+// FlowsVersionID is the GetVersion change id under which the step run gained its flows
+// (016): StartFlows after the stage and ReadFlows after the wait. The seven step histories
+// recorded before it replay at DefaultVersion and run neither.
+const FlowsVersionID = "flows"
+
 // PushOptions bound one node's PushConfig. Each attempt gets its own package's
 // push_timeout_s plus the margin, never a global value; waiting for a worker to take an
 // attempt is bounded by the push step's budget, so a push no worker starts fails instead of
@@ -244,6 +255,35 @@ func VerifyOptions(budgetS int) workflow.ActivityOptions {
 	return o
 }
 
+// StartFlowsOptions bound StartFlows by the largest start_timeout_s among the step's flows,
+// plus FlowsMargin, as both its start-to-close and its schedule-to-close, as VerifyTwin's
+// are: the flows start at once, so the slowest package sets the bound, and a retry, which
+// kills the stray flow and starts it again, shares the one window. It heartbeats.
+func StartFlowsOptions(flows []wire.FlowPlan) workflow.ActivityOptions {
+	longest := 0
+	for _, f := range flows {
+		longest = max(longest, f.Flow.StartTimeoutS)
+	}
+	return flowsOptions(longest)
+}
+
+// ReadFlowsOptions bound ReadFlows by the largest read_timeout_s among the step's flows, plus
+// FlowsMargin, as StartFlowsOptions bound the start. A step with no flows to read, whose
+// read writes the probes it adds or drops alone, has the margin.
+func ReadFlowsOptions(flows []wire.FlowPlan) workflow.ActivityOptions {
+	longest := 0
+	for _, f := range flows {
+		longest = max(longest, f.Flow.ReadTimeoutS)
+	}
+	return flowsOptions(longest)
+}
+
+func flowsOptions(budgetS int) workflow.ActivityOptions {
+	o := hostBoundOptions(seconds(budgetS)+FlowsMargin, true)
+	o.ScheduleToCloseTimeout = o.StartToCloseTimeout
+	return o
+}
+
 // ChildOptions run a rehearsal's provision, steps and destroy as its children, each under
 // its fixed id. ABANDON keeps a child running to its own cleanup when the rehearsal is
 // terminated; WaitForCancellation makes a cancelled rehearsal wait for the child's cleanup
@@ -259,7 +299,8 @@ func ChildOptions(workflowID string) workflow.ChildWorkflowOptions {
 
 // DeadlineMechanism is the mechanism constants a rehearsal's deadline sums (015, research
 // R-09): the bound of each activity its children run that no package decides, the margins
-// each package's own budget is given, and verify's one default wait, which every stage of a
+// each package's own budget is given — a probe package's flows' among them (016) — and
+// verify's one default wait, which every stage of a
 // rehearsal waits. internal/rehearsal takes them as a value, so it imports neither this
 // package nor verify.
 func DeadlineMechanism() rehearsal.Mechanism {
@@ -273,6 +314,7 @@ func DeadlineMechanism() rehearsal.Mechanism {
 		ReadinessMargin: ReadinessMargin,
 		PushMargin:      PushMargin,
 		VerifyMargin:    VerifyMargin,
+		FlowsMargin:     FlowsMargin,
 		Wait:            verify.DefaultBudget,
 	}
 }

@@ -1,10 +1,11 @@
 # Schema
 
-What the Infrahub reader reads, and Fylgja's one kind of its own. The reader reads OpsMill's
+What the Infrahub reader reads, and Fylgja's two kinds of its own. The reader reads OpsMill's
 [schema library](https://github.com/opsmill/schema-library)'s DCIM at commit `26336e9`,
-vendored under `dcim/`, by one documented mapping onto the CTM, below; the stage kind is
-the only schema Fylgja adds to anyone's Infrahub. See architecture
-[§4.1](../docs/architecture.md#41-intent-reader) and [D-057](../docs/decisions.md#d-057).
+vendored under `dcim/`, by one documented mapping onto the CTM, below; the stage kind and
+the probe kind are the only schema Fylgja adds to anyone's Infrahub, and neither is intent.
+See architecture [§4.1](../docs/architecture.md#41-intent-reader),
+[D-057](../docs/decisions.md#d-057) and [D-064](../docs/decisions.md#d-064).
 
 | File | Purpose |
 |---|---|
@@ -17,6 +18,7 @@ the only schema Fylgja adds to anyone's Infrahub. See architecture
 | `dcim/LICENSE.txt` | The library's licence, Apache 2.0 (`71d4aed1…`). |
 | `dcim/README.md` | [The note](dcim/README.md): the commit, each file's full SHA-256, the licence, and how the files are loaded. |
 | `fylgja-stage.yaml` | The stage kind: a marked moment of a proposed change, which the operator writes and Fylgja only reads, and its extension of Infrahub's `CoreProposedChange` (`fylgja_stages`). Loaded on the default branch ([D-028](../docs/decisions.md#d-028)); needed only by `--stage`, `stage list` and `stage plan` ([D-045](../docs/decisions.md#d-045)). |
+| `fylgja-probe.yaml` | The probe kind `FylgjaProbe`: a probe's declaration, two synthesized hosts on two uncabled ports, which the operator writes and Fylgja only reads ([below](#probes-declaring-one)). Branch-agnostic, loaded on the default branch beside the stage kind; read by every request that takes probes and sends no `--probes` file, so a request that reads intent is refused without it unless it sends one ([D-064](../docs/decisions.md#d-064)). |
 | `infrahub.graphql` | The default branch's SDL, fetched from a running Infrahub by `make sdl` and committed, the typed client's input (`make generate`). Never edited by hand. |
 
 The six files keep the library's names and bytes: nothing edits or formats them, not even
@@ -26,15 +28,18 @@ the note, the mapping's table and the CTM's `envelope.mapping.version` together;
 calls itself experimental, so the commit is pinned.
 
 **Loading them.** On the development host and CI's runner, `go run -tags fixture
-./cmd/fylgja-fixture -prepare-main` (the bring-up script's `infrahub` part) loads the six
-files in one request on `main`, then the stage kind, and only onto a `main` holding none of
-the library's kinds. A `main` holding any is refused, with nothing loaded: `main holds <n>
+./cmd/fylgja-fixture -prepare-main` (the bring-up script's `infrahub` part) loads the stage
+and probe kinds in one request on `main`, wherever either is absent, then the six files in
+one more, and only onto a `main` holding none of the library's kinds. A `main` holding any
+is refused, with nothing of the library loaded: `main holds <n>
 of the schema library's kinds (…): -prepare-main is the development host's and CI's tool,
 which loads the library on an empty main alone; it is not an install path: a main that
 already holds the library is yours, and fylgja schema check says whether it is the one the
 reader reads`. A DCIM user who already runs the library loads nothing of Fylgja's but
-`fylgja-stage.yaml` ([below](#the-kind-on-the-default-branch)), and only for the stage
-surface; `fylgja schema check` says whether their DCIM is the one the reader reads.
+`fylgja-stage.yaml` ([below](#the-kind-on-the-default-branch)), for the stage surface, and
+`fylgja-probe.yaml` ([below](#the-probe-kind-on-the-default-branch)), which every read of
+intent that sends no probe file asks for; `fylgja schema check` says whether their DCIM is
+the one the reader reads.
 
 ## The mapping
 
@@ -63,7 +68,8 @@ manifest's and the twin record's provenance carry the same block. It was drafted
 port's `description`, `mtu`, `mac_address`, `l2_mode`, `ip_addresses` and
 `sub_interfaces`; every `InterfaceVirtual`; every address, prefix, location, device type,
 tag beyond the scope's and manufacturer beyond the platform's. The template reads the
-device's `description` and renders it; the reader never does. Every interface is a port:
+device's `description` and each port's `ip_addresses` and renders them; the reader never
+does, so an address moves a device's artifact and nothing else of the CTM. Every interface is a port:
 there is no interface type to read, and wiring is derived by the compiler from
 `mgmt_only` and the cables.
 
@@ -72,7 +78,7 @@ given: `Devices`, `DcimDevice(tags__name__value: $tag)` selecting the name, the 
 name and its manufacturer's, and the artifacts; then `Ports`, `InterfacePhysical(device__ids:
 $devices)` selecting each port's name, role, status, device and cable with the cable's label
 and ends, once per page of devices. The read-only test holds every operation's roots to `DcimDevice`,
-`InterfacePhysical`, `FylgjaStage` and Infrahub's own `CoreProposedChange`,
+`InterfacePhysical`, Fylgja's `FylgjaStage` and `FylgjaProbe`, and Infrahub's own `CoreProposedChange`,
 `CoreArtifactValidator`, `Branch`, `InfrahubEvent` and `CoreGraphQLQueryGroup`, and every
 fragment target to `DcimDevice`, `DcimPlatform`, `InterfacePhysical`, `DcimCable`,
 `CoreArtifactTarget` and `NodeMutatedEvent`. The scope's `BuiltinTag` is read by the filter
@@ -206,17 +212,39 @@ one Jinja2 transform (`srlinux_device_config`,
 artifact definition (`srlinux_device_config`): the artifact `device-config`, `text/plain`,
 for every device in the group `fylgja-devices`, by its name. The query reads one
 `DcimDevice` with its description, its platform and the platform's manufacturer, and every
-interface with its kind, name, status and role, and for a physical port its cable's ends.
-The template renders both platforms: EOS's CLI when the platform's name is `EOS`, SR
-Linux's otherwise, a device with no platform included, so that the pipeline never fails on
-one (the read refuses it). Its header names the device, then `platform <Manufacturer>
-<Platform>; <description>`; each physical port follows in name order, a management-role
-port as a comment left to the platform and every other with its far end as its description
-(`to <device> <port>`) and its admin state, disabled when its `status` is `disabled`. It
-renders no virtual interface, no address and nothing above the ports.
+interface with its kind, name, status and role, and for a physical port its cable's ends
+and its addresses (`ip_addresses`, the `IpamIPAddress` nodes the library's
+`InterfaceLayer3` relates to the port, each by its `address` value). The template renders
+both platforms: EOS's CLI when the platform's name is `EOS`, SR Linux's otherwise, a device
+with no platform included, so that the pipeline never fails on one (the read refuses it).
+Its header names the device, then `platform <Manufacturer> <Platform>; <description>`; each
+physical port follows in name order, a management-role port as a comment left to the
+platform and every other with its far end as its description (`to <device> <port>`), its
+admin state, disabled when its `status` is `disabled`, and its addresses in value order:
 
-**It is a reference transform**, written to render the library's ports and nothing else,
-and meant to be replaced by the user's own transform rendering their layer 2 and 3 from
+| Platform | Per addressed port | Once per device |
+|---|---|---|
+| SR Linux | after the port's `subinterface 0 admin-state enable`: `set / interface <port> subinterface 0 ipv4 admin-state enable`, then `set / interface <port> subinterface 0 ipv4 address <a/l>` for each address | — |
+| EOS | under the interface, after `no shutdown`: `no switchport`, then `ip address <a/l>`, a second and later address `ip address <a/l> secondary` (a plain second one replaces the first) | `ip routing`, after `hostname`, when any port is addressed: cEOS forwards nothing without it |
+
+A device with no addressed port renders byte for byte what it did before 016. The render
+was proved on live branches with `.venv/bin/infrahubctl render srlinux_device_config
+device=<d> --branch <b> --out <file>`, which runs the tree's query and template against a
+branch ([016's research §5](../specs/016-probes/research.md#5-verified-at-implement)).
+
+**No routing.** It renders no virtual interface, no network instance beyond SR Linux's
+`default` membership of each port's subinterface, no static route and no routing protocol,
+and nothing above the ports. So two addressed ports of one device reach each other, by the
+device's connected routes, and two devices do not: a [probe](#probes-declaring-one) whose
+hosts sit on two devices finds no path through a twin of this template, and its burst
+fails. The fixture gives each device two addressed spare ports for this reason,
+`ethernet-1/10` with `10.<d>.10.1/24` and `ethernet-1/11` with `10.<d>.11.1/24` (`Ethernet10`
+and `Ethernet11` on the mixed fixture's EOS devices), `d` the device's index, so that a probe
+lies across one device: `testdata/probes/n1-loop.json` from `n1:ethernet-1/10` to
+`n1:ethernet-1/11`. Routing between devices is the replacing transform's to render.
+
+**It is a reference transform**, written to render the library's ports and their
+addresses and nothing else, and meant to be replaced by the user's own transform rendering their layer 2 and 3 from
 their own kinds. Fylgja reads the artifact, never the template: what a replacement owes is
 an artifact on each device in the scope whose definition's `artifact_name` is its package's
 `config.artifact_name` (`device-config` for both shipped packages), of a content type the
@@ -321,7 +349,7 @@ cancels it, about 16 seconds later.
 
 <a id="the-kind-on-the-default-branch"></a>
 **The kind on the default branch.** Load it once, beside the library: `-prepare-main` does
-on the development host after the library, and on an Infrahub that already holds the
+on the development host before the library, and on an Infrahub that already holds the
 library, `infrahubctl schema load schema/fylgja-stage.yaml` (check it first with
 `infrahubctl schema check`); it is the one file of Fylgja's a DCIM user loads. `fylgja schema check --branch <b>` then says `stages: FylgjaStage present on the
 default branch, with its extension`. An installation that never loads it loses only the
@@ -330,3 +358,101 @@ stage surface: `--stage`, `stage list` and `stage plan` are each refused naming 
 
 [A stepping twin](../README.md#a-stepping-twin) walks a twin through a proposed change's
 stages, forward and back.
+
+## Probes: declaring one
+
+A probe is a declaration outside intent ([D-064](../docs/decisions.md#d-064)): two hosts
+the compiler synthesizes, `<name>-a` and `<name>-b`, each cabled by its `eth1` to an
+uncabled port of the intent that is not `mgmt_only`, so that a step measures the loss
+between them and `twin verify` sends a burst across the twin. It is never intent and never
+in the CTM: the snapshot carries the probes beside it, and the probe package of the
+probe's format says how its hosts run ([probes/README.md](../probes/README.md)). Since the
+shipped template renders no routing ([above](#the-shipped-template)), a probe crosses one
+device: both endpoints on one device's two addressed ports.
+
+**Two sources, one list per request.** A `--probes <file>` declaration
+([contracts/probes.schema.json](../contracts/probes.schema.json), version `1`) replaces the
+probes declared here; it never adds to them. Without one, the server reads `FylgjaProbe` on
+the default branch, unpinned, whatever `--at` or the stage says, once per request, after
+its guards and before any read of intent, and hands the one list to every snapshot the
+request takes: each stage of a `stage plan` or a rehearsal carries the same. With no object
+of the kind the list is `[]`, with no warning. `twin create --snapshot` and `twin step
+--snapshot` read neither: a snapshot carries its own. The checks `fylgja-step` and
+`fylgja-twin` send no file, so a proposed change's checks carry the kind's probes.
+
+**The kind is branch-agnostic**: a probe lands in no branch's diff, and once written every
+branch's read with no file carries it, every proposed change's checks among them, until it
+is deleted. Write one when it should travel with every request, and use a file for one
+twin.
+
+**The fields.** One object is one probe, its two endpoints flat attributes, so a read
+yields the declaration's element by renaming alone: `a_*` is the file's first endpoint,
+`b_*` its second.
+
+| Field | Required | Meaning |
+|---|---|---|
+| `name` | yes | `^[a-z0-9][a-z0-9-]{0,23}$`, unique; its hosts are `<name>-a` and `<name>-b`, their containers `clab-fylgja-<name>-a` and `-b`. |
+| `format` | yes (`ping`) | The probe package that runs the hosts, a dropdown of the formats this kind knows: `ping` alone. |
+| `a_device`, `b_device` | yes | The endpoint's device, by the intent's name. Not a relationship: the device may exist on one branch alone. |
+| `a_interface`, `b_interface` | yes | The endpoint's interface on that device: uncabled and not `mgmt_only`, which the compile judges against the snapshot. |
+| `a_address`, `b_address` | yes | The endpoint's host address with its prefix length, `10.1.10.2/24`. `Text`, not `IPHost`, which would normalise the value. |
+| `a_gateway`, `b_gateway` | yes | The endpoint's gateway, an address with no prefix length, within the address's prefix: the device port's address. |
+| `description` | no | What the probe watches, in a sentence. Fylgja does not read it. |
+
+A probe read from the kind is held to the declaration's rules, at `resolve`, each finding
+naming `FylgjaProbe on the default branch: …` where a file's names `probe file <path>: …`:
+a name repeated or malformed, a format no loaded package declares, an address without a
+prefix length, a gateway outside its prefix, a probe's four addresses of two families, and
+two endpoints of the list sharing an address. Where its endpoints land is the compile's:
+a device or interface the snapshot lacks, a cabled or `mgmt_only` port, a port an earlier
+probe took, a host named as a device (`probe.*`, [contracts/cli.md](../contracts/cli.md)).
+A stage that cables a probe's port is refused by the same rule; nothing drops a probe.
+
+**Three ways to write one**, all Infrahub's own, on the default branch. An object file,
+loaded with `infrahubctl object load probes.yml` (the kind is on the default branch, where
+the loader writes when no `--branch` is given):
+
+```yaml
+---
+apiVersion: infrahub.app/v1
+kind: Object
+spec:
+  kind: FylgjaProbe
+  data:
+    - name: n1-loop
+      format: ping
+      a_device: n1
+      a_interface: ethernet-1/10
+      a_address: 10.1.10.2/24
+      a_gateway: 10.1.10.1
+      b_device: n1
+      b_interface: ethernet-1/11
+      b_address: 10.1.11.2/24
+      b_gateway: 10.1.11.1
+      description: the loop across n1's two spare ports
+```
+
+`format` takes the choice's name, `ping`. Or the UI: **Probe**, an entry of its own in the
+sidebar's object menu (`/objects/FylgjaProbe`). Or `infrahubctl object create FylgjaProbe
+--set name=n1-loop --set a_device=n1 --set a_interface=ethernet-1/10 --set
+a_address=10.1.10.2/24 --set a_gateway=10.1.10.1 --set b_device=n1 --set
+b_interface=ethernet-1/11 --set b_address=10.1.11.2/24 --set b_gateway=10.1.11.1`, which
+reads back every attribute as written, `format` defaulting to `ping`. To delete one: the
+UI, or `infrahubctl object delete FylgjaProbe <name>`, by its human-friendly id. On the
+development host, `go run -tags fixture ./cmd/fylgja-fixture -probes <file>` writes each
+probe of a declaration file, held first to the file's rules, and `-delete-probes` deletes
+every one.
+
+<a id="the-probe-kind-on-the-default-branch"></a>
+**The kind on the default branch.** Load it once, beside the stage kind: `-prepare-main`
+does on the development host, wherever it is absent, a `main` holding the library
+included, and elsewhere `infrahubctl schema load
+schema/fylgja-probe.yaml` (check it first with `infrahubctl schema check`), which moves
+the default branch's schema hash. `fylgja schema check` does not report it. An
+installation that never loads it is refused, at `resolve`, every request that takes probes
+and sends no `--probes` file (`intent read`, `twin create --branch` and `--stage`, `twin
+step` to a stage, `stage plan`, `twin rehearse`, and so the checks, which send none), as
+`probe.kind.absent`, naming this file (`the default branch's schema has no kind
+FylgjaProbe: load schema/fylgja-probe.yaml on it; only a request that sends no --probes
+file reads it`); one that sends a file, an empty declaration
+(`{"probes_version": "1", "probes": []}`) included, reads no kind and needs none.

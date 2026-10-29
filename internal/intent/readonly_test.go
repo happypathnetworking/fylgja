@@ -29,6 +29,8 @@ func operations() map[string]string {
 		"PortStamps":          PortStamps_Operation,
 		// 017: the stamps' account, an owned root (D-060).
 		"QueryGroups": QueryGroups_Operation,
+		// 016: the probes declared in Infrahub, Fylgja's own kind, an owned root (D-064).
+		"Probes": Probes_Operation,
 	}
 }
 
@@ -189,13 +191,17 @@ var mappingRoots = map[string][]string{
 // selects it, and why reading it reserves no structure of theirs.
 type ownedRoot struct{ operation, reason string }
 
-// ownedRoots are the six roots an operation may select beside the mapping's: Fylgja's own
-// stage kind, and five of Infrahub's own units, which nobody implements (Constitution III,
-// 2.1.0). Each is named; anything else is refused.
+// ownedRoots are the seven roots an operation may select beside the mapping's: Fylgja's own
+// two kinds, the stage and the probe, and five of Infrahub's own units, which nobody
+// implements (Constitution III). Each is named; anything else is refused.
 var ownedRoots = map[string]ownedRoot{
 	"FylgjaStage": {"OrphanStages",
-		"Fylgja's own kind, a moment of a proposed change, the one kind Fylgja loads (D-045); " +
+		"Fylgja's own kind, a moment of a proposed change, which Fylgja loads (D-045); " +
 			"read alone for the stages whose proposed change no longer names them (D-047)"},
+	"FylgjaProbe": {"Probes",
+		"Fylgja's own kind, a probe's declaration, which Fylgja loads beside the stage kind (D-064): " +
+			"two synthesized hosts the compiler places, never intent and never in the CTM, read on the default " +
+			"branch as a --probes file is read"},
 	"CoreProposedChange": {"ProposedChanges",
 		"Infrahub's unit of review and the stage's home (D-045): a stage is a moment of one, found by its source branch"},
 	"CoreArtifactValidator": {"ArtifactValidations",
@@ -212,7 +218,7 @@ var ownedRoots = map[string]ownedRoot{
 }
 
 // Every root an operation selects is one of the mapping's, selected by an operation that
-// reads it, or one of the six owned roots, selected by its own operation; and each of them is
+// reads it, or one of the seven owned roots, selected by its own operation; and each of them is
 // selected where it is named. A kind of the operator's model beyond the mapping's, or any
 // other root, fails here (FR-001, SC-002): widening either list is a change to the mapping
 // and to Constitution III, not to this file.

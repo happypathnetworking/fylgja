@@ -11,11 +11,13 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
@@ -29,7 +31,8 @@ import (
 // findings in the result rather than errors — a refusal is an answer — and all of them are
 // gathered in one pass, so an operator clears them together: lab present, twin directory
 // present, memory over the host budget, a probe or push login variable unset, a package
-// missing, an image a package says is not pulled that the host does not hold;
+// missing, an image a package says is not pulled that the host does not hold; a probe
+// package missing, a probe image the host does not hold whatever its acquisition (016);
 // then the warning that no host budget is set.
 func (a *Activities) CheckHost(ctx context.Context, in wire.CheckHostInput) (wire.CheckHostResult, error) {
 	m, err := readManifest(in.BundlePath)
@@ -49,21 +52,11 @@ func (a *Activities) CheckHost(ctx context.Context, in wire.CheckHostInput) (wir
 		res.HostBudgetMB = &budget
 	}
 
-	missing := map[string][]string{} // psp id → the nodes naming it
-	sources := map[string]string{}   // psp id → the manifest's source for it
-	needs := map[string]*imageNeed{} // image reference → what needs it on this host
-	for _, n := range m.Nodes {
-		p, ok := a.Registry.LookupID(n.PSP.ID)
-		if !ok {
-			missing[n.PSP.ID] = append(missing[n.PSP.ID], n.Name)
-			sources[n.PSP.ID] = n.PSP.Source
-			continue
-		}
-		res.Nodes = append(res.Nodes, manifestNodePlan(n, p))
-		res.MemorySumMB += p.Image.Resources.MemoryMB
-		noteImage(needs, n.Name, p)
+	planned, err := planNodes(m, a.Registry, a.Probes)
+	if err != nil {
+		return wire.CheckHostResult{}, StepFailure(findings.StepHostCheck, findings.RuleOperationFailed, in.BundlePath, err.Error())
 	}
-	sort.Slice(res.Nodes, func(i, j int) bool { return res.Nodes[i].Name < res.Nodes[j].Name })
+	res.Nodes, res.MemorySumMB = planned.nodes, planned.memoryMB
 
 	host, err := a.InspectHost(ctx)
 	if err != nil {
@@ -94,16 +87,24 @@ func (a *Activities) CheckHost(ctx context.Context, in wire.CheckHostInput) (wir
 	for _, l := range unsetLogins(res.Nodes, a.getenv()) {
 		add(findings.Rejection, findings.RuleHostProbeLoginUnset, l.variable, "%s", l.message())
 	}
-	for _, id := range slices.Sorted(maps.Keys(missing)) {
+	for _, id := range slices.Sorted(maps.Keys(planned.missingPSP)) {
 		add(findings.Rejection, findings.RuleHostPSPMissing, id,
 			"support package %s (manifest source %s), named by %s, is not on this worker",
-			id, sources[id], strings.Join(missing[id], ", "))
+			id, planned.sources[id], strings.Join(planned.missingPSP[id], ", "))
 	}
-	// The presence pass. One call per distinct reference, and none at all for a bundle
-	// whose packages all say public_registry: that is the one acquisition under which a
-	// deploy may pull, so nothing is asked of the runtime for it.
-	for _, ref := range slices.Sorted(maps.Keys(needs)) {
-		need := needs[ref]
+	for _, id := range slices.Sorted(maps.Keys(planned.missingProbe)) {
+		add(findings.Rejection, findings.RuleHostProbePackageMissing, id,
+			"probe package %s (manifest source %s), named by host %s, is not on this worker",
+			id, planned.probeSources[id], strings.Join(planned.missingProbe[id], ", "))
+	}
+	// The presence pass. One call per distinct reference, and none for a support package
+	// that says public_registry: that is the one acquisition under which a device's deploy
+	// may pull, so nothing is asked of the runtime for it. A probe package's image is asked
+	// after whatever its acquisition says, since a host's deploy budget is sized for a
+	// container that starts in a second and a pull inside a step's reconcile would be timed
+	// as the step's (016, R-12).
+	for _, ref := range slices.Sorted(maps.Keys(planned.needs)) {
+		need := planned.needs[ref]
 		present, err := a.presence(ctx, ref)
 		if err != nil {
 			return wire.CheckHostResult{}, StepFailure(findings.StepHostCheck, findings.RuleOperationFailed, ref, err.Error())
@@ -112,10 +113,9 @@ func (a *Activities) CheckHost(ctx context.Context, in wire.CheckHostInput) (wir
 			continue
 		}
 		add(findings.Rejection, findings.RuleHostImageAbsent, ref,
-			"image %s is not on this host: support package %s (nodes %s) declares it %s, %s; "+
-				"a reference held under another tag is absent; docs/development.md says how to import it",
-			ref, strings.Join(need.packages, ", "), strings.Join(need.nodes, ", "),
-			need.acquisition, acquisitionClause(need.acquisition))
+			"image %s is not on this host: %s %s (nodes %s) declares it %s, %s",
+			ref, need.what, strings.Join(need.packages, ", "), strings.Join(need.nodes, ", "),
+			need.acquisition, imageRemedy(need.acquisition, ref))
 	}
 	if !budgetSet {
 		add(findings.Warning, findings.RuleHostMemoryUnbudgeted, "host",
@@ -130,24 +130,78 @@ func CheckHost(ctx context.Context, a *Activities, in wire.CheckHostInput) (wire
 	return a.CheckHost(ctx, in)
 }
 
-// NodePlans is each node of the bundle at bundlePath planned from reg as the host check
-// plans it, by name, without looking at the host: what a rehearsal's deadline sums from
-// every stage's budgets before the host is read (015, research R-09). A node whose package
-// reg does not hold is left out, as the host check leaves it out of its plan; the host check
-// refuses it.
-func NodePlans(bundlePath string, reg *psp.Registry) ([]wire.NodePlan, error) {
+// NodePlans is each node of the bundle at bundlePath planned from reg and probes as the
+// host check plans it, by name, without looking at the host: what a rehearsal's deadline
+// sums from every stage's budgets before the host is read (015, research R-09). A node
+// whose package reg or probes does not hold is left out, as the host check leaves it out
+// of its plan; the host check refuses it.
+func NodePlans(bundlePath string, reg *psp.Registry, probes *probe.Registry) ([]wire.NodePlan, error) {
 	m, err := readManifest(bundlePath)
 	if err != nil {
 		return nil, err
 	}
-	var nodes []wire.NodePlan
+	planned, err := planNodes(m, reg, probes)
+	if err != nil {
+		return nil, err
+	}
+	return planned.nodes, nil
+}
+
+// plannedNodes are a manifest's nodes planned from this worker's packages, with what the
+// host check refuses of them: the support and probe packages it lacks, by id with the
+// nodes naming each, and the images it must find already on the host.
+type plannedNodes struct {
+	nodes    []wire.NodePlan // by name
+	memoryMB int             // the planned nodes' memory, summed
+
+	missingPSP   map[string][]string // psp id → the nodes naming it
+	sources      map[string]string   // psp id → the manifest's source for it
+	missingProbe map[string][]string // probe package id → the hosts naming it
+	probeSources map[string]string   // probe package id → the manifest's source for it
+	needs        map[string]*imageNeed
+}
+
+// planNodes plans every node of m: a device from the support package its psp names, a
+// host from the probe package its probe names (016, R-12). An error is a host the manifest
+// does not describe whole, or a template its package's validation would have refused.
+func planNodes(m compiler.Manifest, reg *psp.Registry, probes *probe.Registry) (plannedNodes, error) {
+	out := plannedNodes{missingPSP: map[string][]string{}, sources: map[string]string{},
+		missingProbe: map[string][]string{}, probeSources: map[string]string{}, needs: map[string]*imageNeed{}}
 	for _, n := range m.Nodes {
-		if p, ok := reg.LookupID(n.PSP.ID); ok {
-			nodes = append(nodes, manifestNodePlan(n, p))
+		if n.Probe != nil {
+			pkg, ok := lookupProbePackage(probes, n.Probe.Package.ID)
+			if !ok {
+				out.missingProbe[n.Probe.Package.ID] = append(out.missingProbe[n.Probe.Package.ID], n.Name)
+				out.probeSources[n.Probe.Package.ID] = n.Probe.Package.Source
+				continue
+			}
+			plan, err := hostPlan(m, n, pkg)
+			if err != nil {
+				return plannedNodes{}, err
+			}
+			out.nodes = append(out.nodes, plan)
+			out.memoryMB += plan.MemoryMB
+			out.noteImage(n.Name, "probe package", pkg.Format, pkg.Image.Ref, pkg.Image.Acquisition)
+			continue
+		}
+		if n.PSP == nil {
+			return plannedNodes{}, fmt.Errorf("the manifest's node %s names neither a support package nor a probe", n.Name)
+		}
+		p, ok := reg.LookupID(n.PSP.ID)
+		if !ok {
+			out.missingPSP[n.PSP.ID] = append(out.missingPSP[n.PSP.ID], n.Name)
+			out.sources[n.PSP.ID] = n.PSP.Source
+			continue
+		}
+		out.nodes = append(out.nodes, manifestNodePlan(n, p))
+		out.memoryMB += p.Image.Resources.MemoryMB
+		// A device's image is asked after only when its package says it is not pulled.
+		if p.Image.Acquisition != psp.AcquisitionPublicRegistry {
+			out.noteImage(n.Name, "support package", p.Platform.ID, p.Image.Ref, p.Image.Acquisition)
 		}
 	}
-	sort.Slice(nodes, func(i, j int) bool { return nodes[i].Name < nodes[j].Name })
-	return nodes, nil
+	sort.Slice(out.nodes, func(i, j int) bool { return out.nodes[i].Name < out.nodes[j].Name })
+	return out, nil
 }
 
 // manifestNodePlan is one manifest node planned from its package, with the artifact its
@@ -158,6 +212,95 @@ func manifestNodePlan(n compiler.ManifestNode, p *psp.PSP) wire.NodePlan {
 		plan.Artifact = &wire.PlanArtifact{File: n.Artifact.File, Checksum: n.Artifact.Checksum}
 	}
 	return plan
+}
+
+// lookupProbePackage is the probe package of a format, none when the worker holds no
+// probe registry at all.
+func lookupProbePackage(probes *probe.Registry, id string) (*probe.Package, bool) {
+	if probes == nil {
+		return nil, false
+	}
+	return probes.Lookup(id)
+}
+
+// hostPlan is a host's node planned from its probe package: the package's image budgets,
+// memory and readiness timeout, and its readiness, flow and burst rendered for this host
+// from the manifest's probes[] entry, as the compiler rendered its exec lines.
+func hostPlan(m compiler.Manifest, n compiler.ManifestNode, pkg *probe.Package) (wire.NodePlan, error) {
+	values, err := hostValues(m, *n.Probe)
+	if err != nil {
+		return wire.NodePlan{}, fmt.Errorf("host %s: %v", n.Name, err)
+	}
+	render := func(field string, template []string, extra map[string]string) ([]string, error) {
+		v := maps.Clone(values)
+		maps.Copy(v, extra)
+		out, err := probe.Render(template, v)
+		if err != nil {
+			return nil, fmt.Errorf("host %s: probe package %s's %s: %v", n.Name, pkg.Format, field, err)
+		}
+		return out, nil
+	}
+	interval := strconv.FormatFloat(pkg.Flow.IntervalS, 'f', -1, 64)
+	readiness, err := render("readiness.command", pkg.Readiness.Command, nil)
+	if err != nil {
+		return wire.NodePlan{}, err
+	}
+	expect, err := render("readiness.expect", []string{pkg.Readiness.Expect}, nil)
+	if err != nil {
+		return wire.NodePlan{}, err
+	}
+	flow, err := render("flow.command", pkg.Flow.Command, map[string]string{probe.PlaceInterval: interval})
+	if err != nil {
+		return wire.NodePlan{}, err
+	}
+	burst, err := render("burst.command", pkg.Burst.Command, map[string]string{probe.PlaceInterval: interval,
+		probe.PlaceCount: strconv.Itoa(pkg.Burst.Count), probe.PlaceWait: strconv.Itoa(pkg.Burst.WaitS)})
+	if err != nil {
+		return wire.NodePlan{}, err
+	}
+	return wire.NodePlan{
+		Name:            n.Name,
+		Image:           n.Image,
+		MemoryMB:        pkg.Image.Resources.MemoryMB,
+		TimeoutS:        pkg.Readiness.TimeoutS,
+		DeployTimeoutS:  pkg.Image.DeployTimeoutS,
+		DestroyTimeoutS: pkg.Image.DestroyTimeoutS,
+		Host: &wire.ProbePlan{
+			Format:    pkg.Format,
+			Package:   wire.PSPRef{ID: n.Probe.Package.ID, Source: n.Probe.Package.Source},
+			Probe:     n.Probe.Name,
+			Endpoint:  n.Probe.Endpoint,
+			Readiness: wire.ExecProbe{Command: readiness, Expect: expect[0], TimeoutS: pkg.Readiness.TimeoutS},
+			Flow: wire.FlowSpec{IntervalS: pkg.Flow.IntervalS, Command: flow,
+				StartTimeoutS: pkg.Flow.StartTimeoutS, ReadTimeoutS: pkg.Flow.ReadTimeoutS},
+			Burst: wire.BurstSpec{Count: pkg.Burst.Count, WaitS: pkg.Burst.WaitS, Command: burst},
+		},
+	}, nil
+}
+
+// hostValues are the four placeholders every template of a host renders: its address and
+// gateway as declared, the far host's address without its prefix length, and its own port,
+// read from the manifest's probes[] entry of the host's probe.
+func hostValues(m compiler.Manifest, p compiler.ManifestProbe) (map[string]string, error) {
+	for _, e := range m.Probes {
+		if e.Name != p.Name {
+			continue
+		}
+		for i, h := range e.Hosts {
+			if h.Endpoint != p.Endpoint {
+				continue
+			}
+			far, _, _ := strings.Cut(e.Hosts[1-i].Address, "/")
+			return map[string]string{
+				probe.PlaceAddress:    h.Address,
+				probe.PlaceGateway:    h.Gateway,
+				probe.PlaceFarAddress: far,
+				probe.PlaceInterface:  h.Port,
+			}, nil
+		}
+		return nil, fmt.Errorf("the manifest's probe %s has no endpoint %s", p.Name, p.Endpoint)
+	}
+	return nil, fmt.Errorf("the manifest's probes name no probe %s", p.Name)
 }
 
 // HostState is what the host holds of a twin: lab fylgja as containerlab reports it,
@@ -254,38 +397,49 @@ func nodePlan(name, image, pspID, pspSource string, p *psp.PSP) wire.NodePlan {
 }
 
 // imageNeed is one image reference planned nodes need already on this host: the packages
-// that declare it, how they say it is obtained, and the nodes that would run it. Keyed by
-// the reference the package declares, which is the reference the compiler wrote into the
-// manifest and the topology, so the worker's start-up report and this check look for the
-// same thing.
+// that declare it, what kind of package they are, how they say it is obtained, and the
+// nodes that would run it. Keyed by the reference the package declares, which is the
+// reference the compiler wrote into the manifest and the topology, so the worker's
+// start-up report and this check look for the same thing.
 type imageNeed struct {
+	what        string // "support package", or "probe package" (016)
 	acquisition string
 	packages    []string // the package ids declaring it, in name order; one, but for a reference two packages share
 	nodes       []string // the nodes running it, in the order the manifest lists them, which is name order
 }
 
-// noteImage records that node runs p's image, unless p says the image is obtained from a
-// public registry, which is the one acquisition a deploy may pull under.
-func noteImage(needs map[string]*imageNeed, node string, p *psp.PSP) {
-	if p.Image.Acquisition == psp.AcquisitionPublicRegistry {
-		return
-	}
-	need, seen := needs[p.Image.Ref]
+// noteImage records that node runs ref, declared by the package id of kind what under
+// acquisition. The caller decides which images are asked after: every probe package's, and
+// a support package's unless it says public_registry.
+func (p *plannedNodes) noteImage(node, what, id, ref, acquisition string) {
+	need, seen := p.needs[ref]
 	if !seen {
-		need = &imageNeed{acquisition: p.Image.Acquisition}
-		needs[p.Image.Ref] = need
+		need = &imageNeed{what: what, acquisition: acquisition}
+		p.needs[ref] = need
 	}
-	if !slices.Contains(need.packages, p.Platform.ID) {
-		need.packages = append(need.packages, p.Platform.ID)
+	if !slices.Contains(need.packages, id) {
+		need.packages = append(need.packages, id)
 		slices.Sort(need.packages)
 	}
 	need.nodes = append(need.nodes, node)
 }
 
+// imageRemedy is what host.image.absent says after the acquisition: how an image of it is
+// obtained, then that another tag is no match. A public_registry image reaches here only
+// from a probe package, and its remedy is the pull the run never makes (016, R-12).
+func imageRemedy(acquisition, ref string) string {
+	if acquisition == psp.AcquisitionPublicRegistry {
+		return "which a run never pulls, since a host's deploy budget is sized for a container already held: " +
+			"docker pull " + ref + " fetches it; a reference held under another tag is absent"
+	}
+	return acquisitionClause(acquisition) + "; a reference held under another tag is absent; " +
+		"docs/development.md says how to import it"
+}
+
 // acquisitionClause says how an image of this acquisition is obtained, as the refusal
 // words it (contracts/cli.md). One clause per value: the refusal must not
 // claim "with an account" of a value that is not account_gated. public_registry never
-// reaches here, since no presence call is made for it.
+// reaches here: imageRemedy words it.
 func acquisitionClause(acquisition string) string {
 	switch acquisition {
 	case psp.AcquisitionAccountGated:
@@ -345,6 +499,10 @@ func unsetLogins(nodes []wire.NodePlan, getenv func(string) (string, bool)) []un
 	var out []unsetLogin
 	index := map[string]int{}
 	for _, n := range nodes {
+		// A host logs in nowhere: its readiness is an exec in its container (016).
+		if n.Host != nil {
+			continue
+		}
 		named := []struct{ variable, use string }{
 			{n.Probe.UsernameEnv, useProbeLogin}, {n.Probe.PasswordEnv, useProbeLogin},
 			{n.Push.UsernameEnv, usePushLogin}, {n.Push.PasswordEnv, usePushLogin},

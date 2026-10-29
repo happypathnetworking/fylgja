@@ -9,7 +9,10 @@
 // encoding, login and TLS its readiness block: the reader is one mechanism keyed by the
 // facet, and nothing here knows which platform it reads (Constitution II; D-031).
 //
-// Its imports are drawn from compiler, psp, findings and lab/wire: never internal/lab,
+// A synthesized host (016) is not read: its probe's burst is run inside it by a Burster,
+// whose command and count are its probe package's.
+//
+// Its imports are drawn from compiler, psp, probe, findings and lab/wire: never internal/lab,
 // which imports it for its reader and its activity, and never internal/conformance.
 package verify
 
@@ -52,6 +55,16 @@ func (a Answer) Present() bool { return len(a.Updates) > 0 }
 // One call is one read: a reader retries nothing.
 type Reader interface {
 	Get(ctx context.Context, addr string, probe wire.Probe, path string, getenv func(string) (string, bool)) (Answer, error)
+}
+
+// Burster runs a probe's burst (016, R-15): command, its package's burst.command rendered
+// for the host, inside the host's container, and says how many echoes it sent and how many
+// were answered. An error is a burst that could not be run, or whose output says nothing
+// of what it sent: never a burst that lost replies, which is counted. lab.DockerBurster is
+// the one that runs a real host's; tier 1 fakes it, as it fakes the Reader. One call is
+// one burst: a burster retries nothing.
+type Burster interface {
+	Burst(ctx context.Context, container string, command []string) (sent, received int, err error)
 }
 
 // Unanswered is a read the node did not answer at all: its transport failed (gRPC

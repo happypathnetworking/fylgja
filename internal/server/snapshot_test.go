@@ -16,7 +16,7 @@ import (
 )
 
 // fixtureSnapshotID is the fixture CTM's snapshot id (testdata/snapshot/three-node.json).
-const fixtureSnapshotID = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
+const fixtureSnapshotID = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00"
 
 // loadCTM is a fixture CTM under testdata/ctm/, as a read returns one, observed at
 // observedAt.
@@ -34,7 +34,7 @@ func loadCTM(t *testing.T, name, observedAt string) *ctm.CTM {
 // path the server names is that entry (data-model §4).
 func TestTakeSnapshotFilesUnderItsID(t *testing.T) {
 	paths := useStateRoot(t)
-	s, path, list, err := takeSnapshot(context.Background(), paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"))
+	s, path, list, err := takeSnapshot(context.Background(), paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil || len(list) != 0 {
 		t.Fatalf("takeSnapshot = %v, %v; want it filed", list, err)
 	}
@@ -65,7 +65,7 @@ func TestTakeSnapshotFilesUnderItsID(t *testing.T) {
 func TestASecondTakeLeavesTheEntry(t *testing.T) {
 	paths := useStateRoot(t)
 	ctx := context.Background()
-	_, path, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"))
+	_, path, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +73,7 @@ func TestASecondTakeLeavesTheEntry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, again, list, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T10:30:00.000000Z"))
+	s, again, list, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T10:30:00.000000Z"), nil)
 	if err != nil || len(list) != 0 || s.ID != fixtureSnapshotID || again != path {
 		t.Fatalf("the second take = %v at %s, %v, %v; want %s at %s", s, again, list, err, fixtureSnapshotID, path)
 	}
@@ -90,7 +90,7 @@ func TestASecondTakeLeavesTheEntry(t *testing.T) {
 func TestACorruptEntryIsSnapshotIDMismatch(t *testing.T) {
 	paths := useStateRoot(t)
 	ctx := context.Background()
-	other, _, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"))
+	other, _, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -103,7 +103,7 @@ func TestACorruptEntryIsSnapshotIDMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	s, path, list, err := takeSnapshot(ctx, paths, findings.StepCompile, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"))
+	s, path, list, err := takeSnapshot(ctx, paths, findings.StepCompile, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil || s != nil || path != "" {
 		t.Fatalf("takeSnapshot = %v at %q, %v; want no snapshot and the refusal", s, path, err)
 	}
@@ -160,9 +160,9 @@ func fileRefusals(t *testing.T) []fileRefusal {
 	t.Helper()
 	ctmOf := func(doc map[string]any) map[string]any { return doc["ctm"].(map[string]any) }
 	return []fileRefusal{
-		{"another version", fixtureFile(t, func(d map[string]any) { d["snapshot_version"] = "2" }), findings.ExitRejected,
+		{"another version", fixtureFile(t, func(d map[string]any) { d["snapshot_version"] = "3" }), findings.ExitRejected,
 			findings.RuleSnapshotVersionUnsupported, "snap.json",
-			`the snapshot declares snapshot_version "2"; this build reads "1", and nothing converts one`, false},
+			`the snapshot declares snapshot_version "3"; this build reads "1" and "2", and nothing converts one`, false},
 		{"a bare CTM", func() []api.File {
 			raw, err := os.ReadFile(repoPath("testdata", "ctm", "three-node.json"))
 			if err != nil {
@@ -170,8 +170,11 @@ func fileRefusals(t *testing.T) []fileRefusal {
 			}
 			return []api.File{{Path: "snap.json", Data: raw}}
 		}(), findings.ExitRejected, findings.RuleSnapshotVersionUnsupported, "snap.json",
-			`the snapshot declares no snapshot_version; this build reads "1", and nothing converts one`, false},
-		{"a probe", fixtureFile(t, func(d map[string]any) { d["probes"] = []any{map[string]any{}} }), findings.ExitRejected,
+			`the snapshot declares no snapshot_version; this build reads "1" and "2", and nothing converts one`, false},
+		{"a probe in a 1", fixtureFile(t, func(d map[string]any) {
+			d["snapshot_version"] = "1"
+			d["probes"] = []any{map[string]any{}}
+		}), findings.ExitRejected,
 			findings.RuleSnapshotInvalid, "probes", "probes holds 1 entry", true},
 		{"an inner CTM of version 1", fixtureFile(t, func(d map[string]any) { ctmOf(d)["ctm_version"] = "1" }), findings.ExitRejected,
 			findings.RuleCTMVersionUnsupported, "snap.json", `the CTM declares ctm_version "1"; this build reads "2", and nothing converts one`, false},
@@ -327,7 +330,7 @@ func TestARefusedObservedAtLeavesTheTakeOfItsIntent(t *testing.T) {
 			}
 
 			const observedAt = "2026-10-27T09:00:00.000000Z"
-			s, path, list, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", observedAt))
+			s, path, list, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", observedAt), nil)
 			if err != nil || len(list) != 0 || s.ID != fixtureSnapshotID || path != filepath.Join(paths.Snapshots, fixtureSnapshotID+".json") {
 				t.Fatalf("takeSnapshot = %v at %s, %v, %v; want %s filed", s, path, list, err, fixtureSnapshotID)
 			}
@@ -357,7 +360,7 @@ func TestResolveSnapshotByID(t *testing.T) {
 	}
 	validateWithShow(t, currentContract, "018", doc)
 
-	stored, path, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"))
+	stored, path, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +370,7 @@ func TestResolveSnapshotByID(t *testing.T) {
 	}
 
 	// The lossy fixture's stored bytes under the three-node's id.
-	other, _, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"))
+	other, _, _, err := takeSnapshot(ctx, paths, findings.StepRead, loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

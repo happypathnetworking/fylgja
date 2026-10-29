@@ -86,7 +86,7 @@ func TestEnvelopeFormsAreHeld(t *testing.T) {
 			snapshot, reg := load(t, "three-node.json")
 			c.change(&snapshot.Envelope)
 
-			list := Validate(snapshot, reg)
+			list := Validate(snapshot, nil, reg, nil)
 
 			if c.object == "" {
 				if len(list) != 0 {
@@ -110,7 +110,7 @@ func TestAnEmptyEnvelopeFieldIsNamedOnce(t *testing.T) {
 	} {
 		snapshot, reg := load(t, "three-node.json")
 		change(&snapshot.Envelope)
-		if list := Validate(snapshot, reg); len(list) != 1 || list[0].Message == "" {
+		if list := Validate(snapshot, nil, reg, nil); len(list) != 1 || list[0].Message == "" {
 			t.Errorf("findings %v, want the one saying it is not recorded", list)
 		}
 	}
@@ -126,9 +126,9 @@ func TestValidationAcceptsWhatTheManifestContractAccepts(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			snapshot, reg := load(t, "three-node.json")
 			c.change(&snapshot.Envelope)
-			accepted := !Validate(snapshot, reg).Rejected()
+			accepted := !Validate(snapshot, nil, reg, nil).Rejected()
 
-			files, list := compiler.Compile(snapshot, reg)
+			files, list := compiler.Compile(snapshot, nil, reg, nil)
 			if list.Rejected() {
 				t.Fatalf("the compiler refused it: %v", list)
 			}
@@ -156,7 +156,7 @@ func TestValidationRefusesAnArtifactTypeTheManifestContractRefuses(t *testing.T)
 	snapshot, reg := load(t, "three-node.json")
 	n1 := snapshot.Device("n1")
 	n1.Artifact.ContentType = "application/json"
-	list := Validate(snapshot, reg)
+	list := Validate(snapshot, nil, reg, nil)
 	want := "device n1: artifact device-config (checksum " + n1.Artifact.Checksum +
 		") is application/json; the nokia_srlinux package accepts text/plain"
 	if len(list) != 1 || list[0].Severity != findings.Rejection || list[0].Rule != findings.RuleArtifactContentTypeUnsupported ||
@@ -165,7 +165,7 @@ func TestValidationRefusesAnArtifactTypeTheManifestContractRefuses(t *testing.T)
 	}
 
 	clean, reg := load(t, "three-node.json")
-	files, compiled := compiler.Compile(clean, reg)
+	files, compiled := compiler.Compile(clean, nil, reg, nil)
 	if compiled.Rejected() {
 		t.Fatalf("the compiler refused the clean fixture: %v", compiled)
 	}

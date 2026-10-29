@@ -620,6 +620,9 @@ func TestStepNames(t *testing.T) {
 		// M12: the step's wait after its record.
 		{WorkflowStep, wire.ActVerifyTwin, "observe", findings.StepObserve},
 		{WorkflowStep, wire.ActRecordStep, "record", findings.StepRecord},
+		// 016: the step's flows.
+		{WorkflowStep, wire.ActStartFlows, "flows", findings.StepFlows},
+		{WorkflowStep, wire.ActReadFlows, "loss", findings.StepFlows},
 	} {
 		if got := stepName(c.workflowID, c.activityType); got != c.step {
 			t.Errorf("stepName(%s, %s) = %q, want %q", c.workflowID, c.activityType, got, c.step)
@@ -1023,6 +1026,88 @@ func TestObserveStepDetail(t *testing.T) {
 		if got := completedDetail(converter.GetDefaultDataConverter(), wire.ActVerifyTwin, payloads); got != c.want {
 			t.Errorf("observe detail for %+v = %q, want %q", c.wait, got, c.want)
 		}
+	}
+}
+
+// The flows step's progress line reads each flow's start from StartFlows' result, and the
+// loss step's what each lost from ReadFlows', word for word (016, contracts/cli.md, twin
+// step): container timing named once, after every probe.
+func TestFlowsStepDetails(t *testing.T) {
+	dc := converter.GetDefaultDataConverter()
+	detail := func(activityType string, result any) string {
+		t.Helper()
+		payloads, err := dc.ToPayloads(result)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return completedDetail(dc, activityType, payloads)
+	}
+	for _, c := range []struct {
+		flows []wire.FlowOutcome
+		want  string
+	}{
+		{[]wire.FlowOutcome{{Probe: "n1-loop", Outcome: wire.FlowStarted}}, "n1-loop started"},
+		{[]wire.FlowOutcome{{Probe: "n1-loop", Outcome: wire.FlowStarted}, {Probe: "n2-loop", Outcome: wire.FlowNotStarted,
+			Rule: findings.RuleFlowStartFailed, Message: "docker exec exited 1"}}, "n1-loop started; n2-loop not started: docker exec exited 1"},
+	} {
+		if got := detail(wire.ActStartFlows, wire.FlowsResult{Flows: c.flows}); got != c.want {
+			t.Errorf("flows detail for %+v = %q, want %q", c.flows, got, c.want)
+		}
+	}
+	measured := wire.ProbeLoss{Probe: "n1-loop", From: "clab-fylgja-n1-loop-a", To: "clab-fylgja-n1-loop-b",
+		Outcome: wire.FlowMeasured, Sent: 312}
+	for _, c := range []struct {
+		loss wire.Loss
+		want string
+	}{
+		{wire.Loss{Basis: wire.LossBasisContainer, Probes: []wire.ProbeLoss{measured}},
+			"n1-loop 0/312 lost, longest gap 0.0s (container timing)"},
+		{wire.Loss{Basis: wire.LossBasisContainer, Probes: []wire.ProbeLoss{
+			{Probe: "n1-loop", Outcome: wire.FlowInterrupted, Sent: 300, Lost: 274, LongestGapS: 54.8},
+			{Probe: "n2-loop", Outcome: wire.FlowNotStarted, Rule: findings.RuleFlowStartFailed, Message: "docker exec exited 1"},
+			{Probe: "n3-loop", Outcome: wire.FlowNotRead, Rule: findings.RuleFlowReadFailed, Message: "no summary"}},
+			Added: []string{"n4-loop"}, Dropped: []string{"n5-loop", "n6-loop"}},
+			"n1-loop interrupted, 274/300 lost, longest gap 54.8s; n2-loop not started; n3-loop not read: no summary; " +
+				"added n4-loop, not measured; dropped n5-loop, n6-loop, not measured (container timing)"},
+		{wire.Loss{Basis: wire.LossBasisContainer}, "no flow"},
+	} {
+		if got := detail(wire.ActReadFlows, wire.ReadFlowsResult{Loss: c.loss, Recorded: true}); got != c.want {
+			t.Errorf("loss detail for %+v = %q, want %q", c.loss, got, c.want)
+		}
+	}
+}
+
+// twin step's document carries the loss once its flows were read, and null on the dry run and
+// on a run that closed before them (016; step.schema.json's loss). Each document satisfies
+// the contracts.
+func TestStepDocumentCarriesTheLoss(t *testing.T) {
+	in := stepInput()
+	doc := findings.NewDocument(findings.OpTwinStep, &findings.Subject{Stage: "change-1/live"}, nil)
+	doc.Step = StepBlockOf(in, stepPlan())
+	if b := string(mustValidateM11(t, doc)); !strings.Contains(b, `"loss":null`) {
+		t.Errorf("the dry run's document carries no null loss: %s", b)
+	}
+	subject := &findings.Subject{Stage: "change-1/live", RunID: "run-s"}
+	loss := &wire.Loss{Basis: wire.LossBasisContainer, Probes: []wire.ProbeLoss{{Probe: "n1-loop", From: "clab-fylgja-n1-loop-a",
+		To: "clab-fylgja-n1-loop-b", Outcome: wire.FlowMeasured, Sent: 312, Lost: 5, LongestGapS: 1}}, Added: []string{}, Dropped: []string{}}
+	for _, c := range []struct {
+		name string
+		res  StepResult
+		want string
+	}{
+		{"stepped", StepResult{Outcome: StepStepped, Loss: loss}, `"loss":{"basis":"container","probes":[{"probe":"n1-loop",` +
+			`"from":"clab-fylgja-n1-loop-a","to":"clab-fylgja-n1-loop-b","outcome":"measured","sent":312,"lost":5,"longest_gap_s":1}],` +
+			`"added":[],"dropped":[]}`},
+		{"no probe", StepResult{Outcome: StepStepped, Loss: &wire.Loss{Basis: wire.LossBasisContainer}},
+			`"loss":{"basis":"container","probes":[],"added":[],"dropped":[]}`},
+		{"diverged at flows", StepResult{Outcome: StepDiverged, Phase: findings.StepFlows}, `"loss":null`},
+		{"cancelled before the stage", StepResult{Outcome: OutcomeCancelled}, `"loss":null`},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if b := string(mustValidateM11(t, StepDocument(subject, in, c.res))); !strings.Contains(b, c.want) {
+				t.Errorf("document %s\nwant it to carry %s", b, c.want)
+			}
+		})
 	}
 }
 

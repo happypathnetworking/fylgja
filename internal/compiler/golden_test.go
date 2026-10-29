@@ -12,6 +12,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/psp"
+	"github.com/happypathnetworking/fylgja/internal/snapshot"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -29,12 +30,19 @@ func loadFixture(t *testing.T, path string) *ctm.CTM {
 // that names its ports as production gains nothing from the profile.
 // The lossy one is the design case's, baselined once and reviewed. The mixed
 // one is M7's two shipped platforms in one bundle, baselined once likewise.
-// A bundle format moves all three, once and reviewed: M7's "3", and M12's "4", which
-// wrote enabled on every mapping row.
+// A bundle format moves all three, once and reviewed: M7's "3", M12's "4", which
+// wrote enabled on every mapping row, and 016's "6", which wrote the version, probes: []
+// and fidelity.synthesized: [] in each manifest and nothing else. The probed one is 016's
+// three-node snapshot with n1-loop's probe placed, baselined once with bundle "6". A
+// fixture's intent moves its own golden, once and reviewed: 016's probe-ready ports, the
+// seed's ethernet-1/10 and -1/11 (Ethernet10 and 11 on an EOS device), uncabled and
+// addressed, moved three-node and mixed by their mapping rows and every device's artifact,
+// which renders the ports and their addresses, and the probed one by its artifacts alone.
 const (
-	goldenThreeNodeID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
-	goldenLossyID     = "4213b3cfd532f896d476c67c21f54e5375effdbec18f4376360471fd03f50b03"
-	goldenMixedID     = "ecb665f58ffc9882024a06e29b01e681ee38ce40f55b76994d470fe3272a2aec"
+	goldenThreeNodeID       = "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
+	goldenLossyID           = "10099944520a548145d2d8dc45eb9a2ddec950a0ec2c9be48c572bb66fc48c31"
+	goldenMixedID           = "44ac283f65333103a5f4c6557e648c7c0bccd9e023f1babf55b1541577f33834"
+	goldenThreeNodeProbedID = "5222063bac574cf7ba031a0cb7a04dc0ae8b40cca84403215bf5356c50dfcde9"
 )
 
 // compileFixture compiles a fixture and fails on any rejection: the fixtures under
@@ -69,7 +77,7 @@ func lossyRegistry(t *testing.T) *psp.Registry {
 
 func compileFixtureWith(t *testing.T, path string, reg *psp.Registry) map[string][]byte {
 	t.Helper()
-	files, list := Compile(loadFixture(t, path), reg)
+	files, list := Compile(loadFixture(t, path), nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("%s was rejected by the compiler: %v", path, list)
 	}
@@ -84,7 +92,7 @@ func TestGoldenThreeNode(t *testing.T) {
 	if id := bundle.ID(files); id != goldenThreeNodeID {
 		t.Errorf("bundle_id = %s, want %s: the three-node golden never moves", id, goldenThreeNodeID)
 	}
-	checkInvariants(t, "testdata/ctm/three-node.json", files)
+	checkInvariants(t, loadFixture(t, "testdata/ctm/three-node.json"), files)
 
 	// The lab name is fixed and the topology declares no management network of its
 	// own: both are requirements, not accidents.
@@ -110,7 +118,46 @@ func TestGoldenLossy(t *testing.T) {
 	if id := bundle.ID(files); id != goldenLossyID {
 		t.Errorf("bundle_id = %s, want %s", id, goldenLossyID)
 	}
-	checkInvariants(t, "testdata/ctm/lossy.json", files)
+	checkInvariants(t, loadFixture(t, "testdata/ctm/lossy.json"), files)
+}
+
+// TestGoldenThreeNodeProbed is the three-node snapshot wrapped with n1-loop's probe
+// (testdata/snapshot/three-node-probed.json): two ping hosts on n1's probe-ready ports,
+// their links and rows synthesized, beside the three nodes as the three-node golden builds
+// them. Its CTM is the probed fixture PlaceProbes is tested on.
+func TestGoldenThreeNodeProbed(t *testing.T) {
+	s, err := snapshot.Load(filepath.Join("..", "..", "testdata", "snapshot", "three-node-probed.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(s.CTM, probedThreeNode(t)) {
+		t.Fatal("three-node-probed.json's CTM is not the three-node fixture with the probe-ready ports")
+	}
+	files, list := Compile(s.CTM, s.Probes, mustPSP(t), probeRegistry(t))
+	if list.Rejected() {
+		t.Fatalf("three-node-probed was rejected by the compiler: %v", list)
+	}
+	if !checkGolden(t, "three-node-probed", files) {
+		return
+	}
+	if id := bundle.ID(files); id != goldenThreeNodeProbedID {
+		t.Errorf("bundle_id = %s, want %s", id, goldenThreeNodeProbedID)
+	}
+	placed, _, list := PlaceProbes(s.CTM, s.Probes, probeRegistry(t))
+	if list.Rejected() {
+		t.Fatalf("placing three-node-probed's probe: %v", list)
+	}
+	checkInvariants(t, placed, files)
+}
+
+// mustPSP is the embedded platform packages, as `twin compile` without --psp-dir has them.
+func mustPSP(t *testing.T) *psp.Registry {
+	t.Helper()
+	reg, err := psp.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return reg
 }
 
 // checkGolden compares a compile with testdata/golden/<name>/, file by file and in both
@@ -172,12 +219,12 @@ func checkGolden(t *testing.T, name string, files map[string][]byte) bool {
 	return true
 }
 
-// checkInvariants holds a compile to what must be true whatever its golden contains: a
-// golden file that regenerates alongside a bug hides the bug.
-func checkInvariants(t *testing.T, fixture string, files map[string][]byte) {
+// checkInvariants holds a compile of c to what must be true whatever its golden contains:
+// a golden file that regenerates alongside a bug hides the bug. A probed compile is held
+// against its placed CTM, whose hosts and links are the bundle's too.
+func checkInvariants(t *testing.T, c *ctm.CTM, files map[string][]byte) {
 	t.Helper()
 	t.Run("invariants", func(t *testing.T) {
-		c := loadFixture(t, fixture)
 		var m Manifest
 		if err := json.Unmarshal(files[ManifestFile], &m); err != nil {
 			t.Fatal(err)

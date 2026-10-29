@@ -11,6 +11,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/stages"
 	"github.com/happypathnetworking/fylgja/internal/step"
@@ -26,6 +27,9 @@ type stageFlags struct {
 	// stands (017).
 	scope      string
 	scopeGiven bool
+	// probes is --probes as given (016), on stage plan alone: the probe file every stage's
+	// take carries in place of the kind's.
+	probes probesArg
 }
 
 // branchGuard refuses a --branch that is not a branch as the reference syntax names one,
@@ -274,7 +278,7 @@ func runStagePlan(ctx context.Context, opts *options, f *stageFlags) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	planned, err := planStages(ctx, opts, op, subject, f.branch, scope,
+	planned, err := planStages(ctx, opts, op, subject, f.branch, scope, f.probes,
 		func(pc stages.ProposedChange, n int) { opts.note("%s", heading(pc, true, n, scope)) },
 		func(st stages.PlanStage) { printPlanned(opts, st) },
 		func(p step.Pair) { opts.note("%s", p.Text()) })
@@ -293,23 +297,32 @@ func runStagePlan(ctx context.Context, opts *options, f *stageFlags) error {
 // packages it compiled with, the state root its bundles are filed under, the reader it read
 // through, the scope it read under, and the server's clock when it began.
 type plannedStages struct {
-	res    *stages.PlanResult
-	reg    *psp.Registry
-	paths  lab.Paths
-	reader stages.Reader
-	scope  string
-	now    time.Time
+	res *stages.PlanResult
+	reg *psp.Registry
+	// packages are the probe packages every stage was compiled with (016), by which a
+	// rehearsal plans a stage's hosts.
+	packages *probe.Registry
+	paths    lab.Paths
+	reader   stages.Reader
+	scope    string
+	now      time.Time
 }
 
 // planStages is stage plan's plan of branch's open proposed change under scope, which twin
 // rehearse plans with too (015), so a rehearsal's stages are the plan's by construction: the
 // packages, loaded before anything is dialled as a create loads them for its read; the state
-// root; the stage reader; then stages.Plan, each stage's snapshot and bundle filed as a
-// create files them, with onChange, onStage and onStep as stages.Plan calls them. A failure
-// is the document the command ends with, subject its subject.
-func planStages(ctx context.Context, opts *options, op string, subject *findings.Subject, branch, scope string,
+// root; the request's one probe list, from pa's file or the kind (016), read once before any
+// stage, so every stage's snapshot carries it; the stage reader; then stages.Plan, each
+// stage's snapshot and bundle filed as a create files them, with onChange, onStage and onStep
+// as stages.Plan calls them. A failure is the document the command ends with, subject its
+// subject.
+func planStages(ctx context.Context, opts *options, op string, subject *findings.Subject, branch, scope string, pa probesArg,
 	onChange func(stages.ProposedChange, int), onStage func(stages.PlanStage), onStep func(step.Pair)) (plannedStages, error) {
 	reg, err := psp.Load(opts.pspDir)
+	if err != nil {
+		return plannedStages{}, loadFailureAt(op, subject, findings.StepRead, err)
+	}
+	packages, err := opts.probes()
 	if err != nil {
 		return plannedStages{}, loadFailureAt(op, subject, findings.StepRead, err)
 	}
@@ -317,27 +330,32 @@ func planStages(ctx context.Context, opts *options, op string, subject *findings
 	if err != nil {
 		return plannedStages{}, failAt(op, subject, findings.StepCompile, op, "%v", err)
 	}
+	probes, err := readProbes(ctx, opts, op, subject, pa)
+	if err != nil {
+		return plannedStages{}, err
+	}
 	reader, err := intent.StageReaderFromEnv()
 	if err != nil {
 		return plannedStages{}, failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
 
 	now := time.Now().UTC()
-	res, err := stages.Plan(ctx, reader, newIntentStamper(), branch, scope, reg, stagePipeline(paths), now, onChange, onStage, onStep)
+	res, err := stages.Plan(ctx, reader, newIntentStamper(), branch, scope, reg, stagePipeline(paths, probes, packages), now, onChange, onStage, onStep)
 	if err != nil {
 		return plannedStages{}, failAt(op, subject, findings.StepResolve, op, "%v", err)
 	}
-	return plannedStages{res: res, reg: reg, paths: paths, reader: reader, scope: scope, now: now}, nil
+	return plannedStages{res: res, reg: reg, packages: packages, paths: paths, reader: reader, scope: scope, now: now}, nil
 }
 
 // stagePipeline is the stages' pipeline on the server, under paths: each stage's read taken
 // as its snapshot and filed by takeSnapshot, as a create takes its read, its refusals at
 // compile (018), and each bundle filed as the dry run files it. stage plan, twin step and
 // twin rehearse build every stage through it, so a stage's ids are the same whichever
-// command built it (D-011).
-func stagePipeline(paths lab.Paths) stages.Pipeline {
-	take := func(ctx context.Context, c *ctm.CTM) (string, findings.List, error) {
-		s, _, list, err := takeSnapshot(ctx, paths, findings.StepCompile, c)
+// command built it (D-011). probes is the request's one list, which every stage's snapshot
+// carries, and packages the probe registry every stage compiles with (016).
+func stagePipeline(paths lab.Paths, probes []probe.Probe, packages *probe.Registry) stages.Pipeline {
+	take := func(ctx context.Context, c *ctm.CTM, probes []probe.Probe) (string, findings.List, error) {
+		s, _, list, err := takeSnapshot(ctx, paths, findings.StepCompile, c, probes)
 		if s == nil {
 			return "", list, err
 		}
@@ -347,7 +365,7 @@ func stagePipeline(paths lab.Paths) stages.Pipeline {
 		_, list, err := fileCompiled(ctx, paths.Bundles, files, id)
 		return list, err
 	}
-	return stages.NewPipeline(take, file)
+	return stages.NewPipeline(take, file, probes, packages)
 }
 
 // printPlanned prints one planned stage: its resolution, snapshot_id, bundle_id and what its

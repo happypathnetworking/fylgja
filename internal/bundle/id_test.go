@@ -157,7 +157,7 @@ func TestIDMatchesDirectoryForEveryFixture(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			files, list := compiler.Compile(c, reg)
+			files, list := compiler.Compile(c, nil, reg, nil)
 			if list.Rejected() {
 				t.Fatalf("%s was rejected: %v", e.Name(), list)
 			}

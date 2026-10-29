@@ -17,6 +17,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/rehearsal"
@@ -283,7 +284,7 @@ func TestRehearseStagesAreTheStepChain(t *testing.T) {
 	store := fileGoldens(t, "three-node", "mixed")
 	nodes := map[string][]wire.NodePlan{}
 	for _, st := range plan.Stages[1:] {
-		if nodes[st.Ref.String()], err = lab.NodePlans(filepath.Join(store, st.Bundle.ID), reg); err != nil {
+		if nodes[st.Ref.String()], err = lab.NodePlans(filepath.Join(store, st.Bundle.ID), reg, nil); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -366,6 +367,75 @@ func TestRehearseStagesAreTheStepChain(t *testing.T) {
 	}
 	if s := got[3].Step; !s.Unchanged || len(s.PushPlan) != 0 || s.PushPlan == nil {
 		t.Errorf("the unchanged step to the head pushes %v", s.PushPlan)
+	}
+}
+
+// A rehearsed step's flows are twin step's (016, flowsOf): from the probe-less baseline to
+// the probed bundle the probe is added, with no flow; from the probed bundle to itself its
+// one flow runs from n1-loop-a's container towards n1-loop-b's address, as the host check
+// rendered it from the probe package; and the run fills each stage's loss from its step's,
+// none for a stage whose step read none.
+func TestRehearsedStepsCarryTheirFlows(t *testing.T) {
+	plan := rehearsePlan(t)
+	probed := goldenBundle(t, "three-node-probed")
+	plan.Stages[2].Bundle, plan.Stages[3].Bundle = &probed, &probed
+	plan.Steps = plan.Steps[:1]
+	for i := 2; i < len(plan.Stages); i++ {
+		s, err := step.Diff(*plan.Stages[i-1].Bundle, *plan.Stages[i].Bundle)
+		if err != nil {
+			t.Fatal(err)
+		}
+		plan.Steps = append(plan.Steps, step.Between(plan.Stages[i-1].Ref.String(), plan.Stages[i].Ref.String(), s))
+	}
+	b, rows, _ := rehearsalStages(plan)
+	reg, err := psp.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	probes, err := probe.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := fileGoldens(t, "three-node", "three-node-probed")
+	nodes := map[string][]wire.NodePlan{}
+	for _, st := range plan.Stages[1:] {
+		if nodes[st.Ref.String()], err = lab.NodePlans(filepath.Join(store, st.Bundle.ID), reg, probes); err != nil {
+			t.Fatal(err)
+		}
+	}
+	got, err := rehearseStages(rows, b, plan.Steps, nodes, reg, func(id string) string { return filepath.Join(store, id) },
+		"tag:fylgja", "0.2.0-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if in := got[2].Step; in == nil || in.Flows != nil || !slices.Equal(in.Added, []string{"n1-loop"}) || in.Dropped != nil {
+		t.Errorf("the step adding the probe: %+v", in)
+	}
+	var host *wire.ProbePlan
+	for _, n := range nodes[got[3].Ref] {
+		if n.Name == "n1-loop-a" {
+			host = n.Host
+		}
+	}
+	want := []wire.FlowPlan{{Probe: "n1-loop", From: "clab-fylgja-n1-loop-a", To: "clab-fylgja-n1-loop-b", Far: "10.1.11.2"}}
+	if host != nil {
+		want[0].Flow = host.Flow
+	}
+	if in := got[3].Step; host == nil || len(host.Flow.Command) == 0 || in == nil || !jsonEqual(t, in.Flows, want) ||
+		in.Added != nil || in.Dropped != nil {
+		t.Errorf("the step across the probe: %+v, want the flows %+v", in, want)
+	}
+
+	// The run's loss is each stage's: its step's block, none where the step read none.
+	loss := &wire.Loss{Basis: wire.LossBasisContainer, Probes: []wire.ProbeLoss{{Probe: "n1-loop", From: "clab-fylgja-n1-loop-a",
+		To: "clab-fylgja-n1-loop-b", Outcome: wire.FlowMeasured, Sent: 300, Lost: 274, LongestGapS: 54.8}}, Added: []string{}, Dropped: []string{}}
+	res := resultOf("r1", provision.RehearseResult{Outcome: rehearsal.OutcomeOK, Stages: []provision.RehearsedStage{
+		{Ref: "change-1/seeded", Verdict: rehearsal.VerdictBaseline, Provision: &provision.ProvisionResult{Outcome: provision.OutcomeReady}},
+		{Ref: "change-1/third-link", Verdict: rehearsal.VerdictPassed, Step: &provision.StepResult{Outcome: provision.StepStepped}},
+		{Ref: "change-1/head", Verdict: rehearsal.VerdictPassed, Step: &provision.StepResult{Outcome: provision.StepStepped, Loss: loss}},
+	}})
+	if l := res.Stages[2].Loss; l == nil || !jsonEqual(t, l, provision.LossBlockOf(loss)) || res.Stages[0].Loss != nil || res.Stages[1].Loss != nil {
+		t.Errorf("each stage's loss: %+v, %+v, %+v; want the head's its step's", res.Stages[0].Loss, res.Stages[1].Loss, l)
 	}
 }
 
@@ -863,7 +933,7 @@ func TestRehearsalReportNamesEachStagesSnapshot(t *testing.T) {
 	md := rehearsal.Markdown(doc, plan.Steps)
 	seeded := plan.Stages[1]
 	for _, want := range []string{
-		"\n| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |\n",
+		"\n| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |\n",
 		" | " + shortID(snapshotOf("seeded")) + " | " + shortID(seeded.Bundle.ID) + " | ",
 	} {
 		if !strings.Contains(md, want) {

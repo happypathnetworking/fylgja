@@ -2,8 +2,10 @@ package compiler
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
@@ -65,6 +67,78 @@ func compileSchema(t *testing.T, name string) *jsonschema.Schema {
 		t.Fatalf("compiling %s (a consumer could not load this schema): %v", name, err)
 	}
 	return s
+}
+
+// contract019 is the directory 019's copy of manifest.schema.json, the bundle 5 that 016
+// moves to 6, is frozen under.
+const contract019 = "019-following-removed"
+
+// compileFrozenSchema is feature's copy of the contract name, frozen under
+// testdata/contracts/<feature>/. It is read alone: the manifest refers to no other schema.
+func compileFrozenSchema(t *testing.T, feature, name string) *jsonschema.Schema {
+	t.Helper()
+	path := filepath.Join("testdata", "contracts", feature, name)
+	f, err := os.Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	doc, err := jsonschema.UnmarshalJSON(f)
+	if err != nil {
+		t.Fatalf("parsing %s: %v", path, err)
+	}
+	c := jsonschema.NewCompiler()
+	if err := c.AddResource(path, doc); err != nil {
+		t.Fatal(err)
+	}
+	s, err := c.Compile(path)
+	if err != nil {
+		t.Fatalf("compiling %s (a consumer could not load this schema): %v", path, err)
+	}
+	return s
+}
+
+// asBundle5 is a probe-less manifest as bundle 5 wrote it: bundle_version "5", and neither
+// the probes list nor fidelity.synthesized, the two keys bundle 6 adds (016, formats.md),
+// each always written and empty when the CTM declares no probe. A manifest of 5 is returned
+// as it is.
+func asBundle5(t *testing.T, manifest []byte) []byte {
+	t.Helper()
+	var m map[string]any
+	if err := json.Unmarshal(manifest, &m); err != nil {
+		t.Fatal(err)
+	}
+	m["bundle_version"] = "5"
+	delete(m, "probes")
+	if fidelity, ok := m["fidelity"].(map[string]any); ok {
+		delete(fidelity, "synthesized")
+	}
+	b, err := json.Marshal(m)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+// 019's copy of the manifest contract, bundle 5, loads and accepts every probe-less manifest
+// the compiler writes, as bundle 5 wrote it (asBundle5): a probe-less compile is bundle 5's
+// in everything but its version and the two lists 6 adds.
+func TestManifest5FrozenCopy(t *testing.T) {
+	schema := compileFrozenSchema(t, contract019, "manifest.schema.json")
+	root := filepath.Join("..", "..", "testdata", "ctm")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
+			continue
+		}
+		t.Run(e.Name(), func(t *testing.T) {
+			files := compileLossyFixture(t, "testdata/ctm/"+e.Name())
+			mustValidate(t, schema, asBundle5(t, files[ManifestFile]), "manifest from "+e.Name()+" as bundle 5")
+		})
+	}
 }
 
 // asAny round-trips through JSON so the validator sees the same document a consumer
@@ -209,5 +283,67 @@ func TestManifestWithoutFidelityBasisIsInvalid(t *testing.T) {
 	if err := schema.Validate(asAny(t, stripped)); err == nil {
 		t.Error("a manifest with no fidelity.basis satisfied manifest.schema.json; " +
 			"the contract no longer requires the bundle to say fidelity is asserted")
+	}
+}
+
+// A probed bundle's manifest satisfies the contract, and the contract holds a host to its
+// shape (016): a node naming a probe with a platform, or a host without its probe, is
+// refused.
+func TestAProbedManifestSatisfiesContract(t *testing.T) {
+	schema := compileSchema(t, "manifest.schema.json")
+	b := compileProbed(t, probedThreeNode(t), declared(t, "n1-loop"))
+	mustValidate(t, schema, b.files[ManifestFile], "probed manifest")
+
+	for name, edit := range map[string]func(n map[string]any){
+		"a host with a platform":   func(n map[string]any) { n["platform"] = "srlinux" },
+		"a host without its probe": func(n map[string]any) { delete(n, "probe") },
+		"a host of intent":         func(n map[string]any) { delete(n, "provenance") },
+	} {
+		var m map[string]any
+		if err := json.Unmarshal(b.files[ManifestFile], &m); err != nil {
+			t.Fatal(err)
+		}
+		for _, n := range m["nodes"].([]any) {
+			if node := n.(map[string]any); node["name"] == "n1-loop-a" {
+				edit(node)
+			}
+		}
+		doc, err := json.Marshal(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := schema.Validate(asAny(t, doc)); err == nil {
+			t.Errorf("%s satisfied manifest.schema.json", name)
+		}
+	}
+}
+
+// A probe-less compile is bundle 5's in everything but bundle_version, probes and
+// fidelity.synthesized (SC-003, R-11): each golden's manifest as the last build of 5 wrote
+// it, frozen under testdata/bundle5/, against the compile made bundle 5 by asBundle5.
+// Frozen while the fixtures stand: the fixtures' probe-ready ports (T035) moved three-node's
+// and mixed's by the six mapping rows their compile gained and each node's artifact entry,
+// and nothing else.
+func TestAProbelessCompileIsItsBundle5ButForTheVersion(t *testing.T) {
+	for _, c := range []struct{ name, fixture string }{
+		{"three-node", "three-node.json"}, {"lossy", "lossy.json"}, {"mixed", "mixed.json"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			want, err := os.ReadFile(filepath.Join("testdata", "bundle5", c.name+".manifest.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			got := asBundle5(t, compileLossyFixture(t, "testdata/ctm/"+c.fixture)[ManifestFile])
+			var g, w any
+			if err := json.Unmarshal(got, &g); err != nil {
+				t.Fatal(err)
+			}
+			if err := json.Unmarshal(want, &w); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(g, w) {
+				t.Errorf("the probe-less compile differs from its bundle 5 in more than the version and the two lists:\n got  %s\n want %s", got, want)
+			}
+		})
 	}
 }

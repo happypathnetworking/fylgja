@@ -169,11 +169,11 @@ func TestProvisionDryRunOnAClearHost(t *testing.T) {
 		t.Errorf("dry_run = %+v, want clear, three nodes, sum 6144, no budget, nothing on the host", d)
 	}
 	for _, n := range d.Nodes {
-		if n.Image != "ghcr.io/nokia/srlinux:24.7.1" || n.PSP != "nokia_srlinux" || n.MemoryMB != 2048 {
+		if n.Image != "ghcr.io/nokia/srlinux:24.7.1" || n.PSP == nil || *n.PSP != "nokia_srlinux" || n.MemoryMB != 2048 {
 			t.Errorf("node %+v, want the SR Linux image, package and budget", n)
 		}
 		// What would be pushed, as the manifest names it.
-		want := findings.DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[n.Name], Size: 707}
+		want := findings.DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[n.Name], Size: 1327}
 		if n.Artifact == nil || *n.Artifact != want {
 			t.Errorf("node %s artifact %+v, want %+v", n.Name, n.Artifact, want)
 		}
@@ -228,9 +228,9 @@ func TestProvisionDryRunTextReport(t *testing.T) {
 		"dry run: no lab, container, twin directory or run is created",
 		"bundle_id " + fixtureBundleID + "  stored: " + filepath.Join(paths.Bundles, fixtureBundleID),
 		"nodes:",
-		"  n1  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n1"] + " (707 bytes)",
-		"  n2  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n2"] + " (707 bytes)",
-		"  n3  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n3"] + " (707 bytes)",
+		"  n1  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n1"] + " (1327 bytes)",
+		"  n2  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n2"] + " (1327 bytes)",
+		"  n3  ghcr.io/nokia/srlinux:24.7.1  nokia_srlinux  2048 MiB  push device-config " + fixtureArtifacts["n3"] + " (1327 bytes)",
 		"mapping: 0 lossy mappings, 0 shared ports",
 		"memory: sum 6144 MiB; host budget unset",
 		"host: lab fylgja absent; twin directory absent",
@@ -246,7 +246,7 @@ func TestProvisionDryRunTextReport(t *testing.T) {
 // lossy golden holds nine lossy mappings over three shared ports
 // (internal/compiler's TestLossyRecordIsComplete).
 func TestDryRunCountsTheLossyRecord(t *testing.T) {
-	const lossyID = "4213b3cfd532f896d476c67c21f54e5375effdbec18f4376360471fd03f50b03"
+	const lossyID = "10099944520a548145d2d8dc45eb9a2ddec950a0ec2c9be48c572bb66fc48c31"
 	useStateRoot(t)
 	useService(t, nil)
 	dryRunEnv(t)
@@ -347,7 +347,7 @@ func TestProvisionDryRunNamesTheTwin(t *testing.T) {
 	}
 	for _, n := range []string{"n1", "n2", "n3"} {
 		fields.Nodes = append(fields.Nodes, wire.TwinNode{Name: n, Container: "clab-fylgja-" + n,
-			Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"}})
+			Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"}})
 	}
 	rec, err := lab.NewRecord(fields)
 	if err != nil {
@@ -509,7 +509,7 @@ func TestCreateDryRunFromAStage(t *testing.T) {
 	for i, want := range []string{
 		`stage fylgja-fixture/cabled: branch fylgja-fixture at 2026-09-08T12:00:00Z (given), "the leaf cabled"`,
 		"dry run: no lab, container, twin directory or run is created",
-		"read: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports " +
+		"read: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports " +
 			"(branch fylgja-fixture, at 2026-09-08T12:00:00Z, schema fixture)",
 		// The snapshot above the bundle, each filed with its store path (018).
 		"snapshot_id " + fixtureSnapshotID + "  stored: " + filepath.Join(paths.Snapshots, fixtureSnapshotID+".json"),

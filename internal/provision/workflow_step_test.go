@@ -44,7 +44,7 @@ var (
 	// Each side's snapshot (018): the lossy and mixed fixtures' wrapped ids, any identity
 	// serving.
 	stepFromSnapshot = "91f06cd67de31f6c986bc47019e79870b02403a2970d50b6b4497df64c17f10c"
-	stepToSnapshot   = "37d7378a36568e870eb1eb43dbcd580207fb5cae847fb979b54f50eef8800ebf"
+	stepToSnapshot   = "f3980cc735805c92c13be816c5dadd77c19f321c4c486808511b068f3a9659ff"
 	// stageCabled and stageLive are two stages of proposed change pc-1 on branch change-1
 	// (014): the step goes from change-1/cabled to change-1/live.
 	stageCabled = wire.StageRef{ProposedChange: wire.StageChange{ID: "pc-1", Branch: "change-1"}, Label: "cabled",
@@ -186,6 +186,12 @@ func newStepHarness(t *testing.T) *stepHarness {
 		wire.ActVerifyTwin: func(context.Context, wire.VerifyInput) (wire.VerifyResult, error) {
 			return wire.VerifyResult{}, errUnmocked
 		},
+		wire.ActStartFlows: func(context.Context, wire.FlowsInput) (wire.FlowsResult, error) {
+			return wire.FlowsResult{}, errUnmocked
+		},
+		wire.ActReadFlows: func(context.Context, wire.FlowsInput) (wire.ReadFlowsResult, error) {
+			return wire.ReadFlowsResult{}, errUnmocked
+		},
 	}
 	for name, fn := range stubs {
 		env.RegisterActivityWithOptions(fn, activity.RegisterOptions{Name: name})
@@ -276,6 +282,8 @@ func (h *stepHarness) mockHappyPath() {
 	env.OnActivity(wire.ActPushConfig, mock.Anything, mock.Anything).Return(h.landed)
 	env.OnActivity(wire.ActRecordStep, mock.Anything, mock.Anything).Return(h.recordAs)
 	env.OnActivity(wire.ActVerifyTwin, mock.Anything, mock.Anything).Return(settledWait)
+	env.OnActivity(wire.ActStartFlows, mock.Anything, mock.Anything).Return(allStarted)
+	env.OnActivity(wire.ActReadFlows, mock.Anything, mock.Anything).Return(readAs)
 }
 
 // landed answers a push as a node that commits its replace does, with the device's diff.
@@ -2310,5 +2318,20 @@ func TestStepWaitAfterAFailedStageNamesNoBundle(t *testing.T) {
 	}
 	if got.res.Outcome != StepDiverged || got.res.Step != findings.StepStage {
 		t.Errorf("outcome %q step %q, want diverged at the stage", got.res.Outcome, got.res.Step)
+	}
+}
+
+// A host containerlab's plan creates, restarts or recreates is never pushed (016): the step's
+// push plan drops it, so it is neither pushed nor recorded not_attempted. A plan of devices
+// alone, every recorded history's, is returned as it was.
+func TestTheStepsPushPlanHasNoHost(t *testing.T) {
+	nodes := []wire.NodePlan{{Name: "n1"}, {Name: "n1-loop-a", Host: &wire.ProbePlan{Format: "ping"}}}
+	plan := []step.NodePush{{Node: "n1", Reasons: []string{step.PushArtifact}}, {Node: "n1-loop-a", Reasons: []string{step.PushCreated}}}
+	if got := withoutHosts(plan, nodes); !reflect.DeepEqual(got, plan[:1]) {
+		t.Errorf("push plan %+v, want n1 alone", got)
+	}
+	devices := nodes[:1]
+	if got := withoutHosts(plan, devices); !reflect.DeepEqual(got, plan) {
+		t.Errorf("a plan with no host became %+v, want it as it was", got)
 	}
 }

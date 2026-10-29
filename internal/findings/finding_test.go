@@ -193,6 +193,34 @@ var dataModelRules = []string{
 	"snapshot.id.mismatch",
 	"snapshot.unknown",
 	"snapshot.flags.conflict",
+
+	// 016's rules (data-model §12). Appended; none retires (R-27), and snapshot.invalid,
+	// snapshot.version.unsupported and snapshot.flags.conflict above are reworded, not renamed.
+	"probes.version.unsupported",
+	"probes.invalid",
+	"probe.name.invalid",
+	"probe.name.duplicate",
+	"probe.address.invalid",
+	"probe.gateway.invalid",
+	"probe.gateway.outside",
+	"probe.family.mixed",
+	"probe.address.duplicate",
+	"probe.format.unknown",
+	"probe.device.unknown",
+	"probe.interface.unknown",
+	"probe.interface.cabled",
+	"probe.interface.mgmt_only",
+	"probe.port.taken",
+	"probe.host.collision",
+	"probe.kind.absent",
+	"probe.package.schema",
+	"probe.package.version.unknown",
+	"probe.package.format.duplicate",
+	"probe.package.template",
+	"host.probe_package.missing",
+	"flow.start.failed",
+	"flow.read.failed",
+	"verify.burst",
 }
 
 // dcimMapping is the mapping a twin.json 8 record's provenance names when the Infrahub
@@ -697,7 +725,7 @@ func m2Documents() []labelledDocument {
 	dry := NewDocument(OpTwinProvision, &Subject{Bundle: "testdata/golden/three-node"}, unbudgeted)
 	dry.BundleID = id
 	dry.DryRun = &DryRunBlock{
-		Nodes:       []DryRunNode{{Name: "n1", Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: "nokia_srlinux", MemoryMB: 2048}},
+		Nodes:       []DryRunNode{{Name: "n1", Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: ptr("nokia_srlinux"), MemoryMB: 2048}},
 		MemorySumMB: 2048,
 		Host:        DryRunHost{},
 		Verdict:     VerdictClear,
@@ -954,6 +982,45 @@ func drop018Snapshots(doc map[string]any) {
 			stages, _ := b["stages"].([]any)
 			for _, st := range stages {
 				dropNull(st)
+			}
+		}
+	}
+}
+
+// drop016NullLoss removes the step block's loss when it is null, as the dry run and a run
+// closed before its flows were read write it (016), and each rehearsal stage's, null on
+// every stage whose step read no flow, and the burst count of a read that ran no burst
+// (016): the verify block's counts, the step's wait_counts and each rehearsed stage's
+// verify. Every contract before 016's forbids the keys, and from 016 they are always
+// written. A loss that is set, and a burst count that counted a burst, are left, so an
+// earlier contract still refuses a document carrying one.
+func drop016NullLoss(doc map[string]any) {
+	dropNoBurst := func(counts any) {
+		c, ok := counts.(map[string]any)
+		if !ok {
+			return
+		}
+		if b, ok := c["burst"].(map[string]any); ok && b["held"] == 0.0 && b["failed"] == 0.0 && (b["unread"] == nil || b["unread"] == 0.0) {
+			delete(c, "burst")
+		}
+	}
+	if step, ok := doc["step"].(map[string]any); ok {
+		if v, ok := step["loss"]; ok && v == nil {
+			delete(step, "loss")
+		}
+		dropNoBurst(step["wait_counts"])
+	}
+	if v, ok := doc["verify"].(map[string]any); ok {
+		dropNoBurst(v["counts"])
+	}
+	if r, ok := doc["rehearsal"].(map[string]any); ok {
+		stages, _ := r["stages"].([]any)
+		for _, st := range stages {
+			if st, ok := st.(map[string]any); ok {
+				dropNoBurst(st["verify"])
+				if v, ok := st["loss"]; ok && v == nil {
+					delete(st, "loss")
+				}
 			}
 		}
 	}
@@ -1359,7 +1426,7 @@ func m5Documents() []labelledDocument {
 	dry := NewDocument(OpTwinProvision, &Subject{Bundle: "testdata/golden/three-node"}, nil)
 	dry.BundleID = id
 	dry.DryRun = &DryRunBlock{
-		Nodes: []DryRunNode{{Name: "n1", Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: "nokia_srlinux", MemoryMB: 2048,
+		Nodes: []DryRunNode{{Name: "n1", Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: ptr("nokia_srlinux"), MemoryMB: 2048,
 			Artifact: &DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: sum1, Size: 1462}}},
 		MemorySumMB: 2048, HostBudgetMB: &budget, Host: DryRunHost{}, Verdict: VerdictClear,
 	}
@@ -1452,7 +1519,7 @@ func TestM6DocumentsSatisfySchema(t *testing.T) {
 	lossy := NewDocument(OpTwinProvision, &Subject{Bundle: "testdata/golden/lossy"}, nil)
 	lossy.BundleID = strings.Repeat("81", 32)
 	lossy.DryRun = &DryRunBlock{
-		Nodes: []DryRunNode{{Name: "c1", Image: "example.invalid/chassisos:0", PSP: "chassisos", MemoryMB: 2048,
+		Nodes: []DryRunNode{{Name: "c1", Image: "example.invalid/chassisos:0", PSP: ptr("chassisos"), MemoryMB: 2048,
 			Artifact: &DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: m5Checksum, Size: 245}}},
 		MemorySumMB: 2048, HostBudgetMB: &budget, Host: DryRunHost{}, Verdict: VerdictClear,
 		LossyMappings: 9, SharedPorts: 3,

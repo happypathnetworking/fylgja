@@ -45,6 +45,12 @@ provides durable execution for provisioning.
   enabled, discovery on) comes from the platform support package. Production
   configuration is an artifact Infrahub rendered for the branch, pushed to each node
   after boot.
+- **A probe is a declaration outside intent** ([D-064](decisions.md#d-064)): two
+  endpoints on uncabled device ports, from a file or else the kind `FylgjaProbe` on the
+  default branch, carried by the snapshot and compiled into two synthesized `ping` hosts,
+  configured from the declaration alone, across which a step measures its transient loss,
+  labelled container timing and never asserted, and verify runs a burst whose short count
+  fails the stage.
 - **Every command goes through the API.** The CLI is a client of `fylgja serve`, which
   runs on the lab host beside the worker; a client holds one token and an address. So are
   the two checks this repository registers in Infrahub, which run on every proposed
@@ -83,7 +89,10 @@ read ──────▶ take ────▶ compile ─────▶ provi
 
 No separate resolve or bind stage. The compiler emits a deployable topology with the
 fixed lab name `fylgja` and containerlab's default management network; image
-overrides use the PSP override directory. `step` takes a twin built from a snapshot to
+overrides use the PSP override directory. The take carries the request's probes beside
+the CTM, and the compile places each probe's two hosts on a copy of the CTM before it
+surveys it, so a probe reaches the bundle as synthesized nodes, which the step and verify
+read from the manifest. `step` takes a twin built from a snapshot to
 the bundle of a stage of any proposed change, or of a snapshot of any branch, in place,
 and is how a twin walks; `verify` reads the running twin against the intent it was
 built from and changes nothing; `rehearse` builds, steps and verifies a proposed change's

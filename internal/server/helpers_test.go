@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -27,7 +28,7 @@ import (
 // changed only where the seam it set is now a field of the server the helper is called
 // through.
 
-const fixtureBundleID = "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386"
+const fixtureBundleID = "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672"
 
 // dcimMapping is the mapping a twin.json 8 record's provenance names when the Infrahub
 // reader read the schema library's DCIM (017).
@@ -233,7 +234,7 @@ func readyResult() provision.ProvisionResult {
 	for i, name := range []string{"n1", "n2", "n3"} {
 		nodes = append(nodes, wire.TwinNode{
 			Name: name, Container: "clab-fylgja-" + name, Image: "ghcr.io/nokia/srlinux:24.7.1",
-			PSP:      wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
+			PSP:      &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
 			MgmtIPv4: "172.20.20." + string(rune('2'+i)), ReadyAfterS: 0.9,
 			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[name], Size: 861},
 			PushedInS: 0.7,
@@ -274,10 +275,22 @@ func validateM6Document(t *testing.T, doc *findings.Document) {
 // module root's contracts/. 018 is additive: a document that names no snapshot is 017's too,
 // so it is also validated against 017's frozen copy, the null snapshot ids taken out
 // (as017Contract). 019 removes following: a document of this build is 018's too, as built,
-// so it is also validated against 018's frozen copy.
+// so it is also validated against 018's frozen copy. 016 moves the step, verify, rehearsal
+// and findings contracts on: a document of this build is 019's as built, a null step loss
+// taken out (withoutNullLoss), so it is also validated against 019's frozen copy; one whose
+// step carries a loss is 016's alone, and is read against no earlier copy.
 func validateM10Document(t *testing.T, doc *findings.Document) {
 	t.Helper()
 	validateWithShow(t, currentContract, "M13", doc)
+	// A step document carrying a loss its flows read is 016's, which no earlier contract
+	// accepts, as is a rehearsal whose stage carries one.
+	if doc.Step != nil && doc.Step.Loss != nil {
+		return
+	}
+	if r := doc.Rehearsal; r != nil && slices.ContainsFunc(r.Stages, func(s findings.RehearsalStage) bool { return s.Loss != nil }) {
+		return
+	}
+	validateWithShow(t, contract019, "019", doc)
 	validateWithShow(t, contract018, "018", doc)
 	if !namesSnapshot(t, doc) {
 		validateWithShow(t, contract017, "017", doc)
@@ -291,6 +304,11 @@ const contract017 = "017-dcim-reader"
 // contract018 is the feature argument that names 018's copies of the findings contract and
 // the show block, the two 019 moves, frozen under testdata/contracts/018-snapshots/.
 const contract018 = "018-snapshots"
+
+// contract019 is the feature argument that names 019's copies of the findings contract and
+// the step, verify and rehearsal blocks, the four 016 moves, frozen under
+// testdata/contracts/019-following-removed/.
+const contract019 = "019-following-removed"
 
 // namesSnapshot says whether doc names a snapshot anywhere 018 puts one: such a document is
 // 018's, which no earlier contract accepts.
@@ -328,6 +346,37 @@ func dropNullSnapshots(generic map[string]any) {
 	}
 }
 
+// withoutNullLoss is b, a document marshalled, with its step block's loss taken out when it
+// is null, as the dry run and a run closed before its flows write it (016), and each
+// rehearsal stage's, null on every stage whose step read no flow: every contract before
+// 016's forbids the key, and from 016 it is always written.
+func withoutNullLoss(t *testing.T, b []byte) []byte {
+	t.Helper()
+	var generic map[string]any
+	if err := json.Unmarshal(b, &generic); err != nil {
+		t.Fatal(err)
+	}
+	dropNull := func(m any) {
+		if o, ok := m.(map[string]any); ok {
+			if v, ok := o["loss"]; ok && v == nil {
+				delete(o, "loss")
+			}
+		}
+	}
+	dropNull(generic["step"])
+	if r, ok := generic["rehearsal"].(map[string]any); ok {
+		stages, _ := r["stages"].([]any)
+		for _, st := range stages {
+			dropNull(st)
+		}
+	}
+	out, err := json.Marshal(generic)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
+}
+
 // as017Contract is doc as 017's contract reads it, marshalled: the null snapshot ids taken
 // out, and nothing else.
 func as017Contract(t *testing.T, doc *findings.Document) []byte {
@@ -358,6 +407,9 @@ func validateWithShow(t *testing.T, feature, milestone string, doc *findings.Doc
 	if feature == contract017 {
 		b = as017Contract(t, doc)
 	}
+	if feature != currentContract {
+		b = withoutNullLoss(t, b)
+	}
 	v, err := jsonschema.UnmarshalJSON(bytes.NewReader(b))
 	if err != nil {
 		t.Fatal(err)
@@ -385,6 +437,30 @@ func contractPath(feature, name string) string {
 	return filepath.Join("testdata", "contracts", feature, name)
 }
 
+// laterContract is the next later frozen feature's copy of the block name, or the current
+// one when no later copy holds it.
+func laterContract(t *testing.T, feature, name string) string {
+	t.Helper()
+	dirs, err := os.ReadDir(filepath.Join("testdata", "contracts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range dirs {
+		if d.Name() <= feature {
+			continue
+		}
+		if path := contractPath(d.Name(), name); fileExists(path) {
+			return path
+		}
+	}
+	return contractPath(currentContract, name)
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 // findingsContract returns feature's findings contract, compiled once.
 func findingsContract(t *testing.T, feature string) *jsonschema.Schema {
 	t.Helper()
@@ -410,19 +486,19 @@ func findingsContract(t *testing.T, feature string) *jsonschema.Schema {
 		t.Fatal(err)
 	}
 	c := jsonschema.NewCompiler()
-	if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/show.schema.json", load(contractPath(feature, "show.schema.json"))); err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
+	for _, name := range []string{"show.schema.json", "stages.schema.json", "step.schema.json", "verify.schema.json", "rehearsal.schema.json"} {
 		path := contractPath(feature, name)
 		if _, err := os.Stat(path); err != nil {
 			// A block the feature's contract refers to but its directory does not hold had not
 			// moved since the feature: 017's verify.schema.json, which 018 does not move, and
-			// 018's stages, step, verify and rehearsal blocks, which 019 does not freeze.
+			// 018's stages, step, verify and rehearsal blocks, which 019 does not freeze, and
+			// 019's show and stages blocks, which 016 does not move. It is read from the next
+			// later frozen copy, which holds it as the feature left it, and from the current
+			// contract only when no later copy holds it.
 			if feature == currentContract || !strings.Contains(string(refers), "/schemas/"+name) {
 				continue
 			}
-			path = contractPath(currentContract, name)
+			path = laterContract(t, feature, name)
 		}
 		if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/"+name, load(path)); err != nil {
 			t.Fatal(err)

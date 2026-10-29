@@ -38,14 +38,27 @@ System_Boundary("Fylgja_boundary", "Fylgja", $tags="Software System") {
     Component(Fylgja.fylgjaserve.bundle, "bundle", $techn="internal/bundle", $descr="The bundle format, canonical hashing, the store.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.snapshot, "snapshot", $techn="internal/snapshot", $descr="The snapshot: the document, its id, its validation, the store.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.psp, "psp", $techn="internal/psp", $descr="Platform support packages: loading and validation.", $tags="Component", $link="")
+    Component(Fylgja.fylgjaserve.probe, "probe", $techn="internal/probe", $descr="The probe declaration and its rules, the probe packages (loading, validation, their templates rendered) and the pure reading of a ping's output.", $tags="Component", $link="")
     Component(Fylgja.fylgjaserve.findings, "findings", $techn="internal/findings", $descr="Findings, rules, the findings document, exit codes. The client's side links it too.", $tags="Component", $link="")
   }
 
 }
 
+Rel(Fylgja.fylgjaserve.step, Fylgja.fylgjaserve.compiler, "Compares two manifests", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.rehearsal, Fylgja.fylgjaserve.findings, "Builds the report's block and words its findings", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.rehearsal, Fylgja.fylgjaserve.step, "Draws what each step changed", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.compiler, Fylgja.fylgjaserve.psp, "Applies the mapping profile", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.compiler, Fylgja.fylgjaserve.probe, "Places each probe's hosts; renders them from their package", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.validate, Fylgja.fylgjaserve.probe, "Places the probes, refusing as the compiler does", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.snapshot, Fylgja.fylgjaserve.probe, "Holds each declaration to its rules", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.intent, Fylgja.fylgjaserve.psp, "Finds each device's package by its manufacturer and platform", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.intent, Fylgja.fylgjaserve.probe, "Reads FylgjaProbe on the default branch as declarations", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.verify, Fylgja.fylgjaserve.probe, "Renders each burst from its package", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.lab, Fylgja.fylgjaserve.probe, "Plans each host from its package; reads the burst", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.api, "Decodes requests; writes frames", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.findings, "Words every refusal; writes the document", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.psp, "Loads the packages", $techn="", $tags="Relationship", $link="")
+Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.probe, "Loads the probe packages; reads a request's declaration file", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.stage, "Reads and compiles", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.stages, "Resolves, lists, plans", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.server, Fylgja.fylgjaserve.intent, "Reads stages and stamps; checks the schema against the mapping's table", $techn="", $tags="Relationship", $link="")
@@ -73,11 +86,6 @@ Rel(Fylgja.fylgjaserve.lab, Fylgja.fylgjaserve.bundle, "Verifies the staged bund
 Rel(Fylgja.fylgjaserve.lab, Fylgja.fylgjaserve.compiler, "Reads the manifest", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.verify, Fylgja.fylgjaserve.compiler, "Derives from the manifest", $techn="", $tags="Relationship", $link="")
 Rel(Fylgja.fylgjaserve.validate, Fylgja.fylgjaserve.compiler, "Surveys each device", $techn="", $tags="Relationship", $link="")
-Rel(Fylgja.fylgjaserve.step, Fylgja.fylgjaserve.compiler, "Compares two manifests", $techn="", $tags="Relationship", $link="")
-Rel(Fylgja.fylgjaserve.rehearsal, Fylgja.fylgjaserve.findings, "Builds the report's block and words its findings", $techn="", $tags="Relationship", $link="")
-Rel(Fylgja.fylgjaserve.rehearsal, Fylgja.fylgjaserve.step, "Draws what each step changed", $techn="", $tags="Relationship", $link="")
-Rel(Fylgja.fylgjaserve.compiler, Fylgja.fylgjaserve.psp, "Applies the mapping profile", $techn="", $tags="Relationship", $link="")
-Rel(Fylgja.fylgjaserve.intent, Fylgja.fylgjaserve.psp, "Finds each device's package by its manufacturer and platform", $techn="", $tags="Relationship", $link="")
 
 SHOW_LEGEND(true)
 hide stereotypes

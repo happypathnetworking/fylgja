@@ -29,6 +29,10 @@ type stepFlags struct {
 	// waitGiven is whether --wait was given at all, apart from its value: an explicit empty
 	// one is refused, not left out (M4's --interval= rule, a flag twin create had until 019).
 	waitGiven bool
+	// probes is --probes as given (016): the path of a probe declaration the client reads and
+	// sends for a stage target. probesGiven is whether it was given at all.
+	probes      string
+	probesGiven bool
 }
 
 func newTwinStepCmd(opts *options) *cobra.Command {
@@ -57,6 +61,7 @@ func newTwinStepCmd(opts *options) *cobra.Command {
 			f.stageGiven = cmd.Flags().Changed("stage")
 			f.snapshotGiven = cmd.Flags().Changed("snapshot")
 			f.waitGiven = cmd.Flags().Changed("wait")
+			f.probesGiven = cmd.Flags().Changed("probes")
 			return runTwinStep(cmd.Context(), opts, f)
 		},
 	}
@@ -73,14 +78,17 @@ func newTwinStepCmd(opts *options) *cobra.Command {
 			"and read containerlab's plan; start no run (with --snapshot, nothing is read)")
 	cmd.Flags().StringVar(&f.wait, "wait", "",
 		"after the record, read the twin until it conforms, at most this long (default "+defaultBudget+"; 0 reads once)")
+	cmd.Flags().StringVar(&f.probes, "probes", "", probesUsage+"; for a stage target, and refused beside --snapshot, "+
+		"which carries its own")
 	return cmd
 }
 
 // runTwinStep is twin step as one request; the server resolves and reads the target, or
 // resolves the snapshot given, compiles it and files its bundle, checks its host, reads
 // containerlab's plan and starts the run. A --snapshot is sent as twin create sends one
-// (snapshotSent; 019, research R-04), its file read only when --stage is not also given, so
-// the server's snapshot.flags.conflict answers first, whatever the file.
+// (snapshotSent; 019, research R-04), its file read only when neither --stage nor --probes is
+// also given, so the server's snapshot.flags.conflict answers first, whatever the file. A
+// --probes is otherwise sent as create sends it (016).
 func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	a := given{}
 	fromStage := f.stageGiven || f.stage != ""
@@ -92,15 +100,19 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	if f.waitGiven {
 		a["wait"] = f.wait
 	}
+	a.probes(f.probes, f.probesGiven)
+	subject := &findings.Subject{Snapshot: f.snapshot}
 	var files []api.File
+	var err error
 	if f.snapshotGiven || f.snapshot != "" {
 		a["snapshot"] = f.snapshot
-		if !fromStage {
-			var err error
-			if files, err = snapshotSent(findings.OpTwinStep, &findings.Subject{Snapshot: f.snapshot}, f.snapshot); err != nil {
+		if !fromStage && !f.probesGiven {
+			if files, err = snapshotSent(findings.OpTwinStep, subject, f.snapshot); err != nil {
 				return err
 			}
 		}
+	} else if files, err = probesSent(findings.OpTwinStep, subject, f.probes, f.probesGiven); err != nil {
+		return err
 	}
 	return send(ctx, opts, findings.OpTwinStep, a, files, handlers{})
 }

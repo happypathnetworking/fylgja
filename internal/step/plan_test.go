@@ -106,7 +106,8 @@ func TestPushPlanAndUnapplied(t *testing.T) {
 		{
 			name: "a platform change recreated, with its artifact and bootstrap",
 			step: mustDiff(t, mixed, edited(t, mixed, idB, func(m *compiler.Manifest, files map[string][]byte) {
-				m.Nodes[0].Platform = "srlinux"
+				platform := "srlinux"
+				m.Nodes[0].Platform = &platform
 				m.Nodes[0].Artifact.Checksum = "9a0177b2e8c1d4f5a6b7c8d9e0f1a2b3"
 				files[m.Nodes[0].Bootstrap.File] = append(files[m.Nodes[0].Bootstrap.File], "another line\n"...)
 			})),

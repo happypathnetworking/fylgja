@@ -33,14 +33,27 @@ var currentResources = []string{"show.schema.json", "stages.schema.json", "step.
 // refers to a block cannot compile without it, so a caller names every block its
 // feature's copy refers to: currentResources for the current contract. A block the
 // feature's directory does not hold had not moved since that feature, so the current one
-// is read in its place: verify.schema.json beside 017's copy, which 018 does not move, and
-// the stages, step, verify and rehearsal blocks beside 018's, which 019 does not freeze.
+// is read in its place: the next later feature's copy that holds it, or the current one when
+// none does. So verify.schema.json beside 017's and 018's copies is 019's, which froze it as
+// it stood from 017 until 016 moved it, and the stages block beside 018's is the current one.
 func compileFeatureFindingsSchema(t *testing.T, feature string, resources ...string) *jsonschema.Schema {
 	t.Helper()
+	frozen, err := os.ReadDir(filepath.Join("testdata", "contracts"))
+	if err != nil {
+		t.Fatal(err)
+	}
 	load := func(name string) any {
 		path := contractPath(feature, name)
 		if _, err := os.Stat(path); err != nil && name != "findings.schema.json" {
 			path = contractPath(currentContract, name)
+			for _, d := range frozen {
+				if later := contractPath(d.Name(), name); feature != currentContract && d.Name() > feature {
+					if _, err := os.Stat(later); err == nil {
+						path = later
+						break
+					}
+				}
+			}
 		}
 		f, err := os.Open(path)
 		if err != nil {
@@ -138,7 +151,7 @@ func stageDocuments() []labelledDocument {
 	dry.BundleID = id
 	dry.Stage = cabledBlock()
 	dry.DryRun = &DryRunBlock{
-		Nodes: []DryRunNode{{Name: "n1", Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: "nokia_srlinux", MemoryMB: 2048,
+		Nodes: []DryRunNode{{Name: "n1", Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: ptr("nokia_srlinux"), MemoryMB: 2048,
 			Artifact: &DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: m5Checksum, Size: 861}}},
 		MemorySumMB: 2048, HostBudgetMB: &budget, Verdict: VerdictClear,
 	}
@@ -600,3 +613,5 @@ func containsAll(s string, subs []string) bool {
 	}
 	return true
 }
+
+func ptr(s string) *string { return &s }

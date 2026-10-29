@@ -19,6 +19,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/validate"
 )
@@ -82,7 +83,8 @@ func Read(ctx context.Context, branch, at, scope string, reg *psp.Registry, obse
 	}
 
 	// The same rules twin compile runs, on the same shape: a CTM that reads clean compiles.
-	list = append(list, dedupe(validate.Validate(snapshot, reg), list)...)
+	// A read is of intent alone; its probes are the take's, placed at the compile (016).
+	list = append(list, dedupe(validate.Validate(snapshot, nil, reg, nil), list)...)
 	if list.Rejected() {
 		return nil, list, nil
 	}
@@ -144,18 +146,20 @@ func dedupe(add, have findings.List) findings.List {
 // (internal/findings).
 const artifactRules = "artifact."
 
-// Compile turns a CTM into a bundle's files and identity. Validation runs first and its
-// rejections stop everything, so a bundle is never built from intent that could not be
-// built faithfully. On a rejection files is nil and id empty. The id is computed
-// from the bytes before anything is written, so it describes what was compiled.
+// Compile turns a snapshot's body, its CTM and its probes, into a bundle's files and
+// identity. Validation runs first and its rejections stop everything, so a bundle is never
+// built from intent that could not be built faithfully. On a rejection files is nil and id
+// empty. The id is computed from the bytes before anything is written, so it describes
+// what was compiled. probes is the probe registry, which may be nil where decls is empty
+// (016).
 //
 // A CTM of another version never reaches it: ctm.Unmarshal refuses one, naming both
 // versions, and twin compile files that as ctm.version.unsupported at the file (017).
-func Compile(c *ctm.CTM, reg *psp.Registry) (files map[string][]byte, id string, list findings.List) {
-	if list := validate.Validate(c, reg); list.Rejected() {
+func Compile(c *ctm.CTM, decls []probe.Probe, reg *psp.Registry, probes *probe.Registry) (files map[string][]byte, id string, list findings.List) {
+	if list := validate.Validate(c, decls, reg, probes); list.Rejected() {
 		return nil, "", list
 	}
-	files, list = compiler.Compile(c, reg)
+	files, list = compiler.Compile(c, decls, reg, probes)
 	if list.Rejected() {
 		return nil, "", list
 	}

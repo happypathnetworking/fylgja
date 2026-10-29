@@ -77,13 +77,23 @@ func contractProvenance(generic map[string]any) {
 }
 
 // unsnapshotted is a record as a worker of twin.json 8 or earlier wrote it, in generic, a
-// record as JSON: no snapshot_id at the top level or on a step's sides, which 018 added.
+// record as JSON: no snapshot_id at the top level or on a step's sides, which 018 added, and
+// no step.loss, which 016 added.
 func unsnapshotted(generic map[string]any) {
+	unlossed(generic)
 	delete(generic, "snapshot_id")
 	if step, ok := generic["step"].(map[string]any); ok {
 		for _, side := range []string{"from", "to"} {
 			delete(step[side].(map[string]any), "snapshot_id")
 		}
+	}
+}
+
+// unlossed is a record as a worker of twin.json 10 or earlier wrote it, in generic, a record
+// as JSON: no loss in its step block, which 016 added.
+func unlossed(generic map[string]any) {
+	if step, ok := generic["step"].(map[string]any); ok {
+		delete(step, "loss")
 	}
 }
 
@@ -102,8 +112,8 @@ func twinOf(t *testing.T, change func(*lab.RecordFields)) wire.TwinRecord {
 	}
 	for _, n := range []string{"n1", "n2", "n3"} {
 		f.Nodes = append(f.Nodes, wire.TwinNode{Name: n, Container: "clab-fylgja-" + n,
-			Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
-			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[n], Size: 707},
+			Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
+			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[n], Size: 1327},
 			PushedInS: 0.7})
 	}
 	if change != nil {
@@ -247,9 +257,9 @@ func lines(l ...string) string { return strings.Join(l, "\n") + "\n" }
 // and the artifact twin.json records for it, by name and checksum (M5
 // contracts/cli.md, twin show).
 const threeNodes = "twin: lab fylgja present (3 nodes); twin directory present\n" +
-	"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux  device-config 597f6263eb7e0b539679b3956270876f\n" +
-	"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config 5ac21560015ad6bb1e881358115d0b7a\n" +
-	"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config e93df96400ddbada7daa1a0777d9d3e3\n"
+	"  n1  clab-fylgja-n1  running  172.20.20.2  nokia_srlinux  device-config 28881d3d0d61d3fe5acf1f1ee0e31a60\n" +
+	"  n2  clab-fylgja-n2  running  172.20.20.3  nokia_srlinux  device-config 092ca9f62fe2887add0ae679de0a7076\n" +
+	"  n3  clab-fylgja-n3  running  172.20.20.4  nokia_srlinux  device-config 95a3a91788e63626cdb9b4ecdf56eb58\n"
 
 // threeBareNodes is the twin line with no twin.json to name what the nodes were pushed.
 const threeBareNodes = "twin: lab fylgja present (3 nodes); twin directory present\n" +
@@ -523,17 +533,17 @@ func TestShowTreatsAnUnreadableScopeAsUnknown(t *testing.T) {
 	var cases []unreadable
 	for _, scope := range []string{"", "fylgja", "tag:"} {
 		cases = append(cases, unreadable{fmt.Sprintf("scope %q", scope), []edit{{"scope", scope}},
-			`scope unknown (record 10 names scope "` + scope + `", not tag:<name>)`})
+			`scope unknown (record 11 names scope "` + scope + `", not tag:<name>)`})
 	}
 	cases = append(cases, []unreadable{
 		{"mapping reader \"Infrahub DCIM\"", []edit{{"reader", "Infrahub DCIM"}},
-			`scope tag:fylgja, read by an unknown reader (record 10 names mapping reader "Infrahub DCIM")`},
+			`scope tag:fylgja, read by an unknown reader (record 11 names mapping reader "Infrahub DCIM")`},
 		{"an empty mapping model", []edit{{"model", ""}},
-			`scope tag:fylgja, read by an unknown reader (record 10 names mapping model "")`},
+			`scope tag:fylgja, read by an unknown reader (record 11 names mapping model "")`},
 		{"an empty mapping version", []edit{{"version", ""}},
-			`scope tag:fylgja, read by an unknown reader (record 10 names mapping version "")`},
+			`scope tag:fylgja, read by an unknown reader (record 11 names mapping version "")`},
 		{"a reader and a model", []edit{{"reader", "-dcim"}, {"model", ""}},
-			`scope tag:fylgja, read by an unknown reader (record 10 names mapping reader "-dcim", model "")`},
+			`scope tag:fylgja, read by an unknown reader (record 11 names mapping reader "-dcim", model "")`},
 	}...)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -585,7 +595,7 @@ func TestShowTreatsAnUnreadableScopeAsUnknown(t *testing.T) {
 func TestShowNamesEachNodesOwnPackage(t *testing.T) {
 	paths := useStateRoot(t)
 	writeTwin(t, paths, twinOf(t, func(f *lab.RecordFields) {
-		f.Nodes[1].PSP = wire.PSPRef{ID: "arista_eos", Source: "embedded"}
+		f.Nodes[1].PSP = &wire.PSPRef{ID: "arista_eos", Source: "embedded"}
 		f.Nodes[1].Image = "ceos:4.32.0.2F"
 	}))
 	out := showWith(t, paths, "inspect-three.json", &fakeService{})
@@ -606,6 +616,40 @@ func TestShowNamesEachNodesOwnPackage(t *testing.T) {
 	if want := []string{"n1 nokia_srlinux", "n2 arista_eos", "n3 nokia_srlinux"}; !slices.Equal(got, want) {
 		t.Errorf("the document's nodes %v, want %v", got, want)
 	}
+}
+
+// A twin of the probed golden (016): each probe's host is listed among the nodes, naming its
+// format where a device names its package and its probe and endpoint where a device names its
+// artifact, from twin.json 11's nodes[].probe; the JSON node carries psp and artifact null,
+// which the show contract accepts unmoved. The lab is inspect-three.json with the two
+// hosts' linux containers added, as containerlab reports a node of that kind.
+func TestShowListsAProbesHosts(t *testing.T) {
+	paths := useStateRoot(t)
+	ping := wire.PSPRef{ID: "ping", Source: "embedded"}
+	writeTwin(t, paths, twinOf(t, func(f *lab.RecordFields) {
+		for i, endpoint := range []string{"a", "b"} {
+			f.Nodes = append(f.Nodes, wire.TwinNode{Name: "n1-loop-" + endpoint, Container: "clab-fylgja-n1-loop-" + endpoint,
+				Image: "alpine:3.24.2", Probe: &wire.TwinProbe{Name: "n1-loop", Endpoint: endpoint, Format: "ping", Package: ping},
+				MgmtIPv4: fmt.Sprintf("172.20.20.%d", 5+i), ReadyAfterS: 1.2})
+		}
+	}))
+	out := showWith(t, paths, "inspect-three-probed.json", &fakeService{})
+	probed := strings.Replace(threeNodes, "present (3 nodes)", "present (5 nodes)", 1)
+	probed = strings.Replace(probed, "\n  n2  ", "\n"+
+		"  n1-loop-a  clab-fylgja-n1-loop-a  running  172.20.20.5  ping host  probe n1-loop a\n"+
+		"  n1-loop-b  clab-fylgja-n1-loop-b  running  172.20.20.6  ping host  probe n1-loop b\n"+
+		"  n2  ", 1)
+	wantShow(t, out, probed+recordLine+
+		"  intent read at "+showObserved+"; reproducing it with --at that instant is best-effort\n"+
+		strings.Replace(provisionedLine, "3 nodes", "5 nodes", 1)+lines("kind: "+showKind("576933ec…", ""), "in flight: none"),
+		findings.ShowKindSnapshot, bestEffortNote)
+	for _, n := range out.doc.Show.Host.Nodes {
+		host := strings.HasPrefix(n.Name, "n1-loop-")
+		if host != (n.PSP == nil) || host != (n.Artifact == nil) {
+			t.Errorf("node %s carries package %v and artifact %v; want both null on a host alone", n.Name, n.PSP, n.Artifact)
+		}
+	}
+	validateM10Document(t, out.doc)
 }
 
 // US5 scenario 6: from a bundle, with the read time unknown and snapshot none on the record
@@ -1725,8 +1769,8 @@ func TestShowStepWait(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			paths := useStateRoot(t)
 			rec := steppedTwin(t, c.change)
-			if rec.TwinVersion != "10" {
-				t.Fatalf("lab.NewStepRecord wrote version %q, want 10", rec.TwinVersion)
+			if rec.TwinVersion != "11" {
+				t.Fatalf("lab.NewStepRecord wrote version %q, want 11", rec.TwinVersion)
 			}
 			rec.Step.Wait = c.wait
 			writeTwin(t, paths, rec)
@@ -1767,8 +1811,8 @@ func TestShowCreatedVersion10RecordAsM11(t *testing.T) {
 		return showWith(t, paths, "inspect-three.json", &fakeService{})
 	}
 	five, four := show(writeTwin), show(writeM11Twin)
-	if seededTwin(t).TwinVersion != "10" {
-		t.Fatalf("a create's record is version %q, want 10", seededTwin(t).TwinVersion)
+	if seededTwin(t).TwinVersion != "11" {
+		t.Fatalf("a create's record is version %q, want 11", seededTwin(t).TwinVersion)
 	}
 	if five.stdout != four.stdout {
 		t.Errorf("version 5 stdout:\n%s\nversion 4:\n%s", five.stdout, four.stdout)
@@ -1939,8 +1983,8 @@ func TestShowNamesTheStepsStagesAsRecorded(t *testing.T) {
 // says none with its version. The JSON record carries the id, or null for both kinds of
 // none, and a step's sides carry each side's when the record's step names it.
 func TestShowRecordNamesItsSnapshot(t *testing.T) {
-	const fromSnapshot, toSnapshot = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6",
-		"37d7378a36568e870eb1eb43dbcd580207fb5cae847fb979b54f50eef8800ebf"
+	const fromSnapshot, toSnapshot = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00",
+		"f3980cc735805c92c13be816c5dadd77c19f321c4c486808511b068f3a9659ff"
 	head := "record: branch fylgja-fixture at " + stepFromAt + " (stage fylgja-fixture/seeded, at given), "
 	named := twinOf(t, func(f *lab.RecordFields) {
 		f.Provenance.At = stepFromAt

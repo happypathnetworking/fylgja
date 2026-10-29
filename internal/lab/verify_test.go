@@ -17,6 +17,7 @@ import (
 	"go.temporal.io/api/serviceerror"
 	"go.temporal.io/sdk/temporal"
 
+	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
@@ -198,7 +199,7 @@ func waitRecord(t *testing.T, run string, change func(*StepFields)) wire.TwinRec
 		art := &wire.TwinArtifact{Name: n.Artifact.Name, ContentType: n.Artifact.ContentType, Checksum: n.Artifact.Checksum, Size: n.Artifact.Size}
 		staged.PSP[n.Name], staged.Artifacts[n.Name] = ref, art
 		create.Nodes = append(create.Nodes, wire.TwinNode{Name: n.Name, Container: "clab-fylgja-" + n.Name, Image: n.Image,
-			PSP: ref, MgmtIPv4: waitIP[n.Name], ReadyAfterS: 1, Artifact: art, PushedInS: 0.7})
+			PSP: &ref, MgmtIPv4: waitIP[n.Name], ReadyAfterS: 1, Artifact: art, PushedInS: 0.7})
 		lab = append(lab, wire.LabNode{Name: n.Name, Container: "clab-fylgja-" + n.Name, Image: n.Image, State: "running",
 			MgmtIPv4: waitIP[n.Name]})
 		pushed = append(pushed, wire.StepPush{Node: n.Name, Reasons: []string{"artifact"}, Outcome: wire.PushLanded, TookS: took(0.8)})
@@ -804,10 +805,10 @@ func TestVerifyTwinCountsItsLastRead(t *testing.T) {
 	}{
 		{"settled", func(*waitReader) {}, 120, false,
 			`{"host_name":{"held":3,"failed":0,"unread":0},"port_enabled":{"held":6,"failed":0,"skipped":0,"unread":0},` +
-				`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"record":{"held":3,"failed":0}}`},
+				`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"burst":{"held":0,"failed":0,"unread":0},"record":{"held":3,"failed":0}}`},
 		{"expired with a port disabled", disabled, 3, false,
 			`{"host_name":{"held":3,"failed":0,"unread":0},"port_enabled":{"held":5,"failed":1,"skipped":0,"unread":0},` +
-				`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"record":{"held":3,"failed":0}}`},
+				`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"burst":{"held":0,"failed":0,"unread":0},"record":{"held":3,"failed":0}}`},
 		{"incomplete with a node unread", func(r *waitReader) {
 			disabled(r)
 			for _, path := range []string{"/system/name/host-name", srlEnabledPath("ethernet-1/1"), srlEnabledPath("ethernet-1/2"),
@@ -816,7 +817,7 @@ func TestVerifyTwinCountsItsLastRead(t *testing.T) {
 			}
 		}, 2, false,
 			`{"host_name":{"held":2,"failed":0,"unread":1},"port_enabled":{"held":3,"failed":1,"skipped":0,"unread":2},` +
-				`"neighbor":{"held":4,"failed":0,"skipped":0,"unread":2},"record":{"held":3,"failed":0}}`},
+				`"neighbor":{"held":4,"failed":0,"skipped":0,"unread":2},"burst":{"held":0,"failed":0,"unread":0},"record":{"held":3,"failed":0}}`},
 		{"cancelled before the first read", disabled, 120, true, "null"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
@@ -945,4 +946,78 @@ func TestVerifyTwinLooksUpAnUnreportedNodeAgain(t *testing.T) {
 		t.Errorf("wait %+v after %d inspections; want settled at the second read, containerlab asked twice", w, len(runner.calls))
 	}
 	onlyInspected(t, runner)
+}
+
+// probedWaitingTwin is waitingTwin with the probed golden staged in place of the three-node
+// one (016): its devices answering as the live twin's do, n1's two ports to the hosts
+// enabled, containerlab reporting the hosts beside the devices, and each burst ping's output
+// in turn, through the Runner the burster execs by.
+func probedWaitingTwin(t *testing.T, bursts ...reply) (*Activities, *fakeRunner) {
+	t.Helper()
+	r := healthyTwin()
+	for _, port := range []string{"ethernet-1/10", "ethernet-1/11"} {
+		r.set("172.20.20.2:57400", srlEnabledPath(port), srlEnabledAnswer(port, "enable"))
+	}
+	runner := &fakeRunner{replies: map[string][]reply{"inspect": {{stdout: recorded(t, "inspect-three-probed.json")}}, "exec": bursts}}
+	a, _, _ := waitingTwin(t, runner, waitRunID, r)
+	if err := os.RemoveAll(a.Paths.TwinBundle); err != nil {
+		t.Fatal(err)
+	}
+	id, err := bundle.IDOfDir(probedBundle())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.StageBundle(context.Background(), wire.StageInput{BundlePath: probedBundle(), BundleID: id}); err != nil {
+		t.Fatal(err)
+	}
+	return a, runner
+}
+
+// The step's wait runs the probe's burst on each read (016, R-15) by `docker exec` in its
+// first host: one that loses a reply fails the read, and the wait reads again until it gets
+// every reply (settled), counting the burst held; one that never does expires the wait with
+// verify.burst among what still fails, written into the record as any failing assertion is.
+func TestVerifyTwinRunsTheBurst(t *testing.T) {
+	t.Run("settled at the second read", func(t *testing.T) {
+		a, runner := probedWaitingTwin(t, reply{stdout: []byte(burstOneLost), exit: 1}, reply{stdout: []byte(burstAllAnswered)})
+		res, err := a.VerifyTwin(context.Background(), waitInput(120))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if res.Wait.Outcome != wire.WaitSettled || res.Wait.Reads != 2 || len(res.Wait.Failing) != 0 {
+			t.Errorf("wait %+v, want settled at the second read", res.Wait)
+		}
+		if res.Counts == nil || res.Counts.Burst.Held != 1 || res.Counts.Burst.Failed != 0 {
+			t.Errorf("counts %+v, want the burst held", res.Counts)
+		}
+		var execs []string
+		for _, c := range runner.calls {
+			if len(c.args) > 1 && c.args[1] == "exec" {
+				execs = append(execs, strings.Join(c.args, " "))
+			}
+		}
+		want := "docker exec clab-fylgja-n1-loop-a ping -c 5 -i 0.2 -W 2 10.1.11.2"
+		if len(execs) != 2 || execs[0] != want || execs[1] != want {
+			t.Errorf("execs %q, want %q twice", execs, want)
+		}
+	})
+	t.Run("expired with the burst failing", func(t *testing.T) {
+		a, _ := probedWaitingTwin(t, reply{stdout: []byte(burstNoneAnswered), exit: 1})
+		res, err := a.VerifyTwin(context.Background(), waitInput(2))
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := wire.StepFinding{Rule: findings.RuleVerifyBurst, Object: "n1-loop",
+			Message: "probe n1-loop: 0 of 5 replies from n1-loop-b at 10.1.11.2"}
+		if res.Wait.Outcome != wire.WaitExpired || len(res.Wait.Failing) != 1 || res.Wait.Failing[0] != want {
+			t.Errorf("wait %+v, want expired with %+v alone", res.Wait, want)
+		}
+		if res.Counts == nil || res.Counts.Burst.Failed != 1 {
+			t.Errorf("counts %+v, want the burst failed", res.Counts)
+		}
+		_, rec := readRecordFile(t, a)
+		if rec.Step.Wait == nil || len(rec.Step.Wait.Failing) != 1 || rec.Step.Wait.Failing[0] != want {
+			t.Errorf("the record's wait %+v, want the burst's finding", rec.Step.Wait)
+		}
+	})
 }

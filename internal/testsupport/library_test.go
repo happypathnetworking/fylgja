@@ -34,8 +34,8 @@ func TestLibraryKindsAreWhatTheVendoredFilesDefine(t *testing.T) {
 		t.Errorf("the library's kinds:\n got %v\nwant %v", kinds, pinnedLibraryKinds)
 	}
 	for _, k := range kinds {
-		if k == "FylgjaStage" {
-			t.Errorf("the stage kind is Fylgja's, not the library's: %v", kinds)
+		if k == "FylgjaStage" || k == "FylgjaProbe" {
+			t.Errorf("%s is Fylgja's, not the library's: %v", k, kinds)
 		}
 	}
 }
@@ -120,7 +120,7 @@ func (f *fakeSchemaInfrahub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		for _, k := range pinnedLibraryKinds {
 			fields = append(fields, map[string]string{"name": k + "Create"})
 		}
-		fields = append(fields, map[string]string{"name": "FylgjaStageCreate"})
+		fields = append(fields, map[string]string{"name": "FylgjaStageCreate"}, map[string]string{"name": "FylgjaProbeCreate"})
 		_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"__type": map[string]any{"fields": fields}}})
 	default:
 		http.Error(w, "unexpected", http.StatusNotFound)
@@ -222,7 +222,9 @@ func TestLoadLibraryLoadsTheSixFilesInOneRequestOnAnEmptyMain(t *testing.T) {
 	}
 }
 
-func TestLoadOwnSchemaSaysWhetherTheStageKindMoved(t *testing.T) {
+// schema/'s own files are the stage kind's and the probe kind's (D-064), loaded in one
+// request beside the library, never in it.
+func TestLoadOwnSchemaSaysWhetherFylgjasKindsMoved(t *testing.T) {
 	for _, tc := range []struct {
 		name, hash, previous string
 		loaded               bool
@@ -240,9 +242,49 @@ func TestLoadOwnSchemaSaysWhetherTheStageKindMoved(t *testing.T) {
 			if loaded != tc.loaded {
 				t.Errorf("loaded: %v, want %v", loaded, tc.loaded)
 			}
-			if len(f.loaded) != 1 || len(f.loaded[0]) != 1 {
-				t.Errorf("loaded: %v, want one request of the stage kind alone", f.loaded)
+			if len(f.loaded) != 1 || len(f.loaded[0]) != 2 {
+				t.Errorf("loaded: %v, want one request of the stage and probe kinds", f.loaded)
 			}
 		})
 	}
+}
+
+// -prepare-main's schema loads the own kinds before the library (016): on a main holding
+// the library and lacking the probe kind, the own kinds' load runs and moves the hash, and
+// the library's refusal stands, loading nothing of it; on an empty main both load, the own
+// kinds first.
+func TestPrepareMainSchemaLoadsTheOwnKindsFirst(t *testing.T) {
+	t.Run("a main holding the library", func(t *testing.T) {
+		f := &fakeSchemaInfrahub{nodes: []string{"DcimDevice", "FylgjaStage"}, generics: []string{"DcimConnector"},
+			hash: "after", previous: "before"}
+		c := fakeClient(t, f)
+		own, files, err := c.PrepareMainSchema(filepath.Join("..", "..", "schema"))
+		var held *LibraryHeldError
+		if !errors.As(err, &held) {
+			t.Fatalf("got %v, want the library's *LibraryHeldError", err)
+		}
+		if !own || files != 0 {
+			t.Errorf("own %v, files %d; want the own kinds loaded and no library file", own, files)
+		}
+		if len(f.loaded) != 1 || len(f.loaded[0]) != 2 {
+			t.Errorf("loaded: %d request(s), want one, of the stage and probe kinds", len(f.loaded))
+		}
+		if f.requests[0] != "POST /api/schema/load?branch=main" {
+			t.Errorf("first request: %s, want the own kinds' load", f.requests[0])
+		}
+	})
+	t.Run("an empty main", func(t *testing.T) {
+		f := &fakeSchemaInfrahub{nodes: []string{"CoreArtifact"}, hash: "after", previous: "before"}
+		c := fakeClient(t, f)
+		own, files, err := c.PrepareMainSchema(filepath.Join("..", "..", "schema"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !own || files != 6 {
+			t.Errorf("own %v, files %d; want the own kinds loaded and the library's 6 files", own, files)
+		}
+		if len(f.loaded) != 2 || len(f.loaded[0]) != 2 || len(f.loaded[1]) != 6 {
+			t.Errorf("loaded: %d request(s), want the own kinds' 2 files, then the library's 6", len(f.loaded))
+		}
+	})
 }

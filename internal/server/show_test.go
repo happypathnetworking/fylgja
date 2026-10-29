@@ -38,17 +38,19 @@ func TestRecordLineNamesTheSnapshot(t *testing.T) {
 	}
 }
 
-// The record's version gates are numeric (019, research R-09): a 10 reads as later than 5,
-// 8 and 9, so its step's wait, its scope and mapping and its snapshot are read as a 9's are,
-// and an earlier version or one that is no number reads as the record that lacks them.
+// The record's version gates are numeric (019, research R-09): a 10 or an 11 reads as later
+// than 5, 8 and 9, so its step's wait, its scope and mapping and its snapshot are read as a
+// 9's are, and an earlier version or one that is no number reads as the record that lacks
+// them.
 func TestVersionGatesReadTen(t *testing.T) {
-	if lab.TwinVersion != "10" {
-		t.Fatalf("this build writes twin.json %s, want 10", lab.TwinVersion)
+	if lab.TwinVersion != "11" {
+		t.Fatalf("this build writes twin.json %s, want 11", lab.TwinVersion)
 	}
 	for _, c := range []struct {
 		version               string
 		wait, scope, snapshot bool
 	}{
+		{"11", true, true, true},
 		{"10", true, true, true},
 		{"9", true, true, true},
 		{"8", true, true, false},

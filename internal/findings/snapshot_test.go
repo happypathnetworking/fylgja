@@ -20,6 +20,11 @@ const snapshotFeature = "017-dcim-reader"
 // two 019 moves, are frozen under.
 const contract018 = "018-snapshots"
 
+// contract019 is the directory 019's copies of the findings contract and the step, verify and
+// rehearsal blocks, the four 016 moves, are frozen under; its show and stages blocks, which
+// 016 does not move, are read from contracts/.
+const contract019 = "019-following-removed"
+
 // compile017FindingsSchema is 017's findings contract, with the four blocks 018 moves frozen
 // beside it and verify.schema.json, which 018 does not move, read from contracts/.
 func compile017FindingsSchema(t *testing.T) *jsonschema.Schema {
@@ -36,6 +41,7 @@ func as017(t *testing.T, doc *Document) []byte {
 	return mutated(t, doc, func(doc map[string]any) {
 		restore018Kind(doc)
 		drop018Snapshots(doc)
+		drop016NullLoss(doc)
 	})
 }
 
@@ -119,7 +125,8 @@ func TestA017DocumentIsUnchanged(t *testing.T) {
 }
 
 // Every document this package builds is 018's, the ones that name a snapshot and the ones
-// that name none, and 018's contract accepts each as built. 018's copies stay as 018 left
+// that name none, and 018's contract accepts each as built, 016's null loss and empty burst
+// counts taken out (drop016NullLoss). 018's copies stay as 018 left
 // them when 019 moves the findings and show contracts on: the claim is that the older
 // contract still accepts these documents. So does it the documents 018 wrote with following
 // (followingDocuments), which this build no longer writes.
@@ -127,12 +134,28 @@ func TestAn018DocumentIsUnchanged(t *testing.T) {
 	v018 := compileFeatureFindingsSchema(t, contract018, currentResources...)
 	for _, c := range append(noSnapshotDocuments(), snapshotDocuments()...) {
 		t.Run(c.label, func(t *testing.T) {
-			mustValidateBytes(t, v018, mutated(t, c.doc, restore018Kind), c.label+" against 018's contract")
+			mustValidateBytes(t, v018, mutated(t, c.doc, func(doc map[string]any) {
+				restore018Kind(doc)
+				drop016NullLoss(doc)
+			}), c.label+" against 018's contract")
 		})
 	}
 	for _, c := range followingDocuments() {
 		t.Run(c.label, func(t *testing.T) {
 			mustValidateBytes(t, v018, mutated(t, c.doc, c.restore), c.label+" against 018's contract")
+		})
+	}
+}
+
+// Every document this package builds is 019's, its step block's null loss taken out
+// (drop016NullLoss): 019's copies stay as 019 left them when 016 moves the findings, step,
+// verify and rehearsal contracts on, and the claim is that the older contract still accepts
+// these documents. A step document whose loss is set is 016's alone (TestStepLossDocuments).
+func TestA019DocumentIsUnchanged(t *testing.T) {
+	v019 := compileFeatureFindingsSchema(t, contract019, currentResources...)
+	for _, c := range append(noSnapshotDocuments(), snapshotDocuments()...) {
+		t.Run(c.label, func(t *testing.T) {
+			mustValidateBytes(t, v019, mutated(t, c.doc, drop016NullLoss), c.label+" against 019's contract")
 		})
 	}
 }
@@ -171,7 +194,7 @@ func followingDocuments() []earlierDocument {
 // snapshotID and stepSnapshotID are two snapshots' ids: the first the fixture's
 // (testdata/snapshot/three-node.json), the second any other.
 var (
-	snapshotID     = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
+	snapshotID     = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00"
 	stepSnapshotID = strings.Repeat("5e", 32)
 )
 

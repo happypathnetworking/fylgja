@@ -16,8 +16,10 @@ import (
 // $FYLGJA_STATE_ROOT, the staged
 // bundle's manifest, the packages as the worker loads them (embedded, or
 // $FYLGJA_PSP_DIR), each node read by gNMI with the login its package names. One subtest
-// per node per check; each node's success line is logged. It boots, pushes and changes
-// nothing: scripts/e2e.sh runs it in case 1, on a twin that run made.
+// per node per check; each node's success line is logged, and each report's notes. On a
+// probed twin it reads the devices alone, and names the hosts it did not read. It boots,
+// pushes and changes nothing: scripts/e2e.sh runs it in cases 1, 5 (a probed twin) and 6,
+// each on a twin that run made.
 //
 //	FYLGJA_STATE_ROOT=<absolute root> go test -count=1 -tags e2e ./internal/conformance -run '^TestBootHalf$' -v
 func TestBootHalf(t *testing.T) {
@@ -37,6 +39,9 @@ func TestBootHalf(t *testing.T) {
 
 	checked := 0
 	for _, r := range reports {
+		for _, note := range r.Notes {
+			t.Log(note)
+		}
 		for _, node := range r.Nodes {
 			checked++
 			t.Run(node.Name, func(t *testing.T) {
@@ -62,5 +67,14 @@ func TestBootHalf(t *testing.T) {
 			names = append(names, n.Name)
 		}
 	}
+	var hosts []string
+	for _, n := range manifest.Nodes {
+		if n.Probe != nil {
+			hosts = append(hosts, n.Name)
+		}
+	}
 	t.Logf("boot half: %d nodes %v of run %s %s, bundle %s", checked, slices.Sorted(slices.Values(names)), rec.Run.WorkflowID, rec.Run.RunID, rec.BundleID)
+	if len(hosts) > 0 {
+		t.Logf("boot half: %d probe hosts not read, having no package to read them by: %v", len(hosts), slices.Sorted(slices.Values(hosts)))
+	}
 }

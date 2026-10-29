@@ -4,7 +4,8 @@
 // The suite is `go test`, in two halves. The pure half (this file) runs in tier 1 on
 // every package meant to load and needs no infrastructure: the package validates, maps
 // the production names it declares to the ports and node names it declares, inverts
-// them, and renders its bootstrap. The boot half reads a ready twin's nodes and runs in
+// them, and renders its bootstrap; and each probe package (016) validates and renders its
+// templates. The boot half reads a ready twin's nodes and runs in
 // tier 3, inside scripts/e2e.sh's run; it boots nothing itself. The readers it reads them
 // through are internal/verify's, product code that twin verify and the step's wait share
 // with it (D-037); the checks and their wording are
@@ -17,11 +18,14 @@ package conformance
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
@@ -41,6 +45,11 @@ const (
 	CheckDeclaredMapping  = "declared_mapping"
 	CheckRoundTrip        = "round_trip"
 	CheckBootstrapRenders = "bootstrap_renders"
+	// CheckProbePackage holds a probe package (016, R-08), not a platform's, to the format:
+	// it validates as the probe registry validates an override, and every template renders
+	// for a host with nothing left in braces. CheckProbes runs it over a set of probe
+	// packages; it is not one of PureChecks, which Pure runs on each platform package.
+	CheckProbePackage = "probe_package"
 )
 
 // PureChecks lists the pure half's checks, so a test can run one subtest per check
@@ -397,4 +406,78 @@ func laterRuleNotes(p *psp.PSP, prof *psp.Profile) []string {
 		}
 	}
 	return notes
+}
+
+// probeSample is what CheckProbes renders a probe package's templates for: a host on a
+// documentation /31 (RFC 5737), its gateway the device's end, and the far host's address.
+// Any values do, since the check is that every placeholder renders and none is left over.
+var probeSample = map[string]string{
+	probe.PlaceAddress:    "192.0.2.1/31",
+	probe.PlaceGateway:    "192.0.2.0",
+	probe.PlaceFarAddress: "198.51.100.1",
+}
+
+// CheckProbes runs the probe package check on each package (016, R-08): it validates as
+// the probe registry validates an override, every probe.package.* rule; and each of its
+// templates (the two exec lines, the readiness command and its expectation, the flow's and
+// the burst's command) renders for a host from its own field's placeholders with nothing
+// left in braces. Every failure is
+// collected, named by the package's format, its file, the template's field and both
+// values; none stops the run. Nothing here knows which format it holds.
+func CheckProbes(pkgs []*probe.Package) []Failure {
+	var out []Failure
+	for _, p := range pkgs {
+		fail := func(field, declared, produced string) {
+			out = append(out, Failure{Package: p.Format, Path: p.Path, Check: CheckProbePackage,
+				Production: field, Declared: declared, Produced: produced})
+		}
+		probeValidates(p, fail)
+		values := maps.Clone(probeSample)
+		values[probe.PlaceInterface] = p.Host.Interface
+		values[probe.PlaceInterval] = strconv.FormatFloat(p.Flow.IntervalS, 'f', -1, 64)
+		values[probe.PlaceCount] = strconv.Itoa(p.Burst.Count)
+		values[probe.PlaceWait] = strconv.Itoa(p.Burst.WaitS)
+		for _, t := range p.Templates() {
+			const declared = "every placeholder rendered"
+			// Each template is rendered with its own field's placeholders alone, as the
+			// compiler, the host check and verify render it.
+			own := map[string]string{}
+			for _, place := range t.Places {
+				own[place] = values[place]
+			}
+			args, err := probe.Render(t.Args, own)
+			if err != nil {
+				fail(t.Field, declared, err.Error())
+				continue
+			}
+			if line := strings.Join(args, " "); strings.ContainsAny(line, "{}") {
+				fail(t.Field, declared, line)
+			}
+		}
+	}
+	return out
+}
+
+// probeValidates holds a probe package to the probe registry's validation of the file it
+// was read from. A package with no path, or one whose file cannot be read, fails naming the
+// path, as a platform package does.
+func probeValidates(p *probe.Package, fail func(field, declared, produced string)) {
+	const declared = "no rejection from the probe package's validation"
+	if p.Path == "" {
+		fail("", declared, "nothing: the package names no file it was read from")
+		return
+	}
+	if _, err := os.Stat(p.Path); err != nil {
+		fail("", declared, fmt.Sprintf("nothing: %s cannot be read: %v", p.Path, err))
+		return
+	}
+	var rejected []string
+	for _, f := range probe.ValidatePackages([]string{p.Path}) {
+		if f.Severity == findings.Rejection {
+			rejected = append(rejected, f.Rule+": "+f.Message)
+		}
+	}
+	if len(rejected) > 0 {
+		fail("", declared, strings.Join(rejected, "; "))
+	}
 }

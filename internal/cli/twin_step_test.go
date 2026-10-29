@@ -28,6 +28,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/intent"
 	"github.com/happypathnetworking/fylgja/internal/lab"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	snap "github.com/happypathnetworking/fylgja/internal/snapshot"
@@ -364,8 +365,8 @@ func compileStage(t *testing.T, paths lab.Paths, label string) compiledStage {
 	if err != nil || ch == nil {
 		t.Fatalf("change-1's proposed change was not found: %v %+v", err, list)
 	}
-	take := func(ctx context.Context, c *ctm.CTM) (string, findings.List, error) {
-		built.snapshot = snap.Take(c)
+	take := func(ctx context.Context, c *ctm.CTM, probes []probe.Probe) (string, findings.List, error) {
+		built.snapshot = snap.Take(c, probes)
 		_, err := snap.NewDirStore(paths.Snapshots).Put(ctx, built.snapshot)
 		return built.snapshot.ID, nil, err
 	}
@@ -375,7 +376,7 @@ func compileStage(t *testing.T, paths lab.Paths, label string) compiledStage {
 		return list, err
 	}
 	ref := stages.Ref{Branch: "change-1", Label: label}
-	s := stages.Build(ctx, reader, stepStamper{}, reg, ch, ref, stages.NewPipeline(take, file), time.Now().UTC())
+	s := stages.Build(ctx, reader, stepStamper{}, reg, ch, ref, stages.NewPipeline(take, file, nil, nil), time.Now().UTC())
 	if s.Status != stages.PlanCompiled {
 		t.Fatalf("%s did not compile: %+v", ref, s.Findings)
 	}
@@ -523,7 +524,7 @@ func stepRecordOf(t *testing.T, bundleID string, change func(*lab.RecordFields))
 			image, id = "ghcr.io/nokia/srlinux:24.7.1", "nokia_srlinux"
 		}
 		f.Nodes = append(f.Nodes, wire.TwinNode{Name: n, Container: "clab-fylgja-" + n, Image: image,
-			PSP: wire.PSPRef{ID: id, Source: "embedded"}, MgmtIPv4: fmt.Sprintf("172.20.20.%d", i+2), ReadyAfterS: 9})
+			PSP: &wire.PSPRef{ID: id, Source: "embedded"}, MgmtIPv4: fmt.Sprintf("172.20.20.%d", i+2), ReadyAfterS: 9})
 	}
 	if change != nil {
 		change(&f)
@@ -653,7 +654,7 @@ func stepDryRunLines(h *stepHostFixture, toID string) []string {
 		"step change-1/sealed → change-1/linked (" + short(h.fromID) + " → " + short(toID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
 		"  links: +e1:eth3 — s1:e1-3",
-		"  artifacts: e1 device-config 6b31a6de… → fb3cbaf9…; s1 device-config 5e2a65f4… → 22ada947…",
+		"  artifacts: e1 device-config b1431710… → cbc8c75d…; s1 device-config fdf83f15… → 8e15691e…",
 		"reconcile: restart e1 (added link; arista_eos declares restart); live s1 (nokia_srlinux declares live)",
 		"push: e1 (artifact, restarted); s1 (artifact, bootstrap); e2 untouched",
 		// M12: the step's wait after its record, at the default budget.
@@ -1839,7 +1840,7 @@ func TestStepRuns(t *testing.T) {
 				Record: &wire.TwinRecord{State: wire.StateDiverged},
 				Findings: findings.List{
 					{Severity: findings.Rejection, Rule: findings.RulePushRefused, Object: "e1", Step: findings.StepPush,
-						Message: "node e1 refused artifact device-config (checksum fb3cbaf9…) at line 7: Invalid input"},
+						Message: "node e1 refused artifact device-config (checksum cbc8c75d…) at line 7: Invalid input"},
 					diverged(findings.StepPush)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
 			closing: func(fromID, toID string) string {
@@ -1863,7 +1864,7 @@ func TestStepRuns(t *testing.T) {
 				Wait:   &wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 2, AfterS: 1.9, Failing: []wire.StepFinding{}},
 				Findings: findings.List{
 					{Severity: findings.Rejection, Rule: findings.RulePushRefused, Object: "e1", Step: findings.StepPush,
-						Message: "node e1 refused artifact device-config (checksum fb3cbaf9…) at line 7: Invalid input"},
+						Message: "node e1 refused artifact device-config (checksum cbc8c75d…) at line 7: Invalid input"},
 					diverged(findings.StepPush)}},
 			code: findings.ExitUnclean, status: findings.StatusDiverged,
 			closing: func(fromID, toID string) string {
@@ -2430,6 +2431,83 @@ func TestStepRunReportsTheWait(t *testing.T) {
 	}
 }
 
+// The run prints how each flow started after step stage: and what each lost after step
+// observe:, labelled container timing, and the closing line ends with the loss, lost over
+// sent per probe (016, contracts/cli.md, twin step). The document carries the run's loss;
+// the dry run's, which starts nothing, carries loss null. A twin whose bundles carry no
+// probe starts its run with no flow, nothing added and nothing dropped.
+func TestStepRunReportsTheLoss(t *testing.T) {
+	stepHost(t, "plan-link-added.json", nil)
+	dry := runStepCmd(t, "--dry-run", "--allow-restart")
+	raw, err := json.Marshal(dry.doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), `"loss":null`) {
+		t.Errorf("the dry run's document %s, want step.loss null", raw)
+	}
+
+	stepHost(t, "plan-link-added.json", nil)
+	done := func(step string, d time.Duration, detail string) provision.Event {
+		return provision.Event{WorkflowID: provision.WorkflowStep, Step: step, End: true, Outcome: provision.EventDone,
+			Duration: d, Detail: detail}
+	}
+	var events []provision.Event
+	for _, e := range stepEvents() {
+		events = append(events, e)
+		if e.Step == "stage" {
+			events = append(events, done("flows", 400*time.Millisecond, "n1-loop started"))
+		}
+	}
+	events = append(events, done("observe", 2600*time.Millisecond, "settled after 2.4s (2 reads)"),
+		done("loss", 5100*time.Millisecond, "n1-loop 0/312 lost, longest gap 0.0s (container timing)"))
+	reconcile := 3.9
+	e1Took, s1Took := 1.6, 2.4
+	loss := &wire.Loss{Basis: wire.LossBasisContainer, Probes: []wire.ProbeLoss{{Probe: "n1-loop",
+		From: "clab-fylgja-n1-loop-a", To: "clab-fylgja-n1-loop-b", Outcome: wire.FlowMeasured, Sent: 312}},
+		Added: []string{}, Dropped: []string{}}
+	svc := &fakeService{runID: stepRunID, events: events, stepResult: provision.StepResult{Outcome: provision.StepStepped,
+		Findings: findings.List{},
+		PushPlan: []wire.StepPush{{Node: "e1", Reasons: []string{"artifact", "restarted"}, Outcome: wire.PushLanded, TookS: &e1Took},
+			{Node: "s1", Reasons: []string{"artifact", "bootstrap"}, Outcome: wire.PushLanded, TookS: &s1Took}},
+		Timings: wire.StepTimings{ReconcileS: &reconcile, Readiness: map[string]float64{"e1": 54.8},
+			Push: map[string]float64{"e1": 1.6, "s1": 2.4}, WholeS: 71.2},
+		Record: &wire.TwinRecord{State: wire.StateReady},
+		Wait:   &wire.StepWait{Outcome: wire.WaitSettled, BudgetS: 120, Reads: 2, AfterS: 2.4, Failing: []wire.StepFinding{}},
+		Loss:   loss, StartedAt: "2026-10-02T09:14:30Z", EndedAt: "2026-10-02T09:15:41Z"}}
+	useService(t, svc)
+	useInterrupts(t)
+	out := runStepCmd(t, "--allow-restart")
+	if out.code != findings.ExitOK || out.doc.Status != findings.StatusOK {
+		t.Fatalf("exit %d status %s, want 0, ok: the loss changes neither; findings %+v", out.code, out.doc.Status, out.doc.Findings)
+	}
+	if !strings.Contains(out.stdout, "\nstep stage: done in 0.2s\nstep flows: n1-loop started\nstep reconcile: ") {
+		t.Errorf("stdout:\n%s\nwant step flows: right after step stage:", out.stdout)
+	}
+	tail := []string{"step observe: settled after 2.4s (2 reads)",
+		"step loss: n1-loop 0/312 lost, longest gap 0.0s (container timing)",
+		"stepped to stage change-1/linked (bundle " + short(out.doc.BundleID) + ") in 71.2s: reconcile 3.9s; readiness e1 54.8s; " +
+			"push e1 1.6s, s1 2.4s; settled after 2.4s; loss n1-loop 0/312"}
+	if !strings.HasSuffix(out.stdout, "\n"+strings.Join(tail, "\n")+"\n") {
+		t.Errorf("stdout:\n%s\nwant it to end:\n%s", out.stdout, strings.Join(tail, "\n"))
+	}
+	want := &findings.StepLoss{Basis: "container", Probes: []findings.StepProbeLoss{{Probe: "n1-loop",
+		From: "clab-fylgja-n1-loop-a", To: "clab-fylgja-n1-loop-b", Outcome: "measured", Sent: 312}}, Added: []string{}, Dropped: []string{}}
+	if got := out.doc.Step.Loss; !reflect.DeepEqual(got, want) {
+		t.Errorf("step.loss %+v, want the run's %+v", got, want)
+	}
+	svc.mu.Lock()
+	defer svc.mu.Unlock()
+	if len(svc.stepped) == 0 {
+		t.Fatal("no step run started")
+	}
+	for _, in := range svc.stepped {
+		if in.Flows != nil || in.Added != nil || in.Dropped != nil {
+			t.Errorf("a probe-less twin's step started with flows %+v, added %q, dropped %q; want none", in.Flows, in.Added, in.Dropped)
+		}
+	}
+}
+
 // US2's step scenarios through the harness (014, T036), on stepInfrahub's proposed change:
 // the target with none given, a step back, a stage foreign to the twin's proposed change, a
 // step from the branch point to the head, a target that is the twin's own stage under
@@ -2570,7 +2648,7 @@ func TestStepBackToAnEarlierMark(t *testing.T) {
 		"step change-1/linked → change-1/sealed (" + short(linkedID) + " → " + short(sealedID) + "):",
 		"  nodes: ~e1 (mapping); ~s1 (bootstrap, mapping)",
 		"  links: -e1:eth3 — s1:e1-3",
-		"  artifacts: e1 device-config fb3cbaf9… → 6b31a6de…; s1 device-config 22ada947… → 5e2a65f4…",
+		"  artifacts: e1 device-config cbc8c75d… → b1431710…; s1 device-config 8e15691e… → fdf83f15…",
 		"reconcile: restart e1 (deleted endpoint; arista_eos declares restart); live s1 (nokia_srlinux declares live)",
 		"push: e1 (artifact, restarted); s1 (artifact, bootstrap); e2 untouched",
 	}
@@ -3283,7 +3361,7 @@ func recordedStep(prev wire.TwinRecord, in provision.StepInput, outcome string) 
 	for _, n := range prev.Nodes {
 		f.Nodes = append(f.Nodes, wire.LabNode{Name: n.Name, Container: n.Container, Image: n.Image, State: "running",
 			MgmtIPv4: n.MgmtIPv4})
-		f.Staged.PSP[n.Name] = n.PSP
+		f.Staged.PSP[n.Name] = *n.PSP
 	}
 	return f
 }
@@ -3666,13 +3744,13 @@ func TestStepToASnapshotRefused(t *testing.T) {
 					"; leave snapshot_id out to have it computed"
 			}},
 		{name: "a file of another snapshot version", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
-			return targetFile(t, h, target.ID, func(d map[string]any) { d["snapshot_version"] = "2" })
+			return targetFile(t, h, target.ID, func(d map[string]any) { d["snapshot_version"] = "3" })
 		}, want: refusal(findings.RuleSnapshotVersionUnsupported, findings.StepResolve, "",
-			`the snapshot declares snapshot_version "2"; this build reads "1", and nothing converts one`),
+			`the snapshot declares snapshot_version "3"; this build reads "1" and "2", and nothing converts one`),
 			fill: func(_ *stepHostFixture, _ *snap.Snapshot, arg string, f *findings.Finding) { f.Object = arg }},
-		{name: "a file with a probe", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
+		{name: "a file with a probe not the contract's", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
 			return targetFile(t, h, target.ID, func(d map[string]any) { d["probes"] = []any{map[string]any{}} })
-		}, want: refusal(findings.RuleSnapshotInvalid, findings.StepResolve, "probes", "")},
+		}, want: refusal(findings.RuleSnapshotInvalid, findings.StepResolve, "probes[0].name", "")},
 		{name: "a file breaking the CTM's own rules", arg: func(t *testing.T, h *stepHostFixture, target *snap.Snapshot) string {
 			return targetFile(t, h, target.ID, func(d map[string]any) {
 				delete(d, "snapshot_id")
@@ -4053,7 +4131,7 @@ func TestStepToASnapshotCloses(t *testing.T) {
 			{Node: "s1", Reasons: []string{"artifact", "bootstrap"}, Outcome: wire.PushLanded}},
 		Timings: wire.StepTimings{WholeS: 71.2}, Record: &wire.TwinRecord{State: wire.StateDiverged},
 		Findings: findings.List{{Severity: findings.Rejection, Rule: findings.RulePushRefused, Object: "e1", Step: findings.StepPush,
-			Message: "node e1 refused artifact device-config (checksum fb3cbaf9…) at line 7: Invalid input"}}}
+			Message: "node e1 refused artifact device-config (checksum cbc8c75d…) at line 7: Invalid input"}}}
 	for _, c := range []struct {
 		name    string
 		change  func(*lab.RecordFields)

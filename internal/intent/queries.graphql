@@ -2,11 +2,11 @@
 # kinds as the mapping names them (D-057, Constitution III: specs/017-dcim-reader/
 # contracts/mapping.md §2), and nothing beyond them, and the stamps select them in the
 # read's two shapes (017 research R-10). The read-only test (readonly_test.go) asserts that
-# every operation is a query; that its roots are the mapping's two, Fylgja's stage kind, or
-# one of the five that are Infrahub's own units rather than the operator's model (014:
-# CoreProposedChange, CoreArtifactValidator, Branch, and InfrahubEvent, its record of a
-# write, D-048; 017: CoreGraphQLQueryGroup, whose creator is the account a generation's
-# joins are written as, D-060); that its fragments are on the mapping's four kinds or two of
+# every operation is a query; that its roots are the mapping's two, Fylgja's two kinds (014:
+# the stage; 016: the probe, D-064), or one of the five that are Infrahub's own units rather
+# than the operator's model (014: CoreProposedChange, CoreArtifactValidator, Branch, and
+# InfrahubEvent, its record of a write, D-048; 017: CoreGraphQLQueryGroup, whose creator is
+# the account a generation's joins are written as, D-060); that its fragments are on the mapping's four kinds or two of
 # Infrahub's (CoreArtifactTarget, NodeMutatedEvent); and that the scope's tag, Infrahub's
 # BuiltinTag, is read by the tags__name__value filter alone. Each is named there with its
 # reason.
@@ -330,6 +330,29 @@ query IntentEvents($branch: String!, $since: DateTime!, $limit: Int!, $offset: I
         attributes    { name }
         relationships { name peer { id } }
       }
+    } }
+  }
+}
+
+# 016 — the probes declared in Infrahub, the second source of a declaration after a
+# --probes file (R-06; D-064): every object of Fylgja's own kind FylgjaProbe, an owned
+# root, on the default branch's endpoint, unpinned, in name order (the kind's order_by).
+# Its ten attributes are the declaration's element by renaming alone; description is
+# never read.
+query Probes($limit: Int!, $offset: Int!) {
+  FylgjaProbe(limit: $limit, offset: $offset) {
+    count
+    edges { node {
+      name        { value }
+      format      { value }
+      a_device    { value }
+      a_interface { value }
+      a_address   { value }
+      a_gateway   { value }
+      b_device    { value }
+      b_interface { value }
+      b_address   { value }
+      b_gateway   { value }
     } }
   }
 }

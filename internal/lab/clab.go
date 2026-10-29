@@ -28,6 +28,11 @@ const LabName = wire.LabName
 // containerPrefix is how containerlab names a lab's containers: clab-<lab>-<node>.
 const containerPrefix = "clab-" + LabName + "-"
 
+// Container is node's container as containerlab names it in the lab: clab-<lab>-<node>.
+func Container(node string) string {
+	return containerPrefix + node
+}
+
 // Runner executes a command on the lab host and reports what it printed and how it
 // exited. Clab drives containerlab through it so tier-1 tests can substitute the
 // recorded output of the real tool (D-017).

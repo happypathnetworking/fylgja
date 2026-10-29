@@ -15,6 +15,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
@@ -328,4 +329,85 @@ func disable(t *testing.T, m compiler.Manifest, device, iface string) compiler.M
 	}
 	t.Fatalf("no mapping row %s:%s", device, iface)
 	return m
+}
+
+// fakeBurster runs each burst from a table keyed by container (016), as a host would: the
+// n-th burst of a container gets the n-th result of its sequence, the last repeating, so a
+// test can make a burst hold late; an error is a burst that could not be run. A container the
+// table does not hold is an error, so a test sees any burst it did not expect.
+type fakeBurster struct {
+	results map[string][]burstResult
+
+	mu       sync.Mutex
+	calls    []string   // each burst's container
+	commands [][]string // and its command
+	bursts   map[string]int
+}
+
+type burstResult struct {
+	sent, received int
+	err            error
+}
+
+func newBurster() *fakeBurster {
+	return &fakeBurster{results: map[string][]burstResult{}, bursts: map[string]int{}}
+}
+
+func (f *fakeBurster) Burst(ctx context.Context, container string, command []string) (int, int, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.calls = append(f.calls, container)
+	f.commands = append(f.commands, command)
+	if err := ctx.Err(); err != nil {
+		return 0, 0, err
+	}
+	n := f.bursts[container]
+	f.bursts[container]++
+	seq, ok := f.results[container]
+	if !ok || len(seq) == 0 {
+		return 0, 0, fmt.Errorf("the fake host has no burst for %s", container)
+	}
+	r := seq[min(n, len(seq)-1)]
+	return r.sent, r.received, r.err
+}
+
+// set answers a container's bursts with one result, or a sequence of them.
+func (f *fakeBurster) set(container string, results ...burstResult) {
+	f.results[container] = results
+}
+
+// The probed three-node twin (016): the three-node twin with the probe n1-loop's two hosts,
+// cabled to n1's ethernet-1/10 and ethernet-1/11, at the next two addresses.
+var probedIP = map[string]string{"n1": "172.20.20.2", "n2": "172.20.20.3", "n3": "172.20.20.4",
+	"n1-loop-a": "172.20.20.5", "n1-loop-b": "172.20.20.6"}
+
+const loopA = "clab-fylgja-n1-loop-a"
+
+// shippedProbes are the probe packages this build embeds: ping alone.
+func shippedProbes(t *testing.T) *probe.Registry {
+	t.Helper()
+	reg, err := probe.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return reg
+}
+
+// probed is the three-node-probed golden twin, ready and healthy, as one read takes it: the
+// devices answering as the three-node twin's do, n1's two ports to the hosts enabled, and
+// n1-loop-a's burst getting every reply.
+func probed(t *testing.T) (Input, *fakeReader, *fakeBurster) {
+	t.Helper()
+	staged := goldenID(t, "three-node-probed")
+	f := healthyThreeNode()
+	for _, port := range []string{"ethernet-1/10", "ethernet-1/11"} {
+		f.set(srl(probedIP["n1"]), srlEnabled(port), srlEnabledIs(port, "enable"))
+	}
+	b := newBurster()
+	b.set(loopA, burstResult{sent: 5, received: 5})
+	return Input{
+		Manifest: goldenManifest(t, "three-node-probed"), StagedID: staged, Record: ready(staged, probedIP),
+		Lab: labOf(probedIP), Packages: shippedPackages(t), Reader: f, Getenv: fakeEnv,
+		Probes: shippedProbes(t), Burster: b,
+	}, f, b
 }

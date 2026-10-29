@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/happypathnetworking/fylgja/contracts/twin/v10",
-  "title": "Fylgja twin.json v10 — the twin’s record (M2, M5, M10, M11, M12, 014, 015, 017, 018, 019)",
-  "description": "Written by the record step into the twin directory after every node is ready; removed with the directory by unstage. Carries the manifest's provenance block (never observed_at from the bundle: D-023), observed_at when the run's input carried a read's time (a create's read, a snapshot's stored take, or an earlier build's check) and an explicit statement that it is unknown when it did not (Constitution VI), the bundle_id, the provisioning run's identity, and the version of the binary that provisioned it. Nothing here is a credential. M5: twin_version is 2, and each node records the artifact it was pushed — name, content type, checksum and size, copied from the staged manifest — and how long its push took. Never the artifact’s bytes. Everything else is v1’s, with M4’s meaning. M7: unchanged (no new key); twin_version stays 2. M10: twin_version is 3, and the record names the waypoint the twin was created from — series, sequence, description and the at’s source — or null when it was created with --branch or from a bundle; provenance.at carries the at itself. Nothing else is new. A waypoint is only ever recorded on a pinned, intent-sourced record. M11: twin_version is 4. The record gains state (ready or diverged), a step block (the last step: outcome, the side it came from and the side it went to or towards, the step run, the phase that failed, containerlab's plan with each touched node's declared and reported link-change behaviour, every push with its outcome, the readiness and push timings, when it started and ended, and the failure's findings) or null for a twin that has not stepped, and nodes[].holds, the bundle_id whose bootstrap and artifact the node is last known to run, or null for a node containerlab restarted, recreated or created that no push landed on, which runs its baseline alone. After a stepped or unchanged step bundle_id, provenance, observed_at and waypoint are the target's; after a diverged step they stay the previous record's and step.to names the target. run stays the create's. A create writes a 4 record with state ready, step null and holds equal to bundle_id on every node. The record is written whole on every path after the step's stage. No device diff, no artifact or bootstrap line, no credential. M12: twin_version is 5. The step block gains wait: how verify's waiting form ended after the record (settled, expired, cancelled or incomplete), the budget, the reads, the seconds from the record until the twin settled or the wait ended, and the assertions still failing at the last read, or null while it has not run. A create writes a 5 record with step null. Nothing else is new. No device diff, no artifact or bootstrap line, no credential. 014: twin_version is 6. waypoint is gone: the record names the stage the twin was created from or stepped to — its proposed change by id and source branch, its label, description and the at's source (given, written, branch_point, head) — or null; step.from.stage and step.to.stage carry the same shape. A create writes a 6 record with step null. Nothing else is new. A record of 5 or earlier reads with no stage. 015: twin_version is 7. The record names the rehearsal run whose baseline the twin is, the workflow fylgja-rehearse and its run id, or null for a twin no rehearsal created; a step's record keeps it. Nothing else is new. A record of 6 or earlier reads with no rehearsal. 017: twin_version is 8. provenance is the bundle 5 manifest's block, copied verbatim: the branch, the at when pinned, the schema hash, the scope the read was made under (tag:<name>) and the mapping that read it ({reader, model, version}), in place of contract_version. Nothing else is new. A record of 7 or earlier reads with no scope and no mapping: twin show shows it with its scope unknown, twin step refuses it, twin destroy clears it. 018: twin_version is 9. The record names the snapshot the twin was built from or last stepped to, `snapshot_id`, or null for a twin twin provision built, one a following rebuild made, or a record of 8 or earlier, which reads with none; `source` gains `snapshot`, a twin twin create --snapshot built from a stored or sent snapshot, which had no read of a branch; `step.from` and `step.to` may name each side's snapshot, `snapshot_id`, absent where the side's is not known (the from side of an 8 record that stepped). Nothing else is new. 019: twin_version is 10. A stage no longer implies source intent: source says how the twin was created and a step keeps it, so a twin created from a snapshot and stepped to a stage names both. Nothing else is new.",
+  "$id": "https://github.com/happypathnetworking/fylgja/contracts/twin/v11",
+  "title": "Fylgja twin.json v11 — the twin’s record (M2, M5, M10, M11, M12, 014, 015, 017, 018, 019, 016)",
+  "description": "Written by the record step into the twin directory after every node is ready; removed with the directory by unstage. Carries the manifest's provenance block (never observed_at from the bundle: D-023), observed_at when the run's input carried a read's time (a create's read, a snapshot's stored take, or an earlier build's check) and an explicit statement that it is unknown when it did not (Constitution VI), the bundle_id, the provisioning run's identity, and the version of the binary that provisioned it. Nothing here is a credential. M5: twin_version is 2, and each node records the artifact it was pushed — name, content type, checksum and size, copied from the staged manifest — and how long its push took. Never the artifact’s bytes. Everything else is v1’s, with M4’s meaning. M7: unchanged (no new key); twin_version stays 2. M10: twin_version is 3, and the record names the waypoint the twin was created from — series, sequence, description and the at’s source — or null when it was created with --branch or from a bundle; provenance.at carries the at itself. Nothing else is new. A waypoint is only ever recorded on a pinned, intent-sourced record. M11: twin_version is 4. The record gains state (ready or diverged), a step block (the last step: outcome, the side it came from and the side it went to or towards, the step run, the phase that failed, containerlab's plan with each touched node's declared and reported link-change behaviour, every push with its outcome, the readiness and push timings, when it started and ended, and the failure's findings) or null for a twin that has not stepped, and nodes[].holds, the bundle_id whose bootstrap and artifact the node is last known to run, or null for a node containerlab restarted, recreated or created that no push landed on, which runs its baseline alone. After a stepped or unchanged step bundle_id, provenance, observed_at and waypoint are the target's; after a diverged step they stay the previous record's and step.to names the target. run stays the create's. A create writes a 4 record with state ready, step null and holds equal to bundle_id on every node. The record is written whole on every path after the step's stage. No device diff, no artifact or bootstrap line, no credential. M12: twin_version is 5. The step block gains wait: how verify's waiting form ended after the record (settled, expired, cancelled or incomplete), the budget, the reads, the seconds from the record until the twin settled or the wait ended, and the assertions still failing at the last read, or null while it has not run. A create writes a 5 record with step null. Nothing else is new. No device diff, no artifact or bootstrap line, no credential. 014: twin_version is 6. waypoint is gone: the record names the stage the twin was created from or stepped to — its proposed change by id and source branch, its label, description and the at's source (given, written, branch_point, head) — or null; step.from.stage and step.to.stage carry the same shape. A create writes a 6 record with step null. Nothing else is new. A record of 5 or earlier reads with no stage. 015: twin_version is 7. The record names the rehearsal run whose baseline the twin is, the workflow fylgja-rehearse and its run id, or null for a twin no rehearsal created; a step's record keeps it. Nothing else is new. A record of 6 or earlier reads with no rehearsal. 017: twin_version is 8. provenance is the bundle 5 manifest's block, copied verbatim: the branch, the at when pinned, the schema hash, the scope the read was made under (tag:<name>) and the mapping that read it ({reader, model, version}), in place of contract_version. Nothing else is new. A record of 7 or earlier reads with no scope and no mapping: twin show shows it with its scope unknown, twin step refuses it, twin destroy clears it. 018: twin_version is 9. The record names the snapshot the twin was built from or last stepped to, `snapshot_id`, or null for a twin twin provision built, one a following rebuild made, or a record of 8 or earlier, which reads with none; `source` gains `snapshot`, a twin twin create --snapshot built from a stored or sent snapshot, which had no read of a branch; `step.from` and `step.to` may name each side's snapshot, `snapshot_id`, absent where the side's is not known (the from side of an 8 record that stepped). Nothing else is new. 019: twin_version is 10. A stage no longer implies source intent: source says how the twin was created and a step keeps it, so a twin created from a snapshot and stepped to a stage names both. Nothing else is new. 016: twin_version is 11. nodes[] admits a probe's host, which the compiler synthesized from a probe declaration: it carries probe ({name, endpoint, format, package}, the manifest node's, the package the probe package it was built with) in place of a support package, psp and artifact null, since a host has no support package and nothing is pushed to it, and pushed_in_s 0; a device carries no probe and its psp and artifact as before. A host's holds is the record's bundle_id on a create, and, after a step, the target's when containerlab created or recreated it, since its configuration is its topology node's exec lines, and otherwise what it held. The step block gains loss: what the step's flows lost, written by the ReadFlows activity after the wait as VerifyTwin writes wait, or null until it has (the record was just written, the step carried no probe both bundles name, or the run ended before its flows were read): the basis, container; per probe, its two hosts' containers, how its flow ended (measured, not_started, not_read, interrupted), the replies sent and lost, the longest run of unanswered ones in seconds, and the rule and message of a flow not started or not read; and the probes the target adds or drops, which no flow measured across the step. step.phase gains flows, the phase of the step's two flow activities. A figure is the container's, never a hardware forwarder's. A create writes an 11 record with step null. A record of 10 or earlier reads with no host and with step.loss null.",
   "type": "object",
   "required": [
     "twin_version",
@@ -24,7 +24,7 @@
   "additionalProperties": false,
   "properties": {
     "twin_version": {
-      "const": "10"
+      "const": "11"
     },
     "lab": {
       "const": "fylgja",
@@ -179,8 +179,57 @@
           "image": {
             "type": "string"
           },
-          "psp": {
+          "probe": {
             "type": "object",
+            "description": "016: on a probe's host alone, what the host is, copied from the staged manifest's node: the probe it is an endpoint of, which endpoint, the probe's format and the probe package the host was built with. Absent on a device.",
+            "required": [
+              "name",
+              "endpoint",
+              "format",
+              "package"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              },
+              "endpoint": {
+                "enum": [
+                  "a",
+                  "b"
+                ]
+              },
+              "format": {
+                "type": "string",
+                "minLength": 1
+              },
+              "package": {
+                "type": "object",
+                "required": [
+                  "id",
+                  "source"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "id": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "enum": [
+                      "embedded",
+                      "override"
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "psp": {
+            "type": [
+              "object",
+              "null"
+            ],
             "required": [
               "id",
               "source"
@@ -196,7 +245,8 @@
                   "override"
                 ]
               }
-            }
+            },
+            "description": "The device's support package, as the staged manifest names it; null on a host (016), which has none."
           },
           "mgmt_ipv4": {
             "type": "string",
@@ -208,8 +258,11 @@
             "description": "Seconds from the readiness step's start for this node to the probe's first success. M11: after a step, the step's own readiness (step.ready_after) for a node the step awaited; the previous record's value for every other node, or 0 for a created node it lacks."
           },
           "artifact": {
-            "type": "object",
-            "description": "The artifact pushed to this node: the manifest entry minus its file path. Name and checksum are what twin show, the dry run and every finding name an artifact by. M11: the artifact of the bundle holds names.",
+            "type": [
+              "object",
+              "null"
+            ],
+            "description": "The artifact pushed to this node: the manifest entry minus its file path. Name and checksum are what twin show, the dry run and every finding name an artifact by. M11: the artifact of the bundle holds names. 016: null on a host, to which nothing is pushed.",
             "required": [
               "name",
               "content_type",
@@ -248,7 +301,36 @@
             "pattern": "^[0-9a-f]{64}$",
             "description": "M11: the bundle_id whose bootstrap and artifact this node is last known to run: the record's bundle_id on a create and on every node a stepped step pushed or left as it was. After a diverged step: the target's on a node whose push landed; null for a node containerlab restarted, recreated or created whose push did not land, which runs containerlab's baseline alone; the previous bundle's on every other node. null and the previous are what the node last ran that the step knows of, not a claim that a push which did not land left it untouched: a push whose step.pushed[].outcome is failed may have committed (a replace that darkens a node), and only refused is the node's own atomic answer. A later rollback reads step.pushed[].outcome beside holds. artifact is the artifact of the bundle holds names (the previous record's entry beside a null)."
           }
-        }
+        },
+        "allOf": [
+          {
+            "if": {
+              "required": [
+                "probe"
+              ]
+            },
+            "then": {
+              "properties": {
+                "psp": {
+                  "type": "null"
+                },
+                "artifact": {
+                  "type": "null"
+                }
+              }
+            },
+            "else": {
+              "properties": {
+                "psp": {
+                  "type": "object"
+                },
+                "artifact": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        ]
       }
     },
     "stage": {
@@ -349,7 +431,8 @@
         "started_at",
         "ended_at",
         "findings",
-        "wait"
+        "wait",
+        "loss"
       ],
       "additionalProperties": false,
       "properties": {
@@ -535,6 +618,7 @@
             "null"
           ],
           "enum": [
+            "flows",
             "reconcile",
             "readiness",
             "push",
@@ -827,6 +911,99 @@
                 }
               },
               "description": "the assertions still failing at the last read (verify.host_name, verify.port.enabled, verify.neighbor) and an unread node's operation.failed; [] when settled; never content"
+            }
+          }
+        },
+        "loss": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "description": "016: what the step's flows lost, written by the ReadFlows activity after the wait, or null until it has: the record was just written, the step carried no probe both bundles name, or the run ended before its flows were read. A figure is the container's: the hosts forward in software and keep their own timing.",
+          "required": [
+            "basis",
+            "probes",
+            "added",
+            "dropped"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "basis": {
+              "const": "container"
+            },
+            "probes": {
+              "type": "array",
+              "description": "one per probe both bundles carry, in name order",
+              "items": {
+                "type": "object",
+                "required": [
+                  "probe",
+                  "from",
+                  "to",
+                  "outcome",
+                  "sent",
+                  "lost",
+                  "longest_gap_s"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "probe": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "from": {
+                    "type": "string",
+                    "description": "the container the flow ran in"
+                  },
+                  "to": {
+                    "type": "string",
+                    "description": "the far host's container"
+                  },
+                  "outcome": {
+                    "enum": [
+                      "measured",
+                      "not_started",
+                      "not_read",
+                      "interrupted"
+                    ],
+                    "description": "measured: read after the wait. not_started: its start failed (flow.start.failed). not_read: its read failed (flow.read.failed). interrupted: read on a step that failed or was cancelled after its stage."
+                  },
+                  "sent": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "lost": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "longest_gap_s": {
+                    "type": "number",
+                    "minimum": 0,
+                    "description": "the longest run of unanswered requests, in seconds"
+                  },
+                  "rule": {
+                    "type": "string",
+                    "description": "the finding's identifier for a flow not started or not read"
+                  },
+                  "message": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "added": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "the probes the target adds, which no flow measured across the step"
+            },
+            "dropped": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "the probes the target drops, which no flow measured across the step"
             }
           }
         }

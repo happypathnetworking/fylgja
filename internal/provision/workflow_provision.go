@@ -161,23 +161,10 @@ func cancelledAfter(ctx workflow.Context, step string) *stopped {
 // scheduled in the plan's name order. It awaits every one before answering, so
 // a failure names both the nodes that did not answer and the ones that did.
 func awaitReadiness(ctx workflow.Context, plan []wire.NodePlan, deployed []wire.LabNode) ([]wire.ReadinessResult, *stopped) {
-	addr := make(map[string]string, len(deployed))
-	for _, n := range deployed {
-		addr[n.Name] = n.MgmtIPv4
-	}
 	futures := make([]workflow.Future, len(plan))
 	for i, node := range plan {
 		futures[i] = workflow.ExecuteActivity(workflow.WithActivityOptions(ctx, ReadinessOptions(node, plan)),
-			wire.ActAwaitReadiness, wire.ReadinessInput{
-				Node:     node.Name,
-				MgmtIPv4: addr[node.Name],
-				Probe:    node.Probe,
-				TimeoutS: node.TimeoutS,
-				// Only for a node whose package asks, and only the scheme and the port:
-				// the wait opens a connection and closes it, so no login crosses (D-029).
-				AwaitPushScheme: awaitPushScheme(node),
-				AwaitPushPort:   awaitPushPort(node),
-			})
+			wire.ActAwaitReadiness, readinessInput(node, deployed))
 	}
 
 	var ready []wire.ReadinessResult
@@ -233,6 +220,11 @@ func pushConfigs(ctx workflow.Context, twinDir string, plan []wire.NodePlan, dep
 	s := &stopped{step: findings.StepPush}
 	futures := make([]workflow.Future, len(plan))
 	for i, node := range plan {
+		if node.Host != nil {
+			// A host is configured by containerlab from its topology node's exec lines, and
+			// nothing is pushed to it (016).
+			continue
+		}
 		if node.Artifact == nil {
 			// A bundle this build writes names one for every node, and bundle.Verify refuses a
 			// manifest that does not before any run starts; this is the second lock, for a
@@ -404,6 +396,34 @@ func rejected(res ProvisionResult, step string) ProvisionResult {
 	res.Outcome = OutcomeRejected
 	res.Step = step
 	return res
+}
+
+// readinessInput is one node's readiness as its plan gives it: a device's probe at its
+// management address, with the push transport its package asks readiness to wait for; a
+// host's exec in its container (016), which logs in nowhere. A device's input is what
+// every recorded history carries.
+func readinessInput(node wire.NodePlan, lab []wire.LabNode) wire.ReadinessInput {
+	var deployed wire.LabNode
+	for _, n := range lab {
+		if n.Name == node.Name {
+			deployed = n
+		}
+	}
+	if node.Host != nil {
+		exec := node.Host.Readiness
+		return wire.ReadinessInput{Node: node.Name, MgmtIPv4: deployed.MgmtIPv4, TimeoutS: node.TimeoutS,
+			Exec: &exec, Container: deployed.Container}
+	}
+	return wire.ReadinessInput{
+		Node:     node.Name,
+		MgmtIPv4: deployed.MgmtIPv4,
+		Probe:    node.Probe,
+		TimeoutS: node.TimeoutS,
+		// Only for a node whose package asks, and only the scheme and the port:
+		// the wait opens a connection and closes it, so no login crosses (D-029).
+		AwaitPushScheme: awaitPushScheme(node),
+		AwaitPushPort:   awaitPushPort(node),
+	}
 }
 
 // awaitPushScheme and awaitPushPort are the push transport readiness waits for, for a node

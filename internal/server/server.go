@@ -45,6 +45,9 @@ type Server struct {
 	// Reader reads a booted node for twin verify (verifyReader). A lab.GNMIReader with no
 	// logger of its own logs to the request's.
 	Reader verify.Reader
+	// Burster runs a probe's burst for twin verify (016); nil is lab.DockerBurster over
+	// Runner, logging to the request's logger.
+	Burster verify.Burster
 	// Sleep and Now are verify's pause between two reads and its clock; nil is verify's
 	// own timer and time.Now (verifySleep, verifyNow).
 	Sleep func(ctx context.Context, d time.Duration) error
@@ -61,6 +64,9 @@ type Server struct {
 	// Getenv reads the host check's and verify's variables: the logins, the memory budget
 	// (os.LookupEnv).
 	Getenv func(string) (string, bool)
+	// Probes is the kind's read a request that sends no probe file makes (016): nil is
+	// intent.ProbeReader from the process environment, and a test sets its own.
+	Probes func() (ProbeReader, error)
 	// RehearsalCeiling is the longest deadline twin rehearse admits; zero is
 	// rehearsal.Ceiling. A test lowers it, and no flag sets it (015).
 	RehearsalCeiling time.Duration

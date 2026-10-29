@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"reflect"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/snapshot"
 	"github.com/happypathnetworking/fylgja/internal/stage"
@@ -27,7 +29,9 @@ type fakePipeline struct {
 	reads  []string // branch@at, in order
 	scopes []string // the scope of each read, in order
 	taken  []string // snapshot ids, in order
-	filed  []string // bundle ids, in order
+	// takenProbes is the probe list each take was handed, in order (016).
+	takenProbes [][]probe.Probe
+	filed       []string // bundle ids, in order
 	// calls is every call into the pipeline, in order: read, take, compile, file.
 	calls []string
 	// Per branch: a read that could not run, a read refused, a read's warnings, a CTM of a
@@ -37,6 +41,12 @@ type fakePipeline struct {
 	readWarnings map[string]findings.List
 	unsupported  map[string]bool
 	lessLink     map[string]bool
+	// probed reads every reference as the probed fixture's CTM (016), whose devices have two
+	// uncabled ports each; cableProbe, per branch@at, cables n1:ethernet-1/10 to
+	// n2:ethernet-1/10 there. compiledProbes is the probe list each compile was handed.
+	probed         bool
+	cableProbe     map[string]bool
+	compiledProbes [][]probe.Probe
 	// A take that could not run and a take refused (a corrupt store entry), on every stage.
 	takeErr      error
 	takeRefusals findings.List
@@ -60,6 +70,12 @@ func (f *fakePipeline) pipeline() Pipeline {
 			if err != nil {
 				f.t.Fatal(err)
 			}
+			if f.probed {
+				c = probedCTM(f.t)
+			}
+			if f.cableProbe[branch+"@"+at] {
+				cableProbePort(c)
+			}
 			c.Envelope.Branch, c.Envelope.At, c.Envelope.ObservedAt = branch, at, observedAt
 			if f.lessLink[branch+"@"+at] {
 				// The cable gone, as a reader writes it: from the links and from the two
@@ -79,18 +95,20 @@ func (f *fakePipeline) pipeline() Pipeline {
 			}
 			return c, f.readWarnings[branch], nil
 		},
-		Take: func(_ context.Context, c *ctm.CTM) (string, findings.List, error) {
+		Take: func(_ context.Context, c *ctm.CTM, probes []probe.Probe) (string, findings.List, error) {
 			f.calls = append(f.calls, "take")
+			f.takenProbes = append(f.takenProbes, probes)
 			if f.takeErr != nil || f.takeRefusals != nil {
 				return "", f.takeRefusals, f.takeErr
 			}
-			id := snapshot.Take(c).ID
+			id := snapshot.Take(c, probes).ID
 			f.taken = append(f.taken, id)
 			return id, nil, nil
 		},
-		Compile: func(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, string, findings.List) {
+		Compile: func(c *ctm.CTM, decls []probe.Probe, reg *psp.Registry, packages *probe.Registry) (map[string][]byte, string, findings.List) {
 			f.calls = append(f.calls, "compile")
-			return stage.Compile(c, reg)
+			f.compiledProbes = append(f.compiledProbes, decls)
+			return stage.Compile(c, decls, reg, packages)
 		},
 		File: func(_ context.Context, _ map[string][]byte, id string) (findings.List, error) {
 			f.calls = append(f.calls, "file")
@@ -198,7 +216,7 @@ func TestPlanStages(t *testing.T) {
 		t.Errorf("live → head: %+v; want unchanged between the two ids", s)
 	}
 	if st := res.Stages[2]; st.Description != "after its configuration is live" || st.AtSource != AtGiven ||
-		st.Read.Counts != (intent.Counts{Devices: 3, Interfaces: 9, Links: 3, Artifacts: 3}) || st.BundleID() != ids[1] {
+		st.Read.Counts != (intent.Counts{Devices: 3, Interfaces: 15, Links: 3, Artifacts: 3}) || st.BundleID() != ids[1] {
 		t.Errorf("live: %+v, read %+v", st, st.Read)
 	}
 	mustHoldTheStagesFindings(t, res)
@@ -575,8 +593,8 @@ func TestPlanStepThatDoesNotReadIsAnError(t *testing.T) {
 	f := &fakePipeline{t: t}
 	p := f.pipeline()
 	compiles := 0
-	p.Compile = func(c *ctm.CTM, reg *psp.Registry) (map[string][]byte, string, findings.List) {
-		files, id, list := stage.Compile(c, reg)
+	p.Compile = func(c *ctm.CTM, decls []probe.Probe, reg *psp.Registry, probes *probe.Registry) (map[string][]byte, string, findings.List) {
+		files, id, list := stage.Compile(c, decls, reg, probes)
 		if compiles++; compiles == 2 {
 			delete(files, "manifest.json")
 		}
@@ -681,4 +699,125 @@ func TestEveryReadIsUnderTheScopeGiven(t *testing.T) {
 	}
 	onlyScope(t, "the build's stamps", s.scopes)
 	onlyScope(t, "the build's read", f.scopes)
+}
+
+// probedCTM is the CTM of testdata/snapshot/three-node-probed.json: the three-node fixture
+// with ethernet-1/10 and ethernet-1/11 uncabled on each device (016).
+func probedCTM(t *testing.T) *ctm.CTM {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("..", "..", "testdata", "snapshot", "three-node-probed.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := snapshot.Unmarshal(b)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s.CTM
+}
+
+// cableProbePort cables n1:ethernet-1/10, the port n1-loop's endpoint a takes, to
+// n2:ethernet-1/10, as a reader writes a cable: a link, and each end's interface naming it.
+func cableProbePort(c *ctm.CTM) {
+	const id = "n1:ethernet-1/10|n2:ethernet-1/10"
+	c.Links = append(c.Links, ctm.Link{ID: id, Endpoints: []ctm.Endpoint{
+		{Device: "n1", Interface: "ethernet-1/10"}, {Device: "n2", Interface: "ethernet-1/10"}}})
+	for i := range c.Devices {
+		for j := range c.Devices[i].Interfaces {
+			in := &c.Devices[i].Interfaces[j]
+			if in.Name == "ethernet-1/10" && (c.Devices[i].Name == "n1" || c.Devices[i].Name == "n2") {
+				in.Link = id
+			}
+		}
+	}
+}
+
+// n1Loop is testdata/probes/n1-loop.json's list, and the probe packages shipped.
+func n1Loop(t *testing.T) ([]probe.Probe, *probe.Registry) {
+	t.Helper()
+	path := filepath.Join("..", "..", "testdata", "probes", "n1-loop.json")
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, list := probe.Parse(b, path)
+	if d == nil {
+		t.Fatalf("%s: %+v", path, list)
+	}
+	packages, err := probe.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return d.Probes, packages
+}
+
+// A plan's stages share the one list the request read at its start (016, FR-007; US4
+// scenario 4): each of the three stages compiled is taken carrying it and compiled with it,
+// so every snapshot the plan files names the probe and every bundle its hosts.
+func TestPlanStagesCarryTheOneList(t *testing.T) {
+	list, packages := n1Loop(t)
+	r, s := story()
+	f := &fakePipeline{t: t, readRefused: emptyMain, probed: true}
+	p := f.pipeline()
+	p.Probes, p.Packages = list, packages
+	res, err := Plan(context.Background(), r, s, "change-1", testScope, registry(t), p, now, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := labelsOf(res), []string{"branch-point refused", "cabled compiled", "live compiled", "head compiled"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("stages %v, want %v", got, want)
+	}
+	if len(f.takenProbes) != 3 || len(f.compiledProbes) != 3 {
+		t.Fatalf("%d takes and %d compiles; want one of each per stage read", len(f.takenProbes), len(f.compiledProbes))
+	}
+	for i := range 3 {
+		if !reflect.DeepEqual(f.takenProbes[i], list) || !reflect.DeepEqual(f.compiledProbes[i], list) {
+			t.Errorf("stage %d was taken with %+v and compiled with %+v; want the one list %+v", i+1, f.takenProbes[i],
+				f.compiledProbes[i], list)
+		}
+	}
+	for i, st := range res.Stages[1:] {
+		if st.Bundle == nil || st.SnapshotID != f.taken[i] {
+			t.Fatalf("%s: snapshot %s, bundle %v; want the take's %s and a bundle", st.Ref, st.SnapshotID, st.Bundle, f.taken[i])
+		}
+		if !strings.Contains(string(st.Bundle.Files["manifest.json"]), `"n1-loop-a"`) {
+			t.Errorf("%s: the bundle's manifest names no host n1-loop-a", st.Ref)
+		}
+	}
+}
+
+// A stage that cables a probe's port is refused at its compile by probe.interface.cabled, as
+// a stage no package matches is, and the plan goes on (016; US5 scenario 5, SC-004): the
+// stage before it compiled with the probe, the one after it too.
+func TestPlanStageCablingAProbesPortIsRefusedAtItsCompile(t *testing.T) {
+	list, packages := n1Loop(t)
+	r, s := story()
+	f := &fakePipeline{t: t, readRefused: emptyMain, probed: true, cableProbe: map[string]bool{"change-1@" + liveAt: true}}
+	p := f.pipeline()
+	p.Probes, p.Packages = list, packages
+	res, err := Plan(context.Background(), r, s, "change-1", testScope, registry(t), p, now, nil, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := labelsOf(res), []string{"branch-point refused", "cabled compiled", "live refused", "head compiled"}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("stages %v, want %v", got, want)
+	}
+	live := res.Stages[2]
+	if live.Rule != findings.RuleProbeInterfaceCabled || live.Bundle != nil || !snapshot.IsID(live.SnapshotID) {
+		t.Errorf("live: rule %q, bundle %v, snapshot %q; want probe.interface.cabled, no bundle, its snapshot filed",
+			live.Rule, live.Bundle, live.SnapshotID)
+	}
+	var cabled *findings.Finding
+	for i := range live.Findings {
+		if live.Findings[i].Rule == findings.RuleProbeInterfaceCabled {
+			cabled = &live.Findings[i]
+		}
+	}
+	if cabled == nil || cabled.Step != findings.StepCompile || cabled.Object != "n1-loop/a" ||
+		!strings.Contains(cabled.Message, "n1:ethernet-1/10|n2:ethernet-1/10") {
+		t.Errorf("live's findings %+v; want probe.interface.cabled at compile, at n1-loop/a, naming the cable", live.Findings)
+	}
+	if s := res.Steps[1]; s.Step != nil {
+		t.Errorf("cabled → live: %+v; want not computed, live refused", s)
+	}
 }

@@ -38,7 +38,7 @@ func TestCompileRejectsAnEmptyCTM(t *testing.T) {
 				Scope:      "tag:fylgja",
 				Mapping:    ctm.Mapping{Reader: ctm.ReaderInfrahubDCIM, Model: ctm.ModelSchemaLibrary, Version: ctm.ModelVersion},
 			}}
-			files, list := Compile(c, reg)
+			files, list := Compile(c, nil, reg, nil)
 			if files != nil {
 				t.Errorf("an empty CTM produced %d files; a twin of nothing is not a bundle", len(files))
 			}
@@ -69,7 +69,7 @@ func TestCompileRejectsTheEmptyFixture(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	files, list := Compile(c, reg)
+	files, list := Compile(c, nil, reg, nil)
 	if files != nil {
 		t.Errorf("devices-empty.json produced %d files", len(files))
 	}

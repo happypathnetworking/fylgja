@@ -919,6 +919,9 @@ func findingStep(activityType string) string {
 	// M12: the step's wait after its record.
 	case wire.ActVerifyTwin:
 		return findings.StepObserve
+	// 016: the step's flows, started after its stage and read after its wait.
+	case wire.ActStartFlows, wire.ActReadFlows:
+		return findings.StepFlows
 	}
 	return ""
 }
@@ -1078,6 +1081,12 @@ func stepName(workflowID, activityType string) string {
 	// M12: the step's wait after its record.
 	case wire.ActVerifyTwin:
 		return "observe"
+	// 016: the step's flows, started as flows and read as the loss they measured
+	// (contracts/cli.md, twin step); both are the findings' step flows.
+	case wire.ActStartFlows:
+		return "flows"
+	case wire.ActReadFlows:
+		return "loss"
 	case wire.ActCheckHost:
 		return "host check"
 	case wire.ActStageBundle:
@@ -1142,8 +1151,70 @@ func completedDetail(dc converter.DataConverter, activityType string, result *co
 		if dc.FromPayloads(result, &r) == nil {
 			return waitDetail(r.Wait)
 		}
+	case wire.ActStartFlows:
+		var r wire.FlowsResult
+		if dc.FromPayloads(result, &r) == nil {
+			return flowsDetail(r.Flows)
+		}
+	case wire.ActReadFlows:
+		var r wire.ReadFlowsResult
+		if dc.FromPayloads(result, &r) == nil {
+			return lossDetail(r.Loss)
+		}
 	}
 	return ""
+}
+
+// flowsDetail is how each flow's start ended, as the flows step's progress line names it
+// (contracts/cli.md, twin step): "n1-loop started; n2-loop not started: <why>".
+func flowsDetail(flows []wire.FlowOutcome) string {
+	var parts []string
+	for _, f := range flows {
+		switch {
+		case f.Outcome == wire.FlowStarted:
+			parts = append(parts, f.Probe+" started")
+		case f.Message != "":
+			parts = append(parts, f.Probe+" not started: "+f.Message)
+		default:
+			parts = append(parts, f.Probe+" not started")
+		}
+	}
+	return strings.Join(parts, "; ")
+}
+
+// lossDetail is what the step's flows lost, as the loss step's progress line names it
+// (contracts/cli.md, twin step): "n1-loop 0/312 lost, longest gap 0.0s (container timing)",
+// one part per probe, then the probes the target adds and drops, which no flow measured. A
+// figure is the container's, and the line says so.
+func lossDetail(l wire.Loss) string {
+	var parts []string
+	for _, p := range l.Probes {
+		figures := fmt.Sprintf("%d/%d lost, longest gap %.1fs", p.Lost, p.Sent, p.LongestGapS)
+		switch p.Outcome {
+		case wire.FlowMeasured:
+			parts = append(parts, p.Probe+" "+figures)
+		case wire.FlowInterrupted:
+			parts = append(parts, p.Probe+" interrupted, "+figures)
+		case wire.FlowNotStarted:
+			parts = append(parts, p.Probe+" not started")
+		default:
+			part := p.Probe + " not read"
+			if p.Message != "" {
+				part += ": " + p.Message
+			}
+			parts = append(parts, part)
+		}
+	}
+	if len(l.Added) > 0 {
+		parts = append(parts, "added "+strings.Join(l.Added, ", ")+", not measured")
+	}
+	if len(l.Dropped) > 0 {
+		parts = append(parts, "dropped "+strings.Join(l.Dropped, ", ")+", not measured")
+	}
+	if len(parts) == 0 {
+		return "no flow"
+	}
+	return strings.Join(parts, "; ") + " (container timing)"
 }
 
 // waitDetail is how the step's wait ended, as the observe step's progress line names it
@@ -1409,8 +1480,25 @@ func StepDocument(subject *findings.Subject, in StepInput, res StepResult) *find
 		}
 		block.WaitCounts = res.WaitCounts
 	}
+	// The flows' loss once ReadFlows read it (016), null when the run closed without it.
+	block.Loss = LossBlockOf(res.Loss)
 	doc.Step = block
 	return doc
+}
+
+// LossBlockOf is a step's loss as the step document's block carries it
+// (contracts/step.schema.json, $defs/loss), or nil for none.
+func LossBlockOf(l *wire.Loss) *findings.StepLoss {
+	if l == nil {
+		return nil
+	}
+	b := &findings.StepLoss{Basis: l.Basis, Probes: make([]findings.StepProbeLoss, len(l.Probes)),
+		Added: append([]string{}, l.Added...), Dropped: append([]string{}, l.Dropped...)}
+	for i, p := range l.Probes {
+		b.Probes[i] = findings.StepProbeLoss{Probe: p.Probe, From: p.From, To: p.To, Outcome: p.Outcome, Sent: p.Sent,
+			Lost: p.Lost, LongestGapS: p.LongestGapS, Rule: p.Rule, Message: p.Message}
+	}
+	return b
 }
 
 // StepBlockOf is the step block of twin.step's document before any run: the two

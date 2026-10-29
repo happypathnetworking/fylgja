@@ -1,6 +1,7 @@
 // Package snapshot holds the snapshot, the core's one input (D-061): one document of
-// version 1 wrapping an unchanged CTM 2, with a slot for probe declarations, empty until
-// 016, and an id of its own.
+// version 2 wrapping an unchanged CTM 2 and the probe declarations beside it (016), with
+// an id of its own. A document of version 1, which 018 wrote with an empty probes list, is
+// read as a 2 with no probes: the version is not hashed, so its id is unchanged (R-05).
 //
 // The document has two parts. The outer part is snapshot_version, snapshot_id and
 // observed_at, the take's time. The body is ctm and probes. The id hashes the body with
@@ -8,8 +9,9 @@
 // intent taken twice has one id whenever it was read (R-01). The stored bytes keep
 // observed_at and the outer part, so the bytes the id hashes are never stored.
 //
-// It imports the CTM and the standard library alone: a snapshot is the compiler's input
-// wrapped, and nothing here reads a source or compiles.
+// It imports the CTM, the probe's declaration, the findings whose rules name a probe's
+// fault and the standard library alone: a snapshot is the compiler's input wrapped, and
+// nothing here reads a source or compiles.
 //
 // Struct field order is significant, as the CTM's is: it fixes the field order of the
 // stored form and of the hashed bytes.
@@ -20,15 +22,22 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"slices"
 
 	"github.com/happypathnetworking/fylgja/internal/ctm"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 )
 
-// Version is the snapshot's format version.
+// Version is the snapshot's format version, the one every document this build writes
+// declares.
 //
-// "1" at 018: an unchanged CTM 2 and an empty probes list. 016 defines the probes'
-// element and bumps it. Nothing converts a document of another version.
-const Version = "1"
+// "1" at 018: an unchanged CTM 2 and an empty probes list. "2" at 016: the list's element
+// is the declaration's probe. A "1" is read as a "2" with no probes (Version1), and
+// nothing converts a document of another version.
+const Version = "2"
+
+// Version1 is the version 018 wrote, read as a Version with no probes and never written.
+const Version1 = "1"
 
 // ObservedAtLayout is the take's observed_at: UTC, six fractional digits, the form the
 // CTM envelope records a read's in. It is stage.ObservedAtFormat, kept here because the
@@ -45,18 +54,22 @@ type Snapshot struct {
 	ObservedAt string `json:"observed_at"`
 	// CTM is the body's intent, normalised. Hashed, its envelope's observed_at left out.
 	CTM *ctm.CTM `json:"ctm"`
-	// Probes is the body's probe declarations: required and empty in version 1, written
-	// [] and never null. Hashed.
-	Probes []json.RawMessage `json:"probes"`
+	// Probes is the body's probe declarations, in the declaration's order, each held to
+	// the declaration's rules that read no CTM (probe.Validate): written [] and never null,
+	// and empty in a document read as version 1. Hashed.
+	Probes []probe.Probe `json:"probes"`
 }
 
-// Take wraps a CTM as a snapshot of version 1. It is pure: the CTM is copied before it is
-// normalised, so the caller's is untouched, and the snapshot shares nothing with it.
+// Take wraps a CTM and a list of probes as a snapshot of version 2, the probes in the
+// order given, none when the list is nil. It is pure: the CTM is copied before it is
+// normalised, and the list copied, so the caller's are untouched, and the snapshot shares
+// nothing with them. It holds the probes to no rule: Marshal and the store do, before
+// anything is written.
 //
 // The copy is a plain encoding/json round trip, not ctm.Marshal and ctm.Unmarshal:
 // ctm.Marshal normalises its argument in place, and ctm.Unmarshal refuses a CTM built in
 // memory whose lists Normalize has not yet filled.
-func Take(c *ctm.CTM) *Snapshot {
+func Take(c *ctm.CTM, probes []probe.Probe) *Snapshot {
 	b, err := json.Marshal(c)
 	if err != nil {
 		// Every field of a CTM is a string, a bool, or a slice or pointer of them, which
@@ -72,7 +85,9 @@ func Take(c *ctm.CTM) *Snapshot {
 		Version:    Version,
 		ObservedAt: cp.Envelope.ObservedAt,
 		CTM:        &cp,
-		Probes:     []json.RawMessage{},
+		// A Probe holds strings and an array of structs of strings: a shallow clone
+		// shares nothing.
+		Probes: listOf(slices.Clone(probes)),
 	}
 	id, err := ID(s)
 	if err != nil {
@@ -106,15 +121,16 @@ type hashedCTM struct {
 
 // hashedBody is the body the id hashes: {"ctm": …, "probes": […]}.
 type hashedBody struct {
-	CTM    hashedCTM         `json:"ctm"`
-	Probes []json.RawMessage `json:"probes"`
+	CTM    hashedCTM     `json:"ctm"`
+	Probes []probe.Probe `json:"probes"`
 }
 
-// Hashed returns the bytes a snapshot's id hashes: {"ctm": …, "probes": []}, the CTM
-// normalised (in place, as ctm.Marshal normalises) and its envelope written without
-// observed_at, encoded as ctm.Marshal encodes a CTM: struct field order, two-space indent,
-// LF, a trailing newline, Go's default escaping. They differ from the stored bytes and are
-// never stored. By hand, over a stored snapshot, exact when no string holds <, >, &, U+2028
+// Hashed returns the bytes a snapshot's id hashes: {"ctm": …, "probes": […]}, the probes
+// in the snapshot's order and each in the declaration's field order, the version left
+// out, so a 1 and a 2 with no probes hash alike (R-05); the CTM normalised (in place, as
+// ctm.Marshal normalises) and its envelope written without observed_at, encoded as
+// ctm.Marshal encodes a CTM: struct field order, two-space indent, LF, a trailing newline,
+// Go's default escaping. They differ from the stored bytes and are never stored. By hand, over a stored snapshot, exact when no string holds <, >, &, U+2028
 // or U+2029, which Go escapes and jq writes raw, or DEL (U+007F), which jq escapes and Go
 // writes raw:
 //
@@ -139,7 +155,7 @@ func Hashed(s *Snapshot) ([]byte, error) {
 			Devices: s.CTM.Devices,
 			Links:   s.CTM.Links,
 		},
-		Probes: probes(s.Probes),
+		Probes: listOf(s.Probes),
 	}
 	b, err := json.MarshalIndent(body, "", "  ")
 	if err != nil {
@@ -181,15 +197,15 @@ func IsID(s string) bool {
 // Marshal encodes a snapshot in its stored form: the outer part first (snapshot_version,
 // snapshot_id, observed_at), then ctm, then probes; struct field order, two-space indent,
 // LF, a trailing newline, the CTM normalised. It refuses a snapshot that breaks version
-// 1's invariants, so nothing writes a document Unmarshal would refuse: the version is
-// "1", the id is the body's hash, observed_at is the inner CTM's and of its form, and
-// probes is empty.
+// 2's invariants, so nothing writes a document Unmarshal would refuse: the version is
+// "2", the id is the body's hash, observed_at is the inner CTM's and of its form, and
+// every probe holds to the declaration's rules that read no CTM.
 func Marshal(s *Snapshot) ([]byte, error) {
 	if err := check(s); err != nil {
 		return nil, err
 	}
 	out := *s
-	out.Probes = probes(s.Probes)
+	out.Probes = listOf(s.Probes)
 	b, err := json.MarshalIndent(&out, "", "  ")
 	if err != nil {
 		return nil, fmt.Errorf("snapshot: encoding: %w", err)
@@ -197,7 +213,8 @@ func Marshal(s *Snapshot) ([]byte, error) {
 	return append(b, '\n'), nil
 }
 
-// check holds a snapshot to version 1's invariants before it is written or filed.
+// check holds a snapshot to version 2's invariants before it is written or filed: a
+// document read as a 1 is written as a 2.
 func check(s *Snapshot) error {
 	if s.CTM == nil {
 		return fmt.Errorf("snapshot: no ctm")
@@ -205,8 +222,8 @@ func check(s *Snapshot) error {
 	if s.Version != Version {
 		return fmt.Errorf("snapshot: snapshot_version %q, where this build writes %q", s.Version, Version)
 	}
-	if len(s.Probes) != 0 {
-		return fmt.Errorf("snapshot: probes holds %s; in snapshot %s the list is empty", entries(len(s.Probes)), Version)
+	if err := probeFault(s.Probes); err != nil {
+		return fmt.Errorf("snapshot: %s: %s", err.Field, err.Message)
 	}
 	if s.ObservedAt != s.CTM.Envelope.ObservedAt {
 		return fmt.Errorf("snapshot: observed_at %q is not the inner CTM's %q", s.ObservedAt, s.CTM.Envelope.ObservedAt)
@@ -225,10 +242,10 @@ func check(s *Snapshot) error {
 	return nil
 }
 
-// probes is the list written for p: [] and never null.
-func probes(p []json.RawMessage) []json.RawMessage {
+// listOf is the list written for p: [] and never null.
+func listOf(p []probe.Probe) []probe.Probe {
 	if p == nil {
-		return []json.RawMessage{}
+		return []probe.Probe{}
 	}
 	return p
 }

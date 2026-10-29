@@ -665,12 +665,15 @@ library_held() {
 }
 
 # main_lacks: what -prepare-main puts on main beside the library that main does not hold,
-# read by name and written nothing: the stage kind, the group and the registration. Empty
-# when main holds all three.
+# read by name and written nothing: the stage and probe kinds, the group and the
+# registration. Empty when main holds all four.
 main_lacks() {
-  local lacks=""
-  infrahub_get '/api/schema?branch=main' | jq -e '.nodes | any(.kind == "FylgjaStage")' > /dev/null ||
+  local lacks="" schema
+  schema=$(infrahub_get '/api/schema?branch=main')
+  jq -e '.nodes | any(.kind == "FylgjaStage")' <<< "$schema" > /dev/null ||
     lacks+="${lacks:+, }the stage kind FylgjaStage"
+  jq -e '.nodes | any(.kind == "FylgjaProbe")' <<< "$schema" > /dev/null ||
+    lacks+="${lacks:+, }the probe kind FylgjaProbe"
   gql main '{ CoreStandardGroup(name__value: "fylgja-devices") { count } }' |
     jq -e '.CoreStandardGroup.count == 1' > /dev/null || lacks+="${lacks:+, }the group fylgja-devices"
   gql main '{ CoreReadOnlyRepository(name__value: "fylgja") { count } }' |
@@ -762,12 +765,13 @@ part_infrahub() {
     "docker compose -p $COMPOSE_PROJECT logs infrahub-server" infrahub_answers
   item infrahub server present "$INFRAHUB_VERSION (http://localhost:8000)"
 
-  # main: the schema library and the stage kind, the group and this repository's
-  # registration (D-028, D-044), by the fixture tool, the one writer. It loads the library
-  # only on a main that holds none of its kinds, then skips what exists. On a main holding
-  # any of them it refuses, exit 1, writing nothing (R-13): a second run's answer, read as
-  # present once main is read to hold the stage kind, the group and the registration the
-  # refusal never reached. Any other failure is a refusal.
+  # main: the stage and probe kinds, the schema library, the group and this repository's
+  # registration (D-028, D-044), by the fixture tool, the one writer. It loads the two kinds
+  # where either is absent, then the library only on a main that holds none of its kinds,
+  # then skips what exists. On a main holding any of them it refuses, exit 1, writing
+  # nothing after the two kinds (R-13): a second run's answer, read as present once main is
+  # read to hold the two kinds, the group and the registration the refusal never reached.
+  # Any other failure is a refusal.
   local out="$ROOT/local/bring-up-main.log" rc=0 missing
   with_env go run -tags fixture ./cmd/fylgja-fixture -prepare-main > "$out" 2>&1 || rc=$?
   if (( rc != 0 )) && ! library_held "$out"; then
@@ -779,12 +783,12 @@ part_infrahub() {
   sed -e '/^go: downloading /d' -e '/^exit status /d' -e 's/^/bring-up: infrahub: main: /' "$out"
   # A run that succeeds has loaded the library, since a main holding it is refused.
   if (( rc == 0 )); then
-    item infrahub main installed "(the library loaded; the stage kind, the group and the repository registered and imported)"
+    item infrahub main installed "(the library loaded; the stage and probe kinds, the group and the repository registered and imported)"
   else
     missing=$(main_lacks)
     [ -z "$missing" ] ||
-      fail infrahub main "main holds the schema library but not $missing: -prepare-main writes nothing on a main holding any of the library's kinds, so what is missing is added by hand (local/bring-up-main.log)"
-    item infrahub main present "(the library, the stage kind, the group, the repository)"
+      fail infrahub main "main holds the schema library but not $missing: -prepare-main loads only the stage and probe kinds on a main holding any of the library's kinds, so a group or a registration missing is added by hand (local/bring-up-main.log)"
+    item infrahub main present "(the library, the stage and probe kinds, the group, the repository)"
   fi
 
   state=$(fixture_state)

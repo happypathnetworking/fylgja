@@ -54,6 +54,37 @@ func (g given) scope(value string, wasGiven bool) {
 	}
 }
 
+// probes names --probes whenever it was given, an empty one included (016).
+func (g given) probes(value string, wasGiven bool) {
+	if wasGiven {
+		g["probes"] = value
+	}
+}
+
+// probesUsage is --probes's help on the five commands that take one (016): the file replaces
+// the kind's probes, which are the default.
+const probesUsage = "a probe declaration file, read here and sent: every snapshot the command takes carries its probes, " +
+	"in place of the ones declared in Infrahub (default: the probes of FylgjaProbe on the default branch, and none " +
+	"when it holds none)"
+
+// probesSent is the request's files for a --probes given as path (016): the declaration at
+// that path, read here, under it, as snapshotSent sends a snapshot file. Not given, none. A
+// file the client cannot read is its own failure, before any connection, as an explicit empty
+// --probes= is, which names no file.
+func probesSent(op string, subject *findings.Subject, path string, wasGiven bool) ([]api.File, error) {
+	if !wasGiven {
+		return nil, nil
+	}
+	if path == "" {
+		return nil, fail(op, subject, "--probes= is empty; give the path of a probe declaration file")
+	}
+	file, err := readProbes(path)
+	if err != nil {
+		return nil, fail(op, subject, "%v", err)
+	}
+	return []api.File{file}, nil
+}
+
 // scopeUsage is --scope's help on the five commands that read intent under one (017).
 const scopeUsage = "the devices to read, tag:<name>: every device carrying the tag of that name (default: the server's " +
 	"FYLGJA_DEFAULT_SCOPE)"

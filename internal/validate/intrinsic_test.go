@@ -54,7 +54,7 @@ func TestIntrinsicIsValidatesOwnWords(t *testing.T) {
 	for _, fixture := range append([]string{"five.json"}, fixtures(singleDefects)...) {
 		t.Run(fixture, func(t *testing.T) {
 			c, reg := loadDefect(t, fixture)
-			full := Validate(c, reg)
+			full := Validate(c, nil, reg, nil)
 			i := 0
 			for _, f := range Intrinsic(c) {
 				if f.Severity != findings.Rejection {
@@ -97,7 +97,7 @@ func TestIntrinsicNamesANamelessInterfaceOnAnyPlatform(t *testing.T) {
 	if len(list) != 1 || list[0] != want {
 		t.Errorf("Intrinsic = %v; want only %+v", list, want)
 	}
-	for _, f := range Validate(c, reg) {
+	for _, f := range Validate(c, nil, reg, nil) {
 		if f == want {
 			t.Errorf("Validate named the interface on a device whose package it lacks: %v", f)
 		}

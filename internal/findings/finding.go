@@ -256,11 +256,42 @@ const (
 	// inner CTM keeps its own rules, ctm.version.unsupported at the snapshot file and
 	// data.required.missing at the field prefixed ctm.
 	// No status, step or exit is new.
-	RuleSnapshotInvalid            = "snapshot.invalid"             // rejection, exit 1, no step (twin compile) or resolve (twin create --snapshot <file>): the field, or the file; the outer shape is not version 1's: an unknown key, ctm absent or not an object, probes absent, null or not empty, snapshot_id not 64 lowercase hex characters, observed_at not of the CTM's form or not the inner CTM's; or the inner CTM's observed_at not of that form, at ctm.envelope.observed_at
-	RuleSnapshotVersionUnsupported = "snapshot.version.unsupported" // rejection, exit 1, no step or resolve: the file; snapshot_version is not "1", or absent, naming the version read, or that none was, and "1"
+	RuleSnapshotInvalid            = "snapshot.invalid"             // rejection, exit 1, no step (twin compile) or resolve (twin create --snapshot <file>): the field, or the file; the outer shape is not version 2's: an unknown key, ctm absent or not an object, probes absent, null or not a list, snapshot_id not 64 lowercase hex characters, observed_at not of the CTM's form or not the inner CTM's; or the inner CTM's observed_at not of that form, at ctm.envelope.observed_at; from 016, an element of probes not a probe of the declaration's contract, or refused by its rules, at probes[<i>].<field>
+	RuleSnapshotVersionUnsupported = "snapshot.version.unsupported" // rejection, exit 1, no step or resolve: the file; snapshot_version is neither "1" nor "2", or absent, naming the version read, or that none was, and the two read (016: a "1" reads as a "2" with no probes)
 	RuleSnapshotIDMismatch         = "snapshot.id.mismatch"         // rejection, exit 1, no step or resolve, compile for the store: the file, or the store path; a declared snapshot_id is not what the body hashes to, naming both, or an entry under the id hashes to another, or hashes to it and declares another, naming the path and both
 	RuleSnapshotUnknown            = "snapshot.unknown"             // rejection, exit 1, resolve: the id; twin create --snapshot <id> names an id the store does not hold, naming the store's directory
-	RuleSnapshotFlagsConflict      = "snapshot.flags.conflict"      // rejection, exit 2, start: the flag; --snapshot beside --branch, --stage, --at or --scope, the first found in that order, before any connection; and on twin step (019), --stage beside --snapshot, the snapshot being the target
+	RuleSnapshotFlagsConflict      = "snapshot.flags.conflict"      // rejection, exit 2, start: the flag; --snapshot beside --branch, --stage, --at or --scope, the first found in that order, before any connection; on twin step (019), --stage beside --snapshot, the snapshot being the target; and from 016, --probes beside --snapshot on twin create or twin step, at --probes, since the snapshot carries its own list
+
+	// 016, probes (D-064; specs/016-probes/data-model.md §12). Each comment gives the
+	// severity, the exit, the step, the object and when it fires. The declaration's rules
+	// read no CTM and fire at start for a --probes file, at resolve for the kind's objects
+	// or a sent snapshot's elements; the placement's fire at compile, a plan's stage's
+	// compile included, worded alike by validation and the compiler. None retires (R-27).
+	RuleProbesVersionUnsupported    = "probes.version.unsupported"     // rejection, exit 1, start or resolve: the file; probes_version is not "1", or absent, naming the version read, or that none was, and "1"
+	RuleProbesInvalid               = "probes.invalid"                 // rejection, exit 1, start or resolve: the file or probes[<i>].<field>; the document is not an object, holds an unknown key, lacks a field, or a probe has other than two endpoints
+	RuleProbeNameInvalid            = "probe.name.invalid"             // rejection, exit 1, start or resolve: the probe; its name is not ^[a-z0-9][a-z0-9-]{0,23}$, naming the name read
+	RuleProbeNameDuplicate          = "probe.name.duplicate"           // rejection, exit 1, start or resolve: the probe; two or more probes share the name, naming each position
+	RuleProbeAddressInvalid         = "probe.address.invalid"          // rejection, exit 1, start or resolve: <probe>/<a|b>.address; not an address with a prefix length
+	RuleProbeGatewayInvalid         = "probe.gateway.invalid"          // rejection, exit 1, start or resolve: <probe>/<a|b>.gateway; not an address, or one carrying a prefix length
+	RuleProbeGatewayOutside         = "probe.gateway.outside"          // rejection, exit 1, start or resolve: <probe>/<a|b>.gateway; the gateway is not within the address's prefix, so the host's route could not be added
+	RuleProbeFamilyMixed            = "probe.family.mixed"             // rejection, exit 1, start or resolve: the probe; its four addresses are not of one family, naming each family read
+	RuleProbeAddressDuplicate       = "probe.address.duplicate"        // rejection, exit 1, start or resolve: <probe>/<a|b>.address; two endpoints of the list share one host address, naming both probes (R-20)
+	RuleProbeFormatUnknown          = "probe.format.unknown"           // rejection, exit 1, compile (start or resolve where a registry is at hand): <probe>; no loaded probe package declares the format, naming the formats loaded
+	RuleProbeDeviceUnknown          = "probe.device.unknown"           // rejection, exit 1, compile: <probe>/<a|b>; the CTM has no device of the endpoint's name
+	RuleProbeInterfaceUnknown       = "probe.interface.unknown"        // rejection, exit 1, compile: <probe>/<a|b>; the device has no interface of the endpoint's name
+	RuleProbeInterfaceCabled        = "probe.interface.cabled"         // rejection, exit 1, compile: <probe>/<a|b>; the interface is cabled, naming the link: a probe takes an uncabled port that is not mgmt_only
+	RuleProbeInterfaceMgmtOnly      = "probe.interface.mgmt_only"      // rejection, exit 1, compile: <probe>/<a|b>; the interface is mgmt_only
+	RuleProbePortTaken              = "probe.port.taken"               // rejection, exit 1, compile: <probe>/<a|b>; an earlier probe's endpoint takes the interface, naming it
+	RuleProbeHostCollision          = "probe.host.collision"           // rejection, exit 1, compile: <probe>/<a|b>; the host's name, <probe>-<a|b>, is a device's or another host's
+	RuleProbeKindAbsent             = "probe.kind.absent"              // rejection, exit 1, resolve: FylgjaProbe; the default branch's schema lacks the kind or an attribute this build reads, naming schema/fylgja-probe.yaml; only when the kind's read is asked for
+	RuleProbePackageSchema          = "probe.package.schema"           // rejection, exit 1 (2 at serve and worker run start), verify: the package path; the package is not of probes/probe.schema.json, naming the field
+	RuleProbePackageVersionUnknown  = "probe.package.version.unknown"  // rejection, exit 1 (2 at start), verify: the package path; probe_version is not one this build reads, naming it and the one read
+	RuleProbePackageFormatDuplicate = "probe.package.format.duplicate" // rejection, exit 1 (2 at start), verify: the package path; two packages of one origin declare one format, naming both
+	RuleProbePackageTemplate        = "probe.package.template"         // rejection, exit 1 (2 at start), verify: the package path; a command template names a placeholder no field renders, naming the template and the placeholder
+	RuleHostProbePackageMissing     = "host.probe_package.missing"     // rejection, exit 1, host_check: the package id; a host node's manifest probe.package.id has no probe package on the worker
+	RuleFlowStartFailed             = "flow.start.failed"              // warning, exit 0, flows: <probe>; a host's flow could not be started, so its probe is not_started and the step goes on
+	RuleFlowReadFailed              = "flow.read.failed"               // warning, exit 0, flows: <probe>; a host's flow could not be read, so its probe is not_read
+	RuleVerifyBurst                 = "verify.burst"                   // rejection, exit 5 (status nonconforming), observe: <probe>; the burst's replies are fewer than its count, naming the replies, the count, the far host and its address
 )
 
 // Steps a finding can belong to, as contracts/findings.schema.json enumerates them. New
@@ -302,6 +333,10 @@ const (
 	// and where the step run's wait reports. verify
 	// is M2's: twin provision's check of a bundle directory.
 	StepObserve = "observe"
+
+	// 016: the step's flows, started after its stage and read after its wait
+	// (StartFlows, ReadFlows), between stage and reconcile in the step's order.
+	StepFlows = "flows"
 )
 
 // Location points into a file, for findings about files rather than intent.

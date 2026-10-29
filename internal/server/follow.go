@@ -300,6 +300,13 @@ const cancelRequestBudget = 10 * time.Second
 // stepObserve is the step run's wait after its record, as its progress lines name it.
 const stepObserve = "observe"
 
+// stepFlows and stepLoss are the step run's flows, started after its stage and read after
+// its wait, as its progress lines name them (016).
+const (
+	stepFlows = "flows"
+	stepLoss  = "loss"
+)
+
 // printEvent writes one progress line. The lines are not contract (contracts/cli.md).
 // Cleanup steps are named without "step": they are what a stopped run does, not a step
 // toward the twin.
@@ -328,6 +335,9 @@ func printLabelled(opts *options, label string, e provision.Event) {
 	// twin step --wait); an activity that failed outright, or that the service timed out at
 	// the end of its window, is the wait that could not complete.
 	case e.Step == stepObserve && e.Outcome == provision.EventDone && e.Detail != "":
+		opts.note("%s: %s", label, e.Detail)
+	// The flows say how each started and the loss what each lost (016, contracts/cli.md).
+	case (e.Step == stepFlows || e.Step == stepLoss) && e.Outcome == provision.EventDone && e.Detail != "":
 		opts.note("%s: %s", label, e.Detail)
 	case e.Step == stepObserve && (e.Outcome == provision.EventFailed || e.Outcome == provision.EventTimedOut):
 		opts.note("%s: could not complete: %s", label, e.Message)

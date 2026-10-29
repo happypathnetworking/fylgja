@@ -38,7 +38,11 @@ const (
 	// a mapping row has no iftype, and fidelity.read carries the reader's list. A "4" was
 	// read through the generics contract, which this build no longer reads, so its
 	// record could say neither; it is refused naming both.
-	bundleVersion = "5"
+	//
+	// "6" at 016: a node may be a synthesized host, which carries a probe in place of a
+	// platform and has no artifact and no bootstrap. A "5" could not say which of its nodes
+	// a host is, so it is refused naming both.
+	bundleVersion = "6"
 )
 
 // ErrInvalid reports a directory that is not a bundle this build can read: no manifest, a
@@ -74,8 +78,9 @@ func (e *ErrVersionUnsupported) Error() string {
 //   - no topology.clab.yml is *ErrInvalid;
 //   - a node whose manifest entry names no artifact or no bootstrap, or names a file that is not a regular
 //     file inside the bundle, is *ErrInvalid naming the node and what is missing: the
-//     format promises every node a configuration file, and the push step's own guard is
-//     only the second lock;
+//     format promises every device's node a configuration file, and the push step's own
+//     guard is only the second lock. A synthesized host, whose entry names its probe, has
+//     neither and is pushed nothing (016);
 //   - an artifact file whose bytes do not hash to the entry's checksum, or whose length is
 //     not the entry's size, is *ErrInvalid naming the node, the file and both values: the
 //     manifest describes what the run will push and record, so it must describe the bytes
@@ -106,7 +111,10 @@ func Verify(dir string) (string, error) {
 	var m struct {
 		BundleVersion *string `json:"bundle_version"`
 		Nodes         []struct {
-			Name     string `json:"name"`
+			Name string `json:"name"`
+			// Probe is a host's (016): what it is in place of a platform. Only its presence
+			// is read here.
+			Probe    *struct{} `json:"probe"`
 			Artifact *struct {
 				File     string `json:"file"`
 				Checksum string `json:"checksum"`
@@ -143,6 +151,11 @@ func Verify(dir string) (string, error) {
 	// and reach readiness before the push step refused it (the workflow's guard, the
 	// second lock), a minute and a teardown after a refusal was possible.
 	for _, n := range m.Nodes {
+		// A host is configured by its topology node's exec lines: no file of the bundle is
+		// its, and nothing is pushed to it (016).
+		if n.Probe != nil {
+			continue
+		}
 		if n.Artifact == nil {
 			return "", &ErrInvalid{Dir: dir, Reason: fmt.Sprintf("%s names no artifact for node %s", manifestFile, n.Name)}
 		}

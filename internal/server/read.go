@@ -10,6 +10,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/ctm"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/intent"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/snapshot"
 	"github.com/happypathnetworking/fylgja/internal/stage"
@@ -35,6 +36,9 @@ type readFlags struct {
 	// stands (017).
 	scope      string
 	scopeGiven bool
+	// probes is --probes as given (016): the probe file the snapshot carries in place of the
+	// kind's.
+	probes probesArg
 }
 
 // fromStage is whether the read names a stage: --stage given, whatever its value, or a
@@ -94,6 +98,11 @@ func runRead(ctx context.Context, opts *options, f *readFlags) error {
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	// The request's one probe list, before the stage resolves and the branch is read (016).
+	probes, err := readProbes(ctx, opts, findings.OpIntentRead, subject, f.probes)
+	if err != nil {
+		return err
+	}
 	// A stage resolves to the pinned reference it names, and the read is that reference's:
 	// the CTM is the one --branch and --at would write, naming nothing of the stage. The
 	// resolved line comes first, and every document after it names the stage.
@@ -110,13 +119,14 @@ func runRead(ctx context.Context, opts *options, f *readFlags) error {
 	if resolved != nil {
 		block = &resolved.block
 	}
-	return withStage(read(ctx, opts, subject, stage.Read, branch, at, scope, f.out, reg, observedAt, block), resolved)
+	return withStage(read(ctx, opts, subject, stage.Read, branch, at, scope, f.out, reg, observedAt, block, probes), resolved)
 }
 
 // read is intent read's read, take and write of one reference, pinned or not, under scope,
-// read through readFn: stage.Read, or a tier-1 test's own.
+// read through readFn: stage.Read, or a tier-1 test's own. The snapshot carries probes, the
+// request's one list (016).
 func read(ctx context.Context, opts *options, subject *findings.Subject, readFn readFunc, branch, at, scope, out string,
-	reg *psp.Registry, observedAt string, resolved *findings.StageBlock) error {
+	reg *psp.Registry, observedAt string, resolved *findings.StageBlock, probes []probe.Probe) error {
 	// The state root first, as the create's: the snapshot a clean read takes is filed there,
 	// so a read that could not be filed is never made.
 	paths, err := opts.paths()
@@ -137,7 +147,7 @@ func read(ctx context.Context, opts *options, subject *findings.Subject, readFn 
 	// A clean read is taken and filed where a create's is, so a hand read and a create of
 	// the same intent share one stored document (FR-020; R-09). With no step, as M1's
 	// operations carry none. The store keeps a first take's entry; the file is this take.
-	s, stored, taken, err := takeSnapshot(ctx, paths, "", c)
+	s, stored, taken, err := takeSnapshot(ctx, paths, "", c, probes)
 	if err != nil {
 		return fail(findings.OpIntentRead, subject, "%v", err)
 	}

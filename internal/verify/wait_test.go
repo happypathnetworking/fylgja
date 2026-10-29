@@ -342,3 +342,44 @@ func TestWaitKeepsNoReadACancellationCut(t *testing.T) {
 		}
 	})
 }
+
+// The wait runs every burst on each read (016, R-15): a burst that loses replies at the first
+// two reads and gets them all at the third settles the wait there, and one that never does
+// expires it with verify.burst its last read's one finding, every node read.
+func TestWaitRunsTheBurstOnEachRead(t *testing.T) {
+	setup := func(t *testing.T, results ...burstResult) (Input, *fakeBurster, *fakeClock, []Assertion) {
+		t.Helper()
+		in, _, b := probed(t)
+		b.set(loopA, results...)
+		c := newClock()
+		in.Now = c.Now
+		as, err := Derive(in.Manifest)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return in, b, c, as
+	}
+	t.Run("settled late", func(t *testing.T) {
+		in, b, c, as := setup(t, burstResult{sent: 5, received: 3}, burstResult{sent: 5, received: 4}, burstResult{sent: 5, received: 5})
+		res := waitOn(in, as, c, WaitOptions{Budget: DefaultBudget})
+		if res.Outcome != WaitSettled || res.Reads != 3 || len(b.calls) != 3 || !res.Last.Conforms() {
+			t.Errorf("result %s after %d reads and %d bursts, want settled at the third of each", res.Outcome, res.Reads, len(b.calls))
+		}
+		if c := res.Last.Counts().Burst; c.Held != 1 {
+			t.Errorf("last read's burst counts %+v, want 1 held", c)
+		}
+	})
+	t.Run("expired", func(t *testing.T) {
+		in, b, c, as := setup(t, burstResult{sent: 5, received: 0})
+		res := waitOn(in, as, c, WaitOptions{Budget: 2 * time.Second})
+		if res.Outcome != WaitExpired || res.Reads != 3 || len(b.calls) != 3 || !res.Last.AllRead() {
+			t.Fatalf("result %s after %d reads and %d bursts, want expired after 3 of each, every node read",
+				res.Outcome, res.Reads, len(b.calls))
+		}
+		got := res.Last.Findings()
+		if len(got) != 1 || got[0].Rule != "verify.burst" || got[0].Object != "n1-loop" ||
+			got[0].Message != "probe n1-loop: 0 of 5 replies from n1-loop-b at 10.1.11.2" {
+			t.Errorf("last read's findings %v, want n1-loop's verify.burst alone", got)
+		}
+	})
+}

@@ -240,7 +240,7 @@ func TestProvisionWithNoBundleSchedulesNothing(t *testing.T) {
 // names, the read's observed_at and the input's source, as data.
 func TestProvisionCreatesCarryTheirSnapshot(t *testing.T) {
 	const observed = "2026-10-27T09:31:02.118842Z"
-	const snapshotID = "6a8a77fc65bdf47b9bb3a753d7709875671df20e32838344f29cfba46a13f6d6"
+	const snapshotID = "b9db37f826fc612346974b7f54bc5345513662f21c357a0c51fd2802c9b4de00"
 	bundlePath := "/state/bundles/" + testBundleID
 	for _, c := range []struct {
 		name string
@@ -334,6 +334,59 @@ func TestProvisionPushesEachNodeItsArtifact(t *testing.T) {
 	}
 	if len(recorded.Pushed) != 3 {
 		t.Errorf("the record was given %+v, want every node's push", recorded.Pushed)
+	}
+}
+
+// A host (016) is awaited by its probe package's exec in its own container, with no gNMI
+// probe and no login, and is pushed nothing: containerlab configures it from its topology
+// node's exec lines. The devices beside it are awaited and pushed as before, and the twin is
+// ready.
+func TestProvisionAwaitsAHostByExecAndPushesItNothing(t *testing.T) {
+	h := newHarness(t)
+	exec := wire.ExecProbe{Command: []string{"ip", "-4", "-o", "addr", "show", "dev", "eth1"}, Expect: "10.1.10.2/24", TimeoutS: 30}
+	h.plan.Nodes = append(h.plan.Nodes, wire.NodePlan{Name: "n1-loop-a", Image: "alpine:3.24.2", MemoryMB: 32,
+		TimeoutS: 30, DeployTimeoutS: 60, DestroyTimeoutS: 30,
+		Host: &wire.ProbePlan{Format: "ping", Package: wire.PSPRef{ID: "ping", Source: "embedded"}, Probe: "n1-loop",
+			Endpoint: "a", Readiness: exec}})
+	var mu sync.Mutex
+	awaited := map[string]wire.ReadinessInput{}
+	var pushedTo []string
+	h.env.OnActivity(wire.ActAwaitReadiness, mock.Anything, mock.Anything).Return(
+		func(_ context.Context, in wire.ReadinessInput) (wire.ReadinessResult, error) {
+			mu.Lock()
+			awaited[in.Node] = in
+			mu.Unlock()
+			return wire.ReadinessResult{Node: in.Node, ReadyAfterS: 0.4}, nil
+		})
+	h.env.OnActivity(wire.ActPushConfig, mock.Anything, mock.Anything).Return(
+		func(ctx context.Context, in wire.PushInput) (wire.PushResult, error) {
+			mu.Lock()
+			pushedTo = append(pushedTo, in.Node)
+			mu.Unlock()
+			return pushed(ctx, in)
+		})
+	h.mockHappyPath()
+
+	res := h.run(compiled("fylgja-fixture"))
+	if res.Outcome != OutcomeReady {
+		t.Fatalf("outcome %q with %+v, want ready", res.Outcome, res.Findings)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	host := awaited["n1-loop-a"]
+	want := wire.ReadinessInput{Node: "n1-loop-a", MgmtIPv4: "172.20.20.5", TimeoutS: 30, Exec: &exec,
+		Container: "clab-fylgja-n1-loop-a"}
+	if !reflect.DeepEqual(host, want) {
+		t.Errorf("the host was awaited with %+v, want %+v", host, want)
+	}
+	for _, n := range []string{"n1", "n2", "n3"} {
+		if in := awaited[n]; in.Exec != nil || in.Container != "" || in.Probe.Transport != "gnmi_get" {
+			t.Errorf("device %s awaited with %+v, want its gNMI probe as before", n, in)
+		}
+	}
+	slices.Sort(pushedTo)
+	if !slices.Equal(pushedTo, []string{"n1", "n2", "n3"}) {
+		t.Errorf("pushed %v, want the three devices and never the host", pushedTo)
 	}
 }
 

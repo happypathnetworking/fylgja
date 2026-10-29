@@ -71,7 +71,7 @@ func TestGoldenMixed(t *testing.T) {
 	if id := bundle.ID(files); id != goldenMixedID {
 		t.Errorf("bundle_id = %s, want %s", id, goldenMixedID)
 	}
-	checkInvariants(t, "testdata/ctm/mixed.json", files)
+	checkInvariants(t, loadFixture(t, "testdata/ctm/mixed.json"), files)
 }
 
 // Each node is deployed as its own package says: its image under its container kind, and
@@ -261,11 +261,11 @@ func TestMixedArtifactsReachTheBundleUnchanged(t *testing.T) {
 // true and the line is pushed as production wrote it — Fylgja configures no management
 // (D-009). Nothing else warns: no interface is omitted and no data port is renamed.
 func TestMixedWarnsOnlyAboutTheManagementNames(t *testing.T) {
-	files, list := Compile(loadFixture(t, "testdata/ctm/mixed.json"), embeddedRegistry(t))
+	files, list := Compile(loadFixture(t, "testdata/ctm/mixed.json"), nil, embeddedRegistry(t), nil)
 	if list.Rejected() || files == nil {
 		t.Fatalf("the mixed fixture was refused: %v", list)
 	}
-	const message = "artifact device-config names interface Management1 at line 10, " +
+	const message = "artifact device-config names interface Management1 at line 19, " +
 		"which the node calls Management0; the line is pushed as production wrote it"
 	var got []string
 	for _, f := range list {

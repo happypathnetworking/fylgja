@@ -3,7 +3,7 @@
 #
 #   - the import graph of the module's packages, between the <!-- import-graph --> and
 #     <!-- /import-graph --> markers in docs/development.md, and nothing else of that file;
-#   - docs/diagrams/topologies.md, the three golden bundles' topologies.
+#   - docs/diagrams/topologies.md, the four golden bundles' topologies.
 #
 # Run by `make diagrams`, after the C4 exports. Needs go, awk and sha256sum. It reads
 # testdata/golden/ and writes nothing under it. Its output is sorted and carries no
@@ -15,7 +15,7 @@ export LC_ALL=C
 
 guide=docs/development.md
 topologies=docs/diagrams/topologies.md
-goldens=(three-node lossy mixed)
+goldens=(three-node lossy mixed three-node-probed)
 
 # A Mermaid node id for a path: letters, digits and underscores only.
 mermaid_id() {
@@ -86,12 +86,15 @@ bundle_id() {
 }
 
 # One golden's topology: a node per containerlab node, labelled with its kind, and an
-# undirected edge per link, labelled with both endpoints as the topology spells them.
+# undirected edge per link, labelled with both endpoints as the topology spells them. A
+# node's Mermaid id is its name with every character but letters, digits and underscores
+# made an underscore, as mermaid_id makes it, since a probe's host is named <probe>-a.
 topology_graph() {
 	local topo=$1
 	echo '```mermaid'
 	echo 'graph LR'
 	awk '
+		function id(s) { gsub(/[^A-Za-z0-9_]/, "_", s); return "n_" s }
 		/^  nodes:/ { section = "nodes"; next }
 		/^  links:/ { section = "links"; next }
 		section == "nodes" && /^    [^ ].*:$/ { name = $1; sub(/:$/, "", name); next }
@@ -102,10 +105,10 @@ topology_graph() {
 			split(line, ends, ",")
 			a = ends[1]; b = ends[2]
 			na = a; sub(/:.*/, "", na); nb = b; sub(/:.*/, "", nb)
-			link[++l] = sprintf("    n_%s ---|\"%s — %s\"| n_%s", na, a, b, nb)
+			link[++l] = sprintf("    %s ---|\"%s — %s\"| %s", id(na), a, b, id(nb))
 		}
 		END {
-			for (i = 1; i <= n; i++) printf "    n_%s[\"%s (%s)\"]\n", node[i], node[i], kind[i]
+			for (i = 1; i <= n; i++) printf "    %s[\"%s (%s)\"]\n", id(node[i]), node[i], kind[i]
 			for (i = 1; i <= l; i++) print link[i]
 		}' "$topo"
 	echo '```'

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
@@ -456,4 +457,104 @@ func TestPureHalfOnTheShippedEOSPackage(t *testing.T) {
 			t.Errorf("no declaration expects %s; the pure half proves nothing about it", kind)
 		}
 	}
+}
+
+// shippedProbePackages reads, from disk, every probe package the binary embeds (016), held
+// equal to the embedded registry's but for the path, which is the module root's there.
+func shippedProbePackages(t *testing.T) []*probe.Package {
+	t.Helper()
+	reg, err := probe.Load("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []*probe.Package
+	for _, format := range reg.Formats() {
+		e, _ := reg.Lookup(format)
+		b, err := os.ReadFile(repo(e.Path))
+		if err != nil {
+			t.Fatalf("embedded probe package %s was not read from disk: %v", e.Path, err)
+		}
+		disk, err := probe.ParsePackage(b, repo(e.Path), probe.OriginEmbedded)
+		if err != nil {
+			t.Fatal(err)
+		}
+		same := *disk
+		same.Path = e.Path
+		if !reflect.DeepEqual(&same, e) {
+			t.Errorf("%s on disk differs from the probe package the binary embeds", e.Path)
+		}
+		out = append(out, disk)
+	}
+	return out
+}
+
+// Every shipped probe package validates and renders each of its templates with nothing
+// left in braces (016, R-08).
+func TestProbePackagesPass(t *testing.T) {
+	pkgs := shippedProbePackages(t)
+	if len(pkgs) == 0 {
+		t.Fatal("no probe package is embedded; the check would prove nothing")
+	}
+	for _, f := range CheckProbes(pkgs) {
+		t.Error(f.String())
+	}
+}
+
+// A probe package that fails is named by format, file, field and both values, every failure
+// in one run: a template left with a brace no placeholder closes, which the package's own
+// validation does not refuse; and a template naming a placeholder its field does not render,
+// which validation refuses and the render names too. A package naming no file fails.
+func TestProbePackagesNameAFailure(t *testing.T) {
+	src := repo("probes", "ping.yaml")
+	b, err := os.ReadFile(src)
+	if err != nil {
+		t.Fatal(err)
+	}
+	edit := func(t *testing.T, old, new string) *probe.Package {
+		t.Helper()
+		if !strings.Contains(string(b), old) {
+			t.Fatalf("%s no longer holds %q", src, old)
+		}
+		path := filepath.Join(t.TempDir(), "ping.yaml")
+		if err := os.WriteFile(path, []byte(strings.Replace(string(b), old, new, 1)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		p, err := probe.ParsePackage([]byte(strings.Replace(string(b), old, new, 1)), path, probe.OriginOverride)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+
+	t.Run("a brace left over", func(t *testing.T) {
+		p := edit(t, `["ping", "-i", "{interval}", "{far_address}"]`, `["ping", "-i", "{interval}", "{far_address}}"]`)
+		got := CheckProbes([]*probe.Package{p})
+		want := "package ping (" + p.Path + "): probe_package: flow.command: declared every placeholder rendered, " +
+			"produced ping -i 0.2 198.51.100.1}"
+		if len(got) != 1 || got[0].String() != want {
+			t.Errorf("failures %v, want exactly:\n  %s", got, want)
+		}
+	})
+	t.Run("a placeholder its field does not render", func(t *testing.T) {
+		p := edit(t, `["ip", "addr", "add", "{address}", "dev", "{interface}"]`, `["ip", "addr", "add", "{address}", "dev", "{count}"]`)
+		got := CheckProbes([]*probe.Package{p})
+		if len(got) != 2 {
+			t.Fatalf("failures %v, want the validation's and the render's", got)
+		}
+		if got[0].Production != "" || !strings.Contains(got[0].Produced, "probe.package.template") {
+			t.Errorf("first failure %s, want the validation naming probe.package.template", got[0])
+		}
+		if got[1].Production != "host.address" || !strings.Contains(got[1].Produced, "{count}") {
+			t.Errorf("second failure %s, want host.address naming {count}", got[1])
+		}
+	})
+	t.Run("no file", func(t *testing.T) {
+		p := edit(t, "format: ping", "format: ping")
+		p.Path = ""
+		want := "package ping (): probe_package: declared no rejection from the probe package's validation, " +
+			"produced nothing: the package names no file it was read from"
+		if got := CheckProbes([]*probe.Package{p}); len(got) != 1 || got[0].String() != want {
+			t.Errorf("failures %v, want exactly:\n  %s", got, want)
+		}
+	})
 }

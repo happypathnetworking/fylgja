@@ -118,8 +118,8 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 		if list.Rejected() {
 			t.Fatalf("reading %s at %q was rejected: %v", branch, at, list)
 		}
-		taken := snapshot.Take(got)
-		files, id, list := Compile(taken.CTM, reg)
+		taken := snapshot.Take(got, nil)
+		files, id, list := Compile(taken.CTM, nil, reg, nil)
 		if list.Rejected() {
 			t.Fatalf("compiling %s at %q was rejected: %v", branch, at, list)
 		}
@@ -132,7 +132,7 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 				what, got.Devices, got.Interfaces, got.Links, got.Artifacts, want.Devices, want.Interfaces, want.Links, want.Artifacts)
 		}
 	}
-	seeded := intent.Counts{Devices: 3, Interfaces: 9, Links: 3, Artifacts: 3}
+	seeded := intent.Counts{Devices: 3, Interfaces: 15, Links: 3, Artifacts: 3}
 
 	before, beforeID, beforeTake := read(at)
 	counts("the read at T does not see the whole seed", beforeTake.CTM, seeded)
@@ -148,9 +148,9 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	if err := c.GenerateArtifacts(branch); err != nil {
 		t.Fatalf("regenerating after T: %v", err)
 	}
-	for deadline := time.Now().Add(90 * time.Second); artifactsOf(t, c, branch, "device-config")["n1"].Checksum == current["n1"].Checksum; {
+	for deadline := time.Now().Add(testsupport.ArtifactWait); artifactsOf(t, c, branch, "device-config")["n1"].Checksum == current["n1"].Checksum; {
 		if time.Now().After(deadline) {
-			t.Fatalf("n1's artifact checksum stayed %s for 90s after a description change was generated", current["n1"].Checksum)
+			t.Fatalf("n1's artifact checksum stayed %s for %s after a description change was generated", current["n1"].Checksum, testsupport.ArtifactWait)
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
@@ -221,7 +221,7 @@ func TestPinnedReadReproducesItsBundle(t *testing.T) {
 	}
 
 	unpinned, unpinnedID, unpinnedTake := read("")
-	counts("the unpinned read after the change", unpinnedTake.CTM, intent.Counts{Devices: 5, Interfaces: 13, Links: 4, Artifacts: 5})
+	counts("the unpinned read after the change", unpinnedTake.CTM, intent.Counts{Devices: 5, Interfaces: 19, Links: 4, Artifacts: 5})
 	if unpinnedTake.CTM.Device("cs1") == nil {
 		t.Error("the unpinned read after cs1 was tagged did not read it")
 	}

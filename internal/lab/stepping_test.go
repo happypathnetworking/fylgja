@@ -359,7 +359,7 @@ func TestRecordStep(t *testing.T) {
 			RunID:      "01a0e9e3-0000-7000-8000-000000000001", Version: "0.1.0-dev", RecordedAt: time.Now()}
 		for _, n := range golden {
 			f.Nodes = append(f.Nodes, wire.TwinNode{Name: n.Name, Container: "clab-fylgja-" + n.Name, Image: n.Image,
-				PSP: wire.PSPRef{ID: n.PSP.ID, Source: n.PSP.Source}, MgmtIPv4: "172.20.20.2", ReadyAfterS: 1,
+				PSP: &wire.PSPRef{ID: n.PSP.ID, Source: n.PSP.Source}, MgmtIPv4: "172.20.20.2", ReadyAfterS: 1,
 				Artifact: &wire.TwinArtifact{Name: n.Artifact.Name, ContentType: n.Artifact.ContentType,
 					Checksum: n.Artifact.Checksum, Size: n.Artifact.Size}, PushedInS: 0.7})
 		}
@@ -487,7 +487,7 @@ func TestRecordStep(t *testing.T) {
 		}
 		for _, n := range written.Nodes {
 			m := staged[n.Name]
-			if want := (wire.PSPRef{ID: m.PSP.ID, Source: m.PSP.Source}); n.PSP != want {
+			if want := (wire.PSPRef{ID: m.PSP.ID, Source: m.PSP.Source}); n.PSP == nil || *n.PSP != want {
 				t.Errorf("node %s's package is %+v, want the staged manifest's %+v", n.Name, n.PSP, want)
 			}
 			want := wire.TwinArtifact{Name: m.Artifact.Name, ContentType: m.Artifact.ContentType,

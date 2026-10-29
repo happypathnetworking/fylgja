@@ -59,7 +59,7 @@ func TestSingleDefectFixtures(t *testing.T) {
 	for _, tc := range singleDefects {
 		t.Run(tc.fixture, func(t *testing.T) {
 			c, reg := loadDefect(t, tc.fixture)
-			list := Validate(c, reg)
+			list := Validate(c, nil, reg, nil)
 			if !list.Rejected() {
 				t.Fatalf("expected a rejection, got %v", list)
 			}
@@ -133,7 +133,7 @@ func TestUnmappableNameSplitsByCause(t *testing.T) {
 
 	t.Run("out of range and linked is a rejection", func(t *testing.T) {
 		c, reg := load(t, "defects/unmappable-linked-range.json")
-		if list := Validate(c, reg); !has(list, findings.RuleUnmappableLinked, "n1:ethernet-1/59") {
+		if list := Validate(c, nil, reg, nil); !has(list, findings.RuleUnmappableLinked, "n1:ethernet-1/59") {
 			t.Errorf("want %s naming n1:ethernet-1/59; got %v", findings.RuleUnmappableLinked, list)
 		}
 	})
@@ -147,14 +147,14 @@ func TestUnmappableNameSplitsByCause(t *testing.T) {
 				c.Devices[i].Interfaces[j].Link = ""
 			}
 		}
-		if list := Validate(c, reg); list.Rejected() {
+		if list := Validate(c, nil, reg, nil); list.Rejected() {
 			t.Errorf("an unlinked out-of-range name must not reject; the compiler records it: %v", list)
 		}
 	})
 
 	t.Run("no rule and linked is a rejection", func(t *testing.T) {
 		c, reg := load(t, "defects/unmappable-linked-unmatched.json")
-		if list := Validate(c, reg); !has(list, findings.RuleUnmappableLinked, "n1:Ethernet99") {
+		if list := Validate(c, nil, reg, nil); !has(list, findings.RuleUnmappableLinked, "n1:Ethernet99") {
 			t.Errorf("want %s naming n1:Ethernet99; got %v", findings.RuleUnmappableLinked, list)
 		}
 	})
@@ -164,7 +164,7 @@ func TestUnmappableNameSplitsByCause(t *testing.T) {
 		if in := c.Device("n1").Interface("Ethernet99"); in == nil || in.Link != "" {
 			t.Fatal("rule-unmatched.json is meant to hold an unlinked n1:Ethernet99")
 		}
-		list := Validate(c, reg)
+		list := Validate(c, nil, reg, nil)
 		if !has(list, findings.RuleInterfaceRuleUnmatched, "n1:Ethernet99") {
 			t.Errorf("want %s naming n1:Ethernet99; got %v", findings.RuleInterfaceRuleUnmatched, list)
 		}

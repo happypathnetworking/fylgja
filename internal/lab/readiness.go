@@ -29,7 +29,14 @@ const ProbeInterval = time.Second
 // while that transport is still shut, and a push beginning a second later is refused
 // (D-029). Both waits share the one timeout, and ready_after_s covers
 // both.
+//
+// A host's readiness is keyed by its probe package's readiness.probe, exec (016): its
+// command run in the host's container, ready once the output holds what the package
+// expects, under the same once-a-second loop and the package's timeout, with no login.
 func (a *Activities) AwaitReadiness(ctx context.Context, in wire.ReadinessInput) (wire.ReadinessResult, error) {
+	if in.Exec != nil {
+		return a.awaitExec(ctx, in)
+	}
 	start := time.Now()
 	deadline := start.Add(time.Duration(in.TimeoutS) * time.Second)
 	port := in.Probe.Port
@@ -37,7 +44,7 @@ func (a *Activities) AwaitReadiness(ctx context.Context, in wire.ReadinessInput)
 		port = psp.DefaultGNMIPort
 	}
 	addr := net.JoinHostPort(in.MgmtIPv4, strconv.Itoa(port))
-	probe := describeProbe(in.Probe)
+	probe := describeProbe(in)
 	cutShort := func() error {
 		return interrupted(ctx, findings.StepReadiness, findings.RuleReadinessTimeout, in.Node, "the readiness probe of "+in.Node)
 	}
@@ -94,9 +101,93 @@ func (a *Activities) AwaitReadiness(ctx context.Context, in wire.ReadinessInput)
 	return wire.ReadinessResult{}, StepFailure(findings.StepReadiness, findings.RuleReadinessTimeout, in.Node, msg)
 }
 
-// describeProbe names a probe as the findings do: `gnmi_get /system/information json_ietf`.
-func describeProbe(p wire.Probe) string {
+// describeProbe names a probe as the findings do: `gnmi_get /system/information json_ietf`,
+// or a host's `exec ip -4 -o addr show dev eth1 expecting 10.1.10.2/24` (016).
+func describeProbe(in wire.ReadinessInput) string {
+	if e := in.Exec; e != nil {
+		return fmt.Sprintf("exec %s expecting %s", strings.Join(e.Command, " "), e.Expect)
+	}
+	p := in.Probe
 	return strings.Join(strings.Fields(p.Transport+" "+p.Path+" "+p.Encoding), " ")
+}
+
+// dockerExec is the command a host's exec runs through: the container runtime, reached by
+// the Runner containerlab is driven through, so tier 1 substitutes its recorded behaviour.
+const dockerExec = "docker exec"
+
+// awaitExec is a host's readiness: `docker exec <container> <command>` once a second until
+// its output contains the package's expectation or the timeout has passed since the
+// activity began. A failed exec, one that exits non-zero, and one whose output lacks the
+// expectation are alike a host not yet ready, as a refused login and a closed port are a
+// device not yet ready; the last is named if it never becomes ready. Nothing is logged in
+// to and nothing secret is read; the command and its output are a host's own addresses.
+func (a *Activities) awaitExec(ctx context.Context, in wire.ReadinessInput) (wire.ReadinessResult, error) {
+	start := time.Now()
+	deadline := start.Add(time.Duration(in.TimeoutS) * time.Second)
+	container := in.Container
+	if container == "" {
+		container = containerPrefix + in.Node
+	}
+	args := append(append(strings.Fields(dockerExec), container), in.Exec.Command...)
+	probe := describeProbe(in)
+	cutShort := func() error {
+		return interrupted(ctx, findings.StepReadiness, findings.RuleReadinessTimeout, in.Node, "the readiness probe of "+in.Node)
+	}
+
+	log := a.logger().With("node", in.Node)
+	log.Info("readiness probe", "container", container, "probe", probe, "timeout_s", in.TimeoutS,
+		"by_hand", strings.Join(args, " "))
+
+	stop := heartbeat(ctx)
+	defer stop()
+
+	var lastErr error
+	for attempts := 1; ; attempts++ {
+		attemptCtx, cancel := context.WithDeadline(ctx, deadline)
+		stdout, stderr, exit, err := a.Clab.Runner.Run(attemptCtx, nil, args...)
+		cancel()
+		switch {
+		case err != nil:
+			// An exec that ran into the deadline was cut short by it, and keeps the earlier
+			// reason, as a probe attempt does.
+			if lastErr == nil || time.Now().Before(deadline) {
+				lastErr = err
+			}
+		case exit != 0:
+			msg := strings.TrimSpace(string(stderr))
+			if msg == "" {
+				msg = "no message on stderr"
+			}
+			lastErr = fmt.Errorf("exited %d: %s", exit, msg)
+		case !strings.Contains(string(stdout), in.Exec.Expect):
+			lastErr = fmt.Errorf("its output does not contain %s", in.Exec.Expect)
+		default:
+			after := time.Since(start).Seconds()
+			log.Info("node ready", "ready_after_s", after, "attempts", attempts)
+			return wire.ReadinessResult{Node: in.Node, ReadyAfterS: math.Round(after*1000) / 1000}, nil
+		}
+		if ctx.Err() != nil {
+			return wire.ReadinessResult{}, cutShort()
+		}
+
+		wait := min(time.Until(deadline), ProbeInterval)
+		if wait <= 0 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return wire.ReadinessResult{}, cutShort()
+		case <-time.After(wait):
+		}
+		if !time.Now().Before(deadline) {
+			break
+		}
+	}
+
+	msg := fmt.Sprintf("%s did not answer %s in container %s within %ds; last error: %v",
+		in.Node, probe, container, in.TimeoutS, lastErr)
+	log.Warn("readiness timeout", "error", lastErr)
+	return wire.ReadinessResult{}, StepFailure(findings.StepReadiness, findings.RuleReadinessTimeout, in.Node, msg)
 }
 
 // awaitPushTransport waits, once the probe has answered, for the endpoint the node's

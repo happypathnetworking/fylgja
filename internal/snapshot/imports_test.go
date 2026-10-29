@@ -9,9 +9,15 @@ import (
 	"testing"
 )
 
-// A snapshot is the compiler's input wrapped: it imports the CTM and the standard library
-// alone, so nothing here reads a source, compiles, files a bundle or reaches the lab host.
-func TestSnapshotImportsTheCTMAlone(t *testing.T) {
+// A snapshot is the compiler's input wrapped: it imports the CTM, the probe's declaration
+// (016), the findings whose rules name a probe's fault, and the standard library alone, so
+// nothing here reads a source, compiles, files a bundle or reaches the lab host.
+func TestSnapshotImportsTheCTMAndTheProbeAlone(t *testing.T) {
+	admitted := map[string]bool{
+		"github.com/happypathnetworking/fylgja/internal/ctm":      true,
+		"github.com/happypathnetworking/fylgja/internal/probe":    true,
+		"github.com/happypathnetworking/fylgja/internal/findings": true,
+	}
 	files, err := filepath.Glob("*.go")
 	if err != nil {
 		t.Fatal(err)
@@ -32,10 +38,10 @@ func TestSnapshotImportsTheCTMAlone(t *testing.T) {
 				t.Fatal(err)
 			}
 			// The standard library's paths have no dot in their first element.
-			if path == "github.com/happypathnetworking/fylgja/internal/ctm" || !strings.Contains(strings.Split(path, "/")[0], ".") {
+			if admitted[path] || !strings.Contains(strings.Split(path, "/")[0], ".") {
 				continue
 			}
-			t.Errorf("%s imports %q: the snapshot imports the CTM and the standard library alone", name, path)
+			t.Errorf("%s imports %q: the snapshot imports the CTM, the probe, the findings and the standard library alone", name, path)
 		}
 	}
 	if checked == 0 {

@@ -13,16 +13,17 @@
 # no command of the script's: the check fylgja-twin asks them from inside Infrahub's task
 # workers, of the operator's server on the host's Docker bridge (015).
 #
-# After every create and every step that changes a node: each node's first cabled interface
-# reads, over the gNMI its own package declares, the description its staged artifact sets
-# (bootstrap sets none), n1's ethernet-1/2 admin-state is what the artifact says, and
-# twin.json's checksums are Infrahub's. Every node is ready inside its own package's
-# readiness budget, which differs per platform. Every artifact carries a marker in its
-# header, where the template writes the device's description (017); it is found in no
-# output, record, document, history or worker log. Every create files the snapshot the
-# server took under snapshots/, names it in twin.json, and writes no CTM sidecar (018). No
-# token or password is found there either, nor in the bundle store or the snapshot store,
-# which hold the marker by design.
+# After every create and every step that changes a node: each device's first cabled
+# interface reads, over the gNMI its own package declares, the description its staged
+# artifact sets (bootstrap sets none), n1's ethernet-1/2 admin-state is what the artifact
+# says, and twin.json's checksums are Infrahub's. Every node is ready inside its own
+# package's readiness budget, which differs per platform, a probe's host inside its probe
+# package's (016). Every artifact carries a marker in its header, where the template writes
+# the device's description (017); it is found in no output, record, document, history or
+# worker log. Every create files the snapshot the server took under snapshots/, names it in
+# twin.json, and writes no CTM sidecar (018). No token or password is found there either,
+# nor in the bundle store or the snapshot store, which hold the marker by design. After
+# every destroy, no probe's host container (clab-fylgja-<probe>-a or -b) is left (016).
 #
 #   1. create from fylgja-fixture; the conformance suite's boot half reads that twin (M6:
 #      host name, every cabled port enabled, discovering and seeing the far end the bundle's
@@ -35,14 +36,21 @@
 #      of the script's own names it an orphan at start, a dry-run create is refused naming
 #      it, and destroy clears it
 #   4. create --at T again: case 2's snapshot and bundle_id; destroy
-#   5. a throwaway branch seeded; create from it, under --scope tag:fylgja named (017), and
-#      twin show names the snapshot it was built from; an artifact-only change
-#      (n1:ethernet-1/2 disabled, then generated) leaves the twin frozen (019): over five
-#      minutes and a half no run starts, and twin.json, the containers and twin show's kind
-#      line do not move; a step to a snapshot of the changed branch, by file, and the node
-#      reads disable, and twin verify skips that port and its link (M12) and names the
-#      snapshot; the branch's topology changed, and a step to its snapshot by id; twin show
-#      names it, stepped from the first; destroy; the branch deleted
+#   5. a throwaway branch seeded; its dry run with the probe file n1-loop (016) lists the
+#      probe's two hosts among the nodes; create from it with that file, under --scope
+#      tag:fylgja named (017), its snapshot carrying the probe and the twin its two hosts;
+#      the boot half reads its three devices, skips n1's two probe ports' neighbours on the
+#      probe's synthesized links and names the two hosts it does not read (016), and twin
+#      show names the snapshot it was built from; twin verify holds the probe's
+#      burst; an artifact-only change (n1:ethernet-1/2 disabled, then generated) leaves the
+#      twin frozen (019): over five minutes and a half no run starts, and twin.json, the
+#      containers and twin show's kind line do not move; a step to a snapshot of the changed
+#      branch with the probe, by file, and the node reads disable, and twin verify skips that
+#      port and its link (M12), and the probe's two links at both ends, holds the burst and
+#      names the snapshot; the branch's topology changed, and a step to its snapshot by id;
+#      each step's document and twin.json carry the probe's loss, measured, on the
+#      container's basis (016); twin show names it, stepped from the first; destroy; the
+#      branch deleted
 #   6. a throwaway branch seeded with the mixed fixture (M7): one twin of two platforms,
 #      s1 on SR Linux and e1, e2 on EOS, each node read back over its own package's gNMI;
 #      the boot half reads this twin too, and twin verify reads each node over its own
@@ -52,38 +60,50 @@
 #      stages, the branch point refused scope.empty (main holds no tagged device), three
 #      snapshot ids, three bundle ids and three steps, the last unchanged; stage list names
 #      them; create --stage seeded deploys the snapshot and bundle the plan printed and
-#      records the stage in twin.json 10, and twin show and stage list name
+#      records the stage in twin.json 11, and twin show and stage list name
 #      it; a step with no target to third-link, the link re-cabled live, and a second to the
 #      head, unchanged, the record moving and each step's sides naming the plan's snapshots
 #      (018); destroy; the stages, the proposed change and the
 #      branch deleted, after which stage list lists none and stage plan refuses the branch
 #   8. a throwaway branch seeded with the mixed fixture and a draft proposed change opened on
 #      it (M11, 014): stage seeded, a link s1:ethernet-1/3 <-> e1:Ethernet3 added, stage
-#      mixed-link; create --stage seeded, pushed by replace; the step with no target to
+#      mixed-link; the probe e1-loop written into FylgjaProbe on main, which every read from
+#      then on carries with no file (016); create --stage seeded, pushed by replace, its
+#      snapshot carrying the probe and the twin its two hosts; the step with no target to
 #      mixed-link refused without --allow-restart, dry run and run, naming e1; taken with it:
 #      e1 restarted in place, s1 re-cabled live and e2 untouched (their containers say so),
-#      both pushed, the new link seen from both ends over gNMI, twin.json 10 naming the step
-#      and its wait settled (M12); the step back with --stage seeded, settled too; destroy;
-#      the stages, the proposed change and the branch deleted
-#   9. a throwaway branch seeded and a draft proposed change opened on it (015): at the
-#      draft's creation the check fylgja-twin skipped it and fylgja-step passed, and no
-#      comment was posted; stage seeded, a third link, stage third-link; marked ready and the
-#      user checks run again: fylgja-twin rehearsed it on a twin and passed, its message
-#      saying rehearsal ok, one comment in a thread of the proposed change, which its overview
-#      shows, holding the table, the drawing and the stages, and no twin left; an interface n1
-#      does not have, generated, stage bad-port, the checks run again: fylgja-twin failed,
-#      naming bad-port's push on n1, a second comment in a second thread holding the commands
-#      that reproduce it and the head not reached; the branch deleted, and with its proposed
-#      change the threads, their comments and the validators
+#      both pushed, the new link seen from both ends over gNMI, twin.json 11 naming the step
+#      and its wait settled (M12) with the burst held, and the step's document and twin.json
+#      naming the probe's loss across e1's restart, more than none (016); the step back with
+#      --stage seeded, settled too; destroy; the probe deleted from main, which then holds
+#      none; the stages, the proposed change and the branch deleted
+#   9. a throwaway branch seeded, the probe n1-loop written into FylgjaProbe on main, which
+#      the checks read since they send no file (016), and a draft proposed change opened on
+#      it (015): at the draft's creation the check fylgja-twin skipped it and fylgja-step
+#      passed, and no comment was posted; stage seeded, a third link, stage third-link;
+#      marked ready and the user checks run again: fylgja-twin rehearsed it on a twin and
+#      passed, its message saying rehearsal ok and third-link's loss, one comment in a
+#      thread of the proposed change, which its overview shows, holding the table with its
+#      loss column, the drawing and the stages, and no twin left; n1:ethernet-1/10, the
+#      probe's first port, disabled, generated, stage probe-port-down, the checks run again:
+#      fylgja-twin failed, naming probe-port-down's burst (verify.burst), the earlier stages
+#      passed with their loss figures, a second comment in a second thread holding the
+#      commands that reproduce it and the head not reached; the branch deleted, and with its
+#      proposed change the threads, their comments and the validators; the probe deleted
+#      from main. The stage probe-port-down took the place of 015's bad-port: a stage that
+#      fails stops the run, so a push refused at a fourth stage would never be reached, and
+#      one before it would leave probe-port-down unreached.
 #
 # Needs, all running from this directory: `make temporal-dev`, `make worker` (restarted
 # after every rebuild, since case 1's refusal is worded by the worker and the steps of cases
 # 5, 7 and 8 run on it), Docker, containerlab, the SR Linux image, the imported cEOS image
-# (never pulled; docs/development.md says how to import it), go (cases 1 and 6 run the boot
-# half as go test; cases 5 to 9 seed their branches with cmd/fylgja-fixture), and Infrahub
-# with fylgja-fixture seeded (local/.env, which must set FYLGJA_DEFAULT_SCOPE="tag:fylgja",
-# the scope every case's fixtures are tagged into, for the script's server to read under;
-# 017).
+# (never pulled; docs/development.md says how to import it), the probe package's image
+# (probes/ping.yaml's, alpine:3.24.2, which no command pulls: docker pull it), go (cases 1,
+# 5 and 6 run the boot half as go test; cases 5 to 9 seed their branches with
+# cmd/fylgja-fixture), and Infrahub with fylgja-fixture seeded and the kind FylgjaProbe on
+# main holding no probe, since every read with no probe file carries what it holds (016)
+# (local/.env, which must set FYLGJA_DEFAULT_SCOPE="tag:fylgja", the scope every case's
+# fixtures are tagged into, for the script's server to read under; 017).
 # Every command goes to the script's own server, whose
 # port is one the system chooses. Case 9 needs two things more, checked before anything
 # starts: the operator's server from this tree, listening on the Docker bridge with
@@ -97,15 +117,17 @@
 # each account-gated image it needs is present, and is skipped, saying why, otherwise. Unset
 # or empty, every case runs and every package's image is required first. A name no package
 # has, or a list that selects no case, is refused before anything starts.
-# It takes about 32 to 33 minutes, case 5's frozen wait among them; run it on a quiet host
-# (docs/development.md).
+# It takes about 36 to 37 minutes, case 5's frozen wait among them: 2,236.6s at 016's first
+# whole run, and 2,171.8s once case 5 ran the boot half too, which adds about 10s (10.0s, and
+# 12.4s by hand; both 2026-10-29); run it on a quiet host (docs/development.md).
 #
 # Exit 0 prints E2E-OK when every case ran, or, when PLATFORMS skipped one, E2E-PARTIAL naming
 # the list, the cases that ran and each case skipped with its reason. Any failed check exits 1
 # after the trap's destroy, which cancels a rehearsal in flight and waits for its own destroy,
 # and its deletion of the throwaway branches of cases 5 to 9 (7's, 8's and 9's with their
-# stages and proposed changes, 9's threads and validators going with its proposed change); a
-# lab, a twin directory or Schedule fylgja-follow left behind after that destroy exits 99.
+# stages and proposed changes, 9's threads and validators going with its proposed change),
+# and of the probes cases 8 and 9 wrote on main; a lab, a twin directory, a probe's host
+# container or Schedule fylgja-follow left behind after that destroy exits 99.
 # This build makes no such Schedule; the check catches one kept by a host upgraded with a
 # following twin up (019).
 set -euo pipefail
@@ -189,6 +211,14 @@ FROZEN_WAIT_S=330
 # check alone.
 FOLLOW_SCHEDULE=fylgja-follow
 
+# The probe package every probe of this tier is built with (016), read for its image, its
+# readiness budget and its burst's count rather than repeating them. HOSTS is the probe hosts
+# a case's twin carries beside its three devices, two per probe: set before a probed create,
+# 0 again after its destroy.
+PROBE_PACKAGE=probes/ping.yaml
+HOSTS=0
+export HOSTS
+
 # The short-lived worker's host line is on stdout about 0.22s after exec;
 # the bound only stops a worker that never reports from holding the run.
 WORKER_HOST_LINE_WAIT_S=15
@@ -242,6 +272,47 @@ no_credential_contextual() {
 # rather than repeating them, so a package that moves moves this tier with it.
 psp_scalar() {
   sed -n "s/^  $2: *\([^ #]*\).*/\1/p" "$1" | head -1
+}
+
+# probe_containers: every container Docker holds, running or not, named as a probe's host is,
+# clab-fylgja-<probe>-a or -b, one per line (016). No device of the fixtures is so named.
+# Docker is asked rather than containerlab, so a host containerlab no longer reports is
+# found too; a docker that does not answer fails the call.
+probe_containers() {
+  local names
+  names=$(docker ps -a --format '{{.Names}}') || return 1
+  grep -E '^clab-fylgja-.+-[ab]$' <<< "$names" || true
+}
+
+# no_probe_containers CASE: no probe's host container is left after a destroy.
+no_probe_containers() {
+  local left
+  left=$(probe_containers) || fail "case $1: docker ps failed while looking for a probe's host container"
+  [ -z "$left" ] || fail "case $1: a probe's host container is left after the destroy: $(paste -sd ' ' - <<< "$left")"
+}
+
+# write_probes CASE FILE NAME: FILE's one probe, NAME, written into FylgjaProbe on main
+# through the fixture tool (016, R-26), which every read with no probe file then carries;
+# PROBES_ON_MAIN is set first, so the trap deletes it should the run stop before the case
+# does.
+write_probes() {
+  PROBES_ON_MAIN=1
+  fixture -probes "$2" > "$OUT/probes-$1.out" 2> "$OUT/probes-$1.err" ||
+    fail "case $1: -probes $2 failed; see $OUT/probes-$1.err"
+  grep -qxF "wrote 1 probe to FylgjaProbe on main: $3" "$OUT/probes-$1.out" ||
+    fail "case $1: -probes $2 did not report writing $3; see $OUT/probes-$1.out"
+}
+
+# delete_probes CASE: every probe on main deleted, one, after which FylgjaProbe counts 0.
+delete_probes() {
+  fixture -delete-probes > "$OUT/delete-probes-$1.out" 2> "$OUT/delete-probes-$1.err" ||
+    fail "case $1: -delete-probes failed, leaving a probe on main; see $OUT/delete-probes-$1.err"
+  grep -qxF "deleted 1 probe of FylgjaProbe on main" "$OUT/delete-probes-$1.out" ||
+    fail "case $1: -delete-probes did not report deleting the one probe; see $OUT/delete-probes-$1.out"
+  gql "" '{ FylgjaProbe { count } }' > "$OUT/probes-after-$1.json" 2> "$OUT/probes-after-$1.err" ||
+    fail "case $1: reading FylgjaProbe on main failed; see $OUT/probes-after-$1.err"
+  expect "$OUT/probes-after-$1.json" '.FylgjaProbe.count == 0'
+  unset PROBES_ON_MAIN
 }
 
 # case_runs N: whether case N runs, recording it in RAN when it does. A default run runs
@@ -405,10 +476,11 @@ eos_first_description() {
 }
 
 # readback CASE BRANCH N1_E12_STATE [HELD]: the running twin runs its artifacts. For each
-# node in twin.json: the ethernet-1/1 description over gNMI is the
+# device in twin.json: the ethernet-1/1 description over gNMI is the
 # staged artifact's, and its recorded checksum is Infrahub's on the branch; n1's
-# ethernet-1/2 admin-state reads N1_E12_STATE. The staged artifact is read in place and
-# its line never copied into $OUT, where the marker grep looks.
+# ethernet-1/2 admin-state reads N1_E12_STATE. A probe's host (016) has no artifact and no
+# gNMI, so it is none of these. The staged artifact is read in place and its line never
+# copied into $OUT, where the marker grep looks.
 #
 # Infrahub's checksums are read now, or taken from HELD, an artifacts_of file read when the
 # twin's pinned reference was marked. Case 7's first stage needs it: the branch has moved on
@@ -420,8 +492,8 @@ readback() {
     artifacts_of "$branch" "$held" 2> "$OUT/artifacts-readback-$case.err" ||
       fail "case $case: reading the artifacts of $branch from Infrahub failed; see $OUT/artifacts-readback-$case.err"
   fi
-  jq -e --slurpfile tw "$TWIN/twin.json" '. as $inf | ($tw[0].nodes | length) == 3
-    and all($tw[0].nodes[]; .artifact.checksum == $inf[.name].checksum and $inf[.name].status == "Ready")' \
+  jq -e --slurpfile tw "$TWIN/twin.json" '. as $inf | [$tw[0].nodes[] | select(.probe == null)]
+    | length == 3 and all(.[]; .artifact.checksum == $inf[.name].checksum and $inf[.name].status == "Ready")' \
     "$held" > /dev/null ||
     fail "case $case: twin.json's checksums are not Infrahub's on $branch; compare $TWIN/twin.json with $held"
   while read -r name addr file; do
@@ -430,20 +502,20 @@ readback() {
     got=$(gnmi_value "$case" "$addr" '/interface[name=ethernet-1/1]/description')
     [ "$got" = "$want" ] || fail "case $case: node $name's ethernet-1/1 description reads \"$got\", its artifact sets \"$want\""
   done < <(jq -r --slurpfile m "$TWIN/bundle/manifest.json" \
-    '.nodes[] as $n | "\($n.name) \($n.mgmt_ipv4) \($m[0].nodes[] | select(.name==$n.name) | .artifact.file)"' "$TWIN/twin.json")
+    '.nodes[] | select(.probe == null) as $n | "\($n.name) \($n.mgmt_ipv4) \($m[0].nodes[] | select(.name==$n.name) | .artifact.file)"' "$TWIN/twin.json")
   addr=$(jq -r '.nodes[] | select(.name=="n1") | .mgmt_ipv4' "$TWIN/twin.json")
   got=$(gnmi_value "$case" "$addr" '/interface[name=ethernet-1/2]/admin-state')
   [ "$got" = "$want_state" ] || fail "case $case: n1's ethernet-1/2 admin-state reads $got, not $want_state"
   echo "e2e: case $case: every node runs its artifact; n1 ethernet-1/2 $got; checksums are Infrahub's"
 }
 
-# readback_mixed CASE BRANCH [HELD]: the mixed twin runs its artifacts, each node read over the
-# transport its own support package declares. twin.json's checksums are
-# Infrahub's on the branch, as readback checks; then, per node, by the package twin.json
-# records: an SR Linux node as readback reads it, and an EOS node by its host name and by
-# the description its artifact sets on the first interface the rendering describes. The
-# staged artifact is read in place and its lines are never copied into $OUT, where the
-# marker grep looks.
+# readback_mixed CASE BRANCH [HELD]: the mixed twin runs its artifacts, each device read over
+# the transport its own support package declares, and a probe's host, as readback says,
+# none. twin.json's checksums are Infrahub's on the branch, as readback checks; then, per
+# device, by the package twin.json records: an SR Linux node as readback reads it, and an
+# EOS node by its host name and by the description its artifact sets on the first interface
+# the rendering describes. The staged artifact is read in place and its lines are never
+# copied into $OUT, where the marker grep looks.
 #
 # Infrahub's checksums are read now, or taken from HELD, as readback takes them: case 8's
 # twin at its first stage runs what Infrahub held when that stage was marked (M11, 014).
@@ -454,8 +526,8 @@ readback_mixed() {
     artifacts_of "$branch" "$held" 2> "$OUT/artifacts-readback-$case.err" ||
       fail "case $case: reading the artifacts of $branch from Infrahub failed; see $OUT/artifacts-readback-$case.err"
   fi
-  jq -e --slurpfile tw "$TWIN/twin.json" '. as $inf | ($tw[0].nodes | length) == 3
-    and all($tw[0].nodes[]; .artifact.checksum == $inf[.name].checksum and $inf[.name].status == "Ready")' \
+  jq -e --slurpfile tw "$TWIN/twin.json" '. as $inf | [$tw[0].nodes[] | select(.probe == null)]
+    | length == 3 and all(.[]; .artifact.checksum == $inf[.name].checksum and $inf[.name].status == "Ready")' \
     "$held" > /dev/null ||
     fail "case $case: twin.json's checksums are not Infrahub's on $branch; compare $TWIN/twin.json with $held"
   while read -r name addr pspid file; do
@@ -484,26 +556,47 @@ readback_mixed() {
     esac
     echo "e2e: case $case: $name ($pspid) runs its artifact"
   done < <(jq -r --slurpfile m "$TWIN/bundle/manifest.json" \
-    '.nodes[] as $n | "\($n.name) \($n.mgmt_ipv4) \($n.psp.id) \($m[0].nodes[] | select(.name==$n.name) | .artifact.file)"' "$TWIN/twin.json")
+    '.nodes[] | select(.probe == null) as $n | "\($n.name) \($n.mgmt_ipv4) \($n.psp.id) \($m[0].nodes[] | select(.name==$n.name) | .artifact.file)"' "$TWIN/twin.json")
   echo "e2e: case $case: every node runs its artifact, each read over its own platform; checksums are Infrahub's"
 }
 
 # verify_twin CASE [WAIT]: twin verify on the running twin, with --wait=WAIT when given: exit
 # 0, status ok and zero findings, every non-skipped assertion held. The
-# document is kept in $OUT, so the greps below cover it. Held counts the three kinds read
-# from a node; the record's claims are counted apart, since they are the record's and never
-# read. Sets VERIFY_TOOK.
+# document is kept in $OUT, so the greps below cover it. Held counts the four kinds read
+# from the twin, a probe's burst among them (016); the record's claims are counted apart,
+# since they are the record's and never read. Sets VERIFY_TOOK.
 verify_twin() {
-  local case=$1 wait=${2:-} start status=0 args=() held skipped
+  local case=$1 wait=${2:-} start status=0 args=() held skipped bursts
   [ -z "$wait" ] || args=(--wait="$wait")
   start=$(now_ns)
   fylgja twin verify "${args[@]}" --json > "$OUT/verify-$case.json" 2> "$OUT/verify-$case.err" || status=$?
   VERIFY_TOOK=$(since "$start")
   [ "$status" -eq 0 ] || fail "case $case: twin verify exited $status; see $OUT/verify-$case.json and $OUT/verify-$case.err"
   expect "$OUT/verify-$case.json" '.status=="ok" and .operation=="twin.verify" and .findings==[]'
-  held=$(jq '.verify.counts | .host_name.held + .port_enabled.held + .neighbor.held' "$OUT/verify-$case.json")
+  held=$(jq '.verify.counts | .host_name.held + .port_enabled.held + .neighbor.held + .burst.held' "$OUT/verify-$case.json")
+  bursts=$(jq '.verify.counts.burst.held' "$OUT/verify-$case.json")
   skipped=$(jq '.verify.counts | (.port_enabled.skipped // 0) + (.neighbor.skipped // 0)' "$OUT/verify-$case.json")
-  echo "e2e: case $case: twin verify ${VERIFY_TOOK}s, $held held, $skipped skipped"
+  echo "e2e: case $case: twin verify ${VERIFY_TOOK}s, $held held ($bursts bursts), $skipped skipped"
+}
+
+# step_loss_measured CASE PROBE [FILTER]: the step just taken measured PROBE's flow across it,
+# the one probe both its bundles carry (016): its document's step.loss and twin.json's, alike,
+# on the container's basis, one entry, measured, more than none sent, from the probe's first
+# host's container to its second's, and nothing added or dropped; FILTER, a jq condition on
+# the entry, holds too. Sets LOSS_FIGURE, which is recorded, not asserted.
+step_loss_measured() {
+  export LOSS_PROBE=$2
+  local filter='.step.loss.basis == "container" and .step.loss.added == [] and .step.loss.dropped == []
+    and (.step.loss.probes | length) == 1
+    and (.step.loss.probes[0] | .probe == env.LOSS_PROBE and .outcome == "measured" and .sent > 0
+      and .from == "clab-fylgja-" + env.LOSS_PROBE + "-a" and .to == "clab-fylgja-" + env.LOSS_PROBE + "-b"'
+  filter+=" and (${3:-true}))"
+  expect "$OUT/step-$1.json" "$filter"
+  expect "$TWIN/twin.json" "$filter"
+  [ "$(jq -S .step.loss "$OUT/step-$1.json")" = "$(jq -S .step.loss "$TWIN/twin.json")" ] ||
+    fail "case $1: the step's document and twin.json name different losses; compare their step.loss in $OUT/step-$1.json and $TWIN/twin.json"
+  LOSS_FIGURE=$(jq -r '.step.loss.probes[0] | "\(.lost)/\(.sent) lost, longest gap \(.longest_gap_s)s"' "$TWIN/twin.json")
+  echo "e2e: case $1: $2 $LOSS_FIGURE across the step (container timing)"
 }
 
 # schedule_state: present or absent as the workflow service answers for Schedule
@@ -569,8 +662,9 @@ READBACK=readback
 
 # create_twin CASE ARGS...: twin create --branch $BRANCH ARGS, or --stage $CREATE_REF in
 # place of the branch when CREATE_REF is set (cases 7 and 8), ending with three
-# ready nodes, the twin recorded, the snapshot the server took stored under its id, the
-# bundle stored and staged as its id, no CTM sidecar written (018), and each node
+# ready devices and $HOSTS ready probe hosts (016), the twin recorded, the snapshot the server
+# took stored under its id, version 2 and carrying one probe for each two hosts, the
+# bundle stored and staged as its id, no CTM sidecar written (018), and each device
 # running its artifact; sets and exports SID, BID and RUN_ID,
 # and sets CREATE_TOOK.
 CREATE_TIMES=()
@@ -579,6 +673,8 @@ create_twin() {
   shift
   local start status=0 took ref=(--branch "$BRANCH") began="$OUT/began-$case"
   [ -z "${CREATE_REF:-}" ] || ref=(--stage "$CREATE_REF")
+  NODES=$((3 + HOSTS))
+  export NODES
   # The case's start, for the sidecar check below: the store keeps the sidecars of every
   # read before 018, so what is asserted is that this create wrote none.
   touch "$began"
@@ -587,7 +683,7 @@ create_twin() {
   took=$(since "$start")
   CREATE_TOOK=$took
   echo "e2e: case $case: create took ${took}s (exit $status)"
-  expect "$OUT/create-$case.json" '.status=="ok" and (.twin.nodes|length)==3'
+  expect "$OUT/create-$case.json" '.status=="ok" and (.twin.nodes|length)==(env.NODES|tonumber)'
   jq -r '.twin.nodes[] | "e2e:   \(.name)  \(.mgmt_ipv4)  ready after \(.ready_after_s)s"' "$OUT/create-$case.json"
 
   SID=$(jq -r .snapshot_id "$OUT/create-$case.json")
@@ -597,23 +693,33 @@ create_twin() {
   echo "e2e: case $case: snapshot_id $SID, bundle_id $BID, run $RUN_ID"
 
   clab inspect --all --format json > "$OUT/inspect-create-$case.json"
-  expect "$OUT/inspect-create-$case.json" '.fylgja | length == 3 and all(.state=="running")'
+  expect "$OUT/inspect-create-$case.json" '.fylgja | length == (env.NODES|tonumber) and all(.state=="running")'
 
   expect "$TWIN/twin.json" '.snapshot_id==env.SID and .bundle_id==env.BID and .source=="intent" and .observed_at != null
-    and .run.workflow_id=="fylgja-provision" and .run.run_id==env.RUN_ID and (.nodes|length)==3'
+    and .run.workflow_id=="fylgja-provision" and .run.run_id==env.RUN_ID and (.nodes|length)==(env.NODES|tonumber)'
+  # A probe's host (016) is recorded with its probe in place of a package and an artifact,
+  # in the container containerlab names after it, <probe>-<endpoint>.
+  expect "$TWIN/twin.json" '[.nodes[] | select(.probe != null)] | length == (env.HOSTS|tonumber)
+    and all(.[]; .psp == null and .artifact == null and .name == .probe.name + "-" + .probe.endpoint
+      and .container == "clab-fylgja-" + .name)'
 
   # Every node ready inside its own package's readiness budget, read from that package: a
-  # mixed twin's nodes are held to different ones. For cases 1-5, all SR Linux,
-  # this is the 60s a single bound asserted before M7.
-  local name pspid ready budget
-  while read -r name pspid ready; do
-    budget=$(psp_scalar "psp/$pspid.yaml" timeout_s)
-    [ -n "$budget" ] || fail "case $case: psp/$pspid.yaml states no readiness timeout_s"
+  # mixed twin's nodes are held to different ones, and a probe's host to its probe
+  # package's (016). For cases 1-5's devices, all SR Linux, this is the 60s a single bound
+  # asserted before M7.
+  local name pkg ready budget
+  while read -r name pkg ready; do
+    budget=$(psp_scalar "$pkg" timeout_s)
+    [ -n "$budget" ] || fail "case $case: $pkg states no readiness timeout_s"
     awk -v r="$ready" -v b="$budget" 'BEGIN { exit !(r < b) }' ||
-      fail "case $case: node $name ($pspid) was ready after ${ready}s, its package's readiness budget is ${budget}s"
-  done < <(jq -r '.nodes[] | "\(.name) \(.psp.id) \(.ready_after_s)"' "$TWIN/twin.json")
+      fail "case $case: node $name ($pkg) was ready after ${ready}s, its package's readiness budget is ${budget}s"
+  done < <(jq -r '.nodes[] | "\(.name) \(if .probe != null then "probes/\(.probe.package.id)" else "psp/\(.psp.id)" end).yaml \(.ready_after_s)"' "$TWIN/twin.json")
 
   [ -f "$FYLGJA_STATE_ROOT/snapshots/$SID.json" ] || fail "case $case: the snapshot store holds no entry for $SID"
+  # The snapshot is a 2 (016), its probes the ones the twin's hosts are built for. Its version
+  # and its probes' names alone are copied out, since its CTM carries the marker.
+  jq '{snapshot_version, probes: [.probes[].name]}' "$FYLGJA_STATE_ROOT/snapshots/$SID.json" > "$OUT/probes-snapshot-$case.json"
+  expect "$OUT/probes-snapshot-$case.json" '.snapshot_version == "2" and (.probes | length) * 2 == (env.HOSTS|tonumber)'
   [ -d "$FYLGJA_STATE_ROOT/bundles/$BID" ] || fail "case $case: the bundle store holds no entry for $BID"
   local sidecars
   sidecars=$(find "$FYLGJA_STATE_ROOT/bundles" -maxdepth 1 -name '*.ctm.json' -newer "$began")
@@ -637,7 +743,8 @@ create_twin() {
 }
 
 # destroy_twin CASE TEARDOWN UNSTAGE: twin destroy reports TEARDOWN and UNSTAGE, in under
-# 60s, leaving no lab, no twin directory and the bundle store as it was; sets DESTROY_TOOK.
+# 60s, leaving no lab, no probe's host container (016), no twin directory and the bundle
+# store as it was; sets DESTROY_TOOK.
 destroy_twin() {
   local case=$1 teardown=$2 unstage=$3
   local before start status=0 took
@@ -650,6 +757,7 @@ destroy_twin() {
   expect "$OUT/destroy-$case.json" ".status==\"ok\" and .cleanup.teardown==\"$teardown\" and .cleanup.unstage==\"$unstage\" and (.cleanup.remaining|length)==0"
   [ "${took%.*}" -lt 60 ] || fail "case $case: destroy took ${took}s, over 60s"
   [ "$(clab inspect --all --format json)" = "{}" ] || fail "case $case: containerlab still reports a lab after destroy"
+  no_probe_containers "$case"
   [ ! -e "$TWIN" ] || fail "case $case: $TWIN is still present after destroy"
   [ "$before" = "$(store_digest)" ] || fail "case $case: destroy changed the bundle store"
 }
@@ -681,6 +789,11 @@ cleanup() {
       echo "e2e: branch $branch was not deleted; remove it with: go run -tags fixture ./cmd/fylgja-fixture -branch $branch -delete" >&2
     fi
   done
+  # The probe case 8 or 9 wrote on main and had not yet deleted (016), which every read with
+  # no probe file would go on carrying. A failure is reported, not fatal.
+  if [ -n "${PROBES_ON_MAIN:-}" ] && ! fixture -delete-probes > "$OUT/trap-delete-probes.out" 2>&1; then
+    echo "e2e: the probes on main were not deleted; remove them with: go run -tags fixture ./cmd/fylgja-fixture -delete-probes" >&2
+  fi
   # The server goes before the checks below, any of which may exit: an exit inside this trap
   # runs no trap after it.
   stop_server
@@ -691,6 +804,16 @@ cleanup() {
   fi
   if jq -e 'has("fylgja")' <<< "$labs" > /dev/null; then
     echo "e2e: LEAK: lab fylgja still present" >&2
+    exit 99
+  fi
+  # A probe's host containerlab no longer reports is a container all the same (016).
+  local hosts
+  if ! hosts=$(probe_containers 2> "$OUT/trap-probe-containers.err"); then
+    echo "e2e: LEAK?: docker ps failed after the trap's destroy; see $OUT/trap-probe-containers.err" >&2
+    exit 99
+  fi
+  if [ -n "$hosts" ]; then
+    echo "e2e: LEAK: a probe's host container still present: $(paste -sd ' ' - <<< "$hosts")" >&2
     exit 99
   fi
   if [ -e "$TWIN" ]; then
@@ -742,6 +865,23 @@ command -v temporal > /dev/null || fail "the Temporal CLI is neither on PATH nor
 if ! temporal operator cluster health --address "$TEMPORAL_ADDRESS" > "$OUT/health.out" 2>&1; then
   fail "the workflow service is not answering at $TEMPORAL_ADDRESS: start it with make temporal-dev"
 fi
+
+# The probes (016), which cases 5, 8 and 9 boot. Case 5 needs nokia_srlinux alone, which every
+# list that selects a case names, so they are required whenever any case runs. The image is
+# the probe package's, verified present and never pulled by any command (research R-12), so
+# the run pulls it no more than the product would. The kind FylgjaProbe on main, which cases
+# 8 and 9 write into: present, and holding no probe, since every read with no probe file
+# carries what it holds, and every other case's twin would gain its hosts.
+PROBE_IMAGE=$(psp_scalar "$PROBE_PACKAGE" ref)
+[ -n "$PROBE_IMAGE" ] || fail "$PROBE_PACKAGE states no image ref"
+docker image inspect "$PROBE_IMAGE" > /dev/null 2>&1 ||
+  fail "image $PROBE_IMAGE, $PROBE_PACKAGE's, is absent: docker pull $PROBE_IMAGE (no command pulls it)"
+gql "" '{ FylgjaProbe { count } }' > "$OUT/probes-main.json" 2> "$OUT/probes-main.err" ||
+  fail "main has no kind FylgjaProbe, or reading it failed (see $OUT/probes-main.err): load it with .venv/bin/infrahubctl schema load --branch main schema/fylgja-probe.yaml"
+probes_on_main=$(jq -r '.FylgjaProbe.count' "$OUT/probes-main.json")
+[ "$probes_on_main" = 0 ] ||
+  fail "main holds $probes_on_main FylgjaProbe objects, which every case's read with no probe file would carry: delete them with go run -tags fixture ./cmd/fylgja-fixture -delete-probes"
+echo "e2e: the probe image $PROBE_IMAGE is present, and FylgjaProbe on main holds no probe"
 
 # Case 9's rehearsals are asked from inside Infrahub (R-19), so two things outside the script
 # are required first. Case 9 needs nokia_srlinux alone, which every list that selects a case
@@ -1082,13 +1222,78 @@ echo "e2e: case 5: seeding $FB took ${SEED_TOOK}s (exit $seed_status)"
 [ "${SEED_TOOK%.*}" -lt 150 ] || fail "case 5: seeding $FB took ${SEED_TOOK}s, over 150s"
 
 BRANCH=$FB
+# The probe file (016): n1-loop across n1, from ethernet-1/10 to ethernet-1/11, the seed's two
+# probe-ready ports, routed through n1 by their addresses, which the template renders. Its
+# second host's address is where the first's burst goes.
+PROBES5=testdata/probes/n1-loop.json
+PROBE5_FAR=$(jq -r '.probes[0].endpoints[1].address | split("/")[0]' "$PROBES5")
+BURST_COUNT=$(psp_scalar "$PROBE_PACKAGE" count)
+[ -n "$BURST_COUNT" ] || fail "$PROBE_PACKAGE states no burst count"
+
+# The dry run with the file lists the probe's two hosts among the nodes, after the three
+# devices' lines, each on the probe package's image and naming its format where a device
+# names its package, with nothing pushed (contracts/cli.md, "016: probes").
+dry5_status=0
+fylgja twin create --branch "$FB" --scope tag:fylgja --probes "$PROBES5" --dry-run > "$OUT/dry-5.out" 2> "$OUT/dry-5.err" || dry5_status=$?
+[ "$dry5_status" -eq 0 ] || fail "case 5: the dry run with --probes exited $dry5_status; see $OUT/dry-5.out and $OUT/dry-5.err"
+awk '/^nodes:$/ { on = 1; next } on && /^  / { print; next } on { exit }' "$OUT/dry-5.out" > "$OUT/dry-5-nodes.txt"
+[ "$(wc -l < "$OUT/dry-5-nodes.txt")" -eq 5 ] ||
+  fail "case 5: the dry run's nodes: lines name $(wc -l < "$OUT/dry-5-nodes.txt") nodes, not three devices and two hosts; see $OUT/dry-5.out"
+for host in n1-loop-a n1-loop-b; do
+  grep -qE "^  $host  ${PROBE_IMAGE//./\\.}  ping host  [0-9]+ MiB\$" "$OUT/dry-5-nodes.txt" ||
+    fail "case 5: the dry run's nodes: lines name no $host, a ping host on $PROBE_IMAGE pushed nothing; see $OUT/dry-5.out"
+done
+grep -qx 'verdict: clear' "$OUT/dry-5.out" || fail "case 5: the dry run with --probes is not clear; see $OUT/dry-5.out"
+echo "e2e: case 5: the dry run with $PROBES5 lists n1-loop-a and n1-loop-b among the nodes"
+
 # The scope named, the server's default (017). The create follows nothing (019): its
-# document carries no following block.
-create_twin 5 --scope tag:fylgja
+# document carries no following block. The file's probe is in its snapshot, and its two hosts
+# beside the devices.
+HOSTS=2
+create_twin 5 --scope tag:fylgja --probes "$PROBES5"
 SID5=$SID BID5=$BID RUN5=$RUN_ID
 export SID5 BID5 RUN5
 expect "$OUT/create-5.json" 'has("following") | not'
-expect "$TWIN/twin.json" '.provenance.branch==env.FB and (.provenance | has("at") | not) and .provenance.scope=="tag:fylgja"'
+expect "$TWIN/twin.json" '.provenance.branch==env.FB and (.provenance | has("at") | not) and .provenance.scope=="tag:fylgja"
+  and [.nodes[] | select(.probe != null) | .name] == ["n1-loop-a", "n1-loop-b"]'
+expect "$OUT/probes-snapshot-5.json" '.probes == ["n1-loop"]'
+
+# The conformance suite's boot half on this probed twin (016): it reads the three devices as
+# case 1's, but for n1's two probe ports' neighbours, skipped with verify's reason since the
+# probe's links are synthesized and a host speaks no discovery protocol, and names the two
+# hosts it does not read, having no package to read them by. It changes nothing.
+start=$(now_ns)
+go test -count=1 -tags e2e ./internal/conformance -run '^TestBootHalf$' -v > "$OUT/boot-half-5.out" 2>&1 ||
+  fail "case 5: the conformance suite's boot half failed; see $OUT/boot-half-5.out"
+BOOT_HALF5_TOOK=$(since "$start")
+grep -qF 'boot half: 3 nodes [n1 n2 n3] of run ' "$OUT/boot-half-5.out" ||
+  fail "case 5: the boot half read other nodes than n1, n2 and n3; see $OUT/boot-half-5.out"
+grep -qF 'boot half: 2 probe hosts not read, having no package to read them by: [n1-loop-a n1-loop-b]' "$OUT/boot-half-5.out" ||
+  fail "case 5: the boot half names no hosts n1-loop-a and n1-loop-b not read; see $OUT/boot-half-5.out"
+for end in a:10 b:11; do
+  grep -qF "skipped: link n1-loop-${end%%:*}:eth1|n1:ethernet-1/${end#*:} is synthesized: n1-loop-${end%%:*} speaks no discovery protocol" "$OUT/boot-half-5.out" ||
+    fail "case 5: the boot half skipped no neighbour of n1:ethernet-1/${end#*:} on its synthesized link; see $OUT/boot-half-5.out"
+done
+grep -qE '^ +boot_e2e_test\.go:[0-9]+: node n1 \(.*\): booted; .*; 2 skipped on synthesized links; ' "$OUT/boot-half-5.out" ||
+  fail "case 5: n1's boot-half line counts no 2 skipped on synthesized links; see $OUT/boot-half-5.out"
+echo "e2e: case 5: boot half passed in ${BOOT_HALF5_TOOK}s, n1-loop-a and n1-loop-b not read"
+
+# twin verify holds the probe's burst, from its first host to its second's address (016):
+# the document by node, and the text's host line and counts line. The probe's two links are
+# skipped at both ends, since a host speaks no discovery protocol; nothing else is.
+verify_twin 5
+expect "$OUT/verify-5.json" '.verify.counts.burst.held==1 and .verify.counts.burst.failed==0
+  and .verify.counts.neighbor.skipped==4 and (.verify.counts.port_enabled.skipped // 0)==0
+  and ([.verify.nodes[] | select(.probe != null) | {node, bursts: [.bursts[] | {probe, from, to, outcome}]}]
+    == [{node: "n1-loop-a", bursts: [{probe: "n1-loop", from: "n1-loop-a", to: "n1-loop-b", outcome: "held"}]},
+        {node: "n1-loop-b", bursts: []}])'
+fylgja twin verify > "$OUT/verify-5.out" 2> "$OUT/verify-5.err" ||
+  fail "case 5: twin verify exited non-zero; see $OUT/verify-5.out and $OUT/verify-5.err"
+grep -qE "^n1-loop-a \(ping host, [0-9.]+\): burst n1-loop $BURST_COUNT of $BURST_COUNT replies from n1-loop-b at ${PROBE5_FAR//./\\.} held; " "$OUT/verify-5.out" ||
+  fail "case 5: twin verify names no burst n1-loop of $BURST_COUNT replies from n1-loop-b at $PROBE5_FAR held; see $OUT/verify-5.out"
+grep -qE '^held: .*; burst 1 held; failed: none; unread: none$' "$OUT/verify-5.out" ||
+  fail "case 5: twin verify's counts line holds no burst 1 held, with nothing failed or unread; see $OUT/verify-5.out"
+echo "e2e: case 5: the twin carries n1-loop's two hosts, and twin verify holds its burst"
 
 # twin show names the snapshot the twin was built from, and its kind line says so, read at
 # the create's read since the reference names no at (019). The line is kept: it must not
@@ -1108,7 +1313,8 @@ grep '^kind: ' "$OUT/show-5-created.out" | cmp -s "$OUT/kind-5.txt" - ||
 # list query takes.
 twin_before=$(sha256sum < "$TWIN/twin.json")
 containers_before=$(docker ps -q --no-trunc --filter label=containerlab=fylgja | LC_ALL=C sort)
-[ "$(grep -c . <<< "$containers_before")" -eq 3 ] || fail "case 5: docker lists $(grep -c . <<< "$containers_before") containers of lab fylgja, not 3"
+[ "$(grep -c . <<< "$containers_before")" -eq "$NODES" ] ||
+  fail "case 5: docker lists $(grep -c . <<< "$containers_before") containers of lab fylgja, not $NODES"
 CREATED5=$(date -u +%Y-%m-%dT%H:%M:%S.%NZ)
 
 # The artifact-only change: n1's ethernet-1/2 disabled, which the compiler does not see,
@@ -1137,9 +1343,11 @@ expect "$OUT/runs-5-frozen.json" 'length == 0'
 echo "e2e: case 5: ${FROZEN5_TOOK}s after the change, twin.json, the containers and the kind line had not moved, and no run had started since $CREATED5"
 
 # A step to a snapshot of the changed branch, by file (019): intent read --out writes it,
-# and twin compile names its bundle, which the step deploys with nothing read from Infrahub.
-# The record then names that snapshot and bundle, still no stage, and keeps its source.
-compiled_id 5a
+# with the probe file, so it carries the twin's probe (016), and twin compile names its
+# bundle, which the step deploys with nothing read from Infrahub. The record then names that
+# snapshot and bundle, still no stage, and keeps its source; the step's document and the
+# record name the probe's flow across it, measured on the container's basis.
+compiled_id 5a --probes "$PROBES5"
 SID5A=$COMPILED_SNAPSHOT BID5A=$COMPILED_ID
 export SID5A BID5A
 [ "$BID5A" != "$BID5" ] || fail "case 5: the artifact-only change left the compiled bundle_id at $BID5"
@@ -1157,7 +1365,7 @@ expect "$OUT/step-5a.json" '.status=="ok" and .operation=="twin.step" and .snaps
   and any(.step.pushed[]; .node=="n1") and all(.step.pushed[]; .outcome=="landed")'
 RUN5A=$(jq -r .subject.run_id "$OUT/step-5a.json")
 export RUN5A
-expect "$TWIN/twin.json" '.twin_version=="10" and .rehearsal==null and .state=="ready" and .source=="intent" and .stage==null
+expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .state=="ready" and .source=="intent" and .stage==null
   and .snapshot_id==env.SID5A and .bundle_id==env.BID5A
   and .provenance.branch==env.FB and (.provenance | has("at") | not) and .provenance.scope=="tag:fylgja"
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN5A and .step.phase==null
@@ -1165,6 +1373,8 @@ expect "$TWIN/twin.json" '.twin_version=="10" and .rehearsal==null and .state=="
   and .step.to.stage==null and .step.to.snapshot_id==env.SID5A and .step.to.bundle_id==env.BID5A
   and all(.nodes[]; .holds==env.BID5A)'
 cp "$TWIN/twin.json" "$OUT/twin-5a.json"
+step_loss_measured 5a n1-loop
+LOSS5A=$LOSS_FIGURE
 no_credential "the artifact marker" "$MARKER" "$TWIN/twin.json"
 jq -e --slurpfile a "$OUT/artifacts-5a.json" '(.nodes[] | select(.name=="n1") | .artifact.checksum) == $a[0].n1.checksum' "$TWIN/twin.json" > /dev/null ||
   fail "case 5: twin.json does not carry n1's new checksum $(jq -r .n1.checksum "$OUT/artifacts-5a.json")"
@@ -1173,13 +1383,17 @@ history_of step-5a fylgja-step "$RUN5A"
 
 # twin verify on the stepped twin: intent disables n1:ethernet-1/2, so that port and its
 # link's two ends are skipped, each named with its reason, and nothing is found. The
-# bundle's mapping row carries enabled false; the node reads disable. The twin is named by
-# the snapshot its staged bundle was compiled from (019).
+# bundle's mapping row carries enabled false; the node reads disable. The probe's two links
+# are skipped at both ends, as at the create, and its burst holds (016). The twin is named
+# by the snapshot its staged bundle was compiled from (019).
 verify_twin 5a
 VERIFY5_TOOK=$VERIFY_TOOK
-expect "$OUT/verify-5a.json" '.verify.counts.port_enabled.skipped==1 and .verify.counts.neighbor.skipped==2
+expect "$OUT/verify-5a.json" '.verify.counts.port_enabled.skipped==1 and .verify.counts.neighbor.skipped==6
+  and .verify.counts.burst.held==1
   and ([.verify.skipped[] | "\(.node):\(.port) \(.link)"] | sort)
-    == ["n1:ethernet-1/2 n1:ethernet-1/2|n3:ethernet-1/2", "n1:ethernet-1/2 null", "n3:ethernet-1/2 n1:ethernet-1/2|n3:ethernet-1/2"]
+    == ["n1-loop-a:eth1 n1-loop-a:eth1|n1:ethernet-1/10", "n1-loop-b:eth1 n1-loop-b:eth1|n1:ethernet-1/11",
+        "n1:ethernet-1/10 n1-loop-a:eth1|n1:ethernet-1/10", "n1:ethernet-1/11 n1-loop-b:eth1|n1:ethernet-1/11",
+        "n1:ethernet-1/2 n1:ethernet-1/2|n3:ethernet-1/2", "n1:ethernet-1/2 null", "n3:ethernet-1/2 n1:ethernet-1/2|n3:ethernet-1/2"]
   and .verify.twin.snapshot_id==env.SID5A and .verify.twin.bundle_id==env.BID5A'
 
 # The topology change: a third link, which moves n1's and n3's artifacts too; the
@@ -1189,7 +1403,7 @@ cp "$OUT/artifacts-5a.json" "$OUT/artifacts-5b-before.json"
 fixture -branch "$FB" -add-link > "$OUT/add-link-5.out" 2> "$OUT/add-link-5.err" ||
   fail "case 5: -add-link on $FB failed; see $OUT/add-link-5.err"
 await_checksums_moved 5b "$FB" "$OUT/artifacts-5b-before.json" n1 n3
-compiled_id 5b
+compiled_id 5b --probes "$PROBES5"
 SID5B=$COMPILED_SNAPSHOT BID5B=$COMPILED_ID
 export SID5B BID5B
 [ "$BID5B" != "$BID5A" ] || fail "case 5: the branch change left the compiled bundle_id at $BID5A"
@@ -1214,6 +1428,8 @@ expect "$TWIN/twin.json" '.state=="ready" and .source=="intent" and .stage==null
   and .step.from.snapshot_id==env.SID5A and .step.to.snapshot_id==env.SID5B
   and all(.nodes[]; .holds==env.BID5B)'
 cp "$TWIN/twin.json" "$OUT/twin-5b.json"
+step_loss_measured 5b n1-loop
+LOSS5B=$LOSS_FIGURE
 no_credential "the artifact marker" "$MARKER" "$TWIN/twin.json"
 readback 5b "$FB" disable
 history_of step-5b fylgja-step "$RUN5B"
@@ -1232,6 +1448,7 @@ grep -qF -- "$KIND5B" "$OUT/show-5-stepped.out" ||
 
 destroy_twin 5 "done" "done"
 DESTROY5_TOOK=$DESTROY_TOOK
+HOSTS=0
 
 if fixture -branch "$FB" -delete > "$OUT/delete-branch-5.out" 2>&1; then
   unset FB
@@ -1414,7 +1631,7 @@ expect "$OUT/list-7-before.json" '.status=="ok" and .stages.branch==env.FP and .
   and all(.stages.rows[]; .proposed_change.id==env.PC7)'
 
 # The twin from the first mark: the plan's id, pinned at its at, and the
-# record naming the stage and its proposed change, and no rehearsal (twin.json 10). It is
+# record naming the stage and its proposed change, and no rehearsal (twin.json 11). It is
 # read back against what Infrahub held when the mark was made, since -add-link has moved
 # n1's and n3's artifacts since.
 BRANCH=$FP
@@ -1429,7 +1646,7 @@ expect "$OUT/create-7.json" '.subject.stage==(env.FP + "/seeded") and .subject.b
   and .stage == {ref: (env.FP + "/seeded"), branch: env.FP, label: "seeded",
     proposed_change: {id: env.PC7, name: env.FP, branch: env.FP, draft: true},
     at: env.AT7S, at_source: "written", description: "seeded"}'
-expect "$TWIN/twin.json" '.twin_version=="10" and .rehearsal==null and .provenance.branch==env.FP and .provenance.at==env.AT7S and .step==null
+expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .provenance.branch==env.FP and .provenance.at==env.AT7S and .step==null
   and .stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "seeded", description: "seeded", at_source: "written"}'
 readback 7 "$FP" enable "$OUT/artifacts-7-sealed-1.json"
 
@@ -1462,7 +1679,7 @@ expect "$OUT/step-7a.json" '.status=="ok" and .operation=="twin.step" and .snaps
   and .step.from.snapshot_id==env.SNAP7S and (.step.to.snapshot_id | type)=="string" and .step.to.snapshot_id==env.SNAP7T'
 RUN7A=$(jq -r .subject.run_id "$OUT/step-7a.json")
 export RUN7A
-expect "$TWIN/twin.json" '.twin_version=="10" and .rehearsal==null and .state=="ready" and .bundle_id==env.PLAN7T
+expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .state=="ready" and .bundle_id==env.PLAN7T
   and .provenance.branch==env.FP and .provenance.at==env.AT7T
   and .stage == {proposed_change: {id: env.PC7, branch: env.FP}, label: "third-link", description: "third link", at_source: "written"}
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN7A and .step.phase==null
@@ -1668,6 +1885,12 @@ await_checksums_moved 8 "$FS" "$OUT/artifacts-8-sealed-1.json" s1 e1
 fixture -branch "$FS" -stage mixed-link -description "mixed link" > "$OUT/stage-8-mixed-link.out" 2> "$OUT/stage-8-mixed-link.err" ||
   fail "case 8: marking stage $FS/mixed-link failed; see $OUT/stage-8-mixed-link.err"
 
+# The probe from the kind (016): e1-loop across e1, from Ethernet10 to Ethernet11, the mixed
+# seed's probe-ready ports, written into FylgjaProbe on main, so every read from here on
+# carries it with no file: the plan's, the create's and both steps'. It is branch-agnostic:
+# no stage's at pins it, and both stages compile with it.
+write_probes 8 testdata/probes/e1-loop.json e1-loop
+
 # The plan (M10, 014): four stages, the branch point refused as case 7's is, so the plan
 # exits 1; the marks and the head compiled to three ids, and between the marks the link,
 # with s1 re-bootstrapped for it and both ends' artifacts re-rendered. e1's bootstrap
@@ -1703,19 +1926,24 @@ expect "$OUT/plan-8.json" '.plan.steps[1] | .computed and (.unchanged | not)
   and [.artifacts.changed[].node] == ["e1", "s1"]'
 echo "e2e: case 8: plan $FS/seeded $P1, $FS/mixed-link $P2; one link added between e1 and s1, both re-rendered"
 
-# The twin at seeded, pushed by replace: the plan's id, a 10 record of no rehearsal that has
-# not stepped, every node holding seeded's bundle.
+# The twin at seeded, pushed by replace: the plan's id, an 11 record of no rehearsal that has
+# not stepped, every node holding seeded's bundle; created with no probe file, its snapshot
+# carries the kind's probe, and the twin its two hosts on e1 (016).
 BRANCH=$FS
 READBACK=
 CREATE_REF="$FS/seeded"
+HOSTS=2
 create_twin 8
 CREATE8_TOOK=$CREATE_TOOK
 [ "$BID" = "$P1" ] || fail "case 8: create --stage $FS/seeded deployed $BID, but the plan printed $P1"
-expect "$TWIN/twin.json" '.twin_version=="10" and .rehearsal==null and .state=="ready" and .step==null
-  and .stage.proposed_change.branch==env.FS and .stage.label=="seeded" and all(.nodes[]; .holds==env.P1)'
+expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .state=="ready" and .step==null
+  and .stage.proposed_change.branch==env.FS and .stage.label=="seeded" and all(.nodes[]; .holds==env.P1)
+  and [.nodes[] | select(.probe != null) | .name] == ["e1-loop-a", "e1-loop-b"]'
+expect "$OUT/probes-snapshot-8.json" '.probes == ["e1-loop"]'
 readback_mixed 8 "$FS" "$OUT/artifacts-8-sealed-1.json"
 containers_of "$OUT/containers-8-created.txt"
-[ "$(wc -l < "$OUT/containers-8-created.txt")" -eq 3 ] || fail "case 8: docker names $(wc -l < "$OUT/containers-8-created.txt") containers of the twin, not 3"
+[ "$(wc -l < "$OUT/containers-8-created.txt")" -eq "$NODES" ] ||
+  fail "case 8: docker names $(wc -l < "$OUT/containers-8-created.txt") containers of the twin, not $NODES"
 
 # The step with no target goes to the next stage, mixed-link. It restarts e1, so it is
 # refused without --allow-restart: the dry run says so and touches nothing; the run is
@@ -1758,7 +1986,7 @@ expect "$OUT/step-8a.json" '.status=="ok" and .operation=="twin.step" and .bundl
   and .step.outcome=="stepped" and .step.state=="ready" and .step.run.workflow_id=="fylgja-step"'
 RUN8A=$(jq -r .subject.run_id "$OUT/step-8a.json")
 export RUN8A
-expect "$TWIN/twin.json" '.twin_version=="10" and .rehearsal==null and .state=="ready" and .bundle_id==env.P2
+expect "$TWIN/twin.json" '.twin_version=="11" and .rehearsal==null and .state=="ready" and .bundle_id==env.P2
   and .stage.proposed_change.branch==env.FS and .stage.label=="mixed-link" and .run.workflow_id=="fylgja-provision"
   and .step.outcome=="stepped" and .step.run.run_id==env.RUN8A and .step.phase==null
   and .step.from.stage.label=="seeded" and .step.from.bundle_id==env.P1 and .step.to.bundle_id==env.P2
@@ -1793,9 +2021,13 @@ await_neighbour s1 ethernet-1/3 e1 Ethernet3
 await_neighbour e1 Ethernet3 s1 ethernet-1/3
 # The step's own wait after its record: the record and the step's
 # document say it settled; await_neighbour above stays the independent read. after_s is
-# recorded, not asserted.
+# recorded, not asserted. Its last read held e1-loop's burst through e1, restarted, and the
+# probe's flow, across the restart, lost more than none (016).
 step_wait_settled 8a
 WAIT8A_AFTER=$WAIT_AFTER
+expect "$OUT/step-8a.json" '.step.wait_counts.burst.held==1 and .step.wait_counts.burst.failed==0'
+step_loss_measured 8a e1-loop '.lost > 0'
+LOSS8A=$LOSS_FIGURE
 history_of step-8a fylgja-step "$RUN8A"
 
 fylgja twin show --json > "$OUT/show-8a.json" 2> "$OUT/show-8a.err" ||
@@ -1837,12 +2069,18 @@ gnmi_absent 8b "$S1_ADDR" '/interface[name=ethernet-1/3]/description'
 echo "e2e: case 8: s1 ethernet-1/3 carries no description after the step back to $FS/seeded: the replace removed what mixed-link added"
 step_wait_settled 8b
 WAIT8B_AFTER=$WAIT_AFTER
+expect "$OUT/step-8b.json" '.step.wait_counts.burst.held==1 and .step.wait_counts.burst.failed==0'
+step_loss_measured 8b e1-loop
+LOSS8B=$LOSS_FIGURE
 echo "e2e: case 8: settled after ${WAIT8A_AFTER}s and ${WAIT8B_AFTER}s"
 history_of step-8b fylgja-step "$RUN8B"
 
 destroy_twin 8 "done" "done"
 unset CREATE_REF
 READBACK=readback
+HOSTS=0
+# The probe goes from main, which then holds none, so no later read carries it.
+delete_probes 8
 
 # The branch goes with its stages and its proposed change, as case 7's, and Infrahub then
 # holds none of them; the product then lists no stage of it, and plans none.
@@ -1925,13 +2163,14 @@ rehearsal_run() {
 }
 
 # no_twin CASE: the rehearsal's own destroy left the host clear, as twin show reports it and as
-# containerlab and the state root say.
+# containerlab, Docker, for a probe's host (016), and the state root say.
 no_twin() {
   fylgja twin show --json > "$OUT/show-$1.json" 2> "$OUT/show-$1.err" ||
     fail "case $1: twin show exited non-zero after the rehearsal; see $OUT/show-$1.err"
   expect "$OUT/show-$1.json" '.show.kind == "none" and (.show.host.lab_present | not)
     and (.show.host.twin_dir_present | not) and .show.in_flight == []'
   [ "$(clab inspect --all --format json)" = "{}" ] || fail "case $1: containerlab reports a lab after the rehearsal"
+  no_probe_containers "$1"
   [ ! -e "$TWIN" ] || fail "case $1: $TWIN is present after the rehearsal"
 }
 
@@ -1977,6 +2216,26 @@ run_checks_named() {
     fail "case 9: -run-checks user names no check fylgja-twin concluding $2; see $OUT/run-checks-$1.out"
 }
 
+# LOSS9 is a stage line's loss naming n1-loop's flow as measured (016): its requests lost of
+# those sent, and its longest gap; an extended regular expression. LOSS9_CELL is the table's
+# cell, which drops the gap when the comment is shortened to Infrahub's bound.
+LOSS9='n1-loop [0-9]+/[0-9]+, gap [0-9]+\.[0-9]s'
+LOSS9_CELL='n1-loop [0-9]+/[0-9]+(, gap [0-9]+\.[0-9]s)?'
+
+# loss_cells CASE LABEL=ERE...: the case's comment's loss column (016), the table's eighth
+# cell, matches ERE whole in the row of each stage $FR/LABEL.
+loss_cells() {
+  local case=$1 pair cell md
+  shift
+  md=$OUT/comment-$case.md
+  for pair in "$@"; do
+    cell=$(awk -F'|' -v ref="$FR/${pair%%=*}" '/^\| / { c = $2; gsub(/^ +| +$/, "", c)
+      if (c == ref) { l = $9; gsub(/^ +| +$/, "", l); print l; exit } }' "$md")
+    grep -qxE -- "${pair#*=}" <<< "$cell" ||
+      fail "case $case: the comment's loss cell for $FR/${pair%%=*} reads \"$cell\", not ${pair#*=}; see $md"
+  done
+}
+
 # overview_threads NAME PC: the threads the proposed change's overview lists, oldest first, as
 # test support's OverviewThreads reads them from Infrahub's event log: each thread-created
 # event whose primary node is the proposed change names its thread first among its related
@@ -1988,7 +2247,7 @@ overview_threads() {
 }
 
 # rehearsal.Caveat, the markdown's last line, which every comment keeps (FR-014).
-CAVEAT="*Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing.*"
+CAVEAT="*Fidelity is asserted, not measured: the twin's containers forward in software and keep their own timing; a loss figure is the container's, never a hardware forwarder's.*"
 export CAVEAT
 
 # A throwaway branch, set before seeding so the trap's -delete removes it and what hangs on
@@ -2003,6 +2262,11 @@ fixture -branch "$FR" > "$OUT/seed-9.out" 2> "$OUT/seed-9.err" || seed_status=$?
 SEED9_TOOK=$(since "$start")
 echo "e2e: case 9: seeding $FR took ${SEED9_TOOK}s (exit $seed_status)"
 [ "$seed_status" -eq 0 ] || fail "case 9: seeding $FR exited $seed_status; see $OUT/seed-9.err"
+
+# The probe the checks read (016): they send no file, so theirs is the kind's on main, which
+# holds n1-loop from before the draft's checks to after the branch's delete. Every stage the
+# rehearsals compile carries it.
+write_probes 9 testdata/probes/n1-loop.json n1-loop
 
 # The draft. Its creation runs both checks after the rest of the pipeline, which -propose
 # waits for, so they are awaited here, bounded as tier 2's test bounds them: fylgja-twin
@@ -2064,13 +2328,16 @@ expect "$OUT/checks-9a.json" '(map(select(.name == "fylgja-twin")) | length == 1
     and .validator_state == "completed" and ((.message // "") | contains("rehearsal ok"))))
   and (map(select(.name == "fylgja-step")) | length == 1 and .[0].conclusion == "success")'
 stage_lines 9a "^stage $FR/branch-point: refused \\(scope\\.empty\\)\$" "^stage $FR/seeded: created; .*; baseline\$" \
-  "^stage $FR/third-link: .*; passed\$" "^stage $FR/head: .*; passed\$"
+  "^stage $FR/third-link: stepped .*; loss $LOSS9; passed\$" "^stage $FR/head: .*; passed\$"
 comments_of 9a "$PC9" 2> "$OUT/comments-9a.err" || fail "case 9: reading $PC9's comments failed; see $OUT/comments-9a.err"
 expect "$OUT/comments-9a.json" 'length == 1 and (.[0].text | contains("Status **ok**")
-  and contains("| stage | at | snapshot | bundle | step | wait | verify | new verification failures | verdict |")
+  and contains("| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |")
   and contains("```mermaid") and contains("**Stages**") and endswith("\n\n" + env.CAVEAT + "\n"))'
 jq -r '.[0].text' "$OUT/comments-9a.json" > "$OUT/comment-9a.md"
 comment_stages 9a "branch-point=refused (scope.empty)" seeded=baseline third-link=passed head=passed
+# The loss column: — where no step read a flow, the branch point refused and the baseline
+# created, and n1-loop's figures where third-link stepped (016).
+loss_cells 9a "branch-point=—" "seeded=—" "third-link=$LOSS9_CELL"
 COMMENT9A=$(jq -r '.[0].id' "$OUT/comments-9a.json")
 export COMMENT9A
 rehearsal_run 9a "$OUT/comment-9a.md"
@@ -2078,16 +2345,22 @@ RUN9A=$REHEARSAL_RUN USED9A=$REHEARSAL_USED
 echo "e2e: case 9: rehearsal run $RUN9A passed, $USED9A; one comment, holding the table, the drawing and the stages"
 no_twin 9a
 
-# A stage made to fail: a port n1 does not have, rendered into n1's artifact alone, which the
-# compile omits and the node refuses at the push (research R-14). The rehearsal builds the
-# baseline, steps to third-link, and fails at bad-port's push on n1; the head is not reached.
+# A stage made to fail on the probe (016): n1:ethernet-1/10, the probe's first port, disabled
+# and rendered into n1's artifact, which the step pushes. Its flow is cut there and its
+# burst finds no reply, so the stage's wait expires with verify.burst failing, which the
+# baseline did not have, and the gate fails the stage by the rule that fails it on any such
+# finding; the port's own state is skipped, since intent disables it, and its link's ends are
+# never asserted. The rehearsal builds the baseline, steps to third-link, which passes with
+# its loss, and fails at probe-port-down; the head is not reached. 015's bad-port, a push
+# refused, stood here: a failed stage stops the run, so it could stand neither before
+# probe-port-down nor after it.
 artifacts_of "$FR" "$OUT/artifacts-9b-before.json" 2> "$OUT/artifacts-9b-before.err" ||
   fail "case 9: reading $FR's artifacts failed; see $OUT/artifacts-9b-before.err"
-fixture -branch "$FR" -add-interface n1:ethernet-1/99 -generate > "$OUT/add-interface-9.out" 2> "$OUT/add-interface-9.err" ||
-  fail "case 9: -add-interface n1:ethernet-1/99 -generate on $FR failed; see $OUT/add-interface-9.err"
+fixture -branch "$FR" -disable-port n1:ethernet-1/10 -generate > "$OUT/disable-port-9.out" 2> "$OUT/disable-port-9.err" ||
+  fail "case 9: -disable-port n1:ethernet-1/10 -generate on $FR failed; see $OUT/disable-port-9.err"
 await_checksums_moved 9b "$FR" "$OUT/artifacts-9b-before.json" n1
-fixture -branch "$FR" -stage bad-port -description "a port n1 does not have" > "$OUT/stage-9-bad-port.out" 2> "$OUT/stage-9-bad-port.err" ||
-  fail "case 9: marking stage $FR/bad-port failed; see $OUT/stage-9-bad-port.err"
+fixture -branch "$FR" -stage probe-port-down -description "the probe's first port down" > "$OUT/stage-9-probe-port-down.out" 2> "$OUT/stage-9-probe-port-down.err" ||
+  fail "case 9: marking stage $FR/probe-port-down failed; see $OUT/stage-9-probe-port-down.err"
 start=$(now_ns)
 fixture -branch "$FR" -run-checks user > "$OUT/run-checks-9b.out" 2> "$OUT/run-checks-9b.err" ||
   fail "case 9: -run-checks user on $FR failed; see $OUT/run-checks-9b.err"
@@ -2097,10 +2370,11 @@ run_checks_named 9b failure
 user_checks 9b "$PC9" 2> "$OUT/checks-9b.err" || fail "case 9: reading $PC9's checks failed; see $OUT/checks-9b.err"
 expect "$OUT/checks-9b.json" '(map(select(.name == "fylgja-twin")) | length == 1 and (.[0] | .conclusion == "failure"
     and .validator_state == "completed" and ((.message // "")
-      | contains("stage " + env.FR + "/bad-port failed at phase push") and contains("not landed n1 (push.refused)"))))
+      | contains("stage " + env.FR + "/probe-port-down failed: verify.burst n1-loop"))))
   and (map(select(.name == "fylgja-step")) | length == 1 and .[0].conclusion == "success")'
 stage_lines 9b "^stage $FR/branch-point: refused \\(scope\\.empty\\)\$" "^stage $FR/seeded: created; .*; baseline\$" \
-  "^stage $FR/third-link: .*; passed\$" "^stage $FR/bad-port: diverged at phase push: .*; failed\$" "^stage $FR/head: not reached\$"
+  "^stage $FR/third-link: stepped .*; loss $LOSS9; passed\$" \
+  "^stage $FR/probe-port-down: stepped .*; expired after .*; loss $LOSS9; failed: verify\\.burst n1-loop\$" "^stage $FR/head: not reached\$"
 comments_of 9b "$PC9" 2> "$OUT/comments-9b.err" || fail "case 9: reading $PC9's comments failed; see $OUT/comments-9b.err"
 # The failure's comment: its table, its drawing, the five commands that reproduce it in order
 # (FR-015), the create naming the scope every stage was read under, the server's default
@@ -2108,17 +2382,21 @@ comments_of 9b "$PC9" 2> "$OUT/comments-9b.err" || fail "case 9: reading $PC9's 
 # shellcheck disable=SC2016 # the backticks are the markdown's fences, read literally by jq
 expect "$OUT/comments-9b.json" 'length == 2 and any(.[]; .id == env.COMMENT9A) and (map(.thread) | unique | length == 2)
   and (map(select(.id != env.COMMENT9A)) | length == 1 and (.[0].text | contains("Status **nonconforming**")
+    and contains("| stage | at | snapshot | bundle | step | wait | verify | loss | new verification failures | verdict |")
     and contains("```mermaid") and contains("**Reproduce by hand**:\n\n```\n"
       + "fylgja twin create --stage " + env.FR + "/seeded --scope tag:fylgja\n"
       + "fylgja twin step --stage " + env.FR + "/third-link --allow-restart\n"
-      + "fylgja twin step --stage " + env.FR + "/bad-port --allow-restart\n"
+      + "fylgja twin step --stage " + env.FR + "/probe-port-down --allow-restart\n"
       + "fylgja twin verify\nfylgja twin destroy\n```\n")
     and endswith("\n\n" + env.CAVEAT + "\n")))'
 jq -r '.[] | select(.id != env.COMMENT9A) | .text' "$OUT/comments-9b.json" > "$OUT/comment-9b.md"
 COMMENT9B=$(jq -r '.[] | select(.id != env.COMMENT9A) | .id' "$OUT/comments-9b.json")
 THREADS9=$(jq -c 'map(.thread)' "$OUT/comments-9b.json")
-comment_stages 9b "branch-point=refused (scope.empty)" seeded=baseline third-link=passed bad-port=failed \
+comment_stages 9b "branch-point=refused (scope.empty)" seeded=baseline third-link=passed probe-port-down=failed \
   "head=not reached"
+# The earlier stages passed with their loss figures, and the failed one names its loss too: a
+# figure is advisory, and the burst is what fails the stage (016, SC-002).
+loss_cells 9b "seeded=—" "third-link=$LOSS9_CELL" "probe-port-down=$LOSS9_CELL" "head=—"
 # Both threads are listed in the proposed change's overview, the reason D-053 made each
 # comment a thread (SC-007), once Infrahub's event log has them: it lags its writes by a few
 # seconds (D-048), so the read is repeated for a minute, as tier 2's test waits.
@@ -2133,7 +2411,7 @@ echo "e2e: case 9: both threads listed in $PC9's overview after $(since "$start"
 rehearsal_run 9b "$OUT/comment-9b.md"
 RUN9B=$REHEARSAL_RUN USED9B=$REHEARSAL_USED
 [ "$RUN9B" != "$RUN9A" ] || fail "case 9: the second comment names the first rehearsal's run $RUN9A"
-echo "e2e: case 9: rehearsal run $RUN9B failed at $FR/bad-port's push on n1, $USED9B; a second comment, with the commands that reproduce it"
+echo "e2e: case 9: rehearsal run $RUN9B failed at $FR/probe-port-down on n1-loop's burst, $USED9B; a second comment, with the commands that reproduce it"
 no_twin 9b
 
 # The branch goes with its stages and its proposed change, the threads with their comments and
@@ -2152,6 +2430,8 @@ if fixture -branch "$FR" -delete > "$OUT/delete-branch-9.out" 2>&1; then
 else
   fail "case 9: -delete on $FR failed, leaving its branch, stages or proposed change; see $OUT/delete-branch-9.out"
 fi
+# The probe goes from main last, once nothing is left to read it, and main then holds none.
+delete_probes 9
 else
   skip_case 9
 fi
@@ -2180,6 +2460,11 @@ stop_server
 # credentials, not for configuration lines; so do a rehearsal's step children's.
 # Case 9's stage.plan and twin.rehearse went to the operator's server on the bridge, not to
 # the script's: its log, local/server.log by CLAUDE.md's start line, is searched too (SC-008).
+# The probes add case 5's text dry run and twin verify (dry-5.out, verify-5.out), the fixture
+# tool's probe writes and deletes (probes-*.out, delete-probes-*.out) and each create's
+# snapshot's probe names (probes-snapshot-*.json), all under $OUT, and nothing else: a
+# flow's and a burst's output stays in its host and reaches a document only as figures, so
+# the targets do not move (016).
 # The worker's log is searched when WORKER_LOG names it, and the line after the greps says
 # whether it was. The bundle store holds every bundle the host compiled, and the snapshot
 # store every snapshot its servers took, each read's CTM with every device's rendered
@@ -2242,7 +2527,7 @@ done
 # would refuse. Cases 1 and 5 need nokia_srlinux alone, which every list that selects a case
 # names, so they run whenever any case does.
 if ran 5; then
-  echo "e2e: case 5: seed ${SEED_TOOK}s, frozen wait ${FROZEN5_TOOK}s from the change, step 5a ${STEP5A_TOOK}s and step 5b ${STEP5B_TOOK}s, destroy ${DESTROY5_TOOK}s"
+  echo "e2e: case 5: seed ${SEED_TOOK}s, frozen wait ${FROZEN5_TOOK}s from the change, step 5a ${STEP5A_TOOK}s and step 5b ${STEP5B_TOOK}s, destroy ${DESTROY5_TOOK}s; n1-loop $LOSS5A at 5a and $LOSS5B at 5b"
 fi
 if ran 6; then
   echo "e2e: case 6: seed ${SEED6_TOOK}s, mixed twin $BID6 under run $RUN6"
@@ -2251,7 +2536,7 @@ if ran 7; then
   echo "e2e: case 7: proposed change ${PROPOSE7_TOOK}s, plan ${PLAN7_TOOK}s, create ${CREATE7_TOOK}s, steps ${STEP7A_TOOK}s and ${STEP7B_TOOK}s; runs $RUN7A and $RUN7B"
 fi
 if ran 8; then
-  echo "e2e: case 8: proposed change ${PROPOSE8_TOOK}s, steps ${STEP8A_TOOK}s and ${STEP8B_TOOK}s, create ${CREATE8_TOOK}s; runs $RUN8A and $RUN8B"
+  echo "e2e: case 8: proposed change ${PROPOSE8_TOOK}s, steps ${STEP8A_TOOK}s and ${STEP8B_TOOK}s, create ${CREATE8_TOOK}s; runs $RUN8A and $RUN8B; e1-loop $LOSS8A and $LOSS8B"
 fi
 if ran 9; then
   echo "e2e: case 9: seed ${SEED9_TOOK}s, proposed change ${PROPOSE9_TOOK}s and its checks ${DRAFT9_TOOK}s; checks with the rehearsals ${REHEARSE9A_TOOK}s ($USED9A) and ${REHEARSE9B_TOOK}s ($USED9B); runs $RUN9A and $RUN9B"
@@ -2261,6 +2546,7 @@ if ran 6; then line+=", ${VERIFY6_TOOK}s (case 6)"; fi
 if ran 8; then line+="; case 8 settled after ${WAIT8A_AFTER}s and ${WAIT8B_AFTER}s"; fi
 echo "$line"
 line="e2e: wall time $(since "$RUN_START")s, boot half ${BOOT_HALF_TOOK}s (case 1)"
+if ran 5; then line+=", ${BOOT_HALF5_TOOK}s (case 5)"; fi
 if ran 6; then line+=" and ${BOOT_HALF6_TOOK}s (case 6)"; fi
 echo "$line"
 if [ "${#SKIPPED[@]}" -eq 0 ]; then

@@ -8,14 +8,16 @@ import (
 	"testing"
 )
 
-// The three goldens load whole, and the map hashes to the directory's id: LoadFiles and
-// IDOfDir walk alike, so a step's from bundle is the bundle the record names. The ids are
-// the goldens' own, which M12's bundle "4" moved once.
+// The four goldens load whole, three-node-probed's synthesized hosts among them, and the
+// map hashes to the directory's id: LoadFiles and IDOfDir walk alike, so a step's from
+// bundle is the bundle the record names. The ids are the goldens' own, which M12's bundle
+// "4" moved once.
 func TestLoadFilesReadsEveryGolden(t *testing.T) {
 	for _, c := range []struct{ golden, id string }{
-		{"three-node", "43d91715"},
-		{"lossy", "4213b3cf"},
-		{"mixed", "ecb665f5"},
+		{"three-node", "c70589c3"},
+		{"lossy", "10099944"},
+		{"mixed", "44ac283f"},
+		{"three-node-probed", "5222063b"},
 	} {
 		t.Run(c.golden, func(t *testing.T) {
 			dir := filepath.Join("..", "..", "testdata", "golden", c.golden)

@@ -56,7 +56,7 @@ func TestCreateDryRunTakesTheSnapshot(t *testing.T) {
 	subject := &findings.Subject{Branch: "fylgja-fixture", At: "2026-09-08T12:00:00Z"}
 	out := captureStdout(t, func() {
 		err = runCreateDryRun(context.Background(), testOptions(t, false), findings.OpTwinCreate, subject, read,
-			subject.Branch, subject.At, "tag:fylgja", reg)
+			subject.Branch, subject.At, "tag:fylgja", reg, nil)
 	})
 	if code, doc := exitOf(t, err); code != findings.ExitOK {
 		t.Fatalf("exit %d, findings %+v; want 0", code, doc.Findings)
@@ -64,7 +64,7 @@ func TestCreateDryRunTakesTheSnapshot(t *testing.T) {
 	lines := strings.Split(out, "\n")
 	want := []string{
 		"dry run: no lab, container, twin directory or run is created",
-		"read: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports " +
+		"read: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, 0 lossy mappings, 0 shared ports " +
 			"(branch fylgja-fixture, at 2026-09-08T12:00:00Z, schema fixture)",
 		"snapshot_id " + fixtureSnapshotID + "  stored: " + filepath.Join(paths.Snapshots, fixtureSnapshotID+".json"),
 		"bundle_id " + fixtureBundleID + "  stored: " + filepath.Join(paths.Bundles, fixtureBundleID),
@@ -77,7 +77,7 @@ func TestCreateDryRunTakesTheSnapshot(t *testing.T) {
 	}
 
 	_, doc := exitOf(t, runCreateDryRun(context.Background(), testOptions(t, true), findings.OpTwinCreate, subject, read,
-		subject.Branch, subject.At, "tag:fylgja", reg))
+		subject.Branch, subject.At, "tag:fylgja", reg, nil))
 	if doc.SnapshotID != fixtureSnapshotID || doc.BundleID != fixtureBundleID || doc.DryRun == nil {
 		t.Errorf("document names snapshot %q, bundle %q, dry_run %+v; want %s, %s and the report", doc.SnapshotID, doc.BundleID,
 			doc.DryRun, fixtureSnapshotID, fixtureBundleID)
@@ -103,7 +103,7 @@ func TestNoSidecarIsWritten(t *testing.T) {
 	reads := 0
 	subject := &findings.Subject{Branch: "fylgja-fixture", At: "2026-09-08T12:00:00Z"}
 	err := runCreateDryRun(context.Background(), testOptions(t, true), findings.OpTwinCreate, subject,
-		fakeRead(t, "three-node.json", nil, &reads), subject.Branch, subject.At, "tag:fylgja", shippedPackages(t))
+		fakeRead(t, "three-node.json", nil, &reads), subject.Branch, subject.At, "tag:fylgja", shippedPackages(t), nil)
 	if code, doc := exitOf(t, err); code != findings.ExitOK || doc.BundleID != fixtureBundleID {
 		t.Fatalf("exit %d, document %+v; want 0 filing the fixture's bundle", code, doc)
 	}
@@ -132,7 +132,7 @@ func TestRefusedCompileKeepsTheSnapshot(t *testing.T) {
 	read := fakeRead(t, "three-node.json", func(c *ctm.CTM) { c.Devices[0].Platform.Package = "nosuch" }, &reads)
 
 	_, err := readTakeCompile(context.Background(), testOptions(t, true), findings.OpTwinCreate, &findings.Subject{Branch: "b"},
-		read, "b", "", "tag:fylgja", shippedPackages(t))
+		read, "b", "", "tag:fylgja", shippedPackages(t), nil)
 	code, doc := exitOf(t, err)
 	if code != findings.ExitRejected || len(doc.Findings) == 0 || doc.Findings[0].Step != findings.StepCompile || doc.BundleID != "" {
 		t.Fatalf("exit %d, document %+v; want 1, refused at compile, naming no bundle", code, doc)
@@ -206,7 +206,7 @@ func TestARefusedCompileNamesTheSnapshotInText(t *testing.T) {
 			var err error
 			out := captureStdout(t, func() {
 				_, err = readTakeCompile(context.Background(), testOptions(t, false), findings.OpTwinCreate, &findings.Subject{Branch: "b"},
-					read, "b", "", "tag:fylgja", shippedPackages(t))
+					read, "b", "", "tag:fylgja", shippedPackages(t), nil)
 			})
 			code, doc := exitOf(t, err)
 			if code != c.code || !hasRule(doc.Findings, c.rule) || doc.BundleID != "" {
@@ -233,7 +233,7 @@ func TestARefusedCompileNamesTheSnapshotInText(t *testing.T) {
 		useService(t, nil)
 		c := loadCTM(t, "three-node.json", "2026-10-27T09:00:00.000000Z")
 		unknownPackage(c)
-		s, entry, _, err := takeSnapshot(context.Background(), paths, findings.StepCompile, c)
+		s, entry, _, err := takeSnapshot(context.Background(), paths, findings.StepCompile, c, nil)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -278,7 +278,7 @@ func TestADryRunWhoseHostCheckCannotRunNamesWhatItFiled(t *testing.T) {
 			}
 			subject := &findings.Subject{Branch: "fylgja-fixture"}
 			return runCreateDryRun(context.Background(), opts, findings.OpTwinCreate, subject, read, subject.Branch, "",
-				"tag:fylgja", shippedPackages(t))
+				"tag:fylgja", shippedPackages(t), nil)
 		}, true},
 		{"--snapshot <file> --dry-run", func(t *testing.T, opts *options) error {
 			return runCreate(context.Background(), opts, &createFlags{snapshot: "snap.json", snapshotGiven: true, dryRun: true},
@@ -384,7 +384,7 @@ func TestARefusedOrFailedReadFilesNothing(t *testing.T) {
 			paths := useStateRoot(t)
 			useService(t, nil)
 			_, err := readTakeCompile(context.Background(), testOptions(t, true), findings.OpTwinCreate, &findings.Subject{Branch: "b"},
-				c.read, "b", "", "tag:fylgja", shippedPackages(t))
+				c.read, "b", "", "tag:fylgja", shippedPackages(t), nil)
 			code, doc := exitOf(t, err)
 			if code != c.code || len(doc.Findings) != 1 || doc.Findings[0].Rule != c.rule || doc.Findings[0].Step != findings.StepRead ||
 				doc.SnapshotID != "" || doc.BundleID != "" {
@@ -408,7 +408,7 @@ func TestARefusedOrFailedReadFilesNothing(t *testing.T) {
 func TestACreateOverACorruptSnapshotEntry(t *testing.T) {
 	paths := useStateRoot(t)
 	useService(t, nil)
-	other, _, _, err := takeSnapshot(context.Background(), paths, findings.StepCompile, loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"))
+	other, _, _, err := takeSnapshot(context.Background(), paths, findings.StepCompile, loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -418,7 +418,7 @@ func TestACreateOverACorruptSnapshotEntry(t *testing.T) {
 	}
 	reads := 0
 	_, err = readTakeCompile(context.Background(), testOptions(t, true), findings.OpTwinCreate, &findings.Subject{Branch: "b"},
-		fakeRead(t, "three-node.json", nil, &reads), "b", "", "tag:fylgja", shippedPackages(t))
+		fakeRead(t, "three-node.json", nil, &reads), "b", "", "tag:fylgja", shippedPackages(t), nil)
 	code, doc := exitOf(t, err)
 	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleSnapshotIDMismatch ||
 		doc.Findings[0].Step != findings.StepCompile || doc.Findings[0].Object != entry || doc.SnapshotID != "" || doc.BundleID != "" {

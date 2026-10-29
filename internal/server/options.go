@@ -9,6 +9,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/provision"
 )
 
@@ -54,6 +55,14 @@ func (o *options) stderr() io.Writer {
 // dial connects to the workflow service, its warnings the request's (dialService at M12).
 func (o *options) dial(ctx context.Context) (provision.Service, error) {
 	return o.c.s.Dial(ctx, o.c.log)
+}
+
+// probes loads the probe packages, as each request loads the platform packages: the
+// embedded ones, and the override directory's probes/ shadowing them by format (016, R-08).
+// A package its validation refuses is a *probe.InvalidError, which loadFailure files under
+// its own rules.
+func (o *options) probes() (*probe.Registry, error) {
+	return probe.Load(o.pspDir)
 }
 
 // paths is the state root (lab.ResolvePaths at M12).

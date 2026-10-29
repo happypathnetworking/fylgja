@@ -10,6 +10,7 @@ import (
 
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/findings"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 )
 
 // The lossy design case asserted by name. The golden holds
@@ -307,5 +308,52 @@ func TestLossyBootstrapNamesTheNodesPorts(t *testing.T) {
 				t.Errorf("%s's bootstrap names a port by a name the node does not use (%q):\n%s", node, wrong, got)
 			}
 		}
+	}
+}
+
+// A probe on a port a lossy package would have shared is recorded as a shared port is, and
+// not refused (016, FR-010). c2's Ethernet1/50, Ethernet1/50/1 and Ethernet1/50/2 all
+// render to eth50, none cabled; a host cabled to Ethernet1/50/1 makes it the port's holder,
+// as an intent link would: the other two are omitted under omit.interface.shared, and all
+// three stay in fidelity.lossy, Ethernet1/50/1 now marked cabled among the others' shares.
+func TestAProbeOnASharedPortIsRecordedNotRefused(t *testing.T) {
+	c := loadFixture(t, "testdata/ctm/lossy.json")
+	decls := []probe.Probe{{Name: "c2-loop", Format: "ping", Endpoints: [2]probe.Endpoint{
+		{Device: "c2", Interface: "Ethernet1/50/1", Address: "10.2.50.2/24", Gateway: "10.2.50.1"},
+		{Device: "c2", Interface: "Ethernet1/2", Address: "10.2.2.2/24", Gateway: "10.2.2.1"},
+	}}}
+	files, list := Compile(c, decls, lossyRegistry(t), probeRegistry(t))
+	if list.Rejected() {
+		t.Fatalf("a probe on a shared port was refused: %v", list)
+	}
+	var m Manifest
+	if err := json.Unmarshal(files[ManifestFile], &m); err != nil {
+		t.Fatal(err)
+	}
+	b := lossyBundle{files: files, m: m}
+
+	if r := b.row(t, "c2:Ethernet1/50/1"); r.Disposition != DispCabled || r.Provenance != ProvenanceSynthesized || *r.Port != "eth50" {
+		t.Errorf("c2:Ethernet1/50/1 is %+v, want eth50, cabled by the synthesized link", r)
+	}
+	for _, other := range []string{"c2:Ethernet1/50", "c2:Ethernet1/50/2"} {
+		if r := b.row(t, other); r.Disposition != DispOmitted {
+			t.Errorf("%s is %s, want omitted: the host's port holds eth50", other, r.Disposition)
+		}
+		if o, ok := b.omission(other); !ok || o.Rule != findings.RuleOmitInterfaceShared {
+			t.Errorf("%s has omission %+v, want %s", other, o, findings.RuleOmitInterfaceShared)
+		}
+	}
+	held, ok := b.entry("c2:Ethernet1/50")
+	if !ok {
+		t.Fatal("c2:Ethernet1/50 left fidelity.lossy")
+	}
+	var cabled []string
+	for _, s := range held.Shares {
+		if s.Cabled {
+			cabled = append(cabled, s.Interface)
+		}
+	}
+	if fmt.Sprint(cabled) != "[Ethernet1/50/1]" {
+		t.Errorf("c2:Ethernet1/50's shares mark %v cabled, want the probe's port alone", cabled)
 	}
 }

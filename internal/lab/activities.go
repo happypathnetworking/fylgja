@@ -16,6 +16,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 	"github.com/happypathnetworking/fylgja/internal/verify"
 )
@@ -50,7 +51,11 @@ type Activities struct {
 	Store    bundle.Store
 	Paths    Paths
 	Registry *psp.Registry
-	Prober   Prober
+	// Probes are the probe packages (016, R-08), by which a host's node is planned as a
+	// device's is by Registry; nil holds none, and a bundle with a host is then refused
+	// host.probe_package.missing.
+	Probes *probe.Registry
+	Prober Prober
 	// Images reports whether the host already holds an image, for the host check's
 	// presence pass. The worker and the dry run set DockerImages over the host's runner;
 	// tier 1 fakes it.
@@ -62,6 +67,9 @@ type Activities struct {
 	// Reader reads a booted node for the step's wait;
 	// nil is GNMIReader over Log. Tier 1 fakes it, as it fakes Prober.
 	Reader verify.Reader
+	// Burster runs a probe's burst in the step's wait (016); nil is DockerBurster over the
+	// Clab's Runner. Tier 1 records the Runner, or fakes it, as it fakes Reader.
+	Burster verify.Burster
 
 	// waitSleep and waitNow are VerifyTwin's pause between two reads and its clock; nil is
 	// a timer under the activity's context and time.Now. Only tier 1 sets them, so a wait
@@ -91,6 +99,9 @@ func (a *Activities) Names() map[string]any {
 		wire.ActRecordStep:    a.RecordStep,
 		// M12: the step's wait after its record.
 		wire.ActVerifyTwin: a.VerifyTwin,
+		// 016: the step's flows, started after its stage and read after its wait.
+		wire.ActStartFlows: a.StartFlows,
+		wire.ActReadFlows:  a.ReadFlows,
 	}
 }
 

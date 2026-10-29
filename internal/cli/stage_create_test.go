@@ -737,10 +737,10 @@ func TestCreateFromEachKindOfStage(t *testing.T) {
 			res, record := provisionOnSuite(t, paths, svc.started[0])
 			validateTwinJSON(t, record)
 			w := decodeRecord(t, record)
-			if res.BundleID != id || w.BundleID != id || w.TwinVersion != "10" || w.Source != wire.SourceIntent ||
+			if res.BundleID != id || w.BundleID != id || w.TwinVersion != "11" || w.Source != wire.SourceIntent ||
 				w.Provenance.Branch != c.branch || w.Provenance.At != c.at || w.Provenance.Scope != defaultScope ||
 				!reflect.DeepEqual(w.Stage, &stage) || w.Step != nil || w.SnapshotID == nil || *w.SnapshotID != started.SnapshotID {
-				t.Errorf("the run deployed %s and recorded\n%s\nwant %s, twin_version 10, provenance %s at %s under %s, stage %+v, step null",
+				t.Errorf("the run deployed %s and recorded\n%s\nwant %s, twin_version 11, provenance %s at %s under %s, stage %+v, step null",
 					res.BundleID, record, id, c.branch, c.at, defaultScope, stage)
 			}
 			mustCarryNoToken(t, c.label, created, svc.started)
@@ -963,7 +963,7 @@ func TestCreateAlongMainAfterAStageTwin(t *testing.T) {
 	res, record := provisionOnSuite(t, paths, svc.started[0])
 	validateTwinJSON(t, record)
 	w := decodeRecord(t, record)
-	if res.BundleID != dry.BundleID || w.TwinVersion != "10" || w.Provenance.Branch != "main" || w.Provenance.At != mainAt ||
+	if res.BundleID != dry.BundleID || w.TwinVersion != "11" || w.Provenance.Branch != "main" || w.Provenance.At != mainAt ||
 		w.Stage != nil || !strings.Contains(string(record), `"stage": null`) {
 		t.Errorf("the run deployed %s (the dry run %s) and recorded\n%s\nwant main at %s, stage null", res.BundleID, dry.BundleID,
 			record, mainAt)

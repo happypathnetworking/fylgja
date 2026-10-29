@@ -1,5 +1,12 @@
 <!--
 Sync Impact Report
+- Version change: 2.2.0 → 2.3.0 (2026-10-28, MINOR: Principle II materially expanded).
+  II gains that a probe format is data as a platform is: one probe package (`probes/`) per
+  format, keyed by its format value, from which its image, host configuration, flow,
+  burst and budgets come, and no component branches on what a format is. The Gate
+  Adjustments bless the probe package as a fourth layer. Source: D-064. Templates:
+  .specify/templates/plan-template.md's Constitution Check names 2.3.0; its row II and
+  its blessed layers read the amended text.
 - Version change: 2.1.0 → 2.2.0 (2026-10-27, MINOR: Principle VI materially expanded).
   VI's provenance sentence names the snapshot beside the CTM and the bundle;
   `observed_at` appears neither in the bundle nor in the bytes a snapshot's id hashes;
@@ -77,8 +84,11 @@ new platform requires a compiler change, the abstraction is wrong and the change
 be rejected until the abstraction is fixed. A single twin is heterogeneous: no
 component MAY assume all nodes share a vendor. Budgets, timeouts, readiness and the
 manufacturer and platform pairs a package matches MUST come from the PSP, never from a
-global constant.
-*Rationale: D-016, D-021, D-057.*
+global constant. A probe format is data in the same sense: a format MUST be added by
+writing a probe package (`probes/`), keyed by its format value, and nothing else; its
+image, how a host is configured, how a flow runs, is read and bursts, and its budgets MUST
+come from that package, and no component MAY branch on what a format is.
+*Rationale: D-016, D-021, D-057, D-064.*
 
 ### III. The CTM Is the Contract; a Reader Maps One Source
 The CTM MUST be the one contract between a source of truth and the compiler. A reader
@@ -196,7 +206,7 @@ second path for them. The boundary MUST be held by a test over imports.
 
 ## Constitution Check — Gate Adjustments
 
-The default simplicity / single-data-model gate MUST NOT flag the following three
+The default simplicity / single-data-model gate MUST NOT flag the following four
 layers. Each is blessed with its justification:
 
 - **The CTM (Canonical Topology Model).** The one contract between a source of truth
@@ -204,6 +214,8 @@ layers. Each is blessed with its justification:
   it, so nothing any source owns is the compiler's input. It MUST carry only what the
   compiler consumes and what provenance and fidelity require. *(D-010, D-057)*
 - **The Platform Support Package abstraction.** Required by Principle II. *(D-016)*
+- **The probe package, a second package kind.** Required by Principle II as amended; one
+  mechanism per format, keyed by its format value. *(D-031, D-064)*
 - **The mapping, one per source, documented.** Required by Principle III. *(D-057)*
 
 Conversely, the gate MUST flag any plan that introduces a binding stage, a database, a
@@ -250,4 +262,4 @@ Detail lives in `docs/development.md`; these are the gates.
   preceded 1.0.0 at the repository root is retired and MUST NOT be edited in its
   place.
 
-**Version**: 2.2.0 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-27
+**Version**: 2.3.0 | **Ratified**: 2026-09-14 | **Last Amended**: 2026-10-28

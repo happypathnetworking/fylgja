@@ -31,16 +31,16 @@ func TestReadSummaryCountsTheLossyRecord(t *testing.T) {
 		// omitted is how many cable rows the read's fidelity list gains.
 		omitted int
 	}{
-		{"three-node.json", "", "wrote snapshot.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, " +
+		{"three-node.json", "", "wrote snapshot.json: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, " +
 			"0 lossy mappings, 0 shared ports (branch fylgja-fixture, at 2026-09-08T12:00:00Z, scope tag:fylgja, schema fixture)", 0},
 		{"lossy.json", repoPath("testdata", "psp", "lossy"), "wrote snapshot.json: 3 devices (chassisos 2, nokia_srlinux 1), " +
 			"16 interfaces, 3 links, 3 artifacts, 9 lossy mappings, 3 shared ports " +
 			"(branch lossy-fixture, at 2026-09-19T12:00:00Z, scope tag:fylgja, schema fixture)", 0},
-		{"mixed.json", "", "wrote snapshot.json: 3 devices (arista_eos 2, nokia_srlinux 1), 9 interfaces, 3 links, 3 artifacts, " +
+		{"mixed.json", "", "wrote snapshot.json: 3 devices (arista_eos 2, nokia_srlinux 1), 15 interfaces, 3 links, 3 artifacts, " +
 			"0 lossy mappings, 0 shared ports (branch mixed-fixture, at 2026-09-20T12:00:00Z, scope tag:fylgja, schema fixture)", 0},
-		{"three-node.json", "", "wrote snapshot.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, " +
+		{"three-node.json", "", "wrote snapshot.json: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, " +
 			"0 lossy mappings, 0 shared ports; 1 cable omitted (branch fylgja-fixture, at 2026-09-08T12:00:00Z, scope tag:fylgja, schema fixture)", 1},
-		{"three-node.json", "", "wrote snapshot.json: 3 devices (nokia_srlinux 3), 9 interfaces, 3 links, 3 artifacts, " +
+		{"three-node.json", "", "wrote snapshot.json: 3 devices (nokia_srlinux 3), 15 interfaces, 3 links, 3 artifacts, " +
 			"0 lossy mappings, 0 shared ports; 2 cables omitted (branch fylgja-fixture, at 2026-09-08T12:00:00Z, scope tag:fylgja, schema fixture)", 2},
 	} {
 		t.Run(fmt.Sprintf("%s/%d omitted", c.fixture, c.omitted), func(t *testing.T) {
@@ -108,7 +108,7 @@ func readOf(t *testing.T, rec *recordedFrames, readFn readFunc, observedAt strin
 	opts := helperServer.newCall(context.Background(), "test", api.Request{Render: api.RenderText}, newFrames(rec, nil), nil).options()
 	subject := &findings.Subject{Branch: "fylgja-fixture", Out: "snap.json", Scope: "tag:fylgja"}
 	return read(context.Background(), opts, subject, readFn, "fylgja-fixture", "", "tag:fylgja", "snap.json", shippedPackages(t),
-		observedAt, nil)
+		observedAt, nil, nil)
 }
 
 // intent read --out takes the clean read's snapshot and files it where a create files one,
@@ -217,7 +217,7 @@ func TestARefusedReadSendsAndFilesNothing(t *testing.T) {
 func TestAReadOverACorruptSnapshotEntry(t *testing.T) {
 	ctx := context.Background()
 	paths := useStateRoot(t)
-	other, _, _, err := takeSnapshot(ctx, paths, "", loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"))
+	other, _, _, err := takeSnapshot(ctx, paths, "", loadCTM(t, "lossy.json", "2026-10-27T09:00:00.000000Z"), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

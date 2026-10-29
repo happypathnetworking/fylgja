@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/rehearsal.schema.json",
   "title": "fylgja twin rehearse — the rehearsal block (015)",
-  "description": "The `rehearsal` block of the findings document fylgja twin rehearse emits (operation twin.rehearse): the proposed change rehearsed, when its stages were resolved, the deadline and the time used, whether a dead rehearsal's twin was reclaimed, the run, the baseline's findings, one entry per stage in order with its reference, its bundle or its refusal, its role, the step into it, its wait, its verify's counts, the findings new against the baseline and its verdict, the destroy's outcome, and, when a stage failed, the commands that reproduce it. Every list is sorted or in the stages' order, so the same run gives the same document. No configuration line, device diff, artifact or bootstrap content, token or login (Constitution X). The markdown rendering is not in the block: it rides beside the document in its frame (contracts/api.md, 015). The run's own warnings (rehearsal.twin.reclaimed, rehearsal.stage.moved, rehearsal.change.closed) ride in the document's findings beside the block; each stage's ride in its findings. 018: each stage names its snapshot_id beside its bundle_id, null when the stage was refused; the markdown's table carries a snapshot column before bundle, the short id or — for a refused stage.",
+  "description": "The `rehearsal` block of the findings document fylgja twin rehearse emits (operation twin.rehearse): the proposed change rehearsed, when its stages were resolved, the deadline and the time used, whether a dead rehearsal's twin was reclaimed, the run, the baseline's findings, one entry per stage in order with its reference, its bundle or its refusal, its role, the step into it, its wait, its verify's counts, the findings new against the baseline and its verdict, the destroy's outcome, and, when a stage failed, the commands that reproduce it. Every list is sorted or in the stages' order, so the same run gives the same document. No configuration line, device diff, artifact or bootstrap content, token or login (Constitution X). The markdown rendering is not in the block: it rides beside the document in its frame (contracts/api.md, 015). The run's own warnings (rehearsal.twin.reclaimed, rehearsal.stage.moved, rehearsal.change.closed) ride in the document's findings beside the block; each stage's ride in its findings. 018: each stage names its snapshot_id beside its bundle_id, null when the stage was refused; the markdown's table carries a snapshot column before bundle, the short id or — for a refused stage. 016: each stage carries loss, what its step's probe flows lost, the step document's block copied (step.schema.json, $defs/loss), null on the baseline, a refused stage, one not reached, and a step that ended before its flows were read; a stage's verify counts gain burst; the step's phase gains flows. The markdown's table carries a loss column between verify and new verification failures, one figure per probe of a stepped stage, <probe> <lost>/<sent>, gap <s>s, joined by ; , or — for a stage with none, and the caveat gains its sentence: a loss figure is the container's, never a hardware forwarder's.",
   "$defs": {
     "ref": {
       "type": "string",
@@ -72,7 +72,7 @@
       "properties": {
         "outcome": { "enum": ["stepped", "unchanged", "diverged", "rejected", "error", "cancelled"] },
         "run": { "$ref": "#/$defs/run" },
-        "phase": { "enum": ["reconcile", "readiness", "push", "record"] },
+        "phase": { "enum": ["reconcile", "readiness", "push", "record", "flows"], "description": "016: flows, a failure or cancellation of the activity that starts or reads the probes' flows" },
         "restarted": { "type": "array", "items": { "type": "string" } },
         "recreated": { "type": "array", "items": { "type": "string" } },
         "created": { "type": "array", "items": { "type": "string" } },
@@ -108,7 +108,7 @@
     "stage": {
       "type": "object",
       "description": "one stage of the rehearsal, in the proposed change's order: the plan's stage, its role and its verdict, and what the run did at it",
-      "required": ["ref", "label", "description", "at_source", "snapshot_id", "bundle_id", "role", "verdict", "findings", "provision", "step", "wait", "verify", "new_findings", "took_s"],
+      "required": ["ref", "label", "description", "at_source", "snapshot_id", "bundle_id", "role", "verdict", "findings", "provision", "step", "wait", "verify", "loss", "new_findings", "took_s"],
       "additionalProperties": false,
       "properties": {
         "ref": { "$ref": "#/$defs/ref" },
@@ -139,18 +139,23 @@
           "oneOf": [
             {
               "type": "object",
-              "required": ["host_name", "port_enabled", "neighbor", "record"],
+              "required": ["host_name", "port_enabled", "neighbor", "burst", "record"],
               "additionalProperties": false,
               "properties": {
                 "host_name": { "$ref": "#/$defs/count" },
                 "port_enabled": { "$ref": "#/$defs/count" },
                 "neighbor": { "$ref": "#/$defs/count" },
+                "burst": { "$ref": "#/$defs/count", "description": "016: the bursts of the wait's last read" },
                 "record": { "$ref": "#/$defs/count" }
               }
             },
             { "type": "null" }
           ],
           "description": "the counts of the wait's last read; null when no read was made"
+        },
+        "loss": {
+          "oneOf": [{ "$ref": "https://github.com/happypathnetworking/fylgja/schemas/step.schema.json#/$defs/loss" }, { "type": "null" }],
+          "description": "016: what the step child's probe flows lost, its document's block copied; null on the baseline, a refused stage, one not reached, and a step that ended before its flows were read. A figure is the container's"
         },
         "new_findings": { "type": "array", "items": { "$ref": "#/$defs/finding_ref" }, "description": "the wait's failing assertions the baseline's wait did not have, sorted by rule then object; [] otherwise" },
         "took_s": { "type": "number", "minimum": 0, "description": "the stage's whole time on the run's clock: its child and its wait; 0 for a stage not reached or refused" }

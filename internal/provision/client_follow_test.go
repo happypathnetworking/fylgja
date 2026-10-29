@@ -107,15 +107,17 @@ func TestEveryActivityHasAFindingStep(t *testing.T) {
 		// M11's.
 		findings.StepReconcile,
 		// M12's.
-		findings.StepObserve}
+		findings.StepObserve,
+		// 016's, StartFlows' and ReadFlows'.
+		findings.StepFlows}
 	var names []string
 	for name := range (&lab.Activities{}).Names() {
 		names = append(names, name)
 	}
-	if len(names) != 15 {
-		t.Fatalf("%d activities registered, want the lab's fifteen: M2's eight, M4's InspectTwin, M5's push, "+
-			"M11's four (PlanReconcile, StageStep, ReconcileLab, RecordStep) and M12's VerifyTwin",
-			len(names))
+	if len(names) != 17 {
+		t.Fatalf("%d activities registered, want the lab's seventeen: M2's eight, M4's InspectTwin, M5's push, "+
+			"M11's four (PlanReconcile, StageStep, ReconcileLab, RecordStep), M12's VerifyTwin and 016's "+
+			"StartFlows and ReadFlows", len(names))
 	}
 	for _, name := range names {
 		if step := findingStep(name); !slices.Contains(schemaSteps, step) {

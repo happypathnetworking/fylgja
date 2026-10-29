@@ -35,16 +35,16 @@ func TestWrappedFixturesCompileToTheGoldens(t *testing.T) {
 		name, id string
 		reg      *psp.Registry
 	}{
-		{"three-node", "43d917158d2b601cd2cdeb6aafd56d367224d757c4ce3f67fdf3c206e2c5a386", shipped},
-		{"lossy", "4213b3cfd532f896d476c67c21f54e5375effdbec18f4376360471fd03f50b03", lossy},
-		{"mixed", "ecb665f58ffc9882024a06e29b01e681ee38ce40f55b76994d470fe3272a2aec", shipped},
+		{"three-node", "c70589c35899378b8343abd1ebc12ab476e2f08a33a14449eb585d21cefd9672", shipped},
+		{"lossy", "10099944520a548145d2d8dc45eb9a2ddec950a0ec2c9be48c572bb66fc48c31", lossy},
+		{"mixed", "44ac283f65333103a5f4c6557e648c7c0bccd9e023f1babf55b1541577f33834", shipped},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			s, err := snapshot.Load(repoPath("testdata", "snapshot", c.name+".json"))
 			if err != nil {
 				t.Fatal(err)
 			}
-			files, id, list := Compile(s.CTM, c.reg)
+			files, id, list := Compile(s.CTM, nil, c.reg, nil)
 			if list.Rejected() {
 				t.Fatalf("the wrapped %s was rejected: %v", c.name, list)
 			}
@@ -73,7 +73,7 @@ func TestWrappedFixturesCompileToTheGoldens(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			bareFiles, bareID, list := Compile(bare, c.reg)
+			bareFiles, bareID, list := Compile(bare, nil, c.reg, nil)
 			if list.Rejected() {
 				t.Fatalf("the bare %s was rejected: %v", c.name, list)
 			}

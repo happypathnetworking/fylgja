@@ -118,7 +118,23 @@ func (a *Activities) PlanTeardown(ctx context.Context) (wire.PlanTeardownResult,
 	if err == nil {
 		plan := wire.PlanTeardownResult{Basis: wire.BasisManifest}
 		for _, n := range m.Nodes {
-			p, ok := a.Registry.LookupID(n.PSP.ID)
+			// A host is budgeted from its probe package's destroy_timeout_s (016).
+			if n.Probe != nil {
+				pkg, ok := lookupProbePackage(a.Probes, n.Probe.Package.ID)
+				budget := wire.DefaultDestroyTimeoutS
+				if ok {
+					budget = pkg.Image.DestroyTimeoutS
+				} else {
+					plan.Uncovered = append(plan.Uncovered, n.Name)
+				}
+				plan.DestroyTimeoutS = max(plan.DestroyTimeoutS, budget)
+				continue
+			}
+			var p *psp.PSP
+			ok := false
+			if n.PSP != nil {
+				p, ok = a.Registry.LookupID(n.PSP.ID)
+			}
 			budgetTeardown(&plan, n.Name, p, ok)
 		}
 		logTeardownPlan(log, plan)

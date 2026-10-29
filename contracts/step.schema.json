@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/step.schema.json",
   "title": "fylgja twin step — the step block (M11, M12)",
-  "description": "The `step` block of the findings document fylgja twin step emits (operation twin.step), on the dry run and on the run. The two sides, M10's step between their bundles (stages.schema.json $defs/step since 014), containerlab's dry-run plan with each touched node's package declaration beside what containerlab reported, the push plan with each node's reasons, and, once a run closed, the step run, its outcome, the phase that failed, each push's outcome, the timings and when it started and ended. No device diff, artifact or bootstrap content, token or login. M12: wait, the step's waiting form after the record: budget_s on the dry run and before the run closed; outcome, reads, after_s and failing once the run closed and the wait ran; absent when the run was cancelled before the wait began. 014: each side names its stage (twin.json 6's shape) where it named a waypoint. 015: wait_counts, the wait's last read counted by kind as verify.schema.json counts them, optional beside wait. 018: each side names its snapshot_id beside its bundle_id, optional: absent on a from side whose record names none (a record of 8). 019: a side names no stage when the step's target was a snapshot (twin step --snapshot), or when the twin was built from one and has not stepped to a stage.",
+  "description": "The `step` block of the findings document fylgja twin step emits (operation twin.step), on the dry run and on the run. The two sides, M10's step between their bundles (stages.schema.json $defs/step since 014), containerlab's dry-run plan with each touched node's package declaration beside what containerlab reported, the push plan with each node's reasons, and, once a run closed, the step run, its outcome, the phase that failed, each push's outcome, the timings and when it started and ended. No device diff, artifact or bootstrap content, token or login. M12: wait, the step's waiting form after the record: budget_s on the dry run and before the run closed; outcome, reads, after_s and failing once the run closed and the wait ran; absent when the run was cancelled before the wait began. 014: each side names its stage (twin.json 6's shape) where it named a waypoint. 015: wait_counts, the wait's last read counted by kind as verify.schema.json counts them, optional beside wait. 018: each side names its snapshot_id beside its bundle_id, optional: absent on a from side whose record names none (a record of 8). 019: a side names no stage when the step's target was a snapshot (twin step --snapshot), or when the twin was built from one and has not stepped to a stage. 016: loss, what the step's probe flows lost ($defs/loss, as twin.json 11's step.loss keeps it), null on the dry run, before the run closed and when the run ended before its flows were read; the phase gains flows, a failure or cancellation of the activity that starts or reads them. A loss figure is the container's: the hosts forward in software and keep their own timing, so it is never a hardware forwarder's, and nothing asserts on it.",
   "$defs": {
     "stage": {
       "type": ["object", "null"],
@@ -110,6 +110,36 @@
         "whole_s": { "type": "number", "minimum": 0 }
       }
     },
+    "loss": {
+      "type": "object",
+      "description": "016: what the step's flows lost, as twin.json 11's step.loss keeps it: the basis, one entry per probe both bundles carry, in name order, and the probes the target adds or drops, which no flow measured across the step. A figure is the container's",
+      "required": ["basis", "probes", "added", "dropped"],
+      "additionalProperties": false,
+      "properties": {
+        "basis": { "const": "container", "description": "the hosts forward in software and keep their own timing: never a hardware forwarder's figure" },
+        "probes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["probe", "from", "to", "outcome", "sent", "lost", "longest_gap_s"],
+            "additionalProperties": false,
+            "properties": {
+              "probe": { "type": "string", "minLength": 1 },
+              "from": { "type": "string", "description": "the container the flow ran in" },
+              "to": { "type": "string", "description": "the far host's container" },
+              "outcome": { "enum": ["measured", "not_started", "not_read", "interrupted"], "description": "measured: read after the wait. not_started: its start failed (flow.start.failed). not_read: its read failed (flow.read.failed). interrupted: read on a step that failed or was cancelled after its stage" },
+              "sent": { "type": "integer", "minimum": 0 },
+              "lost": { "type": "integer", "minimum": 0 },
+              "longest_gap_s": { "type": "number", "minimum": 0, "description": "the longest run of unanswered requests, in seconds" },
+              "rule": { "type": "string", "description": "the finding's identifier for a flow not started or not read" },
+              "message": { "type": "string" }
+            }
+          }
+        },
+        "added": { "type": "array", "items": { "type": "string" }, "description": "the probes the target adds: created by the reconcile, with no transient figure" },
+        "dropped": { "type": "array", "items": { "type": "string" }, "description": "the probes the target drops: torn down by the reconcile, with no flow started" }
+      }
+    },
     "step": {
       "type": "object",
       "required": ["from", "to", "diff", "reconcile", "push_plan", "allow_restart"],
@@ -128,7 +158,7 @@
           "properties": { "workflow_id": { "const": "fylgja-step" }, "run_id": { "type": "string" } }
         },
         "outcome": { "enum": ["stepped", "unchanged", "diverged"] },
-        "phase": { "enum": ["reconcile", "readiness", "push", "record"] },
+        "phase": { "enum": ["reconcile", "readiness", "push", "record", "flows"] },
         "state": { "enum": ["ready", "diverged"] },
         "pushed": { "type": "array", "items": { "$ref": "#/$defs/pushed_entry" } },
         "ready_after": { "type": "array", "items": { "type": "object", "required": ["node", "ready_after_s"], "additionalProperties": false, "properties": { "node": { "type": "string" }, "ready_after_s": { "type": "number", "minimum": 0 } } } },
@@ -150,16 +180,18 @@
         },
         "wait_counts": {
           "type": "object",
-          "description": "015: the wait's last read counted by kind, as twin verify counts its block; optional, absent when the wait made no read or has not ended",
-          "required": ["host_name", "port_enabled", "neighbor", "record"],
+          "description": "015: the wait's last read counted by kind, as twin verify counts its block; optional, absent when the wait made no read or has not ended. 016: burst, the bursts the wait's last read ran",
+          "required": ["host_name", "port_enabled", "neighbor", "burst", "record"],
           "additionalProperties": false,
           "properties": {
             "host_name": { "$ref": "#/$defs/count" },
             "port_enabled": { "$ref": "#/$defs/count" },
             "neighbor": { "$ref": "#/$defs/count" },
+            "burst": { "$ref": "#/$defs/count" },
             "record": { "$ref": "#/$defs/count" }
           }
-        }
+        },
+        "loss": { "oneOf": [{ "$ref": "#/$defs/loss" }, { "type": "null" }], "description": "016: what the step's flows lost, or null: on the dry run, before the run closed, and when the run ended before its flows were read" }
       }
     }
   }

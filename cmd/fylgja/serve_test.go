@@ -21,6 +21,7 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/api"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
@@ -56,7 +57,8 @@ type heldImages map[string]bool
 func (h heldImages) Present(_ context.Context, ref string) (bool, error) { return h[ref], nil }
 
 // serveTestOptions are serve's options listening on listen alone, over two buffers, the
-// environment env (a missing name is unset), and a host that holds the imported image.
+// environment env (a missing name is unset), and a host that holds the imported image and
+// the probe package's (016).
 func serveTestOptions(listen, pspDir string, env map[string]string) (*serveOptions, *lockedBuffer, *lockedBuffer) {
 	stdout, stderr := &lockedBuffer{}, &lockedBuffer{}
 	return &serveOptions{
@@ -68,7 +70,7 @@ func serveTestOptions(listen, pspDir string, env map[string]string) (*serveOptio
 			v, ok := env[name]
 			return v, ok
 		},
-		images: heldImages{"ceos:4.32.0.2F": true},
+		images: heldImages{"ceos:4.32.0.2F": true, "alpine:3.24.2": true},
 	}, stdout, stderr
 }
 
@@ -146,6 +148,42 @@ func invalidPackageDir(t *testing.T) (dir, text string) {
 	}
 	if !strings.Contains(b.String(), findings.RulePSPVersionUnknown) {
 		t.Fatalf("the package's findings do not name %s:\n%s", findings.RulePSPVersionUnknown, b.String())
+	}
+	return dir, b.String()
+}
+
+// invalidProbePackageDir is an override directory whose probes/ holds the shipped ping
+// package at a probe_version this build does not read, and the findings text the probe
+// registry's load gives for it, as both roles print it (016).
+func invalidProbePackageDir(t *testing.T) (dir, text string) {
+	t.Helper()
+	src, err := os.ReadFile(repoPath("probes", "ping.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	const declared = `probe_version: "0.1"`
+	if !strings.Contains(string(src), declared) {
+		t.Fatalf("probes/ping.yaml no longer declares %s; this case moves that line alone", declared)
+	}
+	dir = t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, probe.Subdirectory), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	moved := strings.Replace(string(src), declared, `probe_version: "0.2"`, 1)
+	if err := os.WriteFile(filepath.Join(dir, probe.Subdirectory, "ping.yaml"), []byte(moved), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = probe.Load(dir)
+	var invalid *probe.InvalidError
+	if !errors.As(err, &invalid) {
+		t.Fatalf("probe.Load(%s) = %v, want the package refused", dir, err)
+	}
+	var b bytes.Buffer
+	if err := findings.NewDocument(findings.OpPSPValidate, nil, invalid.Findings).WriteText(&b); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(b.String(), findings.RuleProbePackageVersionUnknown) {
+		t.Fatalf("the package's findings do not name %s:\n%s", findings.RuleProbePackageVersionUnknown, b.String())
 	}
 	return dir, b.String()
 }
@@ -274,6 +312,14 @@ func TestServeRefusesToStartInOrder(t *testing.T) {
 			dir, text := sharedDir(t, "identity-shared.yaml", findings.RulePSPIdentityDuplicate)
 			o, out, errb := serveTestOptions("", "", map[string]string{api.EnvToken: serveToken, lab.EnvPSPDir: dir})
 			return o, out, errb, text + "fylgja serve: refusing to serve with an invalid support package\n"
+		}},
+		// A probe package its validation refuses, from the override directory's probes/ (016),
+		// is refused as a support package is, after the support packages load.
+		{name: "an invalid override probe package", setup: func(t *testing.T) (*serveOptions, *lockedBuffer, *lockedBuffer, string) {
+			t.Setenv(lab.EnvStateRoot, t.TempDir())
+			dir, text := invalidProbePackageDir(t)
+			o, out, errb := serveTestOptions(holdAddress(t), dir, token)
+			return o, out, errb, text + "fylgja serve: refusing to serve with an invalid probe package\n"
 		}},
 		// An override directory that cannot be read is refused where an invalid package is,
 		// in psp.Load's words (contracts/cli.md).
@@ -682,9 +728,9 @@ func TestServeReportsBeforeTakingARequest(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			opts, stdout, stderr, root, temporal, recorders := serveEnvironment(t, c.listen)
-			lines := 9
+			lines := 10
 			if !c.loopback {
-				lines = 10
+				lines = 11
 			}
 			s := startServe(t, opts, stdout, stderr, lines)
 
@@ -707,6 +753,8 @@ func TestServeReportsBeforeTakingARequest(t *testing.T) {
 				"fylgja serve: probe login nokia_srlinux: FYLGJA_SRLINUX_USERNAME set, FYLGJA_SRLINUX_PASSWORD unset",
 				"fylgja serve: nokia_srlinux (embedded): image ghcr.io/nokia/srlinux:24.7.1, "+
 					"push json_rpc replace over https:443, login FYLGJA_SRLINUX_USERNAME/FYLGJA_SRLINUX_PASSWORD (probe and push)",
+				// The probe package beside the platform packages (016, R-08).
+				"fylgja serve: ping (embedded): image alpine:3.24.2 (public_registry, present on this host), flow ping every 0.2s, burst 5",
 			)
 			if got := stdout.String(); got != strings.Join(want, "\n")+"\n" {
 				t.Errorf("report:\n%s\nwant:\n%s", got, strings.Join(want, "\n"))

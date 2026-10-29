@@ -54,7 +54,7 @@ func rulesOf(list findings.List) map[string]int {
 
 func TestValidFixturePasses(t *testing.T) {
 	c, reg := load(t, "three-node.json")
-	list := Validate(c, reg)
+	list := Validate(c, nil, reg, nil)
 	if list.Rejected() {
 		t.Errorf("the reference fixture must validate cleanly, got %v", list)
 	}
@@ -67,7 +67,7 @@ func TestUnpinnedFixturePasses(t *testing.T) {
 	if c.Envelope.At != "" {
 		t.Fatalf("no-mgmt.json is meant to be an unpinned fixture, but carries at=%q", c.Envelope.At)
 	}
-	if list := Validate(c, reg); list.Rejected() {
+	if list := Validate(c, nil, reg, nil); list.Rejected() {
 		t.Errorf("an unpinned CTM must validate; got %v", list)
 	}
 }
@@ -87,7 +87,7 @@ func TestDefectsAreNamed(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.fixture, func(t *testing.T) {
 			c, reg := load(t, tc.fixture)
-			list := Validate(c, reg)
+			list := Validate(c, nil, reg, nil)
 			if !list.Rejected() {
 				t.Fatalf("expected a rejection, got %v", list)
 			}
@@ -113,7 +113,7 @@ func TestDefectsAreNamed(t *testing.T) {
 // under data.required.missing (LinkTerminations): seven findings, one per fault.
 func TestAllDefectsReportedInOnePass(t *testing.T) {
 	c, reg := load(t, "defects/five.json")
-	list := Validate(c, reg)
+	list := Validate(c, nil, reg, nil)
 
 	type named struct{ rule, object string }
 	want := []named{
@@ -186,7 +186,7 @@ func TestLinkFieldsAndLinksAgree(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c, reg := load(t, "three-node.json")
 			tc.edit(c)
-			list := Validate(c, reg)
+			list := Validate(c, nil, reg, nil)
 			if len(list) != len(tc.want) {
 				t.Fatalf("got %d findings, want %d:\n%v", len(list), len(tc.want), list)
 			}
@@ -210,7 +210,7 @@ func TestOmissionsDoNotReject(t *testing.T) {
 	for _, name := range []string{"mgmt-link.json", "lossy.json", "two-mgmt.json"} {
 		t.Run(name, func(t *testing.T) {
 			c, reg := loadWith(t, name, lossy)
-			if list := Validate(c, reg); list.Rejected() {
+			if list := Validate(c, nil, reg, nil); list.Rejected() {
 				t.Errorf("%s should validate: omissions are recorded, not fatal; got %v", name, list)
 			}
 		})
@@ -223,7 +223,7 @@ func TestOmissionsDoNotReject(t *testing.T) {
 // it names no package of the registry.
 func TestRequiredAttributeMissingIsNamed(t *testing.T) {
 	c, reg := load(t, "defects/required-missing.json")
-	list := Validate(c, reg)
+	list := Validate(c, nil, reg, nil)
 	if !list.Rejected() {
 		t.Fatalf("expected a rejection, got %v", list)
 	}
@@ -254,7 +254,7 @@ func TestUnnamedInterfaceDrawsOneFinding(t *testing.T) {
 	n1 := c.Device("n1")
 	n1.Interfaces = append(n1.Interfaces, ctm.Interface{})
 
-	list := Validate(c, reg)
+	list := Validate(c, nil, reg, nil)
 	want := findings.List{{Severity: findings.Rejection, Rule: findings.RuleRequiredMissing,
 		Object: "n1", Message: "an interface has no name"}}
 	if len(list) != len(want) || list[0].Rule != want[0].Rule || list[0].Object != want[0].Object ||
@@ -272,7 +272,7 @@ func TestUnflaggedManagementNameIsRefusedByTheRulesTried(t *testing.T) {
 	c.Device("c1").Interface("Management1").MgmtOnly = false
 
 	var got []findings.Finding
-	for _, f := range Validate(c, reg) {
+	for _, f := range Validate(c, nil, reg, nil) {
 		if f.Object == "c1:Management1" {
 			got = append(got, f)
 		}
@@ -317,7 +317,7 @@ func TestEnvelopeRequiredFieldsAreNamed(t *testing.T) {
 			tc.blank(&env)
 			c, _ := load(t, "three-node.json")
 			c.Envelope = env
-			list := Validate(c, registry(t))
+			list := Validate(c, nil, registry(t), nil)
 			var found bool
 			for _, f := range list {
 				if f.Rule == findings.RuleRequiredMissing && f.Object == tc.field {
@@ -336,7 +336,7 @@ func TestEnvelopeRequiredFieldsAreNamed(t *testing.T) {
 func TestEnvelopeDoesNotRequireAt(t *testing.T) {
 	c, reg := load(t, "three-node.json")
 	c.Envelope.At = ""
-	for _, f := range Validate(c, reg) {
+	for _, f := range Validate(c, nil, reg, nil) {
 		if f.Rule == findings.RuleRequiredMissing && strings.Contains(f.Object, "at") {
 			t.Errorf("an absent `at` must not be a finding; got %+v", f)
 		}
@@ -364,7 +364,7 @@ func TestEmptyCTMIsRejectedNamingTheReference(t *testing.T) {
 				Scope:      "tag:fylgja",
 				Mapping:    ctm.Mapping{Reader: ctm.ReaderInfrahubDCIM, Model: ctm.ModelSchemaLibrary, Version: ctm.ModelVersion},
 			}}
-			list := Validate(c, registry(t))
+			list := Validate(c, nil, registry(t), nil)
 			if !list.Rejected() {
 				t.Fatalf("an empty CTM must be rejected; got %v", list)
 			}
@@ -394,7 +394,7 @@ func TestEmptyCTMIsRejectedNamingTheReference(t *testing.T) {
 // legitimate intent — not defects.
 func TestSparseDevicesValidate(t *testing.T) {
 	c, reg := load(t, "no-mgmt.json")
-	if list := Validate(c, reg); list.Rejected() {
+	if list := Validate(c, nil, reg, nil); list.Rejected() {
 		t.Errorf("a device without an out-of-band port is valid intent; got %v", list)
 	}
 }
@@ -479,11 +479,11 @@ func TestDisagreeingForwardingIsNoLongerRefused(t *testing.T) {
 		},
 	}
 
-	if list := Validate(c, reg); list.Rejected() {
+	if list := Validate(c, nil, reg, nil); list.Rejected() {
 		t.Errorf("validation refused a twin whose platforms forward differently: %v", list)
 	}
 
-	files, list := compiler.Compile(c, reg)
+	files, list := compiler.Compile(c, nil, reg, nil)
 	if list.Rejected() {
 		t.Fatalf("the compiler refused it: %v", list)
 	}
@@ -508,7 +508,7 @@ func TestPlatformUnsupportedNamesThePackageAndTheRegistry(t *testing.T) {
 		c, reg := load(t, "three-node.json")
 		c.Device("n2").Platform.Package = pkg
 		var got []string
-		for _, f := range Validate(c, reg) {
+		for _, f := range Validate(c, nil, reg, nil) {
 			got = append(got, f.Rule+" "+f.Object+": "+f.Message)
 		}
 		if w := findings.RulePlatformUnsupported + " n2: " + want; len(got) != 1 || got[0] != w {

@@ -1,0 +1,107 @@
+---
+# yaml-language-server: $schema=https://schema.infrahub.app/infrahub/schema/latest.json
+#
+# Fylgja probe kind (016, D-064): a probe declared in Infrahub, the second source of a
+# declaration after a --probes file. Beside the schema library's DCIM, not part of it
+# (D-057); loaded on the default branch (D-028), where Fylgja reads it, by the operator
+# and by fylgja-fixture -prepare-main when absent; needed only when a request reads probes
+# from the kind.
+#
+#   - One object is one probe: a read yields the declaration's element by renaming alone,
+#     {name, format, endpoints: [{a_*}, {b_*}]}, so the endpoints are flat attributes and
+#     one `infrahubctl object create` writes a probe (R-07). a and b are the names the
+#     manifest gives a link's ends.
+#   - The name's regex mirrors probe.NamePattern and contracts/probes.schema.json's pattern;
+#     the address regexes mirror the contract's. Text, not IPHost: IPHost normalises a value
+#     to a prefixed form, so a gateway read back would differ from the file's.
+#   - No relationship to DcimDevice: the device may exist on one branch alone, and the
+#     declaration names devices by name. The placement's rules (a known device, an uncabled
+#     port) are the compiler's, against the snapshot's CTM.
+#   - `branch: agnostic`, so a probe lands in no branch's diff and is read from the default
+#     branch, unpinned.
+version: "1.0"
+nodes:
+  - name: Probe
+    namespace: Fylgja
+    description: "A probe: two synthesized hosts on two uncabled ports of the intent, pinging each other through the twin."
+    label: Probe
+    icon: mdi:radar
+    branch: agnostic
+    include_in_menu: true
+    generate_profile: false
+    human_friendly_id: [name__value]
+    display_label: "{{ name__value }}"
+    order_by: [name__value]
+    uniqueness_constraints:
+      - [name__value]
+    attributes:
+      - name: name
+        kind: Text
+        optional: false
+        parameters:
+          regex: "^[a-z0-9][a-z0-9-]{0,23}$"
+        description: "The probe's name: lowercase letters, digits and '-', at most 24; its hosts are <name>-a and <name>-b."
+        order_weight: 1000
+      - name: format
+        kind: Dropdown
+        default_value: ping
+        choices:
+          - name: ping
+            label: ping
+            description: "Echoes between the two hosts: a step's transient loss and verify's burst."
+        optional: false
+        description: "The probe package that runs the hosts (probes/<format>.yaml)."
+        order_weight: 1100
+      - name: a_device
+        kind: Text
+        optional: false
+        description: "Endpoint a's device, by the intent's name."
+        order_weight: 1200
+      - name: a_interface
+        kind: Text
+        optional: false
+        description: "Endpoint a's interface on it: uncabled and not mgmt_only."
+        order_weight: 1210
+      - name: a_address
+        kind: Text
+        optional: false
+        parameters:
+          regex: '^(((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/([0-9]|[12][0-9]|3[0-2])|[0-9A-Fa-f]{0,4}(:[0-9A-Fa-f]{0,4}){2,7}/([0-9]|[1-9][0-9]|1[01][0-9]|12[0-8]))$'
+        description: "Endpoint a's host address with its prefix length, as 10.1.10.2/24."
+        order_weight: 1220
+      - name: a_gateway
+        kind: Text
+        optional: false
+        parameters:
+          regex: '^(((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])|[0-9A-Fa-f]{0,4}(:[0-9A-Fa-f]{0,4}){2,7})$'
+        description: "Endpoint a's gateway, an address with no prefix length, within its prefix."
+        order_weight: 1230
+      - name: b_device
+        kind: Text
+        optional: false
+        description: "Endpoint b's device, by the intent's name."
+        order_weight: 1500
+      - name: b_interface
+        kind: Text
+        optional: false
+        description: "Endpoint b's interface on it: uncabled and not mgmt_only."
+        order_weight: 1510
+      - name: b_address
+        kind: Text
+        optional: false
+        parameters:
+          regex: '^(((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])/([0-9]|[12][0-9]|3[0-2])|[0-9A-Fa-f]{0,4}(:[0-9A-Fa-f]{0,4}){2,7}/([0-9]|[1-9][0-9]|1[01][0-9]|12[0-8]))$'
+        description: "Endpoint b's host address with its prefix length, as 10.1.10.2/24."
+        order_weight: 1520
+      - name: b_gateway
+        kind: Text
+        optional: false
+        parameters:
+          regex: '^(((25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])\.){3}(25[0-5]|2[0-4][0-9]|1[0-9]{2}|[1-9]?[0-9])|[0-9A-Fa-f]{0,4}(:[0-9A-Fa-f]{0,4}){2,7})$'
+        description: "Endpoint b's gateway, an address with no prefix length, within its prefix."
+        order_weight: 1530
+      - name: description
+        kind: Text
+        optional: true
+        description: "What this probe watches, in a sentence. Fylgja does not read it."
+        order_weight: 1600

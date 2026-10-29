@@ -1,9 +1,18 @@
 ! e1: production configuration rendered by Infrahub (fylgja-artifacts)
 ! platform Arista EOS; FYLGJA-MARKER-mixed-fixture
 hostname e1
+ip routing
 interface Ethernet1
 description to s1 ethernet-1/1
 no shutdown
+interface Ethernet10
+no shutdown
+no switchport
+ip address 10.2.10.1/24
+interface Ethernet11
+no shutdown
+no switchport
+ip address 10.2.11.1/24
 interface Ethernet2/1
 description to e2 Ethernet1
 no shutdown

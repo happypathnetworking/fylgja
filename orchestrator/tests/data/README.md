@@ -37,3 +37,16 @@ BranchPoint and IntentEvents answers, and `go-stamps-events.json` what the Go re
 `Stamps` and `IntentEvents` returned for the same branch at the same moment.
 `test_recorded.py` replays them: the read files `0940db93…`, and the stamps and events are
 Go's. They hold node ids and timestamps, no credential and no address.
+
+`graphql/stages/` holds the stages' answers (020's T018). `golden.json` is the golden
+listing's proposed change (`tests/golden/README.md`) as Infrahub answers it, written from
+the golden's values: its id, its three marks' ids, ats and descriptions, its branch's
+branched_from, the branch's stamps with n1's artifact the latest write one microsecond
+before the head, main holding no device, and the default branch's schema cut from this
+host's `main` to the stage kind and `CoreProposedChange`; `test_stages.py` lists it through
+the real reader and stamper and holds the block to `stages.json` and
+`stages-with-twin.json`. `live.json` is a live proposed change recorded read-only by the
+adapter on 2026-10-29, with the Go server's `stage list --json` and each stage's resolution
+in its `stage plan --json` of the same moment; each request is kept once, and every branch
+schema answer is `schema/schema-26336e9.json` under the hash the branch answered, as
+`test_recorded.py` serves it. Node ids and timestamps, no credential and no address.

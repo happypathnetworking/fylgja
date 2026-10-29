@@ -1,0 +1,532 @@
+{
+  "about": "The golden listing's answers (tests/golden/README.md): proposed change 18e3127c-025b-f488-33be-c5158cf576c3 on fylgja-test-golden-41263, its three marks as T003 wrote them, its branch's branched_from, the branch's stamps with n1's artifact the latest write, one microsecond before the head, and main holding no device. Written from the golden's values, the shapes Infrahub 1.11.2 answers (tests/data/graphql/fylgja-fixture/). The default branch's schema is this host's main's (8a4f3bee\u2026) as GET /api/schema answered it on 2026-10-29, cut to the two kinds the reader checks, each attribute's name and kind and each relationship's name, peer and cardinality.",
+  "branch": "fylgja-test-golden-41263",
+  "default": {
+    "ProposedChanges": {
+      "data": {
+        "CoreProposedChange": {
+          "count": 1,
+          "edges": [
+            {
+              "node": {
+                "id": "18e3127c-025b-f488-33be-c5158cf576c3",
+                "name": {
+                  "value": "fylgja-test-golden-41263"
+                },
+                "source_branch": {
+                  "value": "fylgja-test-golden-41263"
+                },
+                "destination_branch": {
+                  "value": "main"
+                },
+                "state": {
+                  "value": "open"
+                },
+                "is_draft": {
+                  "value": true
+                },
+                "fylgja_stages": {
+                  "edges": [
+                    {
+                      "node": {
+                        "id": "18e3129a-93a6-6c68-33be-c5136cc0a698",
+                        "label": {
+                          "value": "bad-port",
+                          "updated_at": "2026-10-29T18:12:11.745240+00:00"
+                        },
+                        "as_of": {
+                          "value": null,
+                          "updated_at": "2026-10-29T18:12:11.745240+00:00"
+                        },
+                        "description": {
+                          "value": "a port SR Linux refuses"
+                        }
+                      }
+                    },
+                    {
+                      "node": {
+                        "id": "18e31292-9dc4-e4dd-33b5-c51a473f07e6",
+                        "label": {
+                          "value": "seeded",
+                          "updated_at": "2026-10-29T18:11:38.471611+00:00"
+                        },
+                        "as_of": {
+                          "value": null,
+                          "updated_at": "2026-10-29T18:11:38.471611+00:00"
+                        },
+                        "description": {
+                          "value": "seeded"
+                        }
+                      }
+                    },
+                    {
+                      "node": {
+                        "id": "18e31295-9ca5-f8fd-33b6-c5161e55b543",
+                        "label": {
+                          "value": "third-link",
+                          "updated_at": "2026-10-29T18:11:50.425111+00:00"
+                        },
+                        "as_of": {
+                          "value": null,
+                          "updated_at": "2026-10-29T18:11:50.425111+00:00"
+                        },
+                        "description": {
+                          "value": "third link"
+                        }
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "OrphanStages": {
+      "data": {
+        "FylgjaStage": {
+          "count": 0,
+          "edges": []
+        }
+      }
+    },
+    "BranchPoint": {
+      "data": {
+        "Branch": [
+          {
+            "name": "fylgja-test-golden-41263",
+            "branched_from": "2026-10-29T18:09:04.039194Z",
+            "created_at": "2026-10-29T18:09:04.038901Z"
+          }
+        ]
+      }
+    },
+    "IntentEvents": {
+      "data": {
+        "InfrahubEvent": {
+          "count": 0,
+          "edges": []
+        }
+      }
+    }
+  },
+  "branches": {
+    "fylgja-test-golden-41263": {
+      "IntentStamps": {
+        "data": {
+          "DcimDevice": {
+            "count": 3,
+            "edges": [
+              {
+                "node_metadata": {
+                  "updated_at": "2026-10-29T18:12:01.204511+00:00",
+                  "updated_by": {
+                    "id": "account-admin"
+                  },
+                  "created_at": "2026-10-29T18:09:10.000000+00:00"
+                },
+                "node": {
+                  "id": "dev-n1",
+                  "name": {
+                    "value": "n1"
+                  },
+                  "platform": {
+                    "node_metadata": {
+                      "updated_at": "2026-10-29T18:09:10.000000+00:00",
+                      "updated_by": {
+                        "id": "account-admin"
+                      },
+                      "created_at": "2026-10-29T18:09:10.000000+00:00"
+                    },
+                    "node": {
+                      "id": "platform-srlinux",
+                      "name": {
+                        "value": "SR Linux"
+                      },
+                      "manufacturer": {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T18:09:10.000000+00:00",
+                          "updated_by": {
+                            "id": "account-admin"
+                          },
+                          "created_at": "2026-10-29T18:09:10.000000+00:00"
+                        },
+                        "node": {
+                          "id": "manufacturer-nokia",
+                          "name": {
+                            "value": "Nokia"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T18:12:01.204511+00:00",
+                          "updated_by": {
+                            "id": "account-admin"
+                          },
+                          "created_at": "2026-10-29T18:09:10.000000+00:00"
+                        },
+                        "node": {
+                          "id": "if-n1-e1"
+                        }
+                      }
+                    ]
+                  },
+                  "artifacts": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "device-config"
+                          },
+                          "checksum": {
+                            "value": "md5-n1",
+                            "updated_at": "2026-10-29T18:12:10.636974+00:00"
+                          },
+                          "definition": {
+                            "node": {
+                              "transformation": {
+                                "node": {
+                                  "query": {
+                                    "node": null
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node_metadata": {
+                  "updated_at": "2026-10-29T18:09:12.000000+00:00",
+                  "updated_by": {
+                    "id": "account-admin"
+                  },
+                  "created_at": "2026-10-29T18:09:10.000000+00:00"
+                },
+                "node": {
+                  "id": "dev-n2",
+                  "name": {
+                    "value": "n2"
+                  },
+                  "platform": {
+                    "node_metadata": {
+                      "updated_at": "2026-10-29T18:09:10.000000+00:00",
+                      "updated_by": {
+                        "id": "account-admin"
+                      },
+                      "created_at": "2026-10-29T18:09:10.000000+00:00"
+                    },
+                    "node": {
+                      "id": "platform-srlinux",
+                      "name": {
+                        "value": "SR Linux"
+                      },
+                      "manufacturer": {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T18:09:10.000000+00:00",
+                          "updated_by": {
+                            "id": "account-admin"
+                          },
+                          "created_at": "2026-10-29T18:09:10.000000+00:00"
+                        },
+                        "node": {
+                          "id": "manufacturer-nokia",
+                          "name": {
+                            "value": "Nokia"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T18:09:12.000000+00:00",
+                          "updated_by": {
+                            "id": "account-admin"
+                          },
+                          "created_at": "2026-10-29T18:09:10.000000+00:00"
+                        },
+                        "node": {
+                          "id": "if-n2-e1"
+                        }
+                      }
+                    ]
+                  },
+                  "artifacts": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "device-config"
+                          },
+                          "checksum": {
+                            "value": "md5-n2",
+                            "updated_at": "2026-10-29T18:09:40.512345+00:00"
+                          },
+                          "definition": {
+                            "node": {
+                              "transformation": {
+                                "node": {
+                                  "query": {
+                                    "node": null
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "node_metadata": {
+                  "updated_at": "2026-10-29T18:11:42.118200+00:00",
+                  "updated_by": {
+                    "id": "account-admin"
+                  },
+                  "created_at": "2026-10-29T18:09:10.000000+00:00"
+                },
+                "node": {
+                  "id": "dev-n3",
+                  "name": {
+                    "value": "n3"
+                  },
+                  "platform": {
+                    "node_metadata": {
+                      "updated_at": "2026-10-29T18:09:10.000000+00:00",
+                      "updated_by": {
+                        "id": "account-admin"
+                      },
+                      "created_at": "2026-10-29T18:09:10.000000+00:00"
+                    },
+                    "node": {
+                      "id": "platform-srlinux",
+                      "name": {
+                        "value": "SR Linux"
+                      },
+                      "manufacturer": {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T18:09:10.000000+00:00",
+                          "updated_by": {
+                            "id": "account-admin"
+                          },
+                          "created_at": "2026-10-29T18:09:10.000000+00:00"
+                        },
+                        "node": {
+                          "id": "manufacturer-nokia",
+                          "name": {
+                            "value": "Nokia"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "interfaces": {
+                    "edges": [
+                      {
+                        "node_metadata": {
+                          "updated_at": "2026-10-29T18:11:42.118200+00:00",
+                          "updated_by": {
+                            "id": "account-admin"
+                          },
+                          "created_at": "2026-10-29T18:09:10.000000+00:00"
+                        },
+                        "node": {
+                          "id": "if-n3-e1"
+                        }
+                      }
+                    ]
+                  },
+                  "artifacts": {
+                    "edges": [
+                      {
+                        "node": {
+                          "name": {
+                            "value": "device-config"
+                          },
+                          "checksum": {
+                            "value": "md5-n3",
+                            "updated_at": "2026-10-29T18:11:48.902210+00:00"
+                          },
+                          "definition": {
+                            "node": {
+                              "transformation": {
+                                "node": {
+                                  "query": {
+                                    "node": null
+                                  }
+                                }
+                              }
+                            }
+                          }
+                        }
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "PortStamps": {
+        "data": {
+          "InterfacePhysical": {
+            "count": 0,
+            "edges": []
+          }
+        }
+      }
+    },
+    "main": {
+      "IntentStamps": {
+        "data": {
+          "DcimDevice": {
+            "count": 0,
+            "edges": []
+          }
+        }
+      }
+    }
+  },
+  "default_schema": {
+    "main": "8a4f3bee8a72549e97450a414da18107",
+    "nodes": [
+      {
+        "kind": "CoreProposedChange",
+        "branch": "agnostic",
+        "attributes": [
+          {
+            "name": "is_draft",
+            "kind": "Boolean"
+          },
+          {
+            "name": "destination_branch",
+            "kind": "Text"
+          },
+          {
+            "name": "state",
+            "kind": "Text"
+          },
+          {
+            "name": "name",
+            "kind": "Text"
+          },
+          {
+            "name": "description",
+            "kind": "TextArea"
+          },
+          {
+            "name": "total_comments",
+            "kind": "Number"
+          },
+          {
+            "name": "source_branch",
+            "kind": "Text"
+          }
+        ],
+        "relationships": [
+          {
+            "name": "fylgja_stages",
+            "peer": "FylgjaStage",
+            "cardinality": "many"
+          },
+          {
+            "name": "rejected_by",
+            "peer": "CoreGenericAccount",
+            "cardinality": "many"
+          },
+          {
+            "name": "comments",
+            "peer": "CoreChangeComment",
+            "cardinality": "many"
+          },
+          {
+            "name": "member_of_groups",
+            "peer": "CoreGroup",
+            "cardinality": "many"
+          },
+          {
+            "name": "approved_by",
+            "peer": "CoreGenericAccount",
+            "cardinality": "many"
+          },
+          {
+            "name": "validations",
+            "peer": "CoreValidator",
+            "cardinality": "many"
+          },
+          {
+            "name": "subscriber_of_groups",
+            "peer": "CoreGroup",
+            "cardinality": "many"
+          },
+          {
+            "name": "reviewers",
+            "peer": "CoreGenericAccount",
+            "cardinality": "many"
+          },
+          {
+            "name": "threads",
+            "peer": "CoreThread",
+            "cardinality": "many"
+          }
+        ]
+      },
+      {
+        "kind": "FylgjaStage",
+        "branch": "agnostic",
+        "attributes": [
+          {
+            "name": "as_of",
+            "kind": "DateTime"
+          },
+          {
+            "name": "label",
+            "kind": "Text"
+          },
+          {
+            "name": "description",
+            "kind": "Text"
+          }
+        ],
+        "relationships": [
+          {
+            "name": "member_of_groups",
+            "peer": "CoreGroup",
+            "cardinality": "many"
+          },
+          {
+            "name": "subscriber_of_groups",
+            "peer": "CoreGroup",
+            "cardinality": "many"
+          },
+          {
+            "name": "proposed_change",
+            "peer": "CoreProposedChange",
+            "cardinality": "one"
+          },
+          {
+            "name": "profiles",
+            "peer": "CoreProfile",
+            "cardinality": "many"
+          }
+        ]
+      }
+    ]
+  }
+}

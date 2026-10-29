@@ -37,7 +37,7 @@ func namedRecord(t *testing.T, at string, observedAt *string, nodes int) *wire.T
 	for i := 1; i <= nodes; i++ {
 		name := fmt.Sprintf("n%d", i)
 		f.Nodes = append(f.Nodes, wire.TwinNode{Name: name, Container: "clab-fylgja-" + name,
-			Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
+			Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
 			MgmtIPv4: fmt.Sprintf("172.20.20.%d", i+1), ReadyAfterS: 0.3})
 	}
 	rec, err := NewRecord(f)

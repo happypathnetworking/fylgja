@@ -253,7 +253,7 @@ func recordTwin(t *testing.T, acts *lab.Activities, at string) []byte {
 	}
 	for _, n := range []string{"n1", "n2", "n3"} {
 		f.Nodes = append(f.Nodes, wire.TwinNode{Name: n, Container: "clab-fylgja-" + n, Image: "ghcr.io/nokia/srlinux:24.7.1",
-			PSP: wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"}})
+			PSP: &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"}})
 	}
 	rec, err := lab.NewRecord(f)
 	if err != nil {

@@ -323,7 +323,7 @@ func readyResult() provision.ProvisionResult {
 	for i, name := range []string{"n1", "n2", "n3"} {
 		nodes = append(nodes, wire.TwinNode{
 			Name: name, Container: "clab-fylgja-" + name, Image: "ghcr.io/nokia/srlinux:24.7.1",
-			PSP:      wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
+			PSP:      &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
 			MgmtIPv4: "172.20.20." + string(rune('2'+i)), ReadyAfterS: 0.9,
 			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[name], Size: 707},
 			PushedInS: 0.7,

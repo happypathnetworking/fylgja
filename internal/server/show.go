@@ -138,6 +138,10 @@ type showText struct {
 	// towards is the side each run in flight is for, by run id (towardsOf), which the in
 	// flight: line names beside a rehearsal's child (015).
 	towards map[string]string
+	// hosts is each node the record names as a probe's host, by name, with its probe (016):
+	// its line names its format and its probe where a device's names its package and its
+	// artifact. The show block carries no probe, so it is the text's alone.
+	hosts map[string]*wire.TwinProbe
 }
 
 // decideShow builds the show block and its text from what the host holds and what the
@@ -153,6 +157,7 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 	// A node the record does not name — an orphan's — has no artifact.
 	pushed := map[string]*findings.ShowArtifact{}
 	pkg := map[string]*string{}
+	hosts := map[string]*wire.TwinProbe{}
 	if host.Twin != nil {
 		// A version 4 record names the bundle each node holds, and the artifact shown is
 		// that bundle's; a node holding none runs containerlab's baseline and shows
@@ -163,8 +168,12 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 			if a := n.Artifact; a != nil && (!holdsNamed || n.Holds != nil) {
 				pushed[n.Name] = &findings.ShowArtifact{Name: a.Name, Checksum: a.Checksum}
 			}
-			if id := n.PSP.ID; id != "" {
+			if ref := n.PSP; ref != nil && ref.ID != "" {
+				id := ref.ID
 				pkg[n.Name] = &id
+			}
+			if n.Probe != nil {
+				hosts[n.Name] = n.Probe
 			}
 		}
 	}
@@ -206,7 +215,7 @@ func decideShow(host lab.HostState, reads serviceReads, unreachableAt string) (f
 		block.Record.Step = showStep(rec.Step, waitRecorded(rec))
 	}
 
-	text := showText{towards: towardsOf(reads.inFlight)}
+	text := showText{towards: towardsOf(reads.inFlight), hosts: hosts}
 	if rec != nil {
 		text.record = recordLine(rec)
 	}
@@ -704,12 +713,17 @@ func printShow(opts *options, block findings.ShowBlock, text showText) {
 			// The package the node runs under, then what it was pushed: with two
 			// platforms in one twin, which node is which is the first thing to read.
 			// Both are the record's; a node it does not name has neither.
+			// A probe's host has no package and no artifact: its line names its format and the
+			// probe and endpoint it is (016).
 			line := ""
 			if n.PSP != nil {
 				line += "  " + *n.PSP
 			}
 			if a := n.Artifact; a != nil {
 				line += fmt.Sprintf("  %s %s", a.Name, a.Checksum)
+			}
+			if p := text.hosts[n.Name]; p != nil {
+				line += fmt.Sprintf("  %s host  probe %s %s", p.Format, p.Name, p.Endpoint)
 			}
 			opts.note("  %s  %s  %s  %s%s", n.Name, n.Container, n.State, n.MgmtIPv4, line)
 		}

@@ -85,7 +85,7 @@ func goldenManifest(t *testing.T, name string) compiler.Manifest {
 func recordNode(name, ip, pspID, source string, readyAfterS float64) wire.TwinNode {
 	return wire.TwinNode{
 		Name: name, Container: "clab-fylgja-" + name, Image: "ghcr.io/nokia/srlinux:24.7.1",
-		PSP: wire.PSPRef{ID: pspID, Source: source}, MgmtIPv4: ip, ReadyAfterS: readyAfterS,
+		PSP: &wire.PSPRef{ID: pspID, Source: source}, MgmtIPv4: ip, ReadyAfterS: readyAfterS,
 		Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: "43e8fd0c2de5f4646f74a51d34742824", Size: 861},
 		PushedInS: 1.2,
 	}

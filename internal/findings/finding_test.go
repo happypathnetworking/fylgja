@@ -725,7 +725,7 @@ func m2Documents() []labelledDocument {
 	dry := NewDocument(OpTwinProvision, &Subject{Bundle: "testdata/golden/three-node"}, unbudgeted)
 	dry.BundleID = id
 	dry.DryRun = &DryRunBlock{
-		Nodes:       []DryRunNode{{Name: "n1", Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: "nokia_srlinux", MemoryMB: 2048}},
+		Nodes:       []DryRunNode{{Name: "n1", Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: ptr("nokia_srlinux"), MemoryMB: 2048}},
 		MemorySumMB: 2048,
 		Host:        DryRunHost{},
 		Verdict:     VerdictClear,
@@ -1387,7 +1387,7 @@ func m5Documents() []labelledDocument {
 	dry := NewDocument(OpTwinProvision, &Subject{Bundle: "testdata/golden/three-node"}, nil)
 	dry.BundleID = id
 	dry.DryRun = &DryRunBlock{
-		Nodes: []DryRunNode{{Name: "n1", Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: "nokia_srlinux", MemoryMB: 2048,
+		Nodes: []DryRunNode{{Name: "n1", Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: ptr("nokia_srlinux"), MemoryMB: 2048,
 			Artifact: &DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: sum1, Size: 1462}}},
 		MemorySumMB: 2048, HostBudgetMB: &budget, Host: DryRunHost{}, Verdict: VerdictClear,
 	}
@@ -1480,7 +1480,7 @@ func TestM6DocumentsSatisfySchema(t *testing.T) {
 	lossy := NewDocument(OpTwinProvision, &Subject{Bundle: "testdata/golden/lossy"}, nil)
 	lossy.BundleID = strings.Repeat("81", 32)
 	lossy.DryRun = &DryRunBlock{
-		Nodes: []DryRunNode{{Name: "c1", Image: "example.invalid/chassisos:0", PSP: "chassisos", MemoryMB: 2048,
+		Nodes: []DryRunNode{{Name: "c1", Image: "example.invalid/chassisos:0", PSP: ptr("chassisos"), MemoryMB: 2048,
 			Artifact: &DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: m5Checksum, Size: 245}}},
 		MemorySumMB: 2048, HostBudgetMB: &budget, Host: DryRunHost{}, Verdict: VerdictClear,
 		LossyMappings: 9, SharedPorts: 3,

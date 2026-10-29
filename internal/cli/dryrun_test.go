@@ -169,7 +169,7 @@ func TestProvisionDryRunOnAClearHost(t *testing.T) {
 		t.Errorf("dry_run = %+v, want clear, three nodes, sum 6144, no budget, nothing on the host", d)
 	}
 	for _, n := range d.Nodes {
-		if n.Image != "ghcr.io/nokia/srlinux:24.7.1" || n.PSP != "nokia_srlinux" || n.MemoryMB != 2048 {
+		if n.Image != "ghcr.io/nokia/srlinux:24.7.1" || n.PSP == nil || *n.PSP != "nokia_srlinux" || n.MemoryMB != 2048 {
 			t.Errorf("node %+v, want the SR Linux image, package and budget", n)
 		}
 		// What would be pushed, as the manifest names it.
@@ -347,7 +347,7 @@ func TestProvisionDryRunNamesTheTwin(t *testing.T) {
 	}
 	for _, n := range []string{"n1", "n2", "n3"} {
 		fields.Nodes = append(fields.Nodes, wire.TwinNode{Name: n, Container: "clab-fylgja-" + n,
-			Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"}})
+			Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"}})
 	}
 	rec, err := lab.NewRecord(fields)
 	if err != nil {

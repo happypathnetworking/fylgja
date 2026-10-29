@@ -435,17 +435,39 @@ type DryRunBlock struct {
 	SharedPorts   int `json:"shared_ports"`
 }
 
-// DryRunNode is one node a real run would deploy.
+// DryRunNode is one node a real run would deploy: a device of intent, or a probe's host
+// (016).
 type DryRunNode struct {
-	Name     string `json:"name"`
-	Image    string `json:"image"`
-	PSP      string `json:"psp"`
-	MemoryMB int    `json:"memory_mb"`
+	Name  string `json:"name"`
+	Image string `json:"image"`
+	// PSP is the device's support package; nil, written null, on a host, which has none.
+	PSP *string `json:"psp"`
+	// Probe is what a host is, as twin.json 11 records it: its probe, its endpoint, its
+	// format and its probe package. Nil, and not written, on a device.
+	Probe    *DryRunProbe `json:"probe,omitempty"`
+	MemoryMB int          `json:"memory_mb"`
 	// Artifact is what would be pushed to this node, as the bundle's manifest names it
-	// (M5). Every M5 bundle carries one per node, so the contract requires it
-	// here; it is a pointer only so that a document built from an M2-era bundle, which
-	// twin provision refuses as bundle.version.unsupported, marshals without it.
+	// (M5). Every M5 bundle carries one per device, so the contract requires it
+	// there; it is a pointer so that a document built from an M2-era bundle, which
+	// twin provision refuses as bundle.version.unsupported, marshals without it, and a
+	// host, to which nothing is pushed, carries none (016).
 	Artifact *DryRunArtifact `json:"artifact,omitempty"`
+}
+
+// DryRunProbe is a host's probe in a dry run (016): the probe it is an endpoint of, which
+// endpoint, the probe's format and the probe package the host is built with.
+type DryRunProbe struct {
+	Name     string        `json:"name"`
+	Endpoint string        `json:"endpoint"`
+	Format   string        `json:"format"`
+	Package  DryRunPackage `json:"package"`
+}
+
+// DryRunPackage names a probe package, as the manifest does: its id and whether it is the
+// shipped one.
+type DryRunPackage struct {
+	ID     string `json:"id"`
+	Source string `json:"source"`
 }
 
 // DryRunArtifact names what would be pushed: never a byte of it.

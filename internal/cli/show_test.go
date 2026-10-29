@@ -77,13 +77,23 @@ func contractProvenance(generic map[string]any) {
 }
 
 // unsnapshotted is a record as a worker of twin.json 8 or earlier wrote it, in generic, a
-// record as JSON: no snapshot_id at the top level or on a step's sides, which 018 added.
+// record as JSON: no snapshot_id at the top level or on a step's sides, which 018 added, and
+// no step.loss, which 016 added.
 func unsnapshotted(generic map[string]any) {
+	unlossed(generic)
 	delete(generic, "snapshot_id")
 	if step, ok := generic["step"].(map[string]any); ok {
 		for _, side := range []string{"from", "to"} {
 			delete(step[side].(map[string]any), "snapshot_id")
 		}
+	}
+}
+
+// unlossed is a record as a worker of twin.json 10 or earlier wrote it, in generic, a record
+// as JSON: no loss in its step block, which 016 added.
+func unlossed(generic map[string]any) {
+	if step, ok := generic["step"].(map[string]any); ok {
+		delete(step, "loss")
 	}
 }
 
@@ -102,7 +112,7 @@ func twinOf(t *testing.T, change func(*lab.RecordFields)) wire.TwinRecord {
 	}
 	for _, n := range []string{"n1", "n2", "n3"} {
 		f.Nodes = append(f.Nodes, wire.TwinNode{Name: n, Container: "clab-fylgja-" + n,
-			Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
+			Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
 			Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: fixtureArtifacts[n], Size: 707},
 			PushedInS: 0.7})
 	}
@@ -523,17 +533,17 @@ func TestShowTreatsAnUnreadableScopeAsUnknown(t *testing.T) {
 	var cases []unreadable
 	for _, scope := range []string{"", "fylgja", "tag:"} {
 		cases = append(cases, unreadable{fmt.Sprintf("scope %q", scope), []edit{{"scope", scope}},
-			`scope unknown (record 10 names scope "` + scope + `", not tag:<name>)`})
+			`scope unknown (record 11 names scope "` + scope + `", not tag:<name>)`})
 	}
 	cases = append(cases, []unreadable{
 		{"mapping reader \"Infrahub DCIM\"", []edit{{"reader", "Infrahub DCIM"}},
-			`scope tag:fylgja, read by an unknown reader (record 10 names mapping reader "Infrahub DCIM")`},
+			`scope tag:fylgja, read by an unknown reader (record 11 names mapping reader "Infrahub DCIM")`},
 		{"an empty mapping model", []edit{{"model", ""}},
-			`scope tag:fylgja, read by an unknown reader (record 10 names mapping model "")`},
+			`scope tag:fylgja, read by an unknown reader (record 11 names mapping model "")`},
 		{"an empty mapping version", []edit{{"version", ""}},
-			`scope tag:fylgja, read by an unknown reader (record 10 names mapping version "")`},
+			`scope tag:fylgja, read by an unknown reader (record 11 names mapping version "")`},
 		{"a reader and a model", []edit{{"reader", "-dcim"}, {"model", ""}},
-			`scope tag:fylgja, read by an unknown reader (record 10 names mapping reader "-dcim", model "")`},
+			`scope tag:fylgja, read by an unknown reader (record 11 names mapping reader "-dcim", model "")`},
 	}...)
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -585,7 +595,7 @@ func TestShowTreatsAnUnreadableScopeAsUnknown(t *testing.T) {
 func TestShowNamesEachNodesOwnPackage(t *testing.T) {
 	paths := useStateRoot(t)
 	writeTwin(t, paths, twinOf(t, func(f *lab.RecordFields) {
-		f.Nodes[1].PSP = wire.PSPRef{ID: "arista_eos", Source: "embedded"}
+		f.Nodes[1].PSP = &wire.PSPRef{ID: "arista_eos", Source: "embedded"}
 		f.Nodes[1].Image = "ceos:4.32.0.2F"
 	}))
 	out := showWith(t, paths, "inspect-three.json", &fakeService{})
@@ -606,6 +616,40 @@ func TestShowNamesEachNodesOwnPackage(t *testing.T) {
 	if want := []string{"n1 nokia_srlinux", "n2 arista_eos", "n3 nokia_srlinux"}; !slices.Equal(got, want) {
 		t.Errorf("the document's nodes %v, want %v", got, want)
 	}
+}
+
+// A twin of the probed golden (016): each probe's host is listed among the nodes, naming its
+// format where a device names its package and its probe and endpoint where a device names its
+// artifact, from twin.json 11's nodes[].probe; the JSON node carries psp and artifact null,
+// which the show contract accepts unmoved. The lab is inspect-three.json with the two
+// hosts' linux containers added, as containerlab reports a node of that kind.
+func TestShowListsAProbesHosts(t *testing.T) {
+	paths := useStateRoot(t)
+	ping := wire.PSPRef{ID: "ping", Source: "embedded"}
+	writeTwin(t, paths, twinOf(t, func(f *lab.RecordFields) {
+		for i, endpoint := range []string{"a", "b"} {
+			f.Nodes = append(f.Nodes, wire.TwinNode{Name: "n1-loop-" + endpoint, Container: "clab-fylgja-n1-loop-" + endpoint,
+				Image: "alpine:3.24.2", Probe: &wire.TwinProbe{Name: "n1-loop", Endpoint: endpoint, Format: "ping", Package: ping},
+				MgmtIPv4: fmt.Sprintf("172.20.20.%d", 5+i), ReadyAfterS: 1.2})
+		}
+	}))
+	out := showWith(t, paths, "inspect-three-probed.json", &fakeService{})
+	probed := strings.Replace(threeNodes, "present (3 nodes)", "present (5 nodes)", 1)
+	probed = strings.Replace(probed, "\n  n2  ", "\n"+
+		"  n1-loop-a  clab-fylgja-n1-loop-a  running  172.20.20.5  ping host  probe n1-loop a\n"+
+		"  n1-loop-b  clab-fylgja-n1-loop-b  running  172.20.20.6  ping host  probe n1-loop b\n"+
+		"  n2  ", 1)
+	wantShow(t, out, probed+recordLine+
+		"  intent read at "+showObserved+"; reproducing it with --at that instant is best-effort\n"+
+		strings.Replace(provisionedLine, "3 nodes", "5 nodes", 1)+lines("kind: "+showKind("576933ec…", ""), "in flight: none"),
+		findings.ShowKindSnapshot, bestEffortNote)
+	for _, n := range out.doc.Show.Host.Nodes {
+		host := strings.HasPrefix(n.Name, "n1-loop-")
+		if host != (n.PSP == nil) || host != (n.Artifact == nil) {
+			t.Errorf("node %s carries package %v and artifact %v; want both null on a host alone", n.Name, n.PSP, n.Artifact)
+		}
+	}
+	validateM10Document(t, out.doc)
 }
 
 // US5 scenario 6: from a bundle, with the read time unknown and snapshot none on the record
@@ -1725,8 +1769,8 @@ func TestShowStepWait(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			paths := useStateRoot(t)
 			rec := steppedTwin(t, c.change)
-			if rec.TwinVersion != "10" {
-				t.Fatalf("lab.NewStepRecord wrote version %q, want 10", rec.TwinVersion)
+			if rec.TwinVersion != "11" {
+				t.Fatalf("lab.NewStepRecord wrote version %q, want 11", rec.TwinVersion)
 			}
 			rec.Step.Wait = c.wait
 			writeTwin(t, paths, rec)
@@ -1767,8 +1811,8 @@ func TestShowCreatedVersion10RecordAsM11(t *testing.T) {
 		return showWith(t, paths, "inspect-three.json", &fakeService{})
 	}
 	five, four := show(writeTwin), show(writeM11Twin)
-	if seededTwin(t).TwinVersion != "10" {
-		t.Fatalf("a create's record is version %q, want 10", seededTwin(t).TwinVersion)
+	if seededTwin(t).TwinVersion != "11" {
+		t.Fatalf("a create's record is version %q, want 11", seededTwin(t).TwinVersion)
 	}
 	if five.stdout != four.stdout {
 		t.Errorf("version 5 stdout:\n%s\nversion 4:\n%s", five.stdout, four.stdout)

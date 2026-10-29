@@ -554,17 +554,24 @@ type ProvisionedBy struct {
 	Version string `json:"version"`
 }
 
-// TwinNode is one node of a recorded twin.
+// TwinNode is one node of a recorded twin: a device of intent, or a probe's host (016).
 type TwinNode struct {
-	Name        string  `json:"name"`
-	Container   string  `json:"container"`
-	Image       string  `json:"image"`
-	PSP         PSPRef  `json:"psp"`
+	Name      string `json:"name"`
+	Container string `json:"container"`
+	Image     string `json:"image"`
+	// Probe is what a host is in place of a support package, copied from the staged
+	// manifest (016): its probe, its endpoint, its format and the probe package it was
+	// built with. Nil, and not written, on a device, and in every record of 10 or earlier.
+	Probe *TwinProbe `json:"probe,omitempty"`
+	// PSP is the device's support package, copied from the staged manifest; nil, written
+	// null, on a host, which has none (016).
+	PSP         *PSPRef `json:"psp"`
 	MgmtIPv4    string  `json:"mgmt_ipv4"`
 	ReadyAfterS float64 `json:"ready_after_s"`
 	// Artifact is what this node was pushed, copied from the staged manifest as PSP is
 	// (M5). The document projects it to a name and a checksum; the record keeps all
-	// four fields. No content. Nil only in a record written before M5.
+	// four fields. No content. Nil in a record written before M5, and on a host, to which
+	// nothing is pushed (016).
 	Artifact *TwinArtifact `json:"artifact"`
 	// PushedInS is how long this node's push took, from the activity's start to the
 	// node's commit.
@@ -589,6 +596,15 @@ type TwinArtifact struct {
 	ContentType string `json:"content_type"`
 	Checksum    string `json:"checksum"`
 	Size        int    `json:"size"`
+}
+
+// TwinProbe is what a recorded host is (016): one endpoint, a or b, of a probe, of the
+// probe's format, built with the probe package named, as the manifest's node names it.
+type TwinProbe struct {
+	Name     string `json:"name"`
+	Endpoint string `json:"endpoint"`
+	Format   string `json:"format"`
+	Package  PSPRef `json:"package"`
 }
 
 // PSPRef names the support package a node was provisioned with, as the manifest does.

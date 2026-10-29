@@ -58,7 +58,7 @@ func stepDocuments() []labelledDocument {
 	dry.BundleID = stepToID
 	dry.Stage = resolved
 	dry.Step = stepBlock()
-	dry.DryRun = &DryRunBlock{Nodes: []DryRunNode{{Name: "e1", Image: "ceos:4.32.0.2F", PSP: "arista_eos", MemoryMB: 2048,
+	dry.DryRun = &DryRunBlock{Nodes: []DryRunNode{{Name: "e1", Image: "ceos:4.32.0.2F", PSP: ptr("arista_eos"), MemoryMB: 2048,
 		Artifact: &DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: m5Checksum, Size: 900}}},
 		MemorySumMB: 2048, Host: DryRunHost{LabPresent: true, TwinDirPresent: true}, Verdict: VerdictRefused}
 

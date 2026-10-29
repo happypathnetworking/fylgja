@@ -198,7 +198,7 @@ func waitRecord(t *testing.T, run string, change func(*StepFields)) wire.TwinRec
 		art := &wire.TwinArtifact{Name: n.Artifact.Name, ContentType: n.Artifact.ContentType, Checksum: n.Artifact.Checksum, Size: n.Artifact.Size}
 		staged.PSP[n.Name], staged.Artifacts[n.Name] = ref, art
 		create.Nodes = append(create.Nodes, wire.TwinNode{Name: n.Name, Container: "clab-fylgja-" + n.Name, Image: n.Image,
-			PSP: ref, MgmtIPv4: waitIP[n.Name], ReadyAfterS: 1, Artifact: art, PushedInS: 0.7})
+			PSP: &ref, MgmtIPv4: waitIP[n.Name], ReadyAfterS: 1, Artifact: art, PushedInS: 0.7})
 		lab = append(lab, wire.LabNode{Name: n.Name, Container: "clab-fylgja-" + n.Name, Image: n.Image, State: "running",
 			MgmtIPv4: waitIP[n.Name]})
 		pushed = append(pushed, wire.StepPush{Node: n.Name, Reasons: []string{"artifact"}, Outcome: wire.PushLanded, TookS: took(0.8)})

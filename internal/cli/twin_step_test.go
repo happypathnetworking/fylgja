@@ -524,7 +524,7 @@ func stepRecordOf(t *testing.T, bundleID string, change func(*lab.RecordFields))
 			image, id = "ghcr.io/nokia/srlinux:24.7.1", "nokia_srlinux"
 		}
 		f.Nodes = append(f.Nodes, wire.TwinNode{Name: n, Container: "clab-fylgja-" + n, Image: image,
-			PSP: wire.PSPRef{ID: id, Source: "embedded"}, MgmtIPv4: fmt.Sprintf("172.20.20.%d", i+2), ReadyAfterS: 9})
+			PSP: &wire.PSPRef{ID: id, Source: "embedded"}, MgmtIPv4: fmt.Sprintf("172.20.20.%d", i+2), ReadyAfterS: 9})
 	}
 	if change != nil {
 		change(&f)
@@ -3284,7 +3284,7 @@ func recordedStep(prev wire.TwinRecord, in provision.StepInput, outcome string) 
 	for _, n := range prev.Nodes {
 		f.Nodes = append(f.Nodes, wire.LabNode{Name: n.Name, Container: n.Container, Image: n.Image, State: "running",
 			MgmtIPv4: n.MgmtIPv4})
-		f.Staged.PSP[n.Name] = n.PSP
+		f.Staged.PSP[n.Name] = *n.PSP
 	}
 	return f
 }

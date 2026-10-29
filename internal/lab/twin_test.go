@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"maps"
 	"os"
 	"path/filepath"
@@ -16,11 +17,12 @@ import (
 
 	"github.com/santhosh-tekuri/jsonschema/v6"
 
+	"github.com/happypathnetworking/fylgja/internal/bundle"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
 )
 
-// twinSchema is the current contract the record satisfies: twin.json 10, which NewRecord and
+// twinSchema is the current contract the record satisfies: twin.json 11, which NewRecord and
 // NewStepRecord write, under the module root's contracts/.
 func twinSchema(t *testing.T) *jsonschema.Schema {
 	t.Helper()
@@ -30,8 +32,8 @@ func twinSchema(t *testing.T) *jsonschema.Schema {
 // twinSchemaOf is feature's copy of twin.schema.json: "" is the current contract, and an
 // earlier feature's is its frozen copy under testdata/contracts/<feature>/, which keeps the
 // records its milestone wrote, such as M11's 4 (009-stepping), M12's 5 (010-verify), 014's
-// 6 (014-proposed-change-stages), 015's 7 (015-proposed-change-rehearsal) and 017's 8
-// (017-dcim-reader) and 018's 9 (018-snapshots).
+// 6 (014-proposed-change-stages), 015's 7 (015-proposed-change-rehearsal), 017's 8
+// (017-dcim-reader), 018's 9 (018-snapshots) and 019's 10 (019-following-removed).
 func twinSchemaOf(t *testing.T, feature string) *jsonschema.Schema {
 	t.Helper()
 	path := filepath.Join("..", "..", "contracts", "twin.schema.json")
@@ -73,11 +75,11 @@ func fields(source string, observedAt *string) RecordFields {
 		RecordedAt: time.Date(2026, 9, 15, 14, 22, 53, 390000000, time.UTC),
 		Nodes: []wire.TwinNode{
 			{Name: "n2", Container: "clab-fylgja-n2", Image: "ghcr.io/nokia/srlinux:24.7.1",
-				PSP: wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"}, MgmtIPv4: "172.20.20.3", ReadyAfterS: 0.897,
+				PSP: &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"}, MgmtIPv4: "172.20.20.3", ReadyAfterS: 0.897,
 				Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: "ecb03029ea805a09c54d2cd6a0e59ac9", Size: 861},
 				PushedInS: 0.7},
 			{Name: "n1", Container: "clab-fylgja-n1", Image: "ghcr.io/nokia/srlinux:24.7.1",
-				PSP: wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"}, MgmtIPv4: "172.20.20.2", ReadyAfterS: 0.761,
+				PSP: &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"}, MgmtIPv4: "172.20.20.2", ReadyAfterS: 0.761,
 				Artifact:  &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain", Checksum: "43e8fd0c2de5f4646f74a51d34742824", Size: 861},
 				PushedInS: 0.66},
 		},
@@ -207,8 +209,8 @@ func TestRecordNamesItsStage(t *testing.T) {
 			got := jsonOf(t, rec).(map[string]any)
 			want := map[string]any{"proposed_change": map[string]any{"id": "pc-1", "branch": "change-1"},
 				"label": c.label, "description": c.description, "at_source": c.source}
-			if got["twin_version"] != "10" || !reflect.DeepEqual(got["stage"], want) {
-				t.Errorf("twin_version %v, stage %v; want 10 naming %v", got["twin_version"], got["stage"], want)
+			if got["twin_version"] != "11" || !reflect.DeepEqual(got["stage"], want) {
+				t.Errorf("twin_version %v, stage %v; want 11 naming %v", got["twin_version"], got["stage"], want)
 			}
 			if step, ok := got["step"]; !ok || step != nil {
 				t.Errorf("step %v (present %t); want an explicit null", step, ok)
@@ -250,8 +252,8 @@ func TestRecordNamesItsStage(t *testing.T) {
 			t.Errorf("step.from.stage %v, step.to.stage %v; want %v and %v", from["stage"], to["stage"],
 				jsonOf(t, mark("seeded")), jsonOf(t, f.To.Stage))
 		}
-		if !reflect.DeepEqual(got["stage"], to["stage"]) || got["twin_version"] != "10" {
-			t.Errorf("twin_version %v, stage %v; want 10 naming the stage the step went to", got["twin_version"], got["stage"])
+		if !reflect.DeepEqual(got["stage"], to["stage"]) || got["twin_version"] != "11" {
+			t.Errorf("twin_version %v, stage %v; want 11 naming the stage the step went to", got["twin_version"], got["stage"])
 		}
 	})
 }
@@ -341,9 +343,19 @@ func contractProvenance(generic map[string]any) {
 	p["contract_version"] = "0.2"
 }
 
+// unlossed is a record as a worker of twin.json 10 or earlier wrote it, in generic, a record
+// as JSON: no loss in its step block, which 016 added.
+func unlossed(generic map[string]any) {
+	if step, ok := generic["step"].(map[string]any); ok {
+		delete(step, "loss")
+	}
+}
+
 // unsnapshotted is a record as a worker of twin.json 8 or earlier wrote it, in generic, a
-// record as JSON: no snapshot_id at the top level or on a step's sides, which 018 added.
+// record as JSON: no snapshot_id at the top level or on a step's sides, which 018 added, and
+// no step.loss, which 016 added.
 func unsnapshotted(generic map[string]any) {
+	unlossed(generic)
 	delete(generic, "snapshot_id")
 	if step, ok := generic["step"].(map[string]any); ok {
 		for _, side := range []string{"from", "to"} {
@@ -489,8 +501,8 @@ func TestRecordNamesItsRehearsal(t *testing.T) {
 		validateRecord(t, s, rec)
 		got := jsonOf(t, rec).(map[string]any)
 		want := map[string]any{"workflow_id": "fylgja-rehearse", "run_id": "01a1b2c3-0000-7000-8000-0000000000a1"}
-		if got["twin_version"] != "10" || !reflect.DeepEqual(got["rehearsal"], want) {
-			t.Errorf("twin_version %v, rehearsal %v; want 10 naming %v", got["twin_version"], got["rehearsal"], want)
+		if got["twin_version"] != "11" || !reflect.DeepEqual(got["rehearsal"], want) {
+			t.Errorf("twin_version %v, rehearsal %v; want 11 naming %v", got["twin_version"], got["rehearsal"], want)
 		}
 		if got["run"].(map[string]any)["workflow_id"] != wire.ProvisionWorkflowID {
 			t.Errorf("run %v; the record's run stays the provisioning run's", got["run"])
@@ -643,8 +655,8 @@ func TestRecordNamesItsProvenance(t *testing.T) {
 			}
 			validateRecord(t, s, rec)
 			got := jsonOf(t, rec).(map[string]any)
-			if got["twin_version"] != "10" || !reflect.DeepEqual(got["provenance"], wantProvenance) {
-				t.Errorf("%s: twin_version %v, provenance %v; want 10 with %v", label, got["twin_version"], got["provenance"], wantProvenance)
+			if got["twin_version"] != "11" || !reflect.DeepEqual(got["provenance"], wantProvenance) {
+				t.Errorf("%s: twin_version %v, provenance %v; want 11 with %v", label, got["twin_version"], got["provenance"], wantProvenance)
 			}
 		}
 	})
@@ -849,8 +861,8 @@ func TestRecord9(t *testing.T) {
 				}
 				validateRecord(t, s, rec)
 				got := jsonOf(t, rec).(map[string]any)
-				if snap := snapshotOf(t, rec); got["twin_version"] != "10" || snap != c.want || got["source"] != c.f.Source {
-					t.Errorf("twin_version %v, snapshot_id %v, source %v; want 10, %v, %s", got["twin_version"], snap, got["source"], c.want, c.f.Source)
+				if snap := snapshotOf(t, rec); got["twin_version"] != "11" || snap != c.want || got["source"] != c.f.Source {
+					t.Errorf("twin_version %v, snapshot_id %v, source %v; want 11, %v, %s", got["twin_version"], snap, got["source"], c.want, c.f.Source)
 				}
 			})
 		}
@@ -980,8 +992,8 @@ func TestRecord9(t *testing.T) {
 		if _, ok := step["from"].(map[string]any)["snapshot_id"]; ok {
 			t.Errorf("step.from %v names a snapshot; the record it came from named none", step["from"])
 		}
-		if got["twin_version"] != "10" || got["snapshot_id"] != mixedSnapshot || step["to"].(map[string]any)["snapshot_id"] != mixedSnapshot {
-			t.Errorf("twin_version %v, snapshot_id %v, step.to %v; want 10 naming the to side's %s", got["twin_version"], got["snapshot_id"], step["to"], mixedSnapshot)
+		if got["twin_version"] != "11" || got["snapshot_id"] != mixedSnapshot || step["to"].(map[string]any)["snapshot_id"] != mixedSnapshot {
+			t.Errorf("twin_version %v, snapshot_id %v, step.to %v; want 11 naming the to side's %s", got["twin_version"], got["snapshot_id"], step["to"], mixedSnapshot)
 		}
 		f = stepFields()
 		f.To.SnapshotID = mixedSnapshot
@@ -994,8 +1006,8 @@ func TestRecord9(t *testing.T) {
 			t.Fatal(err)
 		}
 		validateRecord(t, s, diverged)
-		if snap := snapshotOf(t, diverged); snap != nil || diverged.TwinVersion != "10" {
-			t.Errorf("diverged: twin_version %s, snapshot_id %v; want 10 naming none, as the record it came from", diverged.TwinVersion, snap)
+		if snap := snapshotOf(t, diverged); snap != nil || diverged.TwinVersion != "11" {
+			t.Errorf("diverged: twin_version %s, snapshot_id %v; want 11 naming none, as the record it came from", diverged.TwinVersion, snap)
 		}
 	})
 
@@ -1101,9 +1113,9 @@ func TestRecord10(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if rec.TwinVersion != "10" || rec.Source != c.source || !SameStage(rec.Stage, c.stage) ||
+			if rec.TwinVersion != "11" || rec.Source != c.source || !SameStage(rec.Stage, c.stage) ||
 				rec.SnapshotID == nil || *rec.SnapshotID != mixedSnapshot {
-				t.Errorf("twin_version %s, source %s, stage %s, snapshot_id %v; want 10, %s, %s and %s", rec.TwinVersion, rec.Source,
+				t.Errorf("twin_version %s, source %s, stage %s, snapshot_id %v; want 11, %s, %s and %s", rec.TwinVersion, rec.Source,
 					rec.Stage.Name(), rec.SnapshotID, c.source, c.stage.Name(), mixedSnapshot)
 			}
 			path := filepath.Join(t.TempDir(), "twin.json")
@@ -1147,6 +1159,329 @@ func TestRecord10(t *testing.T) {
 	})
 }
 
+// twin.json 11 (016, research R-22): a create of the probed golden records each probe's host
+// with its probe in place of a support package, psp and artifact null and no push time,
+// holding the record's bundle as every device does, from a run that pushed the devices
+// alone; and twin.json 10's frozen contract refuses it, since 10 names no host.
+func TestRecord11RecordsAHost(t *testing.T) {
+	ctx := context.Background()
+	s, v10 := twinSchema(t), twinSchemaOf(t, "019-following-removed")
+	id, err := bundle.IDOfDir(probedBundle())
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := testActivities(t, &fakeRunner{})
+	if _, err := a.StageBundle(ctx, wire.StageInput{BundlePath: probedBundle(), BundleID: id}); err != nil {
+		t.Fatal(err)
+	}
+	m, err := readManifest(probedBundle())
+	if err != nil {
+		t.Fatal(err)
+	}
+	observed := "2026-10-29T09:31:02.118842Z"
+	in := wire.RecordInput{TwinDir: a.Paths.Twin, BundleID: id, ObservedAt: &observed, Source: wire.SourceIntent,
+		RunID: "01a0a570-0395-78ee-8d0f-9a45a97547cd"}
+	for i, n := range m.Nodes {
+		in.Nodes = append(in.Nodes, wire.LabNode{Name: n.Name, Container: "clab-fylgja-" + n.Name, Image: n.Image,
+			State: "running", MgmtIPv4: fmt.Sprintf("172.20.20.%d", i+2)})
+		in.ReadyAfter = append(in.ReadyAfter, wire.ReadinessResult{Node: n.Name, ReadyAfterS: 1.5})
+		if art := n.Artifact; art != nil {
+			in.Pushed = append(in.Pushed, wire.PushResult{Node: n.Name, PushedInS: 0.7, Checksum: art.Checksum, Size: art.Size})
+		}
+	}
+	res, err := a.RecordTwin(ctx, in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := res.Record
+	validateRecord(t, s, rec)
+	if rec.TwinVersion != "11" || len(rec.Nodes) != 5 {
+		t.Fatalf("twin_version %s with %d nodes; want 11 with n1, n1-loop-a, n1-loop-b, n2 and n3", rec.TwinVersion, len(rec.Nodes))
+	}
+	ping := wire.PSPRef{ID: "ping", Source: "embedded"}
+	for _, n := range rec.Nodes {
+		switch n.Name {
+		case "n1-loop-a", "n1-loop-b":
+			want := &wire.TwinProbe{Name: "n1-loop", Endpoint: n.Name[len(n.Name)-1:], Format: "ping", Package: ping}
+			if !reflect.DeepEqual(n.Probe, want) || n.PSP != nil || n.Artifact != nil || n.PushedInS != 0 ||
+				n.ReadyAfterS != 1.5 || n.Image != "alpine:3.24.2" {
+				t.Errorf("host %s recorded %+v (probe %+v); want probe %+v, no package, artifact or push time, ready after 1.5s",
+					n.Name, n, n.Probe, want)
+			}
+		default:
+			if n.Probe != nil || n.PSP == nil || n.PSP.ID != "nokia_srlinux" || n.Artifact == nil {
+				t.Errorf("device %s recorded %+v; want its package and artifact and no probe", n.Name, n)
+			}
+		}
+		if n.Holds == nil || *n.Holds != id {
+			t.Errorf("node %s holds %v, want the record's bundle %s", n.Name, n.Holds, id)
+		}
+	}
+	b, err := json.Marshal(rec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`"probe":{"name":"n1-loop","endpoint":"a","format":"ping","package":{"id":"ping","source":"embedded"}},"psp":null`,
+		`"artifact":null`} {
+		if !strings.Contains(string(b), want) {
+			t.Errorf("the record lacks %s:\n%s", want, b)
+		}
+	}
+	generic := jsonOf(t, rec).(map[string]any)
+	generic["twin_version"] = "10"
+	v, err := jsonschema.UnmarshalJSON(bytes.NewReader([]byte(mustJSON(t, generic))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := v10.Validate(v); err == nil {
+		t.Error("twin.json 10's frozen contract accepts a record naming a host")
+	}
+
+	// A host the contract would not hold is refused: one carrying a package, and a device
+	// carrying no artifact.
+	for name, change := range map[string]func(map[string]any){
+		"a host with a package": func(n map[string]any) {
+			if n["name"] == "n1-loop-a" {
+				n["psp"] = map[string]any{"id": "nokia_srlinux", "source": "embedded"}
+			}
+		},
+		"a device with no artifact": func(n map[string]any) {
+			if n["name"] == "n1" {
+				n["artifact"] = nil
+			}
+		},
+	} {
+		generic := jsonOf(t, rec).(map[string]any)
+		for _, n := range generic["nodes"].([]any) {
+			change(n.(map[string]any))
+		}
+		v, err := jsonschema.UnmarshalJSON(bytes.NewReader([]byte(mustJSON(t, generic))))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := s.Validate(v); err == nil {
+			t.Errorf("twin.json 11 accepts %s", name)
+		}
+	}
+}
+
+// losses is a step's loss in each of a flow's outcomes, as ReadFlows writes it into the
+// record (016, research R-13).
+func losses() map[string]*wire.Loss {
+	from, to := "clab-fylgja-s1-loop-a", "clab-fylgja-s1-loop-b"
+	return map[string]*wire.Loss{
+		"measured": {Basis: wire.LossBasisContainer, Probes: []wire.ProbeLoss{{Probe: "s1-loop", From: from, To: to,
+			Outcome: wire.FlowMeasured, Sent: 312, Lost: 4, LongestGapS: 0.8}}, Added: []string{}, Dropped: []string{}},
+		"not started": {Basis: wire.LossBasisContainer, Probes: []wire.ProbeLoss{{Probe: "s1-loop", From: from, To: to,
+			Outcome: wire.FlowNotStarted, Rule: findings.RuleFlowStartFailed, Message: "the flow's start failed"}},
+			Added: []string{"s1-loop2"}, Dropped: []string{}},
+		"not read": {Basis: wire.LossBasisContainer, Probes: []wire.ProbeLoss{{Probe: "s1-loop", From: from, To: to,
+			Outcome: wire.FlowNotRead, Sent: 0, Rule: findings.RuleFlowReadFailed, Message: "the flow's read failed"}},
+			Added: []string{}, Dropped: []string{"s1-loop0"}},
+		"interrupted": {Basis: wire.LossBasisContainer, Probes: []wire.ProbeLoss{{Probe: "s1-loop", From: from, To: to,
+			Outcome: wire.FlowInterrupted, Sent: 40, Lost: 40, LongestGapS: 8}}, Added: []string{}, Dropped: []string{}},
+	}
+}
+
+// A step's record of twin.json 11 carries step.loss: null as NewStepRecord writes it, before
+// the flows are read, and each outcome as ReadFlows writes it, after a stepped or a diverged
+// step, which the contract accepts, holds the key required, and round-trips; twin.json 10's
+// frozen contract refuses the key (016).
+func TestRecord11CarriesTheStepsLoss(t *testing.T) {
+	s, v10 := twinSchema(t), twinSchemaOf(t, "019-following-removed")
+	shapes := map[string]*wire.Loss{"loss null": nil}
+	maps.Copy(shapes, losses())
+	for name, l := range shapes {
+		for _, outcome := range []string{wire.StepStepped, wire.StepDiverged} {
+			t.Run(name+" after "+outcome, func(t *testing.T) {
+				f := stepFields()
+				if outcome == wire.StepDiverged {
+					f.Outcome, f.Phase, f.Findings = wire.StepDiverged, findings.StepFlows, divergedFindings(findings.RuleStepDiverged, findings.StepFlows)
+					f.Pushed[0].Outcome, f.Pushed[0].TookS = wire.PushNotAttempted, nil
+					f.Pushed[1].Outcome, f.Pushed[1].TookS = wire.PushNotAttempted, nil
+				}
+				rec, err := NewStepRecord(stepPrev(t), f)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if rec.Step.Loss != nil {
+					t.Fatalf("NewStepRecord wrote loss %+v; want null until the flows are read", rec.Step.Loss)
+				}
+				rec.Step.Loss = l
+				validateRecord(t, s, rec)
+				path := filepath.Join(t.TempDir(), "twin.json")
+				if err := WriteRecord(path, rec); err != nil {
+					t.Fatal(err)
+				}
+				if back, err := ReadRecord(path); err != nil || !reflect.DeepEqual(back, rec) {
+					t.Errorf("read back %+v (%v)\nwant %+v", back, err, rec)
+				}
+				generic := jsonOf(t, rec).(map[string]any)
+				generic["twin_version"] = "10"
+				v, err := jsonschema.UnmarshalJSON(bytes.NewReader([]byte(mustJSON(t, generic))))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := v10.Validate(v); err == nil {
+					t.Error("twin.json 10's frozen contract accepts a step block with a loss key")
+				}
+			})
+		}
+	}
+
+	rec, err := NewStepRecord(stepPrev(t), stepFields())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b := mustJSON(t, jsonOf(t, rec)); !strings.Contains(b, `"loss":null`) {
+		t.Errorf("a step's record writes no explicit null loss:\n%s", b)
+	}
+	generic := jsonOf(t, rec).(map[string]any)
+	unlossed(generic)
+	v, err := jsonschema.UnmarshalJSON(bytes.NewReader([]byte(mustJSON(t, generic))))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Validate(v); err == nil {
+		t.Error("twin.json 11 accepts a step block with no loss key; it is required, null while the flows have not been read")
+	}
+}
+
+// A record of 10 still reads (016): a create's and a step's record as a 019 worker wrote
+// them, which twin.json 10's frozen contract accepts, read with no host and step.loss nil,
+// and everything else as written.
+func TestRecord10StillReads(t *testing.T) {
+	v10 := twinSchemaOf(t, "019-following-removed")
+	create, err := NewRecord(fields(wire.SourceBundle, nil))
+	if err != nil {
+		t.Fatal(err)
+	}
+	step, err := NewStepRecord(stepPrev(t), stepFields())
+	if err != nil {
+		t.Fatal(err)
+	}
+	step.Step.Wait = waits()["settled"]
+	for name, rec := range map[string]wire.TwinRecord{"a create": create, "a step": step} {
+		t.Run(name, func(t *testing.T) {
+			generic := jsonOf(t, rec).(map[string]any)
+			generic["twin_version"] = "10"
+			unlossed(generic)
+			b := []byte(mustJSON(t, generic))
+			validateBytes(t, v10, b)
+			want := rec
+			want.TwinVersion = "10"
+			got := readBytes(t, b)
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("read %+v\nwant %+v", got, want)
+			}
+			if got.Step != nil && got.Step.Loss != nil {
+				t.Errorf("a 10 step reads with loss %+v, want nil", got.Step.Loss)
+			}
+		})
+	}
+}
+
+// A host through a step (016, R-22): containerlab configures a host from its topology
+// node's exec lines and no push reaches it, so a host containerlab created or recreated
+// holds the staged target, one it restarted or left alone holds what it held, and after a
+// stepped step every host holds the target. Each keeps its probe and no package or
+// artifact, and a target whose lab lacks a host it names is refused.
+func TestNewStepRecordHosts(t *testing.T) {
+	ping := wire.PSPRef{ID: "ping", Source: "embedded"}
+	probeOf := func(endpoint string) *wire.TwinProbe {
+		return &wire.TwinProbe{Name: "s1-loop", Endpoint: endpoint, Format: "ping", Package: ping}
+	}
+	hostNode := func(endpoint, ip string) wire.LabNode {
+		return wire.LabNode{Name: "s1-loop-" + endpoint, Container: "clab-fylgja-s1-loop-" + endpoint, Image: "alpine:3.24.2",
+			State: "running", MgmtIPv4: ip}
+	}
+	prev := stepPrevWith(t, func(f *RecordFields) {
+		for endpoint, ip := range map[string]string{"a": "172.20.20.5", "b": "172.20.20.6"} {
+			n := hostNode(endpoint, ip)
+			f.Nodes = append(f.Nodes, wire.TwinNode{Name: n.Name, Container: n.Container, Image: n.Image,
+				Probe: probeOf(endpoint), MgmtIPv4: ip, ReadyAfterS: 1})
+		}
+	})
+	withHosts := func(f *StepFields) {
+		f.Staged.Probes = map[string]*wire.TwinProbe{"s1-loop-a": probeOf("a"), "s1-loop-b": probeOf("b")}
+		f.Nodes = append(f.Nodes, hostNode("a", "172.20.20.5"), hostNode("b", "172.20.20.6"))
+	}
+	for _, c := range []struct {
+		name   string
+		change func(*StepFields)
+		want   map[string]string // each host's holds
+	}{
+		{"diverged, one host recreated and one restarted", func(f *StepFields) {
+			f.Outcome, f.Phase, f.Findings = wire.StepDiverged, findings.StepPush, divergedFindings(findings.RulePushRefused, findings.StepPush)
+			f.Pushed[1].Outcome, f.Pushed[1].Rule, f.Pushed[1].TookS = wire.PushRefused, findings.RulePushRefused, nil
+			f.Plan.Recreated, f.Plan.Restarted = []string{"s1-loop-a"}, []string{"e1", "s1-loop-b"}
+		}, map[string]string{"s1-loop-a": stepToID, "s1-loop-b": stepFromID}},
+		{"diverged, the hosts left alone", func(f *StepFields) {
+			f.Outcome, f.Phase, f.Findings = wire.StepDiverged, findings.StepPush, divergedFindings(findings.RulePushRefused, findings.StepPush)
+			f.Pushed[1].Outcome, f.Pushed[1].Rule, f.Pushed[1].TookS = wire.PushRefused, findings.RulePushRefused, nil
+		}, map[string]string{"s1-loop-a": stepFromID, "s1-loop-b": stepFromID}},
+		{"stepped, one host recreated", func(f *StepFields) {
+			f.Plan.Recreated = []string{"s1-loop-b"}
+		}, map[string]string{"s1-loop-a": stepToID, "s1-loop-b": stepToID}},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			f := stepFields()
+			withHosts(&f)
+			c.change(&f)
+			rec, err := NewStepRecord(prev, f)
+			if err != nil {
+				t.Fatal(err)
+			}
+			validateRecord(t, twinSchema(t), rec)
+			for _, n := range rec.Nodes {
+				want, host := c.want[n.Name]
+				if !host {
+					continue
+				}
+				if n.Holds == nil || *n.Holds != want {
+					t.Errorf("host %s holds %v, want %s", n.Name, n.Holds, want)
+				}
+				if !reflect.DeepEqual(n.Probe, probeOf(n.Name[len(n.Name)-1:])) || n.PSP != nil || n.Artifact != nil {
+					t.Errorf("host %s recorded probe %+v, package %v and artifact %v; want its probe alone", n.Name, n.Probe, n.PSP, n.Artifact)
+				}
+			}
+		})
+	}
+
+	t.Run("a host the target adds", func(t *testing.T) {
+		f := stepFields()
+		withHosts(&f)
+		f.Outcome, f.Phase, f.Findings = wire.StepDiverged, findings.StepReadiness, divergedFindings(findings.RuleReadinessTimeout, findings.StepReadiness)
+		for i := range f.Pushed {
+			f.Pushed[i].Outcome, f.Pushed[i].TookS = wire.PushNotAttempted, nil
+		}
+		f.Staged.Probes["s1-loop2-a"] = &wire.TwinProbe{Name: "s1-loop2", Endpoint: "a", Format: "ping", Package: ping}
+		f.Plan.Added = []string{"s1-loop2-a"}
+		f.Nodes = append(f.Nodes, wire.LabNode{Name: "s1-loop2-a", Container: "clab-fylgja-s1-loop2-a", Image: "alpine:3.24.2",
+			State: "running", MgmtIPv4: "172.20.20.7"})
+		rec, err := NewStepRecord(prev, f)
+		if err != nil {
+			t.Fatal(err)
+		}
+		validateRecord(t, twinSchema(t), rec)
+		for _, n := range rec.Nodes {
+			if n.Name == "s1-loop2-a" && (n.Holds == nil || *n.Holds != stepToID || n.Probe == nil || n.Probe.Name != "s1-loop2" || n.PSP != nil) {
+				t.Errorf("the added host recorded %+v; want it holding the target with its probe", n)
+			}
+		}
+	})
+
+	t.Run("a target's host containerlab does not report", func(t *testing.T) {
+		f := stepFields()
+		withHosts(&f)
+		f.Nodes = f.Nodes[:len(f.Nodes)-1]
+		_, err := NewStepRecord(prev, f)
+		if err == nil || !strings.Contains(err.Error(), "names node s1-loop-b, which containerlab does not report") {
+			t.Errorf("err = %v, want the target's host named as not reported", err)
+		}
+	})
+}
+
 // A record of 9 still reads (019): a create's and a step's record as an 018 worker wrote
 // them, which twin.json 9's frozen contract accepts, read with everything as written. 9 and
 // 10 hold the same fields, so each reads back as this build writes it but for its version.
@@ -1179,6 +1514,7 @@ func TestRecord9StillReads(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			generic := jsonOf(t, rec).(map[string]any)
 			generic["twin_version"] = "9"
+			unlossed(generic)
 			b := []byte(mustJSON(t, generic))
 			validateBytes(t, v9, b)
 			want := rec
@@ -1363,18 +1699,18 @@ func TestRecordTwin(t *testing.T) {
 		// Each holds the bundle the create pushed it.
 		holds := goldenID
 		want := []wire.TwinNode{
-			{Name: "n1", Container: "clab-fylgja-n1", Image: image, PSP: srlinux, MgmtIPv4: "172.20.20.2", ReadyAfterS: 0.761,
+			{Name: "n1", Container: "clab-fylgja-n1", Image: image, PSP: &srlinux, MgmtIPv4: "172.20.20.2", ReadyAfterS: 0.761,
 				Artifact: artifact("597f6263eb7e0b539679b3956270876f"), PushedInS: 0.7, Holds: &holds},
-			{Name: "n2", Container: "clab-fylgja-n2", Image: image, PSP: srlinux, MgmtIPv4: "172.20.20.3", ReadyAfterS: 0.897,
+			{Name: "n2", Container: "clab-fylgja-n2", Image: image, PSP: &srlinux, MgmtIPv4: "172.20.20.3", ReadyAfterS: 0.897,
 				Artifact: artifact("5ac21560015ad6bb1e881358115d0b7a"), PushedInS: 0.62, Holds: &holds},
-			{Name: "n3", Container: "clab-fylgja-n3", Image: image, PSP: srlinux, MgmtIPv4: "172.20.20.4", ReadyAfterS: 1.102,
+			{Name: "n3", Container: "clab-fylgja-n3", Image: image, PSP: &srlinux, MgmtIPv4: "172.20.20.4", ReadyAfterS: 1.102,
 				Artifact: artifact("e93df96400ddbada7daa1a0777d9d3e3"), PushedInS: 0.65, Holds: &holds},
 		}
 		if !reflect.DeepEqual(rec.Nodes, want) {
 			t.Errorf("nodes:\n got %+v\nwant %+v", rec.Nodes, want)
 		}
-		if rec.TwinVersion != "10" || rec.State != wire.StateReady || rec.Step != nil {
-			t.Errorf("twin_version %q, state %q, step %+v; want 10, ready and no step", rec.TwinVersion, rec.State, rec.Step)
+		if rec.TwinVersion != "11" || rec.State != wire.StateReady || rec.Step != nil {
+			t.Errorf("twin_version %q, state %q, step %+v; want 11, ready and no step", rec.TwinVersion, rec.State, rec.Step)
 		}
 		if rec.Stage != nil || rec.Rehearsal != nil || rec.SnapshotID != nil {
 			t.Errorf("stage = %+v, rehearsal = %+v, snapshot_id = %v; want nil for a run given none", rec.Stage, rec.Rehearsal, rec.SnapshotID)
@@ -1517,7 +1853,7 @@ func TestCreateWritesVersion10(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{`"twin_version":"10"`, `"snapshot_id":null`, `"stage":null`, `"rehearsal":null`, `"state":"ready"`, `"step":null`,
+	for _, want := range []string{`"twin_version":"11"`, `"snapshot_id":null`, `"stage":null`, `"rehearsal":null`, `"state":"ready"`, `"step":null`,
 		`"holds":"` + rec.BundleID + `"`} {
 		if !strings.Contains(string(b), want) {
 			t.Errorf("a create's record lacks %s:\n%s", want, b)
@@ -1805,7 +2141,7 @@ func stepPrevWith(t *testing.T, change func(*RecordFields)) wire.TwinRecord {
 		name, image, ip string
 		psp             wire.PSPRef
 	}{{"e1", ceosImage, "172.20.20.2", eos}, {"e2", ceosImage, "172.20.20.3", eos}, {"s1", "ghcr.io/nokia/srlinux:24.7.1", "172.20.20.4", srlinux}} {
-		f.Nodes = append(f.Nodes, wire.TwinNode{Name: n.name, Container: "clab-fylgja-" + n.name, Image: n.image, PSP: n.psp,
+		f.Nodes = append(f.Nodes, wire.TwinNode{Name: n.name, Container: "clab-fylgja-" + n.name, Image: n.image, PSP: &n.psp,
 			MgmtIPv4: n.ip, ReadyAfterS: 10, Artifact: stepArtifact(before[n.name]), PushedInS: 1})
 	}
 	if change != nil {
@@ -2171,7 +2507,7 @@ func TestNewStepRecordCreatedAndRecreatedNodes(t *testing.T) {
 		e1.Artifact.Checksum != before["e1"] || e1.PushedInS != 0 {
 		t.Errorf("recreated e1: %+v (holds %v); want no holds, the new image and package, its old artifact", e1, e1.Holds)
 	}
-	if s2 := byName["s2"]; s2.Holds != nil || s2.PSP != srlinux || s2.Artifact == nil || s2.Artifact.Checksum != strings.Repeat("5252", 8) {
+	if s2 := byName["s2"]; s2.Holds != nil || s2.PSP == nil || *s2.PSP != srlinux || s2.Artifact == nil || s2.Artifact.Checksum != strings.Repeat("5252", 8) {
 		t.Errorf("created s2: %+v (holds %v); want no holds, its package and the target's artifact", s2, s2.Holds)
 	}
 	if got := holdsOf(rec); got["e2"] != stepFromID || got["s1"] != stepFromID {
@@ -2442,7 +2778,7 @@ func TestNewStepRecordFromAVersion3Record(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if rec.TwinVersion != TwinVersion || TwinVersion != "10" || rec.State != wire.StateReady || rec.Step == nil {
+		if rec.TwinVersion != TwinVersion || TwinVersion != "11" || rec.State != wire.StateReady || rec.Step == nil {
 			t.Errorf("record version %q, state %q, step %v; want version 10, state ready and a step block",
 				rec.TwinVersion, rec.State, rec.Step != nil)
 		}
@@ -2493,7 +2829,7 @@ func TestNewStepRecordRefuses(t *testing.T) {
 		{name: "an outcome of no record", change: func(f *StepFields) { f.Outcome = "rejected" }, want: `unknown step outcome "rejected"`},
 		{name: "a stepped step with a phase", change: func(f *StepFields) { f.Phase = "push" }, want: `a stepped step has no failed phase, but "push" was given`},
 		{name: "a diverged step with no phase", change: func(f *StepFields) { f.Outcome = wire.StepDiverged },
-			want: `one of reconcile, readiness, push or record, not ""`},
+			want: `one of flows, reconcile, readiness, push or record, not ""`},
 		{name: "a diverged step at a phase a step lacks", change: func(f *StepFields) { f.Outcome, f.Phase = wire.StepDiverged, "teardown" },
 			want: `not "teardown"`},
 		{name: "a stepped step whose target is not staged", change: func(f *StepFields) { f.Staged = nil },

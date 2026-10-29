@@ -138,7 +138,7 @@ func stageDocuments() []labelledDocument {
 	dry.BundleID = id
 	dry.Stage = cabledBlock()
 	dry.DryRun = &DryRunBlock{
-		Nodes: []DryRunNode{{Name: "n1", Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: "nokia_srlinux", MemoryMB: 2048,
+		Nodes: []DryRunNode{{Name: "n1", Image: "ghcr.io/nokia/srlinux:24.7.1", PSP: ptr("nokia_srlinux"), MemoryMB: 2048,
 			Artifact: &DryRunArtifact{Name: "device-config", ContentType: "text/plain", Checksum: m5Checksum, Size: 861}}},
 		MemorySumMB: 2048, HostBudgetMB: &budget, Verdict: VerdictClear,
 	}
@@ -600,3 +600,5 @@ func containsAll(s string, subs []string) bool {
 	}
 	return true
 }
+
+func ptr(s string) *string { return &s }

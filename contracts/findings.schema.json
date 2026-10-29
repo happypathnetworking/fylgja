@@ -306,7 +306,7 @@
     },
     "dry_run": {
       "type": "object",
-      "description": "twin.create --dry-run / twin.provision --dry-run: what a real run would do. M6: `lossy_mappings` and `shared_ports` count what the bundle’s manifest records, so the operator sees a lossy twin before creating it.",
+      "description": "twin.create --dry-run / twin.provision --dry-run: what a real run would do. M6: `lossy_mappings` and `shared_ports` count what the bundle’s manifest records, so the operator sees a lossy twin before creating it. 016: `nodes[]` admits a probe's host, which carries `probe` in place of a support package, `psp` null and no `artifact`, since nothing is pushed to it; `memory_sum_mb` counts its probe package's memory beside the devices'.",
       "required": [
         "nodes",
         "memory_sum_mb",
@@ -326,8 +326,7 @@
               "name",
               "image",
               "psp",
-              "memory_mb",
-              "artifact"
+              "memory_mb"
             ],
             "additionalProperties": false,
             "properties": {
@@ -338,8 +337,57 @@
                 "type": "string"
               },
               "psp": {
-                "type": "string",
-                "description": "psp id"
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "description": "the device's support package; null on a probe's host (016), which has none"
+              },
+              "probe": {
+                "type": "object",
+                "description": "016: on a probe's host alone, what the host is, as twin.json 11 records it: the probe it is an endpoint of, which endpoint, the probe's format and the probe package it is built with. Absent on a device.",
+                "required": [
+                  "name",
+                  "endpoint",
+                  "format",
+                  "package"
+                ],
+                "additionalProperties": false,
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "endpoint": {
+                    "enum": [
+                      "a",
+                      "b"
+                    ]
+                  },
+                  "format": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "package": {
+                    "type": "object",
+                    "required": [
+                      "id",
+                      "source"
+                    ],
+                    "additionalProperties": false,
+                    "properties": {
+                      "id": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "enum": [
+                          "embedded",
+                          "override"
+                        ]
+                      }
+                    }
+                  }
+                }
               },
               "memory_mb": {
                 "type": "integer"
@@ -371,7 +419,38 @@
                   }
                 }
               }
-            }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "required": [
+                    "probe"
+                  ]
+                },
+                "then": {
+                  "properties": {
+                    "psp": {
+                      "type": "null"
+                    }
+                  },
+                  "not": {
+                    "required": [
+                      "artifact"
+                    ]
+                  }
+                },
+                "else": {
+                  "required": [
+                    "artifact"
+                  ],
+                  "properties": {
+                    "psp": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            ]
           }
         },
         "memory_sum_mb": {

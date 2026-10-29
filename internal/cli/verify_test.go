@@ -265,7 +265,7 @@ func verifyHost(t *testing.T, golden string, edit func(map[string]any), change f
 		for _, n := range m.Nodes {
 			if n.Name == name {
 				f.Nodes = append(f.Nodes, wire.TwinNode{Name: name, Container: "clab-fylgja-" + name, Image: n.Image,
-					PSP: wire.PSPRef{ID: n.PSP.ID, Source: n.PSP.Source}, MgmtIPv4: ips[name], ReadyAfterS: 9})
+					PSP: &wire.PSPRef{ID: n.PSP.ID, Source: n.PSP.Source}, MgmtIPv4: ips[name], ReadyAfterS: 9})
 			}
 		}
 	}

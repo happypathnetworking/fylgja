@@ -265,7 +265,7 @@ func recordFor(in wire.RecordInput) wire.TwinRecord {
 	for i, n := range in.Nodes {
 		nodes[i] = wire.TwinNode{
 			Name: n.Name, Container: n.Container, Image: n.Image,
-			PSP:      wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
+			PSP:      &wire.PSPRef{ID: "nokia_srlinux", Source: "embedded"},
 			MgmtIPv4: n.MgmtIPv4, ReadyAfterS: ready[n.Name],
 			Artifact: &wire.TwinArtifact{Name: "device-config", ContentType: "text/plain",
 				Checksum: fixtureArtifacts[n.Name], Size: fixtureArtifactSize},

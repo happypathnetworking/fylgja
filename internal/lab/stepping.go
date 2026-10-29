@@ -288,17 +288,7 @@ func stagedTarget(dir, target string) (*StagedTarget, error) {
 	if err != nil {
 		return nil, fmt.Errorf("the staged target bundle %s: %v", target, err)
 	}
-	t := &StagedTarget{BundleID: id, Provenance: recordProvenance(m.Provenance),
-		PSP: map[string]wire.PSPRef{}, Artifacts: map[string]*wire.TwinArtifact{}}
-	for _, n := range m.Nodes {
-		// A host has no support package (016): containerlab configures it from its
-		// topology node's exec lines, and nothing of a package is recorded for it here.
-		if n.PSP != nil {
-			t.PSP[n.Name] = wire.PSPRef{ID: n.PSP.ID, Source: n.PSP.Source}
-		}
-		if a := n.Artifact; a != nil {
-			t.Artifacts[n.Name] = &wire.TwinArtifact{Name: a.Name, ContentType: a.ContentType, Checksum: a.Checksum, Size: a.Size}
-		}
-	}
+	t := targetOf(m)
+	t.BundleID = id
 	return t, nil
 }

@@ -741,16 +741,18 @@ implement() { # <label> <ids> <prompt> <report file> [live]
 # --- Lanes -------------------------------------------------------------------------------
 
 # A worktree for one lane, on a new branch from HEAD, seeded with what Spec Kit needs and
-# this repository ignores: directories by symlink, files by copy (git refuses a symlinked
-# .gitignore), top-level entries only; local/ with the credentials file and the command
-# log's two directories linked, so the hook writes the pending file this tree reads; and
-# feature.json naming the feature. The seeded paths are listed in <seeded>, so the lane's
-# dirty check can leave them out: a symlink matches no ignore rule that ends in "/".
+# this repository ignores, both venvs among them (the root's infrahubctl, and
+# orchestrator/.venv, whose pytest and ruff `make test` and `make lint` run): directories
+# by symlink, files by copy (git refuses a symlinked .gitignore), the top ignored entries
+# only; local/ with the credentials file and the command log's two directories linked, so
+# the hook writes the pending file this tree reads; and feature.json naming the feature.
+# The seeded paths are listed in <seeded>, so the lane's dirty check can leave them out: a
+# symlink matches no ignore rule that ends in "/".
 seed_worktree() { # <worktree> <branch> <seeded list file>
 	local wt="$1" branch="$2" seeded="$3" p
 	git worktree add -q -b "$branch" "$wt" HEAD
 	: > "$seeded"
-	git ls-files -z --others --ignored --exclude-standard --directory -- .claude/skills .specify .venv |
+	git ls-files -z --others --ignored --exclude-standard --directory -- .claude/skills .specify .venv orchestrator/.venv |
 		python3 -c 'import sys
 ps = [p for p in sys.stdin.read().split("\0") if p]
 ps.sort(key=lambda p: (p.rstrip("/").count("/"), p))
@@ -759,7 +761,7 @@ for p in ps:
     if any(p.startswith(k) for k in keep if k.endswith("/")):
         continue
     keep.append(p)
-sys.stdout.write("\0".join(keep))' |
+sys.stdout.write("".join(k + "\0" for k in keep))' |
 		while IFS= read -r -d '' p; do
 			mkdir -p "$wt/$(dirname "$p")"
 			if [[ $p == */ ]]; then

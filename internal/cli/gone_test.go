@@ -478,7 +478,7 @@ func TestAClientGoneDuringADestroysStart(t *testing.T) {
 // was not cancelled, and the start finishes and the run goes on: only the operator's
 // interrupt abandons a start. Each mode has a server of its own, since the first is stopped.
 func TestAServerStoppedDuringADestroy(t *testing.T) {
-	destroyCmd := func(opts *options) error { return runDestroy(context.Background(), opts) }
+	destroyCmd := func(opts *options) error { return runDestroy(context.Background(), opts, &destroyFlags{}) }
 	// stopped runs the destroy in one mode against a server of its own over svc, which it
 	// stops once reached is closed, and returns what the client printed and the address it
 	// named, once the server's handler has ended.

@@ -33,6 +33,8 @@ type stepFlags struct {
 	// sends for a stage target. probesGiven is whether it was given at all.
 	probes      string
 	probesGiven bool
+	// detach is --detach (020): the answer ends at the run's identity.
+	detach bool
 }
 
 func newTwinStepCmd(opts *options) *cobra.Command {
@@ -55,7 +57,7 @@ func newTwinStepCmd(opts *options) *cobra.Command {
 			"twin destroy clears it. A plan that restarts or recreates a node needs --allow-restart.\n" +
 			"After the record the run reads the twin against the target until it conforms, at most\n" +
 			"--wait (default " + defaultBudget + "), and records how that ended; the step's outcome does not\n" +
-			"depend on it.",
+			"depend on it. --detach ends the command once the run has started, at its identity.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			f.stageGiven = cmd.Flags().Changed("stage")
@@ -80,6 +82,7 @@ func newTwinStepCmd(opts *options) *cobra.Command {
 		"after the record, read the twin until it conforms, at most this long (default "+defaultBudget+"; 0 reads once)")
 	cmd.Flags().StringVar(&f.probes, "probes", "", probesUsage+"; for a stage target, and refused beside --snapshot, "+
 		"which carries its own")
+	cmd.Flags().BoolVar(&f.detach, "detach", false, detachUsage+"; refused beside --dry-run")
 	return cmd
 }
 
@@ -97,6 +100,7 @@ func runTwinStep(ctx context.Context, opts *options, f *stepFlags) error {
 	}
 	a.bool("allow_restart", f.allowRestart)
 	a.bool("dry_run", f.dryRun)
+	a.bool("detach", f.detach)
 	if f.waitGiven {
 		a["wait"] = f.wait
 	}

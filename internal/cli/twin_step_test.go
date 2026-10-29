@@ -4211,3 +4211,37 @@ func TestStepToASnapshotCloses(t *testing.T) {
 		})
 	}
 }
+
+// twin step --detach (020) decides everything a followed step decides, prints the step, the
+// reconcile and the push lines before the run, then ends once the run has started: none of
+// its progress, exit 0, the command's warnings then run.detached naming the run. --detach
+// beside --dry-run is run.flags.conflict, exit 1, before the twin's record is read.
+func TestStepDetachedEndsAtTheRun(t *testing.T) {
+	stepHost(t, "plan-link-added.json", nil)
+	svc := &fakeService{runID: stepRunID, events: stepEvents()}
+	useService(t, svc)
+	useInterrupts(t)
+
+	out := runStepCmd(t, "--allow-restart", "--detach")
+	if out.code != findings.ExitOK || out.doc.Status != findings.StatusOK || out.doc.Subject.RunID != stepRunID {
+		t.Fatalf("exit %d, document %+v; want 0, ok, naming %s", out.code, out.doc, stepRunID)
+	}
+	last := out.doc.Findings[len(out.doc.Findings)-1]
+	if last.Rule != findings.RuleRunDetached || last.Object != provision.WorkflowStep+" "+stepRunID {
+		t.Errorf("last finding %+v, want run.detached naming the step run", last)
+	}
+	if strings.Contains(out.stdout, "step inspect") || strings.Contains(out.stdout, "run fylgja-step") {
+		t.Errorf("a detached step printed its run's progress:\n%s", out.stdout)
+	}
+	if !strings.Contains(out.stdout, "push: ") || !strings.Contains(out.stderr, "started; read it with fylgja run read") {
+		t.Errorf("stdout:\n%s\nstderr:\n%s\nwant the step's lines before the run, and run.detached", out.stdout, out.stderr)
+	}
+	if len(svc.stepped) != 2 {
+		t.Errorf("%d step runs started, want one in each rendering", len(svc.stepped))
+	}
+
+	conflict := runStepCmd(t, "--dry-run", "--detach")
+	if f := refusalOf(t, conflict.doc); conflict.code != findings.ExitRejected || f.Rule != findings.RuleRunFlagsConflict {
+		t.Errorf("--dry-run --detach: exit %d, %+v; want run.flags.conflict, exit 1", conflict.code, f)
+	}
+}

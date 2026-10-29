@@ -51,7 +51,7 @@ func TestDestroyPrintsWhatItRemoved(t *testing.T) {
 			useService(t, svc)
 
 			var err error
-			out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}) })
+			out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}, &destroyFlags{}) })
 			code, doc := exitOf(t, err)
 			if code != findings.ExitOK || doc.Operation != findings.OpTwinDestroy {
 				t.Fatalf("exit %d, document %+v; want 0 from twin.destroy", code, doc)
@@ -79,7 +79,7 @@ func TestDestroyUncleanExitsFour(t *testing.T) {
 	}, list)})
 
 	var err error
-	out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}) })
+	out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}, &destroyFlags{}) })
 	code, doc := exitOf(t, err)
 	if code != findings.ExitUnclean || doc.Status != findings.StatusUnclean {
 		t.Fatalf("exit %d, status %s; want 4, unclean", code, doc.Status)
@@ -103,7 +103,7 @@ func TestDestroyStartRefusals(t *testing.T) {
 		t.Run(c.name, func(t *testing.T) {
 			c.use(t)
 			var err error
-			out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{asJSON: true}) })
+			out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{asJSON: true}, &destroyFlags{}) })
 			if out != "" {
 				t.Errorf("--json printed lines on stdout:\n%s", out)
 			}
@@ -144,7 +144,7 @@ func TestDestroyJSONDocumentCarriesTheCleanup(t *testing.T) {
 	}, nil)})
 
 	var err error
-	out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{asJSON: true}) })
+	out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{asJSON: true}, &destroyFlags{}) })
 	if out != "" {
 		t.Errorf("--json printed lines on stdout:\n%s", out)
 	}
@@ -173,7 +173,7 @@ func TestDestroyStopsNothingFirst(t *testing.T) {
 		svc := &fakeService{destroyRun: destroyedRun(cleanup, nil), destroyEvents: events}
 		useService(t, svc)
 		var err error
-		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}) })
+		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}, &destroyFlags{}) })
 		if code, _ := exitOf(t, err); code != findings.ExitOK {
 			t.Fatalf("exit %d, want 0", code)
 		}
@@ -196,7 +196,7 @@ func TestDestroyStopsNothingFirst(t *testing.T) {
 		svc := &fakeService{destroyRun: destroyedRun(cleanup, nil), destroyEvents: events}
 		useService(t, svc)
 		var err error
-		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{asJSON: true}) })
+		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{asJSON: true}, &destroyFlags{}) })
 		if out != "" {
 			t.Errorf("--json printed lines on stdout:\n%s", out)
 		}
@@ -239,7 +239,7 @@ func TestDestroyCancelsAStepRun(t *testing.T) {
 			destroyEvents: append(append([]provision.Event{}, events...), provision.Event{Notice: "run fylgja-destroy run-d"})}
 		useService(t, svc)
 		var err error
-		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}) })
+		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}, &destroyFlags{}) })
 		code, doc := exitOf(t, err)
 		if code != findings.ExitOK || doc.Subject.RunID != "run-d" {
 			t.Fatalf("exit %d, document %+v; want 0 from the destroy run", code, doc)
@@ -261,7 +261,7 @@ func TestDestroyCancelsAStepRun(t *testing.T) {
 	t.Run("waiting for it fails", func(t *testing.T) {
 		boom := errors.New("waiting for step run " + step + ": the workflow service answered with an internal error")
 		useService(t, &fakeService{destroyErr: boom, destroyEvents: events[:2]})
-		code, doc := exitOf(t, runDestroy(context.Background(), &options{asJSON: true}))
+		code, doc := exitOf(t, runDestroy(context.Background(), &options{asJSON: true}, &destroyFlags{}))
 		if code != findings.ExitError || len(doc.Findings) != 1 || doc.Findings[0].Step != findings.StepStart ||
 			doc.Findings[0].Rule != findings.RuleOperationFailed {
 			t.Errorf("exit %d, findings %+v; want 2, operation.failed at step start", code, doc.Findings)
@@ -304,7 +304,7 @@ func TestDestroyThroughTheAPI(t *testing.T) {
 		queued := useInterrupts(t)
 		queued <- os.Interrupt
 
-		printedBy(t, func() { sentDocument(t, runDestroy(context.Background(), &options{})) })
+		printedBy(t, func() { sentDocument(t, runDestroy(context.Background(), &options{}, &destroyFlags{})) })
 
 		seen := fake.seen()
 		if len(seen) != 1 || seen[0].op != findings.OpTwinDestroy || seen[0].stream != "" {
@@ -328,7 +328,7 @@ func TestDestroyThroughTheAPI(t *testing.T) {
 		before := len(requestOutcomes("interrupt"))
 
 		var err error
-		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}) })
+		out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}, &destroyFlags{}) })
 
 		code, doc := exitOf(t, err)
 		if code != findings.ExitOK || doc.Subject == nil || doc.Subject.RunID != "run-d" {
@@ -357,4 +357,28 @@ func TestDestroyThroughTheAPI(t *testing.T) {
 		}
 		validateM2Document(t, doc)
 	})
+}
+
+// twin destroy --detach (020) ends once the destroy run has started: it prints the run as the
+// followed destroy does, and nothing of a cleanup it never read, exit 0, the document ending
+// with run.detached; the followed StartDestroy is never called.
+func TestDestroyDetachedEndsAtTheRun(t *testing.T) {
+	svc := &fakeService{destroyRun: destroyedRun(provision.CleanupResult{Teardown: provision.CleanupDone,
+		Unstage: provision.CleanupDone, Removed: []string{"lab fylgja (3 containers)"}}, nil),
+		destroyEvents: []provision.Event{{Notice: "run fylgja-destroy run-d"}}}
+	useService(t, svc)
+
+	var err error
+	out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}, &destroyFlags{detach: true}) })
+	code, doc := exitOf(t, err)
+	if code != findings.ExitOK || doc.Subject.RunID != "run-d" || len(doc.Findings) != 1 ||
+		doc.Findings[0].Rule != findings.RuleRunDetached || doc.Findings[0].Object != "fylgja-destroy run-d" {
+		t.Fatalf("exit %d, document %+v; want 0, run.detached naming fylgja-destroy run-d", code, doc)
+	}
+	if out != "run fylgja-destroy run-d\n" {
+		t.Errorf("stdout:\n%s\nwant the run alone", out)
+	}
+	if !slices.Equal(svc.calls, []string{"StartDestroyDetached"}) {
+		t.Errorf("calls %v, want StartDestroyDetached alone", svc.calls)
+	}
 }

@@ -171,7 +171,7 @@ func TestADestroyFromASecondClientDuringAStep(t *testing.T) {
 	waitFor(t, svc.following, "the first client's follow of the step run")
 
 	var err error
-	out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}) })
+	out := captureStdout(t, func() { err = runDestroy(context.Background(), &options{}, &destroyFlags{}) })
 	code, doc := exitOf(t, err)
 	if code != findings.ExitOK || doc.Subject == nil || doc.Subject.RunID != "run-d" {
 		t.Errorf("the destroy: exit %d, document %+v; want 0 naming run-d", code, doc)

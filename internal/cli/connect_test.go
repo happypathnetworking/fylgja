@@ -53,7 +53,7 @@ func executeClient(t *testing.T, args ...string) (int, *findings.Document, strin
 	opts := &options{}
 	root := &cobra.Command{Use: "fylgja", SilenceUsage: true, SilenceErrors: true}
 	root.PersistentFlags().BoolVar(&opts.asJSON, "json", false, "")
-	root.AddCommand(newTwinCmd(opts), newIntentCmd(opts), newStageCmd(opts), newSchemaCmd(opts), newPSPCmd(opts))
+	root.AddCommand(newTwinCmd(opts), newIntentCmd(opts), newStageCmd(opts), newSchemaCmd(opts), newPSPCmd(opts), newRunCmd(opts))
 	root.SetArgs(append(args, "--json"))
 	var code int
 	out := captureStdout(t, func() {

@@ -37,6 +37,8 @@ type createFlags struct {
 	// sends. probesGiven is whether it was given at all.
 	probes      string
 	probesGiven bool
+	// detach is --detach (020): the answer ends at the run's identity.
+	detach bool
 }
 
 func newTwinCreateCmd(opts *options) *cobra.Command {
@@ -53,7 +55,7 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 			"the twin through the lab host's worker. Prints a line as each step begins and ends,\n" +
 			"and blocks until every node answers its readiness probe or the run has cleaned up\n" +
 			"after itself. Interrupt once to cancel the run and wait for its cleanup; a second time\n" +
-			"to stop waiting.",
+			"to stop waiting. --detach ends the command once the run has started, at its identity.",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			f.stageGiven = cmd.Flags().Changed("stage")
@@ -76,6 +78,7 @@ func newTwinCreateCmd(opts *options) *cobra.Command {
 		"snapshot to build the twin from, <id|file>: a snapshot id (64 lowercase hex characters) the server's store holds, "+
 			"or a snapshot file, which is read here and sent; no branch is read")
 	cmd.Flags().StringVar(&f.probes, "probes", "", probesUsage+"; refused beside --snapshot, which carries its own")
+	cmd.Flags().BoolVar(&f.detach, "detach", false, detachUsage+"; refused beside --dry-run")
 	return cmd
 }
 
@@ -108,6 +111,7 @@ func runCreate(ctx context.Context, opts *options, f *createFlags) error {
 		a["stage"] = f.stage
 	}
 	a.bool("dry_run", f.dryRun)
+	a.bool("detach", f.detach)
 	a.scope(f.scope, f.scopeGiven)
 	a.probes(f.probes, f.probesGiven)
 	subject := &findings.Subject{Branch: f.branch, At: f.at, Snapshot: f.snapshot}

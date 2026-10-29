@@ -85,6 +85,10 @@ func probesSent(op string, subject *findings.Subject, path string, wasGiven bool
 	return []api.File{file}, nil
 }
 
+// detachUsage is --detach's help on the four commands that start a run (020, R-03).
+const detachUsage = "end once the run has started, printing its identity, and leave it running; fylgja run read reads it " +
+	"and fylgja run interrupt interrupts it"
+
 // scopeUsage is --scope's help on the five commands that read intent under one (017).
 const scopeUsage = "the devices to read, tag:<name>: every device carrying the tag of that name (default: the server's " +
 	"FYLGJA_DEFAULT_SCOPE)"
@@ -162,6 +166,12 @@ func send(ctx context.Context, opts *options, op string, args map[string]any, fi
 	}()
 	for {
 		f, err := answer.Next()
+		if errors.Is(err, io.EOF) {
+			// A run.read of a run that has not closed ends after its events with no document,
+			// the one answer that does (R-04): the client reads its end as EOF only there, and
+			// the command exits 0 with nothing more to print.
+			return nil
+		}
 		if err != nil {
 			if armed != nil {
 				got.cancelAsked = armed.deliveredAny()

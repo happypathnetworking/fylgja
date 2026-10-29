@@ -71,6 +71,7 @@ func AddCommands(root *cobra.Command, b string) {
 	root.AddCommand(newStageCmd(rootOptions))
 	root.AddCommand(newSchemaCmd(rootOptions))
 	root.AddCommand(newPSPCmd(rootOptions))
+	root.AddCommand(newRunCmd(rootOptions))
 }
 
 // Report renders whatever a client's command produced and returns the process exit code.

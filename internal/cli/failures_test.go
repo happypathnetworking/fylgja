@@ -205,7 +205,7 @@ func TestTheClientsOwnFailures(t *testing.T) {
 				}
 				dropConnection(t, w)
 			})
-			text, asJSON := runBothModes(t, func(opts *options) error { return runDestroy(context.Background(), opts) })
+			text, asJSON := runBothModes(t, func(opts *options) error { return runDestroy(context.Background(), opts, &destroyFlags{}) })
 			want := findings.Finding{Severity: findings.Rejection, Rule: findings.RuleAPIUnreachable, Object: address,
 				Message: "the API at " + address + " stopped answering before the command ended: unexpected EOF" + c.suffix}
 			wantClientFailure(t, findings.OpTwinDestroy, text, asJSON, want)

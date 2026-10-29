@@ -306,16 +306,25 @@ func (f *fakeService) ResultOfRehearse(ctx context.Context, _ string) (provision
 }
 
 // Describe answers run.read's and run.interrupt's describe (020): the run described when
-// one is set, under the identity asked, and otherwise no run under it, read first as
-// InFlight reads.
+// one is set and the identity asked names it or names no run, and otherwise no run under
+// it, read first as InFlight reads.
 func (f *fakeService) Describe(ctx context.Context, workflowID, runID string) (provision.RunState, error) {
 	if err := f.read(ctx, "Describe"); err != nil {
 		return provision.RunState{}, err
 	}
-	if f.described == nil {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.described == nil || (runID != "" && runID != f.described.RunID) {
 		return provision.RunState{}, &provision.UnknownRunError{WorkflowID: workflowID, RunID: runID}
 	}
 	return *f.described, nil
+}
+
+// describe sets the run Describe answers, as the run moves on between two requests.
+func (f *fakeService) describe(s provision.RunState) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.described = &s
 }
 
 // History replays the run's events as Follow does: the fake's history is whole (020).
@@ -1180,18 +1189,8 @@ func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 	for _, path := range commands {
 		ops = append(ops, strings.Join(path, "."))
 	}
-	// 020's run.read and run.interrupt are served (T007) before the client has their
-	// commands: fylgja run read and fylgja run interrupt join the tree at T009, each leaving
-	// this list as it does.
-	notYetCommands := []string{findings.OpRunRead, findings.OpRunInterrupt}
-	for _, op := range notYetCommands {
-		if slices.Contains(ops, op) {
-			t.Errorf("the client has a command for %s; drop it from notYetCommands", op)
-		}
-	}
-	served := slices.DeleteFunc(slices.Clone(api.Operations), func(op string) bool { return slices.Contains(notYetCommands, op) })
-	if !slices.Equal(slices.Sorted(slices.Values(ops)), slices.Sorted(slices.Values(served))) {
-		t.Fatalf("the walk found %v; want the API's operations %v", ops, served)
+	if !slices.Equal(slices.Sorted(slices.Values(ops)), slices.Sorted(slices.Values(api.Operations))) {
+		t.Fatalf("the walk found %v; want the API's operations %v", ops, api.Operations)
 	}
 
 	for _, path := range commands {
@@ -1207,7 +1206,7 @@ func TestNoCommandTakesTheFollowingFlags(t *testing.T) {
 				root := &cobra.Command{Use: "fylgja", SilenceUsage: true, SilenceErrors: true}
 				root.PersistentFlags().BoolVar(&opts.asJSON, "json", false, "")
 				for _, cmd := range []*cobra.Command{newIntentCmd(opts), newTwinCmd(opts), newStageCmd(opts),
-					newSchemaCmd(opts), newPSPCmd(opts)} {
+					newSchemaCmd(opts), newPSPCmd(opts), newRunCmd(opts)} {
 					root.AddCommand(cmd)
 				}
 				// --json comes first: cobra stops reading flags at the unknown one.
@@ -1276,4 +1275,48 @@ func TestCreateFollowsNothing(t *testing.T) {
 		t.Errorf("the document carries a following key (%v): %s", err, raw)
 	}
 	validateM10Document(t, doc)
+}
+
+// twin create --detach (020; US4 scenario 1) ends once the run has started: the server's
+// read, take, compile and filing print as a followed create's do, then nothing of the run,
+// whose progress is not followed, and the document, exit 0, ends with run.detached naming
+// the run, its text the line the command prints. --detach beside --dry-run is
+// run.flags.conflict, exit 1, before the workflow service is dialled.
+func TestCreateDetachedEndsAtTheRun(t *testing.T) {
+	paths := useFixtureRead(t)
+	svc := &fakeService{runID: "run-1", result: readyResult(), events: []provision.Event{{Step: "deploy"}}}
+	useService(t, svc)
+	useInterrupts(t)
+
+	var err error
+	var out string
+	errText := captureStderr(t, func() {
+		out = captureStdout(t, func() {
+			err = runCreate(context.Background(), &options{}, &createFlags{branch: "fylgja-fixture", detach: true})
+		})
+		_ = report(&options{}, nil, err)
+	})
+	code, doc := exitOf(t, err)
+	if code != findings.ExitOK || doc.Subject.RunID != "run-1" {
+		t.Fatalf("exit %d, document %+v; want 0 naming run-1", code, doc)
+	}
+	if want := strings.Join(storedLines(paths, headSnapshotID, headBundleID), "\n") + "\n"; out != want {
+		t.Errorf("stdout:\n%s\nwant:\n%s", out, want)
+	}
+	if !strings.Contains(errText, "run fylgja-provision run-1 started; read it with fylgja run read") {
+		t.Errorf("stderr:\n%s\nwant the run.detached line", errText)
+	}
+	last := doc.Findings[len(doc.Findings)-1]
+	if last.Rule != findings.RuleRunDetached || last.Object != "fylgja-provision run-1" || len(svc.started) != 1 {
+		t.Errorf("last finding %+v, %d runs started; want run.detached naming fylgja-provision run-1, and one", last, len(svc.started))
+	}
+	validateM10Document(t, doc)
+
+	dials := countDials(t)
+	code, doc = executeTwin(t, "twin", "create", "--branch", "fylgja-fixture", "--dry-run", "--detach")
+	if code != findings.ExitRejected || len(doc.Findings) != 1 || doc.Findings[0].Rule != findings.RuleRunFlagsConflict ||
+		doc.Findings[0].Object != "dry_run" || dials.Load() != 0 {
+		t.Errorf("--dry-run --detach: exit %d, findings %+v, %d dials; want run.flags.conflict, exit 1, none", code, doc.Findings,
+			dials.Load())
+	}
 }

@@ -225,7 +225,7 @@ func TestEveryRunRequestNamesAFreshStream(t *testing.T) {
 			return runTwinProvision(context.Background(), &options{}, &provisionFlags{}, bundleDir)
 		}},
 		{findings.OpTwinStep, func() error { return runTwinStep(context.Background(), &options{}, &stepFlags{}) }},
-		{findings.OpTwinDestroy, func() error { return runDestroy(context.Background(), &options{}) }},
+		{findings.OpTwinDestroy, func() error { return runDestroy(context.Background(), &options{}, &destroyFlags{}) }},
 		{findings.OpTwinShow, func() error { return runShow(context.Background(), &options{}) }},
 	}
 	printedBy(t, func() {

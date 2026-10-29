@@ -100,13 +100,13 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 		{"destroy, the start fails", findings.StepStart, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
 				useService(t, &fakeService{destroyErr: boom})
-				return findings.StepStart, runDestroy(ctx, jsonOut)
+				return findings.StepStart, runDestroy(ctx, jsonOut, &destroyFlags{})
 			}},
 		{"destroy, waiting for the provisioning run it cancelled fails", findings.StepStart, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
 				useService(t, &fakeService{destroyErr: boom,
 					destroyEvents: []provision.Event{event(provision.WorkflowProvision, "cleanup teardown", findings.StepTeardown)}})
-				return findings.StepStart, runDestroy(ctx, jsonOut)
+				return findings.StepStart, runDestroy(ctx, jsonOut, &destroyFlags{})
 			}},
 		{"destroy, waiting for the destroy run fails during teardown", findings.StepTeardown, findings.RuleOperationFailed,
 			func(t *testing.T) (string, error) {
@@ -114,7 +114,7 @@ func TestM2CommandFindingsNameTheirStep(t *testing.T) {
 					{Notice: "run fylgja-destroy run-d"},
 					event(provision.WorkflowDestroy, "teardown", findings.StepTeardown),
 				}})
-				return findings.StepTeardown, runDestroy(ctx, jsonOut)
+				return findings.StepTeardown, runDestroy(ctx, jsonOut, &destroyFlags{})
 			}},
 		// twin step's own findings, before any run.
 		{"step, an invalid override package", findings.StepRead, findings.RulePSPReadinessEncoding,

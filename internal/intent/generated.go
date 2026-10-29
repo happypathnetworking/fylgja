@@ -2882,6 +2882,251 @@ func (v *PortsResponse) GetInterfacePhysical() PortsInterfacePhysicalPaginatedIn
 	return v.InterfacePhysical
 }
 
+// ProbesFylgjaProbePaginatedFylgjaProbe includes the requested fields of the GraphQL type PaginatedFylgjaProbe.
+// The GraphQL type's documentation follows.
+//
+// A probe: two synthesized hosts on two uncabled ports of the intent, pinging each other through the twin.
+type ProbesFylgjaProbePaginatedFylgjaProbe struct {
+	Count int                                                          `json:"count"`
+	Edges []ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbe `json:"edges"`
+}
+
+// GetCount returns ProbesFylgjaProbePaginatedFylgjaProbe.Count, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbe) GetCount() int { return v.Count }
+
+// GetEdges returns ProbesFylgjaProbePaginatedFylgjaProbe.Edges, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbe) GetEdges() []ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbe {
+	return v.Edges
+}
+
+// ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbe includes the requested fields of the GraphQL type EdgedFylgjaProbe.
+// The GraphQL type's documentation follows.
+//
+// A probe: two synthesized hosts on two uncabled ports of the intent, pinging each other through the twin.
+type ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbe struct {
+	Node ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe `json:"node"`
+}
+
+// GetNode returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbe.Node, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbe) GetNode() ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe {
+	return v.Node
+}
+
+// ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe includes the requested fields of the GraphQL type FylgjaProbe.
+// The GraphQL type's documentation follows.
+//
+// A probe: two synthesized hosts on two uncabled ports of the intent, pinging each other through the twin.
+type ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe struct {
+	// The probe's name: lowercase letters, digits and '-', at most 24; its hosts are <name>-a and <name>-b. (required)
+	Name ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeNameTextAttribute `json:"name"`
+	// The probe package that runs the hosts (probes/<format>.yaml).
+	Format ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeFormatDropdown `json:"format"`
+	// Endpoint a's device, by the intent's name. (required)
+	A_device ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_deviceTextAttribute `json:"a_device"`
+	// Endpoint a's interface on it: uncabled and not mgmt_only. (required)
+	A_interface ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_interfaceTextAttribute `json:"a_interface"`
+	// Endpoint a's host address with its prefix length, as 10.1.10.2/24. (required)
+	A_address ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_addressTextAttribute `json:"a_address"`
+	// Endpoint a's gateway, an address with no prefix length, within its prefix. (required)
+	A_gateway ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_gatewayTextAttribute `json:"a_gateway"`
+	// Endpoint b's device, by the intent's name. (required)
+	B_device ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_deviceTextAttribute `json:"b_device"`
+	// Endpoint b's interface on it: uncabled and not mgmt_only. (required)
+	B_interface ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_interfaceTextAttribute `json:"b_interface"`
+	// Endpoint b's host address with its prefix length, as 10.1.10.2/24. (required)
+	B_address ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_addressTextAttribute `json:"b_address"`
+	// Endpoint b's gateway, an address with no prefix length, within its prefix. (required)
+	B_gateway ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_gatewayTextAttribute `json:"b_gateway"`
+}
+
+// GetName returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe.Name, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe) GetName() ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeNameTextAttribute {
+	return v.Name
+}
+
+// GetFormat returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe.Format, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe) GetFormat() ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeFormatDropdown {
+	return v.Format
+}
+
+// GetA_device returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe.A_device, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe) GetA_device() ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_deviceTextAttribute {
+	return v.A_device
+}
+
+// GetA_interface returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe.A_interface, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe) GetA_interface() ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_interfaceTextAttribute {
+	return v.A_interface
+}
+
+// GetA_address returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe.A_address, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe) GetA_address() ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_addressTextAttribute {
+	return v.A_address
+}
+
+// GetA_gateway returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe.A_gateway, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe) GetA_gateway() ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_gatewayTextAttribute {
+	return v.A_gateway
+}
+
+// GetB_device returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe.B_device, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe) GetB_device() ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_deviceTextAttribute {
+	return v.B_device
+}
+
+// GetB_interface returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe.B_interface, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe) GetB_interface() ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_interfaceTextAttribute {
+	return v.B_interface
+}
+
+// GetB_address returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe.B_address, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe) GetB_address() ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_addressTextAttribute {
+	return v.B_address
+}
+
+// GetB_gateway returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe.B_gateway, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbe) GetB_gateway() ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_gatewayTextAttribute {
+	return v.B_gateway
+}
+
+// ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_addressTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_addressTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_addressTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_addressTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_deviceTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_deviceTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_deviceTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_deviceTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_gatewayTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_gatewayTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_gatewayTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_gatewayTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_interfaceTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_interfaceTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_interfaceTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeA_interfaceTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_addressTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_addressTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_addressTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_addressTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_deviceTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_deviceTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_deviceTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_deviceTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_gatewayTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_gatewayTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_gatewayTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_gatewayTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_interfaceTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_interfaceTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_interfaceTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeB_interfaceTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeFormatDropdown includes the requested fields of the GraphQL type Dropdown.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Dropdown
+type ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeFormatDropdown struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeFormatDropdown.Value, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeFormatDropdown) GetValue() string {
+	return v.Value
+}
+
+// ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeNameTextAttribute includes the requested fields of the GraphQL type TextAttribute.
+// The GraphQL type's documentation follows.
+//
+// Attribute of type Text
+type ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeNameTextAttribute struct {
+	Value string `json:"value"`
+}
+
+// GetValue returns ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeNameTextAttribute.Value, and is useful for accessing the field via an interface.
+func (v *ProbesFylgjaProbePaginatedFylgjaProbeEdgesEdgedFylgjaProbeNodeFylgjaProbeNameTextAttribute) GetValue() string {
+	return v.Value
+}
+
+// ProbesResponse is returned by Probes on success.
+type ProbesResponse struct {
+	FylgjaProbe ProbesFylgjaProbePaginatedFylgjaProbe `json:"FylgjaProbe"`
+}
+
+// GetFylgjaProbe returns ProbesResponse.FylgjaProbe, and is useful for accessing the field via an interface.
+func (v *ProbesResponse) GetFylgjaProbe() ProbesFylgjaProbePaginatedFylgjaProbe { return v.FylgjaProbe }
+
 // ProposedChangesCoreProposedChangePaginatedCoreProposedChange includes the requested fields of the GraphQL type PaginatedCoreProposedChange.
 // The GraphQL type's documentation follows.
 //
@@ -3322,6 +3567,18 @@ func (v *__PortsInput) GetLimit() int { return v.Limit }
 
 // GetOffset returns __PortsInput.Offset, and is useful for accessing the field via an interface.
 func (v *__PortsInput) GetOffset() int { return v.Offset }
+
+// __ProbesInput is used internally by genqlient
+type __ProbesInput struct {
+	Limit  int `json:"limit"`
+	Offset int `json:"offset"`
+}
+
+// GetLimit returns __ProbesInput.Limit, and is useful for accessing the field via an interface.
+func (v *__ProbesInput) GetLimit() int { return v.Limit }
+
+// GetOffset returns __ProbesInput.Offset, and is useful for accessing the field via an interface.
+func (v *__ProbesInput) GetOffset() int { return v.Offset }
 
 // __ProposedChangesInput is used internally by genqlient
 type __ProposedChangesInput struct {
@@ -3958,6 +4215,81 @@ func Ports(
 	}
 
 	data_ = &PortsResponse{}
+	resp_ := &graphql.Response{Data: data_}
+
+	err_ = client_.MakeRequest(
+		ctx_,
+		req_,
+		resp_,
+	)
+
+	return data_, err_
+}
+
+// The query executed by Probes.
+const Probes_Operation = `
+query Probes ($limit: Int!, $offset: Int!) {
+	FylgjaProbe(limit: $limit, offset: $offset) {
+		count
+		edges {
+			node {
+				name {
+					value
+				}
+				format {
+					value
+				}
+				a_device {
+					value
+				}
+				a_interface {
+					value
+				}
+				a_address {
+					value
+				}
+				a_gateway {
+					value
+				}
+				b_device {
+					value
+				}
+				b_interface {
+					value
+				}
+				b_address {
+					value
+				}
+				b_gateway {
+					value
+				}
+			}
+		}
+	}
+}
+`
+
+// 016 — the probes declared in Infrahub, the second source of a declaration after a
+// --probes file (R-06; D-064): every object of Fylgja's own kind FylgjaProbe, an owned
+// root, on the default branch's endpoint, unpinned, in name order (the kind's order_by).
+// Its ten attributes are the declaration's element by renaming alone; description is
+// never read.
+func Probes(
+	ctx_ context.Context,
+	client_ graphql.Client,
+	limit int,
+	offset int,
+) (data_ *ProbesResponse, err_ error) {
+	req_ := &graphql.Request{
+		OpName: "Probes",
+		Query:  Probes_Operation,
+		Variables: &__ProbesInput{
+			Limit:  limit,
+			Offset: offset,
+		},
+	}
+
+	data_ = &ProbesResponse{}
 	resp_ := &graphql.Response{Data: data_}
 
 	err_ = client_.MakeRequest(

@@ -55,6 +55,10 @@ type fakeInfrahub struct {
 	// short, for a cable it names, is the count its connected_endpoints answers in place
 	// of the ends it lists.
 	short map[string]int
+	// probes are every FylgjaProbe on the default branch, in Infrahub's order, as its
+	// GraphQL answers them; the kind is in the schema only once a test adds it
+	// (withProbeKind, probes_test.go).
+	probes []any
 }
 
 // fakeDevice is one DcimDevice: its tags, its platform's name and its manufacturer's (""
@@ -90,14 +94,14 @@ type fakeEnd struct {
 	Kind, ID string
 }
 
-// fakeRequest is one request as the fake saw it: the path, the GraphQL operation when it
-// was one, its query text and variables, and the `at` query parameter, decoded, with
-// whether it was sent at all.
+// fakeRequest is one request as the fake saw it: the path and its query string, the
+// GraphQL operation when it was one, its query text and variables, and the `at` query
+// parameter, decoded, with whether it was sent at all.
 type fakeRequest struct {
-	Path, Operation, At string
-	HasAt               bool
-	Query               string
-	Variables           map[string]any
+	Path, RawQuery, Operation, At string
+	HasAt                         bool
+	Query                         string
+	Variables                     map[string]any
 }
 
 // fakeArtifact is one CoreArtifact as the device query lists it.
@@ -328,7 +332,7 @@ func (f *fakeInfrahub) serve(w http.ResponseWriter, r *http.Request) {
 	defer f.mu.Unlock()
 	f.requests[r.URL.Path]++
 	at, hasAt := r.URL.Query()["at"]
-	seen := fakeRequest{Path: r.URL.Path, HasAt: hasAt}
+	seen := fakeRequest{Path: r.URL.Path, RawQuery: r.URL.RawQuery, HasAt: hasAt}
 	if hasAt {
 		seen.At = strings.Join(at, ",")
 	}
@@ -345,18 +349,19 @@ func (f *fakeInfrahub) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		w.WriteHeader(obj.Status)
 		_, _ = w.Write(obj.Body)
+	case r.Method == http.MethodPost && r.URL.Path == "/graphql":
+		// The default branch's endpoint, unnamed, which the probe reader asks (016).
+		req := f.graphqlRequest(r)
+		switch req.OperationName {
+		case "Probes":
+			limit, offset := pageOf(req.Variables)
+			writeJSON(w, http.StatusOK, map[string]any{"data": map[string]any{"FylgjaProbe": page(f.probes, limit, offset)}})
+		default:
+			f.t.Errorf("the default branch was sent GraphQL operation %q, which the fake does not know", req.OperationName)
+			http.Error(w, "unknown operation", http.StatusTeapot)
+		}
 	case r.Method == http.MethodPost && r.URL.Path == "/graphql/"+f.branch:
-		var req struct {
-			OperationName string         `json:"operationName"`
-			Query         string         `json:"query"`
-			Variables     map[string]any `json:"variables"`
-		}
-		body, _ := io.ReadAll(r.Body)
-		if err := json.Unmarshal(body, &req); err != nil {
-			f.t.Errorf("GraphQL request is not JSON: %v", err)
-		}
-		last := &f.served[len(f.served)-1]
-		last.Operation, last.Query, last.Variables = req.OperationName, req.Query, req.Variables
+		req := f.graphqlRequest(r)
 		limit, offset := pageOf(req.Variables)
 		switch req.OperationName {
 		case "Devices":
@@ -373,6 +378,26 @@ func (f *fakeInfrahub) serve(w http.ResponseWriter, r *http.Request) {
 		f.t.Errorf("the read sent %s %s, which the fake does not serve", r.Method, r.URL.Path)
 		http.Error(w, "unexpected", http.StatusTeapot)
 	}
+}
+
+// graphqlRequest decodes a GraphQL request and records its operation, query and variables
+// on the request served last.
+func (f *fakeInfrahub) graphqlRequest(r *http.Request) graphqlBody {
+	var req graphqlBody
+	body, _ := io.ReadAll(r.Body)
+	if err := json.Unmarshal(body, &req); err != nil {
+		f.t.Errorf("GraphQL request is not JSON: %v", err)
+	}
+	last := &f.served[len(f.served)-1]
+	last.Operation, last.Query, last.Variables = req.OperationName, req.Query, req.Variables
+	return req
+}
+
+// graphqlBody is a GraphQL request's body.
+type graphqlBody struct {
+	OperationName string         `json:"operationName"`
+	Query         string         `json:"query"`
+	Variables     map[string]any `json:"variables"`
 }
 
 // pageOf is a request's limit and offset.

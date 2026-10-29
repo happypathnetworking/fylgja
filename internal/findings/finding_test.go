@@ -988,13 +988,36 @@ func drop018Snapshots(doc map[string]any) {
 }
 
 // drop016NullLoss removes the step block's loss when it is null, as the dry run and a run
-// closed before its flows were read write it (016). Every contract before 016's forbids the
-// key, and from 016 it is always written. A loss that is set is left, so an earlier contract
-// still refuses a document carrying one.
+// closed before its flows were read write it (016), and the burst count of a read that ran
+// no burst (016): the verify block's counts, the step's wait_counts and each rehearsed
+// stage's verify. Every contract before 016's forbids the keys, and from 016 they are always
+// written. A loss that is set, and a burst count that counted a burst, are left, so an
+// earlier contract still refuses a document carrying one.
 func drop016NullLoss(doc map[string]any) {
+	dropNoBurst := func(counts any) {
+		c, ok := counts.(map[string]any)
+		if !ok {
+			return
+		}
+		if b, ok := c["burst"].(map[string]any); ok && b["held"] == 0.0 && b["failed"] == 0.0 && (b["unread"] == nil || b["unread"] == 0.0) {
+			delete(c, "burst")
+		}
+	}
 	if step, ok := doc["step"].(map[string]any); ok {
 		if v, ok := step["loss"]; ok && v == nil {
 			delete(step, "loss")
+		}
+		dropNoBurst(step["wait_counts"])
+	}
+	if v, ok := doc["verify"].(map[string]any); ok {
+		dropNoBurst(v["counts"])
+	}
+	if r, ok := doc["rehearsal"].(map[string]any); ok {
+		stages, _ := r["stages"].([]any)
+		for _, st := range stages {
+			if st, ok := st.(map[string]any); ok {
+				dropNoBurst(st["verify"])
+			}
 		}
 	}
 }

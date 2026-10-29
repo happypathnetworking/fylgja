@@ -851,6 +851,7 @@ func TestVerifyConformingThreeNode(t *testing.T) {
 		HostName:    findings.VerifyCount{Held: three, Unread: &unread},
 		PortEnabled: findings.VerifyCount{Held: six, Skipped: &none, Unread: &unread},
 		Neighbor:    findings.VerifyCount{Held: six, Skipped: &none, Unread: &unread},
+		Burst:       findings.VerifyCount{Unread: &unread},
 		Record:      findings.VerifyCount{Held: three},
 	}); !reflect.DeepEqual(v.Counts, want) {
 		t.Errorf("counts %+v, want %+v", v.Counts, want)

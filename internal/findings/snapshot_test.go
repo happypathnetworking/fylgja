@@ -125,7 +125,8 @@ func TestA017DocumentIsUnchanged(t *testing.T) {
 }
 
 // Every document this package builds is 018's, the ones that name a snapshot and the ones
-// that name none, and 018's contract accepts each as built. 018's copies stay as 018 left
+// that name none, and 018's contract accepts each as built, 016's null loss and empty burst
+// counts taken out (drop016NullLoss). 018's copies stay as 018 left
 // them when 019 moves the findings and show contracts on: the claim is that the older
 // contract still accepts these documents. So does it the documents 018 wrote with following
 // (followingDocuments), which this build no longer writes.
@@ -133,7 +134,10 @@ func TestAn018DocumentIsUnchanged(t *testing.T) {
 	v018 := compileFeatureFindingsSchema(t, contract018, currentResources...)
 	for _, c := range append(noSnapshotDocuments(), snapshotDocuments()...) {
 		t.Run(c.label, func(t *testing.T) {
-			mustValidateBytes(t, v018, mutated(t, c.doc, restore018Kind), c.label+" against 018's contract")
+			mustValidateBytes(t, v018, mutated(t, c.doc, func(doc map[string]any) {
+				restore018Kind(doc)
+				drop016NullLoss(doc)
+			}), c.label+" against 018's contract")
 		})
 	}
 	for _, c := range followingDocuments() {

@@ -180,13 +180,14 @@
         },
         "wait_counts": {
           "type": "object",
-          "description": "015: the wait's last read counted by kind, as twin verify counts its block; optional, absent when the wait made no read or has not ended",
-          "required": ["host_name", "port_enabled", "neighbor", "record"],
+          "description": "015: the wait's last read counted by kind, as twin verify counts its block; optional, absent when the wait made no read or has not ended. 016: burst, the bursts the wait's last read ran",
+          "required": ["host_name", "port_enabled", "neighbor", "burst", "record"],
           "additionalProperties": false,
           "properties": {
             "host_name": { "$ref": "#/$defs/count" },
             "port_enabled": { "$ref": "#/$defs/count" },
             "neighbor": { "$ref": "#/$defs/count" },
+            "burst": { "$ref": "#/$defs/count" },
             "record": { "$ref": "#/$defs/count" }
           }
         },

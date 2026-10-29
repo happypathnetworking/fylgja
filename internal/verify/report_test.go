@@ -89,7 +89,8 @@ func TestReadHealthy(t *testing.T) {
 		if got := r.Findings(); len(got) != 0 {
 			t.Errorf("findings %v, want none", got)
 		}
-		want := []NodeRead{{"n1", srlinux, "172.20.20.2:57400"}, {"n2", srlinux, "172.20.20.3:57400"}, {"n3", srlinux, "172.20.20.4:57400"}}
+		want := []NodeRead{{Node: "n1", PSP: srlinux, Addr: "172.20.20.2:57400"}, {Node: "n2", PSP: srlinux, Addr: "172.20.20.3:57400"},
+			{Node: "n3", PSP: srlinux, Addr: "172.20.20.4:57400"}}
 		if !reflect.DeepEqual(r.Nodes, want) {
 			t.Errorf("Nodes = %+v, want %+v", r.Nodes, want)
 		}
@@ -732,7 +733,7 @@ func TestBlock(t *testing.T) {
 		b := r.Block(TwinOf(in.Record, in.StagedID), nil, findings.ShowServiceOK, nil)
 		doc := document(t, schema, r, b, findings.StatusOK)
 		wantCounts := `{"host_name":{"held":3,"failed":0,"unread":0},"port_enabled":{"held":6,"failed":0,"skipped":0,"unread":0},` +
-			`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"record":{"held":3,"failed":0}}`
+			`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"burst":{"held":0,"failed":0,"unread":0},"record":{"held":3,"failed":0}}`
 		if got := jsonOf(t, doc["verify"].(map[string]any)["counts"]); got != canon(t, wantCounts) {
 			t.Errorf("counts %s\nwant   %s", got, wantCounts)
 		}
@@ -771,7 +772,7 @@ func TestBlock(t *testing.T) {
 		r := read(t, in)
 		v := document(t, schema, r, r.Block(TwinOf(in.Record, in.StagedID), inFlight, findings.ShowServiceOK, nil), findings.StatusError)["verify"].(map[string]any)
 		wantCounts := `{"host_name":{"held":2,"failed":0,"unread":1},"port_enabled":{"held":5,"failed":1,"skipped":0,"unread":0},` +
-			`"neighbor":{"held":5,"failed":1,"skipped":0,"unread":0},"record":{"held":3,"failed":0}}`
+			`"neighbor":{"held":5,"failed":1,"skipped":0,"unread":0},"burst":{"held":0,"failed":0,"unread":0},"record":{"held":3,"failed":0}}`
 		if got := jsonOf(t, v["counts"]); got != canon(t, wantCounts) {
 			t.Errorf("counts %s\nwant   %s", got, wantCounts)
 		}
@@ -800,7 +801,7 @@ func TestBlock(t *testing.T) {
 			t.Errorf("skipped %s\nwant    %s", got, want)
 		}
 		wantCounts := `{"host_name":{"held":3,"failed":0,"unread":0},"port_enabled":{"held":5,"failed":0,"skipped":1,"unread":0},` +
-			`"neighbor":{"held":4,"failed":0,"skipped":2,"unread":0},"record":{"held":3,"failed":0}}`
+			`"neighbor":{"held":4,"failed":0,"skipped":2,"unread":0},"burst":{"held":0,"failed":0,"unread":0},"record":{"held":3,"failed":0}}`
 		if got := jsonOf(t, v["counts"]); got != canon(t, wantCounts) {
 			t.Errorf("counts %s\nwant   %s", got, wantCounts)
 		}
@@ -931,4 +932,173 @@ func canon(t *testing.T, s string) string {
 		t.Fatalf("%v: %s", err, s)
 	}
 	return jsonOf(t, v)
+}
+
+// A probed twin's burst (016, R-15): run inside the probe's first host with its package's
+// burst.command rendered, the host neither dialled nor read, and held when every reply of
+// the package's count came; its host lists its probe and its management address alone.
+func TestReadABurstHeld(t *testing.T) {
+	in, f, b := probed(t)
+	r := read(t, in)
+	if got := outcomes(r); !reflect.DeepEqual(got, []string{
+		"neighbor n1:ethernet-1/10 skipped", "neighbor n1:ethernet-1/11 skipped",
+		"neighbor n1-loop-a:eth1 skipped", "neighbor n1-loop-b:eth1 skipped",
+	}) {
+		t.Errorf("not held: %q", got)
+	}
+	if !r.Conforms() || !r.AllRead() || len(r.Findings()) != 0 {
+		t.Errorf("conforms %v, all read %v, findings %v; want a healthy read", r.Conforms(), r.AllRead(), r.Findings())
+	}
+	onceEach(t, f, 17)
+	for _, call := range f.calls {
+		if strings.Contains(call, "172.20.20.5") || strings.Contains(call, "172.20.20.6") {
+			t.Errorf("a host was dialled: %s", call)
+		}
+	}
+	want := []string{"ping", "-c", "5", "-i", "0.2", "-W", "2", "10.1.11.2"}
+	if !reflect.DeepEqual(b.calls, []string{loopA}) || !reflect.DeepEqual(b.commands, [][]string{want}) {
+		t.Errorf("bursts %q %q, want one from %s running %q", b.calls, b.commands, loopA, want)
+	}
+	a := find(t, r, KindBurst, "n1-loop-a", "")
+	if a.Outcome != Held || a.Expected != "5 replies" || a.Read != "5 replies" || a.Count != 5 || a.FarNode != "n1-loop-b" {
+		t.Errorf("burst %+v, want 5 replies of 5 from n1-loop-b, held", a)
+	}
+	host := r.Nodes[slices.IndexFunc(r.Nodes, func(n NodeRead) bool { return n.Node == "n1-loop-a" })]
+	if host.PSP != "" || host.Addr != "172.20.20.5" || host.Probe == nil || host.Probe.Name != "n1-loop" {
+		t.Errorf("host %+v, want its probe and its address alone", host)
+	}
+	if c := r.Counts().Burst; c.Held != 1 || c.Failed != 0 || *c.Unread != 0 || c.Skipped != nil {
+		t.Errorf("burst counts %+v, want 1 held", c)
+	}
+}
+
+// A burst that loses a reply is failed under verify.burst, naming the probe, the replies,
+// the count, the far host and its address, a rejection at observe, which twin verify ends
+// nonconforming, exit 5; one the burster cannot run is unread, and its host's
+// operation.failed says why; one whose package is not loaded is unread before any burst.
+func TestReadABurstFailedAndUnread(t *testing.T) {
+	t.Run("4 of 5", func(t *testing.T) {
+		in, _, b := probed(t)
+		b.set(loopA, burstResult{sent: 5, received: 4})
+		r := read(t, in)
+		if a := find(t, r, KindBurst, "n1-loop-a", ""); a.Outcome != Failed || a.Read != "4 replies" {
+			t.Errorf("burst %+v, want 4 replies, failed", a)
+		}
+		if r.Conforms() || !r.AllRead() {
+			t.Errorf("conforms %v, all read %v; want nonconforming, every node read", r.Conforms(), r.AllRead())
+		}
+		want := findings.Finding{Severity: findings.Rejection, Step: findings.StepObserve, Rule: findings.RuleVerifyBurst,
+			Object: "n1-loop", Message: "probe n1-loop: 4 of 5 replies from n1-loop-b at 10.1.11.2"}
+		if got := r.Findings(); len(got) != 1 || got[0] != want {
+			t.Errorf("findings %+v, want %+v", got, want)
+		}
+		if c := r.Counts().Burst; c.Held != 0 || c.Failed != 1 {
+			t.Errorf("burst counts %+v, want 1 failed", c)
+		}
+	})
+	t.Run("the exec fails", func(t *testing.T) {
+		in, _, b := probed(t)
+		b.set(loopA, burstResult{err: errors.New("docker exec exited 1: Error response from daemon: container is not running")})
+		r := read(t, in)
+		a := find(t, r, KindBurst, "n1-loop-a", "")
+		if a.Outcome != Unread || !strings.Contains(a.Error, "container is not running") || a.Read != "" {
+			t.Errorf("burst %+v, want unread with the exec's error", a)
+		}
+		if r.AllRead() || len(r.Unread) != 1 || r.Unread[0].Node != "n1-loop-a" {
+			t.Fatalf("unread %+v, want n1-loop-a's", r.Unread)
+		}
+		f := r.Findings()
+		want := "probe n1-loop: the burst from n1-loop-a to n1-loop-b at 10.1.11.2 could not be run: " +
+			"docker exec exited 1: Error response from daemon: container is not running"
+		if len(f) != 1 || f[0].Rule != findings.RuleOperationFailed || f[0].Object != "n1-loop-a" || f[0].Message != want {
+			t.Errorf("findings %+v, want n1-loop-a's operation.failed: %s", f, want)
+		}
+		if c := r.Counts().Burst; *c.Unread != 1 {
+			t.Errorf("burst counts %+v, want 1 unread", c)
+		}
+	})
+	t.Run("no probe package", func(t *testing.T) {
+		in, _, b := probed(t)
+		in.Probes = nil
+		r := read(t, in)
+		if a := find(t, r, KindBurst, "n1-loop-a", ""); a.Outcome != Unread || a.Expected != "" ||
+			a.Error != "probe package ping is not among the probe packages loaded; host n1-loop-a cannot burst" {
+			t.Errorf("burst %+v, want unread for want of its package", a)
+		}
+		if len(b.calls) != 0 {
+			t.Errorf("bursts %q, want none", b.calls)
+		}
+	})
+	t.Run("a host containerlab does not report", func(t *testing.T) {
+		in, _, b := probed(t)
+		in.Lab = slices.DeleteFunc(in.Lab, func(n wire.LabNode) bool { return n.Name == "n1-loop-b" })
+		r := read(t, in)
+		if len(r.Unread) != 1 || r.Unread[0].Node != "n1-loop-b" || r.Unread[0].Addr != "172.20.20.6" {
+			t.Errorf("unread %+v, want n1-loop-b, which containerlab does not report", r.Unread)
+		}
+		if len(b.calls) != 1 {
+			t.Errorf("bursts %q, want n1-loop-a's alone", b.calls)
+		}
+	})
+}
+
+// A probed twin's block (016): each host with psp null, its probe, its address alone, no
+// host name and ports [], the first host with its burst and the second with none; each
+// end of a host's link skipped; counts.burst; and the document satisfies the contract
+// whether the burst held or failed.
+func TestBlockOfAProbedTwin(t *testing.T) {
+	schema := compileFindingsSchema(t)
+	for _, c := range []struct {
+		name     string
+		received int
+		status   findings.Status
+		read     string
+		outcome  string
+	}{
+		{"held", 5, findings.StatusOK, "5 replies", Held},
+		{"failed", 4, findings.StatusNonconforming, "4 replies", Failed},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			in, _, b := probed(t)
+			b.set(loopA, burstResult{sent: 5, received: c.received})
+			r := read(t, in)
+			block := r.Block(TwinOf(in.Record, in.StagedID), nil, findings.ShowServiceOK, nil)
+			doc := document(t, schema, r, block, c.status)
+			nodes := doc["verify"].(map[string]any)["nodes"].([]any)
+			byName := map[string]map[string]any{}
+			for _, n := range nodes {
+				byName[n.(map[string]any)["node"].(string)] = n.(map[string]any)
+			}
+			wantA := canon(t, `{"node":"n1-loop-a","psp":null,"addr":"172.20.20.5","read":true,"ports":[],`+
+				`"probe":{"name":"n1-loop","endpoint":"a","format":"ping","package":{"id":"ping","source":"embedded"}},`+
+				`"bursts":[{"probe":"n1-loop","from":"n1-loop-a","to":"n1-loop-b","far_address":"10.1.11.2",`+
+				`"expected":"5 replies","outcome":"`+c.outcome+`","read":"`+c.read+`"}]}`)
+			if got := jsonOf(t, byName["n1-loop-a"]); got != wantA {
+				t.Errorf("n1-loop-a %s\nwant      %s", got, wantA)
+			}
+			if got := jsonOf(t, byName["n1-loop-b"]["bursts"]); got != "[]" {
+				t.Errorf("n1-loop-b's bursts %s, want []", got)
+			}
+			if _, ok := byName["n1"]["bursts"]; ok || byName["n1"]["psp"] != srlinux || byName["n1"]["host_name"] == nil {
+				t.Errorf("n1 %s, want a device's node, with no bursts", jsonOf(t, byName["n1"]))
+			}
+			skips := 0
+			for _, s := range block.Skipped {
+				if s.Link != nil && strings.Contains(s.Reason, "speaks no discovery protocol") {
+					skips++
+				}
+			}
+			if skips != 4 {
+				t.Errorf("skipped %+v, want both ends of both hosts' links", block.Skipped)
+			}
+			counts := jsonOf(t, doc["verify"].(map[string]any)["counts"].(map[string]any)["burst"])
+			want := canon(t, `{"held":1,"failed":0,"unread":0}`)
+			if c.outcome == Failed {
+				want = canon(t, `{"held":0,"failed":1,"unread":0}`)
+			}
+			if counts != want {
+				t.Errorf("counts.burst %s, want %s", counts, want)
+			}
+		})
+	}
 }

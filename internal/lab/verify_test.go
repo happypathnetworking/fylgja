@@ -804,10 +804,10 @@ func TestVerifyTwinCountsItsLastRead(t *testing.T) {
 	}{
 		{"settled", func(*waitReader) {}, 120, false,
 			`{"host_name":{"held":3,"failed":0,"unread":0},"port_enabled":{"held":6,"failed":0,"skipped":0,"unread":0},` +
-				`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"record":{"held":3,"failed":0}}`},
+				`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"burst":{"held":0,"failed":0,"unread":0},"record":{"held":3,"failed":0}}`},
 		{"expired with a port disabled", disabled, 3, false,
 			`{"host_name":{"held":3,"failed":0,"unread":0},"port_enabled":{"held":5,"failed":1,"skipped":0,"unread":0},` +
-				`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"record":{"held":3,"failed":0}}`},
+				`"neighbor":{"held":6,"failed":0,"skipped":0,"unread":0},"burst":{"held":0,"failed":0,"unread":0},"record":{"held":3,"failed":0}}`},
 		{"incomplete with a node unread", func(r *waitReader) {
 			disabled(r)
 			for _, path := range []string{"/system/name/host-name", srlEnabledPath("ethernet-1/1"), srlEnabledPath("ethernet-1/2"),
@@ -816,7 +816,7 @@ func TestVerifyTwinCountsItsLastRead(t *testing.T) {
 			}
 		}, 2, false,
 			`{"host_name":{"held":2,"failed":0,"unread":1},"port_enabled":{"held":3,"failed":1,"skipped":0,"unread":2},` +
-				`"neighbor":{"held":4,"failed":0,"skipped":0,"unread":2},"record":{"held":3,"failed":0}}`},
+				`"neighbor":{"held":4,"failed":0,"skipped":0,"unread":2},"burst":{"held":0,"failed":0,"unread":0},"record":{"held":3,"failed":0}}`},
 		{"cancelled before the first read", disabled, 120, true, "null"},
 	} {
 		t.Run(c.name, func(t *testing.T) {

@@ -139,12 +139,13 @@
           "oneOf": [
             {
               "type": "object",
-              "required": ["host_name", "port_enabled", "neighbor", "record"],
+              "required": ["host_name", "port_enabled", "neighbor", "burst", "record"],
               "additionalProperties": false,
               "properties": {
                 "host_name": { "$ref": "#/$defs/count" },
                 "port_enabled": { "$ref": "#/$defs/count" },
                 "neighbor": { "$ref": "#/$defs/count" },
+                "burst": { "$ref": "#/$defs/count", "description": "016: the bursts of the wait's last read" },
                 "record": { "$ref": "#/$defs/count" }
               }
             },

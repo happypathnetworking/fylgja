@@ -15,13 +15,15 @@ import (
 	"github.com/happypathnetworking/fylgja/internal/compiler"
 	"github.com/happypathnetworking/fylgja/internal/findings"
 	"github.com/happypathnetworking/fylgja/internal/lab/wire"
+	"github.com/happypathnetworking/fylgja/internal/probe"
 	"github.com/happypathnetworking/fylgja/internal/psp"
 )
 
 // Input is a twin as one read of it needs it: the staged bundle the
 // assertions were derived from, the record that names the twin and claims what each node
 // holds, containerlab's nodes, the packages that say how each node is read, the reader and
-// the environment the logins are read from at the moment of each read.
+// the environment the logins are read from at the moment of each read; and for a twin with
+// probes (016), the probe packages and the burster its hosts' bursts are run by.
 type Input struct {
 	Manifest compiler.Manifest
 	StagedID string
@@ -33,16 +35,23 @@ type Input struct {
 	Lab      []wire.LabNode
 	Packages Packages
 	Reader   Reader
-	Getenv   func(string) (string, bool)
-	Now      func() time.Time // nil: time.Now
+	// Probes are the probe packages a host's burst is run with, by its probe's format; nil
+	// holds none, and a host's burst is then unread.
+	Probes *probe.Registry
+	// Burster runs a host's burst; nil runs none, and a host's burst is then unread.
+	Burster Burster
+	Getenv  func(string) (string, bool)
+	Now     func() time.Time // nil: time.Now
 }
 
 // NodeRead is one node the staged manifest names, as the read found it: its package and
-// the address it was dialled at, "" when it had none.
+// the address it was dialled at, "" when it had none. A host (016) names its probe in
+// place of a package, and its management address alone, since it is not dialled.
 type NodeRead struct {
-	Node string
-	PSP  string
-	Addr string
+	Node  string
+	PSP   string
+	Addr  string
+	Probe *compiler.ManifestProbe
 }
 
 // NodeError is one node with an assertion it could not read: the first reason, and the
@@ -113,6 +122,10 @@ func Read(ctx context.Context, in Input, assertions []Assertion) Report {
 			if a.Node == mn.Name {
 				mine = append(mine, i)
 			}
+		}
+		if mn.Probe != nil {
+			r.burstFrom(ctx, in, mn, mine, recorded[mn.Name], lab)
+			continue
 		}
 		nr := NodeRead{Node: mn.Name, PSP: mn.PSP.ID}
 		p, found := in.Packages.LookupID(mn.PSP.ID)
@@ -206,6 +219,148 @@ func address(s string) string {
 		return ""
 	}
 	return s
+}
+
+// BurstMargin is what a burst's exec is allowed beyond its package's own reckoning of it,
+// count echoes an interval apart and then wait_s for the last reply: docker exec's own
+// start and the summary. A mechanism constant, as ReadInterval is; the count, the interval
+// and the wait are the package's.
+const BurstMargin = 10 * time.Second
+
+// burstFrom reads a host (016): it is not dialled, and its one assertion, a burst to the
+// far host of each probe it is the first host of, is run inside its container by the
+// burster, with its probe package's burst.command rendered from the manifest's probes[]
+// entry, and held when every echo of the package's count was answered. A host
+// containerlab does not report is unread, as a device is; a host with no burst reads
+// nothing. A burst whose package is not loaded, or that the burster could not run, is
+// unread, and the first such reason is the host's NodeError; a burst that lost replies is
+// failed. The commands carry the hosts' addresses and nothing else: no login is read.
+func (r *Report) burstFrom(ctx context.Context, in Input, mn compiler.ManifestNode, mine []int, recorded string,
+	lab map[string]wire.LabNode) {
+	p := *mn.Probe
+	nr := NodeRead{Node: mn.Name, Probe: &p}
+	ln, reported := lab[mn.Name]
+	if nr.Addr = address(recorded); nr.Addr == "" {
+		nr.Addr = address(ln.MgmtIPv4)
+	}
+	r.Nodes = append(r.Nodes, nr)
+
+	var bursts []int
+	for _, i := range mine {
+		if r.Assertions[i].Kind == KindBurst {
+			bursts = append(bursts, i)
+		}
+	}
+	var (
+		pkg   *probe.Package
+		found bool
+	)
+	if in.Probes != nil {
+		pkg, found = in.Probes.Lookup(p.Format)
+	}
+	if found {
+		for _, i := range bursts {
+			a := &r.Assertions[i]
+			a.Count, a.Expected = pkg.Burst.Count, replies(pkg.Burst.Count)
+		}
+	}
+	reason := ""
+	switch {
+	case in.Lab != nil && !reported:
+		reason = fmt.Sprintf("containerlab does not report node %s, which the staged bundle names; nothing to read", mn.Name)
+	case len(bursts) == 0:
+	case !found:
+		reason = fmt.Sprintf("probe package %s is not among the probe packages loaded; host %s cannot burst", p.Format, mn.Name)
+	case in.Burster == nil:
+		reason = fmt.Sprintf("no burster runs a burst here; host %s cannot burst", mn.Name)
+	}
+	if reason != "" {
+		for _, i := range mine {
+			if a := &r.Assertions[i]; a.Outcome != Skipped {
+				a.Outcome, a.Error = Unread, reason
+			}
+		}
+		r.Unread = append(r.Unread, NodeError{Node: mn.Name, Addr: nr.Addr, Error: reason})
+		return
+	}
+
+	container := ln.Container
+	if container == "" {
+		container = "clab-" + wire.LabName + "-" + mn.Name
+	}
+	var first *NodeError
+	for _, i := range bursts {
+		a := &r.Assertions[i]
+		err := burst(ctx, in, a, pkg, container)
+		if err == nil {
+			continue
+		}
+		a.Outcome, a.Error = Unread, err.Error()
+		if first == nil {
+			first = &NodeError{Node: mn.Name, Addr: nr.Addr, Error: fmt.Sprintf("probe %s: the burst from %s to %s at %s could not be run: %v",
+				a.Probe, mn.Name, a.FarNode, a.FarAddress, err)}
+		}
+	}
+	if first != nil {
+		r.Unread = append(r.Unread, *first)
+	}
+}
+
+// burst runs one burst assertion's burst and judges it: held when the replies are the
+// package's count, failed otherwise. An error is a burst not run, or not rendered.
+func burst(ctx context.Context, in Input, a *Assertion, pkg *probe.Package, container string) error {
+	command, err := burstCommand(in.Manifest, a.Probe, pkg)
+	if err != nil {
+		return err
+	}
+	budget := time.Duration(float64(pkg.Burst.Count)*pkg.Flow.IntervalS*float64(time.Second)) +
+		time.Duration(pkg.Burst.WaitS)*time.Second + BurstMargin
+	bctx, cancel := context.WithTimeout(ctx, budget)
+	defer cancel()
+	sent, received, err := in.Burster.Burst(bctx, container, command)
+	if err != nil {
+		return err
+	}
+	a.Sent, a.Received, a.Read = sent, received, replies(received)
+	a.Outcome = Failed
+	if received >= a.Count {
+		a.Outcome = Held
+	}
+	return nil
+}
+
+// burstCommand is a probe's burst.command rendered for its first host, as the lab renders
+// a host's commands from the manifest's probes[] entry: the host's address and gateway as
+// declared, the far host's address without its prefix length, the host's own port, the
+// flow's interval, and the burst's count and wait.
+func burstCommand(m compiler.Manifest, name string, pkg *probe.Package) ([]string, error) {
+	i := slices.IndexFunc(m.Probes, func(e compiler.ManifestProbeEntry) bool { return e.Name == name })
+	if i < 0 {
+		return nil, fmt.Errorf("the staged manifest's probes[] names no probe %s", name)
+	}
+	from, to := m.Probes[i].Hosts[0], m.Probes[i].Hosts[1]
+	far, _, _ := strings.Cut(to.Address, "/")
+	command, err := probe.Render(pkg.Burst.Command, map[string]string{
+		probe.PlaceAddress:    from.Address,
+		probe.PlaceGateway:    from.Gateway,
+		probe.PlaceFarAddress: far,
+		probe.PlaceInterface:  from.Port,
+		probe.PlaceInterval:   strconv.FormatFloat(pkg.Flow.IntervalS, 'f', -1, 64),
+		probe.PlaceCount:      strconv.Itoa(pkg.Burst.Count),
+		probe.PlaceWait:       strconv.Itoa(pkg.Burst.WaitS),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("probe package %s's burst.command: %v", pkg.Format, err)
+	}
+	return command, nil
+}
+
+// replies is a burst's count as its assertion words it: "5 replies".
+func replies(n int) string {
+	if n == 1 {
+		return "1 reply"
+	}
+	return strconv.Itoa(n) + " replies"
 }
 
 // facet fills an assertion's path and expected value from the node's conformance facet,
@@ -318,7 +473,8 @@ func (r Report) undialled() bool {
 }
 
 // Findings words the report as contracts/cli.md's findings table does, each a rejection at
-// step observe: one per failed or absent assertion, in the assertions' order; one
+// step observe: one per failed or absent assertion, in the assertions' order, a failed
+// burst's verify.burst naming its probe (016); one
 // verify.record.holds per claim not held, in node order; and one operation.failed per node
 // with an unread assertion, in node order. Held and skipped assertions say nothing. No
 // message carries a configuration line, the token or a login: what is
@@ -366,6 +522,9 @@ func (r Report) Findings() findings.List {
 				add(findings.RuleVerifyNeighbor, object, "%s sees %d neighbours (%s), not %s alone, at %s; %s",
 					port, len(a.Seen), joinSeen(a.Seen), a.Expected, a.Path, link)
 			}
+		case KindBurst:
+			add(findings.RuleVerifyBurst, a.Probe, "probe %s: %d of %d replies from %s at %s", a.Probe, a.Received, a.Count,
+				a.FarNode, a.FarAddress)
 		}
 	}
 	for _, c := range r.Claims {
@@ -448,7 +607,7 @@ func TwinOf(rec wire.TwinRecord, staged string) TwinInfo {
 }
 
 // Block builds twin verify's block from the report (contracts/verify.schema.json): the
-// twin, each node with its host name and its ports, each
+// twin, each node with its host name and its ports, or a host with its bursts (016), each
 // link with both ends, the claims, the skips (each port's first, then each link end's), the
 // nodes the bundle does not name, the counts, the runs in flight and the service as twin
 // show reads them, and the wait, nil without --wait.
@@ -467,7 +626,14 @@ func (r Report) Block(twin TwinInfo, inFlight []findings.ShowRun, service string
 	}
 	index := map[string]int{}
 	for _, n := range r.Nodes {
-		node := findings.VerifyNode{Node: n.Node, PSP: n.PSP, Read: true}
+		node := findings.VerifyNode{Node: n.Node, Read: true}
+		if p := n.Probe; p != nil {
+			node.Probe = &findings.VerifyProbe{Name: p.Name, Endpoint: p.Endpoint, Format: p.Format,
+				Package: findings.DryRunPackage{ID: p.Package.ID, Source: p.Package.Source}}
+		} else {
+			id := n.PSP
+			node.PSP = &id
+		}
 		if n.Addr != "" {
 			addr := n.Addr
 			node.Addr = &addr
@@ -490,8 +656,11 @@ func (r Report) Block(twin TwinInfo, inFlight []findings.ShowRun, service string
 		}
 		switch a.Kind {
 		case KindHostName:
-			b.Nodes[i].HostName = findings.VerifyAssertion{Path: a.Path, Expected: a.Expected, Outcome: a.Outcome,
+			b.Nodes[i].HostName = &findings.VerifyAssertion{Path: a.Path, Expected: a.Expected, Outcome: a.Outcome,
 				Read: readOf(a), Error: a.Error, Reason: a.Reason}
+		case KindBurst:
+			b.Nodes[i].Bursts = append(b.Nodes[i].Bursts, findings.VerifyBurst{Probe: a.Probe, From: a.Node, To: a.FarNode,
+				FarAddress: a.FarAddress, Expected: a.Expected, Outcome: a.Outcome, Read: readOf(a), Error: a.Error})
 		case KindPortEnabled:
 			b.Nodes[i].Ports = append(b.Nodes[i].Ports, findings.VerifyPort{Port: a.Port, NodeName: a.NodeName, Path: a.Path,
 				Expected: a.Expected, Outcome: a.Outcome, Read: readOf(a), Error: a.Error, Reason: a.Reason})
@@ -548,7 +717,7 @@ func (r Report) Counts() findings.VerifyCounts {
 	for _, n := range r.Nodes {
 		read[n.Node] = true
 	}
-	var hostNames, ports, neighbours counter
+	var hostNames, ports, neighbours, bursts counter
 	for _, a := range r.Assertions {
 		if !read[a.Node] {
 			continue
@@ -560,6 +729,8 @@ func (r Report) Counts() findings.VerifyCounts {
 			ports.count(a.Outcome)
 		case KindNeighbor:
 			neighbours.count(a.Outcome)
+		case KindBurst:
+			bursts.count(a.Outcome)
 		}
 	}
 	var claims findings.VerifyCount
@@ -574,6 +745,7 @@ func (r Report) Counts() findings.VerifyCounts {
 		HostName:    hostNames.block(false),
 		PortEnabled: ports.block(true),
 		Neighbor:    neighbours.block(true),
+		Burst:       bursts.block(false),
 		Record:      claims,
 	}
 }

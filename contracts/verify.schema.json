@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/happypathnetworking/fylgja/schemas/verify.schema.json",
   "title": "fylgja twin verify — the verify block (M12)",
-  "description": "The `verify` block of the findings document fylgja twin verify emits (operation twin.verify): the intent conformance report. The twin as its record names it; every assertion derived from the staged bundle's manifest with its outcome, grouped by node and by link; each node's configuration as the record claims it (nodes[].holds against the staged bundle), labelled recorded, never read; every cabled port intent disables, skipped with its reason; the counts by kind; the runs in flight as twin show reads them; and, with --wait, the wait. Advisory: no Fylgja operation reads it. No configuration line, artifact or bootstrap content, device diff, token or login anywhere: the values read are host names, admin states and neighbour names. 014: twin.stage and diverged.towards.stage name the stage (twin.json 6's shape) where they named a waypoint. 015: twin.rehearsal names the rehearsal run whose baseline the twin is, as twin.json 7 records it, or null. 019: twin.snapshot_id, required, names the snapshot of the staged bundle beside its bundle_id, or null; and twin.source admits snapshot, a twin twin create --snapshot built (twin.json's source since 018), which its every step keeps; the two additions beside 019's removals, without a version move (findings.schema.json).",
+  "description": "The `verify` block of the findings document fylgja twin verify emits (operation twin.verify): the intent conformance report. The twin as its record names it; every assertion derived from the staged bundle's manifest with its outcome, grouped by node and by link; each node's configuration as the record claims it (nodes[].holds against the staged bundle), labelled recorded, never read; every cabled port intent disables, skipped with its reason; the counts by kind; the runs in flight as twin show reads them; and, with --wait, the wait. Advisory: no Fylgja operation reads it. No configuration line, artifact or bootstrap content, device diff, token or login anywhere: the values read are host names, admin states and neighbour names. 014: twin.stage and diverged.towards.stage name the stage (twin.json 6's shape) where they named a waypoint. 015: twin.rehearsal names the rehearsal run whose baseline the twin is, as twin.json 7 records it, or null. 019: twin.snapshot_id, required, names the snapshot of the staged bundle beside its bundle_id, or null; and twin.source admits snapshot, a twin twin create --snapshot built (twin.json's source since 018), which its every step keeps; the two additions beside 019's removals, without a version move (findings.schema.json). 016: a probe's hosts are nodes of the staged bundle, synthesized: nodes[] lists each with psp null and its probe named, no host_name and ports [], and nodes[].bursts the bursts it sends ($defs/burst: one per probe whose first host it is, a burst of its package's count to its second host's address, held when every reply came, failed under verify.burst otherwise, unread when it could not be run); each end of a host's link is skipped, since the host speaks no discovery protocol, and the device port's port_enabled stands; counts.burst counts the bursts, all 0 on a twin with no probe; twin.diverged.phase gains flows. A burst is the container's: the hosts forward in software, so a burst held says the twin's forwarding answered, never a hardware forwarder's.",
   "$defs": {
     "stage": {
       "type": ["object", "null"],
@@ -22,6 +22,39 @@
         "label": { "type": "string", "pattern": "^[^/\\s]+$" },
         "description": { "type": "string" },
         "at_source": { "enum": ["given", "written", "branch_point", "head"] }
+      }
+    },
+    "burst": {
+      "type": "object",
+      "description": "016: one probe's burst, from its first host to its second host's address, of the probe package's burst.count echoes; held when every one was answered, failed (verify.burst) when fewer were, unread when the burst could not be run",
+      "required": ["probe", "from", "to", "far_address", "expected", "outcome", "read"],
+      "additionalProperties": false,
+      "properties": {
+        "probe": { "type": "string" },
+        "from": { "type": "string", "description": "the probe's first host, which sends the burst" },
+        "to": { "type": "string", "description": "the probe's second host" },
+        "far_address": { "type": "string", "description": "the second host's address, without its prefix length" },
+        "expected": { "type": "string", "description": "the replies expected, the package's count: \"5 replies\"; \"\" when the probe package is not loaded" },
+        "outcome": { "enum": ["held", "failed", "unread"] },
+        "read": { "type": ["string", "null"], "description": "the replies counted, \"4 replies\"; null when the burst was not run" },
+        "error": { "type": "string", "description": "unread: why the burst could not be run" }
+      }
+    },
+    "probe": {
+      "type": "object",
+      "description": "016: what a host is in place of a package: the probe it is an endpoint of, which endpoint, the probe's format and the probe package it was built with, as the manifest names them",
+      "required": ["name", "endpoint", "format", "package"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "endpoint": { "enum": ["a", "b"] },
+        "format": { "type": "string" },
+        "package": {
+          "type": "object",
+          "required": ["id", "source"],
+          "additionalProperties": false,
+          "properties": { "id": { "type": "string" }, "source": { "type": "string" } }
+        }
       }
     },
     "outcome": {
@@ -91,16 +124,21 @@
     },
     "node": {
       "type": "object",
-      "required": ["node", "psp", "addr", "read", "host_name", "ports"],
+      "required": ["node", "psp", "addr", "read", "ports"],
       "additionalProperties": false,
+      "if": { "required": ["probe"] },
+      "then": { "required": ["bursts"], "properties": { "psp": { "type": "null" }, "ports": { "maxItems": 0 } }, "not": { "required": ["host_name"] } },
+      "else": { "required": ["host_name"], "properties": { "psp": { "type": "string" } }, "not": { "required": ["bursts"] } },
       "properties": {
         "node": { "type": "string" },
-        "psp": { "type": "string", "description": "the manifest's nodes[].psp.id" },
-        "addr": { "type": ["string", "null"], "description": "<mgmt ipv4>:<readiness port> as dialled: the record's address, else containerlab's; null when the node was not dialled, because it had no address or containerlab did not report it (the record's address is then not used either)" },
+        "psp": { "type": ["string", "null"], "description": "the manifest's nodes[].psp.id; 016: null on a host, which has none" },
+        "probe": { "$ref": "#/$defs/probe", "description": "016: present on a host alone" },
+        "addr": { "type": ["string", "null"], "description": "<mgmt ipv4>:<readiness port> as dialled: the record's address, else containerlab's; null when the node was not dialled, because it had no address or containerlab did not report it (the record's address is then not used either). 016: a host's management address alone, since a host is not dialled" },
         "read": { "type": "boolean", "description": "false when any assertion of the node is unread" },
         "error": { "type": "string", "description": "the first transport error, redacted, when read is false" },
         "host_name": { "$ref": "#/$defs/assertion" },
-        "ports": { "type": "array", "items": { "$ref": "#/$defs/port_assertion" }, "description": "the node's cabled ports, in port order" }
+        "ports": { "type": "array", "items": { "$ref": "#/$defs/port_assertion" }, "description": "the node's cabled ports, in port order; [] on a host" },
+        "bursts": { "type": "array", "items": { "$ref": "#/$defs/burst" }, "description": "016: on a host alone, the bursts it sends, in probe order; [] on a probe's second host" }
       }
     },
     "link": {
@@ -203,7 +241,7 @@
                   "additionalProperties": false,
                   "properties": { "workflow_id": { "const": "fylgja-step" }, "run_id": { "type": "string" } }
                 },
-                "phase": { "enum": ["reconcile", "readiness", "push", "record"] }
+                "phase": { "enum": ["reconcile", "readiness", "push", "record", "flows"], "description": "016: flows, the activity that starts or reads the step's flows" }
               }
             }
           }
@@ -216,12 +254,13 @@
         "extra_nodes": { "type": "array", "items": { "type": "string" }, "description": "nodes containerlab reports that the staged bundle does not name; nothing is asserted of them" },
         "counts": {
           "type": "object",
-          "required": ["host_name", "port_enabled", "neighbor", "record"],
+          "required": ["host_name", "port_enabled", "neighbor", "burst", "record"],
           "additionalProperties": false,
           "properties": {
             "host_name": { "$ref": "#/$defs/count" },
             "port_enabled": { "$ref": "#/$defs/count" },
             "neighbor": { "$ref": "#/$defs/count" },
+            "burst": { "$ref": "#/$defs/count", "description": "016: the bursts, held, failed and unread; all 0 on a twin with no probe" },
             "record": { "$ref": "#/$defs/count" }
           }
         },

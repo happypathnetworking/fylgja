@@ -14,6 +14,7 @@ const (
 	KindHostName    = "host_name"    // the node's host name is its node name
 	KindPortEnabled = "port_enabled" // a cabled port intent enables is enabled, as the facet declares enabled
 	KindNeighbor    = "neighbor"     // one end of a link sees the far node and the far port by the far node's own name
+	KindBurst       = "burst"        // a probe's first host gets every reply of a burst to its second host (016)
 )
 
 // What came of one assertion (contracts/verify.schema.json).
@@ -43,8 +44,15 @@ type Assertion struct {
 	// Expected is host_name: the node name; port_enabled: the facet's enabled value;
 	// neighbor: "<far node> <far node name>".
 	Expected         string
-	FarNode, FarPort string // neighbor: the far end, the port under the far node's own name
-	Outcome          string
+	FarNode, FarPort string // neighbor: the far end, the port under the far node's own name; burst: FarNode the second host
+	// Probe is a burst's probe, and FarAddress its second host's address without its prefix
+	// length; "" for every other kind. A burst's Node is the probe's first host.
+	Probe, FarAddress string
+	// Count is the replies a burst expects, its package's burst.count, filled at the read
+	// with Expected ("5 replies"); Sent and Received are what the burst's ping counted. 0 for
+	// every other kind, and until a burst is run.
+	Count, Sent, Received int
+	Outcome               string
 	// Read is what was read, as Text gives it: for neighbor the one entry
 	// ("e1 Ethernet4"), the entries counted ("2 entries: e1 Ethernet3, e1 Ethernet4") or
 	// the value that is not a list ("{"x":1}, not a list"). Meaningful only when Outcome is
@@ -69,8 +77,15 @@ func (n Neighbour) String() string { return n.Node + " " + n.Port }
 
 // Derive builds every assertion the staged bundle's manifest implies, in node order, and
 // within a node its host name, then each cabled port's
-// state, then each cabled port's neighbour, in the manifest's row order. It is pure: no
-// package and no path yet, which the read fills from the node's facet.
+// state, then each cabled port's neighbour, in the manifest's row order; then one burst per
+// probe of the manifest's probes[], in name order (016, R-15). It is pure: no
+// package and no path yet, which the read fills from the node's facet, and a burst's count
+// from its probe package.
+//
+// A synthesized host (016) asserts no host name and no port state, and each end of its
+// link, the host's and the device's, is skipped, since the host speaks no discovery
+// protocol for either end to see; the device port's state stands. The host's burst is
+// what it asserts.
 //
 // A cabled row whose intent disables the port is skipped, and so is each end of the link
 // on it, since a disabled port forms no adjacency for either end to see. The
@@ -95,6 +110,12 @@ func Derive(m compiler.Manifest) ([]Assertion, error) {
 		far        compiler.MappingRow
 		skip       string // the link's skip reason, "" when both ends are enabled
 	}
+	hosts := map[string]bool{}
+	for _, n := range m.Nodes {
+		if n.Probe != nil {
+			hosts[n.Name] = true
+		}
+	}
 	ends := map[at]end{}
 	links := slices.SortedFunc(slices.Values(m.Links), func(a, b compiler.CabledLink) int { return cmp.Compare(a.ID, b.ID) })
 	for _, l := range links {
@@ -116,7 +137,14 @@ func Derive(m compiler.Manifest) ([]Assertion, error) {
 			}
 		}
 		skip := ""
-		if len(disabled) > 0 {
+		switch {
+		case l.Provenance == compiler.ProvenanceSynthesized:
+			host := l.A.Node
+			if !hosts[host] && hosts[l.B.Node] {
+				host = l.B.Node
+			}
+			skip = fmt.Sprintf("link %s is synthesized: %s speaks no discovery protocol", l.ID, host)
+		case len(disabled) > 0:
 			skip = fmt.Sprintf("link %s is not asserted: intent disables %s", l.ID, strings.Join(disabled, " and "))
 		}
 		ends[at{l.A.Node, l.A.Port}] = end{link: l.ID, side: "a", far: b, skip: skip}
@@ -138,13 +166,16 @@ func Derive(m compiler.Manifest) ([]Assertion, error) {
 	nodes := slices.SortedFunc(slices.Values(m.Nodes), func(a, b compiler.ManifestNode) int { return cmp.Compare(a.Name, b.Name) })
 	var out []Assertion
 	for _, n := range nodes {
-		out = append(out, Assertion{Kind: KindHostName, Node: n.Name, Expected: n.Name})
-		for _, r := range cabled[n.Name] {
-			a := Assertion{Kind: KindPortEnabled, Node: n.Name, Port: r.Interface, NodeName: NodeName(r)}
-			if !r.IsEnabled() {
-				a.Outcome, a.Reason = Skipped, fmt.Sprintf("intent disables %s:%s", r.Device, r.Interface)
+		// A host has no host name or port state to hold: its one assertion is its burst.
+		if n.Probe == nil {
+			out = append(out, Assertion{Kind: KindHostName, Node: n.Name, Expected: n.Name})
+			for _, r := range cabled[n.Name] {
+				a := Assertion{Kind: KindPortEnabled, Node: n.Name, Port: r.Interface, NodeName: NodeName(r)}
+				if !r.IsEnabled() {
+					a.Outcome, a.Reason = Skipped, fmt.Sprintf("intent disables %s:%s", r.Device, r.Interface)
+				}
+				out = append(out, a)
 			}
-			out = append(out, a)
 		}
 		for _, r := range cabled[n.Name] {
 			e := ends[at{r.Device, *r.Port}]
@@ -157,11 +188,22 @@ func Derive(m compiler.Manifest) ([]Assertion, error) {
 			out = append(out, a)
 		}
 	}
+
+	probes := slices.SortedFunc(slices.Values(m.Probes), func(a, b compiler.ManifestProbeEntry) int { return cmp.Compare(a.Name, b.Name) })
+	for _, p := range probes {
+		from, to := p.Hosts[0], p.Hosts[1]
+		if !hosts[from.Node] || !hosts[to.Node] {
+			return nil, &ManifestError{Object: p.Name,
+				Message: fmt.Sprintf("probe %s names hosts %s and %s, which are not both synthesized nodes of the manifest", p.Name, from.Node, to.Node)}
+		}
+		far, _, _ := strings.Cut(to.Address, "/")
+		out = append(out, Assertion{Kind: KindBurst, Node: from.Node, Probe: p.Name, FarNode: to.Node, FarAddress: far})
+	}
 	return out, nil
 }
 
 // ManifestError is a staged manifest the compiler never emits: Object is what
-// it names wrongly, the link id or the row as <device>:<interface>, which twin verify's
+// it names wrongly, the link id, the row as <device>:<interface> or the probe, which twin verify's
 // operation.failed carries as its object (contracts/cli.md).
 type ManifestError struct {
 	Object  string

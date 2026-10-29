@@ -29,6 +29,9 @@ func describe(a Assertion) string {
 			s += " MISMATCHED FAR END"
 		}
 	}
+	if a.Kind == KindBurst {
+		s += fmt.Sprintf(" of %s to %s at %s", a.Probe, a.FarNode, a.FarAddress)
+	}
 	if a.Outcome != "" || a.Reason != "" {
 		s += fmt.Sprintf(" [%s: %s]", a.Outcome, a.Reason)
 	}
@@ -127,6 +130,67 @@ func TestDeriveGoldens(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The probed golden's assertions (016, R-15): the three-node twin's, n1's two ports to the
+// hosts held to their state, each end of a host's link skipped, the host's own end included,
+// since a host speaks no discovery protocol, no host name and no port state of a host, and
+// after the three kinds one burst per probe, from its first host to its second's address.
+// The burst's count and command are its package's, so neither is known until the read.
+func TestDeriveAProbedManifest(t *testing.T) {
+	got, err := Derive(goldenManifest(t, "three-node-probed"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	synth := func(host, port string) string {
+		return fmt.Sprintf("%s:eth1|n1:%s is synthesized: %s speaks no discovery protocol", host, port, host)
+	}
+	want := []string{
+		"host_name n1 is n1",
+		"port_enabled n1:ethernet-1/1 (ethernet-1/1)",
+		"port_enabled n1:ethernet-1/10 (ethernet-1/10)",
+		"port_enabled n1:ethernet-1/11 (ethernet-1/11)",
+		"port_enabled n1:ethernet-1/2 (ethernet-1/2)",
+		"neighbor n1:ethernet-1/1 (ethernet-1/1) sees n2 ethernet-1/1 on n1:ethernet-1/1|n2:ethernet-1/1 (a)",
+		"neighbor n1:ethernet-1/10 (ethernet-1/10) sees n1-loop-a eth1 on n1-loop-a:eth1|n1:ethernet-1/10 (b) [skipped: link " +
+			synth("n1-loop-a", "ethernet-1/10") + "]",
+		"neighbor n1:ethernet-1/11 (ethernet-1/11) sees n1-loop-b eth1 on n1-loop-b:eth1|n1:ethernet-1/11 (b) [skipped: link " +
+			synth("n1-loop-b", "ethernet-1/11") + "]",
+		"neighbor n1:ethernet-1/2 (ethernet-1/2) sees n3 ethernet-1/2 on n1:ethernet-1/2|n3:ethernet-1/2 (a)",
+		"neighbor n1-loop-a:eth1 (eth1) sees n1 ethernet-1/10 on n1-loop-a:eth1|n1:ethernet-1/10 (a) [skipped: link " +
+			synth("n1-loop-a", "ethernet-1/10") + "]",
+		"neighbor n1-loop-b:eth1 (eth1) sees n1 ethernet-1/11 on n1-loop-b:eth1|n1:ethernet-1/11 (a) [skipped: link " +
+			synth("n1-loop-b", "ethernet-1/11") + "]",
+	}
+	want = append(want, goldenAssertions["three-node"][5:]...)
+	want = append(want, "burst n1-loop-a of n1-loop to n1-loop-b at 10.1.11.2")
+	if !reflect.DeepEqual(describeAll(got), want) {
+		t.Errorf("Derive =\n%s\nwant\n%s", lines(describeAll(got)), lines(want))
+	}
+	last := got[len(got)-1]
+	if last.Expected != "" || last.Count != 0 {
+		t.Errorf("the burst %+v expects %q (%d) before the read, which only the package says", last, last.Expected, last.Count)
+	}
+}
+
+// A manifest with no probes derives no burst, and one whose probe names a host the
+// manifest's nodes do not synthesize is refused, naming the probe.
+func TestDeriveABurstPerProbeAlone(t *testing.T) {
+	for _, name := range []string{"three-node", "lossy", "mixed"} {
+		got, err := Derive(goldenManifest(t, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, a := range got {
+			if a.Kind == KindBurst {
+				t.Errorf("%s: a manifest with no probes derives %s", name, describe(a))
+			}
+		}
+	}
+	m := goldenManifest(t, "three-node-probed")
+	m.Probes[0].Hosts[1].Node = "n2"
+	_, err := Derive(m)
+	wantObject(t, err, "n1-loop")
 }
 
 // A cabled port intent disables is skipped, and so is each end of the link on it, with

@@ -713,29 +713,83 @@ func validateM10Document(t *testing.T, doc *findings.Document) {
 	}
 }
 
-// carriesLoss says whether doc's step block carries a loss its flows read (016): such a
-// document is 016's, which no earlier contract accepts.
+// carriesLoss says whether doc carries what 016 alone writes, which no earlier contract
+// accepts: a step block's loss its flows read, or a verify block of a twin with probes, its
+// hosts and its bursts.
 func carriesLoss(doc *findings.Document) bool {
-	return doc.Step != nil && doc.Step.Loss != nil
+	if doc.Step != nil && doc.Step.Loss != nil {
+		return true
+	}
+	if v := doc.Verify; v != nil {
+		c := v.Counts.Burst
+		return c.Held+c.Failed > 0 || (c.Unread != nil && *c.Unread > 0) ||
+			slices.ContainsFunc(v.Nodes, func(n findings.VerifyNode) bool { return n.Probe != nil })
+	}
+	return false
+}
+
+// laterContract is the next later frozen feature's copy of the block name, or the current
+// one when no later copy holds it.
+func laterContract(t *testing.T, feature, name string) string {
+	t.Helper()
+	dirs, err := os.ReadDir(filepath.Join("testdata", "contracts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, d := range dirs {
+		if d.Name() <= feature {
+			continue
+		}
+		if path := contractPath(d.Name(), name); fileExists(path) {
+			return path
+		}
+	}
+	return contractPath(currentContract, name)
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
 
 // withoutNullLoss is b, a document marshalled, with its step block's loss taken out when it
-// is null, as the dry run and a run closed before its flows write it (016): every contract
-// before 016's forbids the key, and from 016 it is always written.
+// is null, as the dry run and a run closed before its flows write it (016), and each burst
+// count of a read that ran no burst (016): the verify block's counts, the step's wait_counts
+// and a rehearsed stage's verify. Every contract before 016's forbids the keys, and from 016
+// they are always written.
 func withoutNullLoss(t *testing.T, b []byte) []byte {
 	t.Helper()
 	var generic map[string]any
 	if err := json.Unmarshal(b, &generic); err != nil {
 		t.Fatal(err)
 	}
-	step, ok := generic["step"].(map[string]any)
-	if !ok {
-		return b
+	noBurst := func(counts any) {
+		c, ok := counts.(map[string]any)
+		if !ok {
+			return
+		}
+		if burst, ok := c["burst"].(map[string]any); ok && burst["held"] == 0.0 && burst["failed"] == 0.0 &&
+			(burst["unread"] == nil || burst["unread"] == 0.0) {
+			delete(c, "burst")
+		}
 	}
-	if v, ok := step["loss"]; !ok || v != nil {
-		return b
+	if step, ok := generic["step"].(map[string]any); ok {
+		if v, ok := step["loss"]; ok && v == nil {
+			delete(step, "loss")
+		}
+		noBurst(step["wait_counts"])
 	}
-	delete(step, "loss")
+	if v, ok := generic["verify"].(map[string]any); ok {
+		noBurst(v["counts"])
+	}
+	if r, ok := generic["rehearsal"].(map[string]any); ok {
+		stages, _ := r["stages"].([]any)
+		for _, st := range stages {
+			if st, ok := st.(map[string]any); ok {
+				noBurst(st["verify"])
+			}
+		}
+	}
 	out, err := json.Marshal(generic)
 	if err != nil {
 		t.Fatal(err)
@@ -927,13 +981,14 @@ func findingsContract(t *testing.T, feature string) *jsonschema.Schema {
 		path := contractPath(feature, name)
 		if _, err := os.Stat(path); err != nil {
 			// A block the feature's contract refers to but its directory does not hold had not
-			// moved since the feature: 017's verify.schema.json, which 018 does not move, and
-			// 018's stages, step, verify and rehearsal blocks, which 019 does not freeze, and
-			// 019's show and stages blocks, which 016 does not move.
+			// moved until the next later feature's copy that holds it, or since the feature
+			// when none does: 017's and 018's verify.schema.json are 019's, which froze it as
+			// it stood from 017 until 016 moved it, and 019's show and stages blocks, which
+			// 016 does not move, are the current ones.
 			if feature == currentContract || !strings.Contains(string(refers), "/schemas/"+name) {
 				continue
 			}
-			path = contractPath(currentContract, name)
+			path = laterContract(t, feature, name)
 		}
 		if err := c.AddResource("https://github.com/happypathnetworking/fylgja/schemas/"+name, load(path)); err != nil {
 			t.Fatal(err)

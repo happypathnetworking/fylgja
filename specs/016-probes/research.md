@@ -725,5 +725,12 @@ Appended by the runs.
   links`, the probe ports' state read as every cabled port's; `n2`'s and `n3`'s lines a
   three-node twin's (`2 cabled ports …; 2 neighbours …`); every check of the three devices
   held, none failed. Destroyed (5 containers) and the branch deleted. `scripts/e2e.sh`'s
-  case 5 then runs it after its create, holding those three readings by `grep`.
-  *(SR Linux 24.7.1, containerlab 0.79.0, alpine 3.24.2, 2026-10-29)*
+  case 5 then runs it after its create, holding those three readings by `grep` (`c62d77d`),
+  and tier 3 on that tree read **`E2E-OK`** at the first attempt, nine cases, exit 0, wall
+  2,171.8 s (12:43:18–13:19:45Z; 016's Run 28 2,236.6 s): case 5's boot half 10.0 s
+  (7.7 s the test's own), the same readings on its twin (bundle `d5a2c7aa…`, `n1` at
+  172.20.20.3), beside case 1's 10.5 s and case 6's 5.9 s; case 5's verify 5.7 s, 18 held
+  (1 burst), 4 skipped, its steps 12.1 s and 13.0 s, `n1-loop 0/45` and `0/53`; case 9's
+  rehearsals 78.1 s of 2,130 s and 206.2 s of 2,850 s. The outputs are under
+  `local/e2e-016-t056.outputs/`. *(SR Linux 24.7.1, cEOS 4.32.0.2F, containerlab 0.79.0,
+  alpine 3.24.2, Infrahub 1.11.2, 2026-10-29)*

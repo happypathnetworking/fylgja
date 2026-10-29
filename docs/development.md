@@ -669,7 +669,9 @@ holds. That is a default run, and its `E2E-OK` means all
 nine cases; it took about 29.5 minutes before 019 (1,769.0 s on 2026-10-26, 1,758.0 s on
 2026-10-27), and with case 5's frozen wait about 31.5 minutes (1,894.1 s on 2026-10-28),
 against the script's estimate of 32 to 33 (019's research R-18); 016's probes put it at
-about 34 minutes (its research R-25) until a run measures it. Every case reads under
+about 37 minutes (2,236.6 s on 2026-10-29, against its research R-25's 34), and case 5's
+boot half on its probed twin adds about 10 s (2,171.8 s whole the same day, the boot half
+10.0 s). Every case reads under
 the server's default scope, `tag:fylgja`, which every fixture's devices carry, but case
 5's create, which names it: the script's own server must report `default scope:
 tag:fylgja`, read from `local/.env`, or the run fails before any case, saying to add

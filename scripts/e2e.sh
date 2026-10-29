@@ -117,8 +117,9 @@
 # each account-gated image it needs is present, and is skipped, saying why, otherwise. Unset
 # or empty, every case runs and every package's image is required first. A name no package
 # has, or a list that selects no case, is refused before anything starts.
-# It takes about 34 minutes, case 5's frozen wait among them (016's estimate, research R-25,
-# until a run measures it); run it on a quiet host (docs/development.md).
+# It takes about 36 to 37 minutes, case 5's frozen wait among them: 2,236.6s at 016's first
+# whole run, and 2,171.8s once case 5 ran the boot half too, which adds about 10s (10.0s, and
+# 12.4s by hand; both 2026-10-29); run it on a quiet host (docs/development.md).
 #
 # Exit 0 prints E2E-OK when every case ran, or, when PLATFORMS skipped one, E2E-PARTIAL naming
 # the list, the cases that ran and each case skipped with its reason. Any failed check exits 1

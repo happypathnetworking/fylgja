@@ -489,14 +489,15 @@ infrahub-clean` (the fixture branch) · `make sdl` · `make diagrams` (needs Doc
 needs it) · **every command but `worker run` and `serve` needs a running server**, the
 pipeline's stage commands and `stage list` and `stage plan` included (`psp validate` and
 `twin compile` need neither Infrahub nor the workflow service, but they need the server) ·
-`make test-e2e` (tier 3, `scripts/e2e.sh`: nine cases, nine twins, `twin verify` on three of them and on the steps' waits, case 5 a twin left 330 s with nothing rebuilding it and then stepped to a snapshot by file and by id, probes in cases 5, 8 and 9 (case 5's `n1-loop` by file, case 8's `e1-loop` from the kind across `e1`'s restart, case 9's stage `probe-port-down` failing on `verify.burst`), every
+`make test-e2e` (tier 3, `scripts/e2e.sh`: nine cases, nine twins, the boot half on three of them (cases 1, 5 and 6, case 5's twin probed), `twin verify` on three of them and on the steps' waits, case 5 a twin left 330 s with nothing rebuilding it and then stepped to a snapshot by file and by id, probes in cases 5, 8 and 9 (case 5's `n1-loop` by file, case 8's `e1-loop` from the kind across `e1`'s restart, case 9's stage `probe-port-down` failing on `verify.burst`), every
 command through a server the script starts itself with a token it makes, but case 9, a
 proposed change rehearsed twice by `fylgja-twin` inside Infrahub, through the operator's
 server on the bridge; needs the dev
 server and a worker running from the repository root, Docker, containerlab, **both**
 images, `alpine:3.24.2` and Infrahub with `FylgjaProbe` on `main` holding no probe, and for case 9 the server on the bridge from this tree and both
-checks imported on `main`, each checked before any case; about 37.3 minutes (2,236.6 s on
-2026-10-29 with 016's probes, 1,894.1 s on 2026-10-28 with case 5's frozen wait); `WORKER_LOG=<file>`
+checks imported on `main`, each checked before any case; about 36 to 37 minutes (2,171.8 s
+on 2026-10-29 with case 5's boot half, 10.0 s of it, and 2,236.6 s the same day with 016's
+probes, 1,894.1 s on 2026-10-28 with case 5's frozen wait); `WORKER_LOG=<file>`
 adds the worker's log to its credential greps; `PLATFORMS=nokia_srlinux` narrows it to
 the seven cases SR Linux alone runs, about 19 minutes (1,156.1 s on 2026-10-27), ending `E2E-PARTIAL: platforms …; ran …; skipped …` with exit 0,
 never `E2E-OK`; never in CI). A command that runs longer than one tool call (tier 3)
@@ -658,7 +659,9 @@ Rewritten whole at each release's close, never appended to.
     (T054); the records naming the fixture's former ids, and `twin compile`'s hand wrap
     written as a `2` (T057); and `README.md`'s walk-through at the re-seeded fixture's
     counts and hash, its probe section filled from case 5 (T058). `probes/ping.yaml`'s
-    `acquisition` comment, also found, was T040's (`3f6b82e`).
+    `acquisition` comment, also found, was T040's (`3f6b82e`). Its live task (T056) ran
+    the boot half on a probed twin by hand, then in tier 3's case 5, which now runs it:
+    `E2E-OK` in 2,171.8 s on 2026-10-29, case 5's boot half 10.0 s.
 - **Next**: F-025 the NetBox reader, Release 0.3's fifth and last spec; it has no brief
   yet.
 - **Open, the operator's**: 016's command log (`make command-log`, once this session is
@@ -673,7 +676,6 @@ Rewritten whole at each release's close, never appended to.
   Infrahub's view: a code block's first line indented (`pre > code` inline with a left
   padding) and a zoomed Mermaid drawing cropped (`docs/verified-facts.md`, 10-21); read
   Arista's own checksum for the cEOS tar at the next download.
-- **Open, for a session**: 016's T056, live: the boot half on a probed twin, then in case
-  5 of `scripts/e2e.sh`; the fixture tool's `-propose` waits its 6 minutes for an
+- **Open, for a session**: the fixture tool's `-propose` waits its 6 minutes for an
   artifact validator a branch with no change from `main` never gets (D-054's window);
   bound with `timeout` there, as the release's demo did.
